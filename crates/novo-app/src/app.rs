@@ -120,6 +120,9 @@ mod revisions;
 mod safety;
 mod safety_functions;
 mod safety_report;
+mod selection_sheet;
+#[cfg(test)]
+mod selection_sheet_tests;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -143,6 +146,7 @@ mod view3d_align;
 mod view3d_controls;
 mod view3d_duplicate;
 mod view3d_heat;
+mod view3d_hints;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
@@ -154,6 +158,7 @@ mod view3d_rail_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
+mod view3d_wires;
 mod whats_new;
 mod wheel;
 mod wire_panel;
@@ -409,6 +414,8 @@ pub struct NovoApp {
     /// Free room between the top bar's left and right groups last frame;
     /// below zero they overlap. Read by the width test.
     top_bar_gap: f32,
+    /// Width the right side of the top bar took last frame.
+    top_bar_right: f32,
     /// Width the menu names took last frame (`menu_bar`).
     menu_bar_width: f32,
     /// Lessons: the catalog, the running lesson and the person's progress.
@@ -482,6 +489,7 @@ impl NovoApp {
             ol: outline::OutlineState::new(),
             window_width: 0.0,
             top_bar_gap: 0.0,
+            top_bar_right: 0.0,
             menu_bar_width: 380.0,
             learn: learn::LearnState::new(),
         };
@@ -1067,7 +1075,13 @@ impl NovoApp {
         };
         // Shift+D swings the 3D door; elsewhere it is not a command.
         let in_3d = self.workspace() == workspace::Workspace::View3d;
-        commands.retain(|id| in_3d || *id != "view.3d_door");
+        commands.retain(|id| {
+            in_3d
+                || !matches!(
+                    *id,
+                    "view.3d_door" | "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all"
+                )
+        });
         if self.workspace() != workspace::Workspace::Schematic {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
@@ -1103,11 +1117,14 @@ impl NovoApp {
                     || *id == "view.3d_door"
                     || id.starts_with("view.3d_align")
                     || id.starts_with("view.3d_spread")
+                    || *id == "view.3d_wire_runs"
                     || *id == "view.3d_duplicate"
                     || (*id == "edit.duplicate" && in_3d)
                     || *id == "view.3d_position"
                     || *id == "view.3d_place"
                     || *id == "view.3d_stats"
+                    || *id == "view.3d_hints"
+                    || matches!(*id, "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all")
                     || id.starts_with("heat.")
             });
         }
@@ -1138,7 +1155,21 @@ impl NovoApp {
         }
         self.sync_commissioning_workspace();
         self.drawer(ui);
-        let canvas_rect = egui::CentralPanel::no_frame()
+        // The canvases paint their own ground; the Reports tables and the
+        // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
+        let pal = novo_theme::Palette::of_ctx(&ctx);
+        let ground = if reports {
+            Some(pal.sunken)
+        } else if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
+            Some(pal.panel)
+        } else {
+            None
+        };
+        let central = match ground {
+            Some(fill) => egui::CentralPanel::no_frame().frame(egui::Frame::new().fill(fill)),
+            None => egui::CentralPanel::no_frame(),
+        };
+        let canvas_rect = central
             .show(ui, |ui| {
                 if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
@@ -1214,6 +1245,7 @@ impl NovoApp {
         self.project_settings_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);
+        self.selection_sheet_window(&ctx);
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
@@ -1454,7 +1486,22 @@ impl NovoApp {
             }
             ui.separator();
             self.outline_toggle_button(ui);
-            self.breadcrumb(ui, fit.name_chars);
+            // The breadcrumb gets what the right side left free last frame
+            // and cuts its text to it, so a long page name or a row of
+            // badges never pushes it under the Search button.
+            let room =
+                (ui.available_width() - self.top_bar_right - ui.spacing().item_spacing.x).max(0.0);
+            let breadcrumb =
+                egui::Rect::from_min_size(ui.cursor().min, egui::vec2(room, ui.available_height()));
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(breadcrumb)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                |ui| {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    self.breadcrumb(ui, fit.name_chars);
+                },
+            );
             let left_end = ui.min_rect().right();
 
             let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1489,6 +1536,7 @@ impl NovoApp {
                 }
             });
             self.top_bar_gap = right.response.rect.left() - left_end;
+            self.top_bar_right = right.response.rect.width();
         });
     }
 
@@ -1507,10 +1555,15 @@ impl NovoApp {
         if !self.outline_flyout_available() {
             return;
         }
-        let toggle = ui.add(egui::Button::selectable(
-            self.outline_open,
-            self.outline_mode.label(),
-        ));
+        // Commissioning is the longest name and the panel names itself in
+        // its header: the button is its icon, the name in the tooltip.
+        let text = match self.outline_mode {
+            OutlineMode::Commissioning => self.outline_mode.icon(),
+            mode => mode.label(),
+        };
+        let toggle = ui
+            .add(egui::Button::selectable(self.outline_open, text))
+            .on_hover_text(self.outline_mode.label());
         if toggle.clicked() {
             self.outline_open ^= true;
             // The keys stay with the drawing after the click.
@@ -1605,16 +1658,16 @@ impl NovoApp {
                 };
                 let font = egui::FontId::proportional(13.0);
                 let color = if current {
-                    novo_theme::tokens::TEXT
+                    crate::theme::ui_palette().text_primary
                 } else {
-                    novo_theme::tokens::TEXT_MUTED
+                    crate::theme::ui_palette().text_secondary
                 };
                 let galley = ui.painter().layout_no_wrap(text, font, color);
                 let size = egui::vec2((galley.size().x + 10.0).max(26.0), 26.0);
                 let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
                 let response = response.on_hover_text(mode.label());
                 let color = if response.hovered() {
-                    novo_theme::tokens::TEXT
+                    crate::theme::ui_palette().text_primary
                 } else {
                     color
                 };
@@ -1631,7 +1684,7 @@ impl NovoApp {
                             egui::pos2(rect.right() - 4.0, rect.bottom()),
                         ),
                         1,
-                        novo_theme::tokens::ACCENT,
+                        crate::theme::ui_palette().accent,
                     );
                 }
                 if response.clicked() {

@@ -195,6 +195,88 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
     assert_eq!(d.app.view3d.controls.door_deg, 100.0);
 }
 
+#[test]
+fn the_hints_command_folds_and_unfolds_the_legend() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(d.app.view3d.hints.open);
+    d.app.run_command(&ctx, "view.3d_hints", None);
+    d.frame();
+    assert!(!d.app.view3d.hints.open);
+    d.app.run_command(&ctx, "view.3d_hints", None);
+    assert!(d.app.view3d.hints.open);
+}
+
+#[test]
+fn select_by_type_asked_before_the_scene_exists_applies_after_the_first_build() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.view3d.built = None;
+    d.app.view3d.view.state.selection.clear();
+    d.app.run_command(&ctx, "view.3d_select_devices", None);
+    assert!(d.app.view3d.view.state.selection.is_empty());
+    d.frame();
+    assert!(!d.app.view3d.view.state.selection.is_empty());
+}
+
+#[test]
+fn every_rebuild_of_the_scene_has_a_new_revision_so_the_renderer_redraws() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let before = scene(&d).revision;
+    d.app.run_command(&ctx, "view.3d_select_devices", None);
+    d.app.run_command(&ctx, "view.3d_hide", None);
+    d.frame();
+    assert_ne!(scene(&d).revision, before);
+}
+
+#[test]
+fn hidden_ids_of_items_that_no_longer_exist_are_dropped_on_the_next_build() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ghost = novo_view3d::ItemId::new(ItemKind::Device, u64::MAX);
+    d.app.view3d.controls.hidden.insert(ghost);
+    d.app.view3d.built = None;
+    d.frame();
+    assert!(d.app.view3d.controls.hidden.is_empty());
+}
+
+#[test]
+fn select_by_type_hide_isolate_and_show_all_work_on_the_picture_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let count = |d: &Drive, kind| scene(d).items.iter().filter(|i| i.id.kind == kind).count();
+    let devices = count(&d, ItemKind::Device);
+    assert!(devices >= 2, "the example cabinet has devices");
+    d.app.run_command(&ctx, "view.3d_select_devices", None);
+    assert_eq!(d.app.view3d.view.state.selection.len(), devices);
+    d.app.run_command(&ctx, "view.3d_hide", None);
+    d.frame();
+    assert_eq!(count(&d, ItemKind::Device), 0);
+    assert!(d.app.view3d.view.state.selection.is_empty());
+    d.app.run_command(&ctx, "view.3d_show_all", None);
+    d.frame();
+    assert_eq!(count(&d, ItemKind::Device), devices);
+    // Isolate one device: the others go, the plate stays.
+    let one = *d.app.view3d.view.state.selection.iter().next().unwrap_or(
+        &scene(&d)
+            .items
+            .iter()
+            .find(|i| i.id.kind == ItemKind::Device)
+            .unwrap()
+            .id,
+    );
+    d.app.view3d.view.state.selection = std::collections::BTreeSet::from([one]);
+    d.app.run_command(&ctx, "view.3d_isolate", None);
+    d.frame();
+    assert_eq!(count(&d, ItemKind::Device), 1);
+    assert!(has(scene(&d), ItemKind::Plate));
+}
+
 /// One frame with `key` pressed, as the app sees a keystroke.
 fn press(d: &mut Drive, key: egui::Key, modifiers: egui::Modifiers) {
     d.frame_with(vec![egui::Event::Key {
@@ -361,6 +443,27 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
 }
 
 #[test]
+fn the_wire_runs_command_opens_the_list_turns_the_wires_on_and_reads_their_lengths() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.view3d.controls.layers.wires = false;
+    d.app.run_command(&ctx, "view.3d_wire_runs", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.view3d.wire_runs);
+    assert!(d.app.view3d.controls.layers.wires, "the wires layer is on");
+    let facts = d.app.view3d.wire_facts.as_ref().map(|f| &f.2);
+    assert!(facts.is_some(), "the lengths were read with the routes");
+    for f in facts.unwrap().values() {
+        assert!(f.length_mm > 0.0, "a cut length is never zero: {f:?}");
+        assert!(!f.from.is_empty() && !f.to.is_empty());
+    }
+    d.app.run_command(&ctx, "view.3d_wire_runs", None);
+    assert!(!d.app.view3d.wire_runs);
+}
+
+#[test]
 fn the_position_command_hides_and_shows_the_box() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
@@ -489,6 +592,21 @@ fn restore_quality_returns_a_stepped_down_view_to_the_adapters_tier() {
         !d.app.view3d.controls.reduced,
         "nothing to restore any more"
     );
+}
+
+#[test]
+fn the_ambient_occlusion_command_toggles_the_views_occlusion() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert!(d.app.view3d.view.state.display.ssao, "on by default");
+    d.app.run_command(&ctx, "view.3d_ssao", None);
+    d.frame();
+    assert!(!d.app.view3d.view.state.display.ssao);
+    d.app.run_command(&ctx, "view.3d_ssao", None);
+    d.frame();
+    assert!(d.app.view3d.view.state.display.ssao);
 }
 
 #[test]

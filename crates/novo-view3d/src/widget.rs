@@ -67,6 +67,8 @@ pub struct RenderStats {
     /// median and 95th percentile of the last renders. GPU time is not in it.
     pub cpu_p50_ms: f32,
     pub cpu_p95_ms: f32,
+    /// Whether the last render ran the screen-space occlusion passes.
+    pub ssao: bool,
 }
 
 struct Recorder {
@@ -108,6 +110,7 @@ pub fn render_stats() -> Option<RenderStats> {
         msaa: r.msaa,
         cpu_p50_ms: percentile(&cpu, 0.5),
         cpu_p95_ms: percentile(&cpu, 0.95),
+        ssao: r.last.ssao,
     })
 }
 
@@ -185,6 +188,40 @@ pub fn is_installed() -> bool {
     INSTALLED.load(Ordering::Relaxed)
 }
 
+/// What the one frame governor steps through: screen-space occlusion first
+/// (the costliest optional pass), then the adapter's tier (resolution while
+/// moving, MSAA, shadow map). Never up by itself; `View3d::reset_quality`
+/// starts again from the adapter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Level {
+    pub tier: Tier,
+    /// Occlusion may be drawn (when the user's switch is on too).
+    pub ssao: bool,
+}
+
+impl Level {
+    /// Where an adapter of this tier starts: discrete GPUs with occlusion
+    /// (it steps down by itself if the view is slow), the others without.
+    pub fn start(tier: Tier) -> Self {
+        Self {
+            tier,
+            ssao: tier == Tier::Discrete,
+        }
+    }
+}
+
+impl crate::governor::Step for Level {
+    fn step_down(self) -> Option<Self> {
+        if self.ssao {
+            return Some(Self {
+                ssao: false,
+                ..self
+            });
+        }
+        self.tier.step_down().map(|tier| Self { tier, ssao: false })
+    }
+}
+
 struct Resources {
     renderer: Renderer,
     blitter: Blitter,
@@ -210,6 +247,9 @@ struct Callback {
     mode: Mode,
     /// The tier the frame governor stepped down to, if it did.
     governed: Option<Tier>,
+    /// Screen-space occlusion for this picture: the switch, the adapter and
+    /// the frame governor all agree.
+    ssao: bool,
     overlays: Arc<Vec<Overlay>>,
     overlay_revision: u64,
     key: u64,
@@ -242,9 +282,10 @@ impl egui_wgpu::CallbackTrait for Callback {
             used: now,
         });
         slot.used = now;
+        let ssao = self.ssao;
         if slot.key != Some(self.key) {
             let used = self.governed.unwrap_or(*tier);
-            let quality = Quality::new(self.mode, used);
+            let quality = Quality::new(self.mode, used).with_ssao(ssao);
             let stats = renderer.render(
                 device,
                 queue,
@@ -440,7 +481,7 @@ pub struct View3d {
     overlay_revision: u64,
     door: Option<DoorAnim>,
     /// Steps the render quality down when moving frames stay slow.
-    governor: Option<FrameGovernor<Tier>>,
+    governor: Option<FrameGovernor<Level>>,
     /// The source scene and its copy with the animated door angle.
     door_scene: Option<(Arc<Scene>, Arc<Scene>)>,
 }
@@ -505,7 +546,7 @@ impl View3d {
     /// [`show`]: View3d::show
     pub fn govern(&mut self, ctx: &egui::Context, moving: bool) -> Option<Tier> {
         if self.governor.is_none() {
-            self.governor = adapter_tier().map(|t| FrameGovernor::new(t, false));
+            self.governor = adapter_tier().map(|t| FrameGovernor::new(Level::start(t), false));
         }
         let gov = self.governor.as_mut()?;
         if moving {
@@ -514,13 +555,34 @@ impl View3d {
                 ctx.request_repaint();
             }
         }
-        (Some(gov.tier) != adapter_tier()).then_some(gov.tier)
+        (Some(gov.tier.tier) != adapter_tier()).then_some(gov.tier.tier)
     }
 
     /// The tier the frame governor stepped down to, if it did.
     pub fn stepped_down(&self) -> Option<Tier> {
         let gov = self.governor.as_ref()?;
-        (Some(gov.tier) != adapter_tier()).then_some(gov.tier)
+        (Some(gov.tier.tier) != adapter_tier()).then_some(gov.tier.tier)
+    }
+
+    /// Whether the frame governor has paused screen-space occlusion (the first
+    /// thing it gives up) on an adapter that would start with it.
+    pub fn occlusion_paused(&self) -> bool {
+        let Some(gov) = self.governor.as_ref() else {
+            return false;
+        };
+        !gov.tier.ssao && adapter_tier().is_some_and(|t| Level::start(t).ssao)
+    }
+
+    /// Whether this adapter draws screen-space occlusion at all (discrete
+    /// GPUs; the others start without it and never get it).
+    pub fn occlusion_available(&self) -> bool {
+        adapter_tier().is_some_and(|t| Level::start(t).ssao)
+    }
+
+    /// Whether occlusion is drawn now: the switch is on and the governor
+    /// still allows it.
+    fn occlusion_now(&self) -> bool {
+        self.state.display.ssao && self.governor.as_ref().is_some_and(|g| g.tier.ssao)
     }
 
     /// Forgets the governor's step-downs: the next moving frames start again
@@ -1024,6 +1086,7 @@ impl View3d {
         // Frame governor: only frames of a moving view count (an idle view
         // repaints rarely, which is not slowness).
         let governed = self.govern(&ctx, idle <= f64::EPSILON);
+        let ssao = self.occlusion_now();
 
         let ppp = ctx.pixels_per_point();
         let size_px = (
@@ -1036,7 +1099,7 @@ impl View3d {
             &self.camera,
             &self.state,
             size_px,
-            (mode, governed),
+            (mode, governed, ssao),
             self.overlay_revision,
         );
         ui.painter().add(egui_wgpu::Callback::new_paint_callback(
@@ -1051,6 +1114,7 @@ impl View3d {
                 size_px,
                 mode,
                 governed,
+                ssao,
                 overlays: self.overlays.clone(),
                 overlay_revision: self.overlay_revision,
                 key,
@@ -1418,7 +1482,7 @@ fn frame_key(
     camera: &Camera,
     state: &ViewState,
     size_px: (u32, u32),
-    (mode, governed): (Mode, Option<Tier>),
+    (mode, governed, ssao): (Mode, Option<Tier>, bool),
     overlay_revision: u64,
 ) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -1427,6 +1491,9 @@ fn frame_key(
         scene.pose_revision,
         library.revision(),
         overlay_revision,
+        // Hiding or showing items changes the scene without a revision.
+        scene.items.len(),
+        scene.wires.len(),
     )
         .hash(&mut h);
     for v in [
@@ -1442,6 +1509,7 @@ fn frame_key(
     }
     (camera.projection as u8, size_px, mode as u8).hash(&mut h);
     governed.map(|t| t as u8 + 1).hash(&mut h);
+    ssao.hash(&mut h);
     (&state.selection, state.hover, &state.hidden, &state.related).hash(&mut h);
     (
         state.display.edges,
@@ -1590,6 +1658,29 @@ mod stats_tests {
         assert!(again.iter().all(Option::is_none), "{again:?}");
         *STATS.lock().unwrap() = None;
     }
+
+    #[test]
+    fn only_a_discrete_adapter_offers_occlusion_and_slowness_pauses_it_first() {
+        let _guard = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let ctx = egui::Context::default();
+        *STATS.lock().unwrap() = Some(recorder(Tier::Integrated));
+        let mut view = View3d::new(11);
+        view.govern(&ctx, false);
+        assert!(!view.occlusion_available());
+        assert!(!view.occlusion_paused(), "never had it, so not paused");
+        *STATS.lock().unwrap() = Some(recorder(Tier::Discrete));
+        let mut view = View3d::new(12);
+        view.govern(&ctx, false);
+        assert!(view.occlusion_available() && view.occlusion_now());
+        // Slow frames take occlusion away before the tier changes.
+        let slow = drive(&mut view, &ctx, 90, 0.04, true);
+        assert!(slow.iter().all(Option::is_none), "tier unchanged: {slow:?}");
+        assert!(view.occlusion_paused() && !view.occlusion_now());
+        view.reset_quality();
+        view.govern(&ctx, false);
+        assert!(view.occlusion_now(), "reset brings it back");
+        *STATS.lock().unwrap() = None;
+    }
 }
 
 #[cfg(test)]
@@ -1722,7 +1813,7 @@ mod key_tests {
                 &camera,
                 state,
                 (64, 64),
-                (Mode::Settled, None),
+                (Mode::Settled, None, true),
                 0,
             )
         };
@@ -1739,5 +1830,70 @@ mod key_tests {
             assert!(!seen.contains(&k), "a switch left the picture key alone");
             seen.push(k);
         }
+        // Occlusion is part of the key by what is drawn (switch and governor).
+        let without = frame_key(
+            &scene,
+            &library,
+            &camera,
+            &base,
+            (64, 64),
+            (Mode::Settled, None, false),
+            0,
+        );
+        assert!(
+            !seen.contains(&without),
+            "occlusion left the picture key alone"
+        );
+    }
+}
+
+#[cfg(test)]
+mod level_tests {
+    use super::*;
+    use crate::governor::{FrameGovernor, Step};
+
+    fn run(g: &mut FrameGovernor<Level>, ms: f32, secs: f32) -> Vec<Level> {
+        let mut seen = Vec::new();
+        for _ in 0..((secs * 1000.0 / ms) as usize) {
+            seen.extend(g.frame(ms));
+        }
+        seen
+    }
+
+    #[test]
+    fn a_discrete_gpu_starts_with_occlusion_the_others_without() {
+        assert!(Level::start(Tier::Discrete).ssao);
+        assert!(!Level::start(Tier::Integrated).ssao);
+        assert!(!Level::start(Tier::Software).ssao);
+    }
+
+    #[test]
+    fn slow_frames_pause_occlusion_first_then_lower_the_tier_and_stop_there() {
+        let mut g = FrameGovernor::new(Level::start(Tier::Discrete), false);
+        let seen = run(&mut g, 40.0, 12.0);
+        assert_eq!(
+            seen,
+            vec![
+                Level {
+                    tier: Tier::Discrete,
+                    ssao: false
+                },
+                Level {
+                    tier: Tier::Integrated,
+                    ssao: false
+                },
+            ],
+            "one rung at a time, and a hardware adapter never reaches Software"
+        );
+    }
+
+    #[test]
+    fn fast_frames_keep_everything_and_nothing_steps_up() {
+        let mut g = FrameGovernor::new(Level::start(Tier::Discrete), false);
+        assert!(run(&mut g, 8.0, 10.0).is_empty());
+        let mut low = FrameGovernor::new(Level::start(Tier::Integrated), false);
+        assert!(run(&mut low, 4.0, 10.0).is_empty());
+        assert_eq!(low.tier, Level::start(Tier::Integrated));
+        assert_eq!(Level::start(Tier::Integrated).step_down(), None);
     }
 }

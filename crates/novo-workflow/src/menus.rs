@@ -52,6 +52,12 @@ fn group_default(group: &str) -> Option<MenuPlace> {
 
 /// Commands whose menu differs from their group's.
 const PLACEMENTS: &[(&str, MenuPlace)] = &[
+    // File > Open: the ways to open a project (the Recent list joins them).
+    ("file.open", under("File", "Open")),
+    ("file.open_read_only", under("File", "Open")),
+    ("file.example", under("File", "Open")),
+    ("macro.browser", under("File", "Macros")),
+    ("macro.import", under("File", "Macros")),
     ("page.new", under("File", "Pages")),
     ("page.rename", under("File", "Pages")),
     ("page.duplicate", under("File", "Pages")),
@@ -115,6 +121,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     // Edit
     ("edit.rotate", at("Edit")),
     ("edit.mirror", at("Edit")),
+    ("edit.shared_properties", at("Edit")),
     ("edit.renumber", under("Edit", "Renumber")),
     ("interruption.renumber", under("Edit", "Renumber")),
     ("plc.renumber_io", under("Edit", "Renumber")),
@@ -129,7 +136,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("macro.save", under("Draw", "Macros")),
     ("macro.place", under("Draw", "Macros")),
     ("macro.edit", under("Draw", "Macros")),
-    ("macro.export_pack", at("File")),
+    ("macro.export_pack", under("File", "Macros")),
     ("terminal.connect", under("Draw", "Terminals")),
     ("terminal.disconnect", under("Draw", "Terminals")),
     ("terminal.toggle_pe", under("Draw", "Terminals")),
@@ -162,9 +169,18 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.3d_align_bottom", under("View", "3D")),
     ("view.3d_spread_h", under("View", "3D")),
     ("view.3d_spread_v", under("View", "3D")),
+    ("view.3d_ssao", under("View", "3D")),
     ("view.3d_dimensions", under("View", "3D")),
     ("view.3d_quality", under("View", "3D")),
     ("view.3d_stats", under("View", "3D")),
+    ("view.3d_wire_runs", under("View", "3D")),
+    ("view.3d_hints", under("View", "3D")),
+    ("view.3d_select_devices", under("View", "3D")),
+    ("view.3d_select_rails", under("View", "3D")),
+    ("view.3d_select_ducts", under("View", "3D")),
+    ("view.3d_hide", under("View", "3D")),
+    ("view.3d_isolate", under("View", "3D")),
+    ("view.3d_show_all", under("View", "3D")),
     ("view.3d_duplicate", under("View", "3D")),
     ("view.3d_position", under("View", "3D")),
     ("view.3d_place", under("View", "3D")),
@@ -296,6 +312,10 @@ const SUBMENU_ORDER: &[&str] = &[
     "Lesson",
 ];
 
+/// Submenus drawn right after a plain command instead of after all of them:
+/// (submenu, the command it follows). File > Open sits under New project.
+const AFTER: &[(&str, &str)] = &[("Open", "file.new")];
+
 /// One row of a drawn menu.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuItem {
@@ -334,7 +354,22 @@ pub fn layout(menu: &str) -> Vec<MenuItem> {
             .unwrap_or(SUBMENU_ORDER.len())
     };
     subs.sort_by_key(|(name, _)| rank(name));
-    let mut out = plain;
+    let mut out = Vec::new();
+    for item in plain {
+        let id = match &item {
+            MenuItem::Command(info) => info.id,
+            _ => "",
+        };
+        out.push(item);
+        for (sub, after) in AFTER {
+            if *after == id
+                && let Some(n) = subs.iter().position(|(name, _)| name == sub)
+            {
+                let (name, items) = subs.remove(n);
+                out.push(MenuItem::Submenu { name, items });
+            }
+        }
+    }
     let blocks = [
         subs.into_iter()
             .map(|(name, items)| MenuItem::Submenu { name, items })
@@ -482,6 +517,31 @@ mod tests {
                 assert!(items.len() <= 10, "{name} has {} entries", items.len());
             }
         }
+    }
+
+    #[test]
+    fn open_commands_share_a_submenu_under_new_and_the_file_menu_stays_short() {
+        let file = layout("File");
+        let at_new = file
+            .iter()
+            .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
+            .unwrap();
+        match &file[at_new + 1] {
+            MenuItem::Submenu {
+                name: "Open",
+                items,
+            } => {
+                let ids: Vec<_> = items.iter().map(|c| c.id).collect();
+                assert_eq!(ids, ["file.open", "file.open_read_only", "file.example"]);
+            }
+            other => panic!("expected File > Open after New project, got {other:?}"),
+        }
+        // About 26 px a row keeps the whole menu inside 700 px.
+        let rows = file
+            .iter()
+            .filter(|i| !matches!(i, MenuItem::Separator))
+            .count();
+        assert!(rows <= 26, "the File menu has {rows} rows");
     }
 
     #[test]

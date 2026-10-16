@@ -62,9 +62,10 @@ fn open_read_only_shows_it_and_takes_edits_back() {
 fn the_command_is_in_the_file_menu_and_the_palette() {
     let file = novo_workflow::menus::layout("File");
     let found = file.iter().any(|item| {
-        matches!(item, novo_workflow::menus::MenuItem::Command(c) if c.id == "file.open_read_only")
+        matches!(item, novo_workflow::menus::MenuItem::Submenu { name: "Open", items }
+            if items.iter().any(|c| c.id == "file.open_read_only"))
     });
-    assert!(found, "File > Open read-only");
+    assert!(found, "File > Open > Open read-only");
     assert_eq!(
         Action::from_id("file.open_read_only"),
         Some(Action::OpenReadOnly)

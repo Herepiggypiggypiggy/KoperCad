@@ -25,7 +25,10 @@ use novo_reports::{
     Labels, Report, ReportOutput, SheetGrid, TapeStock, WireCutJob, ferrule_counts, is_estimate,
     label_items, layout_labels, stock_presets, wire_cut_jobs_with, with_spares,
 };
-use novo_theme::tokens;
+use novo_theme::table::{
+    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths, table_header,
+    table_row,
+};
 
 use super::pdf::write_replacing;
 use super::sheets::{hash, ours_or_free};
@@ -448,7 +451,7 @@ fn cut_tab(
 ) {
     let Some(cache) = state.cache.as_ref().filter(|_| state.standard.is_valid()) else {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             "The ferrule standard is not valid: fix it on the Ferrules tab",
         );
         return;
@@ -471,13 +474,16 @@ fn cut_tab(
     ));
     if estimates > 0 {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             format!(
                 "{estimates} lengths are estimates and print with a ~: the wire is not routed through a duct, or a device has no pin position. Measure those on the plate."
             ),
         );
     } else {
-        ui.colored_label(tokens::SUCCESS, "Every length comes from a routed wire");
+        ui.colored_label(
+            crate::theme::ui_palette().success,
+            "Every length comes from a routed wire",
+        );
     }
     ui.add_space(4.0);
     ui.weak(format!(
@@ -502,42 +508,81 @@ fn cut_tab(
         }
     });
     ui.add_space(6.0);
-    cut_preview(ui, jobs);
+    cut_table(ui, jobs);
 }
 
-/// The wires of the cut list as the PDF will order them, so the list can be
-/// read before anything is exported: number, size, cut length, ends.
-fn cut_preview(ui: &mut egui::Ui, jobs: &[novo_reports::WireCutJob]) {
-    ui.strong("Wires to cut");
+/// The wires to cut, in the order of the printed list (size and colour
+/// groups, longest first), so they can be checked before printing.
+fn cut_table(ui: &mut egui::Ui, jobs: &[WireCutJob]) {
+    let col = |header: &str, align| TableColumn {
+        header: header.into(),
+        align,
+    };
+    let columns = [
+        col("Wire", TableAlign::Left),
+        col("mm²", TableAlign::Right),
+        col("Colour", TableAlign::Left),
+        col("From", TableAlign::Left),
+        col("To", TableAlign::Left),
+        col("Cut mm", TableAlign::Right),
+        col("Basis", TableAlign::Left),
+    ];
+    let bar = ui.spacing().scroll.allocated_width() + 4.0;
+    let widths = column_widths(
+        ui.available_width() - bar,
+        &[1.4, 0.8, 1.2, 3.0, 3.0, 1.4, 1.6],
+    );
+    table_header(ui, &columns, &widths, None);
     egui::ScrollArea::vertical()
-        .id_salt("bench_cut_preview")
-        .max_height(240.0)
-        .auto_shrink([false, true])
-        .show(ui, |ui| {
-            egui::Grid::new("bench_cut_rows")
-                .num_columns(5)
-                .spacing([10.0, 2.0])
-                .striped(true)
-                .show(ui, |ui| {
-                    for head in ["No", "mm²", "Cut mm", "From", "To"] {
-                        ui.weak(head);
-                    }
-                    ui.end_row();
-                    for j in jobs {
-                        let est = is_estimate(&j.basis);
-                        ui.label(if j.number.is_empty() { "-" } else { &j.number });
-                        ui.label(
-                            j.cross_section_mm2
-                                .map_or("not set".to_owned(), |s| s.to_string()),
-                        );
-                        let cut = format!("{}{:.0}", if est { "~" } else { "" }, j.cut_mm);
-                        ui.label(cut);
-                        ui.label(&j.end_a.designation);
-                        ui.label(&j.end_b.designation);
-                        ui.end_row();
-                    }
-                });
+        .id_salt("bench_cut_rows")
+        .auto_shrink([false, false])
+        .min_scrolled_height(260.0)
+        .show_rows(ui, ROW_HEIGHT + 1.0, jobs.len(), |ui, range| {
+            for i in range {
+                let j = &jobs[i];
+                let texts = cut_row_texts(j);
+                let cells: Vec<TableCell<'_>> = texts
+                    .iter()
+                    .enumerate()
+                    .map(|(c, text)| TableCell {
+                        text,
+                        numeric: c == 1 || c == 5,
+                    })
+                    .collect();
+                let state = if is_estimate(&j.basis) {
+                    RowState::Flagged
+                } else {
+                    RowState::Normal
+                };
+                table_row(ui, &columns, &widths, &cells, state, ("bench_cut", i));
+            }
         });
+}
+
+/// The seven cells of one cut-list row: wire, mm², colour, from, to, cut
+/// length (`~` when it is an estimate) and basis. Missing values show `-` or `?`.
+pub(super) fn cut_row_texts(j: &WireCutJob) -> [String; 7] {
+    let or_dash = |s: &str| {
+        if s.is_empty() {
+            "-".to_owned()
+        } else {
+            s.to_owned()
+        }
+    };
+    [
+        or_dash(&j.number),
+        j.cross_section_mm2
+            .map_or_else(|| "?".to_owned(), |v| format!("{v}")),
+        or_dash(&j.colour),
+        j.end_a.designation.clone(),
+        j.end_b.designation.clone(),
+        format!(
+            "{}{:.0}",
+            if is_estimate(&j.basis) { "~" } else { "" },
+            j.cut_mm
+        ),
+        j.basis.clone(),
+    ]
 }
 
 fn ferrule_tab(
@@ -620,7 +665,7 @@ fn ferrule_tab(
     let valid = state.standard.is_valid();
     if !valid {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             "Each size must be listed once, above zero, with a contact length above zero",
         );
     }
@@ -749,7 +794,7 @@ fn label_tab(
     let valid = state.labels.is_valid();
     if !valid {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             "The label sizes do not fit the sheet: check the sheet fields",
         );
     }
@@ -772,7 +817,7 @@ fn label_tab(
         }
         if run.too_small > 0 {
             ui.colored_label(
-                tokens::WARNING,
+                crate::theme::ui_palette().warning,
                 format!(
                     "{} labels have text under 2 mm: choose bigger labels or wider tape",
                     run.too_small

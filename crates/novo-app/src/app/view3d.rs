@@ -28,11 +28,13 @@ use super::heat_spots;
 use super::view3d_align;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
+use super::view3d_hints::Hints;
 use super::view3d_move::{self, MoveState};
 use super::view3d_nudge::{self, Fields, Step};
 use super::view3d_place::{self, PlaceList};
 use super::view3d_rail;
 use super::view3d_stats::{Build, Stats};
+use super::view3d_wires::{self, WireFacts};
 
 /// The one view of the app.
 const VIEW_ID: u64 = 1;
@@ -54,6 +56,9 @@ pub(crate) struct View3dMode {
     /// A standard view or a fit asked for by a command, run on the next frame
     /// (when the scene is at hand).
     pub(super) pending: Option<Pending>,
+    /// A select-by-type asked for before the scene was built, applied right
+    /// after it is.
+    pub(super) pending_select: Option<ItemKind>,
     /// The Cabinet selection revision and the 3D selection as last synced, to
     /// tell which side changed.
     synced: (u64, BTreeSet<ItemId>),
@@ -73,10 +78,18 @@ pub(crate) struct View3dMode {
     heat_scene: Option<((u64, u64), Arc<novo_view3d::Scene>)>,
     /// The layers the scene was built with.
     built_layers: Layers,
+    /// The hidden items the scene was built with.
+    built_hidden: BTreeSet<ItemId>,
     /// The routed wires of an enclosure at a project revision.
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
+    /// What each routed wire comes to, for the hover card and the list.
+    pub(super) wire_facts: Option<(StructureId, u64, std::collections::BTreeMap<u64, WireFacts>)>,
+    /// The Wire runs list is open.
+    pub(super) wire_runs: bool,
     /// The toolbar's layers and door.
     pub(super) controls: Controls,
+    /// The legend of mouse and keys.
+    pub(super) hints: Hints,
     /// The frame statistics panel and the cost of the last scene rebuild.
     pub(super) stats: Stats,
 }
@@ -99,6 +112,7 @@ impl Default for View3dMode {
             library: Arc::new(MeshLibrary::new()),
             built: None,
             pending: None,
+            pending_select: None,
             synced: (0, BTreeSet::new()),
             menu: None,
             heat: Heat3d::default(),
@@ -108,8 +122,12 @@ impl Default for View3dMode {
             heat_flow: heat_3d::Flow::default(),
             heat_scene: None,
             built_layers: Layers::default(),
+            built_hidden: BTreeSet::new(),
             wires: None,
+            wire_facts: None,
+            wire_runs: false,
             controls: Controls::default(),
+            hints: Hints::default(),
             stats: Stats::default(),
         }
     }
@@ -139,6 +157,64 @@ impl NovoApp {
         model::door_limit_deg(project, id)
     }
 
+    /// `view.3d_select_*`: selects every device, rail or duct in the view.
+    pub(super) fn view3d_select_kind(&mut self, kind: ItemKind) {
+        let mode = &mut self.view3d;
+        let Some((_, _, scene)) = &mode.built else {
+            // The scene is built on the next frame; select then.
+            mode.pending_select = Some(kind);
+            return;
+        };
+        mode.view.state.selection = novo_view3d::hide::of_kind(scene, kind);
+        let n = mode.view.state.selection.len();
+        let noun = match kind {
+            ItemKind::Device => "device",
+            ItemKind::Rail => "rail",
+            _ => "duct",
+        };
+        let text = if n == 0 {
+            format!("No {noun}s on the plate")
+        } else {
+            format!("Selected {n} {noun}{}", if n == 1 { "" } else { "s" })
+        };
+        self.message(super::Level::Info, text);
+    }
+
+    /// `view.3d_hide`, `view.3d_isolate` and `view.3d_show_all`: the
+    /// selection goes out of the picture, or alone stays in it, or everything
+    /// comes back. The project is untouched.
+    pub(super) fn view3d_visibility(&mut self, id: &str) {
+        let mode = &mut self.view3d;
+        match id {
+            "view.3d_show_all" => mode.controls.hidden.clear(),
+            "view.3d_hide" => {
+                let parts: Vec<_> = mode
+                    .view
+                    .state
+                    .selection
+                    .iter()
+                    .copied()
+                    .filter(|i| novo_view3d::hide::is_part(i.kind))
+                    .collect();
+                mode.controls.hidden.extend(parts);
+                mode.view.state.selection.clear();
+            }
+            _ => {
+                // Isolate from what is in the picture now, so a second
+                // isolate narrows the first.
+                let Some((_, _, scene)) = &mode.built else {
+                    return;
+                };
+                let keep = mode.view.state.selection.clone();
+                if keep.iter().any(|i| novo_view3d::hide::is_part(i.kind)) {
+                    let out = novo_view3d::hide::all_but(scene, &keep);
+                    mode.controls.hidden.extend(out);
+                    mode.pending = Some(Pending::Fit);
+                }
+            }
+        }
+    }
+
     /// Whether some enclosure has a plate to draw.
     pub(super) fn view3d_has_cabinet(&self) -> bool {
         self.backend
@@ -164,14 +240,23 @@ impl NovoApp {
         let mode = &mut self.view3d;
         let layers = mode.controls.layers;
         let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
-            || mode.built_layers != layers;
+            || mode.built_layers != layers
+            || mode.built_hidden != mode.controls.hidden;
         if stale {
             let started = Instant::now();
             let mut routing_ms = None;
             // Routing is the slow part: it is redone only for a new revision.
             let wires = if layers.wires {
                 if !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision) {
-                    mode.wires = Some((id, revision, model::wires(project, id)));
+                    let routed = novo_routing::model::route_project(project);
+                    let inputs = model::wires_with(project, id, &routed);
+                    let on_plate = inputs.iter().map(|w| w.id).collect();
+                    mode.wire_facts = Some((
+                        id,
+                        revision,
+                        view3d_wires::facts(project, &routed, &on_plate),
+                    ));
+                    mode.wires = Some((id, revision, inputs));
                     routing_ms = Some(started.elapsed().as_secs_f32() * 1000.0);
                 }
                 mode.wires.as_ref().map(|w| w.2.clone()).unwrap_or_default()
@@ -183,10 +268,13 @@ impl NovoApp {
                 wires,
             };
             if let Some(built) = model::scene(project, id, &options) {
+                // Items deleted from the project are no longer hidden.
+                mode.controls.hidden.retain(|i| built.get(*i).is_some());
                 // The renderer redraws on a new scene revision only: `refresh`
                 // bumps it when the items differ (an edit that changes no
                 // selection or camera would otherwise stay unseen).
-                let mut shown = layers.apply(built);
+                let mut shown =
+                    novo_view3d::hide::without(layers.apply(built), &mode.controls.hidden);
                 if let Some((_, _, old)) = &mode.built {
                     let mut current = Scene::clone(old);
                     novo_view3d::build::refresh(&mut current, shown);
@@ -194,6 +282,7 @@ impl NovoApp {
                 }
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
+                mode.built_hidden = mode.controls.hidden.clone();
                 let total = started.elapsed().as_secs_f32() * 1000.0;
                 mode.stats.build = Build {
                     scene_ms: total - routing_ms.unwrap_or(0.0),
@@ -213,6 +302,9 @@ impl NovoApp {
             reduced_motion: self.settings.reduce_motion,
         };
         let now = ui.input(|i| i.time);
+        if let Some(kind) = mode.pending_select.take() {
+            mode.view.state.selection = novo_view3d::hide::of_kind(scene, kind);
+        }
         match mode.pending.take() {
             Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
             Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
@@ -376,13 +468,29 @@ impl NovoApp {
         }
         mode.view.drag_items = mode.controls.move_items && mode.place.armed.is_none();
         mode.view.state.display.shadows = mode.controls.shadows;
+        // Switching occlusion off and on asks for full quality back, the same
+        // as "Restore quality" (one governor, one restore path).
+        if mode.controls.ssao && !mode.view.state.display.ssao {
+            mode.view.reset_quality();
+        }
+        mode.view.state.display.ssao = mode.controls.ssao;
         mode.view.state.display.dimensions = mode.controls.dimensions;
         mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
-        mode.controls.reduced = mode.view.stepped_down().is_some();
-        view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        mode.controls.ssao_available = mode.view.occlusion_available();
+        mode.controls.reduced = mode.view.stepped_down().is_some() || mode.view.occlusion_paused();
+        let (_, asked) = view3d_controls::toolbar(
+            ui.ctx(),
+            view_rect,
+            &mut mode.controls,
+            limit,
+            !mode.view.state.selection.is_empty(),
+        );
+        if let Some(command) = asked {
+            self.wb.queued.push(command);
+        }
         if std::mem::take(&mut mode.controls.restore) {
             mode.view.reset_quality();
         }
@@ -406,6 +514,7 @@ impl NovoApp {
             );
         }
         mode.stats.frame(ui.ctx(), view_rect, &mut mode.view);
+        mode.hints.show(ui.ctx(), view_rect);
         mode.controls.clamp_door(limit);
         let target = mode.controls.door_target(limit);
         if let Some(angle) = open_angle(scene, DOOR_HINGE, target) {
@@ -438,6 +547,35 @@ impl NovoApp {
         );
         super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
         mode.view.state.hover = out.hover;
+        // Wire runs: a card for the wire under the pointer, and the list.
+        let wire_facts = mode
+            .wire_facts
+            .as_ref()
+            .filter(|(s, r, _)| *s == id && *r == revision)
+            .map(|(_, _, f)| f);
+        if let (Some(facts), Some(h), Some(at)) = (
+            wire_facts,
+            out.hover.filter(|h| h.kind == ItemKind::Wire),
+            ui.input(|i| i.pointer.hover_pos()),
+        ) && let Some(f) = facts.get(&h.raw)
+            && !mode.mv.dragging()
+        {
+            view3d_wires::hover_card(ui.ctx(), at, f);
+        }
+        if mode.wire_runs
+            && let Some(facts) = wire_facts
+        {
+            let asked = view3d_wires::list(ui.ctx(), out.rect, facts, &mode.view.state.selection);
+            if let Some(w) = asked.select {
+                mode.view.state.selection = BTreeSet::from([ItemId::new(ItemKind::Wire, w)]);
+            }
+            if asked.close {
+                mode.wire_runs = false;
+            }
+            if asked.cut_list {
+                self.wb.queued.push("report.cutlist");
+            }
+        }
         // Placing: the pointer moves the landing box, a click drops the
         // device, Escape lets go of it.
         let placing = mode.place.armed.is_some();
@@ -483,47 +621,47 @@ impl NovoApp {
         if mode.probe.on
             && let Some(sol) = &solution
         {
+            let place = Place {
+                plate_x: sol.plate[0],
+                plate_y: sol.plate[1],
+                frame: scene.frame,
+            };
+            let plane = mode.heat.slice.then(|| {
+                let a = mode.heat.axis;
+                (
+                    a,
+                    heat_3d::slice_offset(&sol.snapshot, a, mode.heat.slice_at),
+                )
+            });
+            // A point belongs to the result it was read from.
+            mode.probe.bind(sol.id);
             if let Some(click) = &out.clicked {
-                let place = Place {
-                    plate_x: sol.plate[0],
-                    plate_y: sol.plate[1],
-                    frame: scene.frame,
-                };
-                let plane = mode.heat.slice.then(|| {
-                    let a = mode.heat.axis;
-                    (
-                        a,
-                        heat_3d::slice_offset(&sol.snapshot, a, mode.heat.slice_at),
-                    )
-                });
                 mode.probe.at = heat_probe::locate(&sol.snapshot, place, &click.ray, plane);
             }
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 mode.probe.at = None;
             }
-            if let Some(at) = mode.probe.at {
-                let reading = heat_probe::read(&sol.snapshot, sol.ambient, at);
-                egui::Area::new(egui::Id::new("heat_probe_readout"))
-                    .order(egui::Order::Foreground)
-                    .pivot(egui::Align2::LEFT_BOTTOM)
-                    .fixed_pos(out.rect.left_bottom() + egui::vec2(12.0, -12.0))
-                    .show(ui.ctx(), |ui| {
-                        egui::Frame::popup(ui.style()).show(ui, |ui| {
-                            ui.label(reading.text());
-                        });
-                    });
-            } else {
-                egui::Area::new(egui::Id::new("heat_probe_readout"))
-                    .order(egui::Order::Foreground)
-                    .pivot(egui::Align2::LEFT_BOTTOM)
-                    .fixed_pos(out.rect.left_bottom() + egui::vec2(12.0, -12.0))
-                    .show(ui.ctx(), |ui| {
-                        egui::Frame::popup(ui.style()).show(ui, |ui| {
-                            ui.label("Probe: click the air to read it");
-                        });
-                    });
+            // Without a clicked point the strip shows what is under the pointer.
+            let (at, pointed) = match mode.probe.at {
+                Some(at) => (Some(at), false),
+                None => (
+                    out.hover_ray
+                        .and_then(|r| heat_probe::locate(&sol.snapshot, place, &r, plane)),
+                    true,
+                ),
+            };
+            let text = heat_probe::strip_text(
+                at.map(|at| heat_probe::read(&sol.snapshot, sol.ambient, at)),
+                pointed,
+            );
+            if mode.probe.set_text(text) {
+                ui.ctx().request_repaint();
             }
-            ui.ctx().request_repaint();
+            if out.hover_ray.is_some() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+        } else if !mode.probe.text.is_empty() {
+            mode.probe.text.clear();
         }
         let probing = mode.probe.on && solution.is_some();
         if let Some(click) = out.clicked.as_ref().filter(|_| !placing && !probing) {
@@ -812,6 +950,7 @@ fn heat_controls(
                 ui.selectable_value(&mut h.axis, axis, name);
             }
             ui.add(egui::Slider::new(&mut h.slice_at, 0.0..=1.0).show_value(false));
+            slice_position(ui, h, &sol.snapshot);
         }
         ui.checkbox(&mut h.iso, "Shell")
             .on_hover_text("The surface where the air reaches one temperature");
@@ -839,8 +978,44 @@ fn heat_controls(
         ui.checkbox(&mut probe.on, "Probe").on_hover_text(
             "Click the air to read its temperature and speed there (Esc clears the point)",
         );
+        if probe.on && !probe.text.is_empty() {
+            ui.label(egui::RichText::new(&probe.text).small());
+        }
         heat_legend::strip(ui, h, range, top_speed);
         jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
     });
     jump
+}
+
+/// The slice plane's position in millimetres along its axis, with a step to
+/// each side (one cell of the result grid).
+fn slice_position(ui: &mut egui::Ui, h: &mut Heat3d, snap: &novo_cfd::CfdSnapshot) {
+    let edges = heat_3d::slice_edges(snap, h.axis);
+    let (lo, hi) = (edges[0], edges[edges.len() - 1]);
+    let mut mm = lo + f64::from(h.slice_at) * (hi - lo);
+    let back = ui
+        .small_button("-")
+        .on_hover_text("To the centre of the previous cell")
+        .clicked();
+    if back {
+        mm = heat_3d::step_cell(edges, mm, -1);
+    }
+    let drag = ui
+        .add(
+            egui::DragValue::new(&mut mm)
+                .range(lo..=hi)
+                .speed(1.0)
+                .suffix(" mm"),
+        )
+        .on_hover_text("Where the plane cuts the enclosure; drag or type");
+    let forward = ui
+        .small_button("+")
+        .on_hover_text("To the centre of the next cell")
+        .clicked();
+    if forward {
+        mm = heat_3d::step_cell(edges, mm, 1);
+    }
+    if back || forward || drag.changed() {
+        h.slice_at = (((mm - lo) / (hi - lo).max(1e-9)) as f32).clamp(0.0, 1.0);
+    }
 }

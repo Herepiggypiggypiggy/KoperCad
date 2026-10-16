@@ -34,7 +34,17 @@ const fn nl(
 pub const DUTCH: &[Aliases] = &[
     // Project
     nl("file.new", &[], &["nieuw project", "nieuw"]),
-    nl("file.open", &[], &["project openen", "openen"]),
+    nl(
+        "file.open",
+        &[],
+        &[
+            "project openen",
+            "openen",
+            "bestand openen",
+            "recent",
+            "onlangs geopend",
+        ],
+    ),
     nl(
         "file.open_read_only",
         &[],
@@ -139,6 +149,16 @@ pub const DUTCH: &[Aliases] = &[
         "parts.auto_assign",
         &["wijs onderdelen toe"],
         &["automatisch", "artikelen toewijzen", "voorstellen"],
+    ),
+    nl(
+        "edit.shared_properties",
+        &["eigenschappen bewerken"],
+        &[
+            "eigenschappen",
+            "eigenschappen selectie",
+            "meerdere bewerken",
+            "bulk bewerken",
+        ],
     ),
     nl(
         "parts.clear",
@@ -743,6 +763,11 @@ pub const DUTCH: &[Aliases] = &[
         &["verdelen", "gelijk"],
     ),
     nl(
+        "view.3d_wire_runs",
+        &["draadlengtes tonen in 3d"],
+        &["draadlengte", "draden", "lengtes", "afkorten"],
+    ),
+    nl(
         "view.3d_duplicate",
         &["apparaat dupliceren in 3d"],
         &["dupliceren", "kopie", "kopieren"],
@@ -768,10 +793,46 @@ pub const DUTCH: &[Aliases] = &[
         &["kwaliteit", "trage weergave", "herstellen"],
     ),
     nl(
+        "view.3d_ssao",
+        &["omgevingsocclusie tonen in 3d"],
+        &["occlusie", "contactschaduw", "hoeken"],
+    ),
+    nl(
         "view.3d_stats",
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],
     ),
+    nl(
+        "view.3d_hints",
+        &["3d hulp tonen"],
+        &["muis en toetsen", "bediening"],
+    ),
+    nl(
+        "view.3d_select_devices",
+        &["alle apparaten kiezen in 3d"],
+        &["apparaten kiezen"],
+    ),
+    nl(
+        "view.3d_select_rails",
+        &["alle rails kiezen in 3d"],
+        &["rails kiezen"],
+    ),
+    nl(
+        "view.3d_select_ducts",
+        &["alle kanalen kiezen in 3d"],
+        &["kanalen kiezen"],
+    ),
+    nl(
+        "view.3d_hide",
+        &["selectie verbergen in 3d"],
+        &["verbergen"],
+    ),
+    nl(
+        "view.3d_isolate",
+        &["selectie isoleren in 3d"],
+        &["isoleren"],
+    ),
+    nl("view.3d_show_all", &["alles tonen in 3d"], &["alles tonen"]),
     nl("view.iso", &[], &["isometrisch", "hoekzicht"]),
     nl("view.front", &[], &["vooraanzicht", "deurzijde"]),
     nl("view.top", &[], &["bovenaanzicht", "van boven"]),
