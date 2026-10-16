@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use crate::enclosure::{DoorReport, Enclosure, check};
 use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
 use crate::{
-    Margins, Placement, Plate, Rail, Size, clearance_violations, collisions, outside,
+    Duct, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions, outside,
     rail_overflows,
 };
 
@@ -39,6 +39,7 @@ impl Report {
 pub struct CabinetLayout {
     pub plate: Plate,
     pub rails: Vec<Rail>,
+    pub ducts: Vec<Duct>,
     pub placements: Vec<Placement>,
     pub grid: f64,
     /// Interior and door of the enclosure, once set.
@@ -52,6 +53,7 @@ impl CabinetLayout {
         CabinetLayout {
             plate,
             rails: Vec::new(),
+            ducts: Vec::new(),
             placements: Vec::new(),
             grid: DEFAULT_GRID_MM,
             enclosure: None,

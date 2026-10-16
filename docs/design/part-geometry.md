@@ -35,6 +35,10 @@ Per user, `dirs::cache_dir()/kopercad/part-geometry` (`%LOCALAPPDATA%` on Window
 
 `GeometryService` builds on a background thread with a 10 s limit per part and a wake callback for the UI. A failed key is not retried until `forget(key)`.
 
+## Connection points
+
+`part3d::pins` reads where a wire meets the part from the same STEP file, in the same frame as the mesh (`mesh::derive_xf` gives the model-to-part map). Openings are inner loops of flat faces, 0.8 to 14 mm and not longer than 3.5 times their width (vents are dropped); pins are convex cylinders of radius 0.3 to 3 mm that reach the outline. The direction is the outline face the feature is nearest to, so a flipped normal in the file does not matter. `map_terminals` matches them to `PartTerminal`s per side in catalog order and says how (`Fix::Measured`, `Partial`, `Estimated`); estimates are written only on request and are labelled. Positions use the schema frame (origin back-left-bottom) and travel into the project part as `pin.<marking>.x_mm` (`novo_parts::terminal_position`).
+
 ## Known limits
 
 - B-spline surfaces are flat approximated (counted in `approximated_faces`).

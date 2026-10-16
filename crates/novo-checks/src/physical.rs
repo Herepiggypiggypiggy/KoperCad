@@ -2,7 +2,8 @@
 
 use std::collections::BTreeSet;
 
-use novo_core::{AnyId, CabinetPlacement, DeviceKind, SymbolRole, WireId};
+use novo_core::{AnyId, CabinetPlacement, DeviceId, DeviceKind, SymbolRole, WireId};
+use novo_layout::model::load;
 use novo_routing::model::{Connection, route_connections};
 use novo_routing::{Problem as RoutingProblem, Rules};
 
@@ -95,6 +96,86 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
                 }
                 _ => {}
             }
+        }
+    }
+}
+
+/// Collisions, devices off the plate, tight spacing and full rails on each
+/// enclosure's mounting plate, from novo-layout's report.
+pub(crate) fn layout(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    let project = cx.project;
+    let tag = |id: u64| {
+        project
+            .device(DeviceId::from(id))
+            .map_or_else(|| "A device".to_owned(), |d| d.tag.to_string())
+    };
+    let pair = |a: u64, b: u64| {
+        let mut at = vec![
+            AnyId::Device(DeviceId::from(a)),
+            AnyId::Device(DeviceId::from(b)),
+        ];
+        at.sort();
+        at
+    };
+    for structure in project.structures().filter(|s| s.plate.is_some()) {
+        let Some(layout) = load(project, structure.id) else {
+            continue;
+        };
+        let report = layout.report();
+        for (a, b) in report.collisions {
+            out.push(Problem::new(
+                ProblemKind::DeviceCollision,
+                pair(a, b),
+                format!(
+                    "{} and {} overlap on the plate of {}",
+                    tag(a),
+                    tag(b),
+                    structure.tag
+                ),
+            ));
+        }
+        for id in report.outside {
+            out.push(Problem::new(
+                ProblemKind::DeviceOutsidePlate,
+                vec![AnyId::Device(DeviceId::from(id))],
+                format!(
+                    "{} leaves the usable area of the plate of {}",
+                    tag(id),
+                    structure.tag
+                ),
+            ));
+        }
+        for (a, b, gap) in report.too_close {
+            out.push(Problem::new(
+                ProblemKind::DevicesTooClose,
+                pair(a, b),
+                format!(
+                    "{} and {} are {} mm apart, closer than their clearance",
+                    tag(a),
+                    tag(b),
+                    gap.round()
+                ),
+            ));
+        }
+        for (rail, over) in report.rail_overflows {
+            let devices: Vec<AnyId> = layout
+                .placements
+                .iter()
+                .filter(|p| p.rail == Some(rail))
+                .map(|p| AnyId::Device(DeviceId::from(p.id)))
+                .collect();
+            if devices.is_empty() {
+                continue;
+            }
+            out.push(Problem::new(
+                ProblemKind::RailOverflow,
+                devices,
+                format!(
+                    "The devices on a rail of {} need {} mm more than it has",
+                    structure.tag,
+                    over.round()
+                ),
+            ));
         }
     }
 }
