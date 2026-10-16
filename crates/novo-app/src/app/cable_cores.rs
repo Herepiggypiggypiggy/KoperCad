@@ -138,7 +138,9 @@ pub(super) fn header_controls(
         }
     });
     ui.horizontal(|ui| {
-        ui.label("Type");
+        ui.label("Type").on_hover_text(
+            "Changing the type rebuilds the cores like a proposal: hand-made core assignments are reset",
+        );
         let current = novo_cables::type_label(project, record);
         egui::ComboBox::from_id_salt(("cable_type", cable.raw()))
             .selected_text(current)
@@ -173,10 +175,14 @@ fn fitting_types(project: &Project, cable: &Cable) -> Vec<(CableType, bool)> {
         .filter_map(|c| project.wire(c.wire?))
         .map(|w| novo_cables::propose::conductor(project, &netlist, w))
         .collect();
+    let shield_in_use = cable.cores.iter().enumerate().any(|(i, c)| {
+        c.shield && (c.wire.is_some() || novo_cables::shield_connection(cable, i).is_some())
+    });
     novo_cables::default_types()
         .into_iter()
         .map(|t| {
-            let fit = novo_cables::propose::assign(&conductors, &t).is_some();
+            let fit = novo_cables::propose::assign(&conductors, &t).is_some()
+                && (t.shield || !shield_in_use);
             (t, fit)
         })
         .collect()

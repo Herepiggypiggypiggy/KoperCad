@@ -237,23 +237,41 @@ pub fn delete_cable(tx: &mut Tx<'_>, cable: CableId) -> Result<()> {
 /// Gives a cable another type: new cores, the wires put on them the way a
 /// proposal would (PE on green-yellow, lines on BN BK GY). The part is
 /// cleared, since it was for the old type, and spare marks stay on cores
-/// that keep their name. Refused, changing nothing, when the wires do not
-/// fit the new type.
+/// that keep their name.
+///
+/// Like a proposal, this rebuilds the cores: hand-made core assignments
+/// (swaps) and per-core overrides are reset. Shields that carry a wire or a
+/// recorded connection are kept in order (the type's shield first, further
+/// ones as extra shield cores with their names). Refused, changing nothing,
+/// when the wires do not fit the new type, or when a connected shield has
+/// no place on it (a shielded cable to an unshielded type).
 pub fn retype_cable(tx: &mut Tx<'_>, cable: CableId, cable_type: &CableType) -> Result<()> {
     let project = tx.project();
     let record = cable_of(project, cable)?;
     let netlist = project.netlist();
     let mut wires = Vec::new();
     let mut conductors = Vec::new();
-    let mut shield_wire = None;
-    for core in &record.cores {
-        let Some(wire) = core.wire else { continue };
+    // Shields in use: name, wire, recorded connection value.
+    let mut shields: Vec<(String, Option<WireId>, Option<Value>)> = Vec::new();
+    for (index, core) in record.cores.iter().enumerate() {
         if core.shield {
-            shield_wire = Some(wire);
-        } else if let Some(w) = project.wire(wire) {
+            let recorded = record.properties.get(&shield_key(&core.name)).cloned();
+            let connected = shield_connection(record, index).is_some();
+            if core.wire.is_some() || connected || recorded.is_some() {
+                shields.push((core.name.clone(), core.wire, recorded));
+            }
+        } else if let Some(wire) = core.wire
+            && let Some(w) = project.wire(wire)
+        {
             wires.push(wire);
             conductors.push(conductor(project, &netlist, w));
         }
+    }
+    if !shields.is_empty() && !cable_type.shield {
+        return Err(ModelError::InvalidValue {
+            id: cable.into(),
+            field: "cable type",
+        });
     }
     let Some(cores) = assign(&conductors, cable_type) else {
         return Err(ModelError::InvalidValue {
@@ -265,14 +283,43 @@ pub fn retype_cable(tx: &mut Tx<'_>, cable: CableId, cable_type: &CableType) -> 
     for (wire, core) in wires.into_iter().zip(cores) {
         built[core].wire = Some(wire);
     }
-    if let Some(slot) = built.iter_mut().find(|c| c.shield) {
-        slot.wire = shield_wire;
+    // Shield i goes on the type's shield (the first), further ones on extra
+    // shield cores that keep their names.
+    let mut shield_props: Vec<(String, Option<Value>)> = Vec::new();
+    for (i, (old_name, wire, recorded)) in shields.into_iter().enumerate() {
+        let at = if i == 0 {
+            built.iter().position(|c| c.shield)
+        } else {
+            None
+        };
+        let at = at.unwrap_or_else(|| {
+            let mut extra = novo_core::CableCore::new(old_name);
+            extra.shield = true;
+            built.push(extra);
+            built.len() - 1
+        });
+        built[at].wire = wire;
+        shield_props.push((built[at].name.clone(), recorded));
     }
+    let stale: Vec<String> = record
+        .properties
+        .keys()
+        .filter(|k| k.starts_with(SHIELD_KEY_PREFIX))
+        .cloned()
+        .collect();
     let spare: Vec<String> = spare_cores(record)
         .into_iter()
         .filter(|name| built.iter().any(|c| c.name == *name))
         .collect();
     let name = cable_type.name();
+    for key in stale {
+        tx.set_property(cable, key, None)?;
+    }
+    for (core_name, recorded) in shield_props {
+        if recorded.is_some() {
+            tx.set_property(cable, shield_key(&core_name), recorded)?;
+        }
+    }
     tx.update::<Cable>(cable, |c| {
         c.cores = built;
         c.part = None;

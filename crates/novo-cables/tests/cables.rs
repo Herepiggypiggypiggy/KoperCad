@@ -468,6 +468,66 @@ fn a_cable_is_retyped_renamed_and_deleted_in_one_undo_step_each() {
 }
 
 #[test]
+fn retype_keeps_connected_shields_and_refuses_to_drop_them() {
+    let (mut doc, _m) = gate1_without_cable();
+    let proposals = propose_cables(doc.project());
+    let (cables, _) = doc
+        .transact("Accept", |tx| accept_proposals(tx, &proposals, None))
+        .unwrap();
+    let cable = cables[0];
+    let (sh, _) = doc.transact("Sh", |tx| add_shield(tx, cable)).unwrap();
+    let (sh2, _) = doc.transact("Sh2", |tx| add_shield(tx, cable)).unwrap();
+    doc.transact("Connect", |tx| {
+        connect_shield(tx, cable, sh, Some(ShieldConnection::Pe))?;
+        connect_shield(tx, cable, sh2, Some(ShieldConnection::Pe))
+    })
+    .unwrap();
+
+    // To an unshielded type: refused, nothing changes.
+    let before = doc.project().cable(cable).unwrap().clone();
+    let plain = CableType::standard(4, true, 1.5);
+    assert!(
+        doc.transact("Retype", |tx| novo_cables::retype_cable(tx, cable, &plain))
+            .is_err()
+    );
+    assert_eq!(doc.project().cable(cable).unwrap(), &before);
+
+    // To a shielded type: both shields and their connections stay.
+    let shielded = CableType::standard(4, true, 1.5).shielded();
+    doc.transact("Retype", |tx| {
+        novo_cables::retype_cable(tx, cable, &shielded)
+    })
+    .unwrap();
+    let c = doc.project().cable(cable).unwrap();
+    let shields: Vec<usize> = (0..c.cores.len()).filter(|&i| c.cores[i].shield).collect();
+    assert_eq!(shields.len(), 2);
+    for i in shields {
+        assert_eq!(
+            novo_cables::shield_connection(c, i),
+            Some(ShieldConnection::Pe)
+        );
+    }
+
+    // A shield that is not connected may go with an unshielded type, and no
+    // stale shield property is left.
+    let mut doc2 = doc;
+    doc2.transact("Disconnect", |tx| {
+        let c = tx.project().cable(cable).unwrap();
+        let idx: Vec<usize> = (0..c.cores.len()).filter(|&i| c.cores[i].shield).collect();
+        for i in idx {
+            connect_shield(tx, cable, i, None)?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    doc2.transact("Retype", |tx| novo_cables::retype_cable(tx, cable, &plain))
+        .unwrap();
+    let c = doc2.project().cable(cable).unwrap();
+    assert!(c.cores.iter().all(|x| !x.shield));
+    assert!(c.properties.keys().all(|k| !k.starts_with("cable.shield.")));
+}
+
+#[test]
 fn declined_wires_are_listed_until_restored() {
     let (mut doc, m) = gate1_without_cable();
     let proposals = propose_cables(doc.project());
