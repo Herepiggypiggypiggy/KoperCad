@@ -126,7 +126,9 @@ pub(crate) fn fits(target: &Target, number: &str) -> bool {
 }
 
 /// Every group of the project, in reading order: page order, then column,
-/// then top to bottom, then left to right.
+/// then strand by strand (left to right), each strand top to bottom. A
+/// three-phase feed numbers L1 1, 2, 3, then L2 4, 5, 6, not 1, 4, 5 across
+/// the sheet.
 pub fn groups(project: &Project, netlist: &Netlist) -> Vec<Group> {
     let mut pages: Vec<_> = project.pages().collect();
     pages.sort_by(|a, b| {
@@ -167,8 +169,8 @@ fn compare(a: &Group, b: &Group) -> Ordering {
     a.page_rank
         .cmp(&b.page_rank)
         .then(a.column.cmp(&b.column))
-        .then(a.y.total_cmp(&b.y))
         .then(a.x.total_cmp(&b.x))
+        .then(a.y.total_cmp(&b.y))
         .then_with(|| a.wires.cmp(&b.wires))
 }
 
