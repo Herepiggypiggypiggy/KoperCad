@@ -19,7 +19,7 @@ level = "beginner"
 minutes = 5
 topics = ["cabinet", "3d"]
 needs = ["cabinet-layout"]
-project = "../rails-and-ducts/finished.json"
+project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-3d"

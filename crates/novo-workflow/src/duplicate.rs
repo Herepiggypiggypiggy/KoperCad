@@ -39,10 +39,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
-    AnyId, Device, DeviceId, DeviceKind, Endpoint, Junction, JunctionId, PageId, Point, Project,
-    Result, SymbolId, SymbolInstance, SymbolRole, Terminal, TerminalId, Text, TextId, Tx, Wire,
-    WireId, natural_cmp, split_code,
+    AnyId, DeviceId, DeviceKind, Endpoint, Junction, JunctionId, PageId, Point, Project, Result,
+    SymbolId, SymbolInstance, SymbolRole, TerminalId, Text, TextId, Tx, Wire, WireId,
 };
+
+use crate::clipboard::{Clip, paste};
 
 /// How copied devices are tagged.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -50,8 +51,11 @@ pub enum TagMode {
     /// The next free number per letter code (Ctrl+D, Ctrl+V).
     #[default]
     NextFree,
-    /// The original tags (Ctrl+Shift+V).
+    /// The original tags, duplicates included.
     Keep,
+    /// The original tags where no device has them, else the next free
+    /// ones (Ctrl+Shift+V; a paste after a cut).
+    KeepIfFree,
 }
 
 /// What a duplicate created, keyed by the original ids.
@@ -83,7 +87,8 @@ impl Duplicated {
 
 /// Copies `items` (symbols, junctions, wires and free texts; other ids are
 /// ignored), with the texts attached to them, to
-/// `page`, moved by `offset`.
+/// `page`, moved by `offset`. A snapshot pasted at once, see
+/// [`crate::clipboard`].
 pub fn duplicate(
     tx: &mut Tx<'_>,
     items: &[AnyId],
@@ -91,182 +96,15 @@ pub fn duplicate(
     offset: Point,
     mode: TagMode,
 ) -> Result<Duplicated> {
-    let selection = Selection::gather(tx.project(), items);
-    let mut out = Duplicated::default();
-
-    // Devices that get a copy, in tag order so numbers follow it.
-    let mut devices: Vec<&Device> = selection
-        .devices_to_copy(tx.project())
-        .into_iter()
-        .filter_map(|id| tx.project().device(id))
-        .collect();
-    // Natural order, so `-K2` is numbered before `-K10`.
-    devices.sort_by(|a, b| natural_cmp(&a.tag.to_string(), &b.tag.to_string()));
-    let devices: Vec<Device> = devices.into_iter().cloned().collect();
-    for device in devices {
-        let tag = match mode {
-            TagMode::Keep => device.tag.clone(),
-            TagMode::NextFree => {
-                let next = tx
-                    .project()
-                    .next_tag_number(&device.tag.parent(), device.tag.letter_code());
-                device.tag.with_number(next)
-            }
-        };
-        let new = tx.insert(|id| Device {
-            id,
-            tag,
-            ..device.clone()
-        })?;
-        out.devices.insert(device.id, new);
-    }
-
-    // Symbols, with roles pointing at the copies.
-    for original in selection.symbols(tx.project()) {
-        let role = match &original.role {
-            SymbolRole::Device { device, main } => SymbolRole::Device {
-                device: out.devices.get(device).copied().unwrap_or(*device),
-                main: *main,
-            },
-            SymbolRole::Terminal { terminals } => {
-                let mut copies = Vec::with_capacity(terminals.len());
-                for &t in terminals {
-                    let copy = copy_terminal(tx, t, mode)?;
-                    out.terminals.insert(t, copy);
-                    copies.push(copy);
-                }
-                SymbolRole::Terminal { terminals: copies }
-            }
-            other => other.clone(),
-        };
-        let mut placement = original.placement;
-        placement.origin = placement.origin + offset;
-        let new = tx.insert(|id| SymbolInstance {
-            id,
-            page,
-            placement,
-            role,
-            ..original.clone()
-        })?;
-        out.symbols.insert(original.id, new);
-    }
-
-    for original in selection.junctions(tx.project()) {
-        let position = original.position + offset;
-        let new = tx.insert(|id| Junction { id, page, position })?;
-        out.junctions.insert(original.id, new);
-    }
-
-    let wires: Vec<Wire> = selection.wires(tx.project());
-    for original in wires {
-        let (Some(from), Some(to)) = (
-            map_endpoint(&out, original.from, offset),
-            map_endpoint(&out, original.to, offset),
-        ) else {
-            continue;
-        };
-        let route = original.route.iter().map(|&p| p + offset).collect();
-        let new = tx.insert(|id| Wire {
-            id,
-            page,
-            from,
-            to,
-            route,
-            number: None,
-            ..original.clone()
-        })?;
-        out.wires.insert(original.id, new);
-    }
-
-    // Texts attached to copied objects follow them; their offset is
-    // relative to the object, so it stays.
-    let attached: Vec<(AnyId, AnyId)> = out
-        .symbols
-        .iter()
-        .map(|(&a, &b)| (a.into(), b.into()))
-        .chain(out.junctions.iter().map(|(&a, &b)| (a.into(), b.into())))
-        .chain(out.wires.iter().map(|(&a, &b)| (a.into(), b.into())))
-        .collect();
-    for (original, copy) in attached {
-        let texts: Vec<Text> = tx
-            .project()
-            .texts_of(original)
-            .into_iter()
-            .filter_map(|id| tx.project().text(id).cloned())
-            .collect();
-        for text in texts {
-            let new = tx.insert(|id| Text {
-                id,
-                page,
-                attached_to: Some(copy),
-                ..text.clone()
-            })?;
-            out.texts.insert(text.id, new);
-        }
-    }
-    // Selected free texts move by the offset.
-    for text in selection.free_texts(tx.project()) {
-        let mut placement = text.placement;
-        placement.offset = placement.offset + offset;
-        let new = tx.insert(|id| Text {
-            id,
-            page,
-            placement,
-            ..text.clone()
-        })?;
-        out.texts.insert(text.id, new);
-    }
-    Ok(out)
-}
-
-fn map_endpoint(out: &Duplicated, end: Endpoint, offset: Point) -> Option<Endpoint> {
-    match end {
-        Endpoint::Free { at } => Some(Endpoint::Free { at: at + offset }),
-        Endpoint::Pin { symbol, pin } => out
-            .symbols
-            .get(&symbol)
-            .map(|&s| Endpoint::Pin { symbol: s, pin }),
-        Endpoint::Junction { junction } => out
-            .junctions
-            .get(&junction)
-            .map(|&j| Endpoint::Junction { junction: j }),
-    }
-}
-
-/// A new terminal on the same strip: the next number, or the same
-/// non-numeric name. [`TagMode::Keep`] keeps every name.
-fn copy_terminal(tx: &mut Tx<'_>, original: TerminalId, mode: TagMode) -> Result<TerminalId> {
-    let project = tx.project();
-    let Some(terminal) = project.terminal(original).cloned() else {
-        return Err(novo_core::ModelError::NotFound(original.into()));
+    // The copy is in the same project, so contacts keep their coil.
+    let Some(clip) = Clip::capture(tx.project(), items, "", false) else {
+        return Ok(Duplicated::default());
     };
-    let siblings = project.terminals_of_strip(terminal.strip);
-    let numeric = |name: &str| match split_code(name) {
-        ("", Some(n), "") => Some(n),
-        _ => None,
-    };
-    let name = if mode == TagMode::NextFree && numeric(&terminal.name).is_some() {
-        let next = siblings
-            .iter()
-            .filter_map(|t| numeric(&t.name))
-            .max()
-            .map_or(1, |n| n + 1);
-        next.to_string()
-    } else {
-        terminal.name.clone()
-    };
-    let order = siblings.iter().map(|t| t.order).max().unwrap_or(0) + 1;
-    tx.insert(|id| Terminal {
-        id,
-        name,
-        order,
-        jumper: None,
-        ..terminal
-    })
+    Ok(paste(tx, &clip, page, offset, mode, "")?.copied)
 }
 
 /// The objects a duplicate copies.
-struct Selection {
+pub(crate) struct Selection {
     symbols: BTreeSet<SymbolId>,
     junctions: BTreeSet<JunctionId>,
     wires: BTreeSet<WireId>,
@@ -275,7 +113,7 @@ struct Selection {
 }
 
 impl Selection {
-    fn gather(project: &Project, items: &[AnyId]) -> Selection {
+    pub(crate) fn gather(project: &Project, items: &[AnyId]) -> Selection {
         let mut s = Selection {
             symbols: BTreeSet::new(),
             junctions: BTreeSet::new(),
@@ -320,7 +158,7 @@ impl Selection {
         s
     }
 
-    fn devices_to_copy(&self, project: &Project) -> BTreeSet<DeviceId> {
+    pub(crate) fn devices_to_copy(&self, project: &Project) -> BTreeSet<DeviceId> {
         let mut out = BTreeSet::new();
         let referenced: BTreeSet<DeviceId> = self
             .symbols
@@ -352,28 +190,28 @@ impl Selection {
         out
     }
 
-    fn free_texts(&self, project: &Project) -> Vec<Text> {
+    pub(crate) fn free_texts(&self, project: &Project) -> Vec<Text> {
         self.free_texts
             .iter()
             .filter_map(|&id| project.text(id).cloned())
             .collect()
     }
 
-    fn symbols(&self, project: &Project) -> Vec<SymbolInstance> {
+    pub(crate) fn symbols(&self, project: &Project) -> Vec<SymbolInstance> {
         self.symbols
             .iter()
             .filter_map(|&id| project.symbol(id).cloned())
             .collect()
     }
 
-    fn junctions(&self, project: &Project) -> Vec<Junction> {
+    pub(crate) fn junctions(&self, project: &Project) -> Vec<Junction> {
         self.junctions
             .iter()
             .filter_map(|&id| project.junction(id).cloned())
             .collect()
     }
 
-    fn wires(&self, project: &Project) -> Vec<Wire> {
+    pub(crate) fn wires(&self, project: &Project) -> Vec<Wire> {
         self.wires
             .iter()
             .filter_map(|&id| project.wire(id).cloned())

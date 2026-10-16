@@ -155,6 +155,7 @@ pub const DUTCH: &[Aliases] = &[
     nl("edit.cut", &[], &["knippen"]),
     nl("edit.paste", &[], &["plakken"]),
     nl("edit.paste_keep_tags", &[], &["plakken met originele tags"]),
+    nl("edit.paste_in_place", &[], &["plakken op dezelfde plek"]),
     nl("edit.duplicate", &[], &["dupliceren", "kopie"]),
     nl("macro.save", &["macro opslaan"], &["opslaan als macro"]),
     nl(
@@ -403,6 +404,11 @@ pub const DUTCH: &[Aliases] = &[
         &["autocad", "converter", "achtergrond"],
     ),
     nl(
+        "file.eplan_export_script",
+        &["eplan script ophalen"],
+        &["eplan", "exporteren", "migreren", "overstappen", "pxf"],
+    ),
+    nl(
         "file.choose_dwg_converter",
         &[],
         &["dwg converter", "dwg2dxf", "omzetter"],
@@ -450,6 +456,8 @@ pub const DUTCH: &[Aliases] = &[
     nl("report.wires", &["draadlijst"], &["draden", "aders"]),
     nl("report.terminals", &["klemmenlijst"], &["klemmenstrook"]),
     nl("report.cables", &["kabellijst"], &["kabels"]),
+    nl("report.cutlist", &["zaaglijst"], &["afkortlijst"]),
+    nl("report.labels", &["labels", "etiketten"], &["markeringen"]),
     nl(
         "export.sheets",
         &[

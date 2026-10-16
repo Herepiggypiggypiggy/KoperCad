@@ -16,6 +16,7 @@ mod cable_controls;
 mod change_report;
 mod changes;
 mod checks;
+mod clipboard;
 mod commissioning;
 mod compare;
 mod dock;
@@ -31,6 +32,7 @@ mod heat_run_tests;
 mod inspector;
 mod interop;
 mod learn;
+mod learn_demo;
 mod learn_ui;
 mod link;
 mod live;
@@ -73,6 +75,7 @@ mod simulate;
 mod sizing;
 mod standards;
 mod status_bar;
+mod symbol_preview;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
@@ -95,6 +98,8 @@ mod cabinet_rules_tests;
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
+#[cfg(test)]
+mod clipboard_tests;
 #[cfg(test)]
 mod commissioning_tests;
 #[cfg(test)]
@@ -129,7 +134,7 @@ use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
 const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
-const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
+const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Edit the file in Excel and bring it back with File > Import spreadsheet. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::PageView;
 
@@ -807,8 +812,17 @@ impl NovoApp {
         if !self.modal_open() {
             self.outline_keys(&ctx);
         }
+        if !self.modal_open() {
+            self.clipboard_events(&ctx);
+        }
         let mut commands = if self.modal_open() {
-            Vec::new()
+            // The place key pressed again over its own wheel swaps it for
+            // the part search; every other key waits for the wheel.
+            if self.wheel_place_press(&ctx) {
+                vec!["tool.place"]
+            } else {
+                Vec::new()
+            }
         } else {
             self.key_commands(&ctx)
         };
@@ -825,6 +839,7 @@ impl NovoApp {
             commands.retain(|id| {
                 Action::from_id(id).is_some()
                     || *id == "view.cabinet_table"
+                    || *id == "view.command_field_here"
                     || id.starts_with("heat.")
             });
         }
@@ -920,6 +935,7 @@ impl NovoApp {
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
         self.aml_import_dialog(&ctx);
+        self.eplan_guide_dialog(&ctx);
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
@@ -962,6 +978,7 @@ impl NovoApp {
         if let Some(page) = self.canvas.take_page_request() {
             self.show_page(page);
         }
+        self.after_paste_click();
         let asked = self.canvas.take_commands();
         self.wb.queued.extend(asked);
         let cable = self
@@ -999,8 +1016,11 @@ impl NovoApp {
     }
 
     fn modal_open(&self) -> bool {
+        self.wb.wheel.is_some() || self.modal_open_but_wheel()
+    }
+
+    fn modal_open_but_wheel(&self) -> bool {
         self.show_about
-            || self.wb.wheel.is_some()
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
             || self.wb.sheet_import.is_some()

@@ -82,7 +82,11 @@ impl Draw<'_, '_> {
         let potential = edit::find_or_add_potential(self.tx, name, kind, None).expect("potential");
         let symbol = self
             .lib
-            .get("iec/connectivity/potential_feed")
+            .get(if novo_editor::potential::draws_as_earth(kind) {
+                novo_editor::potential::FEED_PE_SYMBOL
+            } else {
+                novo_editor::potential::FEED_SYMBOL
+            })
             .expect("feed");
         let options = PlaceOptions {
             potential: Some(potential),
@@ -930,6 +934,19 @@ fn a_row_of_three_feeds_reads_l1_l2_l3_and_a_fourth_becomes_pe_by_its_chip() {
     assert_eq!(menu.current.as_deref(), Some("L4"));
     let pe = menu.chips.iter().find(|c| c.name == "PE").unwrap().clone();
     assert!(r.editor.set_feed_potential(&mut r.doc, &[fourth], &pe));
+    // The lesson promises "the symbol changes to the protective earth".
+    let key = |r: &Replay| r.project().symbol(fourth).unwrap().symbol.0.clone();
+    assert_eq!(key(&r), "iec/connectivity/potential_feed_pe");
+    // Taking PE away again restores the plain feed, and undo walks back.
+    let l1 = menu.chips.iter().find(|c| c.name == "L1").unwrap().clone();
+    assert!(r.editor.set_feed_potential(&mut r.doc, &[fourth], &l1));
+    assert_eq!(key(&r), "iec/connectivity/potential_feed");
+    r.doc.undo().unwrap();
+    assert_eq!(key(&r), "iec/connectivity/potential_feed_pe");
+    r.doc.undo().unwrap();
+    assert_eq!(key(&r), "iec/connectivity/potential_feed");
+    r.doc.redo().unwrap();
+    assert_eq!(key(&r), "iec/connectivity/potential_feed_pe");
     assert_eq!(
         nets_of(r.project()),
         nets_of(potentials(true).project()),
