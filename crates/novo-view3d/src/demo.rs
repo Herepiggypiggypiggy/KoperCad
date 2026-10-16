@@ -4,7 +4,7 @@
 
 use crate::mesh::{GeometryKey, MeshData, MeshLibrary, PartGeometry, unit_box};
 use crate::scene::{
-    Group, GroupId, Item, ItemId, ItemKind, Mark, PlateFrame, Pose, Profile, Scene, Shape,
+    Group, GroupId, Item, ItemId, ItemKind, Mark, PlateFrame, Pose, Profile, Scene, Shape, Wire,
 };
 use glam::Vec3;
 use std::sync::Arc;
@@ -29,6 +29,9 @@ pub struct DemoOptions {
     pub shaped_parts: bool,
     /// Add a translucent door on a hinge at the left edge.
     pub door: bool,
+    /// Up to this many wires: each runs from one device up into the duct of its
+    /// row, along it and down to another device, in one of six colours.
+    pub wires: usize,
 }
 
 impl Default for DemoOptions {
@@ -37,6 +40,7 @@ impl Default for DemoOptions {
             devices: DEVICES_PER_PANEL,
             shaped_parts: true,
             door: true,
+            wires: 0,
         }
     }
 }
@@ -92,6 +96,8 @@ pub fn cabinet(opts: &DemoOptions) -> (Scene, Arc<MeshLibrary>) {
     let rows = ROWS;
     let per_row = opts.devices.div_ceil(rows).max(1);
     let mut placed = 0usize;
+    // Where each device stands: its row, centre x and the y of the duct above.
+    let mut slots: Vec<(usize, f32, f32)> = Vec::new();
     let margin = 30.0;
     for row in 0..rows {
         let top = 50.0 + row as f32 * 135.0;
@@ -139,9 +145,44 @@ pub fn cabinet(opts: &DemoOptions) -> (Scene, Arc<MeshLibrary>) {
                 item.mark = Mark::GuessedSize;
             }
             scene.push(item);
+            slots.push((row, x + dw * 0.5, duct_y));
             placed += 1;
             x += dw + 1.0;
         }
+    }
+
+    // Wires: from a device up to the duct of its row, along it, down again.
+    let palette: [[u8; 3]; 6] = [
+        [0x1B, 0x1B, 0x1E],
+        [0x2F, 0x6F, 0xD0],
+        [0xB3, 0x3A, 0x3A],
+        [0x6B, 0x42, 0x26],
+        [0x8C, 0x8F, 0x94],
+        [0x7F, 0xB0, 0x20],
+    ];
+    for k in 0..opts.wires.min(slots.len().saturating_sub(1)) {
+        let (row, x0, duct_y) = slots[k];
+        // A partner in the same row, a few devices along.
+        let Some(&(_, x1, _)) = slots[k + 1..].iter().find(|s| s.0 == row) else {
+            continue;
+        };
+        let lane = duct_y - 4.0 + (k % 5) as f32 * 2.0;
+        let body = palette[k % palette.len()];
+        let z = 20.0;
+        let at = |x: f32, y: f32| frame.world(x as f64, y as f64, z as f64);
+        scene.wires.push(Wire {
+            id: ItemId::new(ItemKind::Wire, 50_000 + k as u64),
+            points: vec![
+                at(x0, lane + 40.0),
+                at(x0, lane),
+                at(x1, lane),
+                at(x1, lane + 40.0),
+            ],
+            radius: 1.5,
+            tint: Some(body),
+            mark: Mark::None,
+            label: None,
+        });
     }
 
     if opts.door {
@@ -182,6 +223,27 @@ mod tests {
                 .count();
             assert_eq!(devices, n);
         }
+    }
+
+    #[test]
+    fn the_demo_has_the_requested_wires_with_unique_ids() {
+        let (s, _) = cabinet(&DemoOptions {
+            devices: 300,
+            wires: 100,
+            ..DemoOptions::default()
+        });
+        // The last device of a row has no partner after it, so a few fewer.
+        let n = s.wires.len();
+        assert!((90..=100).contains(&n), "{n}");
+        let mut ids: Vec<_> = s.wires.iter().map(|w| w.id).collect();
+        ids.sort();
+        ids.dedup();
+        assert_eq!(ids.len(), n);
+        assert!(
+            s.wires
+                .iter()
+                .all(|w| w.tint.is_some() && w.points.len() == 4)
+        );
     }
 
     #[test]

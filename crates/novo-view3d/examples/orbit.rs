@@ -1,7 +1,7 @@
 //! Headless orbit benchmark and screenshot.
 //!
 //!   cargo run --release -p novo-view3d --features gpu --example orbit -- \
-//!       [--items 1000] [--frames 300] [--size 1920x1080] [--msaa] [--scale 0.75] \
+//!       [--items 1000] [--wires 300] [--frames 300] [--size 1920x1080] [--msaa] [--scale 0.75] \
 //!       [--png out.png]
 //!
 //! Renders a scripted 360 degree orbit of the demo cabinet into an offscreen
@@ -66,6 +66,7 @@ fn main() {
     let mut items = 1000usize;
     let mut frames = 300usize;
     let mut size = (1920u32, 1080u32);
+    let mut wires = 0usize;
     let mut msaa = false;
     let mut scale: Option<f32> = None;
     let mut png: Option<String> = None;
@@ -74,6 +75,7 @@ fn main() {
     while let Some(a) = args.next() {
         match a.as_str() {
             "--items" => items = args.next().unwrap().parse().unwrap(),
+            "--wires" => wires = args.next().unwrap().parse().unwrap(),
             "--frames" => frames = args.next().unwrap().parse().unwrap(),
             "--size" => {
                 let s = args.next().unwrap();
@@ -106,12 +108,14 @@ fn main() {
 
     let (scene, library) = demo::cabinet(&DemoOptions {
         devices: items,
+        wires,
         ..DemoOptions::default()
     });
     println!(
-        "scene: {} items ({} devices requested), {}x{}",
+        "scene: {} items ({} devices requested), {} wires, {}x{}",
         scene.items.len(),
         items,
+        scene.wires.len(),
         size.0,
         size.1
     );
@@ -162,6 +166,10 @@ fn main() {
         cpu.push(stats.cpu_ms);
         last = stats;
     }
+    println!(
+        "first frame wall ms: {:.1} (pipelines and buffers are made in it)",
+        wall[0]
+    );
     cpu.sort_by(|a, b| a.total_cmp(b));
     wall.sort_by(|a, b| a.total_cmp(b));
     println!(

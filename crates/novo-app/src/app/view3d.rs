@@ -4,6 +4,7 @@
 
 use std::collections::BTreeSet;
 use std::sync::Arc;
+use std::time::Instant;
 
 use eframe::egui;
 use novo_core::{Device, DeviceId, Project, StructureId};
@@ -21,6 +22,7 @@ use super::cabinet_inspector;
 use super::NovoApp;
 use super::heat_3d::{self, Heat3d, Place};
 use super::view3d_controls::{self, Controls};
+use super::view3d_stats::{Build, Stats};
 
 /// The one view of the app.
 const VIEW_ID: u64 = 1;
@@ -50,6 +52,8 @@ pub(crate) struct View3dMode {
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
     /// The toolbar's layers and door.
     pub(super) controls: Controls,
+    /// The frame statistics panel and the cost of the last scene rebuild.
+    pub(super) stats: Stats,
 }
 
 /// What a `view.*` command asks of the 3D view.
@@ -74,6 +78,7 @@ impl Default for View3dMode {
             built_layers: Layers::default(),
             wires: None,
             controls: Controls::default(),
+            stats: Stats::default(),
         }
     }
 }
@@ -124,10 +129,13 @@ impl NovoApp {
         let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
             || mode.built_layers != layers;
         if stale {
+            let started = Instant::now();
+            let mut routing_ms = None;
             // Routing is the slow part: it is redone only for a new revision.
             let wires = if layers.wires {
                 if !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision) {
                     mode.wires = Some((id, revision, model::wires(project, id)));
+                    routing_ms = Some(started.elapsed().as_secs_f32() * 1000.0);
                 }
                 mode.wires.as_ref().map(|w| w.2.clone()).unwrap_or_default()
             } else {
@@ -140,6 +148,11 @@ impl NovoApp {
             if let Some(built) = model::scene(project, id, &options) {
                 mode.built = Some((id, revision, Arc::new(layers.apply(built))));
                 mode.built_layers = layers;
+                let total = started.elapsed().as_secs_f32() * 1000.0;
+                mode.stats.build = Build {
+                    scene_ms: total - routing_ms.unwrap_or(0.0),
+                    routing_ms,
+                };
             }
         }
         let Some((_, _, scene)) = &mode.built else {
@@ -218,6 +231,7 @@ impl NovoApp {
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
         view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        mode.stats.frame(ui.ctx(), view_rect, &mut mode.view);
         mode.controls.clamp_door(limit);
         let target = mode.controls.door_target(limit);
         if let Some(angle) = open_angle(scene, DOOR_HINGE, target) {

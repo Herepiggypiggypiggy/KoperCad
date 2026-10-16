@@ -507,4 +507,73 @@ budgets in section 8.
 - In the egui window (`window --items 1000 --bench 6`, 1400x860, interactive
   tier at scale 0.5 on software, vsync off) the whole app, egui included, ran
   at 35 frames per second on the CPU alone.
-- Not measured here: first-frame time, GPU time on real hardware, memory.
+- Not measured here: GPU time on real hardware, memory.
+
+### With wires, and what a scene rebuild costs (2026-10-16)
+
+Same container (4 cores, llvmpipe), `orbit` with the new `--wires N` (the demo
+runs N wires up from a device into its duct, along it and down to another
+device, in six colours), 1920x1080, `--scale 1.0`, 150 to 200 frames. The CPU
+column is stable between runs; the wall column is a software rasteriser that
+shares four cores with whatever else the container runs and moved by about a
+third between runs, so it is given as the range of three runs.
+
+| Scene | Items, wires | Triangles | CPU ms/frame p50 (p95) | llvmpipe wall ms p50 |
+| --- | --- | --- | --- | --- |
+| 1000 devices | 1016, 0 | 12 700 | 0.23 (0.33) | 16.8 to 20.3 |
+| 1000 devices, 300 wires | 1016, 298 | 23 400 | 0.33 (0.45) | 20.7 to 30.9 |
+| 3000 devices, 1000 wires | 3016, 998 | 65 600 | 0.86 (1.20) | 34.8 |
+| 1000 devices, 300 wires, interactive tier (half size) | 1016, 298 | 22 800 | 0.28 (0.48) | 14.6 |
+| 1000 devices, 300 wires, settled (4x MSAA, full size) | 1016, 298 | 23 400 | 0.33 (0.43) | 56.4 |
+
+- 300 wires add about 0.1 ms of CPU and 11 000 triangles; the draw calls stay
+  at 11 because a wire segment is an instance of the box mesh. A bi-colour
+  wire is cut into bands, so it costs more instances than a plain one, but only
+  while a segment is at least 12 px on screen.
+- The first frame takes 41 to 78 ms on software (pipelines and buffers are
+  made in it), 128 ms for the settled frame with MSAA. It is the cost of
+  opening the 3D workspace the first time; later frames do not pay it.
+- CPU cost is far inside the 0.5 ms budget up to 3000 devices and 1000 wires
+  except the 3000 and 1000 row, which is 0.86 ms: the instance build grows
+  with the item count, so the next lever is culling by distance before the
+  instance copy (not needed at today's sizes).
+- Scene rebuild (`model::scene`) and routing are measured by the app itself,
+  see the panel below; the renderer's benchmark does not include them.
+
+### Measuring on your own machine
+
+View > 3D > Show or hide the 3D frame statistics (palette: "frame rate" or
+"fps"; Dutch "framesnelheid") opens a panel in the bottom left of the 3D view:
+
+```
+KoperCAD 3D frame statistics
+GPU: <adapter> (<Dx12|Vulkan|...>, <Discrete|Integrated|Software>)
+Frame interval: 16.7 ms median, 18.2 ms 95th percentile, 60 fps (240 frames)
+Renderer CPU: 0.40 ms median, 0.62 ms 95th percentile
+Drawn: 1016 items, 11 draw calls, 23424 triangles, 1920 x 1080 px, MSAA 1
+Scene build: 3.2 ms, routing 41.0 ms
+```
+
+"Spin the view" turns the camera steadily (a turn in 12 seconds) so every frame
+is a moving one and the frame interval means something; "Copy" puts the lines
+on the clipboard to paste into a message. The frame interval is the time
+between two frames of the whole app, so it includes the GPU and the display's
+refresh: on a 60 Hz screen it cannot go under 16.7 ms, and the pass condition
+is a 95th percentile that stays at or under 20 ms (the budget in section 8).
+The renderer CPU line is the cost of the renderer itself; GPU time alone is not
+measured (it needs timestamp queries, which eframe's device does not request).
+
+What to run on the Windows laptop, with a project that has the real cabinet:
+
+1. Open the project, View > Workspace > 3D, open the statistics.
+2. Spin for about ten seconds and copy the lines: the integrated GPU case.
+3. Turn Wires off and on (toolbar) and copy again: what the wires cost.
+4. Maximise the window and copy again: the 1080p case of section 8.
+5. Rebuild the scene by changing something in the Cabinet and look at "Scene
+   build": routing is the slow part and runs on a change, not per frame.
+6. If the interval p95 is over 20 ms, say which adapter and whether the
+   laptop was on battery. The frame governor (`governor.rs`) that is meant to
+   step the quality tier down after two seconds over budget is not connected to
+   the widget yet, so the tier stays what the adapter type says; connecting it
+   is the next step if the numbers ask for it.
+
