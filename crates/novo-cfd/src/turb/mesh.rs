@@ -41,6 +41,9 @@ pub struct TurbMesh {
     /// Distance to the nearest wall, m (0 in solid cells).
     pub wall_dist: Vec<f64>,
     pub face_kind: [FaceKind; 6],
+    /// Boundary faces of cells that are open (a vent or fan): no wall there.
+    /// Per cell, indexed `2 * axis + high`.
+    pub open: Vec<[bool; 6]>,
     /// Extent of the domain per axis, m.
     pub size: [f64; 3],
 }
@@ -74,6 +77,7 @@ impl TurbMesh {
             walls: Vec::new(),
             wall_dist: vec![0.0; cells],
             face_kind,
+            open: vec![[false; 6]; cells],
             size,
         };
         mesh.find_walls();
@@ -84,6 +88,27 @@ impl TurbMesh {
     /// Centre of cell `(i, j, k)`, m.
     pub fn centre_of(&self, i: usize, j: usize, k: usize) -> [f64; 3] {
         [self.centre[0][i], self.centre[1][j], self.centre[2][k]]
+    }
+
+    /// Kind of the domain face `high` side of cell `i` along `axis`; an
+    /// open face is no wall.
+    pub fn boundary_kind(&self, c: usize, axis: usize, high: bool) -> FaceKind {
+        let f = 2 * axis + usize::from(high);
+        if self.open[c][f] {
+            FaceKind::Symmetry
+        } else {
+            self.face_kind[f]
+        }
+    }
+
+    /// Marks boundary faces as open: `(cell, axis, high)` of a vent or fan
+    /// face. They stop being walls and leave the wall distance.
+    pub fn mark_open(&mut self, faces: &[(usize, usize, bool)]) {
+        for &(c, axis, high) in faces {
+            self.open[c][2 * axis + usize::from(high)] = true;
+        }
+        self.find_walls();
+        self.compute_wall_distance();
     }
 
     pub fn cells(&self) -> usize {
@@ -178,7 +203,7 @@ impl TurbMesh {
                 for high in [false, true] {
                     let is_wall = match self.neighbour(ix, axis, high) {
                         Some(nb) => !self.fluid[self.cell(nb)],
-                        None => self.face_kind[2 * axis + usize::from(high)] == FaceKind::Wall,
+                        None => self.boundary_kind(c, axis, high) == FaceKind::Wall,
                     };
                     if is_wall {
                         walls.push(WallFace {
@@ -210,7 +235,7 @@ impl TurbMesh {
             let ix = self.ijk(c);
             for axis in 0..3 {
                 for high in [false, true] {
-                    if self.face_kind[2 * axis + usize::from(high)] != FaceKind::Wall {
+                    if self.boundary_kind(c, axis, high) != FaceKind::Wall {
                         continue;
                     }
                     let dist = if high {
