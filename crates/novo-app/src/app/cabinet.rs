@@ -717,6 +717,7 @@ impl NovoApp {
                         ambient: self.sizing.request().ambient_max,
                         items,
                         solution: self.cabinet.heat.solution(),
+                        kept: self.cabinet.heat.kept(),
                     }
                 });
                 if self.cabinet.heat.take_request() {
