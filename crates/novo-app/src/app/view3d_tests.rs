@@ -552,6 +552,9 @@ fn dimensions_toggle_by_command_and_measure_the_selected_part_from_the_cabinet()
 fn restore_quality_returns_a_stepped_down_view_to_the_adapters_tier() {
     use novo_view3d::render::Tier;
     use novo_view3d::widget::register_adapter;
+    let _guard = super::view3d_move_tests::STATS_GUARD
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
     let ctx = d.ctx.clone();

@@ -246,6 +246,10 @@ fn placed(d: &Drive, cab: novo_core::StructureId, id: u64) -> (f64, f64, bool) {
     (p.x, p.y, p.rotated)
 }
 
+/// Both tests that touch the process-wide frame recorder (the Stats panel
+/// reads it) take this, so neither sees the other's adapter or timings.
+pub(super) static STATS_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn press(d: &mut Drive, key: egui::Key) {
     d.frame_with(vec![egui::Event::Key {
         key,
@@ -665,6 +669,13 @@ fn a_group_of_a_rail_and_its_device_lands_the_device_once() {
 /// the Heat panel and the view cube.
 #[test]
 fn the_rail_card_starts_clear_of_the_other_3d_panels() {
+    let _guard = STATS_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+    // A fresh recorder: the Stats panel's height depends on it.
+    novo_view3d::widget::register_adapter(
+        "Test GPU",
+        "Vulkan",
+        novo_view3d::render::Tier::Discrete,
+    );
     for (w, h) in [(1366.0, 768.0), (900.0, 600.0)] {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
@@ -710,4 +721,50 @@ fn the_rail_card_starts_clear_of_the_other_3d_panels() {
             );
         }
     }
+}
+
+#[test]
+fn each_arrow_press_in_3d_is_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, a, _) = cabinet_with_two_devices(&mut d);
+    open_3d_with_selection(&mut d, a);
+    // The keys nudge while the pointer is over the view.
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(640.0, 400.0))]);
+    let start = placed(&d, cab, a);
+    press(&mut d, egui::Key::ArrowRight);
+    d.frame();
+    let one = placed(&d, cab, a);
+    assert!(one.0 > start.0, "moved right");
+    press(&mut d, egui::Key::ArrowRight);
+    d.frame();
+    let two = placed(&d, cab, a);
+    assert!(two.0 > one.0, "moved again");
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(placed(&d, cab, a), one, "one undo takes back one press");
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(placed(&d, cab, a), start);
+}
+
+#[test]
+fn a_typed_position_is_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, a, _) = cabinet_with_two_devices(&mut d);
+    let start = placed(&d, cab, a);
+    let l = novo_layout::model::load(project(&d), cab).unwrap();
+    let edit = super::view3d_nudge::set_position(&l, a, Some(start.0 + 30.0), Some(start.1 + 20.0))
+        .expect("a different position is an edit");
+    let Edit::Group { devices, rails } = edit else {
+        panic!("a typed position is a group edit");
+    };
+    d.app.view3d_move_group(cab, devices, rails);
+    assert_eq!(
+        (placed(&d, cab, a).0, placed(&d, cab, a).1),
+        (start.0 + 30.0, start.1 + 20.0)
+    );
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(placed(&d, cab, a), start, "X and Y come back together");
 }
