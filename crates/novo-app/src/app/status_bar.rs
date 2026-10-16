@@ -73,7 +73,8 @@ impl NovoApp {
                                 let text = format!("{} {text}", novo_theme::icons::status::WARNING);
                                 let label = ui.add(
                                     egui::Label::new(
-                                        egui::RichText::new(&text).color(tokens::ERROR),
+                                        egui::RichText::new(&text)
+                                            .color(novo_theme::Palette::of(ui).error),
                                     )
                                     .truncate(),
                                 );

@@ -287,12 +287,25 @@ impl NovoApp {
                                 "dock.lines",
                             ),
                         ] {
+                            // Copper only for the active tool: with another
+                            // tool in hand the chosen mode is the brighter
+                            // of two faint icons.
+                            let connecting = active == DockTool::Connect;
                             let response = ui
                                 .scope(|ui| {
-                                    if active != DockTool::Connect {
-                                        ui.multiply_opacity(0.6);
+                                    if !connecting {
+                                        ui.multiply_opacity(if mode == chosen {
+                                            0.8
+                                        } else {
+                                            0.45
+                                        });
                                     }
-                                    widgets::tool_button(ui, icon, mode == chosen, tip)
+                                    widgets::tool_button(
+                                        ui,
+                                        icon,
+                                        connecting && mode == chosen,
+                                        tip,
+                                    )
                                 })
                                 .inner;
                             spots.push((id, response.rect, response.clicked()));
