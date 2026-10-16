@@ -45,3 +45,44 @@ fn sst_runs_stably_and_adds_eddy_viscosity_in_a_driven_box() {
         assert!(!walls.is_empty() && walls.iter().all(|w| w.axis != 2));
     }
 }
+
+#[test]
+fn solid_cells_of_the_medium_become_walls_for_the_turbulence() {
+    use novo_cfd::solids::Medium;
+    let mesh = Mesh::uniform([10, 10, 3], [0.3, 0.3, 0.05]);
+    let mut cfg = FlowConfig::air();
+    cfg.faces[Face::ZMin as usize] = FaceBc::SYMMETRY;
+    cfg.faces[Face::ZMax as usize] = FaceBc::SYMMETRY;
+    let mut md = Medium::air(mesh.cells());
+    // a hot block in the middle of the box
+    for k in 0..3 {
+        for j in 4..6 {
+            for i in 4..6 {
+                let c = mesh.cell([i, j, k]);
+                md.fluid_frac[c] = 0.0;
+                md.c_solid[c] = 2.4e6;
+                md.k_solid[c] = 200.0;
+                md.heat_w_m3[c] = 2.0e5;
+            }
+        }
+    }
+    cfg.medium = Some(md);
+    let flow = FlowSolver::new(mesh, cfg, 25.0);
+    let block = |tf: &TurbulentFlow, i, j| tf.turb.mesh.fluid[tf.flow.mesh.cell([i, j, 1])];
+    let mut tf = TurbulentFlow::new(flow, TurbModel::KOmegaSst, 0.2, 0.02);
+    assert!(!block(&tf, 4, 4) && block(&tf, 3, 4));
+    for _ in 0..300 {
+        tf.step(0.05);
+    }
+    let nu_t_in_block = tf.turb.nu_t[tf.flow.mesh.cell([4, 4, 1])];
+    assert_eq!(nu_t_in_block, 0.0);
+    // walls of the block: cell 3,4 sees a wall on its high x face
+    assert!(
+        tf.turb
+            .walls()
+            .iter()
+            .any(|w| w.cell == tf.flow.mesh.cell([3, 4, 1]) && w.axis == 0 && w.high)
+    );
+    assert!(tf.flow.t.iter().all(|t| t.is_finite()));
+    assert!(tf.flow.t.iter().cloned().fold(f64::MIN, f64::max) > 25.0);
+}
