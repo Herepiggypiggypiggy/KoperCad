@@ -14,8 +14,10 @@ use novo_cfd::{CfdSnapshot, Fidelity, Progress, Solver};
 #[derive(Debug)]
 pub(super) struct Solution {
     pub snapshot: Arc<CfdSnapshot>,
-    /// Counts the runs, for the cache key.
+    /// Counts the snapshots, for the cache key.
     pub id: u64,
+    /// `heat_live::scenario_key` of the scenario this result solved.
+    pub scenario_key: u64,
     /// Hash of the layout the run was started from; a different one marks
     /// the result out of date.
     pub layout_key: u64,

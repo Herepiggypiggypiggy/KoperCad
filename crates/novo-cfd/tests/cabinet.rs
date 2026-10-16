@@ -295,8 +295,14 @@ fn turbulence_is_an_option_that_shows_in_the_snapshot_and_the_statement() {
     }
 }
 
+/// The mesh spends its cell budget on bodies first (WS CFD-C1), so a 120 cell
+/// request no longer leaves a 150 mm device unresolved: the grid grows past the
+/// request to the floor that gives the device cells across, the note says so
+/// by not raising the "not resolved" warning, and the band stays the narrow
+/// one. A device the grid really cannot resolve still gets the wide band; that
+/// path is exercised by the mesh tests (`a_slim_device_is_kept_and_reported`).
 #[test]
-fn a_device_the_grid_cannot_resolve_says_so() {
+fn a_small_cell_request_still_resolves_the_device() {
     let mut t = Tuning::default().with_cells(120);
     t.coarse.steady_tol = 1e-2;
     let s = CabinetSolver::new(t)
@@ -308,13 +314,13 @@ fn a_device_the_grid_cannot_resolve_says_so() {
         )
         .unwrap();
     assert!(
-        s.notes.iter().any(|n| n.contains("not resolved")),
+        !s.notes.iter().any(|n| n.contains("not resolved")),
         "{:?}",
         s.notes
     );
+    assert!(s.temperature_c.len() > 120);
     let d = &s.devices[0];
-    // the band spans the whole range from the air to twice the rise
-    assert!(d.surface_band_c.1 - d.surface_band_c.0 >= 1.9 * (d.surface_c - 25.0).max(0.0));
+    assert!(d.surface_band_c.1 - d.surface_band_c.0 < 1.0 * (d.surface_c - 25.0).max(1.0));
 }
 
 /// The default solver (plate sheet, lumped devices) lands near the 2D engine

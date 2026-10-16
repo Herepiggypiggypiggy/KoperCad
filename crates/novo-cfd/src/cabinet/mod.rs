@@ -83,7 +83,7 @@ impl Solver for CabinetSolver {
         let mesh = MeshSettings::for_fidelity(fidelity)
             .map(|m| MeshSettings {
                 target_cells: lvl.target_cells.unwrap_or(m.target_cells),
-                ..m
+                ..lvl.mesh.unwrap_or(m)
             })
             .map_err(|e| CfdError::Setup(e.to_string()))?;
         let st = SolidsSettings {
