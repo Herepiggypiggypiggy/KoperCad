@@ -10,7 +10,7 @@ use crate::commands::{COMMANDS, CommandInfo};
 
 /// The menus, left to right. A menu with no commands yet is not drawn.
 pub const MENUS: [&str; 8] = [
-    "File", "Edit", "Draw", "View", "Check", "Reports", "Tools", "Help",
+    "File", "Edit", "Draw", "View", "Check", "Reports", "Simulate", "Help",
 ];
 
 /// A command's place in the menu bar: a menu, and a submenu inside it when
@@ -102,6 +102,30 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.devices_drawer", under("View", "Panels")),
     ("view.pin_outline", under("View", "Panels")),
     ("view.reports", under("View", "Workspace")),
+    ("view.commissioning", under("View", "Workspace")),
+    ("cabinet.place-all", under("View", "Cabinet")),
+    ("cabinet.size-enclosure", under("View", "Cabinet")),
+    ("cabinet.enclosures", under("View", "Cabinet")),
+    ("cabinet.routes", under("View", "Cabinet")),
+    ("view.background", under("View", "DXF background")),
+    ("view.background_place", under("View", "DXF background")),
+    // Simulate: everything that runs a model of the design lives here, so
+    // it is found by looking for it, in any workspace.
+    ("sim.live", at("Simulate")),
+    ("sim.plc_program", at("Simulate")),
+    ("sim.faults", at("Simulate")),
+    ("simulate.motor-start", at("Simulate")),
+    ("view.protection", at("Simulate")),
+    ("heat.simulate", under("Simulate", "Heat of the cabinet")),
+    ("heat.toggle", under("Simulate", "Heat of the cabinet")),
+    ("heat.airflow", under("Simulate", "Heat of the cabinet")),
+    ("heat.contours", under("Simulate", "Heat of the cabinet")),
+    // Learning
+    ("help.learn", at("Help")),
+    ("learn.next", under("Help", "Lesson")),
+    ("learn.back", under("Help", "Lesson")),
+    ("learn.restart", under("Help", "Lesson")),
+    ("learn.close", under("Help", "Lesson")),
     // Reports
     ("export.reports", at("Reports")),
     ("export.assembly", at("Reports")),
@@ -312,6 +336,27 @@ mod tests {
         }
         let placed = COMMANDS.iter().filter(|c| place(c).is_some()).count();
         assert_eq!(count, placed);
+    }
+
+    #[test]
+    fn everything_that_simulates_is_in_the_simulate_menu() {
+        let sim: Vec<_> = entries("Simulate").iter().map(|(c, _)| c.id).collect();
+        for id in [
+            "sim.live",
+            "sim.plc_program",
+            "sim.faults",
+            "simulate.motor-start",
+            "view.protection",
+            "heat.simulate",
+            "heat.toggle",
+        ] {
+            assert!(sim.contains(&id), "{id} is not in Simulate");
+        }
+        // No menu is long enough to run off a 768 pixel screen (File is the longest; trim it next).
+        for menu in MENUS {
+            let rows = layout(menu).len();
+            assert!(rows <= 25, "{menu} has {rows} rows");
+        }
     }
 
     #[test]
