@@ -17,6 +17,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_surfaces;
 mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
@@ -108,6 +109,8 @@ mod reports;
 mod reports_view;
 mod revisions;
 mod safety;
+mod safety_functions;
+mod safety_report;
 mod selection_sheet;
 #[cfg(test)]
 mod selection_sheet_tests;
@@ -160,6 +163,8 @@ mod cabinet_rails_tests;
 mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
+#[cfg(test)]
+mod cabinet_surfaces_tests;
 #[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
@@ -991,6 +996,7 @@ impl NovoApp {
                     || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
                     || *id == "cabinet.door"
+                    || *id == "cabinet.surface"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
@@ -1019,7 +1025,7 @@ impl NovoApp {
                 .show(ui, |ui| self.reports_list(ui));
         } else if pinned && self.is_open() {
             egui::Panel::left("outline")
-                .exact_size(OUTLINE_WIDTH)
+                .exact_size(self.outline_width())
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
@@ -1227,9 +1233,22 @@ impl NovoApp {
     /// Whether the outline takes space beside the canvas: the user's
     /// choice, otherwise only on wide windows.
     fn outline_pinned(&self) -> bool {
+        if self.commissioning_pins_panel() {
+            return true;
+        }
         self.settings
             .outline_pinned
             .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
+    }
+
+    /// The outline's width: wider in the Commissioning workspace at a tablet
+    /// window, where the touch targets need the room.
+    fn outline_width(&self) -> f32 {
+        if self.commissioning_tablet() {
+            commissioning::TABLET_PANEL_WIDTH
+        } else {
+            OUTLINE_WIDTH
+        }
     }
 
     /// Shows `page` on the canvas.
@@ -1589,7 +1608,7 @@ impl NovoApp {
                 // The frame's margins and stroke come on top of the content.
                 let chrome = frame.total_margin().sum();
                 frame.show(ui, |ui| {
-                    ui.set_width(OUTLINE_WIDTH - chrome.x);
+                    ui.set_width(self.outline_width() - chrome.x);
                     ui.set_height(height - chrome.y);
                     self.outline(ui, picked);
                 });

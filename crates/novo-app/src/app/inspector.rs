@@ -17,11 +17,10 @@ use super::xref::xref_of;
 use super::{Level, NovoApp};
 
 /// The inspector's width.
-pub(super) const INSPECTOR_WIDTH: f32 = 276.0;
+pub(super) const INSPECTOR_WIDTH: f32 = 320.0;
 /// Its distance from the canvas edges; the top clears the outline toggle
 /// and the HUD.
 const MARGIN: f32 = 12.0;
-const TOP: f32 = 40.0;
 
 /// What the inspector shows for one device.
 #[derive(Debug, Clone, PartialEq)]
@@ -318,15 +317,7 @@ impl NovoApp {
                 // The panel slides away with what it last showed.
                 let mut state = InspectorState::default();
                 let mut actions = Vec::new();
-                self.inspector_area(
-                    ctx,
-                    canvas,
-                    left,
-                    slide,
-                    (&info, &[]),
-                    &mut state,
-                    &mut actions,
-                );
+                self.inspector_area(ctx, canvas, left, (&info, &[]), &mut state, &mut actions);
                 self.wb.inspector.leaving = Some((info, left));
             }
             return;
@@ -408,7 +399,6 @@ impl NovoApp {
             ctx,
             canvas,
             left,
-            slide,
             (&info, &candidates),
             &mut shown,
             &mut actions,
@@ -435,60 +425,30 @@ impl NovoApp {
         }
     }
 
-    /// Draws the inspector panel `slide` of the way in (1 is fully in, a
-    /// pinned panel never slides), on the side away from the selection.
+    /// Draws the inspector panel on the side away from the selection, until
+    /// the person drags it somewhere else.
     #[allow(clippy::too_many_arguments)]
     fn inspector_area(
         &self,
         ctx: &egui::Context,
         canvas: egui::Rect,
         left: bool,
-        slide: f32,
         (info, candidates): (&DeviceInfo, &[Candidate]),
         state: &mut InspectorState,
         actions: &mut Vec<InspectorAction>,
     ) {
-        let (pivot, at) = if left {
-            (
-                egui::Align2::LEFT_TOP,
-                canvas.left_top() + egui::vec2(MARGIN, TOP),
-            )
-        } else {
-            (
-                egui::Align2::RIGHT_TOP,
-                canvas.right_top() + egui::vec2(-MARGIN, TOP),
-            )
-        };
-        let away = if state.pinned {
-            0.0
-        } else {
-            (1.0 - slide) * (INSPECTOR_WIDTH + MARGIN)
-        };
-        let at = at + egui::vec2(if left { -away } else { away }, 0.0);
-        let max_height = (canvas.height() - TOP - 72.0).max(120.0);
         let tag_id = egui::Id::new("inspector_tag");
         let description_id = egui::Id::new("inspector_description");
-        egui::Area::new(egui::Id::new("inspector"))
-            .order(egui::Order::Middle)
-            .pivot(pivot)
-            .fixed_pos(at)
+        let side = if left {
+            super::panel::Side::Left
+        } else {
+            super::panel::Side::Right
+        };
+        super::panel::Panel::new("inspector", "Inspector", canvas, side, INSPECTOR_WIDTH)
+            .fixed_open()
+            .height(560.0)
             .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_width(INSPECTOR_WIDTH);
-                    egui::ScrollArea::vertical()
-                        .max_height(max_height)
-                        .show(ui, |ui| {
-                            inspector_body(
-                                ui,
-                                info,
-                                candidates,
-                                state,
-                                tag_id,
-                                description_id,
-                                actions,
-                            )
-                        });
-                });
+                inspector_body(ui, info, candidates, state, tag_id, description_id, actions);
             });
     }
 
@@ -500,41 +460,42 @@ impl NovoApp {
             Some((page.name.clone(), page.title.clone()))
         });
         let mut unpin = false;
-        egui::Area::new(egui::Id::new("inspector"))
-            .order(egui::Order::Middle)
-            .pivot(egui::Align2::RIGHT_TOP)
-            .fixed_pos(canvas.right_top() + egui::vec2(-MARGIN, TOP))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_width(INSPECTOR_WIDTH);
-                    ui.horizontal(|ui| {
-                        let heading = match &page {
-                            Some((name, _)) => format!("Page {name}"),
-                            None => "No page open".to_owned(),
-                        };
-                        ui.add(egui::Label::new(egui::RichText::new(heading).heading()).truncate());
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if widgets::icon_toggle(
-                                ui,
-                                icons::action::PIN,
-                                true,
-                                "Unpin: the inspector slides away with the selection",
-                            )
-                            .clicked()
-                            {
-                                unpin = true;
-                            }
-                        });
-                    });
-                    if let Some((_, title)) = &page
-                        && !title.is_empty()
+        super::panel::Panel::new(
+            "inspector",
+            "Inspector",
+            canvas,
+            super::panel::Side::Right,
+            INSPECTOR_WIDTH,
+        )
+        .fixed_open()
+        .show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                let heading = match &page {
+                    Some((name, _)) => format!("Page {name}"),
+                    None => "No page open".to_owned(),
+                };
+                ui.add(egui::Label::new(egui::RichText::new(heading).heading()).truncate());
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if widgets::icon_toggle(
+                        ui,
+                        icons::action::PIN,
+                        true,
+                        "Unpin: the inspector slides away with the selection",
+                    )
+                    .clicked()
                     {
-                        ui.label(title);
+                        unpin = true;
                     }
-                    ui.add_space(6.0);
-                    ui.weak("Nothing selected");
                 });
             });
+            if let Some((_, title)) = &page
+                && !title.is_empty()
+            {
+                ui.label(title);
+            }
+            ui.add_space(6.0);
+            ui.weak("Nothing selected");
+        });
         if unpin {
             self.wb.inspector.pinned = false;
         }
@@ -724,29 +685,36 @@ fn inspector_body(
 ) {
     // Header: the tag is the title, the pin an icon at the right.
     let tag_height = 24.0;
-    ui.horizontal(|ui| {
-        let pin_width = 26.0;
-        let tag = ui.add_sized(
-            [
-                ui.available_width() - pin_width - ui.spacing().item_spacing.x,
-                tag_height,
-            ],
-            egui::TextEdit::singleline(&mut state.tag)
-                .id(tag_id)
-                .font(egui::TextStyle::Heading),
-        );
-        if committed(ui, &tag) && state.tag.trim() != info.tag {
-            actions.push(InspectorAction::Rename(state.tag.trim().to_owned()));
-        }
-        let tip = if state.pinned {
-            "Unpin: the inspector slides away with the selection"
-        } else {
-            "Pin: keep the inspector open, showing the page when nothing is selected"
-        };
-        if widgets::icon_toggle(ui, icons::action::PIN, state.pinned, tip).clicked() {
-            actions.push(InspectorAction::Pin(!state.pinned));
-        }
-    });
+    // `Sides` gives the pin what it needs and the tag the rest, so the row is
+    // never wider than the panel.
+    let mut rename = None;
+    let mut pin = None;
+    egui::Sides::new().shrink_left().show(
+        ui,
+        |ui| {
+            let tag = ui.add_sized(
+                [ui.available_width(), tag_height],
+                egui::TextEdit::singleline(&mut state.tag)
+                    .id(tag_id)
+                    .font(egui::TextStyle::Heading),
+            );
+            if committed(ui, &tag) && state.tag.trim() != info.tag {
+                rename = Some(state.tag.trim().to_owned());
+            }
+        },
+        |ui| {
+            let tip = if state.pinned {
+                "Unpin: the inspector slides away with the selection"
+            } else {
+                "Pin: keep the inspector open, showing the page when nothing is selected"
+            };
+            if widgets::icon_toggle(ui, icons::action::PIN, state.pinned, tip).clicked() {
+                pin = Some(!state.pinned);
+            }
+        },
+    );
+    actions.extend(rename.map(InspectorAction::Rename));
+    actions.extend(pin.map(InspectorAction::Pin));
     let description = ui.add(
         egui::TextEdit::singleline(&mut state.description)
             .id(description_id)

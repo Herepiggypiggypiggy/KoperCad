@@ -188,3 +188,81 @@ fn the_calculations_window_draws_with_and_without_inputs() {
     assert!(text.contains("planning values"), "{text}");
     assert!(text.contains("Supply:"), "{text}");
 }
+
+#[test]
+fn safety_functions_edited_in_the_window_are_stored_and_raise_problems() {
+    use novo_checks::safety::{FUNCTIONS_KEY, SafetyFunction};
+    let (_dir, mut d, _) = open();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    let mut f = SafetyFunction::new("Guard");
+    f.severity = "S2".into();
+    f.frequency = "F2".into();
+    f.avoidance = "P2".into();
+    for b in &mut f.blocks {
+        b.category = "B".into();
+        b.dc_percent = 0.0;
+        b.ccf = 0;
+        b.channel1[0].value = Some(5.0);
+        b.channel1[0].basis = novo_checks::safety::Basis::Mttfd;
+    }
+    {
+        let win = d.app.wb.safety.as_mut().unwrap();
+        win.bound.list = vec![f];
+        win.bound.dirty = true;
+    }
+    d.frame();
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    assert!(project.info().properties.contains_key(FUNCTIONS_KEY));
+    assert_eq!(novo_checks::safety::functions(project).len(), 1);
+    assert_eq!(count(&d, ProblemKind::SafetyLevelNotMet), 1);
+}
+
+#[test]
+fn closing_the_safety_window_with_an_unwritten_edit_stores_it() {
+    use novo_checks::safety::{SafetyFunction, functions};
+    let (_dir, mut d, _) = open();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    {
+        let win = d.app.wb.safety.as_mut().unwrap();
+        win.bound.list = vec![SafetyFunction::new("Typed just before closing")];
+        win.bound.dirty = true;
+    }
+    // Close before any frame had the chance to write it.
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    assert!(d.app.wb.safety.is_none());
+    let stored = functions(d.app.backend.document().unwrap().project());
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].name, "Typed just before closing");
+}
+
+#[test]
+fn the_safety_report_is_written_and_says_not_met() {
+    use novo_checks::safety::{Basis, SafetyFunction};
+    let (dir, mut d, _) = open();
+    let mut f = SafetyFunction::new("Guard");
+    f.severity = "S2".into();
+    f.frequency = "F2".into();
+    f.avoidance = "P2".into();
+    for b in &mut f.blocks {
+        b.category = "B".into();
+        b.dc_percent = 0.0;
+        b.ccf = 0;
+        b.channel1[0].value = Some(5.0);
+        b.channel1[0].basis = Basis::Mttfd;
+    }
+    assert!(d.app.store_safety_functions(&[f]));
+    let report =
+        super::safety_report::report_input(d.app.backend.document().unwrap().project(), "T");
+    let r = novo_reports::safety::safety_report(&report);
+    assert_eq!(r.section("summary").unwrap().text_rows()[0][4], "NOT met");
+    let path = dir.path().join("guard safety.pdf");
+    assert_eq!(
+        d.app.write_safety_report(&path).as_deref(),
+        Some(path.as_path())
+    );
+    assert!(std::fs::metadata(&path).unwrap().len() > 500);
+}
