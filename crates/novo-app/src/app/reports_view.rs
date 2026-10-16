@@ -19,8 +19,8 @@ use eframe::egui;
 use novo_core::{AnyId, natural_cmp};
 use novo_reports::{Align, Cell, CsvOptions, ReportOutput, Section};
 use novo_theme::table::{
-    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths, table_header,
-    table_row,
+    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths_min, header_width,
+    table_header, table_row,
 };
 use novo_theme::widgets::section_label;
 use novo_xref::Place;
@@ -403,9 +403,14 @@ impl NovoApp {
         if !section.title.is_empty() {
             section_label(ui, &section.title);
         }
-        let widths = column_widths(
-            ui.available_width(),
+        let widths = column_widths_min(
+            ui.available_width() - 12.0,
             &section.columns.iter().map(|c| c.width).collect::<Vec<_>>(),
+            &section
+                .columns
+                .iter()
+                .map(|c| header_width(&c.header))
+                .collect::<Vec<_>>(),
         );
         let columns: Vec<TableColumn> = section
             .columns

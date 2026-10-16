@@ -62,6 +62,34 @@ pub fn column_widths(available: f32, weights: &[f64]) -> Vec<f32> {
         .collect()
 }
 
+/// Width a column needs for its header in caption caps, the sort arrow and
+/// the letter spacing, so the header is never cut to "LENGT...".
+pub fn header_width(header: &str) -> f32 {
+    header.chars().count() as f32 * 9.0 + 24.0
+}
+
+/// Like [`column_widths`], but a column is never narrower than its entry in
+/// `mins` (usually [`header_width`]). The extra width those columns take
+/// comes out of the columns that have more than their minimum, so the row
+/// still fits `available` whenever the minimums do.
+pub fn column_widths_min(available: f32, weights: &[f64], mins: &[f32]) -> Vec<f32> {
+    let room = (available - GAP * weights.len() as f32).max(240.0);
+    let mut widths = column_widths(available, weights);
+    let floor: Vec<f32> = mins.iter().map(|m| m.max(MIN_COLUMN)).collect();
+    for (w, f) in widths.iter_mut().zip(&floor) {
+        *w = w.max(*f);
+    }
+    let excess = widths.iter().sum::<f32>() - room;
+    let spare: f32 = widths.iter().zip(&floor).map(|(w, f)| w - f).sum();
+    if excess > 0.0 && spare > 0.0 {
+        let cut = excess.min(spare) / spare;
+        for (w, f) in widths.iter_mut().zip(&floor) {
+            *w -= (*w - f) * cut;
+        }
+    }
+    widths
+}
+
 fn layout_of(align: TableAlign) -> Layout {
     match align {
         TableAlign::Left => Layout::left_to_right(Align::Center),
@@ -183,5 +211,28 @@ mod tests {
         assert!(w[1] > w[0] * 2.5);
         let narrow = column_widths(100.0, &[1.0, 1.0, 1.0]);
         assert!(narrow.iter().all(|&x| x >= MIN_COLUMN));
+    }
+
+    #[test]
+    fn a_header_keeps_its_width_and_the_row_still_fits() {
+        let weights = [1.0, 1.0, 2.0, 2.0, 3.0, 1.0, 4.0];
+        let headers = [
+            "Pos.",
+            "Qty",
+            "Manufacturer",
+            "Order number",
+            "Description",
+            "Length (m)",
+            "Used by",
+        ];
+        let mins: Vec<f32> = headers.iter().map(|h| header_width(h)).collect();
+        let plain = column_widths(1100.0, &weights);
+        assert!(plain[5] < mins[5], "without minimums the header is cut");
+        let w = column_widths_min(1100.0, &weights, &mins);
+        for (i, m) in mins.iter().enumerate() {
+            assert!(w[i] >= *m - 0.01, "column {i}: {} < {m}", w[i]);
+        }
+        let used = w.iter().sum::<f32>() + GAP * w.len() as f32;
+        assert!(used <= 1100.0 + 0.5, "the row is {used} wide");
     }
 }
