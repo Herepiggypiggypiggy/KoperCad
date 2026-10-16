@@ -1,14 +1,12 @@
 # CFD-FAST handoff
 
-Branch `claude/project-thread-fvw3et` (kopercad). Draft PR: see PROGRESS.md.
+State: PR #688 adds `FlowSolver` steady path (module `flow/solver/steady/`): pseudo-transient, implicit first-order upwind convection with deferred correction to the configured scheme, incremental (SIMPLEC-like) pressure correction, implicit energy with a longer step, window-mean convergence (second-order plumes wobble and never reach a fixed point). The old `step()` march is untouched and still selectable.
 
-State: steady path exists and works on cavities and the 6k-cell cabinet (examples `steady_probe`, `steady_cabinet` in crates/novo-cfd/examples). Not yet wired into the cabinet march; no tests yet.
+Use: `SteadyRun::staged(&mut solver, SteadyConfig::first_order(), SteadyConfig::second_order(), SteadyLimits::default())`, `advance`, `report`. `initialise_from(&coarse)` for grid sequencing. Probes: `examples/steady_probe.rs`, `examples/steady_cabinet.rs` (`<cells> steady|march [cfl] [threads]`, env knobs in the file header).
 
-Resume: `cargo run --release -p novo-cfd --example steady_cabinet -- 6000 steady 10 4` (SCHEME=upwind|vanleer env, EF, MSW, DEFER knobs). `... 6000 march` is the slow reference (about 10 minutes).
-
-Findings
-- Upwind cabinet: converges to 1e-6 in 450 iterations (5 s) against about 250 s of marching.
-- Second order (VanLeer): velocity wobbles about 3 percent (plume, laminar model), heat balance within 1 to 5 percent; smooth limiter and deferred-correction damping do not help. Use window means.
-- cfl 10 with energy step factor 10 is the sweet spot; cfl 30 or energy factor 100 stall.
-
-Owners: R1 reviews (cse_01NCdhCktKEbKPHFBvi2Tjsp). CFD-E owns pressure.rs (#667), CFD-INT owns cabinet/ (#677).
+Open:
+- CFD-INT: select steady path in the cabinet march; keep old march selectable. `tests/cabinet.rs::vents_carry_heat_out_and_cool_the_device` fails on main independent of this work.
+- Mirror CFD-A heat_scale/radiation source in `assemble_energy` (steady/assemble.rs) when #686 lands.
+- Speed: momentum assembly (about 30% of an iteration) is generic and allocation heavy; pressure solve scales poorly past 2 threads; sweeps are serial (bit-identical choice).
+- Not validated: Churchill-Chu plate and IEC 60890 sealed box on the steady path (the IEC gap belongs to CFD-C2). Open-face law only tested on small vent/fan cabinets.
+- Stability: pseudo step is limited by buoyancy frequency (buoyancy_cfl 1; 2 diverges).

@@ -1,1 +1,2 @@
 2026-10-16 12:35 UTC steady path first version; cavities 6 to 10x faster than march, upwind cabinet 5 s vs 250 s; draft PR opened.
+2026-10-16 13:30 UTC window-mean convergence, continuity-tight pressure, grid sequencing, vents and fan tests, strided pressure stencil (bit-identical, ~25% faster). Sealed 6k cabinet: march 283.5 s (Tmax 95.82, mean 31.50) vs steady 7.9 s (95.83, 31.44), 36x. 38k cells: steady 51 s. Lid cavity 1.8 s vs march 35 s (centreline diff 1.3e-3); heated cavity Ra 1e5 Nu 4.5238 vs march 4.5241 in 1.5 s.
