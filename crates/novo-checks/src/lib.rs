@@ -39,6 +39,15 @@
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
 //! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
+//! | [`DeviceCollision`](ProblemKind::DeviceCollision) | error | Two devices overlapping on a mounting plate |
+//! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
+//! | [`DevicesTooClose`](ProblemKind::DevicesTooClose) | warning | Two devices closer than their clearance |
+//! | [`RailOverflow`](ProblemKind::RailOverflow) | warning | Devices needing more room than their DIN rail has |
+//! | [`DeviceTooDeep`](ProblemKind::DeviceTooDeep) | error | A device deeper than the room between plate and door |
+//! | [`DoorGapTight`](ProblemKind::DoorGapTight) | warning | A device that leaves less than the minimum gap to the door |
+//! | [`DepthUnknown`](ProblemKind::DepthUnknown) | info | A placed device without a depth, so the door was not checked |
+//! | [`PlateTooBig`](ProblemKind::PlateTooBig) | error | A plate larger than the inside of its enclosure |
+//! | [`DoorSwing`](ProblemKind::DoorSwing) | warning | An open door that needs more room outside than the site allows |
 //!
 //! A problem can be waived with a reason ([`waive`]); [`check_open`] leaves
 //! waived problems out and [`waived_problems`] lists them for the report.
@@ -64,6 +73,7 @@ pub mod calc;
 mod calc_checks;
 mod checks;
 mod contacts;
+mod door;
 mod physical;
 pub mod protection;
 pub mod standards;
@@ -191,11 +201,33 @@ pub enum ProblemKind {
     /// and grouping of IEC 60364-5-52), read from the planning tables
     /// unless the user loaded a licensed copy (`calc::tables`).
     CableRating,
+    /// Two devices whose footprints overlap on a mounting plate
+    /// (novo-layout).
+    DeviceCollision,
+    /// A device that leaves the usable area of its mounting plate.
+    DeviceOutsidePlate,
+    /// Two devices closer than the clearance they need.
+    DevicesTooClose,
+    /// Devices on a DIN rail that need more room than the rail has.
+    RailOverflow,
+    /// A device deeper than the room between the plate and the door
+    /// (novo-layout's door report); only for enclosures with an interior.
+    DeviceTooDeep,
+    /// A device that fits but leaves less than the minimum gap to the door.
+    DoorGapTight,
+    /// A placed device whose depth is not known (no `depth_mm` on the
+    /// device or its parts), so the door could not be checked for it.
+    DepthUnknown,
+    /// A mounting plate wider or higher than the inside of its enclosure.
+    PlateTooBig,
+    /// The open door needs more room in front or beside the hinge side than
+    /// the enclosure's stated free room.
+    DoorSwing,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 28] = [
+    pub const ALL: [ProblemKind; 37] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -224,6 +256,15 @@ impl ProblemKind {
         ProblemKind::OverfullDuct,
         ProblemKind::Standard,
         ProblemKind::CableRating,
+        ProblemKind::DeviceCollision,
+        ProblemKind::DeviceOutsidePlate,
+        ProblemKind::DevicesTooClose,
+        ProblemKind::RailOverflow,
+        ProblemKind::DeviceTooDeep,
+        ProblemKind::DoorGapTight,
+        ProblemKind::DepthUnknown,
+        ProblemKind::PlateTooBig,
+        ProblemKind::DoorSwing,
     ];
 
     pub fn severity(self) -> Severity {
@@ -234,7 +275,11 @@ impl ProblemKind {
             | ProblemKind::ShortCircuit
             | ProblemKind::DisconnectionTime
             | ProblemKind::ThermalWithstand
-            | ProblemKind::CableRating => Severity::Error,
+            | ProblemKind::CableRating
+            | ProblemKind::DeviceCollision
+            | ProblemKind::DeviceOutsidePlate
+            | ProblemKind::DeviceTooDeep
+            | ProblemKind::PlateTooBig => Severity::Error,
             ProblemKind::UnconnectedPin
             | ProblemKind::LoneInterruption
             | ProblemKind::NoMainFunction
@@ -253,8 +298,14 @@ impl ProblemKind {
             | ProblemKind::WireWithoutDuct
             | ProblemKind::OverfullDuct
             | ProblemKind::Standard
+            | ProblemKind::DevicesTooClose
+            | ProblemKind::RailOverflow
+            | ProblemKind::DoorGapTight
+            | ProblemKind::DoorSwing
             | ProblemKind::Plc => Severity::Warning,
-            ProblemKind::MissingPart | ProblemKind::UnplacedDevice => Severity::Info,
+            ProblemKind::MissingPart | ProblemKind::UnplacedDevice | ProblemKind::DepthUnknown => {
+                Severity::Info
+            }
         }
     }
 
@@ -289,6 +340,15 @@ impl ProblemKind {
             ProblemKind::OverfullDuct => "Overfull duct",
             ProblemKind::Standard => "Standards",
             ProblemKind::CableRating => "Cable rating",
+            ProblemKind::DeviceCollision => "Devices overlap",
+            ProblemKind::DeviceOutsidePlate => "Device off the plate",
+            ProblemKind::DevicesTooClose => "Devices too close",
+            ProblemKind::RailOverflow => "Rail overfull",
+            ProblemKind::DeviceTooDeep => "Device too deep",
+            ProblemKind::DoorGapTight => "Door gap tight",
+            ProblemKind::DepthUnknown => "Depth unknown",
+            ProblemKind::PlateTooBig => "Plate too big",
+            ProblemKind::DoorSwing => "Door swing",
         }
     }
 
@@ -323,6 +383,15 @@ impl ProblemKind {
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
             ProblemKind::OverfullDuct => "check.overfull_duct",
             ProblemKind::Standard => "check.standard",
+            ProblemKind::DeviceCollision => "check.device_collision",
+            ProblemKind::DeviceOutsidePlate => "check.device_outside_plate",
+            ProblemKind::DevicesTooClose => "check.devices_too_close",
+            ProblemKind::RailOverflow => "check.rail_overflow",
+            ProblemKind::DeviceTooDeep => "check.device_too_deep",
+            ProblemKind::DoorGapTight => "check.door_gap_tight",
+            ProblemKind::DepthUnknown => "check.depth_unknown",
+            ProblemKind::PlateTooBig => "check.plate_too_big",
+            ProblemKind::DoorSwing => "check.door_swing",
         }
     }
 }
@@ -450,6 +519,8 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);
     standards::problems(&cx, netlist, &mut problems);
+    physical::layout(&cx, &mut problems);
+    door::door(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
 }

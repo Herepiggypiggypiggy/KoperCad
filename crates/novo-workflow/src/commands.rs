@@ -192,6 +192,26 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "macro.browser",
+            "Macros",
+            "Project",
+            &["macro", "block", "library", "circuit", "starter", "share"],
+            Needs::Nothing,
+        ),
+        &["macros", "macro"],
+    ),
+    verb(
+        cmd(
+            "macro.import",
+            "Import macros",
+            "Project",
+            &["macro", "import", "kcmacro", "share"],
+            Needs::Nothing,
+        ),
+        &["import macro"],
+    ),
+    verb(
+        cmd(
             "app.preferences",
             "Preferences",
             "Project",
@@ -880,6 +900,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide heat",
         "View",
         &["heat", "temperature", "thermal", "map", "cabinet"],
+        Needs::Project,
+    ),
+    cmd(
+        "heat.simulate",
+        "Simulate heat of the cabinet",
+        "View",
+        &[
+            "heat",
+            "simulate",
+            "thermal",
+            "temperature",
+            "cabinet",
+            "loss",
+        ],
         Needs::Project,
     ),
     cmd(

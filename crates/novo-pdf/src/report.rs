@@ -130,15 +130,24 @@ fn draw_layout(w: &mut draw::PageWriter, layout: &PageLayout) {
     }
 }
 
+/// One sheet to write: its layout, an optional bookmark, its height in mm.
+struct Sheet {
+    layout: PageLayout,
+    bookmark: Option<String>,
+    height: f32,
+}
+
+/// The footer line of a report PDF: document title on the left, `right` and
+/// the page number on the right.
+struct Footer<'a> {
+    title: &'a str,
+    right: &'a str,
+}
+
 /// Writes reports as one PDF, each section starting on a new page, with a
 /// footer and a bookmark per section. An empty list gives one blank page,
 /// so the result always opens in a reader. Output is deterministic.
 pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) -> Vec<u8> {
-    struct Sheet {
-        layout: PageLayout,
-        bookmark: Option<String>,
-        height: f32,
-    }
     let mut sheets: Vec<Sheet> = Vec::new();
     for report in reports {
         // Paging is per section: rows per page depends on the section's
@@ -173,7 +182,53 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
             }
         }
     }
-    let blank = options.format.size_mm();
+    let footer = Footer {
+        title: &options.title,
+        right: &options.footer_right,
+    };
+    write_sheets(sheets, options.format, &options.title, Some(&footer))
+}
+
+/// Writes pages laid out by the documentation designer
+/// (`novo_reports::designer::render`) as one PDF. The template draws its own
+/// frame and title block, so there is no footer; `bookmarks` name pages
+/// (0-based index, title). Output is deterministic.
+pub fn export_layouts_pdf(
+    layouts: &[PageLayout],
+    title: &str,
+    bookmarks: &[(usize, String)],
+) -> Vec<u8> {
+    let sheets = layouts
+        .iter()
+        .enumerate()
+        .map(|(i, layout)| Sheet {
+            height: layout.height as f32,
+            layout: layout.clone(),
+            bookmark: bookmarks
+                .iter()
+                .find(|(p, _)| *p == i)
+                .map(|(_, t)| t.clone()),
+        })
+        .collect();
+    let format = layouts
+        .first()
+        .map_or_else(PageFormat::default, |l| PageFormat {
+            size: PaperSize::A4,
+            landscape: l.width > l.height,
+            ..PageFormat::default()
+        });
+    write_sheets(sheets, format, title, None)
+}
+
+/// Writes laid-out sheets as one PDF with the shared page machinery: fonts,
+/// bookmarks, deterministic output.
+fn write_sheets(
+    sheets: Vec<Sheet>,
+    format: PageFormat,
+    title: &str,
+    footer: Option<&Footer<'_>>,
+) -> Vec<u8> {
+    let blank = format.size_mm();
     let count = sheets.len();
 
     let mut next = 1;
@@ -205,8 +260,8 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
         .base_font(Name(b"Helvetica"))
         .encoding_predefined(Name(b"WinAnsiEncoding"));
     let mut info = pdf.document_info(info_id);
-    if !options.title.is_empty() {
-        info.title(TextStr(&options.title));
+    if !title.is_empty() {
+        info.title(TextStr(title));
     }
     info.producer(TextStr("KoperCAD"));
     info.finish();
@@ -220,34 +275,32 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
         let mut writer = draw::PageWriter::new(h, &mut inter);
         if let Some(sheet) = sheets.get(i) {
             draw_layout(&mut writer, &sheet.layout);
-            let y = h - 6.0;
-            let footer = |x: f32, text: String, anchor: Anchor| {
-                let mut l = Label::new(Vec2::new(x, y), text, 2.5);
-                l.anchor = anchor;
-                l
-            };
-            let right = sheet.layout.width as f32 - 15.0;
-            let half = (sheet.layout.width as f32 - 30.0) / 2.0;
-            writer.label(&footer(
-                15.0,
-                fit(&options.title, half, 2.5, false),
-                Anchor::CenterLeft,
-            ));
-            writer.label(&footer(
-                right,
-                format!(
-                    "{}{}page {} / {}",
-                    fit(&options.footer_right, half - 30.0, 2.5, false),
-                    if options.footer_right.is_empty() {
-                        ""
-                    } else {
-                        "   "
-                    },
-                    i + 1,
-                    count
-                ),
-                Anchor::CenterRight,
-            ));
+            if let Some(footer) = footer {
+                let y = h - 6.0;
+                let line = |x: f32, text: String, anchor: Anchor| {
+                    let mut l = Label::new(Vec2::new(x, y), text, 2.5);
+                    l.anchor = anchor;
+                    l
+                };
+                let right = sheet.layout.width as f32 - 15.0;
+                let half = (sheet.layout.width as f32 - 30.0) / 2.0;
+                writer.label(&line(
+                    15.0,
+                    fit(footer.title, half, 2.5, false),
+                    Anchor::CenterLeft,
+                ));
+                writer.label(&line(
+                    right,
+                    format!(
+                        "{}{}page {} / {}",
+                        fit(footer.right, half - 30.0, 2.5, false),
+                        if footer.right.is_empty() { "" } else { "   " },
+                        i + 1,
+                        count
+                    ),
+                    Anchor::CenterRight,
+                ));
+            }
         }
         let mut page = pdf.page(*page_ref);
         page.parent(tree_id)

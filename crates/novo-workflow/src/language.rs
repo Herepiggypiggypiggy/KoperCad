@@ -66,6 +66,8 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl("macro.browser", &["bibliotheek"], &["macro's", "macros"]),
+    nl("macro.import", &["macro importeren"], &["importeer macro"]),
     nl(
         "parts.browser",
         &["onderdelen"],
@@ -271,6 +273,11 @@ pub const DUTCH: &[Aliases] = &[
         "heat.toggle",
         &[],
         &["warmte tonen", "temperatuur", "warmtebeeld"],
+    ),
+    nl(
+        "heat.simulate",
+        &[],
+        &["warmte simuleren", "kast doorrekenen"],
     ),
     nl("heat.airflow", &[], &["luchtstroom", "luchtstroming"]),
     nl("heat.contours", &[], &["isothermen", "warmtelijnen"]),

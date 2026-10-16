@@ -4,7 +4,7 @@
 
 use novo_core::{PinRef, Project, StructureId};
 use novo_routing::model::route_connections;
-use novo_routing::{Kind, Rules};
+use novo_routing::{Kind, WireRules};
 
 /// How a cut length was found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,25 +32,13 @@ impl Basis {
     }
 }
 
-/// Service loop per end, the same as the routing engine's default.
-fn slack_mm() -> f64 {
-    Rules::default().slack_mm
-}
-
-/// Shortest estimated wire between two pins, before the slack.
-pub(crate) const ESTIMATE_MIN_MM: f64 = 100.0;
-
-/// Wire between pins with no usable schematic distance (different pages),
-/// before the slack.
-pub(crate) const ESTIMATE_ACROSS_PAGES_MM: f64 = 500.0;
-
 /// The estimate for a wire whose route is unknown: the Manhattan distance
 /// between its two pins on the schematic page in millimetres (at least
-/// [`ESTIMATE_MIN_MM`]), or [`ESTIMATE_ACROSS_PAGES_MM`] when the pins are
+/// `wire.estimate_min_mm`), or `wire.estimate_across_pages_mm` when the pins are
 /// on different pages, plus the service loop at each end. The drawing is not
 /// to cabinet scale, so this is a planning figure only, and the report
 /// labels it "estimate".
-fn estimate(project: &Project, from: PinRef, to: PinRef) -> f64 {
+fn estimate(project: &Project, rules: &WireRules, from: PinRef, to: PinRef) -> f64 {
     let same_page = project
         .symbol(from.symbol)
         .zip(project.symbol(to.symbol))
@@ -60,18 +48,12 @@ fn estimate(project: &Project, from: PinRef, to: PinRef) -> f64 {
         project.endpoint_position(from.into()),
         project.endpoint_position(to.into()),
     ) {
-        (true, Some(a), Some(b)) => ((a.x - b.x).abs() + (a.y - b.y).abs()).max(ESTIMATE_MIN_MM),
-        _ => ESTIMATE_ACROSS_PAGES_MM,
+        (true, Some(a), Some(b)) => {
+            ((a.x - b.x).abs() + (a.y - b.y).abs()).max(rules.estimate_min_mm)
+        }
+        _ => rules.estimate_across_pages_mm,
     };
-    base + 2.0 * slack_mm()
-}
-
-/// Outer diameter of a wire of the given cross-section: the copper circle
-/// plus about 0.7 mm of insulation each side. Only steers duct fill.
-fn diameter_mm(cross_section_mm2: Option<f64>) -> Option<f64> {
-    cross_section_mm2
-        .filter(|s| s.is_finite() && *s > 0.0)
-        .map(|s| 2.0 * (s / std::f64::consts::PI).sqrt() + 1.4)
+    base + 2.0 * rules.routing.slack_mm
 }
 
 /// One connection to measure: its two pins and the wire's cross-section.
@@ -115,10 +97,11 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
             id: i as u64,
             from: c.from,
             to: c.to,
-            diameter_mm: diameter_mm(c.cross_section_mm2),
+            diameter_mm: novo_routing::model::wire_diameter_mm(c.cross_section_mm2),
         })
         .collect();
-    let routed = route_connections(project, &jobs, &Rules::default());
+    let rules = WireRules::of(project);
+    let routed = route_connections(project, &jobs, &rules.routing);
     let lengths = connections
         .iter()
         .enumerate()
@@ -136,7 +119,7 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
                     ducts: route.ducts.clone(),
                 },
                 None => CutLength {
-                    mm: estimate(project, c.from, c.to),
+                    mm: estimate(project, &rules, c.from, c.to),
                     basis: Basis::Estimate,
                     ducts: Vec::new(),
                 },

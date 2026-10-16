@@ -46,6 +46,27 @@ impl Default for CutList {
 impl CutList {
     pub const ID: &'static str = "cutlist";
 
+    /// The allowances a project's wire rules give (`wire.ferrule_mm`,
+    /// `wire.lug_mm`, `wire.lug_from_mm2`).
+    pub fn of(project: &Project) -> CutList {
+        let rules = novo_routing::WireRules::of(project);
+        CutList {
+            ferrule_mm: rules.ferrule_mm,
+            lug_mm: rules.lug_mm,
+            lug_from_mm2: rules.lug_from_mm2,
+        }
+    }
+
+    /// The allowances this report cuts with for `project`: its own when they
+    /// were set away from the defaults, else the project's wire rules.
+    fn effective(&self, project: &Project) -> CutList {
+        if *self == CutList::default() {
+            CutList::of(project)
+        } else {
+            *self
+        }
+    }
+
     /// What one end of a wire of this cross-section takes for its
     /// termination: a ferrule below [`CutList::lug_from_mm2`], a cable lug
     /// from there on (the ferrule when the size is unknown).
@@ -136,6 +157,7 @@ impl Report for CutList {
 
     fn generate(&self, project: &Project) -> ReportOutput {
         let list = WireList.generate(project);
+        let this = self.effective(project);
         let mut wires: Vec<Wire> = Vec::new();
         if let Some(section) = list.sections.first() {
             let col = |key: &str| section.column(key);
@@ -168,7 +190,7 @@ impl Report for CutList {
                 .then_with(|| natural_cmp(&a.to, &b.to))
         });
 
-        let allowance = |w: &Wire| 2.0 * self.end_allowance_mm(w.section);
+        let allowance = |w: &Wire| 2.0 * this.end_allowance_mm(w.section);
 
         let mut summary = Section::new(
             "summary",

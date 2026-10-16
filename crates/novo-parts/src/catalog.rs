@@ -47,6 +47,12 @@ pub mod keys {
     pub const LETTER_CODES: &str = "letter_codes";
     /// Power loss at rated load in W; feeds the heat estimate.
     pub const POWER_LOSS_W: &str = "power_loss_w";
+    /// Share of the rated loss that occurs in operation, 0 to 1 (default 1).
+    pub const LOAD_FACTOR: &str = "load_factor";
+    /// Highest air temperature around the part the maker allows, degrees C.
+    pub const MAX_AMBIENT_C: &str = "max_ambient_c";
+    /// Highest housing surface temperature allowed, degrees C.
+    pub const MAX_SURFACE_C: &str = "max_surface_c";
     /// How the part is fixed: `din_rail`, `screw`, `plate`, `door_cutout`.
     pub const MOUNTING: &str = "mounting";
     /// Free space the part wants above it, in mm (upright part).

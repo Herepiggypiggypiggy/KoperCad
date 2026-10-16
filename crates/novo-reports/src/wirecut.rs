@@ -183,6 +183,7 @@ fn produce(project: &Project) -> (Vec<WireCutJob>, Plans) {
         })
         .collect();
     let lengths::Measurement { lengths, plans } = lengths::measure(project, &measured);
+    let cut_list = crate::CutList::of(project);
     let mut jobs: Vec<WireCutJob> = items
         .iter()
         .zip(lengths)
@@ -207,7 +208,7 @@ fn produce(project: &Project) -> (Vec<WireCutJob>, Plans) {
                 cross_section_mm2: section,
                 colour: join_distinct(item.wires.iter().filter_map(|w| w.color.as_deref())),
                 length_mm: length.mm,
-                cut_mm: length.mm + 2.0 * crate::CutList::default().end_allowance_mm(section),
+                cut_mm: length.mm + 2.0 * cut_list.end_allowance_mm(section),
                 basis: length.basis.text().to_owned(),
                 end_a: end(project, item.from, item.to, section, ferrule, &number),
                 end_b: end(project, item.to, item.from, section, ferrule, &number),

@@ -23,6 +23,8 @@ use novo_revisions::{Comparison, FieldChange, Side, group_of};
 use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
+mod macros;
+
 /// Process exit codes.
 pub mod exit {
     /// Done.
@@ -59,6 +61,9 @@ struct Cli {
 
 #[derive(Debug, Subcommand)]
 enum Cmd {
+    /// The macro library: list, export, import, install the starter set.
+    #[command(subcommand)]
+    Macros(macros::Macros),
     /// Show a summary of a project file.
     Info {
         file: PathBuf,
@@ -161,8 +166,10 @@ struct ReportArgs {
     #[arg(short, long)]
     output: Option<PathBuf>,
     /// CSV field separator; `;` suits Excel in locales with a decimal comma.
-    #[arg(long, default_value_t = ',')]
-    delimiter: char,
+    /// `,` when left out, except for `export wirecut` into a file, which
+    /// writes `;` like File > Export wire cut in the app.
+    #[arg(long)]
+    delimiter: Option<char>,
 }
 
 /// Which labels, and in which layout.
@@ -385,6 +392,7 @@ where
 
 fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
+        Cmd::Macros(cmd) => macros::run(cmd, out),
         Cmd::Info { file, json } => {
             let project = read(&file)?;
             let info = novo_py::info_json(&project, Some(&file));
@@ -429,7 +437,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             let args = ReportArgs {
                 file,
                 output: Some(output),
-                delimiter: ',',
+                delimiter: Some(','),
             };
             if !matches!(
                 args.output.as_deref().map(ReportFormat::from_path),
@@ -1065,7 +1073,7 @@ fn export_reports(
     let project = read(file)?;
     let usage = |e: novo_py::ScriptError| Failure::new(exit::USAGE, e.to_string());
     let csv = CsvOptions {
-        delimiter: args.delimiter,
+        delimiter: args.delimiter.unwrap_or(','),
         ..CsvOptions::default()
     };
     match &args.output {
@@ -1104,8 +1112,17 @@ fn export_wirecut(args: &ReportArgs, out: &mut dyn Write) -> Result<i32, Failure
     }
     let project = read(&args.file)?;
     let jobs = novo_reports::wire_cut_jobs(&project);
+    // The same job file as the app writes: `;` and a byte order mark in a
+    // file, nothing but the plain header and rows on standard output. Like
+    // the app, no file is written when there is nothing to cut.
+    if jobs.is_empty() && args.output.is_some() {
+        print(out, "No wires to cut yet: connect two device pins")?;
+        return Ok(exit::OK);
+    }
     let options = CsvOptions {
-        delimiter: args.delimiter,
+        delimiter: args
+            .delimiter
+            .unwrap_or(if args.output.is_some() { ';' } else { ',' }),
         bom: args.output.is_some(),
         ..CsvOptions::default()
     };

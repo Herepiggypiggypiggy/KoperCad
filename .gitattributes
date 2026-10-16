@@ -1,2 +1,7 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Files that tests compare byte for byte with what the code generates (lesson
+# projects, lesson text, the anchors doc) stay LF in a Windows checkout.
+assets/lessons/** text eol=lf
+docs/design/*.md text eol=lf

@@ -9,3 +9,5 @@ workflow thread (commands.rs, keymap). Do not edit PR #428's files.
 
 Key finding: `view.shortcuts` (`?`) has no handler in novo-app; it falls to the "is not in the app yet" message
 in `run_command` (app/workbench.rs).
+
+DISC-1 (2026-10-16): the sheet is `app/shortcuts_sheet.rs`; `sections(keymap, filter)` is the pure part, the window is `NovoApp::shortcuts_window`. Gestures that are not one key press live in `GESTURES` there; add a line when a hold/tap behaviour is added. DISC-2 continues with `tip()`, hint counters, What's new and the dead-command audit. onboarding.rs untouched.

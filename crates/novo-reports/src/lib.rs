@@ -80,6 +80,7 @@ mod bom;
 pub mod commissioning;
 mod cutlist;
 mod defaults;
+pub mod designer;
 mod devices;
 mod diagrams;
 mod export;

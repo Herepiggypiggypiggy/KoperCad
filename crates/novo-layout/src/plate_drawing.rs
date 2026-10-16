@@ -384,6 +384,15 @@ fn distinct(mut values: Vec<f64>) -> Vec<f64> {
     values
 }
 
+/// Width and height of a sheet: the plate, or the door, which takes the
+/// inside size of the enclosure when that is set.
+fn sheet_size(layout: &CabinetLayout, surface: Surface) -> (f64, f64) {
+    match (surface, layout.enclosure) {
+        (Surface::Door, Some(e)) if e.width > 0.0 && e.height > 0.0 => (e.width, e.height),
+        _ => (layout.plate.width, layout.plate.height),
+    }
+}
+
 /// Builds the drawing of `surface` at `scale` (denominator).
 ///
 /// The plate drawing shows the plate edge and its margin, the DIN rails,
@@ -392,8 +401,9 @@ fn distinct(mut values: Vec<f64>) -> Vec<f64> {
 /// feature along the top edge, the Y along the left edge). Ordinate labels
 /// closer than one text height to the previous one are left out; the table
 /// has every coordinate. The door drawing has the door edge, cut-outs and
-/// holes only: the door has no model of its own yet, so it is taken to be as
-/// large as the plate.
+/// holes only. The door is as large as the inside of the enclosure (the
+/// door is taken as wide and high as the inside, see `enclosure`); without
+/// enclosure fields it is taken to be as large as the plate.
 pub fn plate_drawing(
     layout: &CabinetLayout,
     features: &[DeviceFeatures],
@@ -402,7 +412,7 @@ pub fn plate_drawing(
     scale: f64,
 ) -> PlateDrawing {
     let u = scale;
-    let (w, h) = (layout.plate.width, layout.plate.height);
+    let (w, h) = sheet_size(layout, surface);
     let t = TEXT_MM * u;
     let mut m = Marks::default();
     m.rect(Layer::Plate, (0.0, 0.0), (w, h));
@@ -583,7 +593,9 @@ pub fn documents(
     features: &[DeviceFeatures],
 ) -> (Vec<PlateDocument>, DrillTable) {
     let table = crate::drill::drill_table(layout, features);
-    let scale = choose_scale(layout.plate.width, layout.plate.height, DRAWING_AREA_MM);
+    let (pw, ph) = sheet_size(layout, Surface::Plate);
+    let (dw, dh) = sheet_size(layout, Surface::Door);
+    let scale = choose_scale(pw.max(dw), ph.max(dh), DRAWING_AREA_MM);
     let mut docs = Vec::new();
     for surface in [Surface::Plate, Surface::Door] {
         let (holes, cutouts) = table.on(surface);

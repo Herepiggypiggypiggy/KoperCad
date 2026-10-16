@@ -1,0 +1,97 @@
+format = 1
+id = "design-checks"
+version = 1
+# Draft until the pill, the Issues list and waivers (PR #413) have anchors on main.
+status = "draft"
+title = "Find and fix problems before anyone else does"
+summary = "Let the design checks walk you through the drawing, fix what is wrong and waive what is meant."
+track = "productivity"
+order = 10
+level = "beginner"
+minutes = 8
+topics = ["checks", "problems", "waive"]
+needs = []
+next = ["parts-library"]
+project = "project.json"
+finished = "finished.json"
+page = "Control circuit"
+
+[[step]]
+id = "see-pill"
+title = "Meet the issue pill"
+text = """
+The pill in the corner counts the {tip:problem} the drawing has right now. This sample has two.
+It checks as you draw; it never blocks saving or exporting.
+"""
+point = { ui = "issue.pill" }
+
+[[step]]
+id = "open-list"
+title = "Open the list"
+text = "Click the pill, or press {key:check.problems}. The Issues list shows errors first, with a count on each filter."
+point = { ui = "issue.pill" }
+expect = { any = [ { clicked = "issue.pill" }, { command = "check.problems" } ] }
+solve = [ { command = "check.problems" } ]
+
+[[step]]
+id = "next-problem"
+title = "Jump to the first problem"
+text = "Press {key:check.next_problem}. The view moves to the problem and a mark sits on it. {key:check.previous_problem} goes back."
+point = { ui = "outline.issues" }
+expect = { command = "check.next_problem" }
+solve = [ { command = "check.next_problem" } ]
+
+[[step]]
+id = "fix-wire"
+title = "Fix the open pin"
+text = "The breaker **-F3** and the stop button **-S0** face each other but no wire joins them. Wire **-F3:2** to **-S0:11**."
+point = { at = { wire = ["-F3:2", "-S0:11"] } }
+note = [
+  { at = { device = "-F3", pin = "2" }, text = "Start here" },
+  { at = { device = "-S0", pin = "11" }, text = "Finish here" },
+]
+expect = { wire = { from = "-F3:2", to = "-S0:11" } }
+solve = [ { wire = ["-F3:2", "-S0:11"] } ]
+
+[[step]]
+id = "pill-updates"
+title = "Watch the pill drop"
+text = "The mark is gone and the count went down by one. Checks run on every change, so there is nothing to refresh."
+point = { ui = "issue.pill" }
+
+[[step]]
+id = "select-s1"
+title = "Look at the second problem"
+text = "**-S1** (start) has no part yet. That is an info, not an error: the drawing is right, the shopping list is not complete. Select **-S1**."
+point = { at = { device = "-S1" } }
+expect = { selected = "-S1" }
+solve = [ { page = "Control circuit" }, { select = "-S1" } ]
+
+[[step]]
+id = "give-part"
+title = "Give it a part"
+text = "In the inspector, pick a part for **-S1**. The Parts library lesson shows the quick ways; any part will do here."
+point = { ui = "inspector.part" }
+expect = { field = { device = "-S1", name = "part", is_set = true } }
+
+[[step]]
+id = "waive"
+title = "Waive a problem on purpose"
+text = """
+Sometimes a problem is meant, such as a spare pin kept free. Right-click it in the list and choose **Waive with a reason...**, then type why.
+The waiver stays in the project, with your reason, in the **Waived** section.
+"""
+point = { ui = "issues.waive" }
+expect = { command = "check.waive" }
+
+[[step]]
+id = "restore"
+title = "Bring one back"
+text = "Open **Waived** at the bottom of the list and press **Restore** on yours. A waiver hides a problem, it never deletes it."
+point = { ui = "issues.waived" }
+expect = { command = "check.restore_waived" }
+
+[[step]]
+id = "done"
+title = "Clean drawing"
+text = "You can read the pill, walk the problems with the keys, fix what is wrong and waive what is meant. Next: the parts library."

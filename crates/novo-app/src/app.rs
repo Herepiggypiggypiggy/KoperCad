@@ -34,6 +34,12 @@ mod live_anim;
 mod macro_actions;
 #[cfg(test)]
 mod macro_actions_tests;
+mod macro_browser;
+#[cfg(test)]
+mod macro_browser_tests;
+#[cfg(test)]
+mod macro_company_tests;
+mod macro_thumb;
 mod menu_bar;
 mod numbering;
 mod onboarding;
@@ -42,6 +48,7 @@ mod outline_tree;
 mod pages;
 mod parts;
 mod parts_import;
+mod parts_quality;
 mod pdf;
 mod plate_export;
 mod plc;
@@ -56,6 +63,7 @@ mod reports_view;
 mod revisions;
 mod sheet_import;
 mod sheets;
+mod shortcuts_sheet;
 mod simulate;
 mod sizing;
 mod standards;
@@ -71,7 +79,11 @@ mod workspace;
 mod xref;
 
 #[cfg(test)]
+mod assembly_pack_tests;
+#[cfg(test)]
 mod assembly_tests;
+#[cfg(test)]
+mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
 #[cfg(test)]
@@ -99,6 +111,8 @@ mod protection_tests;
 #[cfg(test)]
 mod route_all_tests;
 #[cfg(test)]
+mod shortcuts_sheet_tests;
+#[cfg(test)]
 mod variants_tests;
 
 use std::path::{Path, PathBuf};
@@ -109,7 +123,7 @@ use eframe::egui;
 use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
-const ASSEMBLY_HINT: &str = "The workshop sheet of every cabinet: prepare, drill, mount, wire, label and check, with a box to tick at each line. Needs a cabinet with a mounting plate.";
+const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::PageView;
@@ -889,9 +903,11 @@ impl NovoApp {
         self.renumber_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.shortcuts_window(&ctx);
         self.background_panel(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
+        self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
         self.options_window(&ctx);

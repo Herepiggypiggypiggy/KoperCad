@@ -12,6 +12,7 @@ novo-canvas = { path = "../novo-canvas", default-features = false, features = ["
 novo-layout.workspace = true
 novo-routing.workspace = true
 novo-parts.workspace = true
+novo-cables.workspace = true
 # Scene builder only (`model`): headless users such as novo-cli and novo-py must not link wgpu.
 novo-view3d = { path = "../novo-view3d", default-features = false, features = ["model"] }
 glam.workspace = true

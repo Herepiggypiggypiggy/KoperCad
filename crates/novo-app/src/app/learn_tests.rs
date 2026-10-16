@@ -380,7 +380,10 @@ fn anchors_doc_is_current() {
     if std::env::var_os("UPDATE_ANCHORS_DOC").is_some() {
         std::fs::write(&path, &want).unwrap();
     }
-    let have = std::fs::read_to_string(&path).unwrap_or_default();
+    // A Windows checkout may turn the file's line endings into CRLF.
+    let have = std::fs::read_to_string(&path)
+        .unwrap_or_default()
+        .replace("\r\n", "\n");
     assert_eq!(
         have, want,
         "docs/design/lesson-anchors.md is out of date: run `UPDATE_ANCHORS_DOC=1 cargo test -p novo-app anchors_doc`"

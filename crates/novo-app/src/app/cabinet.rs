@@ -5,7 +5,7 @@
 
 use eframe::egui;
 use novo_canvas::cabinet::{
-    BoxState, BoxView, CabinetScene, CabinetView, PlateView, RailView, view_bounds,
+    BoxState, BoxView, CabinetScene, CabinetView, DuctView, PlateView, RailView, view_bounds,
 };
 use novo_canvas::widget::CanvasView;
 use novo_canvas::{Vec2, vec2};
@@ -111,12 +111,16 @@ pub(super) enum Ask {
     /// Set the plate to new dimensions from the inspector.
     SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
+    /// Export the plate drawing PDF of the shown enclosure.
+    ExportPlate,
     Accept,
     Cancel,
     ToggleTable,
     TogglePlateCard,
     ToggleRoutes,
     ExportWireCut,
+    /// Set a wire production rule of the project (`None` back to its default).
+    SetWireRule(&'static str, Option<f64>),
     ExportWireProduction,
     ExportWiringDxf(StructureId),
     /// Select a placed device (from the problems list), on the plate.
@@ -170,6 +174,18 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
                 x: r.x as f32,
                 y: r.y as f32,
                 length: r.length as f32,
+            })
+            .collect(),
+        ducts: layout
+            .ducts
+            .iter()
+            .map(|d| DuctView {
+                id: d.id,
+                x: d.x as f32,
+                y: d.y as f32,
+                length: d.length as f32,
+                width: d.width as f32,
+                vertical: d.vertical,
             })
             .collect(),
         boxes: layout
@@ -503,6 +519,13 @@ impl NovoApp {
                     .clicked()
                 {
                     ask = Some(Ask::ToggleTable);
+                }
+                if ui
+                    .button("Plate drawing")
+                    .on_hover_text("Plate drawing with drill table (PDF)")
+                    .clicked()
+                {
+                    ask = Some(Ask::ExportPlate);
                 }
                 if ui.button("Size enclosure").clicked() {
                     self.sizing.panel_open = !self.sizing.panel_open;
@@ -906,7 +929,15 @@ impl NovoApp {
             Ask::Cancel => self.cabinet.preview = None,
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
+            Ask::ExportPlate => {
+                self.export_plate_pdf();
+            }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
+            Ask::SetWireRule(key, value) => {
+                self.cabinet_edit("Wire rule", move |tx| {
+                    novo_routing::project_rules::set_rule(tx, key, value)
+                });
+            }
             Ask::ExportWireCut => {
                 self.export_wire_cut();
             }

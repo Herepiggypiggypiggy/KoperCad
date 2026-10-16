@@ -91,6 +91,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.reports", under("View", "Workspace")),
     // Reports
     ("export.reports", at("Reports")),
+    ("export.assembly", at("Reports")),
     ("report.toc", at("Reports")),
     ("report.bom", at("Reports")),
     ("report.devices", at("Reports")),

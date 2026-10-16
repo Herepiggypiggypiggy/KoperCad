@@ -3,6 +3,7 @@
 use std::fmt;
 
 use novo_core::AnyId;
+use serde::{Deserialize, Serialize};
 
 /// One value in a report table. Numbers stay numbers, so a spreadsheet can
 /// sum a quantity column and a page can right-align it.
@@ -70,7 +71,8 @@ impl<T: Into<Cell>> From<Option<T>> for Cell {
 }
 
 /// Horizontal alignment of a column's cells.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Align {
     #[default]
     Left,

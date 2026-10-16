@@ -212,6 +212,16 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::MotorStarter,
         ProblemKind::ProtectiveConductor,
         ProblemKind::CableRating,
+        ProblemKind::DeviceCollision,
+        ProblemKind::DeviceOutsidePlate,
+        ProblemKind::DevicesTooClose,
+        ProblemKind::RailOverflow,
+        // Need an enclosure; see tests/door_checks.
+        ProblemKind::DeviceTooDeep,
+        ProblemKind::DoorGapTight,
+        ProblemKind::DepthUnknown,
+        ProblemKind::PlateTooBig,
+        ProblemKind::DoorSwing,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()

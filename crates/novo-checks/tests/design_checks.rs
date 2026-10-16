@@ -172,3 +172,64 @@ fn the_report_lists_open_and_waived_problems() {
     let lines = novo_checks::report_lines(&project);
     assert!(lines.iter().any(|(_, t)| t.contains("Reason: Short start")));
 }
+
+/// A 300 x 300 mm plate with -K1 .. -K3 placed at the given points (45 x 90
+/// mm each, the size of a device without a part).
+fn plate_with(points: [(f64, f64); 3]) -> Project {
+    build(|tx| {
+        let page = tx.add_page("1")?;
+        let cab = tx.add_structure(tag("+CAB1"), "", true)?;
+        tx.set_plate(
+            cab,
+            Some(MountingPlate {
+                width: 300.0,
+                height: 300.0,
+                margin: 10.0,
+            }),
+        )?;
+        for (i, (x, y)) in points.into_iter().enumerate() {
+            let d = tx.add_device(tag(&format!("-K{}", i + 1)), "")?;
+            tx.place_symbol(
+                page,
+                "iec/contacts/no",
+                Placement::at(Point::new(10.0, 10.0 + 20.0 * i as f64)),
+                vec![Pin::new("1", 0.0, 0.0)],
+                SymbolRole::Device {
+                    device: d,
+                    main: true,
+                },
+            )?;
+            tx.place_device(d, cab, Point::new(x, y), false, None)?;
+        }
+        Ok(())
+    })
+    .0
+}
+
+#[test]
+fn devices_apart_on_the_plate_are_quiet() {
+    let project = plate_with([(20.0, 20.0), (100.0, 20.0), (180.0, 20.0)]);
+    let problems = check(&project);
+    for kind in [
+        ProblemKind::DeviceCollision,
+        ProblemKind::DeviceOutsidePlate,
+        ProblemKind::DevicesTooClose,
+    ] {
+        assert!(of_kind(&problems, kind).is_empty(), "{kind:?}");
+    }
+}
+
+#[test]
+fn overlapping_off_plate_and_tight_devices_are_found() {
+    // -K1 and -K2 overlap, -K3 hangs over the right edge; -K1 and -K3 are far.
+    let project = plate_with([(20.0, 20.0), (40.0, 20.0), (270.0, 20.0)]);
+    let problems = check(&project);
+    assert_eq!(of_kind(&problems, ProblemKind::DeviceCollision).len(), 1);
+    assert_eq!(of_kind(&problems, ProblemKind::DeviceOutsidePlate).len(), 1);
+
+    // 5 mm between -K1 and -K2 is under the 10 mm default clearance.
+    let project = plate_with([(20.0, 20.0), (70.0, 20.0), (200.0, 20.0)]);
+    let problems = check(&project);
+    assert_eq!(of_kind(&problems, ProblemKind::DevicesTooClose).len(), 1);
+    assert!(of_kind(&problems, ProblemKind::DeviceCollision).is_empty());
+}
