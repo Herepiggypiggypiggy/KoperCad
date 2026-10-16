@@ -13,6 +13,8 @@
 //! IEC 60617 artwork; until then [`PlaceholderArt`] draws a box with pin
 //! stubs so every symbol is visible and connectable.
 
+use crate::note_table;
+pub use crate::note_table::{NoteDensity, NoteGlyph, NoteRow};
 use crate::scene::{Handle, Hit, Item, ItemId, Layer, LayerId, Scene, Sheet, SnapPoint};
 use crate::shape::{Placement, Primitive, Shape};
 use crate::style::{Color, Stroke};
@@ -433,6 +435,12 @@ pub struct SymbolNote {
     pub warning: bool,
     /// Where the note sits relative to its symbol.
     pub anchor: NoteAnchor,
+    /// A coil's contact table, drawn under the symbol with the contact
+    /// symbols, pins and locations in columns; `lines` then holds only
+    /// what goes below the table (warnings). Empty: `lines` is the note.
+    pub rows: Vec<NoteRow>,
+    /// How tightly the table is drawn.
+    pub density: NoteDensity,
 }
 
 /// The revision fields a title block prints (DESIGN §7), worked out by the
@@ -901,7 +909,7 @@ impl PageScene {
     ) -> bool {
         let mut fresh: HashMap<SymbolId, SymbolNote> = HashMap::new();
         for note in notes {
-            if !note.lines.iter().all(|l| l.trim().is_empty()) {
+            if !note.rows.is_empty() || !note.lines.iter().all(|l| l.trim().is_empty()) {
                 fresh.insert(note.symbol, note);
             }
         }
@@ -1522,10 +1530,59 @@ impl PageScene {
             );
         }
         if let Some(note) = self.notes.get(&id) {
-            let label = self.note_label(&item, tag.as_ref(), note);
-            item.labels.push(label);
+            self.add_note(&mut item, tag.as_ref(), note);
         }
         self.put(id.into(), item);
+    }
+
+    /// Adds a note to the symbol's item: its text, and under a coil the
+    /// contact table with the text of any warning below it.
+    fn add_note(&self, item: &mut Item, tag: Option<&Label>, note: &SymbolNote) {
+        if note.rows.is_empty() || note.anchor != NoteAnchor::Below {
+            if !note.lines.is_empty() {
+                item.labels.push(self.note_label(item, tag, note));
+            }
+            return;
+        }
+        let ink = item
+            .primitives
+            .iter()
+            .fold(crate::Aabb::EMPTY, |b, p| b.union(&p.shape.bounds()));
+        let (left, top) = if ink.is_empty() {
+            let at = item.snap_points.first().map_or(Vec2::ZERO, |s| s.pos);
+            (at.x, at.y)
+        } else {
+            (ink.min.x, ink.max.y)
+        };
+        let h = self.style.tag_height;
+        let color = if note.warning {
+            self.style.note_warning_color
+        } else {
+            self.style.note_color
+        };
+        let table = note_table::layout(
+            &note.rows,
+            note.density,
+            Vec2::new(left, top + 1.0),
+            h,
+            Stroke::world(0.25, color),
+            self.style.note_color,
+        );
+        item.primitives.extend(table.primitives.iter().cloned());
+        item.labels.extend(table.labels.iter().cloned());
+        if !note.lines.is_empty() {
+            let warn = Label::new(
+                Vec2::new(left, table.bottom() + 0.3 * h),
+                note.lines.join("\n"),
+                h,
+            )
+            .anchored(Anchor::TopLeft);
+            item.labels.push(if note.warning {
+                warn.colored(self.style.note_warning_color).keeping_color()
+            } else {
+                warn.colored(self.style.note_color)
+            });
+        }
     }
 
     /// A note next to the symbol's ink (see [`NoteAnchor`]), in the tag's
@@ -2194,6 +2251,8 @@ mod tests {
             lines: lines.iter().map(|l| l.to_string()).collect(),
             warning,
             anchor: NoteAnchor::TopRight,
+            rows: Vec::new(),
+            density: NoteDensity::default(),
         };
         let labels =
             |ps: &PageScene| -> Vec<Label> { ps.scene().get(item_id(k1)).unwrap().labels.clone() };
@@ -2261,6 +2320,8 @@ mod tests {
             lines: vec!["13-14 /1.2".into()],
             warning,
             anchor,
+            rows: Vec::new(),
+            density: NoteDensity::default(),
         };
         ps.set_notes(
             doc.project(),
@@ -2290,6 +2351,60 @@ mod tests {
         assert_eq!(reference.pos.x, tag.bounds().min.x);
         assert!(reference.pos.y >= tag.bounds().max.y);
         assert!(!reference.keep_color);
+    }
+
+    #[test]
+    fn a_coil_note_with_rows_draws_the_contact_table_under_the_symbol() {
+        let (doc, page, k1, _s1, _w) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let row = |glyph, pins: &str, loc: &str| NoteRow {
+            glyph,
+            pins: pins.into(),
+            location: loc.into(),
+        };
+        let rows = vec![
+            row(NoteGlyph::NormallyOpen, "13-14", "2.3"),
+            row(NoteGlyph::NormallyClosed, "21-22", "3.5"),
+        ];
+        let table = |density| SymbolNote {
+            symbol: k1,
+            lines: vec!["! 3 NO drawn, 2 available".into()],
+            warning: false,
+            anchor: NoteAnchor::Below,
+            rows: rows.clone(),
+            density,
+        };
+        let bare = ps.scene().get(item_id(k1)).unwrap().clone();
+        ps.set_notes(doc.project(), [table(NoteDensity::Full)], &PlaceholderArt);
+        let item = ps.scene().get(item_id(k1)).unwrap().clone();
+        assert!(item.primitives.len() > bare.primitives.len());
+        let texts: Vec<&str> = item.labels.iter().map(|l| l.text.as_str()).collect();
+        for want in ["13-14", "2.3", "21-22", "3.5", "! 3 NO drawn, 2 available"] {
+            assert!(texts.contains(&want), "{want} in {texts:?}");
+        }
+        let at = |t: &str| item.labels.iter().find(|l| l.text == t).unwrap().pos;
+        // Columns line up and rows read top to bottom, warning last.
+        assert_eq!(at("13-14").x, at("21-22").x);
+        assert_eq!(at("2.3").x, at("3.5").x);
+        assert!(at("2.3").x > at("13-14").x);
+        assert!(at("13-14").y < at("21-22").y);
+        assert!(at("21-22").y < at("! 3 NO drawn, 2 available").y);
+        // Compact packs the same rows tighter.
+        let full_gap = at("21-22").y - at("13-14").y;
+        ps.set_notes(
+            doc.project(),
+            [table(NoteDensity::Compact)],
+            &PlaceholderArt,
+        );
+        let item = ps.scene().get(item_id(k1)).unwrap().clone();
+        let y = |t: &str| item.labels.iter().find(|l| l.text == t).unwrap().pos.y;
+        assert!(y("21-22") - y("13-14") < full_gap);
+        // Clearing the note restores the bare symbol.
+        ps.set_notes(doc.project(), [], &PlaceholderArt);
+        assert_eq!(
+            ps.scene().get(item_id(k1)).unwrap().primitives.len(),
+            bare.primitives.len()
+        );
     }
 
     /// Two rows of one strip over the same x range (supply terminals at

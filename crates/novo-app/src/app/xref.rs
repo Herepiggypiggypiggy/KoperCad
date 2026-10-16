@@ -2,9 +2,9 @@
 //! and contacts, G / Shift+G, Alt+Left / Alt+Right and jumps to a device.
 
 use eframe::egui;
-use novo_canvas::model::{NoteAnchor, SymbolNote, item_id};
+use novo_canvas::model::{NoteAnchor, NoteDensity, NoteGlyph, NoteRow, SymbolNote, item_id};
 use novo_core::{AnyId, DeviceId, PageId, SymbolId};
-use novo_xref::{Label, LabelAnchor, LiveXref, Place, Reference, XrefIndex};
+use novo_xref::{ContactKind, Label, LabelAnchor, LiveXref, Place, Reference, XrefIndex};
 use std::collections::BTreeMap;
 
 use super::{Level, NovoApp};
@@ -39,7 +39,11 @@ impl NovoApp {
 
     /// The cross-reference labels of a page, as notes for the page scene.
     pub(super) fn xref_notes(&mut self, page: PageId) -> Vec<SymbolNote> {
-        self.xref_labels(page).into_iter().map(note).collect()
+        let density = self.settings.xref_density();
+        self.xref_labels(page)
+            .into_iter()
+            .map(|l| note(l, density))
+            .collect()
     }
 
     /// Every page's cross-reference notes, for the PDF.
@@ -49,12 +53,20 @@ impl NovoApp {
             .document()
             .map(|d| d.project().pages().map(|p| p.id).collect())
             .unwrap_or_default();
+        let density = self.settings.xref_density();
         let Some(index) = self.xref() else {
             return BTreeMap::new();
         };
         pages
             .into_iter()
-            .map(|p| (p, index.labels_on_page(p).into_iter().map(note).collect()))
+            .map(|p| {
+                let notes = index
+                    .labels_on_page(p)
+                    .into_iter()
+                    .map(|l| note(l, density))
+                    .collect();
+                (p, notes)
+            })
             .collect()
     }
 
@@ -192,15 +204,42 @@ pub(super) fn xref_of<'a>(
     })
 }
 
-/// A cross-reference label as a note drawn next to its symbol.
-pub(crate) fn note(label: Label) -> SymbolNote {
+/// A cross-reference label as a note drawn next to its symbol: a coil's
+/// contact image becomes the contact table, its warnings stay text below.
+pub(crate) fn note(label: Label, density: NoteDensity) -> SymbolNote {
+    let rows: Vec<NoteRow> = label
+        .rows
+        .iter()
+        .map(|r| NoteRow {
+            glyph: glyph_of(r.kind),
+            pins: r.pins.clone(),
+            location: r.location.clone(),
+        })
+        .collect();
+    let lines = if rows.is_empty() {
+        label.lines
+    } else {
+        label.extra_lines().to_vec()
+    };
     SymbolNote {
         symbol: label.symbol,
-        lines: label.lines,
+        lines,
         warning: label.warning,
         anchor: match label.anchor {
             LabelAnchor::Below => NoteAnchor::Below,
             LabelAnchor::Right => NoteAnchor::Right,
         },
+        rows,
+        density,
+    }
+}
+
+/// The contact symbol a row of the table draws.
+pub(crate) fn glyph_of(kind: ContactKind) -> NoteGlyph {
+    match kind {
+        ContactKind::Power => NoteGlyph::Power,
+        ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
+        ContactKind::Changeover => NoteGlyph::Changeover,
+        ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
     }
 }

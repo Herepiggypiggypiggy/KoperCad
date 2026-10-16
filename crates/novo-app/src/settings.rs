@@ -35,6 +35,9 @@ pub struct Settings {
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
+    /// How tightly the contact table under a coil is drawn, `"full"` or
+    /// `"compact"` (empty: full): a per-user preference.
+    pub xref_density: String,
     /// Whether the status bar is switched off (docs/design/workspaces.md §7).
     pub hide_status_bar: bool,
     /// Commissioning's large touch buttons: a tablet user sets it once.
@@ -116,6 +119,11 @@ pub struct WorkspaceLayout {
 }
 
 impl Settings {
+    /// The density of the coil contact table.
+    pub fn xref_density(&self) -> novo_canvas::model::NoteDensity {
+        novo_canvas::model::NoteDensity::from_id(&self.xref_density)
+    }
+
     pub const STORAGE_KEY: &str = "novo_settings";
 
     /// The wiring mode; Corners unless the person chose Lines.
