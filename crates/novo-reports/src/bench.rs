@@ -518,20 +518,40 @@ impl BenchCut {
             );
         }
         let estimates = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
-        let mut sections = vec![summary];
+        let no_size = jobs
+            .iter()
+            .filter(|j| j.cross_section_mm2.is_none())
+            .count();
+        let no_colour = jobs.iter().filter(|j| j.colour.is_empty()).count();
+        let mut notes: Vec<String> = Vec::new();
         if estimates > 0 {
+            notes.push(format!(
+                "{estimates} of {} lengths are estimates (marked ~): the wire is not routed through ducts, or a device has no pin position. Measure these on the plate.",
+                jobs.len()
+            ));
+        }
+        if no_size > 0 {
+            notes.push(format!(
+                "{no_size} of {} wires have no cross-section set (listed under \"size not set\"): they get no strip length and no ferrule. Set the size on the wire.",
+                jobs.len()
+            ));
+        }
+        if no_colour > 0 {
+            notes.push(format!(
+                "{no_colour} of {} wires have no insulation colour set, so their Colour is blank here. Ferrule sleeve colours come from the ferrule standard and are on the ferrule table.",
+                jobs.len()
+            ));
+        }
+        let mut sections = vec![summary];
+        if !notes.is_empty() {
             let mut note = Section::new(
                 "estimates",
                 "Check before cutting",
                 vec![Column::new("note", "", 60.0)],
             );
-            note.push(
-                vec![Cell::text(format!(
-                    "{estimates} of {} lengths are estimates (marked ~): the wire is not routed through ducts, or a device has no pin position. Measure these on the plate.",
-                    jobs.len()
-                ))],
-                Vec::new(),
-            );
+            for text in notes {
+                note.push(vec![Cell::text(text)], Vec::new());
+            }
             sections.push(note);
         }
 

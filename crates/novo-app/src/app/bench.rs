@@ -236,10 +236,19 @@ impl NovoApp {
         let jobs = wire_cut_jobs_with(project, &inputs.standard);
         let report = FerruleTable::build(project, &jobs, &inputs.standard);
         if report.section("ferrules").is_none() {
-            self.message(
-                Level::Info,
-                "No ferrules to crimp yet: connect two device pins and set the wire sizes",
-            );
+            let (unknown, off) = novo_reports::ends_without_ferrule(&jobs);
+            let why = if jobs.is_empty() {
+                "No ferrules to crimp yet: connect two device pins".to_owned()
+            } else if unknown > 0 {
+                format!(
+                    "No ferrules to crimp: {unknown} wire ends have no wire size. Set the size on the wires (select them, Inspector)"
+                )
+            } else if off > 0 {
+                "No ferrules to crimp: ferrules are switched off on every wire".to_owned()
+            } else {
+                "No ferrules to crimp yet".to_owned()
+            };
+            self.message(Level::Warning, why);
             return None;
         }
         let options = pdf_options(
