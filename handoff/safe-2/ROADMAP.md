@@ -1,4 +1,3 @@
-# SAFE-2 roadmap
-1. (PR 1) Safety functions bound to devices, stored in the project, Problems when achieved PL < required. Done in this PR.
-2. Report page in novo-reports (required vs achieved PL per function, disclaimer).
-3. Device picker from the canvas selection, B10d/MTTFd on the part catalog.
+1. Done (#777): functions bound to devices, Problems.
+2. (PR 2) Report page and PDF export.
+3. Later: CSV/Excel export entry, device pick from canvas selection, Table K.1 lookup if a reliable source is supplied (see HANDOFF).
