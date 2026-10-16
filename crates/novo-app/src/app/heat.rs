@@ -55,6 +55,8 @@ pub(super) struct Item {
     /// False when no loss figure exists for the device (drawn as "no data",
     /// not as a cool 0 W device).
     pub loss_known: bool,
+    /// True when the loss figure is a planning estimate, not a maker value.
+    pub loss_estimated: bool,
 }
 
 /// What the view draws from: the plate and its devices.
@@ -389,6 +391,7 @@ pub(super) fn layout_key(input: &Input) -> u64 {
             i.h.to_bits(),
             i.loss_w.to_bits(),
             i.loss_known,
+            i.loss_estimated,
         )
             .hash(&mut h);
     }
@@ -647,6 +650,24 @@ fn totals(input: &Input) -> (f64, usize) {
     )
 }
 
+/// Tells a first-time user that some loss figures are planning estimates, so
+/// the temperatures follow from them and are not maker-verified. `None` when
+/// every known loss is a maker or typed value.
+fn estimate_note(input: &Input) -> Option<String> {
+    let known = input.items.iter().filter(|i| i.loss_known).count();
+    let estimated = input
+        .items
+        .iter()
+        .filter(|i| i.loss_known && i.loss_estimated)
+        .count();
+    (estimated > 0).then(|| {
+        format!(
+            "{estimated} of {known} loss figures are planning estimates; \
+             check them against maker data."
+        )
+    })
+}
+
 /// Simulate / Cancel, the fidelity badge and the last notice.
 pub(super) fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
     if state.running() {
@@ -735,6 +756,9 @@ pub(super) fn items_of(
                 loss_known: project
                     .get::<Device>(DeviceId::from(p.id))
                     .is_some_and(|d| novo_thermal::bridge::device_loss_w(project, d).is_some()),
+                loss_estimated: project
+                    .get::<Device>(DeviceId::from(p.id))
+                    .is_some_and(|d| novo_thermal::bridge::device_loss_estimated(project, d)),
             }
         })
         .collect()
@@ -1378,6 +1402,9 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                 let small = |text: &str, color| egui::RichText::new(text).small().color(color);
                 let (total_w, unknown) = totals(input);
                 ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
+                if let Some(note) = estimate_note(input) {
+                    ui.label(small(&note, t::WARNING));
+                }
                 if unknown > 0 {
                     let (noun, verb) = if unknown == 1 {
                         ("device", "has")
@@ -1444,6 +1471,7 @@ mod tests {
                     h: 200.0,
                     loss_w: 80.0,
                     loss_known: true,
+                    loss_estimated: false,
                 },
                 Item {
                     id: 2,
@@ -1454,6 +1482,7 @@ mod tests {
                     h: 90.0,
                     loss_w: 2.0,
                     loss_known: true,
+                    loss_estimated: false,
                 },
             ],
             solution: None,
@@ -1540,6 +1569,20 @@ mod tests {
         let i = input();
         let c = build(&i);
         assert!(device_temp(&c, &i.items[0]) > device_temp(&c, &i.items[1]));
+    }
+
+    #[test]
+    fn estimated_losses_get_a_note_and_maker_losses_do_not() {
+        let mut i = input();
+        assert_eq!(estimate_note(&i), None);
+        i.items[0].loss_estimated = true;
+        assert_eq!(
+            estimate_note(&i).as_deref(),
+            Some("1 of 2 loss figures are planning estimates; check them against maker data.")
+        );
+        // A device without a loss figure is not counted either way.
+        i.items[0].loss_known = false;
+        assert_eq!(estimate_note(&i), None);
     }
 
     /// A scenario matching `input()`: a 700 x 900 x 300 mm interior, the
