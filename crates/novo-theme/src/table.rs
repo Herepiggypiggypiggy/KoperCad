@@ -79,7 +79,9 @@ pub fn table_header(
     sort: Option<(usize, bool)>,
 ) -> Option<usize> {
     let p = Palette::of(ui);
-    let small = ui.style().text_styles[&egui::TextStyle::Small].size - 0.5;
+    let small = ui.style().text_styles[&egui::TextStyle::Small]
+        .size
+        .max(12.0);
     let backdrop = ui.painter().add(Shape::Noop);
     let mut clicked = None;
     let row = ui.horizontal(|ui| {
