@@ -144,6 +144,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["practice", "tutorial", "learn"],
         Needs::Nothing,
     ),
+    cmd(
+        "project.languages",
+        "Report languages",
+        "Project",
+        &[
+            "language",
+            "translate",
+            "dutch",
+            "nederlands",
+            "pdf language",
+            "translation",
+        ],
+        Needs::Project,
+    ),
     cmd("file.save", "Save", "Project", &[], Needs::Project),
     cmd(
         "file.save_as",

@@ -97,6 +97,7 @@ pub(crate) struct Workbench {
     pub(super) electrical: Option<super::electrical::ElectricalWindow>,
     /// The Safety functions window, while it is open.
     pub(super) safety: Option<super::safety::SafetyWindow>,
+    pub(super) languages: Option<super::languages::LanguagesWindow>,
     /// The Renumber devices window, while it is open.
     pub(super) device_renumber: Option<super::device_renumber::DeviceRenumber>,
     /// The Project rules window is open.
@@ -234,6 +235,7 @@ impl Default for Workbench {
             calculations: None,
             electrical: None,
             safety: None,
+            languages: None,
             numbering: None,
             device_renumber: None,
             project_rules: false,
@@ -350,6 +352,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "check.calculations",
     "check.electrical_inputs",
     "check.safety",
+    "project.languages",
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
@@ -894,6 +897,7 @@ impl NovoApp {
             "check.calculations" => self.toggle_calculations(),
             "check.electrical_inputs" => self.toggle_electrical(),
             "check.safety" => self.toggle_safety(),
+            "project.languages" => self.toggle_languages(),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
             "edit.escape" => {

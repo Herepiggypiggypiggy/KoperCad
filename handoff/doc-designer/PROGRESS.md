@@ -1,1 +1,2 @@
 2026-10-16 08:00 UTC DOC-1 engine written, local fmt, clippy -D warnings and tests green; PR opened from main b025e2f.
+2026-10-16 18:20 UTC DOC-2 PR 1: i18n engine, Dutch file, PDF/CSV/Excel hook, Languages window and command; local fmt and clippy green.
