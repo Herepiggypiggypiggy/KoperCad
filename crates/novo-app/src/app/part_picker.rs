@@ -208,7 +208,8 @@ pub(super) fn picker_ui(
                             }),
                         )
                         .on_hover_text(format!(
-                            "How well the part suits this device: {}",
+                            "How well the part suits this device, from {} check(s): {}",
+                            fit.checks,
                             fit.reasons.join(", ")
                         ));
                     }

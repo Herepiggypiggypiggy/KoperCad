@@ -197,8 +197,16 @@ pub fn parse_supply(text: &str) -> Option<Supply> {
         .take_while(|c| c.is_ascii_digit() || *c == '.')
         .collect();
     let volts: f64 = digits.parse().ok()?;
-    let dc = lower.contains("dc") || lower.contains('=');
-    let ac = lower.contains("ac") || lower.contains("hz") || lower.contains('~');
+    // Whole words only ("24 V DC black" must not read as AC), allowing the
+    // unit fused to the number ("24VDC", "50Hz").
+    let word = |w: &str| {
+        lower.split(|c: char| !c.is_ascii_alphanumeric()).any(|t| {
+            t.strip_suffix(w)
+                .is_some_and(|rest| rest.chars().all(|c| c.is_ascii_digit() || c == 'v'))
+        })
+    };
+    let dc = word("dc") || lower.contains('=');
+    let ac = word("ac") || word("hz") || lower.contains('~');
     if !ac && !dc {
         return None;
     }
@@ -271,6 +279,8 @@ fn nominal(volts: f64) -> f64 {
 #[derive(Debug, Clone, PartialEq)]
 pub struct Fit {
     pub percent: u8,
+    /// How many checks the percentage rests on (1 to 4).
+    pub checks: u8,
     /// One short phrase per thing that was checked, for the tooltip.
     pub reasons: Vec<String>,
 }
@@ -319,11 +329,13 @@ impl DeviceNeed {
 pub fn fit(part: &CatalogPart, need: &DeviceNeed, device: &Device) -> Fit {
     let mut reasons = Vec::new();
     let (mut earned, mut possible) = (0u32, 0u32);
+    let mut checks = 0u8;
 
     match (need.role, part_role(part)) {
         (Some(want), Some(have)) => {
             let s = have.score_for(want);
             possible += 60;
+            checks += 1;
             earned += s;
             reasons.push(
                 match s {
@@ -336,12 +348,14 @@ pub fn fit(part: &CatalogPart, need: &DeviceNeed, device: &Device) -> Fit {
         }
         (Some(_), None) => {
             possible += 60;
+            checks += 1;
             reasons.push("kind: the part does not say what it is".to_owned());
         }
         (None, _) => reasons.push("kind: not checked, the device's kind is not known".to_owned()),
     }
 
     possible += 10;
+    checks += 1;
     match part
         .letter_codes
         .iter()
@@ -364,6 +378,7 @@ pub fn fit(part: &CatalogPart, need: &DeviceNeed, device: &Device) -> Fit {
 
     if let Some(want) = need.coil {
         possible += 20;
+        checks += 1;
         let name = |s: Supply| if s.ac { "AC" } else { "DC" };
         let have = part.data.get("coil_voltage").and_then(|v| match v {
             Value::Text(t) => parse_supply(t),
@@ -399,6 +414,7 @@ pub fn fit(part: &CatalogPart, need: &DeviceNeed, device: &Device) -> Fit {
         .any(|(_, v)| matches!(v, Value::Int(_) | Value::Float(_)));
     if sized {
         possible += 10;
+        checks += 1;
         if crate::assign::sized_for(part, device) {
             earned += 10;
             reasons.push("rating: matches".to_owned());
@@ -411,6 +427,7 @@ pub fn fit(part: &CatalogPart, need: &DeviceNeed, device: &Device) -> Fit {
 
     Fit {
         percent: (earned * 100 / possible) as u8,
+        checks,
         reasons,
     }
 }
@@ -424,6 +441,11 @@ mod tests {
         assert_eq!(parse_supply("24 V DC"), Some(Supply::dc(24.0)));
         assert_eq!(parse_supply("230 V AC"), Some(Supply::ac(230.0)));
         assert_eq!(parse_supply("24"), None);
+        for text in ["24 V DC black", "24 V DC contactor", "24VDC, face"] {
+            let s = parse_supply(text).unwrap();
+            assert!(s.dc && !s.ac, "{text}");
+        }
+        assert_eq!(parse_supply("230 V 50Hz"), Some(Supply::ac(230.0)));
     }
 
     #[test]
