@@ -88,7 +88,7 @@ impl Report for WireList {
 
     fn generate(&self, project: &Project) -> ReportOutput {
         let netlist = project.netlist();
-        let connections = items(project);
+        let connections = items(project, false);
         let mut section = Section::new(
             "wires",
             "",
@@ -212,7 +212,12 @@ pub(crate) struct Item<'a> {
 }
 
 /// The connections in reading order: page, left to right, top to bottom.
-pub(crate) fn items(project: &Project) -> Vec<Item<'_>> {
+///
+/// With `with_feeds`, a potential feed counts as the far end of a wire: the
+/// supply lead into a fuse and the PE wire to the motor are wires to cut,
+/// although only one of their ends is a device pin. The wire list leaves
+/// them out; the workshop reports do not.
+pub(crate) fn items(project: &Project, with_feeds: bool) -> Vec<Item<'_>> {
     let page_index: HashMap<PageId, usize> = project
         .pages_in_order()
         .iter()
@@ -278,7 +283,24 @@ pub(crate) fn items(project: &Project) -> Vec<Item<'_>> {
             .collect();
         pins.sort();
         pins.dedup();
-        if pins.len() < 2 {
+        // Feed pins close the chain after the device pins.
+        let mut feeds: Vec<PinRef> = Vec::new();
+        if with_feeds && !pins.is_empty() {
+            feeds = members
+                .iter()
+                .flat_map(|&i| wires[i].ends())
+                .filter(|&end| matches!(joint(end), Some(Joint::End(Endpoint::Pin { .. }))))
+                .filter_map(Endpoint::as_pin)
+                .filter(|p| {
+                    project
+                        .symbol(p.symbol)
+                        .is_some_and(|s| matches!(s.role, SymbolRole::PotentialFeed { .. }))
+                })
+                .collect();
+            feeds.sort();
+            feeds.dedup();
+        }
+        if pins.len() + feeds.len() < 2 {
             continue;
         }
         pins.sort_by(|&a, &b| {
@@ -289,6 +311,7 @@ pub(crate) fn items(project: &Project) -> Vec<Item<'_>> {
                 .then(a.cmp(&b))
         });
         let (page, first) = pin_key(pins[0]);
+        pins.extend(feeds);
         for pair in pins.windows(2) {
             connections.push(Reading {
                 reading: (page, first.x, first.y),

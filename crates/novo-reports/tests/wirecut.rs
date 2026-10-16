@@ -179,3 +179,36 @@ fn the_report_adds_up_stock_ferrules_and_duct_fill() {
     assert_eq!(ducts[0][5], "ok");
     assert!(ducts[0][1].parse::<i64>().unwrap() >= 1);
 }
+
+#[test]
+fn wires_to_a_supply_feed_are_jobs_too() {
+    let (doc, _) = cabinet();
+    let jobs = wire_cut_jobs(doc.project());
+    let feed_ends = |j: &novo_reports::WireCutJob| {
+        [&j.end_a, &j.end_b]
+            .into_iter()
+            .filter(|e| e.designation.ends_with("(feed)"))
+            .count()
+    };
+    let feeds: Vec<_> = jobs.iter().filter(|j| feed_ends(j) == 1).collect();
+    assert!(!feeds.is_empty(), "supply and PE wires are on the list");
+    assert!(jobs.iter().all(|j| feed_ends(j) <= 1));
+    // The protective earth lead to the motor is a wire to cut.
+    assert!(
+        feeds.iter().any(|j| [&j.end_a, &j.end_b]
+            .iter()
+            .any(|e| e.designation == "PE (feed)")),
+        "{:?}",
+        feeds
+            .iter()
+            .map(|j| (&j.end_a.designation, &j.end_b.designation))
+            .collect::<Vec<_>>()
+    );
+    // The wire list stays the wiring between devices.
+    let list = novo_reports::WireList.generate(doc.project());
+    let to_feed = list.sections[0]
+        .rows
+        .iter()
+        .any(|r| r.cells.iter().any(|c| c.to_string().ends_with("(feed)")));
+    assert!(!to_feed);
+}
