@@ -13,6 +13,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cable_controls;
 mod change_report;
 mod changes;
 mod checks;
@@ -54,6 +55,7 @@ mod onboarding;
 mod outline;
 mod outline_tree;
 mod pages;
+mod part_picker;
 mod parts;
 mod parts_import;
 mod parts_quality;
