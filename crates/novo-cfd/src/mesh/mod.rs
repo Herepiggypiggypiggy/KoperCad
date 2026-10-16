@@ -148,9 +148,9 @@ fn spans(scn: &Scenario, regs: &[Region], need: usize, st: &MeshSettings) -> [Ve
             _ => need,
         };
         let carve_out = is_thin_sheet_kind(scn, r.material);
-        for a in 0..3 {
+        for (a, fa) in f.iter_mut().enumerate() {
             let thin = r.hi[a] - r.lo[a] < st.thin_mm;
-            f[a].push(match (thin, carve_out) {
+            fa.push(match (thin, carve_out) {
                 // plate and rails: a cut-cell sheet unless asked for
                 (true, true) if !st.resolve_thin => Span {
                     lo: r.lo[a],
