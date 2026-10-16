@@ -357,3 +357,19 @@ fn a_bad_language_file_is_refused_with_a_reason() {
         Catalog::from_json(r#"{"code":"DE","name":"Deutsch","entries":{"Wire":"Draht"}}"#).unwrap();
     assert_eq!(c.code, "de");
 }
+
+#[test]
+fn merging_a_language_file_keeps_the_projects_own_entries() {
+    let mut table = ProjectTable::default();
+    table.set("nl", "Wire", "Ader").unwrap();
+    let mut file = Catalog::new("nl", "Nederlands");
+    file.set("Wire", "Draad");
+    file.set("Cable", "Kabel");
+    file.set("Line {n}", "Regel");
+    let bad = table.merge_language(file);
+    assert_eq!(bad.len(), 1);
+    let tr = Translator::new("nl", &table);
+    assert_eq!(tr.tr("Wire"), "Ader", "the project's entry wins");
+    assert_eq!(tr.tr("Cable"), "Kabel", "the file fills in the rest");
+    assert_eq!(table.language("nl").unwrap().name, "Nederlands");
+}

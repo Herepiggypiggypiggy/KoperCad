@@ -150,7 +150,8 @@ impl NovoApp {
     }
 
     /// Reads a language file into the project (one undo step) and makes it
-    /// the report language. Entries that would break placeholders are left
+    /// the report language. The project's own entries for that language are
+    /// kept; the file only fills in the rest. Entries that would break placeholders are left
     /// out and counted in the message.
     pub(super) fn import_language_file(&mut self, path: &std::path::Path) -> bool {
         let text = match std::fs::read_to_string(path) {
@@ -176,14 +177,25 @@ impl NovoApp {
         let mut table = ProjectTable::of_project(&project);
         let code = catalog.code.clone();
         let total = catalog.entries.len();
-        let dropped = table.put_language(catalog);
-        self.set_translation_table("Import language file", &table);
-        self.set_report_language(&code);
+        let kept = table.language(&code).map_or(0, |c| c.entries.len());
+        let dropped = table.merge_language(catalog);
+        // One undo step: the table and the language together.
+        let value = table.to_property().map(Value::Text);
+        let language = (code != ENGLISH).then(|| Value::Text(code.clone()));
+        self.edit_project("Import language file", |tx| {
+            standards::set_info_property(tx, TABLE_KEY, value)?;
+            standards::set_info_property(tx, LANGUAGE_KEY, language)
+        });
+        let own = if kept > 0 {
+            format!(" The project's {kept} own entries for {code} were kept.")
+        } else {
+            String::new()
+        };
         let note = if dropped.is_empty() {
-            format!("Loaded {total} texts for {code}")
+            format!("Loaded {total} texts for {code}.{own}")
         } else {
             format!(
-                "Loaded {} texts for {code}; {} left out because they change a {{placeholder}}: {}",
+                "Loaded {} texts for {code}; {} left out because they change a {{placeholder}}: {}.{own}",
                 total - dropped.len(),
                 dropped.len(),
                 dropped
