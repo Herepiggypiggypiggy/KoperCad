@@ -588,6 +588,16 @@ pub enum UnplacedWhy {
     NoRoom,
 }
 
+impl UnplacedWhy {
+    /// The reason, for a message after a device's name.
+    pub fn text(self) -> &'static str {
+        match self {
+            UnplacedWhy::TooLarge => "larger than the usable plate",
+            UnplacedWhy::NoRoom => "no room left on the plate",
+        }
+    }
+}
+
 /// Why a rail is where it is, relative to the rail above it.
 #[derive(Debug, Clone, PartialEq)]
 pub struct RowNote {

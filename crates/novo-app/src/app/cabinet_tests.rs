@@ -610,3 +610,84 @@ fn space_held_and_dragged_pans_the_cabinet_not_the_hidden_schematic() {
     );
     assert!(!d.app.wb.field.is_open(), "a pan opens no field");
 }
+
+/// A terminal strip made as `-X1` has no location; Place all still puts it
+/// on the plate of the only cabinet. With a second cabinet it names the
+/// strip and says why it is left off.
+#[test]
+fn place_all_places_a_terminal_strip_without_a_location_and_names_what_it_leaves() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    let strip = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Strip", |tx| {
+            tx.add_terminal_strip(DeviceTag::parse("-X1").unwrap())
+        })
+        .unwrap()
+        .0
+        .raw();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app
+        .cabinet_ask(Ask::PlaceAll, Some(cab), layout_of(&d, cab), &cands);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+    let layout = layout_of(&d, cab).unwrap();
+    assert!(
+        layout.placements.iter().any(|p| p.id == strip),
+        "X1 is on the plate"
+    );
+    assert_eq!(layout.placements.len(), 4);
+}
+
+/// With two cabinets a strip without a location belongs to neither: Place all
+/// names it and says why instead of leaving it out silently.
+#[test]
+fn place_all_names_a_device_no_cabinet_takes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Strip and second cabinet", |tx| {
+            tx.add_terminal_strip(DeviceTag::parse("-X1").unwrap())?;
+            tx.add_structure(DeviceTag::parse("+CAB2").unwrap(), "Second", true)?;
+            Ok(())
+        })
+        .unwrap();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d)
+        .structures()
+        .find(|s| s.enclosure && s.tag.to_string() == "+CAB1")
+        .unwrap()
+        .id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app
+        .cabinet_ask(Ask::PlaceAll, Some(cab), layout_of(&d, cab), &cands);
+    let texts: Vec<_> = d.app.messages().iter().map(|m| m.text.clone()).collect();
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.starts_with("Not placed: -X1") && t.contains("no location")),
+        "{texts:?}"
+    );
+}
