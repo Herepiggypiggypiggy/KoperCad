@@ -196,6 +196,19 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
 }
 
 #[test]
+fn the_hints_command_folds_and_unfolds_the_legend() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(d.app.view3d.hints.open);
+    d.app.run_command(&ctx, "view.3d_hints", None);
+    d.frame();
+    assert!(!d.app.view3d.hints.open);
+    d.app.run_command(&ctx, "view.3d_hints", None);
+    assert!(d.app.view3d.hints.open);
+}
+
+#[test]
 fn select_by_type_asked_before_the_scene_exists_applies_after_the_first_build() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());

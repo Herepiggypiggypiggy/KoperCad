@@ -748,6 +748,11 @@ pub const DUTCH: &[Aliases] = &[
         &["framesnelheid", "prestaties", "snelheid"],
     ),
     nl(
+        "view.3d_hints",
+        &["3d hulp tonen"],
+        &["muis en toetsen", "bediening"],
+    ),
+    nl(
         "view.3d_select_devices",
         &["alle apparaten kiezen in 3d"],
         &["apparaten kiezen"],
