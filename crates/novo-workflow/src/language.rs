@@ -156,6 +156,22 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("tool.cable", &["kabel"], &["kabel tekenen", "aders"]),
     nl(
+        "cable.rename",
+        &["hernoem kabel"],
+        &["kabel hernoemen", "kabelnaam"],
+    ),
+    nl("cable.delete", &[], &["kabel verwijderen", "kabel wissen"]),
+    nl(
+        "cable.retype",
+        &["kabeltype"],
+        &["kabeltype wijzigen", "aders", "afgeschermd"],
+    ),
+    nl(
+        "cable.restore_proposals",
+        &[],
+        &["afgewezen kabels terugzetten", "opnieuw voorstellen"],
+    ),
+    nl(
         "wire.end_on_part",
         &[],
         &[

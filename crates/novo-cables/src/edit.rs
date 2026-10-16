@@ -10,7 +10,8 @@
 
 use novo_core::{Cable, CableId, ModelError, Project, Result, TerminalId, Tx, Value, WireId};
 
-use crate::kind::SHIELD;
+use crate::kind::{CableType, SHIELD};
+use crate::propose::{assign, conductor};
 
 /// Cable property listing the cores marked spare, by name: `3,5`.
 pub const SPARE_KEY: &str = "cable.spare";
@@ -211,4 +212,72 @@ pub fn connect_shield(
         tx.set_property(cable, key, value)?;
     }
     Ok(())
+}
+
+/// Renames a cable (`-W2`). Refused when another cable already has the
+/// tag.
+pub fn rename_cable(tx: &mut Tx<'_>, cable: CableId, tag: novo_core::DeviceTag) -> Result<()> {
+    cable_of(tx.project(), cable)?;
+    if tx.project().cables().any(|c| c.id != cable && c.tag == tag) {
+        return Err(ModelError::InvalidValue {
+            id: cable.into(),
+            field: "tag",
+        });
+    }
+    tx.update::<Cable>(cable, |c| c.tag = tag)
+}
+
+/// Deletes a cable. Its wires stay, free of any core; they are proposed as
+/// a cable again when they cross a location boundary.
+pub fn delete_cable(tx: &mut Tx<'_>, cable: CableId) -> Result<()> {
+    cable_of(tx.project(), cable)?;
+    tx.remove(cable)
+}
+
+/// Gives a cable another type: new cores, the wires put on them the way a
+/// proposal would (PE on green-yellow, lines on BN BK GY). The part is
+/// cleared, since it was for the old type, and spare marks stay on cores
+/// that keep their name. Refused, changing nothing, when the wires do not
+/// fit the new type.
+pub fn retype_cable(tx: &mut Tx<'_>, cable: CableId, cable_type: &CableType) -> Result<()> {
+    let project = tx.project();
+    let record = cable_of(project, cable)?;
+    let netlist = project.netlist();
+    let mut wires = Vec::new();
+    let mut conductors = Vec::new();
+    let mut shield_wire = None;
+    for core in &record.cores {
+        let Some(wire) = core.wire else { continue };
+        if core.shield {
+            shield_wire = Some(wire);
+        } else if let Some(w) = project.wire(wire) {
+            wires.push(wire);
+            conductors.push(conductor(project, &netlist, w));
+        }
+    }
+    let Some(cores) = assign(&conductors, cable_type) else {
+        return Err(ModelError::InvalidValue {
+            id: cable.into(),
+            field: "cable type",
+        });
+    };
+    let mut built = cable_type.build_cores();
+    for (wire, core) in wires.into_iter().zip(cores) {
+        built[core].wire = Some(wire);
+    }
+    if let Some(slot) = built.iter_mut().find(|c| c.shield) {
+        slot.wire = shield_wire;
+    }
+    let spare: Vec<String> = spare_cores(record)
+        .into_iter()
+        .filter(|name| built.iter().any(|c| c.name == *name))
+        .collect();
+    let name = cable_type.name();
+    tx.update::<Cable>(cable, |c| {
+        c.cores = built;
+        c.part = None;
+        c.description = name;
+    })?;
+    let value = (!spare.is_empty()).then(|| Value::Text(spare.join(",")));
+    tx.set_property(cable, SPARE_KEY, value)
 }
