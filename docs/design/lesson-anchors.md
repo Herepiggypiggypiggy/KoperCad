@@ -44,6 +44,9 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `cabinet.cutlist`: {ui:cabinet.cutlist} shows **Cut list**
 - `cabinet.table`: {ui:cabinet.table} shows **Table**
 - `cabinet.heat`: {ui:cabinet.heat} shows **Heat**
+- `heat.chips`: {ui:heat.chips} shows **Heat chips**
+- `heat.legend`: {ui:heat.legend} shows **Heat legend**
+- `heat.simulate`: {ui:heat.simulate} shows **Simulate button**
 - `cabinet.canvas`: {ui:cabinet.canvas} shows **Cabinet canvas**
 - `workspace.view3d`: {ui:workspace.view3d} shows **3D canvas**
 - `switcher.schematic`: {ui:switcher.schematic} shows **Schematic chip**

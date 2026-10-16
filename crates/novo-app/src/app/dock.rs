@@ -20,6 +20,16 @@ enum DockTool {
     Cable,
 }
 
+/// What the tool in hand has to say (see `NovoApp::tool_hint`).
+#[derive(Default)]
+pub(super) struct ToolHint {
+    pub(super) text: String,
+    /// The text is the empty-page tip, which gives way to a message.
+    pub(super) tip: bool,
+    pub(super) refused: bool,
+    pub(super) proposals: usize,
+}
+
 /// How close to the dock a gesture has to come to move it aside.
 const NEAR: f32 = 32.0;
 /// The dock's distance from the canvas edge.
@@ -104,7 +114,11 @@ impl NovoApp {
         view.editor.catalog = catalog;
     }
 
-    pub(super) fn tool_dock(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+    /// What the drawing has to say about the tool in hand: a refusal, a
+    /// step hint, the rest of the selected device, the first move on an
+    /// empty page, and how many proposals wait. The status bar shows it; the
+    /// dock does only when the bar is off.
+    pub(super) fn tool_hint(&mut self) -> ToolHint {
         // With nothing in hand, a selected coil or contact names where the
         // rest of its device is drawn.
         let elsewhere = match self.selected_symbol() {
@@ -114,6 +128,47 @@ impl NovoApp {
                 .unwrap_or_default(),
             None => String::new(),
         };
+        let Some(view) = self.canvas.schematic_ref() else {
+            return ToolHint::default();
+        };
+        let hint = view
+            .status_text()
+            .filter(|h| !h.is_empty())
+            .unwrap_or(elsewhere);
+        // Dragging a selection box says what letting go would take.
+        let hint = match view.band_count() {
+            Some(n) => format!("{n} selected"),
+            None => hint,
+        };
+        // Nothing else to say on an empty page: name the first move.
+        let (hint, tip) = if hint.is_empty() {
+            match self.empty_page_hint() {
+                Some(t) => (t, true),
+                None => (hint, false),
+            }
+        } else {
+            (hint, false)
+        };
+        ToolHint {
+            text: hint,
+            tip,
+            // A refusal reads as one: the Error tint and a warning icon,
+            // never colour alone (DESIGN.md §4).
+            refused: view.editor.notice().is_some(),
+            proposals: view.editor.proposals().len() + self.page_proposals().len(),
+        }
+    }
+
+    pub(super) fn tool_dock(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+        let ToolHint {
+            text: hint,
+            refused,
+            proposals,
+            ..
+        } = self.tool_hint();
+        // The status bar carries the hint; the dock keeps to its controls so
+        // they never move.
+        let in_bar = self.status_bar_shown();
         let Some(view) = self.canvas.schematic_ref() else {
             return;
         };
@@ -126,27 +181,6 @@ impl NovoApp {
             Tool::Cable(_) => DockTool::Cable,
             Tool::Select | Tool::Move(_) | Tool::Paste(_) => DockTool::Select,
         };
-        let band = view.band_count();
-        let hint = view
-            .status_text()
-            .filter(|h| !h.is_empty())
-            .unwrap_or(elsewhere);
-        // Dragging a selection box says what letting go would take.
-        let hint = match band {
-            Some(n) => format!("{n} selected"),
-            None => hint,
-        };
-        // Nothing else to say on an empty page: name the first move.
-        let hint = if hint.is_empty() {
-            self.empty_page_hint().unwrap_or(hint)
-        } else {
-            hint
-        };
-        // A refusal reads as one: the Error tint and a warning icon, never
-        // colour alone (DESIGN.md §4).
-        let refused = view.editor.notice().is_some();
-        let proposals = view.editor.proposals().len() + self.page_proposals().len();
-
         // Aside: the bottom right corner, while the pointer works near the
         // dock's usual place (a drag, or a tool following the pointer).
         // Measured against that place, so the dock does not flicker back.
@@ -243,26 +277,52 @@ impl NovoApp {
                             // with the drawing.
                             response.surrender_focus();
                         }
-                        // The wiring mode: always there, faint while another
-                        // tool is active; a click connects in that mode.
-                        for (mode, label, id) in [
-                            (WiringMode::Corners, "Corners", "dock.corners"),
-                            (WiringMode::Lines, "Lines", "dock.lines"),
+                        // The wiring mode: two icons of one choice, always
+                        // there, faint while another tool is active; a click
+                        // connects in that mode.
+                        ui.separator();
+                        for (mode, icon, tip, id) in [
+                            (
+                                WiringMode::Corners,
+                                icons::tool::WIRE_CORNERS,
+                                "Wire with corners (right angles) · Shift+W switches",
+                                "dock.corners",
+                            ),
+                            (
+                                WiringMode::Lines,
+                                icons::tool::WIRE_LINES,
+                                "Wire with lines (any angle) · Shift+W switches",
+                                "dock.lines",
+                            ),
                         ] {
-                            let mut text = egui::RichText::new(label).small();
-                            if active != DockTool::Connect {
-                                text = text.weak();
-                            }
-                            let selected = active == DockTool::Connect && mode == chosen;
+                            // Copper only for the active tool: with another
+                            // tool in hand the chosen mode is the brighter
+                            // of two faint icons.
+                            let connecting = active == DockTool::Connect;
                             let response = ui
-                                .selectable_label(selected, text)
-                                .on_hover_text("Wiring mode · Shift+W switches");
+                                .scope(|ui| {
+                                    if !connecting {
+                                        ui.multiply_opacity(if mode == chosen {
+                                            0.8
+                                        } else {
+                                            0.45
+                                        });
+                                    }
+                                    widgets::tool_button(
+                                        ui,
+                                        icon,
+                                        connecting && mode == chosen,
+                                        tip,
+                                    )
+                                })
+                                .inner;
                             spots.push((id, response.rect, response.clicked()));
                             if response.clicked() {
                                 chip = Some(mode);
                             }
                             response.surrender_focus();
                         }
+                        ui.separator();
                         // The cable tool and the history sit after the wiring
                         // mode: a tool of its own, then two plain actions.
                         let response = widgets::tool_button(
@@ -308,7 +368,9 @@ impl NovoApp {
                             widgets::tool_button(ui, icons::tool::TEXT, false, "Text")
                                 .on_disabled_hover_text("Text · Comes later");
                         });
-                        if !hint.is_empty() {
+                        if in_bar {
+                            // See `tool_hint`: the bar shows it.
+                        } else if !hint.is_empty() {
                             ui.separator();
                             if refused {
                                 ui.colored_label(
@@ -320,7 +382,7 @@ impl NovoApp {
                                 spots.push(("dock.hint", response.rect, false));
                             }
                         }
-                        if proposals > 0 {
+                        if proposals > 0 && !in_bar {
                             ui.separator();
                             let response = ui
                                 .label(egui::RichText::new(format!("{proposals} proposed")).weak())

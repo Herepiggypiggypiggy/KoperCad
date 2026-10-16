@@ -53,6 +53,10 @@ pub mod tool {
     pub const UNDO: &str = p::ARROW_COUNTER_CLOCKWISE;
     pub const REDO: &str = p::ARROW_CLOCKWISE;
     pub const TEXT: &str = p::TEXT_T;
+    /// Wiring mode: right-angle corners.
+    pub const WIRE_CORNERS: &str = p::ARROW_ELBOW_RIGHT_DOWN;
+    /// Wiring mode: straight lines at any angle.
+    pub const WIRE_LINES: &str = p::ARROW_UP_RIGHT;
 }
 
 /// The canvases and workspaces.
