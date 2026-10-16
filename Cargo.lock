@@ -2046,11 +2046,14 @@ dependencies = [
  "novo-layout",
  "novo-parts",
  "novo-routing",
+ "novo-symbols",
  "novo-tests",
  "novo-view3d",
  "rust_xlsxwriter",
+ "serde",
  "tempfile",
  "thiserror 2.0.21",
+ "toml",
 ]
 
 [[package]]
