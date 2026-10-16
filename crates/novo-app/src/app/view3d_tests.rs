@@ -655,3 +655,105 @@ fn a_picked_surface_shows_as_panes_in_the_3d_view_and_clear_when_none_is_picked(
     d.frame();
     assert!(d.app.view3d.surface_panes.is_empty());
 }
+
+/// World-space bounding box of an item's local box.
+fn world_bounds(item: &novo_view3d::scene::Item) -> (glam::Vec3, glam::Vec3) {
+    let m = item.pose.matrix();
+    let (hx, hy, sz) = (item.size.x / 2.0, item.size.y / 2.0, item.size.z);
+    let mut lo = glam::Vec3::splat(f32::MAX);
+    let mut hi = glam::Vec3::splat(f32::MIN);
+    for x in [-hx, hx] {
+        for y in [-hy, hy] {
+            for z in [0.0, sz] {
+                let p = m.transform_point3(glam::Vec3::new(x, y, z));
+                lo = lo.min(p);
+                hi = hi.max(p);
+            }
+        }
+    }
+    (lo, hi)
+}
+
+#[test]
+fn the_surface_panes_land_on_the_real_shell_and_the_door_pane_is_the_door() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.app.cabinet.surface = Some("door".to_owned());
+    d.frame();
+    d.frame();
+    let summary = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        super::cabinet_surfaces::summarize(project, cab).unwrap()
+    };
+    let names: Vec<&str> = summary
+        .rows
+        .iter()
+        .filter(|r| r.name != "plate")
+        .map(|r| r.name.as_str())
+        .collect();
+    let novo_view3d::Overlay::Mesh(mesh) = &d.app.view3d.surface_panes[0] else {
+        panic!("the panes are the first overlay")
+    };
+    assert_eq!(mesh.positions.len(), names.len() * 4);
+    let bounds = |i: usize| {
+        let c = &mesh.positions[i * 4..i * 4 + 4];
+        (
+            c.iter()
+                .copied()
+                .fold(glam::Vec3::splat(f32::MAX), glam::Vec3::min),
+            c.iter()
+                .copied()
+                .fold(glam::Vec3::splat(f32::MIN), glam::Vec3::max),
+        )
+    };
+    let items = &scene(&d).items;
+    // The enclosure shell: every pane lies inside it, and the door pane
+    // fills the door ghost's face. The scene's box starts at the plate; the
+    // cabinet's walls reach back to the back wall, `plate_setback` behind it.
+    let setback = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        novo_layout::model::enclosure_of(project, cab)
+            .unwrap()
+            .plate_setback as f32
+    };
+    let shell = items
+        .iter()
+        .filter(|i| matches!(i.id.kind, ItemKind::Enclosure | ItemKind::Door))
+        .map(world_bounds)
+        .fold(
+            (glam::Vec3::splat(f32::MAX), glam::Vec3::splat(f32::MIN)),
+            |(a, b), (lo, hi)| (a.min(lo), b.max(hi)),
+        );
+    for (i, name) in names.iter().enumerate() {
+        let (lo, hi) = bounds(i);
+        assert!(
+            lo.cmpge(shell.0 - glam::Vec3::new(1.0, 1.0, setback + 1.0))
+                .all()
+                && hi.cmple(shell.1 + 1.0).all(),
+            "{name} pane {lo:?}..{hi:?} outside the shell {:?}..{:?}",
+            shell.0,
+            shell.1
+        );
+    }
+    let door = items
+        .iter()
+        .find(|i| i.id.kind == ItemKind::Door)
+        .expect("a door in the scene");
+    let (dlo, dhi) = world_bounds(door);
+    let i = names
+        .iter()
+        .position(|n| *n == "door")
+        .expect("a door surface");
+    let (plo, phi) = bounds(i);
+    let tol = 1.5;
+    assert!(
+        (plo.x - dlo.x).abs() < tol
+            && (phi.x - dhi.x).abs() < tol
+            && (plo.y - dlo.y).abs() < tol
+            && (phi.y - dhi.y).abs() < tol,
+        "door pane {plo:?}..{phi:?} vs door {dlo:?}..{dhi:?}"
+    );
+    assert!(plo.z >= dlo.z - tol && phi.z <= dhi.z + tol);
+}
