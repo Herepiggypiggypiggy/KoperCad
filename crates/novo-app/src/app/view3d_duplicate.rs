@@ -13,12 +13,21 @@ use novo_view3d::scene::{ItemId, ItemKind};
 
 use super::NovoApp;
 
+/// The most candidate spots `free_slot` lists.
+const MAX_SPOTS: f64 = 40_000.0;
+
 /// The top left of the free slot nearest to `src` for a copy of the same
 /// size and turn, or `None` when the plate has no room. Ties go to the
 /// same row, then to the right, so a copy lands next to its original.
 pub(super) fn free_slot(layout: &CabinetLayout, src: &Placement) -> Option<(f64, f64)> {
-    let step = if layout.grid > 0.0 { layout.grid } else { 5.0 };
+    let mut step = if layout.grid > 0.0 { layout.grid } else { 5.0 };
     let usable = layout.plate.usable();
+    // A huge plate on a fine grid would list millions of spots: coarsen the
+    // search until it stays small (the copy then lands on a coarser grid).
+    let cells = (usable.w / step).max(1.0) * (usable.h / step).max(1.0);
+    if cells > MAX_SPOTS {
+        step *= (cells / MAX_SPOTS).sqrt().ceil();
+    }
     let mut copy = Placement {
         id: u64::MAX,
         rail: None,
@@ -231,6 +240,26 @@ mod tests {
             assert!(clearance_violations(&pair).is_empty(), "crowds {}", o.id);
         }
         assert!(l.plate.usable().contains(&copy.footprint()));
+    }
+
+    #[test]
+    fn a_huge_plate_still_finds_a_slot_quickly() {
+        let mut l = CabinetLayout::new(Plate {
+            width: 100_000.0,
+            height: 100_000.0,
+            margin: 10.0,
+        });
+        l.placements = vec![placement(1, 1000.0, 1000.0)];
+        let t = std::time::Instant::now();
+        let (x, y) = free_slot(&l, &l.placements[0]).expect("room");
+        assert!(t.elapsed().as_secs() < 5, "bounded search");
+        let copy = Placement {
+            id: 2,
+            x,
+            y,
+            ..l.placements[0].clone()
+        };
+        assert!(collisions(&[l.placements[0].clone(), copy]).is_empty());
     }
 
     #[test]
