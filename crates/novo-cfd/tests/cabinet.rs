@@ -205,3 +205,25 @@ fn preview_is_not_a_cabinet_level_and_nothing_is_called_validated_yet() {
     assert_eq!(s.accuracy.validated, novo_cfd::cabinet::ENCLOSURE_VALIDATED);
     assert!(!s.accuracy.headline.is_empty() && !s.accuracy.limits.is_empty());
 }
+
+#[test]
+fn a_device_the_grid_cannot_resolve_says_so() {
+    let mut t = Tuning::default().with_cells(450);
+    t.coarse.steady_tol = 1e-2;
+    let s = CabinetSolver::new(t)
+        .solve(
+            &scenario(false),
+            Fidelity::Coarse,
+            &Control::new(),
+            &mut |_| {},
+        )
+        .unwrap();
+    assert!(
+        s.notes.iter().any(|n| n.contains("not resolved")),
+        "{:?}",
+        s.notes
+    );
+    let d = &s.devices[0];
+    // the band spans the whole range from the air to twice the rise
+    assert!(d.surface_band_c.1 - d.surface_band_c.0 >= 1.9 * (d.surface_c - 25.0).max(0.0));
+}
