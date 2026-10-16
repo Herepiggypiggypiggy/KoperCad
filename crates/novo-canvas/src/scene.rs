@@ -542,6 +542,16 @@ impl Scene {
             .fold(Aabb::EMPTY, |b, s| b.union(&s.bounds))
     }
 
+    /// Bounds of what the user drew: the selectable items, leaving out the
+    /// sheet frame, the title block and underlays. Empty on an empty page.
+    pub fn content_bounds(&self) -> Aabb {
+        self.slots
+            .iter()
+            .flatten()
+            .filter(|s| s.item.selectable)
+            .fold(Aabb::EMPTY, |b, s| b.union(&s.bounds))
+    }
+
     /// Bounds of one item.
     pub fn item_bounds(&self, id: ItemId) -> Option<Aabb> {
         let slot = *self.by_id.get(&id)?;

@@ -62,6 +62,7 @@ mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
 mod heat_settings;
+mod heat_spots;
 mod inspector;
 mod interop;
 mod languages;
@@ -141,6 +142,7 @@ mod view3d_heat;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
+mod view3d_place;
 mod view3d_rail;
 #[cfg(test)]
 mod view3d_rail_tests;
@@ -1057,6 +1059,7 @@ impl NovoApp {
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
+                    || *id == "view.3d_place"
                     || *id == "view.3d_stats"
                     || id.starts_with("heat.")
             });
