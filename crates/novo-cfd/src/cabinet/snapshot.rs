@@ -71,6 +71,12 @@ impl<'a> View<'a> {
             fidelity.label(),
             n
         )];
+        notes.push(
+            "Heat conduction into the mounting plate is not resolved by the grid (the plate is thinner \
+             than a cell): the plate share of every device reads 0 and its heat is counted as going \
+             to the air."
+                .into(),
+        );
         notes.extend(super::march::lost_heat_note(setup, scn));
         let base = CfdSnapshot {
             grid: cm.grid.clone(),
