@@ -49,7 +49,7 @@ pub(super) struct CabinetState {
     /// `edit.delete`).
     pub(super) keys: Vec<String>,
     /// The door and depth panel: its form and the model value it follows.
-    door: DoorState,
+    pub(super) door: DoorState,
     /// Text buffers of the inspector's panel-data section.
     pub(super) panel_fields: super::cabinet_panel::PanelFields,
     /// The table face (Ctrl+T) is shown instead of the plate.

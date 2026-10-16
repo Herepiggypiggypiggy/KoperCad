@@ -23,6 +23,9 @@ use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
+use novo_view3d::camera::ViewPreset;
+
+use super::view3d::Pending;
 use super::workspace::Workspace;
 use super::{Level, NovoApp};
 use crate::actions::Action;
@@ -330,6 +333,9 @@ const APP_COMMANDS: &[&str] = &[
     "export.reports",
     "view.reports",
     "view.3d",
+    "view.iso",
+    "view.front",
+    "view.top",
     "report.toc",
     "report.bom",
     "report.devices",
@@ -730,6 +736,14 @@ impl NovoApp {
             "view.toggle_marks" => self.wb.marks ^= true,
             "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
             "view.3d" => self.switch_workspace(Workspace::View3d),
+            "view.iso" | "view.front" | "view.top" if self.is_open() => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.pending = Some(match id {
+                    "view.iso" => Pending::Preset(ViewPreset::Iso),
+                    "view.front" => Pending::Preset(ViewPreset::Front),
+                    _ => Pending::Preset(ViewPreset::Top),
+                });
+            }
             "export.bom" => {
                 self.export_report("bom", super::reports_view::ReportFormat::Excel);
             }
