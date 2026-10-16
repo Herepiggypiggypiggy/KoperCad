@@ -139,8 +139,13 @@ pub(crate) fn anchor_fallback(id: &str) -> Option<String> {
         return m.parent.clone();
     }
     match id {
-        "cabinet.rules" | "cabinet.plate" | "cabinet.sizing" | "cabinet.cutlist"
-        | "cabinet.heat" => Some("cabinet.more".to_owned()),
+        "cabinet.rules"
+        | "cabinet.plate"
+        | "cabinet.sizing"
+        | "cabinet.cutlist"
+        | "cabinet.heat"
+        | "cabinet.rails"
+        | "cabinet.plate_drawing" => Some("cabinet.more".to_owned()),
         _ => None,
     }
 }
