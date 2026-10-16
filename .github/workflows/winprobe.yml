@@ -1,5 +1,7 @@
 name: winprobe
-on: workflow_dispatch
+on:
+  push:
+    branches: [claude/windows-probe]
 jobs:
   windows:
     runs-on: windows-latest
