@@ -32,6 +32,9 @@ mod heat;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
+mod heat_progress;
+#[cfg(test)]
+mod heat_progress_tests;
 mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
@@ -496,7 +499,14 @@ impl NovoApp {
             Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
             Action::ShowSchematic => self.switch_workspace(workspace::Workspace::Schematic),
-            Action::ShowCabinet => self.switch_workspace(workspace::Workspace::Cabinet),
+            Action::ShowCabinet => {
+                // Asking for the Cabinet again from its table face (Ctrl+2,
+                // the Cabinet tab) goes back to the plate drawing.
+                if self.workspace() == workspace::Workspace::Cabinet {
+                    self.cabinet.table = false;
+                }
+                self.switch_workspace(workspace::Workspace::Cabinet);
+            }
             Action::SizeEnclosure => {
                 self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.panel_open = true;
@@ -694,6 +704,10 @@ impl NovoApp {
         self.wb.commissioning = None;
         self.wb.sheet = 0;
         self.add_generated_pages();
+        // Nothing to commission in a closed project.
+        if !self.is_open() && self.workspace() == workspace::Workspace::Commissioning {
+            self.switch_workspace(workspace::Workspace::Schematic);
+        }
     }
 
     fn close_project(&mut self) {
@@ -861,6 +875,11 @@ impl NovoApp {
                     )
                 {
                     self.cabinet.keys.push((*id).to_owned());
+                } else if cabinet && *id == "edit.mirror" {
+                    self.message(
+                        Level::Info,
+                        "Mirror does not apply on the plate: a device only turns a quarter (R).",
+                    );
                 }
             }
             commands.retain(|id| {
@@ -896,6 +915,7 @@ impl NovoApp {
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
+        self.sync_commissioning_workspace();
         self.drawer(ui);
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
@@ -1091,8 +1111,12 @@ impl NovoApp {
         if self.wb.pending.is_some_and(|p| p.page != page) {
             self.wb.pending = None;
         }
-        // A page is a schematic page: picking one leaves the Cabinet.
-        self.switch_workspace(workspace::Workspace::Schematic);
+        // A page is a schematic page: picking one leaves the Cabinet, the
+        // Reports and the 3D view. Commissioning is the schematic page, so
+        // a jump inside it stays there.
+        if self.workspace() != workspace::Workspace::Commissioning {
+            self.switch_workspace(workspace::Workspace::Schematic);
+        }
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).

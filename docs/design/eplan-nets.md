@@ -57,7 +57,36 @@ These appear in the Issues list, the issue pill and F8 like every other check
 
 Already in `novo-checks` and matching findings 9.3: C01 (unconnected pins), B05
 (lone interruption point), C04 (contacts without a coil), C09 (potential
-conflict), C13 partly, A09/A12 partly (duplicate page names). Portable and not
-yet done: B01 (node legs, import-time: `DanglingLeg`), C02, C03 (import-time:
-`BlockedRun`), C05-C07, C10, C11, C14, C15, C17, F01, F04, H01. D, E and G are
-house rule packs, not defaults.
+conflict), C13 partly, A09/A12 partly (duplicate page names).
+
+### 2.1 The second batch (`house_rules.rs`, tests in `tests/house_rules.rs`)
+
+All warnings. They show in Outline > Issues like every other check (filter chip
+by name, F8, waivers). Rules that need a convention the model does not carry
+are written against a project or device property and stay quiet without it.
+
+| Kind | Rule | Reads |
+| --- | --- | --- |
+| `UnwiredTerminal` (C02) | A terminal with no wire on any side, and a plug pin wired on neither half (or at all, for a plug without a mate). | wires, terminal symbols; plug halves |
+| `StrayWireEnd` (C03) | An open wire end within 0.2 mm of a pin, a junction or another wire's line: it looks joined and is not. | wire geometry |
+| `ContactType` (C05) | NO contacts end in 3, 4 (7, 8 delayed); NC in 1, 2 (5, 6 delayed and the 95-98 of overload relays); changeover 1, 2, 4. Names of two digits or more only. | pin names, symbol key |
+| `ContactPosition` (C06) | The tens digit of a contact (the `2` of `24`) is beyond the sum of `contacts.no`, `.nc`, `.co` the device declares. Quiet without a declared total. | device properties |
+| `ContactDrawnTwice` (C07) | Two contact symbols of one device with the same pin numbers. | pin names |
+| `VoltageClassMix` (C10) | Extra-low (50 V AC, 120 V DC) and low voltage nets on the pages of one function code. | potentials with a voltage, page structure |
+| `ConductorContinuity` (C11) | A PE or N terminal, wired, whose net carries no PE/PEN (N/PEN) potential, in a project that defines one. | netlist potentials |
+| `MotorPhases` (C14) | A symbol with pins `U1 V1 W1` whose windings share a net, two get the same potential, or one is on N/PE. | netlist |
+| `CoilSupply` (C15) | A main symbol with `A1`/`A2` whose sides share a net or potential, or touch PE/PEN. A coil between two different line potentials is fine. | netlist |
+| `PlugPinOneSided` (C17) | A pin wired on one connector half and not on the other. | connector devices |
+| `TagRule` (F01) | With project property `tag.rule` = `page-column`, a device name must be letters + two-digit page + one-digit column of its main symbol, `.n` for repeats. | page name, `PageFormat::column_at` |
+| `DisplayedTag` (F04) | A typed text on a device symbol that starts with `-`, `=` or `+` and is neither the full tag nor the short tag. | texts |
+| `StructureCode` (H01) | With project property `structure.list` = `complete`, a function or location code (on devices or pages) that no structure node names, parents included. | structure list |
+
+Conventions: plug halves are two `Connector` devices, each naming the other in
+`plug.mate` (a tag). KoperCAD's netlist does not join plug halves; C17 and C02
+report the wiring, not a joined net. The two opt-in properties have no settings
+dialog yet (they are set with a script, the CLI or an import); a project-rules
+entry in novo-core would be the next step and is WS-02's call.
+
+Not carried: C08, C12, C16 and C18 are not in this lane; D, E and G are house
+rule packs. A real-sample test for these rules waits for the PXF reader
+(`KOPERCAD_PRIVATE_SAMPLES`); the fixtures here are synthetic.

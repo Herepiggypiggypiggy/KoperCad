@@ -172,8 +172,8 @@ expect = { signal = "cabinet_removed" }
 
 [[step]]
 id = "place-all"
-how = ["Click Place all in the header.", "A preview of all eight devices appears; nothing is stored yet."]
-how_nl = ["Klik op Place all in de kop.", "Er verschijnt een voorbeeld van alle acht componenten; er is nog niets opgeslagen."]
+how = ["Click Place all in the Place group at the left of the bar (or press Ctrl+Shift+P).", "A preview of all eight devices appears; nothing is stored yet."]
+how_nl = ["Klik op Place all in de groep Place links in de balk (of druk op Ctrl+Shift+P).", "Er verschijnt een voorbeeld van alle acht componenten; er is nog niets opgeslagen."]
 title = "Let Place all do the rest"
 title_nl = "Laat Place all de rest doen"
 text = """
@@ -193,18 +193,18 @@ expect = { clicked = "cabinet.place_all" }
 
 [[step]]
 id = "accept"
-how = ["Press Enter, or click Accept.", "The header reads 8 placed, 0 unplaced."]
-how_nl = ["Druk op Enter of klik op Accept.", "De kop zegt 8 placed, 0 unplaced."]
+how = ["Press Enter, or click Accept.", "The bar shows 8 placed."]
+how_nl = ["Druk op Enter of klik op Accept.", "De balk toont 8 placed."]
 title = "Keep it"
 title_nl = "Bewaar het"
 text = """
 Press **Enter** or click **Accept** to keep the preview; **Esc** or **Cancel** throws it away.
-The header now reads "8 placed, 0 unplaced" and **Place all** is greyed out. Click one device: the inspector says which rule put it there.
+The strip under the bar now says "8 placed" and "Every device of this panel is placed", and **Place all** is greyed out. Click one device: the inspector says which rule put it there.
 The whole plan is one undo step.
 """
 text_nl = """
 Druk op **Enter** of klik op **Accept** om het voorbeeld te bewaren; **Esc** of **Cancel** gooit het weg.
-De kopregel zegt nu "8 placed, 0 unplaced" en **Place all** is grijs. Klik een component aan: de inspector zegt welke regel het daar heeft gezet.
+De strook onder de balk zegt nu "8 placed" en "Every device of this panel is placed", en **Place all** is grijs. Klik een component aan: de inspector zegt welke regel het daar heeft gezet.
 Het hele plan is één stap om ongedaan te maken.
 """
 point = { ui = "cabinet.accept" }

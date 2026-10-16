@@ -7,13 +7,15 @@
 
 use crate::camera::{Camera, Projection, ViewPreset};
 use crate::cube::{self, CubeHit};
+use crate::door::DoorAnim;
 use crate::feel::{self, Inertia, Transition};
 use crate::labels::{self, Fade, LabelCandidate};
 use crate::look::{self, Glyph, Look};
 use crate::mesh::MeshLibrary;
+use crate::overlay::Overlay;
 use crate::pick::{self, Hit};
 use crate::render::{BlitBind, Blitter, Frame, Mode, Quality, Renderer, Tier, ViewTarget};
-use crate::scene::{ItemId, Mark, Scene};
+use crate::scene::{GroupId, ItemId, Mark, Scene};
 use crate::view_state::ViewState;
 use egui::{
     Align2, Color32, FontId, Key, Modifiers, PointerButton, Pos2, Rect, Sense, Stroke, Vec2,
@@ -82,6 +84,8 @@ struct Callback {
     look: Look,
     size_px: (u32, u32),
     mode: Mode,
+    overlays: Arc<Vec<Overlay>>,
+    overlay_revision: u64,
     key: u64,
 }
 
@@ -126,6 +130,8 @@ impl egui_wgpu::CallbackTrait for Callback {
                     look: &self.look,
                     size_px: self.size_px,
                     quality: Quality::new(self.mode, *tier),
+                    overlays: &self.overlays,
+                    overlay_revision: self.overlay_revision,
                 },
             );
             slot.key = Some(self.key);
@@ -246,6 +252,11 @@ pub struct View3d {
     alt_cycle: Option<(Pos2, usize)>,
     last_aspect: f32,
     label_fades: HashMap<ItemId, Fade>,
+    overlays: Arc<Vec<Overlay>>,
+    overlay_revision: u64,
+    door: Option<DoorAnim>,
+    /// The source scene and its copy with the animated door angle.
+    door_scene: Option<(Arc<Scene>, Arc<Scene>)>,
 }
 
 impl View3d {
@@ -267,7 +278,71 @@ impl View3d {
             alt_cycle: None,
             last_aspect: 1.0,
             label_fades: HashMap::new(),
+            overlays: Arc::new(Vec::new()),
+            overlay_revision: 0,
+            door: None,
+            door_scene: None,
         }
+    }
+
+    /// Replaces the overlays drawn over the cabinet (see `overlay`); an empty
+    /// list clears them. Overlays are not part of the scene: picking, marquee,
+    /// labels and the camera fit ignore them. Invalid overlays (mismatched
+    /// arrays, out of range indices, non-finite coordinates) are skipped.
+    pub fn set_overlays(&mut self, overlays: Vec<Overlay>) {
+        if *self.overlays != overlays {
+            self.overlays = Arc::new(overlays);
+            self.overlay_revision += 1;
+        }
+    }
+
+    /// Swings the hinge group (the door) to `angle` radians, easing unless
+    /// reduced motion is on. This is view state: the project is not touched
+    /// and the angle outlives scene rebuilds. `open_angle` gives the signed
+    /// angle for "open by N degrees".
+    pub fn set_door(&mut self, group: GroupId, angle: f32, now: f64, reduced: bool) {
+        match &mut self.door {
+            Some(d) if d.group == group => d.set_target(angle, now, reduced),
+            _ => {
+                // First use: start from the angle the scene has (closed).
+                let mut d = DoorAnim::at(group, 0.0);
+                d.set_target(angle, now, reduced);
+                self.door = Some(d);
+            }
+        }
+    }
+
+    /// The door angle being shown (radians), if the view drives one.
+    pub fn door_angle(&self, now: f64) -> Option<f32> {
+        self.door.as_ref().map(|d| d.angle(now))
+    }
+
+    /// Hands the door back to the scene's own angle.
+    pub fn release_door(&mut self) {
+        self.door = None;
+        self.door_scene = None;
+    }
+
+    /// The scene to draw: the given one, or a copy with the door at its
+    /// animated angle.
+    fn with_door(&mut self, scene: &Arc<Scene>, now: f64, ctx: &egui::Context) -> Arc<Scene> {
+        let Some(door) = self.door else {
+            return scene.clone();
+        };
+        let angle = door.angle(now);
+        if door.animating(now) {
+            ctx.request_repaint();
+        }
+        if scene.group(door.group).is_none_or(|g| g.angle == angle) {
+            return scene.clone();
+        }
+        let same_source = matches!(&self.door_scene, Some((src, _)) if Arc::ptr_eq(src, scene));
+        if !same_source {
+            self.door_scene = Some((scene.clone(), Arc::new((**scene).clone())));
+        }
+        let (_, adjusted) = self.door_scene.as_mut().expect("just set");
+        Arc::make_mut(adjusted).set_group_angle(door.group, angle);
+        adjusted.clone()
     }
 
     /// Frames the whole scene on the next frame.
@@ -380,6 +455,8 @@ impl View3d {
         }
         let ctx = ui.ctx().clone();
         let now = ctx.input(|i| i.time);
+        let shown = self.with_door(scene, now, &ctx);
+        let scene = &shown;
         let dt = ctx.input(|i| i.stable_dt).clamp(0.0, 0.1);
         let reduced = options.reduced_motion;
         let aspect = rect.width() / rect.height().max(1.0);
@@ -632,7 +709,15 @@ impl View3d {
             (rect.width() * ppp).round().max(1.0) as u32,
             (rect.height() * ppp).round().max(1.0) as u32,
         );
-        let key = frame_key(scene, library, &self.camera, &self.state, size_px, mode);
+        let key = frame_key(
+            scene,
+            library,
+            &self.camera,
+            &self.state,
+            size_px,
+            mode,
+            self.overlay_revision,
+        );
         ui.painter().add(egui_wgpu::Callback::new_paint_callback(
             rect,
             Callback {
@@ -644,6 +729,8 @@ impl View3d {
                 look: *look,
                 size_px,
                 mode,
+                overlays: self.overlays.clone(),
+                overlay_revision: self.overlay_revision,
                 key,
             },
         ));
@@ -852,9 +939,16 @@ fn frame_key(
     state: &ViewState,
     size_px: (u32, u32),
     mode: Mode,
+    overlay_revision: u64,
 ) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
-    (scene.revision, scene.pose_revision, library.revision()).hash(&mut h);
+    (
+        scene.revision,
+        scene.pose_revision,
+        library.revision(),
+        overlay_revision,
+    )
+        .hash(&mut h);
     for v in [
         camera.target.x,
         camera.target.y,

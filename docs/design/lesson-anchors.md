@@ -33,7 +33,14 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `live.pole`
 - `live.coil`
 - `live.output`
-- `cabinet.place-all`
+- `cabinet.place_all`
+- `cabinet.accept`
+- `cabinet.rules`
+- `cabinet.plate`
+- `cabinet.routes`
+- `cabinet.cutlist`
+- `cabinet.table`
+- `cabinet.heat`
 
 ## Signals
 

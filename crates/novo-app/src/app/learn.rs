@@ -74,7 +74,14 @@ pub(crate) const ANCHORS: &[&str] = &[
     "live.pole",
     "live.coil",
     "live.output",
-    "cabinet.place-all",
+    "cabinet.place_all",
+    "cabinet.accept",
+    "cabinet.rules",
+    "cabinet.plate",
+    "cabinet.routes",
+    "cabinet.cutlist",
+    "cabinet.table",
+    "cabinet.heat",
 ];
 
 /// What the shell keeps about learning.
