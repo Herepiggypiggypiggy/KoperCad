@@ -1160,3 +1160,40 @@ fn the_selection_travels_between_the_cabinet_and_3d_and_view_commands_run() {
     d.frame();
     assert!(d.app.view3d.pending.is_none());
 }
+
+#[test]
+fn plate_dxf_has_a_command_and_a_cabinet_button_and_writes_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.save_to(&dir.path().join("Plant.novo")));
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(crate::app::app_runs("export.plate_dxf"));
+    // No plate yet: says why, writes nothing.
+    assert!(d.app.export_plate_dxf().is_none());
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    // The Cabinet toolbar button asks the same thing as the command.
+    d.app.cabinet_ask(Ask::ExportPlateDxf, Some(cab), None, &[]);
+    let dxf: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "dxf"))
+        .collect();
+    assert!(
+        !dxf.is_empty(),
+        "a plate DXF is written next to the project"
+    );
+    let text = std::fs::read_to_string(&dxf[0]).unwrap();
+    assert!(text.contains("SECTION"), "it is a DXF");
+    // The command line (queued, as a menu row does) writes it again.
+    d.app.wb.queued.push("export.plate_dxf");
+    d.frame();
+    let last = d.app.messages().last().unwrap();
+    assert!(last.text.contains("plate"), "{}", last.text);
+}

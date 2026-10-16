@@ -335,6 +335,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.standards_report",
     "export.standards_xlsx",
     "export.plate",
+    "export.plate_dxf",
+    "export.pdf_page",
+    "export.report_pdf",
+    "report.add_page",
     "export.assembly",
     "export.sheets",
     "export.sheets_csv",
@@ -369,6 +373,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "report.cables",
     "report.cutlist",
     "report.labels",
+    "report.wirecut",
+    "report.io",
+    "report.cable_schedule",
+    "report.plugs",
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
@@ -900,6 +908,16 @@ impl NovoApp {
             "export.plate" => {
                 self.export_plate_pdf();
             }
+            "export.plate_dxf" => {
+                self.export_plate_dxf();
+            }
+            "export.pdf_page" => {
+                self.export_pdf_page();
+            }
+            "export.report_pdf" => {
+                self.export_selected_report_pdf();
+            }
+            "report.add_page" => self.add_report_page_command(argument),
             "export.assembly" => {
                 self.export_assembly();
             }

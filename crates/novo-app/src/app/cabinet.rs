@@ -118,6 +118,7 @@ pub(super) enum Ask {
     PlaceAll,
     /// Export the plate drawing PDF of the shown enclosure.
     ExportPlate,
+    ExportPlateDxf,
     Accept,
     Cancel,
     ToggleTable,
@@ -715,6 +716,13 @@ impl NovoApp {
                             ask = Some(Ask::ExportPlate);
                             ui.close();
                         }
+                        if cabinet_bar::button(ui, icons::EXPORT, "Plate drawing (DXF)", false)
+                            .on_hover_text("Plate drawing for a CNC or CAD, with the drill table")
+                            .clicked()
+                        {
+                            ask = Some(Ask::ExportPlateDxf);
+                            ui.close();
+                        }
                     });
                     cabinet_bar::note(&mut anchors, "cabinet.more", "More", &more.response);
                 });
@@ -732,6 +740,14 @@ impl NovoApp {
                         );
                         if item.clicked() {
                             ask = Some(Ask::ExportPlate);
+                            ui.close();
+                        }
+                        if ui
+                            .button("Plate drawing (DXF)")
+                            .on_hover_text("Plate drawing for a CNC or CAD, with the drill table")
+                            .clicked()
+                        {
+                            ask = Some(Ask::ExportPlateDxf);
                             ui.close();
                         }
                     });
@@ -1466,6 +1482,9 @@ impl NovoApp {
             Ask::ExportPlate => {
                 self.learn_command("export.plate");
                 self.export_plate_pdf();
+            }
+            Ask::ExportPlateDxf => {
+                self.export_plate_dxf();
             }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
             Ask::SetWireRule(key, value) => {

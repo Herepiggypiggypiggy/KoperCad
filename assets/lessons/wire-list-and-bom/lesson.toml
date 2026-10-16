@@ -152,7 +152,7 @@ how_nl = ["Scrol omlaag naar de sectie **Devices without parts**"]
 id = "export-sheet"
 title = "Export the devices to a spreadsheet"
 title_nl = "Exporteer de apparaten naar een spreadsheet"
-# verified: export.sheets "Export for bulk edit (.xlsx)" is in File > Export
+# verified: export.sheets "Export for bulk edit (.xlsx)" is in File > Export interchange
 # (commands.rs, menus.rs); no key. It writes "<project> sheets.xlsx" next to
 # the project or in <Documents>\KoperCAD (sheets.rs export_spreadsheet).
 # GAP: no control picks a part for a device (inspector Part is read-only);
@@ -233,21 +233,21 @@ how_nl = ["Klik op **Reports** en dan op **Bill of materials**", "Zoek de regel 
 id = "export-bom"
 title = "Export it for the buyer"
 title_nl = "Exporteer hem voor de inkoper"
-# verified: export.bom "Export bill of materials" is in File > Export
+# verified: export.bom "Export bill of materials" is in File > Export reports
 # (commands.rs, menus.rs), no key of its own; it writes
 # "<project> - Bill of materials.xlsx" next to the project file, or in
 # <Documents>\KoperCAD for a project not saved yet, never over an earlier
 # file, and says "Exported <path>" (reports_view.rs export_report/export_path).
 # Columns as the table; numbers stay numbers in Excel (novo-reports export.rs).
-# Other lists: File > Export > Export all reports to Excel (export.reports,
+# Other lists: Reports > Export all reports to Excel (export.reports,
 # one sheet each) and, per report, the Excel and CSV buttons in the Reports
 # view.
 text = """
-Press {key:view.command_palette}, type **export bom** and press Enter, or choose **File > Export > Export bill of materials**.
+Press {key:view.command_palette}, type **export bom** and press Enter, or choose **File > Export reports > Export bill of materials**.
 KoperCAD saves **<project> - Bill of materials.xlsx** and the message at the bottom shows where. The other lists have **Excel** and **CSV** buttons in the Reports view.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **export bom** en druk op Enter, of kies **File > Export > Export bill of materials**.
+Druk op {key:view.command_palette}, typ **export bom** en druk op Enter, of kies **File > Export reports > Export bill of materials**.
 KoperCAD bewaart **<project> - Bill of materials.xlsx** en de melding onderaan toont waar. De andere lijsten hebben **Excel**- en **CSV**-knoppen in het Reports-venster.
 """
 how = ["Press {key:view.command_palette}, type **export bom**, press Enter", "Or click **File**, **Export**, **Export bill of materials**"]

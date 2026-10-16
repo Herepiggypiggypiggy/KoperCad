@@ -44,7 +44,8 @@ fn group_default(group: &str) -> Option<MenuPlace> {
         "Navigate" => under("View", "Go to"),
         "View" => at("View"),
         "Check" => at("Check"),
-        "Export" => under("File", "Export"),
+        // Anything of the Export group not listed in PLACEMENTS lands here.
+        "Export" => under("File", "Export other"),
         _ => return None,
     })
 }
@@ -66,6 +67,41 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.show_hints", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
+    // File > Export, split by what the file is for.
+    ("export.pdf", under("File", "Export drawings")),
+    ("export.pdf_page", under("File", "Export drawings")),
+    ("export.variant_pdf", under("File", "Export drawings")),
+    ("export.dxf_page", under("File", "Export drawings")),
+    ("export.dxf_all", under("File", "Export drawings")),
+    ("export.step", under("File", "Export drawings")),
+    ("export.plate", under("File", "Export drawings")),
+    ("export.plate_dxf", under("File", "Export drawings")),
+    ("export.wiring_dxf", under("File", "Export drawings")),
+    ("export.bom", under("File", "Export reports")),
+    ("export.change_report", under("File", "Export reports")),
+    ("export.commissioning", under("File", "Export reports")),
+    ("export.standards_report", under("File", "Export reports")),
+    ("export.standards_xlsx", under("File", "Export reports")),
+    ("export.wirecut", under("File", "Export production")),
+    ("export.wirecut_xlsx", under("File", "Export production")),
+    ("export.wirecut_page", under("File", "Export production")),
+    ("export.plc_csv", under("File", "Export PLC")),
+    ("export.plc_plcopen", under("File", "Export PLC")),
+    ("export.plc_tia", under("File", "Export PLC")),
+    ("export.plc_studio5000", under("File", "Export PLC")),
+    ("export.plc_address_plan", under("File", "Export PLC")),
+    ("export.aml", under("File", "Export interchange")),
+    ("export.eplan", under("File", "Export interchange")),
+    ("export.sheets", under("File", "Export interchange")),
+    ("export.sheets_csv", under("File", "Export interchange")),
+    ("export.spec", under("File", "Export interchange")),
+    // Reports
+    ("report.wirecut", at("Reports")),
+    ("report.io", at("Reports")),
+    ("report.cable_schedule", at("Reports")),
+    ("report.plugs", at("Reports")),
+    ("report.add_page", at("Reports")),
+    ("export.report_pdf", at("Reports")),
     // Edit
     ("edit.rotate", at("Edit")),
     ("edit.mirror", at("Edit")),
@@ -301,8 +337,16 @@ mod tests {
         );
         let export = file
             .iter()
-            .position(|i| matches!(i, MenuItem::Submenu { name: "Export", .. }))
-            .expect("an Export submenu");
+            .position(|i| {
+                matches!(
+                    i,
+                    MenuItem::Submenu {
+                        name: "Export drawings",
+                        ..
+                    }
+                )
+            })
+            .expect("an Export drawings submenu");
         let new = file
             .iter()
             .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
@@ -329,5 +373,43 @@ mod tests {
         assert!(file.contains(&"file.new") && file.contains(&"export.pdf"));
         let view: Vec<_> = entries("View").iter().map(|(c, _)| c.id).collect();
         assert!(view.contains(&"view.cabinet") && view.contains(&"nav.back"));
+    }
+
+    #[test]
+    fn the_export_menu_is_split_and_every_export_has_a_submenu_of_its_own() {
+        for (info, p) in entries("File") {
+            if info.group == "Export" && info.id.starts_with("export.") {
+                let sub = p.submenu.unwrap();
+                assert!(
+                    sub.starts_with("Export ") && sub != "Export other",
+                    "{} lands in {sub:?}: give it a place in PLACEMENTS",
+                    info.id
+                );
+            }
+        }
+        for item in layout("File") {
+            if let MenuItem::Submenu { name, items } = item
+                && name.starts_with("Export")
+            {
+                assert!(items.len() <= 10, "{name} has {} entries", items.len());
+            }
+        }
+    }
+
+    #[test]
+    fn the_new_report_and_export_commands_have_their_homes() {
+        let home = |id: &str| place(crate::commands::get(id).unwrap()).unwrap();
+        for id in [
+            "report.wirecut",
+            "report.io",
+            "report.cable_schedule",
+            "report.plugs",
+            "report.add_page",
+            "export.report_pdf",
+        ] {
+            assert_eq!(home(id), at("Reports"), "{id}");
+        }
+        assert_eq!(home("export.pdf_page"), under("File", "Export drawings"));
+        assert_eq!(home("export.plate_dxf"), under("File", "Export drawings"));
     }
 }
