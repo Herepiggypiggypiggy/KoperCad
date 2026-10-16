@@ -220,11 +220,15 @@ impl NovoApp {
         self.ol.rect = Some(ui.max_rect());
         self.anchor("outline.pages", ui.max_rect(), "Pages list");
         self.toolbar(ui);
-        ui.add(
-            egui::TextEdit::singleline(&mut self.page_filter)
-                .hint_text("Filter pages")
-                .desired_width(f32::INFINITY),
-        );
+        ui.horizontal(|ui| {
+            let width = ui.available_width() - 36.0;
+            ui.add(
+                egui::TextEdit::singleline(&mut self.page_filter)
+                    .hint_text("Filter pages")
+                    .desired_width(width),
+            );
+            self.outline_more_menu(ui);
+        });
         ui.add_space(4.0);
         self.filing_banner(ui);
 
@@ -436,39 +440,51 @@ impl NovoApp {
             })
             .response
             .on_hover_text("Page, page group or cabinet, filed next to what you have open");
-            for view in [PageView::Function, PageView::Location] {
-                if novo_theme::widgets::segment(ui, view.label(), self.page_view == view)
-                    .on_hover_text(view.hover())
-                    .clicked()
-                {
-                    self.page_view = view;
+            {
+                let mut view = usize::from(self.page_view == PageView::Location);
+                let labels = [PageView::Function.label(), PageView::Location.label()];
+                let shown = self.page_view;
+                let picked = ui.scope(|ui| novo_theme::widgets::segmented(ui, &mut view, &labels));
+                picked.response.on_hover_text(shown.hover());
+                if picked.inner {
+                    self.page_view = if view == 0 {
+                        PageView::Function
+                    } else {
+                        PageView::Location
+                    };
                 }
             }
-            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                ui.menu_button(icons::DOTS_THREE, |ui| {
-                    ui.set_min_width(170.0);
-                    let items = vec![
-                        Item::Entry {
-                            label: "Expand all".into(),
-                            act: Act::FoldAll(false),
-                            enabled: true,
-                            keys: "",
-                            why: "",
-                        },
-                        Item::Entry {
-                            label: "Collapse all".into(),
-                            act: Act::FoldAll(true),
-                            enabled: true,
-                            keys: "",
-                            why: "",
-                        },
-                    ];
-                    menu_items(ui, &items, &mut acts);
-                })
-                .response
-                .on_hover_text("More");
-            });
         });
+        for act in acts {
+            self.perform(act);
+        }
+    }
+
+    /// The "..." menu beside the filter: fold or unfold every group.
+    fn outline_more_menu(&mut self, ui: &mut egui::Ui) {
+        let mut acts = Vec::new();
+        ui.menu_button(icons::DOTS_THREE, |ui| {
+            ui.set_min_width(170.0);
+            let items = vec![
+                Item::Entry {
+                    label: "Expand all".into(),
+                    act: Act::FoldAll(false),
+                    enabled: true,
+                    keys: "",
+                    why: "",
+                },
+                Item::Entry {
+                    label: "Collapse all".into(),
+                    act: Act::FoldAll(true),
+                    enabled: true,
+                    keys: "",
+                    why: "",
+                },
+            ];
+            menu_items(ui, &items, &mut acts);
+        })
+        .response
+        .on_hover_text("More");
         for act in acts {
             self.perform(act);
         }
@@ -743,13 +759,16 @@ impl NovoApp {
             egui::pos2(right_edge - right_w, rect.bottom()),
         );
         let painter = ui.painter_at(clip);
+        let room = clip.right() - x;
+        let ellipsis = novo_theme::widgets::paint_text_ellipsis;
         if is_node {
-            painter.text(
+            ellipsis(
+                &painter,
                 egui::pos2(x, mid),
-                egui::Align2::LEFT_CENTER,
                 &text,
                 egui::FontId::new(tokens::FONT_BODY, novo_theme::fonts::strong_family()),
                 label_color,
+                room,
             );
         } else if matches!(row.kind, RowKind::Page { drawn: true, .. }) {
             let number = painter.text(
@@ -759,30 +778,28 @@ impl NovoApp {
                 egui::FontId::monospace(tokens::FONT_MONO),
                 tokens::TEXT_MUTED,
             );
-            if weak.is_empty() {
-                painter.text(
-                    egui::pos2(number.right() + 8.0, mid),
-                    egui::Align2::LEFT_CENTER,
-                    "Untitled",
-                    font.clone(),
-                    tokens::TEXT_FAINT,
-                );
+            let (title, color) = if weak.is_empty() {
+                ("Untitled", tokens::TEXT_FAINT)
             } else {
-                painter.text(
-                    egui::pos2(number.right() + 8.0, mid),
-                    egui::Align2::LEFT_CENTER,
-                    &weak,
-                    font.clone(),
-                    label_color,
-                );
-            }
+                (weak.as_str(), label_color)
+            };
+            let start = number.right() + 8.0;
+            ellipsis(
+                &painter,
+                egui::pos2(start, mid),
+                title,
+                font.clone(),
+                color,
+                clip.right() - start,
+            );
         } else {
-            painter.text(
+            ellipsis(
+                &painter,
                 egui::pos2(x, mid),
-                egui::Align2::LEFT_CENTER,
                 &text,
                 font.clone(),
                 label_color,
+                room,
             );
         }
         if let RowKind::Page { page, .. } = &row.kind
