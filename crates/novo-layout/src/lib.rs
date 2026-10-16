@@ -6,6 +6,7 @@
 
 pub mod assembly;
 pub mod check;
+pub mod collide;
 pub mod drill;
 pub mod enclosure;
 pub mod model;
@@ -16,6 +17,7 @@ pub mod sizing;
 pub mod sizing_model;
 pub mod state;
 pub mod stock;
+pub mod surfaces;
 
 /// Footprint used for a device whose part has no dimensions (marked guessed).
 pub const DEFAULT_FOOTPRINT_MM: (f64, f64) = (45.0, 90.0);
