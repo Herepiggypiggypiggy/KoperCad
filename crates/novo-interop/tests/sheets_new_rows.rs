@@ -390,7 +390,7 @@ fn rejected_new_rows_come_back_fixed_and_import() {
     add(
         &mut book,
         TableKind::Terminals,
-        &[("Strip", t("=A1+CAB-X9")), ("Name", t("1"))],
+        &[("Strip", t("=A1+CAB-X9")), ("Name", t("77"))],
     );
     let plan = plan_import(doc.project(), &book);
     assert_eq!(plan.rejected.len(), 1);
