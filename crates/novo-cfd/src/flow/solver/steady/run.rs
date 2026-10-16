@@ -219,11 +219,27 @@ impl SteadyRun {
     /// iteration limit) the fields of `flow` are replaced by the mean of the
     /// last full window.
     pub fn advance(&mut self, flow: &mut FlowSolver, iterations: usize) -> RunStatus {
+        self.advance_with(flow, iterations, &mut |_| {}, &mut |_, _| {})
+    }
+
+    /// [`SteadyRun::advance`] with hooks around every iteration: `before`
+    /// sees the flow just before the iteration (put eddy viscosity in, say),
+    /// `after` sees it afterwards with the pseudo step used, s (advance a
+    /// turbulence model).
+    pub fn advance_with(
+        &mut self,
+        flow: &mut FlowSolver,
+        iterations: usize,
+        before: &mut dyn FnMut(&mut FlowSolver),
+        after: &mut dyn FnMut(&FlowSolver, f64),
+    ) -> RunStatus {
         if let Some(s) = self.done {
             return s;
         }
         for _ in 0..iterations.max(1) {
+            before(flow);
             let info = flow.steady_iterate(&mut self.state);
+            after(flow, info.dt);
             self.last = Some(info);
             self.report.iterations += 1;
             let out: f64 = (0..6).map(|f| flow.wall_heat_w(f)).sum::<f64>()

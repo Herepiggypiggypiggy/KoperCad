@@ -520,3 +520,116 @@ fn a_bi_colour_wire_shows_both_its_colours() {
     assert!(count(&img, greenish) > 10, "the green body shows");
     assert!(count(&img, yellowish) > 10, "and so does the yellow stripe");
 }
+
+/// A tall box on a plate, seen from the front right above, with the key light
+/// shadows on or off.
+fn shadow_picture(gpu: &Gpu, shadows: bool) -> Vec<u8> {
+    let mut scene = Scene::new(PlateFrame {
+        width: 300.0,
+        height: 300.0,
+    });
+    let mut plate = Item::new(
+        ItemId::new(ItemKind::Plate, 0),
+        Shape::Box,
+        Pose::at(Vec3::new(150.0, 150.0, -3.0)),
+        Vec3::new(300.0, 300.0, 3.0),
+    );
+    plate.tint = Some([200, 200, 200]);
+    scene.push(plate);
+    scene.push(boxed(
+        1,
+        Vec3::new(150.0, 150.0, 0.0),
+        Vec3::new(40.0, 40.0, 100.0),
+        [180, 120, 90],
+    ));
+    let mut camera = Camera::default();
+    camera.set_preset(ViewPreset::Iso);
+    camera.fit(&scene.bounds(), SIZE.0 as f32 / SIZE.1 as f32);
+    let mut state = ViewState::default();
+    state.display.shadows = shadows;
+    state.display.edges = false;
+    render(gpu, &scene, &state, &camera, Mode::Settled)
+}
+
+#[test]
+fn the_key_light_casts_a_shadow_of_a_tall_box_on_the_plate() {
+    let Some(gpu) = gpu() else {
+        println!("no adapter, skipped");
+        return;
+    };
+    let (lit, shaded) = (shadow_picture(&gpu, false), shadow_picture(&gpu, true));
+    if let Ok(dir) = std::env::var("NOVO_DUMP_DIR") {
+        for (name, img) in [("shadow_off", &lit), ("shadow_on", &shaded)] {
+            let path = std::path::Path::new(&dir).join(format!("{name}.ppm"));
+            let mut out = format!("P6\n{} {}\n255\n", SIZE.0, SIZE.1).into_bytes();
+            out.extend(img.chunks(4).flat_map(|p| [p[0], p[1], p[2]]));
+            std::fs::write(path, out).unwrap();
+        }
+    }
+    let sum = |img: &[u8]| -> u64 {
+        img.chunks(4)
+            .map(|p| u64::from(p[0]) + u64::from(p[1]))
+            .sum()
+    };
+    let (darker, brighter) = lit
+        .chunks(4)
+        .zip(shaded.chunks(4))
+        .fold((0, 0), |(d, b), (a, s)| {
+            let (a, s) = (i32::from(a[0]), i32::from(s[0]));
+            (d + usize::from(s < a - 8), b + usize::from(s > a + 2))
+        });
+    assert!(sum(&shaded) < sum(&lit), "shadows darken the picture");
+    assert!(
+        darker > 100,
+        "a patch of the plate is in shadow ({darker} px)"
+    );
+    assert_eq!(brighter, 0, "shadows never brighten anything");
+}
+
+#[test]
+fn a_caster_outside_the_picture_still_shadows_what_is_in_it() {
+    let Some(gpu) = gpu() else {
+        println!("no adapter, skipped");
+        return;
+    };
+    let frame = PlateFrame {
+        width: 400.0,
+        height: 300.0,
+    };
+    let mut scene = Scene::new(frame);
+    let mut plate = Item::new(
+        ItemId::new(ItemKind::Plate, 0),
+        Shape::Box,
+        Pose::at(Vec3::new(200.0, 150.0, -3.0)),
+        Vec3::new(400.0, 300.0, 3.0),
+    );
+    plate.tint = Some([200, 200, 200]);
+    scene.push(plate);
+    // The tall box stands left of the part of the plate the camera looks at.
+    scene.push(boxed(
+        1,
+        Vec3::new(100.0, 150.0, 0.0),
+        Vec3::new(40.0, 40.0, 120.0),
+        [180, 120, 90],
+    ));
+    let mut camera = Camera::default();
+    camera.set_preset(ViewPreset::Front);
+    let view = novo_view3d::Aabb::new(Vec3::new(150.0, 60.0, 0.0), Vec3::new(260.0, 240.0, 0.0));
+    camera.fit(&view, SIZE.0 as f32 / SIZE.1 as f32);
+    let picture = |shadows: bool| {
+        let mut state = ViewState::default();
+        state.display.shadows = shadows;
+        state.display.edges = false;
+        render(&gpu, &scene, &state, &camera, Mode::Settled)
+    };
+    let (lit, shaded) = (picture(false), picture(true));
+    let darker = lit
+        .chunks(4)
+        .zip(shaded.chunks(4))
+        .filter(|(a, s)| i32::from(s[0]) < i32::from(a[0]) - 8)
+        .count();
+    assert!(
+        darker > 200,
+        "the shadow reaches into the picture ({darker} px)"
+    );
+}

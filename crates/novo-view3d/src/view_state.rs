@@ -9,6 +9,8 @@ pub struct Display {
     pub edges: bool,
     /// Draw tag labels over the image.
     pub labels: bool,
+    /// Soft shadows from the key light (software renderers skip them).
+    pub shadows: bool,
 }
 
 impl Default for Display {
@@ -16,6 +18,7 @@ impl Default for Display {
         Self {
             edges: true,
             labels: true,
+            shadows: true,
         }
     }
 }
