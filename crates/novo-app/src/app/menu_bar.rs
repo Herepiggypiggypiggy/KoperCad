@@ -126,26 +126,23 @@ impl NovoApp {
         if items.is_empty() {
             return None;
         }
+        // A long menu (File) scrolls instead of running off a short screen. Only a
+        // menu that would not fit is wrapped, so the others lay out as before.
+        let row = ui.spacing().interact_size.y + ui.spacing().item_spacing.y;
+        let separators = items
+            .iter()
+            .filter(|i| matches!(i, MenuItem::Separator))
+            .count();
+        let wanted = (items.len() - separators) as f32 * row + separators as f32 * 10.0;
+        let room = (ui.ctx().content_rect().height() - 80.0).max(200.0);
+        let scrolls = wanted > room;
         let response = ui.menu_button(menu, |ui| {
-            for item in &items {
-                match item {
-                    MenuItem::Separator => {
-                        ui.separator();
-                    }
-                    MenuItem::Command(info) => {
-                        self.command_row(ui, info);
-                        if info.id == "file.example" {
-                            self.recent_menu(ui);
-                        }
-                    }
-                    MenuItem::Submenu { name, items } => {
-                        ui.menu_button(*name, |ui| {
-                            for info in items {
-                                self.command_row(ui, info);
-                            }
-                        });
-                    }
-                }
+            if scrolls {
+                egui::ScrollArea::vertical()
+                    .max_height(room)
+                    .show(ui, |ui| self.menu_rows(ui, &items));
+            } else {
+                self.menu_rows(ui, &items);
             }
         });
         self.anchor(&format!("menu.{menu}"), response.response.rect, menu);
@@ -153,6 +150,37 @@ impl NovoApp {
             response.response.request_focus();
         }
         Some(response.response.rect)
+    }
+
+    /// The rows of one menu.
+    fn menu_rows(&mut self, ui: &mut egui::Ui, items: &[MenuItem]) {
+        for item in items {
+            match item {
+                MenuItem::Separator => {
+                    ui.separator();
+                }
+                MenuItem::Command(info) => {
+                    self.command_row(ui, info);
+                    if info.id == "file.example" {
+                        self.recent_menu(ui);
+                    }
+                }
+                MenuItem::Submenu { name, items } => {
+                    // The lesson steps only exist while a lesson runs;
+                    // outside one they would be permanently greyed.
+                    if *name == "Lesson"
+                        && items.iter().all(|i| self.command_unavailable(i).is_some())
+                    {
+                        continue;
+                    }
+                    ui.menu_button(*name, |ui| {
+                        for info in items {
+                            self.command_row(ui, info);
+                        }
+                    });
+                }
+            }
+        }
     }
 
     /// File › Recent: the projects opened lately, newest first.

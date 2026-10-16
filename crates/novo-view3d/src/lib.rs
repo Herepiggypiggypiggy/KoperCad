@@ -13,6 +13,7 @@ pub mod camera;
 pub mod cube;
 pub mod cull;
 pub mod demo;
+pub mod dimension;
 pub mod door;
 pub mod feel;
 pub mod governor;

@@ -97,12 +97,15 @@ pub(crate) struct Workbench {
     pub(super) electrical: Option<super::electrical::ElectricalWindow>,
     /// The Safety functions window, while it is open.
     pub(super) safety: Option<super::safety::SafetyWindow>,
+    pub(super) languages: Option<super::languages::LanguagesWindow>,
     /// The Renumber devices window, while it is open.
     pub(super) device_renumber: Option<super::device_renumber::DeviceRenumber>,
     /// The Project rules window is open.
     pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
+    /// The net trace window (`net.trace`), while it is open.
+    pub(super) net_trace: Option<super::net_trace::NetTrace>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
     /// The spreadsheet import preview, while it is open.
@@ -127,6 +130,8 @@ pub(crate) struct Workbench {
     pub(super) drawer: Option<Drawer>,
     /// The cable whose cores the Cables tab shows.
     pub(super) drawer_cable: Option<novo_core::CableId>,
+    /// The strip editor of the Terminals tab.
+    pub(super) terminal_edit: super::terminal_edit::TerminalEdit,
     /// The terminal proposal Enter accepts, an index into this page's.
     pub(super) proposal: usize,
     /// Where the pointer was when Space went down, until it comes up.
@@ -179,6 +184,10 @@ pub(crate) struct Workbench {
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
+    /// The PDF options dialog (File > Export drawings > Export PDF...), while open.
+    pub(super) pdf_options: Option<super::pdf_options::PdfOptionsState>,
+    /// The Report designer window, while open.
+    pub(super) designer: Option<super::designer::DesignerState>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
     /// An AutomationML import waiting for the person to confirm.
     pub(super) aml_import: Option<super::interop::AmlImport>,
@@ -188,6 +197,16 @@ pub(crate) struct Workbench {
     pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
+    /// Parts read from an EPLAN parts export, waiting for Add.
+    pub(super) eplan_parts: Option<super::eplan_parts::EplanPartsImport>,
+    /// The EPLAN export options being chosen.
+    pub(super) eplan_export: Option<super::eplan_export::EplanExport>,
+    /// The options the last EPLAN export used, offered again next time.
+    pub(super) eplan_export_last: Option<super::eplan_export::EplanExport>,
+    /// The Add PLC card layout dialog.
+    pub(super) plc_card: Option<super::plc_card::PlcCardForm>,
+    /// Whether the PLC overview window is open.
+    pub(super) plc_overview: bool,
     /// The "Get the EPLAN export script" guide, open after the files are
     /// written.
     pub(super) eplan_guide: Option<super::interop::EplanGuide>,
@@ -234,7 +253,9 @@ impl Default for Workbench {
             calculations: None,
             electrical: None,
             safety: None,
+            languages: None,
             numbering: None,
+            net_trace: None,
             device_renumber: None,
             project_rules: false,
             page_form: None,
@@ -249,6 +270,7 @@ impl Default for Workbench {
             occurrences: None,
             drawer: None,
             drawer_cable: None,
+            terminal_edit: Default::default(),
             part_catalog: Default::default(),
             cable_edit: Default::default(),
             proposal: 0,
@@ -273,12 +295,19 @@ impl Default for Workbench {
             changes: None,
             background_panel: None,
             bench: None,
+            pdf_options: None,
+            designer: None,
             commissioning: None,
             underlay_seen: None,
             aml_import: None,
             parts_bulk: None,
             auto_assign: None,
             eplan_import: None,
+            eplan_parts: None,
+            eplan_export: None,
+            eplan_export_last: None,
+            plc_card: None,
+            plc_overview: false,
             eplan_guide: None,
             dwg_job: None,
         }
@@ -305,6 +334,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "tool.repeat",
     "tool.connect",
     "tool.cable",
+    "draw.text",
+    "net.select",
+    "net.trace",
+    "help.keymap_file",
     "wire.end_on_part",
     "wire.next_pin",
     "view.command_field_here",
@@ -350,14 +383,20 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "check.calculations",
     "check.electrical_inputs",
     "check.safety",
+    "project.languages",
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.pdf_options",
     "export.change_report",
     "export.commissioning",
     "export.standards_report",
     "export.standards_xlsx",
     "export.plate",
+    "export.plate_dxf",
+    "export.pdf_page",
+    "export.report_pdf",
+    "report.add_page",
     "export.assembly",
     "export.sheets",
     "export.sheets_csv",
@@ -366,6 +405,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.wiring_dxf",
     "export.wirecut_page",
     "view.bench",
+    "report.designer",
     "export.bench_cut",
     "export.ferrules",
     "export.labels",
@@ -375,6 +415,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "cabinet.plate",
     "cabinet.cutlist",
     "cabinet.door",
+    "cabinet.surface",
     "export.bom",
     "export.reports",
     "view.reports",
@@ -383,6 +424,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_shell",
     "view.3d_wires",
     "view.3d_shadows",
+    "view.3d_dimensions",
+    "view.3d_quality",
     "view.3d_stats",
     "view.iso",
     "view.front",
@@ -395,6 +438,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "report.cables",
     "report.cutlist",
     "report.labels",
+    "report.wirecut",
+    "report.io",
+    "report.cable_schedule",
+    "report.plugs",
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
@@ -411,6 +458,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "file.choose_dwg_converter",
     "file.eplan_export_script",
     "plc.add_card",
+    "plc.overview",
+    "parts.import_eplan",
     "plc.to_plc",
     "plc.renumber_io",
     "plc.import_tags",
@@ -423,6 +472,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "app.preferences",
     "view.shortcuts",
     "help.show_hints",
+    "help.whats_new",
     "view.reset_panels",
     "parts.browser",
     "parts.import_step",
@@ -469,6 +519,15 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "terminal.strip_up",
     "terminal.strip_down",
     "terminal.strip_lowest",
+    "terminal.add_spares",
+    "terminal.rename",
+    "terminal.renumber",
+    "terminal.join_duplicates",
+    "terminal.set_kind",
+    "terminal.order_up",
+    "terminal.order_down",
+    "terminal.style",
+    "terminal.restore_declined",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -723,6 +782,9 @@ impl NovoApp {
                 if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
                     self.switch_workspace(Workspace::Cabinet);
                     self.cabinet.table = false;
+                } else {
+                    // The run's progress and stop button live in the panel.
+                    self.view3d.controls.heat_panel = true;
                 }
                 self.cabinet.heat.command(id);
             }
@@ -742,6 +804,14 @@ impl NovoApp {
                     view.editor.begin_cable();
                 }
             }
+            "draw.text" => {
+                if let Some(view) = self.canvas.schematic() {
+                    view.editor.begin_text();
+                }
+            }
+            "net.select" => self.select_net(),
+            "net.trace" => self.trace_net(),
+            "help.keymap_file" => self.open_keymap_file(),
             "wire.end_on_part" => self.editor_key(EditorKey::EndOnPart),
             "wire.next_pin" => {
                 // Tab must not leave the drawing: egui's own focus move to
@@ -798,6 +868,15 @@ impl NovoApp {
             | "terminal.strip_up"
             | "terminal.strip_down"
             | "terminal.strip_lowest" => self.terminal_command(id),
+            "terminal.add_spares"
+            | "terminal.rename"
+            | "terminal.renumber"
+            | "terminal.join_duplicates"
+            | "terminal.set_kind"
+            | "terminal.order_up"
+            | "terminal.order_down"
+            | "terminal.style"
+            | "terminal.restore_declined" => self.terminal_edit_command(id, argument),
             "interruption.renumber" => self.renumber_interruptions(),
             "wires.number" => self.number_wires(),
             "wires.numbering" => {
@@ -825,6 +904,14 @@ impl NovoApp {
             "view.3d_shadows" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.shadows ^= true;
+            }
+            "view.3d_quality" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.view.reset_quality();
+            }
+            "view.3d_dimensions" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.controls.dimensions ^= true;
             }
             "view.3d_door" | "view.3d_shell" | "view.3d_wires" => {
                 self.switch_workspace(Workspace::View3d);
@@ -894,6 +981,7 @@ impl NovoApp {
             "check.calculations" => self.toggle_calculations(),
             "check.electrical_inputs" => self.toggle_electrical(),
             "check.safety" => self.toggle_safety(),
+            "project.languages" => self.toggle_languages(),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
             "edit.escape" => {
@@ -929,6 +1017,7 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.pdf_options" => self.open_pdf_options(),
             "export.change_report" => {
                 self.export_change_report();
             }
@@ -942,6 +1031,16 @@ impl NovoApp {
             "export.plate" => {
                 self.export_plate_pdf();
             }
+            "export.plate_dxf" => {
+                self.export_plate_dxf();
+            }
+            "export.pdf_page" => {
+                self.export_pdf_page();
+            }
+            "export.report_pdf" => {
+                self.export_selected_report_pdf();
+            }
+            "report.add_page" => self.add_report_page_command(argument),
             "export.assembly" => {
                 self.export_assembly();
             }
@@ -966,6 +1065,11 @@ impl NovoApp {
                 self.cabinet.keys.push(id.to_owned());
             }
             "cabinet.door" => self.open_cabinet_door(),
+            "cabinet.surface" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.open_cabinet_surfaces();
+            }
             "export.wirecut" => {
                 self.export_wire_cut();
             }
@@ -975,6 +1079,7 @@ impl NovoApp {
             "export.wiring_dxf" => self.export_wiring_dxf_of_panel(),
             "export.wirecut_page" => self.add_wire_production_page(),
             "view.bench" => self.open_bench(),
+            "report.designer" => self.open_designer(),
             "export.bench_cut" => {
                 self.export_bench_cut();
             }
@@ -1001,9 +1106,7 @@ impl NovoApp {
             "export.step" => {
                 self.export_step();
             }
-            "export.eplan" => {
-                self.export_eplan();
-            }
+            "export.eplan" => self.open_eplan_export(),
             "export.aml" => {
                 self.export_aml();
             }
@@ -1035,9 +1138,12 @@ impl NovoApp {
             "app.preferences" => self.wb.preferences = true,
             "view.shortcuts" => self.toggle_shortcuts(),
             "help.show_hints" => self.show_hints_again(),
+            "help.whats_new" => self.show_whats_new = true,
             "view.reset_panels" => super::panel::reset_layout(ctx),
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
+            "parts.import_eplan" => self.import_eplan_parts(),
+            "plc.overview" => self.wb.plc_overview = true,
             "parts.import_folder" => self.import_parts_folder(),
             "parts.auto_assign" => self.start_auto_assign(),
             "parts.clear" => self.clear_selected_parts(),

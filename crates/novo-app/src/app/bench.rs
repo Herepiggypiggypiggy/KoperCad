@@ -73,9 +73,14 @@ struct Inputs {
     labels: LabelSettings,
 }
 
-fn pdf_options(title: String, keys: impl Iterator<Item = String>) -> novo_pdf::ReportPdfOptions {
+fn pdf_options(
+    title: String,
+    keys: impl Iterator<Item = String>,
+    language: novo_reports::i18n::Translator,
+) -> novo_pdf::ReportPdfOptions {
     novo_pdf::ReportPdfOptions {
         title,
+        language,
         // Rows tall enough to tick and to pencil a note on.
         row_mm: keys.map(|k| (k, 8.0)).collect(),
         ..novo_pdf::ReportPdfOptions::default()
@@ -125,7 +130,7 @@ impl NovoApp {
             Ok(()) => {
                 self.wb.sheet_exports.insert(path.to_owned(), hash(bytes));
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {what}: {}", path.display()));
+                self.message_file(format!("{verb} {what}: {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
@@ -165,6 +170,7 @@ impl NovoApp {
         let options = pdf_options(
             format!("{name}  Bench cut list"),
             report.sections.iter().map(|s| s.key.clone()),
+            self.report_translator(),
         );
         let bytes = novo_pdf::export_report_pdf(&[&report], &options);
         let estimates = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
@@ -239,6 +245,7 @@ impl NovoApp {
         let options = pdf_options(
             format!("{name}  Ferrules"),
             std::iter::once("ferrules".to_owned()),
+            self.report_translator(),
         );
         let bytes = novo_pdf::export_report_pdf(&[&report], &options);
         self.bench_write(path, &bytes, "ferrule table")

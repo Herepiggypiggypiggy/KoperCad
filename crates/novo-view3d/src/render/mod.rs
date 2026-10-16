@@ -41,6 +41,20 @@ pub enum Tier {
     Software,
 }
 
+impl crate::governor::Step for Tier {
+    /// A discrete GPU that cannot keep up renders like an integrated one;
+    /// that is the floor. The frame interval the governor sees is the whole
+    /// app's, not the GPU's, so a slow solver or a busy panel must never
+    /// take a hardware adapter down to no shadows and no MSAA by itself:
+    /// Software is only ever the tier of a CPU adapter.
+    fn step_down(self) -> Option<Self> {
+        match self {
+            Tier::Discrete => Some(Tier::Integrated),
+            Tier::Integrated | Tier::Software => None,
+        }
+    }
+}
+
 impl Tier {
     pub fn of(info: &wgpu::AdapterInfo) -> Tier {
         match info.device_type {

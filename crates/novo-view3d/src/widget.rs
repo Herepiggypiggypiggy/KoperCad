@@ -7,10 +7,13 @@
 
 use crate::camera::{Camera, Projection, ViewPreset};
 use crate::cube::{self, CubeHit};
+use crate::dimension::{self, Role};
 use crate::door::DoorAnim;
 use crate::feel::{self, Inertia, Transition};
+use crate::governor::FrameGovernor;
 use crate::labels::{self, Fade, LabelCandidate};
 use crate::look::{self, Glyph, Look};
+use crate::math::Ray;
 use crate::mesh::MeshLibrary;
 use crate::overlay::Overlay;
 use crate::pick::{self, Hit};
@@ -30,6 +33,8 @@ use std::time::{Duration, Instant};
 
 /// GPU state of a view not painted for this long is freed.
 const IDLE_VIEW_TTL: Duration = Duration::from_secs(30);
+/// A dimension line shorter than this on screen is not drawn, points.
+const MIN_DIMENSION_PX: f32 = 28.0;
 /// Seconds without input before the settled (sharp) frame is drawn.
 const SETTLE_AFTER: f64 = 0.25;
 static INSTALLED: AtomicBool = AtomicBool::new(false);
@@ -44,7 +49,11 @@ pub struct RenderStats {
     pub adapter: String,
     /// The graphics API the adapter is used through, for example `Dx12`.
     pub backend: String,
+    /// The quality tier in use: the adapter's, or lower once the frame
+    /// governor has stepped down after sustained slow frames.
     pub tier: Tier,
+    /// The tier the adapter type gives.
+    pub adapter_tier: Tier,
     /// Frames rendered since start (an unchanged view is not rendered again).
     pub renders: u64,
     /// Items drawn, draw calls and triangles of the last render.
@@ -64,6 +73,7 @@ struct Recorder {
     adapter: String,
     backend: String,
     tier: Tier,
+    adapter_tier: Tier,
     renders: u64,
     cpu_ms: VecDeque<f32>,
     last: crate::render::FrameStats,
@@ -89,6 +99,7 @@ pub fn render_stats() -> Option<RenderStats> {
         adapter: r.adapter.clone(),
         backend: r.backend.clone(),
         tier: r.tier,
+        adapter_tier: r.adapter_tier,
         renders: r.renders,
         visible_items: r.last.visible_items,
         draw_calls: r.last.draw_calls,
@@ -100,7 +111,12 @@ pub fn render_stats() -> Option<RenderStats> {
     })
 }
 
-fn record(stats: crate::render::FrameStats, msaa: u32) {
+/// The tier the adapter type gives; `None` before [`install`].
+fn adapter_tier() -> Option<Tier> {
+    STATS.lock().ok()?.as_ref().map(|r| r.adapter_tier)
+}
+
+fn record(stats: crate::render::FrameStats, msaa: u32, tier: Tier) {
     if let Ok(mut guard) = STATS.lock()
         && let Some(r) = guard.as_mut()
     {
@@ -111,6 +127,7 @@ fn record(stats: crate::render::FrameStats, msaa: u32) {
         r.renders += 1;
         r.last = stats;
         r.msaa = msaa;
+        r.tier = tier;
     }
 }
 
@@ -125,17 +142,7 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
     );
     let info = render_state.adapter.get_info();
     let tier = Tier::of(&info);
-    if let Ok(mut guard) = STATS.lock() {
-        *guard = Some(Recorder {
-            adapter: info.name.clone(),
-            backend: format!("{:?}", info.backend),
-            tier,
-            renders: 0,
-            cpu_ms: VecDeque::with_capacity(STATS_WINDOW),
-            last: Default::default(),
-            msaa: 1,
-        });
-    }
+    register_adapter(&info.name, &format!("{:?}", info.backend), tier);
     render_state
         .renderer
         .write()
@@ -146,6 +153,30 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
             tier,
             views: HashMap::new(),
         });
+    INSTALLED.store(true, Ordering::Relaxed);
+}
+
+/// Tells the statistics and the frame governor which adapter draws. [`install`]
+/// does it; a host without a window (tests, headless tools) calls it itself.
+pub fn register_adapter(name: &str, backend: &str, tier: Tier) {
+    if let Ok(mut guard) = STATS.lock() {
+        *guard = Some(Recorder {
+            adapter: name.to_owned(),
+            backend: backend.to_owned(),
+            tier,
+            adapter_tier: tier,
+            renders: 0,
+            cpu_ms: VecDeque::with_capacity(STATS_WINDOW),
+            last: Default::default(),
+            msaa: 1,
+        });
+    }
+}
+
+/// Marks the widget as installed without a window, so [`View3d::show`] runs
+/// all its CPU work (input, culling, picking, labels). Nothing is drawn by the
+/// GPU: for benchmarks and tests of the widget's own cost.
+pub fn install_headless() {
     INSTALLED.store(true, Ordering::Relaxed);
 }
 
@@ -177,6 +208,8 @@ struct Callback {
     look: Look,
     size_px: (u32, u32),
     mode: Mode,
+    /// The tier the frame governor stepped down to, if it did.
+    governed: Option<Tier>,
     overlays: Arc<Vec<Overlay>>,
     overlay_revision: u64,
     key: u64,
@@ -210,7 +243,8 @@ impl egui_wgpu::CallbackTrait for Callback {
         });
         slot.used = now;
         if slot.key != Some(self.key) {
-            let quality = Quality::new(self.mode, *tier);
+            let used = self.governed.unwrap_or(*tier);
+            let quality = Quality::new(self.mode, used);
             let stats = renderer.render(
                 device,
                 queue,
@@ -228,7 +262,7 @@ impl egui_wgpu::CallbackTrait for Callback {
                     overlay_revision: self.overlay_revision,
                 },
             );
-            record(stats, quality.msaa);
+            record(stats, quality.msaa, used);
             slot.key = Some(self.key);
         }
         if slot
@@ -269,6 +303,8 @@ pub struct Click {
     pub modifiers: Modifiers,
     /// Alt + click: the deepest item (repeated clicks step back up).
     pub deepest: bool,
+    /// The pointer ray through the click, in the world.
+    pub ray: Ray,
 }
 
 impl View3dOutput {
@@ -281,6 +317,7 @@ impl View3dOutput {
             context: None,
             double_clicked: None,
             plate_point: None,
+            hover_ray: None,
             item_drag: None,
             camera_changed: false,
         }
@@ -301,6 +338,8 @@ pub struct View3dOutput {
     pub double_clicked: Option<ItemId>,
     /// The 2D plate point (x, y down, mm) under the pointer.
     pub plate_point: Option<(f64, f64)>,
+    /// The ray through the pointer while it is over the view, in the world.
+    pub hover_ray: Option<Ray>,
     /// A drag that started on a device, rail or duct while
     /// [`View3d::drag_items`] is on: how far the pointer has moved on the
     /// plate since the press, and whether the button is still down.
@@ -326,6 +365,8 @@ const CUBE_MARGIN: f32 = 12.0;
 const CUBE_MIN_VIEW: f32 = 200.0;
 /// One mouse wheel notch in egui's scroll points.
 const POINTS_PER_NOTCH: f32 = 50.0;
+/// Time constant of the wheel zoom easing, in seconds.
+const WHEEL_SETTLE_S: f32 = 0.06;
 
 fn color(c: [u8; 4], alpha: f32) -> Color32 {
     Color32::from_rgba_unmultiplied(
@@ -334,6 +375,12 @@ fn color(c: [u8; 4], alpha: f32) -> Color32 {
         c[2],
         (c[3] as f32 * alpha.clamp(0.0, 1.0)) as u8,
     )
+}
+
+/// Whether a "?" (no part data) badge is drawn on `id`: on every device with
+/// the Missing data layer, else only under the pointer or in the selection.
+pub(crate) fn badge_shown(state: &ViewState, id: ItemId) -> bool {
+    state.display.missing_marks || state.hover == Some(id) || state.selection.contains(&id)
 }
 
 /// A chip's 1 px line: copper when selected, steel blue when hovered, the
@@ -370,6 +417,8 @@ pub struct View3d {
     /// returns to perspective.
     auto_ortho: bool,
     needs_fit: bool,
+    /// Mouse-wheel zoom points not yet applied (spread over frames).
+    wheel_pending: f32,
     last_activity: f64,
     marquee_from: Option<Pos2>,
     /// Dragging a device, rail or duct moves it instead of drawing a marquee.
@@ -384,6 +433,8 @@ pub struct View3d {
     overlays: Arc<Vec<Overlay>>,
     overlay_revision: u64,
     door: Option<DoorAnim>,
+    /// Steps the render quality down when moving frames stay slow.
+    governor: Option<FrameGovernor<Tier>>,
     /// The source scene and its copy with the animated door angle.
     door_scene: Option<(Arc<Scene>, Arc<Scene>)>,
 }
@@ -402,6 +453,7 @@ impl View3d {
             cube_drag: false,
             auto_ortho: false,
             needs_fit: true,
+            wheel_pending: 0.0,
             last_activity: f64::NEG_INFINITY,
             marquee_from: None,
             drag_items: false,
@@ -412,6 +464,7 @@ impl View3d {
             overlays: Arc::new(Vec::new()),
             overlay_revision: 0,
             door: None,
+            governor: None,
             door_scene: None,
         }
     }
@@ -436,6 +489,38 @@ impl View3d {
             self.overlays = Arc::new(overlays);
             self.overlay_revision += 1;
         }
+    }
+
+    /// Feeds one frame interval to the frame governor while the view moves and
+    /// returns the tier it stepped down to, if it did. Never steps up by
+    /// itself; `reset_quality` starts again from the adapter's tier. [`show`]
+    /// calls it every frame; a host without a window can drive it itself.
+    ///
+    /// [`show`]: View3d::show
+    pub fn govern(&mut self, ctx: &egui::Context, moving: bool) -> Option<Tier> {
+        if self.governor.is_none() {
+            self.governor = adapter_tier().map(|t| FrameGovernor::new(t, false));
+        }
+        let gov = self.governor.as_mut()?;
+        if moving {
+            let ms = (ctx.input(|i| i.unstable_dt) * 1000.0).clamp(0.0, 100.0);
+            if gov.frame(ms).is_some() {
+                ctx.request_repaint();
+            }
+        }
+        (Some(gov.tier) != adapter_tier()).then_some(gov.tier)
+    }
+
+    /// The tier the frame governor stepped down to, if it did.
+    pub fn stepped_down(&self) -> Option<Tier> {
+        let gov = self.governor.as_ref()?;
+        (Some(gov.tier) != adapter_tier()).then_some(gov.tier)
+    }
+
+    /// Forgets the governor's step-downs: the next moving frames start again
+    /// from the adapter's own tier.
+    pub fn reset_quality(&mut self) {
+        self.governor = None;
     }
 
     /// Swings the hinge group (the door) to `angle` radians, easing unless
@@ -552,8 +637,14 @@ impl View3d {
 
     /// Screen position of a world point inside `rect`.
     pub fn project(&self, rect: Rect, scene: &Scene, p: Vec3) -> Option<Pos2> {
+        self.project_in(rect, &scene.bounds(), p)
+    }
+
+    /// [`project`](Self::project) with the scene bounds at hand: the bounds
+    /// walk every item, so code that projects many points takes them once.
+    fn project_in(&self, rect: Rect, bounds: &crate::math::Aabb, p: Vec3) -> Option<Pos2> {
         let aspect = rect.width() / rect.height().max(1.0);
-        let (ndc, _) = self.camera.project(p, aspect, &scene.bounds())?;
+        let (ndc, _) = self.camera.project(p, aspect, bounds)?;
         Some(Pos2::new(
             rect.min.x + (ndc.x * 0.5 + 0.5) * rect.width(),
             rect.min.y + (0.5 - ndc.y * 0.5) * rect.height(),
@@ -631,11 +722,19 @@ impl View3d {
             self.last_activity = now;
         }
 
-        let (space, alt, scroll, zoom, hover_pos) = ctx.input(|i| {
+        let (space, alt, (scroll, touch_pan), zoom, hover_pos) = ctx.input(|i| {
             (
                 i.key_down(Key::Space),
                 i.modifiers.alt,
-                i.smooth_scroll_delta.y,
+                split_wheel(i.events.iter().filter_map(|e| match e {
+                    egui::Event::MouseWheel {
+                        unit,
+                        delta,
+                        modifiers,
+                        ..
+                    } => Some((*unit, *delta, modifiers.command)),
+                    _ => None,
+                })),
                 i.zoom_delta(),
                 i.pointer.hover_pos(),
             )
@@ -698,6 +797,25 @@ impl View3d {
             }
             self.orbited = false;
             self.cube_drag = false;
+        }
+
+        // Two fingers on a trackpad pan (a pinch zooms, below); a mouse wheel
+        // zooms.
+        if response.hovered() && touch_pan != Vec2::ZERO {
+            self.transition = None;
+            self.inertia.stop();
+            self.camera.pan(touch_pan.x, touch_pan.y, rect.height());
+        }
+
+        // A notch is spread over a few frames, as egui does for scrolling.
+        let scroll = if response.hovered() {
+            smooth_wheel(&mut self.wheel_pending, scroll, dt)
+        } else {
+            self.wheel_pending = 0.0;
+            0.0
+        };
+        if self.wheel_pending != 0.0 {
+            ctx.request_repaint();
         }
 
         // Zoom towards the pointer.
@@ -802,6 +920,7 @@ impl View3d {
         out.hover = new_hover;
         if let Some(p) = hover_pos.filter(|p| rect.contains(*p)) {
             let ray = self.camera.ray(Self::ndc(rect, p), aspect);
+            out.hover_ray = Some(ray);
             out.plate_point = ray
                 .plane_hit(Vec3::ZERO, Vec3::Z)
                 .map(|t| scene.frame.plate(ray.at(t)));
@@ -827,6 +946,7 @@ impl View3d {
                         id: hit.map(|h| h.id),
                         modifiers,
                         deepest: true,
+                        ray,
                     });
                 } else {
                     self.alt_cycle = None;
@@ -834,6 +954,7 @@ impl View3d {
                         id: self.pick_at(rect, scene, p).map(|h| h.id),
                         modifiers,
                         deepest: false,
+                        ray,
                     });
                 }
             }
@@ -894,6 +1015,10 @@ impl View3d {
             Mode::Settled
         };
 
+        // Frame governor: only frames of a moving view count (an idle view
+        // repaints rarely, which is not slowness).
+        let governed = self.govern(&ctx, idle <= f64::EPSILON);
+
         let ppp = ctx.pixels_per_point();
         let size_px = (
             (rect.width() * ppp).round().max(1.0) as u32,
@@ -905,7 +1030,7 @@ impl View3d {
             &self.camera,
             &self.state,
             size_px,
-            mode,
+            (mode, governed),
             self.overlay_revision,
         );
         ui.painter().add(egui_wgpu::Callback::new_paint_callback(
@@ -919,6 +1044,7 @@ impl View3d {
                 look: *look,
                 size_px,
                 mode,
+                governed,
                 overlays: self.overlays.clone(),
                 overlay_revision: self.overlay_revision,
                 key,
@@ -976,7 +1102,7 @@ impl View3d {
                 rect.height() * ppp,
             ) / ppp;
             if let (true, Some(label)) = (self.state.display.labels, &item.label)
-                && let Some(p) = self.project(rect, scene, front)
+                && let Some(p) = self.project_in(rect, &bounds, front)
             {
                 let galley =
                     painter.layout_no_wrap(label.to_string(), font.clone(), Color32::PLACEHOLDER);
@@ -1001,6 +1127,9 @@ impl View3d {
             }
             if item.mark != Mark::None && size_pt >= 12.0 {
                 let style = look.mark(item.mark);
+                if style.glyph == Glyph::DashedEdge && !badge_shown(&self.state, item.id) {
+                    continue;
+                }
                 let text = match style.glyph {
                     Glyph::Cross => "\u{00d7}",
                     Glyph::Bang => "!",
@@ -1008,7 +1137,7 @@ impl View3d {
                     Glyph::None => continue,
                 };
                 let top = world.transform_point3(Vec3::new(0.0, item.size.y * 0.5, item.size.z));
-                if let Some(p) = self.project(rect, scene, top) {
+                if let Some(p) = self.project_in(rect, &bounds, top) {
                     let c = style
                         .edge
                         .unwrap_or(look.overlay.chip_text[..3].try_into().unwrap());
@@ -1063,6 +1192,51 @@ impl View3d {
             }
         }
         self.label_fades = touched;
+        if self.state.display.dimensions {
+            self.paint_dimensions(&painter, rect, scene, look);
+        }
+    }
+
+    /// Measuring lines with end ticks and the length on a chip (see
+    /// `dimension`). Lines too short on screen to carry their text are left
+    /// out; zoom in and they appear.
+    fn paint_dimensions(&self, painter: &egui::Painter, rect: Rect, scene: &Scene, look: &Look) {
+        let font = FontId::monospace(11.0);
+        for d in dimension::dimensions(scene, &self.state.selection) {
+            let (Some(a), Some(b)) = (
+                self.project(rect, scene, d.a),
+                self.project(rect, scene, d.b),
+            ) else {
+                continue;
+            };
+            let galley = painter.layout_no_wrap(d.text.clone(), font.clone(), Color32::PLACEHOLDER);
+            let chip = galley.size() + Vec2::new(8.0, 4.0);
+            let along = b - a;
+            let len = along.length();
+            if len < chip.x.max(MIN_DIMENSION_PX) {
+                continue;
+            }
+            let col = match d.role {
+                Role::Overall => color(look.overlay.chip_text, 0.7),
+                Role::Size => color(look.overlay.chip_text, 1.0),
+                Role::Gap | Role::Edge => color3(look.selection.edge, 255),
+            };
+            let stroke = Stroke::new(1.0, col);
+            painter.line_segment([a, b], stroke);
+            let n = Vec2::new(-along.y, along.x) / len * 4.0;
+            for p in [a, b] {
+                painter.line_segment([p - n, p + n], stroke);
+            }
+            let mid = a + along * 0.5;
+            painter.rect(
+                Rect::from_center_size(mid, chip),
+                3.0,
+                color(look.overlay.chip, 1.0),
+                Stroke::new(1.0, col),
+                egui::StrokeKind::Inside,
+            );
+            painter.text(mid, Align2::CENTER_CENTER, &d.text, font.clone(), col);
+        }
     }
 
     /// The view cube (3d-look.md section 6): nine regions per visible face,
@@ -1180,6 +1354,41 @@ fn paint_face_label(
     painter.add(egui::Shape::mesh(mesh));
 }
 
+/// Splits this frame's wheel events: points of mouse-wheel zoom (a line is
+/// 50 points, a page three times that) and the pan of a trackpad, which
+/// reports in pixels (macOS and Linux; Windows reports lines for both wheel
+/// and precision touchpad, so there a swipe still zooms: not verified on
+/// Windows hardware). Events with Ctrl or Cmd held are the pinch gesture's
+/// (egui turns them into a zoom delta) and count for neither.
+fn split_wheel(events: impl Iterator<Item = (egui::MouseWheelUnit, Vec2, bool)>) -> (f32, Vec2) {
+    let mut zoom = 0.0;
+    let mut pan = Vec2::ZERO;
+    for (unit, delta, command) in events {
+        if command {
+            continue;
+        }
+        match unit {
+            egui::MouseWheelUnit::Line => zoom += delta.y * POINTS_PER_NOTCH,
+            egui::MouseWheelUnit::Page => zoom += delta.y * POINTS_PER_NOTCH * 3.0,
+            egui::MouseWheelUnit::Point => pan += delta,
+        }
+    }
+    (zoom, pan)
+}
+
+/// Adds this frame's wheel points to what is pending and returns the share to
+/// apply now: a notch eases in over a handful of frames instead of jumping.
+fn smooth_wheel(pending: &mut f32, add: f32, dt: f32) -> f32 {
+    *pending += add;
+    let take = if pending.abs() < 1.0 {
+        *pending
+    } else {
+        *pending * (1.0 - (-dt / WHEEL_SETTLE_S).exp())
+    };
+    *pending -= take;
+    take
+}
+
 /// Everything that changes the picture, hashed: when it is the same as the
 /// last frame the renderer does nothing.
 fn frame_key(
@@ -1188,7 +1397,7 @@ fn frame_key(
     camera: &Camera,
     state: &ViewState,
     size_px: (u32, u32),
-    mode: Mode,
+    (mode, governed): (Mode, Option<Tier>),
     overlay_revision: u64,
 ) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -1211,6 +1420,7 @@ fn frame_key(
         v.to_bits().hash(&mut h);
     }
     (camera.projection as u8, size_px, mode as u8).hash(&mut h);
+    governed.map(|t| t as u8 + 1).hash(&mut h);
     (&state.selection, state.hover, &state.hidden, &state.related).hash(&mut h);
     (state.display.edges, state.display.labels).hash(&mut h);
     h.finish()
@@ -1219,6 +1429,21 @@ fn frame_key(
 #[cfg(test)]
 mod chip_tests {
     use super::*;
+
+    #[test]
+    fn the_missing_data_badge_shows_on_hover_selection_or_the_layer() {
+        let id = ItemId::new(ItemKind::Device, 1);
+        let mut state = ViewState::default();
+        assert!(!badge_shown(&state, id));
+        state.hover = Some(id);
+        assert!(badge_shown(&state, id));
+        state.hover = None;
+        state.selection.insert(id);
+        assert!(badge_shown(&state, id));
+        state.selection.clear();
+        state.display.missing_marks = true;
+        assert!(badge_shown(&state, id));
+    }
 
     #[test]
     fn a_chip_border_follows_selection_then_hover() {
@@ -1237,6 +1462,22 @@ mod chip_tests {
 mod stats_tests {
     use super::*;
 
+    /// The recorder is process-wide: tests that set it run one at a time.
+    static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+
+    fn recorder(tier: Tier) -> Recorder {
+        Recorder {
+            adapter: "Test".into(),
+            backend: "Vulkan".into(),
+            tier,
+            adapter_tier: tier,
+            renders: 0,
+            cpu_ms: VecDeque::new(),
+            last: Default::default(),
+            msaa: 1,
+        }
+    }
+
     #[test]
     fn percentiles_pick_the_sample_at_the_rank() {
         assert_eq!(percentile(&[], 0.5), 0.0);
@@ -1249,15 +1490,8 @@ mod stats_tests {
 
     #[test]
     fn recording_fills_the_statistics_and_keeps_a_window() {
-        *STATS.lock().unwrap() = Some(Recorder {
-            adapter: "Test".into(),
-            backend: "Vulkan".into(),
-            tier: Tier::Software,
-            renders: 0,
-            cpu_ms: VecDeque::new(),
-            last: Default::default(),
-            msaa: 1,
-        });
+        let _guard = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        *STATS.lock().unwrap() = Some(recorder(Tier::Software));
         for i in 0..(STATS_WINDOW + 30) {
             record(
                 crate::render::FrameStats {
@@ -1266,13 +1500,152 @@ mod stats_tests {
                     ..Default::default()
                 },
                 4,
+                Tier::Integrated,
             );
         }
         let s = render_stats().unwrap();
+        assert_eq!((s.tier, s.adapter_tier), (Tier::Integrated, Tier::Software));
         assert_eq!(s.renders as usize, STATS_WINDOW + 30);
         assert_eq!((s.draw_calls, s.msaa), (11, 4));
         // Only the last window counts: samples 30 to 149.
         assert!(s.cpu_p50_ms > 80.0 && s.cpu_p95_ms > 140.0, "{s:?}");
         *STATS.lock().unwrap() = None;
+    }
+
+    /// Runs `frames` egui frames `dt` seconds apart, calling the governor
+    /// with `moving` each time; returns the tiers it reported.
+    fn drive(
+        view: &mut View3d,
+        ctx: &egui::Context,
+        frames: usize,
+        dt: f64,
+        moving: bool,
+    ) -> Vec<Option<Tier>> {
+        let mut out = Vec::new();
+        for i in 0..frames {
+            let input = egui::RawInput {
+                time: Some(100.0 + i as f64 * dt),
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |_| out.push(view.govern(ctx, moving)));
+            output.textures_delta.clear();
+        }
+        out
+    }
+
+    #[test]
+    fn slow_moving_frames_step_the_quality_down_and_a_still_view_does_not() {
+        let _guard = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        *STATS.lock().unwrap() = Some(recorder(Tier::Discrete));
+        let ctx = egui::Context::default();
+        let mut view = View3d::new(7);
+        // A view that is not moving repaints rarely: not slowness.
+        let still = drive(&mut view, &ctx, 200, 0.2, false);
+        assert!(still.iter().all(Option::is_none), "{still:?}");
+        // 40 ms frames while moving: down to Integrated after two seconds,
+        // and that is the floor: the interval is the whole app's, so a
+        // hardware adapter never steps itself down to Software.
+        let slow = drive(&mut view, &ctx, 400, 0.04, true);
+        assert_eq!(slow.first(), Some(&None), "starts on the adapter's tier");
+        let seen: Vec<Tier> = slow.iter().flatten().copied().fold(Vec::new(), |mut v, t| {
+            if v.last() != Some(&t) {
+                v.push(t);
+            }
+            v
+        });
+        assert_eq!(seen, vec![Tier::Integrated]);
+        assert_eq!(slow.last(), Some(&Some(Tier::Integrated)));
+        // It never steps up by itself, however fast the frames get.
+        let fast = drive(&mut view, &ctx, 400, 0.008, true);
+        assert_eq!(fast.last(), Some(&Some(Tier::Integrated)));
+        // Resetting starts again from the adapter's tier.
+        view.reset_quality();
+        let again = drive(&mut view, &ctx, 3, 0.008, true);
+        assert!(again.iter().all(Option::is_none), "{again:?}");
+        *STATS.lock().unwrap() = None;
+    }
+}
+
+#[cfg(test)]
+mod wheel_tests {
+    use super::*;
+    use egui::MouseWheelUnit::{Line, Page, Point};
+
+    #[test]
+    fn a_mouse_wheel_zooms_and_a_trackpad_pans() {
+        let (zoom, pan) = split_wheel([(Line, Vec2::new(0.0, 1.0), false)].into_iter());
+        assert_eq!((zoom, pan), (POINTS_PER_NOTCH, Vec2::ZERO));
+        let (zoom, pan) = split_wheel([(Point, Vec2::new(4.0, -7.0), false)].into_iter());
+        assert_eq!((zoom, pan), (0.0, Vec2::new(4.0, -7.0)));
+        let (zoom, _) = split_wheel([(Page, Vec2::new(0.0, 1.0), false)].into_iter());
+        assert_eq!(zoom, POINTS_PER_NOTCH * 3.0);
+    }
+
+    #[test]
+    fn a_notch_eases_in_over_several_frames_and_all_of_it_lands() {
+        let mut pending = 0.0;
+        let mut taken = vec![smooth_wheel(&mut pending, POINTS_PER_NOTCH, 1.0 / 60.0)];
+        assert!(
+            taken[0] > 0.0 && taken[0] < POINTS_PER_NOTCH * 0.5,
+            "not in one jump"
+        );
+        for _ in 0..120 {
+            taken.push(smooth_wheel(&mut pending, 0.0, 1.0 / 60.0));
+        }
+        assert!(taken.iter().filter(|t| **t > 0.0).count() > 4);
+        let total: f32 = taken.iter().sum();
+        assert!((total - POINTS_PER_NOTCH).abs() < 1e-3, "{total}");
+        assert_eq!(pending, 0.0);
+    }
+
+    #[test]
+    fn events_with_the_command_key_are_the_pinch_and_count_for_nothing() {
+        let (zoom, pan) = split_wheel([(Point, Vec2::new(3.0, 3.0), true)].into_iter());
+        assert_eq!((zoom, pan), (0.0, Vec2::ZERO));
+    }
+}
+
+#[cfg(test)]
+mod cost_tests {
+    use super::*;
+    use crate::demo::{self, DemoOptions};
+    use crate::scene::BOUNDS_CALLS;
+
+    /// One headless frame of the widget over `scene`.
+    fn frame(view: &mut View3d, ctx: &egui::Context, scene: &Arc<Scene>, t: f64) {
+        let lib = Arc::new(MeshLibrary::new());
+        let input = egui::RawInput {
+            time: Some(t),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1366.0, 768.0))),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            view.show(ui, scene, &lib, &Look::dark(), ViewOptions::default());
+        });
+        out.textures_delta.clear();
+    }
+
+    /// The scene bounds walk every item, so a frame takes them a few times,
+    /// not once per label: the label pass once cost 50 ms at 1000 devices.
+    #[test]
+    fn a_frame_walks_the_scene_bounds_a_fixed_number_of_times_however_many_labels_show() {
+        install_headless();
+        let calls = |devices: usize| {
+            let (scene, _) = demo::cabinet(&DemoOptions {
+                devices,
+                ..DemoOptions::default()
+            });
+            let scene = Arc::new(scene);
+            let ctx = egui::Context::default();
+            let mut view = View3d::new(9);
+            // Two frames: the first fits the camera.
+            frame(&mut view, &ctx, &scene, 0.0);
+            let before = BOUNDS_CALLS.with(|c| c.get());
+            frame(&mut view, &ctx, &scene, 0.02);
+            BOUNDS_CALLS.with(|c| c.get()) - before
+        };
+        let (small, large) = (calls(20), calls(600));
+        assert_eq!(small, large, "independent of the item count");
+        assert!(large <= 8, "{large} walks of the scene per frame");
     }
 }
