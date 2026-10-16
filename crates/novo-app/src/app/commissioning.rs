@@ -236,19 +236,23 @@ fn place_of(project: &Project, info: &TargetInfo, current: Option<PageId>) -> Op
 }
 
 impl NovoApp {
-    /// The `view.commissioning` command: the mode on in the outline, or off.
-    /// Turning it off drops the in-memory store, which is safe because every
-    /// change is flushed to the project in the frame it is made.
-    pub(super) fn toggle_commissioning(&mut self) {
-        if self.wb.commissioning.is_some() && self.outline_mode == OutlineMode::Commissioning {
-            self.wb.commissioning = None;
-            self.outline_mode = OutlineMode::Pages;
-            return;
-        }
+    /// The `view.commissioning` command opens the Commissioning workspace:
+    /// the mode is on, its panel in the outline's place. Leaving it drops the
+    /// in-memory store, which is safe because every change is flushed to the
+    /// project in the frame it is made.
+    pub(super) fn enter_commissioning(&mut self) {
         self.load_commissioning();
         self.outline_mode = OutlineMode::Commissioning;
         if !self.outline_pinned() {
             self.outline_open = true;
+        }
+    }
+
+    /// The Commissioning workspace is left: the mode is off.
+    pub(super) fn leave_commissioning(&mut self) {
+        self.wb.commissioning = None;
+        if self.outline_mode == OutlineMode::Commissioning {
+            self.outline_mode = OutlineMode::Pages;
         }
     }
 
