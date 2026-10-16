@@ -675,8 +675,11 @@ impl NovoApp {
             "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
                 if self.is_open() =>
             {
-                self.switch_workspace(Workspace::Cabinet);
-                self.cabinet.table = false;
+                // Simulate stays in the 3D view when it is the one open.
+                if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
+                    self.switch_workspace(Workspace::Cabinet);
+                    self.cabinet.table = false;
+                }
                 self.cabinet.heat.command(id);
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {

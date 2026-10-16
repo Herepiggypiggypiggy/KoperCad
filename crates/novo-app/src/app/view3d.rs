@@ -20,8 +20,10 @@ use novo_view3d::{Layers, Look, MeshLibrary, Scene};
 use super::cabinet_inspector;
 
 use super::NovoApp;
+use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
 use super::view3d_controls::{self, Controls};
+use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
 use super::view3d_stats::{Build, Stats};
 
@@ -135,6 +137,7 @@ impl NovoApp {
             return;
         };
         let revision = project.revision();
+        let ambient = self.sizing.request().ambient_max;
         let mode = &mut self.view3d;
         let layers = mode.controls.layers;
         let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
@@ -199,6 +202,8 @@ impl NovoApp {
             mode.synced = (cabinet_rev, mode.view.state.selection.clone());
         }
 
+        // A run started here advances here, not only in the Cabinet.
+        self.cabinet.heat.poll(ui.ctx());
         let solution = self.cabinet.heat.solution();
         if let Some(sol) = &solution {
             heat_controls(ui, &mut mode.heat, sol);
@@ -275,6 +280,14 @@ impl NovoApp {
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
         view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        let stale = run_heat(
+            &mut self.cabinet.heat,
+            project,
+            id,
+            stored.as_ref(),
+            ambient,
+        );
+        view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
         mode.stats.frame(ui.ctx(), view_rect, &mut mode.view);
         mode.controls.clamp_door(limit);
         let target = mode.controls.door_target(limit);
@@ -418,6 +431,45 @@ impl NovoApp {
             }
         }
     }
+}
+
+/// Starts the run Simulate asked for (here or by command) and says whether
+/// the shown result belongs to another layout than the plate now has.
+fn run_heat(
+    heat: &mut HeatState,
+    project: &Project,
+    id: StructureId,
+    layout: Option<&novo_layout::state::CabinetLayout>,
+    ambient: f64,
+) -> bool {
+    let wants_run = heat.take_request();
+    if !wants_run && heat.solution().is_none() {
+        return false;
+    }
+    let Some(layout) = layout else {
+        if wants_run {
+            heat.fail("Open an enclosure with a mounting plate to simulate".into());
+        }
+        return false;
+    };
+    let tag_of = |id: u64| {
+        project
+            .get::<Device>(DeviceId::from(id))
+            .and_then(|d| d.tag.device_code().map(str::to_owned))
+            .unwrap_or_default()
+    };
+    let input = heat::Input {
+        plate: (layout.plate.width, layout.plate.height),
+        ambient,
+        items: heat::items_of(project, layout, &tag_of),
+        solution: None,
+        kept: None,
+    };
+    if wants_run {
+        heat::start_run(heat, project, id, &input);
+    }
+    heat.solution()
+        .is_some_and(|s| s.layout_key != heat::layout_key(&input))
 }
 
 /// The Heat strip above the 3D view: slice, shell and airflow of the last

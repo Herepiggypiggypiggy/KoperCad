@@ -930,35 +930,7 @@ impl NovoApp {
                     self.cabinet.fitted = location.clone();
                 }
                 let heat_input = self.cabinet.heat.on.then(|| {
-                    let items = shown
-                        .placements
-                        .iter()
-                        .map(|p| {
-                            let f = p.footprint();
-                            let loss =
-                                project
-                                    .get::<Device>(DeviceId::from(p.id))
-                                    .map_or(0.0, |d| {
-                                        let s =
-                                            novo_layout::sizing_model::sizing_device(project, d);
-                                        s.power_loss * s.load_factor
-                                    });
-                            super::heat::Item {
-                                id: p.id,
-                                tag: tag_of(p.id),
-                                x: f.x,
-                                y: f.y,
-                                w: f.w,
-                                h: f.h,
-                                loss_w: loss,
-                                loss_known: project
-                                    .get::<Device>(DeviceId::from(p.id))
-                                    .is_some_and(|d| {
-                                        novo_thermal::bridge::device_loss_w(project, d).is_some()
-                                    }),
-                            }
-                        })
-                        .collect();
+                    let items = super::heat::items_of(project, &shown, &tag_of);
                     super::heat::Input {
                         plate: (shown.plate.width, shown.plate.height),
                         ambient: self.sizing.request().ambient_max,
