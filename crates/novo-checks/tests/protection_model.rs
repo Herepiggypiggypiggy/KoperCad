@@ -134,7 +134,7 @@ fn a_limiter_ahead_raises_the_rating_only_when_its_table_and_the_withstand_are_s
         ms.f1,
         &[
             ("rated_current_a", Value::Float(25.0)),
-            ("sccr_ka", Value::Float(100.0)),
+            ("sccr_ka", Value::Float(200.0)),
         ],
     );
     set(
@@ -158,7 +158,7 @@ fn a_limiter_ahead_raises_the_rating_only_when_its_table_and_the_withstand_are_s
         ms.f1,
         &[(
             LET_THROUGH,
-            Value::Text("10000:5000:5e4; 100000:20000:4e5".into()),
+            Value::Text("1000:800:5e3; 100000:20000:4e5".into()),
         )],
     );
     assert_eq!(read(&doc).panel_sccr_ka, 5.0);
@@ -176,6 +176,27 @@ fn a_limiter_ahead_raises_the_rating_only_when_its_table_and_the_withstand_are_s
     assert_eq!(relay.source, Source::CurrentLimiting);
     assert_eq!(relay.effective_ka, 100.0);
     assert_eq!(r.panel_sccr_ka, 100.0);
+    // The credit stops at the table's last point (100 kA) though the fuse
+    // is rated 200 kA: nobody gave numbers beyond it.
+    assert_eq!(relay.effective_ka, 100.0);
+    // A table that starts above the relay's 5 kA gives no credit.
+    set(
+        &mut doc,
+        ms.f1,
+        &[(
+            LET_THROUGH,
+            Value::Text("10000:5000:5e4; 100000:20000:4e5".into()),
+        )],
+    );
+    assert_eq!(read(&doc).panel_sccr_ka, 5.0);
+    set(
+        &mut doc,
+        ms.f1,
+        &[(
+            LET_THROUGH,
+            Value::Text("1000:800:5e3; 100000:20000:4e5".into()),
+        )],
+    );
     // A relay that withstands less than the let-through gets no credit.
     set(&mut doc, ms.f2, &[(WITHSTAND_PEAK_KA, Value::Float(2.0))]);
     assert_eq!(read(&doc).panel_sccr_ka, 5.0);
@@ -185,4 +206,31 @@ fn a_limiter_ahead_raises_the_rating_only_when_its_table_and_the_withstand_are_s
     assert!(parse_let_through("1000:800").is_err());
     assert!(parse_let_through("6000:1:1; 1000:1:1").is_err());
     assert!(parse_let_through("a:b:c").is_err());
+}
+
+#[test]
+fn unreadable_credit_data_is_listed_in_the_assumptions() {
+    use novo_checks::protection::model::{LET_THROUGH, WITHSTAND_PEAK_KA};
+    let mut doc = Document::default();
+    let ms = motor_starter(&mut doc).unwrap();
+    set(
+        &mut doc,
+        ms.f2,
+        &[
+            ("rated_current_a", Value::Float(6.3)),
+            (LET_THROUGH, Value::Text("1000:800".into())),
+            (WITHSTAND_PEAK_KA, Value::Float(5.0)),
+        ],
+    );
+    let project = doc.project();
+    let study = Study::read(project, &project.netlist());
+    let a = &study.devices[0].assumed;
+    assert!(
+        a.iter().any(|x| x.starts_with("let_through not read")),
+        "{a:?}"
+    );
+    assert!(
+        a.iter().any(|x| x.contains("withstand needs both")),
+        "{a:?}"
+    );
 }

@@ -22,7 +22,7 @@
 //! | `sccr_ka` | short-circuit current rating marked on the device, kA |
 //! | `fuse_class` | UL fuse class (`J`, `CC`, `RK5`…), for SCCR combinations |
 //! | `current_limiting` | breaker is a listed current-limiting type |
-//! | `let_through` | limiter's let-through table for the SCCR credit: `rms A : peak A : A²s` points separated by `;` (maker data) |
+//! | `let_through` | limiter's let-through table for the SCCR credit: `rms A : peak A : A²s` points separated by `;` (maker data). The table must start at or below the rating of the device it protects and the credit stops at its last point |
 //! | `withstand_peak_ka`, `withstand_i2t` | what the device withstands (peak kA, A²s), so a limiter ahead can raise its SCCR |
 //!
 //! The last three feed the limiter credit of the panel SCCR. They are the
@@ -310,6 +310,25 @@ fn read_device(project: &Project, id: DeviceId, kind: DeviceType) -> Option<Proj
     if icu_ka.is_none() {
         device.icu_a = f64::INFINITY;
     }
+    let let_through = txt(LET_THROUGH).and_then(|t| match parse_let_through(&t) {
+        Ok(table) => Some(table),
+        Err(e) => {
+            assumed.push(format!("let_through not read: {e}"));
+            None
+        }
+    });
+    let (peak, i2t) = (num(WITHSTAND_PEAK_KA), num(WITHSTAND_I2T));
+    if peak.is_some() != i2t.is_some() {
+        assumed
+            .push("withstand needs both withstand_peak_ka and withstand_i2t, not used".to_string());
+    }
+    let withstand = peak
+        .zip(i2t)
+        .filter(|(p, e)| *p > 0.0 && *e > 0.0)
+        .map(|(p, e)| Withstand {
+            peak_a: p * 1000.0,
+            i2t: e,
+        });
     Some(ProjectDevice {
         id,
         tag,
@@ -324,14 +343,8 @@ fn read_device(project: &Project, id: DeviceId, kind: DeviceType) -> Option<Proj
             }
             _ => Class::Breaker,
         },
-        let_through: txt(LET_THROUGH).and_then(|t| parse_let_through(&t).ok()),
-        withstand: num(WITHSTAND_PEAK_KA)
-            .zip(num(WITHSTAND_I2T))
-            .filter(|(p, e)| *p > 0.0 && *e > 0.0)
-            .map(|(p, e)| Withstand {
-                peak_a: p * 1000.0,
-                i2t: e,
-            }),
+        let_through,
+        withstand,
         downstream: Vec::new(),
         passes: Vec::new(),
     })
