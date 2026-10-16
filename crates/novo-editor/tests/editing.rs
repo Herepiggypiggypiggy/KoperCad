@@ -2997,3 +2997,33 @@ fn joining_a_wire_never_glides_along_it_off_the_grid() {
         p(52.4, 88.0)
     );
 }
+
+#[test]
+fn a_placed_earth_feed_is_pe_not_the_next_line() {
+    let (mut doc, page, _) = setup();
+    let lib = novo_symbols::Library::builtin().unwrap();
+    let place = |doc: &mut Document, key: &str, x: f64| {
+        let sym = lib.get(key).unwrap().clone();
+        doc.transact("feed", |tx| {
+            edit::place(
+                tx,
+                page,
+                &sym,
+                novo_core::Placement::at(p(x, 0.0)),
+                &PlaceOptions::new(),
+            )
+        })
+        .unwrap()
+        .0
+    };
+    place(&mut doc, potential::FEED_SYMBOL, 0.0);
+    let earth = place(&mut doc, potential::FEED_PE_SYMBOL, 40.0);
+    let SymbolRole::PotentialFeed { potential } = doc.project().symbol(earth).unwrap().role else {
+        panic!("a feed")
+    };
+    let pot = doc.project().potential(potential).unwrap();
+    assert_eq!(pot.name, "PE");
+    assert_eq!(pot.kind, PotentialKind::ProtectiveEarth);
+    // The next line feed is still L2.
+    assert_eq!(edit::next_feed_name(doc.project(), page), "L2");
+}

@@ -149,6 +149,10 @@ pub fn place(
         SymbolClass::PotentialFeed => {
             let potential = match options.potential {
                 Some(p) if tx.project().potential(p).is_some() => p,
+                // The earth feed is PE, not the next line conductor.
+                _ if symbol.id.ends_with("/potential_feed_pe") => {
+                    find_or_add_potential(tx, "PE", PotentialKind::ProtectiveEarth, None)?
+                }
                 _ => {
                     let name = next_feed_name(tx.project(), page);
                     find_or_add_potential(tx, &name, PotentialKind::Line, None)?
