@@ -465,7 +465,10 @@ fn show_run(ui: &mut egui::Ui, run: &Run) {
 
 /// Speed (green) and line current (accent) against time.
 fn chart(ui: &mut egui::Ui, r: &StartResult, m: &Motor) {
-    let size = egui::vec2(ui.available_width().max(300.0), 220.0);
+    // As tall as the dialog allows (less the notes under it), so the time
+    // axis is not cut off on a small screen.
+    let height = (ui.available_height() - 70.0).clamp(130.0, 220.0);
+    let size = egui::vec2(ui.available_width().max(300.0), height);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
     let p = ui.painter_at(rect);
     p.rect_filled(rect, 4.0, crate::theme::ui_palette().panel);

@@ -698,6 +698,16 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_position",
+        &["positie tonen in 3d"],
+        &["positie", "coordinaten", "afstand"],
+    ),
+    nl(
+        "view.3d_place",
+        &["apparaat plaatsen in 3d"],
+        &["plaatsen", "apparaat", "component"],
+    ),
+    nl(
         "view.3d_dimensions",
         &["maatvoering tonen in 3d"],
         &["maten", "maatvoering", "afstand", "afstanden"],
