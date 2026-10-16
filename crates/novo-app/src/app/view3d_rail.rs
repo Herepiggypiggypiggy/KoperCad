@@ -142,8 +142,7 @@ pub(super) fn problems(
 /// value was committed, or a turn.
 pub(super) fn card(
     ctx: &egui::Context,
-    view_rect: egui::Rect,
-    bottom_room: f32,
+    (view_rect, bottom_room): (egui::Rect, f32),
     state: &mut RailsState,
     project: &novo_core::Project,
     layout: &CabinetLayout,

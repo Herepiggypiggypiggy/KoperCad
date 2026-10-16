@@ -506,12 +506,14 @@ impl NovoApp {
             };
             rail_ask = view3d_rail::card(
                 ui.ctx(),
-                view_rect,
-                if self.view3d.stats.shown {
-                    super::view3d_stats::ROOM
-                } else {
-                    0.0
-                },
+                (
+                    view_rect,
+                    if self.view3d.stats.shown {
+                        super::view3d_stats::ROOM
+                    } else {
+                        0.0
+                    },
+                ),
                 &mut self.cabinet.rails,
                 project,
                 &stored,
