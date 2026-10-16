@@ -9,6 +9,9 @@ use crate::result::Fidelity;
 pub struct LevelTuning {
     /// Overrides the cell count of the level (tests use small grids).
     pub target_cells: Option<usize>,
+    /// Mesh rules for the level (`None` = the defaults of the level's
+    /// preset); the cell count above still wins.
+    pub mesh: Option<crate::mesh::MeshSettings>,
     /// Steadiness: the rate of change of the stored heat over the last
     /// window, relative to the heating, must fall below this.
     pub steady_tol: f64,
@@ -71,6 +74,7 @@ fn level(
 ) -> LevelTuning {
     LevelTuning {
         target_cells: Some(cells),
+        mesh: None,
         steady_tol,
         max_time_s,
         max_steps,

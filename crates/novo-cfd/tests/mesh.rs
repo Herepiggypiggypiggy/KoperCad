@@ -116,7 +116,9 @@ fn volumes_are_conserved_and_match_the_geometry() {
 
 #[test]
 fn fractions_are_in_range_and_shares_add_up() {
-    let mesh = Mesh::build(&scenario(), &settings(50_000)).unwrap();
+    // A uniform grid does not line up with the bodies: cut cells.
+    let (regs, mats) = regions(&scenario());
+    let mesh = Mesh::classify(Grid3::uniform([40, 60, 20], [796.0, 1196.0, 296.0]), &regs, mats);
     assert!(mesh.fluid_fraction.iter().all(|f| (0.0..=1.0).contains(f)));
     assert!(!mesh.mixed.is_empty());
     for c in &mesh.mixed {
