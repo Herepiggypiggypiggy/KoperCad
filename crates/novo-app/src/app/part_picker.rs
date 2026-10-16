@@ -164,6 +164,16 @@ pub(super) fn cable_candidates(catalog: &Catalog, query: &str) -> Vec<Candidate>
         .collect()
 }
 
+/// Green only for a strong match that rests on at least two checks: one
+/// check alone (the letter code) cannot call a part strong.
+fn match_color(fit: &Fit) -> egui::Color32 {
+    match fit.percent {
+        80.. if fit.checks >= 2 => novo_theme::tokens::SUCCESS,
+        55.. => novo_theme::tokens::WARNING,
+        _ => novo_theme::tokens::ERROR,
+    }
+}
+
 fn grade_color(grade: Grade) -> egui::Color32 {
     match grade {
         Grade::Good => novo_theme::tokens::SUCCESS,
@@ -199,13 +209,8 @@ pub(super) fn picker_ui(
                 ui.horizontal(|ui| {
                     if let Some(fit) = &c.fit {
                         ui.small(
-                            egui::RichText::new(format!("Match {}%", fit.percent)).color(match fit
-                                .percent
-                            {
-                                80.. => novo_theme::tokens::SUCCESS,
-                                55..=79 => novo_theme::tokens::WARNING,
-                                _ => novo_theme::tokens::ERROR,
-                            }),
+                            egui::RichText::new(format!("Match {}%", fit.percent))
+                                .color(match_color(fit)),
                         )
                         .on_hover_text(format!(
                             "How well the part suits this device, from {} check(s): {}",
@@ -319,6 +324,19 @@ mod tests {
             rows.iter().all(|c| c.fit.is_some()),
             "every row has a match"
         );
+    }
+
+    #[test]
+    fn one_check_alone_is_never_a_green_match() {
+        let fit = |percent, checks| Fit {
+            percent,
+            checks,
+            reasons: Vec::new(),
+        };
+        assert_eq!(match_color(&fit(100, 2)), novo_theme::tokens::SUCCESS);
+        assert_eq!(match_color(&fit(100, 1)), novo_theme::tokens::WARNING);
+        assert_eq!(match_color(&fit(60, 3)), novo_theme::tokens::WARNING);
+        assert_eq!(match_color(&fit(20, 3)), novo_theme::tokens::ERROR);
     }
 
     #[test]
