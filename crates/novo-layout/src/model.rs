@@ -19,6 +19,8 @@ use crate::plan::{Candidate, Plan, PlannedDuct};
 use crate::plate_drawing::{PlateDocument, documents};
 use crate::rules::Class;
 use crate::state::CabinetLayout;
+use crate::surfaces::{MAIN_PLATE, SURFACE_PROPERTY, SurfaceKind};
+use crate::swing::DoorDevice;
 use crate::{DEFAULT_DUCT_MM, Duct, Margins, Placement, Plate, Rail, Size};
 
 /// Property of a duct: what its wiring carries (`power`, `signal`, `mixed`).
@@ -155,7 +157,51 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
             Some((p.id, device_depth(project, device)?))
         })
         .collect();
+    let door_ids = place_off_plate(project, id, &mut layout);
+    layout.door_devices = layout
+        .placements
+        .iter()
+        .filter(|p| door_ids.contains(&p.id))
+        .map(|p| DoorDevice {
+            id: p.id,
+            rect: p.footprint(),
+            depth: layout.depths.get(&p.id).copied().unwrap_or(0.0),
+            mesh: None,
+        })
+        .collect();
     Some(layout)
+}
+
+/// Fills `layout.off_plate` from the `surface` property of the stored
+/// placements and returns the ids of those on the door. A name that is not a
+/// surface name, or a door where the enclosure has none, is left on the
+/// plate: the Cabinet's Surface picker reports those names.
+fn place_off_plate(project: &Project, id: StructureId, layout: &mut CabinetLayout) -> Vec<u64> {
+    let mut door_ids = Vec::new();
+    for p in project
+        .all::<CabinetPlacement>()
+        .filter(|p| p.structure == id)
+    {
+        let Some(Value::Text(name)) = p.properties.get(SURFACE_PROPERTY) else {
+            continue;
+        };
+        let name = name.trim().to_ascii_lowercase();
+        let Some(kind) = SurfaceKind::from_name(&name) else {
+            continue;
+        };
+        if kind == SurfaceKind::Plate && name == MAIN_PLATE {
+            continue;
+        }
+        if kind == SurfaceKind::Door {
+            if layout.enclosure.is_some_and(|e| e.door.is_some()) {
+                door_ids.push(p.device.raw());
+                layout.off_plate.insert(p.device.raw(), name);
+            }
+            continue;
+        }
+        layout.off_plate.insert(p.device.raw(), name);
+    }
+    door_ids
 }
 
 /// The wiring ducts of an enclosure's plate with the wiring they serve (the
