@@ -291,6 +291,9 @@ const TOP_BAR: f32 = 42.0;
 const OUTLINE_WIDTH: f32 = 248.0;
 /// Windows at least this wide pin the outline unless the user chose.
 const PIN_OUTLINE_FROM: f32 = 1700.0;
+/// Commissioning is a working column beside the sheet, so it docks from
+/// here unless the user chose otherwise; a flyout would hide the drawing.
+const PIN_COMMISSIONING_FROM: f32 = 1100.0;
 
 /// An action that replaces or closes the open project. Nothing asks first:
 /// the backend keeps the work (docs/DESIGN.md: no save prompts).
@@ -362,6 +365,8 @@ pub struct NovoApp {
     /// Free room between the top bar's left and right groups last frame;
     /// below zero they overlap. Read by the width test.
     top_bar_gap: f32,
+    /// Width the right side of the top bar took last frame.
+    top_bar_right: f32,
     /// Width the menu names took last frame (`menu_bar`).
     menu_bar_width: f32,
     /// Lessons: the catalog, the running lesson and the person's progress.
@@ -435,6 +440,7 @@ impl NovoApp {
             ol: outline::OutlineState::new(),
             window_width: 0.0,
             top_bar_gap: 0.0,
+            top_bar_right: 0.0,
             menu_bar_width: 380.0,
             learn: learn::LearnState::new(),
         };
@@ -1228,9 +1234,11 @@ impl NovoApp {
     /// Whether the outline takes space beside the canvas: the user's
     /// choice, otherwise only on wide windows.
     fn outline_pinned(&self) -> bool {
-        self.settings
-            .outline_pinned
-            .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
+        self.settings.outline_pinned.unwrap_or(
+            self.window_width >= PIN_OUTLINE_FROM
+                || (self.workspace == workspace::Workspace::Commissioning
+                    && self.window_width >= PIN_COMMISSIONING_FROM),
+        )
     }
 
     /// Shows `page` on the canvas.
@@ -1289,7 +1297,22 @@ impl NovoApp {
             }
             ui.separator();
             self.outline_toggle_button(ui);
-            self.breadcrumb(ui, fit.name_chars);
+            // The breadcrumb gets what the right side left free last frame
+            // and cuts its text to it, so a long page name or a row of
+            // badges never pushes it under the Search button.
+            let room =
+                (ui.available_width() - self.top_bar_right - ui.spacing().item_spacing.x).max(0.0);
+            let breadcrumb =
+                egui::Rect::from_min_size(ui.cursor().min, egui::vec2(room, ui.available_height()));
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(breadcrumb)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                |ui| {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    self.breadcrumb(ui, fit.name_chars);
+                },
+            );
             let left_end = ui.min_rect().right();
 
             let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1321,6 +1344,7 @@ impl NovoApp {
                 }
             });
             self.top_bar_gap = right.response.rect.left() - left_end;
+            self.top_bar_right = right.response.rect.width();
         });
     }
 
@@ -1339,10 +1363,15 @@ impl NovoApp {
         if !self.outline_flyout_available() {
             return;
         }
-        let toggle = ui.add(egui::Button::selectable(
-            self.outline_open,
-            self.outline_mode.label(),
-        ));
+        // Commissioning is the longest name and the panel names itself in
+        // its header: the button is its icon, the name in the tooltip.
+        let text = match self.outline_mode {
+            OutlineMode::Commissioning => self.outline_mode.icon(),
+            mode => mode.label(),
+        };
+        let toggle = ui
+            .add(egui::Button::selectable(self.outline_open, text))
+            .on_hover_text(self.outline_mode.label());
         if toggle.clicked() {
             self.outline_open ^= true;
             // The keys stay with the drawing after the click.
