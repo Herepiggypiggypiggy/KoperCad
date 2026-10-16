@@ -26,6 +26,8 @@ mod example;
 mod faults;
 mod heat;
 mod heat_compare;
+#[cfg(test)]
+mod heat_compare_tests;
 mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
