@@ -17,6 +17,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_surfaces;
 mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
@@ -30,6 +31,7 @@ mod checks;
 mod clipboard;
 mod commissioning;
 mod compare;
+mod designer;
 mod device_renumber;
 mod dock;
 mod drawers;
@@ -80,6 +82,7 @@ mod macro_browser_tests;
 mod macro_company_tests;
 mod macro_thumb;
 mod menu_bar;
+mod net_trace;
 mod numbering;
 mod onboarding;
 mod outline;
@@ -106,6 +109,8 @@ mod reports;
 mod reports_view;
 mod revisions;
 mod safety;
+mod safety_functions;
+mod safety_report;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -156,6 +161,8 @@ mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
 #[cfg(test)]
+mod cabinet_surfaces_tests;
+#[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
@@ -200,6 +207,8 @@ mod shortcuts_sheet_tests;
 #[cfg(test)]
 mod tips_tests;
 #[cfg(test)]
+mod ui_gaps_tests;
+#[cfg(test)]
 mod variants_tests;
 #[cfg(test)]
 mod whats_new_tests;
@@ -220,7 +229,7 @@ use pages::PageView;
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
-use crate::{APP_MAKER, APP_NAME, PROJECT_EXTENSION};
+use crate::{APP_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::primary_button;
 pub(crate) use revisions::index_rule;
 use workbench::Workbench;
@@ -984,6 +993,7 @@ impl NovoApp {
                     || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
                     || *id == "cabinet.door"
+                    || *id == "cabinet.surface"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
@@ -1012,7 +1022,7 @@ impl NovoApp {
                 .show(ui, |ui| self.reports_list(ui));
         } else if pinned && self.is_open() {
             egui::Panel::left("outline")
-                .exact_size(OUTLINE_WIDTH)
+                .exact_size(self.outline_width())
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
@@ -1086,6 +1096,7 @@ impl NovoApp {
         self.whats_new_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
+        self.designer_window(&ctx);
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);
@@ -1110,6 +1121,7 @@ impl NovoApp {
         self.safety_window(&ctx);
         self.languages_window(&ctx);
         self.numbering_window(&ctx);
+        self.net_trace_window(&ctx);
         self.terminal_edit_windows(&ctx);
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
@@ -1217,9 +1229,22 @@ impl NovoApp {
     /// Whether the outline takes space beside the canvas: the user's
     /// choice, otherwise only on wide windows.
     fn outline_pinned(&self) -> bool {
+        if self.commissioning_pins_panel() {
+            return true;
+        }
         self.settings
             .outline_pinned
             .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
+    }
+
+    /// The outline's width: wider in the Commissioning workspace at a tablet
+    /// window, where the touch targets need the room.
+    fn outline_width(&self) -> f32 {
+        if self.commissioning_tablet() {
+            commissioning::TABLET_PANEL_WIDTH
+        } else {
+            OUTLINE_WIDTH
+        }
     }
 
     /// Shows `page` on the canvas.
@@ -1301,10 +1326,13 @@ impl NovoApp {
                 if !fit.search.is_empty() && fit.search_width > 0.0 {
                     search = search.shortcut_text(shortcut.clone());
                 }
-                let search = ui
-                    .add(search)
-                    .on_hover_text(format!("Search or run ({shortcut})"));
-                self.anchor_response("palette.button", &search, "Search or run");
+                let search = ui.add(search);
+                let search = self.tip(
+                    search,
+                    "palette.button",
+                    "Search or run",
+                    "view.command_palette",
+                );
                 if search.clicked() {
                     picked.push(Action::CommandPalette);
                 }
@@ -1579,7 +1607,7 @@ impl NovoApp {
                 // The frame's margins and stroke come on top of the content.
                 let chrome = frame.total_margin().sum();
                 frame.show(ui, |ui| {
-                    ui.set_width(OUTLINE_WIDTH - chrome.x);
+                    ui.set_width(self.outline_width() - chrome.x);
                     ui.set_height(height - chrome.y);
                     self.outline(ui, picked);
                 });
@@ -1829,13 +1857,16 @@ impl NovoApp {
             return;
         }
         let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
-            ui.set_width(320.0);
-            ui.heading(APP_NAME);
-            ui.label(format!("by {}", APP_MAKER));
-            ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-            ui.label(format!("Model API v{}", novo_core::MODEL_VERSION));
-            ui.add_space(8.0);
-            ui.button("Close").clicked()
+            ui.set_width(360.0);
+            ui.vertical_centered(|ui| {
+                novo_theme::brand::lockup(ui, 56.0);
+                ui.add_space(novo_theme::space::L);
+                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                ui.weak(format!("Model API v{}", novo_core::MODEL_VERSION));
+                ui.add_space(novo_theme::space::L);
+                ui.button("Close").clicked()
+            })
+            .inner
         });
         if modal.inner || modal.should_close() {
             self.show_about = false;
