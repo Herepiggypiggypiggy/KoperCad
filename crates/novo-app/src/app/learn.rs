@@ -55,6 +55,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "dock.lines",
     "dock.hint",
     "dock.proposals",
+    "cabinet.place-all",
 ];
 
 /// What the shell keeps about learning.

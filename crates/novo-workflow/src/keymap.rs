@@ -394,6 +394,7 @@ impl Keymap {
         bind(Chord::ctrl_shift(l('f')), Anywhere, "view.focus");
         bind(Chord::plain(F(11)), Anywhere, "view.full_screen");
         bind(Chord::ctrl(l('t')), Anywhere, "view.cabinet_table");
+        bind(Chord::ctrl_shift(l('p')), Anywhere, "cabinet.place-all");
         bind(Chord::shift(l('h')), Canvas, "heat.toggle");
         bind(Chord::plain(Char('?')), Canvas, "view.shortcuts");
         Keymap { bindings }
