@@ -13,6 +13,8 @@ pub enum CfdError {
     Scenario(#[from] ThermalError),
     #[error("{0:?} is not available in this solver")]
     Unsupported(Fidelity),
+    #[error("the simulation could not be set up: {0}")]
+    Setup(String),
     #[error("cancelled")]
     Cancelled,
     #[error("the solution diverged at iteration {0}")]

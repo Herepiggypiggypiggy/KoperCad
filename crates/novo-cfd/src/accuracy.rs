@@ -10,6 +10,7 @@ pub fn flow_core_statement() -> AccuracyStatement {
         error,
     };
     AccuracyStatement {
+        validated: false,
         headline: "Laminar natural convection matches published benchmarks within 1% in heat \
                    transfer and about 3% in peak velocity; not yet validated for vents, fans, \
                    turbulence or radiation."

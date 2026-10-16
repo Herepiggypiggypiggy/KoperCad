@@ -160,6 +160,11 @@ pub struct BenchmarkError {
 /// What the app may claim about a result (filled from the validation suite).
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct AccuracyStatement {
+    /// True only when the validation suite supports quoting the enclosure
+    /// temperatures of this result (a cabinet against IEC 60890 and the 2D
+    /// engine, not only the benchmarks of the flow core). The app shows
+    /// "not validated" otherwise.
+    pub validated: bool,
     pub headline: String,
     pub benchmarks: Vec<BenchmarkError>,
     /// What the model leaves out.

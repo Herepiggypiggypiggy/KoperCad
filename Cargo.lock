@@ -1945,6 +1945,7 @@ dependencies = [
 name = "novo-cfd"
 version = "0.1.0"
 dependencies = [
+ "novo-cfd",
  "novo-layout",
  "novo-thermal",
  "rayon",

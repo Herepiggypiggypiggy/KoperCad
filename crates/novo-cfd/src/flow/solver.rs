@@ -83,6 +83,10 @@ pub struct FlowConfig {
     pub rho: f64,
     /// Solids in the grid (conjugate heat transfer). `None` = all air.
     pub medium: Option<Medium>,
+    /// Relative residual the pressure projection solves to each step. The
+    /// default is tight (benchmarks); a march to a steady state does not need
+    /// the last digits and may loosen it.
+    pub pressure_tol: f64,
 }
 
 impl FlowConfig {
@@ -102,6 +106,7 @@ impl FlowConfig {
             t_ref: None,
             rho: 1.18,
             medium: None,
+            pressure_tol: 1e-9,
         }
     }
 }
@@ -598,7 +603,9 @@ impl FlowSolver {
                 }
             }
         });
-        let iters = self.pressure.solve(&b, &mut self.p, 1e-9, 200);
+        let iters = self
+            .pressure
+            .solve(&b, &mut self.p, self.cfg.pressure_tol, 200);
         let (p, drag) = (&self.p, &self.drag_rate);
         for a in 0..3 {
             let d = m.dims(a);
