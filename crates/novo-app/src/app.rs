@@ -120,6 +120,9 @@ mod revisions;
 mod safety;
 mod safety_functions;
 mod safety_report;
+mod selection_sheet;
+#[cfg(test)]
+mod selection_sheet_tests;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -1148,7 +1151,21 @@ impl NovoApp {
         }
         self.sync_commissioning_workspace();
         self.drawer(ui);
-        let canvas_rect = egui::CentralPanel::no_frame()
+        // The canvases paint their own ground; the Reports tables and the
+        // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
+        let pal = novo_theme::Palette::of_ctx(&ctx);
+        let ground = if reports {
+            Some(pal.sunken)
+        } else if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
+            Some(pal.panel)
+        } else {
+            None
+        };
+        let central = match ground {
+            Some(fill) => egui::CentralPanel::no_frame().frame(egui::Frame::new().fill(fill)),
+            None => egui::CentralPanel::no_frame(),
+        };
+        let canvas_rect = central
             .show(ui, |ui| {
                 if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
@@ -1224,6 +1241,7 @@ impl NovoApp {
         self.project_settings_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);
+        self.selection_sheet_window(&ctx);
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);

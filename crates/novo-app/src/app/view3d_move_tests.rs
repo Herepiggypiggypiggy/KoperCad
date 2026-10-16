@@ -506,7 +506,7 @@ fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
         let rect = |id: egui::Id| ctx.memory(|m| m.area_rect(id));
         let toolbar = rect(super::panel::id("view3d_toolbar")).expect("toolbar");
         let inspector = rect(super::panel::id("cabinet_inspector")).expect("inspector");
-        let heat = rect(egui::Id::new("view3d_heat_panel")).expect("heat panel");
+        let heat = rect(super::panel::id("view3d_heat_panel")).expect("heat panel");
         let stats = rect(super::panel::id("view3d_stats")).expect("stats");
         // The heat key lives in the Heat strip, not in a floating area that could cover these.
         assert!(rect(egui::Id::new("heat_legend")).is_none(), "{w} x {h}");
@@ -692,7 +692,7 @@ fn the_rail_card_starts_clear_of_the_other_3d_panels() {
         let rect = |id: egui::Id| ctx.memory(|m| m.area_rect(id));
         let card = rect(super::panel::id("view3d_rail")).expect("rail card");
         let toolbar = rect(super::panel::id("view3d_toolbar")).expect("toolbar");
-        let heat = rect(egui::Id::new("view3d_heat_panel")).expect("heat panel");
+        let heat = rect(super::panel::id("view3d_heat_panel")).expect("heat panel");
         let stats = rect(super::panel::id("view3d_stats")).expect("stats");
         let cube = egui::Rect::from_min_size(
             egui::pos2(heat.right() + 12.0 - 12.0 - 88.0, heat.top() - 8.0 - 88.0),

@@ -247,6 +247,18 @@ pub(super) fn assign_device_command(
     assign_part(project, &[device], part, AssignMode::Replace)
 }
 
+/// The command that gives every device of `devices` the catalog part `key`,
+/// as one undo step. `None` when the part is unknown or nothing changes.
+pub(super) fn assign_devices_command(
+    project: &Project,
+    catalog: &Catalog,
+    devices: &[DeviceId],
+    key: &PartKey,
+) -> Option<novo_core::Command> {
+    let part = catalog.get(key)?;
+    assign_part(project, devices, part, AssignMode::Replace)
+}
+
 /// The devices a selection draws: devices themselves and the devices of
 /// selected symbols, each once.
 pub(super) fn selected_devices(project: &Project, selection: &[AnyId]) -> Vec<DeviceId> {

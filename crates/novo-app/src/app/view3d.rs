@@ -619,47 +619,47 @@ impl NovoApp {
         if mode.probe.on
             && let Some(sol) = &solution
         {
+            let place = Place {
+                plate_x: sol.plate[0],
+                plate_y: sol.plate[1],
+                frame: scene.frame,
+            };
+            let plane = mode.heat.slice.then(|| {
+                let a = mode.heat.axis;
+                (
+                    a,
+                    heat_3d::slice_offset(&sol.snapshot, a, mode.heat.slice_at),
+                )
+            });
+            // A point belongs to the result it was read from.
+            mode.probe.bind(sol.id);
             if let Some(click) = &out.clicked {
-                let place = Place {
-                    plate_x: sol.plate[0],
-                    plate_y: sol.plate[1],
-                    frame: scene.frame,
-                };
-                let plane = mode.heat.slice.then(|| {
-                    let a = mode.heat.axis;
-                    (
-                        a,
-                        heat_3d::slice_offset(&sol.snapshot, a, mode.heat.slice_at),
-                    )
-                });
                 mode.probe.at = heat_probe::locate(&sol.snapshot, place, &click.ray, plane);
             }
             if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
                 mode.probe.at = None;
             }
-            if let Some(at) = mode.probe.at {
-                let reading = heat_probe::read(&sol.snapshot, sol.ambient, at);
-                egui::Area::new(egui::Id::new("heat_probe_readout"))
-                    .order(egui::Order::Foreground)
-                    .pivot(egui::Align2::LEFT_BOTTOM)
-                    .fixed_pos(out.rect.left_bottom() + egui::vec2(12.0, -12.0))
-                    .show(ui.ctx(), |ui| {
-                        egui::Frame::popup(ui.style()).show(ui, |ui| {
-                            ui.label(reading.text());
-                        });
-                    });
-            } else {
-                egui::Area::new(egui::Id::new("heat_probe_readout"))
-                    .order(egui::Order::Foreground)
-                    .pivot(egui::Align2::LEFT_BOTTOM)
-                    .fixed_pos(out.rect.left_bottom() + egui::vec2(12.0, -12.0))
-                    .show(ui.ctx(), |ui| {
-                        egui::Frame::popup(ui.style()).show(ui, |ui| {
-                            ui.label("Probe: click the air to read it");
-                        });
-                    });
+            // Without a clicked point the strip shows what is under the pointer.
+            let (at, pointed) = match mode.probe.at {
+                Some(at) => (Some(at), false),
+                None => (
+                    out.hover_ray
+                        .and_then(|r| heat_probe::locate(&sol.snapshot, place, &r, plane)),
+                    true,
+                ),
+            };
+            let text = heat_probe::strip_text(
+                at.map(|at| heat_probe::read(&sol.snapshot, sol.ambient, at)),
+                pointed,
+            );
+            if mode.probe.set_text(text) {
+                ui.ctx().request_repaint();
             }
-            ui.ctx().request_repaint();
+            if out.hover_ray.is_some() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::Crosshair);
+            }
+        } else if !mode.probe.text.is_empty() {
+            mode.probe.text.clear();
         }
         let probing = mode.probe.on && solution.is_some();
         if let Some(click) = out.clicked.as_ref().filter(|_| !placing && !probing) {
@@ -966,6 +966,9 @@ fn heat_controls(
         ui.checkbox(&mut probe.on, "Probe").on_hover_text(
             "Click the air to read its temperature and speed there (Esc clears the point)",
         );
+        if probe.on && !probe.text.is_empty() {
+            ui.label(egui::RichText::new(&probe.text).small());
+        }
         heat_legend::strip(ui, h, range, top_speed);
         jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
     });
