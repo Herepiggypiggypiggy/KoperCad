@@ -1,0 +1,113 @@
+# Cabinet track, lesson 2. Starts from the end of cabinet-layout (everything on one rail, no
+# ducts); finished.json moves the terminal strip to a second rail and adds three ducts.
+#
+# NOT ON MAIN yet (keep status = "draft" until all are):
+#   - ducts drawn on the plate: #461
+#   - a tool to add a rail or duct, to size a duct and to drop a device onto a rail: no PR yet
+#     (the commands AddRail, MoveRail, SetRailSize exist in novo-core)
+# Steps that need them are marked below.
+format = 1
+id = "rails-and-ducts"
+version = 1
+status = "draft"
+title = "Rails and wiring ducts"
+title_nl = "Rails en bedradingskanalen"
+summary = "See how devices sit on a DIN rail, add a second rail for the terminal strip and lay ducts between the rows."
+summary_nl = "Zie hoe componenten op een DIN-rail zitten, voeg een tweede rail toe voor de klemmenstrook en leg kanalen tussen de rijen."
+track = "cabinet"
+order = 20
+level = "beginner"
+minutes = 8
+topics = ["cabinet", "rails", "ducts"]
+needs = ["cabinet-layout"]
+next = ["wire-routing"]
+project = "../cabinet-layout/finished.json"
+finished = "finished.json"
+
+[[step]]
+id = "open-cabinet"
+title = "Open the cabinet"
+text = "Press {key:view.cabinet}. Place all put every device on one {tip:din-rail} along the top of the plate."
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "select-device"
+title = "A device knows its rail"
+text = """
+Click **-K1**. The inspector on the right says which rail it sits on and where along it.
+Devices on a rail keep their order when the rail moves.
+"""
+point = { ui = "cabinet.inspector" }
+expect = { selected = "-K1" }
+solve = [ { select = "-K1" } ]
+
+[[step]]
+id = "plate-card"
+title = "How full is the plate?"
+text = """
+Click **Plate**. The inspector shows the plate size and how much of it the devices use.
+One row of devices uses very little of 600 x 800 mm.
+"""
+point = { ui = "cabinet.plate" }
+expect = { clicked = "cabinet.plate" }
+
+[[step]]
+id = "ducts-drawn"
+title = "Ducts are part of the plate"
+text = """
+The strips along the plate are wiring ducts. Their cross-section is stored with them.
+Wires will run in the ducts, so the ducts decide how long every wire is.
+"""
+# NOT ON MAIN: ducts drawn on the plate (#461). The sample's ducts are only in finished.json.
+point = { ui = "cabinet.canvas" }
+
+[[step]]
+id = "add-rail"
+title = "Add a rail for the terminal strip"
+text = """
+Use **Add rail** and click near the bottom of the plate.
+The terminal strip belongs near the field cables, away from the contactors.
+"""
+# NOT ON MAIN: a tool to add a rail.
+point = { ui = "cabinet.add_rail" }
+expect = { signal = "cabinet_rail_added" }
+
+[[step]]
+id = "move-strip"
+title = "Put -X1 on the new rail"
+text = """
+Drag **-X1** from the top row onto the new rail. It clips to the rail and keeps its place along it.
+"""
+# NOT ON MAIN: dropping a placed device onto a rail (a drop today lands on the 5 mm grid).
+point = { ui = "cabinet.canvas" }
+expect = { signal = "cabinet_dropped" }
+
+[[step]]
+id = "add-ducts"
+title = "Lay a duct under each row"
+text = """
+Use **Add duct** to draw one under the top row and one above the strip, then a vertical one at the right that joins them.
+Ducts connect where they touch.
+"""
+# NOT ON MAIN: a tool to add a duct.
+point = { ui = "cabinet.add_duct" }
+expect = { signal = "cabinet_duct_added" }
+
+[[step]]
+id = "size-duct"
+title = "Give the ducts a size"
+text = """
+Select a duct and set its cross-section to 40 x 40 mm in the inspector.
+A duct with no size is not penalised, but it cannot be checked for fill.
+"""
+# NOT ON MAIN: a duct in the inspector.
+point = { ui = "cabinet.inspector" }
+
+[[step]]
+id = "done"
+title = "The wiring has a road now"
+text = """
+Two rails, three ducts. Next lesson: KoperCAD routes every wire through them and tells you how full each duct gets.
+"""
