@@ -9,6 +9,7 @@ use novo_xref::Place;
 
 use super::cable_controls::{CableAction, CableEdit, cable_controls};
 use super::part_picker::{Candidate, cable_candidates};
+use super::terminal_edit::{ToolbarAction, strip_toolbar};
 use super::terminals::strip_table;
 use super::workbench::{DRAWER_SHARE, Drawer};
 use super::{Level, NovoApp};
@@ -20,6 +21,8 @@ enum DrawerAction {
     /// A change from the cable controls, for this cable.
     Cable(CableId, CableAction),
     AcceptCables,
+    AcceptTerminals,
+    Terminal(ToolbarAction),
     Tab(Drawer),
     Close,
 }
@@ -46,7 +49,9 @@ impl NovoApp {
         }
         let height = (ui.ctx().content_rect().height() * DRAWER_SHARE).max(120.0);
         let selected = self.selection();
+        self.sync_strip_follow();
         let strip = self.drawer_strip();
+        let declined = self.declined_wires();
         if tab == Drawer::Cables
             && self.wb.cable_edit.picker.open
             && let Some(problem) = self.wb.part_catalog.ensure()
@@ -105,30 +110,61 @@ impl NovoApp {
                                 }
                             }
                             if tab == Drawer::Terminals {
-                                ui.weak(format!("{proposed} proposed"));
+                                let response =
+                                    ui.small_button(format!("Accept {proposed} proposed"));
+                                spots.push((
+                                    "drawer.terminals.accept".into(),
+                                    response.rect,
+                                    response.clicked(),
+                                    "Accept proposed".into(),
+                                ));
+                                if response.clicked() {
+                                    actions.push(DrawerAction::AcceptTerminals);
+                                }
                             }
                         }
                     });
                 });
                 ui.separator();
                 match tab {
-                    Drawer::Terminals => match strip {
-                        Some(strip) => {
-                            let view = novo_terminals::strip_view(project, strip);
-                            let screen = novo_terminals::screen(project, strip);
-                            if let Some(o) = strip_table(ui, &view, &screen, &selected) {
-                                actions.push(DrawerAction::Go(Place {
-                                    page: o.page,
-                                    symbol: Some(o.symbol),
-                                }));
+                    Drawer::Terminals => {
+                        let mut toolbar = Vec::new();
+                        strip_toolbar(
+                            ui,
+                            project,
+                            strip,
+                            &mut self.wb.terminal_edit,
+                            &declined,
+                            &mut toolbar,
+                        );
+                        match strip {
+                            Some(strip) => {
+                                let view = novo_terminals::strip_view(project, strip);
+                                let screen = novo_terminals::screen(project, strip);
+                                let mut ticked = std::mem::take(&mut self.wb.terminal_edit.rows);
+                                if let Some(o) = strip_table(
+                                    ui,
+                                    &view,
+                                    &screen,
+                                    &selected,
+                                    &mut ticked,
+                                    &mut toolbar,
+                                ) {
+                                    actions.push(DrawerAction::Go(Place {
+                                        page: o.page,
+                                        symbol: Some(o.symbol),
+                                    }));
+                                }
+                                self.wb.terminal_edit.rows = ticked;
+                            }
+                            None => {
+                                ui.weak(
+                                    "No terminal strip yet. Place a terminal (I, terminal) or accept a proposal.",
+                                );
                             }
                         }
-                        None => {
-                            ui.weak(
-                                "No terminal strip yet. Place a terminal (I, terminal) or accept a proposal.",
-                            );
-                        }
-                    },
+                        actions.extend(toolbar.into_iter().map(DrawerAction::Terminal));
+                    }
                     Drawer::Cables => {
                         let candidates = match self.wb.part_catalog.get() {
                             Some(catalog) if self.wb.cable_edit.picker.open => self
@@ -171,6 +207,15 @@ impl NovoApp {
                 DrawerAction::ShowCable(cable) => self.wb.drawer_cable = Some(cable),
                 DrawerAction::Cable(cable, action) => self.cable_action(cable, action),
                 DrawerAction::AcceptCables => self.accept_cable_proposals(),
+                DrawerAction::AcceptTerminals => self.accept_all_proposals(),
+                DrawerAction::Terminal(ToolbarAction::Command(id)) => self.wb.queued.push(id),
+                DrawerAction::Terminal(ToolbarAction::Pick(strip)) => {
+                    self.wb.terminal_edit.picked = Some(strip);
+                    self.wb.terminal_edit.rows.clear();
+                }
+                DrawerAction::Terminal(ToolbarAction::Restore(wires)) => {
+                    self.restore_declined(&wires);
+                }
                 DrawerAction::Tab(t) => self.wb.drawer = Some(t),
                 DrawerAction::Close => self.wb.drawer = None,
             }

@@ -117,6 +117,8 @@ pub(crate) struct Workbench {
     pub(super) drawer: Option<Drawer>,
     /// The cable whose cores the Cables tab shows.
     pub(super) drawer_cable: Option<novo_core::CableId>,
+    /// The strip editor of the Terminals tab.
+    pub(super) terminal_edit: super::terminal_edit::TerminalEdit,
     /// The terminal proposal Enter accepts, an index into this page's.
     pub(super) proposal: usize,
     /// Where the pointer was when Space went down, until it comes up.
@@ -234,6 +236,7 @@ impl Default for Workbench {
             occurrences: None,
             drawer: None,
             drawer_cable: None,
+            terminal_edit: Default::default(),
             part_catalog: Default::default(),
             cable_edit: Default::default(),
             proposal: 0,
@@ -436,6 +439,15 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "terminal.strip_up",
     "terminal.strip_down",
     "terminal.strip_lowest",
+    "terminal.add_spares",
+    "terminal.rename",
+    "terminal.renumber",
+    "terminal.join_duplicates",
+    "terminal.set_kind",
+    "terminal.order_up",
+    "terminal.order_down",
+    "terminal.style",
+    "terminal.restore_declined",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -763,6 +775,15 @@ impl NovoApp {
             | "terminal.strip_up"
             | "terminal.strip_down"
             | "terminal.strip_lowest" => self.terminal_command(id),
+            "terminal.add_spares"
+            | "terminal.rename"
+            | "terminal.renumber"
+            | "terminal.join_duplicates"
+            | "terminal.set_kind"
+            | "terminal.order_up"
+            | "terminal.order_down"
+            | "terminal.style"
+            | "terminal.restore_declined" => self.terminal_edit_command(id, argument),
             "interruption.renumber" => self.renumber_interruptions(),
             "wires.number" => self.number_wires(),
             "wires.numbering" => {
