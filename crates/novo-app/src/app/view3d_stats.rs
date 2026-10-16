@@ -118,7 +118,19 @@ pub(super) fn report(stats: Option<&RenderStats>, intervals: &[f32], build: Buil
     let mut out = String::from("KoperCAD 3D frame statistics\n");
     match stats {
         Some(s) => {
-            let _ = writeln!(out, "GPU: {} ({}, {:?})", s.adapter, s.backend, s.tier);
+            let _ = write!(
+                out,
+                "GPU: {} ({}, {:?})",
+                s.adapter, s.backend, s.adapter_tier
+            );
+            if s.tier != s.adapter_tier {
+                let _ = write!(
+                    out,
+                    ", quality stepped down to {:?} after slow frames",
+                    s.tier
+                );
+            }
+            out.push('\n');
         }
         None => out.push_str("GPU: none (the 3D view is not drawn)\n"),
     }
@@ -163,6 +175,7 @@ mod tests {
             adapter: "Test GPU".into(),
             backend: "Vulkan".into(),
             tier: Tier::Discrete,
+            adapter_tier: Tier::Discrete,
             renders: 10,
             visible_items: 1016,
             draw_calls: 11,
@@ -192,6 +205,21 @@ mod tests {
         );
         assert!(
             text.ends_with("Scene build: 3.2 ms, routing 41.0 ms"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn the_report_says_when_the_governor_stepped_the_quality_down() {
+        let stepped = RenderStats {
+            tier: Tier::Integrated,
+            ..stats()
+        };
+        let text = report(Some(&stepped), &[16.0], Build::default());
+        assert!(
+            text.contains(
+                "GPU: Test GPU (Vulkan, Discrete), quality stepped down to Integrated after slow frames"
+            ),
             "{text}"
         );
     }

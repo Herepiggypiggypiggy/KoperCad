@@ -355,3 +355,57 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
         "the run published a result to the 3D view"
     );
 }
+
+#[test]
+fn dimensions_toggle_by_command_and_measure_the_selected_part_from_the_cabinet() {
+    use novo_view3d::ItemKind;
+    use novo_view3d::dimension::{Role, dimensions, format_mm};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert!(
+        !d.app.view3d.view.state.display.dimensions,
+        "off by default"
+    );
+    d.app.run_command(&ctx, "view.3d_dimensions", None);
+    d.frame();
+    assert!(d.app.view3d.view.state.display.dimensions);
+
+    let scene = d.app.view3d.built.as_ref().expect("scene built").2.clone();
+    let device = scene
+        .items
+        .iter()
+        .find(|i| i.id.kind == ItemKind::Device)
+        .expect("a device on the plate");
+    let none = dimensions(&scene, &Default::default());
+    assert!(
+        none.iter().all(|m| m.role == Role::Overall) && none.len() >= 2,
+        "overall size only: {none:?}"
+    );
+    let one = dimensions(&scene, &std::iter::once(device.id).collect());
+    let w = format!("W {}", format_mm(device.size.x));
+    let h = format!("H {}", format_mm(device.size.y));
+    assert!(
+        one.iter().any(|m| m.role == Role::Size && m.text == w),
+        "{w}: {one:?}"
+    );
+    assert!(
+        one.iter().any(|m| m.role == Role::Size && m.text == h),
+        "{h}: {one:?}"
+    );
+    assert!(
+        one.iter().any(|m| matches!(m.role, Role::Gap | Role::Edge)),
+        "distances to the plate edge or a neighbour: {one:?}"
+    );
+    assert!(one.iter().all(|m| m.mm.is_finite() && m.mm >= 0.0));
+
+    // Painting the lines for a selected part runs without trouble.
+    d.app.view3d.view.state.selection = std::iter::once(device.id).collect();
+    d.frame();
+    d.frame();
+
+    d.app.run_command(&ctx, "view.3d_dimensions", None);
+    d.frame();
+    assert!(!d.app.view3d.view.state.display.dimensions);
+}

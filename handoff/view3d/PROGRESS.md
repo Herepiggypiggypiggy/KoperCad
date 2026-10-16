@@ -8,3 +8,4 @@
 - 2026-10-16 #647 merged (overlays, door driver). Follow-up: shell and door from the enclosure, routed wires, layers, 3D toolbar with door angle, view.3d_door/_shell/_wires, Ctrl+6 and Shift+D.
 - 2026-10-16 PR: 3D frame statistics panel (View > 3D), Spin and Copy, `orbit --wires`, first-frame time, numbers with wires in the design doc, what to measure on the Windows laptop.
 - 2026-10-16 #673 merged. Follow-up PR: wire colours from the schematic (own colour, else cable core name; bi-colour stripe in bands), GPU tests that wires show through the closed door.
+- 2026-10-16 #690 and #692 merged. PR: dimensions in the 3D view (View > 3D > Dimensions: enclosure size, one part's size and distances to neighbours and plate edge), frame governor connected to the widget (steps adapter tier down after 2 s over 20 ms), shown in the statistics panel.

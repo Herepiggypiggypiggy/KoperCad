@@ -11,6 +11,9 @@ pub struct Display {
     pub labels: bool,
     /// Soft shadows from the key light (software renderers skip them).
     pub shadows: bool,
+    /// Draw measuring lines: the enclosure's size and, for one selected part,
+    /// its size and its distances to neighbours and the plate edge.
+    pub dimensions: bool,
 }
 
 impl Default for Display {
@@ -19,6 +22,7 @@ impl Default for Display {
             edges: true,
             labels: true,
             shadows: true,
+            dimensions: false,
         }
     }
 }

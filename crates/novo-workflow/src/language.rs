@@ -550,6 +550,11 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_dimensions",
+        &["maatvoering tonen in 3d"],
+        &["maten", "maatvoering", "afstand", "afstanden"],
+    ),
+    nl(
         "view.3d_stats",
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],

@@ -40,6 +40,18 @@ pub enum Tier {
     Software,
 }
 
+impl crate::governor::Step for Tier {
+    /// A discrete GPU that cannot keep up renders like an integrated one, an
+    /// integrated one like a software rasteriser; that is the floor.
+    fn step_down(self) -> Option<Self> {
+        match self {
+            Tier::Discrete => Some(Tier::Integrated),
+            Tier::Integrated => Some(Tier::Software),
+            Tier::Software => None,
+        }
+    }
+}
+
 impl Tier {
     pub fn of(info: &wgpu::AdapterInfo) -> Tier {
         match info.device_type {

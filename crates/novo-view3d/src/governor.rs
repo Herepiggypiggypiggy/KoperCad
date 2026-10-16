@@ -1,24 +1,36 @@
 //! Frame governor (3d-look.md section 4): steps the quality tier down when
 //! the 95th percentile frame time stays above 20 ms for two seconds, and
-//! never steps up by itself.
+//! never steps up by itself. It works on any tier type that can step down:
+//! the palette's `QualityTier` and the renderer's adapter `Tier`.
 
 use crate::palette::QualityTier;
+
+/// A quality level with a cheaper one below it.
+pub trait Step: Copy {
+    fn step_down(self) -> Option<Self>;
+}
+
+impl Step for QualityTier {
+    fn step_down(self) -> Option<Self> {
+        QualityTier::step_down(self)
+    }
+}
 
 pub const BUDGET_MS: f32 = 20.0;
 pub const SUSTAIN_SECS: f32 = 2.0;
 const WINDOW: usize = 120;
 
 #[derive(Debug, Clone)]
-pub struct FrameGovernor {
-    pub tier: QualityTier,
+pub struct FrameGovernor<T: Step = QualityTier> {
+    pub tier: T,
     /// Fixed by the user: the governor only watches.
     pub locked: bool,
     frames: Vec<f32>,
     over_secs: f32,
 }
 
-impl FrameGovernor {
-    pub fn new(tier: QualityTier, locked: bool) -> Self {
+impl<T: Step> FrameGovernor<T> {
+    pub fn new(tier: T, locked: bool) -> Self {
         Self {
             tier,
             locked,
@@ -37,7 +49,7 @@ impl FrameGovernor {
     }
 
     /// Record one frame. Returns the new tier when it stepped down.
-    pub fn frame(&mut self, ms: f32) -> Option<QualityTier> {
+    pub fn frame(&mut self, ms: f32) -> Option<T> {
         if self.frames.len() == WINDOW {
             self.frames.remove(0);
         }
@@ -62,7 +74,7 @@ impl FrameGovernor {
 mod tests {
     use super::*;
 
-    fn run(g: &mut FrameGovernor, ms: f32, secs: f32) -> Option<QualityTier> {
+    fn run(g: &mut FrameGovernor<QualityTier>, ms: f32, secs: f32) -> Option<QualityTier> {
         let mut out = None;
         for _ in 0..((secs * 1000.0 / ms) as usize) {
             out = out.or(g.frame(ms));
@@ -103,5 +115,22 @@ mod tests {
         let mut g = FrameGovernor::new(QualityTier::Standard, false);
         run(&mut g, 4.0, 10.0);
         assert_eq!(g.tier, QualityTier::Standard);
+    }
+
+    #[cfg(feature = "gpu")]
+    #[test]
+    fn the_adapter_tiers_step_down_to_software_and_stop() {
+        use crate::render::Tier;
+        let mut g = FrameGovernor::new(Tier::Discrete, false);
+        let mut seen = Vec::new();
+        for _ in 0..6 {
+            for _ in 0..200 {
+                if let Some(t) = g.frame(40.0) {
+                    seen.push(t);
+                }
+            }
+        }
+        assert_eq!(seen, vec![Tier::Integrated, Tier::Software]);
+        assert_eq!(g.tier, Tier::Software);
     }
 }

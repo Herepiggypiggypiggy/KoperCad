@@ -20,6 +20,8 @@ pub(crate) struct Controls {
     pub(super) move_items: bool,
     /// Soft shadows from the key light.
     pub(super) shadows: bool,
+    /// Measuring lines: the enclosure's size and the selected part's.
+    pub(super) dimensions: bool,
 }
 
 impl Default for Controls {
@@ -29,6 +31,7 @@ impl Default for Controls {
             door_deg: 0.0,
             move_items: true,
             shadows: true,
+            dimensions: false,
         }
     }
 }
@@ -99,6 +102,14 @@ pub(super) fn toolbar(
                         &mut controls.shadows,
                         "Shadows",
                         "Soft shadows from the key light (View > 3D > Shadows)",
+                    );
+                    toggle(
+                        ui,
+                        &mut controls.dimensions,
+                        "Dimensions",
+                        "Measuring lines in mm: the enclosure, and for one selected part its \
+                         size and its distances to neighbours and the plate edge (View > 3D > \
+                         Dimensions)",
                     );
                     ui.separator();
                     if let Some(limit) = limit

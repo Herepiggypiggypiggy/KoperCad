@@ -7,8 +7,10 @@
 
 use crate::camera::{Camera, Projection, ViewPreset};
 use crate::cube::{self, CubeHit};
+use crate::dimension::{self, Role};
 use crate::door::DoorAnim;
 use crate::feel::{self, Inertia, Transition};
+use crate::governor::FrameGovernor;
 use crate::labels::{self, Fade, LabelCandidate};
 use crate::look::{self, Glyph, Look};
 use crate::mesh::MeshLibrary;
@@ -30,6 +32,8 @@ use std::time::{Duration, Instant};
 
 /// GPU state of a view not painted for this long is freed.
 const IDLE_VIEW_TTL: Duration = Duration::from_secs(30);
+/// A dimension line shorter than this on screen is not drawn, points.
+const MIN_DIMENSION_PX: f32 = 28.0;
 /// Seconds without input before the settled (sharp) frame is drawn.
 const SETTLE_AFTER: f64 = 0.25;
 static INSTALLED: AtomicBool = AtomicBool::new(false);
@@ -44,7 +48,11 @@ pub struct RenderStats {
     pub adapter: String,
     /// The graphics API the adapter is used through, for example `Dx12`.
     pub backend: String,
+    /// The quality tier in use: the adapter's, or lower once the frame
+    /// governor has stepped down after sustained slow frames.
     pub tier: Tier,
+    /// The tier the adapter type gives.
+    pub adapter_tier: Tier,
     /// Frames rendered since start (an unchanged view is not rendered again).
     pub renders: u64,
     /// Items drawn, draw calls and triangles of the last render.
@@ -64,6 +72,7 @@ struct Recorder {
     adapter: String,
     backend: String,
     tier: Tier,
+    adapter_tier: Tier,
     renders: u64,
     cpu_ms: VecDeque<f32>,
     last: crate::render::FrameStats,
@@ -89,6 +98,7 @@ pub fn render_stats() -> Option<RenderStats> {
         adapter: r.adapter.clone(),
         backend: r.backend.clone(),
         tier: r.tier,
+        adapter_tier: r.adapter_tier,
         renders: r.renders,
         visible_items: r.last.visible_items,
         draw_calls: r.last.draw_calls,
@@ -100,7 +110,12 @@ pub fn render_stats() -> Option<RenderStats> {
     })
 }
 
-fn record(stats: crate::render::FrameStats, msaa: u32) {
+/// The tier the adapter type gives; `None` before [`install`].
+fn adapter_tier() -> Option<Tier> {
+    STATS.lock().ok()?.as_ref().map(|r| r.adapter_tier)
+}
+
+fn record(stats: crate::render::FrameStats, msaa: u32, tier: Tier) {
     if let Ok(mut guard) = STATS.lock()
         && let Some(r) = guard.as_mut()
     {
@@ -111,6 +126,7 @@ fn record(stats: crate::render::FrameStats, msaa: u32) {
         r.renders += 1;
         r.last = stats;
         r.msaa = msaa;
+        r.tier = tier;
     }
 }
 
@@ -130,6 +146,7 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
             adapter: info.name.clone(),
             backend: format!("{:?}", info.backend),
             tier,
+            adapter_tier: tier,
             renders: 0,
             cpu_ms: VecDeque::with_capacity(STATS_WINDOW),
             last: Default::default(),
@@ -177,6 +194,8 @@ struct Callback {
     look: Look,
     size_px: (u32, u32),
     mode: Mode,
+    /// The tier the frame governor stepped down to, if it did.
+    governed: Option<Tier>,
     overlays: Arc<Vec<Overlay>>,
     overlay_revision: u64,
     key: u64,
@@ -210,7 +229,8 @@ impl egui_wgpu::CallbackTrait for Callback {
         });
         slot.used = now;
         if slot.key != Some(self.key) {
-            let quality = Quality::new(self.mode, *tier);
+            let used = self.governed.unwrap_or(*tier);
+            let quality = Quality::new(self.mode, used);
             let stats = renderer.render(
                 device,
                 queue,
@@ -228,7 +248,7 @@ impl egui_wgpu::CallbackTrait for Callback {
                     overlay_revision: self.overlay_revision,
                 },
             );
-            record(stats, quality.msaa);
+            record(stats, quality.msaa, used);
             slot.key = Some(self.key);
         }
         if slot
@@ -384,6 +404,8 @@ pub struct View3d {
     overlays: Arc<Vec<Overlay>>,
     overlay_revision: u64,
     door: Option<DoorAnim>,
+    /// Steps the render quality down when moving frames stay slow.
+    governor: Option<FrameGovernor<Tier>>,
     /// The source scene and its copy with the animated door angle.
     door_scene: Option<(Arc<Scene>, Arc<Scene>)>,
 }
@@ -412,6 +434,7 @@ impl View3d {
             overlays: Arc::new(Vec::new()),
             overlay_revision: 0,
             door: None,
+            governor: None,
             door_scene: None,
         }
     }
@@ -436,6 +459,29 @@ impl View3d {
             self.overlays = Arc::new(overlays);
             self.overlay_revision += 1;
         }
+    }
+
+    /// Feeds one frame interval to the frame governor while the view moves and
+    /// returns the tier it stepped down to, if it did. Never steps up by
+    /// itself; `reset_quality` starts again from the adapter's tier.
+    fn govern(&mut self, ctx: &egui::Context, moving: bool) -> Option<Tier> {
+        if self.governor.is_none() {
+            self.governor = adapter_tier().map(|t| FrameGovernor::new(t, false));
+        }
+        let gov = self.governor.as_mut()?;
+        if moving {
+            let ms = (ctx.input(|i| i.unstable_dt) * 1000.0).clamp(0.0, 100.0);
+            if gov.frame(ms).is_some() {
+                ctx.request_repaint();
+            }
+        }
+        (Some(gov.tier) != adapter_tier()).then_some(gov.tier)
+    }
+
+    /// Forgets the governor's step-downs: the next moving frames start again
+    /// from the adapter's own tier.
+    pub fn reset_quality(&mut self) {
+        self.governor = None;
     }
 
     /// Swings the hinge group (the door) to `angle` radians, easing unless
@@ -894,6 +940,10 @@ impl View3d {
             Mode::Settled
         };
 
+        // Frame governor: only frames of a moving view count (an idle view
+        // repaints rarely, which is not slowness).
+        let governed = self.govern(&ctx, idle <= f64::EPSILON);
+
         let ppp = ctx.pixels_per_point();
         let size_px = (
             (rect.width() * ppp).round().max(1.0) as u32,
@@ -905,7 +955,7 @@ impl View3d {
             &self.camera,
             &self.state,
             size_px,
-            mode,
+            (mode, governed),
             self.overlay_revision,
         );
         ui.painter().add(egui_wgpu::Callback::new_paint_callback(
@@ -919,6 +969,7 @@ impl View3d {
                 look: *look,
                 size_px,
                 mode,
+                governed,
                 overlays: self.overlays.clone(),
                 overlay_revision: self.overlay_revision,
                 key,
@@ -1063,6 +1114,51 @@ impl View3d {
             }
         }
         self.label_fades = touched;
+        if self.state.display.dimensions {
+            self.paint_dimensions(&painter, rect, scene, look);
+        }
+    }
+
+    /// Measuring lines with end ticks and the length on a chip (see
+    /// `dimension`). Lines too short on screen to carry their text are left
+    /// out; zoom in and they appear.
+    fn paint_dimensions(&self, painter: &egui::Painter, rect: Rect, scene: &Scene, look: &Look) {
+        let font = FontId::monospace(11.0);
+        for d in dimension::dimensions(scene, &self.state.selection) {
+            let (Some(a), Some(b)) = (
+                self.project(rect, scene, d.a),
+                self.project(rect, scene, d.b),
+            ) else {
+                continue;
+            };
+            let galley = painter.layout_no_wrap(d.text.clone(), font.clone(), Color32::PLACEHOLDER);
+            let chip = galley.size() + Vec2::new(8.0, 4.0);
+            let along = b - a;
+            let len = along.length();
+            if len < chip.x.max(MIN_DIMENSION_PX) {
+                continue;
+            }
+            let col = match d.role {
+                Role::Overall => color(look.overlay.chip_text, 0.7),
+                Role::Size => color(look.overlay.chip_text, 1.0),
+                Role::Gap | Role::Edge => color3(look.selection.edge, 255),
+            };
+            let stroke = Stroke::new(1.0, col);
+            painter.line_segment([a, b], stroke);
+            let n = Vec2::new(-along.y, along.x) / len * 4.0;
+            for p in [a, b] {
+                painter.line_segment([p - n, p + n], stroke);
+            }
+            let mid = a + along * 0.5;
+            painter.rect(
+                Rect::from_center_size(mid, chip),
+                3.0,
+                color(look.overlay.chip, 1.0),
+                Stroke::new(1.0, col),
+                egui::StrokeKind::Inside,
+            );
+            painter.text(mid, Align2::CENTER_CENTER, &d.text, font.clone(), col);
+        }
     }
 
     /// The view cube (3d-look.md section 6): nine regions per visible face,
@@ -1188,7 +1284,7 @@ fn frame_key(
     camera: &Camera,
     state: &ViewState,
     size_px: (u32, u32),
-    mode: Mode,
+    (mode, governed): (Mode, Option<Tier>),
     overlay_revision: u64,
 ) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -1211,6 +1307,7 @@ fn frame_key(
         v.to_bits().hash(&mut h);
     }
     (camera.projection as u8, size_px, mode as u8).hash(&mut h);
+    governed.map(|t| t as u8 + 1).hash(&mut h);
     (&state.selection, state.hover, &state.hidden, &state.related).hash(&mut h);
     (state.display.edges, state.display.labels).hash(&mut h);
     h.finish()
@@ -1237,6 +1334,22 @@ mod chip_tests {
 mod stats_tests {
     use super::*;
 
+    /// The recorder is process-wide: tests that set it run one at a time.
+    static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+
+    fn recorder(tier: Tier) -> Recorder {
+        Recorder {
+            adapter: "Test".into(),
+            backend: "Vulkan".into(),
+            tier,
+            adapter_tier: tier,
+            renders: 0,
+            cpu_ms: VecDeque::new(),
+            last: Default::default(),
+            msaa: 1,
+        }
+    }
+
     #[test]
     fn percentiles_pick_the_sample_at_the_rank() {
         assert_eq!(percentile(&[], 0.5), 0.0);
@@ -1249,15 +1362,8 @@ mod stats_tests {
 
     #[test]
     fn recording_fills_the_statistics_and_keeps_a_window() {
-        *STATS.lock().unwrap() = Some(Recorder {
-            adapter: "Test".into(),
-            backend: "Vulkan".into(),
-            tier: Tier::Software,
-            renders: 0,
-            cpu_ms: VecDeque::new(),
-            last: Default::default(),
-            msaa: 1,
-        });
+        let _guard = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        *STATS.lock().unwrap() = Some(recorder(Tier::Software));
         for i in 0..(STATS_WINDOW + 30) {
             record(
                 crate::render::FrameStats {
@@ -1266,13 +1372,67 @@ mod stats_tests {
                     ..Default::default()
                 },
                 4,
+                Tier::Integrated,
             );
         }
         let s = render_stats().unwrap();
+        assert_eq!((s.tier, s.adapter_tier), (Tier::Integrated, Tier::Software));
         assert_eq!(s.renders as usize, STATS_WINDOW + 30);
         assert_eq!((s.draw_calls, s.msaa), (11, 4));
         // Only the last window counts: samples 30 to 149.
         assert!(s.cpu_p50_ms > 80.0 && s.cpu_p95_ms > 140.0, "{s:?}");
+        *STATS.lock().unwrap() = None;
+    }
+
+    /// Runs `frames` egui frames `dt` seconds apart, calling the governor
+    /// with `moving` each time; returns the tiers it reported.
+    fn drive(
+        view: &mut View3d,
+        ctx: &egui::Context,
+        frames: usize,
+        dt: f64,
+        moving: bool,
+    ) -> Vec<Option<Tier>> {
+        let mut out = Vec::new();
+        for i in 0..frames {
+            let input = egui::RawInput {
+                time: Some(100.0 + i as f64 * dt),
+                ..Default::default()
+            };
+            let mut output = ctx.run_ui(input, |_| out.push(view.govern(ctx, moving)));
+            output.textures_delta.clear();
+        }
+        out
+    }
+
+    #[test]
+    fn slow_moving_frames_step_the_quality_down_and_a_still_view_does_not() {
+        let _guard = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        *STATS.lock().unwrap() = Some(recorder(Tier::Discrete));
+        let ctx = egui::Context::default();
+        let mut view = View3d::new(7);
+        // A view that is not moving repaints rarely: not slowness.
+        let still = drive(&mut view, &ctx, 200, 0.2, false);
+        assert!(still.iter().all(Option::is_none), "{still:?}");
+        // 40 ms frames while moving: down to Integrated after two seconds,
+        // down to Software after two more, then it stays.
+        let slow = drive(&mut view, &ctx, 400, 0.04, true);
+        assert_eq!(slow.first(), Some(&None), "starts on the adapter's tier");
+        let seen: Vec<Tier> = slow.iter().flatten().copied().fold(Vec::new(), |mut v, t| {
+            if v.last() != Some(&t) {
+                v.push(t);
+            }
+            v
+        });
+        assert_eq!(seen, vec![Tier::Integrated, Tier::Software]);
+        assert_eq!(slow.last(), Some(&Some(Tier::Software)));
+        // It never steps up by itself, however fast the frames get.
+        let fast = drive(&mut view, &ctx, 400, 0.008, true);
+        assert_eq!(fast.last(), Some(&Some(Tier::Software)));
+        // Resetting starts again from the adapter's tier.
+        view.reset_quality();
+        let again = drive(&mut view, &ctx, 3, 0.008, true);
+        assert!(again.iter().all(Option::is_none), "{again:?}");
         *STATS.lock().unwrap() = None;
     }
 }
