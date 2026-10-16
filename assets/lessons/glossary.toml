@@ -38,6 +38,7 @@ text = "A contact of a relay that keeps its own coil on after the start button i
 
 [term.contact-image]
 text = "The list under a coil showing its contacts, with the page and column of each."
+
 [term.mounting-plate]
 text = "The metal or insulating plate inside the cabinet that the devices are screwed or clipped to. Sizes are in millimetres from its top left corner."
 text_nl = "De montageplaat in de kast waarop de componenten worden bevestigd. Maten in millimeters vanaf de linkerbovenhoek."
