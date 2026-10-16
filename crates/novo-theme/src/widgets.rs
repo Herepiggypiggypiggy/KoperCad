@@ -113,7 +113,9 @@ pub fn collapsing_section<R>(
     } else {
         crate::icons::CARET_RIGHT
     };
-    let small = ui.style().text_styles[&egui::TextStyle::Small].size;
+    let small = ui.style().text_styles[&egui::TextStyle::Small]
+        .size
+        .max(12.0);
     let painter = ui.painter();
     painter.text(
         egui::pos2(rect.left() + 2.0, rect.center().y),
@@ -126,7 +128,7 @@ pub fn collapsing_section<R>(
         egui::pos2(rect.left() + 18.0, rect.center().y),
         Align2::LEFT_CENTER,
         title.to_uppercase(),
-        FontId::new(small - 0.5, fonts::strong_family()),
+        FontId::new(small, fonts::strong_family()),
         color,
     );
     if !summary.is_empty() {
