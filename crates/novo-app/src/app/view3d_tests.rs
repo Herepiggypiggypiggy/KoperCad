@@ -637,3 +637,21 @@ fn duplicate_in_3d_adds_a_device_with_the_next_tag_on_the_plate_and_undo_takes_i
     let project = d.app.backend.document().unwrap().project();
     assert_eq!(project.all::<novo_core::Device>().count(), devices);
 }
+
+#[test]
+fn a_picked_surface_shows_as_panes_in_the_3d_view_and_clear_when_none_is_picked() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.frame();
+    assert!(
+        d.app.view3d.surface_panes.is_empty(),
+        "nothing picked, toggle off"
+    );
+    d.app.cabinet.surface = Some("door".to_owned());
+    d.frame();
+    let picked = d.app.view3d.surface_panes.len();
+    assert!(picked > 0, "the picked door is drawn");
+    d.app.cabinet.surface = None;
+    d.frame();
+    assert!(d.app.view3d.surface_panes.is_empty());
+}

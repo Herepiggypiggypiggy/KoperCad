@@ -51,7 +51,7 @@ pub(crate) struct View3dMode {
     /// The surface panes drawn, and what they were built for (enclosure,
     /// project revision, picked surface, shown).
     surfaces_shown: Option<(StructureId, u64, Option<String>, bool)>,
-    surface_panes: Vec<novo_view3d::Overlay>,
+    pub(super) surface_panes: Vec<novo_view3d::Overlay>,
     library: Arc<MeshLibrary>,
     /// The enclosure and project revision the scene was built for.
     pub(super) built: Option<(StructureId, u64, Arc<Scene>)>,
