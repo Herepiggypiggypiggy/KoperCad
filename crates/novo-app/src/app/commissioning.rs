@@ -37,6 +37,12 @@ const TOUCH: f32 = 44.0;
 const TOUCH_LARGE: f32 = 64.0;
 /// How long the first touch of "Pass all open" waits for the second.
 const ARM_SECONDS: f64 = 5.0;
+/// Windows narrower than this (logical points) get the tablet layout in the
+/// Commissioning workspace: the panel pinned and wider, large buttons on.
+pub(super) const TABLET_MAX_WIDTH: f32 = 1200.0;
+/// The panel's width in the tablet layout.
+pub(super) const TABLET_PANEL_WIDTH: f32 = 380.0;
+
 /// Row and label text size with large buttons on.
 const TEXT_LARGE: f32 = 18.0;
 
@@ -60,7 +66,7 @@ pub(crate) struct CommissioningMode {
     punch_severity: Severity,
     show_closed: bool,
     /// Bigger buttons and text for a tablet.
-    large: bool,
+    pub(super) large: bool,
     /// "Pass all open" was touched once for this target at this time (egui
     /// seconds); a second touch within `ARM_SECONDS` does it.
     armed: Option<(Target, f64)>,
@@ -239,6 +245,19 @@ fn place_of(project: &Project, info: &TargetInfo, current: Option<PageId>) -> Op
 }
 
 impl NovoApp {
+    /// The Commissioning workspace is showing, so its panel stays beside the
+    /// drawing at any window width: the walk-through needs it all the time.
+    pub(super) fn commissioning_pins_panel(&self) -> bool {
+        self.is_open() && self.workspace() == Workspace::Commissioning
+    }
+
+    /// Commissioning on a window the size of a tablet.
+    pub(super) fn commissioning_tablet(&self) -> bool {
+        self.commissioning_pins_panel()
+            && self.window_width > 0.0
+            && self.window_width < TABLET_MAX_WIDTH
+    }
+
     /// The `view.commissioning` command opens the Commissioning workspace:
     /// the mode is on, its panel in the outline's place. Leaving it drops the
     /// in-memory store, which is safe because every change is flushed to the
@@ -336,6 +355,7 @@ impl NovoApp {
         let current = self.current_page;
         let mut go: Option<Place> = None;
         let mut export: Option<ReportFileFormat> = None;
+        let tablet = self.commissioning_tablet();
         {
             let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
             else {
@@ -343,12 +363,16 @@ impl NovoApp {
                 return false;
             };
             let project = doc.project();
-            mode.large = self.settings.large_buttons;
+            mode.large = self.settings.large_buttons || tablet;
             ui.horizontal_wrapped(|ui| {
                 ui.weak("By");
                 let who = ui.add(egui::TextEdit::singleline(&mut mode.who).desired_width(80.0));
                 note_ctx(ui.ctx(), "commissioning.who", "By field", &who);
-                if ui.checkbox(&mut mode.large, "Large buttons").changed() {
+                let large = ui.add_enabled(
+                    !tablet,
+                    egui::Checkbox::new(&mut mode.large, "Large buttons"),
+                );
+                if large.changed() {
                     self.settings.large_buttons = mode.large;
                 }
                 for (tab, label) in [(Tab::Checks, "Checks"), (Tab::Punch, "Punch list")] {
