@@ -5,7 +5,7 @@
 format = 1
 id = "cables-and-shields"
 version = 2
-status = "draft"   # GAP: no screen control sets a cable's part, length or shield (the part-length-shield step says so)
+status = "early"   # GAPs below: no screen control yet for a cable's part, length and shield
 title = "Cables and Shields"
 title_nl = "Kabels en schermen"
 summary = "Turn the wires that leave the cabinet into cables, read their cores, and learn what the program can and cannot yet store on a cable."

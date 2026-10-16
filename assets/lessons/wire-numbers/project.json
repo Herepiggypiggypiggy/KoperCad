@@ -1179,7 +1179,7 @@
         "pin": 2
       },
       "route": [],
-      "number": "2",
+      "number": null,
       "color": null,
       "cross_section_mm2": null,
       "properties": {}

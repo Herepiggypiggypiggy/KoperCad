@@ -55,7 +55,7 @@ impl Drive {
         self.frame_with(Vec::new());
     }
 
-    fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers) {
+    pub(super) fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers) {
         self.frame_with(vec![egui::Event::Key {
             key,
             physical_key: None,
@@ -1741,6 +1741,100 @@ fn a_held_place_key_with_repeats_opens_only_the_wheel() {
         !d.app.wb.field.is_open(),
         "the part search does not open under the wheel"
     );
+}
+
+/// The place key as Windows can deliver it: a held key's repeats arriving as
+/// fresh presses (repeat flag false), a stray release between them, and slow
+/// frames. A tap must open only the part search, a hold only the wheel.
+#[test]
+fn q_tap_opens_only_the_search_and_q_hold_only_the_wheel_under_odd_repeats() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let q = egui::Key::Q;
+    let both = |d: &Drive| d.app.wb.wheel.is_some() && d.app.wb.field.is_open();
+    frame_at(
+        &mut d,
+        10.0,
+        vec![egui::Event::PointerMoved(egui::pos2(800.0, 450.0))],
+    );
+
+    // Tap on a slow frame: press and release land in one frame.
+    frame_at(&mut d, 11.0, vec![key_event(q, true), key_event(q, false)]);
+    frame_at(&mut d, 11.6, vec![]);
+    assert!(d.app.wb.field.is_open() && d.app.wb.wheel.is_none());
+    d.app.wb.field.close();
+
+    // Hold with every repeat delivered as a fresh press, a stray release and
+    // press pair after the wheel is up, and a slow frame in between.
+    frame_at(&mut d, 20.0, vec![key_event(q, true)]);
+    frame_at(&mut d, 20.5, vec![key_event(q, true)]);
+    assert!(d.app.wb.wheel.is_some(), "held past 250 ms");
+    assert!(!d.app.wb.field.is_open());
+    assert!(
+        d.app.wb.place_hold.is_none(),
+        "a press in the frame that opens the wheel does not arm a second decision"
+    );
+    frame_at(&mut d, 20.55, vec![key_event(q, false), key_event(q, true)]);
+    frame_at(&mut d, 20.6, vec![key_event(q, true)]);
+    frame_at(&mut d, 20.65, vec![key_event(q, true)]);
+    assert!(!both(&d) && d.app.wb.wheel.is_some());
+    frame_at(&mut d, 21.0, vec![key_event(q, false)]);
+    assert!(
+        !d.app.wb.field.is_open(),
+        "the part search does not open under the wheel"
+    );
+    assert!(d.app.wb.place_hold.is_none());
+
+    // Fresh-press repeats while the hold is still undecided do not restart
+    // it or turn it into a tap.
+    d.app.wb.wheel = None;
+    frame_at(&mut d, 21.1, vec![key_event(egui::Key::Escape, true)]);
+    frame_at(&mut d, 21.2, vec![]);
+    frame_at(&mut d, 21.4, vec![]);
+    frame_at(&mut d, 22.0, vec![key_event(q, true)]);
+    frame_at(&mut d, 22.1, vec![key_event(q, true)]);
+    frame_at(&mut d, 22.2, vec![key_event(q, true)]);
+    frame_at(&mut d, 22.3, vec![]);
+    assert!(d.app.wb.wheel.is_some(), "not delayed by repeats");
+    frame_at(&mut d, 22.4, vec![key_event(q, false)]);
+    assert!(!d.app.wb.field.is_open());
+
+    // The key works again afterwards.
+    d.app.wb.wheel = None;
+    frame_at(&mut d, 22.7, vec![key_event(egui::Key::Escape, true)]);
+    frame_at(&mut d, 22.8, vec![]);
+    frame_at(&mut d, 23.0, vec![]);
+    frame_at(&mut d, 30.0, vec![key_event(q, true)]);
+    frame_at(&mut d, 30.1, vec![key_event(q, false)]);
+    assert!(d.app.wb.field.is_open() && d.app.wb.wheel.is_none());
+}
+
+#[test]
+fn a_q_tap_while_the_wheel_is_still_up_replaces_it_with_the_search() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let q = egui::Key::Q;
+    frame_at(
+        &mut d,
+        10.0,
+        vec![egui::Event::PointerMoved(egui::pos2(800.0, 450.0))],
+    );
+    frame_at(&mut d, 11.0, vec![key_event(q, true)]);
+    frame_at(&mut d, 11.5, vec![]);
+    frame_at(&mut d, 11.6, vec![key_event(q, false)]);
+    frame_at(&mut d, 11.8, vec![]);
+    assert!(d.app.wb.wheel.is_some(), "the wheel stays up after a hold");
+    frame_at(&mut d, 12.0, vec![key_event(q, true)]);
+    frame_at(&mut d, 12.05, vec![key_event(q, false)]);
+    frame_at(&mut d, 12.1, vec![]);
+    assert!(d.app.wb.field.is_open(), "a tap opens the search");
+    assert!(d.app.wb.wheel.is_none(), "and the wheel is gone");
 }
 
 #[test]

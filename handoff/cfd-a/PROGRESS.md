@@ -9,4 +9,7 @@
   - Conduction between fixed walls: max error 8.5e-10 K. Closed adiabatic box energy: exact to 1e-8 relative. Still air stays still (1e-16 m/s).
   - Test time about 160 s total (Re 1000 cavity 60 s, heated cavity 90 s, run in parallel).
 - Design choice: Boussinesq reference is the volume-mean temperature (closed box: a uniform offset is a pressure gradient; removes a splitting error of 3.6e-4 m/s). Openings lane C2 must revisit.
-- Next: heated vertical plate vs Churchill-Chu; implement `Solver` for the flow core (Fidelity::Coarse from a Scenario) once lane C1 meshing lands; rayon kernels are lane E.
+
+- 2026-10-16: #575 merged (R1 READY). New: `ThermalBc::Convective { h, t_out }` and `FlowConfig::conductivity` (half air cell in series with the film; the outside wall of the IEC 60890 film belongs here); test against the series-resistance solution, error 1e-9 K.
+- Heated vertical plate vs Churchill-Chu: tried as the hot wall of a closed square cavity against the local similarity formula; deviates +38 % mean at Ra 1e6 because the layer is thick (about 0.1 H) and the core is stratified, so the comparison is not well posed. Not shipped as a test. Needs an open (inflow/outflow) boundary, which comes with lane C2 openings; then do it as a free plate, and at Ra above 1e8 for the thin-layer regime.
+- Accuracy statement input (R1 note): time stepping is first order and convection explicit, so the steady state is exact in the limit but transients are only first-order accurate; CFL 0.4 limits the step.

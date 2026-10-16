@@ -384,7 +384,9 @@ mod tests {
             .get_args()
             .map(|a| a.to_string_lossy().into_owned())
             .collect();
-        assert_eq!(args, ["-y", "-o", "/out/plan.dxf", "/in/plan.dwg"]);
+        // The output path is joined with the platform separator ("\\" on Windows).
+        let out = Path::new("/out").join("plan.dxf");
+        assert_eq!(args, ["-y", "-o", out.to_str().unwrap(), "/in/plan.dwg"]);
         let o = Converter {
             kind: ConverterKind::Oda,
             program: "ODAFileConverter".into(),

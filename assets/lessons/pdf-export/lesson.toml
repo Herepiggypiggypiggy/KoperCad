@@ -16,13 +16,13 @@
 format = 1
 id = "pdf-export"
 version = 1
-status = "draft"
+status = "early"
 title = "Issue and Export a PDF"
 title_nl = "Uitgeven en exporteren als PDF"
 summary = "Issue a revision, export the whole set as a vector PDF and check bookmarks, links and the title block."
 summary_nl = "Geef een revisie uit, exporteer de hele set als vector-PDF en controleer bladwijzers, koppelingen en titelblok."
-track = "terminals"
-order = 100
+track = "outputs"
+order = 50
 level = "beginner"
 minutes = 8
 topics = ["export", "pdf", "revisions"]

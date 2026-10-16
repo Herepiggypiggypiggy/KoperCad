@@ -5,6 +5,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+/// Times a hint is followed before it stops showing.
+pub const HINT_LIMIT: u32 = 3;
 const MAX_RECENT: usize = 10;
 const MAX_RECENT_ACTIONS: usize = 20;
 
@@ -35,6 +37,9 @@ pub struct Settings {
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
+    /// How tightly the contact table under a coil is drawn, `"full"` or
+    /// `"compact"` (empty: full): a per-user preference.
+    pub xref_density: String,
     /// Whether the status bar is switched off (docs/design/workspaces.md §7).
     pub hide_status_bar: bool,
     /// Commissioning's large touch buttons: a tablet user sets it once.
@@ -60,6 +65,11 @@ pub struct Settings {
     pub group_prefix: String,
     /// The same for a new cabinet (`A` makes `+A1`). Empty: the default.
     pub cabinet_prefix: String,
+    /// How often each one-time hint was followed, by hint id
+    /// (`app/tips.rs`, docs/design/discoverability.md layer 4). A hint
+    /// stops showing once followed [`HINT_LIMIT`] times; Help > Show hints
+    /// again clears the counters.
+    pub hints_seen: BTreeMap<String, u32>,
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way
@@ -116,6 +126,11 @@ pub struct WorkspaceLayout {
 }
 
 impl Settings {
+    /// The density of the coil contact table.
+    pub fn xref_density(&self) -> novo_canvas::model::NoteDensity {
+        novo_canvas::model::NoteDensity::from_id(&self.xref_density)
+    }
+
     pub const STORAGE_KEY: &str = "novo_settings";
 
     /// The wiring mode; Corners unless the person chose Lines.

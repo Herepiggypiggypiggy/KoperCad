@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 
 use crate::check::Check;
+use crate::demo::DemoOp;
 use crate::markup::{self, MarkupError};
 
 /// The lesson format this build reads.
@@ -19,6 +20,8 @@ pub const MAX_STEPS: usize = 40;
 pub const MAX_TEXT_CHARS: usize = 500;
 /// Most notes on one step.
 pub const MAX_NOTES: usize = 3;
+/// Instruction lines on one step's card.
+pub const MAX_HOW: usize = 8;
 
 /// The language of the text to show.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -56,6 +59,10 @@ fn invalid(place: impl Into<String>, why: impl Into<String>) -> LessonError {
 pub enum Status {
     #[default]
     Ready,
+    /// Shown to everyone with an "Early access" badge: the lesson runs, but
+    /// its steps may still be rough or name controls that are not finished.
+    /// Lints as a draft until it is promoted to `ready`.
+    Early,
     /// Hidden unless drafts are shown; may name commands or anchors this
     /// build does not have yet.
     Draft,
@@ -131,6 +138,13 @@ pub struct Step {
     pub text: String,
     #[serde(default)]
     pub text_nl: Option<String>,
+    /// The instructions, one line each, numbered on the card: the keys and
+    /// clicks and why. Same markup as `text` (`{key:..}`, `{ui:..}`).
+    #[serde(default)]
+    pub how: Vec<String>,
+    /// The Dutch lines; as many as `how`, or none.
+    #[serde(default)]
+    pub how_nl: Vec<String>,
     #[serde(default)]
     pub point: Option<Target>,
     #[serde(default)]
@@ -145,6 +159,10 @@ pub struct Step {
     /// "Do it for me" runs.
     #[serde(default)]
     pub solve: Vec<SolveOp>,
+    /// What "Show me how" plays (`demo`): key caps, typing, a moving pointer. A step
+    /// that gives none gets one derived from its check, `solve` and `point`.
+    #[serde(default)]
+    pub demo: Vec<DemoOp>,
 }
 
 /// A small callout next to a target. (Unknown keys are refused by
@@ -206,6 +224,11 @@ pub struct At {
     /// A wire by its two ends, `tag:pin`.
     #[serde(default)]
     pub wire: Option<[String; 2]>,
+    /// A potential feed by the name of its potential (`L1`). Use it for a
+    /// feed the person drew themselves, which lands wherever they dropped
+    /// it, never a coordinate.
+    #[serde(default)]
+    pub feed: Option<String>,
 }
 
 /// A rectangle on a page, in millimetres.
@@ -483,6 +506,21 @@ impl Lesson {
             if let Some(nl) = &step.text_nl {
                 markup::parse_markup(nl).map_err(markup_fail)?;
             }
+            if step.how.len() > MAX_HOW {
+                return Err(invalid(
+                    at(&step.id),
+                    format!("at most {MAX_HOW} `how` lines"),
+                ));
+            }
+            if !step.how_nl.is_empty() && step.how_nl.len() != step.how.len() {
+                return Err(invalid(
+                    at(&step.id),
+                    "`how_nl` needs as many lines as `how`, or none",
+                ));
+            }
+            for line in step.how.iter().chain(&step.how_nl) {
+                markup::parse_markup(line).map_err(markup_fail)?;
+            }
             if let Some(point) = &step.point {
                 point.validate().map_err(|why| invalid(at(&step.id), why))?;
             }
@@ -494,6 +532,18 @@ impl Lesson {
             }
             if let Some(check) = &step.expect {
                 check.validate().map_err(|why| invalid(at(&step.id), why))?;
+            }
+            for op in &step.demo {
+                let targets: Vec<&Target> = match op {
+                    DemoOp::Move(m) => vec![&m.to],
+                    DemoOp::Drag(d) => vec![&d.drag.from, &d.drag.to],
+                    _ => Vec::new(),
+                };
+                for target in targets {
+                    target
+                        .validate()
+                        .map_err(|why| invalid(at(&step.id), why))?;
+                }
             }
             if step.expect.is_none() && !step.solve.is_empty() {
                 return Err(invalid(at(&step.id), "a reading step has nothing to solve"));
@@ -510,6 +560,15 @@ impl Step {
 
     pub fn text(&self, lang: Lang) -> &str {
         pick(&self.text, self.text_nl.as_deref(), lang)
+    }
+
+    /// The instruction lines in the language, English when there is no
+    /// Dutch twin.
+    pub fn how(&self, lang: Lang) -> &[String] {
+        match lang {
+            Lang::Nl if !self.how_nl.is_empty() => &self.how_nl,
+            _ => &self.how,
+        }
     }
 
     /// Whether the card moves on by itself once the check holds.
@@ -544,14 +603,22 @@ impl Target {
             let device = at.device.is_some();
             let spot = at.page.is_some() && at.x.is_some() && at.y.is_some();
             let wire = at.wire.is_some();
-            if [device, spot, wire].iter().filter(|g| **g).count() != 1 {
+            let feed = at.feed.is_some();
+            // A pin on its own is written whole, `-K1:A1`.
+            let pin = at.pin.as_ref().is_some_and(|p| !device && p.contains(':'));
+            if [device, spot, wire, feed, pin]
+                .iter()
+                .filter(|g| **g)
+                .count()
+                != 1
+            {
                 return Err(
-                    "`at` is a device (with an optional pin), a page spot (page, x, y) or a wire"
+                    "`at` is a device (with an optional pin), a pin (`-K1:A1`), a feed (by potential name), a page spot (page, x, y) or a wire"
                         .to_owned(),
                 );
             }
-            if at.pin.is_some() && !device {
-                return Err("`pin` goes with `device`".to_owned());
+            if at.pin.is_some() && !device && !pin {
+                return Err("`pin` goes with `device`, or is a whole `-K1:A1`".to_owned());
             }
         }
         Ok(())
@@ -578,6 +645,35 @@ pub fn is_id(id: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn how_lines_come_in_both_languages_with_markup() {
+        let text = format!(
+            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\n\
+             how = [\"Press {{key:tool.place}}\", \"Type a name\"]\n\
+             how_nl = [\"Druk op {{key:tool.place}}\", \"Typ een naam\"]\n"
+        );
+        let lesson = Lesson::parse(&text).unwrap();
+        let step = lesson.steps.last().unwrap();
+        assert_eq!(step.how(Lang::En).len(), 2);
+        assert_eq!(step.how(Lang::Nl)[1], "Typ een naam");
+        // Without a Dutch twin the English lines show.
+        let text = text.replace("how_nl", "x_nl");
+        assert!(Lesson::parse(&text).is_err(), "unknown field is refused");
+    }
+
+    #[test]
+    fn how_nl_must_match_how() {
+        let text = format!(
+            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\nhow = [\"a\", \"b\"]\nhow_nl = [\"a\"]\n"
+        );
+        let err = Lesson::parse(&text).unwrap_err().to_string();
+        assert!(err.contains("how_nl"), "{err}");
+        let text = format!(
+            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\nhow = [\"{{key:\"]\n"
+        );
+        assert!(Lesson::parse(&text).is_err(), "bad markup in how");
+    }
 
     #[test]
     fn newer_solve_ops_parse() {

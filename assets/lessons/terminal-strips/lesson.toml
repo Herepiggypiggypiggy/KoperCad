@@ -1,7 +1,7 @@
 format = 1
 id = "terminal-strips"
 version = 2
-status = "draft"   # GAP: several controls below have no UI anchor yet, see NOTES.md
+status = "early"   # GAP: several controls below have no UI anchor yet, see NOTES.md
 title = "Terminal strips"
 title_nl = "Klemmenstroken"
 summary = "Accept the terminals KoperCAD proposes where wires leave the cabinet, read the strip, bridge two terminals and move the earth terminal to its own strip."

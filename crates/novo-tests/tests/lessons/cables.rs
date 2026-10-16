@@ -326,7 +326,7 @@ pub fn wire_numbers_start() -> Project {
 wire number lesson. Parts are illustrative, not a verified parts list."
                 .into();
         })?;
-        for (end, number) in [("-M1:U1", "1"), ("-M1:V1", "2"), ("-M1:W1", "2")] {
+        for (end, number) in [("-M1:U1", "1"), ("-M1:V1", "2")] {
             let wire = wire_between(tx.project(), end, "-X1:");
             tx.update::<Wire>(wire, |w| w.number = Some(number.into()))?;
         }

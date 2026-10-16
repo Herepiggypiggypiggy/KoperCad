@@ -8,7 +8,7 @@
 format = 1
 id = "wire-numbers"
 version = 2
-status = "draft"   # GAPs: no wire number check kind for the lesson engine, no wire.number design check (see NOTES.md)
+status = "early"   # GAPs: no way to give an unnumbered wire its first number, no numbering rule, no renumber
 title = "Wire Numbers and the Wire List"
 title_nl = "Draadnummers en de draadlijst"
 summary = "Number every wire of a drawing in one command, keep a number you typed yourself, and read the numbers in the wire list and on the cable cores."

@@ -1,7 +1,7 @@
 format = 1
 id = "interruption-points"
 version = 2
-status = "draft"   # GAP: check kinds and anchors are missing, see NOTES.md
+status = "early"   # GAP: check kinds and anchors are missing, see NOTES.md
 title = "Signals across pages"
 title_nl = "Signalen over pagina's"
 summary = "Continue a signal from one page to the next with an interruption point, jump between the two ends, number them, and read the contact references under a coil."

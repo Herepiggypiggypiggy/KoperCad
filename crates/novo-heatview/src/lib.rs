@@ -5,6 +5,7 @@
 //! Frame: millimetres, `y` down, like `novo-thermal`. Fields are sampled at
 //! cell centres. Spec: `docs/design/thermal-visuals.md`.
 
+pub mod cfd;
 pub mod compare;
 pub mod contour;
 pub mod field;

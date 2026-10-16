@@ -6,13 +6,13 @@
 format = 1
 id = "generated-pages"
 version = 1
-status = "draft"
+status = "early"
 title = "Pages KoperCAD Writes For You"
 title_nl = "Pagina's die KoperCAD voor je schrijft"
 summary = "Find the contents, device list, terminal and cable diagrams, add a lamp and watch the lists follow."
 summary_nl = "Vind de inhoudsopgave, de apparatenlijst, de klemmen- en kabelschema's, plaats een lamp en zie de lijsten meebewegen."
-track = "terminals"
-order = 80
+track = "outputs"
+order = 20
 level = "beginner"
 minutes = 8
 topics = ["reports", "pages", "outline"]

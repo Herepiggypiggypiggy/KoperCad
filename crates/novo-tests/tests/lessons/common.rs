@@ -92,9 +92,9 @@ pub fn lint(id: &str, project: &Project) -> Vec<String> {
     }
     if !matches!(
         doc.get("status").and_then(|v| v.as_str()),
-        Some("draft" | "ready")
+        Some("draft" | "early" | "ready")
     ) {
-        bad("status must be draft or ready".into());
+        bad("status must be draft, early or ready".into());
     }
     let tracks = std::fs::read_to_string(lessons_dir().join("tracks.toml")).unwrap();
     let tracks: toml::Table = tracks.parse().unwrap();

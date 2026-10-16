@@ -1896,6 +1896,69 @@ fn renaming_a_contact_to_its_coils_tag_links_it_and_two_coils_are_refused() {
 }
 
 #[test]
+fn clearing_a_tag_joins_the_device_on_the_left_in_one_step() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/coils/relay", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    editor.begin_place("iec/contacts/no", None);
+    editor.click(&mut doc, page, p(80.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(120.0, 40.0), TOL);
+    editor.leave_tool();
+    assert_eq!(tags(&doc), ["-K1", "-K2", "-K3"]);
+    let dev = |doc: &Document, at| {
+        let s = symbol_at(doc, page, at);
+        doc.project().symbol(s).unwrap().device().unwrap()
+    };
+    let (k1, k2, k3) = (
+        dev(&doc, p(40.0, 40.0)),
+        dev(&doc, p(80.0, 40.0)),
+        dev(&doc, p(120.0, 40.0)),
+    );
+    let depth = doc.undo_depth();
+    assert!(editor.check_rename(&doc, k2, "  ").is_ok());
+    editor.rename(&mut doc, k2, "").unwrap();
+    assert_eq!(doc.undo_depth(), depth + 1);
+    assert_eq!(dev(&doc, p(80.0, 40.0)), k1);
+    // K3 now has K2's contact on its left, which belongs to K1.
+    editor.rename(&mut doc, k3, "").unwrap();
+    assert_eq!(dev(&doc, p(120.0, 40.0)), k1);
+    assert_eq!(tags(&doc), ["-K1"]);
+    // The contacts of the K1 family do not repeat connection names.
+    let mut names: Vec<String> = doc
+        .project()
+        .symbols_of_device(k1)
+        .iter()
+        .flat_map(|s| s.pins.iter().map(|p| p.name.clone()))
+        .collect();
+    let all = names.len();
+    names.sort();
+    names.dedup();
+    assert_eq!(names.len(), all, "{names:?}");
+    doc.undo().unwrap();
+    doc.undo().unwrap();
+    assert_eq!(tags(&doc), ["-K1", "-K2", "-K3"]);
+    assert_eq!(dev(&doc, p(80.0, 40.0)), k2);
+}
+
+#[test]
+fn clearing_a_tag_with_nothing_on_the_left_is_refused_and_changes_nothing() {
+    let (mut doc, page, mut editor) = setup();
+    editor.begin_place("iec/coils/relay", None);
+    editor.click(&mut doc, page, p(40.0, 40.0), TOL);
+    // Another device to the right and another to the left on a different row.
+    editor.click(&mut doc, page, p(80.0, 40.0), TOL);
+    editor.click(&mut doc, page, p(20.0, 120.0), TOL);
+    editor.leave_tool();
+    let k1 = doc.project().devices_by_tag(&"-K1".parse().unwrap())[0];
+    let depth = doc.undo_depth();
+    let err = editor.rename(&mut doc, k1, "").unwrap_err();
+    assert!(err.contains("no device on its left"), "{err}");
+    assert!(editor.check_rename(&doc, k1, "").is_err());
+    assert_eq!(doc.undo_depth(), depth);
+    assert_eq!(tags(&doc).len(), 3);
+}
+
+#[test]
 fn a_click_on_a_pin_starts_a_wire_with_no_tool_switch() {
     let (mut doc, page, mut editor, [a, b, _]) = three_contacts();
     assert!(!editor.tool_active());
@@ -2375,7 +2438,15 @@ fn set_potential_on_selected_feeds_is_one_undo_step() {
     let spec = potential::PotentialSpec::new("N", PotentialKind::Neutral, Some(0.0));
     let (changed, _) = doc
         .transact("Set potential", |tx| {
-            potential::set_feed_potential(tx, &feeds, &spec)
+            potential::set_feed_potential(
+                tx,
+                &feeds,
+                &spec,
+                &potential::FeedSymbols {
+                    line: potential::FEED_SYMBOL.into(),
+                    earth: potential::FEED_PE_SYMBOL.into(),
+                },
+            )
         })
         .unwrap();
     assert_eq!(changed, feeds);
@@ -2828,4 +2899,44 @@ fn a_cable_line_collects_the_wires_it_touches() {
     assert!(!editor.key(&mut doc, EditorKey::Finish, &[]));
     assert!(editor.take_cable_request().is_none());
     assert!(editor.notice().is_some());
+}
+
+#[test]
+fn joining_a_wire_never_glides_along_it_off_the_grid() {
+    use novo_editor::geometry::{snap_along_wire, wire_points};
+    let (mut doc, page, [a, _b, c, _d]) = two_rows();
+    let w1 = doc
+        .transact("w1", |tx| {
+            edit::draw_wire(
+                tx,
+                page,
+                target(tx.project(), a, "14"),
+                &[],
+                target(tx.project(), c, "13"),
+            )
+        })
+        .unwrap()
+        .0;
+    let pts = wire_points(doc.project(), w1).unwrap();
+    // The horizontal stretch y = 88 runs x = 40..60. With a 15 mm grid the
+    // only grid line inside it is x = 45; the pointer sweeps the whole
+    // stretch, including the part nearest the end at x = 60 whose own grid
+    // line is the wire end, and always lands on 45.
+    assert!(pts.iter().any(|q| (q.y - 88.0).abs() < 1e-6));
+    let mut x = 40.5;
+    while x < 59.6 {
+        let at = snap_along_wire(doc.project(), w1, p(x, 88.0), 15.0);
+        assert_eq!(at, p(45.0, 88.0), "pointer at x = {x}");
+        x += 0.5;
+    }
+    // A fine grid still picks the nearest line, as before.
+    assert_eq!(
+        snap_along_wire(doc.project(), w1, p(52.4, 88.0), 5.0),
+        p(50.0, 88.0)
+    );
+    // No grid line inside the stretch: nothing to snap to, the point stays.
+    assert_eq!(
+        snap_along_wire(doc.project(), w1, p(52.4, 88.0), 40.0),
+        p(52.4, 88.0)
+    );
 }

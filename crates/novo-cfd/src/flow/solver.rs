@@ -1,6 +1,7 @@
 use super::mesh::Mesh;
 use super::pressure::PressureSolver;
 use super::scheme::{Sample, Scheme, face_value};
+use crate::openings::{OpenPatch, OpenSet};
 
 /// Thermal condition on a wall.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -8,6 +9,12 @@ pub enum ThermalBc {
     Adiabatic,
     /// Fixed wall temperature, degrees C.
     Fixed(f64),
+    /// Heat leaves through a film to air at `t_out` (degrees C):
+    /// `h` is the film coefficient, W/m2K (an outside wall, IEC 60890).
+    Convective {
+        h: f64,
+        t_out: f64,
+    },
 }
 
 /// Condition on one of the six domain faces (all walls).
@@ -51,6 +58,9 @@ pub struct FlowConfig {
     pub nu: f64,
     /// Thermal diffusivity, m2/s.
     pub alpha: f64,
+    /// Thermal conductivity of the fluid, W/mK (with `alpha` it gives
+    /// rho cp, which turns film coefficients into the cell equation).
+    pub conductivity: f64,
     /// Thermal expansion coefficient, 1/K.
     pub beta: f64,
     /// Gravity vector, m/s2, in the frame of the mesh (`y` down: `[0, 9.81, 0]`).
@@ -59,6 +69,14 @@ pub struct FlowConfig {
     pub faces: [FaceBc; 6],
     /// Volumetric heating per cell, K/s (heat / (rho cp)), or none.
     pub heat_source: Option<Vec<f64>>,
+    /// Openings to the outside air. Empty = closed box.
+    pub openings: Vec<OpenPatch>,
+    /// Temperature of the outside air and buoyancy reference, degrees C.
+    /// `None` = the volume mean (right for a closed box); with openings set
+    /// it to the outside temperature so the stack effect comes out.
+    pub t_ref: Option<f64>,
+    /// Density, kg/m3: turns fan curves in Pa into the kinematic pressure.
+    pub rho: f64,
 }
 
 impl FlowConfig {
@@ -67,11 +85,15 @@ impl FlowConfig {
         FlowConfig {
             nu: 1.55e-5,
             alpha: 2.2e-5,
+            conductivity: 0.026,
             beta: 1.0 / 298.15,
             gravity: [0.0, 9.81, 0.0],
             scheme: Scheme::VanLeer,
             faces: [FaceBc::WALL; 6],
             heat_source: None,
+            openings: Vec::new(),
+            t_ref: None,
+            rho: 1.18,
         }
     }
 }
@@ -98,6 +120,13 @@ pub struct FlowSolver {
     pub time: f64,
     t_buoyancy_ref: f64,
     pressure: PressureSolver,
+    /// The openings resolved on the mesh.
+    pub open: OpenSet,
+    /// Smoothed speed at each open face, m/s (lags the quadratic losses).
+    open_speed: Vec<f64>,
+    open_alpha: Vec<f64>,
+    /// Inflow temperature of each patch, degrees C.
+    t_in: Vec<f64>,
 }
 
 impl FlowSolver {
@@ -105,7 +134,18 @@ impl FlowSolver {
         let vel = std::array::from_fn(|c| vec![0.0; mesh.len(c)]);
         let cells = mesh.cells();
         let pressure = PressureSolver::new(&mesh);
+        let open = OpenSet::resolve(&mesh, &cfg.openings);
+        let t_in = cfg
+            .openings
+            .iter()
+            .map(|p| p.inflow_c.unwrap_or(cfg.t_ref.unwrap_or(t_init)))
+            .collect();
+        let nf = open.faces.len();
         FlowSolver {
+            open,
+            open_speed: vec![0.0; nf],
+            open_alpha: vec![1.0; nf],
+            t_in,
             vel,
             p: vec![0.0; cells],
             t: vec![t_init; cells],
@@ -173,8 +213,12 @@ impl FlowSolver {
                         let mut hi = ix;
                         hi[a] += 1;
                         let (fl, fh) = (
-                            self.vel[a][m.idx(a, ix)] * m.area(a, ix),
-                            self.vel[a][m.idx(a, hi)] * m.area(a, ix),
+                            self.vel[a][m.idx(a, ix)]
+                                * m.area(a, ix)
+                                * self.open.afrac[a][m.idx(a, ix)],
+                            self.vel[a][m.idx(a, hi)]
+                                * m.area(a, ix)
+                                * self.open.afrac[a][m.idx(a, hi)],
                         );
                         net += fh - fl;
                         scale = scale.max(fl.abs()).max(fh.abs());
@@ -193,11 +237,12 @@ impl FlowSolver {
         self.advance_temperature(dt);
         // In a closed box a uniform temperature offset is a pure pressure
         // gradient, so the Boussinesq term uses the volume mean as reference.
-        self.t_buoyancy_ref = self.mean_temperature();
+        self.t_buoyancy_ref = self.cfg.t_ref.unwrap_or_else(|| self.mean_temperature());
         let rhs: [Vec<f64>; 3] = std::array::from_fn(|c| self.momentum_rhs(c));
         for (c, r) in rhs.iter().enumerate() {
             self.diffuse_velocity(c, r, dt);
         }
+        self.predict_open_faces(dt);
         let iters = self.project(dt);
         self.time += dt;
         let max_accel = (0..3)
@@ -279,7 +324,7 @@ impl FlowSolver {
                             width = m.dx[b][s];
                             let flux_at = |e: usize| -> f64 {
                                 if e == 0 || e == m.n[b] {
-                                    return 0.0;
+                                    return self.open_transverse_flux(c, b, e, ix);
                                 }
                                 // advecting velocity u_b at b-edge e, c-edge ix[c]
                                 let (lo, hi) = (ix[c] - 1, ix[c]);
@@ -356,7 +401,8 @@ impl FlowSolver {
                                     if (!upper && s == 0) || (upper && s + 1 == m.n[b]) {
                                         let bc = self.cfg.faces[2 * b + upper as usize];
                                         if !bc.slip {
-                                            let cw = nu / (0.5 * w * w);
+                                            let closed = 1.0 - self.open_share(b, upper, ix, c);
+                                            let cw = closed * nu / (0.5 * w * w);
                                             a_sum += cw;
                                             a_nb += cw * bc.wall_velocity[c];
                                         }
@@ -386,7 +432,9 @@ impl FlowSolver {
     // ---- pressure projection -------------------------------------------
 
     fn project(&mut self, dt: f64) -> usize {
+        self.set_open_faces(dt);
         let m = &self.mesh;
+        let af = &self.open.afrac;
         let mut b = vec![0.0; m.cells()];
         for k in 0..m.n[2] {
             for j in 0..m.n[1] {
@@ -394,8 +442,8 @@ impl FlowSolver {
                     let ix = [i, j, k];
                     let mut net = 0.0;
                     for a in 0..3 {
-                        net += (self.vel[a][m.idx(a, with(ix, a, ix[a] + 1))]
-                            - self.vel[a][m.idx(a, ix)])
+                        let (hi, lo) = (m.idx(a, with(ix, a, ix[a] + 1)), m.idx(a, ix));
+                        net += (self.vel[a][hi] * af[a][hi] - self.vel[a][lo] * af[a][lo])
                             * m.area(a, ix);
                     }
                     b[m.cell(ix)] = -net / dt;
@@ -420,7 +468,145 @@ impl FlowSolver {
                 }
             }
         }
+        self.finish_open_faces(dt);
         iters
+    }
+
+    // ---- openings --------------------------------------------------------
+
+    /// Share of the boundary face on side `upper` of axis `b` that is open,
+    /// averaged over the two cells next to the velocity face `ix` of
+    /// component `c`.
+    fn open_share(&self, b: usize, upper: bool, ix: [usize; 3], c: usize) -> f64 {
+        if self.open.is_empty() {
+            return 0.0;
+        }
+        let m = &self.mesh;
+        let e = if upper { m.n[b] } else { 0 };
+        let at = |q: usize| -> f64 {
+            let mut f = with(ix, b, e);
+            f[c] = q;
+            self.open.afrac[b][m.idx(b, f)]
+        };
+        0.5 * (at(ix[c] - 1) + at(ix[c].min(m.n[c] - 1)))
+    }
+
+    /// Tangential momentum carried through an open face: the face velocity
+    /// `u_b` times the component `c` of the air that crosses (zero for air
+    /// coming in from rest, the adjacent value for air going out).
+    fn open_transverse_flux(&self, c: usize, b: usize, e: usize, ix: [usize; 3]) -> f64 {
+        if self.open.is_empty() {
+            return 0.0;
+        }
+        let m = &self.mesh;
+        let (lo, hi) = (ix[c] - 1, ix[c]);
+        let w_lo = m.dx[c][hi] / (m.dx[c][lo] + m.dx[c][hi]);
+        let mut ia = with(ix, b, e);
+        ia[c] = lo;
+        let mut ib = ia;
+        ib[c] = hi;
+        let (va, vb) = (m.idx(b, ia), m.idx(b, ib));
+        let ub = w_lo * self.vel[b][va] * self.open.afrac[b][va]
+            + (1.0 - w_lo) * self.vel[b][vb] * self.open.afrac[b][vb];
+        let inflow = if e == 0 { ub > 0.0 } else { ub < 0.0 };
+        if inflow {
+            return 0.0;
+        }
+        let edge = if e == 0 { 0 } else { m.n[b] - 1 };
+        ub * self.vel[c][m.idx(c, with(ix, b, edge))]
+    }
+
+    /// Enthalpy flux `phi u T` through boundary face `e` (0 or n) of the
+    /// cell `ix` along axis `a`, in the +axis direction.
+    fn open_enthalpy_flux(&self, a: usize, e: usize, ix: [usize; 3]) -> f64 {
+        if self.open.is_empty() {
+            return 0.0;
+        }
+        let m = &self.mesh;
+        let v = m.idx(a, with(ix, a, e));
+        let phi = self.open.afrac[a][v];
+        if phi == 0.0 {
+            return 0.0;
+        }
+        let u = self.vel[a][v];
+        let inflow = if e == 0 { u > 0.0 } else { u < 0.0 };
+        let tb = if inflow {
+            self.t_in[self.open.patch_of[a][v]]
+        } else {
+            self.t[m.cell(ix)]
+        };
+        phi * u * tb
+    }
+
+    /// Open faces get the buoyancy of the air behind them as their
+    /// predicted velocity (no convection or viscosity on the half cell).
+    fn predict_open_faces(&mut self, dt: f64) {
+        for f in &self.open.faces {
+            let g = self.cfg.gravity[f.axis];
+            let acc = -g * self.cfg.beta * (self.t[f.cell] - self.t_buoyancy_ref);
+            self.vel[f.axis][f.vel] += dt * acc;
+        }
+    }
+
+    /// Before the pressure solve: the open faces' implicit law becomes an
+    /// effective predicted velocity and a conductance to zero pressure.
+    fn set_open_faces(&mut self, dt: f64) {
+        if self.open.is_empty() {
+            return;
+        }
+        let mut g = vec![0.0; self.mesh.cells()];
+        for (n, f) in self.open.faces.iter().enumerate() {
+            let sgn = f.outward();
+            let u_star = sgn * self.vel[f.axis][f.vel];
+            let (r, pj) = self.open.law(f, self.open_speed[n], u_star, self.cfg.rho);
+            let alpha = 1.0 / (1.0 + dt * r / f.dh);
+            self.open_alpha[n] = alpha;
+            g[f.cell] += f.area * alpha / f.dh;
+            self.vel[f.axis][f.vel] = sgn * alpha * (u_star - dt * pj / f.dh);
+        }
+        self.pressure.set_open_conductance(&g);
+    }
+
+    /// After the pressure solve: the open faces' velocity from the cell
+    /// pressure behind them.
+    fn finish_open_faces(&mut self, dt: f64) {
+        for (n, f) in self.open.faces.iter().enumerate() {
+            let sgn = f.outward();
+            let u_out =
+                sgn * self.vel[f.axis][f.vel] + self.open_alpha[n] * dt * self.p[f.cell] / f.dh;
+            self.vel[f.axis][f.vel] = sgn * u_out;
+            self.open_speed[n] = 0.5 * (self.open_speed[n] + u_out.abs());
+        }
+    }
+
+    /// Volume flow out through patch `patch`, m3/s (negative = in).
+    pub fn patch_flow_m3s(&self, patch: usize) -> f64 {
+        self.open
+            .faces
+            .iter()
+            .filter(|f| f.patch == patch)
+            .map(|f| f.outward() * self.vel[f.axis][f.vel] * f.area)
+            .sum()
+    }
+
+    /// Enthalpy carried out through all openings, W, relative to 0 degrees C
+    /// (the net mass flow is zero at steady state, so the zero is
+    /// immaterial there). Air going in carries its inflow temperature.
+    pub fn open_enthalpy_out_w(&self) -> f64 {
+        let rho_cp = self.cfg.conductivity / self.cfg.alpha;
+        self.open
+            .faces
+            .iter()
+            .map(|f| {
+                let u = f.outward() * self.vel[f.axis][f.vel];
+                let tb = if u < 0.0 {
+                    self.t_in[f.patch]
+                } else {
+                    self.t[f.cell]
+                };
+                rho_cp * u * f.area * tb
+            })
+            .sum()
     }
 
     // ---- energy --------------------------------------------------------
@@ -438,7 +624,7 @@ impl FlowSolver {
                     for a in 0..3 {
                         let face = |e: usize| -> f64 {
                             if e == 0 || e == n[a] {
-                                return 0.0;
+                                return self.open_enthalpy_flux(a, e, ix);
                             }
                             let ua = self.vel[a][m.idx(a, with(ix, a, e))];
                             let at = |q: usize| -> Sample {
@@ -471,12 +657,21 @@ impl FlowSolver {
                             let w = m.dx[a][s];
                             for upper in [false, true] {
                                 if (!upper && s == 0) || (upper && s + 1 == n[a]) {
-                                    if let ThermalBc::Fixed(tw) =
-                                        self.cfg.faces[2 * a + upper as usize].thermal
-                                    {
-                                        let cw = alpha / (0.5 * w * w);
-                                        a_sum += cw;
-                                        a_nb += cw * tw;
+                                    match self.cfg.faces[2 * a + upper as usize].thermal {
+                                        ThermalBc::Adiabatic => {}
+                                        ThermalBc::Fixed(tw) => {
+                                            let cw = alpha / (0.5 * w * w);
+                                            a_sum += cw;
+                                            a_nb += cw * tw;
+                                        }
+                                        ThermalBc::Convective { h, t_out } => {
+                                            // half cell of air in series with the film
+                                            let r = 0.5 * w / self.cfg.conductivity + 1.0 / h;
+                                            let cw =
+                                                self.cfg.alpha / (self.cfg.conductivity * r * w);
+                                            a_sum += cw;
+                                            a_nb += cw * t_out;
+                                        }
                                     }
                                 } else {
                                     let q = if upper { s + 1 } else { s - 1 };
