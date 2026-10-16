@@ -9,3 +9,6 @@
 
 ## 2026-10-16: cabinet track ready
 Registered the switcher chips, `outline.pages`, `commissioning.*` anchors and Ctrl+7 (`view.commissioning`); the commissioning lesson points at `switcher.commissioning`. All ten cabinet lessons are `ready`; lint, replay, key-hint and control-name tests pass.
+
+## 2026-10-16: audit wording fixes
+From audits/cabinet-lessons-vs-ui-2026-10-16.md: cabinet-layout (problem count and placed/unplaced are in the strip under the bar), heat-and-sizing (total loss 34 W), view-3d (no longer read only), commissioning (punch line sits under the check). Still open: narrow-window More-menu anchors, short switcher chips under 1250 px, heat anchors, wire-routing summary line, rails-and-ducts example prefix, Won't fix only on Open items.

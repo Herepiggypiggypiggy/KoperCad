@@ -88,10 +88,10 @@ id = "total-loss"
 title = "Total loss"
 title_nl = "Totaal verlies"
 text = """
-Under the colour bar the legend says "Total loss 35 W", the sum of the part losses. When a part has no loss data, the legend also says how many devices lack it.
+Under the colour bar the legend says "Total loss 34 W", the sum of the part losses. When a part has no loss data, the legend also says how many devices lack it.
 """
 text_nl = """
-Onder de kleurbalk zegt de legenda "Total loss 35 W", de som van de artikelverliezen. Heeft een artikel geen verliesgegevens, dan zegt de legenda ook hoeveel componenten die missen.
+Onder de kleurbalk zegt de legenda "Total loss 34 W", de som van de artikelverliezen. Heeft een artikel geen verliesgegevens, dan zegt de legenda ook hoeveel componenten die missen.
 """
 point = { ui = "cabinet.heat" }
 
