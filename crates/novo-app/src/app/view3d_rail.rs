@@ -239,8 +239,20 @@ pub(super) fn card(
             width: state.typed(id, Field::Width).unwrap_or(now.width),
             height: state.typed(id, Field::Height).unwrap_or(now.height),
         };
-        for line in problems(layout, &typed, kind, vertical, tag_of) {
-            ui.colored_label(crate::theme::ui_palette().error, line);
+        // Only a value being typed can be a problem; the stored ones are fine.
+        let any_typed = [
+            Field::X,
+            Field::Y,
+            Field::Length,
+            Field::Width,
+            Field::Height,
+        ]
+        .iter()
+        .any(|f| state.typed(id, *f).is_some());
+        if any_typed {
+            for line in problems(layout, &typed, kind, vertical, tag_of) {
+                ui.colored_label(crate::theme::ui_palette().error, line);
+            }
         }
         if changed {
             ask = Some(RailAsk::Set(edit));
