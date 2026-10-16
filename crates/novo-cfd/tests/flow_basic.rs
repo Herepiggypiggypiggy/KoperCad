@@ -62,3 +62,30 @@ fn a_heated_box_conserves_energy() {
     let vmax = s.vel.iter().flatten().fold(0.0_f64, |a, v| a.max(v.abs()));
     assert!(vmax > 1e-4, "the plume should move air");
 }
+
+#[test]
+fn convective_wall_matches_the_series_resistance() {
+    // Fixed 60 C on the left, a film (h = 8 W/m2K) to 20 C air on the right,
+    // no flow: q = (60 - 20) / (L/k + 1/h) and the profile is linear.
+    let (mesh, mut cfg) = base([20, 3, 3]);
+    cfg.gravity = [0.0; 3];
+    cfg.faces[Face::XMin as usize].thermal = ThermalBc::Fixed(60.0);
+    cfg.faces[Face::XMax as usize].thermal = ThermalBc::Convective {
+        h: 8.0,
+        t_out: 20.0,
+    };
+    let (k, l) = (cfg.conductivity, 0.5);
+    let mut s = FlowSolver::new(mesh, cfg, 20.0);
+    for _ in 0..1500 {
+        s.step(20.0);
+    }
+    let q = 40.0 / (l / k + 1.0 / 8.0);
+    let slope = -q / k; // dT/dx
+    let mut worst: f64 = 0.0;
+    for i in 0..20 {
+        let exact = 60.0 + slope * s.mesh.centre[0][i];
+        worst = worst.max((s.t[s.mesh.cell([i, 1, 1])] - exact).abs());
+    }
+    println!("convective wall: max error {worst:.2e} K (q = {q:.3} W/m2)");
+    assert!(worst < 1e-6);
+}
