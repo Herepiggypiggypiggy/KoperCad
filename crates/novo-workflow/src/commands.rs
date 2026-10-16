@@ -848,6 +848,27 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.iso",
+        "Isometric view",
+        "View",
+        &["3d", "corner view", "perspective"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.front",
+        "Front view",
+        "View",
+        &["3d", "door side", "look at the door"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.top",
+        "Top view",
+        "View",
+        &["3d", "from above", "plan"],
+        Needs::Project,
+    ),
+    cmd(
         "view.terminals_drawer",
         "Terminals",
         "View",

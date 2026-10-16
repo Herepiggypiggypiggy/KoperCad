@@ -1009,3 +1009,49 @@ fn the_cabinet_registers_the_controls_and_panels_lessons_point_at() {
         assert!(rect.width() > 0.0 && rect.height() > 0.0, "{id}: {rect:?}");
     }
 }
+
+#[test]
+fn the_selection_travels_between_the_cabinet_and_3d_and_view_commands_run() {
+    use novo_view3d::scene::{ItemId, ItemKind};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let device = novo_layout::model::candidates(project(&d), cab)[0].id;
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 100.0, 120.0), Some(cab), l, &[]);
+    d.frame();
+
+    // Selected in the Cabinet, selected in 3D.
+    d.app.cabinet_ask(Ask::Select(device), None, None, &[]);
+    d.app.run_command(&ctx, "view.3d", None);
+    d.frame();
+    assert_eq!(
+        d.app
+            .view3d
+            .view
+            .state
+            .selection
+            .iter()
+            .copied()
+            .collect::<Vec<_>>(),
+        vec![ItemId::new(ItemKind::Device, device)]
+    );
+
+    // The view commands switch to 3D and are spent by the next frame.
+    d.app.run_command(&ctx, "view.schematic", None);
+    d.frame();
+    d.app.run_command(&ctx, "view.iso", None);
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.pending.is_some());
+    d.frame();
+    assert!(d.app.view3d.pending.is_none());
+}
