@@ -40,6 +40,10 @@ name = "orbit"
 required-features = ["gpu"]
 
 [[example]]
+name = "uicost"
+required-features = ["egui"]
+
+[[example]]
 name = "window"
 required-features = ["egui"]
 

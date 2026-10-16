@@ -2,7 +2,8 @@
 //!
 //!   cargo run --release -p novo-view3d --features gpu --example orbit -- \
 //!       [--items 1000] [--wires 300] [--frames 300] [--size 1920x1080] [--msaa] [--scale 0.75] \
-//!       [--png out.png]
+//!       [--png out.png] [--tier discrete|integrated|software] [--shadows] [--no-edges] \
+//!       [--heat N]
 //!
 //! Renders a scripted 360 degree orbit of the demo cabinet into an offscreen
 //! target and prints CPU time per frame (cull, instances, encode) and wall time
@@ -12,7 +13,7 @@
 use flate2::{Compression, write::ZlibEncoder};
 use novo_view3d::demo::{self, DemoOptions};
 use novo_view3d::render::{Frame, Mode, Quality, Renderer, Tier, ViewTarget, read_rgba};
-use novo_view3d::{Camera, Look, ViewPreset, ViewState};
+use novo_view3d::{Camera, Look, Overlay, OverlayLines, OverlayMesh, ViewPreset, ViewState};
 use std::io::Write;
 use std::time::Instant;
 
@@ -58,6 +59,57 @@ fn write_png(path: &str, w: u32, h: u32, rgba: &[u8]) {
     std::fs::write(path, out).unwrap();
 }
 
+/// A stand-in for the heat layer: a translucent slice plane through the
+/// cabinet of `n` x `n` quads coloured by position, and `n` tracer lines of 40
+/// points each.
+fn heat_overlays(b: &novo_view3d::Aabb, n: usize) -> Vec<Overlay> {
+    use glam::Vec3;
+    let (min, max) = (b.min, b.max);
+    let z = (min.z + max.z) * 0.5 + 20.0;
+    let mut mesh = OverlayMesh {
+        translucent: true,
+        ..Default::default()
+    };
+    for j in 0..=n {
+        for i in 0..=n {
+            let (u, v) = (i as f32 / n as f32, j as f32 / n as f32);
+            mesh.positions.push(Vec3::new(
+                min.x + u * (max.x - min.x),
+                min.y + v * (max.y - min.y),
+                z,
+            ));
+            mesh.colors
+                .push([(u * 255.0) as u8, 80, ((1.0 - v) * 255.0) as u8, 140]);
+        }
+    }
+    for j in 0..n {
+        for i in 0..n {
+            let a = (j * (n + 1) + i) as u32;
+            let (b2, c, d) = (a + 1, a + n as u32 + 1, a + n as u32 + 2);
+            mesh.indices.extend([a, b2, d, a, d, c]);
+        }
+    }
+    let mut lines = OverlayLines {
+        width_px: 2.0,
+        order: 1,
+        ..Default::default()
+    };
+    for k in 0..n {
+        lines.starts.push(lines.positions.len() as u32);
+        let y = min.y + (k as f32 + 0.5) / n as f32 * (max.y - min.y);
+        for p in 0..40 {
+            let t = p as f32 / 39.0;
+            lines.positions.push(Vec3::new(
+                min.x + t * (max.x - min.x),
+                y + (t * 12.0).sin() * 8.0,
+                z + 2.0,
+            ));
+            lines.colors.push([255, (t * 255.0) as u8, 40, 255]);
+        }
+    }
+    vec![Overlay::Mesh(mesh), Overlay::Lines(lines)]
+}
+
 fn percentile(sorted: &[f32], p: f32) -> f32 {
     sorted[((sorted.len() - 1) as f32 * p).round() as usize]
 }
@@ -71,6 +123,10 @@ fn main() {
     let mut scale: Option<f32> = None;
     let mut png: Option<String> = None;
     let mut view: Option<String> = None;
+    let mut forced_tier: Option<Tier> = None;
+    let mut shadows = false;
+    let mut edges = true;
+    let mut heat = 0usize;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -86,6 +142,17 @@ fn main() {
             "--scale" => scale = Some(args.next().unwrap().parse().unwrap()),
             "--png" => png = Some(args.next().unwrap()),
             "--view" => view = Some(args.next().unwrap()),
+            "--tier" => {
+                forced_tier = Some(match args.next().unwrap().as_str() {
+                    "discrete" => Tier::Discrete,
+                    "integrated" => Tier::Integrated,
+                    "software" => Tier::Software,
+                    other => panic!("unknown tier {other}"),
+                })
+            }
+            "--shadows" => shadows = true,
+            "--no-edges" => edges = false,
+            "--heat" => heat = args.next().unwrap().parse().unwrap(),
             other => panic!("unknown argument {other}"),
         }
     }
@@ -98,7 +165,7 @@ fn main() {
     }))
     .expect("no wgpu adapter");
     let info = adapter.get_info();
-    let tier = Tier::of(&info);
+    let tier = forced_tier.unwrap_or_else(|| Tier::of(&info));
     println!(
         "adapter: {} ({:?}, {:?}), tier {:?}",
         info.name, info.backend, info.device_type, tier
@@ -120,7 +187,14 @@ fn main() {
         size.1
     );
     let look = Look::dark();
-    let state = ViewState::default();
+    let mut state = ViewState::default();
+    state.display.edges = edges;
+    state.display.shadows = shadows;
+    let overlays = if heat > 0 {
+        heat_overlays(&scene.bounds(), heat)
+    } else {
+        Vec::new()
+    };
     let mut renderer = Renderer::new(&device);
     let mut target = ViewTarget::new(&renderer, &device);
     let mut quality = Quality::new(Mode::Interactive, tier);
@@ -130,7 +204,16 @@ fn main() {
     if let Some(s) = scale {
         quality.scale = s;
     }
-    println!("quality: msaa {} scale {}", quality.msaa, quality.scale);
+    quality.shadows = shadows;
+    println!(
+        "quality: msaa {} scale {} shadows {} edges {} heat overlay {} ({} overlays)",
+        quality.msaa,
+        quality.scale,
+        quality.shadows,
+        edges,
+        heat,
+        overlays.len()
+    );
 
     let aspect = size.0 as f32 / size.1 as f32;
     let mut camera = Camera::default();
@@ -156,8 +239,8 @@ fn main() {
                 look: &look,
                 size_px: size,
                 quality,
-                overlays: &[],
-                overlay_revision: 0,
+                overlays: &overlays,
+                overlay_revision: 1,
             },
         );
         queue.submit([encoder.finish()]);

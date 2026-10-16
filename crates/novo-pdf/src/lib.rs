@@ -177,6 +177,7 @@ pub fn print_style() -> ModelStyle {
         tag_color: ink,
         sheet_fill: None,
         frame_color: ink,
+        sheet_text_color: ink,
         note_color: ink,
         note_warning_color: ink,
         joint_color: ink,
@@ -424,6 +425,7 @@ pub fn export_pdf_with_reports(
                     rotation: 0.0,
                     keep_color: false,
                     bold: *bold,
+                    priority: Default::default(),
                 });
             }
         }

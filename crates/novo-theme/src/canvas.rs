@@ -15,6 +15,9 @@ pub struct CanvasPalette {
     pub sheet: [u8; 4],
     /// Sheet border and title block lines.
     pub sheet_frame: [u8; 4],
+    /// Text of the title block and the sheet's column numbers: content the
+    /// user checks, so clearly stronger than the frame lines.
+    pub sheet_text: [u8; 4],
     /// Minor grid points or lines.
     pub grid_minor: [u8; 4],
     /// Major grid points or lines, every fifth step.
@@ -110,6 +113,7 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     background: [0x0E, 0x0E, 0x10, 0xFF],
     sheet: [0x13, 0x13, 0x15, 0xFF],
     sheet_frame: [0x46, 0x45, 0x48, 0xFF],
+    sheet_text: [0xA8, 0xA6, 0xA1, 0xFF],
     grid_minor: [0x2E, 0x2E, 0x33, 0xFF],
     grid_major: [0x40, 0x40, 0x45, 0xFF],
     symbol: [0xEC, 0xEA, 0xE5, 0xFF],
@@ -140,6 +144,7 @@ pub const CANVAS_LIGHT: CanvasPalette = CanvasPalette {
     background: [0xD9, 0xD7, 0xD2, 0xFF],
     sheet: [0xFF, 0xFF, 0xFF, 0xFF],
     sheet_frame: [0x6F, 0x6C, 0x66, 0xFF],
+    sheet_text: [0x4A, 0x48, 0x44, 0xFF],
     grid_minor: [0xD2, 0xCF, 0xC9, 0xFF],
     grid_major: [0xB4, 0xB0, 0xA8, 0xFF],
     symbol: [0x1E, 0x1D, 0x1B, 0xFF],
@@ -221,6 +226,7 @@ mod tests {
                 p.symbol,
                 p.wire,
                 p.text,
+                p.sheet_text,
                 p.cross_reference,
                 p.connection_point,
                 p.selection,

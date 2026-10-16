@@ -34,6 +34,22 @@ impl NovoApp {
         self.export_pdf_to(&path)
     }
 
+    /// Exports only the page on screen, to `<project> page <name>.pdf` next
+    /// to the project (a project with no file yet: in Documents).
+    pub(super) fn export_pdf_page(&mut self) -> Option<PathBuf> {
+        let page = self.current_page?;
+        let page_name = self
+            .backend
+            .document()?
+            .project()
+            .page(page)
+            .map(|p| p.name.to_string())?;
+        let (dir, stem) = self.export_base()?;
+        let file = format!("{stem} page {page_name}.pdf").replace(['/', '\\', ':'], "-");
+        let path = replaceable_path(&dir.join(file));
+        self.export_pdf_pages_to(&path, novo_pdf::PageSet::Pages(vec![page]))
+    }
+
     /// The design checks as report pages after the drawing. A clean
     /// project prints none, so its PDF is the drawing alone.
     fn checks_appendix(&self) -> Option<novo_pdf::Appendix> {
@@ -50,9 +66,19 @@ impl NovoApp {
 
     /// Exports every page to `path`.
     pub fn export_pdf_to(&mut self, path: &Path) -> Option<PathBuf> {
+        self.export_pdf_pages_to(path, novo_pdf::PageSet::All)
+    }
+
+    /// Exports `pages` to `path`.
+    pub fn export_pdf_pages_to(
+        &mut self,
+        path: &Path,
+        pages: novo_pdf::PageSet,
+    ) -> Option<PathBuf> {
         let summary = Summary::of(self.problems());
         let replaced = path.exists();
         let options = novo_pdf::PdfOptions {
+            pages,
             notes: self.xref_notes_by_page(),
             title_revisions: self.all_title_revisions(),
             changed_pages: self.pages_changed_since_latest(),
