@@ -390,6 +390,13 @@ fn each_phase_strand_is_numbered_top_to_bottom_before_the_next() {
         .iter()
         .filter_map(|g| Some((g.potential.clone()?, g.new.clone()?)))
         .collect();
+    // The three phases are all there, so the checks below cannot pass empty.
+    for phase in ["L1", "L2", "L3"] {
+        assert!(
+            order.iter().any(|(p, _)| p == phase),
+            "{phase} in {order:?}"
+        );
+    }
     // Potentials in the order their groups were numbered: each phase once.
     let mut seen: Vec<&str> = Vec::new();
     for (potential, _) in &order {

@@ -234,11 +234,17 @@ fn split_at_device_bridges(project: &Project, wires: &[WireId]) -> Vec<Vec<WireI
     parts.into_values().collect()
 }
 
+/// The strand a group's first point lies on: x in whole millimetres, so a
+/// device drawn a fraction of a millimetre off does not interleave strands.
+fn strand(x: f64) -> i64 {
+    x.round() as i64
+}
+
 fn compare(a: &Group, b: &Group) -> Ordering {
     a.page_rank
         .cmp(&b.page_rank)
         .then(a.column.cmp(&b.column))
-        .then(a.x.total_cmp(&b.x))
+        .then(strand(a.x).cmp(&strand(b.x)))
         .then(a.y.total_cmp(&b.y))
         .then_with(|| a.wires.cmp(&b.wires))
 }
