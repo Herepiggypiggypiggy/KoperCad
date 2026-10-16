@@ -617,6 +617,11 @@ impl View3d {
                 None => self.marquee_from = press,
             }
         }
+        // Escape drops the item: nothing moves, and the rest of the drag does
+        // nothing (it does not turn into a marquee).
+        if self.item_grab.is_some() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            self.item_grab = None;
+        }
         if let Some((id, start)) = self.item_grab {
             let released = response.drag_stopped_by(PointerButton::Primary);
             let now = hover_pos

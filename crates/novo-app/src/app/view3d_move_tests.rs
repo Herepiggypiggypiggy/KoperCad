@@ -99,14 +99,14 @@ fn only_things_on_the_plate_can_be_moved() {
 fn releasing_a_moved_device_asks_for_one_drop_and_a_still_one_for_nothing() {
     let l = layout();
     let mut m = MoveState::default();
-    let (land, edit) = m.step(&l, drag(dev(1), (40.0, 0.0), false));
-    assert!(land.is_some() && edit.is_none() && m.dragging());
+    let (land, edit) = m.step(&l, &BTreeSet::new(), drag(dev(1), (40.0, 0.0), false));
+    assert!(!land.is_empty() && edit.is_none() && m.dragging());
     // The layout does not change while dragging: the origin is the press's.
-    let (_, edit) = m.step(&l, drag(dev(1), (60.0, 20.0), true));
+    let (_, edit) = m.step(&l, &BTreeSet::new(), drag(dev(1), (60.0, 20.0), true));
     let at = l.snapped(160.0, 120.0);
     assert_eq!(edit, Some(Edit::Device(DeviceEdit::Drop(1, at.0, at.1))));
     assert!(!m.dragging());
-    let (_, edit) = m.step(&l, drag(dev(1), (0.5, 0.5), true));
+    let (_, edit) = m.step(&l, &BTreeSet::new(), drag(dev(1), (0.5, 0.5), true));
     assert_eq!(edit, None, "snapped back to where it was");
 }
 
@@ -114,10 +114,18 @@ fn releasing_a_moved_device_asks_for_one_drop_and_a_still_one_for_nothing() {
 fn rails_and_ducts_move_by_the_rail_edit() {
     let l = layout();
     let mut m = MoveState::default();
-    let (_, edit) = m.step(&l, drag(ItemId::new(ItemKind::Rail, 7), (0.0, 50.0), true));
+    let (_, edit) = m.step(
+        &l,
+        &BTreeSet::new(),
+        drag(ItemId::new(ItemKind::Rail, 7), (0.0, 50.0), true),
+    );
     let at = l.snapped(50.0, 450.0);
     assert_eq!(edit, Some(Edit::Rail(RailEdit::MoveTo(7, at.0, at.1))));
-    let (_, edit) = m.step(&l, drag(ItemId::new(ItemKind::Duct, 8), (0.0, -50.0), true));
+    let (_, edit) = m.step(
+        &l,
+        &BTreeSet::new(),
+        drag(ItemId::new(ItemKind::Duct, 8), (0.0, -50.0), true),
+    );
     let at = l.snapped(50.0, 550.0);
     assert_eq!(edit, Some(Edit::Rail(RailEdit::MoveTo(8, at.0, at.1))));
 }
@@ -126,9 +134,9 @@ fn rails_and_ducts_move_by_the_rail_edit() {
 fn no_drag_ends_the_one_in_progress() {
     let l = layout();
     let mut m = MoveState::default();
-    m.step(&l, drag(dev(1), (10.0, 0.0), false));
+    m.step(&l, &BTreeSet::new(), drag(dev(1), (10.0, 0.0), false));
     assert!(m.dragging());
-    assert_eq!(m.step(&l, None), (None, None));
+    assert_eq!(m.step(&l, &BTreeSet::new(), None), (Vec::new(), None));
     assert!(!m.dragging());
 }
 
@@ -265,7 +273,7 @@ fn a_3d_drop_is_one_undo_step_and_the_plate_shows_it() {
     let before = placed(&d, cab, a);
     let l = novo_layout::model::load(project(&d), cab).unwrap();
     let mut m = MoveState::default();
-    let (_, edit) = m.step(&l, drag(dev(a), (50.0, 100.0), true));
+    let (_, edit) = m.step(&l, &BTreeSet::new(), drag(dev(a), (50.0, 100.0), true));
     let (ask, rail) = edit.unwrap().ask();
     assert!(rail.is_none());
     d.app.cabinet_ask(ask.unwrap(), Some(cab), Some(l), &[]);
@@ -321,4 +329,94 @@ fn rotate_and_delete_keys_do_not_leak_to_the_plate_afterwards() {
     d.frame();
     d.frame();
     assert!(placed(&d, cab, a).2, "still turned once, not twice");
+}
+
+#[test]
+fn pressing_on_a_selected_item_moves_the_whole_selection_by_the_same_step() {
+    let l = layout();
+    let sel: BTreeSet<_> = [dev(1), dev(2), ItemId::new(ItemKind::Rail, 7)].into();
+    let mut m = MoveState::default();
+    let (lands, _) = m.step(&l, &sel, drag(dev(1), (0.0, 50.0), false));
+    assert_eq!(lands.len(), 3);
+    let at = |item: ItemId| lands.iter().find(|x| x.item == item).unwrap().at;
+    assert_eq!(at(dev(1)), (100.0, 150.0));
+    assert!(lands.iter().all(|x| !x.clash), "{lands:?}");
+    assert_eq!(at(dev(2)), (300.0, 150.0));
+    assert_eq!(at(ItemId::new(ItemKind::Rail, 7)), (50.0, 450.0));
+    let (_, edit) = m.step(&l, &sel, drag(dev(1), (0.0, 50.0), true));
+    match edit {
+        Some(Edit::Group { devices, rails }) => {
+            assert_eq!(devices.len(), 2);
+            assert_eq!(rails, vec![(7, 50.0, 450.0)]);
+        }
+        other => panic!("{other:?}"),
+    }
+    // An unselected item moves alone.
+    let (lands, _) = m.step(&l, &sel, drag(dev(2), (0.0, 0.0), false));
+    assert_eq!(lands.len(), 3, "device 2 is selected too");
+    m.step(&l, &sel, None);
+    let (lands, _) = m.step(
+        &l,
+        &BTreeSet::from([dev(1)]),
+        drag(dev(2), (10.0, 0.0), false),
+    );
+    assert_eq!(lands.len(), 1);
+}
+
+#[test]
+fn a_group_clashes_when_any_member_does() {
+    let l = layout();
+    let sel: BTreeSet<_> = [dev(1), dev(2)].into();
+    let mut m = MoveState::default();
+    let (lands, _) = m.step(&l, &sel, drag(dev(1), (-95.0, 0.0), false));
+    assert!(lands[0].clash || lands.iter().any(|x| x.clash), "{lands:?}");
+}
+
+#[test]
+fn a_device_near_a_rail_lines_up_on_it() {
+    let l = layout();
+    // The rail at y = 400 runs from x = 50 for 300 mm; device 1 is at y = 100.
+    let land = landing(&l, dev(1), (0.0, 296.0)).unwrap();
+    assert_eq!(land.at.1, 400.0, "top snapped onto the rail line");
+    assert_eq!(land.rail, Some(7));
+    assert!(!land.clash);
+    // Beyond the reach: no snap.
+    let far = landing(&l, dev(1), (0.0, 250.0)).unwrap();
+    assert_eq!(far.rail, None);
+    // Beside the rail's run: no snap.
+    let beside = landing(&l, dev(1), (400.0, 296.0)).unwrap();
+    assert_eq!(beside.rail, None);
+}
+
+#[test]
+fn the_lined_up_landing_is_green() {
+    let l = layout();
+    let frame = PlateFrame {
+        width: 600.0,
+        height: 800.0,
+    };
+    let land = landing(&l, dev(1), (0.0, 296.0)).unwrap();
+    let set = ghost(&land, &frame, 60.0);
+    let novo_view3d::Overlay::Mesh(m) = &set[0] else {
+        panic!()
+    };
+    assert!(m.colors[0][1] > m.colors[0][0] && m.colors[0][1] > m.colors[0][2]);
+}
+
+#[test]
+fn a_group_move_is_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, a, b) = cabinet_with_two_devices(&mut d);
+    let (pa, pb) = (placed(&d, cab, a), placed(&d, cab, b));
+    d.app.view3d_move_group(
+        cab,
+        vec![(a, pa.0, pa.1 + 40.0), (b, pb.0, pb.1 + 40.0)],
+        vec![],
+    );
+    assert_eq!(placed(&d, cab, a).1, pa.1 + 40.0);
+    assert_eq!(placed(&d, cab, b).1, pb.1 + 40.0);
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!((placed(&d, cab, a), placed(&d, cab, b)), (pa, pb));
 }
