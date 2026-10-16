@@ -157,6 +157,8 @@ point = { at = { device = "-K1" } }                     # a device on the shown 
 point = { at = { device = "-K1", pin = "A1" } }         # a pin
 point = { at = { page = "Control circuit", x = 120, y = 60 } }   # a canvas spot in mm
 point = { at = { wire = ["-F1:2", "-K1:1"] } }          # a wire by its ends
+point = { at = { pin = "-K1:A1" } }                     # a pin written whole
+point = { at = { feed = "L1" } }                        # the potential feed named L1, wherever it is
 point = { area = { page = "Main circuit", x = 20, y = 20, w = 80, h = 50 } }  # a region
 point = { ui = "dock.connect", view = "keep" }          # canvas targets default to view = "reveal"
 ```
@@ -175,6 +177,10 @@ point = { ui = "dock.connect", view = "keep" }          # canvas targets default
   `view = "reveal"` (default) the view is moved only if the target is off screen, using the same
   reveal as cross reference jumps; a lesson never changes the zoom of a person who already has it
   in view.
+- **Point at what the person made, not at a coordinate.** A page spot (`x`, `y`) is right for "drop
+  it here" before anything is placed. Once the person has placed or drawn something, its place is
+  theirs: a feed they dragged lands wherever they pressed. Point at it by what it is (`device`,
+  `pin`, `feed`, `wire`) so the box is on the thing, whatever they did.
 - **Look.** A soft pulsing ring (or rectangle for areas) in the accent colour, plus a short arrow
   from the card when the target is far from it. It never dims the screen, never blocks a click and
   never takes a key (`interactable(false)`). With `reduce_motion` the ring is static. Colours come
@@ -268,13 +274,22 @@ takes a key and never blocks input.
    [ Back ]  [ Show me how ]  [ Skip step ]        ⟲ Restart lesson
 ```
 
-- **Show me how** flashes the pointer again. A **Do it for me** button that runs the step's `solve`
-  as one undo step is not in the first version; the format keeps `solve` so it can be added
-  without changing any lesson.
+- **Show me how** plays a demonstration over the real screen, repeated up to three times and
+  stopped when the step changes: a pointer gliding to the control or the spot, key caps with the
+  person's own keys, text typed letter by letter, a click ripple, a faint copy of the part that
+  lands and a wire being dragged. The card lists the same actions under **How**, with the one being
+  done in bold. It never changes the drawing. With Preferences > reduce motion it shows the last
+  picture, still. A **Do it for me** button that runs the step's `solve` as one undo step is not in
+  the first version; the format keeps `solve` so it can be added without changing any lesson.
+
+  A step writes its demonstration with `demo`, a list played in order (section 6a); a step without
+  `demo` gets one derived from the command that ticks it, its `solve` and its `point`.
 - **Back** returns the card to the previous step (it does not undo the drawing). **Skip step**
   moves on without the tick and records "skipped". **Restart lesson** reopens a fresh copy of the
   sample project and clears this lesson's progress after a confirm. ✕ closes the card and keeps
-  progress; the Learn window offers **Continue**.
+  progress; the Learn window offers **Continue** while the lesson's own project is still open. The
+  sample project is not saved between sessions, so in a later session the same lesson offers
+  **Start** (or **Do again**) and begins at step 1, with the old progress still shown as steps done.
 - Esc does not close the card: Esc belongs to the editor.
 - The last step shows "Done", a summary of what was covered, and the lessons in `next`.
 
@@ -299,6 +314,47 @@ makes it dirty and Ctrl+S keeps the person's own copy. Nothing is ever written t
 | Panels | A faint **Lesson: Terminal strips** link in an empty state, from the lesson's `topics` (the design-system thread owns the widget) |
 | Shortcut sheet (#434) | Links to Learn |
 
+### 6a. `how` and `demo`: the instructions and the demonstration of a step
+
+`how = ["Hold {key:tool.place}", "Press 4"]` (with `how_nl` of the same length) are the author's
+numbered instructions on the card: the keys and clicks, and why. Same markup as `text`; at most 8
+lines. When a step has `how`, the card shows them under **How**; when it has none, the card lists the
+actions of the demonstration instead. `demo` below is what **Show me how** plays.
+
+```toml
+demo = [
+  { press = "tool.place" },               # the person's own key for a command (Q), as a key cap
+  { type = "mcb" },                       # typed letter by letter
+  { key = "Enter" },                      # a key by its name
+  { hold = "tool.place", secs = 1.2 },    # a key held down
+  { move = { at = { page = "Control branch", x = 80, y = 40 } } },   # a target, as `point`
+  { ghost = { symbol = "iec/protection/mcb_1p", page = "Control branch", x = 80, y = 40 } },
+  { click = true },                       # a click ripple where the pointer is
+  { double_click = true },                # two rings; right_click = true shows the right button
+  { keys = ["Ctrl", "Z"] },               # several keys at once
+  { drag = { from = { at = { pin = "-K1:A1" } }, to = { at = { pin = "-F1:2" } } } },
+  { say = "Release over the pin", say_nl = "Laat los boven de pin" },   # a line of the How list only
+  { wait = 0.5 },
+]
+```
+
+- `press` and `hold` name a command id: the cap shows the key the person has, so a changed key shows
+  correctly. The How list says "Press Q" from `demo_press` in `ui.toml` (with a Dutch twin); nothing
+  readable is typed in code.
+- `move`, `drag` and the pin of a `ghost` use the same targets as `point` (`ui`, `at`, `area`).
+  `at = { pin = "-K1:A1" }` names a pin without repeating the device.
+- **A wire step shows its two ends.** Every `drag` draws a ring on the start (badge 1, "Start")
+  and on the end (badge 2, "End"; a second wire is 3 and 4) and a dashed ghost wire between
+  them. The rings leave the pin itself in view and the badges flip inwards at the page edge. After
+  the three plays the markers and the ghost wire stay until the step changes, **Stop** is pressed
+  on the card or Esc is pressed. A step ticked by `expect = { wire = { from, to } }` gets this
+  without writing a `demo`.
+- Every `press`, `hold` and `ui` target in `demo` is checked by the lint like the rest of the step;
+  in a `ready` lesson an unknown one is an error.
+- Without `demo`, the demonstration is: the command of an `expect = { command }`, then each `solve`
+  op (a placed part is a move, a ghost and a click; a wire is a drag between its pins; a selection is
+  a move and a click), else a move to `point` and a click when it is a control.
+
 ## 7. Content threads: how to write a lesson
 
 Rules of thumb (the reviewer checks them)
@@ -312,7 +368,9 @@ Rules of thumb (the reviewer checks them)
 5. Never teach a feature that is unfinished or hidden. Mark such a lesson `status = "draft"`.
 6. The sample project has just enough drawing to make the point, a name that says what it is, and
    illustrative parts (say so in its description, as the example does).
-7. Every action step has a `solve`, so the lesson is tested and the person has "Show me how".
+7. Every action step has a `solve`, so the lesson is tested, and a `demo` whenever the action is not
+   just a click on what the pointer shows (a key, a typed word, a held key, a drag), so "Show me how"
+   teaches *how*; the derived demonstration only points and clicks.
 
 CI (all run in the normal `cargo test --workspace`, Linux, no window)
 
@@ -340,8 +398,9 @@ CI (all run in the normal `cargo test --workspace`, Linux, no window)
 
 Authoring loop for a thread with no window: write `lesson.toml` and `project.json`, run
 `cargo test -p novo-learn -p novo-app learn`, read the report. For someone with the app:
-`kopercad --lessons <folder>` loads lessons from a folder on top of the built-in ones, and the Learn
-window has a **Reload** button, so edits show without a rebuild.
+setting the environment variable `KOPERCAD_LESSONS` to a folder loads its lessons on top of the
+built-in ones (so does `%APPDATA%\KoperCAD\lessons`), and the Learn window has a **Reload** button, so
+edits show without a rebuild.
 
 ## Language
 
@@ -408,7 +467,7 @@ owns its list.
 | **Schematic basics and motor control** (`basics`) | `tour` (screen tour: dock, outline, inspector, pill, Ctrl+K, `?`), `fast-keys` (the #428 steps as a lesson), `first-schematic` (build the control circuit of the motor starter from `@blank`), `wiring-modes`, `proposals-and-tags`, `duplicate-and-numbering`, `pages-and-functions`, `cross-references`, `potentials`, `motor-starter`, `save-and-share` |
 | **Terminals, PLC and documentation** (`terminals`) | `terminal-strips`, `connection-screens`, `cables-and-shields`, `plc-io`, `generated-pages`, `wire-list-and-bom`, `pdf-export` |
 | **Cabinet layout and panel building** (`cabinet`) | `cabinet-layout`, `enclosure-sizing`, `wire-routing`, `view-3d`, `panel-plate-drawing`, `commissioning` |
-| **Productivity, checks and data** (`productivity`) | `design-checks`, `blocks-and-macros`, `spreadsheets`, `revisions-and-compare`, `live-view`, `import-dxf-and-parts`, `parts-library` |
+| **Productivity, checks and data** (`productivity`) | `design-checks`, `parts-library`, `blocks-and-macros`, `spreadsheets`, `revisions-and-compare`, `dxf-and-backgrounds`, `time-savers` (settings: Auto connections, keymap file, drawing standard). `commissioning` is written by this thread but listed under `cabinet`. `live-view` is left to the simulation owner |
 
 Each lesson starts as `draft` until the control it teaches has an anchor on main, then flips to
 `ready` in its own PR.

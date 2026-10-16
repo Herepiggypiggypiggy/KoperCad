@@ -11,10 +11,13 @@ use std::path::{Path, PathBuf};
 
 use eframe::egui;
 use novo_core::Value;
+use novo_interop::part3d::cache::MeshCache;
+use novo_interop::part3d::service::{GeometryJob, GeometryService, GeometryState, TIME_LIMIT};
+use novo_interop::part3d::{Fallback, MeshOrigin, Quality};
 use novo_parts::{
-    Catalog, CatalogPart, ImportFlow, LocalLibrary, PartKey, RowAction, SourceRecord, SourceTable,
-    browser_rows, default_downloads_dir, display_value, is_internal_key, property_label,
-    user_catalog_path,
+    Catalog, CatalogPart, ConnectionKind, DataSource, FileKind, ImportFlow, Lifecycle,
+    LocalLibrary, PartKey, RowAction, Side, SourceRecord, SourceTable, browser_rows,
+    default_downloads_dir, display_value, is_internal_key, property_label, user_catalog_path,
 };
 
 use super::parts_import::{Import, Phase, import_path};
@@ -39,6 +42,11 @@ pub(crate) struct PartsWindow {
     /// The part whose Remove from library awaits a second click.
     confirm_remove: Option<PartKey>,
     focus_search: bool,
+    /// Builds the 3D models of imported STEP files in the background;
+    /// created on the first frame, when the repaint handle is known.
+    geometry: Option<GeometryService>,
+    /// The Quality tab (completeness of the catalog).
+    quality: super::parts_quality::QualityTab,
 }
 
 impl PartsWindow {
@@ -59,6 +67,8 @@ impl PartsWindow {
             catalog_path: user_catalog_path(),
             confirm_remove: None,
             focus_search: true,
+            geometry: None,
+            quality: Default::default(),
         }
     }
 
@@ -120,6 +130,28 @@ impl PartsWindow {
         }
     }
 
+    /// Asks for a STEP file and stores it for the selected part.
+    fn choose_model(&mut self) {
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Choose the 3D model (STEP)")
+            .add_filter("STEP model", &["stp", "step"])
+            .pick_file()
+        {
+            self.import_file(&path, ImportFlow::Manual);
+        }
+    }
+
+    /// The model state of a part with a stored STEP file; asks the service
+    /// to build it the first time. `None` when the part has no STEP file.
+    fn model_state(&self, part: &CatalogPart, records: &[SourceRecord]) -> Option<GeometryState> {
+        let record = records
+            .iter()
+            .find(|r| FileKind::of_file_name(&r.file_name) == FileKind::Step)?;
+        let (service, library) = (self.geometry.as_ref()?, self.library.as_ref()?);
+        let key = service.request(model_job(part, record, library));
+        Some(service.geometry(key))
+    }
+
     /// The makers in the catalog, sorted, each once.
     pub(crate) fn makers(&self) -> Vec<String> {
         let mut makers: Vec<String> = Vec::new();
@@ -178,6 +210,22 @@ const POWER_LOSS: &str = "Power loss";
 const CLEARANCES: &str = "Clearances";
 const CONNECTIONS: &str = "Connections";
 const TECHNICAL: &str = "Technical data";
+const CLASSIFICATION: &str = "Classification";
+const ORDER_DATA: &str = "Order data";
+const TERMINALS: &str = "Terminals";
+const LET_THROUGH: &str = "Let-through";
+const SOURCE: &str = "Source";
+
+/// What a value's source tag says, or nothing when the source is unknown
+/// (an unknown source is not labelled; a known one always is).
+fn source_label(source: DataSource) -> Option<&'static str> {
+    match source {
+        DataSource::MakerDatasheet => Some("maker datasheet"),
+        DataSource::Typed => Some("typed"),
+        DataSource::Estimated => Some("estimated"),
+        DataSource::Unknown => None,
+    }
+}
 
 /// Which block a data key belongs to: by words in the key, so the keys the
 /// power loss and clearance work adds (`power_loss_w`, `clearance_side_mm`,
@@ -221,14 +269,24 @@ fn mm(v: f64) -> String {
 /// The detail of a part, grouped: dimensions first, then power loss,
 /// clearances, connection data and the rest. Empty blocks are left out.
 pub(crate) fn detail_sections(part: &CatalogPart) -> Vec<DetailSection> {
-    let mut blocks: Vec<DetailSection> =
-        [DIMENSIONS, POWER_LOSS, CLEARANCES, CONNECTIONS, TECHNICAL]
-            .into_iter()
-            .map(|title| DetailSection {
-                title,
-                rows: Vec::new(),
-            })
-            .collect();
+    let mut blocks: Vec<DetailSection> = [
+        DIMENSIONS,
+        POWER_LOSS,
+        CLEARANCES,
+        CONNECTIONS,
+        TECHNICAL,
+        CLASSIFICATION,
+        ORDER_DATA,
+        TERMINALS,
+        LET_THROUGH,
+        SOURCE,
+    ]
+    .into_iter()
+    .map(|title| DetailSection {
+        title,
+        rows: Vec::new(),
+    })
+    .collect();
     if let Some(d) = part.dimensions {
         blocks[0].rows.push((
             "Width \u{d7} height \u{d7} depth".into(),
@@ -245,10 +303,13 @@ pub(crate) fn detail_sections(part: &CatalogPart) -> Vec<DetailSection> {
             continue;
         }
         let (label, unit) = property_label(key);
-        let text = match value {
+        let mut text = match value {
             Value::Text(t) if t.is_empty() => continue,
             other => with_unit(display_value(other), unit),
         };
+        if let Some(label) = source_label(part.source_of(key)) {
+            text = format!("{text}  ({label})");
+        }
         let title = section_of(key);
         let block = blocks
             .iter_mut()
@@ -256,8 +317,135 @@ pub(crate) fn detail_sections(part: &CatalogPart) -> Vec<DetailSection> {
             .expect("every title has a block");
         block.rows.push((label, text));
     }
+    push_v2_rows(part, &mut blocks);
     blocks.retain(|b| !b.rows.is_empty());
     blocks
+}
+
+/// The schema v2 blocks: classification, order data, terminals, the
+/// let-through table and where the part came from. Nothing is filled in for
+/// fields the part does not have.
+fn push_v2_rows(part: &CatalogPart, blocks: &mut [DetailSection]) {
+    let mut add = |title: &str, label: &str, value: String| {
+        blocks
+            .iter_mut()
+            .find(|b| b.title == title)
+            .expect("every title has a block")
+            .rows
+            .push((label.to_owned(), value));
+    };
+    if let Some(code) = &part.class.etim {
+        add(CLASSIFICATION, "ETIM class", code.clone());
+    }
+    if let Some(code) = &part.class.eclass {
+        add(CLASSIFICATION, "ECLASS", code.clone());
+    }
+    if !part.function.is_empty() {
+        add(CLASSIFICATION, "Function", part.function.clone());
+    }
+    let lifecycle = match part.lifecycle {
+        Lifecycle::Active => Some("active"),
+        Lifecycle::PhasingOut => Some("phasing out"),
+        Lifecycle::Discontinued => Some("discontinued"),
+        Lifecycle::Unknown => None,
+    };
+    if let Some(text) = lifecycle {
+        add(CLASSIFICATION, "Lifecycle", text.into());
+    }
+    if let Some(r) = &part.replaced_by {
+        add(
+            CLASSIFICATION,
+            "Replaced by",
+            format!("{} {}", r.manufacturer, r.order_number),
+        );
+    }
+    if !part.alternatives.is_empty() {
+        let list: Vec<String> = part
+            .alternatives
+            .iter()
+            .map(|r| format!("{} {}", r.manufacturer, r.order_number))
+            .collect();
+        add(CLASSIFICATION, "Alternatives", list.join(", "));
+    }
+    if let Some(price) = &part.price {
+        let per = if price.per > 1 {
+            format!(" per {}", price.per)
+        } else {
+            String::new()
+        };
+        let date = if price.date.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", price.date)
+        };
+        add(
+            ORDER_DATA,
+            "List price",
+            format!("{:.2} {}{per}{date}", price.amount, price.currency),
+        );
+    }
+    for t in &part.terminals {
+        let mut bits = Vec::new();
+        if let Some((lo, hi)) = t.wire_mm2 {
+            bits.push(format!("{lo}\u{2013}{hi} mm\u{b2}"));
+        }
+        if let Some(label) = connection_label(t.kind) {
+            bits.push(label.to_owned());
+        }
+        if let Some(label) = side_label(t.side) {
+            bits.push(label.to_owned());
+        }
+        if let Some([x, y, z]) = t.position_mm {
+            bits.push(format!("at {x}, {y}, {z} mm"));
+        }
+        add(TERMINALS, &format!("Terminal {}", t.name), bits.join(", "));
+    }
+    for p in &part.let_through {
+        add(
+            LET_THROUGH,
+            &format!("At {} kA", p.ik_ka),
+            format!("{} A\u{b2}s, peak {} kA", p.i2t_a2s, p.ip_ka),
+        );
+    }
+    if let Some(p) = &part.provenance {
+        {
+            add(SOURCE, "Origin", p.source.clone());
+            if !p.file.is_empty() {
+                add(SOURCE, "File", p.file.clone());
+            }
+            if !p.imported.is_empty() {
+                add(SOURCE, "Imported", p.imported.clone());
+            }
+            if !p.licence_note.is_empty() {
+                add(SOURCE, "Licence", p.licence_note.clone());
+            }
+        }
+    }
+}
+
+fn connection_label(kind: ConnectionKind) -> Option<&'static str> {
+    Some(match kind {
+        ConnectionKind::Screw => "screw",
+        ConnectionKind::PushIn => "push-in",
+        ConnectionKind::Spring => "spring",
+        ConnectionKind::Screwless => "screwless",
+        ConnectionKind::Lug => "lug",
+        ConnectionKind::Pin => "pin",
+        ConnectionKind::Faston => "faston",
+        ConnectionKind::SolderPin => "solder pin",
+        ConnectionKind::Unknown => return None,
+    })
+}
+
+fn side_label(side: Side) -> Option<&'static str> {
+    Some(match side {
+        Side::Top => "top",
+        Side::Bottom => "bottom",
+        Side::Left => "left",
+        Side::Right => "right",
+        Side::Front => "front",
+        Side::Unknown => return None,
+    })
 }
 
 /// What a click in the window asks for; run after drawing, so drawing only
@@ -267,6 +455,7 @@ enum PartsAction {
     Import(PartKey),
     OpenPage(String),
     ChooseFile,
+    ChooseModel,
     ChooseFolder,
     StopImport,
     ConfirmFile(PathBuf),
@@ -274,6 +463,8 @@ enum PartsAction {
     AskRemove(PartKey),
     CancelRemove,
     Remove(PartKey),
+    /// Give the selected devices this part.
+    UseForSelection(PartKey),
     Close,
 }
 
@@ -297,12 +488,35 @@ impl NovoApp {
         ));
     }
 
+    /// The command `parts.import_step`: with a part picked in the Parts
+    /// window it asks for the file; otherwise it opens the window and says
+    /// what to do.
+    pub(super) fn import_part_model(&mut self) {
+        self.open_parts_browser();
+        match self.wb.parts.as_mut() {
+            Some(win) if win.selected.is_some() => win.choose_model(),
+            _ => self.message(
+                Level::Info,
+                "Pick a part in the Parts window, then import its 3D model",
+            ),
+        }
+    }
+
     pub(super) fn parts_window(&mut self, ctx: &egui::Context) {
         let Some(win) = self.wb.parts.as_mut() else {
             return;
         };
         let mut open = true;
         let mut actions = Vec::new();
+        win.geometry.get_or_insert_with(|| {
+            let wake = ctx.clone();
+            GeometryService::new(
+                MeshCache::open_default(),
+                Quality::Normal,
+                TIME_LIMIT,
+                move || wake.request_repaint(),
+            )
+        });
         let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
         let shown = egui::Window::new("Parts")
             .open(&mut open)
@@ -346,6 +560,7 @@ impl NovoApp {
         }
         let mut close = !open;
         let mut error = None;
+        let mut assign = None;
         for action in actions {
             match action {
                 PartsAction::Select(key) => win.selected = Some(key),
@@ -364,6 +579,7 @@ impl NovoApp {
                         win.import_file(&path, ImportFlow::Manual);
                     }
                 }
+                PartsAction::ChooseModel => win.choose_model(),
                 PartsAction::ChooseFolder => {
                     if let Some(dir) = rfd::FileDialog::new()
                         .set_title("Folder to watch for downloads")
@@ -390,11 +606,15 @@ impl NovoApp {
                         error = Some(format!("Parts library: {e}"));
                     }
                 }
+                PartsAction::UseForSelection(key) => assign = win.catalog.get(&key).cloned(),
                 PartsAction::Close => close = true,
             }
         }
         if let Some(text) = error {
             self.message(Level::Error, text);
+        }
+        if let Some(part) = assign {
+            self.use_part_for_selection(&part);
         }
         if close {
             self.wb.parts = None;
@@ -408,6 +628,12 @@ fn parts_ui(
     dragging: bool,
     actions: &mut Vec<PartsAction>,
 ) {
+    if let Some(jump) = super::parts_quality::tab(ui, &mut win.quality, &win.catalog) {
+        if let Some(key) = jump {
+            (win.selected, win.query, win.maker) = (Some(key), String::new(), None);
+        }
+        return;
+    }
     let mut search_focused = false;
     ui.horizontal(|ui| {
         let search = ui.add(
@@ -540,6 +766,12 @@ you can also drop it on this window.",
                 )),
                 _ => ui.label("Drop the downloaded file on this window, or choose it."),
             };
+            if let Some(w) = &import.order_warning {
+                ui.colored_label(ui.visuals().warn_fg_color, w);
+            }
+            for (i, step) in import.steps.iter().enumerate() {
+                ui.label(format!("{}. {step}", i + 1));
+            }
             if import.page_url.is_some() && !import.page_verified {
                 ui.weak(
                     "This page address is not confirmed. If it does not show the part, find it \
@@ -634,6 +866,14 @@ fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction
         }
         let key = part.key();
         ui.add_space(8.0);
+        if ui
+            .button("Use for selected device")
+            .on_hover_text("Gives the devices selected on the drawing this part (one undo step)")
+            .clicked()
+        {
+            actions.push(PartsAction::UseForSelection(key.clone()));
+        }
+        ui.add_space(8.0);
         ui.strong("Source");
         let records = win.records(&key);
         if records.is_empty() {
@@ -657,6 +897,14 @@ fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction
                 ui.hyperlink_to("Terms", url);
             }
         }
+        ui.add_space(8.0);
+        ui.strong("3D model");
+        ui.label(model_status(win.model_state(part, &records).as_ref()));
+        ui.horizontal(|ui| {
+            if ui.small_button("Import 3D model (STEP)...").clicked() {
+                actions.push(PartsAction::ChooseModel);
+            }
+        });
         if !records.is_empty() {
             if win.confirm_remove.as_ref() == Some(&key) {
                 ui.label("Delete the saved files? You can download them again from the maker.");
@@ -673,6 +921,53 @@ fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction
             }
         }
     });
+}
+
+fn model_job(part: &CatalogPart, record: &SourceRecord, library: &LocalLibrary) -> GeometryJob {
+    GeometryJob {
+        part_id: format!("{}|{}", part.manufacturer, part.order_number),
+        content_id: record.sha256.clone(),
+        step_path: library.path_of(record),
+        size_mm: part
+            .dimensions
+            .map(|d| [d.width_mm, d.height_mm, d.depth_mm]),
+    }
+}
+
+/// The status line of a part's 3D model.
+pub(crate) fn model_status(state: Option<&GeometryState>) -> String {
+    match state {
+        None => "No 3D model. The part is drawn as a box from its catalog size.".into(),
+        Some(GeometryState::None | GeometryState::Pending) => "Building the 3D model...".into(),
+        Some(GeometryState::Failed(why)) => why.clone(),
+        Some(GeometryState::Ready(geometry)) => match &geometry.origin {
+            MeshOrigin::Step { .. } => format!(
+                "3D model: STEP, {} triangles",
+                geometry.detail().triangle_count()
+            ),
+            MeshOrigin::Box => {
+                "No 3D model. The part is drawn as a box from its catalog size.".into()
+            }
+            MeshOrigin::Fallback(why) => fallback_text(why).to_owned(),
+        },
+    }
+}
+
+fn fallback_text(why: &Fallback) -> &'static str {
+    match why {
+        Fallback::NoModel => "No 3D model. The part is drawn as a box from its catalog size.",
+        Fallback::Unreadable => {
+            "KoperCAD cannot read this file as a STEP model. Import a different export from the maker."
+        }
+        Fallback::NoGeometry => {
+            "The STEP file holds no solid shapes. Import a different export from the maker."
+        }
+        Fallback::TooComplex => {
+            "The model is too detailed for a quick preview. Import a simpler export from the maker."
+        }
+        Fallback::TimedOut => "Reading the model took too long.",
+        Fallback::Cancelled => "Building the model was cancelled.",
+    }
 }
 
 #[cfg(test)]
@@ -720,6 +1015,82 @@ mod tests {
             all.iter().flat_map(|s| &s.rows).all(|r| r.1 != "hidden"),
             "internal keys stay out"
         );
+    }
+
+    #[test]
+    fn detail_shows_schema_v2_fields_and_labels_known_sources_only() {
+        use novo_parts::{
+            Classification, LetThroughPoint, PartRef, PartTerminal, Price, Provenance,
+        };
+        let mut p = part(&[
+            ("rated_current_a", Value::Int(16)),
+            ("breaking_capacity_icu_ka", Value::Float(10.0)),
+        ]);
+        p.sources
+            .insert("rated_current_a".into(), DataSource::MakerDatasheet);
+        p.class = Classification {
+            etim: Some("EC000042".into()),
+            eclass: None,
+        };
+        p.lifecycle = Lifecycle::PhasingOut;
+        p.replaced_by = Some(PartRef {
+            manufacturer: "Acme".into(),
+            order_number: "A-2".into(),
+        });
+        p.price = Some(Price {
+            amount: 12.5,
+            currency: "EUR".into(),
+            per: 10,
+            date: "2026-10-15".into(),
+        });
+        p.terminals = vec![PartTerminal {
+            name: "1".into(),
+            kind: ConnectionKind::PushIn,
+            wire_mm2: Some((0.5, 4.0)),
+            side: Side::Top,
+            position_mm: None,
+        }];
+        p.let_through = vec![LetThroughPoint {
+            ik_ka: 6.0,
+            i2t_a2s: 20000.0,
+            ip_ka: 3.1,
+        }];
+        p.provenance = Some(Provenance {
+            source: "import:bmecat".into(),
+            file: "acme.xml".into(),
+            ..Default::default()
+        });
+        let all = detail_sections(&p);
+        let find = |title: &str, label: &str| -> String {
+            all.iter()
+                .find(|s| s.title == title)
+                .and_then(|s| s.rows.iter().find(|r| r.0 == label))
+                .unwrap_or_else(|| panic!("{title} / {label} missing"))
+                .1
+                .clone()
+        };
+        assert_eq!(
+            find("Technical data", "Rated current"),
+            "16 A  (maker datasheet)"
+        );
+        // No source recorded, so no label: unknown is not dressed up.
+        assert!(!find("Technical data", "Breaking capacity icu").contains('('));
+        assert_eq!(find("Classification", "ETIM class"), "EC000042");
+        assert_eq!(find("Classification", "Lifecycle"), "phasing out");
+        assert_eq!(find("Classification", "Replaced by"), "Acme A-2");
+        assert_eq!(
+            find("Order data", "List price"),
+            "12.50 EUR per 10 (2026-10-15)"
+        );
+        assert_eq!(
+            find("Terminals", "Terminal 1"),
+            "0.5\u{2013}4 mm\u{b2}, push-in, top"
+        );
+        assert_eq!(
+            find("Let-through", "At 6 kA"),
+            "20000 A\u{b2}s, peak 3.1 kA"
+        );
+        assert_eq!(find("Source", "Origin"), "import:bmecat");
     }
 
     #[test]
@@ -800,5 +1171,24 @@ mod tests {
         let row = win.rows().into_iter().find(|(k, _)| *k == key).unwrap();
         assert_eq!(row.1, RowAction::InLibrary);
         assert_eq!(win.records(&key)[0].flow, ImportFlow::Manual);
+    }
+
+    #[test]
+    fn model_status_says_what_is_drawn() {
+        assert!(model_status(None).starts_with("No 3D model"));
+        assert_eq!(
+            model_status(Some(&GeometryState::Pending)),
+            "Building the 3D model..."
+        );
+        let timed_out = novo_interop::part3d::fallback_box(None, Fallback::TimedOut);
+        let state = GeometryState::Ready(std::sync::Arc::new(timed_out));
+        assert!(model_status(Some(&state)).contains("too long"));
+        let unreadable = novo_interop::part3d::fallback_box(None, Fallback::Unreadable);
+        let state = GeometryState::Ready(std::sync::Arc::new(unreadable));
+        assert!(model_status(Some(&state)).contains("Import a different export"));
+        let boxed = GeometryState::Ready(std::sync::Arc::new(novo_interop::part3d::box_mesh([
+            18.0, 90.0, 60.0,
+        ])));
+        assert!(model_status(Some(&boxed)).starts_with("No 3D model"));
     }
 }

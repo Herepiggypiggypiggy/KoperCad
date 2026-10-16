@@ -1,0 +1,167 @@
+format = 1
+id = "spreadsheets"
+version = 1
+status = "early"
+title = "Edit two hundred devices in Excel"
+summary = "Export the project to a spreadsheet, change it there, preview the import and apply it as one undo step."
+track = "data"
+order = 20
+level = "intermediate"
+minutes = 9
+topics = ["spreadsheet", "excel", "export", "import"]
+needs = ["parts-library"]
+next = ["revisions-and-compare"]
+project = "project.json"
+finished = "finished.json"
+page = "Main circuit"
+title_nl = "Bewerk tweehonderd apparaten in Excel"
+summary_nl = "Exporteer het project naar een spreadsheet, wijzig het daar, bekijk de import vooraf en voer hem door als één stap die je kunt terugdraaien."
+
+[[step]]
+id = "see-descriptions"
+title = "See why you would want this"
+title_nl = "Zie waarom je dit wilt"
+text = "Every device here has a one word description: Fuse, Contactor, Button. Fixing seven by hand is fine. Seven hundred is when a spreadsheet pays off."
+text_nl = "Elk apparaat hier heeft een omschrijving van één woord: Fuse, Contactor, Button. Zeven met de hand aanpassen is prima. Bij zevenhonderd loont een spreadsheet."
+point = { at = { device = "-K1" } }
+
+[[step]]
+id = "export"
+title = "Export the project to a workbook"
+title_nl = "Exporteer het project naar een werkmap"
+text = "Excel can change a thousand cells in a minute. The workbook holds one sheet each for devices, terminals, wires, cables and cores."
+text_nl = "Excel past in een minuut duizend cellen aan. De werkmap bevat een blad voor apparaten, klemmen, draden, kabels en aders."
+how = [
+  "Press {key:view.command_palette} and type **export**.",
+  "Pick **Export for bulk edit (.xlsx)** and press Enter.",
+  "The message at the bottom gives the file path. A lesson project is not saved yet, so the file is in your Documents folder under **KoperCAD**, named like the project with **sheets**.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette} en typ **export**.",
+  "Kies **Export for bulk edit (.xlsx)** en druk op Enter.",
+  "De melding onderaan geeft het pad van het bestand. Een lesproject is nog niet bewaard, dus het bestand staat in Documenten onder **KoperCAD**, genoemd naar het project met **sheets**.",
+]
+point = { ui = "palette.button" }
+expect = { command = "export.sheets" }
+solve = [ { command = "export.sheets" } ]
+
+[[step]]
+id = "edit-outside"
+title = "Change a description in Excel"
+title_nl = "Wijzig een omschrijving in Excel"
+text = "Do this outside KoperCAD, then come back. Leave the grey columns alone: they only show where a row belongs."
+text_nl = "Doe dit buiten KoperCAD en kom daarna terug. Laat de grijze kolommen met rust: ze laten alleen zien waar een rij bij hoort."
+how = [
+  "Open the workbook in Excel.",
+  "On the **Devices** sheet, change the description of **-K1** to exactly **Pump 1 contactor**.",
+  "Change one or two more if you like.",
+  "Save the file and close Excel.",
+]
+how_nl = [
+  "Open de werkmap in Excel.",
+  "Verander op het blad **Devices** de omschrijving van **-K1** in precies **Pump 1 contactor**.",
+  "Wijzig er gerust een of twee meer.",
+  "Bewaar het bestand en sluit Excel.",
+]
+
+[[step]]
+id = "ids"
+title = "Why rows keep their Id"
+title_nl = "Waarom rijen hun Id houden"
+text = """
+Each device has a hidden number in the **Id** column. KoperCAD uses it to know which device a row belongs to, so renaming a tag in the sheet renames that device instead of making a new one. A row with no Id is offered as a new device. Nothing is ever deleted.
+"""
+text_nl = """
+Elk apparaat heeft een verborgen nummer in de kolom **Id**. KoperCAD gebruikt het om te weten bij welk apparaat een rij hoort; een tag hernoemen in het blad hernoemt dus dat apparaat in plaats van een nieuw te maken. Een rij zonder Id wordt aangeboden als nieuw apparaat. Er wordt nooit iets verwijderd.
+"""
+
+[[step]]
+id = "import"
+title = "Bring the file back"
+title_nl = "Haal het bestand terug"
+text = "Importing does not change anything yet. It first shows you every change, so you decide what goes in."
+text_nl = "Importeren verandert nog niets. Eerst zie je elke wijziging, zodat jij beslist wat erin gaat."
+how = [
+  "Press {key:view.command_palette} and type **import spreadsheet**.",
+  "Press Enter and pick the file you saved from Excel.",
+  "A window opens with a list of changes.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette} en typ **import spreadsheet**.",
+  "Druk op Enter en kies het bestand dat je uit Excel hebt bewaard.",
+  "Er opent een venster met een lijst van wijzigingen.",
+]
+point = { ui = "palette.button" }
+expect = { command = "import.spreadsheet" }
+
+[[step]]
+id = "preview"
+title = "Read the preview"
+title_nl = "Lees het overzicht"
+text = "Each row shows the value now and the value in the sheet. Rows KoperCAD could not use are listed with the row number and the reason, never skipped silently."
+text_nl = "Elke regel toont de waarde nu en de waarde in het blad. Rijen die KoperCAD niet kon gebruiken staan er met rijnummer en reden bij, nooit stilzwijgend overgeslagen."
+how = [
+  "Look for **-K1** with the description you typed.",
+  "Use the filters **All**, **Changed**, **New**, **Conflicts** and **Rejected** to narrow the list.",
+]
+how_nl = [
+  "Zoek **-K1** met de omschrijving die je typte.",
+  "Gebruik de filters **All**, **Changed**, **New**, **Conflicts** en **Rejected** om de lijst te beperken.",
+]
+
+[[step]]
+id = "conflict"
+title = "Settle a clash"
+title_nl = "Los een botsing op"
+text = "If you also changed the same field in KoperCAD after exporting, the row is a clash and starts unticked. Neither side wins until you choose."
+text_nl = "Heb je hetzelfde veld na het exporteren ook in KoperCAD gewijzigd, dan is de rij een botsing en staat hij uit. Geen van beide wint tot jij kiest."
+how = [
+  "Press **Take the sheet** to use Excel's value.",
+  "Or press **Keep the project** to use what is in KoperCAD.",
+  "This lesson has no clash, so you can read on.",
+]
+how_nl = [
+  "Druk op **Take the sheet** om de waarde uit Excel te gebruiken.",
+  "Of druk op **Keep the project** om te houden wat in KoperCAD staat.",
+  "Deze les heeft geen botsing; je kunt dus doorlezen.",
+]
+
+[[step]]
+id = "apply"
+title = "Apply the changes"
+title_nl = "Voer de wijzigingen door"
+text = "All ticked changes go in together as one step, so one undo takes them all back."
+text_nl = "Alle aangevinkte wijzigingen gaan samen door als één stap, zodat één keer ongedaan maken ze allemaal terugdraait."
+how = [
+  "Press the button **Apply N changes** (or Enter).",
+  "The device **-K1** now reads **Pump 1 contactor**.",
+]
+how_nl = [
+  "Druk op de knop **Apply N changes** (of op Enter).",
+  "Het apparaat **-K1** heet nu **Pump 1 contactor**.",
+]
+expect = { field = { device = "-K1", name = "description", equals = "Pump 1 contactor" } }
+
+[[step]]
+id = "undo"
+title = "Take it back"
+title_nl = "Draai het terug"
+text = "A big import is safe to try, because one undo brings back everything it changed."
+text_nl = "Een grote import kun je veilig proberen, want één keer ongedaan maken brengt alles terug."
+how = [
+  "Press {key:edit.undo}. All the descriptions return at once.",
+  "Press {key:edit.redo} to have them again.",
+]
+how_nl = [
+  "Druk op {key:edit.undo}. Alle omschrijvingen komen in één keer terug.",
+  "Druk op {key:edit.redo} om ze weer te hebben.",
+]
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "done"
+title = "Bulk edits without fear"
+title_nl = "Bulkwijzigingen zonder zorgen"
+text = "Export, edit, preview, apply, undo if needed. Next: revisions."
+text_nl = "Exporteren, wijzigen, bekijken, doorvoeren, zo nodig ongedaan maken. Hierna: revisies."

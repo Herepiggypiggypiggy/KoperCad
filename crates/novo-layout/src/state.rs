@@ -2,9 +2,13 @@
 //! model stores placements. Every edit returns nothing and never fails
 //! silently: problems are reported by [`CabinetLayout::report`].
 
+use std::collections::BTreeMap;
+
+use crate::enclosure::{DoorReport, Enclosure, check};
 use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
 use crate::{
-    Placement, Plate, Rail, Size, clearance_violations, collisions, outside, rail_overflows,
+    Duct, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions, outside,
+    rail_overflows,
 };
 
 /// Default snap grid for free placement (the Cabinet canvas grid).
@@ -35,8 +39,13 @@ impl Report {
 pub struct CabinetLayout {
     pub plate: Plate,
     pub rails: Vec<Rail>,
+    pub ducts: Vec<Duct>,
     pub placements: Vec<Placement>,
     pub grid: f64,
+    /// Interior and door of the enclosure, once set.
+    pub enclosure: Option<Enclosure>,
+    /// Depth of the parts of placed devices, by device id, where known.
+    pub depths: BTreeMap<u64, f64>,
 }
 
 impl CabinetLayout {
@@ -44,9 +53,23 @@ impl CabinetLayout {
         CabinetLayout {
             plate,
             rails: Vec::new(),
+            ducts: Vec::new(),
             placements: Vec::new(),
             grid: DEFAULT_GRID_MM,
+            enclosure: None,
+            depths: BTreeMap::new(),
         }
+    }
+
+    /// The depth and door checks; `None` until the enclosure has an interior.
+    pub fn door_report(&self) -> Option<DoorReport> {
+        let enclosure = self.enclosure.as_ref()?;
+        let depths: Vec<(u64, Option<f64>)> = self
+            .placements
+            .iter()
+            .map(|p| (p.id, self.depths.get(&p.id).copied()))
+            .collect();
+        Some(check(enclosure, &self.plate, &depths))
     }
 
     /// A position snapped to the grid, for dropping and dragging.
@@ -78,6 +101,7 @@ impl CabinetLayout {
                 rotated: false,
                 size,
                 clearance: None,
+                margins: Margins::default(),
                 rail: None,
             });
         }
@@ -144,6 +168,7 @@ impl CabinetLayout {
                     rotated: false,
                     size: c.size,
                     clearance: None,
+                    margins: Margins::default(),
                     rail: Some(p.rail),
                 });
             }

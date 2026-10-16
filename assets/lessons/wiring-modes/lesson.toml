@@ -1,0 +1,192 @@
+format = 1
+id = "wiring-modes"
+version = 1
+status = "early"
+title = "Corners and Lines"
+title_nl = "Hoeken en lijnen"
+summary = "Draw wires from a pin, and bend them in the two wiring modes."
+summary_nl = "Teken draden vanaf een pen en buig ze in de twee draadmodi."
+track = "start"
+order = 20
+level = "beginner"
+minutes = 7
+topics = ["wiring"]
+needs = ["placing-parts"]
+next = ["potentials"]
+project = "project.json"
+finished = "finished.json"
+page = "Two start buttons"
+
+[[step]]
+id = "intro"
+title = "Two branches, three wires missing"
+title_nl = "Twee takken, drie draden ontbreken"
+text = """
+The page has two copies of the same control branch: a breaker, a start button and a relay coil, left and right. In each branch the wire from the button to the coil is missing, and in the left one so is the wire from the breaker to the button.
+You will draw them in the two ways KoperCAD wires, so you can choose the one that suits your hand.
+"""
+text_nl = """
+Op de pagina staan twee keer dezelfde stuurstroomtak: een automaat, een startknop en een relaisspoel, links en rechts. In elke tak ontbreekt de draad van knop naar spoel, en in de linker ook de draad van automaat naar knop.
+Je tekent ze op de twee manieren waarop KoperCAD bedraadt, zodat je kunt kiezen wat bij jouw hand past.
+"""
+point = { area = { page = "Two start buttons", x = 40, y = 16, w = 160, h = 130 } }
+pause = true
+
+[[step]]
+id = "pin-drag"
+title = "Drag a wire from one pin to another"
+title_nl = "Sleep een draad van de ene pen naar de andere"
+text = """
+When two pins face each other, a drag is the quickest wire: no tool, no clicks in between.
+"""
+text_nl = """
+Als twee pennen naar elkaar wijzen, is slepen de snelste draad: geen gereedschap, geen tussenklikken.
+"""
+how = [
+  "Point at the lower pin of the left breaker **-F1** and press the mouse button down.",
+  "Drag down to the upper pin of the left push button **-S1** (pin 13).",
+  "Release on the pin. A straight wire joins them.",
+]
+how_nl = [
+  "Wijs de onderste pen van de linker automaat **-F1** aan en houd de muisknop ingedrukt.",
+  "Sleep omlaag naar de bovenste pen van de linker drukknop **-S1** (pen 13).",
+  "Laat los op de pen. Een rechte draad verbindt ze.",
+]
+point = { at = { device = "-F1", pin = "2" } }
+note = [ { at = { device = "-S1", pin = "13" }, text = "Release here" } ]
+expect = { wire = { from = "-F1:2", to = "-S1:13" } }
+solve = [ { wire = ["-F1:2", "-S1:13"] } ]
+
+[[step]]
+id = "corners-tool"
+title = "Start a wire with the wire tool"
+title_nl = "Begin een draad met het draadgereedschap"
+text = """
+Pins that do not face each other need bends. The wire tool lets you click your way from pin to pin. The dock shows which mode it is in. In **Corners** you click only where the wire should turn, and KoperCAD draws the straight pieces between your clicks.
+"""
+text_nl = """
+Pennen die niet naar elkaar wijzen hebben knikken nodig. Met het draadgereedschap klik je je weg van pen naar pen. Het dock toont de modus. In **Corners** klik je alleen waar de draad moet afbuigen, en KoperCAD tekent de rechte stukken tussen je klikken.
+"""
+how = [
+  "Press {key:tool.connect}. The dock shows the wire tool and the mode chip **Corners**.",
+  "If the chip says **Lines**, press {key:wire.mode} once to go back to Corners.",
+]
+how_nl = [
+  "Druk op {key:tool.connect}. Het dock toont het draadgereedschap en de modus **Corners**.",
+  "Staat er **Lines**, druk dan één keer op {key:wire.mode} om terug te gaan naar Corners.",
+]
+demo = [
+  { press = "tool.connect" },
+  { say = "In the dock the Corners chip is lit. If Lines is lit instead, click Corners.", say_nl = "In het dock is de chip Corners verlicht. Is Lines verlicht, klik dan op Corners." },
+]
+point = { ui = "dock.corners" }
+expect = { tool = "wire" }
+solve = [ { command = "tool.connect" } ]
+
+[[step]]
+id = "corners-wire"
+title = "Wire the left button to the relay in Corners"
+title_nl = "Bedraad de linker knop met het relais in Hoeken"
+text = """
+In Corners you click the pins and, where you want the wire to turn, one point in between. KoperCAD joins your clicks with straight lines.
+"""
+text_nl = """
+In Corners klik je op de pennen en, waar je de draad wilt laten afbuigen, op één punt ertussen. KoperCAD verbindt je klikken met rechte lijnen.
+"""
+how = [
+  "With the wire tool active, click the lower pin of the left push button **-S1** (pin 14).",
+  "Click the empty dot directly above the left relay coil.",
+  "Click the upper pin of the left relay coil **-K1** (pin A1). The wire is finished.",
+]
+how_nl = [
+  "Klik met het draadgereedschap actief op de onderste pen van de linker drukknop **-S1** (pen 14).",
+  "Klik op het lege punt direct boven de linker relaisspoel.",
+  "Klik op de bovenste pen van de linker relaisspoel **-K1** (pen A1). De draad is klaar.",
+]
+demo = [
+  { move = { at = { pin = "-S1:14" } } },
+  { click = true },
+  { move = { at = { page = "Two start buttons", x = 100, y = 96 } } },
+  { click = true },
+  { move = { at = { pin = "-K1:A1" } } },
+  { click = true },
+  { say = "KoperCAD joins your clicks with straight lines.", say_nl = "KoperCAD verbindt je klikken met rechte lijnen." },
+]
+point = { at = { device = "-S1", pin = "14" } }
+note = [ { at = { device = "-K1", pin = "A1" }, text = "Finish here" } ]
+expect = { wire = { from = "-S1:14", to = "-K1:A1" } }
+solve = [ { wire = ["-S1:14", "-K1:A1"], via = [[100, 96]], mode = "corners" } ]
+
+[[step]]
+id = "switch-mode"
+title = "Switch to Lines"
+title_nl = "Schakel over naar Lijnen"
+text = """
+In **Lines** every click becomes a bend exactly where you put it, with no router in between. It is the mode for when you want a wire to pass a precise place.
+"""
+text_nl = """
+In **Lines** wordt elke klik een knik precies waar jij hem zet, zonder router ertussen. Het is de modus voor als een draad langs een precieze plek moet lopen.
+"""
+how = [
+  "Press {key:wire.mode}. The mode chip in the dock changes from **Corners** to **Lines**.",
+]
+how_nl = [
+  "Druk op {key:wire.mode}. De modusknop in het dock wisselt van **Corners** naar **Lines**.",
+]
+demo = [
+  { press = "wire.mode" },
+  { say = "The Lines chip in the dock lights up.", say_nl = "De chip Lines in het dock licht op." },
+]
+point = { ui = "dock.lines" }
+expect = { wiring_mode = "lines" }
+solve = [ { command = "wire.mode" } ]
+
+[[step]]
+id = "lines-wire"
+title = "Wire the right button to the relay in Lines"
+title_nl = "Bedraad de rechter knop met het relais in Lijnen"
+text = """
+You choose every bend. This wire leaves the button, goes down a little, runs right above the relay, and then reaches it.
+"""
+text_nl = """
+Jij kiest elke knik. Deze draad verlaat de knop, gaat een stukje omlaag, loopt naar rechts boven het relais en bereikt het dan.
+"""
+how = [
+  "Click the lower pin of the right push button **-S2** (pin 14).",
+  "Click the empty dot directly below the button, then the empty dot directly above the right relay coil. Each click is a bend.",
+  "Click the upper pin of the right relay coil **-K2** (pin A1). The wire is finished.",
+]
+how_nl = [
+  "Klik op de onderste pen van de rechter drukknop **-S2** (pen 14).",
+  "Klik op het lege punt direct onder de knop en dan op het lege punt direct boven de rechter relaisspoel. Elke klik is een knik.",
+  "Klik op de bovenste pen van de rechter relaisspoel **-K2** (pen A1). De draad is klaar.",
+]
+demo = [
+  { move = { at = { pin = "-S2:14" } } },
+  { click = true },
+  { move = { at = { page = "Two start buttons", x = 140, y = 96 } } },
+  { click = true },
+  { move = { at = { page = "Two start buttons", x = 180, y = 96 } } },
+  { click = true },
+  { move = { at = { pin = "-K2:A1" } } },
+  { click = true },
+  { say = "Each click is one bend.", say_nl = "Elke klik is één knik." },
+]
+point = { at = { device = "-S2", pin = "14" } }
+note = [ { at = { device = "-K2", pin = "A1" }, text = "Finish here" } ]
+expect = { wire = { from = "-S2:14", to = "-K2:A1" } }
+solve = [ { wire = ["-S2:14", "-K2:A1"], via = [[140, 96], [180, 96]], mode = "lines" } ]
+
+[[step]]
+id = "compare"
+title = "Which suits your hand?"
+title_nl = "Welke past bij jouw hand?"
+text = """
+Both branches now run from L1 through the breaker and the button to the relay coil and N. The left button-to-relay wire turns at the point you clicked; the right one has exactly the two bends you clicked.
+Corners saves clicks: you click only the turn. Lines gives exact control: every click is one bend. {key:wire.mode} switches between them at any time, even in the middle of a wire.
+"""
+text_nl = """
+Beide takken lopen nu van L1 via de automaat en de knop naar de relaisspoel en N. De linker draad van knop naar relais buigt af op het punt dat je klikte; de rechter heeft precies de twee knikken die jij klikte.
+Corners bespaart klikken: je klikt alleen de bocht. Lines geeft exacte controle: elke klik is één knik. {key:wire.mode} wisselt op elk moment, ook midden in een draad.
+"""
+pause = true

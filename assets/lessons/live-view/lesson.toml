@@ -1,0 +1,238 @@
+format = 1
+id = "live-view"
+version = 1
+status = "early"
+title = "The live view"
+title_nl = "De live-weergave"
+summary = "Switch on the live view, press the start button and read what lights up."
+summary_nl = "Zet de live-weergave aan, druk op de startknop en lees wat oplicht."
+track = "circuits"
+order = 30
+level = "intermediate"
+minutes = 6
+topics = ["simulation", "live"]
+needs = ["cross-references"]
+project = "../cross-references/finished.json"
+page = "Control circuit"
+
+[[step]]
+id = "enter"
+title = "Switch the live view on"
+title_nl = "Zet de live-weergave aan"
+text = """
+The live view lets you operate the drawing like a bench: you close and open switches and see which wires carry power. It never changes the drawing.
+"""
+text_nl = """
+Met de live-weergave bedien je de tekening als een proefopstelling: je sluit en opent schakelaars en ziet welke draden spanning voeren. De tekening zelf verandert nooit.
+"""
+how = [
+  "Press {key:sim.live}. A card titled **Live potentials** appears and a round badge shows on every switch and breaker.",
+]
+how_nl = [
+  "Druk op {key:sim.live}. Er verschijnt een kaart **Live potentials** en op elke schakelaar en automaat staat een ronde knop.",
+]
+demo = [
+  { press = "sim.live" },
+  { say = "A card titled Live potentials appears and a round badge shows on every switch.", say_nl = "Er verschijnt een kaart Live potentials en op elke schakelaar staat een ronde knop." },
+]
+expect = { live = true }
+solve = [ { command = "sim.live" } ]
+
+[[step]]
+id = "card"
+title = "Read the card and the badges"
+title_nl = "Lees de kaart en de knoppen"
+text = """
+The card lists the potentials that carry power. Right now every switch is open, like a plant at rest, so nothing runs. An empty round badge is an open switch; a green one is closed.
+"""
+text_nl = """
+De kaart toont de potentialen die spanning voeren. Nu staat elke schakelaar open, zoals een installatie in rust, dus niets draait. Een lege ronde knop is een open schakelaar; een groene is gesloten.
+"""
+how = [
+  "Look at the card. It lists no running load.",
+  "Point at a badge. The tooltip says whether the switch is open or closed and what a click does.",
+]
+how_nl = [
+  "Kijk naar de kaart. Er staat geen draaiende last op.",
+  "Wijs een knop aan. De tip zegt of de schakelaar open of gesloten is en wat een klik doet.",
+]
+pause = true
+
+[[step]]
+id = "close-breaker"
+title = "Switch on the motor breaker"
+title_nl = "Zet de motorbeveiliging aan"
+text = """
+The motor only gets power when its breaker is on. The breaker has three poles; Shift and a click close all three at once.
+"""
+text_nl = """
+De motor krijgt alleen stroom als zijn beveiliging aan staat. De beveiliging heeft drie polen; Shift en een klik sluit ze alle drie tegelijk.
+"""
+how = [
+  "Go to the page **Main circuit** with {key:nav.previous_page} (Page Up) if you are not on it.",
+  "Hold Shift and click the badge on the motor breaker **-Q1**. All three poles turn green.",
+]
+how_nl = [
+  "Ga met {key:nav.previous_page} (Page Up) naar de pagina **Main circuit** als je er niet bent.",
+  "Houd Shift ingedrukt en klik op de knop van de motorbeveiliging **-Q1**. Alle drie de polen worden groen.",
+]
+demo = [
+  { press = "nav.previous_page" },
+  { move = { at = { device = "-Q1" } } },
+  { keys = ["Shift"] },
+  { click = true },
+  { say = "Shift and a click closes all three poles.", say_nl = "Shift en een klik sluit alle drie de polen." },
+]
+point = { at = { device = "-Q1" } }
+expect = { pole_closed = "-Q1" }
+
+[[step]]
+id = "page-down"
+title = "Go to the control circuit"
+title_nl = "Ga naar het stuurcircuit"
+text = """
+The contactor is switched from the control page, so that is where you press start.
+"""
+text_nl = """
+De contactor wordt vanaf de stuurpagina geschakeld, dus daar druk je op start.
+"""
+how = [
+  "Press {key:nav.next_page} (Page Down). The page **Control circuit** opens.",
+]
+how_nl = [
+  "Druk op {key:nav.next_page} (Page Down). De pagina **Control circuit** opent.",
+]
+demo = [
+  { press = "nav.next_page" },
+]
+expect = { page = "Control circuit" }
+solve = [ { page = "Control circuit" } ]
+
+[[step]]
+id = "close-control"
+title = "Switch on the control breaker and close the stop button"
+title_nl = "Zet de stuurstroomautomaat aan en sluit de stopknop"
+text = """
+The control circuit has a breaker **-F1** and a stop button **-S1**. The stop button is normally closed in real life, but the live view starts with every switch open, so you close it yourself.
+"""
+text_nl = """
+Het stuurcircuit heeft een automaat **-F1** en een stopknop **-S1**. De stopknop is in het echt normaal gesloten, maar de live-weergave begint met alle schakelaars open, dus sluit je hem zelf.
+"""
+how = [
+  "Click the badge on the breaker **-F1**. It turns green.",
+  "Click the badge on the stop button **-S1**. It turns green. Nothing runs yet, because the start button is still open.",
+]
+how_nl = [
+  "Klik op de knop van de automaat **-F1**. Hij wordt groen.",
+  "Klik op de knop van de stopknop **-S1**. Hij wordt groen. Er draait nog niets, omdat de startknop nog open is.",
+]
+demo = [
+  { move = { at = { device = "-F1" } } },
+  { click = true },
+  { move = { at = { device = "-S1" } } },
+  { click = true },
+  { say = "Both badges turn green. Nothing runs yet.", say_nl = "Beide knoppen worden groen. Er draait nog niets." },
+]
+point = { at = { device = "-S1" } }
+expect = { all = [ { pole_closed = "-F1" }, { pole_closed = "-S1" } ] }
+
+[[step]]
+id = "start"
+title = "Press start"
+title_nl = "Druk op start"
+text = """
+Closing the start button feeds the coil. The coil pulls in the contactor: its contacts follow it, the motor gets power and the lamp lights.
+"""
+text_nl = """
+Het sluiten van de startknop voedt de spoel. De spoel trekt de contactor aan: zijn contacten volgen, de motor krijgt stroom en de lamp brandt.
+"""
+how = [
+  "Click the badge on the start button **-S2**. It turns green.",
+  "Watch the square badge on the coil **-K1** turn green, and the lamp **-P1** light up. The card now lists the motor and the lamp as running.",
+]
+how_nl = [
+  "Klik op de knop van de startknop **-S2**. Hij wordt groen.",
+  "Kijk hoe de vierkante knop op de spoel **-K1** groen wordt en de lamp **-P1** gaat branden. De kaart toont de motor en de lamp nu als draaiend.",
+]
+demo = [
+  { move = { at = { device = "-S2" } } },
+  { click = true },
+  { say = "The coil -K1 and the lamp -P1 light up.", say_nl = "De spoel -K1 en de lamp -P1 gaan branden." },
+]
+point = { at = { device = "-S2" } }
+expect = { coil_on = "-K1" }
+
+[[step]]
+id = "seal-in"
+title = "Let go of start"
+title_nl = "Laat start los"
+text = """
+A real start button springs back when you let go. Here you open it with a second click. The coil stays on because the holding contact, in parallel with the start button, now feeds it. That is the {tip:self-hold}.
+"""
+text_nl = """
+Een echte startknop veert terug als je loslaat. Hier open je hem met een tweede klik. De spoel blijft aan omdat het houdcontact, parallel aan de startknop, hem nu voedt. Dat is de {tip:self-hold}.
+"""
+how = [
+  "Click the badge on the start button **-S2** again. It turns empty (open).",
+  "The coil **-K1**, the motor and the lamp stay on.",
+]
+how_nl = [
+  "Klik nogmaals op de knop van de startknop **-S2**. Hij wordt leeg (open).",
+  "De spoel **-K1**, de motor en de lamp blijven aan.",
+]
+demo = [
+  { move = { at = { device = "-S2" } } },
+  { click = true },
+  { say = "The coil, the motor and the lamp stay on.", say_nl = "De spoel, de motor en de lamp blijven aan." },
+]
+point = { at = { device = "-K1", pin = "13" } }
+expect = { all = [ { coil_on = "-K1" }, { not = { pole_closed = "-S2" } } ] }
+
+[[step]]
+id = "stop"
+title = "Press stop"
+title_nl = "Druk op stop"
+text = """
+Stopping breaks the circuit to the coil. Because the coil is gone, the holding contact opens as well, so releasing stop does not start the motor again.
+"""
+text_nl = """
+Stoppen onderbreekt het circuit naar de spoel. Omdat de spoel weg is, opent ook het houdcontact, dus het loslaten van stop start de motor niet opnieuw.
+"""
+how = [
+  "Click the badge on the stop button **-S1** to open it. The coil, the motor and the lamp drop out.",
+  "Click the badge on **-S1** again to close it. Nothing starts: you have to press start again.",
+]
+how_nl = [
+  "Klik op de knop van de stopknop **-S1** om hem te openen. De spoel, de motor en de lamp vallen af.",
+  "Klik nogmaals op de knop van **-S1** om hem te sluiten. Er start niets: je moet opnieuw op start drukken.",
+]
+demo = [
+  { move = { at = { device = "-S1" } } },
+  { click = true },
+  { say = "Everything drops out.", say_nl = "Alles valt af." },
+  { click = true },
+  { say = "Nothing starts: you have to press start again.", say_nl = "Er start niets: je moet opnieuw op start drukken." },
+]
+point = { at = { device = "-S1" } }
+expect = { not = { coil_on = "-K1" } }
+
+[[step]]
+id = "leave"
+title = "Leave the live view"
+title_nl = "Verlaat de live-weergave"
+text = """
+Switching the view off clears all the switch positions. The drawing underneath is exactly as you left it, because the live view only shows and never edits.
+"""
+text_nl = """
+Het uitzetten van de weergave wist alle schakelaarstanden. De tekening eronder is precies zoals je hem liet, omdat de live-weergave alleen toont en nooit bewerkt.
+"""
+how = [
+  "Press {key:sim.live} again.",
+]
+how_nl = [
+  "Druk nogmaals op {key:sim.live}.",
+]
+demo = [
+  { press = "sim.live" },
+]
+pause = true

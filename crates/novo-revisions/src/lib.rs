@@ -9,6 +9,7 @@ mod compare;
 mod fields;
 mod issue;
 mod list;
+mod report;
 mod sheets;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -19,6 +20,7 @@ pub use compare::{CompareError, Comparison, Group, Side, compare, group_of};
 pub use fields::{FieldChange, field_changes};
 pub use issue::{IssueError, Issued, issue_revision, issue_revision_as};
 pub use list::{ChangeRow, change_list, list_of};
+pub use report::{REPORT_ID, change_report};
 pub use sheets::{SheetChange, SheetChangeKind, changed_sheet_fingerprints, changed_sheets};
 
 /// How revisions are indexed, a project rule ("Revisions are indexed

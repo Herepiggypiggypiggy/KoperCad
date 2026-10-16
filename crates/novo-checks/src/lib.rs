@@ -28,6 +28,36 @@
 //! | [`WireOverlap`](ProblemKind::WireOverlap) | warning | Two wires on a page sharing a stretch of line |
 //! | [`OpenWire`](ProblemKind::OpenWire) | warning | A wire with an open end that is connected to nothing |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
+//! | [`VoltageDrop`](ProblemKind::VoltageDrop) | warning, error above twice the limit | A wire whose voltage drop exceeds the limit (calc::drop) |
+//! | [`ShortCircuit`](ProblemKind::ShortCircuit) | error | A device that cannot break the supply's short-circuit current |
+//! | [`DisconnectionTime`](ProblemKind::DisconnectionTime) | error | A wire so long that an earth fault cannot trip its protective device in time |
+//! | [`ThermalWithstand`](ProblemKind::ThermalWithstand) | error | A wire that cannot take the let-through energy of its protective device |
+//! | [`CableRating`](ProblemKind::CableRating) | error | A wire whose cable carries less than its protective device allows, or the load draws more than the device is rated for |
+//! | [`MotorStarter`](ProblemKind::MotorStarter) | warning, error where it cannot work | A motor starter whose relay, contactor or fuse does not suit the motor |
+//! | [`ProtectiveConductor`](ProblemKind::ProtectiveConductor) | warning | A protective conductor thinner than its phase conductors need |
+//! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
+//! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
+//! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
+//! | [`AmbiguousInterruption`](ProblemKind::AmbiguousInterruption) | warning | A name used by more than two interruption points |
+//! | [`WireNumber`](ProblemKind::WireNumber) | warning | A wire number used on two nets |
+//! | [`UntaggedDevice`](ProblemKind::UntaggedDevice) | warning | A device without a product level in its tag |
+//! | [`UnnamedTerminal`](ProblemKind::UnnamedTerminal) | warning | A terminal without a number or name |
+//! | [`SameShortTag`](ProblemKind::SameShortTag) | info | One short tag under two function or location levels |
+//! | [`DuplicatePage`](ProblemKind::DuplicatePage) | warning | Two pages with one name in one structure |
+//! | [`DanglingJunction`](ProblemKind::DanglingJunction) | warning | A junction no wire ends on |
+//! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
+//! | [`DeviceCollision`](ProblemKind::DeviceCollision) | error | Two devices overlapping on a mounting plate |
+//! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
+//! | [`DevicesTooClose`](ProblemKind::DevicesTooClose) | warning | Two devices closer than their clearance |
+//! | [`RailOverflow`](ProblemKind::RailOverflow) | warning | Devices needing more room than their DIN rail has |
+//! | [`DeviceTooDeep`](ProblemKind::DeviceTooDeep) | error | A device deeper than the room between plate and door |
+//! | [`DoorGapTight`](ProblemKind::DoorGapTight) | warning | A device that leaves less than the minimum gap to the door |
+//! | [`DepthUnknown`](ProblemKind::DepthUnknown) | info | A placed device without a depth, so the door was not checked |
+//! | [`PlateTooBig`](ProblemKind::PlateTooBig) | error | A plate larger than the inside of its enclosure |
+//! | [`DoorSwing`](ProblemKind::DoorSwing) | warning | An open door that needs more room outside than the site allows |
+//!
+//! A problem can be waived with a reason ([`waive`]); [`check_open`] leaves
+//! waived problems out and [`waived_problems`] lists them for the report.
 //!
 //! Not checked here:
 //! - Wires beyond the next device on a protective device's load side (past
@@ -47,8 +77,15 @@
 //! ```
 
 pub mod calc;
+mod calc_checks;
 mod checks;
+mod connection_rules;
 mod contacts;
+mod door;
+mod physical;
+pub mod protection;
+pub mod standards;
+mod waiver;
 
 use std::cmp::Ordering;
 use std::collections::HashMap;
@@ -59,6 +96,7 @@ use novo_core::{
 };
 
 pub use contacts::{ContactKind, contact_limit_property};
+pub use waiver::{Waived, check_open, report_lines, waive, waived_problems, waiver_of};
 
 /// How bad a problem is. Orders from most to least severe.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -132,11 +170,88 @@ pub enum ProblemKind {
     /// A wire with an open end (`wire.open`, DESIGN.md §4): an end connected
     /// to nothing. Open ends are allowed while sketching; they join no net.
     OpenWire,
+    /// A wire that drops too much of the supply voltage. Filled by the
+    /// electrical calculations (novo-checks::calc), which read the wire
+    /// property `length_m` (or a cable's length), `load_current_a` and the
+    /// project property `check.voltage_drop_pct`.
+    VoltageDrop,
+    /// A protective device that cannot break the prospective short-circuit
+    /// current. Filled by the electrical calculations, which read the device
+    /// or part property `breaking_capacity_ka` and the project property
+    /// `supply.short_circuit_ka`.
+    ShortCircuit,
+    /// A wire whose smallest earth-fault current is too low for its
+    /// protective device to trip at once (`calc::short_circuit`).
+    DisconnectionTime,
+    /// A wire thinner than its protective device's let-through energy
+    /// allows (`k²S²`).
+    ThermalWithstand,
+    /// A motor starter whose overload relay, contactor or short-circuit
+    /// device does not suit the motor or each other (`calc::motor`).
+    MotorStarter,
+    /// A protective conductor thinner than the rule for its phase
+    /// conductors (`calc::pe`).
+    ProtectiveConductor,
+    /// A name used by more than two interruption points. EPLAN pairs them
+    /// two by two in page order, KoperCAD joins all of one name, so an
+    /// imported project and this one read it differently.
+    AmbiguousInterruption,
+    /// A wire number used on two nets.
+    WireNumber,
+    /// A device without a product level in its tag.
+    UntaggedDevice,
+    /// A terminal without a number or name.
+    UnnamedTerminal,
+    /// One short tag under two function or location levels.
+    SameShortTag,
+    /// Two pages with one name in the same structure.
+    DuplicatePage,
+    /// A junction no wire ends on.
+    DanglingJunction,
+    /// A device drawn in the schematic but not placed on any mounting plate,
+    /// in a project where the cabinet layout has been started.
+    UnplacedDevice,
+    /// A wire between two placed devices that no duct path serves (novo-routing).
+    WireWithoutDuct,
+    /// A duct carrying more wires than its fill limit (novo-routing).
+    OverfullDuct,
+    /// A rule of a selected standard is not met (IEC 60204-1, NFPA 79,
+    /// UL 508A; [`standards`]). Only produced for projects that selected a
+    /// standard. Each problem carries its rule id in [`Problem::rule`] and
+    /// its own severity, set by the rule.
+    Standard,
+    /// A wire whose cable cannot carry what its protective device allows
+    /// (`Ib ≤ In ≤ Iz`, with the installation method, ambient temperature
+    /// and grouping of IEC 60364-5-52), read from the planning tables
+    /// unless the user loaded a licensed copy (`calc::tables`).
+    CableRating,
+    /// Two devices whose footprints overlap on a mounting plate
+    /// (novo-layout).
+    DeviceCollision,
+    /// A device that leaves the usable area of its mounting plate.
+    DeviceOutsidePlate,
+    /// Two devices closer than the clearance they need.
+    DevicesTooClose,
+    /// Devices on a DIN rail that need more room than the rail has.
+    RailOverflow,
+    /// A device deeper than the room between the plate and the door
+    /// (novo-layout's door report); only for enclosures with an interior.
+    DeviceTooDeep,
+    /// A device that fits but leaves less than the minimum gap to the door.
+    DoorGapTight,
+    /// A placed device whose depth is not known (no `depth_mm` on the
+    /// device or its parts), so the door could not be checked for it.
+    DepthUnknown,
+    /// A mounting plate wider or higher than the inside of its enclosure.
+    PlateTooBig,
+    /// The open door needs more room in front or beside the hinge side than
+    /// the enclosure's stated free room.
+    DoorSwing,
 }
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 17] = [
+    pub const ALL: [ProblemKind; 44] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -154,13 +269,48 @@ impl ProblemKind {
         ProblemKind::MissingPart,
         ProblemKind::WireOverlap,
         ProblemKind::OpenWire,
+        ProblemKind::VoltageDrop,
+        ProblemKind::ShortCircuit,
+        ProblemKind::DisconnectionTime,
+        ProblemKind::ThermalWithstand,
+        ProblemKind::MotorStarter,
+        ProblemKind::ProtectiveConductor,
+        ProblemKind::UnplacedDevice,
+        ProblemKind::WireWithoutDuct,
+        ProblemKind::OverfullDuct,
+        ProblemKind::Standard,
+        ProblemKind::CableRating,
+        ProblemKind::DeviceCollision,
+        ProblemKind::DeviceOutsidePlate,
+        ProblemKind::DevicesTooClose,
+        ProblemKind::RailOverflow,
+        ProblemKind::DeviceTooDeep,
+        ProblemKind::DoorGapTight,
+        ProblemKind::DepthUnknown,
+        ProblemKind::PlateTooBig,
+        ProblemKind::DoorSwing,
+        ProblemKind::AmbiguousInterruption,
+        ProblemKind::WireNumber,
+        ProblemKind::UntaggedDevice,
+        ProblemKind::UnnamedTerminal,
+        ProblemKind::SameShortTag,
+        ProblemKind::DuplicatePage,
+        ProblemKind::DanglingJunction,
     ];
 
     pub fn severity(self) -> Severity {
         match self {
             ProblemKind::DuplicateTag
             | ProblemKind::TooManyContacts
-            | ProblemKind::PotentialConflict => Severity::Error,
+            | ProblemKind::PotentialConflict
+            | ProblemKind::ShortCircuit
+            | ProblemKind::DisconnectionTime
+            | ProblemKind::ThermalWithstand
+            | ProblemKind::CableRating
+            | ProblemKind::DeviceCollision
+            | ProblemKind::DeviceOutsidePlate
+            | ProblemKind::DeviceTooDeep
+            | ProblemKind::PlateTooBig => Severity::Error,
             ProblemKind::UnconnectedPin
             | ProblemKind::LoneInterruption
             | ProblemKind::NoMainFunction
@@ -173,8 +323,27 @@ impl ProblemKind {
             | ProblemKind::TerminalUse
             | ProblemKind::WireOverlap
             | ProblemKind::OpenWire
+            | ProblemKind::VoltageDrop
+            | ProblemKind::MotorStarter
+            | ProblemKind::ProtectiveConductor
+            | ProblemKind::WireWithoutDuct
+            | ProblemKind::OverfullDuct
+            | ProblemKind::Standard
+            | ProblemKind::DevicesTooClose
+            | ProblemKind::RailOverflow
+            | ProblemKind::DoorGapTight
+            | ProblemKind::DoorSwing
+            | ProblemKind::AmbiguousInterruption
+            | ProblemKind::WireNumber
+            | ProblemKind::UntaggedDevice
+            | ProblemKind::UnnamedTerminal
+            | ProblemKind::DuplicatePage
+            | ProblemKind::DanglingJunction
             | ProblemKind::Plc => Severity::Warning,
-            ProblemKind::MissingPart => Severity::Info,
+            ProblemKind::MissingPart
+            | ProblemKind::UnplacedDevice
+            | ProblemKind::DepthUnknown
+            | ProblemKind::SameShortTag => Severity::Info,
         }
     }
 
@@ -198,6 +367,83 @@ impl ProblemKind {
             ProblemKind::Plc => "PLC",
             ProblemKind::WireOverlap => "Wires overlap",
             ProblemKind::OpenWire => "Open wire end",
+            ProblemKind::VoltageDrop => "Voltage drop",
+            ProblemKind::ShortCircuit => "Short-circuit rating",
+            ProblemKind::DisconnectionTime => "Disconnection time",
+            ProblemKind::ThermalWithstand => "Thermal withstand",
+            ProblemKind::MotorStarter => "Motor starter",
+            ProblemKind::ProtectiveConductor => "Protective conductor",
+            ProblemKind::UnplacedDevice => "Unplaced device",
+            ProblemKind::WireWithoutDuct => "Wire without duct",
+            ProblemKind::OverfullDuct => "Overfull duct",
+            ProblemKind::Standard => "Standards",
+            ProblemKind::CableRating => "Cable rating",
+            ProblemKind::DeviceCollision => "Devices overlap",
+            ProblemKind::DeviceOutsidePlate => "Device off the plate",
+            ProblemKind::DevicesTooClose => "Devices too close",
+            ProblemKind::RailOverflow => "Rail overfull",
+            ProblemKind::DeviceTooDeep => "Device too deep",
+            ProblemKind::DoorGapTight => "Door gap tight",
+            ProblemKind::DepthUnknown => "Depth unknown",
+            ProblemKind::PlateTooBig => "Plate too big",
+            ProblemKind::DoorSwing => "Door swing",
+            ProblemKind::AmbiguousInterruption => "Interruption name used often",
+            ProblemKind::WireNumber => "Wire number",
+            ProblemKind::UntaggedDevice => "Device without tag",
+            ProblemKind::UnnamedTerminal => "Unnamed terminal",
+            ProblemKind::SameShortTag => "Same short tag",
+            ProblemKind::DuplicatePage => "Duplicate page",
+            ProblemKind::DanglingJunction => "Dangling junction",
+        }
+    }
+
+    /// A stable name for storing a waiver (`check.voltage_drop`).
+    pub fn key(self) -> &'static str {
+        match self {
+            ProblemKind::UnconnectedPin => "check.unconnected_pin",
+            ProblemKind::DuplicateTag => "check.duplicate_tag",
+            ProblemKind::DuplicateTerminal => "check.duplicate_terminal",
+            ProblemKind::NoMainFunction => "check.no_main_function",
+            ProblemKind::SeveralMainFunctions => "check.several_main_functions",
+            ProblemKind::TooManyContacts => "check.too_many_contacts",
+            ProblemKind::LoneInterruption => "check.lone_interruption",
+            ProblemKind::PotentialConflict => "check.potential_conflict",
+            ProblemKind::ZeroLengthWire => "check.zero_length_wire",
+            ProblemKind::MissingPart => "check.missing_part",
+            ProblemKind::UndersizedWire => "check.undersized_wire",
+            ProblemKind::WrongTerminalBlock => "check.wrong_terminal_block",
+            ProblemKind::CableCore => "check.cable_core",
+            ProblemKind::TerminalUse => "check.terminal_use",
+            ProblemKind::Plc => "check.plc",
+            ProblemKind::WireOverlap => "check.wire_overlap",
+            ProblemKind::OpenWire => "check.open_wire",
+            ProblemKind::VoltageDrop => "check.voltage_drop",
+            ProblemKind::ShortCircuit => "check.short_circuit",
+            ProblemKind::DisconnectionTime => "check.disconnection_time",
+            ProblemKind::ThermalWithstand => "check.thermal_withstand",
+            ProblemKind::MotorStarter => "check.motor_starter",
+            ProblemKind::ProtectiveConductor => "check.protective_conductor",
+            ProblemKind::CableRating => "check.cable_rating",
+            ProblemKind::UnplacedDevice => "check.unplaced_device",
+            ProblemKind::WireWithoutDuct => "check.wire_without_duct",
+            ProblemKind::OverfullDuct => "check.overfull_duct",
+            ProblemKind::Standard => "check.standard",
+            ProblemKind::DeviceCollision => "check.device_collision",
+            ProblemKind::DeviceOutsidePlate => "check.device_outside_plate",
+            ProblemKind::DevicesTooClose => "check.devices_too_close",
+            ProblemKind::RailOverflow => "check.rail_overflow",
+            ProblemKind::DeviceTooDeep => "check.device_too_deep",
+            ProblemKind::DoorGapTight => "check.door_gap_tight",
+            ProblemKind::DepthUnknown => "check.depth_unknown",
+            ProblemKind::PlateTooBig => "check.plate_too_big",
+            ProblemKind::DoorSwing => "check.door_swing",
+            ProblemKind::AmbiguousInterruption => "check.ambiguous_interruption",
+            ProblemKind::WireNumber => "check.wire_number",
+            ProblemKind::UntaggedDevice => "check.untagged_device",
+            ProblemKind::UnnamedTerminal => "check.unnamed_terminal",
+            ProblemKind::SameShortTag => "check.same_short_tag",
+            ProblemKind::DuplicatePage => "check.duplicate_page",
+            ProblemKind::DanglingJunction => "check.dangling_junction",
         }
     }
 }
@@ -218,6 +464,10 @@ pub struct Problem {
     pub position: Option<Point>,
     /// One plain sentence, shown on hover and in the Issues list.
     pub message: String,
+    /// The id of the standards rule this problem comes from
+    /// (`iec60204.pe-colour`), for [`ProblemKind::Standard`]; `None` for
+    /// every other kind.
+    pub rule: Option<&'static str>,
 }
 
 impl Problem {
@@ -229,6 +479,17 @@ impl Problem {
             page: None,
             position: None,
             message,
+            rule: None,
+        }
+    }
+
+    /// The name a waiver of this problem is stored under: the kind's key, or
+    /// for a standards problem the key of its rule (`check.std.<rule id>`),
+    /// so a waiver covers one rule and not every standards problem.
+    pub fn waiver_key(&self) -> String {
+        match self.rule {
+            Some(rule) => standards::waiver_key(rule),
+            None => self.kind.key().to_owned(),
         }
     }
 }
@@ -306,6 +567,19 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::plc(&cx, &mut problems);
     checks::wire_overlaps(&cx, &mut problems);
     checks::open_wires(&cx, &mut problems);
+    connection_rules::ambiguous_interruptions(&cx, &mut problems);
+    connection_rules::wire_numbers(&cx, netlist, &mut problems);
+    connection_rules::untagged_devices(&cx, &mut problems);
+    connection_rules::unnamed_terminals(&cx, &mut problems);
+    connection_rules::same_short_tags(&cx, &mut problems);
+    connection_rules::duplicate_pages(&cx, &mut problems);
+    connection_rules::dangling_junctions(&cx, &mut problems);
+    calc_checks::run(&cx, netlist, &mut problems);
+    physical::unplaced_devices(&cx, &mut problems);
+    physical::routing(&cx, &mut problems);
+    standards::problems(&cx, netlist, &mut problems);
+    physical::layout(&cx, &mut problems);
+    door::door(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
 }
@@ -425,24 +699,28 @@ impl<'a> Context<'a> {
         }
     }
 
+    /// Fills in a problem's page and position from the first of its objects
+    /// in reading order and returns that spot.
+    fn locate(&self, problem: &mut Problem) -> Option<Spot> {
+        let spot = problem
+            .at
+            .iter()
+            .filter_map(|&id| self.spot(id))
+            .min_by(Spot::cmp);
+        if let Some(spot) = spot {
+            problem.page = Some(spot.page);
+            problem.position = Some(spot.at);
+        }
+        spot
+    }
+
     /// Fills in each problem's page and position and sorts them in reading
     /// order. Problems with nothing drawn come last; ties go by kind, then
     /// message, then the marked ids, so the order is the same every run.
     fn sort(&self, problems: &mut Vec<Problem>) {
         let mut keyed: Vec<(Option<Spot>, Problem)> = problems
             .drain(..)
-            .map(|mut problem| {
-                let spot = problem
-                    .at
-                    .iter()
-                    .filter_map(|&id| self.spot(id))
-                    .min_by(Spot::cmp);
-                if let Some(spot) = spot {
-                    problem.page = Some(spot.page);
-                    problem.position = Some(spot.at);
-                }
-                (spot, problem)
-            })
+            .map(|mut problem| (self.locate(&mut problem), problem))
             .collect();
         keyed.sort_unstable_by(|(a, p), (b, q)| {
             let place = match (a, b) {

@@ -1,0 +1,76 @@
+format = 1
+id = "revisions-and-compare"
+version = 1
+status = "early"
+title = "Issue a revision and see what changed"
+summary = "Freeze the drawing as revision A, change it, compare, and issue revision B."
+track = "outputs"
+order = 40
+level = "beginner"
+minutes = 8
+topics = ["revision", "compare", "changes"]
+needs = []
+next = ["time-savers"]
+project = "project.json"
+finished = "finished.json"
+page = "Main circuit"
+
+[[step]]
+id = "meet-revision"
+title = "Revision A is already issued"
+text = "This project was issued as **A** earlier. An issued revision freezes every page as it was and keeps a copy to compare with."
+
+[[step]]
+id = "change-motor"
+title = "Change the motor"
+text = "Select **-M1** and change its description to **Pump motor 3 kW** in the inspector. That is a change since revision A."
+point = { at = { device = "-M1" } }
+expect = { field = { device = "-M1", name = "description", equals = "Pump motor 3 kW" } }
+
+[[step]]
+id = "show-changes"
+title = "Show the changes on the drawing"
+text = "Run **changes** from the command field ({key:view.command_palette}). Changed objects get a mark on the pages, and the Changes list names them."
+point = { ui = "palette.field" }
+expect = { command = "view.changes" }
+solve = [ { command = "view.changes" } ]
+
+[[step]]
+id = "jump-to-change"
+title = "Click a change"
+text = "Click a row in the Changes list. It opens the page and selects the object."
+point = { ui = "changes.list" }
+expect = { clicked = "changes.list" }
+
+[[step]]
+id = "compare"
+title = "Compare two states"
+text = "Run **compare** from the command field. Choose **From** revision A and **To** now. Filter by typing in the Filter box."
+point = { ui = "palette.field" }
+expect = { command = "revision.compare" }
+solve = [ { command = "revision.compare" } ]
+
+[[step]]
+id = "swap"
+title = "Look from the other side"
+text = "Press the swap button between From and To. Additions become removals. The same list answers 'what did we add' and 'what did we take away'."
+point = { ui = "compare.swap" }
+expect = { clicked = "compare.swap" }
+
+[[step]]
+id = "issue"
+title = "Issue revision B"
+text = "Run **issue** from the command field. Type what changed (**Larger pump motor**), check the index, date and initials, and press **Issue B**."
+point = { ui = "palette.field" }
+expect = { command = "revision.issue" }
+solve = [ { command = "revision.issue" } ]
+
+[[step]]
+id = "frozen"
+title = "The pages are frozen again"
+text = "References to the issued pages no longer move. Later changes show up against revision B."
+
+[[step]]
+id = "done"
+title = "A trail you can trust"
+text = "Issue at every hand-over, compare before you send. Next: settings that save time."

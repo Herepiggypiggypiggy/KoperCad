@@ -20,16 +20,18 @@ pub enum SheetError {
     Write(#[from] XlsxError),
     #[error("could not read the workbook: {0}")]
     Read(String),
+    #[error("{0:?} files cannot be imported; use .xlsx or .csv")]
+    UnknownFormat(String),
     #[error("the file is empty")]
     Empty,
     #[error("a quote that opens a cell on line {0} is never closed")]
     UnclosedQuote(usize),
     #[error(
-        "this file does not look like a KoperCAD export: no sheet is called Devices, Terminals, Wires or Cables"
+        "this file does not look like a KoperCAD export: no sheet is called Devices, Terminals, Wires, Cables or Cores"
     )]
     NoTables,
     #[error(
-        "cannot tell which table this CSV is; its columns match none of Devices, Terminals, Wires, Cables"
+        "cannot tell which table this CSV is; its columns match none of Devices, Terminals, Wires, Cables, Cores"
     )]
     UnknownCsv,
 }
@@ -309,7 +311,9 @@ pub fn to_csv(table: &Table, options: &CsvOptions) -> String {
 /// Which table a CSV holds, from its header.
 fn detect_kind(headers: &[String]) -> Option<TableKind> {
     let has = |name: &str| headers.iter().any(|h| h.trim().eq_ignore_ascii_case(name));
-    if has("Strip") {
+    if has("Core No") {
+        Some(TableKind::Cores)
+    } else if has("Strip") {
         Some(TableKind::Terminals)
     } else if has("From") && has("To") {
         Some(TableKind::Wires)

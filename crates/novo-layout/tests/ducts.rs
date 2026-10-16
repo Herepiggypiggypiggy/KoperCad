@@ -1,0 +1,49 @@
+use novo_core::{Command, DeviceTag, MountingPlate, Project, RailKind};
+use novo_layout::model::{load, set_plate};
+
+#[test]
+fn ducts_are_loaded_apart_from_din_rails_with_a_default_cross_section() {
+    let mut p = Project::new("t");
+    let (cab, _) = p
+        .transact("setup", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            set_plate(
+                tx,
+                cab,
+                MountingPlate {
+                    width: 400.0,
+                    height: 400.0,
+                    margin: 10.0,
+                },
+            )?;
+            for (kind, vertical, width) in [
+                (RailKind::DinRail, false, 0.0),
+                (RailKind::Duct, false, 0.0),
+                (RailKind::Duct, true, 60.0),
+            ] {
+                tx.execute(Command::AddRail {
+                    structure: cab,
+                    x: 20.0,
+                    y: 50.0,
+                    length: 200.0,
+                    kind,
+                    vertical,
+                    width,
+                    height: 0.0,
+                })?;
+            }
+            Ok(cab)
+        })
+        .unwrap();
+    let layout = load(&p, cab).unwrap();
+    assert_eq!(layout.rails.len(), 1);
+    assert_eq!(layout.ducts.len(), 2);
+    let flat = layout.ducts.iter().find(|d| !d.vertical).unwrap();
+    assert_eq!(flat.width, 30.0);
+    let f = flat.footprint();
+    // The start is on the centre line, like a rail's: 15 mm each side.
+    assert_eq!((f.x, f.y, f.w, f.h), (20.0, 35.0, 200.0, 30.0));
+    let tall = layout.ducts.iter().find(|d| d.vertical).unwrap();
+    let t = tall.footprint();
+    assert_eq!((t.x, t.y, t.w, t.h), (-10.0, 50.0, 60.0, 200.0));
+}

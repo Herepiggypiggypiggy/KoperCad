@@ -8,7 +8,7 @@ use novo_core::{
     CabinetPlacement, DeviceId, Direction, PinRef, Project, Rail, RailKind, StructureId, SymbolRole,
 };
 
-use crate::{Anchor, Duct, Facing, Job, Network, Plan, Point, Route, Rules, plan};
+use crate::{Anchor, Duct, Facing, Job, Network, Plan, Point, Route, Rules, WireRules, plan};
 
 /// The ducts on the plate of an enclosure, in model id order. DIN rails are
 /// not ducts and are left out. A duct without a cross-section keeps
@@ -47,12 +47,31 @@ pub struct Connection {
     pub diameter_mm: Option<f64>,
 }
 
+/// Outer diameter of a wire of the given cross-section: the copper circle
+/// plus about 0.8 mm of insulation each side (1.5 mm2 comes out at 3 mm).
+/// Only steers duct fill. `None` for no size or a size that is not a
+/// positive number. The one rule for the wire list, the cut list, the
+/// checks and the Cabinet, so they fill a duct the same way.
+pub fn wire_diameter_mm(cross_section_mm2: Option<f64>) -> Option<f64> {
+    cross_section_mm2
+        .filter(|s| s.is_finite() && *s > 0.0)
+        .map(|s| 2.0 * (s / std::f64::consts::PI).sqrt() + 1.6)
+}
+
+/// The cross-section of a wire: its own, else its cable core's.
+pub fn wire_section_mm2(project: &Project, wire: &novo_core::Wire) -> Option<f64> {
+    wire.cross_section_mm2.or_else(|| {
+        let (cable, core) = project.core_of_wire(wire.id)?;
+        project.cable(cable)?.cores.get(core)?.cross_section_mm2
+    })
+}
+
 /// The connections of a project's wires: every wire with a pin at both ends
 /// (a wire ending on a junction or open is not a connection yet), the id
-/// being the raw wire id. The diameter is the conductor plus insulation of
-/// the wire's cross-section (1.5 mm2 comes out at 3 mm), `None` when the
-/// wire has no size. The Cabinet, the checks and the wire list route the
-/// same connections by using this.
+/// being the raw wire id. The diameter comes from [`wire_diameter_mm`] of
+/// the wire's cross-section (its cable core's when the wire has none),
+/// `None` when it has no size. The Cabinet, the checks and the wire list
+/// route the same connections by using this.
 pub fn wire_connections(project: &Project) -> Vec<Connection> {
     project
         .wires()
@@ -61,19 +80,21 @@ pub fn wire_connections(project: &Project) -> Vec<Connection> {
                 id: w.id.raw(),
                 from: w.from.as_pin()?,
                 to: w.to.as_pin()?,
-                diameter_mm: w
-                    .cross_section_mm2
-                    .filter(|s| *s > 0.0)
-                    .map(|s| 2.0 * (s / std::f64::consts::PI).sqrt() + 1.6),
+                diameter_mm: wire_diameter_mm(wire_section_mm2(project, w)),
             })
         })
         .collect()
 }
 
-/// Routes every wire of the project with the default rules: the one call a
-/// screen needs. Routes and unrouted ids are wire ids.
+/// Routes every wire of the project with the project's wire rules
+/// ([`WireRules`]): the one call a screen needs. Routes and unrouted ids are
+/// wire ids.
 pub fn route_project(project: &Project) -> Routed {
-    route_connections(project, &wire_connections(project), &Rules::default())
+    route_connections(
+        project,
+        &wire_connections(project),
+        &WireRules::of(project).routing,
+    )
 }
 
 /// The device a pin physically sits on: the device of a device symbol, or
@@ -98,6 +119,21 @@ fn facing(direction: Option<Direction>) -> Facing {
         Some(Direction::Right) => Facing::Right,
         None => Facing::Any,
     }
+}
+
+/// How far a device stands off the plate: the depth of its first part that
+/// has one, which is where the terminals' screws and wires are. `None` when
+/// no part says.
+fn device_height(project: &Project, device: &novo_core::Device) -> Option<f64> {
+    device.parts.iter().find_map(|part| {
+        let part = project.get::<novo_core::Part>(*part)?;
+        let depth = match part.properties.get("depth_mm")? {
+            novo_core::Value::Float(v) => *v,
+            novo_core::Value::Int(v) => *v as f64,
+            _ => return None,
+        };
+        (depth.is_finite() && depth > 0.0).then_some(depth)
+    })
 }
 
 /// Where a pin is on the mounting plate, or `None` when its device is not
@@ -133,6 +169,7 @@ fn anchor_of(
                 .direction,
         )
     };
+    let z_mm = device_height(project, device);
     let (cx, cy) = (placed.x + w / 2.0, placed.y + h / 2.0);
     let pos = match facing {
         Facing::Up => Point::new(cx, placed.y),
@@ -141,7 +178,7 @@ fn anchor_of(
         Facing::Right => Point::new(placed.x + w, cy),
         Facing::Any => Point::new(cx, cy),
     };
-    Some((placed.structure, Anchor { pos, facing }))
+    Some((placed.structure, Anchor { pos, facing, z_mm }))
 }
 
 /// The routes of a set of connections.
@@ -156,6 +193,10 @@ pub struct Routed {
     /// plate, the two ends are on different plates, or the id is used by
     /// more than one connection (ids must be unique; every use is listed).
     pub unrouted: Vec<u64>,
+    /// Routed connections with an end whose device depth is unknown: their
+    /// length is flat (as if the terminals sat on the plate) and too short
+    /// by the rise to the duct. The parts need a `depth_mm`.
+    pub unknown_height: Vec<u64>,
 }
 
 /// Routes connections through the ducts of the enclosures their devices are
@@ -180,12 +221,17 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         let ends =
             anchor_of(project, &placements, c.from).zip(anchor_of(project, &placements, c.to));
         match ends {
-            Some(((s1, from), (s2, to))) if s1 == s2 => jobs.entry(s1).or_default().push(Job {
-                id: c.id,
-                from,
-                to,
-                diameter_mm: c.diameter_mm,
-            }),
+            Some(((s1, from), (s2, to))) if s1 == s2 => {
+                if from.z_mm.is_none() || to.z_mm.is_none() {
+                    out.unknown_height.push(c.id);
+                }
+                jobs.entry(s1).or_default().push(Job {
+                    id: c.id,
+                    from,
+                    to,
+                    diameter_mm: c.diameter_mm,
+                });
+            }
             _ => out.unrouted.push(c.id),
         }
     }

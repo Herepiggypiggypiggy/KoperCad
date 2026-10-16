@@ -651,6 +651,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "crossbeam-deque"
+version = "0.8.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "622f3fc73690be383c7214310406f28a90e6edeadc3cea882f9d71e495b9711a"
+dependencies = [
+ "crossbeam-epoch",
+ "crossbeam-utils",
+]
+
+[[package]]
+name = "crossbeam-epoch"
+version = "0.9.21"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dc74980687109a3b14c72fd458107bf0baa1da1a1a805e178d15501ba9b86d9d"
+dependencies = [
+ "crossbeam-utils",
+]
+
+[[package]]
 name = "crossbeam-utils"
 version = "0.8.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1863,12 +1882,16 @@ dependencies = [
  "lopdf",
  "novo-cables",
  "novo-canvas",
+ "novo-cfd",
  "novo-checks",
  "novo-commissioning",
  "novo-core",
  "novo-editor",
+ "novo-heatview",
  "novo-interop",
  "novo-layout",
+ "novo-learn",
+ "novo-numbering",
  "novo-parts",
  "novo-pdf",
  "novo-plc",
@@ -1881,6 +1904,8 @@ dependencies = [
  "novo-terminals",
  "novo-tests",
  "novo-theme",
+ "novo-thermal",
+ "novo-view3d",
  "novo-workflow",
  "novo-xref",
  "rfd",
@@ -1916,16 +1941,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-cfd"
+version = "0.1.0"
+dependencies = [
+ "novo-layout",
+ "novo-thermal",
+ "rayon",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "novo-checks"
 version = "0.1.0"
 dependencies = [
  "novo-cables",
  "novo-core",
+ "novo-layout",
  "novo-parts",
  "novo-plc",
+ "novo-routing",
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1935,10 +1974,14 @@ dependencies = [
  "calamine",
  "clap",
  "novo-checks",
+ "novo-commissioning",
  "novo-core",
  "novo-editor",
  "novo-interop",
+ "novo-layout",
+ "novo-parts",
  "novo-pdf",
+ "novo-plc",
  "novo-py",
  "novo-reports",
  "novo-revisions",
@@ -1983,20 +2026,34 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-heatview"
+version = "0.1.0"
+dependencies = [
+ "novo-cfd",
+]
+
+[[package]]
 name = "novo-interop"
 version = "0.1.0"
 dependencies = [
  "calamine",
  "dirs",
  "earcutr",
+ "glam",
+ "novo-cables",
  "novo-canvas",
  "novo-core",
  "novo-layout",
  "novo-parts",
+ "novo-routing",
+ "novo-symbols",
  "novo-tests",
+ "novo-view3d",
  "rust_xlsxwriter",
+ "serde",
  "tempfile",
  "thiserror 2.0.21",
+ "toml",
 ]
 
 [[package]]
@@ -2016,6 +2073,15 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "toml",
+]
+
+[[package]]
+name = "novo-numbering"
+version = "0.1.0"
+dependencies = [
+ "novo-cables",
+ "novo-core",
+ "novo-reports",
 ]
 
 [[package]]
@@ -2056,9 +2122,12 @@ dependencies = [
 name = "novo-plc"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "novo-core",
  "novo-editor",
  "novo-symbols",
+ "quick-xml",
+ "rust_xlsxwriter",
  "thiserror 2.0.21",
 ]
 
@@ -2084,6 +2153,7 @@ name = "novo-reports"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "dirs",
  "novo-cables",
  "novo-core",
  "novo-layout",
@@ -2092,6 +2162,9 @@ dependencies = [
  "novo-terminals",
  "novo-tests",
  "rust_xlsxwriter",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 
@@ -2100,6 +2173,7 @@ name = "novo-revisions"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-pdf",
  "novo-reports",
  "novo-storage",
  "novo-tests",
@@ -2118,11 +2192,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-safety"
+version = "0.1.0"
+
+[[package]]
 name = "novo-sim"
 version = "0.1.0"
 dependencies = [
  "novo-core",
  "novo-symbols",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2161,20 +2241,24 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "novo-app",
+ "novo-cables",
  "novo-canvas",
  "novo-checks",
  "novo-core",
  "novo-editor",
  "novo-parts",
  "novo-pdf",
+ "novo-plc",
  "novo-reports",
  "novo-storage",
  "novo-symbols",
  "novo-terminals",
  "novo-theme",
  "novo-workflow",
+ "novo-xref",
  "serde_json",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
@@ -2184,6 +2268,16 @@ dependencies = [
  "eframe",
  "egui",
  "egui-phosphor",
+]
+
+[[package]]
+name = "novo-thermal"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-layout",
+ "novo-parts",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2199,6 +2293,7 @@ dependencies = [
  "naga",
  "novo-core",
  "novo-layout",
+ "novo-theme",
  "pollster 1.0.1",
  "wgpu",
 ]
@@ -2208,8 +2303,12 @@ name = "novo-workflow"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-numbering",
  "novo-symbols",
  "novo-tests",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
@@ -2931,6 +3030,26 @@ dependencies = [
  "objc2-core-foundation",
  "objc2-foundation 0.3.2",
  "objc2-quartz-core 0.3.2",
+]
+
+[[package]]
+name = "rayon"
+version = "1.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d"
+dependencies = [
+ "either",
+ "rayon-core",
+]
+
+[[package]]
+name = "rayon-core"
+version = "1.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
+dependencies = [
+ "crossbeam-deque",
+ "crossbeam-utils",
 ]
 
 [[package]]

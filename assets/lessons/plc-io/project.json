@@ -1,0 +1,359 @@
+{
+  "format": 1,
+  "info": {
+    "name": "Pump with PLC I/O",
+    "description": "A 24 V pump circuit prepared for a PLC card, used by the PLC and I/O lesson. The parts are illustrative catalogue entries, not a verified parts list.",
+    "rules": {
+      "terminals": {
+        "same_name": "join",
+        "join_link": "connector"
+      },
+      "potentials": {
+        "from_terminal_names": true
+      }
+    },
+    "properties": {}
+  },
+  "next_id": 20,
+  "parts": [
+    {
+      "id": 12,
+      "manufacturer": "Siemens",
+      "order_number": "3SU1100-0AB40-1BA0",
+      "type_number": "3SU1100",
+      "description": "Pushbutton, flush, green",
+      "properties": {}
+    },
+    {
+      "id": 13,
+      "manufacturer": "Siemens",
+      "order_number": "3SU1106-6AA40-1AA0",
+      "type_number": "3SU1106",
+      "description": "Indicator light, green, 24 V",
+      "properties": {}
+    },
+    {
+      "id": 14,
+      "manufacturer": "Siemens",
+      "order_number": "6ES7134-6HD01-0BA1",
+      "type_number": "ET 200SP AI 4xU/I",
+      "description": "Analog input module, 4 channels",
+      "properties": {
+        "plc.channels": "AI4"
+      }
+    }
+  ],
+  "potentials": [
+    {
+      "id": 2,
+      "name": "24V",
+      "kind": "dc_positive",
+      "voltage": null,
+      "properties": {}
+    },
+    {
+      "id": 3,
+      "name": "0V",
+      "kind": "dc_negative",
+      "voltage": null,
+      "properties": {}
+    }
+  ],
+  "pages": [
+    {
+      "id": 1,
+      "name": "1",
+      "title": "Pump control",
+      "kind": {
+        "type": "schematic"
+      },
+      "format": {
+        "size": "A3",
+        "landscape": true,
+        "columns": 10
+      },
+      "structure": "=A1+CAB",
+      "properties": {}
+    },
+    {
+      "id": 16,
+      "name": "0",
+      "title": "Table of contents",
+      "kind": {
+        "type": "generated",
+        "generator": "toc"
+      },
+      "format": {
+        "size": "A3",
+        "landscape": true,
+        "columns": 10
+      },
+      "properties": {}
+    },
+    {
+      "id": 17,
+      "name": "10",
+      "title": "Bill of materials",
+      "kind": {
+        "type": "generated",
+        "generator": "bom"
+      },
+      "format": {
+        "size": "A3",
+        "landscape": true,
+        "columns": 10
+      },
+      "properties": {}
+    },
+    {
+      "id": 18,
+      "name": "20",
+      "title": "Device list",
+      "kind": {
+        "type": "generated",
+        "generator": "devices"
+      },
+      "format": {
+        "size": "A3",
+        "landscape": true,
+        "columns": 10
+      },
+      "properties": {}
+    },
+    {
+      "id": 19,
+      "name": "30",
+      "title": "I/O list",
+      "kind": {
+        "type": "generated",
+        "generator": "io"
+      },
+      "format": {
+        "size": "A3",
+        "landscape": true,
+        "columns": 10
+      },
+      "properties": {}
+    }
+  ],
+  "devices": [
+    {
+      "id": 5,
+      "tag": "=A1+CAB-S1",
+      "description": "Pump start button",
+      "kind": "general",
+      "parts": [
+        12
+      ],
+      "properties": {}
+    },
+    {
+      "id": 9,
+      "tag": "=A1+CAB-H1",
+      "description": "Pump running lamp",
+      "kind": "general",
+      "parts": [
+        13
+      ],
+      "properties": {}
+    },
+    {
+      "id": 15,
+      "tag": "=A1+CAB-K1",
+      "description": "Analog input card (tank level)",
+      "kind": "plc",
+      "parts": [
+        14
+      ],
+      "properties": {
+        "plc.slot": 1,
+        "plc.start.i": 4
+      }
+    }
+  ],
+  "terminals": [],
+  "symbols": [
+    {
+      "id": 4,
+      "page": 1,
+      "symbol": "iec/connectivity/potential_feed",
+      "placement": {
+        "origin": {
+          "x": 24.0,
+          "y": 44.0
+        },
+        "rotation": "90",
+        "mirrored": false
+      },
+      "role": {
+        "type": "potential_feed",
+        "potential": 2
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 8.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 6,
+      "page": 1,
+      "symbol": "iec/operators/pushbutton_no",
+      "placement": {
+        "origin": {
+          "x": 40.0,
+          "y": 44.0
+        },
+        "rotation": "90",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 5,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "13",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "14",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "pass_through": [
+        [
+          0,
+          1
+        ]
+      ],
+      "properties": {}
+    },
+    {
+      "id": 8,
+      "page": 1,
+      "symbol": "iec/connectivity/potential_feed",
+      "placement": {
+        "origin": {
+          "x": 120.0,
+          "y": 28.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "potential_feed",
+        "potential": 3
+      },
+      "pins": [
+        {
+          "name": "1",
+          "offset": {
+            "x": 0.0,
+            "y": 8.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    },
+    {
+      "id": 10,
+      "page": 1,
+      "symbol": "iec/signalling/lamp_green",
+      "placement": {
+        "origin": {
+          "x": 120.0,
+          "y": 48.0
+        },
+        "rotation": "0",
+        "mirrored": false
+      },
+      "role": {
+        "type": "device",
+        "device": 9,
+        "main": true
+      },
+      "pins": [
+        {
+          "name": "X1",
+          "offset": {
+            "x": 0.0,
+            "y": 0.0
+          },
+          "direction": "up"
+        },
+        {
+          "name": "X2",
+          "offset": {
+            "x": 0.0,
+            "y": 16.0
+          },
+          "direction": "down"
+        }
+      ],
+      "bridges": [],
+      "properties": {}
+    }
+  ],
+  "junctions": [],
+  "wires": [
+    {
+      "id": 7,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 4,
+        "pin": 0
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 6,
+        "pin": 0
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    },
+    {
+      "id": 11,
+      "page": 1,
+      "from": {
+        "type": "pin",
+        "symbol": 8,
+        "pin": 0
+      },
+      "to": {
+        "type": "pin",
+        "symbol": 10,
+        "pin": 0
+      },
+      "route": [],
+      "number": null,
+      "color": null,
+      "cross_section_mm2": null,
+      "properties": {}
+    }
+  ],
+  "cables": []
+}

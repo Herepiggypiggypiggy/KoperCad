@@ -4,8 +4,10 @@
 use std::collections::HashMap;
 use std::f64::consts::{PI, TAU};
 use std::rc::Rc;
+use std::sync::Arc;
 
 use super::math::*;
+use super::nurbs::SplineSurface;
 use super::parse::{Entity, Param, StepFile};
 
 /// A curve, in millimetres.
@@ -85,6 +87,8 @@ pub enum Surface {
     Sphere(Frame, f64),
     /// Frame, major radius, minor radius.
     Torus(Frame, f64, f64),
+    /// A B-spline surface; the data is in `Face::nurbs`.
+    BSpline,
     Other,
 }
 
@@ -93,6 +97,8 @@ pub enum Surface {
 pub struct Face {
     pub loops: Vec<Vec<V3>>,
     pub surface: Surface,
+    /// The surface itself when `surface` is [`Surface::BSpline`].
+    pub nurbs: Option<Arc<SplineSurface>>,
     pub same_sense: bool,
 }
 
@@ -300,10 +306,74 @@ impl<'a> Reader<'a> {
         })
     }
 
+    /// A `B_SPLINE_SURFACE_WITH_KNOTS` (simple or complex, rational or
+    /// not). The other forms (uniform, quasi-uniform, Bezier) carry no
+    /// knot lists and are left to the flat fallback.
+    fn spline_surface(&self, id: u32) -> Option<SplineSurface> {
+        let e = self.file.entity(id)?;
+        let (degrees, rows, mults, knots) = if e.name() == "B_SPLINE_SURFACE_WITH_KNOTS" {
+            let a = e.args();
+            (
+                [a.get(1)?, a.get(2)?],
+                a.get(3)?,
+                [a.get(8)?, a.get(9)?],
+                [a.get(10)?, a.get(11)?],
+            )
+        } else {
+            let b = e.part("B_SPLINE_SURFACE")?;
+            let k = e.part("B_SPLINE_SURFACE_WITH_KNOTS")?;
+            (
+                [b.first()?, b.get(1)?],
+                b.get(2)?,
+                [k.first()?, k.get(1)?],
+                [k.get(2)?, k.get(3)?],
+            )
+        };
+        let (du, dv) = (degrees[0].as_int()?, degrees[1].as_int()?);
+        let (du, dv) = (usize::try_from(du).ok()?, usize::try_from(dv).ok()?);
+        let mut ctrl = Vec::new();
+        let mut nv = 0;
+        let rows = rows.as_list()?;
+        for row in rows {
+            let refs = row.refs();
+            if nv != 0 && refs.len() != nv {
+                return None;
+            }
+            nv = refs.len();
+            for r in refs {
+                let p = self.point(r)?;
+                ctrl.push(p);
+            }
+        }
+        let nu = rows.len();
+        let expand = |m: &Param, k: &Param| -> Option<Vec<f64>> {
+            let mut out = Vec::new();
+            for (m, k) in m.as_list()?.iter().zip(k.as_list()?) {
+                for _ in 0..m.as_int()?.clamp(0, 64) {
+                    out.push(k.as_f64()?);
+                }
+            }
+            Some(out)
+        };
+        let u_knots = expand(mults[0], knots[0])?;
+        let v_knots = expand(mults[1], knots[1])?;
+        // Weights are a grid of numbers shaped like the control net.
+        let weights = e
+            .part("RATIONAL_B_SPLINE_SURFACE")
+            .and_then(|w| w.first())
+            .and_then(Param::as_list)
+            .map(|rows| rows.iter().flat_map(nums).collect::<Vec<f64>>())
+            .filter(|w| w.len() == ctrl.len());
+        SplineSurface::new((du, dv), (nu, nv), ctrl, weights, u_knots, v_knots)
+    }
+
     pub fn surface(&self, id: u32) -> Surface {
         let Some(e) = self.file.entity(id) else {
             return Surface::Other;
         };
+        if is_spline_surface(&e) {
+            return Surface::BSpline;
+        }
         let a = e.args();
         let fr = a.get(1).and_then(Param::as_ref).and_then(|r| self.frame(r));
         let num = |i: usize| a.get(i).and_then(Param::as_f64);
@@ -481,17 +551,33 @@ impl<'a> Reader<'a> {
         if loops.is_empty() {
             return None;
         }
-        let surface = a
+        let mut surface = a
             .get(2)
             .and_then(Param::as_ref)
             .map_or(Surface::Other, |r| self.surface(r));
+        let mut nurbs = None;
+        if matches!(surface, Surface::BSpline) {
+            nurbs = a
+                .get(2)
+                .and_then(Param::as_ref)
+                .and_then(|r| self.spline_surface(r))
+                .map(Arc::new);
+            if nurbs.is_none() {
+                surface = Surface::Other;
+            }
+        }
         let same_sense = a.get(3).and_then(Param::as_bool).unwrap_or(true);
         Some(Face {
             loops,
             surface,
+            nurbs,
             same_sense,
         })
     }
+}
+
+fn is_spline_surface(e: &Entity) -> bool {
+    e.name() == "B_SPLINE_SURFACE_WITH_KNOTS" || e.has("B_SPLINE_SURFACE")
 }
 
 /// Angle values in files are radians unless the context says degrees;

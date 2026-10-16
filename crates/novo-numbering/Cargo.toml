@@ -1,0 +1,16 @@
+[package]
+name = "novo-numbering"
+description = "Wire and potential numbering: schemes, stable fill, renumber with preview, manual locks, conflict detection"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+novo-core.workspace = true
+
+[dev-dependencies]
+novo-reports.workspace = true
+novo-cables.workspace = true
+
+[lints]
+workspace = true

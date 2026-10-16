@@ -1,9 +1,9 @@
 use novo_core::{DeviceTag, MountingPlate, Project, StructureId, Value};
 use novo_layout::plan::{Candidate, Plan, ROW_GAP_MM};
 use novo_layout::rules::{
-    Gaps, HotRule, KindRule, RailUse, RuleSet, Spec, Zone, kind_of, place_all_rules,
+    Class, Gaps, HotRule, KindRule, RailUse, RuleSet, Spec, Zone, kind_of, place_all_rules,
 };
-use novo_layout::{Placement, Plate, Size, collisions, outside, rail_overflows};
+use novo_layout::{Margins, Placement, Plate, Size, collisions, outside, rail_overflows};
 
 fn spec(id: u64, kind: &str, w: f64, h: f64) -> Spec {
     Spec {
@@ -39,6 +39,7 @@ fn placements(plan: &Plan, specs: &[Spec]) -> Vec<Placement> {
             rotated: false,
             size: specs.iter().find(|s| s.id == p.id).unwrap().size,
             clearance: None,
+            margins: Margins::default(),
             rail: Some(p.rail),
         })
         .collect()
@@ -103,6 +104,7 @@ fn unknown_kinds_follow_the_star_rule_and_the_longest_code_wins() {
         gap: None,
         above: None,
         below: None,
+        class: Class::Mixed,
     });
     let specs = vec![
         spec(1, "QA", 45.0, 90.0),
@@ -191,7 +193,12 @@ fn a_mixed_plan_has_no_collisions_overflows_or_off_plate_devices() {
         .enumerate()
         .map(|(i, k)| spec(i as u64 + 1, k, if *k == "X" { 6.0 } else { 45.0 }, 70.0))
         .collect();
-    let p = plate();
+    // Drives want 80 mm above and below, power and signal rows want a duct
+    // each: this mix needs a tall plate.
+    let p = Plate {
+        height: 900.0,
+        ..plate()
+    };
     let plan = place_all_rules(&p, &specs, &RuleSet::standard(), 1, 0.0);
     assert!(plan.unplaced.is_empty());
     assert_eq!(plan.placements.len(), specs.len());
@@ -442,6 +449,17 @@ fn a_project_plan_applies_in_one_undo_step_and_stays_clean() {
     let layout = load(&p, cab).unwrap();
     assert_eq!(layout.placements.len(), 3);
     assert!(layout.report().is_clean());
+    // The ducts came with the plan, with the wiring they serve, and the
+    // result passes the rule check.
+    let ducts = novo_layout::model::ducts(&p, cab);
+    assert_eq!(ducts.len(), plan.ducts.len());
+    assert!(ducts.iter().all(|d| d.width == 25.0 && d.height == 60.0));
+    assert!(
+        novo_layout::rules::model::violations(&p, cab, &RuleSet::standard()).is_empty(),
+        "{:?}",
+        novo_layout::rules::model::violations(&p, cab, &RuleSet::standard())
+    );
     p.apply(&applied.inverse()).unwrap();
     assert!(load(&p, cab).unwrap().placements.is_empty());
+    assert!(novo_layout::model::ducts(&p, cab).is_empty());
 }

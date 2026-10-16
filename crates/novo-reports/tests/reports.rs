@@ -8,8 +8,8 @@ use novo_core::{
     Placement, Point, RailKind, SymbolRole, Terminal, Wire,
 };
 use novo_reports::{
-    Cell, CsvOptions, CutList, LiveReports, PageSetup, ReportOutput, generate_all, layout_page,
-    paginate, tag_cmp, to_csv, xlsx_bytes,
+    Cell, CsvOptions, CutList, LabelLayout, LiveReports, PageSetup, ReportOutput, generate_all,
+    labels_csv, layout_page, paginate, tag_cmp, to_csv, xlsx_bytes,
 };
 use novo_tests::{MotorStarter, motor_starter};
 
@@ -591,11 +591,13 @@ fn xlsx_round_trips() {
             "Device list",
             "Wire list",
             "Cut list",
+            "Wire production",
             "Terminal diagram",
             "Cable diagram",
             "IO list",
             "Cable schedule",
-            "Plug connection list"
+            "Plug connection list",
+            "Labels"
         ]
     );
     // Cell by cell for the one-table sheets (a sheet with several sections
@@ -795,9 +797,30 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
         .0;
     let wires = report(&doc, "wires");
     // Both footprints are the default 45 x 90 mm: anchors at the centres,
-    // 105 mm down to the duct each, 300 mm along it, 50 mm slack per end.
+    // 105 mm down to the duct each, 300 mm along it, 50 mm slack per end, and
+    // 30 mm per end from the plate to the middle of the 60 mm duct: the
+    // parts have no depth yet, so the list says it measured from the plate.
     let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
-    assert_eq!((row[8].as_str(), row[9].as_str()), ("610", "routed"));
+    assert_eq!(
+        (row[8].as_str(), row[9].as_str()),
+        ("670", "routed, no depth")
+    );
+    // With a depth the terminals stand 80 mm off the plate: 50 mm to the duct.
+    let parts: Vec<_> = [h.f1, h.k1]
+        .iter()
+        .flat_map(|d| doc.project().device(*d).unwrap().parts.clone())
+        .collect();
+    assert!(!parts.is_empty(), "the starter's devices have parts");
+    doc.transact("Depth", |tx| {
+        for part in &parts {
+            tx.set_property(*part, "depth_mm", Some(novo_core::Value::Float(80.0)))?;
+        }
+        Ok(())
+    })
+    .expect("depth");
+    let wires = report(&doc, "wires");
+    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!((row[8].as_str(), row[9].as_str()), ("710", "routed"));
     // F2 is not placed: that wire stays an estimate.
     let row = wire_row(&wires, "=A1+CAB-K1:2", "=A1+CAB-F2:1");
     assert_eq!(row[9], "estimate");
@@ -921,4 +944,56 @@ fn cut_list_is_empty_without_wires_and_exports_to_csv() {
     let (doc, _) = starter();
     let csv = to_csv(&report(&doc, "cutlist"), &CsvOptions::default());
     assert!(csv.contains("Wire no.,From,To,Cable,Length basis,Wire mm,Ends mm,Cut mm"));
+}
+
+#[test]
+fn labels_cover_wires_terminals_and_devices() {
+    let (doc, _) = starter();
+    let labels = report(&doc, "labels");
+    let kinds: Vec<&str> = labels.sections.iter().map(|s| s.key.as_str()).collect();
+    assert_eq!(kinds, ["wires", "terminals", "devices", "cables"]);
+
+    // Two labels per wire-list row: this end shows where the other goes.
+    let wires = rows(&labels, "wires");
+    let list = rows(&report(&doc, "wires"), "wires");
+    assert_eq!(wires.len(), 2 * list.len());
+    assert_eq!(wires[0], ["", "=A1+CAB-K1:1", "=A1+CAB-F1:2"]);
+    assert_eq!(wires[1], ["", "=A1+CAB-F1:2", "=A1+CAB-K1:1"]);
+
+    let terminals = rows(&labels, "terminals");
+    assert_eq!(terminals.len(), 4);
+    assert_eq!(terminals[0][..2], ["=A1+CAB-X1", "1"]);
+    assert_eq!(terminals[3][..2], ["=A1+CAB-X1", "PE"]);
+
+    let devices = rows(&labels, "devices");
+    assert!(
+        devices
+            .iter()
+            .any(|r| r[0] == "=A1+CAB-K1" && r[1] == "Motor contactor")
+    );
+    // Rows point back at their objects.
+    assert!(
+        labels.sections[2]
+            .rows
+            .iter()
+            .all(|r| !r.sources.is_empty())
+    );
+}
+
+#[test]
+fn label_csv_layouts() {
+    let (doc, _) = starter();
+    let labels = report(&doc, "labels");
+    let generic = labels_csv(&labels, &["terminals"], LabelLayout::Generic);
+    assert!(generic.contains("Line 1,Line 2,Line 3"), "{generic}");
+    assert!(generic.contains("'=A1+CAB-X1,PE,"), "{generic}");
+    assert!(!generic.contains("Wire labels"), "only the asked kind");
+
+    let brother = labels_csv(&labels, &["terminals"], LabelLayout::Brother);
+    assert!(!brother.starts_with('\u{feff}'));
+    assert!(!brother.contains("Line 1"), "no header row");
+    assert!(brother.starts_with("=A1+CAB-X1\t1\t\r\n"), "{brother:?}");
+    assert_eq!(brother.lines().count(), 4);
+    assert_eq!(LabelLayout::parse("P-Touch"), Some(LabelLayout::Brother));
+    assert_eq!(LabelLayout::parse("zebra"), None);
 }

@@ -5,7 +5,7 @@ use novo_layout::drill::{
 use novo_layout::model::{apply_plan, candidates, load, plate_documents, set_plate};
 use novo_layout::plate_drawing::{choose_scale, plate_drawing, scale_text, tables};
 use novo_layout::state::CabinetLayout;
-use novo_layout::{Placement, Plate, Rail, Size};
+use novo_layout::{Margins, Placement, Plate, Rail, Size};
 
 fn layout() -> CabinetLayout {
     let mut l = CabinetLayout::new(Plate {
@@ -27,6 +27,7 @@ fn layout() -> CabinetLayout {
         rotated: false,
         size: Size::from_part(Some(40.0), Some(80.0)),
         clearance: None,
+        margins: Margins::default(),
         rail: Some(1),
     });
     l
@@ -238,4 +239,30 @@ fn vertical_rails_get_holes_down_their_length_and_are_drawn_vertical() {
         assert_eq!(a.0, b.0);
         assert_eq!(b.1 - a.1, 500.0);
     }
+}
+
+#[test]
+fn the_door_sheet_takes_its_size_from_the_enclosure() {
+    use novo_layout::enclosure::Enclosure;
+    let mut l = layout();
+    let f = features_from_text(7, "-P1", Some("door_cutout"), None, Some("rect 22.5x22.5"));
+    let t = drill_table(&l, std::slice::from_ref(&f));
+    let door = |l: &CabinetLayout, scale| {
+        plate_drawing(l, std::slice::from_ref(&f), &t, Surface::Door, scale)
+    };
+    assert_eq!((door(&l, 5.0).width, door(&l, 5.0).height), (600.0, 800.0));
+
+    l.enclosure = Some(Enclosure {
+        width: 650.0,
+        height: 850.0,
+        depth: 250.0,
+        plate_setback: 20.0,
+        door: None,
+        front_clearance: None,
+        hinge_side_clearance: None,
+    });
+    let d = door(&l, 5.0);
+    assert_eq!((d.width, d.height), (650.0, 850.0));
+    let plate = plate_drawing(&l, std::slice::from_ref(&f), &t, Surface::Plate, 5.0);
+    assert_eq!((plate.width, plate.height), (600.0, 800.0));
 }

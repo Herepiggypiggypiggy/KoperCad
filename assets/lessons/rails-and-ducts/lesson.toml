@@ -1,0 +1,167 @@
+# Cabinet track, lesson 2. Starts from the end of cabinet-layout (Place all with the standard rules:
+# five DIN rails and five wiring ducts). There is no finished state: the lesson only reads and moves.
+#
+# Verified against main (e2fa0013): the inspector fields (Mounted on, Place rule, Position), the
+# Plate card, the Rules window and the Cut list window. There is no tool to add a rail or duct, so
+# this lesson does not ask for one: Place all makes them. A device dragged by hand leaves its rail
+# (novo_layout::model::place_device passes rail: None).
+# Needs from the Cabinet owner: the anchors named below. Ducts are not selectable yet.
+format = 1
+id = "rails-and-ducts"
+version = 2
+status = "early"
+title = "Rails and wiring ducts"
+title_nl = "Rails en bedradingskanalen"
+summary = "See how devices sit on DIN rails, why Place all lays ducts beside the rows, and how many bars of rail and duct to buy."
+summary_nl = "Zie hoe componenten op DIN-rails zitten, waarom Place all kanalen naast de rijen legt en hoeveel staven rail en kanaal je moet kopen."
+track = "cabinet"
+order = 20
+level = "beginner"
+minutes = 8
+topics = ["cabinet", "rails", "ducts"]
+needs = ["cabinet-layout"]
+next = ["wire-routing"]
+project = "../cabinet-layout/finished.json"
+
+[[step]]
+id = "open-cabinet"
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
+title = "Open the cabinet"
+title_nl = "Open de kast"
+text = """
+Press {key:view.cabinet}. The plate of **+CAB** is filled: eight devices in rows on five {tip:din-rail}s, with a strip beside each row.
+The strips are {tip:wiring-duct}s: the channels the wires will run in. Place all put them there.
+"""
+text_nl = """
+Druk op {key:view.cabinet}. De plaat van **+CAB** is gevuld: acht componenten in rijen op vijf {tip:din-rail}s, met naast elke rij een strook.
+De stroken zijn {tip:wiring-duct}s: de goten waarin de draden komen te liggen. Place all heeft ze neergelegd.
+"""
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "select-device"
+how = ["Click -K1 on the plate.", "Read Mounted on, Position and Place rule in the inspector."]
+how_nl = ["Klik op -K1 op de plaat.", "Lees Mounted on, Position en Place rule in de inspecteur."]
+title = "A device knows its rail"
+title_nl = "Een component kent zijn rail"
+text = """
+Click **-K1**. The inspector shows **Mounted on** with the number of its rail, **Position** in millimetres from the plate corner,
+and **Place rule**: the rule that decided where it goes, for example "A K zone=middle rail=own class=signal".
+A device that sits on a rail moves with it; the rail is the real mounting.
+"""
+text_nl = """
+Klik op **-K1**. De inspector toont **Mounted on** met het nummer van de rail, **Position** in millimeters vanaf de hoek van de plaat
+en **Place rule**: de regel die bepaalde waar het komt, bijvoorbeeld "A K zone=middle rail=own class=signal".
+Een component op een rail beweegt met de rail mee; de rail is de echte bevestiging.
+"""
+point = { ui = "cabinet.inspector" }
+expect = { selected = "-K1" }
+solve = [ { select = "-K1" } ]
+
+[[step]]
+id = "rules-window"
+how = ["Click Rules in the header.", "Read one rule per line, then close the window."]
+how_nl = ["Klik op Rules in de kop.", "Lees één regel per rij en sluit het venster."]
+title = "Read the place rules"
+title_nl = "Lees de plaatsingsregels"
+text = """
+Click **Rules**. The window **Place rules** lists one rule per line: which letter codes it covers, the zone on the plate (top, middle or bottom),
+whether the kind gets a rail of its own or shares one, and whether it is power or signal.
+Power and signal rows are kept apart, with a duct for each side. These are practice values, not a standard.
+You can edit them and press **Save**; this lesson only reads them. Close the window when you are done.
+"""
+text_nl = """
+Klik op **Rules**. Het venster **Place rules** toont per regel: welke lettercodes erbij horen, de zone op de plaat (top, middle of bottom),
+of de soort een eigen rail krijgt of er een deelt en of het vermogen of signaal is.
+Vermogens- en signaalrijen blijven gescheiden, met voor elke kant een kanaal. Dit zijn praktijkwaarden, geen norm.
+Je kunt ze aanpassen en op **Save** drukken; deze les leest ze alleen. Sluit het venster als je klaar bent.
+"""
+point = { ui = "cabinet.rules" }
+expect = { clicked = "cabinet.rules" }
+
+[[step]]
+id = "plate-card"
+how = ["Click an empty spot on the plate to clear the selection.", "Click Plate in the header.", "Read Placed and Plate used in the inspector."]
+how_nl = ["Klik op een lege plek op de plaat om de selectie te wissen.", "Klik op Plate in de kop.", "Lees Placed en Plate used in de inspecteur."]
+title = "How full is the plate?"
+title_nl = "Hoe vol is de plaat?"
+text = """
+Click an empty spot on the plate to clear the selection, then click **Plate**. The inspector now shows the plate: width, height and margin, **Placed** (8) and **Plate used** as a percentage.
+Rails and ducts take space that devices cannot use, which is why a plate with eight small devices is already well filled.
+"""
+text_nl = """
+Klik op een lege plek op de plaat om de selectie te wissen en klik dan op **Plate**. De inspector toont nu de plaat: breedte, hoogte en marge, **Placed** (8) en **Plate used** als percentage.
+Rails en kanalen nemen ruimte in die componenten niet kunnen gebruiken; daarom is een plaat met acht kleine componenten al flink gevuld.
+"""
+point = { ui = "cabinet.plate" }
+expect = { clicked = "cabinet.plate" }
+
+[[step]]
+id = "move-off-rail"
+how = ["Press the mouse button on -K1.", "Drag it a little to the right and let go.", "Mounted on is gone from the inspector."]
+how_nl = ["Druk de muisknop in op -K1.", "Sleep het een stukje naar rechts en laat los.", "Mounted on is weg uit de inspecteur."]
+title = "Drag a device off its rail"
+title_nl = "Sleep een component van zijn rail"
+text = """
+Drag **-K1** a little to the right and let go. It lands on the 5 mm grid, and **Mounted on** disappears from the inspector:
+a device you place by hand no longer belongs to a rail, so the rail does not move it and the cut list no longer counts its width.
+"""
+text_nl = """
+Sleep **-K1** een stukje naar rechts en laat los. Het landt op het raster van 5 mm en **Mounted on** verdwijnt uit de inspector:
+een component dat je met de hand plaatst hoort niet meer bij een rail, dus de rail verplaatst het niet en de zaaglijst telt de breedte niet meer mee.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { signal = "cabinet_dropped" }
+
+[[step]]
+id = "undo"
+how = ["Press {key:edit.undo}.", "Mounted on is back."]
+how_nl = ["Druk op {key:edit.undo}.", "Mounted on staat er weer."]
+title = "Put it back"
+title_nl = "Zet het terug"
+text = """
+Press {key:edit.undo}. **-K1** returns to its rail and **Mounted on** is back.
+"""
+text_nl = """
+Druk op {key:edit.undo}. **-K1** staat weer op zijn rail en **Mounted on** is terug.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "cut-list"
+how = ["Click Cut list in the header.", "Read which pieces come out of which 2000 mm bar."]
+how_nl = ["Klik op Cut list in de kop.", "Lees welke stukken uit welke staaf van 2000 mm komen."]
+title = "How many bars to buy"
+title_nl = "Hoeveel staven je moet kopen"
+text = """
+Click **Cut list**. The window lists the DIN rail and each duct size as bars of 2000 mm stock with a 2 mm saw cut:
+which pieces come out of which bar, and how much is left over to keep or scrap.
+The five rails of 580 mm and the five ducts do not each need a bar of their own; the list packs them.
+"""
+text_nl = """
+Klik op **Cut list**. Het venster toont de DIN-rail en elke kanaalmaat als staven van 2000 mm met 2 mm zaagsnede:
+welke stukken uit welke staaf komen en hoeveel er overblijft om te bewaren of af te voeren.
+De vijf rails van 580 mm en de vijf kanalen hebben niet elk een eigen staaf nodig; de lijst pakt ze samen.
+"""
+point = { ui = "cabinet.cutlist" }
+expect = { clicked = "cabinet.cutlist" }
+
+[[step]]
+id = "done"
+title = "The wiring has a road"
+title_nl = "De bedrading heeft een weg"
+text = """
+Devices sit on rails, the ducts run beside the rows, and you know how much stock that takes.
+One thing is still missing: the five ducts do not touch each other, so no wire can pass from one row to another yet.
+The next lesson shows what that does to the wire lengths, in a plate where the ducts are joined.
+"""
+text_nl = """
+Componenten zitten op rails, de kanalen lopen naast de rijen en je weet hoeveel materiaal dat kost.
+Eén ding ontbreekt nog: de vijf kanalen raken elkaar niet, dus er kan nog geen draad van de ene rij naar de andere.
+De volgende les laat zien wat dat met de draadlengtes doet, op een plaat waar de kanalen verbonden zijn.
+"""

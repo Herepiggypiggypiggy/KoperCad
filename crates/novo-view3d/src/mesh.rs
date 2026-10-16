@@ -182,14 +182,15 @@ pub fn unit_box() -> MeshData {
     MeshData::from_boxes(&[(Vec3::new(-0.5, -0.5, 0.0), Vec3::new(0.5, 0.5, 1.0))])
 }
 
-/// A rail or duct section of length 1 along X, at real millimetres in y and
-/// z. Scale X by the length. `width` and `height` apply to `Channel` only.
-pub fn profile_mesh(profile: Profile, width: f32, height: f32) -> MeshData {
+/// The boxes a rail or duct section is made of: length 1 along X (x from
+/// -0.5 to 0.5), real millimetres in y and z. `width` and `height` apply to
+/// `Channel` only. Also what a STEP export of the cabinet writes.
+pub fn profile_boxes(profile: Profile, width: f32, height: f32) -> Vec<(Vec3, Vec3)> {
     let b = |x0: f32, x1: f32, y0: f32, y1: f32, z0: f32, z1: f32| {
         (Vec3::new(x0, y0, z0), Vec3::new(x1, y1, z1))
     };
     let (x0, x1) = (-0.5, 0.5);
-    let boxes = match profile {
+    match profile {
         Profile::TopHat35x7_5 | Profile::TopHat35x15 => {
             let h = if profile == Profile::TopHat35x15 {
                 15.0
@@ -215,8 +216,13 @@ pub fn profile_mesh(profile: Profile, width: f32, height: f32) -> MeshData {
                 b(x0, x1, w * 0.5 - t, w * 0.5, t, h),
             ]
         }
-    };
-    MeshData::from_boxes(&boxes)
+    }
+}
+
+/// A rail or duct section of length 1 along X, at real millimetres in y and
+/// z. Scale X by the length. `width` and `height` apply to `Channel` only.
+pub fn profile_mesh(profile: Profile, width: f32, height: f32) -> MeshData {
+    MeshData::from_boxes(&profile_boxes(profile, width, height))
 }
 
 #[cfg(test)]

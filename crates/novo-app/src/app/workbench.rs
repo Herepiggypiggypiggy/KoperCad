@@ -16,12 +16,14 @@ use novo_checks::Problem;
 use novo_core::{AnyId, ChangeSet, DeviceId, Document, PageId, SymbolId};
 use novo_editor::EditorKey;
 use novo_editor::tool::WiringMode;
+use novo_plc::link::LinkFormat;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
 use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
+use super::workspace::Workspace;
 use super::{Level, NovoApp};
 use crate::actions::Action;
 use crate::command_field::CommandField;
@@ -43,6 +45,9 @@ pub(crate) struct Workbench {
     pub(super) field: CommandField,
     pub(super) keymap: Keymap,
     pub(super) xref: LiveXref,
+    /// The symbol library as canvas art, for the inspector's symbol
+    /// previews; built once, when first needed.
+    pub(super) preview_art: Option<novo_editor::art::LibraryArt>,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
     /// The place wheel, when open.
@@ -50,14 +55,26 @@ pub(crate) struct Workbench {
     /// A key that opens the wheel went down at this time (egui seconds),
     /// with the keys then held: a tap runs Place, a hold opens the wheel.
     pub(super) place_hold: Option<(f64, Vec<egui::Key>)>,
+    /// The keys of a hold that opened the wheel, and since when all were up.
+    pub(super) place_latch: Option<(Vec<egui::Key>, Option<f64>)>,
     /// Commands the canvas asked for, run next frame by id.
     pub(super) queued: Vec<&'static str>,
     /// The `renumber io` preview waiting for Enter or Esc, per station.
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
+    /// The PLC tag import preview (file name and plan), waiting for Enter or Esc.
+    pub(super) plc_import: Option<(String, novo_plc::link::ImportPlan)>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
+    /// The shortcut sheet (`?`).
+    pub(super) shortcuts: super::shortcuts_sheet::ShortcutSheet,
+    /// The macro browser window.
+    pub(super) macros: super::macro_browser::MacroBrowser,
     /// The Parts window (browser and one-click import), while open.
     pub(super) parts: Option<super::parts::PartsWindow>,
+    /// The catalog the part pickers search (inspector, Cables drawer).
+    pub(super) part_catalog: super::part_picker::PickerCatalog,
+    /// The cable controls of the Cables drawer.
+    pub(super) cable_edit: super::cable_controls::CableEdit,
     /// The Save as macro window, while it is open.
     pub(super) macro_save: Option<super::macro_actions::SaveDraft>,
     /// The Place macro window.
@@ -68,10 +85,20 @@ pub(crate) struct Workbench {
     pub(super) issue: Option<super::revisions::IssueDraft>,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
+    /// The Fault scenarios window, while it is open.
+    pub(super) faults: Option<super::faults::FaultsWindow>,
+    /// The Wire numbering window, while it is open.
+    pub(super) numbering: Option<super::numbering::NumberingWindow>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
+    /// The spreadsheet import preview, while it is open.
+    pub(super) sheet_import: Option<super::sheet_import::SheetImport>,
     /// Which sheet of a generated page the canvas shows (0 for the first).
     pub(super) sheet: usize,
+    /// The Project options and variants window, while open.
+    pub(super) options: Option<super::variants::OptionsWindow>,
+    /// The Generate pages from a spec sheet window, while open.
+    pub(super) generate: Option<super::variants::GenerateWindow>,
     pub(super) nav: Navigator,
     /// Where to select and centre once the canvas shows its page.
     pub(super) pending: Option<Place>,
@@ -101,6 +128,10 @@ pub(crate) struct Workbench {
     pub(super) inspector: super::inspector::InspectorState,
     /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
+    /// Shift+O: false hides the override diamonds (PE set by hand).
+    pub(super) override_marks: bool,
+    /// Copy, cut and paste.
+    pub(super) clip: super::clipboard::ClipState,
     /// Design-check results for one project revision.
     pub(super) problems: Option<(u64, Vec<Problem>)>,
     /// Where the issue pill was drawn, so its own click does not close
@@ -110,6 +141,8 @@ pub(crate) struct Workbench {
     pub(super) issue_filter: [bool; 3],
     /// F8 position in the problem list.
     pub(super) problem_at: Option<usize>,
+    /// A problem being waived (its index in the list) and the reason typed.
+    pub(super) waiving: Option<(usize, String)>,
     /// The last PDF written, for tests and the toast.
     pub(super) last_export: Option<PathBuf>,
     /// Hash of each spreadsheet export this session wrote, by path: only a
@@ -117,13 +150,27 @@ pub(crate) struct Workbench {
     pub(super) sheet_exports: std::collections::BTreeMap<PathBuf, u64>,
     /// The live potentials view (Shift+L).
     pub(super) live: super::live::LiveView,
+    /// Electrical values for the live view and the motor start window.
+    pub(super) sim: super::simulate::SimState,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
     /// Commissioning mode's data and panel state, once opened.
     pub(super) commissioning: Option<super::commissioning::CommissioningMode>,
     /// The background drawing last handed to the canvas: page, project
     /// revision and the key it has.
+    /// The DXF background panel, while open; inside, the values being
+    /// edited before they are committed.
+    pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
+    /// An AutomationML import waiting for the person to confirm.
+    pub(super) aml_import: Option<super::interop::AmlImport>,
+    /// An EPLAN (PXF) import waiting for the person to confirm.
+    pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
+    /// The "Get the EPLAN export script" guide, open after the files are
+    /// written.
+    pub(super) eplan_guide: Option<super::interop::EplanGuide>,
+    /// A DWG being converted in the background.
+    pub(super) dwg_job: Option<super::interop::DwgJob>,
 }
 
 impl Workbench {
@@ -144,20 +191,30 @@ impl Default for Workbench {
             field: CommandField::default(),
             keymap: Keymap::workflow(),
             xref: LiveXref::default(),
+            preview_art: None,
             reports: Default::default(),
             wheel: None,
             place_hold: None,
+            place_latch: None,
             queued: Vec::new(),
             renumber: None,
+            plc_import: None,
             preferences: false,
+            shortcuts: Default::default(),
+            macros: Default::default(),
             parts: None,
             macro_save: None,
             macro_place: Default::default(),
             project_settings: false,
             issue: None,
             compare: None,
+            faults: None,
+            numbering: None,
             page_form: None,
+            sheet_import: None,
             sheet: 0,
+            options: None,
+            generate: None,
             nav: Navigator::default(),
             pending: None,
             pending_item: None,
@@ -165,6 +222,8 @@ impl Default for Workbench {
             occurrences: None,
             drawer: None,
             drawer_cable: None,
+            part_catalog: Default::default(),
+            cable_edit: Default::default(),
             proposal: 0,
             space_down: None,
             pointer_world: None,
@@ -172,16 +231,25 @@ impl Default for Workbench {
             dock_size: egui::Vec2::ZERO,
             inspector: Default::default(),
             marks: true,
+            override_marks: true,
+            clip: Default::default(),
             problems: None,
             pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,
+            waiving: None,
             last_export: None,
             sheet_exports: Default::default(),
             live: Default::default(),
+            sim: super::simulate::SimState::new(),
             changes: None,
+            background_panel: None,
             commissioning: None,
             underlay_seen: None,
+            aml_import: None,
+            eplan_import: None,
+            eplan_guide: None,
+            dwg_job: None,
         }
     }
 }
@@ -213,6 +281,12 @@ const APP_COMMANDS: &[&str] = &[
     "edit.mirror",
     "edit.delete",
     "edit.duplicate",
+    "edit.copy",
+    "edit.cut",
+    "edit.paste",
+    "edit.paste_keep_tags",
+    "edit.paste_in_place",
+    "view.override_marks",
     "macro.save",
     "macro.place",
     "edit.rename",
@@ -232,32 +306,98 @@ const APP_COMMANDS: &[&str] = &[
     "view.devices_drawer",
     "view.toggle_marks",
     "sim.live",
+    "sim.plc_program",
+    "sim.faults",
     "view.changes",
     "view.commissioning",
     "check.problems",
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.change_report",
+    "export.commissioning",
+    "export.plate",
+    "export.assembly",
     "export.sheets",
     "export.sheets_csv",
+    "export.wirecut",
+    "export.wirecut_xlsx",
+    "export.wiring_dxf",
+    "export.wirecut_page",
+    "cabinet.routes",
+    "cabinet.rails",
+    "export.bom",
+    "export.reports",
+    "view.reports",
+    "view.3d",
+    "report.toc",
+    "report.bom",
+    "report.devices",
+    "report.wires",
+    "report.terminals",
+    "report.cables",
+    "report.cutlist",
+    "report.labels",
     "file.import_dxf_background",
     "view.background",
+    "view.background_place",
     "file.remove_background",
     "export.dxf_page",
     "export.dxf_all",
+    "import.spreadsheet",
+    "export.step",
+    "export.aml",
+    "file.import_aml",
+    "file.import_eplan",
+    "file.import_dwg",
+    "file.choose_dwg_converter",
+    "file.eplan_export_script",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
+    "plc.import_tags",
+    "export.plc_csv",
+    "export.plc_plcopen",
+    "export.plc_tia",
+    "export.plc_studio5000",
+    "export.plc_address_plan",
     "xref.link",
     "app.preferences",
+    "view.shortcuts",
+    "help.show_hints",
     "parts.browser",
+    "parts.import_step",
     "project.standard",
+    "macro.browser",
+    "macro.import",
+    "project.options",
+    "project.variant",
+    "project.generate",
+    "export.variant_pdf",
+    "export.spec",
     "revision.issue",
     "revision.compare",
     "terminal.toggle_pe",
     "terminal.reset_pe",
     "wire.mode",
     "interruption.renumber",
+    "wires.number",
+    "wires.numbering",
+    "wires.renumber",
+    "wires.check_numbers",
+    "wires.set_number",
+    "wires.unlock_number",
+    "edit.select_all",
+    "view.cabinet_table",
+    "heat.toggle",
+    "heat.airflow",
+    "heat.contours",
+    "heat.simulate",
+    "terminal.connect",
+    "terminal.disconnect",
+    "terminal.strip_up",
+    "terminal.strip_down",
+    "terminal.strip_lowest",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -314,7 +454,7 @@ impl NovoApp {
             has_device: devices == 1,
             can_undo: doc.is_some_and(Document::can_undo),
             can_redo: doc.is_some_and(Document::can_redo),
-            clipboard: false,
+            clipboard: true,
             can_go_back: self.wb.nav.history.can_go_back(),
             can_go_forward: self.wb.nav.history.can_go_forward(),
         }
@@ -329,7 +469,11 @@ impl NovoApp {
             focus
         } else if ctx.text_edit_focused() {
             Focus::TextField
-        } else if self.is_open() && !self.panel_has_focus(ctx) {
+        } else if self.is_open()
+            && self.workspace() != Workspace::Reports
+            && !self.panel_has_focus(ctx)
+        {
+            // The Reports table has the keyboard, not the hidden drawing.
             Focus::Canvas
         } else {
             Focus::Panel
@@ -439,6 +583,8 @@ impl NovoApp {
     /// between (a held Space pans); every other key runs its command.
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
         if id == "tool.place" {
+            self.learn_command(id);
+            self.hint_command_run(id);
             self.tour_tick("place");
             self.arm_place_hold(ctx);
         } else if id == "view.command_field_here" {
@@ -451,6 +597,11 @@ impl NovoApp {
     /// Runs a command by its novo-workflow id, from a key or the command
     /// field. `argument` is what was typed after its verb.
     pub(super) fn run_command(&mut self, ctx: &egui::Context, id: &str, argument: Option<&str>) {
+        self.learn_command(id);
+        if id == "help.learn" || id.starts_with("learn.") {
+            self.learn_run_command(id, argument);
+            return;
+        }
         if let Some(slot) = FAVOURITE_COMMANDS.iter().position(|&c| c == id) {
             let digit = (slot + 1).to_string();
             let target = self.with_field(|field, sources| field.pick_shortcut(&digit, sources));
@@ -471,15 +622,23 @@ impl NovoApp {
         if id == "edit.duplicate" {
             self.tour_tick("duplicate");
         }
-        if self.cabinet_open && matches!(id, "edit.rotate" | "edit.delete") {
+        if self.workspace() == Workspace::Cabinet && matches!(id, "edit.rotate" | "edit.delete") {
             self.cabinet.keys.push(id.to_owned());
             return;
         }
         let pointer = ctx.pointer_latest_pos();
         match id {
             "view.cabinet_table" if self.is_open() => {
-                self.cabinet.table = !(self.cabinet_open && self.cabinet.table);
-                self.cabinet_open = true;
+                let showing = self.workspace() == Workspace::Cabinet && self.cabinet.table;
+                self.cabinet.table = !showing;
+                self.switch_workspace(Workspace::Cabinet);
+            }
+            "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
+                if self.is_open() =>
+            {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.heat.command(id);
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),
@@ -511,6 +670,10 @@ impl NovoApp {
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
             "edit.duplicate" => self.duplicate_selection(),
+            "edit.copy" => self.copy_selection(ctx, false),
+            "edit.cut" => self.copy_selection(ctx, true),
+            "edit.paste" | "edit.paste_keep_tags" | "edit.paste_in_place" => self.paste_command(id),
+            "view.override_marks" => self.wb.override_marks ^= true,
             "macro.save" => self.open_macro_save(argument),
             "macro.place" => self.open_macro_place(argument),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
@@ -539,6 +702,7 @@ impl NovoApp {
                 self.next_proposal();
             }
             "proposal.accept_all" => self.accept_all_proposals(),
+            "edit.select_all" => self.select_all_on_page(),
             "terminal.connect"
             | "terminal.toggle_pe"
             | "terminal.disconnect"
@@ -547,13 +711,50 @@ impl NovoApp {
             | "terminal.strip_down"
             | "terminal.strip_lowest" => self.terminal_command(id),
             "interruption.renumber" => self.renumber_interruptions(),
+            "wires.number" => self.number_wires(),
+            "wires.numbering" => {
+                self.open_numbering(novo_numbering::Mode::Fill, super::numbering::Tab::Preview)
+            }
+            "wires.renumber" => self.open_numbering(
+                novo_numbering::Mode::Renumber,
+                super::numbering::Tab::Preview,
+            ),
+            "wires.check_numbers" => {
+                self.open_numbering(novo_numbering::Mode::Fill, super::numbering::Tab::Conflicts)
+            }
+            "wires.set_number" => self.set_wire_number(argument),
+            "wires.unlock_number" => self.unlock_wire_number(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
             "view.toggle_marks" => self.wb.marks ^= true,
+            "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
+            "view.3d" => self.switch_workspace(Workspace::View3d),
+            "export.bom" => {
+                self.export_report("bom", super::reports_view::ReportFormat::Excel);
+            }
+            "export.reports" => {
+                self.export_all_reports();
+            }
             "sim.live" => self.toggle_live(),
+            "sim.plc_program" => self.open_plc_program(),
+            _ if super::reports_view::REPORT_COMMANDS
+                .iter()
+                .any(|(c, _)| *c == id) =>
+            {
+                if let Some((_, report)) = super::reports_view::REPORT_COMMANDS
+                    .iter()
+                    .find(|(c, _)| *c == id)
+                {
+                    self.show_report(report);
+                }
+            }
+            "sim.faults" => self.toggle_faults(),
             "view.changes" => self.toggle_changes(argument),
-            "view.commissioning" => self.toggle_commissioning(),
+            "view.commissioning" if self.workspace() == Workspace::Commissioning => {
+                self.switch_workspace(Workspace::Schematic);
+            }
+            "view.commissioning" => self.switch_workspace(Workspace::Commissioning),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
@@ -580,14 +781,35 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.change_report" => {
+                self.export_change_report();
+            }
+            "export.commissioning" => self.export_commissioning_pdf(),
+            "export.plate" => {
+                self.export_plate_pdf();
+            }
+            "export.assembly" => {
+                self.export_assembly();
+            }
             "export.sheets" => {
                 self.export_spreadsheet();
             }
+            "cabinet.routes" => self.toggle_cabinet_routes(),
+            "cabinet.rails" => self.toggle_cabinet_rails(),
+            "export.wirecut" => {
+                self.export_wire_cut();
+            }
+            "export.wirecut_xlsx" => {
+                self.export_wire_production();
+            }
+            "export.wiring_dxf" => self.export_wiring_dxf_of_panel(),
+            "export.wirecut_page" => self.add_wire_production_page(),
             "export.sheets_csv" => {
                 self.export_spreadsheet_csv();
             }
             "file.import_dxf_background" => self.import_dxf_background(),
             "view.background" => self.toggle_background(),
+            "view.background_place" => self.open_background_panel(),
             "file.remove_background" => self.remove_background(),
             "export.dxf_page" => {
                 self.export_dxf(super::dxf::DxfScope::CurrentPage);
@@ -595,19 +817,96 @@ impl NovoApp {
             "export.dxf_all" => {
                 self.export_dxf(super::dxf::DxfScope::AllPages);
             }
+            "import.spreadsheet" => self.import_sheet(),
+            "export.step" => {
+                self.export_step();
+            }
+            "export.aml" => {
+                self.export_aml();
+            }
+            "file.import_aml" => self.import_aml(),
+            "file.import_eplan" => self.import_eplan(),
+            "file.import_dwg" => self.import_dwg(),
+            "file.choose_dwg_converter" => self.choose_dwg_converter(),
+            "file.eplan_export_script" => self.eplan_export_script(),
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
+            "plc.import_tags" => self.plc_import_tags(),
+            "export.plc_csv" => {
+                self.export_plc(LinkFormat::Csv);
+            }
+            "export.plc_plcopen" => {
+                self.export_plc(LinkFormat::PlcOpen);
+            }
+            "export.plc_tia" => {
+                self.export_plc(LinkFormat::Tia);
+            }
+            "export.plc_studio5000" => {
+                self.export_plc(LinkFormat::Studio5000);
+            }
+            "export.plc_address_plan" => {
+                self.export_plc(LinkFormat::Hardware);
+            }
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
+            "view.shortcuts" => self.toggle_shortcuts(),
+            "help.show_hints" => self.show_hints_again(),
             "parts.browser" => self.open_parts_browser(),
+            "parts.import_step" => self.import_part_model(),
             "project.standard" => self.wb.project_settings = true,
+            "macro.browser" => self.wb.macros.show(),
+            "macro.import" => self.macro_import(),
+            "project.options" => self.open_options(),
+            "project.variant" => self.switch_variant(argument),
+            "project.generate" => self.open_generate(),
+            "export.variant_pdf" => {
+                self.export_variant_pdf(argument);
+            }
+            "export.spec" => {
+                self.export_spec();
+            }
             "revision.issue" => self.open_issue_revision(argument),
             "revision.compare" => self.open_compare(argument),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));
             }
+        }
+    }
+
+    /// Selects everything drawn on the current page (Ctrl+A). Selection is
+    /// not a model edit, so there is nothing to undo.
+    pub(super) fn select_all_on_page(&mut self) {
+        let (Some(page), Some(doc)) = (self.current_page, self.backend.document()) else {
+            return;
+        };
+        let project = doc.project();
+        let ids: Vec<AnyId> = project
+            .symbols()
+            .filter(|s| s.page == page)
+            .map(|s| AnyId::Symbol(s.id))
+            .chain(
+                project
+                    .junctions()
+                    .filter(|j| j.page == page)
+                    .map(|j| AnyId::Junction(j.id)),
+            )
+            .chain(
+                project
+                    .wires()
+                    .filter(|w| w.page == page)
+                    .map(|w| AnyId::Wire(w.id)),
+            )
+            .chain(
+                project
+                    .texts()
+                    .filter(|t| t.page == page)
+                    .map(|t| AnyId::Text(t.id)),
+            )
+            .collect();
+        if let Some(view) = self.canvas.schematic() {
+            view.select_ids(&ids);
         }
     }
 
@@ -798,7 +1097,9 @@ impl NovoApp {
         };
         let mut list = super::terminals::proposal_marks(&self.page_proposals(), self.wb.proposal);
         list.extend(self.problem_marks(page));
-        list.extend(self.pe_override_marks(page));
+        if self.wb.override_marks {
+            list.extend(self.pe_override_marks(page));
+        }
         list.extend(self.changes_marks(page));
         list.extend(self.commissioning_marks(page));
         let hidden = !self.wb.marks;
@@ -828,10 +1129,15 @@ impl NovoApp {
             None => return,
         };
         let delta = pointer - from;
-        if let Some(view) = self.canvas.schematic() {
-            view.canvas
-                .viewport
-                .pan_by_screen(novo_canvas::Vec2::new(delta.x, delta.y));
+        let by = novo_canvas::Vec2::new(delta.x, delta.y);
+        match self.workspace() {
+            Workspace::Cabinet => self.cabinet.view.viewport.pan_by_screen(by),
+            Workspace::Reports | Workspace::View3d => {}
+            _ => {
+                if let Some(view) = self.canvas.schematic() {
+                    view.canvas.viewport.pan_by_screen(by);
+                }
+            }
         }
         self.wb.space_pan = Some(pointer);
         ctx.set_cursor_icon(egui::CursorIcon::Grabbing);

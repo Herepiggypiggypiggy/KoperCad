@@ -1,0 +1,2 @@
+# Every lesson PR appends terms here; keep both sides when two PRs do.
+glossary.toml merge=union

@@ -5,3 +5,4 @@ Code: PR stacked on #439 (renderer skeleton, branch claude/project-thread-8laqbm
 PR #420 (same ideas in novo-theme, own camera) is superseded: close it.
 Renderer thread (session_01UMNPbP9STYPHPF8CDKoBbN) owns wgpu; it reads Look::surface and Look::mark only. Design system thread (session_018Mr3ZJ9VtQqHa3AF6FRdm6, PR #448) will add a 3D section to its palette; then palette.rs room colours read from it. UI entry points: spec section 8; UI thread session_01G52sVY5N34jPsrkqWukApR places widgets.
 Next: wire label and outline passes with the renderer, Settings > 3D view, measure on an integrated GPU.
+Widget overlay PR (branch 3d-look-overlay): view cube, label chips, feel in widget.rs. Still open: outline pass for hover/selection (needs renderer hook), frame governor wiring (needs renderer quality API), hover tooltip, Settings > 3D view, integrated-GPU measurement.

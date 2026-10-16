@@ -9,7 +9,8 @@ handoff/macro-library) owns the .kcmacro file, the library folder and the browse
 - Draft PR: app entry points. `macro.save` (Save as macro window over `macro_place::capture`) and
   `macro.place` (Place macro window: search, parameters, preview line, Place; lands right of the
   drawing and selects the result). Code in `novo-app/src/app/macro_actions.rs`.
-- Not started: parts and cabinet offsets (design step 4), a pointer-following ghost (the window
+- Parts carry-over: draft PR (parts saved in the macro file's `parts` field, assigned on placement).
+- Not started: cabinet offsets, a pointer-following ghost (the window
   previews instead), terminals inside macros (WS-02), update from library.
 - Browser (`macro.browser`, import/export) is the Macro library thread's #455; its disabled Place
   button can call `open_macro_place(Some(name))` once both are merged.

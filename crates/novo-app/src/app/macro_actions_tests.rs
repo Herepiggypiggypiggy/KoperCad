@@ -112,3 +112,51 @@ fn replace_overwrites_the_macro_save_refused_even_with_a_slash_in_the_name() {
     assert_eq!(untouched.description, "unrelated");
     assert_eq!(untouched.revision, 1);
 }
+
+#[test]
+fn a_device_part_is_saved_with_the_macro_and_assigned_on_placement() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let library = MacroLibrary::new(dir.path().join("Macros"), "user");
+    d.app.wb.macro_place = PlaceWindow::new(Some(library.clone()));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    let breaker = d.place("mcb3", 80.0, 48.0);
+    d.frame();
+    let device = d.doc().project().devices().next().unwrap().id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Part", |tx| {
+            let part = tx.add_part("ABB", "S201-C16")?;
+            tx.assign_part(device, part)
+        })
+        .unwrap();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .select_ids(&[AnyId::Symbol(breaker)]);
+    d.app.run_command(&ctx, "macro.save", Some("With part"));
+    let draft = d.app.wb.macro_save.take().unwrap();
+    d.app.submit_macro_save(draft);
+    let saved = library.load("With part.kcmacro").unwrap();
+    assert!(saved.extra.contains_key("parts"));
+
+    d.app.run_command(&ctx, "macro.place", None);
+    d.app.wb.macro_place.select("With part.kcmacro");
+    d.frame();
+    let text = d.app.wb.macro_place.preview_text().unwrap();
+    assert!(text.contains("1 part assigned"), "{text}");
+    d.app.place_picked_macro();
+    let with_part = d
+        .doc()
+        .project()
+        .devices()
+        .filter(|dev| !dev.parts.is_empty())
+        .count();
+    assert_eq!(with_part, 2);
+    assert_eq!(d.doc().project().parts().count(), 1, "the part is reused");
+}

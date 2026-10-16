@@ -51,10 +51,25 @@ printed page can be ticked and the CSV opens as a work list.
   `standard_reports()`: that list feeds the Excel workbook, the Python export
   and several tests that count the built-in reports, and the checklist is a
   workshop document, not a workbook sheet. The app has no menu for it yet.
-- **In-app entry (follow-up).** A palette command "Export assembly checklist"
-  (`export.assembly`), which writes the PDF beside the project like Export
-  PDF does. It needs the stand-alone report PDF (#404, `ReportPdfOptions`),
-  and adds `row_mm` for the sign-off rows.
+- **In the app.** File > Export assembly checklist (PDF), or the palette
+  command `export.assembly` ("Export assembly checklist (PDF)", also reachable
+  as `export assembly`, Dutch `exporteer montagelijst`). It writes
+  `<project> assembly.pdf` next to the project (the Documents folder for an
+  untitled one) through the stand-alone report PDF (`novo_pdf::export_report_pdf`),
+  one section per page with 8 mm rows to tick or write in. Like the page PDF
+  it replaces only a file it wrote itself and unchanged since; anything else
+  takes the next free name (`... assembly 2.pdf`). With no cabinet that has a
+  plate it writes nothing and says so. Code: `crates/novo-app/src/app/assembly.rs`.
+- **Print pack (WORK-1).** Reports > Assembly (same command, `export.assembly`)
+  writes the pack: per cabinet a **Build order** table first, then the six
+  checklist tables, and last the wire cutting list (`novo_reports::CutList`).
+  The build order is `novo_layout::assembly::steps`: rails (R1..), ducts (D1..),
+  devices rail by rail along the rail then the bare plate in reading order,
+  wires after every device, labels last. Each step lists the steps it must
+  follow; `order_problems` checks numbering, dependencies and phase order.
+  Tests: `crates/novo-layout/tests/assembly.rs` (hand-built layouts and the
+  `cabinet-layout` and `rails-and-ducts` lesson projects) and
+  `crates/novo-app/src/app/assembly_pack_tests.rs`.
 - **Machine files.** Skipped until a machine is named.
 
 ## 4. Tests

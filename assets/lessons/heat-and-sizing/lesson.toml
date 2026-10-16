@@ -1,0 +1,246 @@
+# Cabinet track, lesson 6. Sample: wire-routing/project.json. Part losses in the sample: -F1 6 W,
+# -K1 3 W, -F2 4 W, -F3 1.5 W, -T1 20 W (34.5 W in all).
+#
+# Verified on main (59a37de0): the Heat chip (command heat.toggle, Shift+H) with the chips Map,
+# Contours, Airflow, Badges and the Simulate button (command heat.simulate); the legend says
+# "Preview model from the part losses, not a solver result" until a run finishes. The "Size
+# enclosure" button (command cabinet.size-enclosure) opens a window; the enclosure list starts
+# empty, "Add" appends "Enclosure 1" 600 x 800 x 300 mm, plate 550 x 750 mm. With that one row and
+# the defaults (free space 20 %, ducts 20 %, ambient max 35 C, inside max 40 C, floor standing) the
+# result is: loss 34 W, inside at the highest ambient 39 C, natural cooling is enough; with
+# ambient max 45 C: 49 C and "Needs about 34 W of cooling." The list is saved in the user's own
+# enclosure file, so the lesson says so. Heat visuals are in flux (CFD lane): numbers on the map
+# are not quoted here.
+# Since #596 the legend also says "Total loss N W" and counts devices without loss data (drawn
+# dashed, "no data" pill).
+# Needs from the Cabinet owner: the anchors named below.
+format = 1
+id = "heat-and-sizing"
+version = 2
+status = "early"
+title = "Where it gets hot, and how big the cabinet must be"
+title_nl = "Waar het warm wordt en hoe groot de kast moet zijn"
+summary = "Turn on the heat view, find the hot spot, move the transformer, and see what the heat means for the enclosure."
+summary_nl = "Zet de warmteweergave aan, vind de hotspot, verplaats de transformator en zie wat de warmte betekent voor de kast."
+track = "cabinet"
+order = 60
+level = "intermediate"
+minutes = 8
+topics = ["cabinet", "heat", "sizing"]
+needs = ["cabinet-layout"]
+next = ["panel-plate-drawing"]
+project = "../wire-routing/project.json"
+
+[[step]]
+id = "open-cabinet"
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
+title = "Open the cabinet"
+title_nl = "Open de kast"
+text = """
+Press {key:view.cabinet}. Every part in this project carries its {tip:power-loss} in watts: **-T1** 20 W, **-F1** 6 W, **-F2** 4 W, **-K1** 3 W, **-F3** 1.5 W.
+Together that is 34.5 W of heat that the cabinet has to get rid of.
+"""
+text_nl = """
+Druk op {key:view.cabinet}. Elk artikel in dit project heeft zijn {tip:power-loss} in watt: **-T1** 20 W, **-F1** 6 W, **-F2** 4 W, **-K1** 3 W, **-F3** 1,5 W.
+Samen is dat 34,5 W warmte die de kast kwijt moet.
+"""
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "heat-on"
+how = ["Click Heat in the header, or press {key:heat.toggle}.", "Find the chips Map, Contours, Airflow and Badges."]
+how_nl = ["Klik op Heat in de kop of druk op {key:heat.toggle}.", "Zoek de chips Map, Contours, Airflow en Badges."]
+title = "Turn on Heat"
+title_nl = "Zet Heat aan"
+text = """
+Click **Heat** in the header (or press {key:heat.toggle}). A coloured {tip:heat-map} appears under the devices, a legend **TEMPERATURE** appears in the corner,
+and four chips appear next to the button: **Map**, **Contours**, **Airflow** and **Badges**. Each chip switches one layer on or off.
+"""
+text_nl = """
+Klik op **Heat** in de kopregel (of druk op {key:heat.toggle}). Onder de componenten verschijnt een gekleurde {tip:heat-map}, in de hoek een legenda **TEMPERATURE**
+en naast de knop vier chips: **Map**, **Contours**, **Airflow** en **Badges**. Elke chip zet één laag aan of uit.
+"""
+point = { ui = "cabinet.heat" }
+expect = { command = "heat.toggle" }
+solve = [ { command = "heat.toggle" } ]
+
+[[step]]
+id = "read-legend"
+title = "Read the legend"
+title_nl = "Lees de legenda"
+text = """
+The colour bar runs from cool to hot with ticks in °C, and the line under it says "°C · ambient" followed by the room temperature.
+Until you run a simulation the legend says "Preview model from the part losses, not a solver result": the picture is quick and shows where heat collects, not exact temperatures.
+The hottest place sits on the transformer **-T1**, the biggest source.
+"""
+text_nl = """
+De kleurbalk loopt van koel naar heet met streepjes in °C en de regel eronder zegt "°C · ambient" gevolgd door de kamertemperatuur.
+Zolang je geen simulatie draait zegt de legenda "Preview model from the part losses, not a solver result": het beeld is snel en toont waar warmte zich ophoopt, geen exacte temperaturen.
+De heetste plek zit bij de transformator **-T1**, de grootste bron.
+"""
+point = { ui = "cabinet.heat" }
+
+[[step]]
+id = "total-loss"
+title = "Total loss"
+title_nl = "Totaal verlies"
+text = """
+Under the colour bar the legend says "Total loss 35 W", the sum of the part losses. When a part has no loss data, the legend also says how many devices lack it.
+"""
+text_nl = """
+Onder de kleurbalk zegt de legenda "Total loss 35 W", de som van de artikelverliezen. Heeft een artikel geen verliesgegevens, dan zegt de legenda ook hoeveel componenten die missen.
+"""
+point = { ui = "cabinet.heat" }
+
+[[step]]
+id = "badges"
+title = "Hot spots and badges"
+title_nl = "Hotspots en badges"
+text = """
+With **Badges** on, a hot spot carries a label such as "-T1  45 °C", and hovering a device says how many K it is above the plate mean.
+Switch **Contours** on to see lines of equal temperature around the sources.
+"""
+text_nl = """
+Met **Badges** aan krijgt een hotspot een label als "-T1  45 °C" en als je boven een component blijft hangen staat er hoeveel K het boven het gemiddelde van de plaat ligt.
+Zet **Contours** aan om lijnen van gelijke temperatuur rond de bronnen te zien.
+"""
+point = { ui = "cabinet.heat" }
+
+[[step]]
+id = "unknown"
+title = "Unknown is not zero"
+title_nl = "Onbekend is niet nul"
+text = """
+A device whose part has no **power_loss_w** gets a "no data" pill instead of a temperature, is drawn dashed, and the legend counts it: "1 device has no loss data (shown dashed)".
+The total then counts only the devices that have a figure. Fill in the part to clear the warning.
+"""
+text_nl = """
+Een component waarvan het artikel geen **power_loss_w** heeft krijgt een "no data"-label in plaats van een temperatuur, wordt gestippeld getekend en de legenda telt het mee: "1 device has no loss data (shown dashed)".
+Het totaal telt dan alleen de componenten met een waarde. Vul het artikel in om de waarschuwing weg te nemen.
+"""
+
+[[step]]
+id = "move-t1"
+how = ["Drag -T1 to another free place and let go.", "Watch the hot spot follow.", "Press {key:edit.undo}."]
+how_nl = ["Sleep -T1 naar een andere vrije plek en laat los.", "Zie de hotspot meekomen.", "Druk op {key:edit.undo}."]
+title = "Move the transformer"
+title_nl = "Verplaats de transformator"
+text = """
+Drag **-T1** to another free place on the plate and let go. The map and the hot spot follow it at once.
+In a real cabinet warm air rises, so a hot device does better low on the plate than right under the top, and away from anything that dislikes heat.
+Press {key:edit.undo} to put it back.
+"""
+text_nl = """
+Sleep **-T1** naar een andere vrije plek op de plaat en laat los. De kaart en de hotspot volgen direct.
+In een echte kast stijgt warme lucht, dus een heet component staat beter laag op de plaat dan vlak onder de bovenkant, en uit de buurt van wat niet tegen warmte kan.
+Druk op {key:edit.undo} om het terug te zetten.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { signal = "cabinet_dropped" }
+
+[[step]]
+id = "simulate"
+how = ["Click Simulate in the header.", "Wait until the legend says the run finished."]
+how_nl = ["Klik op Simulate in de kop.", "Wacht tot de legenda zegt dat de run klaar is."]
+title = "Simulate it for real"
+title_nl = "Simuleer het echt"
+text = """
+Click **Simulate** (or run **Simulate heat of the cabinet** from the palette). The solver runs in the background: the header shows how long it has been running, and **Cancel** stops it and keeps the latest result.
+When it finishes, the legend names the fidelity of the result and says whether it converged, and the map is replaced by the solved field.
+If you move a device afterwards, the legend says "Out of date: the layout changed since this run".
+"""
+text_nl = """
+Klik op **Simulate** (of voer **Simulate heat of the cabinet** uit via het palet). De solver draait op de achtergrond: de kopregel toont hoe lang hij al bezig is en **Cancel** stopt hem en houdt het laatste resultaat.
+Als hij klaar is noemt de legenda de nauwkeurigheid van het resultaat en of het geconvergeerd is en wordt de kaart vervangen door het opgeloste veld.
+Verplaats je daarna een component, dan zegt de legenda "Out of date: the layout changed since this run".
+"""
+point = { ui = "cabinet.heat" }
+expect = { command = "heat.simulate" }
+solve = [ { command = "heat.simulate" } ]
+
+[[step]]
+id = "planning-value"
+title = "It is a planning aid"
+title_nl = "Het is een planningshulp"
+text = """
+Both the preview and the simulation are planning tools. They show where heat collects and roughly how hot it gets; the final word on the enclosure is the enclosure maker's own sizing tool.
+"""
+text_nl = """
+Zowel het voorbeeld als de simulatie zijn planningshulpmiddelen. Ze tonen waar warmte zich ophoopt en ruwweg hoe heet het wordt; het laatste woord over de kast heeft het eigen dimensioneringsprogramma van de kastfabrikant.
+"""
+
+[[step]]
+id = "balance"
+how = ["Click Size enclosure in the header.", "Click Add to add Enclosure 1.", "Read the result under the list."]
+how_nl = ["Klik op Size enclosure in de kop.", "Klik op Add om Enclosure 1 toe te voegen.", "Lees het resultaat onder de lijst."]
+title = "What the heat means for the box"
+title_nl = "Wat de warmte voor de kast betekent"
+text = """
+Click **Size enclosure** in the header (or press {key:view.command_palette} and search for it). The window **Size the enclosure** opens with the inputs **Free space** (spare room on the plate, 20 %), **Ducts** (room for ducts, 20 %),
+**Ambient max** (35 C) and **Inside max** (40 C), and a choice of how the cabinet stands, at first "Floor standing, free".
+"""
+text_nl = """
+Klik op **Size enclosure** in de kopregel (of druk op {key:view.command_palette} en zoek het). Het venster **Size the enclosure** opent met de invoeren **Free space** (reserveruimte op de plaat, 20 %), **Ducts** (ruimte voor kanalen, 20 %),
+**Ambient max** (35 C) en **Inside max** (40 C) en een keuze hoe de kast staat, eerst "Floor standing, free".
+"""
+point = { ui = "cabinet.sizing" }
+expect = { command = "cabinet.size-enclosure" }
+solve = [ { command = "cabinet.size-enclosure" } ]
+
+[[step]]
+id = "empty-list"
+title = "The enclosure list starts empty"
+title_nl = "De kastenlijst begint leeg"
+text = """
+Below the inputs is the result. Your enclosure list is empty, so it says "Your enclosure list is empty. Add sizes under Enclosures... to get a recommendation."
+It still gives the plate area needed and the loss, 34 W.
+"""
+text_nl = """
+Onder de invoeren staat het resultaat. Je kastenlijst is leeg, dus er staat "Your enclosure list is empty. Add sizes under Enclosures... to get a recommendation."
+De benodigde plaatoppervlakte en het verlies, 34 W, staan er wel.
+"""
+point = { ui = "cabinet.sizing" }
+
+[[step]]
+id = "add-enclosure"
+title = "Add an enclosure to compare"
+title_nl = "Voeg een kast toe om te vergelijken"
+text = """
+Click **Enclosures...** and then **Add**. A row "Enclosure 1" appears: 600 x 800 x 300 mm outside, plate 550 x 750 mm, steel. This list is your own and is kept on your computer, so a row you add stays for other projects; remove it with **Remove** when you are done.
+Close the list. The result now reads: Enclosure 1, plate fill 10 %, loss 34 W, inside at the highest ambient 39 C, and "Natural cooling is enough."
+"""
+text_nl = """
+Klik op **Enclosures...** en dan op **Add**. Er verschijnt een rij "Enclosure 1": 600 x 800 x 300 mm buiten, plaat 550 x 750 mm, staal. Deze lijst is van jou en blijft op je computer bewaard, dus een rij die je toevoegt blijft ook voor andere projecten staan; verwijder hem met **Remove** als je klaar bent.
+Sluit de lijst. Het resultaat luidt nu: Enclosure 1, plaatvulling 10 %, verlies 34 W, binnen bij de hoogste omgevingstemperatuur 39 C en "Natural cooling is enough."
+"""
+point = { ui = "cabinet.sizing" }
+
+[[step]]
+id = "cooling"
+title = "Does it need cooling?"
+title_nl = "Heeft het koeling nodig?"
+text = """
+Set **Ambient max** to 45 C. The inside at the highest ambient becomes 49 C, above the 40 C limit, and the result says "Needs about 34 W of cooling." with the note "No enclosure in your list cools naturally at this loss."
+That is the moment to choose a bigger enclosure, a fan or a cooling unit. Set **Ambient max** back to 35 C afterwards.
+"""
+text_nl = """
+Zet **Ambient max** op 45 C. De binnentemperatuur bij de hoogste omgeving wordt 49 C, boven de grens van 40 C, en het resultaat zegt "Needs about 34 W of cooling." met de opmerking "No enclosure in your list cools naturally at this loss."
+Dat is het moment om een grotere kast, een ventilator of een koelunit te kiezen. Zet **Ambient max** daarna terug op 35 C.
+"""
+point = { ui = "cabinet.sizing" }
+
+[[step]]
+id = "done"
+title = "Heat is part of the layout"
+title_nl = "Warmte hoort bij de indeling"
+text = """
+You turned on the heat view, found the hot spot and moved it, and saw what 34 W means for a 600 x 800 mm enclosure.
+Next: the drawing that gets the plate drilled.
+"""
+text_nl = """
+Je zette de warmteweergave aan, vond de hotspot en verplaatste hem en zag wat 34 W betekent voor een kast van 600 x 800 mm.
+Straks: de tekening waarmee de plaat wordt geboord.
+"""

@@ -17,6 +17,7 @@
 //!   code for the next free tag (J2).
 //! - [`macro_place`]: place a macro from the user library, with a preview.
 //! - [`orientation`]: R and X on a symbol or text.
+//! - [`menus`]: where each command sits in the menu bar.
 //! - [`locate`]: where a device occurs, as page and column (`/3.4`), on top
 //!   of novo-core's cross references.
 //! - [`renumber`]: renumber devices with a preview, as one undo step (J4).
@@ -29,17 +30,23 @@
 //! Model edits go through [`novo_core::Tx`], so each gesture is one undo
 //! step.
 
+pub mod clipboard;
 pub mod commands;
 pub mod duplicate;
+pub mod expr;
 pub mod fuzzy;
+pub mod generate;
 pub mod history;
 pub mod insert;
 pub mod keymap;
 pub mod language;
 pub mod locate;
 pub mod macro_place;
+pub mod menus;
+pub mod options;
 pub mod orientation;
 pub mod palette;
+pub mod parametric;
 pub mod renumber;
 pub mod switch;
 pub mod userkeys;

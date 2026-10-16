@@ -2,8 +2,11 @@
 
 use novo_editor::tool::{ConnectMode, WiringMode};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
+/// Times a hint is followed before it stops showing.
+pub const HINT_LIMIT: u32 = 3;
 const MAX_RECENT: usize = 10;
 const MAX_RECENT_ACTIONS: usize = 20;
 
@@ -34,8 +37,39 @@ pub struct Settings {
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
+    /// How tightly the contact table under a coil is drawn, `"full"` or
+    /// `"compact"` (empty: full): a per-user preference.
+    pub xref_density: String,
+    /// Whether the status bar is switched off (docs/design/workspaces.md §7).
+    pub hide_status_bar: bool,
+    /// Commissioning's large touch buttons: a tablet user sets it once.
+    pub large_buttons: bool,
+    /// The workspace shown when the app last ran (`Workspace::id`),
+    /// reopened with the project when it is available again
+    /// (docs/design/workspaces.md §4.1).
+    pub last_workspace: String,
+    /// Each workspace's panels as the person left them, by `Workspace::id`.
+    /// A workspace with no entry has its default layout.
+    pub workspaces: BTreeMap<String, WorkspaceLayout>,
     /// How far the fast-keys walk-through is (docs/ONBOARDING-DESIGN.md §2).
     pub onboarding: Onboarding,
+    /// The DWG converter program the person chose (`dwg2dxf` or the ODA File
+    /// Converter), tried before the ones KoperCAD finds itself.
+    pub dwg_converter: Option<PathBuf>,
+    /// A shared macro folder (a company library on a network drive): the
+    /// macro browser lists it beside the person's own macros and offers
+    /// newer revisions of macros a project was built from.
+    pub company_macros: Option<PathBuf>,
+    /// The start of the name a new page group gets (`G` makes `=G1`) in a
+    /// project with no group to continue. Empty: the default.
+    pub group_prefix: String,
+    /// The same for a new cabinet (`A` makes `+A1`). Empty: the default.
+    pub cabinet_prefix: String,
+    /// How often each one-time hint was followed, by hint id
+    /// (`app/tips.rs`, docs/design/discoverability.md layer 4). A hint
+    /// stops showing once followed [`HINT_LIMIT`] times; Help > Show hints
+    /// again clears the counters.
+    pub hints_seen: BTreeMap<String, u32>,
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way
@@ -74,7 +108,29 @@ impl Onboarding {
     }
 }
 
+/// What one workspace remembers about its panels: a snapshot taken when the
+/// person leaves it and put back when they return. Per user, not per
+/// project, because it describes their screen. Strings keep an old settings
+/// file readable when a panel is renamed or removed; an unknown one means
+/// the default.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WorkspaceLayout {
+    /// Whether the outline takes space beside the canvas; `None` follows
+    /// the window width.
+    pub outline_pinned: Option<bool>,
+    /// `"pages"`, `"issues"` or `"changes"`.
+    pub outline_mode: String,
+    /// `"terminals"`, `"cables"` or `"devices"`; `None` is closed.
+    pub drawer: Option<String>,
+}
+
 impl Settings {
+    /// The density of the coil contact table.
+    pub fn xref_density(&self) -> novo_canvas::model::NoteDensity {
+        novo_canvas::model::NoteDensity::from_id(&self.xref_density)
+    }
+
     pub const STORAGE_KEY: &str = "novo_settings";
 
     /// The wiring mode; Corners unless the person chose Lines.
@@ -152,6 +208,29 @@ mod tests {
         let s: Settings = ron::from_str(old).unwrap();
         assert_eq!(s.recent_actions, vec!["view.fit"]);
         assert_eq!(s.outline_pinned, None);
+    }
+
+    #[test]
+    fn workspace_layouts_round_trip() {
+        let mut s = Settings {
+            last_workspace: "cabinet".into(),
+            ..Settings::default()
+        };
+        s.workspaces.insert(
+            "schematic".into(),
+            WorkspaceLayout {
+                outline_pinned: Some(true),
+                outline_mode: "issues".into(),
+                drawer: Some("cables".into()),
+            },
+        );
+        let text = ron::to_string(&s).unwrap();
+        let back: Settings = ron::from_str(&text).unwrap();
+        assert_eq!(back, s);
+        // Settings written before workspaces existed still load.
+        let old: Settings = ron::from_str("(recent_actions: [\"view.fit\"])").unwrap();
+        assert!(old.workspaces.is_empty());
+        assert_eq!(old.last_workspace, "");
     }
 
     #[test]

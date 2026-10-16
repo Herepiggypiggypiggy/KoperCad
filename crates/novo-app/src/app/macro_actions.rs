@@ -13,7 +13,7 @@
 use eframe::egui;
 use novo_core::{AnyId, BlockDefinition, Value};
 use novo_parts::{MacroEntry, MacroFile, MacroLibrary};
-use novo_workflow::macro_place::{self, PlaceOptions, Report, WireNumbers};
+use novo_workflow::macro_place::{self, PartRef, PlaceOptions, Report, WireNumbers};
 
 use super::{Level, NovoApp};
 
@@ -33,7 +33,7 @@ pub(crate) struct SaveDraft {
 
 /// What the Place macro preview was computed for, and its result.
 struct Shown {
-    key: (String, u64, bool, Vec<(String, Value)>),
+    key: (String, u64, bool, bool, Vec<(String, Value)>),
     definition: BlockDefinition,
     report: Result<Report, String>,
 }
@@ -46,6 +46,9 @@ pub(crate) struct PlaceWindow {
     query: String,
     selected: Option<String>,
     keep_numbers: bool,
+    /// The parts the picked macro carries, and whether to assign them.
+    parts: Vec<PartRef>,
+    carry_parts: bool,
     values: Vec<(String, Value)>,
     shown: Option<Shown>,
     status: String,
@@ -60,6 +63,8 @@ impl PlaceWindow {
             query: String::new(),
             selected: None,
             keep_numbers: false,
+            parts: Vec::new(),
+            carry_parts: true,
             values: Vec::new(),
             shown: None,
             status: String::new(),
@@ -75,6 +80,11 @@ impl PlaceWindow {
 
     fn options(&self) -> PlaceOptions {
         PlaceOptions {
+            parts: if self.carry_parts {
+                self.parts.clone()
+            } else {
+                Vec::new()
+            },
             values: self.values.clone(),
             wire_numbers: if self.keep_numbers {
                 WireNumbers::Keep
@@ -88,10 +98,13 @@ impl PlaceWindow {
     pub(super) fn select(&mut self, path: &str) {
         self.selected = Some(path.to_owned());
         self.shown = None;
-        self.values = self
-            .library
+        let file = self.library.as_ref().and_then(|l| l.load(path).ok());
+        self.parts = file
             .as_ref()
-            .and_then(|l| l.load(path).ok())
+            .and_then(|f| f.extra.get("parts"))
+            .map(macro_place::parts_from_json)
+            .unwrap_or_default();
+        self.values = file
             .map(|f| {
                 f.definition
                     .parameters
@@ -135,6 +148,10 @@ pub(crate) fn describe(report: &Report) -> String {
     }
     if !report.clashes.is_empty() {
         text += &format!(" · already used: {}", report.clashes.join(", "));
+    }
+    if report.parts_assigned > 0 {
+        let n = report.parts_assigned;
+        text += &format!(" · {n} {} assigned", if n == 1 { "part" } else { "parts" });
     }
     text
 }
@@ -290,7 +307,21 @@ impl NovoApp {
             .library
             .as_ref()
             .ok_or_else(|| plain("There is no macro folder on this computer".into()))?;
-        let file = MacroFile::new(definition).with_author(self.settings.initials.clone());
+        let parts = macro_place::captured_parts(project, &definition);
+        let mut file = MacroFile::new(definition).with_author(self.settings.initials.clone());
+        // Carried parts make the file format version 2.
+        file.set_parts(
+            &parts
+                .iter()
+                .map(|p| novo_parts::MacroPart {
+                    device: p.device.raw(),
+                    manufacturer: p.manufacturer.clone(),
+                    order_number: p.order_number.clone(),
+                    type_number: p.type_number.clone(),
+                    description: p.description.clone(),
+                })
+                .collect::<Vec<_>>(),
+        );
         if replace {
             // The file `save` refused is the top-level macro of this name;
             // its path comes from the library, not from the raw name, which
@@ -355,6 +386,7 @@ impl NovoApp {
                     path.clone(),
                     project.revision(),
                     win.keep_numbers,
+                    win.carry_parts,
                     win.values.clone(),
                 );
                 if win.shown.as_ref().is_none_or(|s| s.key != key) {
@@ -452,6 +484,12 @@ impl NovoApp {
                             }
                         }
                         ui.checkbox(&mut win.keep_numbers, "Keep the macro's wire numbers");
+                        if !win.parts.is_empty() {
+                            let n = win.parts.len();
+                            let label =
+                                format!("Assign its {n} {}", if n == 1 { "part" } else { "parts" });
+                            ui.checkbox(&mut win.carry_parts, label);
+                        }
                         match &shown.report {
                             Ok(report) => {
                                 ui.label(describe(report));

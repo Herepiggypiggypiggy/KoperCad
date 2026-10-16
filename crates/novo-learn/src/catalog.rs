@@ -18,6 +18,8 @@ pub type Files = BTreeMap<String, String>;
 pub const MAX_TEXT_FILE_BYTES: u64 = 64 * 1024;
 /// Largest sample project read.
 pub const MAX_PROJECT_BYTES: u64 = 2 * 1024 * 1024;
+/// Deepest folder level read below the lessons folder.
+pub const MAX_DEPTH: usize = 3;
 /// Most files read from one folder.
 pub const MAX_FILES: usize = 2000;
 
@@ -32,6 +34,7 @@ pub fn read_dir(root: &Path) -> std::io::Result<(Files, Vec<String>)> {
         dir: &Path,
         out: &mut Files,
         notes: &mut Vec<String>,
+        depth: usize,
     ) -> std::io::Result<()> {
         for entry in std::fs::read_dir(dir)? {
             let path = entry?.path();
@@ -40,7 +43,14 @@ pub fn read_dir(root: &Path) -> std::io::Result<(Files, Vec<String>)> {
                 continue;
             }
             if meta.is_dir() {
-                walk(root, &path, out, notes)?;
+                if depth >= MAX_DEPTH {
+                    notes.push(format!(
+                        "{}: skipped, folders nest too deep",
+                        path.display()
+                    ));
+                    continue;
+                }
+                walk(root, &path, out, notes, depth + 1)?;
                 continue;
             }
             let ext = path.extension().and_then(|e| e.to_str());
@@ -76,7 +86,7 @@ pub fn read_dir(root: &Path) -> std::io::Result<(Files, Vec<String>)> {
     }
     let mut files = Files::new();
     let mut notes = Vec::new();
-    walk(root, root, &mut files, &mut notes)?;
+    walk(root, root, &mut files, &mut notes, 0)?;
     Ok((files, notes))
 }
 
@@ -244,11 +254,11 @@ impl Catalog {
         self.entries.iter().find(|e| e.lesson.id == id)
     }
 
-    /// The lessons to list: drafts only when asked for.
+    /// The lessons to list: ready and early-access ones, drafts only when asked for.
     pub fn visible(&self, show_drafts: bool) -> impl Iterator<Item = &Entry> {
         self.entries
             .iter()
-            .filter(move |e| show_drafts || e.lesson.status == Status::Ready)
+            .filter(move |e| show_drafts || e.lesson.status != Status::Draft)
     }
 
     /// Lessons that carry a topic, for the "Lesson: ..." links in panels.

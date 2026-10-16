@@ -1,0 +1,134 @@
+format = 1
+id = "dxf-and-backgrounds"
+version = 1
+status = "early"
+title = "Hand over DXF and trace a floor plan"
+summary = "Export pages as DXF for the workshop and place a DXF drawing behind a page."
+track = "data"
+order = 30
+level = "intermediate"
+minutes = 7
+topics = ["dxf", "export", "import", "background"]
+needs = []
+next = ["time-savers"]
+project = "project.json"
+page = "Main circuit"
+title_nl = "Lever DXF aan en trek een plattegrond over"
+summary_nl = "Exporteer pagina's als DXF voor de werkplaats en zet een DXF-tekening achter een pagina."
+
+[[step]]
+id = "why-dxf"
+title = "Why DXF"
+title_nl = "Waarom DXF"
+text = """
+DXF is a file type most CAD programs open: the workshop's cutting machine and the architect's floor plan both speak it. A **background** is a drawing shown pale behind your page for reference. It is never part of your schematic.
+"""
+text_nl = """
+DXF is een bestandstype dat de meeste CAD-programma's openen: de snijmachine in de werkplaats en de plattegrond van de architect spreken het allebei. Een **achtergrond** is een tekening die bleek achter je pagina staat als referentie. Hij hoort nooit bij je schema.
+"""
+
+[[step]]
+id = "export-page"
+title = "Export this page as DXF"
+title_nl = "Exporteer deze pagina als DXF"
+text = "Hand over exactly what the workshop asked for: the page you are looking at, drawn as lines they can open."
+text_nl = "Lever precies wat de werkplaats vroeg: de pagina die je ziet, getekend als lijnen die zij kunnen openen."
+how = [
+  "Open the **File** menu, then **Export**, then **Export this page as DXF**.",
+  "Or press {key:view.command_palette}, type **export dxf** and press Enter.",
+  "The message at the bottom names the file. This lesson project is not saved yet, so it goes to your Documents folder under **KoperCAD**.",
+]
+how_nl = [
+  "Open het menu **File**, dan **Export**, dan **Export this page as DXF**.",
+  "Of druk op {key:view.command_palette}, typ **export dxf** en druk op Enter.",
+  "De melding onderaan noemt het bestand. Dit lesproject is nog niet bewaard, dus het gaat naar je map Documenten onder **KoperCAD**.",
+]
+point = { ui = "palette.button" }
+expect = { command = "export.dxf_page" }
+solve = [ { command = "export.dxf_page" } ]
+
+[[step]]
+id = "export-all"
+title = "Export every page"
+title_nl = "Exporteer alle pagina's"
+text = "One command hands over the whole set, so nothing is forgotten. Running it again replaces only the files KoperCAD wrote itself, never yours."
+text_nl = "Eén opdracht levert de hele set, zodat niets vergeten wordt. Opnieuw uitvoeren vervangt alleen bestanden die KoperCAD zelf schreef, nooit de jouwe."
+how = [
+  "Open **File > Export > Export all pages as DXF**.",
+  "KoperCAD writes one file per page into a folder called **<project name> DXF**.",
+  "The message at the bottom tells you where it is.",
+]
+how_nl = [
+  "Open **File > Export > Export all pages as DXF**.",
+  "KoperCAD schrijft één bestand per pagina in een map met de naam **<projectnaam> DXF**.",
+  "De melding onderaan vertelt waar die staat.",
+]
+expect = { command = "export.dxf_all" }
+solve = [ { command = "export.dxf_all" } ]
+
+[[step]]
+id = "go-page"
+title = "Go to the control circuit"
+title_nl = "Ga naar het stuurstroomschema"
+text = "A background belongs to one page. Pick the page you want to draw over."
+text_nl = "Een achtergrond hoort bij één pagina. Kies de pagina waar je overheen wilt tekenen."
+how = [
+  "Press {key:nav.next_page} to go to the next page.",
+  "Or click **2 Control circuit** in the page list on the left.",
+]
+how_nl = [
+  "Druk op {key:nav.next_page} om naar de volgende pagina te gaan.",
+  "Of klik links in de paginalijst op **2 Control circuit**.",
+]
+expect = { page = "Control circuit" }
+solve = [ { page = "Control circuit" } ]
+
+[[step]]
+id = "background"
+title = "Put a DXF behind the page"
+title_nl = "Zet een DXF achter de pagina"
+text = "Use a floor plan or a machine drawing as a guide while you draw, without mixing it into the schematic."
+text_nl = "Gebruik een plattegrond of machinetekening als hulp tijdens het tekenen, zonder die met het schema te mengen."
+how = [
+  "Open **File > Import > Import DXF as background**.",
+  "Pick a DXF file. One of the files you just exported works, from the folder **<project name> DXF**.",
+  "The drawing appears pale behind the page.",
+]
+how_nl = [
+  "Open **File > Import > Import DXF as background**.",
+  "Kies een DXF-bestand. Een van de bestanden die je net exporteerde werkt, uit de map **<projectnaam> DXF**.",
+  "De tekening verschijnt bleek achter de pagina.",
+]
+expect = { command = "file.import_dxf_background" }
+
+[[step]]
+id = "trace"
+title = "Draw over it"
+title_nl = "Teken eroverheen"
+text = "The background cannot be selected, so you cannot move it by accident. Place symbols and wire on top as usual, using it as a guide."
+text_nl = "De achtergrond kan niet geselecteerd worden, dus je verschuift hem niet per ongeluk. Plaats symbolen en trek draden er gewoon overheen, met de achtergrond als hulp."
+
+[[step]]
+id = "remove"
+title = "Take it away again"
+title_nl = "Haal hem weer weg"
+text = "When you no longer need the guide, remove it. The page keeps everything you drew."
+text_nl = "Heb je de hulp niet meer nodig, haal hem dan weg. De pagina behoudt alles wat je tekende."
+how = [
+  "Open **File > Import > Remove the DXF background**.",
+  "It is greyed out on a page that has no background.",
+  "It is one undo step, so {key:edit.undo} brings the background back.",
+]
+how_nl = [
+  "Open **File > Import > Remove the DXF background**.",
+  "Op een pagina zonder achtergrond is het grijs.",
+  "Het is één stap, dus {key:edit.undo} brengt de achtergrond terug.",
+]
+expect = { command = "file.remove_background" }
+
+[[step]]
+id = "done"
+title = "DXF in, DXF out"
+title_nl = "DXF erin, DXF eruit"
+text = "You can hand pages to the workshop and draw over a plan you were given."
+text_nl = "Je kunt pagina's aan de werkplaats geven en tekenen over een plan dat je kreeg."

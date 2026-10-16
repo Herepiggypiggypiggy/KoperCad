@@ -16,6 +16,7 @@ novo-ai = { path = "crates/novo-ai" }
 novo-app = { path = "crates/novo-app" }
 novo-cables = { path = "crates/novo-cables" }
 novo-canvas = { path = "crates/novo-canvas" }
+novo-cfd = { path = "crates/novo-cfd" }
 novo-checks = { path = "crates/novo-checks" }
 novo-cli = { path = "crates/novo-cli" }
 novo-commissioning = { path = "crates/novo-commissioning" }
@@ -23,6 +24,7 @@ novo-core = { path = "crates/novo-core" }
 novo-editor = { path = "crates/novo-editor" }
 novo-interop = { path = "crates/novo-interop" }
 novo-layout = { path = "crates/novo-layout" }
+novo-numbering = { path = "crates/novo-numbering" }
 novo-parts = { path = "crates/novo-parts" }
 novo-pdf = { path = "crates/novo-pdf" }
 novo-plc = { path = "crates/novo-plc" }
@@ -30,6 +32,7 @@ novo-py = { path = "crates/novo-py" }
 novo-reports = { path = "crates/novo-reports" }
 novo-revisions = { path = "crates/novo-revisions" }
 novo-routing = { path = "crates/novo-routing" }
+novo-safety = { path = "crates/novo-safety" }
 novo-sim = { path = "crates/novo-sim" }
 novo-storage = { path = "crates/novo-storage" }
 novo-symbols = { path = "crates/novo-symbols" }
@@ -79,6 +82,8 @@ ttf-parser = { version = "0.25", default-features = false, features = ["std"] }
 subsetter = "0.2"
 # Compresses revision snapshots in project files (novo-storage).
 flate2 = "1"
+# Data-parallel kernels of the flow solver (novo-cfd).
+rayon = "1"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
@@ -89,3 +94,12 @@ all = { level = "warn", priority = -1 }
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+# The thermal solver is numeric code: unoptimised it is about 30 times slower,
+# which makes its tests and the app's debug builds crawl.
+[profile.dev.package.novo-thermal]
+opt-level = 3
+
+# The flow solver is numeric code too (see novo-thermal above).
+[profile.dev.package.novo-cfd]
+opt-level = 3

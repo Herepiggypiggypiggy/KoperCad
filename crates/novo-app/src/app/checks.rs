@@ -26,7 +26,7 @@ impl NovoApp {
         };
         let problems = match &self.wb.problems {
             Some((revision, problems)) if *revision == project.revision() => problems.clone(),
-            _ => novo_checks::check(project),
+            _ => novo_checks::check_open(project),
         };
         let mut marks = Vec::new();
         for p in &problems {
@@ -55,7 +55,7 @@ impl NovoApp {
             .as_ref()
             .is_none_or(|(r, _)| *r != revision)
         {
-            self.wb.problems = Some((revision, novo_checks::check(project)));
+            self.wb.problems = Some((revision, novo_checks::check_open(project)));
         }
         self.wb.problems.as_ref().map_or(&[], |(_, p)| p.as_slice())
     }
@@ -98,6 +98,8 @@ impl NovoApp {
             .collect();
         problems.sort_by_key(|(_, p)| severity_rank(p.severity));
         let mut go = None;
+        self.waive_form(ui);
+        let mut toggle = None;
         if problems.is_empty() {
             ui.weak(if summary.errors + summary.warnings + summary.infos == 0 {
                 "No issues"
@@ -115,16 +117,140 @@ impl NovoApp {
                         Severity::Info => "ℹ",
                     };
                     let text = format!("{mark} {}", p.message);
-                    if ui.selectable_label(false, text).clicked() {
+                    let row = ui.selectable_label(false, text);
+                    if row.clicked() {
                         go = Some(*i);
                     }
+                    row.context_menu(|ui| {
+                        if ui.button("Go to").clicked() {
+                            go = Some(*i);
+                            ui.close();
+                        }
+                        if ui.button("Waive with a reason…").clicked() {
+                            self.wb.waiving = Some((*i, String::new()));
+                            ui.close();
+                        }
+                        if ui.button("Copy message").clicked() {
+                            ui.ctx().copy_text(p.message.clone());
+                            ui.close();
+                        }
+                    });
                 }
+                // The empty space under the list has its own menu: the
+                // filters and all messages at once.
+                let rest = ui.available_height().max(32.0);
+                let (_, space) = ui.allocate_exact_size(
+                    egui::vec2(ui.available_width(), rest),
+                    egui::Sense::click(),
+                );
+                space.context_menu(|ui| {
+                    for (i, name) in ["errors", "warnings", "infos"].into_iter().enumerate() {
+                        let shown = filter[i];
+                        if ui.selectable_label(shown, format!("Show {name}")).clicked() {
+                            toggle = Some(i);
+                            ui.close();
+                        }
+                    }
+                    ui.separator();
+                    if ui
+                        .add_enabled(!problems.is_empty(), egui::Button::new("Copy all shown"))
+                        .clicked()
+                    {
+                        let all: Vec<&str> =
+                            problems.iter().map(|(_, p)| p.message.as_str()).collect();
+                        ui.ctx().copy_text(all.join("\n"));
+                        ui.close();
+                    }
+                });
             });
-        ui.weak("F8 next · Shift+F8 previous");
+        if let Some(i) = toggle {
+            self.wb.issue_filter[i] ^= true;
+        }
+        self.waived_list(ui);
+        ui.weak("F8 next · Shift+F8 previous · right-click for more");
         if let Some(i) = go {
             self.go_problem(i);
         }
         go.is_some()
+    }
+
+    /// The reason field of a problem being waived.
+    fn waive_form(&mut self, ui: &mut egui::Ui) {
+        let Some((index, mut reason)) = self.wb.waiving.take() else {
+            return;
+        };
+        let Some(problem) = self.problems().get(index).cloned() else {
+            return;
+        };
+        ui.group(|ui| {
+            ui.label(format!("Waive: {}", problem.message));
+            ui.add(
+                egui::TextEdit::singleline(&mut reason)
+                    .hint_text("Why this is acceptable")
+                    .desired_width(f32::INFINITY),
+            );
+            let mut keep = true;
+            ui.horizontal(|ui| {
+                let ready = !reason.trim().is_empty();
+                if ui.add_enabled(ready, egui::Button::new("Waive")).clicked() {
+                    keep = false;
+                    let Some(doc) = self.backend.document_mut() else {
+                        return;
+                    };
+                    match doc.transact("Waive problem", |tx| {
+                        novo_checks::waive(tx, &problem, &reason).map(|_| ())
+                    }) {
+                        Ok(((), changes)) => {
+                            self.changed_outside_canvas(&changes);
+                            self.learn_signal("problem_waived");
+                        }
+                        Err(e) => {
+                            self.message(Level::Error, format!("Could not waive the problem: {e}"))
+                        }
+                    }
+                }
+                if ui.button("Cancel").clicked() {
+                    keep = false;
+                }
+            });
+            if keep {
+                self.wb.waiving = Some((index, std::mem::take(&mut reason)));
+            }
+        });
+    }
+
+    /// The waived problems with their reasons; Restore brings one back.
+    fn waived_list(&mut self, ui: &mut egui::Ui) {
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        let waived = novo_checks::waived_problems(doc.project());
+        if waived.is_empty() {
+            return;
+        }
+        let mut restore = None;
+        egui::CollapsingHeader::new(format!("Waived ({})", waived.len())).show(ui, |ui| {
+            for w in &waived {
+                ui.label(&w.problem.message);
+                ui.horizontal(|ui| {
+                    ui.weak(format!("Reason: {}", w.reason));
+                    if ui.small_button("Restore").clicked() {
+                        restore = Some(w.waiver);
+                    }
+                });
+            }
+        });
+        if let Some(id) = restore
+            && let Some(doc) = self.backend.document_mut()
+        {
+            match doc.transact("Restore problem", |tx| tx.remove(id)) {
+                Ok(((), changes)) => {
+                    self.changed_outside_canvas(&changes);
+                    self.learn_signal("waiver_restored");
+                }
+                Err(e) => self.message(Level::Error, format!("Could not restore: {e}")),
+            }
+        }
     }
 
     /// Shows the outline in Issues mode. With `toggle`, a second request

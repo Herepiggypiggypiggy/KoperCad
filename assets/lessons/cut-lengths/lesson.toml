@@ -1,0 +1,167 @@
+# Cabinet track, lesson 4. Sample: wire-routing/project.json (placed plate, ducts joined).
+#
+# Verified on main (59a37de0) with the wire list on this sample: 20 rows, 17 "routed" (1924 mm
+# for -F2 to -X1, 1486 for -F1 to -K1, 1456 for -K1 to -F2, 250 and 310 between the buttons) and
+# 4 "estimate" at 200 mm for the motor wires, whose device is in the field. The wire cut export
+# is Cabinet > Route all > Export wire cut (wire_production.rs): a semicolon CSV next to the
+# project. There is no Cut list page or report in the app yet, so the lesson does not use one.
+format = 1
+id = "cut-lengths"
+version = 2
+status = "early"
+title = "Wire list and cut lengths"
+title_nl = "Draadlijst en afkortlengtes"
+summary = "Read the cut length of every wire in the wire list, see where it comes from, watch it change when a device moves, and export the wire cut file."
+summary_nl = "Lees de afkortlengte van elke draad in de draadlijst, zie waar die vandaan komt, zie hem veranderen als een component verschuift en exporteer het draadzaagbestand."
+track = "cabinet"
+order = 40
+level = "intermediate"
+minutes = 8
+topics = ["cabinet", "wire-list", "routing"]
+needs = ["wire-routing"]
+next = ["panel-plate-drawing"]
+project = "../wire-routing/project.json"
+
+[[step]]
+id = "open-wire-list"
+how = ["Press {key:view.schematic}.", "Click the page Wire list in the outline."]
+how_nl = ["Druk op {key:view.schematic}.", "Klik op de pagina Wire list in het overzicht."]
+title = "Open the wire list"
+title_nl = "Open de draadlijst"
+text = """
+Go back to the schematic with {key:view.schematic}, then open the page **Wire list** from the outline.
+It is a generated page: it is rebuilt from the drawing every time something changes, so nobody types into it.
+You see one row per connection, with the wire number, both ends, the potential and the cross-section.
+"""
+text_nl = """
+Ga terug naar het schema met {key:view.schematic} en open de pagina **Wire list** in het overzicht.
+Het is een gegenereerde pagina: ze wordt bij elke wijziging opnieuw uit de tekening opgebouwd, dus niemand typt erin.
+Je ziet één rij per verbinding, met draadnummer, beide einden, potentiaal en doorsnede.
+"""
+point = { ui = "outline.pages" }
+expect = { page = "Wire list" }
+solve = [ { command = "view.schematic" }, { page = "Wire list" } ]
+
+[[step]]
+id = "last-columns"
+title = "Two columns at the end"
+title_nl = "Twee kolommen achteraan"
+text = """
+The last two columns are **Cut length mm** and **Length basis**.
+The first is how long to cut the wire. The second says how that length was found: "routed" or "estimate", and in free air when no duct reaches.
+Of the 20 rows here, 16 say **routed** and 4 say **estimate**.
+"""
+text_nl = """
+De laatste twee kolommen zijn **Cut length mm** en **Length basis**.
+De eerste is hoe lang de draad moet worden afgekort. De tweede zegt hoe die lengte is bepaald: "routed" of "estimate", en free air als geen kanaal de draad bereikt.
+Van de 20 rijen hier staat er bij 16 **routed** en bij 4 **estimate**.
+"""
+
+[[step]]
+id = "routed"
+title = "Routed"
+title_nl = "Gerouteerd"
+text = """
+Both devices are on the plate and a duct path joins them. The length is stub, duct run and stub, plus a {tip:service-loop} at each end.
+For example wire 4, from **-F2** to **-X1**, is 1924 mm, and the two wires between the push buttons on the same rail are only 250 mm and 310 mm.
+That is the number the workshop cuts to.
+"""
+text_nl = """
+Beide componenten staan op de plaat en een kanaalpad verbindt ze. De lengte is stub, kanaaldeel en stub, plus een {tip:service-loop} aan elk uiteinde.
+Draad 4 van **-F2** naar **-X1** is bijvoorbeeld 1924 mm en de twee draden tussen de drukknoppen op dezelfde rail zijn maar 250 mm en 310 mm.
+Dat is het getal waarop de werkplaats afkort.
+"""
+
+[[step]]
+id = "estimate"
+title = "Estimate"
+title_nl = "Schatting"
+text = """
+The motor is in the field, not on this plate, so its four wires (**-X1** to **-M1**) say **estimate** and 200 mm:
+a distance guessed from the schematic plus the loops. It is a planning figure, always labelled as one, and it only becomes a real length when both ends sit on a plate.
+"""
+text_nl = """
+De motor staat in het veld, niet op deze plaat, dus zijn vier draden (**-X1** naar **-M1**) zeggen **estimate** en 200 mm:
+een afstand geschat uit het schema plus de lussen. Het is een planningsgetal, altijd als zodanig gemarkeerd, en het wordt pas een echte lengte als beide einden op een plaat zitten.
+"""
+
+[[step]]
+id = "back-to-cabinet"
+how = ["Press {key:view.cabinet}."]
+how_nl = ["Druk op {key:view.cabinet}."]
+title = "Back to the cabinet"
+title_nl = "Terug naar de kast"
+text = """
+Press {key:view.cabinet}. You will move one device and read the list again.
+"""
+text_nl = """
+Druk op {key:view.cabinet}. Je verplaatst één component en leest de lijst opnieuw.
+"""
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "move-k1"
+how = ["Drag -K1 about 100 mm to the right and let go.", "If a box turns red, press {key:edit.undo} and move less."]
+how_nl = ["Sleep -K1 ongeveer 100 mm naar rechts en laat los.", "Wordt een kader rood, druk dan op {key:edit.undo} en verschuif minder."]
+title = "Move -K1"
+title_nl = "Verplaats -K1"
+text = """
+Drag **-K1** about 100 mm to the right and let go. A red box would mean it now overlaps a neighbour; if you see one, press {key:edit.undo} and try a shorter move.
+"""
+text_nl = """
+Sleep **-K1** ongeveer 100 mm naar rechts en laat los. Een rood kader betekent dat het een buur overlapt; zie je dat, druk dan op {key:edit.undo} en probeer een kortere verschuiving.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { signal = "cabinet_dropped" }
+
+[[step]]
+id = "check-again"
+how = ["Press {key:view.schematic}.", "Click the page Wire list in the outline.", "Read Cut length mm for the wires at -K1."]
+how_nl = ["Druk op {key:view.schematic}.", "Klik op de pagina Wire list in het overzicht.", "Lees Cut length mm bij de draden op -K1."]
+title = "Read the wire list again"
+title_nl = "Lees de draadlijst opnieuw"
+text = """
+Return to **Wire list** (the schematic with {key:view.schematic}, then the page in the outline).
+The wires that end at **-K1** have new lengths in **Cut length mm**, and nobody typed them: the list is worked out from the plate each time.
+"""
+text_nl = """
+Ga terug naar **Wire list** (het schema met {key:view.schematic} en dan de pagina in het overzicht).
+De draden die bij **-K1** eindigen hebben nieuwe lengtes in **Cut length mm** en niemand heeft ze getypt: de lijst wordt elke keer uit de plaat berekend.
+"""
+point = { ui = "outline.pages" }
+expect = { page = "Wire list" }
+solve = [ { command = "view.schematic" }, { page = "Wire list" } ]
+
+[[step]]
+id = "export-cut"
+how = ["Click Route all in the Cabinet header.", "Click Export wire cut in the Routes panel.", "A message shows the file name."]
+how_nl = ["Klik op Route all in de kop van de Cabinet.", "Klik op Export wire cut in het paneel Routes.", "Een melding toont de bestandsnaam."]
+title = "Export the wire cut file"
+title_nl = "Exporteer het draadzaagbestand"
+text = """
+Back in the Cabinet, click **Route all** and then **Export wire cut** in the Routes panel.
+KoperCAD writes a CSV next to the project, one row per wire with cut length, cross-section, colour, strip lengths, ferrules and labels, separated by semicolons so Excel opens it directly.
+A message shows the file name. **Workbook** in the same panel writes an Excel file that also lists wire stock, ferrules to order and duct fill.
+"""
+text_nl = """
+Klik in de Cabinet-weergave op **Route all** en dan op **Export wire cut** in het paneel Routes.
+KoperCAD schrijft een CSV naast het project, één rij per draad met afkortlengte, doorsnede, kleur, striplengtes, adereindhulzen en labels, gescheiden door puntkomma's zodat Excel het direct opent.
+Een melding toont de bestandsnaam. **Workbook** in hetzelfde paneel schrijft een Excel-bestand dat ook draadvoorraad, te bestellen adereindhulzen en kanaalvulling bevat.
+"""
+point = { ui = "cabinet.routes_panel" }
+expect = { signal = "wire_cut_exported" }
+
+[[step]]
+id = "done"
+title = "Lengths that follow the layout"
+title_nl = "Lengtes die de indeling volgen"
+text = """
+You read where each cut length comes from, moved a device and saw the numbers follow, and wrote the file the wire cutter works from.
+Next: the drawing the workshop drills the plate from.
+"""
+text_nl = """
+Je las waar elke afkortlengte vandaan komt, verplaatste een component en zag de getallen meebewegen en schreef het bestand waar de draadknipper mee werkt.
+Straks: de tekening waarmee de werkplaats de plaat boort.
+"""

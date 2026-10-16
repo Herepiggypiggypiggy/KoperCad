@@ -2,15 +2,18 @@
 //! `novo-routing` where both ends are placed on one mounting plate,
 //! estimated otherwise.
 
-use novo_core::{PinRef, Project};
+use novo_core::{PinRef, Project, StructureId};
 use novo_routing::model::route_connections;
-use novo_routing::{Kind, Rules};
+use novo_routing::{Kind, WireRules};
 
 /// How a cut length was found.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Basis {
     /// Through the ducts of the mounting plate both devices are placed on.
     Routed,
+    /// Routed, but a device has no depth: the wire is measured from the plate,
+    /// so it is too short by the rise to the terminals.
+    RoutedFlat,
     /// Both devices are placed on one plate but no duct reaches both: a
     /// straight Manhattan line, which the routing engine flags as a problem.
     FreeAir,
@@ -22,31 +25,20 @@ impl Basis {
     pub(crate) fn text(self) -> &'static str {
         match self {
             Basis::Routed => "routed",
+            Basis::RoutedFlat => "routed, no depth",
             Basis::FreeAir => "free air",
             Basis::Estimate => "estimate",
         }
     }
 }
 
-/// Service loop per end, the same as the routing engine's default.
-fn slack_mm() -> f64 {
-    Rules::default().slack_mm
-}
-
-/// Shortest estimated wire between two pins, before the slack.
-pub(crate) const ESTIMATE_MIN_MM: f64 = 100.0;
-
-/// Wire between pins with no usable schematic distance (different pages),
-/// before the slack.
-pub(crate) const ESTIMATE_ACROSS_PAGES_MM: f64 = 500.0;
-
 /// The estimate for a wire whose route is unknown: the Manhattan distance
 /// between its two pins on the schematic page in millimetres (at least
-/// [`ESTIMATE_MIN_MM`]), or [`ESTIMATE_ACROSS_PAGES_MM`] when the pins are
+/// `wire.estimate_min_mm`), or `wire.estimate_across_pages_mm` when the pins are
 /// on different pages, plus the service loop at each end. The drawing is not
 /// to cabinet scale, so this is a planning figure only, and the report
 /// labels it "estimate".
-fn estimate(project: &Project, from: PinRef, to: PinRef) -> f64 {
+fn estimate(project: &Project, rules: &WireRules, from: PinRef, to: PinRef) -> f64 {
     let same_page = project
         .symbol(from.symbol)
         .zip(project.symbol(to.symbol))
@@ -56,18 +48,12 @@ fn estimate(project: &Project, from: PinRef, to: PinRef) -> f64 {
         project.endpoint_position(from.into()),
         project.endpoint_position(to.into()),
     ) {
-        (true, Some(a), Some(b)) => ((a.x - b.x).abs() + (a.y - b.y).abs()).max(ESTIMATE_MIN_MM),
-        _ => ESTIMATE_ACROSS_PAGES_MM,
+        (true, Some(a), Some(b)) => {
+            ((a.x - b.x).abs() + (a.y - b.y).abs()).max(rules.estimate_min_mm)
+        }
+        _ => rules.estimate_across_pages_mm,
     };
-    base + 2.0 * slack_mm()
-}
-
-/// Outer diameter of a wire of the given cross-section: the copper circle
-/// plus about 0.7 mm of insulation each side. Only steers duct fill.
-fn diameter_mm(cross_section_mm2: Option<f64>) -> Option<f64> {
-    cross_section_mm2
-        .filter(|s| s.is_finite() && *s > 0.0)
-        .map(|s| 2.0 * (s / std::f64::consts::PI).sqrt() + 1.4)
+    base + 2.0 * rules.routing.slack_mm
 }
 
 /// One connection to measure: its two pins and the wire's cross-section.
@@ -78,10 +64,19 @@ pub(crate) struct Connection {
 }
 
 /// A measured connection.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CutLength {
     pub mm: f64,
     pub basis: Basis,
+    /// The ducts the wire lies in, in order (empty when not ducted).
+    pub ducts: Vec<u64>,
+}
+
+/// The lengths of a set of connections and the plans they were routed in.
+pub(crate) struct Measurement {
+    pub lengths: Vec<CutLength>,
+    /// Per enclosure the duct fill after routing all of its wires.
+    pub plans: Vec<(StructureId, novo_routing::Plan)>,
 }
 
 /// The cut length of every connection, in the given order. Connections
@@ -90,6 +85,11 @@ pub(crate) struct CutLength {
 /// [`estimate`]. A length is rounded up to a whole millimetre and is never
 /// zero.
 pub(crate) fn cut_lengths(project: &Project, connections: &[Connection]) -> Vec<CutLength> {
+    measure(project, connections).lengths
+}
+
+/// [`cut_lengths`] with the duct fill of each plate the wires were routed on.
+pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurement {
     let jobs: Vec<novo_routing::model::Connection> = connections
         .iter()
         .enumerate()
@@ -97,11 +97,12 @@ pub(crate) fn cut_lengths(project: &Project, connections: &[Connection]) -> Vec<
             id: i as u64,
             from: c.from,
             to: c.to,
-            diameter_mm: diameter_mm(c.cross_section_mm2),
+            diameter_mm: novo_routing::model::wire_diameter_mm(c.cross_section_mm2),
         })
         .collect();
-    let routed = route_connections(project, &jobs, &Rules::default());
-    connections
+    let rules = WireRules::of(project);
+    let routed = route_connections(project, &jobs, &rules.routing);
+    let lengths = connections
         .iter()
         .enumerate()
         .map(|(i, c)| {
@@ -109,13 +110,18 @@ pub(crate) fn cut_lengths(project: &Project, connections: &[Connection]) -> Vec<
                 Some(route) => CutLength {
                     mm: route.length_mm,
                     basis: match route.kind {
+                        Kind::Ducted if routed.unknown_height.contains(&(i as u64)) => {
+                            Basis::RoutedFlat
+                        }
                         Kind::Ducted => Basis::Routed,
                         Kind::FreeAir => Basis::FreeAir,
                     },
+                    ducts: route.ducts.clone(),
                 },
                 None => CutLength {
-                    mm: estimate(project, c.from, c.to),
+                    mm: estimate(project, &rules, c.from, c.to),
                     basis: Basis::Estimate,
+                    ducts: Vec::new(),
                 },
             };
             CutLength {
@@ -123,5 +129,9 @@ pub(crate) fn cut_lengths(project: &Project, connections: &[Connection]) -> Vec<
                 ..found
             }
         })
-        .collect()
+        .collect();
+    Measurement {
+        lengths,
+        plans: routed.plans,
+    }
 }

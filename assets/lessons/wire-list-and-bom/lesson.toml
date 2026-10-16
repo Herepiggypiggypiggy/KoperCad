@@ -1,0 +1,248 @@
+# Lesson: the reports as lists (wire list, cable diagram, bill of materials)
+# and the spreadsheet export.
+# Sample project: the pump starter with the new lamp -P1 wired and still
+# without a part (project.json); builder and tests:
+# crates/novo-tests/tests/lessons/documents.rs. Reviewer notes: NOTES.md.
+#
+# GAPS in the app that this lesson meets (the lesson stays draft):
+#  - assign-part: no control assigns a part to a device (inspector.rs:527
+#    shows "Part" read-only; the Parts window only browses and imports).
+#  - export-bom: the command `export.bom` is in the command list but has no
+#    handler; the app answers "<label> is not in the app yet"
+#    (workbench.rs:553-556). Excel/CSV export exists only in the command line
+#    (`kopercad-cli export bom|wires|devices|reports`).
+
+format = 1
+id = "wire-list-and-bom"
+version = 1
+status = "early"
+title = "Wire List and Bill of Materials"
+title_nl = "Draadlijst en stuklijst"
+summary = "Find a wire and a cable in the lists, give a lamp a part, watch the bill of materials follow and export it."
+summary_nl = "Zoek een draad en een kabel in de lijsten, geef een lamp een onderdeel, zie de stuklijst meebewegen en exporteer hem."
+track = "outputs"
+order = 30
+level = "beginner"
+minutes = 9
+topics = ["reports", "parts", "export"]
+needs = ["generated-pages", "cables-and-shields"]
+next = ["pdf-export"]
+project = "project.json"
+page = "Control circuit"
+
+[[step]]
+id = "intro"
+title = "What you will have"
+title_nl = "Wat je straks hebt"
+text = """
+By the end you can find a wire and a cable in their lists, give a device a part and see it in the bill of materials, and you know what an export holds.
+"""
+text_nl = """
+Straks vind je een draad en een kabel in hun lijsten, geef je een apparaat een onderdeel en zie je het in de stuklijst, en weet je wat een export bevat.
+"""
+pause = true
+
+[[step]]
+id = "open-wire-list"
+title = "Open the wire list"
+title_nl = "Open de draadlijst"
+# verified: nav.next_page is PageDown (keymap.rs:385); from page 2 the order
+# is 10 Bill of materials, 20 Device list, 30 Wire list, so three presses;
+# rows of the outline: "30  Wire list" (backend.rs:729).
+text = "Press {key:nav.next_page} three times, or pick **30  Wire list** in the page list."
+text_nl = "Druk drie keer op {key:nav.next_page}, of kies **30  Wire list** in de paginalijst."
+point = { ui = ["outline.toggle", "outline.page.30"] }
+expect = { page = "Wire list" }
+solve = [ { page = "Wire list" } ]
+
+[[step]]
+id = "find-wire"
+title = "Find wire 4"
+title_nl = "Zoek draad 4"
+# verified: columns Wire no., From, To, Potential, Colour, mm2, Cable,
+# Location, Cut length mm, Length basis (novo-reports wires.rs:189-203). Wire
+# 4 is the fourth row (y=53 on the sheet): -X1:1 to -M1:U1, core BK of -W1.
+# The wire numbers of the sample project are set by documents.rs.
+text = """
+Wire **4** runs from **-X1:1** to **-M1:U1**, as core BK of cable **-W1**.
+Each row is one connection from pin to pin, with its colour and size.
+"""
+text_nl = """
+Draad **4** loopt van **-X1:1** naar **-M1:U1**, als ader BK van kabel **-W1**.
+Elke regel is één verbinding van pen naar pen, met kleur en doorsnede.
+"""
+point = { area = { page = "Wire list", x = 15, y = 53, w = 390, h = 6 } }
+note = [
+  { area = { page = "Wire list", x = 16.5, y = 27, w = 28, h = 8 }, text = "Wire number", text_nl = "Draadnummer" },
+  { area = { page = "Wire list", x = 269.5, y = 27, w = 49, h = 8 }, text = "Cable and core", text_nl = "Kabel en ader" },
+]
+pause = true
+
+[[step]]
+id = "open-cable-diagram"
+title = "Open the cable diagram"
+title_nl = "Open het kabelschema"
+# verified: from 30 the next pages are 40 Terminal diagram and 50 Cable
+# diagram; the page shows its first sheet, 50a Overview (show_page resets the
+# sheet to 0, app.rs:863-870).
+text = "Press {key:nav.next_page} twice: past the terminal diagram to the **Cable diagram**."
+text_nl = "Druk twee keer op {key:nav.next_page}: langs het klemmenschema naar het **Cable diagram**."
+expect = { page = "Cable diagram" }
+solve = [ { page = "Cable diagram" } ]
+
+[[step]]
+id = "read-cable-schedule"
+title = "Find cable -W1"
+title_nl = "Zoek kabel -W1"
+# verified: the first sheet (50a, section Overview) has one row per cable:
+# Cable, Type, Length (m), From, To, Used, Cores, Spare (novo-reports
+# diagrams.rs:142-153); sheet 50b has the cores of -W1.
+text = """
+This sheet is the cable schedule: one row per cable, with type, length, from and to.
+**-W1** uses 4 of its 4 cores. The next sheet, **50b**, lists every core.
+"""
+text_nl = """
+Dit blad is het kabeloverzicht: één regel per kabel, met type, lengte, van en naar.
+**-W1** gebruikt 4 van zijn 4 aders. Het volgende blad, **50b**, toont elke ader.
+"""
+point = { area = { page = "Cable diagram", x = 15, y = 35, w = 390, h = 6 } }
+note = [
+  { area = { page = "Cable diagram", x = 311.4, y = 27, w = 28.7, h = 8 }, text = "Cores in use", text_nl = "Gebruikte aders" },
+  { area = { page = "Cable diagram", x = 374.8, y = 27, w = 28.7, h = 8 }, text = "Spare cores", text_nl = "Reserve-aders" },
+]
+pause = true
+
+[[step]]
+id = "open-bom"
+title = "Open the bill of materials"
+title_nl = "Open de stuklijst"
+# verified: the report has two sections, so two sheets while a device lacks a
+# part: 10a (parts) and 10b (Devices without parts) (novo-reports bom.rs).
+text = "Pick **10a  Bill of materials** in the page list."
+text_nl = "Kies **10a  Bill of materials** in de paginalijst."
+point = { ui = ["outline.toggle", "outline.page.10a"] }
+expect = { page = "Bill of materials" }
+solve = [ { page = "Bill of materials" } ]
+
+[[step]]
+id = "read-parts"
+title = "One row per article"
+title_nl = "Eén regel per artikel"
+# verified: columns Pos., Qty, Manufacturer, Order number, Type, Description,
+# Length (m), Used by; rows sort by manufacturer then order number; each
+# terminal counts as one use of its terminal block (bom.rs:102-130).
+# Row 3044076 (Qty 3, y=41) is the second row.
+text = """
+Each row is one article with its **Qty**. The terminal block **3044076** is used three times: -X1:1, -X1:2 and -X1:3.
+The last column says where each one sits.
+"""
+text_nl = """
+Elke regel is één artikel met zijn **Qty**. Het klemmenblok **3044076** wordt drie keer gebruikt: -X1:1, -X1:2 en -X1:3.
+De laatste kolom zegt waar elk zit.
+"""
+point = { area = { page = "Bill of materials", x = 15, y = 41, w = 390, h = 6 } }
+note = [
+  { area = { page = "Bill of materials", x = 31.9, y = 27, w = 12.4, h = 8 }, text = "Quantity", text_nl = "Aantal" },
+  { area = { page = "Bill of materials", x = 310.4, y = 27, w = 93, h = 8 }, text = "Where it is used", text_nl = "Waar het gebruikt wordt" },
+]
+pause = true
+
+[[step]]
+id = "see-missing"
+title = "Devices without a part"
+title_nl = "Apparaten zonder onderdeel"
+# verified: while a device or cable has no part the report adds the section
+# "Devices without parts", which is its own sheet (10b). Only -P1 is listed;
+# -X1 counts as covered through its terminals. The Issues list shows the same
+# device as "has no part" (novo-checks MissingPart, an info).
+text = """
+Open sheet **10b**: the devices without a part. Only the new lamp **-P1** is there.
+"""
+text_nl = """
+Open blad **10b**: de apparaten zonder onderdeel. Alleen de nieuwe lamp **-P1** staat erop.
+"""
+point = { ui = ["outline.toggle", "outline.page.10b"] }
+pause = true
+
+[[step]]
+id = "assign-part"
+title = "Give the lamp a part"
+title_nl = "Geef de lamp een onderdeel"
+# GAP: no control assigns a part to a device. The inspector's Part section is
+# a read-only label (inspector.rs:527-532), the Devices drawer lists parts
+# read-only (drawers.rs:345), the Parts window (parts.browser) browses and
+# imports catalogue files only (parts.rs). The engine call is
+# novo_parts::assign_part (crates/novo-parts/src/assign.rs:85), also used by
+# the Python/CLI layer. Owner: the parts-browser / inspector thread.
+# GAP: needs solve op `assign_part = { device, manufacturer, order_number }`.
+text = """
+Select the lamp **-P1** and give it the part **Siemens 3SU1106-6AA40-1AA0**.
+"""
+text_nl = """
+Selecteer de lamp **-P1** en geef hem het onderdeel **Siemens 3SU1106-6AA40-1AA0**.
+"""
+point = { at = { device = "-P1" } }
+expect = { field = { device = "-P1", name = "part", is_set = true } }
+solve = [ { assign_part = { device = "-P1", manufacturer = "Siemens", order_number = "3SU1106-6AA40-1AA0" } } ]
+
+[[step]]
+id = "bom-follows"
+title = "The bill of materials followed"
+title_nl = "De stuklijst is meegegaan"
+# verified: the report reads devices, terminals, cables and parts
+# (bom.rs dependencies) and is regenerated on the next change set. With no
+# device left without a part the second section disappears, so the report is
+# one sheet again, named 10. The lamp row is the tenth row (y=89).
+text = """
+Open **10  Bill of materials** again: the lamp is a row with **Qty** 1, and sheet 10b is gone.
+"""
+text_nl = """
+Open **10  Bill of materials** opnieuw: de lamp is een regel met **Qty** 1 en blad 10b is verdwenen.
+"""
+point = { ui = ["outline.toggle", "outline.page.10"] }
+expect = { page = "Bill of materials" }
+solve = [ { page = "Bill of materials" } ]
+
+[[step]]
+id = "export-bom"
+title = "Export it"
+title_nl = "Exporteer hem"
+# GAP: `export.bom` ("Export bill of materials", verbs "export bom" / "bom",
+# commands.rs:722-731) is not handled by the app: run_command falls to
+# "Export bill of materials is not in the app yet" (workbench.rs:553-556),
+# and it is not in APP_COMMANDS. The engine is ready: novo_reports::
+# save_xlsx / to_csv (export.rs) and the command line
+# `kopercad-cli export bom <file> -o bom.xlsx|bom.csv` (novo-cli lib.rs:213).
+# Owner: the outputs thread (WS-13) with the app shell. The command-field
+# shortcut is Ctrl+K, as export.bom has no key of its own.
+text = """
+Press {key:view.command_palette}, type **export bom** and press Enter.
+"""
+text_nl = """
+Druk op {key:view.command_palette}, typ **export bom** en druk op Enter.
+"""
+point = { ui = "palette.field" }
+expect = { command = "export.bom" }
+solve = [ { command = "export.bom" } ]
+
+[[step]]
+id = "export-columns"
+title = "What is in the file"
+title_nl = "Wat er in het bestand staat"
+# verified: columns Pos., Qty, Manufacturer, Order number, Type, Description,
+# Length (m), Used by, then a second table Tag, Description, Kind when parts
+# are missing (bom.rs:102-115, 137-143). Excel files hold one sheet per report
+# with the header row bold and frozen, numbers as numbers (export.rs:70-120).
+# CSV: comma by default, ";" for Dutch Excel (--delimiter), UTF-8 byte order
+# mark, tags start with an apostrophe so Excel does not read "-K1" as a
+# formula (export.rs CsvOptions). All of it also applies to wires, devices
+# and the contents.
+text = """
+Columns: Pos., Qty, Manufacturer, Order number, Type, Description, Length (m), Used by. Excel gets numbers as numbers.
+The wire list, device list and contents export the same way.
+"""
+text_nl = """
+Kolommen: Pos., Qty, Manufacturer, Order number, Type, Description, Length (m), Used by. Excel krijgt getallen als getallen.
+De draadlijst, apparatenlijst en inhoudsopgave exporteren op dezelfde manier.
+"""
+pause = true

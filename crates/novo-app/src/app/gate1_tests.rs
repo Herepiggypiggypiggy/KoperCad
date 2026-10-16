@@ -37,7 +37,7 @@ impl Drive {
         drive
     }
 
-    fn frame_with(&mut self, events: Vec<egui::Event>) {
+    pub(super) fn frame_with(&mut self, events: Vec<egui::Event>) {
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
@@ -55,7 +55,7 @@ impl Drive {
         self.frame_with(Vec::new());
     }
 
-    fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers) {
+    pub(super) fn key(&mut self, key: egui::Key, modifiers: egui::Modifiers) {
         self.frame_with(vec![egui::Event::Key {
             key,
             physical_key: None,
@@ -104,7 +104,7 @@ impl Drive {
         placed
     }
 
-    fn click(&mut self, at: Point) {
+    pub(super) fn click(&mut self, at: Point) {
         let page = self.page();
         let app = &mut self.app;
         let view = app.canvas.schematic().expect("the editor canvas");
@@ -415,13 +415,15 @@ fn gate1_motor_starter_through_the_window() {
     let file = dir.path().join("Starter.novo");
     assert!(d.app.save_to(&file));
     d.frame();
-    // PDF export: two pages, written where asked.
+    // PDF export: two pages, written where asked, then the design checks
+    // report while problems remain.
     let pdf = dir.path().join("Starter.pdf");
     assert_eq!(d.app.export_pdf_to(&pdf), Some(pdf.clone()));
     let bytes = std::fs::read(&pdf).unwrap();
     assert!(bytes.starts_with(b"%PDF"));
     let pages = lopdf::Document::load_mem(&bytes).unwrap().get_pages().len();
-    assert_eq!(pages, 2, "one PDF page per project page");
+    let report = usize::from(novo_checks::report_lines(d.doc().project()).len() > 2);
+    assert_eq!(pages, 2 + report, "one PDF page per project page");
     // DXF export: every page into a folder beside the project, drawn with
     // geometry (the symbols are in it), reproducible on a second export.
     let files = d
@@ -462,6 +464,20 @@ fn gate1_motor_starter_through_the_window() {
     d.frame();
     assert_eq!(underlay_items(&d), Some(0), "hidden");
     d.app.toggle_background();
+    // Move and scale: one undo step for the whole edit.
+    {
+        use super::background_panel::Placement;
+        let from = Placement::of(d.app.page_properties().unwrap());
+        let to = Placement {
+            dx: 40.0,
+            dy: 25.0,
+            percent: 50.0,
+        };
+        d.app.apply_placement(from, to);
+        assert_eq!(Placement::of(d.app.page_properties().unwrap()), to);
+        d.app.run(&d.ctx.clone(), Action::Undo);
+        assert_eq!(Placement::of(d.app.page_properties().unwrap()), from);
+    }
     d.app.remove_background();
     d.frame();
     assert_eq!(underlay_items(&d), Some(0));
@@ -1727,6 +1743,100 @@ fn a_held_place_key_with_repeats_opens_only_the_wheel() {
     );
 }
 
+/// The place key as Windows can deliver it: a held key's repeats arriving as
+/// fresh presses (repeat flag false), a stray release between them, and slow
+/// frames. A tap must open only the part search, a hold only the wheel.
+#[test]
+fn q_tap_opens_only_the_search_and_q_hold_only_the_wheel_under_odd_repeats() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let q = egui::Key::Q;
+    let both = |d: &Drive| d.app.wb.wheel.is_some() && d.app.wb.field.is_open();
+    frame_at(
+        &mut d,
+        10.0,
+        vec![egui::Event::PointerMoved(egui::pos2(800.0, 450.0))],
+    );
+
+    // Tap on a slow frame: press and release land in one frame.
+    frame_at(&mut d, 11.0, vec![key_event(q, true), key_event(q, false)]);
+    frame_at(&mut d, 11.6, vec![]);
+    assert!(d.app.wb.field.is_open() && d.app.wb.wheel.is_none());
+    d.app.wb.field.close();
+
+    // Hold with every repeat delivered as a fresh press, a stray release and
+    // press pair after the wheel is up, and a slow frame in between.
+    frame_at(&mut d, 20.0, vec![key_event(q, true)]);
+    frame_at(&mut d, 20.5, vec![key_event(q, true)]);
+    assert!(d.app.wb.wheel.is_some(), "held past 250 ms");
+    assert!(!d.app.wb.field.is_open());
+    assert!(
+        d.app.wb.place_hold.is_none(),
+        "a press in the frame that opens the wheel does not arm a second decision"
+    );
+    frame_at(&mut d, 20.55, vec![key_event(q, false), key_event(q, true)]);
+    frame_at(&mut d, 20.6, vec![key_event(q, true)]);
+    frame_at(&mut d, 20.65, vec![key_event(q, true)]);
+    assert!(!both(&d) && d.app.wb.wheel.is_some());
+    frame_at(&mut d, 21.0, vec![key_event(q, false)]);
+    assert!(
+        !d.app.wb.field.is_open(),
+        "the part search does not open under the wheel"
+    );
+    assert!(d.app.wb.place_hold.is_none());
+
+    // Fresh-press repeats while the hold is still undecided do not restart
+    // it or turn it into a tap.
+    d.app.wb.wheel = None;
+    frame_at(&mut d, 21.1, vec![key_event(egui::Key::Escape, true)]);
+    frame_at(&mut d, 21.2, vec![]);
+    frame_at(&mut d, 21.4, vec![]);
+    frame_at(&mut d, 22.0, vec![key_event(q, true)]);
+    frame_at(&mut d, 22.1, vec![key_event(q, true)]);
+    frame_at(&mut d, 22.2, vec![key_event(q, true)]);
+    frame_at(&mut d, 22.3, vec![]);
+    assert!(d.app.wb.wheel.is_some(), "not delayed by repeats");
+    frame_at(&mut d, 22.4, vec![key_event(q, false)]);
+    assert!(!d.app.wb.field.is_open());
+
+    // The key works again afterwards.
+    d.app.wb.wheel = None;
+    frame_at(&mut d, 22.7, vec![key_event(egui::Key::Escape, true)]);
+    frame_at(&mut d, 22.8, vec![]);
+    frame_at(&mut d, 23.0, vec![]);
+    frame_at(&mut d, 30.0, vec![key_event(q, true)]);
+    frame_at(&mut d, 30.1, vec![key_event(q, false)]);
+    assert!(d.app.wb.field.is_open() && d.app.wb.wheel.is_none());
+}
+
+#[test]
+fn a_q_tap_while_the_wheel_is_still_up_replaces_it_with_the_search() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let q = egui::Key::Q;
+    frame_at(
+        &mut d,
+        10.0,
+        vec![egui::Event::PointerMoved(egui::pos2(800.0, 450.0))],
+    );
+    frame_at(&mut d, 11.0, vec![key_event(q, true)]);
+    frame_at(&mut d, 11.5, vec![]);
+    frame_at(&mut d, 11.6, vec![key_event(q, false)]);
+    frame_at(&mut d, 11.8, vec![]);
+    assert!(d.app.wb.wheel.is_some(), "the wheel stays up after a hold");
+    frame_at(&mut d, 12.0, vec![key_event(q, true)]);
+    frame_at(&mut d, 12.05, vec![key_event(q, false)]);
+    frame_at(&mut d, 12.1, vec![]);
+    assert!(d.app.wb.field.is_open(), "a tap opens the search");
+    assert!(d.app.wb.wheel.is_none(), "and the wheel is gone");
+}
+
 #[test]
 fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
     use novo_canvas::model::LabelKind;
@@ -1964,6 +2074,7 @@ fn the_title_block_prints_the_set_revision_after_an_issue() {
             date: "2026-10-15".into(),
             author: "TV".into(),
             description: String::new(),
+            note: String::new(),
         })
         .unwrap();
     d.app.changed_outside_canvas(&outcome.changes);
@@ -2708,4 +2819,111 @@ fn the_editor_catalog_follows_the_project_standard_and_the_wheel_hides_missing_t
         .favourites()
         .to_vec();
     assert_eq!(back, order, "the reordered row comes back");
+}
+
+#[test]
+fn plc_tags_leave_as_files_and_the_programmers_edits_come_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let last = |d: &Drive| d.app.messages().last().map(|m| m.text.clone()).unwrap();
+
+    // A project with no card says what to do instead of writing an empty file.
+    d.app
+        .export_plc_to(novo_plc::link::LinkFormat::Csv, dir.path(), "Plant");
+    assert!(last(&d).contains("no PLC cards"), "{}", last(&d));
+
+    d.app.run_command(&ctx, "plc.add_card", Some("DI4 DQ4"));
+    let sensor = d.place("pbnc", 40.0, 40.0);
+    d.select(sensor);
+    d.app.run_command(&ctx, "plc.to_plc", None);
+    let written = d
+        .app
+        .export_plc_to(novo_plc::link::LinkFormat::PlcOpen, dir.path(), "Plant");
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].file_name().unwrap(), "Plant PLC.xml");
+    let xml = std::fs::read_to_string(&written[0]).unwrap();
+    assert!(xml.contains("address=\"%IX0.0\""), "{xml}");
+
+    // The programmer rewords the comment and renames the tag; the preview
+    // lists it, Esc leaves the project alone, Enter applies one undo step.
+    let csv = d
+        .app
+        .export_plc_to(novo_plc::link::LinkFormat::Csv, dir.path(), "Plant");
+    let text = std::fs::read_to_string(&csv[0]).unwrap();
+    let row = text.lines().nth(1).unwrap().to_owned();
+    let mut fields: Vec<String> = row.split(';').map(str::to_owned).collect();
+    fields[6] = "ESTOP_OK".into();
+    fields[8] = "Emergency stop healthy".into();
+    let edited = dir.path().join("edited.csv");
+    std::fs::write(&edited, text.replace(&row, &fields.join(";"))).unwrap();
+    assert!(d.app.plc_import_tags_from(&edited));
+    let plan = &d.app.wb.plc_import.as_ref().unwrap().1;
+    assert_eq!(plan.updates.len(), 1, "{plan:?}");
+    d.frame();
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(d.app.wb.plc_import.is_none());
+    let depth = d.doc().undo_depth();
+    assert!(d.app.plc_import_tags_from(&edited));
+    d.frame();
+    d.key(egui::Key::Enter, egui::Modifiers::NONE);
+    assert!(
+        last(&d).starts_with("Imported PLC tags: 1 channel"),
+        "{}",
+        last(&d)
+    );
+    assert_eq!(d.doc().undo_depth(), depth + 1);
+    let again = d
+        .app
+        .export_plc_to(novo_plc::link::LinkFormat::Csv, dir.path(), "Plant");
+    assert!(
+        std::fs::read_to_string(&again[0])
+            .unwrap()
+            .contains("ESTOP_OK;BOOL;Emergency stop healthy")
+    );
+}
+
+#[test]
+fn switching_placed_symbols_follows_the_plan_in_one_undo_step() {
+    use novo_core::{Pin, Point, SymbolRole};
+    use novo_symbols::Pack;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let page = d.page();
+    let (coil, _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("setup", |tx| {
+            tx.place_symbol(
+                page,
+                "iec/contacts/no",
+                novo_core::Placement::at(Point::new(40.0, 50.0)),
+                vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 8.0)],
+                SymbolRole::Unassigned,
+            )
+        })
+        .unwrap();
+    let key = |d: &Drive| d.doc().project().symbol(coil).unwrap().symbol.0.clone();
+
+    // Choosing NFPA alone leaves placed symbols as drawn; the plan lists them.
+    d.app.set_standard(Pack::Nfpa);
+    d.frame();
+    assert_eq!(key(&d), "iec/contacts/no");
+    let plan = novo_workflow::switch::plan(d.doc().project(), Pack::Nfpa);
+    assert_eq!(plan.rekey.len(), 1);
+
+    d.app.switch_placed_symbols();
+    d.frame();
+    assert_eq!(key(&d), "nfpa/contacts/no");
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(key(&d), "iec/contacts/no");
+    assert_eq!(d.app.standard(), Pack::Nfpa, "undo takes the keys only");
 }

@@ -5,13 +5,18 @@
 //! resolved when the command is built, with one counter, in the order the
 //! commands run.
 
+use std::collections::BTreeMap;
+
 use novo_core::{
-    Command, Device, DeviceId, DeviceKind, DeviceTag, Part, PartId, Project, Record, Value,
+    Cable, CableId, Command, Device, DeviceId, DeviceKind, DeviceTag, Part, PartId, Project,
+    Record, Terminal, TerminalId, Value,
 };
 use novo_parts::{Catalog, CatalogPart, normalize_code};
 
 use super::fields::{Field, Slot, parse};
 use super::grid::Cell;
+use super::new_rows::{NewCable, NewCore, NewTerminal, StripRef};
+use super::plan::ApplyError;
 
 /// A part named in the sheet: its order number, the manufacturer when the
 /// row gives one, and the catalog entry that matches, if any.
@@ -19,7 +24,7 @@ use super::grid::Cell;
 pub(crate) struct PartRef {
     pub order_number: String,
     pub manufacturer: String,
-    pub catalog: Option<CatalogPart>,
+    pub catalog: Option<Box<CatalogPart>>,
 }
 
 impl PartRef {
@@ -32,7 +37,7 @@ impl PartRef {
         PartRef {
             order_number: order_number.to_owned(),
             manufacturer: manufacturer.to_owned(),
-            catalog: found.cloned(),
+            catalog: found.cloned().map(Box::new),
         }
     }
 }
@@ -145,6 +150,10 @@ pub(crate) struct Ids<'a> {
     project: &'a Project,
     next: u64,
     added: Vec<(PartRef, PartId)>,
+    /// The devices this import adds, by tag.
+    devices: Vec<(DeviceTag, DeviceId)>,
+    /// The next terminal order per strip: after the last one there.
+    next_order: BTreeMap<DeviceId, i64>,
     pub inserts: Vec<Command>,
 }
 
@@ -154,6 +163,8 @@ impl<'a> Ids<'a> {
             project,
             next: project.next_id(),
             added: Vec::new(),
+            devices: Vec::new(),
+            next_order: BTreeMap::new(),
             inserts: Vec::new(),
         }
     }
@@ -202,9 +213,11 @@ impl<'a> Ids<'a> {
         for (k, v) in &new.properties {
             properties.insert(k.clone(), v.clone());
         }
+        let id = self.device();
+        self.devices.push((new.tag.clone(), id));
         Command::Insert {
             record: Record::Device(Device {
-                id: self.device(),
+                id,
                 tag: new.tag.clone(),
                 description: new.description.clone(),
                 kind: new.kind,
@@ -212,5 +225,78 @@ impl<'a> Ids<'a> {
                 properties,
             }),
         }
+    }
+}
+
+impl Ids<'_> {
+    /// The command that adds `new` with its `cores` (in core order).
+    pub(crate) fn insert_cable(&mut self, new: &NewCable, cores: &[&NewCore]) -> Command {
+        let id = CableId::from(self.next);
+        self.next += 1;
+        let mut properties = novo_core::Properties::default();
+        for (k, v) in &new.properties {
+            properties.insert(k.clone(), v.clone());
+        }
+        let mut cable = Cable {
+            id,
+            tag: new.tag.clone(),
+            description: new.description.clone(),
+            part: None,
+            cores: Vec::new(),
+            length_m: new.length_m,
+            properties,
+        };
+        for core in cores {
+            super::new_rows::add_core(&mut cable, core);
+        }
+        Command::Insert {
+            record: Record::Cable(cable),
+        }
+    }
+
+    /// The command that adds `new`. A terminal without an order goes after
+    /// the last one of its strip.
+    pub(crate) fn insert_terminal(&mut self, new: &NewTerminal) -> Result<Command, ApplyError> {
+        let strip = match &new.strip {
+            StripRef::Existing(id) => *id,
+            StripRef::New(tag) => self
+                .devices
+                .iter()
+                .find(|(t, _)| t == tag)
+                .map(|(_, id)| *id)
+                .ok_or(ApplyError::Outdated)?,
+        };
+        let project = self.project;
+        let next = self.next_order.entry(strip).or_insert_with(|| {
+            project
+                .terminals_of_strip(strip)
+                .iter()
+                .map(|t| t.order + 1)
+                .max()
+                .unwrap_or(0)
+        });
+        let order = new.order.unwrap_or(*next);
+        *next = (*next).max(order + 1);
+        let id = TerminalId::from(self.next);
+        self.next += 1;
+        let mut properties = novo_core::Properties::default();
+        for (k, v) in &new.properties {
+            properties.insert(k.clone(), v.clone());
+        }
+        Ok(Command::Insert {
+            record: Record::Terminal(Terminal {
+                id,
+                strip,
+                name: new.name.clone(),
+                kind: new.kind,
+                level: new.level,
+                order,
+                jumper: new.jumper,
+                part: None,
+                feed: None,
+                pe_override: Default::default(),
+                properties,
+            }),
+        })
     }
 }

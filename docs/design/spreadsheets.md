@@ -18,13 +18,34 @@ item or fail), no cryptic "import failed" without row and cause.
 ## Tables and columns
 
 One sheet (or CSV) per kind: **Devices**, **Terminals**, **Wires**,
-**Cables**. Column `Id` comes first and is the key. Greyed columns (Id,
+**Cables**, **Cores**. Column `Id` comes first and is the key. Greyed columns (Id,
 Kind, Manufacturer, Order number, Strip, Page, From, To, Cable core,
 Cores) are for orientation and ignored on import. Editable: device and
 cable Tag and Description, cable Length, terminal Name, Level, Order and
 Jumper, wire Number, Color and Cross-section, and every
 `properties.<key>` column. A `properties.<key>` column no row has yet
 adds that property. Internal property namespaces are not exported.
+
+### Jumpers
+
+Terminals of one strip with the same `Jumper` number are bridged. The
+greyed `Bridged with` column lists the others of the group, so a group is
+readable in the sheet. A group number only one terminal of a strip would
+carry after the import gets a warning (it bridges nothing).
+
+### Cores
+
+One row per cable core. `Id` is the cable's id (repeated on each of its
+rows) and `Core No` the core's 1-based position: together the key. Greyed:
+Id, Cable, Core No, Wire number. Editable: `Core` (name), `Cross-section
+[mm²]`, `Shield` and `Spare` (yes/no; a spare mark follows a renamed
+core) and `Wire Id` (empty frees the core; two rows can swap their wires).
+A wire that sits on a core of another cable, or does not exist, rejects
+the row. The import never adds or deletes cores. If the cores of a cable
+were reordered after the export, a row that edits something is refused
+(positions no longer mean the same core); export again. Warnings: two
+cores of a cable that would share a name, or be given the same wire. Edit
+the wire's number on the Wires sheet.
 
 ## Matching
 
@@ -75,8 +96,37 @@ spaces and dashes, so retyping one changes nothing. A device with several
 parts is not edited this way. An empty cell removes the part. New parts,
 new devices and edits are one batch: one undo step.
 
+## New terminals, cables and cores (FU-SHEET)
+
+Like new devices, these are rows added to an export (the sheet has an
+`Id` column) and need no Id. Each is its own entry in the preview
+(`ImportPlan::new_terminals`, `new_cables`, `new_cores`, and all of them
+as one list in `added_rows()` / `select_added()`), selected by default.
+They run in the same single undo step as the edits.
+
+- **Terminal**: a Terminals row without Id whose `Strip` and `Name` no
+  terminal has. The strip is a terminal strip of the project or a strip
+  device the same sheet adds (leave that device out and its terminals go
+  with it). `Level` (default 1), `Order` (default: after the last terminal
+  of the strip), `Jumper`, `Kind` (feedthrough, PE, neutral, fuse,
+  disconnect) and property columns are read. A second row for the same
+  strip, name and level is refused.
+- **Cable**: a Cables row without Id whose tag no cable has. Description,
+  length and properties are read.
+- **Core**: a Cores row beyond the end of a cable: `Core No` one past the
+  last core (cable by Id), or an empty `Core No` with the cable's tag in
+  `Cable` (appended). Rows are numbered together, in order, with no gaps;
+  a core the cable already has needs the Id to be edited. The cores of a
+  new cable are rows with its tag. `Core` (name, required, not already on
+  the cable), `Cross-section`, `Shield`, `Spare` (the mark is kept by core
+  name, so it also follows a rename made in the same import) and `Wire Id`
+  (a free wire only). Wire numbers stay on the Wires sheet.
+
+Rejected rows say why (unknown strip, not a terminal strip, tag in use,
+gap in the core numbers, name or wire already taken, ...) and come back in
+`rejected_workbook` to fix and import again.
+
 ## Later
 
-Cable cores sheet, terminal Kind, rejected rows
-written back as a fix-and-reimport workbook, `kopercad-cli` and Python
-entry points, app dialog (open file, preview table, conflict choice).
+Removals, `kopercad-cli` and Python entry points; the app dialog lists new
+terminals, cables and cores through `added_rows()` (dialog thread).
