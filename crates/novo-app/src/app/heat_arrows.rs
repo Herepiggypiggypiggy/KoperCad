@@ -16,17 +16,11 @@ const QUIET: f32 = 0.02;
 /// Shortest arrow, as a share of the grid spacing.
 const MIN_LEN: f64 = 0.3;
 
-/// Arrows at plane `at` (0 to 1 along `axis`), in the scene frame. Cells
-/// inside solids get none.
-pub(crate) fn arrows(snap: &CfdSnapshot, place: Place, axis: Axis, at: f32) -> OverlayLines {
-    let mut out = OverlayLines {
-        width_px: 1.6,
-        order: 3,
-        ..Default::default()
-    };
-    if !snap.is_consistent() {
-        return out;
-    }
+type Sample = ([f64; 3], [f32; 3], f32);
+
+/// The air on the plane at a coarse grid: the samples, the grid spacing in
+/// mm and the fastest speed found, m/s.
+fn sample(snap: &CfdSnapshot, axis: Axis, at: f32) -> (Vec<Sample>, f64, f32) {
     let edges = match axis {
         Axis::X => &snap.grid.x_edges_mm,
         Axis::Y => &snap.grid.y_edges_mm,
@@ -42,7 +36,6 @@ pub(crate) fn arrows(snap: &CfdSnapshot, place: Place, axis: Axis, at: f32) -> O
         Axis::X => [offset, v, u],
         Axis::Y => [u, offset, v],
     };
-    // Gather first so the fastest arrow sets the scale.
     let mut samples = Vec::new();
     for r in 0..nv {
         for c in 0..nu {
@@ -59,6 +52,29 @@ pub(crate) fn arrows(snap: &CfdSnapshot, place: Place, axis: Axis, at: f32) -> O
         }
     }
     let top = samples.iter().map(|s| s.2).fold(0.0f32, f32::max);
+    (samples, step, top)
+}
+
+/// The fastest air on the plane, m/s: what the longest arrow stands for.
+pub(crate) fn top_speed(snap: &CfdSnapshot, axis: Axis, at: f32) -> f32 {
+    if !snap.is_consistent() {
+        return 0.0;
+    }
+    sample(snap, axis, at).2
+}
+
+/// Arrows at plane `at` (0 to 1 along `axis`), in the scene frame. Cells
+/// inside solids get none; air slower than 2 % of the fastest gets none.
+pub(crate) fn arrows(snap: &CfdSnapshot, place: Place, axis: Axis, at: f32) -> OverlayLines {
+    let mut out = OverlayLines {
+        width_px: 1.6,
+        order: 3,
+        ..Default::default()
+    };
+    if !snap.is_consistent() {
+        return out;
+    }
+    let (samples, step, top) = sample(snap, axis, at);
     if top <= 0.0 {
         return out;
     }
@@ -174,6 +190,15 @@ mod tests {
             .map(|c| (o.positions[c[0] as usize + 1] - o.positions[c[0] as usize]).length())
             .collect();
         assert!(lens.iter().all(|l| (l - lens[0]).abs() < 1e-3));
+    }
+
+    #[test]
+    fn the_top_speed_is_the_fastest_air_on_the_plane() {
+        let snap = snapshot();
+        assert!((top_speed(&snap, Axis::Z, 0.8) - 1.0).abs() < 1e-6);
+        let mut slow = snapshot();
+        slow.velocity.iter_mut().for_each(|v| *v = [0.0, 0.25, 0.0]);
+        assert!((top_speed(&slow, Axis::Z, 0.8) - 0.25).abs() < 1e-6);
     }
 
     #[test]
