@@ -63,4 +63,26 @@ No step needs admin rights. If one asks for it, stop and say so.
   does not return by itself; Ctrl+K, "Fast keys walk-through" brings it back. The card must not
   cover the tool dock.
 
+## 6. Cabinet table, DXF export, recovery
+
+- **Cabinet table (needs #403).** Open the cabinet view of a panel with a few devices. Click the
+  table button in the cabinet toolbar (tip "Devices as a table (Ctrl+T)"), or press Ctrl+T: a
+  table replaces the plate with the columns Device, Size (mm), X, Y, Turned, Rail, Problems.
+  Ctrl+T again returns to the plate. Move a device so it overlaps another: on the plate its mark
+  shows a hover text such as "Overlaps -Q2", and the same words appear in the table's Problems
+  column.
+- **Export DXF (needs #385).** Open a project with two or more pages and save it. File, Export
+  DXF, This page: a `.dxf` for the current page appears next to the project file and a message
+  says so. Export again: the old file is not overwritten silently, you get a numbered copy or a
+  note that it was replaced. File, Export DXF, All pages: a folder `<project> DXF` with one
+  `.dxf` per page. Open one in any DXF viewer: the symbols and wires are on the page. With
+  nothing open the menu is greyed out.
+- **DXF background (needs #385).** File, DXF background, Import DXF: pick a `.dxf`. It shows
+  grey under the drawing, cannot be selected or moved, and is saved with the project.
+- **Recovery after a crash.** Open a project, draw a wire (do not save), then end KoperCAD in
+  Task Manager (End task). Start KoperCAD again and open the same project: a dialog "Restore
+  unsaved work?" names the project and when it was autosaved. Escape and a click outside do
+  nothing; only Restore or Discard answer it. Restore brings the wire back; Discard leaves the
+  last saved version. After a normal close there is no dialog at the next start.
+
 Send the result to the thread you got the build from, or write it next to the build number.
