@@ -1202,6 +1202,36 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "cabinet.rules",
+            "Placement rules (Cabinet)",
+            "View",
+            &["place rules", "where devices go", "zones", "rail rule"],
+            Needs::Project,
+        ),
+        &["placement rules"],
+    ),
+    verb(
+        cmd(
+            "cabinet.plate",
+            "Plate setup (Cabinet)",
+            "View",
+            &["plate size", "mounting plate", "margin", "fill", "door"],
+            Needs::Project,
+        ),
+        &["plate setup"],
+    ),
+    verb(
+        cmd(
+            "cabinet.cutlist",
+            "Rail and duct cut list (Cabinet)",
+            "View",
+            &["cut list", "bars", "rail length", "duct length", "buy"],
+            Needs::Project,
+        ),
+        &["cut list"],
+    ),
+    verb(
+        cmd(
             "cabinet.rails",
             "Rails and ducts (Cabinet)",
             "View",

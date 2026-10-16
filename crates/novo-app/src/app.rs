@@ -10,6 +10,7 @@ mod cabinet;
 mod cabinet_bar;
 mod cabinet_door;
 mod cabinet_inspector;
+mod cabinet_menu;
 mod cabinet_panel;
 mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
