@@ -576,3 +576,24 @@ fn plate_export_before_the_cabinet_was_opened_says_what_to_do() {
     let last = d.app.messages().last().unwrap();
     assert!(last.text.contains("Open the Cabinet"), "{}", last.text);
 }
+
+#[test]
+fn the_3d_workspace_opens_once_the_cabinet_has_a_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    assert!(d.app.workspace_unavailable(Workspace::View3d).is_some());
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    assert!(d.app.workspace_unavailable(Workspace::View3d).is_none());
+    d.app.run_command(&ctx, "view.3d", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.built.is_some(), "the scene was built");
+}

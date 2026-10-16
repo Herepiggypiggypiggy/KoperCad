@@ -1905,6 +1905,7 @@ dependencies = [
  "novo-tests",
  "novo-theme",
  "novo-thermal",
+ "novo-view3d",
  "novo-workflow",
  "novo-xref",
  "rfd",
