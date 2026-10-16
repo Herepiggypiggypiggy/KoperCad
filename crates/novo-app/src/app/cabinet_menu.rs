@@ -54,6 +54,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
                 Some(("Rotate   R", "edit.rotate")),
                 Some(("Take off the plate   Del", "edit.delete")),
                 None,
+                Some(("Measure distance", "view.3d_measure")),
                 Some(("Show in Cabinet", "view.cabinet")),
             ],
             Target::Rail(_) => vec![
@@ -67,6 +68,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
                 Some(("Front", "view.front")),
                 Some(("Top", "view.top")),
                 None,
+                Some(("Measure distance", "view.3d_measure")),
                 Some(("Door open or closed", "view.3d_door")),
                 Some(("Enclosure on or off", "view.3d_shell")),
                 Some(("Wires on or off", "view.3d_wires")),

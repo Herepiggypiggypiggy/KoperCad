@@ -980,6 +980,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_measure",
+        "Measure distances in 3D",
+        "View",
+        &["measure", "distance", "ruler", "gap", "clearance"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_stats",
         "Show or hide the 3D frame statistics",
         "View",

@@ -71,6 +71,7 @@ pub(super) fn toolbar(
     ctx: &egui::Context,
     view: egui::Rect,
     controls: &mut Controls,
+    measure: &mut bool,
     limit: Option<f64>,
 ) -> Changed {
     let mut changed = Changed::default();
@@ -93,6 +94,13 @@ pub(super) fn toolbar(
                         "Drag a device, rail or duct to move it on the plate (grid and checks \
                          as in the Cabinet). R turns the selection, Delete takes it off. Off: \
                          a drag draws a selection box.",
+                    );
+                    toggle(
+                        ui,
+                        measure,
+                        "Measure",
+                        "Click two points to read the distance, and the gap between two \
+                         devices (View > 3D > Measure)",
                     );
                     toggle(
                         ui,

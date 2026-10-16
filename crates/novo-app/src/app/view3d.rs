@@ -24,6 +24,7 @@ use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
+use super::view3d_measure::{self, Measure};
 use super::view3d_move::{self, MoveState};
 use super::view3d_stats::{Build, Stats};
 
@@ -35,6 +36,9 @@ pub(crate) struct View3dMode {
     pub(super) view: View3d,
     /// Dragging, turning and deleting devices, rails and ducts in the view.
     pub(super) mv: MoveState,
+    /// The Measure tool and the points it holds.
+    pub(super) measure: Measure,
+    measure_shown: Vec<[i64; 3]>,
     /// The landing box drawn last frame, to redraw the overlays when it changes.
     ghost_shown: Vec<([i64; 4], bool)>,
     library: Arc<MeshLibrary>,
@@ -80,6 +84,8 @@ impl Default for View3dMode {
         View3dMode {
             view: View3d::new(VIEW_ID),
             mv: MoveState::default(),
+            measure: Measure::default(),
+            measure_shown: Vec::new(),
             ghost_shown: Vec::new(),
             library: Arc::new(MeshLibrary::new()),
             built: None,
@@ -233,10 +239,12 @@ impl NovoApp {
                 )
             })
             .collect();
-        let ghost_changed = mode.ghost_shown != ghost_key;
+        let measure_key = mode.measure.key();
+        let ghost_changed = mode.ghost_shown != ghost_key || mode.measure_shown != measure_key;
+        mode.measure_shown = measure_key;
         mode.ghost_shown = ghost_key;
         let stored = load(project, id);
-        let ghost: Vec<_> = landings
+        let mut ghost: Vec<_> = landings
             .iter()
             .flat_map(|l| {
                 let top = stored
@@ -247,6 +255,7 @@ impl NovoApp {
                 view3d_move::ghost(l, &scene.frame, top)
             })
             .collect();
+        ghost.extend(mode.measure.overlays());
         let mut heat_changed = false;
         let tracing = solution.is_some() && mode.heat.lines && !self.settings.reduce_motion;
         if wanted != mode.heat_shown {
@@ -286,12 +295,22 @@ impl NovoApp {
             mode.view.set_overlays(all);
             ui.ctx().request_repaint();
         }
-        mode.view.drag_items = mode.controls.move_items;
+        mode.view.drag_items = mode.controls.move_items && !mode.measure.on;
         mode.view.state.display.shadows = mode.controls.shadows;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
-        view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        let was_measuring = mode.measure.on;
+        view3d_controls::toolbar(
+            ui.ctx(),
+            view_rect,
+            &mut mode.controls,
+            &mut mode.measure.on,
+            limit,
+        );
+        if was_measuring && !mode.measure.on {
+            mode.measure.clear();
+        }
         let stale = run_heat(
             &mut self.cabinet.heat,
             project,
@@ -333,8 +352,49 @@ impl NovoApp {
         );
         super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
         mode.view.state.hover = out.hover;
+        // Measure: a click picks a point; selection stays as it is.
+        if mode.measure.on {
+            if let Some(click) = &out.clicked {
+                let point = click
+                    .point
+                    .or_else(|| out.plate_point.map(|(x, y)| scene.frame.world(x, y, 0.0)));
+                if let Some(point) = point {
+                    mode.measure.click(point, click.id);
+                }
+            }
+            let reading = mode
+                .measure
+                .reading(&scene.frame, load(project, id).as_ref());
+            if let (Some(r), Some(mid)) = (reading, mode.measure.midpoint())
+                && let Some(at) = mode.view.project(out.rect, scene, mid)
+            {
+                let font = egui::FontId::proportional(13.0);
+                let text = view3d_measure::mm(r.distance);
+                let galley = ui
+                    .painter()
+                    .layout_no_wrap(text, font, egui::Color32::BLACK);
+                let chip = egui::Rect::from_center_size(at, galley.size() + egui::vec2(12.0, 6.0));
+                ui.painter()
+                    .rect_filled(chip, 4.0, egui::Color32::from_rgb(255, 196, 64));
+                ui.painter().galley(
+                    chip.min + egui::vec2(6.0, 3.0),
+                    galley,
+                    egui::Color32::BLACK,
+                );
+            }
+            if view3d_measure::readout(ui.ctx(), out.rect, &mode.measure, reading) {
+                mode.measure.clear();
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                if mode.measure.has_pins() {
+                    mode.measure.clear();
+                } else {
+                    mode.measure.on = false;
+                }
+            }
+        }
         let state = &mut mode.view.state;
-        if let Some(click) = &out.clicked {
+        if let Some(click) = out.clicked.as_ref().filter(|_| !mode.measure.on) {
             let extend = click.modifiers.shift || click.modifiers.command;
             match click.id {
                 Some(id) if extend => {
