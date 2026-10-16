@@ -108,6 +108,7 @@ pub fn check_leg(
         None,
         &wires_at_pin(project, start_pin),
         &wires_at_pin(project, end_pin),
+        &[],
     )
     .map(|_| ())
 }
@@ -146,6 +147,7 @@ pub fn draw_wire_exact(
         endpoint_direction(project, to),
         &wires_at_pin(project, Some(from)),
         &wires_at_pin(project, Some(to)),
+        &[],
     )
     .map_err(|r| crate::edit::refusal_error(Some(project), r))?;
     let wire = tx.connect(from, to)?;

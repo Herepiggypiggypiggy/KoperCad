@@ -2004,34 +2004,59 @@ impl Editor {
 
     /// Rotates the selection a quarter turn (R with nothing in hand).
     pub fn rotate_selection(&mut self, doc: &mut Document, selection: &[AnyId]) -> bool {
-        let Some(c) = edit::pivot(doc.project(), selection, self.grid) else {
-            return false;
-        };
-        let settle = self.auto_connect;
-        self.run(doc, "Rotate", |tx| {
-            edit::transform_interactive(tx, selection, Transform::Rotate(c))?;
-            // No preview here, so only pins dropped inside wires connect.
-            if settle {
-                edit::settle(tx, &edit::symbols_in(selection))?;
-            }
-            Ok(())
-        })
+        self.turn_selection(doc, selection, "Rotate", Transform::Rotate)
     }
 
     /// Mirrors the selection (X with nothing in hand).
     pub fn mirror_selection(&mut self, doc: &mut Document, selection: &[AnyId]) -> bool {
+        self.turn_selection(doc, selection, "Mirror", Transform::Mirror)
+    }
+
+    /// Rotates or mirrors the selection about its centre. Wires on the turned
+    /// parts are re-routed clear of other wires; where no route is clear the
+    /// part still turns (the key must never be refused for a wire's sake) and
+    /// the wire keeps the plain route, which `wire.overlap` reports.
+    fn turn_selection(
+        &mut self,
+        doc: &mut Document,
+        selection: &[AnyId],
+        label: &str,
+        how: impl Fn(Point) -> Transform,
+    ) -> bool {
         let Some(c) = edit::pivot(doc.project(), selection, self.grid) else {
             return false;
         };
         let settle = self.auto_connect;
-        self.run(doc, "Mirror", |tx| {
-            edit::transform_interactive(tx, selection, Transform::Mirror(c))?;
-            // No preview here, so only pins dropped inside wires connect.
-            if settle {
-                edit::settle(tx, &edit::symbols_in(selection))?;
+        let how = &how;
+        // The edit is repeatable: a refused first attempt rolled back.
+        let attempt = |refuse: bool| {
+            move |tx: &mut novo_core::Tx<'_>| {
+                if refuse {
+                    edit::transform_interactive(tx, selection, how(c))?;
+                } else {
+                    edit::transform(tx, selection, how(c))?;
+                }
+                // No preview here, so only pins dropped inside wires connect.
+                if settle {
+                    edit::settle(tx, &edit::symbols_in(selection))?;
+                }
+                Ok(())
             }
-            Ok(())
-        })
+        };
+        if self.run(doc, label, attempt(true)) {
+            return true;
+        }
+        if !matches!(self.notice.as_deref(), Some(n) if n.contains("run along")) {
+            return false;
+        }
+        let edited = self.run(doc, label, attempt(false));
+        if edited {
+            self.notice = Some(
+                "Turned. A wire now runs along another; move a corner of it, the check lists it"
+                    .into(),
+            );
+        }
+        edited
     }
 
     /// How far a label dragged from `from` to `to` moves: both ends snap to
