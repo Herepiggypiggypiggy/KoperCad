@@ -1055,6 +1055,9 @@ fn the_names_the_lessons_type_find_the_symbols_they_name() {
         ("feed", "iec/connectivity/potential_feed", None),
         ("coil K1", "iec/coils/relay", Some("-K1")),
         ("no K1", "iec/contacts/no", Some("-K1")),
+        ("coil", "iec/coils/relay", None),
+        ("mpcb", "iec/protection/motor_protection_breaker", None),
+        ("main", "iec/contactors/main_3p", None),
     ] {
         let hit = &editor.catalog.search(query)[0];
         assert_eq!(hit.symbol, symbol, "{query}");

@@ -45,12 +45,12 @@ text_nl = """
 De motorbeveiliging beschermt de motor tegen overbelasting en kortsluiting, dus het is het eerste apparaat onder de voeding.
 """
 how = [
-  "Tap {key:tool.place}, then tap **5**. The motor protection breaker hangs on your pointer.",
+  "Tap {key:tool.place}, type **mpcb** and press Enter. The motor protection breaker hangs on your pointer.",
   "Click just under the three feeds. It is wired to them and gets the tag **-Q1**.",
   "Press {key:edit.escape} to put the part down.",
 ]
 how_nl = [
-  "Tik op {key:tool.place} en dan op **5**. De motorbeveiliging hangt aan je aanwijzer.",
+  "Tik op {key:tool.place}, typ **mpcb** en druk op Enter. De motorbeveiliging hangt aan je aanwijzer.",
   "Klik net onder de drie feeds. Hij wordt met de feeds verbonden en krijgt de tag **-Q1**.",
   "Druk op {key:edit.escape} om het onderdeel los te laten.",
 ]
@@ -69,12 +69,12 @@ text_nl = """
 De contactor schakelt de motor in en uit. Zijn drie hoofdcontacten voeren de motorstroom, één per fase.
 """
 how = [
-  "Tap {key:tool.place}, then tap **4**. The three main contacts hang on your pointer.",
+  "Tap {key:tool.place}, type **main** and press Enter. The three main contacts hang on your pointer.",
   "Click under the breaker. The three wires between breaker and contacts, and the three wires down to the motor, are drawn for you. The device gets the tag **-K1**.",
   "Press {key:edit.escape} to put the part down.",
 ]
 how_nl = [
-  "Tik op {key:tool.place} en dan op **4**. De drie hoofdcontacten hangen aan je aanwijzer.",
+  "Tik op {key:tool.place}, typ **main** en druk op Enter. De drie hoofdcontacten hangen aan je aanwijzer.",
   "Klik onder de motorbeveiliging. De drie draden tussen beveiliging en contacten, en de drie draden omlaag naar de motor, worden voor je getekend. Het apparaat krijgt de tag **-K1**.",
   "Druk op {key:edit.escape} om het onderdeel los te laten.",
 ]

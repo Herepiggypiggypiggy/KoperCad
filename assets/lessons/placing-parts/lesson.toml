@@ -114,14 +114,14 @@ De startknop sluit het circuit zolang hij ingedrukt is, dus het is een **sluiten
 """
 how = [
   "Hold {key:tool.place} to open the wheel.",
-  "Move toward **Switch**, then toward **Push button NO**.",
+  "Move toward **Switch**, then toward **Push NO** (the push button that closes while pressed).",
   "Release the key. The push button hangs on your pointer.",
   "Click just under the breaker. It gets the tag **-S1** and is wired to the breaker.",
   "Press {key:edit.escape} to put the part down.",
 ]
 how_nl = [
   "Houd {key:tool.place} ingedrukt om het wiel te openen.",
-  "Beweeg naar **Switch** en dan naar **Push button NO**.",
+  "Beweeg naar **Switch** en dan naar **Push NO** (de drukknop die sluit zolang hij ingedrukt is).",
   "Laat de toets los. De drukknop hangt aan je aanwijzer.",
   "Klik net onder de automaat. Hij krijgt de tag **-S1** en wordt met de automaat verbonden.",
   "Druk op {key:edit.escape} om het onderdeel los te laten.",
@@ -131,22 +131,22 @@ expect = { device = { symbol = "iec/operators/pushbutton_no" } }
 solve = [ { place = { symbol = "iec/operators/pushbutton_no", page = "Control branch", x = 80, y = 72 } } ]
 
 [[step]]
-id = "digit-coil"
-title = "Use a favourite digit"
-title_nl = "Gebruik een favoriete cijfertoets"
+id = "type-coil"
+title = "Place the relay coil by name"
+title_nl = "Plaats de relaisspoel bij naam"
 text = """
-The parts you place most have a digit. The relay coil is favourite number 3, so a coil costs two key presses.
+The same field also lists your favourite parts with a digit beside each; typing that digit picks the part. Which digit is which depends on your favourites, so read it off the list. Here you simply type the name.
 """
 text_nl = """
-De onderdelen die je het vaakst plaatst hebben een cijfer. De relaisspoel is favoriet nummer 3, dus een spoel kost twee toetsaanslagen.
+Hetzelfde veld toont ook je favoriete onderdelen met een cijfer ernaast; dat cijfer typen kiest het onderdeel. Welk cijfer bij welk onderdeel hoort hangt af van je favorieten, dus lees het af van de lijst. Hier typ je gewoon de naam.
 """
 how = [
-  "Tap {key:tool.place}, then tap **3**. The relay coil hangs on your pointer.",
+  "Tap {key:tool.place}, type **coil** and press Enter. The relay coil hangs on your pointer.",
   "Click just under the push button. It gets the tag **-K1** and is wired to the button.",
   "Press {key:edit.escape} to put the part down.",
 ]
 how_nl = [
-  "Tik op {key:tool.place} en dan op **3**. De relaisspoel hangt aan je aanwijzer.",
+  "Tik op {key:tool.place}, typ **coil** en druk op Enter. De relaisspoel hangt aan je aanwijzer.",
   "Klik net onder de drukknop. Hij krijgt de tag **-K1** en wordt met de knop verbonden.",
   "Druk op {key:edit.escape} om het onderdeel los te laten.",
 ]
