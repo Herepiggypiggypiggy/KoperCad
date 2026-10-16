@@ -59,7 +59,8 @@ roles, so nothing breaks while screens migrate.)
 | `surface.control` (`BG_3`) | `#232327` | `#E9E7E3` | Buttons and fields at rest |
 | `surface.hover` (`BG_4`) | `#2D2D32` | `#DFDCD7` | Hovered controls, pressed rows |
 | `border.subtle` (`BORDER`) | `#25252A` | `#DAD8D3` | Hairlines between regions |
-| `border.strong` (`BORDER_STRONG`) | `#3B3B41` | `#B5B1AA` | Hovered and focused outlines, inputs |
+| `border.strong` (`BORDER_STRONG`) | `#3B3B41` | `#B5B1AA` | Hovered and focused outlines |
+| `border.control` | `#6A6A72` | `#8C8880` | Outlines of controls at rest: checks, radios, buttons, fields (3:1 on panel, sunken, raised) |
 | `text.primary` | `#E3E1DC` | `#1E1D1B` | Body text, values |
 | `text.secondary` | `#989691` | `#5A5853` | Labels, hints, units, section labels |
 | `text.tertiary` | `#858380` | `#66645F` | Placeholders, coordinates, disabled |

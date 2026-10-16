@@ -24,6 +24,7 @@ use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
 use novo_view3d::camera::ViewPreset;
+use novo_view3d::scene::ItemKind;
 
 use super::standards_report::StandardsFormat;
 use super::view3d::Pending;
@@ -93,6 +94,8 @@ pub(crate) struct Workbench {
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
     pub(super) faults: Option<super::faults::FaultsWindow>,
+    /// The Add fault window (`sim.add_fault`), while it is open.
+    pub(super) add_fault: Option<super::faults::AddFault>,
     /// The Calculations window, while it is open.
     pub(super) calculations: Option<super::calculations::CalcWindow>,
     /// The Electrical inputs window, while it is open.
@@ -102,6 +105,8 @@ pub(crate) struct Workbench {
     pub(super) languages: Option<super::languages::LanguagesWindow>,
     /// The Renumber devices window, while it is open.
     pub(super) device_renumber: Option<super::device_renumber::DeviceRenumber>,
+    /// The shared property sheet of the selection (window and inspector).
+    pub(super) selection_sheet: super::selection_sheet::SelectionSheet,
     /// The Project rules window is open.
     pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
@@ -253,6 +258,7 @@ impl Default for Workbench {
             issue: None,
             compare: None,
             faults: None,
+            add_fault: None,
             calculations: None,
             electrical: None,
             safety: None,
@@ -260,6 +266,7 @@ impl Default for Workbench {
             numbering: None,
             net_trace: None,
             device_renumber: None,
+            selection_sheet: Default::default(),
             project_rules: false,
             page_form: None,
             sheet_import: None,
@@ -381,6 +388,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "sim.live",
     "sim.plc_program",
     "sim.faults",
+    "sim.add_fault",
     "view.changes",
     "view.commissioning",
     "check.problems",
@@ -428,10 +436,31 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_shell",
     "view.3d_wires",
     "view.3d_shadows",
+    "view.3d_align_left",
+    "view.3d_align_hcentre",
+    "view.3d_align_right",
+    "view.3d_align_top",
+    "view.3d_align_vcentre",
+    "view.3d_align_bottom",
+    "view.3d_spread_h",
+    "view.3d_spread_v",
+    "view.3d_ssao",
     "view.3d_dimensions",
     "view.3d_quality",
     "view.3d_stats",
     "view.3d_section",
+    "view.3d_save_view",
+    "view.3d_wire_runs",
+    "view.3d_hints",
+    "view.3d_select_devices",
+    "view.3d_select_rails",
+    "view.3d_select_ducts",
+    "view.3d_hide",
+    "view.3d_isolate",
+    "view.3d_show_all",
+    "view.3d_duplicate",
+    "view.3d_position",
+    "view.3d_place",
     "view.iso",
     "view.front",
     "view.top",
@@ -483,6 +512,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "parts.import_step",
     "parts.import_folder",
     "parts.auto_assign",
+    "edit.shared_properties",
     "parts.clear",
     "parts.remove_unused",
     "project.standard",
@@ -516,6 +546,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "cable.restore_proposals",
     "edit.select_all",
     "view.cabinet_table",
+    "view.fit_sheet",
     "cabinet.place-all",
     "heat.toggle",
     "heat.airflow",
@@ -777,6 +808,13 @@ impl NovoApp {
                 self.cabinet.table = !showing;
                 self.switch_workspace(Workspace::Cabinet);
             }
+            "view.fit_sheet" if self.is_open() => {
+                if self.workspace() == Workspace::View3d {
+                    self.view3d.pending = Some(super::view3d::Pending::Fit);
+                } else {
+                    self.canvas.zoom_to_sheet();
+                }
+            }
             "cabinet.place-all" if self.is_open() => {
                 self.switch_workspace(Workspace::Cabinet);
                 self.cabinet.table = false;
@@ -832,6 +870,11 @@ impl NovoApp {
             }
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
+            "edit.duplicate" if self.workspace() == Workspace::View3d => self.view3d_duplicate(),
+            "view.3d_duplicate" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_duplicate();
+            }
             "edit.reset_note" => {
                 let selection = self.selection();
                 self.with_editor(|editor, doc| editor.reset_notes(doc, &selection));
@@ -925,6 +968,10 @@ impl NovoApp {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.dimensions ^= true;
             }
+            "view.3d_ssao" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.controls.ssao ^= true;
+            }
             "view.3d_door" | "view.3d_shell" | "view.3d_wires" => {
                 self.switch_workspace(Workspace::View3d);
                 let limit = self.view3d_door_limit();
@@ -945,6 +992,55 @@ impl NovoApp {
                     Some(_) => None,
                     None => Some(novo_view3d::Section::default()),
                 };
+            }
+            "view.3d_save_view" => {
+                // Saved in the view's next frame, once the camera is fitted.
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.save_view = true;
+            }
+            "view.3d_align_left"
+            | "view.3d_align_hcentre"
+            | "view.3d_align_right"
+            | "view.3d_align_top"
+            | "view.3d_align_vcentre"
+            | "view.3d_align_bottom"
+            | "view.3d_spread_h"
+            | "view.3d_spread_v" => {
+                self.switch_workspace(Workspace::View3d);
+                if let Some(op) = super::view3d_align::Op::from_command(id) {
+                    self.view3d_arrange(op);
+                }
+            }
+            "view.3d_wire_runs" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.wire_runs ^= true;
+                if self.view3d.wire_runs {
+                    self.view3d.controls.layers.wires = true;
+                }
+            }
+            "view.3d_hints" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.hints.toggle();
+            }
+            "view.3d_select_devices" | "view.3d_select_rails" | "view.3d_select_ducts" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_select_kind(match id {
+                    "view.3d_select_devices" => ItemKind::Device,
+                    "view.3d_select_rails" => ItemKind::Rail,
+                    _ => ItemKind::Duct,
+                });
+            }
+            "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_visibility(id);
+            }
+            "view.3d_position" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.position.toggle();
+            }
+            "view.3d_place" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.place.toggle();
             }
             "view.3d_stats" => {
                 self.switch_workspace(Workspace::View3d);
@@ -992,6 +1088,7 @@ impl NovoApp {
                 }
             }
             "sim.faults" => self.toggle_faults(),
+            "sim.add_fault" => self.begin_add_fault(),
             "view.changes" => self.toggle_changes(argument),
             "view.commissioning" if self.workspace() == Workspace::Commissioning => {
                 self.switch_workspace(Workspace::Schematic);
@@ -1166,6 +1263,7 @@ impl NovoApp {
             "plc.overview" => self.wb.plc_overview = true,
             "parts.import_folder" => self.import_parts_folder(),
             "parts.auto_assign" => self.start_auto_assign(),
+            "edit.shared_properties" => self.open_selection_sheet(),
             "parts.clear" => self.clear_selected_parts(),
             "parts.remove_unused" => self.remove_unused_project_parts(),
             "project.standard" => self.wb.project_settings = true,

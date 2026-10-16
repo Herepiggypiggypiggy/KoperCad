@@ -279,7 +279,7 @@ impl NovoApp {
                 format!("Layout: {layout}. Left empty, the starts follow the cards already there.")
             });
             if let Some(p) = &form.problem {
-                ui.colored_label(novo_theme::tokens::WARNING, p);
+                ui.colored_label(crate::theme::ui_palette().warning, p);
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -427,7 +427,7 @@ impl NovoApp {
                                             r.output.as_deref().unwrap_or("none")
                                         ));
                                         if let Some(p) = &r.problem {
-                                            ui.colored_label(novo_theme::tokens::WARNING, p);
+                                            ui.colored_label(crate::theme::ui_palette().warning, p);
                                         }
                                         for (text, drawn) in &r.channels {
                                             ui.label(format!(
@@ -442,7 +442,7 @@ impl NovoApp {
                             ui.add_space(6.0);
                             ui.strong("Problems");
                             for i in &issues {
-                                ui.colored_label(novo_theme::tokens::WARNING, i);
+                                ui.colored_label(crate::theme::ui_palette().warning, i);
                             }
                         }
                     });

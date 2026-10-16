@@ -6,6 +6,7 @@
 //! buffers (instance data is not read from storage buffers), no compute and no
 //! optional features.
 
+use crate::ao;
 use crate::camera::{Camera, Projection};
 use crate::cull;
 use crate::look::{Highlight, Look, Rgb, mix};
@@ -79,6 +80,9 @@ pub struct Quality {
     pub scale: f32,
     /// Soft shadows from the key light (a cached depth map).
     pub shadows: bool,
+    /// Screen-space ambient occlusion: a depth pass, a half resolution
+    /// occlusion pass and a blur (the High tier). Off unless asked for.
+    pub ssao: bool,
 }
 
 impl Quality {
@@ -96,7 +100,14 @@ impl Quality {
             // The map is drawn once per scene change, so even integrated
             // GPUs afford the lookup; software renderers do not.
             shadows: tier != Tier::Software,
+            ssao: false,
         }
+    }
+
+    /// The same quality with screen-space occlusion on or off.
+    pub fn with_ssao(mut self, on: bool) -> Self {
+        self.ssao = on;
+        self
     }
 }
 
@@ -125,6 +136,8 @@ pub struct FrameStats {
     pub cpu_ms: f32,
     /// Size the image was rendered at.
     pub rendered_px: (u32, u32),
+    /// Whether the screen-space occlusion passes ran.
+    pub ssao: bool,
 }
 
 #[repr(C)]
@@ -159,6 +172,9 @@ struct Globals {
     viewport: [f32; 4],
     light_vp: [[f32; 4]; 4],
     shadow: [f32; 4],
+    ao: [f32; 4],
+    inv_view_proj: [[f32; 4]; 4],
+    ssao: [f32; 4],
     clip: [f32; 4],
 }
 
@@ -362,6 +378,13 @@ pub struct Renderer {
     shadow_layout: wgpu::BindGroupLayout,
     shadow_pipeline: wgpu::RenderPipeline,
     shadow_sampler: wgpu::Sampler,
+    ssao_sampler: wgpu::Sampler,
+    ssao_depth_layout: wgpu::BindGroupLayout,
+    ssao_blur_layout: wgpu::BindGroupLayout,
+    depth_pipeline: wgpu::RenderPipeline,
+    ssao_pipeline: wgpu::RenderPipeline,
+    blur_pipeline: wgpu::RenderPipeline,
+    ao_sampler: wgpu::Sampler,
     module: wgpu::ShaderModule,
     globals_layout: wgpu::BindGroupLayout,
     pipelines: HashMap<u32, Pipelines>,
@@ -385,12 +408,102 @@ pub struct ViewTarget {
     shadow_size: u32,
     /// What the map was last drawn for; `None` while it holds nothing.
     shadow_key: Option<u64>,
+    /// Occlusion textures at the current size; made on first use.
+    ssao: Option<SsaoTargets>,
+    /// Stands in for the occlusion map in the main pass while there is none.
+    ssao_dummy: wgpu::TextureView,
+    /// Plate occlusion texture and what it was baked for.
+    ao_view: wgpu::TextureView,
+    ao_texture: wgpu::Texture,
+    ao_size: (u32, u32),
+    ao_key: Option<u64>,
     instances: wgpu::Buffer,
     instance_capacity: u64,
     overlays: Vec<GpuOverlay>,
     overlay_revision: Option<u64>,
     /// Bumped each time the colour texture is recreated; the blitter rebinds.
     pub(crate) generation: u64,
+}
+
+const SSAO_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::R8Unorm;
+/// Reach of the occlusion, mm.
+const SSAO_RADIUS_MM: f32 = 40.0;
+/// How far over the surface plane a neighbour must sit to count (cosine).
+const SSAO_BIAS: f32 = 0.12;
+const SSAO_STRENGTH: f32 = 1.0;
+
+/// The textures and bind groups of the occlusion passes for one image size.
+struct SsaoTargets {
+    /// Size of the image they were made for.
+    size: (u32, u32),
+    depth: wgpu::TextureView,
+    raw: wgpu::TextureView,
+    blur: wgpu::TextureView,
+    depth_bind: wgpu::BindGroup,
+    blur_bind: wgpu::BindGroup,
+}
+
+fn plain_texture(
+    device: &wgpu::Device,
+    label: &str,
+    size: (u32, u32),
+    format: wgpu::TextureFormat,
+    usage: wgpu::TextureUsages,
+) -> wgpu::TextureView {
+    device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: wgpu::Extent3d {
+                width: size.0.max(1),
+                height: size.1.max(1),
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            view_formats: &[],
+        })
+        .create_view(&Default::default())
+}
+
+fn ssao_targets(device: &wgpu::Device, renderer: &Renderer, size: (u32, u32)) -> SsaoTargets {
+    let both = wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING;
+    let half = ((size.0 / 2).max(1), (size.1 / 2).max(1));
+    let depth = plain_texture(device, "novo_view3d_ssao_depth", size, DEPTH_FORMAT, both);
+    let raw = plain_texture(device, "novo_view3d_ssao_raw", half, SSAO_FORMAT, both);
+    let blur = plain_texture(device, "novo_view3d_ssao_blur", half, SSAO_FORMAT, both);
+    let depth_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("novo_view3d_ssao_depth"),
+        layout: &renderer.ssao_depth_layout,
+        entries: &[wgpu::BindGroupEntry {
+            binding: 0,
+            resource: wgpu::BindingResource::TextureView(&depth),
+        }],
+    });
+    let blur_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("novo_view3d_ssao_blur"),
+        layout: &renderer.ssao_blur_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&depth),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(&raw),
+            },
+        ],
+    });
+    SsaoTargets {
+        size,
+        depth,
+        raw,
+        blur,
+        depth_bind,
+        blur_bind,
+    }
 }
 
 fn shadow_texture(device: &wgpu::Device, size: u32) -> wgpu::TextureView {
@@ -412,11 +525,32 @@ fn shadow_texture(device: &wgpu::Device, size: u32) -> wgpu::TextureView {
         .create_view(&Default::default())
 }
 
+fn ao_texture(device: &wgpu::Device, w: u32, h: u32) -> (wgpu::Texture, wgpu::TextureView) {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("novo_view3d_plate_ao"),
+        size: wgpu::Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&Default::default());
+    (texture, view)
+}
+
 fn globals_bind(
     device: &wgpu::Device,
     renderer: &Renderer,
     globals: &wgpu::Buffer,
     shadow: &wgpu::TextureView,
+    ao: &wgpu::TextureView,
+    ssao: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("novo_view3d_globals"),
@@ -434,6 +568,22 @@ fn globals_bind(
                 binding: 2,
                 resource: wgpu::BindingResource::Sampler(&renderer.shadow_sampler),
             },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::TextureView(ao),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::Sampler(&renderer.ao_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 5,
+                resource: wgpu::BindingResource::TextureView(ssao),
+            },
+            wgpu::BindGroupEntry {
+                binding: 6,
+                resource: wgpu::BindingResource::Sampler(&renderer.ssao_sampler),
+            },
         ],
     })
 }
@@ -447,7 +597,22 @@ impl ViewTarget {
             mapped_at_creation: false,
         });
         let shadow_view = shadow_texture(device, 1);
-        let globals_bind = globals_bind(device, renderer, &globals, &shadow_view);
+        let (ao_texture, ao_view) = ao_texture(device, 1, 1);
+        let ssao_dummy = plain_texture(
+            device,
+            "novo_view3d_ssao_none",
+            (1, 1),
+            SSAO_FORMAT,
+            wgpu::TextureUsages::TEXTURE_BINDING,
+        );
+        let globals_bind = globals_bind(
+            device,
+            renderer,
+            &globals,
+            &shadow_view,
+            &ao_view,
+            &ssao_dummy,
+        );
         let shadow_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("novo_view3d_shadow_globals"),
             layout: &renderer.shadow_layout,
@@ -470,6 +635,12 @@ impl ViewTarget {
             shadow_view,
             shadow_size: 1,
             shadow_key: None,
+            ssao: None,
+            ssao_dummy,
+            ao_view,
+            ao_texture,
+            ao_size: (1, 1),
+            ao_key: None,
             instances: instance_buffer(device, instance_capacity),
             instance_capacity,
             overlays: Vec::new(),
@@ -489,6 +660,19 @@ impl ViewTarget {
 
     pub fn size(&self) -> (u32, u32) {
         self.size
+    }
+
+    /// Builds the main pass's bind group again from the current textures.
+    fn rebind(&mut self, device: &wgpu::Device, renderer: &Renderer) {
+        let ssao = self.ssao.as_ref().map_or(&self.ssao_dummy, |s| &s.blur);
+        self.globals_bind = globals_bind(
+            device,
+            renderer,
+            &self.globals,
+            &self.shadow_view,
+            &self.ao_view,
+            ssao,
+        );
     }
 
     fn ensure(&mut self, device: &wgpu::Device, size: (u32, u32), samples: u32) {
@@ -596,6 +780,97 @@ fn shadow_pipeline(
         }),
         multisample: wgpu::MultisampleState::default(),
         fragment: None,
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+/// Depth of the opaque scene from the camera, for the occlusion passes. Same
+/// culling and depth test as the faces it stands in for.
+fn depth_pipeline(
+    device: &wgpu::Device,
+    module: &wgpu::ShaderModule,
+    uniform: &wgpu::BindGroupLayout,
+) -> wgpu::RenderPipeline {
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("novo_view3d_depth_layout"),
+        bind_group_layouts: &[Some(uniform)],
+        immediate_size: 0,
+    });
+    let buffers = [
+        Some(wgpu::VertexBufferLayout {
+            array_stride: size_of::<Vertex>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &VERTEX_ATTRS,
+        }),
+        Some(wgpu::VertexBufferLayout {
+            array_stride: size_of::<Instance>() as u64,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &INSTANCE_ATTRS,
+        }),
+    ];
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("novo_view3d_depth"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module,
+            entry_point: Some("vs_depth"),
+            compilation_options: Default::default(),
+            buffers: &buffers,
+        },
+        primitive: wgpu::PrimitiveState {
+            cull_mode: Some(wgpu::Face::Back),
+            ..Default::default()
+        },
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Greater),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        fragment: None,
+        multiview_mask: None,
+        cache: None,
+    })
+}
+
+/// A fullscreen triangle into a one-channel texture (the occlusion passes).
+fn fullscreen_pipeline(
+    device: &wgpu::Device,
+    module: &wgpu::ShaderModule,
+    label: &str,
+    fragment: &str,
+    groups: &[Option<&wgpu::BindGroupLayout>],
+) -> wgpu::RenderPipeline {
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some(label),
+        bind_group_layouts: groups,
+        immediate_size: 0,
+    });
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some(label),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module,
+            entry_point: Some("vs_full"),
+            compilation_options: Default::default(),
+            buffers: &[],
+        },
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: None,
+        multisample: wgpu::MultisampleState::default(),
+        fragment: Some(wgpu::FragmentState {
+            module,
+            entry_point: Some(fragment),
+            compilation_options: Default::default(),
+            targets: &[Some(wgpu::ColorTargetState {
+                format: SSAO_FORMAT,
+                blend: None,
+                write_mask: wgpu::ColorWrites::ALL,
+            })],
+        }),
         multiview_mask: None,
         cache: None,
     })
@@ -791,6 +1066,38 @@ impl Renderer {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 6,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
             ],
         });
         // The shadow pass renders into the map, so it must not bind it.
@@ -799,11 +1106,59 @@ impl Renderer {
             entries: &[uniform_entry],
         });
         let shadow_pipeline = shadow_pipeline(device, &module, &shadow_layout);
+        let depth_entry = |binding: u32, sample_type| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type,
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
+        let ssao_depth_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("novo_view3d_ssao_depth"),
+            entries: &[depth_entry(0, wgpu::TextureSampleType::Depth)],
+        });
+        let ssao_blur_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("novo_view3d_ssao_blur"),
+            entries: &[
+                depth_entry(0, wgpu::TextureSampleType::Depth),
+                depth_entry(1, wgpu::TextureSampleType::Float { filterable: false }),
+            ],
+        });
+        let depth_pipeline = depth_pipeline(device, &module, &shadow_layout);
+        let ssao_pipeline = fullscreen_pipeline(
+            device,
+            &module,
+            "novo_view3d_ssao",
+            "fs_ssao",
+            &[Some(&shadow_layout), Some(&ssao_depth_layout)],
+        );
+        let blur_pipeline = fullscreen_pipeline(
+            device,
+            &module,
+            "novo_view3d_ssao_blur",
+            "fs_blur",
+            &[Some(&shadow_layout), Some(&ssao_blur_layout)],
+        );
+        let ssao_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("novo_view3d_ssao_sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
         let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("novo_view3d_shadow_sampler"),
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
             compare: Some(wgpu::CompareFunction::LessEqual),
+            ..Default::default()
+        });
+        let ao_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("novo_view3d_ao_sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -819,6 +1174,13 @@ impl Renderer {
             shadow_layout,
             shadow_pipeline,
             shadow_sampler,
+            ssao_sampler,
+            ssao_depth_layout,
+            ssao_blur_layout,
+            depth_pipeline,
+            ssao_pipeline,
+            blur_pipeline,
+            ao_sampler,
             module,
             globals_layout,
             pipelines,
@@ -1089,6 +1451,47 @@ impl Renderer {
                 1.0,
             ]
         };
+        // Screen-space occlusion needs textures for this image size.
+        let ssao_on = frame.quality.ssao && frame.state.display.ssao;
+        if ssao_on && target.ssao.as_ref().is_none_or(|t| t.size != size) {
+            target.ssao = Some(ssao_targets(device, self, size));
+            target.rebind(device, self);
+        }
+        // Plate occlusion: baked when the scene or the layers change.
+        let ao_on = look.contact_shade > 0.0;
+        if ao_on {
+            let akey = ao::key(scene, frame.state, look.contact_shade);
+            if target.ao_key != Some(akey) {
+                let map = ao::bake(scene, frame.state, look.contact_shade);
+                if target.ao_size != (map.width, map.height) {
+                    let (texture, view) = ao_texture(device, map.width, map.height);
+                    target.ao_texture = texture;
+                    target.ao_view = view;
+                    target.ao_size = (map.width, map.height);
+                    target.rebind(device, self);
+                }
+                queue.write_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &target.ao_texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &map.data,
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(map.width),
+                        rows_per_image: Some(map.height),
+                    },
+                    wgpu::Extent3d {
+                        width: map.width,
+                        height: map.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                target.ao_key = Some(akey);
+            }
+        }
         let globals = Globals {
             view_proj: view_proj.to_cols_array_2d(),
             eye: eye.extend(1.0).to_array(),
@@ -1118,6 +1521,19 @@ impl Renderer {
                 1.0 / SHADOW_MAP_SIZE as f32,
                 0.0,
             ],
+            ao: [
+                if ao_on { 1.0 } else { 0.0 },
+                1.0 / scene.frame.width.max(1.0),
+                1.0 / scene.frame.height.max(1.0),
+                0.0,
+            ],
+            inv_view_proj: view_proj.inverse().to_cols_array_2d(),
+            ssao: [
+                if ssao_on { 1.0 } else { 0.0 },
+                SSAO_RADIUS_MM,
+                SSAO_BIAS,
+                SSAO_STRENGTH,
+            ],
             clip: frame.state.section.map_or([0.0, 0.0, 0.0, -1.0], |s| {
                 let (n, w) = s.plane(&bounds);
                 [n.x, n.y, n.z, w]
@@ -1130,8 +1546,7 @@ impl Renderer {
                 target.shadow_view = shadow_texture(device, SHADOW_MAP_SIZE);
                 target.shadow_size = SHADOW_MAP_SIZE;
                 target.shadow_key = None;
-                target.globals_bind =
-                    globals_bind(device, self, &target.globals, &target.shadow_view);
+                target.rebind(device, self);
             }
             if build_shadow {
                 target.shadow_key = Some(skey);
@@ -1160,6 +1575,70 @@ impl Renderer {
                 }
             }
         }
+
+        if ssao_on {
+            let ssao = target.ssao.as_ref().expect("made above");
+            // The opaque scene's depth from the camera ...
+            {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("novo_view3d_ssao_depth"),
+                    color_attachments: &[],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &ssao.depth,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(0.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    ..Default::default()
+                });
+                pass.set_pipeline(&self.depth_pipeline);
+                pass.set_bind_group(0, &target.shadow_bind, &[]);
+                for (key, range) in &draws[..opaque_draws] {
+                    let mesh = &self.meshes[key];
+                    pass.set_vertex_buffer(0, mesh.vertices.slice(..));
+                    pass.set_vertex_buffer(1, target.instances.slice(..));
+                    pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..mesh.index_count, 0, range.clone());
+                    stats.draw_calls += 1;
+                }
+            }
+            // ... then the raw occlusion at half resolution, then the blur.
+            let mut fullscreen = |label, view: &wgpu::TextureView, pipeline, bind| {
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some(label),
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view,
+                        depth_slice: None,
+                        resolve_target: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color::WHITE),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                });
+                pass.set_pipeline(pipeline);
+                pass.set_bind_group(0, &target.shadow_bind, &[]);
+                pass.set_bind_group(1, bind, &[]);
+                pass.draw(0..3, 0..1);
+                stats.draw_calls += 1;
+            };
+            fullscreen(
+                "novo_view3d_ssao",
+                &ssao.raw,
+                &self.ssao_pipeline,
+                &ssao.depth_bind,
+            );
+            fullscreen(
+                "novo_view3d_ssao_blur",
+                &ssao.blur,
+                &self.blur_pipeline,
+                &ssao.blur_bind,
+            );
+        }
+        stats.ssao = ssao_on;
 
         let pipes = &self.pipelines[&samples];
         let color_view = target.color_view.as_ref().expect("ensured");

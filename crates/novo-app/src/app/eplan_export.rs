@@ -146,7 +146,7 @@ impl NovoApp {
                     ui.end_row();
                 });
             if let Some(problem) = &form.problem {
-                ui.colored_label(novo_theme::tokens::WARNING, problem);
+                ui.colored_label(crate::theme::ui_palette().warning, problem);
             }
             ui.add_space(4.0);
             egui::CollapsingHeader::new("About the symbol table file")
