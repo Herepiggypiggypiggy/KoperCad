@@ -1507,6 +1507,13 @@ impl NovoApp {
                     if plan.placements.is_empty() {
                         match left_out {
                             Some(text) => self.message(Level::Warning, text),
+                            None if !cands.is_empty()
+                                && cands
+                                    .iter()
+                                    .all(|c| layout.placements.iter().any(|p| p.id == c.id)) =>
+                            {
+                                self.message(Level::Info, "Every device is already on the plate");
+                            }
                             None => self.message(Level::Info, "Nothing fits on the plate"),
                         }
                     } else {

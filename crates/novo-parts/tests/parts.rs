@@ -475,6 +475,7 @@ fn catalog_file_round_trips() {
     let model = part.to_model(novo_core::PartId(7));
     let mut back = CatalogPart::from_model(&model);
     back.keywords = part.keywords.clone();
+    back.sources = part.sources.clone();
     assert_eq!(&back, part);
     // A newer format is refused, not misread.
     std::fs::write(&path, r#"{"format": 99, "parts": []}"#).unwrap();
@@ -1337,10 +1338,11 @@ fn panel_data_is_editable_in_the_part_rows_and_checked() {
     run(&mut doc, command);
     let target = AnyId::from(gate.k1);
 
-    // The panel keys are listed under the part's data, empty until filled in.
+    // The panel keys are listed under the part's data: the catalogue's
+    // planning value for the loss, empty for a key the part does not give.
     let sheet = PropertySheet::build(doc.project(), &[target]);
     let loss = sheet.row(&RowKey::PartData("power_loss_w".into())).unwrap();
-    assert_eq!(loss.value, RowValue::Same(String::new()));
+    assert_eq!(loss.value, RowValue::Same("2.5".into()));
     assert_eq!(loss.unit, Some("W"));
     assert!(loss.editable);
     let mounting = sheet.row(&RowKey::PartData("mounting".into())).unwrap();
