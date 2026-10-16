@@ -22,6 +22,7 @@ use super::cabinet_inspector;
 use super::NovoApp;
 use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
+use super::heat_legend;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
@@ -299,6 +300,10 @@ impl NovoApp {
             stored.as_ref(),
             ambient,
         );
+        if let Some(sol) = &solution {
+            let range = heat_3d::range(&sol.snapshot, sol.ambient);
+            heat_legend::show(ui.ctx(), view_rect, &mode.heat, range, mode.heat_flow.top);
+        }
         view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
         mode.stats.frame(ui.ctx(), view_rect, &mut mode.view);
         mode.controls.clamp_door(limit);
