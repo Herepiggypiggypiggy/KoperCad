@@ -8,6 +8,11 @@
 //! optionally followed by `keep K` (extra free ring around it in mm, default
 //! [`DEFAULT_KEEP_MM`]) and `to <surface> X Y` (the other end of a
 //! pass-through). X and Y are the centre in the surface's own millimetres.
+//!
+//! In this slice the keep-out is only checked for devices on the main plate;
+//! openings on other surfaces are valid and usable for pass-through, and an
+//! opening whose surface (or exit surface) does not exist is reported by
+//! [`unknown_surfaces`].
 
 use crate::surfaces::{MAIN_PLATE, SurfaceKind};
 use crate::{Placement, Rect};
@@ -132,7 +137,9 @@ impl Opening {
         })
     }
 
-    /// The area no device may cover: the opening plus its free ring.
+    /// The area no device may cover: the opening plus its free ring. A round
+    /// opening gets a square, so a device touching a corner of the square
+    /// but clear of the circle is flagged too (conservative).
     pub fn keep_out(&self) -> Rect {
         let (hx, hy) = self.shape.half_extent();
         Rect {
@@ -160,6 +167,25 @@ pub fn parse_all(props: &[(String, String)]) -> (Vec<Opening>, Vec<String>) {
         }
     }
     (list, problems)
+}
+
+/// One sentence per opening whose surface or exit surface is not among
+/// `known` (surface names, lower case), so a typo is never silently inert.
+pub fn unknown_surfaces(openings: &[Opening], known: &[String]) -> Vec<String> {
+    let mut out = Vec::new();
+    for o in openings {
+        let ends = std::iter::once(&o.surface).chain(o.exit.iter().map(|e| &e.surface));
+        for s in ends {
+            if !known.iter().any(|k| k == s) {
+                out.push(format!(
+                    "Opening '{}' names the surface '{s}', which this enclosure does not have (known: {}).",
+                    o.name,
+                    known.join(", ")
+                ));
+            }
+        }
+    }
+    out
 }
 
 /// A device that covers an opening's keep-out.
@@ -213,8 +239,9 @@ pub struct Passage<'a> {
     /// Where the wire enters and leaves, in each surface's millimetres.
     pub enter: (f64, f64),
     pub leave: (f64, f64),
-    /// Extra wire length compared with a straight line between the two
-    /// points, in mm: the price of detouring through the opening.
+    /// In-surface path length to and from the opening, in mm; the distance
+    /// between the two surfaces is not included, so this is a ranking
+    /// figure and not a wire length.
     pub detour: f64,
 }
 

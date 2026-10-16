@@ -132,6 +132,10 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
         .collect();
     layout.enclosure = enclosure_of(project, id);
     (layout.openings, layout.opening_problems) = openings_of(project, id);
+    let known = surface_names(project, id, layout.enclosure.as_ref(), &layout.plate);
+    layout
+        .opening_problems
+        .extend(crate::openings::unknown_surfaces(&layout.openings, &known));
     layout.placements = project
         .all::<CabinetPlacement>()
         .filter(|p| p.structure == id)
@@ -433,6 +437,40 @@ pub fn openings_of(project: &Project, id: StructureId) -> (Vec<Opening>, Vec<Str
         })
         .collect();
     crate::openings::parse_all(&props)
+}
+
+/// Names of the surfaces of a structure: the main plate, the standard
+/// surfaces of its enclosure, and the extra plates and profiles named by
+/// `surface.<name>` properties.
+pub fn surface_names(
+    project: &Project,
+    id: StructureId,
+    enclosure: Option<&Enclosure>,
+    plate: &Plate,
+) -> Vec<String> {
+    let extra: Vec<(String, String)> = structure(project, id)
+        .map(|s| {
+            s.properties
+                .iter()
+                .filter_map(|(k, v)| {
+                    let name = k.strip_prefix(crate::surfaces::SURFACE_SIZE_PREFIX)?;
+                    match v {
+                        Value::Text(t) => Some((name.to_string(), t.clone())),
+                        _ => None,
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    match enclosure {
+        Some(e) => crate::surfaces::Surfaces::from_enclosure(e, plate, &extra)
+            .0
+            .list
+            .into_iter()
+            .map(|s| s.name)
+            .collect(),
+        None => vec![crate::surfaces::MAIN_PLATE.to_string()],
+    }
 }
 
 pub fn enclosure_of(project: &Project, id: StructureId) -> Option<Enclosure> {

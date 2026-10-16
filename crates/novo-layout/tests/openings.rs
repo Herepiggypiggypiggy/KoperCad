@@ -123,6 +123,16 @@ fn the_layout_reports_devices_over_openings_and_loads_them_from_the_project() {
                 Some(Value::Text("plate round 30 100 200".into())),
             )?;
             tx.set_property(cab, key("bad"), Some(Value::Text("nonsense".into())))?;
+            tx.set_property(
+                cab,
+                key("typo"),
+                Some(Value::Text("plat round 10 5 5".into())),
+            )?;
+            tx.set_property(
+                cab,
+                key("ghost"),
+                Some(Value::Text("plate round 10 5 5 to door 1 1".into())),
+            )?;
             let part = tx.add_part("ACME", "C1")?;
             tx.set_property(part, "width_mm", Some(Value::Float(45.0)))?;
             tx.set_property(part, "height_mm", Some(Value::Float(90.0)))?;
@@ -133,10 +143,29 @@ fn the_layout_reports_devices_over_openings_and_loads_them_from_the_project() {
         })
         .unwrap();
     let (list, problems) = openings_of(&p, cab);
-    assert_eq!((list.len(), problems.len()), (1, 1));
+    assert_eq!((list.len(), problems.len()), (3, 1));
     let layout = load(&p, cab).unwrap();
-    assert_eq!(layout.opening_problems.len(), 1);
+    // 'bad' cannot be read; 'typo' names 'plat'; 'ghost' leads to a door the
+    // structure (no enclosure) does not have.
+    assert_eq!(
+        layout.opening_problems.len(),
+        3,
+        "{:?}",
+        layout.opening_problems
+    );
+    assert!(layout.opening_problems.iter().any(|t| t.contains("'plat'")));
+    assert!(layout.opening_problems.iter().any(|t| t.contains("'door'")));
     let r = layout.report();
     assert_eq!(r.opening_conflicts.len(), 1);
     assert!(!r.is_clean());
+}
+
+#[test]
+fn unknown_surface_names_are_sentences() {
+    let o = Opening::parse("a", "plate round 10 5 5 to plate2 1 1").unwrap();
+    let known = vec!["plate".to_string()];
+    let p = unknown_surfaces(&[o.clone()], &known);
+    assert_eq!(p.len(), 1);
+    assert!(p[0].contains("'plate2'") && p[0].contains("known: plate"));
+    assert!(unknown_surfaces(&[o], &["plate".into(), "plate2".into()]).is_empty());
 }

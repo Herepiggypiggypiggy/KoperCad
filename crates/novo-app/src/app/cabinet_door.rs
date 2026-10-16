@@ -219,10 +219,16 @@ impl DoorState {
         match (layout.enclosure.as_ref(), layout.door_report()) {
             (Some(e), Some(report)) => {
                 report_lines(ui, e, &report, tag_of);
+                for text in &layout.opening_problems {
+                    line(ui, true, text.clone());
+                }
                 ui.add_space(6.0);
                 top_view(ui, e, layout, &report);
             }
             _ => {
+                for text in &layout.opening_problems {
+                    line(ui, true, text.clone());
+                }
                 ui.weak("Set the inside size to see the top view and the checks.");
             }
         }
