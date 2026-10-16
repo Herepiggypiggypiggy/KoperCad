@@ -518,6 +518,10 @@ impl NovoApp {
             .unwrap_or_default();
         if let Some(l) = on_surface.as_ref().and(layout.as_ref()) {
             cands.retain(|c| l.placements.iter().any(|p| p.id == c.id));
+        } else if let Some(sum) = &surfaces {
+            // A device mounted on the door or a wall is placed, not waiting
+            // for a spot on the plate.
+            super::cabinet_surface_move::keep_plate_candidates(&mut cands, sum);
         }
         let sizing_devices = structure
             .map(|s| novo_layout::sizing_model::sizing_devices(project, s))

@@ -42,6 +42,20 @@ pub(super) fn annotate(facts: &mut Facts, summary: Option<&SurfaceSummary>) {
     }
 }
 
+/// Drops the candidates already mounted on another surface: they are placed,
+/// so the plate view must not list them as unplaced or plan them a spot.
+pub(super) fn keep_plate_candidates(
+    cands: &mut Vec<novo_layout::plan::Candidate>,
+    summary: &SurfaceSummary,
+) {
+    cands.retain(|c| {
+        summary
+            .assigned
+            .get(&c.id)
+            .is_none_or(|name| name.as_str() == MAIN_PLATE)
+    });
+}
+
 /// The "On surface" row; returns the surface picked.
 pub(super) fn show(ui: &mut egui::Ui, d: &DeviceFacts) -> Option<String> {
     let choice = d.surface.as_ref()?;

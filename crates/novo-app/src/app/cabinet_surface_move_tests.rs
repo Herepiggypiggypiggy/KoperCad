@@ -6,7 +6,7 @@ use novo_layout::model::{place_device, set_enclosure};
 
 use super::cabinet::Ask;
 use super::cabinet_inspector::{Facts, gather};
-use super::cabinet_surface_move::{annotate, surface_of};
+use super::cabinet_surface_move::{annotate, keep_plate_candidates, surface_of};
 use super::cabinet_surfaces::summarize;
 use super::gate1_tests::Drive;
 use crate::actions::Action;
@@ -165,4 +165,53 @@ fn a_device_on_the_door_leaves_the_plate_view_and_shows_on_the_door_view() {
     d.app.cabinet.surface = Some("door".to_owned());
     d.frame();
     assert!(drawn(&d).contains(&k1), "drawn on the door");
+}
+
+#[test]
+fn a_device_on_the_door_is_not_unplaced_and_place_all_leaves_it_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, k1) = cabinet(&mut d, true);
+    // A second device with no spot yet: the only one the plate needs.
+    let k2 = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("K2", |tx| {
+            let k2 = tx.add_device(DeviceTag::parse("-K2")?, "")?;
+            let page = tx.add_page("2")?;
+            tx.place_symbol(
+                page,
+                "iec/contacts/no",
+                novo_core::Placement::at(novo_core::Point::new(10.0, 10.0)),
+                vec![novo_core::Pin::new("1", 0.0, 0.0)],
+                novo_core::SymbolRole::Device {
+                    device: k2,
+                    main: true,
+                },
+            )?;
+            Ok(k2.raw())
+        })
+        .unwrap()
+        .0;
+    d.app
+        .cabinet_ask(Ask::SetSurface(k1, "door".into()), Some(cab), None, &[]);
+
+    let p = project(&d);
+    let mut cands = novo_layout::model::candidates(p, cab);
+    assert!(cands.iter().any(|c| c.id == k1), "the model still lists K1");
+    let sum = summarize(p, cab).unwrap();
+    keep_plate_candidates(&mut cands, &sum);
+    assert!(!cands.iter().any(|c| c.id == k1), "K1 is mounted elsewhere");
+
+    let mut layout = novo_layout::model::load(p, cab).unwrap();
+    layout.placements.retain(|pl| pl.id != k1);
+    let unplaced: Vec<u64> = layout.unplaced(&cands).iter().map(|c| c.id).collect();
+    assert_eq!(unplaced, [k2], "only K2 waits for a spot on the plate");
+    let plan = layout.preview(&cands);
+    assert!(
+        !format!("{plan:?}").contains(&format!("id: {k1}")),
+        "Place all does not plan K1 onto the plate"
+    );
 }
