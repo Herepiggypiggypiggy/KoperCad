@@ -637,7 +637,11 @@ fn place_all_command_shows_the_preview_from_any_workspace() {
     assert!(d.app.cabinet.preview.is_some());
     assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
     assert_eq!(
-        d.app.wb.keymap.shortcut_text("cabinet.place-all").as_deref(),
+        d.app
+            .wb
+            .keymap
+            .shortcut_text("cabinet.place-all")
+            .as_deref(),
         Some("Ctrl+Shift+P")
     );
 }
