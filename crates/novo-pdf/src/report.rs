@@ -12,8 +12,8 @@ use std::collections::BTreeMap;
 use novo_canvas::{Anchor, Color, Label, Primitive, Shape, Stroke, Vec2};
 use novo_core::{PageFormat, PaperSize};
 use novo_reports::{
-    Align, CsvOptions, ExportError, PageLayout, PageSetup, ReportOutput, layout_page, paginate,
-    to_csv, xlsx_bytes,
+    Align, CsvOptions, ExportError, PageLayout, PageSetup, ReportOutput, i18n::Translator,
+    i18n::translate_layout, i18n::translate_output, layout_page, paginate, to_csv, xlsx_bytes,
 };
 use pdf_writer::types::PageMode;
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref, TextStr};
@@ -34,6 +34,9 @@ pub struct ReportPdfOptions {
     /// Row height in mm for sections that need room to write in, by section
     /// key. The sign-off block gets tall rows so it can be signed by hand.
     pub row_mm: BTreeMap<String, f64>,
+    /// The language of the report text: titles, headers, fixed section
+    /// titles and the pager words. English prints the text as generated.
+    pub language: Translator,
 }
 
 impl Default for ReportPdfOptions {
@@ -47,6 +50,7 @@ impl Default for ReportPdfOptions {
                 ..PageFormat::default()
             },
             row_mm: BTreeMap::from([("signoff".to_owned(), 16.0)]),
+            language: Translator::english(),
         }
     }
 }
@@ -162,7 +166,11 @@ struct Footer<'a> {
 /// so the result always opens in a reader. Output is deterministic.
 pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) -> Vec<u8> {
     let mut sheets: Vec<Sheet> = Vec::new();
-    for report in reports {
+    let translated: Vec<ReportOutput> = reports
+        .iter()
+        .map(|r| translate_output(r, &options.language))
+        .collect();
+    for report in &translated {
         // Paging is per section: rows per page depends on the section's
         // row height.
         for section in &report.sections {
@@ -182,6 +190,7 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
                 layout
                     .texts
                     .retain(|t| !(t.text == heading_number && t.y == heading_y && !t.bold));
+                let layout = translate_layout(&layout, &options.language);
                 let title = if section.title.is_empty() {
                     report.title.clone()
                 } else {
@@ -407,7 +416,9 @@ pub fn report_bytes(
 ) -> Result<Vec<u8>, ExportError> {
     match format {
         ReportFileFormat::Pdf => Ok(export_report_pdf(&[report], options)),
-        ReportFileFormat::Csv(csv) => Ok(to_csv(report, &csv).into_bytes()),
-        ReportFileFormat::Xlsx => xlsx_bytes(&[report]),
+        ReportFileFormat::Csv(csv) => {
+            Ok(to_csv(&translate_output(report, &options.language), &csv).into_bytes())
+        }
+        ReportFileFormat::Xlsx => xlsx_bytes(&[&translate_output(report, &options.language)]),
     }
 }
