@@ -85,6 +85,13 @@ struct Drag {
 }
 
 impl CabinetState {
+    /// The theme changed: the plate view and scene take the new colours
+    /// (the scene is filled again every frame).
+    pub(super) fn restyle(&mut self) {
+        self.view.style = theme::canvas_style();
+        self.scene = CabinetScene::new(theme::cabinet_style());
+    }
+
     pub(super) fn new() -> Self {
         let mut view = CanvasView::new();
         view.style = theme::canvas_style();
