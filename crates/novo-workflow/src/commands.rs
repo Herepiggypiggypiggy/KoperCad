@@ -1179,6 +1179,9 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide ambient occlusion in 3D",
         "View",
         &["occlusion", "ao", "ssao", "contact shadows", "corners"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_position",
         "Show or hide the Position box in 3D",
         "View",
