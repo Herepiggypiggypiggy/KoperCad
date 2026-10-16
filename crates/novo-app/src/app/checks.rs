@@ -68,6 +68,7 @@ impl NovoApp {
         let summary = Summary::of(self.problems());
         let response = novo_theme::widgets::issue_pill(ui, summary.errors, summary.warnings);
         self.wb.pill_rect = response.rect;
+        self.anchor_response("issue.pill", &response, "Issues");
         if response.clicked() {
             self.show_issues(true);
         }

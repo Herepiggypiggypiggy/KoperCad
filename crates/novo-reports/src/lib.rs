@@ -76,6 +76,7 @@
 //! [`PageSetup::title_block_mm`] to match that frame.
 
 mod assembly;
+pub(crate) mod bench;
 mod bom;
 pub mod commissioning;
 mod cutlist;
@@ -85,6 +86,7 @@ mod devices;
 mod diagrams;
 mod export;
 mod io;
+mod label_sheet;
 mod labels;
 mod lengths;
 mod order;
@@ -100,6 +102,10 @@ mod wirecut;
 mod wires;
 
 pub use assembly::{AssemblyChecklist, BOX as ASSEMBLY_BOX};
+pub use bench::{
+    BenchCut, FerruleCount, FerruleSize, FerruleStandard, FerruleTable, STANDARD_KEY, TICK_BOX,
+    bench_jobs, ends_without_ferrule, ferrule_counts, is_estimate, with_spares,
+};
 pub use bom::BillOfMaterials;
 pub use cutlist::CutList;
 pub use defaults::{
@@ -110,6 +116,11 @@ pub use devices::DeviceList;
 pub use diagrams::{CableDiagram, TerminalDiagram};
 pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
 pub use io::IoList;
+pub use label_sheet::{
+    LabelItem, LabelRun, LabelSettings, LabelStock, MIN_TEXT_MM,
+    SETTINGS_KEY as LABEL_SETTINGS_KEY, SheetGrid, TapeStock, label_items, layout_labels,
+    stock_presets,
+};
 pub use labels::{LABEL_LINES, LabelLayout, Labels, labels_csv};
 pub use order::{function_of, location_of, location_text, tag_cmp};
 pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout_page, paginate};
@@ -124,7 +135,7 @@ pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::{PanelContents, TableOfContents};
 pub use wirecut::{
     FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut, WireCutJob, WireEnd,
-    typical_strip_mm, wire_cut_csv, wire_cut_jobs,
+    typical_strip_mm, wire_cut_csv, wire_cut_jobs, wire_cut_jobs_with,
 };
 pub use wires::WireList;
 

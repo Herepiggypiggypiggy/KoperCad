@@ -266,6 +266,67 @@ pub enum SolveOp {
     Cable(CableOp),
     IssueRevision(IssueRevisionOp),
     AssignPart(AssignPartOp),
+    Key(KeySolveOp),
+    LivePole(LivePoleOp),
+    LiveCoil(LiveCoilOp),
+    SetPotential(SetPotentialOp),
+}
+
+/// A click on a pole badge of the live view (Shift+click: this pole only).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LivePoleOp {
+    pub live_pole: LivePoleArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LivePoleArgs {
+    pub device: String,
+    #[serde(default)]
+    pub shift: bool,
+}
+
+/// A click on a coil badge of the live view; `output` for a PLC output.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LiveCoilOp {
+    pub live_coil: LiveCoilArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LiveCoilArgs {
+    pub device: String,
+    #[serde(default)]
+    pub output: bool,
+}
+
+/// The right-click chip of a feed: the feed at a spot takes the potential
+/// the chip names (`PE`, `L1`, `+24 V`).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SetPotentialOp {
+    pub set_potential: SetPotentialArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SetPotentialArgs {
+    /// Where the feed's symbol is, in millimetres.
+    pub feed_at: [f64; 2],
+    /// Its page; the page shown when missing.
+    #[serde(default)]
+    pub page: Option<String>,
+    pub chip: String,
+}
+
+/// A key pressed on the keyboard, by name (`Enter`, `Escape`, `Tab`, `Y`):
+/// what takes a preview or a dialog.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct KeySolveOp {
+    pub key: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
