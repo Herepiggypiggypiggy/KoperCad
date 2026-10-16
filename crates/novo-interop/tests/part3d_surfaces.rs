@@ -275,3 +275,29 @@ fn a_step_bspline_face_keeps_its_bump_in_both_spellings() {
         );
     }
 }
+
+#[test]
+fn a_step_bspline_with_an_over_cap_degree_or_infinite_knot_falls_back_to_flat() {
+    use std::sync::atomic::AtomicBool;
+    let base = patch_step(false);
+    let hostile = [
+        // Degree 40 in both directions (knot lists no longer fit).
+        base.replace("',3,3,(", "',40,40,("),
+        // An infinite knot.
+        base.replace("(0.,1.),(0.,1.)", "(0.,1.0E999),(0.,1.)"),
+    ];
+    for text in hostile {
+        let g = novo_interop::part3d::geometry_from_step(
+            text.as_bytes(),
+            None,
+            novo_interop::part3d::Quality::Normal,
+            &AtomicBool::new(false),
+            None,
+        )
+        .unwrap();
+        let novo_interop::part3d::MeshOrigin::Step { stats, .. } = g.origin else {
+            panic!("a model")
+        };
+        assert_eq!(stats.approximated_faces, 1, "flat, not a stall");
+    }
+}

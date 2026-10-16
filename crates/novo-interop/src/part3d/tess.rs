@@ -231,7 +231,8 @@ fn unwrap_nurbs(n: &SplineSurface, pts: &[V3], tol: f64) -> Option<UvLoop> {
     let mut uv: Vec<[f64; 2]> = Vec::with_capacity(pts.len());
     for &p in pts {
         let (q, d) = n.project(p, uv.last().copied());
-        if d > reach {
+        // A NaN distance fails too.
+        if d.is_nan() || d > reach {
             return None;
         }
         uv.push(q);
@@ -239,7 +240,8 @@ fn unwrap_nurbs(n: &SplineSurface, pts: &[V3], tol: f64) -> Option<UvLoop> {
     for i in 0..uv.len() {
         let j = (i + 1) % uv.len();
         let mid = n.eval((uv[i][0] + uv[j][0]) * 0.5, (uv[i][1] + uv[j][1]) * 0.5);
-        if distance_to_segment(mid, pts[i], pts[j]) > reach {
+        let off = distance_to_segment(mid, pts[i], pts[j]);
+        if off.is_nan() || off > reach {
             return None;
         }
     }

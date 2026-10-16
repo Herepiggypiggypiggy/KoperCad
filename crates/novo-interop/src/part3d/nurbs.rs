@@ -18,6 +18,12 @@ pub struct SplineSurface {
     pub v_knots: Vec<f64>,
 }
 
+/// Largest degree and control net read. Evaluation costs O(degree^2) and a
+/// boundary point takes hundreds of evaluations, so a hostile file could
+/// otherwise stall one face.
+pub const MAX_DEGREE: usize = 16;
+pub const MAX_NET: usize = 50_000;
+
 /// Samples per direction of the coarse search for a first guess.
 const SEARCH_GRID: usize = 16;
 
@@ -31,7 +37,16 @@ impl SplineSurface {
         u_knots: Vec<f64>,
         v_knots: Vec<f64>,
     ) -> Option<SplineSurface> {
-        let ok = u_degree >= 1
+        let finite = ctrl.iter().flatten().all(|v| v.is_finite())
+            && u_knots.iter().chain(&v_knots).all(|k| k.is_finite())
+            && weights
+                .as_ref()
+                .is_none_or(|w| w.iter().all(|x| x.is_finite()));
+        let ok = finite
+            && u_degree <= MAX_DEGREE
+            && v_degree <= MAX_DEGREE
+            && nu.checked_mul(nv).is_some_and(|n| n <= MAX_NET)
+            && u_degree >= 1
             && v_degree >= 1
             && nu > u_degree
             && nv > v_degree
@@ -264,6 +279,35 @@ mod tests {
         }
         let k = vec![0.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0];
         SplineSurface::new((3, 3), (4, 4), ctrl, None, k.clone(), k).unwrap()
+    }
+
+    #[test]
+    fn hostile_surfaces_are_refused() {
+        let k = |n: usize| (0..n).map(|i| i as f64).collect::<Vec<_>>();
+        let pts = vec![[0.0; 3]; 4];
+        // Degree over the cap.
+        let big = MAX_DEGREE + 1;
+        let n = big + 1;
+        assert!(
+            SplineSurface::new(
+                (big, 1),
+                (n, 2),
+                vec![[0.0; 3]; n * 2],
+                None,
+                k(n + big + 1),
+                k(4)
+            )
+            .is_none()
+        );
+        // A non-finite knot (1.0E999 parses to infinity).
+        let mut kn = vec![0.0, 0.0, 1.0, 1.0];
+        kn[2] = f64::INFINITY;
+        assert!(SplineSurface::new((1, 1), (2, 2), pts.clone(), None, kn.clone(), kn).is_none());
+        // A non-finite control point.
+        let mut bad = pts;
+        bad[1][0] = f64::NAN;
+        let kk = vec![0.0, 0.0, 1.0, 1.0];
+        assert!(SplineSurface::new((1, 1), (2, 2), bad, None, kk.clone(), kk).is_none());
     }
 
     #[test]
