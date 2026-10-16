@@ -10,3 +10,7 @@ Open:
 - Speed: momentum assembly (about 30% of an iteration) is generic and allocation heavy; pressure solve scales poorly past 2 threads; sweeps are serial (bit-identical choice).
 - Not validated: Churchill-Chu plate and IEC 60890 sealed box on the steady path (the IEC gap belongs to CFD-C2). Open-face law only tested on small vent/fan cabinets.
 - Stability: pseudo step is limited by buoyancy frequency (buoyancy_cfl 1; 2 diverges).
+
+Fan + porous duct (tests/flow_steady.rs): steady closes the heat balance to 0.1 %, the march leaks about 3 % with a fan (51.7 W out for 50 W in), the device is +0.9 K above the march (8 % of the rise), fan flow agrees to 0.1 %. Cause not found; fan+duct steady is not validated better than ~8 %.
+Turbulence: LevelTuning.turbulent (and, after #694, CabinetSolver.turbulence != Laminar) forces the march; wiring TurbState into steady_iterate is a follow-up.
+heat_scale is applied in steady energy and heating_w; the radiation source extra_heat_w_m3 (CFD-A) is not mirrored yet.
