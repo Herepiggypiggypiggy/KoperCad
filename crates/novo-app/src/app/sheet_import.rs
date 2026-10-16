@@ -9,7 +9,8 @@ use std::path::Path;
 
 use eframe::egui;
 use novo_interop::sheets::{
-    AddedRow, ImportPlan, Resolution, TableKind, plan_import_with, read_file,
+    AddedRow, ImportPlan, Resolution, TableKind, Workbook, plan_import_with, read_file,
+    rejected_workbook, xlsx_bytes,
 };
 use novo_parts::Catalog;
 
@@ -83,16 +84,20 @@ pub(super) fn row_groups(plan: &ImportPlan) -> Vec<RowGroup> {
 pub(super) struct SheetImport {
     file_name: String,
     plan: ImportPlan,
+    /// The workbook the plan was made from, kept to write the rejected rows
+    /// back out.
+    book: Workbook,
     groups: Vec<RowGroup>,
     filter: Filter,
 }
 
 impl SheetImport {
-    pub(super) fn new(file_name: String, plan: ImportPlan) -> SheetImport {
+    pub(super) fn new(file_name: String, plan: ImportPlan, book: Workbook) -> SheetImport {
         let groups = row_groups(&plan);
         SheetImport {
             file_name,
             plan,
+            book,
             groups,
             filter: Filter::All,
         }
@@ -220,7 +225,61 @@ impl NovoApp {
             self.message(Level::Info, text);
             return;
         }
-        self.wb.sheet_import = Some(SheetImport::new(name, plan));
+        self.wb.sheet_import = Some(SheetImport::new(name, plan, book));
+    }
+
+    /// Writes the rejected rows to `<project> rejected rows.xlsx` next to the
+    /// project (a free name, or our own earlier file).
+    pub(super) fn save_rejected_rows(
+        &mut self,
+        plan: &ImportPlan,
+        book: &Workbook,
+    ) -> Option<std::path::PathBuf> {
+        let Some(rejected) = rejected_workbook(plan, book) else {
+            self.message(Level::Info, "No rejected rows to save");
+            return None;
+        };
+        let bytes = match xlsx_bytes(&rejected) {
+            Ok(bytes) => bytes,
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not save the rejected rows: {e}"),
+                );
+                return None;
+            }
+        };
+        let (dir, stem) = self.export_base()?;
+        let path = super::sheets::ours_or_free(
+            &dir,
+            &format!("{stem} rejected rows"),
+            "xlsx",
+            &self.wb.sheet_exports,
+        );
+        match super::pdf::write_replacing(&path, &bytes) {
+            Ok(()) => {
+                self.wb
+                    .sheet_exports
+                    .insert(path.clone(), super::sheets::hash(&bytes));
+                self.message(
+                    Level::Info,
+                    format!(
+                        "Saved {} rejected rows: {}",
+                        plan.rejected.len(),
+                        path.display()
+                    ),
+                );
+                self.wb.last_export = Some(path.clone());
+                Some(path)
+            }
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not write {}: {e}", path.display()),
+                );
+                None
+            }
+        }
     }
 
     /// The preview as a modal: a tick per row, filters, conflicts, rejected
@@ -315,11 +374,22 @@ impl NovoApp {
                 let label = format!("Apply {n} change{} (Enter)", if n == 1 { "" } else { "s" });
                 let apply = ui.add_enabled(n > 0, egui::Button::new(label)).clicked();
                 let cancel = ui.button("Cancel (Esc)").clicked();
-                (apply, cancel)
+                let rejected = import.plan.rejected.len();
+                let save = ui
+                    .add_enabled(rejected > 0, egui::Button::new("Save rejected rows..."))
+                    .on_hover_text(
+                        "Write the rows that cannot be used to a workbook, with the reason \
+                         in a last column. Fix them there and import that file.",
+                    )
+                    .clicked();
+                (apply, cancel, save)
             })
             .inner
         });
-        let (apply, cancel) = modal.inner;
+        let (apply, cancel, save) = modal.inner;
+        if save {
+            self.save_rejected_rows(&import.plan, &import.book);
+        }
         let enter = ctx.input(|i| i.key_pressed(egui::Key::Enter));
         if apply || (enter && !import.plan.is_empty()) {
             self.apply_sheet_import(&import.plan);
@@ -660,5 +730,34 @@ mod tests {
                 .iter()
                 .any(|m| m.text.contains("Could not"))
         );
+    }
+
+    #[test]
+    fn the_rejected_rows_can_be_saved_as_a_workbook() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut d, _) = drive_with_sheet(dir.path(), "x");
+        assert!(d.app.save_to(&dir.path().join("Plant.novo")));
+        let mut book = export_project(d.app.document().unwrap().project());
+        let table = &mut book.tables[0];
+        let id = table.column("Id").unwrap();
+        table.rows[0].cells[id] = Cell::text("not an id");
+        let path = dir.path().join("bad.xlsx");
+        std::fs::write(&path, xlsx_bytes(&book).unwrap()).unwrap();
+        d.app.import_sheet_from(&path);
+        let import = d.app.wb.sheet_import.take().expect("the preview opens");
+        assert_eq!(import.plan.rejected.len(), 1);
+        let saved = d
+            .app
+            .save_rejected_rows(&import.plan, &import.book)
+            .expect("saved");
+        assert_eq!(saved, dir.path().join("Plant rejected rows.xlsx"));
+        let back = read_file("r.xlsx", &std::fs::read(&saved).unwrap()).unwrap();
+        let t = &back.tables[0];
+        assert_eq!(t.rows.len(), 1);
+        assert_eq!(t.headers.last().unwrap(), novo_interop::sheets::WHY_HEADER);
+        // The dialog draws the button, enabled for a plan with rejects.
+        d.app.wb.sheet_import = Some(import);
+        d.frame();
+        assert!(d.app.wb.sheet_import.is_some());
     }
 }
