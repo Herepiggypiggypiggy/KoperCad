@@ -1108,7 +1108,14 @@ pub const COMMANDS: &[CommandInfo] = &[
         "view.fit",
         "Zoom to fit",
         "View",
-        &["zoom", "extents"],
+        &["zoom", "extents", "drawing", "content"],
+        Needs::Page,
+    ),
+    cmd(
+        "view.fit_sheet",
+        "Fit whole sheet",
+        "View",
+        &["zoom", "paper", "page", "extents"],
         Needs::Page,
     ),
     cmd(
