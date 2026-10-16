@@ -22,6 +22,11 @@
 //! | `sccr_ka` | short-circuit current rating marked on the device, kA |
 //! | `fuse_class` | UL fuse class (`J`, `CC`, `RK5`…), for SCCR combinations |
 //! | `current_limiting` | breaker is a listed current-limiting type |
+//! | `let_through` | limiter's let-through table for the SCCR credit: `rms A : peak A : A²s` points separated by `;` (maker data) |
+//! | `withstand_peak_ka`, `withstand_i2t` | what the device withstands (peak kA, A²s), so a limiter ahead can raise its SCCR |
+//!
+//! The last three feed the limiter credit of the panel SCCR. They are the
+//! designer's planning values from maker data, not a certified rating.
 //! | `supply.short_circuit_ka` | project: prospective current at the supply, kA |
 //!
 //! Which devices are protective, and which side is the line side, follows
@@ -37,12 +42,68 @@ use novo_core::{
 
 use super::coordination::{self, Finding, Node};
 use super::curves::{McbCurve, RelayClass, TripCurve};
-use super::devices::{Device, MakerTables};
+use super::devices::{Device, LetThrough, MakerTables, Withstand};
 use super::sccr::{self, Branch, Class, Component, Kind, Panel, Protector};
 use super::selectivity::{Backup, Selectivity, Settings};
 
 /// The project property for the prospective current at the supply, kA.
 pub const SUPPLY_SHORT_CIRCUIT_KA: &str = "supply.short_circuit_ka";
+
+/// Device property: breaker is a listed current-limiting type.
+pub const CURRENT_LIMITING: &str = "current_limiting";
+/// Device property: UL fuse class.
+pub const FUSE_CLASS: &str = "fuse_class";
+/// Device property: let-through table, `rms A : peak A : A²s` points
+/// separated by `;`.
+pub const LET_THROUGH: &str = "let_through";
+/// Device property: highest peak current the device withstands, kA.
+pub const WITHSTAND_PEAK_KA: &str = "withstand_peak_ka";
+/// Device property: highest let-through energy the device withstands, A²s.
+pub const WITHSTAND_I2T: &str = "withstand_i2t";
+
+/// Reads a let-through table written as `1000:800:5000; 6000:1500:20000`
+/// (prospective rms A : peak A : A²s). Points are separated by `;`, fields
+/// by `:`; a dot is the decimal mark.
+pub fn parse_let_through(text: &str) -> Result<LetThrough, String> {
+    let mut points = Vec::new();
+    for chunk in text.split(';').map(str::trim).filter(|c| !c.is_empty()) {
+        let nums: Vec<f64> = chunk
+            .split(':')
+            .map(|n| n.trim().parse::<f64>())
+            .collect::<Result<_, _>>()
+            .map_err(|_| format!("\"{chunk}\" is not three numbers like 6000:1500:20000"))?;
+        let [i, ip, e] = nums[..] else {
+            return Err(format!(
+                "\"{chunk}\" needs three numbers: rms A : peak A : A²s"
+            ));
+        };
+        points.push((i, ip, e));
+    }
+    LetThrough::new(points).map_err(|e| format!("let-through table: {e}"))
+}
+
+/// A let-through table as [`parse_let_through`] reads it.
+pub fn format_let_through(table: &LetThrough) -> String {
+    table
+        .points()
+        .iter()
+        .map(|(i, ip, e)| format!("{i}:{ip}:{e}"))
+        .collect::<Vec<_>>()
+        .join("; ")
+}
+
+/// `true` for a flag property that is set (`true`, `yes`, `1`).
+fn flag(properties: &Properties, key: &str) -> bool {
+    match properties.get(key) {
+        Some(Value::Bool(b)) => *b,
+        Some(Value::Int(i)) => *i != 0,
+        Some(Value::Text(t)) => matches!(
+            t.trim().to_ascii_lowercase().as_str(),
+            "true" | "yes" | "1" | "ja"
+        ),
+        _ => false,
+    }
+}
 
 /// What kind of protective device a symbol is.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -126,6 +187,13 @@ pub struct ProjectDevice {
     pub assumed: Vec<String>,
     /// Marked short-circuit rating, kA.
     pub sccr_ka: Option<f64>,
+    /// Class for matching tested combinations and limiters.
+    pub class: Class,
+    /// Let-through table of a current limiter (planning data from the
+    /// maker, entered by the designer).
+    pub let_through: Option<LetThrough>,
+    /// What the device itself withstands, for the limiter credit.
+    pub withstand: Option<Withstand>,
     /// Devices directly behind it (indices into [`Study::devices`]).
     pub downstream: Vec<usize>,
     /// Contactors and other pass-through power parts directly behind it:
@@ -249,6 +317,21 @@ fn read_device(project: &Project, id: DeviceId, kind: DeviceType) -> Option<Proj
         device,
         assumed,
         sccr_ka: num("sccr_ka").filter(|k| *k > 0.0),
+        class: match kind {
+            DeviceType::Fuse => Class::Fuse(txt(FUSE_CLASS).unwrap_or_else(|| "gG".to_string())),
+            _ if lookup(project, id, |p| flag(p, CURRENT_LIMITING).then_some(())).is_some() => {
+                Class::LimitingBreaker
+            }
+            _ => Class::Breaker,
+        },
+        let_through: txt(LET_THROUGH).and_then(|t| parse_let_through(&t).ok()),
+        withstand: num(WITHSTAND_PEAK_KA)
+            .zip(num(WITHSTAND_I2T))
+            .filter(|(p, e)| *p > 0.0 && *e > 0.0)
+            .map(|(p, e)| Withstand {
+                peak_a: p * 1000.0,
+                i2t: e,
+            }),
         downstream: Vec::new(),
         passes: Vec::new(),
     })
@@ -422,17 +505,16 @@ impl Study {
             DeviceType::OverloadRelay => Kind::OverloadRelay,
             DeviceType::Mcb | DeviceType::MotorBreaker => Kind::CircuitBreaker,
         };
-        let class = match d.kind {
-            DeviceType::Fuse => Class::Fuse("gG".into()),
-            _ => Class::Breaker,
-        };
         let mut branch = Branch {
             name: d.tag.clone(),
             protector: Some(Protector {
-                component: Component::new(d.tag.clone(), kind, d.sccr_ka),
-                class,
+                component: Component {
+                    withstand: d.withstand,
+                    ..Component::new(d.tag.clone(), kind, d.sccr_ka)
+                },
+                class: d.class.clone(),
                 rating_a: d.device.rated_a(),
-                let_through: None,
+                let_through: d.let_through.clone(),
             }),
             ..Default::default()
         };
