@@ -5,9 +5,11 @@ Scope: "Open example", the seven-step fast-keys card, the practice project. Desi
 Done
 - Design amendments (#373): seven steps, ticks from use, example marked saved.
 - Open example (#394): start panel, project menu, `file.example`.
-- Walk-through (this branch `claude/project-thread-e4qih3-tour`): card, practice project, `file.practice`, `help.walkthrough`.
+- Walk-through (#428): card, practice project, `file.practice`, `help.walkthrough`.
 
 Next
+- Convert to lesson `fast-keys` with the Learning modules engine, then delete the card (signals proposal_next, proposal_accept, wheel_opened).
+- Quiet the issue pill on the practice project; keycap widget and icons on the card.
 - Hands-on check by Tadjiro on Windows (card position at small windows, wheel tick).
 - Dutch step text with the language work.
 - Move the fixture into a small example crate when cheap (design decision 1).
