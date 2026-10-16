@@ -3,6 +3,7 @@
 //! It is baked on the CPU into a small one-channel texture laid over the
 //! plate and redone only when the scene or the layers change.
 
+use crate::math::Aabb;
 use crate::scene::{ItemKind, Scene};
 use crate::view_state::ViewState;
 
@@ -34,6 +35,45 @@ impl AoMap {
     }
 }
 
+/// Footprints on the plate (world boxes) of the items the term is cast by:
+/// opaque, visible, standing on the plate. Wires, the shell, the door and the
+/// plate itself cast none.
+fn footprints<'a>(scene: &'a Scene, state: &'a ViewState) -> impl Iterator<Item = Aabb> + 'a {
+    scene.items.iter().filter_map(move |item| {
+        let kind = item.id.kind;
+        if item.translucent
+            || matches!(
+                kind,
+                ItemKind::Plate | ItemKind::Enclosure | ItemKind::Door | ItemKind::Wire
+            )
+            || !state.is_visible(kind)
+        {
+            return None;
+        }
+        let b = scene.world_bounds(item);
+        (b.min.z <= FOOT_MM && b.max.z >= 0.5).then_some(b)
+    })
+}
+
+/// What the baked map depends on: the plate, the strength and the footprints.
+/// Moving a door or a part that casts nothing leaves it alone.
+pub fn key(scene: &Scene, state: &ViewState, strength: f32) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (
+        scene.frame.width.to_bits(),
+        scene.frame.height.to_bits(),
+        strength.to_bits(),
+    )
+        .hash(&mut h);
+    for b in footprints(scene, state) {
+        for v in [b.min.x, b.min.y, b.max.x, b.max.y] {
+            v.to_bits().hash(&mut h);
+        }
+    }
+    h.finish()
+}
+
 /// Bakes the term: `strength` (0 to 1) at the foot of a device, falling to
 /// nothing `AO_RADIUS_MM` away.
 pub fn bake(scene: &Scene, state: &ViewState, strength: f32) -> AoMap {
@@ -43,21 +83,7 @@ pub fn bake(scene: &Scene, state: &ViewState, strength: f32) -> AoMap {
     let height = ((ph / cell).ceil() as u32).max(1);
     let mut data = vec![0u8; (width * height) as usize];
     let top = (strength.clamp(0.0, 1.0) * 255.0).round();
-    for item in &scene.items {
-        let kind = item.id.kind;
-        if item.translucent
-            || matches!(
-                kind,
-                ItemKind::Plate | ItemKind::Enclosure | ItemKind::Door | ItemKind::Wire
-            )
-            || !state.is_visible(kind)
-        {
-            continue;
-        }
-        let b = scene.world_bounds(item);
-        if b.min.z > FOOT_MM || b.max.z < 0.5 {
-            continue;
-        }
+    for b in footprints(scene, state) {
         let reach = |lo: f32, hi: f32, n: u32| {
             let a = ((lo - AO_RADIUS_MM) / cell).floor().max(0.0) as u32;
             let z = (((hi + AO_RADIUS_MM) / cell).ceil().max(0.0) as u32).min(n);
@@ -143,5 +169,27 @@ mod tests {
                 .iter()
                 .all(|&v| v == 0)
         );
+    }
+
+    #[test]
+    fn the_key_follows_footprints_not_the_door_or_unrelated_changes() {
+        let mut scene = scene_with_box(ItemKind::Device, 0.0);
+        let state = ViewState::default();
+        let base = key(&scene, &state, 0.35);
+        assert_eq!(base, key(&scene, &state, 0.35), "stable");
+        assert_ne!(base, key(&scene, &state, 0.2), "strength");
+        let mut hidden = ViewState::default();
+        hidden.hidden.insert(ItemKind::Device);
+        assert_ne!(base, key(&scene, &hidden, 0.35), "layers");
+        // A door swinging (or anything translucent) does not touch the map.
+        let mut door = Item::new(
+            ItemId::new(ItemKind::Door, 0),
+            Shape::Box,
+            Pose::at(Vec3::new(10.0, 10.0, 0.0)),
+            Vec3::new(5.0, 5.0, 5.0),
+        );
+        door.translucent = true;
+        scene.push(door);
+        assert_eq!(base, key(&scene, &state, 0.35), "door");
     }
 }

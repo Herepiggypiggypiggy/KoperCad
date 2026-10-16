@@ -1141,7 +1141,7 @@ impl Renderer {
         // Plate occlusion: baked when the scene or the layers change.
         let ao_on = look.contact_shade > 0.0;
         if ao_on {
-            let akey = ao_key(scene, frame.state, look.contact_shade);
+            let akey = ao::key(scene, frame.state, look.contact_shade);
             if target.ao_key != Some(akey) {
                 let map = ao::bake(scene, frame.state, look.contact_shade);
                 if target.ao_size != (map.width, map.height) {
@@ -1471,20 +1471,6 @@ fn shadow_key(scene: &Scene, state: &ViewState, light_vp: &Mat4) -> u64 {
     }
     for v in light_vp.to_cols_array() {
         v.to_bits().hash(&mut h);
-    }
-    h.finish()
-}
-
-/// What the plate occlusion depends on: the scene, the layers and its strength.
-fn ao_key(scene: &Scene, state: &ViewState, strength: f32) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut h = std::collections::hash_map::DefaultHasher::new();
-    (scene.revision, scene.pose_revision, strength.to_bits()).hash(&mut h);
-    for g in &scene.groups {
-        g.angle.to_bits().hash(&mut h);
-    }
-    for k in &state.hidden {
-        k.hash(&mut h);
     }
     h.finish()
 }

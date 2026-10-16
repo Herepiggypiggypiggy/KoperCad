@@ -666,28 +666,47 @@ fn the_plate_is_darker_around_a_device_than_far_from_it() {
         1,
         Vec3::new(150.0, 150.0, 0.0),
         Vec3::new(40.0, 40.0, 20.0),
-        [180, 120, 90],
+        [40, 90, 200],
     ));
     let mut camera = Camera::default();
-    camera.set_preset(ViewPreset::Top);
+    camera.set_preset(ViewPreset::Iso);
     camera.fit(&scene.bounds(), SIZE.0 as f32 / SIZE.1 as f32);
     let mut state = ViewState::default();
     state.display.shadows = false;
     state.display.edges = false;
-    let (mut open, mut occluded) = (Look::dark(), Look::dark());
+    let (mut open, mut occluded) = (Look::light(), Look::light());
     open.contact_shade = 0.0;
-    occluded.contact_shade = 0.35;
+    occluded.contact_shade = 0.8;
     let picture =
         |look: &Look| render_look(&gpu, &scene, &state, &camera, Mode::Settled, &[], look);
     let (a, b) = (picture(&open), picture(&occluded));
+    // The open plate's grey: the most common red value of the open picture,
+    // which is the plate (the background gradient is a different value per row).
+    let mut hist = [0usize; 256];
+    for x in a.chunks(4) {
+        hist[usize::from(x[0])] += 1;
+    }
+    let plate_grey = (0..256).max_by_key(|&v| hist[v]).unwrap() as i32;
+    // Only plain plate counts: pixels that are plate grey when open and have
+    // no non-plate neighbour, so the device, its edge and its sides (which
+    // the contact shade darkens too) cannot pass for occlusion on the plate.
+    let (w, h) = (SIZE.0 as usize, SIZE.1 as usize);
+    let plate = |x: usize, y: usize| (i32::from(a[(y * w + x) * 4]) - plate_grey).abs() <= 1;
     let (mut darker, mut brighter) = (0, 0);
-    for (x, y) in a.chunks(4).zip(b.chunks(4)) {
-        let (x, y) = (i32::from(x[0]), i32::from(y[0]));
-        darker += usize::from(y < x - 6);
-        brighter += usize::from(y > x + 2);
+    for y in 1..h - 1 {
+        for x in 1..w - 1 {
+            let (o, c) = (i32::from(a[(y * w + x) * 4]), i32::from(b[(y * w + x) * 4]));
+            brighter += usize::from(c > o + 2);
+            let clear = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+                .iter()
+                .all(|&(dx, dy)| plate((x as i32 + dx) as usize, (y as i32 + dy) as usize));
+            if plate(x, y) && clear {
+                darker += usize::from(c < o - 4);
+            }
+        }
     }
     assert!(
-        darker > 150,
+        darker > 20,
         "a ring of plate around the device is darker ({darker} px)"
     );
     assert_eq!(brighter, 0, "occlusion never brightens anything");
