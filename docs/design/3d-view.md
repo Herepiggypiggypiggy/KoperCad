@@ -50,7 +50,7 @@ assemblies, ray tracing, shadows from lights, VR.
 | Culling | CPU frustum cull of item bounds, plus a screen-size level of detail for meshes (below 24 px the box, below 3 px nothing). | Cheap, and it is the lever that keeps imported meshes from costing frames. No occlusion culling: a closed door hides the inside by drawing it. |
 | Look of edges | Box and feature edges are drawn as lines over the shaded faces. | Crisp, readable and cheap, no post-process pass. |
 | Labels, view cube, dimensions | Drawn with the egui painter over the 3D image, from `View3d::project`. | No text rendering in wgpu, and the labels follow the app theme and font for free. |
-| Quality | Two tiers, chosen from the adapter type (`Tier`: discrete, integrated, software). **Interactive** (while the camera moves): no MSAA, render scale 1.0 on discrete, 0.75 on integrated, 0.5 on software adapters. **Settled** (a moment after input stops): full scale, 4x MSAA, one extra frame. | Fill rate is what an integrated GPU lacks, not triangles. Refine-on-settle gives a sharp still image and a smooth orbit. |
+| Quality | Two tiers, chosen from the adapter type (`Tier`: discrete, integrated, software). **Interactive** (while the camera moves): no MSAA, render scale 1.0 on discrete, 0.75 on integrated, 0.5 on software adapters. **Settled** (a moment after input stops): full scale, 4x MSAA, one extra frame. | Fill rate is what an integrated GPU lacks, not triangles. Refine-on-settle gives a sharp still image and a smooth orbit. The frame governor only steps a discrete GPU down to the integrated row, never to software (see "Dimensions and the frame governor"). |
 | Redraw | On demand. The view asks egui for a repaint only while the camera animates, input arrives, or the scene changes. | Idle cabinets cost nothing, so laptops stay quiet. |
 | Motion | Camera transitions ease over 250 ms; with the app's reduced-motion setting they jump. | Same rule as the Live view animation (#377). |
 | Dependencies at runtime | Pure Rust, no native library, no installer, no network. Works on whatever wgpu backend the app already runs (DX12 or Vulkan). | Hard requirement: no admin rights. |
@@ -344,6 +344,42 @@ amber tint are never the only difference.
   counts its pixels, and a second one checks that a bi-colour wire shows both
   colours.
 
+### Dimensions and the frame governor (2026-10-16)
+
+- **Dimensions** (`dimension.rs`, GPU free; painted by `widget`). Off by
+  default; toolbar toggle "Dimensions", command `view.3d_dimensions`
+  (View > 3D, palette "dimensions" or "measure", Dutch "maatvoering", also in
+  the right-click menu of the 3D view). With nothing selected the
+  enclosure's overall width, height and depth are drawn standing off the box
+  (from its shell; with no shell only the plate's width and height, since its
+  third side is a thickness, not a depth). With exactly one part selected (device, rail,
+  duct) its width, height and depth are added, and the clear distance to the
+  nearest neighbour on each of the four sides, or to the plate edge when
+  nothing is there. Distances are along the plate and in millimetres, written
+  with one decimal only when needed (`50 mm`, `54.5 mm`): what a hand-drilled
+  layout needs. Touching parts have no line; several selected parts add no
+  part lines (a distance needs one part). Lines too short on screen to carry
+  their text are left out and appear when zoomed in. Colour: overall muted, part
+  size in the text colour, distances in the selection blue; the text is on a
+  chip, never colour alone.
+- **Frame governor connected** (`governor.rs` is now generic over the tier
+  type). While the view moves, the widget feeds each frame interval to a
+  governor on the adapter's `render::Tier`; when the 95th percentile stays over
+  20 ms for two seconds it steps Discrete to Integrated (less resolution while
+  moving) and never steps up by itself. Integrated is the floor: the interval is
+  the whole app's, not the GPU's, so a slow solver or a busy panel must not
+  silently take a hardware adapter to no shadows and no MSAA. Software is only
+  the tier of a CPU adapter. Idle intervals are not counted (an idle view repaints
+  rarely). The statistics panel says "quality stepped down to ..." when it did
+  and the way back is in the UI: command `view.3d_quality` ("Restore 3D quality",
+  View > 3D, palette, right-click menu, Dutch "kwaliteit herstellen"), a
+  "Restore quality" button in the toolbar and in the statistics panel while
+  the quality is stepped down; all call `View3d::reset_quality`, which starts
+  again from the adapter's tier. The tier
+  steps are the renderer's existing ones (`Quality::new`), not the palette's
+  `QualityTier`, which stays unused until the renderer has more than two
+  settings to move.
+
 ## 6. Camera and input
 
 Turntable orbit around a target point, +Y up, so the cabinet never rolls.
@@ -565,6 +601,58 @@ third between runs, so it is given as the range of three runs.
 - Scene rebuild (`model::scene`) and routing are measured by the app itself,
   see the panel below; the renderer's benchmark does not include them.
 
+### Performance pass at 1366x768 (2026-10-16)
+
+Two tools, because the cost is in two places. `orbit` (renderer, offscreen) got
+`--tier`, `--shadows`, `--no-edges` and `--heat N` (a translucent slice plane of
+N x N quads and N tracer lines of 40 points, a stand-in for the Heat layer);
+`uicost` (new example) runs the widget itself headless over the turning demo
+cabinet and prints milliseconds per frame, so the CPU cost outside the GPU shows.
+
+**The top cost was not in the renderer.** Renderer CPU is 0.13 to 0.2 ms at 400
+devices and 120 wires. The widget's label pass was 51 ms per frame at 1000
+devices and 300 wires (release build, median of 300 frames), every frame the
+view moved: `View3d::project` took the bounds of the whole scene (a walk over
+every item and wire point) for each label and mark, so a frame cost items
+squared. The label pass now takes the bounds once (`project_in`):
+
+| Widget CPU per frame, 1366x768 | before | after |
+| --- | --- | --- |
+| 1000 devices, 300 wires, labels on | 51.0 ms | 0.45 ms |
+| 3000 devices, 1000 wires, labels on | (not measured, about 9 times worse) | 1.54 ms |
+| 200 devices, 60 wires | | 0.10 ms |
+
+A test counts the scene-bounds walks per frame and requires the same number
+with 20 and with 600 devices (it fails with 22 against 602 on the old code),
+and that it is one: `show` hands its bounds to the overlay and the dimension
+painter, so a frame walks the scene once.
+The label cost left at 3000 devices (1.5 ms, three times the rest of the
+widget) was not the overlap check: a grid for it measured the same. It was the
+text layout of a chip for every device in view, of which nearly all are too
+small to carry a label. A device now gets its chip laid out only when it could
+show one (28 px wide, selected, hovered, or still fading out), and the shown
+set is a hash set instead of a list searched per chip:
+
+| Widget CPU per frame, 1366x768 | before | after |
+| --- | --- | --- |
+| 1000 devices, 300 wires, labels on | 0.43 ms | 0.19 ms |
+| 3000 devices, 1000 wires, labels on | 1.50 ms | 0.51 ms |
+
+(Same release `uicost` run, the labels-off row is 0.48 ms at 3000 devices, so
+labels now cost 0.03 ms.) A test counts the chips laid out per frame.
+
+**Renderer on llvmpipe at 1366x768** (4 cores, software rasteriser, forced to the
+discrete tier so shadows and MSAA settings match a real GPU; wall ms per frame
+median, 400 devices and 120 wires, 120 frames): 11.0 base, 14.8 with shadows,
+9.6 with shadows and no edges, 17.6 with shadows and a 60 x 60 heat slice (7 200
+translucent triangles plus 60 tracers), 38.6 with a 200 x 200 slice (80 000
+triangles), 76.2 with that and 4x MSAA. A software rasteriser is slow at what a
+GPU does for free (1 px lines, large translucent fills), so these rank the
+passes but do not predict a GPU: edges are 5 ms here and shadows 4 ms, the
+translucent slice scales with its covered pixels, MSAA doubles everything. Real
+numbers come from the owner's laptop (steps below). Ambient occlusion is not on
+main yet (#762).
+
 ### Measuring on your own machine
 
 View > 3D > Show or hide the 3D frame statistics (palette: "frame rate" or
@@ -597,8 +685,7 @@ What to run on the Windows laptop, with a project that has the real cabinet:
 5. Rebuild the scene by changing something in the Cabinet and look at "Scene
    build": routing is the slow part and runs on a change, not per frame.
 6. If the interval p95 is over 20 ms, say which adapter and whether the
-   laptop was on battery. The frame governor (`governor.rs`) that is meant to
-   step the quality tier down after two seconds over budget is not connected to
-   the widget yet, so the tier stays what the adapter type says; connecting it
-   is the next step if the numbers ask for it.
+   laptop was on battery. The frame governor steps the quality tier down by
+   itself after two seconds over budget (see "Dimensions and the frame
+   governor"); the panel names the tier it stepped down to.
 

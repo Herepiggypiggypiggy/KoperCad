@@ -9,7 +9,6 @@ use novo_core::{Document, Placement, Point, Tx};
 use novo_editor::edit::{PlaceOptions, place};
 use novo_editor::{Tool, naming::Numbering};
 use novo_symbols::Library;
-use novo_theme::widgets::section_label;
 
 use super::{Level, NovoApp};
 
@@ -229,64 +228,68 @@ impl NovoApp {
         let on_example = self.project_name().as_deref() == Some(super::example::EXAMPLE_NAME);
         let mut example = false;
         let mut close = false;
-        egui::Area::new(egui::Id::new("walkthrough"))
-            .order(egui::Order::Middle)
-            .pivot(egui::Align2::RIGHT_BOTTOM)
-            .fixed_pos(canvas.right_bottom() - egui::vec2(12.0, 72.0))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    if pill {
-                        ui.weak(format!("Fast keys {done} of {}", STEPS.len()));
-                        return;
-                    }
-                    ui.set_max_width(300.0);
-                    ui.horizontal(|ui| {
-                        section_label(ui, &format!("Fast keys · {done} of {}", STEPS.len()));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let label = if next.is_none() { "Close" } else { "Skip" };
-                            if ui.small_button(label).clicked() {
-                                close = true;
-                            }
-                        });
-                    });
-                    for (i, (ticked, title, key, text)) in rows.iter().enumerate() {
-                        ui.horizontal(|ui| {
-                            ui.label(if *ticked { "✓" } else { "○" });
-                            let title = egui::RichText::new(format!("{key}  {title}"));
-                            ui.label(if *ticked {
-                                title.weak()
-                            } else {
-                                title.strong()
-                            });
-                        });
-                        if next == Some(i) {
-                            ui.indent("walkthrough_text", |ui| {
-                                ui.label(text);
-                                if STEPS[i].id == "live"
-                                    && !on_example
-                                    && ui.link("Open the example").clicked()
-                                {
-                                    example = true;
-                                }
-                            });
-                        }
-                    }
-                    ui.add_space(2.0);
-                    if done < 3 {
-                        ui.weak("A tick means the tool opened, not that something was drawn.");
-                    }
-                    if next.is_some() {
-                        let key = self.step_key(&STEPS[STEPS.len() - 1]);
-                        ui.weak(format!(
-                            "Skip hides this. {key}, then fast keys, brings it back."
-                        ));
-                    }
-                    if next.is_none() {
-                        ui.add_space(4.0);
-                        ui.label("That is all of them. The command field finds the rest.");
+        let panel = super::panel::Panel::new(
+            "walkthrough",
+            format!("Fast keys · {done} of {}", STEPS.len()),
+            canvas,
+            super::panel::Side::BottomRight,
+            300.0,
+        )
+        .fixed_open()
+        .fit();
+        // The pill has no heading of its own to put in a title bar.
+        let panel = if pill { panel.bare() } else { panel };
+        panel.show(ctx, |ui| {
+            if pill {
+                ui.weak(format!("Fast keys {done} of {}", STEPS.len()));
+                return;
+            }
+            ui.set_max_width(300.0);
+            ui.horizontal(|ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    let label = if next.is_none() { "Close" } else { "Skip" };
+                    if ui.small_button(label).clicked() {
+                        close = true;
                     }
                 });
             });
+            for (i, (ticked, title, key, text)) in rows.iter().enumerate() {
+                ui.horizontal(|ui| {
+                    ui.label(if *ticked { "✓" } else { "○" });
+                    let title = egui::RichText::new(format!("{key}  {title}"));
+                    ui.label(if *ticked {
+                        title.weak()
+                    } else {
+                        title.strong()
+                    });
+                });
+                if next == Some(i) {
+                    ui.indent("walkthrough_text", |ui| {
+                        ui.label(text);
+                        if STEPS[i].id == "live"
+                            && !on_example
+                            && ui.link("Open the example").clicked()
+                        {
+                            example = true;
+                        }
+                    });
+                }
+            }
+            ui.add_space(2.0);
+            if done < 3 {
+                ui.weak("A tick means the tool opened, not that something was drawn.");
+            }
+            if next.is_some() {
+                let key = self.step_key(&STEPS[STEPS.len() - 1]);
+                ui.weak(format!(
+                    "Skip hides this. {key}, then fast keys, brings it back."
+                ));
+            }
+            if next.is_none() {
+                ui.add_space(4.0);
+                ui.label("That is all of them. The command field finds the rest.");
+            }
+        });
         if close {
             self.settings.onboarding.dismissed = true;
         }

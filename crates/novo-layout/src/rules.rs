@@ -44,7 +44,7 @@
 use std::fmt;
 
 use crate::plan::{Candidate, Plan, PlannedDuct, Proposed, ROW_GAP_MM};
-use crate::{DEFAULT_CLEARANCE_MM, Plate, Rail, Size};
+use crate::{DEFAULT_CLEARANCE_MM, Plate, Rail, Rect, Size};
 
 /// Where on the plate a kind of device goes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -699,7 +699,126 @@ pub fn place_all_explained(
     first_rail_id: u64,
     top: f64,
 ) -> (Plan, Explanation) {
-    let (plan, why) = plan_with_trunk(plate, specs, rules, first_rail_id, top);
+    place_all_around(plate, specs, rules, first_rail_id, top, &[])
+}
+
+/// [`place_all_explained`] on a plate that already has ducts: nothing is
+/// planned over a `blocked` area (a duct's footprint), nor within
+/// [`DUCT_CLEAR_MM`] of it. The usable plate is cut around the blocked areas
+/// into free regions, biggest first; each region is filled by the rules and
+/// what it could not take goes to the next. The zone order therefore holds
+/// inside a region, not across a duct. With nothing blocked the result is
+/// that of [`place_all_explained`].
+pub fn place_all_around(
+    plate: &Plate,
+    specs: &[Spec],
+    rules: &RuleSet,
+    first_rail_id: u64,
+    top: f64,
+    blocked: &[Rect],
+) -> (Plan, Explanation) {
+    let regions = free_regions(plate.usable(), blocked);
+    let mut plan = Plan::default();
+    let mut why = Explanation::default();
+    let mut left: Vec<Spec> = specs.to_vec();
+    for (n, region) in regions.iter().enumerate() {
+        if left.is_empty() && n > 0 {
+            break;
+        }
+        let first = first_rail_id + plan.rails.len() as u64;
+        let (p, w) = plan_region(*region, &left, rules, first, top);
+        let unplaced = p.unplaced.clone();
+        plan.rails.extend(p.rails);
+        plan.ducts.extend(p.ducts);
+        plan.placements.extend(p.placements);
+        why.decisions.extend(w.decisions);
+        why.rows.extend(w.rows);
+        why.separation_relaxed |= w.separation_relaxed;
+        why.trunk |= w.trunk;
+        why.trunk_dropped |= w.trunk_dropped;
+        // Only what no region takes is unplaced (and why, from the last try).
+        left.retain(|s| unplaced.contains(&s.id));
+        why.unplaced = w.unplaced;
+    }
+    plan.unplaced = left.iter().map(|s| s.id).collect();
+    if regions.is_empty() {
+        why.unplaced = left.iter().map(|s| (s.id, UnplacedWhy::NoRoom)).collect();
+    }
+    why.unplaced.retain(|(id, _)| plan.unplaced.contains(id));
+    (plan, why)
+}
+
+/// The usable area cut around `blocked` (each grown by [`DUCT_CLEAR_MM`]),
+/// biggest region first, ties top-left first. Without blockers it is the
+/// area itself. Slivers under 20 mm either way are dropped.
+fn free_regions(area: Rect, blocked: &[Rect]) -> Vec<Rect> {
+    const MIN_MM: f64 = 20.0;
+    let mut regions = vec![area];
+    for b in blocked {
+        let b = Rect {
+            x: b.x - DUCT_CLEAR_MM,
+            y: b.y - DUCT_CLEAR_MM,
+            w: b.w + 2.0 * DUCT_CLEAR_MM,
+            h: b.h + 2.0 * DUCT_CLEAR_MM,
+        };
+        let mut next = Vec::new();
+        for r in regions {
+            if !r.overlaps(&b) {
+                next.push(r);
+                continue;
+            }
+            // Left and right take the full height; above and below only the
+            // blocker's columns.
+            let (cx0, cx1) = (b.x.max(r.x), b.right().min(r.right()));
+            let parts = [
+                Rect {
+                    x: r.x,
+                    y: r.y,
+                    w: b.x - r.x,
+                    h: r.h,
+                },
+                Rect {
+                    x: b.right(),
+                    y: r.y,
+                    w: r.right() - b.right(),
+                    h: r.h,
+                },
+                Rect {
+                    x: cx0,
+                    y: r.y,
+                    w: cx1 - cx0,
+                    h: b.y - r.y,
+                },
+                Rect {
+                    x: cx0,
+                    y: b.bottom(),
+                    w: cx1 - cx0,
+                    h: r.bottom() - b.bottom(),
+                },
+            ];
+            next.extend(parts.into_iter().filter(|p| p.w >= MIN_MM && p.h >= MIN_MM));
+        }
+        regions = next;
+    }
+    regions.sort_by(|a, b| {
+        b.area()
+            .total_cmp(&a.area())
+            .then(a.y.total_cmp(&b.y))
+            .then(a.x.total_cmp(&b.x))
+    });
+    regions
+}
+
+/// One region: the rules' plan, with the separation given up before a device
+/// is left off (see [`place_all_explained`]).
+fn plan_region(
+    area: Rect,
+    specs: &[Spec],
+    rules: &RuleSet,
+    first_rail_id: u64,
+    top: f64,
+) -> (Plan, Explanation) {
+    let (plan, why) = plan_with_trunk(area, specs, rules, first_rail_id, top);
     if plan.unplaced.is_empty() || rules.separation <= 0.0 {
         return (plan, why);
     }
@@ -707,7 +826,7 @@ pub fn place_all_explained(
         separation: 0.0,
         ..rules.clone()
     };
-    let (plan2, mut why2) = plan_with_trunk(plate, specs, &relaxed, first_rail_id, top);
+    let (plan2, mut why2) = plan_with_trunk(area, specs, &relaxed, first_rail_id, top);
     if plan2.unplaced.len() < plan.unplaced.len() {
         why2.separation_relaxed = true;
         (plan2, why2)
@@ -731,17 +850,17 @@ pub fn place_all_explained(
 /// check. If the narrower plate loses a device the plan without a trunk is
 /// kept and [`Explanation::trunk_dropped`] says so.
 fn plan_with_trunk(
-    plate: &Plate,
+    area: Rect,
     specs: &[Spec],
     rules: &RuleSet,
     first_rail_id: u64,
     top: f64,
 ) -> (Plan, Explanation) {
-    let (plan, why) = plan_once(plate, specs, rules, first_rail_id, top, false);
+    let (plan, why) = plan_once(area, specs, rules, first_rail_id, top, false);
     if plan.rails.len() < 2 {
         return (plan, why);
     }
-    let (with, mut why_with) = plan_once(plate, specs, rules, first_rail_id, top, true);
+    let (with, mut why_with) = plan_once(area, specs, rules, first_rail_id, top, true);
     if with.unplaced.len() <= plan.unplaced.len() {
         (with, why_with)
     } else {
@@ -753,14 +872,14 @@ fn plan_with_trunk(
 }
 
 fn plan_once(
-    plate: &Plate,
+    area: Rect,
     specs: &[Spec],
     rules: &RuleSet,
     first_rail_id: u64,
     top: f64,
     trunk: bool,
 ) -> (Plan, Explanation) {
-    let full = plate.usable();
+    let full = area;
     let mut usable = full;
     // The strip kept free along the left edge for the trunk duct.
     let strip = rules.duct_width + 2.0 * DUCT_CLEAR_MM;

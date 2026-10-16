@@ -663,9 +663,12 @@ fn wire_list_and_bom_every_step_works_from_its_own_start() {
     }
     l.next();
 
-    // export-sheet: File > Export > Export for bulk edit (.xlsx).
+    // export-sheet: File > Export interchange > Export for bulk edit (.xlsx).
     l.open("export-sheet");
-    menu(&mut l, &["File", "Export", "Export for bulk edit (.xlsx)"]);
+    menu(
+        &mut l,
+        &["File", "Export interchange", "Export for bulk edit (.xlsx)"],
+    );
     l.ticked("export-sheet");
     let xlsx =
         l.d.app
@@ -854,16 +857,19 @@ fn the_menu_routes_and_the_page_list_click_work() {
     );
     l.press(egui::Key::Escape);
     l.frames(2);
-    menu(&mut l, &["File", "Export", "Export PDF"]);
+    menu(&mut l, &["File", "Export drawings", "Export PDF"]);
     assert!(
         l.say().contains("Exported"),
-        "File > Export > Export PDF: {}",
+        "File > Export drawings > Export PDF: {}",
         l.say()
     );
-    menu(&mut l, &["File", "Export", "Export bill of materials"]);
+    menu(
+        &mut l,
+        &["File", "Export reports", "Export bill of materials"],
+    );
     assert!(
         l.say().contains("Bill of materials"),
-        "File > Export > Export bill of materials: {}",
+        "File > Export reports > Export bill of materials: {}",
         l.say()
     );
 

@@ -15,7 +15,7 @@ use novo_core::{Project, StructureId};
 use novo_layout::check::Violation;
 use novo_layout::model::{ducts, load};
 use novo_layout::plan::{Plan, ROW_GAP_MM};
-use novo_layout::rules::{Explanation, RuleSet, Spec, place_all_explained};
+use novo_layout::rules::{Explanation, RuleSet, Spec, place_all_around};
 use novo_layout::state::CabinetLayout;
 use novo_layout::stock::{CutPlan, Piece, Stock, optimise, rail_pieces};
 
@@ -153,12 +153,15 @@ pub(super) fn plan(
         .iter()
         .map(|p| p.footprint().bottom() + ROW_GAP_MM)
         .fold(0.0, f64::max);
-    place_all_explained(
+    // Ducts already on the plate are kept clear, not planned over.
+    let ducts: Vec<_> = layout.ducts.iter().map(|d| d.footprint()).collect();
+    place_all_around(
         &layout.plate,
         &specs,
         rules,
         layout.rails.iter().map(|r| r.id + 1).max().unwrap_or(1),
         top,
+        &ducts,
     )
 }
 

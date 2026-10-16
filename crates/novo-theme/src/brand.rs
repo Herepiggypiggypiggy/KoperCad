@@ -4,8 +4,9 @@
 //! to it are rendered from it with `tools/brand-render` (see
 //! `assets/branding/README.md`).
 
-use crate::tokens;
-use egui::{Color32, Painter, Pos2, Rect, Stroke, Vec2};
+use crate::{Palette, fonts, tokens};
+use egui::text::{LayoutJob, TextFormat};
+use egui::{Color32, FontId, Painter, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 
 /// Product name as shown to people.
 pub const NAME: &str = "KoperCAD";
@@ -89,6 +90,42 @@ pub fn paint_mark(painter: &Painter, rect: Rect, tile: bool) {
     painter.circle_filled(at(128.0, 128.0), 11.0 * unit, MARK_COPPER);
 }
 
+/// The maker's name, shown under the wordmark.
+pub const MAKER: &str = "KoperVonk";
+
+/// The mark, the wordmark ("Koper" in the text colour, "CAD" in copper) and
+/// "BY KOPERVONK" under it, centred in the width of `ui`: the start screen's
+/// and the About card's header. `mark` is the mark's side in points.
+pub fn lockup(ui: &mut Ui, mark: f32) {
+    let p = Palette::of(ui);
+    ui.vertical_centered(|ui| {
+        let (rect, _) = ui.allocate_exact_size(Vec2::splat(mark), Sense::hover());
+        paint_mark(ui.painter(), rect, true);
+        ui.add_space(crate::space::M);
+        let size = (mark * 0.45).max(16.0);
+        let font = FontId::new(size, fonts::strong_family());
+        let mut job = LayoutJob::default();
+        job.append(
+            "Koper",
+            0.0,
+            TextFormat::simple(font.clone(), p.text_primary),
+        );
+        job.append("CAD", 0.0, TextFormat::simple(font, p.accent));
+        ui.label(job);
+        ui.label(
+            egui::RichText::new(format!("BY {}", MAKER.to_uppercase()))
+                .size(
+                    ui.style().text_styles[&egui::TextStyle::Small]
+                        .size
+                        .max(12.0),
+                )
+                .family(fonts::strong_family())
+                .extra_letter_spacing(1.2)
+                .color(p.text_secondary),
+        );
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -108,5 +145,21 @@ mod tests {
     #[test]
     fn svg_is_square() {
         assert!(ICON_SVG.contains(r#"viewBox="0 0 256 256""#));
+    }
+
+    #[test]
+    fn the_lockup_lays_out_in_both_themes() {
+        for theme in [crate::ThemeChoice::Dark, crate::ThemeChoice::Light] {
+            let ctx = egui::Context::default();
+            crate::apply_with(&ctx, theme, crate::Density::Standard);
+            let mut height = 0.0;
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let before = ui.cursor().top();
+                lockup(ui, 64.0);
+                height = ui.cursor().top() - before;
+            });
+            out.textures_delta.clear();
+            assert!(height > 64.0, "mark, name and maker take room: {height}");
+        }
     }
 }

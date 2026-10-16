@@ -1161,6 +1161,43 @@ fn the_selection_travels_between_the_cabinet_and_3d_and_view_commands_run() {
     assert!(d.app.view3d.pending.is_none());
 }
 
+#[test]
+fn plate_dxf_has_a_command_and_a_cabinet_button_and_writes_the_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.save_to(&dir.path().join("Plant.novo")));
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(crate::app::app_runs("export.plate_dxf"));
+    // No plate yet: says why, writes nothing.
+    assert!(d.app.export_plate_dxf().is_none());
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    // The Cabinet toolbar button asks the same thing as the command.
+    d.app.cabinet_ask(Ask::ExportPlateDxf, Some(cab), None, &[]);
+    let dxf: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "dxf"))
+        .collect();
+    assert!(
+        !dxf.is_empty(),
+        "a plate DXF is written next to the project"
+    );
+    let text = std::fs::read_to_string(&dxf[0]).unwrap();
+    assert!(text.contains("SECTION"), "it is a DXF");
+    // The command line (queued, as a menu row does) writes it again.
+    d.app.wb.queued.push("export.plate_dxf");
+    d.frame();
+    let last = d.app.messages().last().unwrap();
+    assert!(last.text.contains("plate"), "{}", last.text);
+}
+
 /// A right-click on the plate opens a menu for what is under it; its rows
 /// run the same commands as the toolbar.
 #[test]
@@ -1222,6 +1259,78 @@ fn right_click_on_the_plate_opens_a_menu_for_what_is_under_it() {
     right_click(&mut d, egui::pos2(canvas.left() + s.x, canvas.top() + s.y));
     let menu = d.app.cabinet.menu.expect("a menu opened on the plate");
     assert_eq!(menu.target, Target::Plate);
+}
+
+#[test]
+fn door_devices_are_swept_and_named_in_the_door_panel() {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::swing::DoorDevice;
+    use novo_layout::{Plate, Rect};
+    let mut layout = CabinetLayout::new(Plate {
+        width: 560.0,
+        height: 760.0,
+        margin: 10.0,
+    });
+    assert!(layout.swing_report().is_none());
+    layout.enclosure = Some(Enclosure {
+        width: 600.0,
+        height: 800.0,
+        depth: 250.0,
+        plate_setback: 20.0,
+        door: Some(Door {
+            hinge: Hinge::Left,
+            ..Door::default()
+        }),
+        front_clearance: None,
+        hinge_side_clearance: None,
+    });
+    let tag = |id: u64| format!("-H{id}");
+    let none = layout.swing_report().unwrap();
+    assert!(super::cabinet_door::swing_sentences(&none, &tag).is_empty());
+    layout.door_devices.push(DoorDevice {
+        id: 1,
+        rect: Rect {
+            x: 560.0,
+            y: 300.0,
+            w: 39.5,
+            h: 40.0,
+        },
+        depth: 40.0,
+        mesh: None,
+    });
+    let lines = super::cabinet_door::swing_sentences(&layout.swing_report().unwrap(), &tag);
+    assert_eq!(lines.len(), 1);
+    assert!(lines[0].0 && lines[0].1.contains("-H1") && lines[0].1.contains("[door.swing]"));
+    layout.door_devices[0].rect.x = 100.0;
+    layout.door_devices[0].rect.w = 20.0;
+    assert!(
+        super::cabinet_door::swing_sentences(&layout.swing_report().unwrap(), &tag)[0]
+            .1
+            .contains("clear everything")
+    );
+    layout.placements.push(novo_layout::Placement {
+        id: 9,
+        x: 50.0,
+        y: 50.0,
+        rotated: false,
+        size: novo_layout::Size {
+            width: 40.0,
+            height: 40.0,
+            guessed: false,
+        },
+        clearance: None,
+        margins: Default::default(),
+        rail: None,
+    });
+    let lines = super::cabinet_door::swing_sentences(&layout.swing_report().unwrap(), &tag);
+    assert_eq!(lines.len(), 1);
+    assert!(
+        lines[0]
+            .1
+            .contains("Not checked against the door devices: 1")
+    );
+    assert!(!lines[0].1.contains("clear everything"));
 }
 
 #[test]
