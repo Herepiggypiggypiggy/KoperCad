@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod appearance;
 mod assembly;
 mod background_panel;
 mod bench;
@@ -16,6 +17,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_surfaces;
 mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
@@ -29,13 +31,16 @@ mod checks;
 mod clipboard;
 mod commissioning;
 mod compare;
+mod designer;
 mod device_renumber;
 mod dock;
 mod drawers;
 mod duplicate;
 mod dxf;
 mod electrical;
+mod eplan_export;
 mod eplan_import;
+mod eplan_parts;
 mod example;
 mod faults;
 mod heat;
@@ -57,6 +62,9 @@ mod heat_run_tests;
 mod heat_settings;
 mod inspector;
 mod interop;
+mod languages;
+#[cfg(test)]
+mod languages_tests;
 mod learn;
 mod learn_demo;
 mod learn_labels;
@@ -74,6 +82,7 @@ mod macro_browser_tests;
 mod macro_company_tests;
 mod macro_thumb;
 mod menu_bar;
+mod net_trace;
 mod numbering;
 mod onboarding;
 mod outline;
@@ -86,8 +95,10 @@ mod parts_bulk;
 mod parts_import;
 mod parts_quality;
 mod pdf;
+mod pdf_options;
 mod plate_export;
 mod plc;
+mod plc_card;
 mod plc_link;
 mod plc_run;
 mod potentials;
@@ -99,6 +110,8 @@ mod reports;
 mod reports_view;
 mod revisions;
 mod safety;
+mod safety_functions;
+mod safety_report;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -110,6 +123,7 @@ mod standards_report;
 mod standards_report_tests;
 mod status_bar;
 mod symbol_preview;
+mod terminal_edit;
 mod terminals;
 mod tidy;
 mod tips;
@@ -125,6 +139,7 @@ mod view3d_move_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
+mod whats_new;
 mod wheel;
 mod wire_panel;
 #[cfg(test)]
@@ -147,6 +162,8 @@ mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
 #[cfg(test)]
+mod cabinet_surfaces_tests;
+#[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
@@ -156,6 +173,8 @@ mod clipboard_tests;
 mod commissioning_tests;
 #[cfg(test)]
 mod compare_tests;
+#[cfg(test)]
+mod eplan_ui_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
@@ -181,6 +200,8 @@ mod outline_tests;
 #[cfg(test)]
 mod page_commands_tests;
 #[cfg(test)]
+mod pdf_options_tests;
+#[cfg(test)]
 mod protection_tests;
 #[cfg(test)]
 mod route_all_tests;
@@ -189,7 +210,11 @@ mod shortcuts_sheet_tests;
 #[cfg(test)]
 mod tips_tests;
 #[cfg(test)]
+mod ui_gaps_tests;
+#[cfg(test)]
 mod variants_tests;
+#[cfg(test)]
+mod whats_new_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -207,7 +232,7 @@ use pages::PageView;
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
-use crate::{APP_MAKER, APP_NAME, PROJECT_EXTENSION};
+use crate::{APP_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::primary_button;
 pub(crate) use revisions::index_rule;
 use workbench::Workbench;
@@ -256,12 +281,35 @@ pub struct Message {
     pub text: String,
     /// When it was raised; info toasts fade after [`TOAST_INFO`].
     pub at: Instant,
-    /// Clicked away; warnings and errors stay until then.
+    /// Clicked away, or expired.
     pub dismissed: bool,
+    /// How often the same text was raised while it was still up.
+    pub count: u32,
+    /// A file this message is about (an export): its toast offers to open
+    /// the folder and stays up longer than a plain info message.
+    pub file: Option<PathBuf>,
+}
+
+impl Message {
+    /// How long its toast stays up.
+    fn expiry(&self) -> Option<Duration> {
+        Some(match (self.level, &self.file) {
+            (Level::Info, None) => TOAST_INFO,
+            (Level::Info, Some(_)) => TOAST_FILE,
+            (Level::Warning, _) => TOAST_WARNING,
+            (Level::Error, _) => TOAST_ERROR,
+        })
+    }
 }
 
 /// How long an info toast stays up.
 const TOAST_INFO: Duration = Duration::from_secs(5);
+/// How long the toast for a written file stays up.
+const TOAST_FILE: Duration = Duration::from_secs(12);
+/// How long a warning stays up; it is still in the log afterwards.
+const TOAST_WARNING: Duration = Duration::from_secs(15);
+/// How long an error stays up unless clicked away.
+const TOAST_ERROR: Duration = Duration::from_secs(30);
 /// Most toasts shown at once; older ones wait in [`NovoApp::messages`].
 const MAX_TOASTS: usize = 3;
 /// Height of the top bar.
@@ -295,12 +343,16 @@ pub struct NovoApp {
     wb: Workbench,
     messages: Vec<Message>,
     show_about: bool,
+    /// The What's new list is open (app/whats_new.rs).
+    show_whats_new: bool,
     standards_open: bool,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
     open_on_start: Option<PathBuf>,
     /// The first frame has run its start-up work.
     started: bool,
+    /// The theme and density last applied to the egui context.
+    appearance_applied: Option<(novo_theme::ThemeChoice, novo_theme::Density)>,
     /// When to give the backend its next chance to autosave.
     next_tick: Instant,
     /// The last autosave failed; reported once until it works again.
@@ -356,11 +408,15 @@ impl NovoApp {
         backend: Box<dyn ProjectBackend>,
         canvas: Box<dyn CanvasView>,
     ) -> Self {
-        let settings = cc
+        let settings: Settings = cc
             .storage
             .and_then(|s| eframe::get_value(s, Settings::STORAGE_KEY))
             .unwrap_or_default();
-        novo_theme::apply(&cc.egui_ctx);
+        novo_theme::apply_with(
+            &cc.egui_ctx,
+            settings.theme_choice(),
+            settings.density_choice(),
+        );
         let mut app = Self::with_settings(backend, canvas, settings);
         app.load_user_keymap();
         app.learn_init_paths();
@@ -382,10 +438,12 @@ impl NovoApp {
             wb,
             messages: Vec::new(),
             show_about: false,
+            show_whats_new: false,
             standards_open: false,
             window_title: String::new(),
             open_on_start: None,
             started: false,
+            appearance_applied: None,
             next_tick: Instant::now(),
             autosave_failing: false,
             focus_mode: false,
@@ -603,17 +661,41 @@ impl NovoApp {
     }
 
     fn message(&mut self, level: Level, text: impl Into<String>) {
-        let text = text.into();
+        self.raise(level, text.into(), None);
+    }
+
+    /// Reports a file that was written: the toast names it and offers to
+    /// open its folder.
+    pub(super) fn message_file(&mut self, text: impl Into<String>, file: &Path) {
+        self.raise(Level::Info, text.into(), Some(file.to_owned()));
+    }
+
+    fn raise(&mut self, level: Level, text: String, file: Option<PathBuf>) {
         match level {
             Level::Info => log::info!("{text}"),
             Level::Warning => log::warn!("{text}"),
             Level::Error => log::error!("{text}"),
+        }
+        // The same message again (a failing export tried twice) renews the
+        // one on screen instead of stacking a copy.
+        if let Some(same) = self
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|m| !m.dismissed && m.level == level && m.text == text && m.file == file)
+            .filter(|m| m.expiry().is_none_or(|e| m.at.elapsed() < e))
+        {
+            same.count += 1;
+            same.at = Instant::now();
+            return;
         }
         self.messages.push(Message {
             level,
             text,
             at: Instant::now(),
             dismissed: false,
+            count: 1,
+            file,
         });
         if self.messages.len() > MESSAGE_HISTORY {
             let excess = self.messages.len() - MESSAGE_HISTORY;
@@ -901,6 +983,7 @@ impl NovoApp {
             self.started = true;
             self.start();
         }
+        self.sync_appearance(&ctx);
         self.fix_current_page();
         self.tick(&ctx);
         self.settings.last_open = self.backend.file();
@@ -960,6 +1043,7 @@ impl NovoApp {
                     || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
                     || *id == "cabinet.door"
+                    || *id == "cabinet.surface"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
@@ -988,7 +1072,7 @@ impl NovoApp {
                 .show(ui, |ui| self.reports_list(ui));
         } else if pinned && self.is_open() {
             egui::Panel::left("outline")
-                .exact_size(OUTLINE_WIDTH)
+                .exact_size(self.outline_width())
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
@@ -1052,11 +1136,18 @@ impl NovoApp {
         self.learn_window(&ctx);
         self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);
+        self.plc_card_dialog(&ctx);
+        self.plc_overview_window(&ctx);
+        self.eplan_parts_dialog(&ctx);
+        self.eplan_export_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
+        self.whats_new_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
+        self.pdf_options_window(&ctx);
+        self.designer_window(&ctx);
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);
@@ -1079,7 +1170,10 @@ impl NovoApp {
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
         self.safety_window(&ctx);
+        self.languages_window(&ctx);
         self.numbering_window(&ctx);
+        self.net_trace_window(&ctx);
+        self.terminal_edit_windows(&ctx);
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);
@@ -1161,6 +1255,7 @@ impl NovoApp {
 
     fn modal_open_but_wheel(&self) -> bool {
         self.show_about
+            || self.show_whats_new
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
             || self.wb.sheet_import.is_some()
@@ -1185,9 +1280,22 @@ impl NovoApp {
     /// Whether the outline takes space beside the canvas: the user's
     /// choice, otherwise only on wide windows.
     fn outline_pinned(&self) -> bool {
+        if self.commissioning_pins_panel() {
+            return true;
+        }
         self.settings
             .outline_pinned
             .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
+    }
+
+    /// The outline's width: wider in the Commissioning workspace at a tablet
+    /// window, where the touch targets need the room.
+    fn outline_width(&self) -> f32 {
+        if self.commissioning_tablet() {
+            commissioning::TABLET_PANEL_WIDTH
+        } else {
+            OUTLINE_WIDTH
+        }
     }
 
     /// Shows `page` on the canvas.
@@ -1254,6 +1362,7 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
+                self.whats_new_pill(ui);
                 let shortcut = Action::CommandPalette
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
@@ -1268,10 +1377,13 @@ impl NovoApp {
                 if !fit.search.is_empty() && fit.search_width > 0.0 {
                     search = search.shortcut_text(shortcut.clone());
                 }
-                let search = ui
-                    .add(search)
-                    .on_hover_text(format!("Search or run ({shortcut})"));
-                self.anchor_response("palette.button", &search, "Search or run");
+                let search = ui.add(search);
+                let search = self.tip(
+                    search,
+                    "palette.button",
+                    "Search or run",
+                    "view.command_palette",
+                );
                 if search.clicked() {
                     picked.push(Action::CommandPalette);
                 }
@@ -1374,7 +1486,7 @@ impl NovoApp {
         // name is in the tooltip), so four tabs and the pin fit the 248 pt
         // column at every density.
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = novo_theme::space::XS;
+            ui.spacing_mut().item_spacing.x = 0.0;
             for mode in [
                 OutlineMode::Pages,
                 OutlineMode::Issues,
@@ -1391,11 +1503,38 @@ impl NovoApp {
                 } else {
                     mode.icon().to_owned()
                 };
-                if ui
-                    .selectable_label(current, text)
-                    .on_hover_text(mode.label())
-                    .clicked()
-                {
+                let font = egui::FontId::proportional(13.0);
+                let color = if current {
+                    novo_theme::tokens::TEXT
+                } else {
+                    novo_theme::tokens::TEXT_MUTED
+                };
+                let galley = ui.painter().layout_no_wrap(text, font, color);
+                let size = egui::vec2((galley.size().x + 10.0).max(26.0), 26.0);
+                let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+                let response = response.on_hover_text(mode.label());
+                let color = if response.hovered() {
+                    novo_theme::tokens::TEXT
+                } else {
+                    color
+                };
+                ui.painter().galley(
+                    rect.center() - galley.size() / 2.0 - egui::vec2(0.0, 1.0),
+                    galley,
+                    color,
+                );
+                if current {
+                    // Copper underline: the one mark of the open tab.
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_max(
+                            egui::pos2(rect.left() + 4.0, rect.bottom() - 2.0),
+                            egui::pos2(rect.right() - 4.0, rect.bottom()),
+                        ),
+                        1,
+                        novo_theme::tokens::ACCENT,
+                    );
+                }
+                if response.clicked() {
                     self.outline_mode = mode;
                 }
             }
@@ -1413,6 +1552,7 @@ impl NovoApp {
                 }
             });
         });
+        ui.add_space(novo_theme::space::S);
         if self.outline_mode == OutlineMode::Issues {
             if self.issues_list(ui) {
                 self.outline_open = false;
@@ -1518,7 +1658,7 @@ impl NovoApp {
                 // The frame's margins and stroke come on top of the content.
                 let chrome = frame.total_margin().sum();
                 frame.show(ui, |ui| {
-                    ui.set_width(OUTLINE_WIDTH - chrome.x);
+                    ui.set_width(self.outline_width() - chrome.x);
                     ui.set_height(height - chrome.y);
                     self.outline(ui, picked);
                 });
@@ -1547,15 +1687,15 @@ impl NovoApp {
         ui.painter()
             .rect_filled(rect, 0.0, ui.visuals().extreme_bg_color);
         let width = 320.0_f32.min(rect.width() - 32.0);
-        let top = rect.top() + (rect.height() * 0.25).min(200.0);
+        let top = rect.top() + (rect.height() * 0.15).min(120.0);
         let column = egui::Rect::from_min_size(
             egui::pos2(rect.center().x - width / 2.0, top),
             egui::vec2(width, rect.bottom() - top),
         );
         ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-                ui.weak("No project open");
-                ui.add_space(8.0);
+                novo_theme::brand::lockup(ui, 64.0);
+                ui.add_space(novo_theme::space::XXL);
                 if self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
                     ui.weak("Two minutes: place, wire, cable, live view");
@@ -1644,14 +1784,13 @@ impl NovoApp {
                 if m.dismissed {
                     return false;
                 }
-                if m.level != Level::Info {
-                    return true;
-                }
-                // The status bar shows info messages when it is on.
-                if self.status_bar_shown() {
+                // The status bar shows plain info messages when it is on; a
+                // written file always gets its toast, with the folder action.
+                if m.level == Level::Info && m.file.is_none() && self.status_bar_shown() {
                     return false;
                 }
-                let left = TOAST_INFO.saturating_sub(now - m.at);
+                let life = m.expiry().unwrap_or(TOAST_INFO);
+                let left = life.saturating_sub(now - m.at);
                 if !left.is_zero() {
                     fade_in = Some(fade_in.map_or(left, |f| f.min(left)));
                 }
@@ -1667,6 +1806,7 @@ impl NovoApp {
             return;
         }
         let mut dismiss = Vec::new();
+        let mut open = None;
         egui::Area::new(egui::Id::new("toasts"))
             .pivot(egui::Align2::LEFT_BOTTOM)
             .fixed_pos(canvas.left_bottom() + egui::vec2(12.0, -12.0))
@@ -1680,7 +1820,17 @@ impl NovoApp {
                         Level::Error => ui.visuals().error_fg_color,
                     };
                     let frame = egui::Frame::popup(ui.style()).show(ui, |ui| {
-                        ui.add(egui::Label::new(egui::RichText::new(&m.text).color(color)).wrap());
+                        let text = if m.count > 1 {
+                            format!("{} (x{})", m.text, m.count)
+                        } else {
+                            m.text.clone()
+                        };
+                        ui.add(egui::Label::new(egui::RichText::new(text).color(color)).wrap());
+                        if let Some(file) = &m.file
+                            && ui.button("Open folder").clicked()
+                        {
+                            open = file.parent().map(Path::to_owned);
+                        }
                     });
                     let response = frame.response.interact(egui::Sense::click());
                     if response.on_hover_text("Click to dismiss").clicked() {
@@ -1690,6 +1840,11 @@ impl NovoApp {
             });
         for i in dismiss {
             self.messages[i].dismissed = true;
+        }
+        if let Some(dir) = open
+            && let Err(e) = parts_bulk::open_folder(&dir)
+        {
+            self.message(Level::Error, format!("Could not open the folder: {e}"));
         }
     }
 
@@ -1768,13 +1923,16 @@ impl NovoApp {
             return;
         }
         let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
-            ui.set_width(320.0);
-            ui.heading(APP_NAME);
-            ui.label(format!("by {}", APP_MAKER));
-            ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-            ui.label(format!("Model API v{}", novo_core::MODEL_VERSION));
-            ui.add_space(8.0);
-            ui.button("Close").clicked()
+            ui.set_width(360.0);
+            ui.vertical_centered(|ui| {
+                novo_theme::brand::lockup(ui, 56.0);
+                ui.add_space(novo_theme::space::L);
+                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                ui.weak(format!("Model API v{}", novo_core::MODEL_VERSION));
+                ui.add_space(novo_theme::space::L);
+                ui.button("Close").clicked()
+            })
+            .inner
         });
         if modal.inner || modal.should_close() {
             self.show_about = false;
@@ -1784,6 +1942,7 @@ impl NovoApp {
 
 impl eframe::App for NovoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        fit_window_to_screen(ui.ctx());
         self.show(ui);
     }
 
@@ -1948,6 +2107,36 @@ mod tests {
     fn frame(ctx: &egui::Context, app: &mut NovoApp, input: egui::RawInput) {
         let mut output = ctx.run_ui(input, |ui| app.show(ui));
         output.textures_delta.clear();
+    }
+
+    #[test]
+    fn the_default_choice_is_dark_and_standard() {
+        let s = Settings::default();
+        assert_eq!(s.theme_choice(), novo_theme::ThemeChoice::Dark);
+        assert_eq!(s.density_choice(), novo_theme::Density::Standard);
+    }
+
+    #[test]
+    fn a_saved_choice_is_read_back() {
+        let s = Settings {
+            appearance_theme: "light".into(),
+            appearance_density: "compact".into(),
+            ..Default::default()
+        };
+        assert_eq!(s.theme_choice(), novo_theme::ThemeChoice::Light);
+        assert_eq!(s.density_choice(), novo_theme::Density::Compact);
+    }
+
+    #[test]
+    fn the_chosen_density_reaches_the_controls() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.settings.appearance_density = "compact".into();
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(
+            ctx.global_style().spacing.interact_size.y,
+            novo_theme::Density::Compact.metrics().control_height
+        );
     }
 
     #[test]
@@ -2453,6 +2642,39 @@ mod tests {
     }
 
     #[test]
+    fn the_same_error_renews_one_toast_and_errors_expire() {
+        let mut app = app_with(MemoryBackend::default());
+        for _ in 0..4 {
+            app.message(Level::Error, "Could not find the Documents folder");
+        }
+        assert_eq!(app.messages.len(), 1);
+        assert_eq!(app.messages[0].count, 4);
+        app.messages[0].at -= TOAST_ERROR;
+        app.message(Level::Error, "Could not find the Documents folder");
+        assert_eq!(app.messages.len(), 2, "an expired one is not renewed");
+    }
+
+    #[test]
+    fn an_exported_file_gets_a_toast_with_the_folder_even_with_the_status_bar() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        assert!(app.status_bar_shown());
+        app.message(Level::Info, "Plain info");
+        frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(!open.iter().any(|l| l.id == egui::Id::new("toasts")));
+        app.message_file("Exported /tmp/x/plan.pdf", Path::new("/tmp/x/plan.pdf"));
+        frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(open.iter().any(|l| l.id == egui::Id::new("toasts")));
+        app.messages.last_mut().unwrap().at -= TOAST_FILE;
+        frame(&ctx, &mut app, Default::default());
+        frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(!open.iter().any(|l| l.id == egui::Id::new("toasts")));
+    }
+
+    #[test]
     fn the_saved_state_follows_the_project() {
         let ctx = themed_ctx();
         let mut app = app_with(DirtyBackend::default());
@@ -2512,5 +2734,86 @@ mod tests {
         let mut reopened = storage_app();
         reopened.open_path(&path);
         assert_eq!(page_count(&reopened), 2);
+    }
+}
+
+/// Room the system keeps for the taskbar and the window's title bar, in
+/// points, when a window is made to fit the screen.
+const SCREEN_MARGIN: egui::Vec2 = egui::vec2(0.0, 80.0);
+
+/// The size a window of `inner` gets on a screen of `monitor`, or `None`
+/// when it already fits.
+fn fitted_size(inner: egui::Vec2, monitor: egui::Vec2) -> Option<egui::Vec2> {
+    let room = (monitor - SCREEN_MARGIN).max(egui::vec2(640.0, 400.0));
+    let fitted = inner.min(room);
+    (fitted != inner).then_some(fitted)
+}
+
+/// Whether the window was left maximized or full screen by the user.
+fn user_sized(maximized: Option<bool>, fullscreen: Option<bool>) -> bool {
+    maximized == Some(true) || fullscreen == Some(true)
+}
+
+/// Once, on the first frame: the default window is 1280 x 800, which on a
+/// 1366 x 768 screen puts the status bar below the edge. A window larger
+/// than the screen is made to fit; one that fits is left alone.
+fn fit_window_to_screen(ctx: &egui::Context) {
+    let id = egui::Id::new("window_fitted");
+    if ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false) {
+        return;
+    }
+    let (inner, monitor, maximized, fullscreen) = ctx.input(|i| {
+        let v = i.viewport();
+        (
+            v.inner_rect.map(|r| r.size()),
+            v.monitor_size,
+            v.maximized,
+            v.fullscreen,
+        )
+    });
+    let (Some(inner), Some(monitor)) = (inner, monitor) else {
+        return;
+    };
+    ctx.data_mut(|d| d.insert_temp(id, true));
+    // A restored maximized or full screen window already fills the screen;
+    // resizing it would undo that on every launch.
+    if user_sized(maximized, fullscreen) {
+        return;
+    }
+    if let Some(size) = fitted_size(inner, monitor) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+    }
+}
+
+#[cfg(test)]
+mod fit_tests {
+    use super::*;
+
+    #[test]
+    fn a_window_taller_than_a_small_screen_shrinks_to_it() {
+        let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1366.0, 768.0));
+        assert_eq!(got, Some(egui::vec2(1280.0, 688.0)));
+    }
+
+    #[test]
+    fn a_window_that_fits_is_left_alone() {
+        assert_eq!(
+            fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1920.0, 1080.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn a_maximized_or_full_screen_window_is_never_resized() {
+        assert!(user_sized(Some(true), Some(false)));
+        assert!(user_sized(Some(false), Some(true)));
+        assert!(!user_sized(Some(false), Some(false)));
+        assert!(!user_sized(None, None));
+    }
+
+    #[test]
+    fn a_tiny_screen_never_goes_below_the_minimum() {
+        let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(500.0, 400.0));
+        assert_eq!(got, Some(egui::vec2(640.0, 400.0)));
     }
 }

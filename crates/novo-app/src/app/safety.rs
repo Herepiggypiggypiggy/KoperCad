@@ -97,6 +97,8 @@ pub(super) struct SafetyWindow {
     pub hours: f64,
     pub cycle_s: f64,
     pub subsystems: Vec<SubsystemInput>,
+    /// The functions bound to project devices, kept in the project.
+    pub bound: super::safety_functions::BoundFunctions,
 }
 
 impl Default for SafetyWindow {
@@ -113,6 +115,7 @@ impl Default for SafetyWindow {
                 SubsystemInput::new("Logic (safety relay)"),
                 SubsystemInput::new("Output (contactors)"),
             ],
+            bound: Default::default(),
         }
     }
 }
@@ -171,8 +174,13 @@ fn pl_text(pl: PerformanceLevel) -> String {
 
 impl NovoApp {
     pub(super) fn toggle_safety(&mut self) {
-        if self.wb.safety.take().is_none() && self.is_open() {
-            self.wb.safety = Some(SafetyWindow::default());
+        match self.wb.safety.take() {
+            Some(win) if win.bound.dirty => {
+                self.store_safety_functions(&win.bound.list);
+            }
+            Some(_) => {}
+            None if self.is_open() => self.wb.safety = Some(SafetyWindow::default()),
+            None => {}
         }
     }
 
@@ -180,24 +188,42 @@ impl NovoApp {
         let Some(mut win) = self.wb.safety.take() else {
             return;
         };
+        let Some(project) = self.backend.document().map(|d| d.project().clone()) else {
+            return;
+        };
+        win.bound.sync(&project);
         let mut open = true;
         let mut copy = None;
+        let mut export = false;
         super::panel::dialog(ctx, "Safety functions", [700.0, 640.0])
             .open(&mut open)
             .show(ctx, |ui| {
                 ui.colored_label(tokens::WARNING, DISCLAIMER);
                 ui.weak(
-                    "ISO 13849-1. Kept for this session only; use Copy as text to keep the result.",
+                    "ISO 13849-1. Project safety functions are kept in the project; the free calculator below is kept for this session only.",
                 );
                 ui.separator();
+                super::safety_functions::section(ui, &project, &mut win.bound, &mut copy, &mut export);
+                ui.separator();
+                widgets::section_label(ui, "Calculator (not bound to devices)");
                 body(ui, &mut win, &mut copy);
             });
+        if export {
+            // The report shows what is stored, so write any pending edit first.
+            if win.bound.dirty && self.store_safety_functions(&win.bound.list) {
+                win.bound.dirty = false;
+            }
+            self.export_safety_report();
+        }
         if let Some(text) = copy {
             ctx.copy_text(text);
             self.message(Level::Info, "Safety function copied as text");
         }
         if open {
             self.wb.safety = Some(win);
+            self.commit_safety_functions(ctx);
+        } else if win.bound.dirty {
+            self.store_safety_functions(&win.bound.list);
         }
     }
 }

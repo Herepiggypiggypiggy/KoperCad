@@ -4,12 +4,9 @@
 use std::collections::BTreeSet;
 
 use eframe::egui;
-use novo_core::{DeviceTag, Endpoint, Placement, Point};
+use novo_core::{Endpoint, Placement, Point};
 use novo_editor::catalog::model_pins;
-use novo_editor::naming::next_device_tag;
-use novo_plc::commands::{
-    NewCardLayout, RenumberPlan, add_card, apply_renumber, renumber_plan, to_plc,
-};
+use novo_plc::commands::{RenumberPlan, apply_renumber, renumber_plan, to_plc};
 use novo_plc::{CardLayout, ChannelType, PlcIndex, Space, cards};
 
 use super::{Level, NovoApp};
@@ -32,15 +29,12 @@ impl NovoApp {
     /// `add card DI16 DQ8`: a PLC card with that layout, the next free `-K`
     /// tag on the page and the next free addresses of the station.
     pub(super) fn plc_add_card(&mut self, argument: Option<&str>) {
-        let Some(page) = self.current_page else {
+        if self.current_page.is_none() {
             return;
-        };
+        }
         let text = argument.map(str::trim).unwrap_or_default();
         if text.is_empty() {
-            self.message(
-                Level::Info,
-                "Add card needs its channels, for example: add card DI16 DQ8",
-            );
+            self.open_plc_card_dialog();
             return;
         }
         let layout: CardLayout = match text.parse() {
@@ -50,21 +44,7 @@ impl NovoApp {
                 return;
             }
         };
-        let Some(doc) = self.backend.document_mut() else {
-            return;
-        };
-        let result = doc.transact("Add PLC card", |tx| {
-            let tag: DeviceTag = next_device_tag(tx.project(), page, "K");
-            let card = add_card(tx, tag.clone(), "", NewCardLayout::Typed(layout), "", None)?;
-            Ok((card, tag))
-        });
-        match result {
-            Ok(((_, tag), changes)) => {
-                self.changed_outside_canvas(&changes);
-                self.message(Level::Info, format!("Added card {tag} ({text})"));
-            }
-            Err(e) => self.message(Level::Error, format!("Could not add the card: {e}")),
-        }
+        self.plc_add_card_with(layout, "", None, [None, None]);
     }
 
     /// `to plc`: with a contact, sensor or coil selected, draws the next
