@@ -51,6 +51,17 @@ pub const DUTCH: &[Aliases] = &[
             "panelen resetten",
         ],
     ),
+    nl("layout.draw", &[], &["indeling tekenen", "tekenen"]),
+    nl("layout.cabinet", &[], &["indeling kast"]),
+    nl("layout.3d", &[], &["indeling 3d", "warmte"]),
+    nl("layout.review", &[], &["indeling controle", "controleren"]),
+    nl("layout.reports", &[], &["indeling rapporten"]),
+    nl(
+        "layout.reset",
+        &[],
+        &["indeling terugzetten", "werkruimte herstellen"],
+    ),
+    nl("layout.reset_all", &[], &["alle indelingen terugzetten"]),
     nl(
         "help.show_hints",
         &[],

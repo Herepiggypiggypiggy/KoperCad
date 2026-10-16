@@ -92,6 +92,13 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("terminal.strip_down", under("Draw", "Terminals")),
     ("terminal.strip_lowest", under("Draw", "Terminals")),
     // View
+    ("layout.draw", under("View", "Layouts")),
+    ("layout.cabinet", under("View", "Layouts")),
+    ("layout.3d", under("View", "Layouts")),
+    ("layout.review", under("View", "Layouts")),
+    ("layout.reports", under("View", "Layouts")),
+    ("layout.reset", under("View", "Layouts")),
+    ("layout.reset_all", under("View", "Layouts")),
     ("view.schematic", under("View", "Workspace")),
     ("view.cabinet", under("View", "Workspace")),
     ("view.3d", under("View", "Workspace")),
