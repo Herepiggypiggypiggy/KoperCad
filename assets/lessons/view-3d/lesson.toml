@@ -10,7 +10,7 @@
 format = 1
 id = "view-3d"
 version = 2
-status = "early"
+status = "ready"
 title = "The cabinet in 3D"
 title_nl = "De kast in 3D"
 summary = "Open the cabinet in 3D, orbit, zoom and pan it, use the view cube and see how deep each device stands."

@@ -11,7 +11,7 @@
 format = 1
 id = "enclosure-door-and-depth"
 version = 2
-status = "early"
+status = "ready"
 title = "Will the door close?"
 title_nl = "Sluit de deur nog?"
 summary = "Enter the inside size and door of the cabinet and let KoperCAD check device depth and the room the open door needs."
