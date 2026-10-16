@@ -12,8 +12,7 @@ pub fn flow_core_statement() -> AccuracyStatement {
     AccuracyStatement {
         validated: false,
         headline: "Laminar natural convection matches published benchmarks within 1% in heat \
-                   transfer and about 3% in peak velocity; not yet validated for vents, fans, \
-                   turbulence or radiation."
+                   transfer and about 3% in peak velocity; not yet validated for radiation."
             .into(),
         benchmarks: vec![
             b("Heated cavity Ra 1e3, Nusselt (de Vahl Davis)", 0.0055),
@@ -30,7 +29,12 @@ pub fn flow_core_statement() -> AccuracyStatement {
             ),
         ],
         limits: vec![
-            "Open vents, fans, turbulence and radiation are not yet validated.".into(),
+            "Radiation is not yet validated; vents and fans are checked against analytic operating points, turbulence on a channel and a heated wall only."
+                .into(),
+            "Wall functions are not valid for natural-convection boundary layers thinner than the first cell: resolve the wall cells there (coarse wall cells read about 52% low)."
+                .into(),
+            "Sealed-enclosure air rise lies up to 15% below the IEC 60890 estimate and the 2D engine (stratified air)."
+                .into(),
             "Results for a cabinet carry the uncertainty of the loss data and boundary conditions."
                 .into(),
             "Time integration is first order: heat-up curves need small steps.".into(),

@@ -228,9 +228,7 @@ demo = [
 ]
 point = { area = { page = "Pump and valve feeder", x = 104, y = 100, w = 8, h = 8 } }
 expect = { terminal = { strip = "-X1", name = "11" } }
-# GAP solve: a `rename` op (terminal "-X1:4" to "11") is agreed with the learning thread, not in
-#   the engine yet; `command` has no rename command either.
-solve = [ { select = "-X1" } ]
+solve = [ { rename = { target = "-X1:4", to = "11" } } ]
 # verified: double click on a terminal name opens the rename box (crates/novo-editor/src/view.rs
 #   `LabelKind::TerminalName`); the edit is `rename_label` (edit.rs), which refuses a name already
 #   on the strip. F2 STILL does not rename a terminal (the F2 handler looks for a device only), so

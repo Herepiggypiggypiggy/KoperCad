@@ -639,7 +639,7 @@ impl NovoApp {
             });
             if narrow {
                 cabinet_bar::group(ui, "More", |ui| {
-                    ui.menu_button(format!("{}  More", icons::DOTS_THREE), |ui| {
+                    let more = ui.menu_button(format!("{}  More", icons::DOTS_THREE), |ui| {
                         if cabinet_bar::button(ui, icons::SLIDERS_HORIZONTAL, "Rules", false)
                             .clicked()
                         {
@@ -709,6 +709,7 @@ impl NovoApp {
                             ui.close();
                         }
                     });
+                    cabinet_bar::note(&mut anchors, "cabinet.more", "More", &more.response);
                 });
             } else {
                 cabinet_bar::group(ui, "Output", |ui| {
