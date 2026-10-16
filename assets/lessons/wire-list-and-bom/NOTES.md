@@ -19,7 +19,7 @@ Verified path per step
 - import-part: File > Import spreadsheet (file dialog, not driven; `import_sheet_from` stands in), preview, "Apply 1 change (Enter)" applies; the lamp gets
   part Siemens 3SU1106-6AA40-1AA0 (a part the catalog does not know is created from the sheet, sheets/create.rs).
 - bom-follows: one section, lamp row Qty 1 (asserted).
-- export-bom: {key:view.command_palette} "export bom" or File > Export > Export bill of materials; writes "<project> - Bill of materials.xlsx" next to the
+- export-bom: {key:view.command_palette} "export bom" or File > Export reports > Export bill of materials; writes "<project> - Bill of materials.xlsx" next to the
   project (reports_view.rs export_path), never over an earlier file; message "Exported <path>". Menu click verified.
 
 Closed since the first version: export.bom now has a handler and a menu entry (real export taught); the Reports workspace with Excel and CSV buttons exists.

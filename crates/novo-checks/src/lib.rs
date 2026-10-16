@@ -71,6 +71,8 @@
 //! | [`DoorGapTight`](ProblemKind::DoorGapTight) | warning | A device that leaves less than the minimum gap to the door |
 //! | [`DepthUnknown`](ProblemKind::DepthUnknown) | info | A placed device without a depth, so the door was not checked |
 //! | [`PlateTooBig`](ProblemKind::PlateTooBig) | error | A plate larger than the inside of its enclosure |
+//! | [`SafetyLevelNotMet`](ProblemKind::SafetyLevelNotMet) | error | A safety function whose achieved performance level is below the required one (ISO 13849-1 calculation aid) |
+//! | [`SafetyBinding`](ProblemKind::SafetyBinding) | warning | A safety function block bound to a device that is missing or states no reliability data |
 //! | [`DoorSwing`](ProblemKind::DoorSwing) | warning | An open door that needs more room outside than the site allows |
 //!
 //! A problem can be waived with a reason ([`waive`]); [`check_open`] leaves
@@ -104,6 +106,7 @@ mod house_rules;
 mod more_rules;
 mod physical;
 pub mod protection;
+pub mod safety;
 pub mod standards;
 mod waiver;
 
@@ -298,6 +301,10 @@ pub enum ProblemKind {
     DepthUnknown,
     /// A mounting plate wider or higher than the inside of its enclosure.
     PlateTooBig,
+    /// A safety function achieving a lower PL than it requires (SAFE-2).
+    SafetyLevelNotMet,
+    /// A safety function part bound to a missing device or without reliability data (SAFE-2).
+    SafetyBinding,
     /// The open door needs more room in front or beside the hinge side than
     /// the enclosure's stated free room.
     DoorSwing,
@@ -305,7 +312,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 61] = [
+    pub const ALL: [ProblemKind; 63] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -342,6 +349,8 @@ impl ProblemKind {
         ProblemKind::DoorGapTight,
         ProblemKind::DepthUnknown,
         ProblemKind::PlateTooBig,
+        ProblemKind::SafetyLevelNotMet,
+        ProblemKind::SafetyBinding,
         ProblemKind::DoorSwing,
         ProblemKind::AmbiguousInterruption,
         ProblemKind::WireNumber,
@@ -381,6 +390,7 @@ impl ProblemKind {
             | ProblemKind::DeviceCollision
             | ProblemKind::DeviceOutsidePlate
             | ProblemKind::DeviceTooDeep
+            | ProblemKind::SafetyLevelNotMet
             | ProblemKind::PlateTooBig => Severity::Error,
             ProblemKind::UnconnectedPin
             | ProblemKind::LoneInterruption
@@ -426,6 +436,7 @@ impl ProblemKind {
             | ProblemKind::TagRule
             | ProblemKind::DisplayedTag
             | ProblemKind::StructureCode
+            | ProblemKind::SafetyBinding
             | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart
             | ProblemKind::UnplacedDevice
@@ -474,6 +485,8 @@ impl ProblemKind {
             ProblemKind::DoorGapTight => "Door gap tight",
             ProblemKind::DepthUnknown => "Depth unknown",
             ProblemKind::PlateTooBig => "Plate too big",
+            ProblemKind::SafetyLevelNotMet => "Safety level not met",
+            ProblemKind::SafetyBinding => "Safety function binding",
             ProblemKind::DoorSwing => "Door swing",
             ProblemKind::AmbiguousInterruption => "Interruption name used often",
             ProblemKind::WireNumber => "Wire number",
@@ -541,6 +554,8 @@ impl ProblemKind {
             ProblemKind::DoorGapTight => "check.door_gap_tight",
             ProblemKind::DepthUnknown => "check.depth_unknown",
             ProblemKind::PlateTooBig => "check.plate_too_big",
+            ProblemKind::SafetyLevelNotMet => "check.safety_level",
+            ProblemKind::SafetyBinding => "check.safety_binding",
             ProblemKind::DoorSwing => "check.door_swing",
             ProblemKind::AmbiguousInterruption => "check.ambiguous_interruption",
             ProblemKind::WireNumber => "check.wire_number",
@@ -718,6 +733,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     standards::problems(&cx, netlist, &mut problems);
     physical::layout(&cx, &mut problems);
     door::door(&cx, &mut problems);
+    safety::run(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
 }

@@ -245,6 +245,12 @@ pub struct Scene {
     pub pose_revision: u64,
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How often `Scene::bounds` ran on this thread (tests only).
+    pub(crate) static BOUNDS_CALLS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 impl Scene {
     pub fn new(frame: PlateFrame) -> Self {
         Self {
@@ -292,8 +298,11 @@ impl Scene {
         item.local_bounds().transformed(&self.world_matrix(item))
     }
 
-    /// Bounds of everything.
+    /// Bounds of everything. Walks every item and wire point: take it once
+    /// per frame, never once per item.
     pub fn bounds(&self) -> Aabb {
+        #[cfg(test)]
+        BOUNDS_CALLS.with(|c| c.set(c.get() + 1));
         let mut b = Aabb::EMPTY;
         for i in &self.items {
             b = b.union(&self.world_bounds(i));
