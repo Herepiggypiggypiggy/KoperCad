@@ -399,6 +399,11 @@ pub const DUTCH: &[Aliases] = &[
         &["installatie", "automationml", "uitwisselen"],
     ),
     nl(
+        "export.eplan",
+        &["exporteer eplan"],
+        &["eplan", "pxf", "terugsturen", "uitwisselen"],
+    ),
+    nl(
         "file.import_aml",
         &["importeer aml"],
         &["automationml", "installatie", "overnemen", "migreren"],

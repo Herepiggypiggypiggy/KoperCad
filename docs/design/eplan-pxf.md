@@ -63,6 +63,7 @@ function blocks, symbol definitions. Wires come with the net rebuild by EPLAN's 
    Without `-o` nothing is written.
 4. Interruption points to KoperCAD cross references; `.emp` into the macro library.
 5. Nets, with the EPLAN-NETS lane.
+6. (built) Writer: see `docs/design/eplan-pxf-write.md`.
 
 ## 5. Safety
 
