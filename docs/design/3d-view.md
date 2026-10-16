@@ -319,6 +319,31 @@ amber tint are never the only difference.
   palette, Dutch names), keys Ctrl+6 for the 3D workspace and Shift+D for the
   door. The door angle is view state and eases through `View3d::set_door`.
 
+### Wire colours (2026-10-16)
+
+- **Where the colour comes from.** `model::wire_colour` reads the wire's own
+  colour (the Colour field of the wire panel), else the name of its cable core
+  when that is a colour code, and parses it with the standards checks' colour
+  reader (`novo_checks::standards::Colour`: `BK`, `black`, `GNYE`, Dutch and
+  German names), so the 3D view and the checks never disagree on what a text
+  means. `model::insulation` gives the drawn colour; the palette's red, blue and
+  green-yellow are the ones of 3d-look.md section 3.
+- **Bi-colour wires.** `Wire.stripe` is a second colour; the renderer draws
+  the tube in bands of about six radii alternating body and stripe colour,
+  only while a segment is at least 12 px on screen (farther away it is the body
+  colour, which also keeps the instance count down). Green-yellow is the
+  protective conductor, white with a blue stripe the grounded dc one.
+- **No colour set.** The wire stays the neutral grey of 3d-look.md. The spec's
+  colour by potential (AC control red, neutral blue, 24 V red, PE green-yellow
+  when the potential says so) is not done: it needs the potential's role from
+  the editor, which the model does not store yet. A colour is never the only
+  carrier: the label and the inspector name the wire.
+- **Seen through the closed door.** The door and the enclosure are ghosts
+  (translucent), wires and ducts are opaque and drawn first, so wires show with
+  the door closed; a GPU test renders a blue wire behind the closed door and
+  counts its pixels, and a second one checks that a bi-colour wire shows both
+  colours.
+
 ## 6. Camera and input
 
 Turntable orbit around a target point, +Y up, so the cabinet never rolls.

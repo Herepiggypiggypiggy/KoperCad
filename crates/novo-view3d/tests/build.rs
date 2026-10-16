@@ -167,3 +167,23 @@ fn a_plate_without_wires_has_none_in_the_scene() {
     let (p, cab, _) = project();
     assert!(model::wires(&p, cab).is_empty());
 }
+
+#[test]
+fn insulation_colours_follow_the_iec_codes_and_bi_colours_have_a_stripe() {
+    use novo_checks::standards::Colour;
+    let plain = [Colour::Black, Colour::Blue, Colour::Red, Colour::White];
+    for c in plain {
+        assert_eq!(model::insulation(c).stripe, None, "{c:?}");
+    }
+    let pe = model::insulation(Colour::GreenYellow);
+    assert_eq!(pe.body, [0x7F, 0xB0, 0x20]);
+    assert_eq!(pe.stripe, Some([0xE3, 0xD3, 0x4A]));
+    let grounded_dc = model::insulation(Colour::WhiteBlue);
+    assert_eq!(grounded_dc.stripe, Some([0x2F, 0x6F, 0xD0]));
+    // The codes the schematic's wire panel accepts all map to a colour.
+    assert_eq!(
+        Colour::parse("BU").map(model::insulation).map(|c| c.body),
+        Some([0x2F, 0x6F, 0xD0])
+    );
+    assert!(Colour::parse("GNYE").is_some());
+}

@@ -83,6 +83,7 @@ mod tests {
             points: vec![Vec3::ZERO, Vec3::X],
             radius: 1.5,
             tint: None,
+            stripe: None,
             mark: Mark::None,
             label: None,
         });

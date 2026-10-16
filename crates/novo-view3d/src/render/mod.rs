@@ -780,6 +780,9 @@ impl Renderer {
                     continue;
                 }
                 let (color, edge) = colors(wire.id, wire.tint, wire.mark, false, look, frame.state);
+                let striped = wire
+                    .stripe
+                    .map(|s| colors(wire.id, Some(s), wire.mark, false, look, frame.state));
                 let r = wire.radius.max(0.25);
                 for seg in wire::segments(wire) {
                     let dist = (seg.centre() - eye).length();
@@ -788,17 +791,29 @@ impl Renderer {
                     if size_px < 3.0 {
                         continue;
                     }
-                    let m = seg.frame();
-                    opaque.entry(MeshKey::Cube).or_default().push(Instance {
-                        rows: [
-                            m.row(0).to_array(),
-                            m.row(1).to_array(),
-                            m.row(2).to_array(),
-                        ],
-                        scale: [2.0 * r, 2.0 * r, seg.length()],
-                        color,
-                        edge,
-                    });
+                    let mut push = |piece: &wire::Segment, (color, edge): ([u8; 4], [u8; 4])| {
+                        let m = piece.frame();
+                        opaque.entry(MeshKey::Cube).or_default().push(Instance {
+                            rows: [
+                                m.row(0).to_array(),
+                                m.row(1).to_array(),
+                                m.row(2).to_array(),
+                            ],
+                            scale: [2.0 * r, 2.0 * r, piece.length()],
+                            color,
+                            edge,
+                        });
+                    };
+                    match striped {
+                        // Bands only where the wire is big enough on screen
+                        // to show them; far away it is one body colour.
+                        Some(stripe) if size_px >= 12.0 => {
+                            for (piece, odd) in seg.bands(r * 6.0) {
+                                push(&piece, if odd { stripe } else { (color, edge) });
+                            }
+                        }
+                        _ => push(&seg, (color, edge)),
+                    }
                 }
             }
         }

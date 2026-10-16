@@ -6,3 +6,4 @@
 - 19:41 #481 merged (renderer, widget, examples, GPU tests, wires). Next: follow-up PR with door animation and the design notes; waiting on the UI integration thread for the 3D face.
 - 2026-10-16 overlays (meshes, ribbons) and door animation driver, GPU tests for both; PR from main.
 - 2026-10-16 #647 merged (overlays, door driver). Follow-up: shell and door from the enclosure, routed wires, layers, 3D toolbar with door angle, view.3d_door/_shell/_wires, Ctrl+6 and Shift+D.
+- 2026-10-16 #673 merged. Follow-up PR: wire colours from the schematic (own colour, else cable core name; bi-colour stripe in bands), GPU tests that wires show through the closed door.

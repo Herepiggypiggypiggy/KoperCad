@@ -326,6 +326,7 @@ mod tests {
             ],
             radius: 1.0,
             tint: None,
+            stripe: None,
             mark: crate::scene::Mark::None,
             label: None,
         });

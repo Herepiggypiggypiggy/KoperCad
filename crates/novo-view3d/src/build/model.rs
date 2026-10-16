@@ -3,8 +3,9 @@
 
 use std::sync::Arc;
 
+use novo_checks::standards::Colour;
 use novo_core::{
-    CabinetPlacement, Device, Project, Rail as ModelRail, RailKind, StructureId, Value,
+    CabinetPlacement, Device, Project, Rail as ModelRail, RailKind, StructureId, Value, WireId,
 };
 use novo_layout::enclosure::{Enclosure, Hinge};
 use novo_layout::model::{enclosure_of, load};
@@ -12,7 +13,8 @@ use novo_routing::Kind;
 use novo_routing::model::{route_project, wire_connections};
 
 use super::{
-    Depth, DoorSpec, DuctShape, HingeSide, Inputs, Options, Shell, WireInput, WireKind, from_layout,
+    Depth, DoorSpec, DuctShape, HingeSide, Inputs, Options, Shell, WireColour, WireInput, WireKind,
+    from_layout,
 };
 use crate::scene::Scene;
 
@@ -108,6 +110,53 @@ pub fn door_limit_deg(project: &Project, id: StructureId) -> Option<f64> {
     Some(door.max_angle.clamp(0.0, 180.0))
 }
 
+/// How a wire colour is drawn: IEC 60757 colours as insulation, the
+/// protective green-yellow and the grounded white with a blue stripe as two
+/// colours. Red, blue and green-yellow are the palette's wire colours
+/// (3d-look.md section 3).
+pub fn insulation(colour: Colour) -> WireColour {
+    let one = |body| WireColour { body, stripe: None };
+    match colour {
+        Colour::Black => one([0x1B, 0x1B, 0x1E]),
+        Colour::Brown => one([0x6B, 0x42, 0x26]),
+        Colour::Red => one([0xB3, 0x3A, 0x3A]),
+        Colour::Orange => one([0xE0, 0x7B, 0x22]),
+        Colour::Yellow => one([0xE3, 0xC9, 0x3A]),
+        Colour::Green => one([0x3F, 0x9A, 0x47]),
+        Colour::Blue => one([0x2F, 0x6F, 0xD0]),
+        Colour::Violet => one([0x7A, 0x4F, 0xB0]),
+        Colour::Grey => one([0x8C, 0x8F, 0x94]),
+        Colour::White => one([0xEC, 0xEA, 0xE5]),
+        Colour::Pink => one([0xE7, 0x9A, 0xB5]),
+        Colour::Turquoise => one([0x2B, 0xB3, 0xB3]),
+        Colour::GreenYellow => WireColour {
+            body: [0x7F, 0xB0, 0x20],
+            stripe: Some([0xE3, 0xD3, 0x4A]),
+        },
+        Colour::WhiteBlue => WireColour {
+            body: [0xEC, 0xEA, 0xE5],
+            stripe: Some([0x2F, 0x6F, 0xD0]),
+        },
+    }
+}
+
+/// The colour a wire has in the schematic: its own colour, else the name of
+/// its cable core when that is a colour code. `None` when neither is set or
+/// the text is not a colour the standards checks know either.
+pub fn wire_colour(project: &Project, wire: WireId) -> Option<WireColour> {
+    let w = project.wire(wire)?;
+    let own = w.color.as_deref().map(str::trim).filter(|t| !t.is_empty());
+    let colour = match own {
+        Some(text) => Colour::parse(text),
+        None => {
+            let (cable, core) = project.core_of_wire(wire)?;
+            let core = project.cable(cable)?.cores.get(core)?;
+            Colour::parse(&core.name)
+        }
+    };
+    colour.map(insulation)
+}
+
 /// The routed wires that lie on the plate of `id`, ready for the scene. The
 /// routes are the Cabinet's, so the 3D view and the wire list agree.
 pub fn wires(project: &Project, id: StructureId) -> Vec<WireInput> {
@@ -130,6 +179,7 @@ pub fn wires(project: &Project, id: StructureId) -> Vec<WireInput> {
             points: r.points.iter().map(|p| (p.x, p.y)).collect(),
             ducts: r.ducts.clone(),
             diameter_mm: diameters.get(&r.job).copied().flatten(),
+            colour: wire_colour(project, WireId::from(r.job)),
         })
         .collect()
 }

@@ -1,7 +1,7 @@
 //! The 3D workspace's toolbar and commands: layers, wires and the door.
 
 use eframe::egui;
-use novo_core::{DeviceTag, MountingPlate, Point, RailKind};
+use novo_core::{CableCore, DeviceTag, MountingPlate, Point, RailKind, Wire, WireId};
 use novo_layout::enclosure::{Door, Enclosure, Hinge};
 use novo_layout::model::set_enclosure;
 use novo_tests::motor_starter;
@@ -82,6 +82,75 @@ fn the_routed_wires_are_in_the_3d_scene_and_the_command_hides_them() {
     d.app.run_command(&ctx, "view.3d_wires", None);
     d.frame();
     assert!(!scene(&d).wires.is_empty(), "and they come back");
+}
+
+/// The wires drawn in the scene, as project wire ids.
+fn wire_ids(d: &Drive) -> Vec<WireId> {
+    scene(d)
+        .wires
+        .iter()
+        .map(|w| WireId::from(w.id.raw))
+        .collect()
+}
+
+#[test]
+fn wires_are_drawn_in_the_colour_the_schematic_gives_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ids = wire_ids(&d);
+    assert!(ids.len() >= 2, "the fixture has wires");
+    let doc = d.app.backend.document_mut().unwrap();
+    doc.transact("Colours", |tx| {
+        tx.update::<Wire>(ids[0], |w| w.color = Some("BU".into()))?;
+        tx.update::<Wire>(ids[1], |w| w.color = Some("GNYE".into()))?;
+        Ok(())
+    })
+    .unwrap();
+    d.frame();
+    let wire = |id: WireId| {
+        let w = scene(&d)
+            .wires
+            .iter()
+            .find(|w| w.id.raw == id.raw())
+            .expect("the wire is still in the scene");
+        (w.tint, w.stripe)
+    };
+    assert_eq!(wire(ids[0]), (Some([0x2F, 0x6F, 0xD0]), None));
+    assert_eq!(
+        wire(ids[1]),
+        (Some([0x7F, 0xB0, 0x20]), Some([0xE3, 0xD3, 0x4A])),
+        "green-yellow has a stripe"
+    );
+}
+
+#[test]
+fn a_wire_without_a_colour_takes_it_from_its_cable_core_name() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ids = wire_ids(&d);
+    let doc = d.app.backend.document_mut().unwrap();
+    doc.transact("Cable", |tx| {
+        let cable = tx.add_cable(
+            DeviceTag::parse("-W1")?,
+            vec![CableCore::new("BK"), CableCore::new("1")],
+        )?;
+        tx.assign_core(cable, 0, Some(ids[0]))?;
+        tx.assign_core(cable, 1, Some(ids[1]))?;
+        Ok(())
+    })
+    .unwrap();
+    d.frame();
+    let tint_of = |id: WireId| {
+        scene(&d)
+            .wires
+            .iter()
+            .find(|w| w.id.raw == id.raw())
+            .expect("the wire is still in the scene")
+            .tint
+    };
+    // BK is a colour code and colours the wire; "1" is a number and does not.
+    assert_eq!(tint_of(ids[0]), Some([0x1B, 0x1B, 0x1E]));
+    assert_eq!(tint_of(ids[1]), None);
 }
 
 #[test]
