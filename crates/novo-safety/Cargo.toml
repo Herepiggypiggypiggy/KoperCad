@@ -1,0 +1,11 @@
+[package]
+name = "novo-safety"
+description = "Functional safety calculation aid: ISO 13849-1 performance level, PFHd, subsystem combination (pure engine)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
