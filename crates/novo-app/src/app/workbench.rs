@@ -1116,7 +1116,7 @@ impl NovoApp {
         let by = novo_canvas::Vec2::new(delta.x, delta.y);
         match self.workspace() {
             Workspace::Cabinet => self.cabinet.view.viewport.pan_by_screen(by),
-            Workspace::Reports => {}
+            Workspace::Reports | Workspace::View3d => {}
             _ => {
                 if let Some(view) = self.canvas.schematic() {
                     view.canvas.viewport.pan_by_screen(by);
