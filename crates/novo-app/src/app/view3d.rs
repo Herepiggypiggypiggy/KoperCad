@@ -545,14 +545,15 @@ fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solut
 /// The slice plane's position in millimetres along its axis, with a step to
 /// each side (one cell of the result grid).
 fn slice_position(ui: &mut egui::Ui, h: &mut Heat3d, snap: &novo_cfd::CfdSnapshot) {
-    let (lo, hi, cells) = heat_3d::slice_span(snap, h.axis);
+    let edges = heat_3d::slice_edges(snap, h.axis);
+    let (lo, hi) = (edges[0], edges[edges.len() - 1]);
     let mut mm = lo + f64::from(h.slice_at) * (hi - lo);
-    let changed = ui
+    let back = ui
         .small_button("-")
-        .on_hover_text("One cell back")
+        .on_hover_text("To the centre of the previous cell")
         .clicked();
-    if changed {
-        mm -= (hi - lo) / cells as f64;
+    if back {
+        mm = heat_3d::step_cell(edges, mm, -1);
     }
     let drag = ui
         .add(
@@ -564,12 +565,12 @@ fn slice_position(ui: &mut egui::Ui, h: &mut Heat3d, snap: &novo_cfd::CfdSnapsho
         .on_hover_text("Where the plane cuts the enclosure; drag or type");
     let forward = ui
         .small_button("+")
-        .on_hover_text("One cell forward")
+        .on_hover_text("To the centre of the next cell")
         .clicked();
     if forward {
-        mm += (hi - lo) / cells as f64;
+        mm = heat_3d::step_cell(edges, mm, 1);
     }
-    if changed || forward || drag.changed() {
+    if back || forward || drag.changed() {
         h.slice_at = (((mm - lo) / (hi - lo).max(1e-9)) as f32).clamp(0.0, 1.0);
     }
 }
