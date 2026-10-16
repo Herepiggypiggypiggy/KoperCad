@@ -96,6 +96,7 @@ mod plc_link;
 mod plc_run;
 mod potentials;
 mod preferences;
+mod probe;
 mod project_rules;
 mod project_settings;
 mod protection;

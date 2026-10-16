@@ -183,13 +183,6 @@ impl NovoApp {
         let options = ViewOptions {
             reduced_motion: self.settings.reduce_motion,
         };
-        let now = ui.input(|i| i.time);
-        match mode.pending.take() {
-            Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
-            Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
-            None => {}
-        }
-
         // The Cabinet's selection reaches the 3D view when it changed there.
         let cabinet_rev = self.cabinet.view.selection.revision();
         if cabinet_rev != mode.synced.0 {
@@ -203,6 +196,13 @@ impl NovoApp {
                 .map(|d| ItemId::new(ItemKind::Device, d))
                 .collect();
             mode.synced = (cabinet_rev, mode.view.state.selection.clone());
+        }
+
+        let now = ui.input(|i| i.time);
+        match mode.pending.take() {
+            Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
+            Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
+            None => {}
         }
 
         // A run started here advances here, not only in the Cabinet; the
