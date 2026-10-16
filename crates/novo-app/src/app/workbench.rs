@@ -327,6 +327,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.change_report",
     "export.commissioning",
     "export.standards_report",
+    "export.standards_xlsx",
     "export.plate",
     "export.assembly",
     "export.sheets",
@@ -341,6 +342,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.labels",
     "cabinet.routes",
     "cabinet.rails",
+    "cabinet.door",
     "export.bom",
     "export.reports",
     "view.reports",
@@ -389,6 +391,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "app.preferences",
     "view.shortcuts",
     "help.show_hints",
+    "view.reset_panels",
     "parts.browser",
     "parts.import_step",
     "project.standard",
@@ -673,8 +676,11 @@ impl NovoApp {
             "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
                 if self.is_open() =>
             {
-                self.switch_workspace(Workspace::Cabinet);
-                self.cabinet.table = false;
+                // Simulate stays in the 3D view when it is the one open.
+                if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
+                    self.switch_workspace(Workspace::Cabinet);
+                    self.cabinet.table = false;
+                }
                 self.cabinet.heat.command(id);
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
@@ -802,8 +808,22 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" => self.toggle_live(),
-            "sim.plc_program" => self.open_plc_program(),
+            "sim.live" | "sim.plc_program" => {
+                // The live view and the PLC window draw only over the
+                // schematic: go there first so the command is not silent.
+                if self.workspace() != Workspace::Schematic && self.is_open() {
+                    self.switch_workspace(Workspace::Schematic);
+                    self.message(
+                        Level::Info,
+                        "Simulation runs on the schematic: switched to it",
+                    );
+                }
+                if id == "sim.live" {
+                    self.toggle_live();
+                } else {
+                    self.open_plc_program();
+                }
+            }
             _ if super::reports_view::REPORT_COMMANDS
                 .iter()
                 .any(|(c, _)| *c == id) =>
@@ -864,6 +884,9 @@ impl NovoApp {
             "export.standards_report" => {
                 self.export_standards_report(StandardsFormat::Pdf);
             }
+            "export.standards_xlsx" => {
+                self.export_standards_report(StandardsFormat::Excel);
+            }
             "export.plate" => {
                 self.export_plate_pdf();
             }
@@ -875,6 +898,7 @@ impl NovoApp {
             }
             "cabinet.routes" => self.toggle_cabinet_routes(),
             "cabinet.rails" => self.toggle_cabinet_rails(),
+            "cabinet.door" => self.open_cabinet_door(),
             "export.wirecut" => {
                 self.export_wire_cut();
             }
@@ -944,6 +968,7 @@ impl NovoApp {
             "app.preferences" => self.wb.preferences = true,
             "view.shortcuts" => self.toggle_shortcuts(),
             "help.show_hints" => self.show_hints_again(),
+            "view.reset_panels" => super::panel::reset_layout(ctx),
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "project.standard" => self.wb.project_settings = true,

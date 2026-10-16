@@ -42,6 +42,7 @@ mod heat_progress_tests;
 mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
+mod heat_settings;
 mod inspector;
 mod interop;
 mod learn;
@@ -66,6 +67,7 @@ mod onboarding;
 mod outline;
 mod outline_tree;
 mod pages;
+mod panel;
 mod part_picker;
 mod parts;
 mod parts_import;
@@ -100,6 +102,7 @@ mod userkeymap;
 mod variants;
 mod view3d;
 mod view3d_controls;
+mod view3d_heat;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
@@ -922,6 +925,7 @@ impl NovoApp {
                     || *id == "view.cabinet_table"
                     || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
+                    || *id == "cabinet.door"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"

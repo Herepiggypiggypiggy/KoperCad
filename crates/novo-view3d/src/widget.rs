@@ -1108,23 +1108,76 @@ impl View3d {
                 base
             };
             painter.add(egui::Shape::convex_polygon(pts, color3(fill, 235), border));
-            if let Some(name) = cube::face_name(cell.dir)
-                && cell.facing > 0.4
-            {
-                let mid = Pos2::new(
-                    cell.quad.iter().map(|q| q[0]).sum::<f32>() / 4.0,
-                    cell.quad.iter().map(|q| q[1]).sum::<f32>() / 4.0,
-                );
-                painter.text(
-                    to_screen([mid.x, mid.y]),
-                    Align2::CENTER_CENTER,
-                    name,
-                    FontId::proportional(9.0),
-                    color(look.overlay.chip_text, 1.0),
-                );
+        }
+        // Names go on after every cell, so no neighbouring cell paints over
+        // them, and are laid on the face so they turn with it.
+        for label in cube::visible_labels(&self.camera) {
+            let Some(name) = cube::face_name(label.dir) else {
+                continue;
+            };
+            let fade = ((label.facing - 0.15) / 0.45).clamp(0.0, 1.0);
+            if fade <= 0.0 {
+                continue;
             }
+            paint_face_label(
+                painter,
+                name,
+                label,
+                c,
+                half,
+                color3(text, (255.0 * fade) as u8),
+            );
         }
     }
+}
+
+/// Writes `name` on a cube face: the glyph mesh of the text is mapped onto the
+/// face's right and up vectors, so it is foreshortened and turned with it.
+fn paint_face_label(
+    painter: &egui::Painter,
+    name: &str,
+    label: cube::FaceLabel,
+    c: Pos2,
+    half: f32,
+    tint: Color32,
+) {
+    let galley = painter.layout_no_wrap(name.to_owned(), FontId::proportional(14.0), tint);
+    let size = galley.size();
+    if size.x <= 0.0 {
+        return;
+    }
+    let tex = painter.ctx().fonts(|f| f.font_image_size());
+    let norm = Vec2::new(1.0 / tex[0] as f32, 1.0 / tex[1] as f32);
+    // The text fills about 70 % of the face width.
+    let k = 0.7 / size.x;
+    let map = |p: Pos2| {
+        let (a, b) = ((p.x - size.x * 0.5) * k, -(p.y - size.y * 0.5) * k);
+        let x = label.center[0] + label.right[0] * a + label.up[0] * b;
+        let y = label.center[1] + label.right[1] * a + label.up[1] * b;
+        Pos2::new(c.x + x * half, c.y - y * half)
+    };
+    let mut mesh = egui::Mesh::default();
+    for row in &galley.rows {
+        let base = mesh.vertices.len() as u32;
+        mesh.indices
+            .extend(row.visuals.mesh.indices.iter().map(|i| i + base));
+        mesh.vertices.extend(
+            row.visuals
+                .mesh
+                .vertices
+                .iter()
+                .map(|v| egui::epaint::Vertex {
+                    pos: map(row.pos + v.pos.to_vec2()),
+                    uv: (v.uv.to_vec2() * norm).to_pos2(),
+                    color: if v.color == Color32::PLACEHOLDER {
+                        tint
+                    } else {
+                        v.color
+                    },
+                }),
+        );
+    }
+    painter.add(egui::Shape::mesh(mesh));
 }
 
 /// Everything that changes the picture, hashed: when it is the same as the

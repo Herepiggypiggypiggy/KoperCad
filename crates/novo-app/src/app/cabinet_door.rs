@@ -90,6 +90,10 @@ impl Draft {
 pub(super) struct DoorState {
     draft: Option<Draft>,
     source: Option<Option<Enclosure>>,
+    /// Scroll the inspector to the form (`"cabinet.door"`) or to Apply
+    /// (`"cabinet.door.apply"`) the next time the section is drawn: the
+    /// form sits below the plate fields and can start out of view.
+    pub(super) reveal: Option<&'static str>,
 }
 
 fn mm(ui: &mut egui::Ui, value: &mut f64, max: f64) {
@@ -199,6 +203,16 @@ impl DoorState {
         super::cabinet_bar::note_ctx(ui.ctx(), "cabinet.door.apply", "Apply", &apply);
         if apply.clicked() {
             ask = Some(Ask::SetEnclosure(draft.enclosure()));
+        }
+        match self.reveal.take() {
+            Some("cabinet.door.apply") => {
+                ui.scroll_to_rect(apply.rect, Some(egui::Align::Center));
+            }
+            Some(_) => {
+                let form = Rect::from_min_max(top, apply.rect.right_bottom());
+                ui.scroll_to_rect(form, Some(egui::Align::Min));
+            }
+            None => {}
         }
         ui.separator();
 
