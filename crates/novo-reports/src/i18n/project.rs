@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use novo_core::{Project, Value};
 
-use super::catalog::Catalog;
+use super::catalog::{Catalog, CatalogProblem, check_entry};
 
 /// Project property: the language reports and PDFs print in (`en`, `nl`).
 pub const LANGUAGE_KEY: &str = "i18n.language";
@@ -27,12 +27,18 @@ impl ProjectTable {
         self.languages.keys().map(String::as_str)
     }
 
-    /// Sets one entry, creating the language if needed.
-    pub fn set(&mut self, code: &str, key: &str, text: &str) {
+    /// Sets one entry, creating the language if needed. A translation that
+    /// is empty or changes the key's `{placeholders}` is refused with the
+    /// reason, and nothing is stored.
+    pub fn set(&mut self, code: &str, key: &str, text: &str) -> Result<(), String> {
+        if let Some(why) = check_entry(key, text) {
+            return Err(why);
+        }
         self.languages
             .entry(code.to_owned())
             .or_insert_with(|| Catalog::new(code, ""))
             .set(key, text);
+        Ok(())
     }
 
     /// Removes one entry (the shipped text, or English, shows again).
@@ -46,9 +52,15 @@ impl ProjectTable {
     }
 
     /// Adds or replaces a whole language (a translation file loaded by the
-    /// user).
-    pub fn put_language(&mut self, catalog: Catalog) {
+    /// user). Entries that fail [`check_entry`] are dropped and returned
+    /// with their reasons, so a bad file never prints wrong values.
+    pub fn put_language(&mut self, mut catalog: Catalog) -> Vec<CatalogProblem> {
+        let bad = catalog.problems();
+        for p in &bad {
+            catalog.entries.remove(&p.key);
+        }
         self.languages.insert(catalog.code.clone(), catalog);
+        bad
     }
 
     /// The value stored in [`TABLE_KEY`]; empty when there is nothing.

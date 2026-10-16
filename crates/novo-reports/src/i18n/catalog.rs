@@ -47,6 +47,24 @@ pub fn placeholders(text: &str) -> Vec<String> {
     out
 }
 
+/// Why `text` cannot be the translation of `key`, if it cannot: it is empty
+/// or it keeps different `{placeholders}` (order does not matter).
+pub fn check_entry(key: &str, text: &str) -> Option<String> {
+    if text.trim().is_empty() {
+        return Some("the translation is empty".into());
+    }
+    let (mut a, mut b) = (placeholders(key), placeholders(text));
+    a.sort();
+    b.sort();
+    (a != b).then(|| {
+        if a.is_empty() {
+            "the translation must not contain {placeholders}".to_owned()
+        } else {
+            format!("the translation must keep {{{}}}", a.join("}, {"))
+        }
+    })
+}
+
 impl Catalog {
     pub fn new(code: &str, name: &str) -> Self {
         Catalog {
@@ -67,30 +85,15 @@ impl Catalog {
     /// Entries whose translation changes the placeholders of the key, or is
     /// empty: such a line would print wrong or blank values.
     pub fn problems(&self) -> Vec<CatalogProblem> {
-        let mut out = Vec::new();
-        for (key, text) in &self.entries {
-            if text.trim().is_empty() {
-                out.push(CatalogProblem {
+        self.entries
+            .iter()
+            .filter_map(|(key, text)| {
+                check_entry(key, text).map(|message| CatalogProblem {
                     key: key.clone(),
-                    message: "the translation is empty".into(),
-                });
-                continue;
-            }
-            let (mut a, mut b) = (placeholders(key), placeholders(text));
-            a.sort();
-            b.sort();
-            if a != b {
-                out.push(CatalogProblem {
-                    key: key.clone(),
-                    message: format!(
-                        "placeholders differ: the English has {{{}}}, the translation {{{}}}",
-                        a.join("}, {"),
-                        b.join("}, {")
-                    ),
-                });
-            }
-        }
-        out
+                    message,
+                })
+            })
+            .collect()
     }
 }
 

@@ -125,14 +125,14 @@ fn missing_keys_are_listed() {
 #[test]
 fn project_entries_win_and_new_languages_work() {
     let mut table = ProjectTable::default();
-    table.set("nl", "Device list", "Componentenlijst");
+    table.set("nl", "Device list", "Componentenlijst").unwrap();
     let tr = Translator::new("nl", &table);
     assert_eq!(tr.tr("Device list"), "Componentenlijst");
     assert_eq!(tr.tr("Wire list"), "Draadlijst", "shipped text still used");
 
     let mut de = Catalog::new("de", "Deutsch");
     de.set("Wire list", "Drahtliste");
-    table.put_language(de);
+    assert!(table.put_language(de).is_empty());
     let tr = Translator::new("de", &table);
     assert_eq!(tr.tr("Wire list"), "Drahtliste");
     assert_eq!(tr.tr("Device list"), "Device list");
@@ -167,7 +167,7 @@ fn placeholder_changes_are_caught() {
 fn project_keeps_language_and_table() {
     let mut doc = Document::default();
     let mut table = ProjectTable::default();
-    table.set("nl", "Qty", "Aant.");
+    table.set("nl", "Qty", "Aant.").unwrap();
     let text = table.to_property().expect("not empty");
     doc.transact("Languages", |tx| {
         tx.set_info(|i| {
@@ -289,4 +289,42 @@ fn dutch_title_block_captions_fit_their_column() {
             assert!(caption.chars().count() <= 20, "{caption}");
         }
     }
+}
+
+#[test]
+fn typed_translations_cannot_drop_or_rename_placeholders() {
+    let mut table = ProjectTable::default();
+    assert!(table.set("nl", "Line {n}", "Regel").is_err());
+    assert!(table.set("nl", "Line {n}", "Regel {x}").is_err());
+    assert!(table.set("nl", "Wire", "Draad {n}").is_err());
+    assert!(table.set("nl", "Wire", "  ").is_err());
+    assert_eq!(table.to_property(), None, "nothing was stored");
+    assert!(table.set("nl", "Line {n}", "Rij {n}").is_ok());
+    assert!(
+        table
+            .set("nl", "page {page} / {pages}", "{pages} / {page}")
+            .is_ok()
+    );
+}
+
+#[test]
+fn a_loaded_language_file_loses_its_bad_entries() {
+    let mut file = Catalog::new("de", "Deutsch");
+    file.set("Wire", "Draht");
+    file.set("Line {n}", "Zeile");
+    let mut table = ProjectTable::default();
+    let bad = table.put_language(file);
+    assert_eq!(bad.len(), 1);
+    assert_eq!(bad[0].key, "Line {n}");
+    let tr = Translator::new("de", &table);
+    assert_eq!(tr.tr("Wire"), "Draht");
+    assert_eq!(tr.tr("Line 4"), "Line 4");
+}
+
+#[test]
+fn a_captured_value_that_looks_like_a_placeholder_is_kept() {
+    let mut table = ProjectTable::default();
+    table.set("nl", "Line {a} {b}", "{b} {a}").unwrap();
+    let tr = Translator::new("nl", &table);
+    assert_eq!(tr.tr("Line {b} x"), "x {b}");
 }

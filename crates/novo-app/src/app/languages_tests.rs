@@ -54,8 +54,8 @@ fn choosing_a_language_is_saved_in_the_project_and_undone_in_one_step() {
 fn rows_list_missing_texts_and_project_entries_win() {
     let (_dir, mut d) = open();
     let mut table = ProjectTable::default();
-    table.put_language(i18n::Catalog::new("de", "Deutsch"));
-    table.set("de", "Wire list", "Drahtliste");
+    let _ = table.put_language(i18n::Catalog::new("de", "Deutsch"));
+    table.set("de", "Wire list", "Drahtliste").unwrap();
     d.app.set_translation_table("Add language", &table);
     d.app.set_report_language("de");
     let project = d.app.backend.document().unwrap().project().clone();
@@ -79,4 +79,11 @@ fn rows_list_missing_texts_and_project_entries_win() {
         "{}",
         missing_as_text(&list)
     );
+}
+
+#[test]
+fn a_translation_that_drops_a_placeholder_is_not_saved() {
+    let mut table = ProjectTable::default();
+    assert!(table.set("nl", "Line {n}", "Regel").is_err());
+    assert!(table.language("nl").is_none());
 }

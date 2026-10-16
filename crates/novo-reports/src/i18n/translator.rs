@@ -151,9 +151,30 @@ fn match_pattern(pattern: &str, text: &str) -> Option<Vec<(String, String)>> {
 }
 
 fn fill(template: &str, captures: &[(String, String)]) -> String {
-    let mut out = template.to_owned();
-    for (name, value) in captures {
-        out = out.replace(&format!("{{{name}}}"), value);
+    // One pass, so a captured value that looks like `{other}` is kept as is.
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(i) = rest.find('{') {
+        out.push_str(&rest[..i]);
+        let tail = &rest[i..];
+        let named = tail.find('}').and_then(|end| {
+            let name = tail[1..end].trim();
+            captures
+                .iter()
+                .find(|(n, _)| n == name)
+                .map(|(_, v)| (v, end))
+        });
+        match named {
+            Some((value, end)) => {
+                out.push_str(value);
+                rest = &tail[end + 1..];
+            }
+            None => {
+                out.push('{');
+                rest = &tail[1..];
+            }
+        }
     }
+    out.push_str(rest);
     out
 }

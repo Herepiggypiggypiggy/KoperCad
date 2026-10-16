@@ -43,6 +43,7 @@ pub(super) struct LanguagesWindow {
     buffers: BTreeMap<String, String>,
     new_code: String,
     new_name: String,
+    error: Option<String>,
 }
 
 /// Every text the project prints that a language needs an entry for: the
@@ -199,6 +200,9 @@ impl NovoApp {
                             copy = Some(missing_as_text(&table_rows));
                         }
                     });
+                    if let Some(error) = &win.error {
+                        ui.colored_label(tokens::ERROR, error);
+                    }
                     ui.separator();
                     egui::ScrollArea::vertical()
                         .max_height(300.0)
@@ -260,23 +264,33 @@ impl NovoApp {
                     }
                 });
                 ui.weak("Texts with no translation print in English, so nothing is left blank.");
+                ui.weak(
+                    "CSV and Excel exports of a report use the same language for their headers.",
+                );
             });
         if let Some(code) = pick {
             self.set_report_language(&code);
         }
         if let Some((english, text)) = edit {
             let mut table = table.clone();
-            if text.trim().is_empty() {
-                table.remove(translator.code(), &english);
-            } else {
-                table.set(translator.code(), &english, text.trim());
-            }
             win.buffers.remove(&english);
-            self.set_translation_table("Edit translation", &table);
+            let result = if text.trim().is_empty() {
+                table.remove(translator.code(), &english);
+                Ok(())
+            } else {
+                table.set(translator.code(), &english, text.trim())
+            };
+            match result {
+                Ok(()) => {
+                    win.error = None;
+                    self.set_translation_table("Edit translation", &table);
+                }
+                Err(why) => win.error = Some(format!("\"{english}\": {why}")),
+            }
         }
         if let Some((code, name)) = add_language {
             let mut table = table.clone();
-            table.put_language(i18n::Catalog::new(&code, &name));
+            let _ = table.put_language(i18n::Catalog::new(&code, &name));
             self.set_translation_table("Add language", &table);
             self.set_report_language(&code);
             win.new_code.clear();
