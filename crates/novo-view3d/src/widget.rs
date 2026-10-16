@@ -241,6 +241,19 @@ fn color(c: [u8; 4], alpha: f32) -> Color32 {
     )
 }
 
+/// A chip's 1 px line: copper when selected, steel blue when hovered, the
+/// quiet border otherwise.
+fn chip_border(selected: bool, hovered: bool, look: &Look, alpha: f32) -> Color32 {
+    let edge = if selected {
+        look.selection.edge
+    } else if hovered {
+        look.hover.edge
+    } else {
+        return color(look.overlay.chip_border, alpha);
+    };
+    color3(edge, (alpha.clamp(0.0, 1.0) * 255.0).round() as u8)
+}
+
 fn color3(c: [u8; 3], alpha: u8) -> Color32 {
     Color32::from_rgba_unmultiplied(c[0], c[1], c[2], alpha)
 }
@@ -837,10 +850,13 @@ impl View3d {
             text: Arc<str>,
             centre: Pos2,
             size: Vec2,
+            selected: bool,
+            hovered: bool,
         }
         let mut chips: Vec<Chip> = Vec::new();
         let mut candidates: Vec<LabelCandidate> = Vec::new();
-        let font = FontId::proportional(11.0);
+        // Tags are monospace 12 pt (3d-look.md section 5).
+        let font = FontId::monospace(12.0);
         for i in frustum_ok {
             let item = &scene.items[i];
             let world = scene.world_matrix(item);
@@ -859,18 +875,22 @@ impl View3d {
                 let galley =
                     painter.layout_no_wrap(label.to_string(), font.clone(), Color32::PLACEHOLDER);
                 let size = galley.size() + Vec2::new(8.0, 4.0);
+                let selected = self.state.selection.contains(&item.id);
+                let hovered = self.state.hover == Some(item.id);
                 candidates.push(LabelCandidate {
                     id: chips.len() as u64,
                     rect: [p.x - size.x * 0.5, p.y - size.y * 0.5, size.x, size.y],
                     device_px: size_pt,
-                    selected: self.state.selection.contains(&item.id),
-                    hovered: self.state.hover == Some(item.id),
+                    selected,
+                    hovered,
                 });
                 chips.push(Chip {
                     id: item.id,
                     text: label.clone(),
                     centre: p,
                     size,
+                    selected,
+                    hovered,
                 });
             }
             if item.mark != Mark::None && size_pt >= 12.0 {
@@ -917,7 +937,7 @@ impl View3d {
                     r,
                     3.0,
                     color(look.overlay.chip, a),
-                    Stroke::new(1.0, color(look.overlay.chip_border, a)),
+                    Stroke::new(1.0, chip_border(chip.selected, chip.hovered, look, a)),
                     egui::StrokeKind::Inside,
                 );
                 painter.text(
@@ -1035,4 +1055,21 @@ fn frame_key(
     (&state.selection, state.hover, &state.hidden, &state.related).hash(&mut h);
     (state.display.edges, state.display.labels).hash(&mut h);
     h.finish()
+}
+
+#[cfg(test)]
+mod chip_tests {
+    use super::*;
+
+    #[test]
+    fn a_chip_border_follows_selection_then_hover() {
+        let look = crate::look::Look::default();
+        let quiet = chip_border(false, false, &look, 1.0);
+        let hover = chip_border(false, true, &look, 1.0);
+        let selected = chip_border(true, true, &look, 1.0);
+        assert_eq!(selected, color3(look.selection.edge, 255), "copper wins");
+        assert_eq!(hover, color3(look.hover.edge, 255));
+        assert_ne!(quiet, hover);
+        assert_ne!(selected, hover);
+    }
 }
