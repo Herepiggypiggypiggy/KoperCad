@@ -17,6 +17,7 @@ enum DockTool {
     Select,
     Place,
     Connect,
+    Cable,
     Text,
 }
 
@@ -178,8 +179,9 @@ impl NovoApp {
         let active = match view.editor.tool() {
             Tool::Place(_) => DockTool::Place,
             Tool::Wire(_) => DockTool::Connect,
+            Tool::Cable(_) => DockTool::Cable,
             Tool::Text => DockTool::Text,
-            Tool::Select | Tool::Move(_) | Tool::Cable(_) | Tool::Paste(_) => DockTool::Select,
+            Tool::Select | Tool::Move(_) | Tool::Paste(_) => DockTool::Select,
         };
         // Aside: the bottom right corner, while the pointer works near the
         // dock's usual place (a drag, or a tool following the pointer).
@@ -230,6 +232,12 @@ impl NovoApp {
             ),
             None => super::tips::tip_text(&self.wb.keymap, "Connect", "tool.connect"),
         };
+        let cable_tip = super::tips::tip_text(&self.wb.keymap, "Cable", "tool.cable");
+        let undo_tip = super::tips::tip_text(&self.wb.keymap, "Undo", "edit.undo");
+        let redo_tip = super::tips::tip_text(&self.wb.keymap, "Redo", "edit.redo");
+        let can_undo = self.is_enabled(crate::actions::Action::Undo);
+        let can_redo = self.is_enabled(crate::actions::Action::Redo);
+        let mut history = None;
         let text_tip = super::tips::tip_text(&self.wb.keymap, "Add text", "draw.text");
         let chosen = self.settings.wiring_mode();
         let mut chip = None;
@@ -318,6 +326,47 @@ impl NovoApp {
                             response.surrender_focus();
                         }
                         ui.separator();
+                        // The cable tool and the history sit after the wiring
+                        // mode: a tool of its own, then two plain actions.
+                        let response = widgets::tool_button(
+                            ui,
+                            icons::tool::CABLE,
+                            active == DockTool::Cable,
+                            cable_tip.as_str(),
+                        );
+                        spots.push(("dock.cable", response.rect, response.clicked()));
+                        if response.clicked() {
+                            picked = Some(DockTool::Cable);
+                        }
+                        response.surrender_focus();
+                        ui.separator();
+                        for (icon, tip, id, enabled, command) in [
+                            (
+                                icons::tool::UNDO,
+                                undo_tip.as_str(),
+                                "dock.undo",
+                                can_undo,
+                                "edit.undo",
+                            ),
+                            (
+                                icons::tool::REDO,
+                                redo_tip.as_str(),
+                                "dock.redo",
+                                can_redo,
+                                "edit.redo",
+                            ),
+                        ] {
+                            let response = ui
+                                .add_enabled_ui(enabled, |ui| {
+                                    widgets::tool_button(ui, icon, false, tip)
+                                })
+                                .inner;
+                            spots.push((id, response.rect, response.clicked()));
+                            if response.clicked() {
+                                history = Some(command);
+                            }
+                            response.surrender_focus();
+                        }
                         let response = widgets::tool_button(
                             ui,
                             icons::tool::TEXT,
@@ -358,6 +407,9 @@ impl NovoApp {
                 "dock.select" => "Select",
                 "dock.place" => "Place",
                 "dock.connect" => "Connect",
+                "dock.cable" => "Cable",
+                "dock.undo" => "Undo",
+                "dock.redo" => "Redo",
                 "dock.corners" => "Corners",
                 "dock.lines" => "Lines",
                 "dock.hint" => "hint",
@@ -369,6 +421,9 @@ impl NovoApp {
             }
         }
 
+        if let Some(command) = history {
+            self.wb.queued.push(command);
+        }
         if let Some(mode) = chip {
             self.set_wiring_mode(mode, true);
         }
@@ -384,6 +439,7 @@ impl NovoApp {
                     view.editor.begin_wire();
                 }
             }
+            Some(DockTool::Cable) => self.wb.queued.push("tool.cable"),
             Some(DockTool::Text) => {
                 if let Some(view) = self.canvas.schematic() {
                     view.editor.begin_text();

@@ -301,7 +301,15 @@ fn controls_register_where_they_are_and_the_start_panel_offers_learn() {
     d.app.start_lesson("tiny");
     d.frame();
     d.frame();
-    for id in ["dock.select", "dock.place", "dock.connect", "dock.corners"] {
+    for id in [
+        "dock.select",
+        "dock.place",
+        "dock.connect",
+        "dock.corners",
+        "dock.cable",
+        "dock.undo",
+        "dock.redo",
+    ] {
         let rect = d.app.learn_anchor(id).unwrap_or_else(|| panic!("{id}"));
         assert!(rect.width() > 0.0 && rect.height() > 0.0, "{id}");
     }

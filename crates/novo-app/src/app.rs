@@ -17,6 +17,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_surfaces;
 mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
@@ -109,6 +110,7 @@ mod reports;
 mod reports_view;
 mod revisions;
 mod safety;
+mod safety_functions;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -158,6 +160,8 @@ mod cabinet_rails_tests;
 mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
+#[cfg(test)]
+mod cabinet_surfaces_tests;
 #[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
@@ -991,6 +995,7 @@ impl NovoApp {
                     || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
                     || *id == "cabinet.door"
+                    || *id == "cabinet.surface"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
