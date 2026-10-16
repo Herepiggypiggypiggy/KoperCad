@@ -1786,7 +1786,7 @@ impl SchematicView {
                         if ui.button("Paste   Ctrl+V").clicked() {
                             chosen = Some(MenuChoice::Command("edit.paste"));
                         }
-                        if ui.button("Add text   T").clicked() {
+                        if ui.button("Add text   Shift+T").clicked() {
                             chosen = Some(MenuChoice::Command("draw.text"));
                         }
                         if ui.button("New page after this").clicked() {
@@ -1962,7 +1962,9 @@ impl SchematicView {
                             chosen = Some(MenuChoice::MakeCable);
                         }
                     }
-                    if !menu.wires.is_empty() || menu.symbols > 0 {
+                    // A selection of terminals already has a tall menu; its nets are
+                    // one right-click away on the wire, and in Edit > Net.
+                    if !menu.wires.is_empty() || menu.symbols > menu.terminals {
                         if ui
                             .button("Select net")
                             .on_hover_text("Every wire of this net on the page")
@@ -3083,7 +3085,8 @@ mod tests {
         h.view.editor.begin_place("iec/coils/relay", None);
         h.click(100.0, 100.0, egui::PointerButton::Secondary);
         assert!(h.view.menu.is_some());
-        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        // Outside the menu, whatever rows it has.
+        h.click(400.0, 400.0, egui::PointerButton::Primary);
         assert!(h.view.menu.is_none());
         assert_eq!(h.doc.project().symbols().count(), 0);
         // The next click places as usual.

@@ -190,7 +190,7 @@ fn net_commands_without_a_selection_say_what_to_select() {
 }
 
 #[test]
-fn the_new_commands_are_run_by_the_app_and_t_is_the_text_key() {
+fn the_new_commands_are_run_by_the_app_and_shift_t_is_the_text_key() {
     for id in ["draw.text", "net.select", "net.trace", "help.keymap_file"] {
         assert!(super::workbench::app_runs(id), "{id}");
     }
@@ -198,6 +198,14 @@ fn the_new_commands_are_run_by_the_app_and_t_is_the_text_key() {
         novo_workflow::keymap::Keymap::workflow()
             .shortcut_text("draw.text")
             .as_deref(),
-        Some("T")
+        Some("Shift+T")
     );
+}
+
+#[test]
+fn shift_t_on_the_drawing_arms_the_text_tool() {
+    let (_dir, mut d) = drive();
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(800.0, 450.0))]);
+    d.key(egui::Key::T, egui::Modifiers::SHIFT);
+    assert!(d.app.canvas.schematic().unwrap().editor.placing_text());
 }
