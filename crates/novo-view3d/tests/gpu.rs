@@ -41,11 +41,22 @@ fn render_with(
     mode: Mode,
     overlays: &[Overlay],
 ) -> Vec<u8> {
+    render_ssao(gpu, scene, state, camera, mode, overlays, false)
+}
+fn render_ssao(
+    gpu: &Gpu,
+    scene: &Scene,
+    state: &ViewState,
+    camera: &Camera,
+    mode: Mode,
+    overlays: &[Overlay],
+    ssao: bool,
+) -> Vec<u8> {
     let look = Look::dark();
     let library = MeshLibrary::new();
     let mut renderer = Renderer::new(&gpu.device);
     let mut target = ViewTarget::new(&renderer, &gpu.device);
-    let mut quality = Quality::new(mode, Tier::Discrete);
+    let mut quality = Quality::new(mode, Tier::Discrete).with_ssao(ssao);
     quality.scale = 1.0;
     let mut encoder = gpu.device.create_command_encoder(&Default::default());
     renderer.render(
@@ -632,4 +643,55 @@ fn a_caster_outside_the_picture_still_shadows_what_is_in_it() {
         darker > 200,
         "the shadow reaches into the picture ({darker} px)"
     );
+}
+
+#[test]
+fn screen_space_occlusion_darkens_the_corner_between_a_wall_and_the_plate() {
+    let Some(gpu) = gpu() else {
+        println!("no adapter, skipped");
+        return;
+    };
+    let mut scene = Scene::new(PlateFrame {
+        width: 300.0,
+        height: 300.0,
+    });
+    let mut plate = Item::new(
+        ItemId::new(ItemKind::Plate, 0),
+        Shape::Box,
+        Pose::at(Vec3::new(150.0, 150.0, -3.0)),
+        Vec3::new(300.0, 300.0, 3.0),
+    );
+    plate.tint = Some([200, 200, 200]);
+    scene.push(plate);
+    scene.push(boxed(
+        1,
+        Vec3::new(150.0, 150.0, 0.0),
+        Vec3::new(60.0, 60.0, 80.0),
+        [180, 120, 90],
+    ));
+    let mut camera = Camera::default();
+    camera.set_preset(ViewPreset::Iso);
+    camera.fit(&scene.bounds(), SIZE.0 as f32 / SIZE.1 as f32);
+    let mut state = ViewState::default();
+    state.display.shadows = false;
+    state.display.edges = false;
+    let picture = |ssao| render_ssao(&gpu, &scene, &state, &camera, Mode::Settled, &[], ssao);
+    let (flat, occluded) = (picture(false), picture(true));
+    if let Ok(dir) = std::env::var("NOVO_DUMP_DIR") {
+        for (name, img) in [("ssao_off", &flat), ("ssao_on", &occluded)] {
+            let path = std::path::Path::new(&dir).join(format!("{name}.ppm"));
+            let mut out = format!("P6\n{} {}\n255\n", SIZE.0, SIZE.1).into_bytes();
+            out.extend(img.chunks(4).flat_map(|p| [p[0], p[1], p[2]]));
+            std::fs::write(path, out).unwrap();
+        }
+    }
+    let (mut darker, mut brighter) = (0, 0);
+    for (a, b) in flat.chunks(4).zip(occluded.chunks(4)) {
+        let (a, b) = (i32::from(a[0]), i32::from(b[0]));
+        darker += usize::from(b < a - 10);
+        brighter += usize::from(b > a + 3);
+    }
+    assert!(darker > 120, "the foot of the box is darker ({darker} px)");
+    assert!(brighter < 20, "occlusion does not brighten ({brighter} px)");
+    assert_eq!(px(&flat, 2, 2), px(&occluded, 2, 2), "background untouched");
 }

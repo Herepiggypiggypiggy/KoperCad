@@ -20,6 +20,8 @@ pub(crate) struct Controls {
     pub(super) move_items: bool,
     /// Soft shadows from the key light.
     pub(super) shadows: bool,
+    /// Screen-space ambient occlusion (the frame governor may pause it).
+    pub(super) ssao: bool,
 }
 
 impl Default for Controls {
@@ -29,6 +31,7 @@ impl Default for Controls {
             door_deg: 0.0,
             move_items: true,
             shadows: true,
+            ssao: true,
         }
     }
 }
@@ -99,6 +102,14 @@ pub(super) fn toolbar(
                         &mut controls.shadows,
                         "Shadows",
                         "Soft shadows from the key light (View > 3D > Shadows)",
+                    );
+                    toggle(
+                        ui,
+                        &mut controls.ssao,
+                        "Occlusion",
+                        "Ambient occlusion: corners and contacts darken (View > 3D > Ambient \
+                         occlusion). The 3D view turns it off by itself when it runs slowly; \
+                         switch it off and on to ask for it back.",
                     );
                     ui.separator();
                     if let Some(limit) = limit

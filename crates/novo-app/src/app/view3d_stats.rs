@@ -7,6 +7,7 @@ use std::collections::VecDeque;
 use std::fmt::Write;
 
 use eframe::egui;
+use novo_view3d::palette::QualityTier;
 use novo_view3d::widget::{RenderStats, View3d, percentile, render_stats};
 
 /// Frame intervals kept for the percentiles.
@@ -135,6 +136,12 @@ pub(super) fn report(stats: Option<&RenderStats>, intervals: &[f32], build: Buil
         );
     }
     if let Some(s) = stats {
+        let occlusion = match (s.ssao, s.detail) {
+            (true, _) => "on (screen space, High tier)",
+            (false, QualityTier::High) => "off (switched off, or this GPU cannot)",
+            (false, _) => "off (the frame governor stepped the detail down, or Low tier)",
+        };
+        let _ = writeln!(out, "Ambient occlusion: {occlusion}");
         let _ = writeln!(
             out,
             "Renderer CPU: {:.2} ms median, {:.2} ms 95th percentile",
@@ -171,6 +178,8 @@ mod tests {
             msaa: 1,
             cpu_p50_ms: 0.18,
             cpu_p95_ms: 0.4,
+            ssao: true,
+            detail: QualityTier::High,
         }
     }
 
@@ -186,6 +195,10 @@ mod tests {
         assert!(text.contains("18.0 ms median"), "{text}");
         assert!(text.contains("56 fps (100 frames)"), "{text}");
         assert!(text.contains("Renderer CPU: 0.18 ms median"), "{text}");
+        assert!(
+            text.contains("Ambient occlusion: on (screen space, High tier)"),
+            "{text}"
+        );
         assert!(
             text.contains("1016 items, 11 draw calls, 12700 triangles"),
             "{text}"

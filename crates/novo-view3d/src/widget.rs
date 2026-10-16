@@ -9,10 +9,12 @@ use crate::camera::{Camera, Projection, ViewPreset};
 use crate::cube::{self, CubeHit};
 use crate::door::DoorAnim;
 use crate::feel::{self, Inertia, Transition};
+use crate::governor::FrameGovernor;
 use crate::labels::{self, Fade, LabelCandidate};
 use crate::look::{self, Glyph, Look};
 use crate::mesh::MeshLibrary;
 use crate::overlay::Overlay;
+use crate::palette::QualityTier;
 use crate::pick::{self, Hit};
 use crate::render::{BlitBind, Blitter, Frame, Mode, Quality, Renderer, Tier, ViewTarget};
 use crate::scene::{GroupId, ItemId, ItemKind, Mark, Scene};
@@ -58,6 +60,10 @@ pub struct RenderStats {
     /// median and 95th percentile of the last renders. GPU time is not in it.
     pub cpu_p50_ms: f32,
     pub cpu_p95_ms: f32,
+    /// Whether the last render ran the screen-space occlusion passes.
+    pub ssao: bool,
+    /// The detail tier the frame governor is at (it only ever steps down).
+    pub detail: QualityTier,
 }
 
 struct Recorder {
@@ -68,6 +74,7 @@ struct Recorder {
     cpu_ms: VecDeque<f32>,
     last: crate::render::FrameStats,
     msaa: u32,
+    detail: QualityTier,
 }
 
 /// The percentile `p` (0 to 1) of unsorted samples; 0 for none.
@@ -97,10 +104,12 @@ pub fn render_stats() -> Option<RenderStats> {
         msaa: r.msaa,
         cpu_p50_ms: percentile(&cpu, 0.5),
         cpu_p95_ms: percentile(&cpu, 0.95),
+        ssao: r.last.ssao,
+        detail: r.detail,
     })
 }
 
-fn record(stats: crate::render::FrameStats, msaa: u32) {
+fn record(stats: crate::render::FrameStats, msaa: u32, detail: QualityTier) {
     if let Ok(mut guard) = STATS.lock()
         && let Some(r) = guard.as_mut()
     {
@@ -111,6 +120,7 @@ fn record(stats: crate::render::FrameStats, msaa: u32) {
         r.renders += 1;
         r.last = stats;
         r.msaa = msaa;
+        r.detail = detail;
     }
 }
 
@@ -134,6 +144,7 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
             cpu_ms: VecDeque::with_capacity(STATS_WINDOW),
             last: Default::default(),
             msaa: 1,
+            detail: start_detail(tier),
         });
     }
     render_state
@@ -144,6 +155,7 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
             renderer,
             blitter,
             tier,
+            detail: DetailControl::new(tier),
             views: HashMap::new(),
         });
     INSTALLED.store(true, Ordering::Relaxed);
@@ -154,16 +166,84 @@ pub fn is_installed() -> bool {
     INSTALLED.load(Ordering::Relaxed)
 }
 
+/// Where the frame governor starts: discrete GPUs on High (it steps down by
+/// itself if the view is slow), the others on Low.
+fn start_detail(tier: Tier) -> QualityTier {
+    match tier {
+        Tier::Discrete => QualityTier::High,
+        Tier::Integrated | Tier::Software => QualityTier::Low,
+    }
+}
+
+/// What the occlusion switch and the frame governor decide together.
+struct DetailControl {
+    /// Steps the detail tier down while the view is slow.
+    governor: FrameGovernor,
+    /// When the last picture was drawn, for the governor's frame times.
+    last_render: Option<Instant>,
+    /// Whether the switch was on at the last look.
+    asked: bool,
+    /// Whether the last `ssao` call said yes (what the next render runs).
+    running: bool,
+    capable: bool,
+}
+
+impl DetailControl {
+    fn new(tier: Tier) -> Self {
+        Self {
+            governor: FrameGovernor::new(start_detail(tier), false),
+            last_render: None,
+            asked: true,
+            running: false,
+            capable: tier != Tier::Software,
+        }
+    }
+
+    /// Whether occlusion should be drawn now, given the switch. Switching it
+    /// off and on again asks for the High tier back after a step down.
+    fn ssao(&mut self, asked: bool, tier: Tier) -> bool {
+        if asked && !self.asked {
+            self.governor.tier = self.governor.tier.max(QualityTier::High);
+        }
+        self.asked = asked;
+        self.capable = tier != Tier::Software;
+        self.running = asked && self.capable && self.governor.tier.ssao();
+        self.running
+    }
+
+    /// A picture is about to be drawn at `now`. While the camera moves the
+    /// time since the last one is a frame time for the governor, which only
+    /// watches while occlusion (the one thing it controls) runs. Returns
+    /// whether occlusion is on for this picture, after any step down.
+    fn render(&mut self, interactive: bool, now: Instant) -> bool {
+        if interactive
+            && self.running
+            && let Some(prev) = self.last_render
+        {
+            let dt = now.saturating_duration_since(prev).as_secs_f32();
+            if dt > 0.0 && dt < 0.25 {
+                self.governor.frame(dt * 1000.0);
+            }
+        }
+        self.last_render = Some(now);
+        self.running = self.asked && self.capable && self.governor.tier.ssao();
+        self.running
+    }
+}
+
 struct Resources {
     renderer: Renderer,
     blitter: Blitter,
     tier: Tier,
+    detail: DetailControl,
     views: HashMap<u64, Slot>,
 }
 
 struct Slot {
     target: ViewTarget,
     key: Option<u64>,
+    /// Whether the picture was drawn with screen-space occlusion.
+    ssao: bool,
     bind: Option<BlitBind>,
     used: Instant,
 }
@@ -198,6 +278,7 @@ impl egui_wgpu::CallbackTrait for Callback {
             renderer,
             blitter,
             tier,
+            detail,
             views,
         } = res;
         let now = Instant::now();
@@ -205,12 +286,15 @@ impl egui_wgpu::CallbackTrait for Callback {
         let slot = views.entry(self.id).or_insert_with(|| Slot {
             target: ViewTarget::new(renderer, device),
             key: None,
+            ssao: false,
             bind: None,
             used: now,
         });
         slot.used = now;
-        if slot.key != Some(self.key) {
-            let quality = Quality::new(self.mode, *tier);
+        let ssao = detail.ssao(self.state.display.ssao, *tier);
+        if slot.key != Some(self.key) || slot.ssao != ssao {
+            let ssao = detail.render(self.mode == Mode::Interactive, now);
+            let quality = Quality::new(self.mode, *tier).with_ssao(ssao);
             let stats = renderer.render(
                 device,
                 queue,
@@ -228,8 +312,9 @@ impl egui_wgpu::CallbackTrait for Callback {
                     overlay_revision: self.overlay_revision,
                 },
             );
-            record(stats, quality.msaa);
+            record(stats, quality.msaa, detail.governor.tier);
             slot.key = Some(self.key);
+            slot.ssao = ssao;
         }
         if slot
             .bind
@@ -1257,6 +1342,7 @@ mod stats_tests {
             cpu_ms: VecDeque::new(),
             last: Default::default(),
             msaa: 1,
+            detail: QualityTier::Standard,
         });
         for i in 0..(STATS_WINDOW + 30) {
             record(
@@ -1266,13 +1352,88 @@ mod stats_tests {
                     ..Default::default()
                 },
                 4,
+                QualityTier::High,
             );
         }
         let s = render_stats().unwrap();
         assert_eq!(s.renders as usize, STATS_WINDOW + 30);
         assert_eq!((s.draw_calls, s.msaa), (11, 4));
+        assert_eq!(s.detail, QualityTier::High);
         // Only the last window counts: samples 30 to 149.
         assert!(s.cpu_p50_ms > 80.0 && s.cpu_p95_ms > 140.0, "{s:?}");
         *STATS.lock().unwrap() = None;
+    }
+}
+
+#[cfg(test)]
+mod detail_tests {
+    use super::*;
+
+    /// Draws `frames` pictures `ms` apart while the camera moves.
+    fn orbit(d: &mut DetailControl, t0: Instant, frames: u32, ms: u64) -> Instant {
+        let mut t = t0;
+        for _ in 0..frames {
+            t += Duration::from_millis(ms);
+            d.ssao(true, Tier::Discrete);
+            d.render(true, t);
+        }
+        t
+    }
+
+    #[test]
+    fn a_discrete_gpu_starts_with_occlusion_and_software_never_has_it() {
+        let mut d = DetailControl::new(Tier::Discrete);
+        assert!(d.ssao(true, Tier::Discrete));
+        assert!(!d.ssao(false, Tier::Discrete), "the switch turns it off");
+        let mut soft = DetailControl::new(Tier::Software);
+        assert!(!soft.ssao(true, Tier::Software));
+        let mut integrated = DetailControl::new(Tier::Integrated);
+        assert!(!integrated.ssao(true, Tier::Integrated), "Low until asked");
+    }
+
+    #[test]
+    fn a_slow_view_steps_occlusion_down_and_a_fast_one_keeps_it() {
+        let t0 = Instant::now();
+        let mut fast = DetailControl::new(Tier::Discrete);
+        orbit(&mut fast, t0, 400, 12);
+        assert!(fast.ssao(true, Tier::Discrete), "12 ms frames are fine");
+        assert_eq!(fast.governor.tier, QualityTier::High);
+
+        let mut slow = DetailControl::new(Tier::Discrete);
+        assert!(slow.ssao(true, Tier::Discrete));
+        orbit(&mut slow, t0, 120, 30);
+        assert!(!slow.ssao(true, Tier::Discrete), "30 ms frames for 3.6 s");
+        assert_eq!(slow.governor.tier, QualityTier::Standard);
+    }
+
+    #[test]
+    fn switching_occlusion_off_and_on_asks_for_it_back() {
+        let t0 = Instant::now();
+        let mut d = DetailControl::new(Tier::Discrete);
+        orbit(&mut d, t0, 120, 30);
+        assert!(!d.ssao(true, Tier::Discrete), "stepped down");
+        assert!(!d.ssao(false, Tier::Discrete));
+        assert!(d.ssao(true, Tier::Discrete), "asked for again");
+        assert_eq!(d.governor.tier, QualityTier::High);
+    }
+
+    #[test]
+    fn pauses_and_settled_pictures_are_not_frame_times() {
+        let t0 = Instant::now();
+        let mut d = DetailControl::new(Tier::Discrete);
+        d.ssao(true, Tier::Discrete);
+        let mut t = t0;
+        for _ in 0..40 {
+            t += Duration::from_secs(2);
+            d.render(true, t);
+        }
+        for _ in 0..400 {
+            t += Duration::from_millis(40);
+            d.render(false, t);
+        }
+        assert!(
+            d.ssao(true, Tier::Discrete),
+            "idle gaps and settled frames do not count"
+        );
     }
 }

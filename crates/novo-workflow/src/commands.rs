@@ -980,6 +980,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_ssao",
+        "Show or hide ambient occlusion in 3D",
+        "View",
+        &["occlusion", "ao", "ssao", "contact shadows", "corners"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_stats",
         "Show or hide the 3D frame statistics",
         "View",

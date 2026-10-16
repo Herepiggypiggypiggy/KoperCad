@@ -77,6 +77,11 @@ Colour of selection, hover and problems is **not** a material: it is drawn by th
   time stays above 20 ms for two seconds, and never steps up on its own (no flicker); the user can pick
   a tier in settings.
 
+  Implemented so far: the one thing the governor controls is screen-space ambient occlusion (the High tier
+  row below). Discrete GPUs start on High and the governor steps SSAO off when the view is slow; integrated
+  GPUs start on Low (no SSAO). The user switch is **Occlusion** in the 3D toolbar and View > 3D > Ambient
+  occlusion; switching it off and on asks for High again. Shadows and MSAA do not change with the tier yet.
+
 | Tier | MSAA | Shadow | Contact term | Edges | Wires |
 | --- | --- | --- | --- | --- | --- |
 | Low | 2x | none (contact term only) | baked | crease only | ribbons and lines |

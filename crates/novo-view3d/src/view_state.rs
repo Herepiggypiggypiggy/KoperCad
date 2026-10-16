@@ -11,6 +11,9 @@ pub struct Display {
     pub labels: bool,
     /// Soft shadows from the key light (software renderers skip them).
     pub shadows: bool,
+    /// Screen-space ambient occlusion on the High tier (the frame governor
+    /// can step the tier down; turning this on again asks for it back).
+    pub ssao: bool,
 }
 
 impl Default for Display {
@@ -19,6 +22,7 @@ impl Default for Display {
             edges: true,
             labels: true,
             shadows: true,
+            ssao: true,
         }
     }
 }

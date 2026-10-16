@@ -355,3 +355,18 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
         "the run published a result to the 3D view"
     );
 }
+
+#[test]
+fn the_ambient_occlusion_command_toggles_the_views_occlusion() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert!(d.app.view3d.view.state.display.ssao, "on by default");
+    d.app.run_command(&ctx, "view.3d_ssao", None);
+    d.frame();
+    assert!(!d.app.view3d.view.state.display.ssao);
+    d.app.run_command(&ctx, "view.3d_ssao", None);
+    d.frame();
+    assert!(d.app.view3d.view.state.display.ssao);
+}

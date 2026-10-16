@@ -71,6 +71,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
                 Some(("Enclosure on or off", "view.3d_shell")),
                 Some(("Wires on or off", "view.3d_wires")),
                 Some(("Shadows on or off", "view.3d_shadows")),
+                Some(("Ambient occlusion on or off", "view.3d_ssao")),
                 None,
                 Some(("Simulate heat", "heat.simulate")),
                 Some(("Show in Cabinet", "view.cabinet")),
