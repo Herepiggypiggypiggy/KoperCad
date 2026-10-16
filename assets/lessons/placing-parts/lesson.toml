@@ -1,12 +1,12 @@
 format = 1
 id = "placing-parts"
 version = 1
-status = "draft"
+status = "early"
 title = "Placing parts fast"
 title_nl = "Snel onderdelen plaatsen"
 summary = "Put a breaker, a button and a relay on the page with the wheel and the fast keys."
 summary_nl = "Plaats een automaat, een drukknop en een relais met het wiel en de snelle toetsen."
-track = "basics"
+track = "start"
 order = 10
 level = "beginner"
 minutes = 6

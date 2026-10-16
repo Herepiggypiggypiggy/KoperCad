@@ -2,11 +2,11 @@ format = 1
 id = "spreadsheets"
 version = 1
 # Draft until Export spreadsheet (PR #430) and the import dialog (PR #433) are on main.
-status = "draft"
+status = "early"
 title = "Edit two hundred devices in Excel"
 summary = "Export the project to a spreadsheet, change it there, preview the import and apply it as one undo step."
-track = "productivity"
-order = 40
+track = "data"
+order = 20
 level = "intermediate"
 minutes = 9
 topics = ["spreadsheet", "excel", "export", "import"]

@@ -1,13 +1,13 @@
 format = 1
 id = "live-view"
 version = 1
-status = "draft"
+status = "early"
 title = "The live view"
 title_nl = "De live-weergave"
 summary = "Switch on the live view, press the start button and read what lights up."
 summary_nl = "Zet de live-weergave aan, druk op de startknop en lees wat oplicht."
-track = "basics"
-order = 60
+track = "circuits"
+order = 30
 level = "intermediate"
 minutes = 6
 topics = ["simulation", "live"]

@@ -4,8 +4,10 @@
 //! produces [`novo_parts::CatalogPart`]s in a [`novo_parts::ImportReport`].
 //! Nothing here touches the user's catalog: the caller previews and merges.
 
+pub mod export_script;
 mod parts;
 pub mod pxf;
+pub mod symbols;
 pub(crate) mod xml;
 
 pub use parts::{EplanError, import_auto, import_delimited, import_xml};

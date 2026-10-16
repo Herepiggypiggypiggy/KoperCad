@@ -1,12 +1,12 @@
 format = 1
 id = "potentials"
 version = 1
-status = "draft"
+status = "early"
 title = "Potentials and feeds"
 title_nl = "Potentialen en voedingen"
 summary = "Give a motor feeder its supply with a row of feeds and an earth."
 summary_nl = "Geef een motorgroep zijn voeding met een rij voedingen en een aarde."
-track = "basics"
+track = "start"
 order = 30
 level = "beginner"
 minutes = 6

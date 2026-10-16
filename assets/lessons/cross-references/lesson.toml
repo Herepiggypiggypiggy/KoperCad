@@ -1,13 +1,13 @@
 format = 1
 id = "cross-references"
 version = 1
-status = "draft"
+status = "early"
 title = "Cross references"
 title_nl = "Kruisverwijzingen"
 summary = "Jump between the coil and its contacts, and add a contact on another page."
 summary_nl = "Spring tussen de spoel en zijn contacten en voeg een contact toe op een andere pagina."
-track = "basics"
-order = 50
+track = "circuits"
+order = 20
 level = "intermediate"
 minutes = 8
 topics = ["cross references", "contacts"]

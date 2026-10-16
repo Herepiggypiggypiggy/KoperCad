@@ -24,7 +24,17 @@ fn tracks_and_glossary_parse() {
     let (catalog, _) = catalog();
     assert!(catalog.notes.is_empty(), "{:?}", catalog.notes);
     let tracks: Vec<_> = catalog.tracks.iter().map(|t| t.id.as_str()).collect();
-    assert_eq!(tracks, ["basics", "terminals", "cabinet", "productivity"]);
+    assert_eq!(
+        tracks,
+        [
+            "start",
+            "circuits",
+            "terminals",
+            "outputs",
+            "cabinet",
+            "data"
+        ]
+    );
     assert!(catalog.glossary.contains_key("pin"));
 }
 

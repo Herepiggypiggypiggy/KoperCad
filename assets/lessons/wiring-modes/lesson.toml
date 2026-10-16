@@ -1,12 +1,12 @@
 format = 1
 id = "wiring-modes"
 version = 1
-status = "draft"
+status = "early"
 title = "Corners and Lines"
 title_nl = "Hoeken en lijnen"
 summary = "Draw wires from a pin, and bend them in the two wiring modes."
 summary_nl = "Teken draden vanaf een pen en buig ze in de twee draadmodi."
-track = "basics"
+track = "start"
 order = 20
 level = "beginner"
 minutes = 7
