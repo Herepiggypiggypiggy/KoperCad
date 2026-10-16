@@ -136,3 +136,16 @@ fn a_large_synthetic_project_reads_from_a_stream() {
     assert_eq!(f.devices.len(), 10_000);
     assert!(f.duplicate_ids.is_empty());
 }
+
+#[test]
+fn the_survey_lists_names_and_shapes_but_never_values() {
+    let s = super::survey_pxf(SMALL.as_bytes()).unwrap();
+    let kinds: Vec<_> = s.kinds().collect();
+    assert!(kinds.contains(&(4, 2)));
+    assert!(kinds.contains(&(17, 4)));
+    let t = s.text();
+    assert!(t.contains("A762"));
+    assert!(t.contains("[00.0/000]") || t.contains("00.0/000"), "{t}");
+    assert!(!t.contains("DEMO"), "values must not appear: {t}");
+    assert!(!t.contains("Breaker"), "{t}");
+}
