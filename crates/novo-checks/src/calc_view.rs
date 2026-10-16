@@ -397,7 +397,7 @@ fn circuit_entry(
         let power_factor =
             wire_number(project, wire, "power_factor").filter(|pf| (0.1..=1.0).contains(pf));
         if power_factor.is_none() {
-            notes.push("power factor 1 assumed for the voltage drop: exact for resistive loads, optimistic for motors (it leaves out the reactive part of the drop)".to_owned());
+            notes.push("power factor 1 assumed for the voltage drop: exact for resistive loads; for inductive loads the real drop is larger on thick cables and smaller on thin ones (the reactive part is left out)".to_owned());
         }
         if number(&project.info().properties, VOLTAGE_DROP_PCT).is_none() {
             notes.push(format!(
