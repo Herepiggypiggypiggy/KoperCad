@@ -60,6 +60,8 @@ pub(crate) struct Workbench {
     pub(super) plc_import: Option<(String, novo_plc::link::ImportPlan)>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
+    /// The shortcut sheet (`?`).
+    pub(super) shortcuts: super::shortcuts_sheet::ShortcutSheet,
     /// The macro browser window.
     pub(super) macros: super::macro_browser::MacroBrowser,
     /// The Parts window (browser and one-click import), while open.
@@ -178,6 +180,7 @@ impl Default for Workbench {
             renumber: None,
             plc_import: None,
             preferences: false,
+            shortcuts: Default::default(),
             macros: Default::default(),
             parts: None,
             macro_save: None,
@@ -322,6 +325,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.plc_address_plan",
     "xref.link",
     "app.preferences",
+    "view.shortcuts",
     "parts.browser",
     "parts.import_step",
     "project.standard",
@@ -781,6 +785,7 @@ impl NovoApp {
             }
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
+            "view.shortcuts" => self.toggle_shortcuts(),
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "project.standard" => self.wb.project_settings = true,
