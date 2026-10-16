@@ -1001,6 +1001,13 @@ impl View3d {
             }
             if item.mark != Mark::None && size_pt >= 12.0 {
                 let style = look.mark(item.mark);
+                if style.glyph == Glyph::DashedEdge
+                    && !self.state.display.missing_marks
+                    && self.state.hover != Some(item.id)
+                    && !self.state.selection.contains(&item.id)
+                {
+                    continue;
+                }
                 let text = match style.glyph {
                     Glyph::Cross => "\u{00d7}",
                     Glyph::Bang => "!",
