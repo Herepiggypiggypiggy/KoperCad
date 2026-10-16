@@ -300,11 +300,16 @@ impl NovoApp {
         }
         mode.view.drag_items = mode.controls.move_items;
         mode.view.state.display.shadows = mode.controls.shadows;
+        mode.view.state.display.dimensions = mode.controls.dimensions;
         mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
+        mode.controls.reduced = mode.view.stepped_down().is_some();
         view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        if std::mem::take(&mut mode.controls.restore) {
+            mode.view.reset_quality();
+        }
         let stale = run_heat(
             &mut self.cabinet.heat,
             project,
