@@ -10,6 +10,7 @@ use super::tuning::LevelTuning;
 use crate::flow::{FlowSolver, RunStatus, SteadyConfig, SteadyLimits, SteadyReport, SteadyRun};
 use crate::result::{Fidelity, Progress, Residuals};
 use crate::solids::FlowSetup;
+use crate::turb::TurbState;
 
 /// Note carried by every snapshot published during the first-order stage.
 pub const PREVIEW_NOTE: &str = "First-order preview: the numerical diffusion of the upwind scheme \
@@ -19,7 +20,14 @@ pub const PREVIEW_NOTE: &str = "First-order preview: the numerical diffusion of 
 pub struct CabinetSteady {
     pub run: SteadyRun,
     pub status: RunStatus,
+    /// Turbulence model driven with the iteration (none = laminar).
+    pub turb: Option<TurbState>,
 }
+
+/// Gauss-Seidel sweeps of the turbulence equations per iteration.
+const TURB_SWEEPS: usize = 3;
+/// The turbulence equations take at most this pseudo step, s.
+const TURB_DT_MAX: f64 = 0.1;
 
 impl CabinetSteady {
     pub fn new(setup: &FlowSetup, flow: &FlowSolver, lvl: &LevelTuning) -> CabinetSteady {
@@ -47,12 +55,35 @@ impl CabinetSteady {
         CabinetSteady {
             run,
             status: RunStatus::Running,
+            turb: None,
         }
+    }
+
+    /// Drives `turb` with the iteration: eddy viscosity and wall values go
+    /// into the flow before every iteration, the model advances after it.
+    pub fn with_turbulence(mut self, turb: Option<TurbState>) -> CabinetSteady {
+        self.turb = turb;
+        self
     }
 
     /// Runs `iterations` more iterations.
     pub fn advance(&mut self, flow: &mut FlowSolver, iterations: usize) -> RunStatus {
-        self.status = self.run.advance(flow, iterations);
+        let cell = std::cell::RefCell::new(self.turb.take());
+        self.status = self.run.advance_with(
+            flow,
+            iterations,
+            &mut |f| {
+                if let Some(t) = cell.borrow().as_ref() {
+                    t.push_to_flow(f);
+                }
+            },
+            &mut |f, dt| {
+                if let Some(t) = cell.borrow_mut().as_mut() {
+                    t.advance_with(f, dt.min(TURB_DT_MAX), TURB_SWEEPS);
+                }
+            },
+        );
+        self.turb = cell.into_inner();
         self.status
     }
 
