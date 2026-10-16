@@ -402,7 +402,7 @@
     {
       "id": 24,
       "page": 1,
-      "symbol": "iec/connectivity/potential_feed",
+      "symbol": "iec/connectivity/potential_feed_pe",
       "placement": {
         "origin": {
           "x": 104.0,

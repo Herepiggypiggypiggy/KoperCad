@@ -87,3 +87,31 @@ fn the_command_opens_and_closes_the_sheet() {
     d.frame();
     assert!(!d.app.wb.shortcuts.open);
 }
+
+/// A command with a key in the default keymap works, so it must never be
+/// listed or greyed as "Comes later" (command field, `?` sheet, menus).
+#[test]
+fn a_command_with_a_key_is_never_comes_later() {
+    let dead: Vec<_> = Keymap::workflow()
+        .bindings()
+        .iter()
+        .map(|b| b.command)
+        .filter(|c| !super::workbench::app_runs(c))
+        .collect();
+    assert_eq!(dead, Vec::<&str>::new(), "keys that only toast");
+}
+
+#[test]
+fn ctrl_a_selects_everything_on_the_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    d.place("mcb3", 80.0, 48.0);
+    d.place("mcb3", 120.0, 48.0);
+    d.frame();
+    d.app.run_command(&ctx, "edit.select_all", None);
+    d.frame();
+    assert_eq!(d.app.selection().len(), 2);
+}

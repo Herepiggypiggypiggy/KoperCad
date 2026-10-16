@@ -73,7 +73,7 @@ fn drain(r: &mut Runner) -> Vec<Event> {
     let mut all = Vec::new();
     while t0.elapsed() < Duration::from_secs(10) {
         all.extend(r.poll());
-        if matches!(all.last(), Some(Event::Finished(_))) {
+        if matches!(all.last(), Some(Event::Finished(_) | Event::Lost)) {
             return all;
         }
         std::thread::sleep(Duration::from_millis(10));
@@ -96,7 +96,7 @@ fn cancel_ends_the_run_promptly() {
 fn a_dead_worker_is_reported_as_a_failed_run() {
     let mut r = Runner::start(Arc::new(Panics), scenario(), Fidelity::Coarse, || {});
     let events = drain(&mut r);
-    assert!(matches!(events.last(), Some(Event::Finished(Err(_)))));
+    assert!(matches!(events.last(), Some(Event::Lost)));
 }
 
 #[test]

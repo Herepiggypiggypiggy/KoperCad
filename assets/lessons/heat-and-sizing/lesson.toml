@@ -8,7 +8,7 @@
 format = 1
 id = "heat-and-sizing"
 version = 1
-status = "draft"
+status = "early"
 title = "Where it gets hot, and how big the cabinet must be"
 title_nl = "Waar het warm wordt en hoe groot de kast moet zijn"
 summary = "Turn on the heat layer, find the hot spot, move the transformer, and see what the heat means for the enclosure."
@@ -20,7 +20,7 @@ minutes = 8
 topics = ["cabinet", "heat", "sizing"]
 needs = ["cabinet-layout"]
 next = ["panel-plate-drawing"]
-project = "../rails-and-ducts/finished.json"
+project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-cabinet"

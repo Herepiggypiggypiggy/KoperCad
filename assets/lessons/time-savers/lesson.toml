@@ -1,11 +1,11 @@
 format = 1
 id = "time-savers"
 version = 1
-status = "draft"
+status = "early"
 title = "Three settings that save time every day"
 summary = "Set the auto connections, give a key your own command and pick the drawing standard."
-track = "productivity"
-order = 70
+track = "start"
+order = 40
 level = "beginner"
 minutes = 7
 topics = ["settings", "preferences", "keymap", "standard"]

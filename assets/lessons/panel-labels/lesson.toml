@@ -8,7 +8,7 @@
 format = 1
 id = "panel-labels"
 version = 1
-status = "draft"
+status = "early"
 title = "Labels for wires, terminals and devices"
 title_nl = "Labels voor draden, klemmen en componenten"
 summary = "Export the four kinds of labels to a CSV for your label printer."
@@ -20,7 +20,7 @@ minutes = 6
 topics = ["cabinet", "labels", "export"]
 needs = ["cut-lengths"]
 next = ["view-3d"]
-project = "../rails-and-ducts/finished.json"
+project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-reports"

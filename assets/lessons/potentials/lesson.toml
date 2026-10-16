@@ -1,10 +1,10 @@
 format = 1
 id = "potentials"
 version = 1
-status = "draft"
+status = "early"
 title = "Potentials and feeds"
 summary = "Give a motor feeder its supply with a row of feeds and an earth."
-track = "basics"
+track = "start"
 order = 30
 level = "beginner"
 minutes = 6
@@ -62,7 +62,7 @@ text = """
 Right-click the new feed and choose **PE** from the potential chips.
 The symbol changes to the protective earth.
 """
-point = { at = { page = "Motor feeder", x = 104, y = 92 } }
+point = { at = { feed = "L4" } }
 expect = { potential_kind = { kind = "protective_earth", page = "Motor feeder" } }
 
 [[step]]
@@ -71,5 +71,5 @@ title = "See where a potential goes"
 text = """
 Select **L1** and use **Show where it goes**. Every pin on that potential lights up.
 """
-point = { at = { page = "Motor feeder", x = 80, y = 20 } }
+point = { at = { feed = "L1" } }
 pause = true

@@ -416,3 +416,254 @@ fn a_ready_lesson_naming_a_missing_anchor_is_coming_soon() {
     d.app.learn.use_files(files);
     assert!(d.app.learn.is_coming_soon("tiny"));
 }
+
+#[test]
+fn early_access_lessons_are_listed_by_default() {
+    let dir = tempfile::tempdir().unwrap();
+    let d = Drive::new(&dir.path().join("untitled"));
+    assert!(!d.app.learn.show_drafts);
+    assert!(
+        d.app.learn.catalog.visible(false).count() > 0,
+        "the build ships lessons"
+    );
+}
+
+const DEMOING: &str = r#"
+format = 1
+id = "demoing"
+version = 1
+title = "Demoing"
+summary = "Show me how."
+track = "basics"
+project = "@example"
+
+[[step]]
+id = "typed"
+title = "Ask by name"
+text = "Ask for a breaker."
+point = { ui = "dock.place" }
+demo = [
+  { press = "tool.place" },
+  { type = "mcb" },
+  { key = "Enter" },
+  { move = { ui = "dock.place" } },
+  { click = true },
+]
+
+[[step]]
+id = "derived"
+title = "Place a relay"
+text = "Place a relay."
+expect = { count = { kind = "symbol", at_least = 999 } }
+solve = [ { place = { symbol = "iec/coils/relay", page = "1", x = 80, y = 104 } } ]
+
+[[step]]
+id = "reading"
+title = "Read"
+text = "Nothing to show."
+"#;
+
+fn demoing() -> (tempfile::TempDir, Drive) {
+    let (dir, mut d) = drive();
+    let mut files = files();
+    files.insert("demoing/lesson.toml".into(), DEMOING.into());
+    d.app.learn.use_files(files);
+    (dir, d)
+}
+
+#[test]
+fn show_me_how_plays_the_steps_demonstration_and_the_card_lists_it() {
+    let (_dir, mut d) = demoing();
+    d.app.start_lesson("demoing");
+    d.frame();
+    d.frame();
+    assert!(d.app.learn.demo.is_none(), "nothing plays until asked");
+    assert!(d.app.learn_how_lines().is_empty());
+    d.app.learn_show_me();
+    d.frame();
+    d.frame();
+    assert!(d.app.learn.demo.is_some());
+    let lines = d.app.learn_how_lines();
+    // Press, type, key and click are lines; the move is not.
+    assert_eq!(lines.len(), 4, "{lines:?}");
+    assert!(lines[0].0.starts_with("1. Press "), "{lines:?}");
+    assert!(lines[1].0.contains("Type mcb"), "{lines:?}");
+    assert!(lines[2].0.contains("Press Enter"), "{lines:?}");
+    // The step changing ends it.
+    d.app.learn_move(super::learn::Move::Skip);
+    d.frame();
+    d.frame();
+    assert!(d.app.learn.demo.is_none());
+}
+
+#[test]
+fn the_pointer_and_ghost_of_a_demonstration_land_on_screen() {
+    let (_dir, mut d) = demoing();
+    d.app.start_lesson("demoing");
+    d.frame();
+    d.frame();
+    let canvas = d.app.wb.canvas_area.unwrap().1;
+    let start = canvas.center();
+
+    // The authored step: at its end the pointer is on the dock control.
+    let step = d.app.learn.run.as_ref().unwrap().step().unwrap().clone();
+    let demo = novo_learn::Demo::for_step(&step);
+    let end = demo.frame(demo.duration() + 0.1);
+    let scene = d.app.demo_scene(&end, canvas, start);
+    let dock = d.app.learn_anchor("dock.place").unwrap();
+    assert_eq!(scene.cursor, Some(dock.center()));
+
+    // The derived step: a ghost on the page where the relay lands.
+    d.app.learn_move(super::learn::Move::Skip);
+    d.frame();
+    d.frame();
+    let step = d.app.learn.run.as_ref().unwrap().step().unwrap().clone();
+    assert_eq!(step.id, "derived");
+    let demo = novo_learn::Demo::for_step(&step);
+    let end = demo.frame(demo.duration() + 0.1);
+    let scene = d.app.demo_scene(&end, canvas, start);
+    let (at, place, alpha) = scene.ghost.expect("a ghost");
+    assert_eq!(place.symbol, "iec/coils/relay");
+    assert_eq!(alpha, 1.0);
+    assert!(at.x.is_finite() && at.y.is_finite());
+    assert!(scene.cursor.is_some());
+}
+
+#[test]
+fn a_reading_step_has_no_demonstration_to_start() {
+    let (_dir, mut d) = demoing();
+    d.app.start_lesson("demoing");
+    d.frame();
+    d.app.learn_move(super::learn::Move::Skip);
+    d.app.learn_move(super::learn::Move::Skip);
+    d.frame();
+    d.frame();
+    assert_eq!(step(&d), "reading");
+    assert!(!d.app.learn_start_demo());
+}
+
+#[test]
+fn a_feed_target_follows_the_feed_wherever_the_person_dropped_it() {
+    let (_dir, mut d) = pointing();
+    d.app.start_lesson("pointing");
+    d.frame();
+    d.frame();
+    let canvas = d.app.wb.canvas_area.unwrap().1;
+    // Find a feed the sample drawing has, by its own data.
+    let (name, origin, page) = {
+        let project = d.doc().project();
+        let symbol = project
+            .symbols()
+            .find(|s| matches!(s.role, novo_core::SymbolRole::PotentialFeed { .. }))
+            .expect("the example has a feed");
+        let novo_core::SymbolRole::PotentialFeed { potential } = &symbol.role else {
+            unreachable!()
+        };
+        let name = project.potential(*potential).unwrap().name.clone();
+        (name, symbol.placement.origin, symbol.page)
+    };
+    d.app.show_page(page);
+    d.frame();
+    d.frame();
+    let target = novo_learn::Target {
+        at: Some(novo_learn::lesson::At {
+            feed: Some(name),
+            ..Default::default()
+        }),
+        ..Default::default()
+    };
+    let rect = d
+        .app
+        .target_rect(&target, canvas)
+        .expect("the feed is on screen");
+    // The box is the feed's own place on screen: its origin (the triangle)
+    // is inside it, by the same mapping the canvas draws with.
+    let viewport = d.app.canvas.schematic_ref().unwrap().canvas.viewport;
+    let s = viewport.world_to_screen(novo_canvas::vec2(origin.x as f32, origin.y as f32));
+    let at = canvas.min + eframe::egui::vec2(s.x, s.y);
+    assert!(rect.contains(at), "{rect:?} should hold the feed at {at:?}");
+    // And it moves with the feed: pan the view and the box follows.
+    d.app.canvas.schematic().unwrap().canvas.viewport.center += novo_canvas::vec2(10.0, 0.0);
+    d.frame();
+    let moved = d.app.target_rect(&target, canvas).expect("still on screen");
+    assert!(
+        moved.center().x < rect.center().x,
+        "panning right moves it left"
+    );
+}
+
+#[test]
+fn a_lesson_stays_whole_when_the_live_view_goes_on_and_off() {
+    let (_dir, mut d) = drive();
+    d.app.start_lesson("tiny");
+    d.frame();
+    d.frame();
+    let card = eframe::egui::Id::new("lesson_card");
+    let height = |d: &Drive| d.ctx.memory(|m| m.area_rect(card)).unwrap().height();
+    let before = height(&d);
+    assert!(before > 60.0, "the full card has a step text: {before}");
+    d.app.run_command(&d.ctx.clone(), "sim.live", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.live.on);
+    assert!(
+        d.app.learn.card_on(),
+        "the lesson is still running and shown"
+    );
+    assert_eq!(step(&d), "hello");
+    assert!(
+        (height(&d) - before).abs() < 1.0,
+        "the card is not folded away"
+    );
+    d.app.run_command(&d.ctx.clone(), "sim.live", None);
+    d.frame();
+    assert!(!d.app.wb.live.on && d.app.learn.card_on());
+}
+
+#[test]
+fn a_wire_demonstration_marks_where_the_wire_starts_and_ends() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.start_lesson("wiring-modes");
+    d.frame();
+    d.frame();
+    assert_eq!(step(&d), "pin-drag");
+    let canvas = d.app.wb.canvas_area.unwrap().1;
+    assert!(d.app.learn_start_demo());
+    let step = d.app.learn.run.as_ref().unwrap().step().unwrap().clone();
+    let demo = novo_learn::Demo::for_step(&step);
+    // Before the drag begins and after it ends, both ends are marked.
+    for t in [0.0, demo.duration() + 0.1] {
+        let scene = d.app.demo_scene(&demo.frame(t), canvas, canvas.center());
+        let numbers: Vec<_> = scene.markers.iter().map(|m| (m.1, m.2)).collect();
+        assert_eq!(numbers, [(1, false), (2, true)], "at {t}");
+    }
+    let scene = d
+        .app
+        .demo_scene(&demo.frame(demo.duration() + 0.1), canvas, canvas.center());
+    // The markers sit on the pins named: -F1:2 and -S1:13.
+    let pin = |device: &str, pin: &str| {
+        let target = novo_learn::Target {
+            at: Some(novo_learn::lesson::At {
+                device: Some(device.into()),
+                pin: Some(pin.into()),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        d.app.target_rect(&target, canvas).unwrap().center()
+    };
+    assert_eq!(scene.markers[0].0, pin("-F1", "2"));
+    assert_eq!(scene.markers[1].0, pin("-S1", "13"));
+    assert_ne!(scene.markers[0].0, scene.markers[1].0);
+    // The ghost wire joins them, in full.
+    assert_eq!(scene.drag, Some((scene.markers[0].0, scene.markers[1].0)));
+    // After the plays it settles on the markers and the wire, until Stop.
+    d.app.learn.demo.as_mut().unwrap().started = Some(-1000.0);
+    d.frame();
+    d.frame();
+    assert!(d.app.learn.demo.is_some(), "the markers stay");
+    d.app.learn_stop_demo();
+    assert!(d.app.learn.demo.is_none());
+}
