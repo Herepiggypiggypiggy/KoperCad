@@ -19,10 +19,7 @@ const TOL: f64 = 1.0;
 
 /// Steps whose `solve` the editor cannot carry out today, each with the
 /// reason. A step that starts working must come off this list.
-const KNOWN_BROKEN: &[(&str, &str)] = &[(
-    "interruption-points/same-name",
-    "needs a `rename` solve op (double-click the name, Ctrl+A, type, Enter); `xref.link` cannot pair points on two pages",
-)];
+const KNOWN_BROKEN: &[(&str, &str)] = &[];
 
 /// What happened to one step.
 #[derive(Debug, Clone, PartialEq)]
@@ -33,6 +30,8 @@ pub(super) enum Outcome {
     Reading,
     /// An `expect` but no `solve`: nothing to replay.
     Unverified,
+    /// The author marked the step `manual` (a file dialog, say), with why.
+    Manual(String),
     /// A solve op the replay cannot perform yet.
     Unsupported(String),
     /// The solve ran, the check did not tick.
@@ -94,7 +93,15 @@ impl Drive {
                 self.frame();
                 Ok(())
             }
-            SolveOp::Page(p) => self.replay_page(&p.page).map(|_| ()),
+            SolveOp::Page(p) => {
+                // A jump to a page puts where we were in the back history.
+                let from = self.app.here();
+                let page = self.replay_page(&p.page)?;
+                if let Some(from) = from.filter(|f| f.page != page) {
+                    self.app.wb.nav.history.record(from);
+                }
+                Ok(())
+            }
             SolveOp::Place(p) => {
                 let a = &p.place;
                 let page = self.replay_page(&a.page)?;
@@ -152,8 +159,170 @@ impl Drive {
                 Ok(())
             }
             SolveOp::Select(s) => self.replay_select(&s.select, s.add),
-            other => Err(format!("unsupported:{}", op_name(other))),
+            SolveOp::Tee(t) => self.replay_tee(&t.tee.from, t.tee.at),
+            SolveOp::FeedRow(f) => self.replay_feed_row(&f.feed_row),
+            SolveOp::Cable(c) => self.replay_cable(&c.cable.wires),
+            SolveOp::IssueRevision(i) => {
+                let ctx = self.ctx.clone();
+                self.app
+                    .run_command(&ctx, "revision.issue", Some(&i.issue_revision.description));
+                let draft = self
+                    .app
+                    .wb
+                    .issue
+                    .take()
+                    .ok_or("the issue window did not open")?;
+                self.app.submit_issue(draft);
+                self.frame();
+                Ok(())
+            }
+            SolveOp::AssignPart(a) => self.replay_assign_part(&a.assign_part),
+            SolveOp::Rename(r) => self.replay_rename(&r.rename.target, &r.rename.to),
         }
+    }
+
+    /// A wire from a pin that ends on another wire at a point, as dragging
+    /// it there does: the T joins the two.
+    fn replay_tee(&mut self, from: &str, at: [f64; 2]) -> Result<(), String> {
+        let (page, start) = self.replay_pin(from)?;
+        self.replay_page_id(page);
+        self.replay_leave();
+        let doc = self.app.backend.document().ok_or("no project")?;
+        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
+        view.editor.hover(doc, page, start, TOL);
+        if !view.editor.begin_drag() {
+            return Err(format!("no pin `{from}` to drag from"));
+        }
+        let result = self.replay_click(page, Point::new(at[0], at[1]));
+        self.replay_leave();
+        result
+    }
+
+    /// A row of feeds dragged out from a point at the pole pitch.
+    fn replay_feed_row(&mut self, row: &novo_learn::lesson::FeedRowArgs) -> Result<(), String> {
+        const PITCH: f64 = 8.0;
+        let page = self.replay_page(&row.page)?;
+        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
+        let doc = self.app.backend.document().ok_or("no project")?;
+        if !view
+            .editor
+            .begin_place("iec/connectivity/potential_feed", None)
+        {
+            return Err("the feed cannot be placed".into());
+        }
+        view.editor.hover(doc, page, Point::new(row.x, row.y), TOL);
+        if !view.editor.begin_row() {
+            return Err("a row cannot start here".into());
+        }
+        let last = row.names.len().saturating_sub(1) as f64;
+        view.editor
+            .row_follow(Point::new(row.x + PITCH * last + 1.0, row.y), PITCH);
+        let doc = self.app.backend.document_mut().ok_or("no project")?;
+        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
+        let done = view.editor.end_row(doc, page);
+        let notice = view.editor.notice().map(str::to_owned);
+        self.replay_leave();
+        if done == novo_editor::tool::Clicked::Edited {
+            Ok(())
+        } else {
+            Err(notice.unwrap_or_else(|| "the row was not placed".into()))
+        }
+    }
+
+    /// A cable over the wires that join these pairs of pins, as the cables
+    /// drawer's button makes it.
+    fn replay_cable(&mut self, pairs: &[[String; 2]]) -> Result<(), String> {
+        let project = self.doc().project();
+        let mut wires = Vec::new();
+        for [a, b] in pairs {
+            let pa = novo_learn::check::pins_named(project, a);
+            let pb = novo_learn::check::pins_named(project, b);
+            let found = project.wires().find(|w| {
+                let (f, t) = (w.from.as_pin(), w.to.as_pin());
+                pa.iter().any(|x| Some(*x) == f) && pb.iter().any(|y| Some(*y) == t)
+                    || pb.iter().any(|x| Some(*x) == f) && pa.iter().any(|y| Some(*y) == t)
+            });
+            wires.push(found.ok_or_else(|| format!("no wire {a} - {b}"))?.id);
+        }
+        self.app.make_cable(&wires);
+        self.frame();
+        Ok(())
+    }
+
+    /// A part with this maker and order number on a device, as the
+    /// spreadsheet import or the part picker leaves it.
+    fn replay_assign_part(&mut self, a: &novo_learn::lesson::AssignPartArgs) -> Result<(), String> {
+        let project = self.doc().project();
+        let device = project
+            .devices()
+            .find(|d| novo_learn::check::tag_matches(&d.tag, &a.device))
+            .ok_or_else(|| format!("nothing named `{}`", a.device))?
+            .id;
+        let doc = self.app.backend.document_mut().ok_or("no project")?;
+        let (_, changes) = doc
+            .transact("Assign part", |tx| {
+                let part = tx.add_part(&a.manufacturer, &a.order_number)?;
+                tx.assign_part(device, part)
+            })
+            .map_err(|e| e.to_string())?;
+        self.app.changed_outside_canvas(&changes);
+        self.frame();
+        Ok(())
+    }
+
+    /// The rename box's Enter: a terminal by designation, an interruption
+    /// point by name, or a device by tag.
+    fn replay_rename(&mut self, target: &str, to: &str) -> Result<(), String> {
+        let project = self.doc().project();
+        let label_symbol: Option<SymbolId> = if let Some((strip, name)) = target.rsplit_once(':') {
+            let strip = project
+                .devices()
+                .find(|d| novo_learn::check::tag_matches(&d.tag, strip))
+                .ok_or_else(|| format!("nothing named `{strip}`"))?
+                .id;
+            let terminal = project
+                .terminals_of_strip(strip)
+                .into_iter()
+                .find(|t| t.name == name)
+                .ok_or_else(|| format!("no terminal `{target}`"))?
+                .id;
+            project
+                .symbols()
+                .find(|s| {
+                    matches!(&s.role, novo_core::SymbolRole::Terminal { terminals }
+                        if terminals.contains(&terminal))
+                })
+                .map(|s| s.id)
+        } else {
+            project
+                .symbols()
+                .find(|s| {
+                    matches!(&s.role, novo_core::SymbolRole::Interruption { name }
+                        if name == target)
+                })
+                .map(|s| s.id)
+        };
+        if let Some(symbol) = label_symbol {
+            let doc = self.app.backend.document_mut().ok_or("no project")?;
+            let (result, changes) = doc
+                .transact("Rename", |tx| {
+                    Ok(novo_editor::edit::rename_label(tx, symbol, to))
+                })
+                .map_err(|e| e.to_string())?;
+            self.app.changed_outside_canvas(&changes);
+            self.frame();
+            return result;
+        }
+        let device = project
+            .devices()
+            .find(|d| novo_learn::check::tag_matches(&d.tag, target))
+            .ok_or_else(|| format!("nothing named `{target}` to rename"))?
+            .id;
+        let doc = self.app.backend.document_mut().ok_or("no project")?;
+        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
+        let result = view.editor.rename(doc, device, to);
+        self.frame();
+        result
     }
 
     fn replay_wire(&mut self, w: &WireOp) -> Result<(), String> {
@@ -378,6 +547,9 @@ impl Drive {
         if step.expect.is_none() {
             return Outcome::Reading;
         }
+        if let Some(why) = &step.manual {
+            return Outcome::Manual(why.clone());
+        }
         if step.solve.is_empty() {
             return Outcome::Unverified;
         }
@@ -404,25 +576,6 @@ impl Drive {
                 .and_then(|v| v.editor.notice().map(str::to_owned));
             Outcome::Failed(notice.unwrap_or_else(|| "the check did not tick".into()))
         }
-    }
-}
-
-fn op_name(op: &SolveOp) -> &'static str {
-    match op {
-        SolveOp::Command(_) => "command",
-        SolveOp::Place(_) => "place",
-        SolveOp::Wire(_) => "wire",
-        SolveOp::Tee(_) => "tee",
-        SolveOp::FeedRow(_) => "feed_row",
-        SolveOp::Select(_) => "select",
-        SolveOp::Page(_) => "page",
-        SolveOp::Cable(_) => "cable",
-        SolveOp::IssueRevision(_) => "issue_revision",
-        SolveOp::AssignPart(_) => "assign_part",
-        SolveOp::Key(_) => "key",
-        SolveOp::LivePole(_) => "live_pole",
-        SolveOp::LiveCoil(_) => "live_coil",
-        SolveOp::SetPotential(_) => "set_potential",
     }
 }
 
@@ -457,6 +610,7 @@ fn every_shipped_lesson_replays_from_its_own_solve() {
     let mut waiting = Vec::new();
     let mut downstream = Vec::new();
     let mut known_seen = Vec::new();
+    let mut manual: Vec<String> = Vec::new();
     let (mut ticked, mut unverified, mut unsupported) = (0, 0, 0);
     for id in ids {
         // After a step this replay could not perform, later steps may lack
@@ -490,6 +644,11 @@ fn every_shipped_lesson_replays_from_its_own_solve() {
                 Outcome::Unverified => {
                     unverified += 1;
                     gap = true;
+                    eprintln!("  no solve: {key}");
+                }
+                Outcome::Manual(why) => {
+                    manual.push(format!("{key}: {why}"));
+                    gap = true;
                 }
                 Outcome::Unsupported(name) => {
                     unsupported += 1;
@@ -500,7 +659,8 @@ fn every_shipped_lesson_replays_from_its_own_solve() {
         }
     }
     eprintln!(
-        "replay: {ticked} steps ticked, {unverified} without solve, {unsupported} with ops not replayable yet, {} waiting for controls this build lacks, {} after a gap, {} known broken, {} failed",
+        "replay: {ticked} steps ticked, {unverified} without solve, {unsupported} with ops not replayable yet, {} not scripted (marked manual), {} waiting for controls this build lacks, {} after a gap, {} known broken, {} failed",
+        manual.len(),
         waiting.len(),
         downstream.len(),
         known_seen.len(),
