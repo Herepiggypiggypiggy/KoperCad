@@ -71,6 +71,10 @@ pub(crate) struct Workbench {
     pub(super) macros: super::macro_browser::MacroBrowser,
     /// The Parts window (browser and one-click import), while open.
     pub(super) parts: Option<super::parts::PartsWindow>,
+    /// The catalog the part pickers search (inspector, Cables drawer).
+    pub(super) part_catalog: super::part_picker::PickerCatalog,
+    /// The cable controls of the Cables drawer.
+    pub(super) cable_edit: super::cable_controls::CableEdit,
     /// The Save as macro window, while it is open.
     pub(super) macro_save: Option<super::macro_actions::SaveDraft>,
     /// The Place macro window.
@@ -160,6 +164,8 @@ pub(crate) struct Workbench {
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
     /// An AutomationML import waiting for the person to confirm.
     pub(super) aml_import: Option<super::interop::AmlImport>,
+    /// An EPLAN (PXF) import waiting for the person to confirm.
+    pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// The "Get the EPLAN export script" guide, open after the files are
     /// written.
     pub(super) eplan_guide: Option<super::interop::EplanGuide>,
@@ -216,6 +222,8 @@ impl Default for Workbench {
             occurrences: None,
             drawer: None,
             drawer_cable: None,
+            part_catalog: Default::default(),
+            cable_edit: Default::default(),
             proposal: 0,
             space_down: None,
             pointer_world: None,
@@ -239,6 +247,7 @@ impl Default for Workbench {
             commissioning: None,
             underlay_seen: None,
             aml_import: None,
+            eplan_import: None,
             eplan_guide: None,
             dwg_job: None,
         }
@@ -316,6 +325,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.wiring_dxf",
     "export.wirecut_page",
     "cabinet.routes",
+    "cabinet.rails",
     "export.bom",
     "export.reports",
     "view.reports",
@@ -338,6 +348,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.step",
     "export.aml",
     "file.import_aml",
+    "file.import_eplan",
     "file.import_dwg",
     "file.choose_dwg_converter",
     "file.eplan_export_script",
@@ -353,6 +364,7 @@ const APP_COMMANDS: &[&str] = &[
     "xref.link",
     "app.preferences",
     "view.shortcuts",
+    "help.show_hints",
     "parts.browser",
     "parts.import_step",
     "project.standard",
@@ -572,6 +584,7 @@ impl NovoApp {
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
         if id == "tool.place" {
             self.learn_command(id);
+            self.hint_command_run(id);
             self.tour_tick("place");
             self.arm_place_hold(ctx);
         } else if id == "view.command_field_here" {
@@ -782,6 +795,7 @@ impl NovoApp {
                 self.export_spreadsheet();
             }
             "cabinet.routes" => self.toggle_cabinet_routes(),
+            "cabinet.rails" => self.toggle_cabinet_rails(),
             "export.wirecut" => {
                 self.export_wire_cut();
             }
@@ -811,6 +825,7 @@ impl NovoApp {
                 self.export_aml();
             }
             "file.import_aml" => self.import_aml(),
+            "file.import_eplan" => self.import_eplan(),
             "file.import_dwg" => self.import_dwg(),
             "file.choose_dwg_converter" => self.choose_dwg_converter(),
             "file.eplan_export_script" => self.eplan_export_script(),
@@ -836,6 +851,7 @@ impl NovoApp {
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
             "view.shortcuts" => self.toggle_shortcuts(),
+            "help.show_hints" => self.show_hints_again(),
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "project.standard" => self.wb.project_settings = true,
@@ -1116,7 +1132,7 @@ impl NovoApp {
         let by = novo_canvas::Vec2::new(delta.x, delta.y);
         match self.workspace() {
             Workspace::Cabinet => self.cabinet.view.viewport.pan_by_screen(by),
-            Workspace::Reports => {}
+            Workspace::Reports | Workspace::View3d => {}
             _ => {
                 if let Some(view) = self.canvas.schematic() {
                     view.canvas.viewport.pan_by_screen(by);

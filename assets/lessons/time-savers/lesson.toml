@@ -14,64 +14,124 @@ next = []
 project = "project.json"
 finished = "finished.json"
 page = "Main circuit"
+title_nl = "Drie instellingen die elke dag tijd besparen"
+summary_nl = "Stel de automatische verbindingen in, geef een toets je eigen opdracht en kies de tekennorm."
 
 [[step]]
 id = "open-prefs"
 title = "Open Preferences"
-text = "Run **preferences** from the command field ({key:view.command_palette}). These settings belong to you, not to the project."
-point = { ui = "palette.field" }
+title_nl = "Open Voorkeuren"
+text = "Preferences belong to you, not to the project: set them once and every project you open behaves the same way."
+text_nl = "Voorkeuren horen bij jou, niet bij het project: stel ze één keer in en elk project dat je opent gedraagt zich zo."
+how = [
+  "Press {key:view.command_palette} and type **preferences**.",
+  "Press Enter. The window **Preferences** opens.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette} en typ **preferences**.",
+  "Druk op Enter. Het venster **Preferences** opent.",
+]
+point = { ui = "palette.button" }
 expect = { command = "app.preferences" }
 solve = [ { command = "app.preferences" } ]
 
 [[step]]
 id = "auto-connect"
 title = "Choose how auto connections behave"
-text = """
-**Auto connections** draw wires between facing free pins after you place or move a symbol.
-**Draw them** saves the most clicks; **Ask me each time** is gentler; **Never** leaves wiring to you.
-"""
-point = { ui = "preferences.auto_connections" }
-expect = { clicked = "preferences.auto_connections" }
+title_nl = "Kies hoe automatische verbindingen werken"
+text = "After you place or move a symbol, KoperCAD can draw the wires between facing free pins for you. Choosing the right mode saves a click on almost every symbol."
+text_nl = "Nadat je een symbool plaatst of verplaatst, kan KoperCAD de draden tekenen tussen vrije pennen die tegenover elkaar staan. De juiste keuze scheelt bijna bij elk symbool een klik."
+how = [
+  "Under **Connections**, find **Auto connections**.",
+  "**Draw them (default)** saves the most clicks.",
+  "**Ask me each time** is gentler: you confirm each set of wires.",
+  "**Never** leaves all wiring to you.",
+]
+how_nl = [
+  "Zoek onder **Connections** het onderdeel **Auto connections**.",
+  "**Draw them (default)** scheelt de meeste klikken.",
+  "**Ask me each time** is milder: je bevestigt elke set draden.",
+  "**Never** laat alle bedrading aan jou over.",
+]
 
 [[step]]
 id = "move-carries"
 title = "Moving a symbol"
+title_nl = "Een symbool verplaatsen"
 text = "Choose whether a moved symbol leaves its wires or takes them along. Holding Shift always does the other one, so either default is one key away."
-point = { ui = "preferences.move_carries" }
-
-[[step]]
-id = "close-prefs"
-title = "Close Preferences"
-text = "Press Esc or **Close**. Settings are saved as you click, there is no Save button."
+text_nl = "Kies of een verplaatst symbool zijn draden achterlaat of meeneemt. Met Shift ingedrukt gebeurt altijd het andere, dus elke standaard is één toets verwijderd."
+how = [
+  "Under **Moving a symbol**, pick **Leaves its wires (default)** or **Takes its wires along**.",
+  "Close the window with **Close (Esc)**. Settings are saved as you click; there is no Save button.",
+]
+how_nl = [
+  "Kies onder **Moving a symbol** voor **Leaves its wires (default)** of **Takes its wires along**.",
+  "Sluit het venster met **Close (Esc)**. Instellingen worden bewaard terwijl je klikt; er is geen knop Opslaan.",
+]
 
 [[step]]
 id = "keymap"
 title = "Your own keys in a text file"
+title_nl = "Je eigen toetsen in een tekstbestand"
 text = """
-Keys live in a plain text file named **keymap.txt** in your KoperCAD folder under **%APPDATA%**.
-One line each: `tool.cable = F6`. A line KoperCAD cannot read is skipped and reported once at start.
+The keys you press every day can be yours. A plain text file in your KoperCAD folder under **%APPDATA%** changes any key; a line KoperCAD cannot read is skipped and reported once at start.
 """
-point = { ui = "shortcuts.sheet" }
-note = [
-  { ui = "shortcuts.sheet", text = "{key:view.shortcuts} shows every key you have now, including yours." },
+text_nl = """
+De toetsen die je elke dag gebruikt kunnen de jouwe zijn. Een tekstbestand in je map KoperCAD onder **%APPDATA%** wijzigt elke toets; een regel die KoperCAD niet kan lezen wordt overgeslagen en één keer bij het starten gemeld.
+"""
+how = [
+  "Open the shortcut sheet with {key:view.shortcuts} to see every key you have now.",
+  "Create the file **keymap.txt** in **%APPDATA%\\KoperCAD** with Notepad.",
+  "Write one line per key, command first: for example **tool.cable = F6**.",
+  "Restart KoperCAD. The shortcut sheet now shows your key.",
 ]
+how_nl = [
+  "Open het toetsenoverzicht met {key:view.shortcuts} om elke toets te zien die je nu hebt.",
+  "Maak het bestand **keymap.txt** in **%APPDATA%\\KoperCAD** met Kladblok.",
+  "Schrijf één regel per toets, eerst de opdracht: bijvoorbeeld **tool.cable = F6**.",
+  "Start KoperCAD opnieuw. Het toetsenoverzicht toont nu jouw toets.",
+]
+expect = { command = "view.shortcuts" }
+solve = [ { command = "view.shortcuts" } ]
 
 [[step]]
 id = "open-standard"
-title = "Open the drawing standard"
-text = "Run **standard** from the command field. Unlike Preferences, this setting is saved in the project."
-point = { ui = "palette.field" }
+title = "Open the project settings"
+title_nl = "Open de projectinstellingen"
+text = "Unlike Preferences, the drawing standard is saved in the project, so everyone who opens the file sees the same symbols."
+text_nl = "In tegenstelling tot Voorkeuren wordt de tekennorm in het project bewaard, zodat iedereen die het bestand opent dezelfde symbolen ziet."
+how = [
+  "Press {key:view.command_palette} and type **standard**.",
+  "Press Enter. The window **Project settings** opens.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette} en typ **standard**.",
+  "Druk op Enter. Het venster **Project settings** opent.",
+]
+point = { ui = "palette.button" }
 expect = { command = "project.standard" }
 solve = [ { command = "project.standard" } ]
 
 [[step]]
 id = "pick-standard"
 title = "Pick a standard"
-text = "IEC 60617 is the default. **NFPA 79 / ANSI Y32.2** gives new symbols the American look; symbols already placed stay as drawn."
-point = { ui = "project_settings.standard" }
-expect = { clicked = "project_settings.standard" }
+title_nl = "Kies een norm"
+text = "IEC 60617 is the default. NFPA gives new symbols the American look. Symbols already placed stay as drawn, so changing it never breaks a finished page."
+text_nl = "IEC 60617 is de standaard. NFPA geeft nieuwe symbolen het Amerikaanse uiterlijk. Symbolen die al staan blijven zoals getekend, dus wijzigen breekt nooit een afgeronde pagina."
+how = [
+  "Under **Drawing standard**, choose **IEC 60617 (default)** or **NFPA 79 / ANSI Y32.2**.",
+  "Close the window with **Close (Esc)**.",
+  "The lesson **IEC or NFPA** shows the effect in detail.",
+]
+how_nl = [
+  "Kies onder **Drawing standard** voor **IEC 60617 (default)** of **NFPA 79 / ANSI Y32.2**.",
+  "Sluit het venster met **Close (Esc)**.",
+  "De les **IEC of NFPA** toont het effect in detail.",
+]
 
 [[step]]
 id = "done"
 title = "Set once, saved for good"
+title_nl = "Eén keer ingesteld, voorgoed bewaard"
 text = "Auto connections and the keymap follow you to every project; the standard travels with the project it belongs to."
+text_nl = "Automatische verbindingen en de toetsenkaart volgen je naar elk project; de norm reist mee met het project waar hij bij hoort."

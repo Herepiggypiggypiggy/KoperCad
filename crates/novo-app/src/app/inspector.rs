@@ -11,6 +11,7 @@ use novo_core::{AnyId, DeviceId, Project, SymbolRole, Value};
 use novo_theme::widgets;
 use novo_xref::{Place, XrefIndex};
 
+use super::part_picker::{Candidate, PartPicker, device_candidates, picker_ui};
 use super::symbol_preview::{self, SymbolPreview, symbol_preview};
 use super::xref::xref_of;
 use super::{Level, NovoApp};
@@ -69,6 +70,8 @@ pub(super) struct InspectorState {
     /// The pin: a pinned inspector stays where it is with nothing selected
     /// and shows the page (DESIGN.md §3).
     pub(super) pinned: bool,
+    /// The Part row's search list.
+    picker: PartPicker,
     /// What was shown last, drawn while the panel slides away.
     leaving: Option<(DeviceInfo, bool)>,
 }
@@ -82,6 +85,8 @@ enum InspectorAction {
     /// The reset arrow of an overridden property: back to the part's value.
     ResetProperty(String),
     Pin(bool),
+    /// A part picked in the Part row.
+    AssignPart(novo_parts::PartKey),
 }
 
 /// The one device the selection draws, if it draws exactly one.
@@ -240,7 +245,15 @@ impl NovoApp {
                 // The panel slides away with what it last showed.
                 let mut state = InspectorState::default();
                 let mut actions = Vec::new();
-                self.inspector_area(ctx, canvas, left, slide, &info, &mut state, &mut actions);
+                self.inspector_area(
+                    ctx,
+                    canvas,
+                    left,
+                    slide,
+                    (&info, &[]),
+                    &mut state,
+                    &mut actions,
+                );
                 self.wb.inspector.leaving = Some((info, left));
             }
             return;
@@ -264,6 +277,24 @@ impl NovoApp {
             return;
         };
         let left = self.selection_under_inspector(canvas, &selection);
+        if self.wb.inspector.picker.open
+            && let Some(problem) = self.wb.part_catalog.ensure()
+        {
+            self.message(Level::Error, problem);
+        }
+        let candidates = match (
+            self.wb.part_catalog.get(),
+            self.backend.document(),
+            self.wb.inspector.picker.open,
+        ) {
+            (Some(catalog), Some(doc), true) => device_candidates(
+                catalog,
+                doc.project(),
+                device,
+                &self.wb.inspector.picker.query,
+            ),
+            _ => Vec::new(),
+        };
 
         // The fields follow the model unless they are being edited.
         let tag_id = egui::Id::new("inspector_tag");
@@ -291,7 +322,15 @@ impl NovoApp {
         let state = &mut self.wb.inspector;
         state.leaving = Some((info.clone(), left));
         let mut shown = std::mem::take(state);
-        self.inspector_area(ctx, canvas, left, slide, &info, &mut shown, &mut actions);
+        self.inspector_area(
+            ctx,
+            canvas,
+            left,
+            slide,
+            (&info, &candidates),
+            &mut shown,
+            &mut actions,
+        );
         self.wb.inspector = shown;
 
         for action in actions {
@@ -307,6 +346,7 @@ impl NovoApp {
                 InspectorAction::SetDelay(seconds) => self.set_delay(device, seconds),
                 InspectorAction::ResetProperty(key) => self.reset_property(device, &key),
                 InspectorAction::Pin(on) => self.wb.inspector.pinned = on,
+                InspectorAction::AssignPart(key) => self.assign_device_part(device, &key),
             }
         }
     }
@@ -320,7 +360,7 @@ impl NovoApp {
         canvas: egui::Rect,
         left: bool,
         slide: f32,
-        info: &DeviceInfo,
+        (info, candidates): (&DeviceInfo, &[Candidate]),
         state: &mut InspectorState,
         actions: &mut Vec<InspectorAction>,
     ) {
@@ -354,7 +394,15 @@ impl NovoApp {
                     egui::ScrollArea::vertical()
                         .max_height(max_height)
                         .show(ui, |ui| {
-                            inspector_body(ui, info, state, tag_id, description_id, actions)
+                            inspector_body(
+                                ui,
+                                info,
+                                candidates,
+                                state,
+                                tag_id,
+                                description_id,
+                                actions,
+                            )
                         });
                 });
             });
@@ -426,7 +474,7 @@ impl NovoApp {
         else {
             return;
         };
-        if tag != old.0 && !tag.is_empty() {
+        if tag != old.0 {
             let result = self.with_editor(|editor, doc| editor.rename(doc, device, &tag));
             if let Some(Err(reason)) = result {
                 self.message(Level::Warning, reason);
@@ -434,6 +482,27 @@ impl NovoApp {
         }
         if description != old.1 {
             self.describe(device, description);
+        }
+    }
+
+    /// Gives a device the catalog part `key`, as one undo step.
+    pub(super) fn assign_device_part(&mut self, device: DeviceId, key: &novo_parts::PartKey) {
+        let Some((command, title)) = self.backend.document().and_then(|d| {
+            let catalog = self.wb.part_catalog.get()?;
+            let command =
+                super::part_picker::assign_device_command(d.project(), catalog, device, key)?;
+            let part = catalog.get(key)?;
+            Some((
+                command,
+                format!("{} {}", part.manufacturer, part.order_number),
+            ))
+        }) else {
+            return;
+        };
+        match self.execute(command) {
+            Some(Ok(_)) => self.message(Level::Info, format!("Part set: {title}")),
+            Some(Err(e)) => self.message(Level::Error, format!("Could not set the part: {e}")),
+            None => {}
         }
     }
 
@@ -503,6 +572,7 @@ impl NovoApp {
 fn inspector_body(
     ui: &mut egui::Ui,
     info: &DeviceInfo,
+    candidates: &[Candidate],
     state: &mut InspectorState,
     tag_id: egui::Id,
     description_id: egui::Id,
@@ -563,10 +633,35 @@ fn inspector_body(
 
     ui.add_space(6.0);
     widgets::section_label(ui, "Part");
-    if info.part.is_empty() {
-        ui.weak("No part");
-    } else {
-        ui.label(&info.part);
+    ui.horizontal(|ui| {
+        if info.part.is_empty() {
+            ui.weak("No part");
+        } else {
+            ui.label(&info.part);
+        }
+        let label = match (state.picker.open, info.part.is_empty()) {
+            (true, _) => "Close",
+            (false, true) => "Choose...",
+            (false, false) => "Change...",
+        };
+        if ui
+            .small_button(label)
+            .on_hover_text("Pick this device's part from the catalog (Parts window: Ctrl+K, Parts)")
+            .clicked()
+        {
+            state.picker.open = !state.picker.open;
+        }
+    });
+    if state.picker.open
+        && let Some(key) = picker_ui(
+            ui,
+            &mut state.picker,
+            candidates,
+            "No part in the catalog matches. Open the Parts window to import one.",
+        )
+    {
+        actions.push(InspectorAction::AssignPart(key));
+        state.picker.open = false;
     }
 
     ui.add_space(6.0);

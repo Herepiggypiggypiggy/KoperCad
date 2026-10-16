@@ -200,7 +200,10 @@ impl NovoApp {
                     match doc.transact("Waive problem", |tx| {
                         novo_checks::waive(tx, &problem, &reason).map(|_| ())
                     }) {
-                        Ok(((), changes)) => self.changed_outside_canvas(&changes),
+                        Ok(((), changes)) => {
+                            self.changed_outside_canvas(&changes);
+                            self.learn_signal("problem_waived");
+                        }
                         Err(e) => {
                             self.message(Level::Error, format!("Could not waive the problem: {e}"))
                         }
@@ -241,7 +244,10 @@ impl NovoApp {
             && let Some(doc) = self.backend.document_mut()
         {
             match doc.transact("Restore problem", |tx| tx.remove(id)) {
-                Ok(((), changes)) => self.changed_outside_canvas(&changes),
+                Ok(((), changes)) => {
+                    self.changed_outside_canvas(&changes);
+                    self.learn_signal("waiver_restored");
+                }
                 Err(e) => self.message(Level::Error, format!("Could not restore: {e}")),
             }
         }

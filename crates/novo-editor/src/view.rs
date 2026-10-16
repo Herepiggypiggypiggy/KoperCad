@@ -1606,6 +1606,8 @@ impl SchematicView {
                             );
                             ui.weak(if feed {
                                 "Enter sets the feed's potential · Esc cancels"
+                            } else if rename.text.trim().is_empty() {
+                                "Empty: Enter joins the device on its left · Esc cancels"
                             } else {
                                 "Enter renames · Esc cancels"
                             });
