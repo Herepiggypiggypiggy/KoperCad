@@ -922,6 +922,7 @@ impl NovoApp {
                     || *id == "view.cabinet_table"
                     || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
+                    || *id == "cabinet.door"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"

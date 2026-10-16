@@ -254,3 +254,24 @@ fn a_rail_has_a_grip_outside_its_start() {
         None
     );
 }
+
+/// The inside size and door form has a command and a menu row, and the
+/// command opens the plate card with the form scrolled into view.
+#[test]
+fn inside_size_and_door_has_a_command_a_menu_row_and_opens_the_card() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let _ = cabinet(&mut d);
+    d.app.cabinet.plate_card = false;
+    d.app.run_command(&ctx, "cabinet.door", None);
+    d.frame();
+    assert!(d.app.cabinet.plate_card);
+    assert!(d.app.cabinet.view.selection.ids().is_empty());
+    let info = novo_workflow::commands::get("cabinet.door").expect("registered");
+    assert!(novo_workflow::menus::place(info).is_some());
+    assert!(
+        d.app.learn_anchor("cabinet.door.apply").is_some(),
+        "the form is drawn"
+    );
+}

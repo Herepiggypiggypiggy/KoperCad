@@ -24,6 +24,8 @@ mod thermal;
 pub use model::*;
 pub use result::*;
 pub use setup::Error;
+/// Surface coefficient of a device, shared with the 3D engine (`novo-cfd`).
+pub use thermal::device_h;
 
 use setup::Setup;
 

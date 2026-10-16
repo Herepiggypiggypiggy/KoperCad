@@ -110,11 +110,11 @@ title = "Fail one"
 title_nl = "Keur er een af"
 text = """
 Press **Next open** again, write what you saw in the **Note** field, for example "terminal loose", and press **Fail**.
-The check is marked failed with your note, and KoperCAD raises a punch item itself: the status line says "Punch item raised:" with the title and the severity.
+The check is marked failed with your note, and KoperCAD raises a punch item itself: the line under the check says "Punch item raised:" with the title and the severity.
 """
 text_nl = """
 Druk nogmaals op **Next open**, schrijf in het veld **Note** wat je zag, bijvoorbeeld "klem los", en druk op **Fail**.
-De controle wordt afgekeurd met je notitie en KoperCAD maakt zelf een punt aan: de statusregel zegt "Punch item raised:" met de titel en de ernst.
+De controle wordt afgekeurd met je notitie en KoperCAD maakt zelf een punt aan: de regel onder de controle zegt "Punch item raised:" met de titel en de ernst.
 """
 point = { ui = "commissioning.fail" }
 expect = { clicked = "commissioning.fail" }

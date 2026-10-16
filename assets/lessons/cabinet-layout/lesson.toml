@@ -51,12 +51,12 @@ title = "What is where"
 title_nl = "Wat staat waar"
 text = """
 Every device of **+CAB** that has no place yet waits in the **Unplaced** list on the left, with its size taken from its part.
-The header ends with "0 placed, 8 unplaced" and, once something is wrong, a problem count you can click.
+The strip under the bar says "0 placed, 8 unplaced" and, once something is wrong, shows a problem count you can click.
 **Place all** fills the plate for you; the other buttons come in later lessons.
 """
 text_nl = """
 Elk component van **+CAB** zonder plek wacht links in de lijst **Unplaced**, met de afmeting uit het artikel.
-Rechts in de kopregel staat "0 placed, 8 unplaced" en, zodra er iets mis is, een aantal problemen waarop je kunt klikken.
+De strook onder de knoppenbalk zegt "0 placed, 8 unplaced" en toont, zodra er iets mis is, een aantal problemen waarop je kunt klikken.
 **Place all** vult de plaat voor je; de andere knoppen komen in latere lessen.
 """
 point = { ui = "cabinet.unplaced" }
@@ -68,19 +68,19 @@ note = [
 
 [[step]]
 id = "drag-first"
-how = ["Press and hold the mouse button on -F1 in the Unplaced list.", "Drag it to the upper left of the plate.", "Let go; the header says 1 placed, 7 unplaced."]
-how_nl = ["Houd de muisknop ingedrukt op -F1 in de lijst Unplaced.", "Sleep het naar linksboven op de plaat.", "Laat los; de kop zegt 1 placed, 7 unplaced."]
+how = ["Press and hold the mouse button on -F1 in the Unplaced list.", "Drag it to the upper left of the plate.", "Let go; the strip under the bar says 1 placed, 7 unplaced."]
+how_nl = ["Houd de muisknop ingedrukt op -F1 in de lijst Unplaced.", "Sleep het naar linksboven op de plaat.", "Laat los; de strook onder de knoppenbalk zegt 1 placed, 7 unplaced."]
 title = "Drag a device onto the plate"
 title_nl = "Sleep een component op de plaat"
 text = """
 Drag **-F1** from the list to the upper left of the plate and let go.
 While you drag, a box shows where it will land; positions snap to a 5 mm grid.
-Afterwards **-F1** is a 54 x 90 mm box on the plate, gone from the list, and the header says "1 placed, 7 unplaced".
+Afterwards **-F1** is a 54 x 90 mm box on the plate, gone from the list, and the strip under the bar says "1 placed, 7 unplaced".
 """
 text_nl = """
 Sleep **-F1** uit de lijst naar linksboven op de plaat en laat los.
 Tijdens het slepen toont een kader waar het component landt; posities springen naar een raster van 5 mm.
-Daarna staat **-F1** als kader van 54 x 90 mm op de plaat, is het uit de lijst verdwenen en staat in de kopregel "1 placed, 7 unplaced".
+Daarna staat **-F1** als kader van 54 x 90 mm op de plaat, is het uit de lijst verdwenen en staat in de strook onder de knoppenbalk "1 placed, 7 unplaced".
 """
 point = { ui = "cabinet.unplaced" }
 expect = { signal = "cabinet_dropped" }
@@ -130,7 +130,7 @@ title = "Read what is wrong"
 title_nl = "Lees wat er mis is"
 text = """
 Hold the pointer over a red box: the tooltip says what is wrong in words, for example "Overlaps -F1".
-The header now ends with a problem count; click it for a list of "device: problem" rows, and click a row to select that device.
+The strip under the bar now shows a problem count; click it for a list of "device: problem" rows, and click a row to select that device.
 """
 text_nl = """
 Houd de aanwijzer boven een rood kader: de tooltip zegt in woorden wat er mis is, bijvoorbeeld "Overlaps -F1".

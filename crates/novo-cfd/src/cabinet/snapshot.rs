@@ -71,12 +71,17 @@ impl<'a> View<'a> {
             fidelity.label(),
             n
         )];
-        notes.push(
+        notes.push(if setup.cfg.plate.is_some() && !setup.cfg.device_film_h.is_empty() {
+            "The mounting plate is a thin sheet on the rear wall with a contact resistance to the \
+             devices; devices are lumped housings with a surface film (the 2D engine's \
+             correlation), scaled to their true surface."
+                .into()
+        } else {
             "Heat conduction into the mounting plate is not resolved by the grid (the plate is thinner \
              than a cell): the plate share of every device reads 0 and its heat is counted as going \
              to the air."
-                .into(),
-        );
+                .into()
+        });
         notes.extend(super::march::lost_heat_note(setup, scn));
         let base = CfdSnapshot {
             grid: cm.grid.clone(),
@@ -174,12 +179,18 @@ impl<'a> View<'a> {
         let m = &flow.mesh;
         let amb = self.scn.ambient_c;
         let share = band_share(self.fidelity);
+        // Lumped devices (the default) report their housing, the air round
+        // it and the heat into the plate sheet directly; the cell sampling
+        // below is for the volume model.
+        let lumped =
+            (!self.setup.cfg.device_film_h.is_empty()).then(|| self.setup.device_report(flow));
         let out: Vec<DeviceResult> = self
             .scn
             .devices
             .iter()
             .zip(&self.device_cells)
-            .map(|(d, cells)| {
+            .enumerate()
+            .map(|(slot, (d, cells))| {
                 // area-weighted temperature of the housing and of the air
                 // touching it; heat that leaves into other solids
                 let (mut a_exp, mut t_surf, mut t_air, mut q_cond) = (0.0, 0.0, 0.0, 0.0);
@@ -207,9 +218,17 @@ impl<'a> View<'a> {
                     (sum / wsum, sum / wsum)
                 };
                 let loss = d.loss_w;
+                let rep = lumped
+                    .as_ref()
+                    .and_then(|r| r.get(slot))
+                    .filter(|r| r.surface_c.is_finite() && r.air_c.is_finite());
+                let (surface_c, air_c) = rep.map_or((surface_c, air_c), |r| (r.surface_c, r.air_c));
+                let q_cond = rep.map_or(q_cond, |r| r.to_plate_w);
                 let to_air = (loss - q_cond).max(0.0);
                 let dt = surface_c - air_c;
-                let h = if a_exp > 0.0 && dt > 0.05 {
+                let h = if let Some(r) = rep {
+                    r.film_h
+                } else if a_exp > 0.0 && dt > 0.05 {
                     to_air / (a_exp * dt)
                 } else {
                     0.0
@@ -222,7 +241,12 @@ impl<'a> View<'a> {
                 let (f, hgt) = (&d.footprint, d.height());
                 let a_geom = (f.w * f.h + 2.0 * (f.w + f.h) * hgt) * 1e-6;
                 let pure = cells.iter().filter(|c| c.1 >= 1.0).count();
-                let resolved = pure >= 8 && (0.7..=1.3).contains(&(a_exp / a_geom.max(1e-12)));
+                // a lumped device only needs its steps to hold the surface
+                // roughly (the film is scaled to the true area)
+                let resolved = rep.map_or_else(
+                    || pure >= 8 && (0.7..=1.3).contains(&(a_exp / a_geom.max(1e-12))),
+                    |r| (0.5..=2.0).contains(&(r.film_area_m2 / a_geom.max(1e-12))),
+                );
                 if !resolved {
                     unresolved.push(d.id);
                 }
