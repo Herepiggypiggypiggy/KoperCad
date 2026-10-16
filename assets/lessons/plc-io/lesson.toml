@@ -231,7 +231,7 @@ De lijst erachter volgt: %IX12.0 wordt %IX8.0.
 """
 point = { ui = "palette.field" }
 expect = { field = { device = "=A1+CAB-K2", name = "plc.start.i", equals = 8 } }
-solve = [ { command = "plc.renumber_io" } ]
+solve = [ { command = "plc.renumber_io" }, { key = "Enter" } ]
 
 [[step]]
 id = "back-to-drawing"
@@ -299,7 +299,7 @@ note = [
 expect = { clicked = "live.pole" }
 # GAP: solve has no operation for a click on a live-view badge; the replay
 # can only turn the live view on.
-solve = [ { command = "sim.live" } ]
+solve = [ { live_pole = { device = "-S1" } } ]
 
 [[step]]
 id = "switch-output"
@@ -329,4 +329,4 @@ note = [
 ]
 expect = { clicked = "live.output" }
 # GAP: as above (no solve operation for a live-view badge).
-solve = [ { command = "sim.live" } ]
+solve = [ { live_coil = { device = "=A1+CAB-K2", output = true } } ]
