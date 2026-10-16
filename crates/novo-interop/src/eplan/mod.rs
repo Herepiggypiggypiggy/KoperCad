@@ -5,6 +5,6 @@
 //! Nothing here touches the user's catalog: the caller previews and merges.
 
 mod parts;
-mod xml;
+pub(crate) mod xml;
 
 pub use parts::{EplanError, import_auto, import_delimited, import_xml};

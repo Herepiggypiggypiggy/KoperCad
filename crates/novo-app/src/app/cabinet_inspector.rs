@@ -10,6 +10,7 @@ use novo_layout::state::CabinetLayout;
 use novo_theme::widgets;
 
 use super::cabinet::{Ask, problem_lines};
+use super::cabinet_door::DoorState;
 /// The inspector's width, the same as the schematic's.
 const WIDTH: f32 = super::inspector::INSPECTOR_WIDTH;
 const MARGIN: f32 = 12.0;
@@ -120,6 +121,14 @@ pub(super) fn gather(
     }
 }
 
+/// What the inspector's "Inside and door" section needs: its form state, the
+/// layout as drawn and the tag names.
+pub(super) struct DoorView<'a, F> {
+    pub state: &'a mut DoorState,
+    pub layout: &'a CabinetLayout,
+    pub tag_of: &'a F,
+}
+
 /// Draws the inspector; returns what the user asked for.
 /// The inspector as an overlay on the canvas (DESIGN.md section 3), on the
 /// side away from the selection so it never hides it.
@@ -128,6 +137,9 @@ pub(super) fn overlay(
     canvas: egui::Rect,
     left: bool,
     facts: &Facts,
+    project: &Project,
+    fields: &mut super::cabinet_panel::PanelFields,
+    door: DoorView<'_, impl Fn(u64) -> String>,
 ) -> Option<Ask> {
     let (pivot, at) = if left {
         (
@@ -151,7 +163,7 @@ pub(super) fn overlay(
                     ui.set_width(WIDTH);
                     egui::ScrollArea::vertical()
                         .max_height(max_height)
-                        .show(ui, |ui| show(ui, facts))
+                        .show(ui, |ui| show(ui, facts, project, fields, door))
                         .inner
                 })
                 .inner
@@ -159,7 +171,13 @@ pub(super) fn overlay(
         .inner
 }
 
-fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
+fn show(
+    ui: &mut egui::Ui,
+    facts: &Facts,
+    project: &Project,
+    fields: &mut super::cabinet_panel::PanelFields,
+    door: DoorView<'_, impl Fn(u64) -> String>,
+) -> Option<Ask> {
     let mut ask = None;
     match facts {
         Facts::Devices(devices) => {
@@ -192,6 +210,13 @@ fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
                 if let Some(why) = &d.why {
                     ui.add_space(2.0);
                     ui.weak(why);
+                }
+                // One device only: the text buffers are shared, and bulk edits
+                // belong to the property sheet.
+                if devices.len() == 1
+                    && let Some(edit) = super::cabinet_panel::show(ui, fields, project, d.id)
+                {
+                    ask = Some(Ask::SetPanelValue(edit));
                 }
                 if !d.problems.is_empty() {
                     ui.add_space(4.0);
@@ -244,6 +269,16 @@ fn show(ui: &mut egui::Ui, facts: &Facts) -> Option<Ask> {
             ui.add_space(6.0);
             widgets::field(ui, "Placed", &placed.to_string());
             widgets::field(ui, "Plate used", &format!("{used_percent:.0} %"));
+            ui.add_space(6.0);
+            // Inside size, door and depth checks (open by default: this is
+            // where they are edited).
+            egui::CollapsingHeader::new("Inside and door")
+                .default_open(true)
+                .show(ui, |ui| {
+                    if let Some(a) = door.state.show(ui, door.layout, door.tag_of) {
+                        ask = Some(a);
+                    }
+                });
         }
     }
     ask

@@ -16,6 +16,7 @@ fn anchor(x: f64, y: f64, facing: Facing) -> Anchor {
     Anchor {
         pos: Point::new(x, y),
         facing,
+        z_mm: Some(30.0),
     }
 }
 
@@ -32,6 +33,7 @@ const NO_SLACK: Rules = Rules {
     slack_mm: 0.0,
     max_stub_mm: 150.0,
     fill_limit: 0.5,
+    bend_mm: 0.0,
 };
 
 #[test]

@@ -161,6 +161,23 @@ pub struct CommissioningInput {
     pub sign_offs: Vec<SignOff>,
 }
 
+/// The usual two lines of the sign-off block: the commissioning engineer
+/// (named when `engineer` is not empty) and the customer, both to sign and
+/// date by hand.
+pub fn default_sign_offs(engineer: &str) -> Vec<SignOff> {
+    vec![
+        SignOff {
+            role: "Commissioning engineer".into(),
+            name: engineer.into(),
+            ..SignOff::default()
+        },
+        SignOff {
+            role: "Customer".into(),
+            ..SignOff::default()
+        },
+    ]
+}
+
 /// Counts of checks by state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Progress {
@@ -618,6 +635,14 @@ mod tests {
         let keys: Vec<_> = report.sections.iter().map(|s| s.key.as_str()).collect();
         assert_eq!(keys, ["summary", "signoff"]);
         assert!(!readiness(&CommissioningInput::default()).ready());
+    }
+
+    #[test]
+    fn default_sign_offs_name_the_engineer_only() {
+        let lines = default_sign_offs("TV");
+        assert_eq!(lines[0].name, "TV");
+        assert_eq!(lines[1].role, "Customer");
+        assert!(lines[1].name.is_empty() && lines[1].date.is_empty());
     }
 
     #[test]

@@ -4,3 +4,4 @@
 2026-10-15 18:58 UTC owner decision: maker meshes wanted; #449 normal review.
 2026-10-15 19:40 UTC #449 merged. Follow-up: Fallback::message()/can_retry() for the UI threads.
 2026-10-15 19:50 UTC reviewer C found parse.rs defects (recursion depth, id overflow); fixed in #506.
+2026-10-15 20:10 UTC #506 merged (READY by main reviewer C); handoff finalised.
