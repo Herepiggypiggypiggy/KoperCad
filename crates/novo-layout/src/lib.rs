@@ -17,6 +17,7 @@ pub mod sizing;
 pub mod sizing_model;
 pub mod state;
 pub mod stock;
+pub mod surface_rules;
 pub mod surfaces;
 
 /// Footprint used for a device whose part has no dimensions (marked guessed).

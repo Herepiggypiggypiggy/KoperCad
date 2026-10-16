@@ -1223,3 +1223,58 @@ fn right_click_on_the_plate_opens_a_menu_for_what_is_under_it() {
     let menu = d.app.cabinet.menu.expect("a menu opened on the plate");
     assert_eq!(menu.target, Target::Plate);
 }
+
+#[test]
+fn surface_rules_keep_door_devices_off_the_plate_plan() {
+    use novo_core::{DeviceTag, MountingPlate, Project, Value};
+    use novo_layout::enclosure::{Door, Enclosure};
+    use novo_layout::model::{load, set_enclosure, set_plate};
+
+    let mut p = Project::new("t");
+    let (cab, _) = p
+        .transact("setup", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            set_plate(
+                tx,
+                cab,
+                MountingPlate {
+                    width: 400.0,
+                    height: 400.0,
+                    margin: 10.0,
+                },
+            )?;
+            set_enclosure(
+                tx,
+                cab,
+                &Enclosure {
+                    width: 450.0,
+                    height: 450.0,
+                    depth: 200.0,
+                    plate_setback: 20.0,
+                    door: Some(Door::default()),
+                    front_clearance: None,
+                    hinge_side_clearance: None,
+                },
+            )?;
+            tx.set_property(cab, "surface_rules", Some(Value::Text("door: H".into())))?;
+            let part = tx.add_part("ACME", "C1")?;
+            tx.set_property(part, "width_mm", Some(Value::Float(22.0)))?;
+            tx.set_property(part, "height_mm", Some(Value::Float(22.0)))?;
+            for tag in ["=A1+CAB1-K1", "=A1+CAB1-H1"] {
+                let d = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+                tx.assign_part(d, part)?;
+            }
+            Ok(cab)
+        })
+        .unwrap();
+    let layout = load(&p, cab).unwrap();
+    let split = super::cabinet_rules::surface_split(&p, cab, &layout);
+    assert_eq!(split.plate.len(), 1);
+    assert_eq!(split.plate[0].kind, "K");
+    assert_eq!(split.others.len(), 1);
+    assert_eq!(split.others[0].0, "door");
+    assert!(split.problems.is_empty());
+    let (plan, _) =
+        super::cabinet_rules::plan(&p, cab, &layout, &novo_layout::rules::RuleSet::standard());
+    assert_eq!(plan.placements.len(), 1);
+}

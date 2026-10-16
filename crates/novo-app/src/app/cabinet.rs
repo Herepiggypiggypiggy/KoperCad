@@ -1451,6 +1451,41 @@ impl NovoApp {
     /// What Place all leaves off the plate, by name with the reason: devices
     /// that do not fit, and devices no cabinet takes because their tag has
     /// no location while the project has several. `None` when all is placed.
+    /// Tells what the surface rules did to `Place all`: the devices that
+    /// belong on another surface and are not on the plate plan, and rules
+    /// that could not be used.
+    fn surface_rule_messages(&mut self, structure: Option<StructureId>, layout: &CabinetLayout) {
+        let (Some(s), Some(project)) = (structure, self.backend.document().map(|d| d.project()))
+        else {
+            return;
+        };
+        let split = cabinet_rules::surface_split(project, s, layout);
+        let tag = |id: u64| {
+            project
+                .get::<novo_core::Device>(novo_core::DeviceId::from(id))
+                .map_or_else(|| format!("device {id}"), |d| d.tag.to_string())
+        };
+        let mut notes: Vec<(Level, String)> = split
+            .problems
+            .iter()
+            .map(|p| (Level::Warning, p.clone()))
+            .collect();
+        for (surface, specs) in &split.others {
+            let tags: Vec<String> = specs.iter().map(|sp| tag(sp.id)).collect();
+            notes.push((
+                Level::Info,
+                format!(
+                    "By the surface rules {} belong on the {surface} [{}] and are not placed on the plate",
+                    tags.join(", "),
+                    novo_layout::surface_rules::RULE_SURFACE
+                ),
+            ));
+        }
+        for (level, text) in notes {
+            self.message(level, text);
+        }
+    }
+
     fn left_out_text(
         &self,
         structure: Option<StructureId>,
@@ -1577,6 +1612,7 @@ impl NovoApp {
                         }
                         _ => layout.preview(cands),
                     };
+                    self.surface_rule_messages(structure, &layout);
                     let left_out = self.left_out_text(structure, &plan);
                     if plan.placements.is_empty() {
                         match left_out {
