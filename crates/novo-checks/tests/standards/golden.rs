@@ -276,12 +276,13 @@ pub fn golden() -> Golden {
                 d.wire(h1_sym, 1, feed_m, 0),
             ];
             for w in &control_wires {
-                d.style(*w, "BU", 1.0);
+                d.style(*w, "BU", 1.5);
             }
 
             // Machine data.
             standards::set_info_property(tx, "machine.rated_voltage_v", Some(400i64.into()))?;
             standards::set_info_property(tx, "machine.phases", Some(3i64.into()))?;
+            standards::set_info_property(tx, "machine.installation_method", Some("C".into()))?;
             standards::set_info_property(tx, "machine.frequency_hz", Some(50i64.into()))?;
             standards::set_info_property(tx, "machine.full_load_current_a", Some(5.0.into()))?;
             standards::set_info_property(tx, "supply.short_circuit_ka", Some(10.0.into()))?;
@@ -441,7 +442,7 @@ impl Golden {
             let lamp = d.sym("iec/signalling/lamp", h, true, &["X1", "X2"], &[], &[]);
             let w = d.wire(feed, 0, lamp, 1);
             if let Some(c) = colour {
-                d.style(w, c, 1.0);
+                d.style(w, c, 1.5);
             }
             Ok(w)
         })

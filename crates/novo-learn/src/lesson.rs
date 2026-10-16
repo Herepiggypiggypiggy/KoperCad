@@ -159,6 +159,11 @@ pub struct Step {
     /// "Do it for me" runs.
     #[serde(default)]
     pub solve: Vec<SolveOp>,
+    /// Why the step has no `solve`: a file dialog, a drag no script can
+    /// make. The replay lists the step as "not scripted" with this reason
+    /// instead of leaving a silent gap.
+    #[serde(default)]
+    pub manual: Option<String>,
     /// What "Show me how" plays (`demo`): key caps, typing, a moving pointer. A step
     /// that gives none gets one derived from its check, `solve` and `point`.
     #[serde(default)]
@@ -270,6 +275,23 @@ pub enum SolveOp {
     LivePole(LivePoleOp),
     LiveCoil(LiveCoilOp),
     SetPotential(SetPotentialOp),
+    Rename(RenameOp),
+}
+
+/// Renames what a label names, as the rename box does: a device tag
+/// (`-K1`), a terminal by designation (`-X1:4`), an interruption point
+/// (`IP2`) or a feed's potential.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RenameOp {
+    pub rename: RenameArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RenameArgs {
+    pub target: String,
+    pub to: String,
 }
 
 /// A click on a pole badge of the live view (Shift+click: this pole only).
@@ -327,6 +349,10 @@ pub struct SetPotentialArgs {
 #[serde(deny_unknown_fields)]
 pub struct KeySolveOp {
     pub key: String,
+    /// Hold the key down this many seconds, then let go (a hold opens the
+    /// wheel); a plain press otherwise.
+    #[serde(default)]
+    pub hold: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

@@ -200,3 +200,23 @@ text_nl = "{arg}"
 [no_key]
 text = "command palette: {label}"
 text_nl = "opdrachtenlijst: {label}"
+
+[continue_where]
+text = "Continue where you left off"
+text_nl = "Ga verder waar je was"
+
+[next_lesson]
+text = "Next lesson"
+text_nl = "Volgende les"
+
+[all_done]
+text = "Every lesson is done. Pick one below to do it again."
+text_nl = "Alle lessen zijn klaar. Kies er hieronder een om opnieuw te doen."
+
+[track_progress]
+text = "{done}/{total} done · {minutes} min"
+text_nl = "{done}/{total} klaar · {minutes} min"
+
+[do_first]
+text = "Do first:"
+text_nl = "Doe eerst:"

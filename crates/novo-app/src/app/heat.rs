@@ -689,7 +689,7 @@ fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
         compare_controls(ui, state);
         if let Some(sol) = &state.solution {
             let p = &sol.snapshot.progress;
-            let validated = !sol.snapshot.accuracy.benchmarks.is_empty();
+            let validated = sol.snapshot.accuracy.validated;
             ui.label(
                 egui::RichText::new(status_label(p, validated))
                     .small()
@@ -1357,7 +1357,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                     }
                     Source::Solved(sol) => {
                         let p = &sol.snapshot.progress;
-                        let validated = !sol.snapshot.accuracy.benchmarks.is_empty();
+                        let validated = sol.snapshot.accuracy.validated;
                         ui.label(small(&status_label(p, validated), t::TEXT));
                         if stale {
                             ui.label(small(

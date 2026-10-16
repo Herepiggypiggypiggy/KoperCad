@@ -85,6 +85,7 @@ demo = [
 ]
 point = { at = { device = "-Q1" } }
 expect = { pole_closed = "-Q1" }
+solve = [ { live_pole = { device = "-Q1" } } ]
 
 [[step]]
 id = "page-down"
@@ -135,6 +136,7 @@ demo = [
 ]
 point = { at = { device = "-S1" } }
 expect = { all = [ { pole_closed = "-F1" }, { pole_closed = "-S1" } ] }
+solve = [ { live_pole = { device = "-F1" } }, { live_pole = { device = "-S1" } } ]
 
 [[step]]
 id = "start"
@@ -161,6 +163,7 @@ demo = [
 ]
 point = { at = { device = "-S2" } }
 expect = { coil_on = "-K1" }
+solve = [ { live_pole = { device = "-S2" } } ]
 
 [[step]]
 id = "seal-in"
@@ -187,6 +190,7 @@ demo = [
 ]
 point = { at = { device = "-K1", pin = "13" } }
 expect = { all = [ { coil_on = "-K1" }, { not = { pole_closed = "-S2" } } ] }
+solve = [ { live_pole = { device = "-S2" } } ]
 
 [[step]]
 id = "stop"
@@ -215,6 +219,7 @@ demo = [
 ]
 point = { at = { device = "-S1" } }
 expect = { not = { coil_on = "-K1" } }
+solve = [ { live_pole = { device = "-S1" } } ]
 
 [[step]]
 id = "leave"

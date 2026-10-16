@@ -7,7 +7,21 @@
 //! solution is returned with zero mean.
 
 use super::mesh::Mesh;
-use super::par::for_planes;
+use super::par::{MIN_VALUES, for_planes};
+use rayon::prelude::*;
+
+/// Ordering of the Gauss-Seidel smoother of the multigrid preconditioner.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Smoother {
+    /// Cell by cell in index order: serial, the reference.
+    #[default]
+    Lexicographic,
+    /// Red cells, then black cells (chequerboard). The cells of one colour
+    /// do not touch each other, so each half sweep runs on all threads.
+    /// Forward is red then black, backward is black then red, which keeps
+    /// the V-cycle symmetric for the conjugate gradients.
+    RedBlack,
+}
 
 /// Face coupling coefficients and the diagonal of one level.
 struct Level {
@@ -90,7 +104,63 @@ impl Level {
         });
     }
 
-    fn sweep(&self, x: &mut [f64], b: &[f64], forward: bool) {
+    fn sweep(&self, x: &mut [f64], b: &[f64], forward: bool, smoother: Smoother) {
+        match smoother {
+            Smoother::Lexicographic => self.sweep_lex(x, b, forward),
+            Smoother::RedBlack => {
+                let order = if forward { [0, 1] } else { [1, 0] };
+                for colour in order {
+                    self.half_sweep(x, b, colour);
+                }
+            }
+        }
+    }
+
+    /// Updates the cells with `(i + j + k) % 2 == colour` from the other
+    /// colour (untouched meanwhile): computed per plane into a scratch
+    /// copy, then written back, so no cell is read and written at once.
+    fn half_sweep(&self, x: &mut [f64], b: &[f64], colour: usize) {
+        let (nx, ny) = (self.n[0], self.n[1]);
+        let mut next = vec![0.0; x.len()];
+        {
+            let xr: &[f64] = x;
+            for_planes(&mut next, nx * ny, |k, plane| {
+                for j in 0..ny {
+                    for i in 0..nx {
+                        if (i + j + k) % 2 != colour {
+                            continue;
+                        }
+                        let c = self.idx([i, j, k]);
+                        plane[j * nx + i] = if self.diag[c] > 0.0 {
+                            (b[c] + self.off(xr, [i, j, k])) / self.diag[c]
+                        } else {
+                            xr[c]
+                        };
+                    }
+                }
+            });
+        }
+        let copy = |k: usize, plane: &mut [f64]| {
+            for j in 0..ny {
+                for i in 0..nx {
+                    if (i + j + k) % 2 == colour {
+                        plane[j * nx + i] = next[(k * ny + j) * nx + i];
+                    }
+                }
+            }
+        };
+        if x.len() < MIN_VALUES {
+            x.chunks_mut(nx * ny)
+                .enumerate()
+                .for_each(|(k, p)| copy(k, p));
+        } else {
+            x.par_chunks_mut(nx * ny)
+                .enumerate()
+                .for_each(|(k, p)| copy(k, p));
+        }
+    }
+
+    fn sweep_lex(&self, x: &mut [f64], b: &[f64], forward: bool) {
         let (nx, ny, nz) = (self.n[0], self.n[1], self.n[2]);
         let order = |n: usize, f: bool, v: usize| if f { v } else { n - 1 - v };
         for kk in 0..nz {
@@ -148,27 +218,39 @@ impl Level {
         Level::finish(cn, cf)
     }
 
+    /// Sums the fine cells of every aggregate (gathered per coarse cell in
+    /// the same order as a scatter would add them: bit-identical).
     fn restrict(&self, coarse: &Level, fine: &[f64], out: &mut [f64]) {
-        out.iter_mut().for_each(|v| *v = 0.0);
         let f: [usize; 3] = std::array::from_fn(|a| self.n[a] / coarse.n[a]);
-        for k in 0..self.n[2] {
-            for j in 0..self.n[1] {
-                for i in 0..self.n[0] {
-                    out[coarse.idx([i / f[0], j / f[1], k / f[2]])] += fine[self.idx([i, j, k])];
+        let cn = coarse.n;
+        for_planes(out, cn[0] * cn[1], |ck, plane| {
+            for cj in 0..cn[1] {
+                for ci in 0..cn[0] {
+                    let mut sum = 0.0;
+                    for dk in 0..f[2] {
+                        for dj in 0..f[1] {
+                            for di in 0..f[0] {
+                                sum += fine
+                                    [self.idx([ci * f[0] + di, cj * f[1] + dj, ck * f[2] + dk])];
+                            }
+                        }
+                    }
+                    plane[cj * cn[0] + ci] = sum;
                 }
             }
-        }
+        });
     }
 
     fn prolong_add(&self, coarse: &Level, cx: &[f64], fine: &mut [f64]) {
         let f: [usize; 3] = std::array::from_fn(|a| self.n[a] / coarse.n[a]);
-        for k in 0..self.n[2] {
-            for j in 0..self.n[1] {
-                for i in 0..self.n[0] {
-                    fine[self.idx([i, j, k])] += cx[coarse.idx([i / f[0], j / f[1], k / f[2]])];
+        let (nx, ny) = (self.n[0], self.n[1]);
+        for_planes(fine, nx * ny, |k, plane| {
+            for j in 0..ny {
+                for i in 0..nx {
+                    plane[j * nx + i] += cx[coarse.idx([i / f[0], j / f[1], k / f[2]])];
                 }
             }
-        }
+        });
     }
 }
 
@@ -179,6 +261,7 @@ pub struct PressureSolver {
     active: Vec<bool>,
     /// No open boundary: the operator is singular (constants).
     singular: bool,
+    smoother: Smoother,
     /// Iterations and relative residual of the last solve.
     pub last_iterations: usize,
     pub last_residual: f64,
@@ -224,9 +307,19 @@ impl PressureSolver {
             levels,
             active,
             singular: true,
+            smoother: Smoother::default(),
             last_iterations: 0,
             last_residual: 0.0,
         }
+    }
+
+    /// Chooses the smoother ordering (does not change the operator).
+    pub fn set_smoother(&mut self, smoother: Smoother) {
+        self.smoother = smoother;
+    }
+
+    pub fn smoother(&self) -> Smoother {
+        self.smoother
     }
 
     pub fn level_count(&self) -> usize {
@@ -280,12 +373,12 @@ impl PressureSolver {
         x.iter_mut().for_each(|v| *v = 0.0);
         if l + 1 == self.levels.len() {
             for _ in 0..30 {
-                lev.sweep(x, b, true);
-                lev.sweep(x, b, false);
+                lev.sweep(x, b, true, self.smoother);
+                lev.sweep(x, b, false, self.smoother);
             }
             return;
         }
-        lev.sweep(x, b, true);
+        lev.sweep(x, b, true, self.smoother);
         let mut r = vec![0.0; b.len()];
         lev.apply(x, &mut r);
         for (ri, bi) in r.iter_mut().zip(b) {
@@ -297,7 +390,7 @@ impl PressureSolver {
         let mut cx = vec![0.0; coarse.cells()];
         self.vcycle(l + 1, &cb, &mut cx);
         lev.prolong_add(coarse, &cx, x);
-        lev.sweep(x, b, false);
+        lev.sweep(x, b, false, self.smoother);
     }
 
     /// Solves `A p = b` (the mean of `b` is removed). `p` is the starting
@@ -341,10 +434,7 @@ impl PressureSolver {
                     break;
                 }
                 let alpha = rz / dq;
-                for c in 0..n {
-                    p[c] += alpha * d[c];
-                    r[c] -= alpha * q[c];
-                }
+                axpy2(alpha, &d, &q, p, &mut r);
                 it += 1;
                 rel = dot(&r, &r).sqrt() / bnorm;
                 if rel <= rel_tol {
@@ -354,9 +444,7 @@ impl PressureSolver {
                 let rz_new = dot(&r, &z);
                 let beta = rz_new / rz;
                 rz = rz_new;
-                for c in 0..n {
-                    d[c] = z[c] + beta * d[c];
-                }
+                update_direction(beta, &z, &mut d);
             }
         }
         if self.singular {
@@ -375,6 +463,43 @@ impl PressureSolver {
         self.last_residual = rel;
         it
     }
+}
+
+/// `p += alpha d`, `r -= alpha q` (per element, so thread-count independent).
+fn axpy2(alpha: f64, d: &[f64], q: &[f64], p: &mut [f64], r: &mut [f64]) {
+    if p.len() < MIN_VALUES {
+        for c in 0..p.len() {
+            p[c] += alpha * d[c];
+            r[c] -= alpha * q[c];
+        }
+        return;
+    }
+    p.par_chunks_mut(4096)
+        .zip(r.par_chunks_mut(4096))
+        .zip(d.par_chunks(4096).zip(q.par_chunks(4096)))
+        .for_each(|((p, r), (d, q))| {
+            for c in 0..p.len() {
+                p[c] += alpha * d[c];
+                r[c] -= alpha * q[c];
+            }
+        });
+}
+
+/// `d = z + beta d`.
+fn update_direction(beta: f64, z: &[f64], d: &mut [f64]) {
+    if d.len() < MIN_VALUES {
+        for c in 0..d.len() {
+            d[c] = z[c] + beta * d[c];
+        }
+        return;
+    }
+    d.par_chunks_mut(4096)
+        .zip(z.par_chunks(4096))
+        .for_each(|(d, z)| {
+            for c in 0..d.len() {
+                d[c] = z[c] + beta * d[c];
+            }
+        });
 }
 
 fn dot(a: &[f64], b: &[f64]) -> f64 {

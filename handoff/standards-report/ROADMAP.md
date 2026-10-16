@@ -6,6 +6,6 @@ Done (this PR): evidence on passes, planning-value register, document model and 
 
 Next:
 - STANDARDS-VERIFY: the owner reads the licensed clauses, records confirmed values as project overrides (`standards.<set>.<name>`), then the matching `provenance::BASIS` entries can move to a "confirmed" status.
-- IEC 60204-1 conductor ampacity rule using the IEC 60364-5-52 TableSet (needs an installation-method property on wires/cables).
-- Evidence for the remaining rules (colour rules count wires only).
+- Done in the follow-up: IEC conductor-ampacity rule, wire panel, colour evidence.
+
 - File menu entry (Export submenu) for the command.

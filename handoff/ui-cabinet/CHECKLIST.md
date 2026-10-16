@@ -41,3 +41,7 @@ Status key: UI = reachable in the app today, ENGINE = engine only (on main or in
 ## Coordination
 
 Layout and look: inspector uses the same panel pattern as the Terminals drawer; the Layout thread reviews spacing. Workspaces thread: Ctrl+2 and the faces switch must not collide with its tabs. 3D threads: the face switch calls one function, `show_3d(ui, structure)`, they supply it.
+
+## 3D (2026-10-16)
+
+The 3D workspace is hosted by the Workspaces thread (#611, `view.3d`). This thread added the interaction: click, Shift/Ctrl click and marquee select; selection shared with the Cabinet (devices); the Cabinet inspector as an overlay in 3D; commands `view.iso`, `view.front`, `view.top` (View > 3D) and `view.fit` (F or Home also work with the pointer over the view). Open: context menu, hover chip, hide-layer toggles (door, shell, wires), a 3D toolbar.

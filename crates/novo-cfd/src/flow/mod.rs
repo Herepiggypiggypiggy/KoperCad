@@ -14,7 +14,7 @@ mod scheme;
 mod solver;
 
 pub use mesh::{Mesh, other_axes};
-pub use pressure::PressureSolver;
+pub use pressure::{PressureSolver, Smoother};
 pub use scheme::Scheme;
 pub use solver::{
     Face, FaceBc, FlowConfig, FlowSolver, RunStatus, SteadyConfig, SteadyInfo, SteadyLimits,

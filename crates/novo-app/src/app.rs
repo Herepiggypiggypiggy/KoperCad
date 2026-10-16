@@ -46,6 +46,7 @@ mod inspector;
 mod interop;
 mod learn;
 mod learn_demo;
+mod learn_labels;
 mod learn_ui;
 mod link;
 mod live;
@@ -98,7 +99,13 @@ mod title_revisions;
 mod userkeymap;
 mod variants;
 mod view3d;
+mod view3d_controls;
+#[cfg(test)]
+mod view3d_tests;
 mod wheel;
+mod wire_panel;
+#[cfg(test)]
+mod wire_panel_tests;
 mod wire_production;
 mod workbench;
 mod workspace;
@@ -512,6 +519,9 @@ impl NovoApp {
             Action::Quit => self.leave_then(ctx, Leaving::Quit),
             Action::Undo => self.undo_redo(false),
             Action::Redo => self.undo_redo(true),
+            Action::ZoomToFit if self.workspace() == workspace::Workspace::View3d => {
+                self.view3d.pending = Some(view3d::Pending::Fit);
+            }
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
             Action::ShowSchematic => self.switch_workspace(workspace::Workspace::Schematic),
             Action::ShowCabinet => {
@@ -877,6 +887,9 @@ impl NovoApp {
         } else {
             self.key_commands(&ctx)
         };
+        // Shift+D swings the 3D door; elsewhere it is not a command.
+        let in_3d = self.workspace() == workspace::Workspace::View3d;
+        commands.retain(|id| in_3d || *id != "view.3d_door");
         if self.workspace() != workspace::Workspace::Schematic {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
@@ -903,6 +916,8 @@ impl NovoApp {
                     || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
                     || *id == "view.command_field_here"
+                    || *id == "view.3d"
+                    || *id == "view.3d_door"
                     || id.starts_with("heat.")
             });
         }

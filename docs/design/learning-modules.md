@@ -394,7 +394,21 @@ CI (all run in the normal `cargo test --workspace`, Linux, no window)
   (`parent` places it as another function of an existing device, such as a contact image of `-K1`),
   `{ wire = ["tag:pin", "tag:pin"], via = [[x, y]], mode = "lines" }`,
   `{ tee = { from, onto, at = [x, y] } }` (a wire that starts with a T on another wire),
-  `{ feed_row = { names = ["L1", "L2"], page, x, y } }`, `{ select = "-K1" }`, `{ page = "name" }`. New operations are added with the check kinds above.
+  `{ feed_row = { names = ["L1", "L2"], page, x, y } }`, `{ select = "-K1" }`, `{ page = "name" }`,
+  `{ rename = { target = "-K1", to = "-K9" } }`, `{ cable = { ... } }`, `{ issue_revision = "description" }`,
+  `{ assign_part = { device, part } }`, `{ key = "x", hold = 0.5 }` (a held key; a pushbutton is momentary,
+  so a pressed-and-released click needs the hold), `{ live_pole }`, `{ live_coil }`, `{ set_potential }`.
+  New operations are added with the check kinds above.
+- **`manual = "why"`** on a step marks it as something the replay cannot do (a file dialog, a printer, a
+  real EPLAN). It is an error to give both `manual` and `solve`; an `expect` with neither is a warning, so
+  the gap stays visible. The report lists such steps as Manual.
+- **Anchors.** Besides the static anchors (`app/learn.rs`, listed in `docs/design/lesson-anchors.md`), every
+  menu and every menu row is an anchor: `{ui:menu.File}` and `{ui:cmd.<command id>}`. When a row is folded
+  away (narrow window, More menu) the pointer falls back to the menu or button that holds it.
+  Write control names in step text with `{ui:...}`, not bold text: `app/learn_labels.rs` holds the label
+  table, and `docs/design/lesson-ui-names.md` is a ratchet of bold control names still written as free
+  text. The test fails when a lesson adds one; regenerate with `UPDATE_UI_NAMES=1 cargo test -p novo-app
+  lessons_name_no_new_control` only after converting, never to hide a new one.
 
 Authoring loop for a thread with no window: write `lesson.toml` and `project.json`, run
 `cargo test -p novo-learn -p novo-app learn`, read the report. For someone with the app:
