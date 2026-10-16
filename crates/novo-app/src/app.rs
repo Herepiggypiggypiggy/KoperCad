@@ -157,6 +157,7 @@ mod view3d_rail_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
+mod view3d_wires;
 mod whats_new;
 mod wheel;
 mod wire_panel;
@@ -1113,6 +1114,7 @@ impl NovoApp {
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
+                    || *id == "view.3d_wire_runs"
                     || *id == "view.3d_duplicate"
                     || (*id == "edit.duplicate" && in_3d)
                     || *id == "view.3d_position"
