@@ -124,6 +124,10 @@ pub(crate) struct Workbench {
     pub(super) inspector: super::inspector::InspectorState,
     /// Shift+P: false hides the marks on the drawing (counters stay).
     pub(super) marks: bool,
+    /// Shift+O: false hides the override diamonds (PE set by hand).
+    pub(super) override_marks: bool,
+    /// Copy, cut and paste.
+    pub(super) clip: super::clipboard::ClipState,
     /// Design-check results for one project revision.
     pub(super) problems: Option<(u64, Vec<Problem>)>,
     /// Where the issue pill was drawn, so its own click does not close
@@ -219,6 +223,8 @@ impl Default for Workbench {
             dock_size: egui::Vec2::ZERO,
             inspector: Default::default(),
             marks: true,
+            override_marks: true,
+            clip: Default::default(),
             problems: None,
             pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
@@ -266,6 +272,12 @@ const APP_COMMANDS: &[&str] = &[
     "edit.mirror",
     "edit.delete",
     "edit.duplicate",
+    "edit.copy",
+    "edit.cut",
+    "edit.paste",
+    "edit.paste_keep_tags",
+    "edit.paste_in_place",
+    "view.override_marks",
     "macro.save",
     "macro.place",
     "edit.rename",
@@ -429,7 +441,7 @@ impl NovoApp {
             has_device: devices == 1,
             can_undo: doc.is_some_and(Document::can_undo),
             can_redo: doc.is_some_and(Document::can_redo),
-            clipboard: false,
+            clipboard: true,
             can_go_back: self.wb.nav.history.can_go_back(),
             can_go_forward: self.wb.nav.history.can_go_forward(),
         }
@@ -644,6 +656,10 @@ impl NovoApp {
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
             "edit.duplicate" => self.duplicate_selection(),
+            "edit.copy" => self.copy_selection(ctx, false),
+            "edit.cut" => self.copy_selection(ctx, true),
+            "edit.paste" | "edit.paste_keep_tags" | "edit.paste_in_place" => self.paste_command(id),
+            "view.override_marks" => self.wb.override_marks ^= true,
             "macro.save" => self.open_macro_save(argument),
             "macro.place" => self.open_macro_place(argument),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
@@ -1063,7 +1079,9 @@ impl NovoApp {
         };
         let mut list = super::terminals::proposal_marks(&self.page_proposals(), self.wb.proposal);
         list.extend(self.problem_marks(page));
-        list.extend(self.pe_override_marks(page));
+        if self.wb.override_marks {
+            list.extend(self.pe_override_marks(page));
+        }
         list.extend(self.changes_marks(page));
         list.extend(self.commissioning_marks(page));
         let hidden = !self.wb.marks;

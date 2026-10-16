@@ -523,9 +523,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "edit.paste_keep_tags",
-        "Paste with the original tags",
+        "Paste with the original tags where free",
         "Edit",
         &[],
+        Needs::Clipboard,
+    ),
+    cmd(
+        "edit.paste_in_place",
+        "Paste in place",
+        "Edit",
+        &["same position"],
         Needs::Clipboard,
     ),
     cmd(
