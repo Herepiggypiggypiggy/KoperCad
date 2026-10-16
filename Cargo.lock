@@ -2232,20 +2232,24 @@ version = "0.1.0"
 dependencies = [
  "egui",
  "novo-app",
+ "novo-cables",
  "novo-canvas",
  "novo-checks",
  "novo-core",
  "novo-editor",
  "novo-parts",
  "novo-pdf",
+ "novo-plc",
  "novo-reports",
  "novo-storage",
  "novo-symbols",
  "novo-terminals",
  "novo-theme",
  "novo-workflow",
+ "novo-xref",
  "serde_json",
  "tempfile",
+ "toml",
 ]
 
 [[package]]
