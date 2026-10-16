@@ -76,9 +76,10 @@ fn line(a: Vec3, b: Vec3, role: Role, prefix: &str) -> Dimension {
 pub fn dimensions(scene: &Scene, selection: &BTreeSet<ItemId>) -> Vec<Dimension> {
     let mut out = Vec::new();
     let plate = bounds_of(scene, ItemKind::Plate);
-    let overall = bounds_of(scene, ItemKind::Enclosure).or(plate);
+    let shell = bounds_of(scene, ItemKind::Enclosure);
+    let overall = shell.or(plate);
     if let Some(b) = overall.filter(|b| !b.is_empty()) {
-        overall_lines(&b, &mut out);
+        overall_lines(&b, shell.is_some(), &mut out);
     }
     let mut chosen = selection.iter().filter_map(|id| scene.get(*id));
     if let (Some(item), None) = (chosen.next(), chosen.next())
@@ -102,8 +103,10 @@ fn bounds_of(scene: &Scene, kind: ItemKind) -> Option<Aabb> {
 }
 
 /// Width below the enclosure, height at its left, depth along its bottom
-/// left edge, each standing off so the line does not cover the box.
-fn overall_lines(b: &Aabb, out: &mut Vec<Dimension>) {
+/// left edge, each standing off so the line does not cover the box. Without
+/// a shell the box is only the plate, whose third side is its thickness, not
+/// a depth of the enclosure: then there is no depth line.
+fn overall_lines(b: &Aabb, has_shell: bool, out: &mut Vec<Dimension>) {
     let z = b.max.z;
     out.push(line(
         Vec3::new(b.min.x, b.min.y - STAND_OFF_MM, z),
@@ -117,7 +120,7 @@ fn overall_lines(b: &Aabb, out: &mut Vec<Dimension>) {
         Role::Overall,
         "H",
     ));
-    if b.max.z - b.min.z > 0.5 {
+    if has_shell && b.max.z - b.min.z > 0.5 {
         out.push(line(
             Vec3::new(b.min.x - STAND_OFF_MM, b.min.y - STAND_OFF_MM, b.min.z),
             Vec3::new(b.min.x - STAND_OFF_MM, b.min.y - STAND_OFF_MM, b.max.z),
@@ -262,13 +265,14 @@ mod tests {
     }
 
     #[test]
-    fn the_overall_size_of_the_plate_is_always_there() {
+    fn the_overall_size_of_the_plate_is_always_there_without_a_depth() {
         let s = scene();
         let d = dimensions(&s, &BTreeSet::new());
-        assert_eq!(d.len(), 3, "{d:?}");
+        assert_eq!(d.len(), 2, "{d:?}");
         assert!(find(&d, Role::Overall, "W 400 mm").is_some(), "{d:?}");
         assert!(find(&d, Role::Overall, "H 300 mm").is_some(), "{d:?}");
-        assert!(find(&d, Role::Overall, "D 3 mm").is_some(), "{d:?}");
+        // The plate's third side is its thickness (3 mm), not a depth.
+        assert!(d.iter().all(|d| !d.text.starts_with("D ")), "{d:?}");
     }
 
     #[test]
@@ -345,11 +349,11 @@ mod tests {
             ItemId::new(ItemKind::Device, 10),
             ItemId::new(ItemKind::Device, 11),
         ]);
-        assert_eq!(dimensions(&s, &two).len(), 3, "overall lines only");
+        assert_eq!(dimensions(&s, &two).len(), 2, "overall lines only");
         let plate = BTreeSet::from([ItemId::new(ItemKind::Plate, 1)]);
-        assert_eq!(dimensions(&s, &plate).len(), 3);
+        assert_eq!(dimensions(&s, &plate).len(), 2);
         let missing = BTreeSet::from([ItemId::new(ItemKind::Device, 99)]);
-        assert_eq!(dimensions(&s, &missing).len(), 3);
+        assert_eq!(dimensions(&s, &missing).len(), 2);
     }
 
     #[test]
