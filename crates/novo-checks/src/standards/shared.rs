@@ -249,7 +249,10 @@ pub(super) fn supply_disconnect(
                 format!("{tag} is reached through a circuit breaker only; state `isolating = true` on it if it is suitable for isolation"),
             );
         } else if open.any(&nets) {
-            s.pass(id);
+            s.pass_note(
+                id,
+                format!("{tag}: reached only through a disconnecting device"),
+            );
             for net in &nets {
                 for sym in e.nets.upstream(*net).poles.keys() {
                     if let Some(symbol) = project.symbol(*sym)
@@ -271,7 +274,7 @@ pub(super) fn supply_disconnect(
     for device in isolators {
         let tag = e.tag(device);
         match device_flag(e, device, "lockable") {
-            Some(true) => s.pass(lock_id),
+            Some(true) => s.pass_note(lock_id, format!("{tag}: lockable in OFF")),
             Some(false) => s.fail(
                 lock_id,
                 at_symbols(e, device),
@@ -707,7 +710,7 @@ pub(super) fn protection(
                 if class_of(sym) == Class::Motor
                     && nets.iter().any(|n| is_drive_pin_on(e, *n, sym.id))
                 {
-                    s.pass(short_id);
+                    s.pass_note(short_id, format!("{tag}: supplied through a drive"));
                 } else if blocked.any(&nets) {
                     s.fail(
                         short_id,
@@ -715,7 +718,7 @@ pub(super) fn protection(
                         format!("{tag} can be reached from the supply without passing a fuse or circuit breaker"),
                     );
                 } else if open.any(&nets) {
-                    s.pass(short_id);
+                    s.pass_note(short_id, format!("{tag}: behind a fuse or circuit breaker"));
                 } else if starts.is_empty() {
                     s.unknown(
                         short_id,
@@ -789,7 +792,10 @@ pub(super) fn protection(
     for (device, symbols) in &motors {
         let tag = e.tag(*device);
         if device_flag(e, *device, "thermal_protection") == Some(true) {
-            s.pass(overload_id);
+            s.pass_note(
+                overload_id,
+                format!("{tag}: thermal protection in the motor"),
+            );
             continue;
         }
         for sym in symbols {
@@ -821,7 +827,7 @@ pub(super) fn protection(
                 .iter()
                 .any(|(_, pnets)| pnets.iter().any(|n| region.contains(n)));
             if protected {
-                s.pass(overload_id);
+                s.pass_note(overload_id, format!("{tag}: overload protection upstream"));
             } else {
                 s.fail(
                     overload_id,
@@ -1175,7 +1181,9 @@ pub(super) fn ampacity_rule(e: &Env<'_>, s: &mut Sink, set: StandardSet, id: &'s
                 for w in project.wires_at(Endpoint::pin(sym.id, i)) {
                     match wire_section(e, w).and_then(|a| rate(a).map(|amps| (a, amps))) {
                         None => unknown_wires.push(AnyId::Wire(w)),
-                        Some((_, amps)) if amps + 1e-9 >= need => s.pass(id),
+                        Some((_, amps)) if amps + 1e-9 >= need => {
+                            s.pass_note(id, format!("{}: wire carries {} A, needs {} A", e.tag(device), number(amps), number(need)))
+                        }
                         Some((mm2, amps)) => s.fail(
                             id,
                             vec![AnyId::Wire(w), AnyId::Symbol(sym.id)],

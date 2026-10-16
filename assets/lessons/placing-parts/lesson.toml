@@ -58,7 +58,7 @@ demo = [
 ]
 point = { ui = "dock.place" }
 expect = { tool = "place" }
-solve = [ { command = "tool.place", arg = "mcb" } ]
+solve = [ { command = "tool.place", arg = "mcb" }, { key = "Enter" } ]
 
 [[step]]
 id = "drop-breaker"

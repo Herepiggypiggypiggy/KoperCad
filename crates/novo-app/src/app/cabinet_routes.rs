@@ -339,7 +339,7 @@ fn fits(area: egui::Rect, label: &str) -> bool {
 /// export buttons and every wire with its length. Returns what was clicked.
 pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Option<Ask> {
     let mut ask = None;
-    egui::Panel::right("cabinet_routes")
+    let panel = egui::Panel::right("cabinet_routes")
         .exact_size(340.0)
         .resizable(false)
         .show(ui, |ui| {
@@ -371,6 +371,13 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
                     .clicked()
                 {
                     ask = Some(Ask::ExportWireProduction);
+                }
+                if ui
+                    .button("Bench output")
+                    .on_hover_text("Bench cut list, ferrule table and label sheets to print")
+                    .clicked()
+                {
+                    ask = Some(Ask::OpenBench);
                 }
                 if ui
                     .button("DXF plan")
@@ -412,6 +419,13 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
                 },
             );
         });
+    super::cabinet_bar::note_rect(
+        ui.ctx(),
+        "cabinet.routes_panel",
+        "Routes",
+        panel.response.rect,
+        false,
+    );
     ask
 }
 
@@ -431,7 +445,7 @@ fn rules_section(ui: &mut egui::Ui, rules: &WireRules) -> Option<Ask> {
     } else {
         format!("Wire rules ({custom} changed)")
     };
-    egui::CollapsingHeader::new(title)
+    let section = egui::CollapsingHeader::new(title)
         .id_salt("cabinet_wire_rules")
         .default_open(false)
         .show(ui, |ui| {
@@ -486,6 +500,13 @@ fn rules_section(ui: &mut egui::Ui, rules: &WireRules) -> Option<Ask> {
                 );
             }
         });
+    let rect = section
+        .body_response
+        .as_ref()
+        .map_or(section.header_response.rect, |b| {
+            section.header_response.rect.union(b.rect)
+        });
+    super::cabinet_bar::note_rect(ui.ctx(), "cabinet.wire_rules", "Wire rules", rect, false);
     ask
 }
 

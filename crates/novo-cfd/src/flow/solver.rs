@@ -1,4 +1,5 @@
 use super::mesh::Mesh;
+use super::par::{for_planes, max_over_planes};
 use super::pressure::PressureSolver;
 use super::scheme::{Sample, Scheme, face_value};
 use crate::openings::{OpenPatch, OpenSet};
@@ -275,16 +276,19 @@ impl FlowSolver {
         let mut rate: f64 = 1e-12;
         for c in 0..3 {
             let d = m.dims(c);
-            for k in 0..d[2] {
+            let r = max_over_planes(d[2], m.len(c), |k| {
+                let mut r: f64 = 0.0;
                 for j in 0..d[1] {
                     for i in 0..d[0] {
                         let ix = [i, j, k];
                         let s = ix[c].min(m.n[c] - 1);
                         let h = m.dx[c][s];
-                        rate = rate.max(self.vel[c][m.idx(c, ix)].abs() / h);
+                        r = r.max(self.vel[c][m.idx(c, ix)].abs() / h);
                     }
                 }
-            }
+                r
+            });
+            rate = rate.max(r);
         }
         cfl / rate
     }
@@ -294,9 +298,8 @@ impl FlowSolver {
     /// largest face flux (0 = exactly divergence free).
     pub fn divergence_max(&self) -> f64 {
         let m = &self.mesh;
-        let mut worst: f64 = 0.0;
-        let mut scale: f64 = 1e-30;
-        for k in 0..m.n[2] {
+        let plane = |k: usize| -> (f64, f64) {
+            let (mut worst, mut scale): (f64, f64) = (0.0, 1e-30);
             for j in 0..m.n[1] {
                 for i in 0..m.n[0] {
                     let ix = [i, j, k];
@@ -318,7 +321,11 @@ impl FlowSolver {
                     worst = worst.max(net.abs());
                 }
             }
-        }
+            (worst, scale)
+        };
+        // Both are maxima, so the plane order does not matter.
+        let worst = max_over_planes(m.n[2], m.cells(), |k| plane(k).0).max(0.0);
+        let scale = max_over_planes(m.n[2], m.cells(), |k| plane(k).1).max(1e-30);
         worst / scale
     }
 
@@ -370,7 +377,7 @@ impl FlowSolver {
         let d = m.dims(c);
         let u = &self.vel;
         let sch = self.cfg.scheme;
-        for k in 0..d[2] {
+        for_planes(&mut out, d[0] * d[1], |k, plane| {
             for j in 0..d[1] {
                 for i in 0..d[0] {
                     let ix = [i, j, k];
@@ -455,10 +462,10 @@ impl FlowSolver {
                     let w_lo = m.dx[c][ix[c]] / (m.dx[c][ix[c] - 1] + m.dx[c][ix[c]]);
                     let tf = w_lo * self.t[m.cell(lo)] + (1.0 - w_lo) * self.t[m.cell(hi)];
                     let buoy = -self.cfg.gravity[c] * self.cfg.beta * (tf - self.t_buoyancy_ref);
-                    out[m.idx(c, ix)] = -conv + buoy;
+                    plane[j * d[0] + i] = -conv + buoy;
                 }
             }
-        }
+        });
         out
     }
 
@@ -577,24 +584,25 @@ impl FlowSolver {
         let m = &self.mesh;
         let af = &self.open.afrac;
         let mut b = vec![0.0; m.cells()];
-        for k in 0..m.n[2] {
+        let vel = &self.vel;
+        for_planes(&mut b, m.n[0] * m.n[1], |k, plane| {
             for j in 0..m.n[1] {
                 for i in 0..m.n[0] {
                     let ix = [i, j, k];
                     let mut net = 0.0;
                     for a in 0..3 {
                         let (hi, lo) = (m.idx(a, with(ix, a, ix[a] + 1)), m.idx(a, ix));
-                        net += (self.vel[a][hi] * af[a][hi] - self.vel[a][lo] * af[a][lo])
-                            * m.area(a, ix);
+                        net += (vel[a][hi] * af[a][hi] - vel[a][lo] * af[a][lo]) * m.area(a, ix);
                     }
-                    b[m.cell(ix)] = -net / dt;
+                    plane[j * m.n[0] + i] = -net / dt;
                 }
             }
-        }
+        });
         let iters = self.pressure.solve(&b, &mut self.p, 1e-9, 200);
+        let (p, drag) = (&self.p, &self.drag_rate);
         for a in 0..3 {
             let d = m.dims(a);
-            for k in 0..d[2] {
+            for_planes(&mut self.vel[a], d[0] * d[1], |k, plane| {
                 for j in 0..d[1] {
                     for i in 0..d[0] {
                         let ix = [i, j, k];
@@ -604,15 +612,14 @@ impl FlowSolver {
                         let lo = with(ix, a, ix[a] - 1);
                         let dist = m.centre[a][ix[a]] - m.centre[a][ix[a] - 1];
                         let g = if porous {
-                            1.0 / (1.0 + dt * self.drag_rate[a][m.idx(a, ix)])
+                            1.0 / (1.0 + dt * drag[a][m.idx(a, ix)])
                         } else {
                             1.0
                         };
-                        self.vel[a][m.idx(a, ix)] -=
-                            g * dt * (self.p[m.cell(ix)] - self.p[m.cell(lo)]) / dist;
+                        plane[j * d[0] + i] -= g * dt * (p[m.cell(ix)] - p[m.cell(lo)]) / dist;
                     }
                 }
-            }
+            });
         }
         self.finish_open_faces(dt);
         iters
