@@ -1,18 +1,19 @@
-# Cabinet track, lesson 9. Sample: the finished cabinet of rails-and-ducts. Part depths in the
-# sample: -F1 68, -K1 90, -F2 90, -F3 70, -X1 45, -T1 85, -S0 and -S1 50 mm.
+# Cabinet track, lesson 9. Sample: wire-routing/project.json. Part depths in the sample: -F1 68,
+# -K1 90, -F2 90, -F3 70, -X1 45, -T1 85, -S0 and -S1 50 mm.
 #
-# NOT ON MAIN yet (the whole lesson; keep status = "draft" until the 3D face has an entry):
-#   - the renderer and widget: #481; camera feel, view cube, labels: #457; scene builder: #391
-#   - the third face of the Cabinet canvas (Plate / Table / 3D) and the command cabinet.view3d,
-#     see docs/design/3d-view.md section 12. Steps follow the input table in section 6.
+# NOT VERIFIABLE ON MAIN (aa5977ab): the novo-view3d crate exists (scene builder, camera, renderer)
+# but the app does not use it yet: there is no 3D face next to Plate and Table, no command
+# cabinet.view3d and no view cube in the Cabinet. The steps follow the input table of
+# docs/design/3d-view.md section 6 and must be re-checked in the app when the 3D face lands.
+# Keep status = "draft" until then. Needs: the face switch and the anchors named below.
 format = 1
 id = "view-3d"
-version = 1
+version = 2
 status = "draft"
 title = "The cabinet in 3D"
 title_nl = "De kast in 3D"
-summary = "Orbit the finished cabinet, click a device to find it on the plate, and use the view cube."
-summary_nl = "Draai om de afgebouwde kast, klik een component om het op de plaat te vinden en gebruik de kijkkubus."
+summary = "Orbit the laid-out cabinet, click a device to find it on the plate, and use the view cube."
+summary_nl = "Draai om de ingedeelde kast, klik een component om het op de plaat te vinden en gebruik de kijkkubus."
 track = "cabinet"
 order = 90
 level = "beginner"
@@ -24,7 +25,15 @@ project = "../wire-routing/project.json"
 [[step]]
 id = "open-3d"
 title = "Switch to 3D"
-text = "Open the Cabinet with {key:view.cabinet}, then click **3D** in the face switch next to Plate and Table."
+title_nl = "Schakel naar 3D"
+text = """
+The plate drawing shows width and height only. Open the Cabinet with {key:view.cabinet}, then click **3D** in the face switch next to **Plate** and **Table**.
+The plate, the rails, the ducts and every device appear as solid boxes as deep as their parts.
+"""
+text_nl = """
+De plaattekening toont alleen breedte en hoogte. Open de kast met {key:view.cabinet} en klik dan op **3D** in de weergaveschakelaar naast **Plate** en **Table**.
+De plaat, de rails, de kanalen en elk component verschijnen als massieve blokken zo diep als hun artikelen.
+"""
 point = { ui = "cabinet.view3d" }
 expect = { command = "cabinet.view3d" }
 solve = [ { command = "view.cabinet" }, { command = "cabinet.view3d" } ]
@@ -32,23 +41,41 @@ solve = [ { command = "view.cabinet" }, { command = "cabinet.view3d" } ]
 [[step]]
 id = "orbit"
 title = "Look around"
+title_nl = "Kijk rond"
 text = """
-Drag with the **right** mouse button, or hold **Alt** and drag with the left. The cabinet turns around its middle and never rolls.
+Drag with the **right** mouse button, or hold **Alt** and drag with the left button. The cabinet turns around its middle and never rolls, so up stays up.
+A short right click still opens the context menu.
+"""
+text_nl = """
+Sleep met de **rechter** muisknop, of houd **Alt** ingedrukt en sleep met de linker. De kast draait om zijn midden en rolt nooit, dus boven blijft boven.
+Een korte klik met rechts opent nog steeds het contextmenu.
 """
 point = { ui = "cabinet.canvas" }
 
 [[step]]
 id = "zoom-pan"
 title = "Zoom and pan"
+title_nl = "Zoom en pan"
 text = """
-The wheel zooms towards the pointer. Hold **Space** and drag, or drag with the middle button, to pan.
+The wheel zooms towards the pointer. Hold **Space** and drag, or drag with the middle button, to pan the cabinet across the window.
+"""
+text_nl = """
+Het wiel zoomt naar de aanwijzer toe. Houd **Spatie** ingedrukt en sleep, of sleep met de middelste knop, om de kast door het venster te verschuiven.
 """
 point = { ui = "cabinet.canvas" }
 
 [[step]]
 id = "click-device"
 title = "Click a device"
-text = "Click the contactor. It is selected, and the inspector shows the same data as on the plate."
+title_nl = "Klik op een component"
+text = """
+Click the contactor **-K1**. It is selected, drawn lit, and the inspector shows the same data as on the plate: size, position and rail.
+Double-click it to fit the camera to it.
+"""
+text_nl = """
+Klik op de contactor **-K1**. Het wordt geselecteerd, lichter getekend, en de inspector toont dezelfde gegevens als op de plaat: maat, positie en rail.
+Dubbelklik erop om de camera erop te richten.
+"""
 point = { ui = "cabinet.canvas" }
 expect = { selected = "-K1" }
 solve = [ { select = "-K1" } ]
@@ -56,14 +83,28 @@ solve = [ { select = "-K1" } ]
 [[step]]
 id = "view-cube"
 title = "Use the view cube"
-text = "Click **Front** on the view cube. The camera eases to look straight at the plate, as the 2D plate shows it."
+title_nl = "Gebruik de kijkkubus"
+text = """
+Click **Front** on the view cube. The camera eases round to look straight at the plate, as the plate drawing shows it.
+**Back**, **Left**, **Right**, **Top** and **Bottom** do the same from the other sides.
+"""
+text_nl = """
+Klik op **Front** op de kijkkubus. De camera draait soepel om recht naar de plaat te kijken, zoals de plaattekening hem toont.
+**Back**, **Left**, **Right**, **Top** en **Bottom** doen hetzelfde van de andere kanten.
+"""
 point = { ui = "cabinet.view3d.cube" }
 expect = { clicked = "cabinet.view3d.cube" }
 
 [[step]]
 id = "iso"
 title = "Show it from a corner"
-text = "Click the corner of the cube for an isometric view. {key:view.fit} fits the whole panel again."
+title_nl = "Toon het vanuit een hoek"
+text = """
+Click the corner of the cube for an isometric view. Press {key:view.fit} to fit the whole cabinet in the window again.
+"""
+text_nl = """
+Klik op de hoek van de kubus voor een isometrisch beeld. Druk op {key:view.fit} om de hele kast weer in het venster te passen.
+"""
 point = { ui = "cabinet.view3d.cube" }
 expect = { command = "view.fit" }
 solve = [ { command = "view.fit" } ]
@@ -71,19 +112,37 @@ solve = [ { command = "view.fit" } ]
 [[step]]
 id = "depth"
 title = "Depth you could not see"
+title_nl = "Diepte die je niet kon zien"
 text = """
-The 2D plate shows only width and height. Here every device is as deep as its part, so you can see which ones stand out towards the door.
+From the side or the corner you can see which devices stand out furthest towards the door: **-K1** and **-F2** at 90 mm, then **-T1** at 85 mm.
+The plate drawing cannot show that, and it is exactly what the door check in the lesson "Will the door close?" measures.
+"""
+text_nl = """
+Van opzij of vanuit een hoek zie je welke componenten het verst naar de deur toe uitsteken: **-K1** en **-F2** met 90 mm, dan **-T1** met 85 mm.
+De plaattekening kan dat niet tonen en het is precies wat de deurcontrole uit de les "Sluit de deur nog?" meet.
 """
 point = { ui = "cabinet.canvas" }
 
 [[step]]
 id = "back"
 title = "Back to the plate"
-text = "Click **Plate** in the face switch. Selecting a device in 3D selected it on the plate too."
+title_nl = "Terug naar de plaat"
+text = """
+Click **Plate** in the face switch. **-K1**, which you selected in 3D, is selected on the plate too: both views share one selection.
+"""
+text_nl = """
+Klik op **Plate** in de weergaveschakelaar. **-K1**, dat je in 3D selecteerde, is ook op de plaat geselecteerd: beide weergaven delen één selectie.
+"""
 point = { ui = "cabinet.plate" }
 expect = { clicked = "cabinet.plate" }
 
 [[step]]
 id = "done"
 title = "That is the cabinet track"
-text = "From placing a first device to a labelled, drilled and viewable panel. Take the schematic track to design what goes in it."
+title_nl = "Dat was het kastenspoor"
+text = """
+From placing a first device to a laid-out, wired, drilled and labelled panel you can look at from every side. The schematic track shows how to design what goes in it.
+"""
+text_nl = """
+Van het plaatsen van een eerste component tot een ingedeelde, bedrade, geboorde en gelabelde kast die je van alle kanten kunt bekijken. Het schemaspoor laat zien hoe je ontwerpt wat erin komt.
+"""

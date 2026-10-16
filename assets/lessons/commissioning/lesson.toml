@@ -1,10 +1,15 @@
 format = 1
 id = "commissioning"
 version = 1
-# Draft until the Commissioning tab (PR #471) is on main.
+# The Commissioning tab is on main (verified against aa5977ab: outline tab Checks and Punch list,
+# buttons Next open, Pass, Fail, N/A, Reset, Pass all N open, Fixed, Verified, Reopen, Won't fix, report
+# PDF and CSV). Failing a check does NOT open a punch item by itself: items are added on the Punch
+# list tab. Stays a draft until the commissioning anchors and signals below are registered.
 status = "draft"
 title = "Commission a panel with a tick list"
-summary = "Walk the commissioning checks, pass and fail them and keep a punch list."
+title_nl = "Een kast in bedrijf stellen met een afvinklijst"
+summary = "Walk the commissioning checks, pass and fail them with a value, and keep a punch list until it is clear."
+summary_nl = "Loop de inbedrijfstellingscontroles af, keur ze goed of af met een waarde en houd een puntenlijst bij tot hij leeg is."
 # Listed under `cabinet` in design section 10; owned by the productivity thread.
 track = "cabinet"
 order = 60
@@ -19,50 +24,139 @@ page = "Main circuit"
 [[step]]
 id = "what"
 title = "What commissioning mode is"
-text = "At the panel you test what was drawn. This mode turns the drawing into a tick list, so the checks and their results live with the project."
+title_nl = "Wat de inbedrijfstelmodus is"
+text = """
+At the panel you test what was drawn: is every wire tight, every terminal marked, every device working?
+Commissioning mode turns the drawing into a tick list. The checks, their results and the open faults are saved in the project, so the next person sees what was done.
+"""
+text_nl = """
+Bij de kast test je wat getekend is: zit elke draad vast, is elke klem gemarkeerd, werkt elk component?
+De inbedrijfstelmodus maakt van de tekening een afvinklijst. De controles, hun resultaten en de openstaande fouten worden in het project bewaard, zodat de volgende zien wat gedaan is.
+"""
 
 [[step]]
 id = "open"
 title = "Open Commissioning"
-text = "Run **commissioning** from the command field, or pick the Commissioning tab."
+title_nl = "Open Inbedrijfstelling"
+text = """
+Press {key:view.commissioning}, or run **Commissioning** from the command field. The outline on the left becomes the commissioning tab with two sub-tabs, **Checks** and **Punch list**,
+two progress bars, **Project** and **This page**, and a list of the wires, terminals and devices on the page that have checks.
+"""
+text_nl = """
+Druk op {key:view.commissioning} of voer **Commissioning** uit in het opdrachtveld. Het overzicht links wordt het tabblad inbedrijfstelling met twee subtabbladen, **Checks** en **Punch list**,
+twee voortgangsbalken, **Project** en **This page**, en een lijst van de draden, klemmen en componenten op de pagina die controles hebben.
+"""
 point = { ui = "workspace.commissioning" }
 expect = { command = "view.commissioning" }
 solve = [ { command = "view.commissioning" } ]
 
 [[step]]
+id = "who"
+title = "Say who is testing"
+title_nl = "Zeg wie er test"
+text = """
+Type your name in the **By** field at the top. Every result you record carries your name and the time, which the commissioning report prints.
+Tick **Large buttons** when you work on a tablet or in gloves.
+"""
+text_nl = """
+Typ je naam in het veld **By** bovenaan. Elk resultaat dat je vastlegt draagt je naam en de tijd, die het inbedrijfstellingsrapport afdrukt.
+Vink **Large buttons** aan als je op een tablet of met handschoenen werkt.
+"""
+point = { ui = "commissioning.who" }
+
+[[step]]
 id = "next-open"
 title = "Go to the next open check"
-text = "Press **Next open**. It selects the first check nobody has done yet, and shows which device it belongs to."
+title_nl = "Ga naar de volgende open controle"
+text = """
+Press **Next open**. It selects the first wire, terminal or device that still has an undecided check, jumps to its page and shows it in the drawing.
+Under it the name of the item appears with a **Pass**, **Fail**, **N/A** line for each of its checks.
+"""
+text_nl = """
+Druk op **Next open**. Het selecteert de eerste draad, klem of component met een nog niet beoordeelde controle, springt naar de pagina en toont het in de tekening.
+Eronder verschijnt de naam van het item met voor elk van zijn controles een regel **Pass**, **Fail**, **N/A**.
+"""
 point = { ui = "commissioning.next_open" }
 expect = { clicked = "commissioning.next_open" }
 
 [[step]]
 id = "pass"
-title = "Pass one"
-text = "Press **Pass** when the check holds. The big buttons are made for a tablet or a gloved hand."
+title = "Pass one, with a value"
+title_nl = "Keur er een goed, met een waarde"
+text = """
+Type a measured value in the field "Value (2.5 Nm, 0.2 ohm)", for example **2.5 Nm**, and press **Pass** when the check holds.
+The line gets a tick, your name and the time, and the value is kept with it. **N/A** says the check does not apply here; **Reset** takes a decision back.
+"""
+text_nl = """
+Typ een gemeten waarde in het veld "Value (2.5 Nm, 0.2 ohm)", bijvoorbeeld **2.5 Nm**, en druk op **Pass** als de controle klopt.
+De regel krijgt een vinkje, je naam en de tijd en de waarde wordt erbij bewaard. **N/A** zegt dat de controle hier niet geldt; met **Reset** neem je een beslissing terug.
+"""
 point = { ui = "commissioning.pass" }
 expect = { clicked = "commissioning.pass" }
 
 [[step]]
 id = "fail"
 title = "Fail one"
-text = "Press **Fail** on the next check. A failed check offers to open a punch item with the device already filled in."
+title_nl = "Keur er een af"
+text = """
+Press **Next open** again, write what you saw in the **Note** field, for example "terminal loose", and press **Fail**.
+The check is marked failed with your note. It does not open a punch item by itself: you do that on the Punch list, in the next step.
+"""
+text_nl = """
+Druk nogmaals op **Next open**, schrijf in het veld **Note** wat je zag, bijvoorbeeld "klem los", en druk op **Fail**.
+De controle wordt afgekeurd met je notitie. Er wordt niet vanzelf een punt aangemaakt: dat doe je op de Punch list, in de volgende stap.
+"""
 point = { ui = "commissioning.fail" }
 expect = { clicked = "commissioning.fail" }
 
 [[step]]
 id = "punch"
-title = "Fill in the punch item"
-text = "Give it a severity and a short note. The punch list keeps everything that is not right yet."
+title = "Add a punch item"
+title_nl = "Voeg een punt toe"
+text = """
+Click **Punch list**. With the failed item still selected, type "Tighten terminal" in **New punch item**, choose a severity (**Minor**, **Major** or **Blocking**) and click **Add**.
+The item appears as "Major · Open · Tighten terminal · (the item)". The punch list keeps everything that is not right yet; click its row to jump to the item in the drawing.
+"""
+text_nl = """
+Klik op **Punch list**. Typ, terwijl het afgekeurde item nog geselecteerd is, "Klem vastdraaien" in **New punch item**, kies een ernst (**Minor**, **Major** of **Blocking**) en klik op **Add**.
+Het punt verschijnt als "Major · Open · Klem vastdraaien · (het item)". De puntenlijst bewaart alles wat nog niet goed is; klik op een rij om naar het item in de tekening te springen.
+"""
 point = { ui = "commissioning.punch" }
+expect = { signal = "punch_added" }
 
 [[step]]
 id = "resolve"
 title = "Close it out"
-text = "When the fault is fixed, resolve the item. **Won't fix** closes it with your reason on record."
+title_nl = "Sluit het af"
+text = """
+When the fault is fixed, click **Fixed** on the item. The person who checks it then clicks **Verified**, and the item is closed; **Reopen** puts it back to Open.
+If it will not be fixed, click **Won't fix**: the item is closed as not to be fixed and stays on record. Tick **Show closed** to see closed items too.
+"""
+text_nl = """
+Als de fout is hersteld, klik je op **Fixed** bij het punt. Wie het controleert klikt dan op **Verified** en het punt is gesloten; **Reopen** zet het terug op Open.
+Wordt het niet hersteld, klik dan op **Won't fix**: het punt wordt gesloten als niet te herstellen en blijft vastgelegd. Vink **Show closed** aan om ook gesloten punten te zien.
+"""
 point = { ui = "commissioning.resolve" }
+
+[[step]]
+id = "report"
+title = "Write the report"
+title_nl = "Schrijf het rapport"
+text = """
+Back on **Checks**, click **PDF** or **CSV** next to **Report**. The commissioning report is written next to the project file, with the results of the checks and the punch list.
+"""
+text_nl = """
+Klik terug op **Checks** op **PDF** of **CSV** naast **Report**. Het inbedrijfstellingsrapport wordt naast het projectbestand geschreven, met de resultaten van de controles en de puntenlijst.
+"""
+point = { ui = "commissioning.report" }
 
 [[step]]
 id = "done"
 title = "A tick list that goes with the project"
-text = "Progress is saved in the project, so the next person sees what was done and what is open."
+title_nl = "Een afvinklijst die bij het project hoort"
+text = """
+Progress is saved in the project, so the next person sees what was decided and what is still open, on the same bars you started with.
+"""
+text_nl = """
+De voortgang wordt in het project bewaard, dus de volgende ziet wat beslist is en wat nog openstaat, op dezelfde balken waarmee jij begon.
+"""

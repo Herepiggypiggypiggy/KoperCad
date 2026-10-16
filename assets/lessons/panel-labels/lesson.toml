@@ -1,18 +1,21 @@
-# Cabinet track, lesson 8. Sample: the finished cabinet of rails-and-ducts. The wires are
-# numbered 2, 3, 4, ... (gaps are the feed wires of the drawing), terminals -X1:1 to :PE exist,
-# the motor cable is -W1.
+# Cabinet track, lesson 8. Sample: wire-routing/project.json. The wires are numbered 2, 3, 4, ...
+# (gaps are the feed wires of the drawing), terminals -X1:1 to :PE exist, the motor cable is -W1.
 #
-# NOT ON MAIN yet (the whole lesson; keep status = "draft" until it is):
-#   - the Labels report with generic and Brother CSV layouts and `kopercad-cli export labels`: #482
-#   - the Reports hub (Ctrl+6): #452; PDF label sheets and an in-app preview are not planned yet
+# Verified on main (aa5977ab) with the Labels report on this sample: wires 38 labels (two per wire
+# list row), terminals 4, devices 9, cables 1. Labels exist in novo-reports and as
+# `kopercad-cli export labels <file.novo> [-k wires|terminals|devices|cables] [--layout generic|brother]
+# [-o file.csv]`; the CLI reads the saved .novo file, not the JSON of the sample. THE APP HAS NO
+# LABELS PAGE YET (the Reports workspace lists only the live reports, labels are exported on
+# demand), so this lesson works from the command line and stays a draft until Labels are in the
+# Reports workspace. Then the steps become clicks.
 format = 1
 id = "panel-labels"
-version = 1
+version = 2
 status = "draft"
 title = "Labels for wires, terminals and devices"
 title_nl = "Labels voor draden, klemmen en componenten"
-summary = "Export the four kinds of labels to a CSV for your label printer."
-summary_nl = "Exporteer de vier soorten labels naar een CSV voor je labelprinter."
+summary = "Export the four kinds of labels to a CSV for your label printer, with the command line tool."
+summary_nl = "Exporteer de vier soorten labels naar een CSV voor je labelprinter, met het opdrachtregelprogramma."
 track = "cabinet"
 order = 80
 level = "beginner"
@@ -23,52 +26,100 @@ next = ["view-3d"]
 project = "../wire-routing/project.json"
 
 [[step]]
-id = "open-reports"
-title = "Open the Reports hub"
-text = "Press {key:view.reports} to see every report KoperCAD can build from the project."
-point = { ui = "switcher.reports" }
-expect = { command = "view.reports" }
+id = "what-labels"
+title = "Four kinds of label"
+title_nl = "Vier soorten labels"
+text = """
+The workshop sticks a label on every wire end, every terminal, every device and every cable. KoperCAD makes the text from the project, so the label always says what the drawing says.
+**Wire** labels (a sleeve or flag) carry the wire number, where the other end goes and this end. **Terminal** labels carry the strip and the terminal name.
+**Device** labels carry the tag and the description. **Cable** labels carry the tag, the description and the number of cores. A label has three lines of text at most.
+"""
+text_nl = """
+De werkplaats plakt een label op elk draaduiteinde, elke klem, elk component en elke kabel. KoperCAD maakt de tekst uit het project, dus het label zegt altijd wat de tekening zegt.
+**Draad**labels (een hulsje of vlag) dragen het draadnummer, waar het andere einde heen gaat en dit einde. **Klem**labels dragen de strook en de klemnaam.
+**Component**labels dragen de tag en de omschrijving. **Kabel**labels dragen de tag, de omschrijving en het aantal aders. Een label heeft hooguit drie regels tekst.
+"""
 
 [[step]]
-id = "pick-labels"
-title = "Pick Labels"
-text = "Click **Labels**. It has four tables: wires, terminals, devices and cables."
-point = { ui = "reports.labels" }
-expect = { clicked = "reports.labels" }
+id = "save"
+title = "Save the project as a file"
+title_nl = "Bewaar het project als bestand"
+text = """
+The command line tool reads a saved project. Press {key:file.save_as}, name it **starter** and save it in a folder you can find, for example Documents.
+The file ends in **.novo**.
+"""
+text_nl = """
+Het opdrachtregelprogramma leest een bewaard project. Druk op {key:file.save_as}, noem het **starter** en bewaar het in een map die je terugvindt, bijvoorbeeld Documenten.
+Het bestand eindigt op **.novo**.
+"""
+expect = { command = "file.save_as" }
+solve = [ { command = "file.save_as" } ]
 
 [[step]]
 id = "wire-labels"
-title = "Wire labels"
+title = "Export the wire labels"
+title_nl = "Exporteer de draadlabels"
 text = """
-A wire gets one label per end for a sleeve or flag: its number, where the other end goes, and this end.
-Three lines at most.
+Open a terminal in that folder and run:
+
+`kopercad-cli export labels starter.novo --kind wires --output wire-labels.csv`
+
+The file has a header row "Line 1, Line 2, Line 3" and 38 rows: two labels for each of the 19 wires, one for each end. A row reads for example
+2 | =A1+CAB-K1:1 | =A1+CAB-F1:2, the number first, then where the other end goes, then this end.
 """
-point = { ui = "reports.table" }
+text_nl = """
+Open een terminal in die map en voer uit:
+
+`kopercad-cli export labels starter.novo --kind wires --output wire-labels.csv`
+
+Het bestand heeft een kopregel "Line 1, Line 2, Line 3" en 38 rijen: twee labels voor elk van de 19 draden, een voor elk uiteinde. Een rij luidt bijvoorbeeld
+2 | =A1+CAB-K1:1 | =A1+CAB-F1:2, eerst het nummer, dan waar het andere einde heen gaat en dan dit einde.
+"""
 
 [[step]]
 id = "pick-layout"
 title = "Choose a layout"
+title_nl = "Kies een indeling"
 text = """
-Pick **Generic CSV** or **Brother**. The columns and the delimiter match what that printer's software imports.
+The default layout, **generic**, is a CSV with a header and commas that any label software can import. For a Brother P-touch printer add `--layout brother`: no header row, tab separated, one label per row.
+In that layout use one kind per file, with `--kind`, because the rows of different kinds cannot be told apart.
 """
-point = { ui = "reports.layout" }
-expect = { clicked = "reports.layout" }
+text_nl = """
+De standaardindeling, **generic**, is een CSV met kopregel en komma's die elke labelsoftware kan importeren. Voor een Brother P-touch-printer voeg je `--layout brother` toe: geen kopregel, tabs als scheiding, één label per rij.
+Gebruik in die indeling één soort per bestand, met `--kind`, want de rijen van verschillende soorten zijn niet van elkaar te onderscheiden.
+"""
 
 [[step]]
-id = "export"
-title = "Export the CSV"
-text = "Click **Export** and save the file. Open it in the label software and map Line 1 to Line 3."
-point = { ui = "reports.export" }
-expect = { clicked = "reports.export" }
-
-[[step]]
-id = "cli"
-title = "The same from a script"
+id = "other-kinds"
+title = "Terminals, devices and cables"
+title_nl = "Klemmen, componenten en kabels"
 text = """
-`kopercad-cli export labels project.kopercad -o labels.csv` writes the same file, so the labels can be part of a release routine.
+Run it again with `--kind terminals`, `--kind devices` and `--kind cables`. The sample gives 4 terminal labels (-X1 terminals 1, 2, 3 and PE), 9 device labels such as "-F1 Main circuit fuses", and 1 cable label, "-W1 Motor cable 4G1.5, 4 cores".
+Leave `--kind` out to get all four kinds in one generic file, each under its own title.
+"""
+text_nl = """
+Voer het opnieuw uit met `--kind terminals`, `--kind devices` en `--kind cables`. Het voorbeeld geeft 4 klemlabels (-X1 klemmen 1, 2, 3 en PE), 9 componentlabels zoals "-F1 Main circuit fuses" en 1 kabellabel, "-W1 Motor cable 4G1.5, 4 cores".
+Laat `--kind` weg om alle vier de soorten in een generiek bestand te krijgen, elk onder een eigen titel.
+"""
+
+[[step]]
+id = "print"
+title = "Into the label printer"
+title_nl = "In de labelprinter"
+text = """
+Open the CSV in your label software and map Line 1, Line 2 and Line 3 to the three text lines of the label. Change a wire number in the project, export again, and the labels follow.
+"""
+text_nl = """
+Open de CSV in je labelsoftware en koppel Line 1, Line 2 en Line 3 aan de drie tekstregels van het label. Verander een draadnummer in het project, exporteer opnieuw en de labels volgen.
 """
 
 [[step]]
 id = "done"
-title = "Everything is labelled"
-text = "Labels come from the wire list, the strips and the cables, so they follow the drawing. Last: the cabinet in 3D."
+title = "Labels that match the drawing"
+title_nl = "Labels die bij de tekening passen"
+text = """
+Labels come from the same wire list, terminal list and device list as the drawing, so a sleeve cannot disagree with the schematic. Next: the cabinet in 3D.
+"""
+text_nl = """
+Labels komen uit dezelfde draadlijst, klemmenlijst en componentenlijst als de tekening, dus een hulsje kan het schema niet tegenspreken. Straks: de kast in 3D.
+"""
