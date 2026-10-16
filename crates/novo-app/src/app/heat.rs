@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Shape, Stroke, Vec2};
 use novo_canvas::Viewport;
-use novo_cfd::{CfdError, Fidelity};
+use novo_cfd::Fidelity;
 use novo_heatview::cfd::{self, Window};
 use novo_heatview::contour::{self, Contour};
 use novo_heatview::hotspot::{self, Peak};
@@ -28,7 +28,10 @@ use novo_theme::tokens as t;
 use novo_thermal::Status;
 
 use super::heat_compare::{self, Diff};
+use super::heat_progress;
 use super::heat_run::{self, Event, Runner, Solution};
+use novo_cfd::Progress;
+use novo_cfd::sched::Outcome;
 
 /// Opacity of the map over the drawing; the devices stay readable through it.
 const MAP_ALPHA: f32 = 0.62;
@@ -95,6 +98,10 @@ pub(super) struct HeatState {
     /// next frame, when it has the project.
     requested: bool,
     run: Option<Runner>,
+    /// Latest iteration report of the running level, with the residuals seen
+    /// so far in this level for the sparkline.
+    progress: Option<Progress>,
+    history: Vec<f64>,
     solution: Option<Arc<Solution>>,
     /// Result kept as A for comparison.
     kept: Option<Arc<Solution>>,
@@ -146,6 +153,8 @@ impl HeatState {
             cache: None,
             requested: false,
             run: None,
+            progress: None,
+            history: Vec::new(),
             solution: None,
             pending: None,
             runs: 0,
@@ -239,12 +248,7 @@ impl HeatState {
 
     /// Starts a run unless one is going. The model can change while it
     /// runs; the result is then marked out of date.
-    pub(super) fn start(
-        &mut self,
-        scenario: novo_thermal::Scenario,
-        meta: Meta,
-        wake: impl Fn() + Send + 'static,
-    ) {
+    pub(super) fn start(&mut self, scenario: novo_thermal::Scenario, meta: Meta) {
         if self.run.is_some() {
             return;
         }
@@ -254,9 +258,10 @@ impl HeatState {
         self.run = Some(Runner::start(
             heat_run::default_solver(),
             scenario,
-            Fidelity::Coarse,
-            wake,
+            Fidelity::Fine,
         ));
+        self.progress = None;
+        self.history.clear();
     }
 
     /// Why a run could not start, shown next to the Simulate button.
@@ -291,18 +296,29 @@ impl HeatState {
                         }));
                     }
                 }
+                Event::Progress(p) => {
+                    if self
+                        .progress
+                        .as_ref()
+                        .is_some_and(|q| q.fidelity != p.fidelity)
+                    {
+                        self.history.clear();
+                    }
+                    heat_progress::push(&mut self.history, &p);
+                    self.progress = Some(p);
+                }
                 Event::Lost => {
                     done = true;
                     self.notice = Some("The simulation stopped unexpectedly".into());
                 }
-                Event::Finished(result) => {
+                Event::Finished(outcome) => {
                     done = true;
-                    self.notice = match result {
-                        Ok(()) => None,
-                        Err(CfdError::Cancelled) => {
+                    self.notice = match outcome {
+                        Outcome::Completed => None,
+                        Outcome::Cancelled => {
                             Some("Stopped: the last result is not converged".into())
                         }
-                        Err(e) => Some(format!("The simulation failed: {e}")),
+                        Outcome::Failed(e) => Some(format!("The simulation failed: {e}")),
                     };
                 }
             }
@@ -310,6 +326,7 @@ impl HeatState {
         if done {
             self.run = None;
             self.pending = None;
+            self.progress = None;
         } else {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
@@ -642,18 +659,29 @@ fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
             state.cancel();
         }
         let secs = state.run.as_ref().map_or(0.0, Runner::elapsed_s);
-        ui.label(
-            egui::RichText::new(format!(
-                "{} · running {secs:.0} s",
-                state
-                    .run
-                    .as_ref()
-                    .map_or(Fidelity::Coarse, |r| r.fidelity)
-                    .label()
-            ))
-            .small()
-            .color(t::TEXT_MUTED),
-        );
+        let levels = state
+            .run
+            .as_ref()
+            .map(|r| r.levels.as_slice())
+            .unwrap_or(&[]);
+        match &state.progress {
+            Some(p) => {
+                let frac = heat_progress::fraction(levels, p);
+                ui.add(
+                    egui::ProgressBar::new(frac)
+                        .desired_width(150.0)
+                        .text(egui::RichText::new(heat_progress::label(p, secs)).small()),
+                );
+                heat_progress::sparkline(ui, &state.history);
+            }
+            None => {
+                ui.label(
+                    egui::RichText::new(format!("starting · {secs:.0} s"))
+                        .small()
+                        .color(t::TEXT_MUTED),
+                );
+            }
+        }
     } else {
         if ui
             .button("Simulate")
@@ -685,7 +713,6 @@ pub(super) fn start_run(
     project: &novo_core::Project,
     enclosure: novo_core::StructureId,
     input: &Input,
-    ctx: &egui::Context,
 ) {
     let options = novo_thermal::bridge::BridgeOptions {
         ambient_c: input.ambient,
@@ -700,8 +727,7 @@ pub(super) fn start_run(
                 plate: [plate.x, plate.y, plate.w, plate.h],
                 messages: bridge.report.messages(),
             };
-            let ctx = ctx.clone();
-            state.start(bridge.scenario, meta, move || ctx.request_repaint());
+            state.start(bridge.scenario, meta);
         }
         Err(e) => state.fail(format!("Cannot simulate: {e}")),
     }
@@ -1545,7 +1571,7 @@ mod tests {
     fn a_run_replaces_the_synthetic_field_with_the_result() {
         let mut state = HeatState::new();
         let mut i = input();
-        state.start(scenario(), meta(&i), || {});
+        state.start(scenario(), meta(&i));
         assert!(state.running());
         run_to_end(&mut state);
         assert!(state.notice.is_none(), "{:?}", state.notice);
@@ -1585,9 +1611,9 @@ mod tests {
     fn a_second_start_is_ignored_while_running() {
         let mut state = HeatState::new();
         let i = input();
-        state.start(scenario(), meta(&i), || {});
+        state.start(scenario(), meta(&i));
         let runs = state.runs;
-        state.start(scenario(), meta(&i), || {});
+        state.start(scenario(), meta(&i));
         assert_eq!(state.runs, runs);
         run_to_end(&mut state);
     }
@@ -1607,7 +1633,7 @@ mod tests {
     fn a_result_nobody_validated_is_never_just_converged() {
         let mut state = HeatState::new();
         let i = input();
-        state.start(scenario(), meta(&i), || {});
+        state.start(scenario(), meta(&i));
         run_to_end(&mut state);
         let sol = state.solution().unwrap();
         let p = &sol.snapshot.progress;
@@ -1619,13 +1645,13 @@ mod tests {
     fn a_cooler_second_run_shows_as_a_negative_difference() {
         let mut state = HeatState::new();
         let mut i = input();
-        state.start(scenario(), meta(&i), || {});
+        state.start(scenario(), meta(&i));
         run_to_end(&mut state);
         state.keep();
         assert!(state.kept().is_some());
         let mut cooler = scenario();
         cooler.devices[0].loss_w = 10.0;
-        state.start(cooler, meta(&i), || {});
+        state.start(cooler, meta(&i));
         run_to_end(&mut state);
         i.solution = state.solution();
         i.kept = state.kept();
@@ -1646,7 +1672,7 @@ mod tests {
     fn comparing_a_result_with_itself_has_no_difference() {
         let mut state = HeatState::new();
         let mut i = input();
-        state.start(scenario(), meta(&i), || {});
+        state.start(scenario(), meta(&i));
         run_to_end(&mut state);
         state.keep();
         i.solution = state.solution();
@@ -1672,12 +1698,12 @@ mod tests {
     fn wipe_and_delta_exclude_each_other() {
         let mut state = HeatState::new();
         let mut i = input();
-        state.start(scenario(), meta(&i), || {});
+        state.start(scenario(), meta(&i));
         run_to_end(&mut state);
         state.keep();
         let mut cooler = scenario();
         cooler.devices[0].loss_w = 10.0;
-        state.start(cooler, meta(&i), || {});
+        state.start(cooler, meta(&i));
         run_to_end(&mut state);
         i.solution = state.solution();
         i.kept = state.kept();
