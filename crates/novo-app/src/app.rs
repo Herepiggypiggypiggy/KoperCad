@@ -42,6 +42,7 @@ mod heat_progress_tests;
 mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
+mod heat_settings;
 mod inspector;
 mod interop;
 mod learn;
@@ -100,6 +101,7 @@ mod userkeymap;
 mod variants;
 mod view3d;
 mod view3d_controls;
+mod view3d_heat;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
