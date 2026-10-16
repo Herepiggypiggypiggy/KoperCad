@@ -30,7 +30,8 @@ pub struct DemoOptions {
     /// Add a translucent door on a hinge at the left edge.
     pub door: bool,
     /// Up to this many wires: each runs from one device up into the duct of its
-    /// row, along it and down to another device, in one of six colours.
+    /// row, along it and down to another device, in one of six colours; one in
+    /// six is the green-yellow protective wire with its stripe.
     pub wires: usize,
 }
 
@@ -152,13 +153,13 @@ pub fn cabinet(opts: &DemoOptions) -> (Scene, Arc<MeshLibrary>) {
     }
 
     // Wires: from a device up to the duct of its row, along it, down again.
-    let palette: [[u8; 3]; 6] = [
-        [0x1B, 0x1B, 0x1E],
-        [0x2F, 0x6F, 0xD0],
-        [0xB3, 0x3A, 0x3A],
-        [0x6B, 0x42, 0x26],
-        [0x8C, 0x8F, 0x94],
-        [0x7F, 0xB0, 0x20],
+    let palette: [([u8; 3], Option<[u8; 3]>); 6] = [
+        ([0x1B, 0x1B, 0x1E], None),
+        ([0x2F, 0x6F, 0xD0], None),
+        ([0xB3, 0x3A, 0x3A], None),
+        ([0x6B, 0x42, 0x26], None),
+        ([0x8C, 0x8F, 0x94], None),
+        ([0x7F, 0xB0, 0x20], Some([0xE3, 0xD3, 0x4A])),
     ];
     for k in 0..opts.wires.min(slots.len().saturating_sub(1)) {
         let (row, x0, duct_y) = slots[k];
@@ -167,7 +168,7 @@ pub fn cabinet(opts: &DemoOptions) -> (Scene, Arc<MeshLibrary>) {
             continue;
         };
         let lane = duct_y - 4.0 + (k % 5) as f32 * 2.0;
-        let body = palette[k % palette.len()];
+        let (body, stripe) = palette[k % palette.len()];
         let z = 20.0;
         let at = |x: f32, y: f32| frame.world(x as f64, y as f64, z);
         scene.wires.push(Wire {
@@ -180,6 +181,7 @@ pub fn cabinet(opts: &DemoOptions) -> (Scene, Arc<MeshLibrary>) {
             ],
             radius: 1.5,
             tint: Some(body),
+            stripe,
             mark: Mark::None,
             label: None,
         });

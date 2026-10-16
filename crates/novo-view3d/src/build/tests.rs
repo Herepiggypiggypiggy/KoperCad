@@ -198,6 +198,7 @@ fn wires_are_runs_mid_duct_or_in_free_air() {
                 points: vec![(20.0, 250.0), (120.0, 250.0), (120.0, 200.0)],
                 ducts: vec![9],
                 diameter_mm: Some(4.0),
+                colour: None,
             },
             WireInput {
                 id: 2,
@@ -205,6 +206,7 @@ fn wires_are_runs_mid_duct_or_in_free_air() {
                 points: vec![(0.0, 0.0), (0.0, 10.0)],
                 ducts: vec![],
                 diameter_mm: None,
+                colour: None,
             },
         ],
         ..Options::default()
