@@ -62,9 +62,15 @@ impl Tuning {
     }
 }
 
-fn level(steady_tol: f64, max_time_s: f64, max_steps: usize) -> LevelTuning {
+fn level(
+    steady_tol: f64,
+    max_time_s: f64,
+    max_steps: usize,
+    cells: usize,
+    wall_s: u64,
+) -> LevelTuning {
     LevelTuning {
-        target_cells: None,
+        target_cells: Some(cells),
         steady_tol,
         max_time_s,
         max_steps,
@@ -74,16 +80,21 @@ fn level(steady_tol: f64, max_time_s: f64, max_steps: usize) -> LevelTuning {
         full_snapshot_every: Duration::from_millis(1500),
         pressure_tol: 1e-5,
         warm_start: true,
-        max_wall: None,
+        max_wall: Some(Duration::from_secs(wall_s)),
     }
 }
 
+/// Defaults: the cell counts are what this build marches to a steady state
+/// in the time budget (about 6k, 20k and 50k cells), well below the
+/// `Fidelity::target_cells` of the design (50k, 500k, 2M); they rise as the
+/// kernels get faster. A level that is not steady at its budget ends
+/// "not converged" and says so.
 impl Default for Tuning {
     fn default() -> Tuning {
         Tuning {
-            coarse: level(2.0e-3, 4000.0, 40_000),
-            medium: level(1.0e-3, 4000.0, 60_000),
-            fine: level(5.0e-4, 4000.0, 80_000),
+            coarse: level(3.0e-3, 4000.0, 40_000, 6_000, 180),
+            medium: level(2.0e-3, 4000.0, 60_000, 20_000, 420),
+            fine: level(1.0e-3, 4000.0, 80_000, 50_000, 900),
         }
     }
 }

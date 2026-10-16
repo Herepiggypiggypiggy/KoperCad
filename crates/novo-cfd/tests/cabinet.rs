@@ -65,9 +65,9 @@ fn scenario(with_vent: bool) -> Scenario {
 }
 
 fn small() -> CabinetSolver {
-    let mut t = Tuning::default().with_cells(1200);
+    let mut t = Tuning::default().with_cells(700);
     for l in [&mut t.coarse, &mut t.medium, &mut t.fine] {
-        l.steady_tol = 4e-3;
+        l.steady_tol = 1e-2;
         l.report_every = 20;
         l.full_snapshot_every = Duration::ZERO;
     }

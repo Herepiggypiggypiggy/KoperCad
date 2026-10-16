@@ -147,7 +147,7 @@ impl MarchState {
             let info = flow.step(dt);
             self.last_info = (info.max_accel, info.max_dtdt);
             self.steps += 1;
-            if self.steps % SAMPLE_EVERY == 0 {
+            if self.steps.is_multiple_of(SAMPLE_EVERY) {
                 self.sample(flow);
                 if let Some((a, b)) = self.window() {
                     self.storage_rate = if self.heat_w > 0.0 {
