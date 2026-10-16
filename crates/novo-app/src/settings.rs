@@ -40,6 +40,10 @@ pub struct Settings {
     /// How tightly the contact table under a coil is drawn, `"full"` or
     /// `"compact"` (empty: full): a per-user preference.
     pub xref_density: String,
+    /// The colour theme, `"dark"` (empty), `"light"` or `"system"`.
+    pub appearance_theme: String,
+    /// The interface density, `"standard"` (empty), `"compact"` or `"touch"`.
+    pub appearance_density: String,
     /// Whether the status bar is switched off (docs/design/workspaces.md §7).
     pub hide_status_bar: bool,
     /// Commissioning's large touch buttons: a tablet user sets it once.
@@ -76,6 +80,9 @@ pub struct Settings {
     /// stops showing once followed [`HINT_LIMIT`] times; Help > Show hints
     /// again clears the counters.
     pub hints_seen: BTreeMap<String, u32>,
+    /// The id of the newest What's new entry the person has opened the
+    /// list over (`assets/whats-new.md`); empty on a first run.
+    pub whats_new_seen: String,
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way
@@ -135,6 +142,16 @@ pub struct WorkspaceLayout {
 }
 
 impl Settings {
+    /// The theme the person chose; dark by default.
+    pub fn theme_choice(&self) -> novo_theme::ThemeChoice {
+        novo_theme::ThemeChoice::from_id(&self.appearance_theme)
+    }
+
+    /// The density the person chose; standard by default.
+    pub fn density_choice(&self) -> novo_theme::Density {
+        novo_theme::Density::from_id(&self.appearance_density)
+    }
+
     /// The density of the coil contact table.
     pub fn xref_density(&self) -> novo_canvas::model::NoteDensity {
         novo_canvas::model::NoteDensity::from_id(&self.xref_density)
