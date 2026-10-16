@@ -123,25 +123,36 @@ impl NovoApp {
         }
         let mut open = true;
         let mut apply = false;
-        egui::Window::new("Renumber devices")
+        super::panel::dialog(ctx, "Renumber devices", [420.0, 0.0])
             .open(&mut open)
-            .default_size([420.0, 420.0])
             .show(ctx, |ui| {
                 ui.weak(
                     "Numbers each letter code from 1 in reading order: page, column, top to \
 bottom. Numbers used outside the scope are skipped. Terminal strips keep their tags.",
                 );
-                ui.horizontal(|ui| {
-                    ui.label("Devices");
-                    ui.selectable_value(&mut win.scope, DeviceScope::Project, "Project");
-                    ui.add_enabled_ui(win.page.is_some(), |ui| {
-                        ui.selectable_value(&mut win.scope, DeviceScope::ThisPage, "This page")
-                    });
-                    ui.add_enabled_ui(!win.selected.is_empty(), |ui| {
-                        ui.selectable_value(&mut win.scope, DeviceScope::Selection, "Selection")
-                    });
-                });
-                ui.separator();
+                ui.add_space(6.0);
+                novo_theme::widgets::section_label(ui, "Devices");
+                let scopes = [
+                    DeviceScope::Project,
+                    DeviceScope::ThisPage,
+                    DeviceScope::Selection,
+                ];
+                let mut scope = scopes.iter().position(|s| *s == win.scope).unwrap_or(0);
+                if novo_theme::widgets::segmented(
+                    ui,
+                    &mut scope,
+                    &["Project", "This page", "Selection"],
+                ) {
+                    let allowed = match scopes[scope] {
+                        DeviceScope::Project => true,
+                        DeviceScope::ThisPage => win.page.is_some(),
+                        DeviceScope::Selection => !win.selected.is_empty(),
+                    };
+                    if allowed {
+                        win.scope = scopes[scope];
+                    }
+                }
+                ui.add_space(8.0);
                 let plan: &[Renaming] = win.shown.as_ref().map_or(&[], |(_, _, p)| p);
                 if plan.is_empty() {
                     ui.weak("Nothing to change: the numbers already run in reading order");
@@ -163,9 +174,12 @@ bottom. Numbers used outside the scope are skipped. Terminal strips keep their t
                                 });
                         });
                 }
-                ui.separator();
+                ui.add_space(6.0);
                 if ui
-                    .add_enabled(!plan.is_empty(), egui::Button::new("Renumber"))
+                    .add_enabled_ui(!plan.is_empty(), |ui| {
+                        novo_theme::widgets::primary_button(ui, "Renumber")
+                    })
+                    .inner
                     .on_hover_text("One undo step")
                     .clicked()
                 {
