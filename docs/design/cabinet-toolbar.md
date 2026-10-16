@@ -16,7 +16,7 @@ ducts button (#612) would add another. It does not scale.
 
 One bar, 56 px high, controls 28 px, text 14 px, icons 16 px (`icon_size::BUTTON`),
 every button icon plus label. Buttons sit in named groups in workflow order,
-each group with a small-caps caption above it (`text_tertiary`):
+each group with a small-caps caption above it (`text_tertiary`, which the Palette guarantees 4.5:1; captions are 12 px at minimum, the mock draws them at 12 px):
 
 | Group | Contents | Notes |
 | --- | --- | --- |
@@ -40,9 +40,9 @@ the toolbar, so the bar holds only things you press.
 - Label says what it does when it is cheap to know: "Place all" stays the
   name (the lessons and the command use it); the tooltip says "Place the 5
   unplaced devices on the DIN rail, you review before it is stored".
-- When everything is placed it is greyed with the reason in the tooltip
-  ("Every device of this panel is placed"), and it keeps its position so the
-  bar does not jump.
+- When everything is placed it is greyed, and it keeps its position so the
+  bar does not jump. The reason is written in the status strip ("Every device
+  of this panel is placed"), not only in the tooltip, so keyboard users see it.
 - While a preview is shown, the Place group becomes **Accept (Enter)**
   (primary) and **Cancel (Esc)**, plus **Why here?** (opens the rule
   explanation that exists today). Place all steps aside; nothing else changes
@@ -71,11 +71,11 @@ they move unchanged.
 
 ### Key and focus rule
 
-The bar never takes keyboard focus away from the plate: clicking a bar button
-returns focus to the canvas, so R, Delete and moving a device keep working
+The bar never takes keyboard focus away from the plate: a pointer click on a bar
+button returns focus to the canvas, so R, Delete and moving a device keep working
 straight after Place all and Accept. (The bug that F1 cannot be clicked and
 moved after Place all is owned by the Cabinet key-bugs thread; this design
-only promises the bar is not the cause.)
+only promises the bar is not the cause.) The rule is for pointer clicks only: Tab and Enter on a button, and opening a menu or the panel picker, keep focus where it is.
 
 ## Where the user finds it
 
@@ -96,4 +96,4 @@ copper button on the left of the bar, or Ctrl+Shift+P, or the command field.
 ## Open questions for the reviewers
 
 - Ctrl+Shift+P as the key for Place all: any conflict in the keymap?
-- Group captions: keep always, or only above 1400 px?
+- Group captions: kept always while they fit; they drop below 1100 px (answered by the design reviewer).
