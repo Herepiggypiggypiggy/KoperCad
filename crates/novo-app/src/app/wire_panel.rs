@@ -5,6 +5,7 @@
 //! to every selected wire and is one undo step.
 
 use eframe::egui;
+use novo_checks::calc_view::inputs as calc;
 use novo_checks::standards::keys;
 use novo_core::{Project, Tx, Value, Wire, WireId};
 use novo_theme::widgets;
@@ -23,6 +24,10 @@ pub(super) struct WireFacts {
     /// `PVC`, `XLPE`, or empty for the default.
     pub insulation: String,
     pub grouped: String,
+    /// Run length in metres, empty when none stated.
+    pub length: String,
+    /// Design current in amperes, empty when none stated.
+    pub load: String,
 }
 
 fn text_of(value: Option<&Value>) -> String {
@@ -48,6 +53,8 @@ pub(super) fn facts(project: &Project, wire: WireId) -> Option<WireFacts> {
         method: text_of(w.properties.get(keys::INSTALLATION_METHOD)),
         insulation: text_of(w.properties.get(keys::INSULATION)),
         grouped: text_of(w.properties.get(keys::GROUPED_CIRCUITS)),
+        length: text_of(w.properties.get(calc::LENGTH_M)),
+        load: text_of(w.properties.get(calc::LOAD_CURRENT_A)),
     })
 }
 
@@ -60,6 +67,22 @@ pub(super) enum WireEdit {
     Method(String),
     Insulation(String),
     Grouped(String),
+    /// Run length in metres; empty clears it.
+    Length(String),
+    /// Design (load) current in amperes; empty clears it.
+    Load(String),
+}
+
+/// A positive number as a property value; empty clears it.
+fn positive(text: &str, what: &str) -> Result<Option<Value>, String> {
+    let text = text.trim().replace(',', ".");
+    if text.is_empty() {
+        return Ok(None);
+    }
+    match text.parse::<f64>() {
+        Ok(v) if v > 0.0 && v.is_finite() => Ok(Some(Value::Float(v))),
+        _ => Err(format!("\"{text}\" is not {what}")),
+    }
 }
 
 /// Applies an edit to wires. Errors name what could not be read.
@@ -86,6 +109,16 @@ pub(super) fn apply(tx: &mut Tx<'_>, wires: &[WireId], edit: &WireEdit) -> Resul
             }
             WireEdit::Method(text) => set_text(tx, wire, keys::INSTALLATION_METHOD, text)?,
             WireEdit::Insulation(text) => set_text(tx, wire, keys::INSULATION, text)?,
+            WireEdit::Length(text) => {
+                let value = positive(text, "a length in metres")?;
+                tx.set_property(wire, calc::LENGTH_M, value)
+                    .map_err(|e| e.to_string())?;
+            }
+            WireEdit::Load(text) => {
+                let value = positive(text, "a current in amperes")?;
+                tx.set_property(wire, calc::LOAD_CURRENT_A, value)
+                    .map_err(|e| e.to_string())?;
+            }
             WireEdit::Grouped(text) => {
                 let text = text.trim();
                 let value = if text.is_empty() {
@@ -122,6 +155,8 @@ pub(super) struct WirePanel {
     colour: String,
     section: String,
     grouped: String,
+    length: String,
+    load: String,
 }
 
 const METHODS: [(&str, &str); 4] = [
@@ -197,6 +232,8 @@ impl NovoApp {
             ("wire_colour", &mut panel.colour, &shown.colour),
             ("wire_section", &mut panel.section, &shown.section),
             ("wire_grouped", &mut panel.grouped, &shown.grouped),
+            ("wire_length", &mut panel.length, &shown.length),
+            ("wire_load", &mut panel.load, &shown.load),
         ] {
             if focused != Some(egui::Id::new(id)) {
                 field.clone_from(value);
@@ -205,10 +242,12 @@ impl NovoApp {
         let mut edits: Vec<WireEdit> = Vec::new();
         let mut number = panel.number.clone();
         let mut number_edit: Option<Option<String>> = None;
-        let (mut colour, mut section, mut grouped) = (
+        let (mut colour, mut section, mut grouped, mut length, mut load) = (
             panel.colour.clone(),
             panel.section.clone(),
             panel.grouped.clone(),
+            panel.length.clone(),
+            panel.load.clone(),
         );
         let mut method = shown.method.clone();
         let mut insulation = shown.insulation.clone();
@@ -292,6 +331,10 @@ impl NovoApp {
                             });
                     });
                     text_row(ui, &mut edits, "Grouped circuits", "wire_grouped", &mut grouped, &shown.grouped, "1", WireEdit::Grouped);
+                    widgets::section_label(ui, "Calculation inputs");
+                    text_row(ui, &mut edits, "Length m", "wire_length", &mut length, &shown.length, "20", WireEdit::Length);
+                    text_row(ui, &mut edits, "Load current A", "wire_load", &mut load, &shown.load, "14", WireEdit::Load);
+                    ui.weak("Voltage drop, cable rating and disconnection time are calculated from these (Check > Calculations). Blank means unknown, never guessed.");
                     ui.weak("The standards check reads these. A wire with no installation method is not rated, never guessed; set a default for the project in Standards check.");
 
 
@@ -299,6 +342,7 @@ impl NovoApp {
         let panel = &mut self.wb.wire_panel;
         (panel.number, panel.colour, panel.section, panel.grouped) =
             (number, colour, section, grouped);
+        (panel.length, panel.load) = (length, load);
         match number_edit {
             Some(Some(text)) => self.set_wire_number(Some(&text)),
             Some(None) => self.unlock_wire_number(),

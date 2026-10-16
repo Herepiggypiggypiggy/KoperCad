@@ -38,6 +38,7 @@ novo-terminals.workspace = true
 novo-plc.workspace = true
 novo-revisions.workspace = true
 novo-sim.workspace = true
+novo-safety.workspace = true
 novo-view3d.workspace = true
 glam.workspace = true
 novo-tests.workspace = true
