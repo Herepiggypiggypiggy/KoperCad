@@ -5,3 +5,4 @@
 # projects, lesson text, the anchors doc) stay LF in a Windows checkout.
 assets/lessons/** text eol=lf
 docs/design/*.md text eol=lf
+crates/novo-storage/tests/fixtures/*.json text eol=lf

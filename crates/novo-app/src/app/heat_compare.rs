@@ -18,6 +18,8 @@ pub(super) struct Diff {
     pub field: Scalar,
     /// A's temperature on the plate, for the wipe.
     pub a_plate: Scalar,
+    /// A's housing surface temperature per device, degrees C.
+    pub a_surface: Vec<(u64, f64)>,
     /// Symmetric range of the map, K.
     pub extent: f32,
     /// Devices in both results, biggest change first.
@@ -66,9 +68,16 @@ pub(super) fn diff(a: &Solution, b: &Solution, b_plate: &Scalar, cell_mm: f64) -
     } else {
         compare::verdict_line(peak(a), peak(b), over(a), over(b))
     };
+    let a_surface = a
+        .snapshot
+        .devices
+        .iter()
+        .map(|d| (d.id, d.surface_c))
+        .collect();
     Some(Diff {
         field,
         a_plate,
+        a_surface,
         extent,
         rows,
         verdict,

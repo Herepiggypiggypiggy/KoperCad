@@ -27,3 +27,10 @@ Coordinator: session_01PgJyn3Yh6bBF3XNhYuLmpc.
 - `commissioning` sits in track `cabinet` (design section 10), written here at the coordinator's request.
 - Ids of commands, anchors and problems are guesses for the unmerged parts; grep for them when the PRs land.
 - Reading steps carry no `pause` (the engine warns that it does nothing).
+
+## Phase 2 state (2026-10-16)
+
+All eight lessons now have how/how_nl, Dutch text and the audit fixes (PRs #628, #634, #635). Known gaps:
+- No part-assign UI on main: parts-library and design-checks have an honest "not yet" reading step. Add `assign_part` solve and a check when the picker exists.
+- No solve (unverified, cannot reach `ready`): spreadsheet apply, DXF import/remove, parts import, macro place/export/import, commissioning steps after "open". Needs anchors or a file-dialog-free path.
+- revisions-and-compare issues revision A itself because lesson projects carry no kept snapshot (app bug, audit item 3). If the app is fixed, the start project can carry A again (generator `revisions_start`).

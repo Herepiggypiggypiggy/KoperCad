@@ -750,6 +750,41 @@ fn place_all_names_a_device_no_cabinet_takes() {
     );
 }
 
+#[test]
+fn place_all_command_shows_the_preview_from_any_workspace() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    d.app.run(&ctx, Action::ShowSchematic);
+    d.frame();
+    assert!(d.app.cabinet.preview.is_none());
+
+    // The command (Ctrl+Shift+P) opens the Cabinet and makes the preview on
+    // the next frame; nothing is stored until Enter.
+    d.app.run_command(&ctx, "cabinet.place-all", None);
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
+    d.frame();
+    d.frame();
+    assert!(d.app.cabinet.preview.is_some());
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
+    assert_eq!(
+        d.app
+            .wb
+            .keymap
+            .shortcut_text("cabinet.place-all")
+            .as_deref(),
+        Some("Ctrl+Shift+P")
+    );
+}
+
 /// Cabinet with one placed, selected device and the plate on screen.
 fn selected_on_plate(d: &mut Drive) -> (novo_core::StructureId, u64) {
     let ctx = d.ctx.clone();
