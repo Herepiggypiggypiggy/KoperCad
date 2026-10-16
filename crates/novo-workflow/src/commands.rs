@@ -869,6 +869,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_shadows",
+        "Show or hide shadows in 3D",
+        "View",
+        &["shadows", "light", "soft shadows"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_stats",
         "Show or hide the 3D frame statistics",
         "View",

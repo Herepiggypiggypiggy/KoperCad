@@ -18,6 +18,8 @@ pub(crate) struct Controls {
     pub(super) door_deg: f64,
     /// The Move tool: a drag on a device, rail or duct moves it.
     pub(super) move_items: bool,
+    /// Soft shadows from the key light.
+    pub(super) shadows: bool,
 }
 
 impl Default for Controls {
@@ -26,6 +28,7 @@ impl Default for Controls {
             layers: Layers::default(),
             door_deg: 0.0,
             move_items: true,
+            shadows: true,
         }
     }
 }
@@ -90,6 +93,12 @@ pub(super) fn toolbar(
                         "Drag a device, rail or duct to move it on the plate (grid and checks \
                          as in the Cabinet). R turns the selection, Delete takes it off. Off: \
                          a drag draws a selection box.",
+                    );
+                    toggle(
+                        ui,
+                        &mut controls.shadows,
+                        "Shadows",
+                        "Soft shadows from the key light (View > 3D > Shadows)",
                     );
                     ui.separator();
                     if let Some(limit) = limit
