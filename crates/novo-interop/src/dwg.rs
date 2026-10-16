@@ -382,8 +382,9 @@ mod tests {
         let args: Vec<_> = l
             .command(Path::new("/in/plan.dwg"), Path::new("/out"))
             .get_args()
-            .map(|a| a.to_string_lossy().into_owned())
+            .map(|a| a.to_string_lossy().replace('\\', "/"))
             .collect();
+        // `Path::join` writes a backslash on Windows; the path is the same.
         assert_eq!(args, ["-y", "-o", "/out/plan.dxf", "/in/plan.dwg"]);
         let o = Converter {
             kind: ConverterKind::Oda,
@@ -392,7 +393,7 @@ mod tests {
         let args: Vec<_> = o
             .command(Path::new("/in/plan.dwg"), Path::new("/out"))
             .get_args()
-            .map(|a| a.to_string_lossy().into_owned())
+            .map(|a| a.to_string_lossy().replace('\\', "/"))
             .collect();
         assert_eq!(
             args,
