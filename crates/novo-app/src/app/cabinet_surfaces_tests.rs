@@ -214,7 +214,7 @@ fn a_picked_surface_is_drawn_from_its_own_layout_and_cannot_be_edited_yet() {
         .plate
         .unwrap();
     let enclosure_before = novo_layout::model::enclosure_of(project(&d), cab).unwrap();
-    let mut bigger = enclosure_before.clone();
+    let mut bigger = enclosure_before;
     bigger.width += 100.0;
     let asks = vec![
         Ask::Remove(vec![s1.raw()]),
