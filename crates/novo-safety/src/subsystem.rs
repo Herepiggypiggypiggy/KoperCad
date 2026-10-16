@@ -92,16 +92,6 @@ impl Dc {
             Self::None
         }
     }
-
-    /// Representative value used in the model.
-    fn value(self) -> f64 {
-        match self {
-            Self::None => 0.0,
-            Self::Low => 0.60,
-            Self::Medium => 0.90,
-            Self::High => 0.99,
-        }
-    }
 }
 
 /// A finding about a subsystem (shown as a Problem by the UI).
