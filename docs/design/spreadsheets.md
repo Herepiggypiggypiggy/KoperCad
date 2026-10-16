@@ -18,13 +18,34 @@ item or fail), no cryptic "import failed" without row and cause.
 ## Tables and columns
 
 One sheet (or CSV) per kind: **Devices**, **Terminals**, **Wires**,
-**Cables**. Column `Id` comes first and is the key. Greyed columns (Id,
+**Cables**, **Cores**. Column `Id` comes first and is the key. Greyed columns (Id,
 Kind, Manufacturer, Order number, Strip, Page, From, To, Cable core,
 Cores) are for orientation and ignored on import. Editable: device and
 cable Tag and Description, cable Length, terminal Name, Level, Order and
 Jumper, wire Number, Color and Cross-section, and every
 `properties.<key>` column. A `properties.<key>` column no row has yet
 adds that property. Internal property namespaces are not exported.
+
+### Jumpers
+
+Terminals of one strip with the same `Jumper` number are bridged. The
+greyed `Bridged with` column lists the others of the group, so a group is
+readable in the sheet. A group number only one terminal of a strip would
+carry after the import gets a warning (it bridges nothing).
+
+### Cores
+
+One row per cable core. `Id` is the cable's id (repeated on each of its
+rows) and `Core No` the core's 1-based position: together the key. Greyed:
+Id, Cable, Core No, Wire number. Editable: `Core` (name), `Cross-section
+[mm²]`, `Shield` and `Spare` (yes/no; a spare mark follows a renamed
+core) and `Wire Id` (empty frees the core; two rows can swap their wires).
+A wire that sits on a core of another cable, or does not exist, rejects
+the row. The import never adds or deletes cores. If the cores of a cable
+were reordered after the export, a row that edits something is refused
+(positions no longer mean the same core); export again. Warnings: two
+cores of a cable that would share a name, or be given the same wire. Edit
+the wire's number on the Wires sheet.
 
 ## Matching
 
@@ -77,6 +98,6 @@ new devices and edits are one batch: one undo step.
 
 ## Later
 
-Cable cores sheet, terminal Kind, rejected rows
+Cable core additions and removals, terminal Kind, rejected rows
 written back as a fix-and-reimport workbook, `kopercad-cli` and Python
 entry points, app dialog (open file, preview table, conflict choice).

@@ -2005,6 +2005,7 @@ dependencies = [
  "dirs",
  "earcutr",
  "glam",
+ "novo-cables",
  "novo-canvas",
  "novo-core",
  "novo-layout",
