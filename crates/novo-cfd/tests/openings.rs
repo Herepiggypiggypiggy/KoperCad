@@ -328,7 +328,8 @@ fn stack_effect_follows_the_chimney_law() {
     );
     // The scaling Q ~ P^(1/3): 8 times the power, twice the flow.
     let ratio = q8 / q1;
-    assert!((ratio - 2.0).abs() < 0.3, "ratio {ratio}");
-    // The ideal fully mixed law is an upper-ish estimate: within 40 percent.
-    assert!((q1 / ideal(20.0) - 1.0).abs() < 0.4);
+    assert!((ratio - 2.0).abs() < 0.2, "ratio {ratio}");
+    // The ideal fully mixed law is an upper-ish estimate: within 15 percent (measured -9 percent).
+    assert!((q1 / ideal(20.0) - 1.0).abs() < 0.15);
+    assert!((q8 / ideal(160.0) - 1.0).abs() < 0.15);
 }

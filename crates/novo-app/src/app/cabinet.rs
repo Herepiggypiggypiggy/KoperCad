@@ -1436,6 +1436,30 @@ impl NovoApp {
         (!parts.is_empty()).then(|| format!("Not placed: {}", parts.join("; ")))
     }
 
+    /// The plate the Cabinet shows, with its stored layout and the devices
+    /// that could go on it: what a canvas action works on. Used by lesson
+    /// replays, which act without the canvas.
+    #[cfg(test)]
+    pub(super) fn cabinet_plate(
+        &self,
+    ) -> Option<(
+        StructureId,
+        Option<CabinetLayout>,
+        Vec<novo_layout::plan::Candidate>,
+    )> {
+        let project = self.backend.document()?.project();
+        let location = self.cabinet.location.as_ref()?;
+        let structure = project
+            .structures()
+            .find(|s| s.enclosure && &s.tag == location)?
+            .id;
+        Some((
+            structure,
+            load(project, structure),
+            candidates(project, structure),
+        ))
+    }
+
     pub(super) fn cabinet_ask(
         &mut self,
         ask: Ask,

@@ -22,6 +22,7 @@ use super::cabinet_inspector;
 use super::NovoApp;
 use super::heat_3d::{self, Heat3d, Place};
 use super::view3d_controls::{self, Controls};
+use super::view3d_move::{self, MoveState};
 use super::view3d_stats::{Build, Stats};
 
 /// The one view of the app.
@@ -30,6 +31,10 @@ const VIEW_ID: u64 = 1;
 /// The 3D workspace's state: the camera and the scene it shows.
 pub(crate) struct View3dMode {
     pub(super) view: View3d,
+    /// Dragging, turning and deleting devices, rails and ducts in the view.
+    pub(super) mv: MoveState,
+    /// The landing box drawn last frame, to redraw the overlays when it changes.
+    ghost_shown: Option<([i64; 4], bool)>,
     library: Arc<MeshLibrary>,
     /// The enclosure and project revision the scene was built for.
     pub(super) built: Option<(StructureId, u64, Arc<Scene>)>,
@@ -70,6 +75,8 @@ impl Default for View3dMode {
     fn default() -> Self {
         View3dMode {
             view: View3d::new(VIEW_ID),
+            mv: MoveState::default(),
+            ghost_shown: None,
             library: Arc::new(MeshLibrary::new()),
             built: None,
             pending: None,
@@ -197,6 +204,24 @@ impl NovoApp {
             heat_controls(ui, &mut mode.heat, sol);
         }
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
+        // The landing box of a dragged device, rail or duct.
+        let landing = mode.mv.landing();
+        let ghost_key = landing.map(|l| {
+            let r = l.rect;
+            (
+                [r.x, r.y, r.w, r.h].map(|v| (v * 10.0).round() as i64),
+                l.clash,
+            )
+        });
+        let ghost_changed = mode.ghost_shown != ghost_key;
+        mode.ghost_shown = ghost_key;
+        let ghost = landing.map_or_else(Vec::new, |l| {
+            let top = load(project, id)
+                .and_then(|lay| lay.depths.get(&l.item.raw).copied())
+                .unwrap_or(10.0);
+            view3d_move::ghost(&l, &scene.frame, top)
+        });
+        let mut heat_changed = false;
         let tracing = solution.is_some() && mode.heat.lines && !self.settings.reduce_motion;
         if wanted != mode.heat_shown {
             let place = |sol: &super::heat_run::Solution| Place {
@@ -218,12 +243,16 @@ impl NovoApp {
                 )
             });
             mode.heat_shown = wanted;
-            if !tracing {
-                mode.view.set_overlays(mode.heat_base.clone());
-            }
+            heat_changed = true;
+        }
+        if !tracing && (heat_changed || ghost_changed) {
+            let mut all = mode.heat_base.clone();
+            all.extend(ghost.iter().cloned());
+            mode.view.set_overlays(all);
         }
         if tracing {
             let mut all = mode.heat_base.clone();
+            all.extend(ghost.iter().cloned());
             let t = heat_3d::tracers(&mode.heat_flow, ui.input(|i| i.time));
             if !t.positions.is_empty() {
                 all.push(novo_view3d::Overlay::Lines(t));
@@ -231,6 +260,7 @@ impl NovoApp {
             mode.view.set_overlays(all);
             ui.ctx().request_repaint();
         }
+        mode.view.drag_items = mode.controls.move_items;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
@@ -288,6 +318,30 @@ impl NovoApp {
             state.selection.extend(items.iter().copied());
         }
 
+        // Dragging a device, rail or duct moves it by the Cabinet's rules.
+        let mut edits = Vec::new();
+        if let Some(stored) = load(project, id) {
+            if let Some(d) = &out.item_drag
+                && !mode.mv.dragging()
+            {
+                let extend = ui.input(|i| i.modifiers.shift || i.modifiers.command);
+                if !state.selection.contains(&d.id) && !extend {
+                    state.selection = BTreeSet::from([d.id]);
+                } else if !state.selection.contains(&d.id) {
+                    state.selection.insert(d.id);
+                }
+            }
+            let (_, edit) = mode.mv.step(&stored, out.item_drag);
+            edits.extend(edit);
+            if mode.mv.dragging() {
+                ui.ctx().request_repaint();
+            }
+            let keys = std::mem::take(&mut self.cabinet.keys);
+            edits.extend(view3d_move::key_edits(&keys, &state.selection, &stored));
+        } else {
+            self.cabinet.keys.clear();
+        }
+
         // The devices selected in 3D reach the Cabinet, and show their data.
         let devices: Vec<u64> = state
             .selection
@@ -335,6 +389,18 @@ impl NovoApp {
             let layout = load(project, id);
             let cands = candidates(project, id);
             self.cabinet_ask(ask, Some(id), layout, &cands);
+        }
+        for edit in edits {
+            let (device, rail) = edit.ask();
+            if let Some(device) = device {
+                let doc = self.backend.document().map(|d| d.project());
+                let layout = doc.and_then(|p| load(p, id));
+                let cands = doc.map_or_else(Vec::new, |p| candidates(p, id));
+                self.cabinet_ask(device, Some(id), layout, &cands);
+            }
+            if let Some(rail) = rail {
+                self.cabinet_rail_ask(Some(id), rail);
+            }
         }
     }
 }

@@ -140,6 +140,7 @@ Druk op {key:edit.undo} om het terug te zetten.
 """
 point = { ui = "cabinet.canvas" }
 expect = { signal = "cabinet_dropped" }
+solve = [ { cabinet_place = { device = "-T1", x = 200, y = 550 } } ]
 
 [[step]]
 id = "simulate"
