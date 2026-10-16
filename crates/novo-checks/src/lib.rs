@@ -39,7 +39,7 @@
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
 //! | [`AmbiguousInterruption`](ProblemKind::AmbiguousInterruption) | warning | A name used by more than two interruption points |
-//! | [`WireNumber`](ProblemKind::WireNumber) | warning | A wire number on two nets, or two numbers on one net |
+//! | [`WireNumber`](ProblemKind::WireNumber) | warning | A wire number used on two nets |
 //! | [`UntaggedDevice`](ProblemKind::UntaggedDevice) | warning | A device without a product level in its tag |
 //! | [`UnnamedTerminal`](ProblemKind::UnnamedTerminal) | warning | A terminal without a number or name |
 //! | [`SameShortTag`](ProblemKind::SameShortTag) | info | One short tag under two function or location levels |
@@ -196,7 +196,7 @@ pub enum ProblemKind {
     /// two by two in page order, KoperCAD joins all of one name, so an
     /// imported project and this one read it differently.
     AmbiguousInterruption,
-    /// A wire number on two nets, or several numbers on one net.
+    /// A wire number used on two nets.
     WireNumber,
     /// A device without a product level in its tag.
     UntaggedDevice,

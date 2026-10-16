@@ -37,10 +37,13 @@ pub(crate) fn ambiguous_interruptions(cx: &Context<'_>, out: &mut Vec<Problem>) 
     }
 }
 
-/// A wire number on two nets, or two numbers on one net.
+/// A wire number used on two nets.
+///
+/// Several numbers on one net are not reported: the two sides of a terminal,
+/// a fuse or a cable core are separate connections that share a net, and
+/// KoperCAD's own lessons number each branch of a junction separately.
 pub(crate) fn wire_numbers(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
     let mut by_number: BTreeMap<&str, BTreeMap<u32, Vec<AnyId>>> = BTreeMap::new();
-    let mut by_net: BTreeMap<u32, BTreeMap<&str, Vec<AnyId>>> = BTreeMap::new();
     for wire in cx.project.wires() {
         let Some(number) = wire.number.as_deref().filter(|n| !n.is_empty()) else {
             continue;
@@ -54,12 +57,6 @@ pub(crate) fn wire_numbers(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Pr
             .entry(net.0)
             .or_default()
             .push(wire.id.into());
-        by_net
-            .entry(net.0)
-            .or_default()
-            .entry(number)
-            .or_default()
-            .push(wire.id.into());
     }
     for (number, nets) in by_number {
         if nets.len() > 1 {
@@ -68,17 +65,6 @@ pub(crate) fn wire_numbers(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Pr
                 ProblemKind::WireNumber,
                 at,
                 format!("Wire number {number} is on more than one net"),
-            ));
-        }
-    }
-    for numbers in by_net.into_values() {
-        if numbers.len() > 1 {
-            let names: Vec<&str> = numbers.keys().copied().collect();
-            let at = numbers.into_values().flatten().collect::<Vec<_>>();
-            out.push(Problem::new(
-                ProblemKind::WireNumber,
-                at,
-                format!("One net carries several wire numbers: {}", names.join(", ")),
             ));
         }
     }
