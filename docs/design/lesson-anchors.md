@@ -28,6 +28,17 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `cabinet.cutlist`
 - `cabinet.table`
 - `cabinet.heat`
+- `cabinet.canvas`
+- `cabinet.unplaced`
+- `cabinet.problems`
+- `cabinet.inspector`
+- `cabinet.door`
+- `cabinet.door.apply`
+- `cabinet.routes_panel`
+- `cabinet.wire_rules`
+- `cabinet.sizing`
+- `cabinet.rails`
+- `cabinet.plate_drawing`
 
 ## Signals
 
