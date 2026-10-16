@@ -52,6 +52,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
         return match target {
             Target::Device(_) => vec![
                 Some(("Rotate   R", "edit.rotate")),
+                Some(("Duplicate   Ctrl+D", "view.3d_duplicate")),
                 Some(("Take off the plate   Del", "edit.delete")),
                 None,
                 Some(("Hide   Ctrl+H", "view.3d_hide")),
@@ -85,6 +86,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
                 Some(("Enclosure on or off", "view.3d_shell")),
                 Some(("Wires on or off", "view.3d_wires")),
                 Some(("Shadows on or off", "view.3d_shadows")),
+                Some(("Ambient occlusion on or off", "view.3d_ssao")),
                 Some(("Dimensions on or off", "view.3d_dimensions")),
                 Some(("Restore 3D quality", "view.3d_quality")),
                 None,

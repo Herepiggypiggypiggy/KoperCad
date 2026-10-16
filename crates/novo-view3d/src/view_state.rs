@@ -11,6 +11,9 @@ pub struct Display {
     pub labels: bool,
     /// Soft shadows from the key light (software renderers skip them).
     pub shadows: bool,
+    /// Screen-space ambient occlusion on the High tier (the frame governor
+    /// can step the tier down; turning this on again asks for it back).
+    pub ssao: bool,
     /// Draw measuring lines: the enclosure's size and, for one selected part,
     /// its size and its distances to neighbours and the plate edge.
     pub dimensions: bool,
@@ -25,6 +28,7 @@ impl Default for Display {
             edges: true,
             labels: true,
             shadows: true,
+            ssao: true,
             dimensions: false,
             missing_marks: false,
         }

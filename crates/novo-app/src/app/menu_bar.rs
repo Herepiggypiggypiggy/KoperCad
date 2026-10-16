@@ -161,9 +161,6 @@ impl NovoApp {
                 }
                 MenuItem::Command(info) => {
                     self.command_row(ui, info);
-                    if info.id == "file.example" {
-                        self.recent_menu(ui);
-                    }
                 }
                 MenuItem::Submenu { name, items } => {
                     // The lesson steps only exist while a lesson runs;
@@ -177,13 +174,17 @@ impl NovoApp {
                         for info in items {
                             self.command_row(ui, info);
                         }
+                        // File > Open > Recent is not a command of its own.
+                        if *name == "Open" {
+                            self.recent_menu(ui);
+                        }
                     });
                 }
             }
         }
     }
 
-    /// File › Recent: the projects opened lately, newest first.
+    /// File > Open > Recent: the projects opened lately, newest first.
     fn recent_menu(&mut self, ui: &mut egui::Ui) {
         ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
             ui.menu_button("Recent", |ui| {
