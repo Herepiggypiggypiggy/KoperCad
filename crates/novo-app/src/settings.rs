@@ -77,6 +77,55 @@ pub struct Settings {
     /// The id of the newest What's new entry the person has opened the
     /// list over (`assets/whats-new.md`); empty on a first run.
     pub whats_new_seen: String,
+    /// What the person last chose in File > Export drawings > Export PDF...
+    /// (`app/pdf_options.rs`): a per-user preference, kept in the settings
+    /// file under the user's profile.
+    pub pdf_choice: PdfChoice,
+}
+
+/// The choices of the PDF options dialog. [`PdfChoice::default`] is what the
+/// one-click Export PDF commands always write, whatever was chosen here.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PdfChoice {
+    /// `"all"`, `"current"` or `"ranges"`.
+    pub scope: String,
+    /// Page numbers for `scope == "ranges"`: `1-3, 5, 7-` (1 is the first
+    /// page in the project's order).
+    pub ranges: String,
+    /// One bookmark per page.
+    pub bookmarks: bool,
+    /// Clickable links between a device's parts and interruption points.
+    pub links: bool,
+    /// Cross reference text next to symbols.
+    pub xref_notes: bool,
+    /// The title block's revision row.
+    pub title_revisions: bool,
+    /// A dot on the bookmark of pages changed since the latest revision.
+    pub changed_marks: bool,
+    /// The design checks as report pages after the drawing.
+    pub checks_appendix: bool,
+    /// `"black"` (print style) or `"colour"`.
+    pub look: String,
+    /// The document title; empty uses the project name.
+    pub title: String,
+}
+
+impl Default for PdfChoice {
+    fn default() -> Self {
+        Self {
+            scope: "all".into(),
+            ranges: String::new(),
+            bookmarks: true,
+            links: true,
+            xref_notes: true,
+            title_revisions: true,
+            changed_marks: true,
+            checks_appendix: true,
+            look: "black".into(),
+            title: String::new(),
+        }
+    }
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way
