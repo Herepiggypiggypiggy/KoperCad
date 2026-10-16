@@ -1,7 +1,6 @@
 format = 1
 id = "design-checks"
 version = 1
-# Draft until the pill, the Issues list and waivers (PR #413) have anchors on main.
 status = "early"
 title = "Find and fix problems before anyone else does"
 summary = "Let the design checks walk you through the drawing, fix what is wrong and waive what is meant."
@@ -15,20 +14,39 @@ next = ["parts-library"]
 project = "project.json"
 finished = "finished.json"
 page = "Control circuit"
+title_nl = "Vind en los problemen op voordat een ander ze vindt"
+summary_nl = "Laat de controles je door de tekening leiden, los op wat fout is en negeer bewust wat zo bedoeld is."
 
 [[step]]
 id = "see-pill"
 title = "Meet the issue pill"
+title_nl = "Maak kennis met de probleemknop"
 text = """
-The pill in the corner counts the {tip:problem} the drawing has right now. This sample has two.
+The pill in the top bar counts the errors and warnings in your drawing. It says **2 warnings** now.
+A **warning** needs your attention. An **info** is only a note, such as a missing part, and shows in the list but not in the pill.
 It checks as you draw; it never blocks saving or exporting.
+"""
+text_nl = """
+De knop in de bovenbalk telt de fouten en waarschuwingen in je tekening. Er staat nu **2 warnings**.
+Een **waarschuwing** vraagt je aandacht. Een **info** is slechts een notitie, zoals een ontbrekend onderdeel, en staat wel in de lijst maar niet in de knop.
+De controle loopt terwijl je tekent; ze blokkeert nooit het opslaan of exporteren.
 """
 point = { ui = "issue.pill" }
 
 [[step]]
 id = "open-list"
 title = "Open the list"
-text = "Click the pill, or press {key:check.problems}. The Issues list shows errors first, with a count on each filter."
+title_nl = "Open de lijst"
+text = "The list names every problem and where it is, errors first, so you can work through them in order."
+text_nl = "De lijst noemt elk probleem en waar het zit, fouten eerst, zodat je ze op volgorde kunt afwerken."
+how = [
+  "Click the pill in the top bar, or open **Check** and choose **Problems**.",
+  "The **Issues** list opens in the page panel, with a count on each filter: errors, warnings and infos.",
+]
+how_nl = [
+  "Klik op de knop in de bovenbalk, of open **Check** en kies **Problems**.",
+  "De lijst **Issues** opent in het paginapaneel, met een aantal bij elk filter: fouten, waarschuwingen en infos.",
+]
 point = { ui = "issue.pill" }
 expect = { any = [ { clicked = "issue.pill" }, { command = "check.problems" } ] }
 solve = [ { command = "check.problems" } ]
@@ -36,15 +54,37 @@ solve = [ { command = "check.problems" } ]
 [[step]]
 id = "next-problem"
 title = "Jump to the first problem"
-text = "Press {key:check.next_problem}. The view moves to the problem and a mark sits on it. {key:check.previous_problem} goes back."
-point = { ui = "outline.issues" }
+title_nl = "Spring naar het eerste probleem"
+text = "Walking the problems with a key is faster than hunting for them. The text of the problem shows at the bottom, and a warning also gets a small warning sign on the symbol."
+text_nl = "Met een toets door de problemen lopen gaat sneller dan ze zoeken. De tekst van het probleem staat onderin en een waarschuwing krijgt ook een klein waarschuwingsteken op het symbool."
+how = [
+  "Press {key:check.next_problem}. The view jumps to a problem.",
+  "Press {key:check.previous_problem} to go back one.",
+]
+how_nl = [
+  "Druk op {key:check.next_problem}. Het beeld springt naar een probleem.",
+  "Druk op {key:check.previous_problem} om er een terug te gaan.",
+]
 expect = { command = "check.next_problem" }
 solve = [ { command = "check.next_problem" } ]
+demo = [ { key = "F8" } ]
 
 [[step]]
 id = "fix-wire"
 title = "Fix the open pin"
-text = "The breaker **-F3** and the stop button **-S0** face each other but no wire joins them. Wire **-F3:2** to **-S0:11**."
+title_nl = "Herstel de open pin"
+text = "On page **Control circuit** the breaker **-F3** sits near the top with the stop button **-S0** just below it, but no wire joins them. Both symbols show a warning sign for that pin."
+text_nl = "Op pagina **Control circuit** staat de automaat **-F3** bovenaan met de stopknop **-S0** er net onder, maar geen draad verbindt ze. Beide symbolen tonen daarvoor een waarschuwingsteken."
+how = [
+  "Press {key:tool.connect} to pick the wire tool.",
+  "Click the pin at the bottom of **-F3** (pin 2).",
+  "Click the pin at the top of **-S0** (pin 11). A line now joins them.",
+]
+how_nl = [
+  "Druk op {key:tool.connect} voor het draadgereedschap.",
+  "Klik op de pin onderaan **-F3** (pin 2).",
+  "Klik op de pin bovenaan **-S0** (pin 11). Een lijn verbindt ze nu.",
+]
 point = { at = { wire = ["-F3:2", "-S0:11"] } }
 note = [
   { at = { device = "-F3", pin = "2" }, text = "Start here" },
@@ -56,42 +96,61 @@ solve = [ { wire = ["-F3:2", "-S0:11"] } ]
 [[step]]
 id = "pill-updates"
 title = "Watch the pill drop"
-text = "The mark is gone and the count went down by one. Checks run on every change, so there is nothing to refresh."
+title_nl = "Zie de knop zakken"
+text = "Both warning signs are gone and the pill says **No issues**. Checks run on every change, so there is nothing to refresh. The note about **-S1** is still in the list."
+text_nl = "Beide waarschuwingstekens zijn weg en de knop zegt **No issues**. De controles lopen bij elke wijziging, dus er is niets te verversen. De notitie over **-S1** staat nog in de lijst."
 point = { ui = "issue.pill" }
 
 [[step]]
-id = "select-s1"
-title = "Look at the second problem"
-text = "**-S1** (start) has no part yet. That is an info, not an error: the drawing is right, the shopping list is not complete. Select **-S1**."
-point = { at = { device = "-S1" } }
-expect = { selected = "-S1" }
-solve = [ { page = "Control circuit" }, { select = "-S1" } ]
-
-[[step]]
-id = "give-part"
-title = "Give it a part"
-text = "In the inspector, pick a part for **-S1**. The Parts library lesson shows the quick ways; any part will do here."
-point = { ui = "inspector.part" }
-expect = { field = { device = "-S1", name = "part", is_set = true } }
-
-[[step]]
 id = "waive"
-title = "Waive a problem on purpose"
+title = "Waive a note on purpose"
+title_nl = "Negeer een notitie met opzet"
 text = """
-Sometimes a problem is meant, such as a spare pin kept free. Right-click it in the list and choose **Waive with a reason...**, then type why.
-The waiver stays in the project, with your reason, in the **Waived** section.
+Sometimes a problem is meant. To **waive** it says: I know, this is fine, and here is why. Here the start button **-S1** has no part yet because the quote is still open.
+The waiver stays in the project with your reason, so a colleague can read it later.
 """
-point = { ui = "issues.waive" }
-expect = { command = "check.waive" }
+text_nl = """
+Soms is een probleem bedoeld. Het **negeren** (waive) zegt: ik weet het, dit is goed, en dit is waarom. Hier heeft de startknop **-S1** nog geen onderdeel omdat de offerte nog openstaat.
+Het negeren blijft met je reden in het project staan, zodat een collega het later kan lezen.
+"""
+how = [
+  "In the **Issues** list click the **infos** filter.",
+  "Right-click **-S1: No part** and choose **Waive with a reason...**.",
+  "Type **Quote still open** and press **Waive**. The note leaves the list.",
+]
+how_nl = [
+  "Klik in de lijst **Issues** op het filter **infos**.",
+  "Klik met de rechtermuisknop op **-S1: No part** en kies **Waive with a reason...**.",
+  "Typ **Quote still open** en druk op **Waive**. De notitie verdwijnt uit de lijst.",
+]
+expect = { signal = "problem_waived" }
 
 [[step]]
 id = "restore"
 title = "Bring one back"
-text = "Open **Waived** at the bottom of the list and press **Restore** on yours. A waiver hides a problem, it never deletes it."
-point = { ui = "issues.waived" }
-expect = { command = "check.restore_waived" }
+title_nl = "Haal er een terug"
+text = "A waiver hides a problem, it never deletes it, so you can always undo your decision."
+text_nl = "Een negeerbesluit verbergt een probleem maar verwijdert het nooit, dus je kunt je besluit altijd terugdraaien."
+how = [
+  "Open **Waived** at the bottom of the list. It shows the note with your reason.",
+  "Press the small **Restore** button next to it. The note is back under **infos**.",
+]
+how_nl = [
+  "Open **Waived** onderaan de lijst. Daar staat de notitie met je reden.",
+  "Druk op de kleine knop **Restore** ernaast. De notitie staat weer onder **infos**.",
+]
+expect = { signal = "waiver_restored" }
+
+[[step]]
+id = "part-note"
+title = "The note goes away when the part is set"
+title_nl = "De notitie verdwijnt zodra het onderdeel is gekozen"
+text = "The real cure for **-S1: No part** is to give the button a part, so it appears in the bill of materials. Picking a part for a device is not in the app yet; until it is, waiving is the way to say the gap is known."
+text_nl = "De echte oplossing voor **-S1: No part** is de knop een onderdeel geven, zodat hij in de stuklijst komt. Een onderdeel kiezen voor een apparaat zit nog niet in de app; tot die tijd is negeren de manier om te zeggen dat de lacune bekend is."
 
 [[step]]
 id = "done"
 title = "Clean drawing"
+title_nl = "Schone tekening"
 text = "You can read the pill, walk the problems with the keys, fix what is wrong and waive what is meant. Next: the parts library."
+text_nl = "Je kunt de knop lezen, met de toetsen door de problemen lopen, herstellen wat fout is en negeren wat bedoeld is. Hierna: de onderdelenbibliotheek."

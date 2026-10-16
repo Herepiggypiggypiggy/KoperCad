@@ -1,7 +1,6 @@
 format = 1
 id = "blocks-and-macros"
 version = 1
-# Draft until the macro browser (PR #455) and the Save macro command are on main.
 status = "early"
 title = "Save a circuit once, place it anywhere"
 summary = "Turn a motor starter into a macro, place it on another page and share it as a file."
@@ -15,67 +14,157 @@ next = ["spreadsheets"]
 project = "project.json"
 finished = "finished.json"
 page = "Motor 1"
+title_nl = "Bewaar een schakeling één keer, plaats hem overal"
+summary_nl = "Maak van een motorstarter een macro, plaats hem op een andere pagina en deel hem als bestand."
 
 [[step]]
 id = "select-circuit"
 title = "Select the starter"
-text = "Page **Motor 1** has a breaker, a contactor and an overload relay, wired in a chain. Select all of it with {key:edit.select_all}."
+title_nl = "Selecteer de starter"
+text = "A macro is a saved copy of a circuit, so first say which part of the drawing you want to save. Page **Motor 1** has a breaker, a contactor and an overload relay, wired in a chain."
+text_nl = "Een macro is een bewaard exemplaar van een schakeling, dus geef eerst aan welk deel van de tekening je wilt bewaren. Pagina **Motor 1** heeft een automaat, een contactor en een motorbeveiliging, in een keten verbonden."
+how = [
+  "Put the pointer on empty paper just above and left of the top device.",
+  "Hold the left button and drag a box down and right until it covers all three devices, then let go.",
+  "The three devices turn blue. If one is missing, drag the box again.",
+]
+how_nl = [
+  "Zet de aanwijzer op leeg papier net boven en links van het bovenste apparaat.",
+  "Houd de linkermuisknop ingedrukt en sleep een kader naar rechtsonder tot alle drie de apparaten erin zitten, en laat los.",
+  "De drie apparaten worden blauw. Mist er een, sleep het kader dan opnieuw.",
+]
 point = { area = { page = "Motor 1", x = 30, y = 30, w = 40, h = 100 } }
 expect = { selected_count = 3 }
-solve = [ { command = "edit.select_all" } ]
+solve = [ { page = "Motor 1" }, { select = "-Q1" }, { select = "-K1", add = true }, { select = "-F1", add = true } ]
+demo = [ { drag = { from = { area = { page = "Motor 1", x = 20, y = 20, w = 1, h = 1 } }, to = { area = { page = "Motor 1", x = 80, y = 140, w = 1, h = 1 } } } } ]
 
 [[step]]
 id = "save-macro"
 title = "Save it as a macro"
-text = "Press {key:macro.save} and name it **dol-starter**. A {tip:macro} keeps the devices, the wires between them and their layout, not their tags."
-point = { ui = "mark.menu.save_macro" }
+title_nl = "Bewaar het als macro"
+text = "When you place a macro again, the devices get new names (tags), such as -K2 instead of -K1, so nothing clashes. The macro keeps the devices, the wires between them and their layout."
+text_nl = "Plaats je een macro opnieuw, dan krijgen de apparaten nieuwe namen (tags), zoals -K2 in plaats van -K1, zodat niets botst. De macro bewaart de apparaten, de draden ertussen en hun indeling."
+how = [
+  "Open the **Draw** menu, then **Macros**, then **Save selection as macro**.",
+  "Type **dol-starter** in the **Name** box. The description may stay empty.",
+  "Press **Save** (or Enter).",
+]
+how_nl = [
+  "Open het menu **Draw**, dan **Macros** en kies **Save selection as macro**.",
+  "Typ **dol-starter** in het vak **Name**. De beschrijving mag leeg blijven.",
+  "Druk op **Save** (of op Enter).",
+]
 expect = { command = "macro.save" }
 solve = [ { command = "macro.save", arg = "dol-starter" } ]
+demo = [ { type = "dol-starter" }, { key = "Enter" } ]
 
 [[step]]
 id = "open-browser"
 title = "Open the macro library"
-text = "Press {key:macro.browser}. Your macros live in a folder in your profile, one file each, so no admin rights and nothing in the cloud."
-point = { ui = "macro.browser" }
-expect = { opened = "macro.browser" }
+title_nl = "Open de macrobibliotheek"
+text = "Your macros live in a folder in your own profile, one file each, so no admin rights are needed and nothing goes to the cloud. The library window lists them."
+text_nl = "Je macro's staan in een map in je eigen profiel, een bestand per macro, dus je hebt geen beheerdersrechten nodig en er gaat niets naar de cloud. Het bibliotheekvenster toont ze."
+how = [
+  "Press {key:view.command_palette} and type **macros**.",
+  "Pick **Macros** and press Enter. The **Macros** window opens with **dol-starter** in the list.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette} en typ **macros**.",
+  "Kies **Macros** en druk op Enter. Het venster **Macros** opent met **dol-starter** in de lijst.",
+]
+point = { ui = "palette.button" }
+expect = { command = "macro.browser" }
 solve = [ { command = "macro.browser" } ]
 
 [[step]]
 id = "go-page"
 title = "Go to the empty page"
-text = "Open page **Motor 2** from the outline. That is where the second motor goes."
-point = { ui = "outline.page.motor-2" }
+title_nl = "Ga naar de lege pagina"
+text = "The second motor goes on its own page, **Motor 2**. It is empty now."
+text_nl = "De tweede motor komt op een eigen pagina, **Motor 2**. Die is nu leeg."
+how = [
+  "Open the outline on the left and click **Motor 2**.",
+  "Or press {key:nav.next_page} to step to the next page.",
+]
+how_nl = [
+  "Open de inhoud links en klik op **Motor 2**.",
+  "Of druk op {key:nav.next_page} om naar de volgende pagina te gaan.",
+]
 expect = { page = "Motor 2" }
 solve = [ { page = "Motor 2" } ]
 
 [[step]]
 id = "preview"
 title = "Place it and read the preview"
-text = "Pick **dol-starter** and place it. A ghost follows the pointer and a line says which tags it will take. Click to drop it."
-point = { ui = "macro.place" }
+title_nl = "Plaats hem en lees het voorbeeld"
+text = "The Place window shows what will happen before anything changes. One line says which tags the new devices take, for example -Q2, -K2 and -F2 because -Q1, -K1 and -F1 are already used."
+text_nl = "Het venster Place toont wat er gaat gebeuren voordat er iets verandert. Een regel zegt welke tags de nieuwe apparaten krijgen, bijvoorbeeld -Q2, -K2 en -F2 omdat -Q1, -K1 en -F1 al bestaan."
+how = [
+  "Open **Draw**, then **Macros**, then **Place macro**. The **Place macro** window opens.",
+  "Click **dol-starter** in its list. The line under the list reads **Takes** followed by the new tags.",
+  "Press **Place**. The three devices land in a free spot on the page and stay selected.",
+]
+how_nl = [
+  "Open **Draw**, dan **Macros** en kies **Place macro**. Het venster **Place macro** opent.",
+  "Klik op **dol-starter** in de lijst. De regel onder de lijst begint met **Takes** gevolgd door de nieuwe tags.",
+  "Druk op **Place**. De drie apparaten komen op een vrije plek op de pagina en blijven geselecteerd.",
+]
 expect = { count = { kind = "symbol", page = "Motor 2", at_least = 3 } }
 
 [[step]]
 id = "tags"
 title = "See the new tags"
-text = "The three devices took the next free numbers, so the first motor's tags did not repeat. Select the new contactor to see it."
+title_nl = "Bekijk de nieuwe tags"
+text = "The new devices took the next free numbers, so the first motor's tags did not repeat. One undo step removes the whole placement again."
+text_nl = "De nieuwe apparaten kregen de volgende vrije nummers, zodat de tags van de eerste motor niet dubbel voorkomen. Eén stap ongedaan maken haalt de hele plaatsing weer weg."
+how = [
+  "Click the new contactor on page **Motor 2**.",
+  "The inspector shows its tag, **-K2**. Press {key:edit.undo} to take the placement back if you want to try again.",
+]
+how_nl = [
+  "Klik op de nieuwe contactor op pagina **Motor 2**.",
+  "De inspector toont de tag, **-K2**. Druk op {key:edit.undo} om de plaatsing terug te nemen als je het opnieuw wilt proberen.",
+]
 expect = { count = { kind = "device", at_least = 6 } }
 
 [[step]]
 id = "export"
 title = "Share the file"
-text = "In the library, select **dol-starter** and press **Export...**. The result is one **.kcmacro** file you can mail or keep in a shared folder."
-point = { ui = "macro.export" }
-expect = { command = "macro.export" }
+title_nl = "Deel het bestand"
+text = "A macro is one **.kcmacro** file, so a colleague can get your circuit by mail or from a shared folder."
+text_nl = "Een macro is een **.kcmacro**-bestand, zodat een collega je schakeling per mail of uit een gedeelde map kan krijgen."
+how = [
+  "In the **Macros** window click **dol-starter**.",
+  "Press **Export...** and choose where to save the file.",
+  "The status line in the window says **Exported to** and the path.",
+]
+how_nl = [
+  "Klik in het venster **Macros** op **dol-starter**.",
+  "Druk op **Export...** en kies waar het bestand komt.",
+  "De statusregel in het venster zegt **Exported to** en het pad.",
+]
 
 [[step]]
 id = "import"
 title = "Take in a colleague's macro"
-text = "**Import...** reads a **.kcmacro** file into your library. A file that fails its checks is refused whole, with the reason."
-point = { ui = "macro.import" }
+title_nl = "Neem de macro van een collega over"
+text = "Import reads a **.kcmacro** file into your library. A file that fails its checks is refused whole, with the reason, so a broken file never half-lands."
+text_nl = "Importeren leest een **.kcmacro**-bestand in je bibliotheek. Een bestand dat de controles niet haalt wordt helemaal geweigerd, met de reden, zodat een kapot bestand nooit half binnenkomt."
+how = [
+  "In the **Macros** window press **Import...**.",
+  "Pick a **.kcmacro** file, for example the one you just exported.",
+  "The status line says **Imported 1 macro(s)**. A name that already exists is kept, not overwritten.",
+]
+how_nl = [
+  "Druk in het venster **Macros** op **Import...**.",
+  "Kies een **.kcmacro**-bestand, bijvoorbeeld het bestand dat je net exporteerde.",
+  "De statusregel zegt **Imported 1 macro(s)**. Een bestaande naam blijft staan en wordt niet overschreven.",
+]
 expect = { command = "macro.import" }
 
 [[step]]
 id = "done"
 title = "Your library grows with you"
-text = "Save the circuits you draw twice, place them in seconds. Next: spreadsheets."
+title_nl = "Je bibliotheek groeit mee"
+text = "Save the circuits you draw twice and place them in seconds. Next: spreadsheets."
+text_nl = "Bewaar de schakelingen die je twee keer tekent en plaats ze in seconden. Hierna: spreadsheets."
