@@ -12,6 +12,28 @@ use super::heat_settings::{LEVELS, MODELS, VentSpec, Wall};
 /// Margin from the view's corner, in points.
 const MARGIN: f32 = 12.0;
 const WIDTH: f32 = 330.0;
+/// The view cube's size and margin (`novo-view3d::widget`); the panel starts
+/// below it so the cube stays usable.
+const CUBE_SIZE: f32 = 88.0;
+const CUBE_MARGIN: f32 = 12.0;
+const GAP: f32 = 8.0;
+
+/// Top right corner of the panel: under the cube, inside the view.
+pub(super) fn anchor(view: egui::Rect) -> egui::Pos2 {
+    view.right_top() + egui::vec2(-MARGIN, CUBE_MARGIN + CUBE_SIZE + GAP)
+}
+
+/// The cube's rectangle, as `novo-view3d` draws it.
+#[cfg(test)]
+fn cube_rect(view: egui::Rect) -> egui::Rect {
+    egui::Rect::from_min_size(
+        egui::pos2(
+            view.max.x - CUBE_MARGIN - CUBE_SIZE,
+            view.min.y + CUBE_MARGIN,
+        ),
+        egui::Vec2::splat(CUBE_SIZE),
+    )
+}
 
 /// What the panel says above its button, in words a first-time user reads.
 pub(super) fn phase_line(running: bool, has_result: bool, stale: bool) -> (&'static str, bool) {
@@ -28,7 +50,10 @@ pub(super) fn phase_line(running: bool, has_result: bool, stale: bool) -> (&'sta
             "Out of date: the layout changed after this run. Simulate again.",
             true,
         ),
-        (false, true, false) => ("Result for the cabinet as it is now.", false),
+        (false, true, false) => (
+            "Result for this layout. Quality, turbulence and vents apply to the next run.",
+            false,
+        ),
     }
 }
 
@@ -38,27 +63,33 @@ pub(super) fn show(ctx: &egui::Context, view: egui::Rect, state: &mut HeatState,
     egui::Area::new(egui::Id::new("view3d_heat_panel"))
         .order(egui::Order::Middle)
         .pivot(egui::Align2::RIGHT_TOP)
-        .fixed_pos(view.right_top() + egui::vec2(-MARGIN, MARGIN))
+        .fixed_pos(anchor(view))
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_max_width(WIDTH);
-                ui.label(egui::RichText::new("Heat").strong());
-                let (text, warn) = phase_line(state.running(), state.solution().is_some(), stale);
-                ui.label(egui::RichText::new(text).small().color(if warn {
-                    t::WARNING
-                } else {
-                    t::TEXT_MUTED
-                }));
-                ui.horizontal_wrapped(|ui| heat::simulate_controls(ui, state));
-                let running = state.running();
-                egui::CollapsingHeader::new("Settings for the next run")
-                    .id_salt("view3d_heat_settings")
+                let room = (view.bottom() - anchor(view).y - MARGIN - 24.0).max(120.0);
+                egui::ScrollArea::vertical()
+                    .max_height(room)
                     .show(ui, |ui| {
-                        ui.add_enabled_ui(!running, |ui| settings(ui, state));
+                        ui.label(egui::RichText::new("Heat").strong());
+                        let (text, warn) =
+                            phase_line(state.running(), state.solution().is_some(), stale);
+                        ui.label(egui::RichText::new(text).small().color(if warn {
+                            t::WARNING
+                        } else {
+                            t::TEXT_MUTED
+                        }));
+                        ui.horizontal_wrapped(|ui| heat::simulate_controls(ui, state));
+                        let running = state.running();
+                        egui::CollapsingHeader::new("Settings for the next run")
+                            .id_salt("view3d_heat_settings")
+                            .show(ui, |ui| {
+                                ui.add_enabled_ui(!running, |ui| settings(ui, state));
+                            });
+                        egui::CollapsingHeader::new("What is this?")
+                            .id_salt("view3d_heat_about")
+                            .show(ui, |ui| about(ui, state));
                     });
-                egui::CollapsingHeader::new("What is this?")
-                    .id_salt("view3d_heat_about")
-                    .show(ui, |ui| about(ui, state));
             });
         });
 }
@@ -196,6 +227,19 @@ mod tests {
         assert!(b.starts_with("Simulating"));
         assert!(c.starts_with("Result"));
         assert!(d.0.starts_with("Out of date") && d.1);
+    }
+
+    #[test]
+    fn the_panel_clears_the_view_cube_at_small_sizes() {
+        for (w, h) in [(1366.0, 768.0), (900.0, 600.0)] {
+            let view = egui::Rect::from_min_size(egui::pos2(200.0, 40.0), egui::vec2(w, h));
+            let panel = egui::Rect::from_min_max(
+                egui::pos2(anchor(view).x - WIDTH, anchor(view).y),
+                anchor(view) + egui::vec2(0.0, 100.0),
+            );
+            assert!(!panel.intersects(cube_rect(view)), "{w} x {h}");
+            assert!(panel.min.y > cube_rect(view).max.y);
+        }
     }
 
     #[test]
