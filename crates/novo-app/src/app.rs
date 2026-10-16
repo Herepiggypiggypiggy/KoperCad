@@ -17,6 +17,9 @@ mod cabinet_rails;
 mod cabinet_routes;
 mod cabinet_rules;
 mod cable_controls;
+mod cable_cores;
+#[cfg(test)]
+mod cable_cores_tests;
 mod calculations;
 #[cfg(test)]
 mod calculations_tests;

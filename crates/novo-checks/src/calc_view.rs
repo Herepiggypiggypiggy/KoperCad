@@ -339,21 +339,30 @@ fn circuit_entry(
         else {
             continue;
         };
-        judged += 1;
-        let mut notes = Vec::new();
         let potential = netlist
             .net_of_wire(wire)
             .and_then(|n| netlist.net(n).potential())
             .and_then(|p| project.potential(p));
+        // Neutral, earth and other non-load potentials carry no load of
+        // their own here (as in calc_checks): they are not judged.
+        if potential.is_some_and(|p| {
+            p.voltage.is_some_and(|v| v > 0.0)
+                && !matches!(
+                    p.kind,
+                    PotentialKind::Line | PotentialKind::DcPositive | PotentialKind::Signal
+                )
+        }) {
+            continue;
+        }
+        judged += 1;
+        let mut notes = Vec::new();
         let (supply_kind, line_voltage) = match potential {
             Some(p) if p.voltage.is_some_and(|v| v > 0.0) => {
                 let v = p.voltage.unwrap_or(voltage);
-                match p.kind {
-                    PotentialKind::Line if v >= 380.0 => (Supply::ThreePhase, v),
-                    PotentialKind::Line | PotentialKind::DcPositive | PotentialKind::Signal => {
-                        (Supply::TwoWire, v)
-                    }
-                    _ => (Supply::ThreePhase, voltage),
+                if p.kind == PotentialKind::Line && v >= 380.0 {
+                    (Supply::ThreePhase, v)
+                } else {
+                    (Supply::TwoWire, v)
                 }
             }
             _ => {

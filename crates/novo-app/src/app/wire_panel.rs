@@ -150,7 +150,8 @@ fn set_text(tx: &mut Tx<'_>, wire: WireId, key: &str, text: &str) -> Result<(), 
 /// The panel's text fields while they are edited.
 #[derive(Debug, Default)]
 pub(super) struct WirePanel {
-    wire: Option<WireId>,
+    pub(super) wire: Option<WireId>,
+    pub(super) number: String,
     colour: String,
     section: String,
     grouped: String,
@@ -220,8 +221,14 @@ impl NovoApp {
                 ..WirePanel::default()
             };
         }
+        let locked = self
+            .backend
+            .document()
+            .is_some_and(|d| novo_numbering::is_locked(d.project(), first));
+        let panel = &mut self.wb.wire_panel;
         let focused = ctx.memory(|m| m.focused());
         for (id, field, value) in [
+            ("wire_number", &mut panel.number, &shown.number),
             ("wire_colour", &mut panel.colour, &shown.colour),
             ("wire_section", &mut panel.section, &shown.section),
             ("wire_grouped", &mut panel.grouped, &shown.grouped),
@@ -233,6 +240,8 @@ impl NovoApp {
             }
         }
         let mut edits: Vec<WireEdit> = Vec::new();
+        let mut number = panel.number.clone();
+        let mut number_edit: Option<Option<String>> = None;
         let (mut colour, mut section, mut grouped, mut length, mut load) = (
             panel.colour.clone(),
             panel.section.clone(),
@@ -256,6 +265,34 @@ impl NovoApp {
                     } else {
                         format!("Wire {}", shown.number)
                     });
+                    if wires.len() == 1 {
+                        widgets::section_label(ui, "Number");
+                        ui.horizontal(|ui| {
+                            ui.label("Wire number");
+                            let r = ui.add(
+                                egui::TextEdit::singleline(&mut number)
+                                    .id(egui::Id::new("wire_number"))
+                                    .hint_text("105")
+                                    .desired_width(90.0),
+                            );
+                            if should_commit(r.lost_focus(), &number, &shown.number) {
+                                number_edit = Some(Some(number.clone()));
+                            }
+                            if locked
+                                && ui
+                                    .small_button("Unlock")
+                                    .on_hover_text("Numbering runs may change this number again")
+                                    .clicked()
+                            {
+                                number_edit = Some(None);
+                            }
+                        });
+                        ui.weak(if locked {
+                            "Fixed by hand: numbering runs leave it alone."
+                        } else {
+                            "Type a number to fix it; numbering runs then leave it alone."
+                        });
+                    }
                     widgets::section_label(ui, "Conductor");
                     text_row(ui, &mut edits, "Colour", "wire_colour", &mut colour, &shown.colour, "BK, BU, GNYE", WireEdit::Colour);
                     text_row(ui, &mut edits, "Section mm²", "wire_section", &mut section, &shown.section, "2.5", WireEdit::Section);
@@ -300,8 +337,14 @@ impl NovoApp {
                 });
             });
         let panel = &mut self.wb.wire_panel;
-        (panel.colour, panel.section, panel.grouped) = (colour, section, grouped);
+        (panel.number, panel.colour, panel.section, panel.grouped) =
+            (number, colour, section, grouped);
         (panel.length, panel.load) = (length, load);
+        match number_edit {
+            Some(Some(text)) => self.set_wire_number(Some(&text)),
+            Some(None) => self.unlock_wire_number(),
+            None => {}
+        }
         for edit in edits {
             let Some(doc) = self.backend.document_mut() else {
                 break;

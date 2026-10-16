@@ -214,3 +214,29 @@ fn the_starter_route_reads_ambient_and_grouping_like_the_circuit_rows() {
     };
     assert!(cable(m) >= cable(a));
 }
+
+#[test]
+fn a_thin_neutral_wire_is_not_judged_and_the_line_wire_is_reported() {
+    let (mut doc, ms) = starter();
+    let load_side = feed(&mut doc, &ms, 0.5, 200.0);
+    let line_side = doc
+        .project()
+        .wires_at(Endpoint::pin(ms.f1_sym, 0))
+        .next()
+        .expect("wire on the fuse's line side");
+    doc.transact("potentials", |tx| {
+        let n = tx.add_potential("N", PotentialKind::Neutral)?;
+        let l = tx.add_potential("L1x", PotentialKind::Line)?;
+        tx.update::<Potential>(n, |p| p.voltage = Some(0.1))?;
+        tx.update::<Potential>(l, |p| p.voltage = Some(400.0))?;
+        tx.set_wire_potential(load_side, Some(n))?;
+        tx.set_wire_potential(line_side, Some(l))?;
+        tx.update::<Wire>(line_side, |w| w.cross_section_mm2 = Some(4.0))?;
+        tx.set_property(line_side, "length_m", Some(10.0.into()))
+    })
+    .unwrap();
+    let s = sheet(&doc);
+    let c = s.circuits.iter().find(|c| c.device == ms.f1).unwrap();
+    assert_eq!(c.wire, Some(line_side), "{c:?}");
+    assert_eq!(c.judged_wires, 1);
+}

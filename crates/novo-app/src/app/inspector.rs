@@ -521,8 +521,6 @@ impl NovoApp {
         }
     }
 
-    /// The reset arrow of an overridden property: the device goes back to
-    /// its part's value, as one undo step.
     /// Writes a calculation input on the device: one undo step.
     pub(super) fn set_device_input(&mut self, device: DeviceId, key: &str, text: &str) {
         let value = match parse_device_input(key, text) {
@@ -545,6 +543,8 @@ impl NovoApp {
         }
     }
 
+    /// The reset arrow of an overridden property: the device goes back to
+    /// its part's value, as one undo step.
     fn reset_property(&mut self, device: DeviceId, key: &str) {
         let Some(doc) = self.backend.document_mut() else {
             return;
