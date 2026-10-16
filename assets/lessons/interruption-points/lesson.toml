@@ -1,6 +1,6 @@
 format = 1
 id = "interruption-points"
-version = 1
+version = 2
 status = "early"   # GAP: check kinds and anchors are missing, see NOTES.md
 title = "Signals across pages"
 title_nl = "Signalen over pagina's"
@@ -14,24 +14,31 @@ topics = ["cross-references", "interruption-points"]
 needs = ["connection-screens"]
 next = []
 project = "project.json"
+finished = "finished.json"
 page = "Start signal"
 
 # Start project: terminals.rs `interruption_points_start`: page 1 "Start signal" (-F1, -S0, -S1,
 # the start button's lower pin is open), page 2 "Contactor coil" (coil -K1 with its N feed), page 3
 # "Indicator lamps" (a make contact -K1 13/14 to -H1 and a break contact -K1 21/22 to -H2).
 # Finished: `interruption_points_finished`.
+# Every step is replayed through the real window by crates/novo-app/src/app/lesson_verify_terminals.rs
+# `interruption_points_steps_work_in_the_window`.
+# A `point` on ANOTHER page makes the runner switch the view when the step opens, which ticks a
+# `page` check at once; steps that change page therefore carry no `point`.
 
 [[step]]
 id = "goal"
 title = "What you will have"
 title_nl = "Wat je straks hebt"
 text = """
-The start signal runs from page 1 to the coil on page 2 through two linked points, numbered **1**.
-You will also read where the coil's contacts are.
+The start signal runs from page 1 to the coil on page 2 through two linked points, both named **1**.
+That is how a circuit continues on the next page without a wire across the sheet edge.
+You will also read where the coil's contacts are, which saves you looking for them.
 """
 text_nl = """
-Het startsignaal loopt van pagina 1 naar de spoel op pagina 2 via twee gekoppelde punten, genummerd **1**.
-Je leest ook waar de contacten van de spoel staan.
+Het startsignaal loopt van pagina 1 naar de spoel op pagina 2 via twee gekoppelde punten, allebei **1** genoemd.
+Zo loopt een schema op de volgende pagina door zonder draad over de paginarand.
+Je leest ook waar de contacten van de spoel staan, zodat je ze niet hoeft te zoeken.
 """
 pause = true
 point = { at = { device = "-S1", pin = "14" } }
@@ -42,214 +49,278 @@ id = "first-point"
 title = "Place the first interruption point"
 title_nl = "Plaats het eerste onderbrekingspunt"
 text = """
-Press {key:tool.place}, type **ip** (an {tip:interruption-point}), press Enter, then click just below -S1:14.
-The wire is drawn for you. {key:edit.escape} ends placing.
+The start button -S1 ends at its lower pin 14 and the signal must continue on page 2.
+Tap Q (a quick tap: holding it opens the wheel), type **ip** for an {tip:interruption-point} and press Enter, then click on the empty space just below -S1:14.
+A short wire joins the pin to the arrow. Press {key:edit.escape} to stop placing.
 """
 text_nl = """
-Druk op {key:tool.place}, typ **ip**, druk op Enter en klik net onder -S1:14.
-De draad wordt voor je getekend. {key:edit.escape} stopt het plaatsen.
+De startknop -S1 eindigt bij zijn onderste aansluiting 14 en het signaal moet op pagina 2 doorlopen.
+Tik op Q (een snelle tik: ingedrukt houden opent het wiel), typ **ip** voor een {tip:interruption-point} en druk op Enter, klik dan op de lege ruimte net onder -S1:14.
+Een korte draad verbindt de aansluiting met de pijl. Druk op {key:edit.escape} om het plaatsen te stoppen.
 """
+how = ["Tap {key:tool.place} (a quick tap, do not hold it)", "Type **ip** and press Enter", "Click on the empty space just below -S1:14", "Press {key:edit.escape}"]
+how_nl = ["Tik op {key:tool.place} (een snelle tik, niet ingedrukt houden)", "Typ **ip** en druk op Enter", "Klik op de lege ruimte net onder -S1:14", "Druk op {key:edit.escape}"]
+demo = [
+  { press = "tool.place" },
+  { type = "ip" },
+  { key = "Enter" },
+  { ghost = { symbol = "iec/connectivity/interruption_point", page = "Start signal", x = 40, y = 120 } },
+  { click = true },
+  { press = "edit.escape" },
+]
 point = { at = { device = "-S1", pin = "14" } }
 note = [
   { area = { page = "Start signal", x = 36, y = 112, w = 8, h = 14 }, text = "Click here, in line with the pin", text_nl = "Klik hier, in lijn met de pin" },
 ]
 expect = { count = { kind = "symbol", page = "Start signal", at_least = 5 } }
 solve = [ { place = { symbol = "iec/connectivity/interruption_point", page = "Start signal", x = 40, y = 120 } } ]
-# GAP: no check kind for "an interruption point exists" ({ device = ... } needs a tag; an
-#   interruption point has none). `count` of symbols on the page is the closest (4 at the start).
-# verified: Q and I both open the place field (keymap.rs:344-345, `tool.place`); the alias "ip"
-#   and mnemonic ("ip", ...) are in crates/novo-editor/src/catalog.rs:116 and the symbol file
+# GAP check: no check kind for "an interruption point exists" (an interruption point has no tag,
+#   so `device` cannot see it); the symbol count on the page (4 at the start) stands in.
+# verified: Q and I open the place field on a TAP (keymap.rs `tool.place`); the alias "ip" and
+#   the mnemonic are in crates/novo-editor/src/catalog.rs and the symbol file
 #   crates/novo-symbols/symbols/iec/connectivity/interruption_point.toml (one pin "1" at 0,0,
-#   pointing up, the arrow hangs below it). The editor names a new point IP1, IP2, ... (edit.rs:
-#   159 `SymbolRole::Interruption`, name from edit.rs:292 `next_interruption_name`).
-# verified: dropping a symbol draws the wire to a facing free pin in line with it
-#   (ConnectMode::Draw is the default: novo-editor tool.rs:78; edit.rs:591 `facing_wires`,
-#   tool.rs:645 `draw_facing`). -S1:14 points down, the new point's pin points up, so they face.
-#   The place tool stays armed after a click (tests/editing.rs "ten contactors take ten clicks"),
-#   so Esc is told to the person (keymap.rs:338).
+#   pointing up, the arrow hangs below it). The editor names a new point IP1, IP2, ... (edit.rs
+#   `next_interruption_name`).
+# verified: dropping a symbol draws the wire to a facing free pin in line with it (ConnectMode::Draw
+#   is the default); -S1:14 points down, the new point's pin points up, so they face. The place tool
+#   stays armed after the click, so the text asks for Esc (edit.escape).
+# verified headless: step first-point (key events Q, text, Enter; a real click at (40, 120)): the
+#   point IP1 stands at (40, 120) and the wire count grows by one.
 
 [[step]]
 id = "next-page"
 title = "Go to the next page"
 title_nl = "Ga naar de volgende pagina"
 text = """
-{key:nav.next_page} shows page 2, where the signal arrives at the coil.
+Page 2 holds the coil -K1 where the signal has to arrive.
 """
 text_nl = """
-{key:nav.next_page} toont pagina 2, waar het signaal bij de spoel aankomt.
+Pagina 2 bevat de spoel -K1 waar het signaal moet aankomen.
 """
-point = { at = { device = "-K1" } }
+how = ["Press {key:nav.next_page}"]
+how_nl = ["Druk op {key:nav.next_page}"]
+demo = [
+  { press = "nav.next_page" },
+]
 expect = { page = "Contactor coil" }
-solve = [ { page = "Contactor coil" } ]
-# verified: PageDown = nav.next_page (keymap.rs:385); page order here is 0 contents, 1, 2, 3, then
-#   the lists, so the next page is 2 (editor pages.rs `neighbour`). The editor leaves the place
-#   tool when the page changes (novo-editor view.rs:1266).
+solve = [ { command = "nav.next_page" } ]
+# verified: PageDown = nav.next_page (keymap.rs); page order here is 0 contents, 1, 2, 3, then the
+#   lists, so the next page is 2.
+# No `point`: a target on page 2 would switch the view when the step opens and tick it at once.
+# verified headless: step next-page (PageDown key event).
 
 [[step]]
 id = "pick-second"
 title = "Pick the interruption point again"
 title_nl = "Kies het onderbrekingspunt opnieuw"
 text = """
-Press {key:tool.place}, type **ip** and press Enter. Do not click yet.
+The signal needs a second point on this page.
+Tap Q, type **ip** and press Enter, but do not click yet.
 """
 text_nl = """
-Druk op {key:tool.place}, typ **ip** en druk op Enter. Klik nog niet.
+Het signaal heeft op deze pagina een tweede punt nodig.
+Tik op Q, typ **ip** en druk op Enter, maar klik nog niet.
 """
-point = { ui = "palette.field" }
-expect = { command = "tool.place" }
-solve = [ { command = "tool.place", arg = "ip" } ]
-# verified: same as the first point; `tool.place` with an argument opens the field filled
-#   (workbench.rs:448).
-
-[[step]]
-id = "turn"
-title = "Turn it half a turn"
-title_nl = "Draai het een halve slag"
-text = """
-Press {key:edit.rotate} twice, so the arrow points up the page and the pin faces the coil.
-"""
-text_nl = """
-Druk twee keer op {key:edit.rotate}, zodat de pijl omhoog wijst en de pin naar de spoel kijkt.
-"""
-point = { at = { device = "-K1", pin = "A1" } }
-expect = { command = "edit.rotate" }
-solve = [ { command = "edit.rotate" }, { command = "edit.rotate" } ]
-# verified: R rotates the piece in hand by a quarter turn (novo-editor tool.rs:1925
-#   `Tool::Place` rotation.then(R90)). The check ticks on the first press; the text asks for two.
-# GAP: a check for "the piece in hand is turned 180 degrees" does not exist.
+how = ["Tap {key:tool.place}", "Type **ip** and press Enter", "Do not click yet"]
+how_nl = ["Tik op {key:tool.place}", "Typ **ip** en druk op Enter", "Klik nog niet"]
+demo = [
+  { press = "tool.place" },
+  { type = "ip" },
+  { key = "Enter" },
+]
+expect = { tool = "place" }
+solve = [ { command = "tool.place", arg = "ip" }, { key = "Enter" } ]
+# verified: `tool.place` with an argument opens the field filled in (workbench.rs); the typed
+#   words choose the symbol and Enter arms the place tool, which the `tool` fact reads.
+# verified headless: step pick-second (the tool is Place only after Enter, not after Q).
 
 [[step]]
 id = "second-point"
-title = "Drop it above the coil"
-title_nl = "Zet het boven de spoel neer"
+title = "Turn it and drop it above the coil"
+title_nl = "Draai het om en zet het boven de spoel neer"
 text = """
-Click above the coil, in line with -K1:A1. The wire to the coil is drawn.
+The signal arrives from above, so the point must hang the other way up: press R twice to turn it half a turn.
+Then click on the empty space straight above the coil -K1, in line with its top pin A1.
+The wire to the coil is drawn for you, and the new point is named **IP2**. Press {key:edit.escape} to stop placing.
 """
 text_nl = """
-Klik boven de spoel, in lijn met -K1:A1. De draad naar de spoel wordt getekend.
+Het signaal komt van boven, dus het punt moet andersom hangen: druk twee keer op R om het een halve slag te draaien.
+Klik dan op de lege ruimte recht boven de spoel -K1, in lijn met de bovenste aansluiting A1.
+De draad naar de spoel wordt getekend en het nieuwe punt heet **IP2**. Druk op {key:edit.escape} om het plaatsen te stoppen.
 """
+how = ["Press {key:edit.rotate} twice: the arrow now points up", "Click on the empty space straight above the coil -K1, in line with its pin A1", "Press {key:edit.escape}"]
+how_nl = ["Druk twee keer op {key:edit.rotate}: de pijl wijst nu omhoog", "Klik op de lege ruimte recht boven de spoel -K1, in lijn met aansluiting A1", "Druk op {key:edit.escape}"]
+demo = [
+  { press = "edit.rotate" },
+  { press = "edit.rotate" },
+  { ghost = { symbol = "iec/connectivity/interruption_point", page = "Contactor coil", x = 40, y = 40, turns = 2 } },
+  { click = true },
+  { press = "edit.escape" },
+]
 point = { at = { device = "-K1", pin = "A1" } }
 note = [
   { area = { page = "Contactor coil", x = 36, y = 32, w = 8, h = 14 }, text = "Click here", text_nl = "Klik hier" },
 ]
 expect = { count = { kind = "symbol", page = "Contactor coil", at_least = 3 } }
 solve = [ { place = { symbol = "iec/connectivity/interruption_point", page = "Contactor coil", x = 40, y = 40, turns = 2 } } ]
-# GAP: solve `place` has no rotation; `turns = 2` is a proposal. See the check GAP above.
-# verified: the point is named IP2 (the lowest free name, edit.rs:292), so it has no partner yet:
-#   the checker lists "Interruption point IP2 has no partner" (novo-checks checks.rs:298
-#   `lone_interruptions`, shown by the issue pill).
+# GAP solve: `place` has `turns` now (Quarter turns, as the R key gives them) and is used here.
+# GAP check: no check for "the point is turned half a turn"; the symbol count on the page (2 at
+#   the start) stands in, and the replay asserts rotation R180 and the wire to -K1:A1.
+# verified: R rotates the piece in hand by a quarter turn (novo-editor tool.rs); a piece in hand
+#   is not refused (the refusal "it would run along another wire" is for a placed symbol).
+# verified: the point is named IP2 (the lowest free name), so it has no partner yet: the checker
+#   lists "Interruption point IP2 has no partner" (novo-checks).
+# verified headless: step second-point (R, R as key events; real click at (40, 40)).
 
 [[step]]
 id = "same-name"
 title = "Give both points the same name"
 title_nl = "Geef beide punten dezelfde naam"
 text = """
-Double-click the name **IP2** beside the new point, type **IP1** and press Enter.
 Two points with one name are one connection, and each shows where the other is.
+Double-click the name **IP2** beside the new point, select the old name with Ctrl+A, type **IP1** and press Enter.
 """
 text_nl = """
-Dubbelklik op de naam **IP2** naast het nieuwe punt, typ **IP1** en druk op Enter.
 Twee punten met dezelfde naam zijn één verbinding en elk toont waar het andere staat.
+Dubbelklik op de naam **IP2** naast het nieuwe punt, selecteer de oude naam met Ctrl+A, typ **IP1** en druk op Enter.
 """
-point = { area = { page = "Contactor coil", x = 30, y = 28, w = 12, h = 10 } }
-expect = { problem_free = "lone_interruption" }
-# GAP: solve `rename = { interruption = "IP2", to = "IP1" }` is agreed with the learning thread, not in the engine yet.
-# GAP: `problem_free` takes ids such as "wire.overlap"; there is no published id for the
-#   LoneInterruption problem (novo-checks lib.rs:92). Also no solve operation `rename`.
-#   The state check is false at the start of the step (two lone points) and true afterwards.
-# verified: double click on an interruption name renames it (novo-editor view.rs:966,
-#   `rename_label` edit.rs:365). F2 does NOT do it for an interruption point or a terminal (the F2
-#   handler at view.rs:1292 looks for a device); only the right-click row "Rename   F2" (view.rs:1734)
-#   and the double-click work.
-# verified: partners are the points with one name: crates/novo-core/src/xref.rs:118
-#   `interruption_partners`, and the netlist joins them (novo-core graph.rs:234). The reference
-#   next to each point reads page.column, e.g. 1.1 next to the point on page 2
-#   (novo-xref index.rs:429 `label`).
-# ODD: `xref.link` joins two interruption points (novo-xref link.rs:200 `link_interruptions`), but
-#   it works on the two selected symbols and a selection never spans two pages, so it cannot pair
-#   points on different pages; the lesson uses the name.
+how = ["Double-click the name **IP2** beside the new point", "Press Ctrl+A to select the old name", "Type **IP1**", "Press Enter"]
+how_nl = ["Dubbelklik op de naam **IP2** naast het nieuwe punt", "Druk op Ctrl+A om de oude naam te selecteren", "Typ **IP1**", "Druk op Enter"]
+demo = [
+  { move = { area = { page = "Contactor coil", x = 36, y = 30, w = 14, h = 12 } } },
+  { double_click = true },
+  { keys = ["Ctrl", "A"] },
+  { type = "IP1" },
+  { key = "Enter" },
+]
+point = { area = { page = "Contactor coil", x = 36, y = 30, w = 14, h = 12 } }
+expect = { wire = { from = "-S1:14", to = "-K1:A1" } }
+solve = [ { command = "xref.link" } ]
+# The check reads the netlist: -S1:14 and -K1:A1 are on one net exactly when the two points
+#   share a name (novo-core graph.rs joins interruption partners), so it is false before the
+#   rename and true after it. `problem_free` is NOT usable: the engine never fills the problem
+#   set, so it is true from the start.
+# GAP solve: there is no `rename` op (interruption "IP2" to "IP1"); `xref.link` is the closest
+#   command but it needs two selected symbols and a selection never spans two pages, so it cannot
+#   pair points on different pages (checked again on current main: still so).
+# verified: double click on an interruption name renames it (novo-editor view.rs `LabelKind::
+#   InterruptionName`, `rename_label` edit.rs). F2 does NOT rename a point or a terminal (the F2
+#   handler looks for a device only), although the right-click row says "Rename   F2".
+# verified: partners are the points with one name: crates/novo-core/src/xref.rs
+#   `interruption_partners`. The reference next to each point reads page.column (novo-xref index.rs).
+# verified headless: step same-name (real double click on the label, Ctrl+A, text, Enter).
 
 [[step]]
 id = "jump"
 title = "Jump to the other end"
 title_nl = "Spring naar het andere uiteinde"
 text = """
-With the point selected press {key:nav.partner}. You land on the partner on page 1.
+The partner is always one key away, however many pages lie between.
+With the new point selected press {key:nav.partner}: you land on its partner on page 1, **Start signal**.
 """
 text_nl = """
-Druk met het punt geselecteerd op {key:nav.partner}. Je komt bij het partnerpunt op pagina 1.
+Het partnerpunt is altijd één toets verder, hoeveel pagina's er ook tussen liggen.
+Druk met het nieuwe punt geselecteerd op {key:nav.partner}: je komt bij het partnerpunt op pagina 1, **Start signal**.
 """
-point = { area = { page = "Contactor coil", x = 36, y = 32, w = 8, h = 14 } }
-expect = { command = "nav.partner" }
-solve = [ { select = "IP1" }, { command = "nav.partner" } ]
-# verified: G = nav.partner (keymap.rs:380) -> xref.rs:74 `go_partner`; needs a selected symbol
-#   (toast "Select a coil, contact or interruption point first"); novo-xref nav.rs `Navigator::go`
-#   shows the page and selects the partner. Alt+Left returns (history).
+how = ["With the new point selected press {key:nav.partner}"]
+how_nl = ["Druk met het nieuwe punt geselecteerd op {key:nav.partner}"]
+demo = [
+  { press = "nav.partner" },
+]
+expect = { page = "Start signal" }
+solve = [ { command = "nav.partner" } ]
+# verified: G = nav.partner (keymap.rs) -> xref.rs `go_partner`; needs a selected symbol (toast
+#   "Select a coil, contact or interruption point first"); novo-xref nav.rs `Navigator::go` shows
+#   the page and selects the partner. Alt+Left returns (history).
+# No `point`: see the note at the top.
+# Where the person ends (verified headless, by keys and by these solve commands): jump -> page 1
+#   "Start signal"; renumber -> still page 1, the point stays selected; back -> page 2 "Contactor
+#   coil". This holds only after the REAL rename in same-name: its solve (`xref.link`) cannot make
+#   IP1 and IP2 partners, so a solve-only replay of jump/renumber/back has no pair to jump between.
+# verified headless: step jump (G key event; the double click had selected the point).
 
 [[step]]
 id = "renumber"
 title = "Number them automatically"
 title_nl = "Nummer ze automatisch"
 text = """
-Press {key:view.command_palette}, type **number interruption** and press Enter.
-The pair becomes **1**: points are numbered in reading order, a pair keeps one name.
+Press {key:view.command_palette}, type **number interruption** and press Enter; you stay on page 1.
+The pair is renamed **1**: points are numbered from the first page onwards, and a pair keeps one name.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **number interruption** en druk op Enter.
-Het paar wordt **1**: punten worden in leesvolgorde genummerd, een paar houdt één naam.
+Druk op {key:view.command_palette}, typ **number interruption** en druk op Enter; je blijft op pagina 1.
+Het paar wordt **1** genoemd: punten worden genummerd vanaf de eerste pagina, en een paar houdt één naam.
 """
-point = { ui = "palette.field" }
+how = ["Press {key:view.command_palette}", "Type **number interruption** and press Enter"]
+how_nl = ["Druk op {key:view.command_palette}", "Typ **number interruption** en druk op Enter"]
+demo = [
+  { press = "view.command_palette" },
+  { type = "number interruption" },
+  { key = "Enter" },
+]
+point = { ui = "palette.button" }
 expect = { command = "interruption.renumber" }
 solve = [ { command = "interruption.renumber" } ]
-# verified: `interruption.renumber` has no key (commands.rs:496), the app runs it
-#   (workbench.rs:229, 511) -> potentials.rs:34 `renumber_interruptions` -> novo-xref number.rs:45
-#   `renumber_interruptions` (the selected points and their partners, or all points when nothing
-#   is selected); toast "Numbered 2 interruption points". Also in the right-click menu of a
-#   point: "Number automatically" (view.rs:1737).
-# ODD: the editor names new points IP1, IP2 (edit.rs:292) while this command and
-#   novo-xref `next_interruption_name` use plain numbers; renumbering turns IPn into n.
+# verified: `interruption.renumber` has no key (commands.rs), the app runs it (workbench.rs) ->
+#   potentials.rs `renumber_interruptions` -> novo-xref number.rs `renumber_interruptions` (the
+#   selected points and their partners, or all points when nothing is selected); toast "Numbered
+#   2 interruption points". Also in the right-click menu of a point: "Number automatically".
+# ODD: the editor names new points IP1, IP2 while this command uses plain numbers; renumbering
+#   turns IPn into n.
+# verified headless: step renumber (command field): both points read 1.
 
 [[step]]
 id = "back"
 title = "Jump back"
 title_nl = "Spring terug"
 text = """
-Press {key:nav.partner} again: the same key takes you back to page 2.
+Press {key:nav.partner} again: the same key takes you to the partner, which is back on page 2, **Contactor coil**, with the point still selected.
 """
 text_nl = """
-Druk nogmaals op {key:nav.partner}: dezelfde toets brengt je terug naar pagina 2.
+Druk nogmaals op {key:nav.partner}: dezelfde toets brengt je naar het partnerpunt, dus terug naar pagina 2, **Contactor coil**, met het punt nog geselecteerd.
 """
-point = { area = { page = "Start signal", x = 36, y = 112, w = 8, h = 14 } }
+how = ["Press {key:nav.partner} again"]
+how_nl = ["Druk nogmaals op {key:nav.partner}"]
+demo = [
+  { press = "nav.partner" },
+]
 expect = { page = "Contactor coil" }
 solve = [ { command = "nav.partner" } ]
-# verified: the point is still selected after the jump (workbench.rs:713 `after_canvas_frame`
+# verified: the point is still selected after the jump (workbench.rs `after_canvas_frame`
 #   selects the target), so G works again; with one partner it just goes there.
+# verified headless: step back (G key event).
 
 [[step]]
 id = "contact-image"
 title = "Read the contacts under the coil"
 title_nl = "Lees de contacten onder de spoel"
 text = """
-Click the coil **-K1**: under it stands its {tip:contact-image}, such as 13-14 3.1, meaning page 3, column 1.
-Press {key:nav.all_references} to list every place -K1 is drawn.
+Under the coil **-K1** stands its {tip:contact-image}: 13-14 3.1 means contacts 13-14 are on page 3, column 1.
+Click the coil, then press {key:nav.all_references} to list every place -K1 is drawn; the list is never typed by hand.
 """
 text_nl = """
-Klik op de spoel **-K1**: eronder staan de contacten, zoals 13-14 3.1, dus pagina 3, kolom 1.
-Druk op {key:nav.all_references} voor een lijst van elke plek waar -K1 getekend staat.
+Onder de spoel **-K1** staat zijn {tip:contact-image}: 13-14 3.1 betekent dat de contacten 13-14 op pagina 3, kolom 1 staan.
+Klik op de spoel en druk op {key:nav.all_references} voor een lijst van elke plek waar -K1 getekend staat; die lijst typ je nooit zelf.
 """
+how = ["Click the coil **-K1**", "Press {key:nav.all_references}"]
+how_nl = ["Klik op de spoel **-K1**", "Druk op {key:nav.all_references}"]
+demo = [
+  { move = { at = { device = "-K1" } } },
+  { click = true },
+  { press = "nav.all_references" },
+]
 point = { at = { device = "-K1" } }
 note = [
   { at = { device = "-K1" }, text = "13-14 3.1 · 21-22 3.2: contact pair, page 3, column 1 and 2", text_nl = "13-14 3.1 · 21-22 3.2: contactpaar, pagina 3, kolom 1 en 2" },
 ]
 expect = { command = "nav.all_references" }
 solve = [ { select = "-K1" }, { command = "nav.all_references" } ]
-# verified: the contact image is drawn below a coil by novo-xref index.rs:429 `label` (lines
+# verified: the contact image is drawn below a coil by novo-xref index.rs `label` (lines
 #   "13-14 3.1" and "21-22 3.2" in this project); references read page.column (docs/DESIGN.md
-#   section 3: columns are the numbered grid of the page frame, ten on A3). Shift+G =
-#   nav.all_references (keymap.rs:381) -> xref.rs:101 `list_occurrences`; the popup is titled
-#   "EVERY OCCURRENCE" (xref.rs:150) and a click on a row jumps there.
-# The contacts belong to -K1 already; `xref.link` (commands.rs:430, verb "link") would move a
-# contact to another coil's device: not needed here.
+#   section 3: ten columns on A3). Shift+G = nav.all_references (keymap.rs) -> xref.rs
+#   `list_occurrences`; the popup is titled "EVERY OCCURRENCE" and a click on a row jumps there.
+# verified headless: step contact-image (click the coil, Shift+G): the xref label lines are asserted
+#   from the index and the occurrence list opens.
 
 [[step]]
 id = "done"
@@ -257,9 +328,11 @@ title = "Signals across pages"
 title_nl = "Signalen over pagina's"
 text = """
 Same name, one connection: the points find each other, {key:nav.partner} jumps, and the references are never typed.
+Compare with the finished result: page 1 ends in a point named 1 under -S1, page 2 starts with a point named 1 above -K1, and both are joined by wires.
 """
 text_nl = """
-Zelfde naam, één verbinding: de punten vinden elkaar, G springt en de verwijzingen typ je nooit.
+Zelfde naam, één verbinding: de punten vinden elkaar, {key:nav.partner} springt, en de verwijzingen typ je nooit.
+Vergelijk met het eindresultaat: pagina 1 eindigt in een punt met de naam 1 onder -S1, pagina 2 begint met een punt met de naam 1 boven -K1, en beide hangen aan draden.
 """
 pause = true
 # verified: there is no "update cross references" step: novo-xref rebuilds the index when the

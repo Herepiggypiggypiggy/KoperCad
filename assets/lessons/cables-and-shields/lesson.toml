@@ -1,13 +1,15 @@
 # Lesson: cables and shields. Builder and tests: crates/novo-tests/tests/lessons/cables.rs
-# Verified against the app code on this branch; see NOTES.md for the table of file:line.
+# Every step is replayed headless from project.json by crates/novo-app/src/app/lesson_verify_cables.rs
+# (keys, palette and clicks through the real app). NOTES.md has the verified path per step, the
+# remaining GAPs.
 format = 1
 id = "cables-and-shields"
-version = 1
+version = 2
 status = "early"   # GAPs below: no screen control yet for a cable's part, length and shield
 title = "Cables and Shields"
 title_nl = "Kabels en schermen"
-summary = "Turn the wires that leave the cabinet into cables, read their cores, and see where a part and a shield go."
-summary_nl = "Maak van de draden die de kast verlaten kabels, lees de aders en zie waar een artikel en een scherm komen."
+summary = "Turn the wires that leave the cabinet into cables, read their cores, and learn what the program can and cannot yet store on a cable."
+summary_nl = "Maak van de draden die de kast verlaten kabels, lees de aders en leer wat het programma al wel en nog niet op een kabel kan vastleggen."
 track = "terminals"
 order = 40
 level = "intermediate"
@@ -16,6 +18,7 @@ topics = ["cables", "terminals", "shield"]
 needs = ["terminal-strips"]
 next = ["wire-numbers"]
 project = "project.json"
+finished = "finished.json"
 page = "Pump station"
 
 [[step]]
@@ -23,12 +26,12 @@ id = "intro"
 title = "Cables for the pump station"
 title_nl = "Kabels voor het pompstation"
 text = """
-At the end, the pump motor and the level transmitter each have a cable with every {tip:core} assigned.
-The drawing is a pump station: wires run from the cabinet (+CAB) to the field (+FLD), and no cable exists yet.
+The pump motor and the level transmitter sit in the field (+FLD); their wires run from the terminal strip in the cabinet (+CAB). No cable exists yet.
+At the end both have a cable with every {tip:core} assigned, so the cable list, wire list and bill of materials all agree.
 """
 text_nl = """
-Aan het eind hebben de pompmotor en de niveauzender elk een kabel met alle {tip:core}-en toegewezen.
-De tekening is een pompstation: draden lopen van de kast (+CAB) naar het veld (+FLD), en er is nog geen kabel.
+De pompmotor en de niveauzender staan in het veld (+FLD); hun draden lopen van de klemmenstrook in de kast (+CAB). Er bestaat nog geen kabel.
+Aan het eind hebben beide een kabel met alle {tip:core}-en toegewezen, zodat kabellijst, draadlijst en stuklijst overeenkomen.
 """
 pause = true
 
@@ -37,17 +40,28 @@ id = "open-drawer"
 title = "Open the Cables drawer"
 title_nl = "Open de lade Cables"
 text = """
-Press {key:view.cables_drawer} to open the **Cables** drawer under the drawing.
-It lists cables and cores, and counts what the program proposes.
+The Cables drawer under the drawing lists every cable with its cores, and counts the cables the program proposes.
+Opening it shows the tab **Cables** and the button **Accept 2 proposed**.
 """
 text_nl = """
-Druk op {key:view.cables_drawer} om de lade **Cables** onder de tekening te openen.
-Daar staan kabels en aders, en het aantal voorstellen van het programma.
+De lade Cables onder de tekening toont elke kabel met zijn aders en telt de kabels die het programma voorstelt.
+Na het openen zie je het tabblad **Cables** en de knop **Accept 2 proposed**.
 """
-# verified: keymap.rs:392 binds Ctrl+4 (Anywhere) to view.cables_drawer; commands.rs:593 "Cables";
-# workbench.rs:513 toggles the drawer; the tab is drawers.rs:62-66.
-point = { ui = "drawer.cables.tab" }
-expect = { opened = "drawer.cables" }
+how = [
+  "Press {key:view.cables_drawer}",
+  "The drawer opens under the drawing with the tabs **Terminals**, **Cables** and **Devices**; **Cables** is selected",
+]
+how_nl = [
+  "Druk op {key:view.cables_drawer}",
+  "De lade opent onder de tekening met de tabbladen **Terminals**, **Cables** en **Devices**; **Cables** is geselecteerd",
+]
+demo = [
+  { press = "view.cables_drawer" },
+]
+# verified: keymap.rs:392 Ctrl+4 (Anywhere) -> view.cables_drawer; workbench.rs:670 toggles the drawer;
+# tabs and the button drawers.rs:62, :76. Test: open_the_drawer (key chord Ctrl+4, drawer = Cables).
+# `opened = "drawer.cables"` is not an anchor in learn.rs ANCHORS, so the check is the command.
+expect = { command = "view.cables_drawer" }
 solve = [ { command = "view.cables_drawer" } ]
 
 [[step]]
@@ -55,24 +69,17 @@ id = "read-proposals"
 title = "Read the proposals"
 title_nl = "Lees de voorstellen"
 text = """
-Wires that leave one {tip:location} for another are proposed as cables.
-**Accept 2 proposed** counts them: one for the motor, one for the level transmitter.
+A wire that leaves one {tip:location} for another is proposed as part of a cable. Here that gives two proposals: one for the motor (four wires) and one for the level transmitter (two wires).
+Proposals are only counted in the drawer; nothing is drawn on the page for them.
 """
 text_nl = """
-Draden die van de ene {tip:location} naar de andere gaan, worden als kabel voorgesteld.
-**Accept 2 proposed** telt ze: een voor de motor, een voor de niveauzender.
+Een draad die van de ene {tip:location} naar de andere gaat, wordt voorgesteld als onderdeel van een kabel. Hier zijn dat twee voorstellen: een voor de motor (vier draden) en een voor de niveauzender (twee draden).
+Voorstellen worden alleen in de lade geteld; op de pagina wordt er niets voor getekend.
 """
-# verified: drawers.rs:51 counts novo_cables::propose_cables; the button is drawers.rs:73-79
-# (small_button "Accept {n} proposed", no hover text); the empty message is drawers.rs:185-190.
-# GAP: cable proposals are not drawn on the canvas (no dashed wires) and Enter / proposal.accept
-#      only accepts TERMINAL proposals (workbench.rs:370, terminals.rs:30). The drawer button is the
-#      only way to accept all. Owner: Fast keyboard / UI integration (novo-app).
-point = { ui = "drawer.cables.accept" }
-note = [
-  { ui = "drawer.cables.empty", text = "No cables yet", text_nl = "Nog geen kabels" },
-  { area = { page = "Pump station", x = 36, y = 100, w = 40, h = 28 }, text = "Motor wires: strip to field", text_nl = "Motordraden: klemmenstrook naar veld" },
-  { area = { page = "Pump station", x = 82, y = 100, w = 22, h = 28 }, text = "Level transmitter wires", text_nl = "Draden van de niveauzender" },
-]
+# verified: drawers.rs:51 counts novo_cables::propose_cables (2 here: test read_the_proposals);
+# the empty-state text is drawers.rs:185-190.
+# GAP: cable proposals are not drawn on the canvas and have no command id or key (Enter accepts only terminal
+#      proposals); the drawer button is the only way to accept all. Declining one has no control either.
 pause = true
 
 [[step]]
@@ -80,17 +87,25 @@ id = "cable-tool"
 title = "Pick the Cable tool"
 title_nl = "Kies het gereedschap Kabel"
 text = """
-Press {key:tool.cable} for the Cable tool.
-You draw a line across the wires that belong in one cable. Start with the level transmitter.
+To decide yourself which wires share a cable, take the Cable tool: you draw a line across the wires that belong together. Start with the two wires of the level transmitter, below terminals 4 and 5.
 """
 text_nl = """
-Druk op {key:tool.cable} voor het gereedschap Kabel.
-Je trekt een lijn over de draden die in een kabel horen. Begin met de niveauzender.
+Wil je zelf bepalen welke draden een kabel delen, kies dan het gereedschap Kabel: je trekt een lijn over de draden die bij elkaar horen. Begin met de twee draden van de niveauzender, onder klem 4 en 5.
 """
-# verified: keymap.rs:348 binds C (Canvas) to tool.cable; commands.rs:274-280 "Cable";
-# workbench.rs:459 begins the tool (tool.rs:696); status line tool.rs:2544 "Cable: click along the wires...".
-# The dock has no Cable button (dock.rs:89 maps it to Select), so the key or Ctrl+K "cable" is the way.
-point = { area = { page = "Pump station", x = 82, y = 112, w = 22, h = 8 } }
+how = [
+  "Move the pointer over the drawing",
+  "Press {key:tool.cable}; the status line says the Cable tool is active",
+]
+how_nl = [
+  "Beweeg de aanwijzer over de tekening",
+  "Druk op {key:tool.cable}; de statusregel meldt dat het gereedschap Kabel actief is",
+]
+demo = [
+  { press = "tool.cable" },
+]
+# verified: keymap.rs:348 C (Canvas) -> tool.cable; workbench.rs:601 begin_cable (tool.rs:696). The dock has
+# no Cable button (dock.rs maps it to Select), so the key or Ctrl+K "cable" is the way.
+point = { area = { page = "Pump station", x = 80, y = 104, w = 24, h = 24 } }
 expect = { tool = "cable" }
 solve = [ { command = "tool.cable" } ]
 
@@ -99,18 +114,32 @@ id = "draw-line"
 title = "Draw the line across both wires"
 title_nl = "Trek de lijn over beide draden"
 text = """
-Click left of the first transmitter wire, then right of the second.
-Press {key:proposal.accept} to finish. Both wires become one cable.
+Click on the empty page left of the first transmitter wire, then right of the second wire, and finish the line. Both wires become one 3-core cable, -W1; its third core stays free.
 """
 text_nl = """
-Klik links van de eerste draad van de niveauzender en dan rechts van de tweede.
-Druk op {key:proposal.accept} om af te ronden. Beide draden worden een kabel.
+Klik op de lege pagina links van de eerste draad van de niveauzender en dan rechts van de tweede draad, en rond de lijn af. Beide draden worden een kabel met 3 aders, -W1; de derde ader blijft vrij.
 """
-# verified: tool.rs:1109-1121 (points are clicked; the last point again finishes), view.rs:1259-1261
-# (Enter finishes the cable line while no wire proposals are showing), tool.rs:1730-1762 finish_cable,
-# app.rs:799-805 -> drawers.rs:128-150 make_cable: one undo step "Draw cable", toast
-# "Cable =P1-W1: 3x1.5 on 2 wires", the drawer shows the new cable.
-point = { area = { page = "Pump station", x = 82, y = 112, w = 22, h = 8 } }
+how = [
+  "Click on empty page at the left of the first transmitter wire, about halfway between terminal 4 and -B1",
+  "Click again at the right of the second wire, so the line crosses both",
+  "Press {key:proposal.accept} to finish; the toast reads Cable =P1-W1",
+]
+how_nl = [
+  "Klik op lege pagina links van de eerste draad van de zender, ongeveer halverwege klem 4 en -B1",
+  "Klik opnieuw rechts van de tweede draad, zodat de lijn beide kruist",
+  "Druk op {key:proposal.accept} om af te ronden; de melding zegt Cable =P1-W1",
+]
+demo = [
+  { move = { at = { page = "Pump station", x = 80, y = 116 } } },
+  { click = true },
+  { move = { at = { page = "Pump station", x = 104, y = 116 } } },
+  { click = true },
+  { press = "proposal.accept" },
+]
+# verified: tool.rs:1109-1121 (clicked points), tool.rs:1904 EditorKey::Finish = Enter (keymap.rs:370
+# proposal.accept), tool.rs:1730 finish_cable, app.rs:973 -> drawers.rs:128 make_cable: one undo step "Draw cable",
+# toast "Cable =P1-W1: 3x1.5 on 2 wires". Test: draw_the_transmitter_cable.
+point = { area = { page = "Pump station", x = 80, y = 104, w = 24, h = 24 } }
 expect = { cable = { name = "-W1", cores_at_least = 3 } }
 solve = [ { cable = { name = "-W1", wires = [["-X1:4", "-B1:+"], ["-X1:5", "-B1:-"]] } } ]
 
@@ -119,103 +148,80 @@ id = "accept"
 title = "Accept the motor cable"
 title_nl = "Neem de motorkabel over"
 text = """
-In the drawer, click **Accept 1 proposed**.
-The four motor wires become one cable, each on its own core.
+One proposal is left, for the motor. Accepting it turns the four motor wires into the cable -W2 with one core per wire; the drawer now lists two cables.
 """
 text_nl = """
-Klik in de lade op **Accept 1 proposed**.
-De vier motordraden worden een kabel, elk op een eigen ader.
+Er blijft een voorstel over, voor de motor. Overnemen maakt van de vier motordraden de kabel -W2 met een ader per draad; de lade toont nu twee kabels.
 """
-# verified: drawers.rs:73-79 button -> accept_cable_proposals drawers.rs:153-172 (one undo step
-# "Accept cables", toast "Accepted 1 cable: =P1-W2 4G1.5").
+how = [
+  "In the drawer, click **Accept 1 proposed**",
+  "The list on the left now shows two cables",
+]
+how_nl = [
+  "Klik in de lade op **Accept 1 proposed**",
+  "De lijst links toont nu twee kabels",
+]
+# verified: drawers.rs:76 button "Accept {n} proposed" -> accept_cable_proposals drawers.rs:153 (one undo step
+# "Accept cables", toast "Accepted 1 cable: =P1-W2 4G1.5"). Test: accept_the_motor_cable (click by label).
 # GAP: no command id and no key for "accept cable proposals"; only the drawer button.
-point = { ui = "drawer.cables.accept" }
 expect = { cable = { name = "-W2", cores_at_least = 4 } }
+# GAP solve: a drawer button click; the `cable` solve makes the same cable through the engine.
 solve = [ { cable = { name = "-W2", wires = [["-X1:1", "-M1:U1"], ["-X1:2", "-M1:V1"], ["-X1:3", "-M1:W1"], ["-X1:PE", "-M1:PE"]] } } ]
 
 [[step]]
 id = "read-cores"
-title = "Read the cores"
-title_nl = "Lees de aders"
+title = "Read the cores of the motor cable"
+title_nl = "Lees de aders van de motorkabel"
 text = """
-The right half lists the cores of the cable you picked.
-BN, BK and GY carry L1 to L3. The green-yellow core GNYE always carries PE.
+The right half of the drawer lists the cores (the separate insulated wires) of the picked cable. The columns headed +CAB and +FLD show where each core connects at the cabinet end and at the field end.
+In -W2 brown (BN), black (BK) and grey (GY) carry L1, L2 and L3 to U1, V1 and W1; the green-yellow core (GNYE) always carries PE.
 """
 text_nl = """
-De rechterhelft toont de aders van de gekozen kabel.
-BN, BK en GY voeren L1 tot L3. De groen-gele ader GNYE voert altijd PE.
+De rechterhelft van de lade toont de aders (de afzonderlijk geïsoleerde draden) van de gekozen kabel. De kolommen +CAB en +FLD tonen waar elke ader aan de kastzijde en aan de veldzijde is aangesloten.
+In -W2 voeren bruin (BN), zwart (BK) en grijs (GY) L1, L2 en L3 naar U1, V1 en W1; de groen-gele ader (GNYE) voert altijd PE.
 """
-# verified: drawers.rs:224-262 columns Core, From (+CAB), To (+FLD), Potential; core order and colours
-# novo-cables propose.rs assign() (L1 BN, L2 BK, L3 GY, N BU, PE GNYE); kind.rs colour_cores.
-point = { ui = "drawer.cables.cores" }
-note = [
-  { ui = "drawer.cables.cores", text = "Core: colour or number", text_nl = "Ader: kleur of nummer" },
-  { ui = "drawer.cables.cores", text = "From: cabinet end, To: field end", text_nl = "From: kastzijde, To: veldzijde" },
-  { ui = "drawer.cables.cores", text = "Potential the wire carries", text_nl = "Potentiaal van de draad" },
-]
+# verified: drawers.rs:224-262 columns Core, From (+CAB), To (+FLD), Potential; core names and potentials as
+# printed by the test read_the_cores (W2: BN L1, BK L2, GY L3, GNYE PE).
 pause = true
 
 [[step]]
 id = "free-core"
-title = "See a free core"
-title_nl = "Zie een vrije ader"
+title = "See the free core of the transmitter cable"
+title_nl = "Zie de vrije ader van de zenderkabel"
 text = """
-Click **=P1-W1** in the list on the left.
-Its **Cores** column says 2 of 3: one core is free, kept for later.
+Click -W1 in the cable list on the left. Its Cores column reads 2 of 3: the third core has no wire yet, a free core kept for a later addition.
 """
 text_nl = """
-Klik links in de lijst op **=P1-W1**.
-De kolom **Cores** zegt 2 of 3: een ader is vrij, gereserveerd voor later.
+Klik links in de kabellijst op -W1. De kolom Cores toont 2 of 3: de derde ader heeft nog geen draad, een vrije ader voor later.
 """
-# verified: drawers.rs:198-222 (list; a click on the tag picks the cable, DrawerAction::ShowCable),
-# "{used} of {cores}" drawers.rs:217. A click has no solve operation yet, so this is a reading step.
-point = { ui = "drawer.cables.list" }
+how = [
+  "Click **=P1-W1** in the list on the left",
+  "Read **2 of 3** in its Cores column",
+]
+how_nl = [
+  "Klik links in de lijst op **=P1-W1**",
+  "Lees **2 of 3** in de kolom Cores",
+]
+# verified: drawers.rs:198-222 (list; click on the tag = ShowCable), "{used} of {cores}" drawers.rs:214.
+# Test: read_the_cores clicks the label and checks drawer_cable and the 2 of 3 count.
+# GAP solve: no click operation; a reading step.
 pause = true
 
 [[step]]
-id = "part-and-length"
-title = "Give the motor cable a part and a length"
-title_nl = "Geef de motorkabel een artikel en een lengte"
+id = "part-length-shield"
+title = "What a cable can carry that you cannot set yet"
+title_nl = "Wat een kabel kan dragen maar je nog niet kunt instellen"
 text = """
-Pick the Lapp **ÖLFLEX CLASSIC 110 4G1,5** as the part of -W2 and set its length to 12 m.
-The wire list and the bill of materials use them.
+A cable can hold a part (for example a Lapp ÖLFLEX 4G1,5), a length and a {tip:shield} connected to PE; the wire list and bill of materials would use them. The program has no screen control for the part or the shield yet, so those wait. The length can come in through the Cables sheet of the Excel round trip.
 """
 text_nl = """
-Kies de Lapp **ÖLFLEX CLASSIC 110 4G1,5** als artikel van -W2 en zet de lengte op 12 m.
-De draadlijst en de stuklijst gebruiken ze.
+Een kabel kan een artikel dragen (bijvoorbeeld een Lapp ÖLFLEX 4G1,5), een lengte en een {tip:shield} dat op PE is aangesloten; draadlijst en stuklijst zouden ze gebruiken. Voor artikel en scherm is er nog geen bediening in het programma, dus die wachten. De lengte kan via het blad Cables van de Excel-rondgang binnenkomen.
 """
-# GAP: no screen control sets a cable's part or length. Engine: novo_parts::assign_cable_part
-#      (novo-parts/src/assign.rs:247) and Cable.length_m. The Cables drawer is read-only
-#      (drawers.rs:178-262), the inspector only knows devices (inspector.rs:78), and the property
-#      sheet (novo-parts sheet.rs) is not in the app. Accept passes no catalog (drawers.rs:158).
-#      Owner: Parts / UI integration (inspector for cables).
-# GAP: needs check kind `field` on a cable (part set, length).
-point = { ui = "inspector.cable.part" }
-# GAP: pause until the engine has a cable `field` check (expect = { field = { cable = "-W2", name = "part", is_set = true } })
-#      and a `cable_part` solve (name, maker, order_number, length_m); the learning thread agreed to add both.
-pause = true
-
-[[step]]
-id = "shield"
-title = "Add a shield to the transmitter cable"
-title_nl = "Voeg een scherm toe aan de zenderkabel"
-text = """
-A 4-20 mA signal needs a {tip:shield}. Add one to -W1 and connect it to PE at the cabinet end.
-A shield that is not connected is reported as a problem.
-"""
-text_nl = """
-Een 4-20 mA-signaal heeft een {tip:shield} nodig. Voeg er een toe aan -W1 en sluit het in de kast aan op PE.
-Een scherm dat niet is aangesloten, wordt als probleem gemeld.
-"""
-# GAP: no screen control adds a shield or connects it. Engine: novo_cables::add_shield and
-#      connect_shield (edit.rs:122, :175), core name SH, property cable.shield.SH = "pe". Proposals
-#      never offer a shielded type (propose.rs choose_type), and the drawer shows a shield core as a
-#      row named SH with the connection in the "From" column (screen.rs shield_ends).
-#      The unconnected-shield finding exists (check.rs ShieldUnconnected, novo-checks CableCore).
-#      Owner: Cables (WS-12) engine is done; the Cables drawer / inspector owner adds the control.
-# GAP: needs check kind `cable` with shield_connected = true (or `problem_free = "cable.core"`).
-point = { ui = "drawer.cables.cores" }
-# GAP: reading step until the engine has `cable = { name, shield_connected }` and a `cable_shield` solve.
+# GAP: no screen control sets a cable's part, type or shield. Engine: novo_parts::assign_cable_part,
+#      novo_cables::add_shield / connect_shield (edit.rs). Inspector knows devices only; the drawer is read-only;
+#      accept_proposals gets no catalog (drawers.rs:163). Check kinds wished for: `field` on a cable (part, length),
+#      `cable` with shield_connected; solve ops `cable_part`, `cable_shield`.
+# verified: novo-interop sheets/fields.rs:210-214 the Cables sheet has "Length [m]" (read 395, written 588).
 pause = true
 
 [[step]]
@@ -223,15 +229,9 @@ id = "done"
 title = "That is a cable plan"
 title_nl = "Dat is een kabelplan"
 text = """
-Wires that leave the cabinet are now cables with cores, a part, a length and a shield.
-Next: wire numbers, and how they show on the cable cores.
+The two field wire groups are now cables -W1 (3 cores, one free) and -W2 (4 cores, PE on GNYE). Use **Open finished version** to compare: it also shows a part, a length and a shield, which the engine can store but the screen cannot set yet.
 """
 text_nl = """
-Draden die de kast verlaten zijn nu kabels met aders, een artikel, een lengte en een scherm.
-Straks: draadnummers, en hoe ze op de kabeladers verschijnen.
+De twee groepen veldbedrading zijn nu kabels -W1 (3 aders, een vrij) en -W2 (4 aders, PE op GNYE). Gebruik **Open finished version** om te vergelijken: daar staan ook een artikel, een lengte en een scherm bij, die de motor wel kan opslaan maar het scherm nog niet kan instellen.
 """
-# NOTE: the generated "Cable diagram" page (novo-reports CableDiagram) is added by the program only
-# when a project opens (app.rs:549-554 document_replaced -> reports.rs:109 add_generated_pages) and
-# there is no command to add it later. Right after these steps it is not in the outline yet; it appears
-# when the project is saved and opened again. GAP: a command "Add generated pages" (UI integration).
 pause = true

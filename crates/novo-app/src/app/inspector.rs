@@ -7,7 +7,7 @@
 
 use eframe::egui;
 use novo_canvas::model::SymbolArt;
-use novo_core::{AnyId, DeviceId, Project, SymbolRole, Value};
+use novo_core::{AnyId, DeviceId, DeviceKind, DeviceTag, Project, SymbolRole, Value};
 use novo_theme::widgets;
 use novo_xref::{Place, XrefIndex};
 
@@ -40,6 +40,9 @@ pub(super) struct DeviceInfo {
     pub part_values: Vec<(String, String)>,
     /// The set time in seconds, for a device with a timer contact.
     pub delay: Option<f64>,
+    /// For a plug or socket: the tag of its other half (`plug.mate`),
+    /// empty when none is named. `None` for any other device.
+    pub mate: Option<String>,
 }
 
 /// One place the device is drawn: `NO 13-14 2.6`.
@@ -66,6 +69,7 @@ pub(super) struct InspectorState {
     tag: String,
     description: String,
     delay: String,
+    mate: String,
     pub(super) filter: String,
     /// The pin: a pinned inspector stays where it is with nothing selected
     /// and shows the page (DESIGN.md §3).
@@ -82,6 +86,8 @@ enum InspectorAction {
     Rename(String),
     Describe(String),
     SetDelay(f64),
+    /// The tag of a plug's other half; empty clears it.
+    SetMate(String),
     /// The reset arrow of an overridden property: back to the part's value.
     ResetProperty(String),
     Pin(bool),
@@ -195,6 +201,10 @@ pub(super) fn device_info(
         properties,
         part_values,
         delay,
+        mate: (d.kind == DeviceKind::Connector).then(|| match d.properties.get("plug.mate") {
+            Some(Value::Text(t)) => t.clone(),
+            _ => String::new(),
+        }),
     })
 }
 
@@ -323,6 +333,10 @@ impl NovoApp {
             state.delay = info.delay.map(|d| d.to_string()).unwrap_or_default();
         }
 
+        if focused != Some(egui::Id::new("inspector_mate")) {
+            state.mate = info.mate.clone().unwrap_or_default();
+        }
+
         let mut actions = Vec::new();
         let state = &mut self.wb.inspector;
         state.leaving = Some((info.clone(), left));
@@ -349,6 +363,7 @@ impl NovoApp {
                 }
                 InspectorAction::Describe(text) => self.describe(device, text),
                 InspectorAction::SetDelay(seconds) => self.set_delay(device, seconds),
+                InspectorAction::SetMate(tag) => self.set_mate(device, &tag),
                 InspectorAction::ResetProperty(key) => self.reset_property(device, &key),
                 InspectorAction::Pin(on) => self.wb.inspector.pinned = on,
                 InspectorAction::AssignPart(key) => self.assign_device_part(device, &key),
@@ -527,6 +542,32 @@ impl NovoApp {
         }
     }
 
+    /// Names the other half of a plug or socket (`plug.mate`), as one undo
+    /// step; empty clears it. Design checks compare the wiring of the two
+    /// halves.
+    pub(super) fn set_mate(&mut self, device: DeviceId, tag: &str) {
+        let tag = tag.trim();
+        let value = if tag.is_empty() {
+            None
+        } else if DeviceTag::parse(tag).is_ok() {
+            Some(Value::Text(tag.to_owned()))
+        } else {
+            self.message(Level::Warning, format!("\"{tag}\" is not a device tag"));
+            return;
+        };
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let Some(old) = doc.project().device(device) else {
+            return;
+        };
+        let label = format!("Set the other half of {}", old.tag);
+        match doc.transact(label, |tx| tx.set_property(device, "plug.mate", value)) {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+        }
+    }
+
     /// Sets a device's description, as one undo step.
     pub(super) fn describe(&mut self, device: DeviceId, text: String) {
         let Some(doc) = self.backend.document_mut() else {
@@ -633,6 +674,22 @@ fn inspector_body(
             && Some(seconds) != info.delay
         {
             actions.push(InspectorAction::SetDelay(seconds));
+        }
+    }
+
+    if info.mate.is_some() {
+        ui.add_space(6.0);
+        widgets::section_label(ui, "Other half");
+        let mate = ui
+            .add(
+                egui::TextEdit::singleline(&mut state.mate)
+                    .id(egui::Id::new("inspector_mate"))
+                    .hint_text("Tag of the plug or socket it mates with")
+                    .desired_width(f32::INFINITY),
+            )
+            .on_hover_text("Design checks report a pin wired on one half and not the other.");
+        if committed(ui, &mate) && Some(state.mate.trim()) != info.mate.as_deref() {
+            actions.push(InspectorAction::SetMate(state.mate.clone()));
         }
     }
 
@@ -842,6 +899,42 @@ mod tests {
         assert_eq!(info.description, "Pump");
         assert!(info.part.is_empty() && info.relations.is_empty());
         assert_eq!(info.delay, None, "no coil, no time field");
+        assert_eq!(info.mate, None, "only plugs name another half");
+    }
+
+    #[test]
+    fn a_plug_names_its_other_half() {
+        let mut project = Project::new("Plant");
+        let ((plug, other), _) = project
+            .transact("setup", |tx| {
+                let plug = tx.add_device_of_kind(
+                    DeviceTag::parse("-XM1").unwrap(),
+                    "",
+                    DeviceKind::Connector,
+                )?;
+                let other = tx.add_device_of_kind(
+                    DeviceTag::parse("-XF1").unwrap(),
+                    "",
+                    DeviceKind::Connector,
+                )?;
+                tx.set_property(plug, "plug.mate", Some(Value::Text("-XF1".into())))?;
+                Ok((plug, other))
+            })
+            .unwrap();
+        assert_eq!(
+            device_info(&project, None, None, plug)
+                .unwrap()
+                .mate
+                .as_deref(),
+            Some("-XF1")
+        );
+        assert_eq!(
+            device_info(&project, None, None, other)
+                .unwrap()
+                .mate
+                .as_deref(),
+            Some("")
+        );
     }
 
     #[test]

@@ -170,18 +170,18 @@ jobs:
       - name: Build (main + open PRs)
         id: combined
         continue-on-error: true
-        run: cargo build --release -p novo-app
+        run: cargo build --release -p novo-app -p novo-cli
 
       - name: Drop the PRs that break the build
         if: steps.combined.outcome == 'failure'
         run: |
           git reset -q --hard origin/main
           bash "$state/merge-prs.sh" check
-          if ! cargo build --release -p novo-app; then
+          if ! cargo build --release -p novo-app -p novo-cli; then
             git reset -q --hard origin/main
             echo "main $(git rev-parse --short HEAD)" > "$state/merged.txt"
             echo "Release build failed with the remaining PRs; this build is main only." >> "$state/skipped.txt"
-            cargo build --release -p novo-app
+            cargo build --release -p novo-app -p novo-cli
           fi
 
       - name: Build canvas stress demo (for the GPU check on real hardware)
@@ -193,6 +193,7 @@ jobs:
           stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           mkdir -p dist out
           cp target/release/kopercad.exe dist/
+          cp target/release/kopercad-cli.exe dist/
           # Launchers installed before the rename start novoelectric.exe after
           # unpacking this zip; keep a copy until they have been refreshed.
           cp target/release/kopercad.exe dist/novoelectric.exe
@@ -237,8 +238,8 @@ jobs:
           # One orphan commit with the exe, run.cmd and README, force-pushed
           # each build so the branch never grows and deleting it removes the
           # build. For running kopercad.exe straight from a git clone.
-          mkdir stage && unzip -q out/novoelectric-experimental-windows.zip kopercad.exe BUILD_INFO.txt -d stage
-          cp scripts/latest-build/run.cmd scripts/latest-build/README.md stage/
+          mkdir stage && unzip -q out/novoelectric-experimental-windows.zip kopercad.exe kopercad-cli.exe BUILD_INFO.txt -d stage
+          cp scripts/latest-build/run.cmd scripts/latest-build/import-parts.cmd scripts/latest-build/README.md stage/
           size=$(stat -c %s stage/kopercad.exe)
           if [ "$size" -gt 95000000 ]; then echo "kopercad.exe is $size bytes, over the git file limit; skipping the branch"; exit 0; fi
           cd stage

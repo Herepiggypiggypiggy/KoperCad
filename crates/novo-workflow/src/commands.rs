@@ -1376,6 +1376,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.standards_report",
+            "Export standards compliance report",
+            "Export",
+            &[
+                "iec 60204",
+                "ul 508a",
+                "nfpa 79",
+                "compliance",
+                "customer",
+                "checklist",
+            ],
+            Needs::Project,
+        ),
+        &["export standards", "standards report"],
+    ),
+    verb(
+        cmd(
             "export.plate",
             "Export plate drawing",
             "Export",
@@ -1446,6 +1463,55 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export wiring plan"],
+    ),
+    verb(
+        cmd(
+            "view.bench",
+            "Bench output...",
+            "Export",
+            &[
+                "bench",
+                "ferrule",
+                "ferrules",
+                "labels",
+                "label sheet",
+                "cut list",
+                "workshop",
+                "print",
+            ],
+            Needs::Project,
+        ),
+        &["bench output", "open bench output"],
+    ),
+    verb(
+        cmd(
+            "export.bench_cut",
+            "Export bench cut list (PDF)",
+            "Export",
+            &["wire cut", "bench", "workshop", "print", "tick", "strip"],
+            Needs::Project,
+        ),
+        &["export bench cut list", "bench cut list"],
+    ),
+    verb(
+        cmd(
+            "export.ferrules",
+            "Export ferrule table (PDF)",
+            "Export",
+            &["ferrule", "end sleeve", "crimp", "colour", "bench"],
+            Needs::Project,
+        ),
+        &["export ferrules", "ferrule table"],
+    ),
+    verb(
+        cmd(
+            "export.labels",
+            "Export label sheets (PDF)",
+            "Export",
+            &["labels", "stickers", "wire flags", "print", "tape"],
+            Needs::Project,
+        ),
+        &["export labels", "print labels"],
     ),
     verb(
         cmd(

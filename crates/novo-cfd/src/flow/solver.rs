@@ -1,4 +1,5 @@
 use super::mesh::Mesh;
+use super::par::{for_planes, max_over_planes};
 use super::pressure::PressureSolver;
 use super::scheme::{Sample, Scheme, face_value};
 use crate::openings::{OpenPatch, OpenSet};
@@ -70,6 +71,8 @@ pub struct FlowConfig {
     pub faces: [FaceBc; 6],
     /// Volumetric heating per cell, K/s (heat / (rho cp)), or none.
     pub heat_source: Option<Vec<f64>>,
+    /// Turbulent Prandtl number: the eddy diffusivity is `nu_t / prandtl_t`.
+    pub prandtl_t: f64,
     /// Openings to the outside air. Empty = closed box.
     pub openings: Vec<OpenPatch>,
     /// Temperature of the outside air and buoyancy reference, degrees C.
@@ -94,6 +97,7 @@ impl FlowConfig {
             scheme: Scheme::VanLeer,
             faces: [FaceBc::WALL; 6],
             heat_source: None,
+            prandtl_t: 0.85,
             openings: Vec::new(),
             t_ref: None,
             rho: 1.18,
@@ -122,6 +126,18 @@ pub struct FlowSolver {
     pub p: Vec<f64>,
     pub t: Vec<f64>,
     pub time: f64,
+    /// Eddy viscosity per cell, m2/s, set by a turbulence model each step.
+    /// Momentum diffuses with `nu + nu_t`, heat with `k + rho cp nu_t / prandtl_t`,
+    /// both as the harmonic mean over a face. The cross terms of the stress
+    /// tensor (gradients of `nu_t`) are neglected. `None` is laminar flow and
+    /// gives bit-identical results.
+    pub nu_t: Option<Vec<f64>>,
+    /// Wall function values, per cell and face (index `2 * axis + high`, the
+    /// order of [`Face`]): the viscosity / diffusivity that replaces `nu` /
+    /// `alpha` between the cell centre and the wall (a domain wall or a
+    /// solid). `NaN` keeps the molecular value.
+    pub wall_nu: Option<Vec<[f64; 6]>>,
+    pub wall_alpha: Option<Vec<[f64; 6]>>,
     t_buoyancy_ref: f64,
     pressure: PressureSolver,
     /// The openings resolved on the mesh.
@@ -142,6 +158,10 @@ pub struct FlowSolver {
     conv_scale: Vec<f64>,
     /// Heating per cell, K/s (from the config and the medium).
     q_cell: Vec<f64>,
+    /// Quadratic drag per cell and axis, 1/m (porous cells), if any.
+    drag_cell: Option<[Vec<f64>; 3]>,
+    /// Drag rate `F |u|` on each velocity face, 1/s (lagged one step).
+    drag_rate: [Vec<f64>; 3],
 }
 
 impl FlowSolver {
@@ -190,6 +210,13 @@ impl FlowSolver {
             }
             kf
         });
+        let drag_cell = cfg
+            .medium
+            .as_ref()
+            .filter(|md| md.has_drag())
+            .map(|md| md.drag.clone());
+        let drag_rate =
+            std::array::from_fn(|c| vec![0.0; if drag_cell.is_some() { mesh.len(c) } else { 0 }]);
         let pressure = PressureSolver::with_openness(&mesh, Some(&open.afrac));
         let t_in = cfg
             .openings
@@ -207,10 +234,15 @@ impl FlowSolver {
             k_face,
             conv_scale,
             q_cell,
+            drag_cell,
+            drag_rate,
             vel,
             p: vec![0.0; cells],
             t: vec![t_init; cells],
             time: 0.0,
+            nu_t: None,
+            wall_nu: None,
+            wall_alpha: None,
             t_buoyancy_ref: t_init,
             pressure,
             mesh,
@@ -244,16 +276,19 @@ impl FlowSolver {
         let mut rate: f64 = 1e-12;
         for c in 0..3 {
             let d = m.dims(c);
-            for k in 0..d[2] {
+            let r = max_over_planes(d[2], m.len(c), |k| {
+                let mut r: f64 = 0.0;
                 for j in 0..d[1] {
                     for i in 0..d[0] {
                         let ix = [i, j, k];
                         let s = ix[c].min(m.n[c] - 1);
                         let h = m.dx[c][s];
-                        rate = rate.max(self.vel[c][m.idx(c, ix)].abs() / h);
+                        r = r.max(self.vel[c][m.idx(c, ix)].abs() / h);
                     }
                 }
-            }
+                r
+            });
+            rate = rate.max(r);
         }
         cfl / rate
     }
@@ -263,9 +298,8 @@ impl FlowSolver {
     /// largest face flux (0 = exactly divergence free).
     pub fn divergence_max(&self) -> f64 {
         let m = &self.mesh;
-        let mut worst: f64 = 0.0;
-        let mut scale: f64 = 1e-30;
-        for k in 0..m.n[2] {
+        let plane = |k: usize| -> (f64, f64) {
+            let (mut worst, mut scale): (f64, f64) = (0.0, 1e-30);
             for j in 0..m.n[1] {
                 for i in 0..m.n[0] {
                     let ix = [i, j, k];
@@ -287,7 +321,11 @@ impl FlowSolver {
                     worst = worst.max(net.abs());
                 }
             }
-        }
+            (worst, scale)
+        };
+        // Both are maxima, so the plane order does not matter.
+        let worst = max_over_planes(m.n[2], m.cells(), |k| plane(k).0).max(0.0);
+        let scale = max_over_planes(m.n[2], m.cells(), |k| plane(k).1).max(1e-30);
         worst / scale
     }
 
@@ -295,6 +333,7 @@ impl FlowSolver {
     pub fn step(&mut self, dt: f64) -> StepInfo {
         let old_t = self.t.clone();
         let old_vel = self.vel.clone();
+        self.update_drag_rate();
         self.advance_temperature(dt);
         // In a closed box a uniform temperature offset is a pure pressure
         // gradient, so the Boussinesq term uses the volume mean as reference.
@@ -338,7 +377,7 @@ impl FlowSolver {
         let d = m.dims(c);
         let u = &self.vel;
         let sch = self.cfg.scheme;
-        for k in 0..d[2] {
+        for_planes(&mut out, d[0] * d[1], |k, plane| {
             for j in 0..d[1] {
                 for i in 0..d[0] {
                     let ix = [i, j, k];
@@ -423,10 +462,10 @@ impl FlowSolver {
                     let w_lo = m.dx[c][ix[c]] / (m.dx[c][ix[c] - 1] + m.dx[c][ix[c]]);
                     let tf = w_lo * self.t[m.cell(lo)] + (1.0 - w_lo) * self.t[m.cell(hi)];
                     let buoy = -self.cfg.gravity[c] * self.cfg.beta * (tf - self.t_buoyancy_ref);
-                    out[m.idx(c, ix)] = -conv + buoy;
+                    plane[j * d[0] + i] = -conv + buoy;
                 }
             }
-        }
+        });
         out
     }
 
@@ -435,6 +474,8 @@ impl FlowSolver {
         let m = &self.mesh;
         let d = m.dims(c);
         let nu = self.cfg.nu;
+        let (nu_t, wall_nu) = (self.nu_t.as_deref(), self.wall_nu.as_deref());
+        let nu_cell = |cell: [usize; 3]| nu + nu_t.map_or(0.0, |v| v[m.cell(cell)]);
         let old = self.vel[c].clone();
         let rhs_total: Vec<f64> = old.iter().zip(rhs).map(|(o, r)| o / dt + r).collect();
         for _ in 0..200 {
@@ -449,23 +490,40 @@ impl FlowSolver {
                             continue;
                         }
                         let id = m.idx(c, ix);
-                        let (mut a_sum, mut a_nb) = (0.0, 0.0);
+                        let (mut a_sum, mut a_nb) = (self.drag_rate_at(c, id), 0.0);
                         for b in 0..3 {
                             let s = ix[b];
                             if b == c {
                                 let w = 0.5 * (m.dx[c][s - 1] + m.dx[c][s]);
-                                let (cl, cu) = (nu / (m.dx[c][s - 1] * w), nu / (m.dx[c][s] * w));
+                                let nu_lo = nu_cell(with(ix, c, s - 1));
+                                let nu_hi = nu_cell(ix);
+                                let (cl, cu) =
+                                    (nu_lo / (m.dx[c][s - 1] * w), nu_hi / (m.dx[c][s] * w));
                                 a_sum += cl + cu;
                                 a_nb += cl * self.vel[c][m.idx(c, with(ix, c, s - 1))]
                                     + cu * self.vel[c][m.idx(c, with(ix, c, s + 1))];
                             } else {
                                 let w = m.dx[b][s];
+                                // the two cells beside this sample along c
+                                let side = |t: usize| {
+                                    [
+                                        with(with(ix, b, t), c, ix[c] - 1),
+                                        with(with(ix, b, t), c, ix[c]),
+                                    ]
+                                };
+                                let nu_here = {
+                                    let [a, a2] = side(s);
+                                    0.5 * (nu_cell(a) + nu_cell(a2))
+                                };
                                 for upper in [false, true] {
+                                    let face = 2 * b + upper as usize;
                                     if (!upper && s == 0) || (upper && s + 1 == m.n[b]) {
-                                        let bc = self.cfg.faces[2 * b + upper as usize];
+                                        let bc = self.cfg.faces[face];
                                         if !bc.slip {
                                             let closed = 1.0 - self.open_share(b, upper, ix, c);
-                                            let cw = closed * nu / (0.5 * w * w);
+                                            let nu_w = wall_value(wall_nu, m, &side(s), face)
+                                                .unwrap_or(nu);
+                                            let cw = closed * nu_w / (0.5 * w * w);
                                             a_sum += cw;
                                             a_nb += cw * bc.wall_velocity[c];
                                         }
@@ -474,10 +532,16 @@ impl FlowSolver {
                                         let nbr = m.idx(c, with(ix, b, q));
                                         if self.open.afrac[c][nbr] == 0.0 {
                                             // a solid next door: no-slip wall half a cell away
-                                            a_sum += nu / (0.5 * w * w);
+                                            let nu_w = wall_value(wall_nu, m, &side(s), face)
+                                                .unwrap_or(nu);
+                                            a_sum += nu_w / (0.5 * w * w);
                                         } else {
                                             let dist = (m.centre[b][q] - m.centre[b][s]).abs();
-                                            let cn = nu / (dist * w);
+                                            let nu_there = {
+                                                let [a, a2] = side(q);
+                                                0.5 * (nu_cell(a) + nu_cell(a2))
+                                            };
+                                            let cn = harmonic(nu_here, nu_there) / (dist * w);
                                             a_sum += cn;
                                             a_nb += cn * self.vel[c][nbr];
                                         }
@@ -501,28 +565,44 @@ impl FlowSolver {
     // ---- pressure projection -------------------------------------------
 
     fn project(&mut self, dt: f64) -> usize {
+        // Porous drag acts inside the projection: the velocity correction of
+        // a face is dt / (1 + dt d) times the pressure gradient, so a steady
+        // state balances the drag exactly, however large dt d is.
+        let porous = self.drag_cell.is_some();
+        if porous {
+            let m = &self.mesh;
+            let coupling: [Vec<f64>; 3] = std::array::from_fn(|a| {
+                self.open.afrac[a]
+                    .iter()
+                    .zip(&self.drag_rate[a])
+                    .map(|(af, d)| af / (1.0 + dt * d))
+                    .collect()
+            });
+            self.pressure.set_coupling(m, &coupling);
+        }
         self.set_open_faces(dt);
         let m = &self.mesh;
         let af = &self.open.afrac;
         let mut b = vec![0.0; m.cells()];
-        for k in 0..m.n[2] {
+        let vel = &self.vel;
+        for_planes(&mut b, m.n[0] * m.n[1], |k, plane| {
             for j in 0..m.n[1] {
                 for i in 0..m.n[0] {
                     let ix = [i, j, k];
                     let mut net = 0.0;
                     for a in 0..3 {
                         let (hi, lo) = (m.idx(a, with(ix, a, ix[a] + 1)), m.idx(a, ix));
-                        net += (self.vel[a][hi] * af[a][hi] - self.vel[a][lo] * af[a][lo])
-                            * m.area(a, ix);
+                        net += (vel[a][hi] * af[a][hi] - vel[a][lo] * af[a][lo]) * m.area(a, ix);
                     }
-                    b[m.cell(ix)] = -net / dt;
+                    plane[j * m.n[0] + i] = -net / dt;
                 }
             }
-        }
+        });
         let iters = self.pressure.solve(&b, &mut self.p, 1e-9, 200);
+        let (p, drag) = (&self.p, &self.drag_rate);
         for a in 0..3 {
             let d = m.dims(a);
-            for k in 0..d[2] {
+            for_planes(&mut self.vel[a], d[0] * d[1], |k, plane| {
                 for j in 0..d[1] {
                     for i in 0..d[0] {
                         let ix = [i, j, k];
@@ -531,14 +611,50 @@ impl FlowSolver {
                         }
                         let lo = with(ix, a, ix[a] - 1);
                         let dist = m.centre[a][ix[a]] - m.centre[a][ix[a] - 1];
-                        self.vel[a][m.idx(a, ix)] -=
-                            dt * (self.p[m.cell(ix)] - self.p[m.cell(lo)]) / dist;
+                        let g = if porous {
+                            1.0 / (1.0 + dt * drag[a][m.idx(a, ix)])
+                        } else {
+                            1.0
+                        };
+                        plane[j * d[0] + i] -= g * dt * (p[m.cell(ix)] - p[m.cell(lo)]) / dist;
+                    }
+                }
+            });
+        }
+        self.finish_open_faces(dt);
+        iters
+    }
+
+    // ---- porous drag -------------------------------------------------
+
+    fn drag_rate_at(&self, c: usize, id: usize) -> f64 {
+        self.drag_rate[c].get(id).copied().unwrap_or(0.0)
+    }
+
+    /// `F |u|` on every interior face from the cells either side.
+    fn update_drag_rate(&mut self) {
+        let Some(f) = &self.drag_cell else {
+            return;
+        };
+        let m = &self.mesh;
+        for c in 0..3 {
+            let d = m.dims(c);
+            for k in 0..d[2] {
+                for j in 0..d[1] {
+                    for i in 0..d[0] {
+                        let ix = [i, j, k];
+                        let id = m.idx(c, ix);
+                        self.drag_rate[c][id] = if ix[c] == 0 || ix[c] == m.n[c] {
+                            0.0
+                        } else {
+                            let lo = m.cell(with(ix, c, ix[c] - 1));
+                            let hi = m.cell(ix);
+                            0.5 * (f[c][lo] + f[c][hi]) * self.vel[c][id].abs()
+                        };
                     }
                 }
             }
         }
-        self.finish_open_faces(dt);
-        iters
     }
 
     // ---- openings --------------------------------------------------------
@@ -781,6 +897,11 @@ impl FlowSolver {
             }
         }
         let old = self.t.clone();
+        let (nu_t, wall_alpha) = (self.nu_t.as_deref(), self.wall_alpha.as_deref());
+        let pr_t = self.cfg.prandtl_t;
+        // conductivity of a cell with the eddy part added
+        let k_eff =
+            |id: usize| self.k_cell[id] + nu_t.map_or(0.0, |v| self.c_cell[id] * v[id] / pr_t);
         for _ in 0..200 {
             let mut change: f64 = 0.0;
             let mut scale: f64 = 1e-30;
@@ -795,7 +916,11 @@ impl FlowSolver {
                             let s = ix[a];
                             let w = m.dx[a][s];
                             for upper in [false, true] {
+                                let face = 2 * a + upper as usize;
                                 if (!upper && s == 0) || (upper && s + 1 == n[a]) {
+                                    // wall function: replaces kc / cc (alpha) on this face
+                                    let a_wall = wall_value(wall_alpha, m, &[ix], face);
+                                    let kc = a_wall.map_or(kc, |aw| aw * cc);
                                     // an opening takes its share of the face off the wall
                                     let closed = 1.0
                                         - self.open.afrac[a]
@@ -819,7 +944,32 @@ impl FlowSolver {
                                     let q = if upper { s + 1 } else { s - 1 };
                                     let dist = (m.centre[a][q] - m.centre[a][s]).abs();
                                     let nb = m.cell(with(ix, a, q));
-                                    let kf = self.k_face[a][if upper { nb } else { id }];
+                                    // one conductance for the face, the same from both
+                                    // cells so the heat leaving one enters the other
+                                    let (lo, hi) = if upper { (id, nb) } else { (nb, id) };
+                                    let (lo_ix, hi_ix) = if upper {
+                                        (ix, with(ix, a, q))
+                                    } else {
+                                        (with(ix, a, q), ix)
+                                    };
+                                    let mut kf = self.k_face[a][hi];
+                                    let (c_lo, c_hi) = (self.c_cell[lo], self.c_cell[hi]);
+                                    let (w_lo, w_hi) = (m.dx[a][lo_ix[a]], m.dx[a][hi_ix[a]]);
+                                    let wall_lo = wall_value(wall_alpha, m, &[lo_ix], 2 * a + 1);
+                                    let wall_hi = wall_value(wall_alpha, m, &[hi_ix], 2 * a);
+                                    if let Some(aw) = wall_lo {
+                                        kf = dist
+                                            / (0.5 * w_lo / (aw * c_lo)
+                                                + 0.5 * w_hi / self.k_cell[hi]);
+                                    } else if let Some(aw) = wall_hi {
+                                        kf = dist
+                                            / (0.5 * w_hi / (aw * c_hi)
+                                                + 0.5 * w_lo / self.k_cell[lo]);
+                                    } else if nu_t.is_some() {
+                                        let eff = harmonic(k_eff(lo), k_eff(hi));
+                                        let mol = harmonic(self.k_cell[lo], self.k_cell[hi]);
+                                        kf *= eff / mol;
+                                    }
                                     let cn = kf / (cc * dist * w);
                                     a_sum += cn;
                                     a_nb += cn * self.t[nb];
@@ -843,4 +993,28 @@ impl FlowSolver {
 fn with(mut ix: [usize; 3], axis: usize, v: usize) -> [usize; 3] {
     ix[axis] = v;
     ix
+}
+
+/// Harmonic mean of two diffusivities (exactly `a` when equal).
+fn harmonic(a: f64, b: f64) -> f64 {
+    if a == b { a } else { 2.0 * a * b / (a + b) }
+}
+
+/// Mean of the wall-function values of `cells` on `face`, if any is set.
+fn wall_value(
+    table: Option<&[[f64; 6]]>,
+    m: &Mesh,
+    cells: &[[usize; 3]],
+    face: usize,
+) -> Option<f64> {
+    let table = table?;
+    let (mut sum, mut count) = (0.0, 0);
+    for c in cells {
+        let v = table[m.cell(*c)][face];
+        if !v.is_nan() {
+            sum += v;
+            count += 1;
+        }
+    }
+    (count > 0).then(|| sum / count as f64)
 }

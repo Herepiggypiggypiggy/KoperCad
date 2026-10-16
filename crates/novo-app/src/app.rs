@@ -5,6 +5,7 @@
 
 mod assembly;
 mod background_panel;
+mod bench;
 mod cabinet;
 mod cabinet_bar;
 mod cabinet_door;
@@ -29,9 +30,15 @@ mod eplan_import;
 mod example;
 mod faults;
 mod heat;
+mod heat_3d;
+#[cfg(test)]
+mod heat_3d_tests;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
+mod heat_progress;
+#[cfg(test)]
+mod heat_progress_tests;
 mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
@@ -80,6 +87,9 @@ mod shortcuts_sheet;
 mod simulate;
 mod sizing;
 mod standards;
+mod standards_report;
+#[cfg(test)]
+mod standards_report_tests;
 mod status_bar;
 mod symbol_preview;
 mod terminals;
@@ -98,6 +108,8 @@ mod xref;
 mod assembly_pack_tests;
 #[cfg(test)]
 mod assembly_tests;
+#[cfg(test)]
+mod bench_tests;
 #[cfg(test)]
 mod cabinet_rails_tests;
 #[cfg(test)]
@@ -119,7 +131,15 @@ mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
+mod learn_replay;
+#[cfg(test)]
 mod learn_tests;
+#[cfg(test)]
+mod lesson_verify_cables;
+#[cfg(test)]
+mod lesson_verify_outputs;
+#[cfg(test)]
+mod lesson_verify_terminals;
 #[cfg(test)]
 mod numbering_tests;
 #[cfg(test)]
@@ -494,7 +514,14 @@ impl NovoApp {
             Action::Redo => self.undo_redo(true),
             Action::ZoomToFit => self.canvas.zoom_to_fit(),
             Action::ShowSchematic => self.switch_workspace(workspace::Workspace::Schematic),
-            Action::ShowCabinet => self.switch_workspace(workspace::Workspace::Cabinet),
+            Action::ShowCabinet => {
+                // Asking for the Cabinet again from its table face (Ctrl+2,
+                // the Cabinet tab) goes back to the plate drawing.
+                if self.workspace() == workspace::Workspace::Cabinet {
+                    self.cabinet.table = false;
+                }
+                self.switch_workspace(workspace::Workspace::Cabinet);
+            }
             Action::SizeEnclosure => {
                 self.switch_workspace(workspace::Workspace::Cabinet);
                 self.sizing.panel_open = true;
@@ -683,9 +710,19 @@ impl NovoApp {
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
+        // The live view, an open drawer and a preview belong to the project
+        // they were opened on; a lesson (or any project) starts clean.
+        self.wb.live = Default::default();
+        self.wb.drawer = None;
+        self.wb.renumber = None;
+        self.wb.field.close();
         self.wb.commissioning = None;
         self.wb.sheet = 0;
         self.add_generated_pages();
+        // Nothing to commission in a closed project.
+        if !self.is_open() && self.workspace() == workspace::Workspace::Commissioning {
+            self.switch_workspace(workspace::Workspace::Schematic);
+        }
     }
 
     fn close_project(&mut self) {
@@ -853,6 +890,11 @@ impl NovoApp {
                     )
                 {
                     self.cabinet.keys.push((*id).to_owned());
+                } else if cabinet && *id == "edit.mirror" {
+                    self.message(
+                        Level::Info,
+                        "Mirror does not apply on the plate: a device only turns a quarter (R).",
+                    );
                 }
             }
             commands.retain(|id| {
@@ -888,6 +930,7 @@ impl NovoApp {
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
+        self.sync_commissioning_workspace();
         self.drawer(ui);
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
@@ -948,6 +991,7 @@ impl NovoApp {
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
         self.background_panel(&ctx);
+        self.bench_window(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.macro_browser_window(&ctx);
@@ -1083,8 +1127,12 @@ impl NovoApp {
         if self.wb.pending.is_some_and(|p| p.page != page) {
             self.wb.pending = None;
         }
-        // A page is a schematic page: picking one leaves the Cabinet.
-        self.switch_workspace(workspace::Workspace::Schematic);
+        // A page is a schematic page: picking one leaves the Cabinet, the
+        // Reports and the 3D view. Commissioning is the schematic page, so
+        // a jump inside it stays there.
+        if self.workspace() != workspace::Workspace::Commissioning {
+            self.switch_workspace(workspace::Workspace::Schematic);
+        }
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).

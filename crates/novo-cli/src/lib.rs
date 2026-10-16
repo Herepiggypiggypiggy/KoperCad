@@ -25,6 +25,7 @@ use serde_json::{Value, json};
 
 mod eplan;
 mod macros;
+mod parts;
 
 /// Process exit codes.
 pub mod exit {
@@ -65,6 +66,9 @@ enum Cmd {
     /// The macro library: list, export, import, install the starter set.
     #[command(subcommand)]
     Macros(macros::Macros),
+    /// The parts catalog: import every downloaded catalog file in one folder.
+    #[command(subcommand)]
+    Parts(parts::Parts),
     /// The user-run "Export from EPLAN" helper: write the script, check an
     /// export.
     #[command(subcommand)]
@@ -431,6 +435,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
         Cmd::Macros(cmd) => macros::run(cmd, out),
         Cmd::Eplan(cmd) => eplan::run(cmd, out),
+        Cmd::Parts(cmd) => parts::run(cmd, out),
         Cmd::Info { file, json } => {
             let project = read(&file)?;
             let info = novo_py::info_json(&project, Some(&file));
