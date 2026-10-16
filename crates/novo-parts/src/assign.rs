@@ -12,6 +12,7 @@ use novo_core::{
 };
 
 use crate::catalog::{Catalog, CatalogPart, PartKey};
+use crate::fit::{DeviceNeed, Fit, fit, is_wrong_kind};
 
 /// How a part is assigned to a device that may already have parts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -469,6 +470,13 @@ pub fn missing_parts(project: &Project) -> Vec<AnyId> {
         .collect()
 }
 
+/// A suggested part with how well it matches the device.
+#[derive(Debug, Clone)]
+pub struct Suggestion<'c> {
+    pub part: &'c CatalogPart,
+    pub fit: Fit,
+}
+
 /// Catalog parts that suit a device, best first: parts for its letter code
 /// (`K` for `-K1`), narrowed by `query` when given. A terminal strip gets
 /// terminal blocks.
@@ -479,6 +487,24 @@ pub fn suggest_for_device<'c>(
     query: &str,
     limit: usize,
 ) -> Vec<&'c CatalogPart> {
+    suggestions_for_device(catalog, project, device, query, limit)
+        .into_iter()
+        .map(|s| s.part)
+        .collect()
+}
+
+/// [`suggest_for_device`] with the match of each part. Without a query the
+/// parts rank by [`Fit`] (kind of device, coil voltage, rating); parts of a
+/// plainly different kind (a fuse holder for a breaker) are left out when
+/// better ones exist. With a query the catalog's text ranking stands, since
+/// the user asked for it; each part still carries its match.
+pub fn suggestions_for_device<'c>(
+    catalog: &'c Catalog,
+    project: &Project,
+    device: DeviceId,
+    query: &str,
+    limit: usize,
+) -> Vec<Suggestion<'c>> {
     let Some(device) = project.device(device) else {
         return Vec::new();
     };
@@ -486,10 +512,32 @@ pub fn suggest_for_device<'c>(
         DeviceKind::TerminalStrip => "X",
         _ => device.tag.letter_code(),
     };
-    let mut hits = catalog.suggest(code, query, limit);
-    if hits.is_empty() && !query.trim().is_empty() {
-        hits = catalog.search(query, limit);
+    let need = DeviceNeed::of(project, device);
+    let rate = |part: &'c CatalogPart| Suggestion {
+        fit: fit(part, &need, device),
+        part,
+    };
+    let searching = !query.trim().is_empty();
+    let mut hits: Vec<Suggestion<'c>> = catalog
+        .suggest(code, query, usize::MAX)
+        .into_iter()
+        .map(rate)
+        .collect();
+    if hits.is_empty() && searching {
+        hits = catalog
+            .search(query, usize::MAX)
+            .into_iter()
+            .map(rate)
+            .collect();
     }
+    if !searching {
+        if hits.iter().any(|h| !is_wrong_kind(h.part, &need)) {
+            hits.retain(|h| !is_wrong_kind(h.part, &need));
+        }
+        // Stable: equal matches keep the catalog's order.
+        hits.sort_by_key(|h| std::cmp::Reverse(h.fit.percent));
+    }
+    hits.truncate(limit);
     hits
 }
 
@@ -564,7 +612,7 @@ fn number(value: &novo_core::Value) -> Option<f64> {
 /// equal value for the same quantity (`power_kw` 2.2), or a current inside
 /// the part's setting range (`current_a` 8 within 7 to 10 A). A quantity
 /// the part does not state does not rule it out.
-fn sized_for(part: &CatalogPart, device: &Device) -> bool {
+pub(crate) fn sized_for(part: &CatalogPart, device: &Device) -> bool {
     device.properties.iter().all(|(key, value)| {
         let Some(wanted) = number(value) else {
             return true;

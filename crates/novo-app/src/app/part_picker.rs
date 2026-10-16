@@ -4,15 +4,18 @@
 //! Cables drawer (Ctrl+4, pick a cable). The Parts window has its own
 //! "Use for selected device" button for the part it shows.
 //!
-//! Each row shows how complete the part's data is (the Quality score of the
-//! Parts window), so a poorly described part is visible before it is used.
+//! A device's rows show how well each part matches the device (its kind, the
+//! coil voltage of its circuit, its rating) and rank by it; every row also
+//! shows how complete the part's data is (the Quality score of the Parts
+//! window), so a poorly described part is visible before it is used.
 //! An assignment is one undo step.
 
 use super::{Level, NovoApp};
 use eframe::egui;
 use novo_core::{AnyId, DeviceId, Project};
 use novo_parts::{
-    AssignMode, Catalog, CatalogPart, Grade, PartKey, assess, assign_part, suggest_for_device,
+    AssignMode, Catalog, CatalogPart, Fit, Grade, PartKey, assess, assign_part,
+    suggestions_for_device,
 };
 
 /// How many rows the list shows; the search narrows it.
@@ -96,6 +99,9 @@ pub(super) struct Candidate {
     pub(super) detail: String,
     pub(super) percent: u8,
     pub(super) grade: Grade,
+    /// How well the part suits the device; `None` in lists with no device
+    /// (cable parts).
+    pub(super) fit: Option<Fit>,
 }
 
 impl Candidate {
@@ -112,6 +118,7 @@ impl Candidate {
             detail,
             percent: quality.percent,
             grade: quality.grade(),
+            fit: None,
         }
     }
 }
@@ -124,9 +131,12 @@ pub(super) fn device_candidates(
     device: DeviceId,
     query: &str,
 ) -> Vec<Candidate> {
-    suggest_for_device(catalog, project, device, query, LIMIT)
+    suggestions_for_device(catalog, project, device, query, LIMIT)
         .into_iter()
-        .map(Candidate::of)
+        .map(|s| Candidate {
+            fit: Some(s.fit),
+            ..Candidate::of(s.part)
+        })
         .collect()
 }
 
@@ -187,8 +197,23 @@ pub(super) fn picker_ui(
                     .selectable_label(false, &c.title)
                     .on_hover_text("Use this part");
                 ui.horizontal(|ui| {
+                    if let Some(fit) = &c.fit {
+                        ui.small(
+                            egui::RichText::new(format!("Match {}%", fit.percent)).color(match fit
+                                .percent
+                            {
+                                80.. => novo_theme::tokens::SUCCESS,
+                                55..=79 => novo_theme::tokens::WARNING,
+                                _ => novo_theme::tokens::ERROR,
+                            }),
+                        )
+                        .on_hover_text(format!(
+                            "How well the part suits this device: {}",
+                            fit.reasons.join(", ")
+                        ));
+                    }
                     ui.small(
-                        egui::RichText::new(format!("{} {}%", c.grade.label(), c.percent))
+                        egui::RichText::new(format!("Data {} {}%", c.grade.label(), c.percent))
                             .color(grade_color(c.grade)),
                     )
                     .on_hover_text("How complete the part's data is (Parts > Quality)");
@@ -289,6 +314,10 @@ mod tests {
         let fits = |c: &Candidate| catalog.get(&c.key).is_some_and(|p| p.fits("K"));
         assert!(rows.iter().all(fits));
         assert!(rows.iter().all(|c| c.percent <= 100 && !c.title.is_empty()));
+        assert!(
+            rows.iter().all(|c| c.fit.is_some()),
+            "every row has a match"
+        );
     }
 
     #[test]
