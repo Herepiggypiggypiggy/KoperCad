@@ -657,3 +657,33 @@ fn x_on_the_plate_says_why_it_does_nothing() {
     press(&mut d, egui::Key::X);
     assert!(d.app.messages().iter().any(|m| m.text.contains("Mirror")));
 }
+
+#[test]
+fn moving_a_device_during_the_place_all_preview_takes_the_preview_first() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let layout = layout_of(&d, cab);
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.frame();
+    assert!(d.app.cabinet.preview.is_some());
+    let device = cands[0].id;
+
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 300.0, 200.0), Some(cab), l, &[]);
+    d.frame();
+    assert!(d.app.cabinet.preview.is_none(), "the preview is committed");
+    let l = layout_of(&d, cab).unwrap();
+    assert_eq!(l.placements.len(), 3);
+    let p = l.placements.iter().find(|p| p.id == device).unwrap();
+    assert_eq!((p.x, p.y), (300.0, 200.0));
+}

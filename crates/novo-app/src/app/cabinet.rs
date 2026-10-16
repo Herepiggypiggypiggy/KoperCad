@@ -819,7 +819,8 @@ impl NovoApp {
                     ask = Some(Ask::Accept);
                 } else if has_plan && escape {
                     ask = Some(Ask::Cancel);
-                } else if let (Some(layout), false) = (&layout, has_plan) {
+                } else if let Some(layout) = &layout {
+                    let on_plate = shown;
                     // Dropping a device from the list.
                     if let (Some(id), Some(at)) =
                         (out.response.dnd_release_payload::<u64>(), out.cursor_raw)
@@ -857,7 +858,7 @@ impl NovoApp {
                             .viewport
                             .screen_to_world(vec2(press.x - rect.min.x, press.y - rect.min.y));
                         let (wx, wy) = (f64::from(world.x), f64::from(world.y));
-                        if let Some(p) = layout.placements.iter().rev().find(|p| {
+                        if let Some(p) = on_plate.placements.iter().rev().find(|p| {
                             let f = p.footprint();
                             wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
                         }) {
@@ -936,6 +937,14 @@ impl NovoApp {
         layout: Option<CabinetLayout>,
         cands: &[novo_layout::plan::Candidate],
     ) {
+        // Editing the plate while a Place all preview is up takes the
+        // preview first (one undo step), so a drag, turn or take-off never
+        // acts on a layout that is not stored yet.
+        if self.cabinet.preview.is_some()
+            && matches!(ask, Ask::Drop(..) | Ask::Rotate(_) | Ask::Remove(_))
+        {
+            self.cabinet_ask(Ask::Accept, structure, None, cands);
+        }
         match ask {
             Ask::Panel(l) => {
                 self.cabinet.location = Some(l);
