@@ -694,7 +694,10 @@ impl NovoApp {
             }
             "sim.faults" => self.toggle_faults(),
             "view.changes" => self.toggle_changes(argument),
-            "view.commissioning" => self.toggle_commissioning(),
+            "view.commissioning" if self.workspace() == Workspace::Commissioning => {
+                self.switch_workspace(Workspace::Schematic);
+            }
+            "view.commissioning" => self.switch_workspace(Workspace::Commissioning),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
