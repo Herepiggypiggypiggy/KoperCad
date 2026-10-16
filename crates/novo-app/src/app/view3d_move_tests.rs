@@ -472,6 +472,8 @@ fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
         let inspector = rect(super::panel::id("cabinet_inspector")).expect("inspector");
         let heat = rect(egui::Id::new("view3d_heat_panel")).expect("heat panel");
         let stats = rect(super::panel::id("view3d_stats")).expect("stats");
+        // The heat key lives in the Heat strip, not in a floating area that could cover these.
+        assert!(rect(egui::Id::new("heat_legend")).is_none(), "{w} x {h}");
         // The cube sits above the Heat panel, at the view's top right.
         let cube = egui::Rect::from_min_size(
             egui::pos2(heat.right() + 12.0 - 12.0 - 88.0, heat.top() - 8.0 - 88.0),

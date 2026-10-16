@@ -15,7 +15,7 @@ use super::heat_3d::{
 
 /// 100 x 80 x 60 mm; `T = 20 + x / 10` (20 to 30 C); a wind of 1 m/s along
 /// +x; a 20 mm cube device at the origin.
-fn snapshot() -> CfdSnapshot {
+pub(super) fn snapshot() -> CfdSnapshot {
     let grid = Grid3::uniform([20, 16, 12], [100.0, 80.0, 60.0]);
     let n = grid.cells();
     let (mut temp, mut mat) = (Vec::new(), Vec::new());
@@ -67,7 +67,7 @@ fn snapshot() -> CfdSnapshot {
 }
 
 /// The plate corner sits 10 mm in from the solver origin on both axes.
-fn place() -> Place {
+pub(super) fn place() -> Place {
     Place {
         plate_x: 10.0,
         plate_y: 10.0,
