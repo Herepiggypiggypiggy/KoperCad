@@ -14,6 +14,8 @@ use super::cabinet_door::DoorState;
 /// The inspector's width, the same as the schematic's.
 /// Roomier than the schematic inspector: it holds the plate and door forms.
 const WIDTH: f32 = 320.0;
+/// Tall enough for the plate form and the door form without scrolling much.
+const HEIGHT: f32 = 620.0;
 
 /// The widest a plate dimension can be set to, in mm.
 const MAX_MM: f64 = 5000.0;
@@ -128,27 +130,43 @@ pub(super) struct DoorView<'a, F> {
     pub tag_of: &'a F,
 }
 
+/// Where the inspector starts when other panels share the canvas edge: how far
+/// below the top (None: under the top bar) and how much of the bottom stays
+/// free.
+#[derive(Clone, Copy, Default)]
+pub(super) struct Room {
+    /// The side away from the selection: the left edge.
+    pub left: bool,
+    pub top: Option<f32>,
+    pub bottom: f32,
+}
+
 /// Draws the inspector; returns what the user asked for.
 /// The inspector as an overlay on the canvas (DESIGN.md section 3), on the
 /// side away from the selection so it never hides it.
 pub(super) fn overlay(
     ctx: &egui::Context,
     canvas: egui::Rect,
-    left: bool,
+    room: Room,
     facts: &Facts,
     project: &Project,
     fields: &mut super::cabinet_panel::PanelFields,
     door: DoorView<'_, impl Fn(u64) -> String>,
 ) -> Option<Ask> {
-    let side = if left {
+    let side = if room.left {
         super::panel::Side::Left
     } else {
         super::panel::Side::Right
     };
-    let shown = super::panel::Panel::new("cabinet_inspector", "Inspector", canvas, side, WIDTH)
+    let mut panel = super::panel::Panel::new("cabinet_inspector", "Inspector", canvas, side, WIDTH)
         .fixed_open()
         .scroll_bar_always()
-        .show(ctx, |ui| show(ui, facts, project, fields, door));
+        .height(HEIGHT)
+        .bottom_room(room.bottom);
+    if let Some(top) = room.top {
+        panel = panel.top(top);
+    }
+    let shown = panel.show(ctx, |ui| show(ui, facts, project, fields, door));
     super::cabinet_bar::note_rect(
         ctx,
         "cabinet.inspector",
