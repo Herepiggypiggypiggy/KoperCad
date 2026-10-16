@@ -359,3 +359,22 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
         "the run published a result to the 3D view"
     );
 }
+
+#[test]
+fn the_3d_heat_strip_draws_a_colour_scale() {
+    let ctx = egui::Context::default();
+    let mut bar = egui::Rect::NOTHING;
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        let range = novo_heatview::range::Range { lo: 35.0, hi: 55.0 };
+        bar = super::view3d::heat_scale(ui, range);
+    });
+    out.textures_delta.clear();
+    assert_eq!(bar.width(), 110.0);
+    assert_eq!(bar.height(), 10.0);
+    assert!(
+        out.shapes
+            .iter()
+            .any(|s| matches!(s.shape, egui::Shape::Mesh(_))),
+        "the ramp is drawn as a mesh"
+    );
+}

@@ -539,6 +539,36 @@ fn run_heat(
     heat.live.is_stale()
 }
 
+/// The colour scale of the slice, shell and device tints: a ramp bar with the
+/// ambient and the hottest temperature at its ends. Returns the bar's rect.
+pub(super) fn heat_scale(ui: &mut egui::Ui, range: novo_heatview::range::Range) -> egui::Rect {
+    let muted = novo_theme::tokens::TEXT_MUTED;
+    let label = |ui: &mut egui::Ui, text: String| {
+        ui.label(egui::RichText::new(text).small().color(muted));
+    };
+    label(ui, format!("{:.0}", range.lo));
+    let (bar, response) = ui.allocate_exact_size(egui::vec2(110.0, 10.0), egui::Sense::hover());
+    let steps = 16;
+    let mut mesh = egui::Mesh::default();
+    for k in 0..=steps {
+        let f = k as f32 / steps as f32;
+        let [r, g, b] = novo_theme::heat::ramp(f);
+        let c = egui::Color32::from_rgb(r, g, b);
+        let x = bar.left() + f * bar.width();
+        mesh.colored_vertex(egui::pos2(x, bar.top()), c);
+        mesh.colored_vertex(egui::pos2(x, bar.bottom()), c);
+    }
+    for k in 0..steps as u32 {
+        let i = k * 2;
+        mesh.add_triangle(i, i + 1, i + 2);
+        mesh.add_triangle(i + 1, i + 3, i + 2);
+    }
+    ui.painter().add(egui::Shape::mesh(mesh));
+    response.on_hover_text("Temperature: ambient on the left, the hottest cell on the right");
+    label(ui, format!("{:.0} °C", range.hi));
+    bar
+}
+
 /// The Heat strip above the 3D view: slice, shell and airflow of the last
 /// simulation result (Cabinet > Heat > Simulate makes one).
 fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solution) {
@@ -567,10 +597,6 @@ fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solut
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
             "Colour each device by the air temperature in front of it, on the same scale as the slice",
         );
-        ui.label(
-            egui::RichText::new(format!("{:.0} to {:.0} °C", range.lo, range.hi))
-                .small()
-                .color(novo_theme::tokens::TEXT_MUTED),
-        );
+        heat_scale(ui, range);
     });
 }
