@@ -1,7 +1,7 @@
 format = 1
 id = "connection-screens"
 version = 1
-status = "draft"   # GAP: anchors and one check kind are missing, see NOTES.md
+status = "early"   # GAP: anchors and one check kind are missing, see NOTES.md
 title = "Terminal connection screens"
 title_nl = "Klemmenplannen"
 summary = "Open the generated terminal diagram of a finished strip, read it, then change a cable and a terminal number and watch the page follow."

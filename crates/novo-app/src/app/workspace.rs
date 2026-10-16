@@ -86,6 +86,7 @@ impl Workspace {
             self,
             Workspace::Schematic
                 | Workspace::Cabinet
+                | Workspace::View3d
                 | Workspace::Reports
                 | Workspace::Commissioning
         )
@@ -153,7 +154,11 @@ impl NovoApp {
             Workspace::Cabinet => None,
             Workspace::Reports if !self.is_open() => Some("Open a project first"),
             Workspace::Reports => None,
-            Workspace::View3d => Some("The 3D view is not built yet"),
+            Workspace::View3d if !self.is_open() => Some("Open a project first"),
+            Workspace::View3d if !self.view3d_has_cabinet() => {
+                Some("Set a mounting plate in the Cabinet first")
+            }
+            Workspace::View3d => None,
             Workspace::Commissioning if !self.is_open() => Some("Open a project first"),
             Workspace::Commissioning => None,
         }

@@ -20,13 +20,13 @@
 format = 1
 id = "drawing-standard"
 version = 1
-status = "draft"
+status = "early"
 title = "IEC or NFPA: the Drawing Standard"
 title_nl = "IEC of NFPA: de tekennorm"
 summary = "Switch a project from IEC 60617 to NFPA 79 and see the same circuit drawn with the other symbols."
 summary_nl = "Zet een project om van IEC 60617 naar NFPA 79 en zie hetzelfde schema met de andere symbolen getekend."
-track = "terminals"
-order = 70
+track = "start"
+order = 50
 level = "beginner"
 minutes = 6
 topics = ["symbols", "standard", "project settings"]

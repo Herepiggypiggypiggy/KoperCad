@@ -2,10 +2,10 @@ format = 1
 id = "design-checks"
 version = 1
 # Draft until the pill, the Issues list and waivers (PR #413) have anchors on main.
-status = "draft"
+status = "early"
 title = "Find and fix problems before anyone else does"
 summary = "Let the design checks walk you through the drawing, fix what is wrong and waive what is meant."
-track = "productivity"
+track = "outputs"
 order = 10
 level = "beginner"
 minutes = 8

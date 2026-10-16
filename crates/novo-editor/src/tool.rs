@@ -127,6 +127,19 @@ pub enum Tool {
     Wire(WireTool),
     Move(MoveTool),
     Cable(CableTool),
+    Paste(PasteTool),
+}
+
+/// A paste in hand: the copied drawing follows the pointer until the next
+/// click, which asks the app to paste it there ([`Editor::take_paste_request`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PasteTool {
+    /// The copied symbols as drawn at their source.
+    pub symbols: Vec<SymbolInstance>,
+    /// One polyline per copied wire, at the source.
+    pub paths: Vec<Vec<Point>>,
+    /// The source point the pointer holds (the top-left corner).
+    pub origin: Point,
 }
 
 /// Drawing a cable: a line over wires (DESIGN.md, C in the keys table and
@@ -144,7 +157,7 @@ impl Tool {
         match self {
             Tool::Wire(_) => Tool::Wire(WireTool::default()),
             Tool::Cable(_) => Tool::Cable(CableTool::default()),
-            Tool::Move(_) | Tool::Select => Tool::Select,
+            Tool::Move(_) | Tool::Select | Tool::Paste(_) => Tool::Select,
             Tool::Place(p) => Tool::Place(p.clone()),
         }
     }
@@ -214,6 +227,8 @@ pub struct Preview {
     pub moving: Vec<AnyId>,
     /// The wire in progress: start, bends and the pointer.
     pub wire: Vec<Point>,
+    /// Wires of a paste in hand, one polyline each.
+    pub paths: Vec<Vec<Point>>,
     /// A pin, junction or wire point the next click would connect to.
     pub target: Option<Point>,
     /// Proposed wires between facing free pins ([`edit::facing_wires`]),
@@ -439,6 +454,7 @@ pub struct Editor {
     hover_raw: Option<Point>,
     /// The wires of a finished cable line, until the app takes them.
     cable_request: Option<Vec<WireId>>,
+    paste_request: Option<Point>,
     notice: Option<String>,
     link_hint: Option<String>,
     row: Option<RowDrag>,
@@ -474,6 +490,7 @@ impl Editor {
             hovered: None,
             hover_raw: None,
             cable_request: None,
+            paste_request: None,
             notice: None,
             link_hint: None,
             row: None,
@@ -519,7 +536,7 @@ impl Editor {
         match &self.tool {
             Tool::Wire(w) => w.start.is_some(),
             Tool::Cable(c) => !c.points.is_empty(),
-            Tool::Move(_) => true,
+            Tool::Move(_) | Tool::Paste(_) => true,
             _ => false,
         }
     }
@@ -701,6 +718,32 @@ impl Editor {
     /// cable out of them.
     pub fn take_cable_request(&mut self) -> Option<Vec<WireId>> {
         self.cable_request.take()
+    }
+
+    /// Puts a copied drawing on the pointer (Ctrl+V): it follows the grid
+    /// until a click, which the app answers with the paste.
+    pub fn begin_paste(
+        &mut self,
+        symbols: Vec<SymbolInstance>,
+        paths: Vec<Vec<Point>>,
+        origin: Point,
+    ) {
+        self.set_tool(Tool::Paste(PasteTool {
+            symbols,
+            paths,
+            origin,
+        }));
+    }
+
+    /// Whether a paste is in hand.
+    pub fn pasting(&self) -> bool {
+        matches!(self.tool, Tool::Paste(_))
+    }
+
+    /// Where the click that dropped a paste was (snapped), once: the app
+    /// pastes there, offset by the clip's origin.
+    pub fn take_paste_request(&mut self) -> Option<Point> {
+        self.paste_request.take()
     }
 
     /// A press with a symbol on the pointer: a drag from here places a row
@@ -905,7 +948,7 @@ impl Editor {
                 c.points.clear();
                 true
             }
-            Tool::Move(_) => {
+            Tool::Move(_) | Tool::Paste(_) => {
                 self.tool = Tool::Select;
                 true
             }
@@ -1011,6 +1054,12 @@ impl Editor {
                 _ => Clicked::Unhandled,
             },
             Tool::Place(p) => self.commit_place(doc, page, &p, at),
+            Tool::Paste(_) => {
+                self.paste_request = Some(at);
+                self.tool = Tool::Select;
+                self.notice = None;
+                Clicked::Step
+            }
             Tool::Wire(mut w) => {
                 let target = self.target;
                 match (w.start, target) {
@@ -2560,6 +2609,9 @@ impl Editor {
                 "Click the next point · Enter or click the last point again to finish · Esc cancels"
                     .into()
             }
+            Tool::Paste(_) => {
+                "Paste: click to drop it · Esc cancels · Ctrl+Alt+V pastes in place".into()
+            }
             Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
                 let wires = if m.carry {
                     String::new()
@@ -2686,6 +2738,25 @@ impl Editor {
                         }
                     }
                 }
+            }
+            Tool::Paste(p) => {
+                let by = cursor - p.origin;
+                preview.symbols = p
+                    .symbols
+                    .iter()
+                    .map(|s| {
+                        let mut s = s.clone();
+                        s.id = SymbolId::from(PREVIEW_ID);
+                        s.page = page;
+                        s.placement.origin = s.placement.origin + by;
+                        s
+                    })
+                    .collect();
+                preview.paths = p
+                    .paths
+                    .iter()
+                    .map(|path| path.iter().map(|&q| q + by).collect())
+                    .collect();
             }
             Tool::Move(m) => {
                 preview.moving = m.ids.clone();
