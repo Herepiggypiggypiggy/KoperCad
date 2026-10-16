@@ -54,12 +54,12 @@ title_nl = "Exporteer alle pagina's"
 text = "One command hands over the whole set, so nothing is forgotten. Running it again replaces only the files KoperCAD wrote itself, never yours."
 text_nl = "Eén opdracht levert de hele set, zodat niets vergeten wordt. Opnieuw uitvoeren vervangt alleen bestanden die KoperCAD zelf schreef, nooit de jouwe."
 how = [
-  "Open **File > Export > Export all pages as DXF**.",
+  "Open **File > Export drawings > Export all pages as DXF**.",
   "KoperCAD writes one file per page into a folder called **<project name> DXF**.",
   "The message at the bottom tells you where it is.",
 ]
 how_nl = [
-  "Open **File > Export > Export all pages as DXF**.",
+  "Open **File > Export drawings > Export all pages as DXF**.",
   "KoperCAD schrijft één bestand per pagina in een map met de naam **<projectnaam> DXF**.",
   "De melding onderaan vertelt waar die staat.",
 ]
