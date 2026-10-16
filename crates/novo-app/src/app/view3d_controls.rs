@@ -16,6 +16,8 @@ pub(crate) struct Controls {
     pub(super) layers: Layers,
     /// How far the door is asked to be open, in degrees; 0 closed.
     pub(super) door_deg: f64,
+    /// The Move tool: a drag on a device, rail or duct moves it.
+    pub(super) move_items: bool,
 }
 
 impl Default for Controls {
@@ -23,6 +25,7 @@ impl Default for Controls {
         Controls {
             layers: Layers::default(),
             door_deg: 0.0,
+            move_items: true,
         }
     }
 }
@@ -80,6 +83,15 @@ pub(super) fn toolbar(
                     changed.layers |= toggle(ui, &mut layers.door, "Door", "Show the door");
                     changed.layers |=
                         toggle(ui, &mut layers.wires, "Wires", "Show the routed wires");
+                    toggle(
+                        ui,
+                        &mut controls.move_items,
+                        "Move",
+                        "Drag a device, rail or duct to move it on the plate (grid and checks \
+                         as in the Cabinet). R turns the selection, Delete takes it off. Off: \
+                         a drag draws a selection box.",
+                    );
+                    ui.separator();
                     if let Some(limit) = limit
                         && controls.layers.door
                     {

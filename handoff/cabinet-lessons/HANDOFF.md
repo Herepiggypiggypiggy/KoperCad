@@ -77,3 +77,8 @@ The six lessons after wire-routing start from `../wire-routing/project.json`.
 - All ten cabinet lessons are `early`, with Dutch and `how`/`how_nl`. Samples come from Place all (trunk duct included): `cabinet-layout/finished.json` equals `wire-routing/project.json`; regenerate with `cargo run -p novo-app --example panel_lessons assets/lessons`.
 - Numbers on the sample: routes 490/579/643/1047 mm, 11 wires at fullest duct 10 %, wire list 19 rows (15 routed, 4 estimate), Cut list summary 4 wires 0.88 m and 15 wires 9.32 m, Labels 38/4/9/1, plate holes 20 + 4.
 - Still open: anchor `workspace.view3d` (3D steps), solve ops for cabinet actions and `solve = "manual"` for wire_cut_exported (runner thread), signals cabinet_dropped, cabinet_rotated, cabinet_removed, cabinet_plan_accepted, wire_cut_exported. Promote lessons to `ready` once those exist and the replay gate passes.
+
+## Solve ops for the Cabinet (this PR)
+- `cabinet_place = { device, x, y }` (top left on the plate, mm, as a drop), `cabinet_rotate = "-F1"`, `cabinet_remove = "-F1"`, `cabinet = "place_all"` (shows the preview and raises the click on `cabinet.place_all`), `cabinet = "accept"`. They go through `cabinet_ask`, like the canvas.
+- Scripted: cabinet-layout (drag, turn, overlap, take-off, Place all, accept), rails-and-ducts move-off-rail, wire-routing move-device, cut-lengths move-k1, heat-and-sizing move-t1, panel-plate-drawing turn-t1.
+- Still without solve: steps ticked by a `clicked` on a panel button (rules, plate card, cut list, door apply, routes) and wire_cut_exported; they need the runner's `manual` marker or a click op. `workspace.view3d` anchor not yet registered.

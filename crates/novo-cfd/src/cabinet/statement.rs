@@ -26,6 +26,9 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
         _ => "Fine grid: the best this build offers.",
     };
     let mut limits = vec![
+        "The share of a device's heat that leaves through the mounting plate is not resolved \
+         (reads 0); device temperatures matched the 2D estimate in the sealed reference case."
+            .into(),
         "Turbulence and radiation are not modelled: surface temperatures of hot devices are \
          slightly high without radiation, and flow in a strongly forced cabinet is laminar."
             .into(),

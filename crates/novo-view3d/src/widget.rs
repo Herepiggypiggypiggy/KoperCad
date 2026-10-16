@@ -15,7 +15,7 @@ use crate::mesh::MeshLibrary;
 use crate::overlay::Overlay;
 use crate::pick::{self, Hit};
 use crate::render::{BlitBind, Blitter, Frame, Mode, Quality, Renderer, Tier, ViewTarget};
-use crate::scene::{GroupId, ItemId, Mark, Scene};
+use crate::scene::{GroupId, ItemId, ItemKind, Mark, Scene};
 use crate::view_state::ViewState;
 use egui::{
     Align2, Color32, FontId, Key, Modifiers, PointerButton, Pos2, Rect, Sense, Stroke, Vec2,
@@ -186,6 +186,7 @@ impl View3dOutput {
             context: None,
             double_clicked: None,
             plate_point: None,
+            item_drag: None,
             camera_changed: false,
         }
     }
@@ -205,7 +206,22 @@ pub struct View3dOutput {
     pub double_clicked: Option<ItemId>,
     /// The 2D plate point (x, y down, mm) under the pointer.
     pub plate_point: Option<(f64, f64)>,
+    /// A drag that started on a device, rail or duct while
+    /// [`View3d::drag_items`] is on: how far the pointer has moved on the
+    /// plate since the press, and whether the button is still down.
+    pub item_drag: Option<ItemDrag>,
     pub camera_changed: bool,
+}
+
+/// A device, rail or duct being dragged across the plate in the view.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ItemDrag {
+    pub id: ItemId,
+    /// The pointer's move on the plate plane since the press (x right, y
+    /// down, mm).
+    pub delta: (f64, f64),
+    /// The button was released this frame.
+    pub done: bool,
 }
 
 /// View cube: size and distance from the top-right corner of the view, in points.
@@ -248,6 +264,11 @@ pub struct View3d {
     needs_fit: bool,
     last_activity: f64,
     marquee_from: Option<Pos2>,
+    /// Dragging a device, rail or duct moves it instead of drawing a marquee.
+    pub drag_items: bool,
+    /// The item under the press of the current left drag, and the plate point
+    /// of the press.
+    item_grab: Option<(ItemId, (f64, f64))>,
     /// Where the last Alt + click landed and how many times in a row.
     alt_cycle: Option<(Pos2, usize)>,
     last_aspect: f32,
@@ -275,6 +296,8 @@ impl View3d {
             needs_fit: true,
             last_activity: f64::NEG_INFINITY,
             marquee_from: None,
+            drag_items: false,
+            item_grab: None,
             alt_cycle: None,
             last_aspect: 1.0,
             label_fades: HashMap::new(),
@@ -573,9 +596,52 @@ impl View3d {
         let plain_left =
             response.dragged_by(PointerButton::Primary) && !alt && !space && !self.cube_drag;
         if response.drag_started_by(PointerButton::Primary) && !alt && !space && !self.cube_drag {
-            self.marquee_from = ctx.input(|i| i.pointer.press_origin());
+            let press = ctx.input(|i| i.pointer.press_origin());
+            let grabbed = press
+                .filter(|_| self.drag_items)
+                .and_then(|p| self.pick_at(rect, scene, p).map(|h| (p, h)))
+                .filter(|(_, h)| {
+                    matches!(
+                        h.id.kind,
+                        ItemKind::Device | ItemKind::Rail | ItemKind::Duct
+                    )
+                });
+            match grabbed {
+                Some((p, hit)) => {
+                    let ray = self.camera.ray(Self::ndc(rect, p), aspect);
+                    let start = ray
+                        .plane_hit(Vec3::ZERO, Vec3::Z)
+                        .map(|t| scene.frame.plate(ray.at(t)));
+                    self.item_grab = start.map(|s| (hit.id, s));
+                }
+                None => self.marquee_from = press,
+            }
         }
-        if let (true, Some(from), Some(to)) = (plain_left, self.marquee_from, hover_pos) {
+        if let Some((id, start)) = self.item_grab {
+            let released = response.drag_stopped_by(PointerButton::Primary);
+            let now = hover_pos
+                .or_else(|| ctx.input(|i| i.pointer.latest_pos()))
+                .and_then(|p| {
+                    let ray = self.camera.ray(Self::ndc(rect, p), aspect);
+                    ray.plane_hit(Vec3::ZERO, Vec3::Z)
+                        .map(|t| scene.frame.plate(ray.at(t)))
+                });
+            if let Some(now) = now {
+                out.item_drag = Some(ItemDrag {
+                    id,
+                    delta: (now.0 - start.0, now.1 - start.1),
+                    done: released,
+                });
+            }
+            if released || !response.dragged() {
+                self.item_grab = None;
+            }
+        }
+        if let (true, Some(from), Some(to)) = (
+            plain_left && self.item_grab.is_none(),
+            self.marquee_from,
+            hover_pos,
+        ) {
             let band = Rect::from_two_pos(from, to);
             let edge = look.selection.edge;
             ui.painter().rect(
