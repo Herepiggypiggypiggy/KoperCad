@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod appearance;
 mod assembly;
 mod background_panel;
 mod bench;
@@ -35,7 +36,9 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod electrical;
+mod eplan_export;
 mod eplan_import;
+mod eplan_parts;
 mod example;
 mod faults;
 mod heat;
@@ -58,6 +61,9 @@ mod heat_run_tests;
 mod heat_settings;
 mod inspector;
 mod interop;
+mod languages;
+#[cfg(test)]
+mod languages_tests;
 mod learn;
 mod learn_demo;
 mod learn_labels;
@@ -89,6 +95,7 @@ mod parts_quality;
 mod pdf;
 mod plate_export;
 mod plc;
+mod plc_card;
 mod plc_link;
 mod plc_run;
 mod potentials;
@@ -111,6 +118,7 @@ mod standards_report;
 mod standards_report_tests;
 mod status_bar;
 mod symbol_preview;
+mod terminal_edit;
 mod terminals;
 mod tidy;
 mod tips;
@@ -126,6 +134,7 @@ mod view3d_move_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
+mod whats_new;
 mod wheel;
 mod wire_panel;
 #[cfg(test)]
@@ -157,6 +166,8 @@ mod clipboard_tests;
 mod commissioning_tests;
 #[cfg(test)]
 mod compare_tests;
+#[cfg(test)]
+mod eplan_ui_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
@@ -191,6 +202,8 @@ mod shortcuts_sheet_tests;
 mod tips_tests;
 #[cfg(test)]
 mod variants_tests;
+#[cfg(test)]
+mod whats_new_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -296,12 +309,16 @@ pub struct NovoApp {
     wb: Workbench,
     messages: Vec<Message>,
     show_about: bool,
+    /// The What's new list is open (app/whats_new.rs).
+    show_whats_new: bool,
     standards_open: bool,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
     open_on_start: Option<PathBuf>,
     /// The first frame has run its start-up work.
     started: bool,
+    /// The theme and density last applied to the egui context.
+    appearance_applied: Option<(novo_theme::ThemeChoice, novo_theme::Density)>,
     /// When to give the backend its next chance to autosave.
     next_tick: Instant,
     /// The last autosave failed; reported once until it works again.
@@ -357,11 +374,15 @@ impl NovoApp {
         backend: Box<dyn ProjectBackend>,
         canvas: Box<dyn CanvasView>,
     ) -> Self {
-        let settings = cc
+        let settings: Settings = cc
             .storage
             .and_then(|s| eframe::get_value(s, Settings::STORAGE_KEY))
             .unwrap_or_default();
-        novo_theme::apply(&cc.egui_ctx);
+        novo_theme::apply_with(
+            &cc.egui_ctx,
+            settings.theme_choice(),
+            settings.density_choice(),
+        );
         let mut app = Self::with_settings(backend, canvas, settings);
         app.load_user_keymap();
         app.learn_init_paths();
@@ -383,10 +404,12 @@ impl NovoApp {
             wb,
             messages: Vec::new(),
             show_about: false,
+            show_whats_new: false,
             standards_open: false,
             window_title: String::new(),
             open_on_start: None,
             started: false,
+            appearance_applied: None,
             next_tick: Instant::now(),
             autosave_failing: false,
             focus_mode: false,
@@ -902,6 +925,7 @@ impl NovoApp {
             self.started = true;
             self.start();
         }
+        self.sync_appearance(&ctx);
         self.fix_current_page();
         self.tick(&ctx);
         self.settings.last_open = self.backend.file();
@@ -1053,9 +1077,14 @@ impl NovoApp {
         self.learn_window(&ctx);
         self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);
+        self.plc_card_dialog(&ctx);
+        self.plc_overview_window(&ctx);
+        self.eplan_parts_dialog(&ctx);
+        self.eplan_export_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
+        self.whats_new_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
         self.parts_window(&ctx);
@@ -1080,7 +1109,9 @@ impl NovoApp {
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
         self.safety_window(&ctx);
+        self.languages_window(&ctx);
         self.numbering_window(&ctx);
+        self.terminal_edit_windows(&ctx);
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);
@@ -1162,6 +1193,7 @@ impl NovoApp {
 
     fn modal_open_but_wheel(&self) -> bool {
         self.show_about
+            || self.show_whats_new
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
             || self.wb.sheet_import.is_some()
@@ -1255,6 +1287,7 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
+                self.whats_new_pill(ui);
                 let shortcut = Action::CommandPalette
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
@@ -1375,7 +1408,7 @@ impl NovoApp {
         // name is in the tooltip), so four tabs and the pin fit the 248 pt
         // column at every density.
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = novo_theme::space::XS;
+            ui.spacing_mut().item_spacing.x = 0.0;
             for mode in [
                 OutlineMode::Pages,
                 OutlineMode::Issues,
@@ -1392,11 +1425,38 @@ impl NovoApp {
                 } else {
                     mode.icon().to_owned()
                 };
-                if ui
-                    .selectable_label(current, text)
-                    .on_hover_text(mode.label())
-                    .clicked()
-                {
+                let font = egui::FontId::proportional(13.0);
+                let color = if current {
+                    novo_theme::tokens::TEXT
+                } else {
+                    novo_theme::tokens::TEXT_MUTED
+                };
+                let galley = ui.painter().layout_no_wrap(text, font, color);
+                let size = egui::vec2((galley.size().x + 10.0).max(26.0), 26.0);
+                let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+                let response = response.on_hover_text(mode.label());
+                let color = if response.hovered() {
+                    novo_theme::tokens::TEXT
+                } else {
+                    color
+                };
+                ui.painter().galley(
+                    rect.center() - galley.size() / 2.0 - egui::vec2(0.0, 1.0),
+                    galley,
+                    color,
+                );
+                if current {
+                    // Copper underline: the one mark of the open tab.
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_max(
+                            egui::pos2(rect.left() + 4.0, rect.bottom() - 2.0),
+                            egui::pos2(rect.right() - 4.0, rect.bottom()),
+                        ),
+                        1,
+                        novo_theme::tokens::ACCENT,
+                    );
+                }
+                if response.clicked() {
                     self.outline_mode = mode;
                 }
             }
@@ -1414,6 +1474,7 @@ impl NovoApp {
                 }
             });
         });
+        ui.add_space(novo_theme::space::S);
         if self.outline_mode == OutlineMode::Issues {
             if self.issues_list(ui) {
                 self.outline_open = false;
@@ -1548,15 +1609,15 @@ impl NovoApp {
         ui.painter()
             .rect_filled(rect, 0.0, ui.visuals().extreme_bg_color);
         let width = 320.0_f32.min(rect.width() - 32.0);
-        let top = rect.top() + (rect.height() * 0.25).min(200.0);
+        let top = rect.top() + (rect.height() * 0.15).min(120.0);
         let column = egui::Rect::from_min_size(
             egui::pos2(rect.center().x - width / 2.0, top),
             egui::vec2(width, rect.bottom() - top),
         );
         ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-                ui.weak("No project open");
-                ui.add_space(8.0);
+                novo_theme::brand::lockup(ui, 64.0);
+                ui.add_space(novo_theme::space::XXL);
                 if self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
                     ui.weak("Two minutes: place, wire, cable, live view");
@@ -1785,6 +1846,7 @@ impl NovoApp {
 
 impl eframe::App for NovoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        fit_window_to_screen(ui.ctx());
         self.show(ui);
     }
 
@@ -1949,6 +2011,36 @@ mod tests {
     fn frame(ctx: &egui::Context, app: &mut NovoApp, input: egui::RawInput) {
         let mut output = ctx.run_ui(input, |ui| app.show(ui));
         output.textures_delta.clear();
+    }
+
+    #[test]
+    fn the_default_choice_is_dark_and_standard() {
+        let s = Settings::default();
+        assert_eq!(s.theme_choice(), novo_theme::ThemeChoice::Dark);
+        assert_eq!(s.density_choice(), novo_theme::Density::Standard);
+    }
+
+    #[test]
+    fn a_saved_choice_is_read_back() {
+        let s = Settings {
+            appearance_theme: "light".into(),
+            appearance_density: "compact".into(),
+            ..Default::default()
+        };
+        assert_eq!(s.theme_choice(), novo_theme::ThemeChoice::Light);
+        assert_eq!(s.density_choice(), novo_theme::Density::Compact);
+    }
+
+    #[test]
+    fn the_chosen_density_reaches_the_controls() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.settings.appearance_density = "compact".into();
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(
+            ctx.global_style().spacing.interact_size.y,
+            novo_theme::Density::Compact.metrics().control_height
+        );
     }
 
     #[test]
@@ -2513,5 +2605,86 @@ mod tests {
         let mut reopened = storage_app();
         reopened.open_path(&path);
         assert_eq!(page_count(&reopened), 2);
+    }
+}
+
+/// Room the system keeps for the taskbar and the window's title bar, in
+/// points, when a window is made to fit the screen.
+const SCREEN_MARGIN: egui::Vec2 = egui::vec2(0.0, 80.0);
+
+/// The size a window of `inner` gets on a screen of `monitor`, or `None`
+/// when it already fits.
+fn fitted_size(inner: egui::Vec2, monitor: egui::Vec2) -> Option<egui::Vec2> {
+    let room = (monitor - SCREEN_MARGIN).max(egui::vec2(640.0, 400.0));
+    let fitted = inner.min(room);
+    (fitted != inner).then_some(fitted)
+}
+
+/// Whether the window was left maximized or full screen by the user.
+fn user_sized(maximized: Option<bool>, fullscreen: Option<bool>) -> bool {
+    maximized == Some(true) || fullscreen == Some(true)
+}
+
+/// Once, on the first frame: the default window is 1280 x 800, which on a
+/// 1366 x 768 screen puts the status bar below the edge. A window larger
+/// than the screen is made to fit; one that fits is left alone.
+fn fit_window_to_screen(ctx: &egui::Context) {
+    let id = egui::Id::new("window_fitted");
+    if ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false) {
+        return;
+    }
+    let (inner, monitor, maximized, fullscreen) = ctx.input(|i| {
+        let v = i.viewport();
+        (
+            v.inner_rect.map(|r| r.size()),
+            v.monitor_size,
+            v.maximized,
+            v.fullscreen,
+        )
+    });
+    let (Some(inner), Some(monitor)) = (inner, monitor) else {
+        return;
+    };
+    ctx.data_mut(|d| d.insert_temp(id, true));
+    // A restored maximized or full screen window already fills the screen;
+    // resizing it would undo that on every launch.
+    if user_sized(maximized, fullscreen) {
+        return;
+    }
+    if let Some(size) = fitted_size(inner, monitor) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+    }
+}
+
+#[cfg(test)]
+mod fit_tests {
+    use super::*;
+
+    #[test]
+    fn a_window_taller_than_a_small_screen_shrinks_to_it() {
+        let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1366.0, 768.0));
+        assert_eq!(got, Some(egui::vec2(1280.0, 688.0)));
+    }
+
+    #[test]
+    fn a_window_that_fits_is_left_alone() {
+        assert_eq!(
+            fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1920.0, 1080.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn a_maximized_or_full_screen_window_is_never_resized() {
+        assert!(user_sized(Some(true), Some(false)));
+        assert!(user_sized(Some(false), Some(true)));
+        assert!(!user_sized(Some(false), Some(false)));
+        assert!(!user_sized(None, None));
+    }
+
+    #[test]
+    fn a_tiny_screen_never_goes_below_the_minimum() {
+        let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(500.0, 400.0));
+        assert_eq!(got, Some(egui::vec2(640.0, 400.0)));
     }
 }
