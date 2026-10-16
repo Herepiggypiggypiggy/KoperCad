@@ -893,7 +893,7 @@ fn limiter_credit(
                         "Withstands, peak kA",
                         "Withstands, A\u{b2}s",
                     ] {
-                        ui.label(egui::RichText::new(h).color(tokens::TEXT_MUTED).size(tokens::FONT_SMALL));
+                        ui.label(egui::RichText::new(h).color(crate::theme::ui_palette().text_secondary).size(tokens::FONT_SMALL));
                     }
                     ui.end_row();
                     for row in rows {
