@@ -6,8 +6,12 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+novo-core.workspace = true
 novo-layout.workspace = true
 thiserror.workspace = true
+
+[dev-dependencies]
+novo-parts.workspace = true
 
 [lints]
 workspace = true

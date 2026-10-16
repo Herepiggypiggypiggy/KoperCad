@@ -12,6 +12,7 @@
 //! [`simulate_steady_with_advice`].
 
 mod advice;
+pub mod bridge;
 mod flow;
 mod linalg;
 pub mod model;
