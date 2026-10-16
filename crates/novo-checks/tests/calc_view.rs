@@ -159,3 +159,58 @@ fn the_wire_panel_installation_key_is_read_as_the_installation_method() {
             .any(|m| m.starts_with("installation_method"))
     );
 }
+
+fn drop_percent(s: &CalcSheet, device: DeviceId) -> f64 {
+    let c = s.circuits.iter().find(|c| c.device == device).unwrap();
+    c.report
+        .as_ref()
+        .unwrap()
+        .rows
+        .iter()
+        .find(|r| r.title == "Voltage drop")
+        .and_then(|r| r.value)
+        .unwrap()
+}
+
+#[test]
+fn a_stated_power_factor_changes_the_voltage_drop() {
+    let (mut doc, ms) = starter();
+    let wire = feed(&mut doc, &ms, 95.0, 100.0);
+    let base = drop_percent(&sheet(&doc), ms.f1);
+    doc.transact("pf", |tx| {
+        tx.set_property(wire, "power_factor", Some(0.8.into()))
+    })
+    .unwrap();
+    let s = sheet(&doc);
+    assert!(drop_percent(&s, ms.f1) > base);
+    let c = s.circuits.iter().find(|c| c.device == ms.f1).unwrap();
+    let notes = &c.report.as_ref().unwrap().assumptions;
+    assert!(!notes.iter().any(|n| n.contains("power factor 1 assumed")));
+}
+
+#[test]
+fn the_starter_route_reads_ambient_and_grouping_like_the_circuit_rows() {
+    let (mut doc, ms) = starter();
+    feed(&mut doc, &ms, 2.5, 20.0);
+    doc.transact("motor", |tx| {
+        tx.set_property(ms.m1, "rated_current_a", Some(9.0.into()))?;
+        tx.set_property(ms.motor_wires[0], "length_m", Some(15.0.into()))
+    })
+    .unwrap();
+    let plain = sheet(&doc);
+    let m = plain.starters.iter().find(|m| m.motor == ms.m1).unwrap();
+    assert!(m.notes.iter().any(|n| n.contains("ambient")));
+    doc.transact("hot", |tx| {
+        tx.set_property(ms.motor_wires[0], "ambient_c", Some(55.0.into()))?;
+        tx.set_property(ms.motor_wires[0], "grouped_circuits", Some(9.0.into()))
+    })
+    .unwrap();
+    let hot = sheet(&doc);
+    let m = hot.starters.iter().find(|m| m.motor == ms.m1).unwrap();
+    assert!(!m.notes.iter().any(|n| n.contains("ambient")));
+    let a = plain.starters.iter().find(|m| m.motor == ms.m1).unwrap();
+    let cable = |e: &novo_checks::calc_view::StarterEntry| {
+        e.result.as_ref().unwrap().as_ref().unwrap().cable_mm2
+    };
+    assert!(cable(m) >= cable(a));
+}

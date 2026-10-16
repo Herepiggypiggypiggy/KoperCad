@@ -483,6 +483,9 @@ fn starter(ui: &mut egui::Ui, s: &StarterEntry) {
                 }
                 None => {}
             }
+            for n in &s.notes {
+                ui.weak(format!("- {n}"));
+            }
             for m in &s.missing {
                 ui.colored_label(tokens::WARNING, format!("Missing: {m}"));
             }
@@ -492,7 +495,7 @@ fn starter(ui: &mut egui::Ui, s: &StarterEntry) {
 fn panel(ui: &mut egui::Ui, sheet: &CalcSheet) {
     let p = &sheet.panel;
     ui.label(format!(
-        "{} power components counted in one series chain (branch limiting is not credited).",
+        "{} power components counted in one series chain (branch limiting is not credited); the default table applies to components without a stated rating.",
         p.components
     ));
     match p.result.panel_ka {

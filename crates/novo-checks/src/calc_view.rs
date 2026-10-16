@@ -94,6 +94,8 @@ pub struct StarterEntry {
     pub motor: DeviceId,
     pub tag: String,
     pub missing: Vec<String>,
+    /// Defaults used for the cable route, one line each.
+    pub notes: Vec<String>,
     pub result: Option<Result<Proposal, NoProposal>>,
 }
 
@@ -392,8 +394,10 @@ fn circuit_entry(
                 );
                 Method::C
             });
-        if number(&wire.properties, "power_factor").is_none() {
-            notes.push("power factor 1 assumed for the voltage drop (conservative for resistive loads, optimistic for motors)".to_owned());
+        let power_factor =
+            wire_number(project, wire, "power_factor").filter(|pf| (0.1..=1.0).contains(pf));
+        if power_factor.is_none() {
+            notes.push("power factor 1 assumed for the voltage drop: exact for resistive loads, optimistic for motors (it leaves out the reactive part of the drop)".to_owned());
         }
         if number(&project.info().properties, VOLTAGE_DROP_PCT).is_none() {
             notes.push(format!(
@@ -408,7 +412,7 @@ fn circuit_entry(
         let design = CircuitDesign {
             name: tag.clone(),
             load_current_a: load_a,
-            power_factor: 1.0,
+            power_factor: power_factor.unwrap_or(1.0),
             supply: supply_kind,
             voltage: line_voltage,
             device: device_data.clone(),
@@ -491,6 +495,7 @@ fn motor_starters(
             .map(|d| d.tag.to_string())
             .unwrap_or_default();
         let mut missing = Vec::new();
+        let mut notes = Vec::new();
         let current = project
             .rated_current_a(device)
             .or_else(|| device_number(project, device, keys::FLC_A))
@@ -537,18 +542,41 @@ fn motor_starters(
                     start_time_s: None,
                 };
                 let wire = project.wire(wire);
+                let method = wire
+                    .and_then(|w| installation_method_text(project, w))
+                    .or_else(|| {
+                        match project
+                            .info()
+                            .properties
+                            .get(keys::DEFAULT_INSTALLATION_METHOD)
+                        {
+                            Some(novo_core::Value::Text(t)) => Some(t.clone()),
+                            _ => None,
+                        }
+                    })
+                    .as_deref()
+                    .and_then(Method::parse);
+                if method.is_none() {
+                    notes.push("installation method not stated: method C assumed".to_owned());
+                }
+                let ambient = wire.and_then(|w| wire_number(project, w, AMBIENT_C));
+                if ambient.is_none() {
+                    notes.push("ambient temperature not stated: 30 \u{b0}C assumed".to_owned());
+                }
+                let grouped = wire
+                    .and_then(|w| wire_number(project, w, GROUPED_CIRCUITS))
+                    .filter(|n| *n >= 1.0);
+                if grouped.is_none() {
+                    notes.push("grouped circuits not stated: 1 assumed".to_owned());
+                }
                 let route = Route {
                     length_m: length,
                     insulation: wire
                         .map(|w| wire_insulation(project, w))
                         .unwrap_or(Insulation::Pvc),
-                    method: wire
-                        .and_then(|w| installation_method_text(project, w))
-                        .as_deref()
-                        .and_then(Method::parse)
-                        .unwrap_or(Method::C),
-                    ambient_c: 30.0,
-                    grouped_circuits: 1,
+                    method: method.unwrap_or(Method::C),
+                    ambient_c: ambient.unwrap_or(30.0),
+                    grouped_circuits: grouped.map_or(1, |n| n as u32),
                 };
                 Some(size_starter(&SizingInput {
                     motor: &motor,
@@ -569,6 +597,7 @@ fn motor_starters(
             motor: device,
             tag,
             missing,
+            notes,
             result,
         });
     }
