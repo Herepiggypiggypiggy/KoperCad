@@ -340,6 +340,11 @@ impl FlowSolver {
                                         diag += cw;
                                         rhs += cw * t_out;
                                     }
+                                    ThermalBc::Overall { u, t_out } => {
+                                        let cw = closed * u / (cc * w);
+                                        diag += cw;
+                                        rhs += cw * t_out;
+                                    }
                                 }
                             } else {
                                 let q = if upper { s + 1 } else { s - 1 };
