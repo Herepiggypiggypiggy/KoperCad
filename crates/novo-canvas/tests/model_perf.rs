@@ -93,6 +93,8 @@ fn big_page_cpu_budget() {
             lines: vec!["-K1 3.4".into()],
             warning: false,
             anchor: NoteAnchor::default(),
+            rows: Vec::new(),
+            density: Default::default(),
         })
         .collect();
     let first_notes = time("set 10k notes (first)", 1, || {

@@ -51,7 +51,7 @@ No step needs admin rights. If one asks for it, stop and say so.
   M: it moves as the Moving preference says. Shift+M always carries the wires, and keeps
   carrying them after you release Shift. Esc cancels and puts it back.
 - **Shift+L, live potentials.** Shift+L turns the live view on: a badge sits on each switched
-  pole, click it to close or open the pole. Lit wires show the potential colour, unreached
+  pole, click it to close or open all poles of that device together (Shift+click drives one pole alone, amber ring). The view starts as a plant at rest: break contacts and breakers closed, a breaker whose device has `state` = off open. Hold a pushbutton badge to press it; Reset goes back to rest. Lit wires show the potential colour, unreached
   wires are dimmed, a net where two potentials meet is red. Hover a wire for a tip about what it
   carries. Coils get a badge too and timers count down. Shift+L (or the close button) leaves the
   view and the drawing is unchanged.

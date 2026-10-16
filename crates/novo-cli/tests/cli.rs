@@ -911,3 +911,100 @@ fn import_sheet_lists_and_writes_new_devices() {
     let imported = novo_storage::ProjectFile::read(&out_path).unwrap();
     assert!(imported.devices().any(|d| d.description == "Pump motor"));
 }
+
+fn pxf_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../novo-interop/tests/fixtures/pxf/synthetic-small.epj")
+}
+
+#[test]
+fn import_eplan_previews_with_a_counted_not_carried_list_and_writes_nothing() {
+    let pxf = pxf_fixture();
+    let r = novo(&["import", "eplan", s(&pxf)]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("2 pages (empty)"), "{}", r.out);
+    assert!(r.out.contains("symbol drawings"), "{}", r.out);
+    let r = novo(&["import", "eplan", s(&pxf), "--json"]);
+    assert!(r.out.contains("\"not_carried\""), "{}", r.out);
+}
+
+#[test]
+fn import_eplan_output_writes_a_new_project_and_never_replaces_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let pxf = pxf_fixture();
+    let target = dir.path().join("eplan.novo");
+    let r = novo(&["import", "eplan", s(&pxf), "-o", s(&target)]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    let imported = novo_storage::ProjectFile::read(&target).unwrap();
+    assert_eq!(imported.pages().count(), 2);
+    assert_eq!(imported.cables().count(), 1);
+    let again = novo(&["import", "eplan", s(&pxf), "-o", s(&target)]);
+    assert_ne!(again.code, exit::OK);
+}
+
+#[test]
+fn import_eplan_refuses_a_file_that_is_not_pxf() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad = dir.path().join("x.epj");
+    std::fs::write(&bad, "<project/>").unwrap();
+    let r = novo(&["import", "eplan", s(&bad)]);
+    assert_eq!(r.code, exit::READ);
+    assert!(r.err.contains("not a PXF file"), "{}", r.err);
+}
+
+#[test]
+fn eplan_script_is_written_and_an_export_is_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("script");
+    let r = novo(&[
+        "eplan",
+        "script",
+        "-o",
+        target.to_str().unwrap(),
+        "--show",
+        "nl",
+    ]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("Stappen"));
+    for name in [
+        "KoperCAD_ExportFromEPLAN.cs",
+        "README-EN.txt",
+        "README-NL.txt",
+        "kopercad-selftest.epj",
+    ] {
+        assert!(target.join(name).is_file(), "{name}");
+    }
+    // The self-test file passes the check; no manifest means unknown version.
+    let r = novo(&[
+        "eplan",
+        "check",
+        target.join("kopercad-selftest.epj").to_str().unwrap(),
+    ]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("self-test"));
+    // An export folder from an older script is flagged.
+    let export = dir.path().join("export");
+    std::fs::create_dir(&export).unwrap();
+    std::fs::copy(
+        target.join("kopercad-selftest.epj"),
+        export.join("project.epj"),
+    )
+    .unwrap();
+    std::fs::write(
+        export.join("kopercad-export.xml"),
+        "<KoperCadEplanExport scriptVersion=\"0\"/>",
+    )
+    .unwrap();
+    let r = novo(&["eplan", "check", export.to_str().unwrap()]);
+    assert_eq!(r.code, exit::PROBLEMS);
+    assert!(r.out.contains("Get the script again"));
+    let r = novo(&[
+        "eplan",
+        "script",
+        "-o",
+        target.to_str().unwrap(),
+        "--show",
+        "fr",
+    ]);
+    assert_eq!(r.code, exit::USAGE);
+}

@@ -119,9 +119,11 @@ text = "Page and column of a place, written 3.4: page 3, column 4 of its frame. 
 text_nl = "Pagina en kolom van een plek, geschreven als 3.4: pagina 3, kolom 4 van het kader. Een verwijzing hoef je nooit te typen."
 [term.feed]
 text = "A symbol that puts a potential, such as L1 or N, on the page so wires can connect to it."
+text_nl = "Een symbool dat een potentiaal, zoals L1 of N, op de pagina zet zodat draden eraan kunnen verbinden."
 
 [term.self-hold]
 text = "A contact of a relay that keeps its own coil on after the start button is released."
+text_nl = "Een contact van een relais dat zijn eigen spoel aanhoudt nadat de startknop is losgelaten."
 
 [term.problem]
 text = "Something a design check found: an error, a warning or an info. Checks read the drawing and never block saving or exporting."

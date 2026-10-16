@@ -8,7 +8,7 @@
 format = 1
 id = "wire-numbers"
 version = 1
-status = "draft"   # GAPs: no way to give an unnumbered wire its first number, no numbering rule, no renumber
+status = "early"   # GAPs: no way to give an unnumbered wire its first number, no numbering rule, no renumber
 title = "Wire Numbers and the Wire List"
 title_nl = "Draadnummers en de draadlijst"
 summary = "See where a wire's name and number come from, change them, and read them in the wire list and on the cable cores."

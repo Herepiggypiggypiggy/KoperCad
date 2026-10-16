@@ -121,6 +121,8 @@ fn cross_reference_notes_are_printed_on_their_page() {
             lines: vec!["1-2 /1.3".into(), "13-14 /2.4".into()],
             warning: false,
             anchor: Default::default(),
+            rows: Vec::new(),
+            density: Default::default(),
         }],
     );
     let pdf = parse(&export_pdf(doc.project(), &options).unwrap());
@@ -129,6 +131,47 @@ fn cross_reference_notes_are_printed_on_their_page() {
     assert!(control.contains("(1-2 /1.3) Tj"), "{control}");
     assert!(control.contains("(13-14 /2.4) Tj"));
     assert!(!content(&pdf, ids[0]).contains("(1-2 /1.3) Tj"));
+}
+
+#[test]
+fn coil_contact_table_is_printed_with_its_symbols() {
+    use novo_pdf::{NoteGlyph, NoteRow};
+    let (doc, h) = gate1();
+    let mut options = PdfOptions::default();
+    let plain = export_pdf(doc.project(), &options).unwrap();
+    options.notes.insert(
+        h.control_page,
+        vec![SymbolNote {
+            symbol: h.k1_coil,
+            lines: Vec::new(),
+            warning: false,
+            anchor: novo_pdf::NoteAnchor::Below,
+            rows: vec![
+                NoteRow {
+                    glyph: NoteGlyph::Power,
+                    pins: "1-2 3-4 5-6".into(),
+                    location: "1.3".into(),
+                },
+                NoteRow {
+                    glyph: NoteGlyph::NormallyOpen,
+                    pins: "13-14".into(),
+                    location: "2.4".into(),
+                },
+            ],
+            density: Default::default(),
+        }],
+    );
+    let with = export_pdf(doc.project(), &options).unwrap();
+    let pdf = parse(&with);
+    let ids = pages(&pdf);
+    let control = content(&pdf, ids[1]);
+    for t in ["1-2 3-4 5-6", "1.3", "13-14", "2.4"] {
+        assert!(control.contains(&format!("({t}) Tj")), "{t}");
+    }
+    // The contact symbols are vector strokes on top of the text.
+    let strokes = |s: &str| s.lines().filter(|l| l.ends_with(" l")).count();
+    let before = content(&parse(&plain), pages(&parse(&plain))[1]);
+    assert!(strokes(&control) > strokes(&before));
 }
 
 #[test]

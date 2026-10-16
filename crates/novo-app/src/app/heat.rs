@@ -27,6 +27,7 @@ use novo_theme::heat::{self, Verdict};
 use novo_theme::tokens as t;
 use novo_thermal::Status;
 
+use super::heat_compare::{self, Diff};
 use super::heat_run::{self, Event, Runner, Solution};
 
 /// Opacity of the map over the drawing; the devices stay readable through it.
@@ -45,6 +46,9 @@ pub(super) struct Item {
     pub w: f64,
     pub h: f64,
     pub loss_w: f64,
+    /// False when no loss figure exists for the device (drawn as "no data",
+    /// not as a cool 0 W device).
+    pub loss_known: bool,
 }
 
 /// What the view draws from: the plate and its devices.
@@ -55,6 +59,8 @@ pub(super) struct Input {
     pub items: Vec<Item>,
     /// The latest solver result, if a run has produced one.
     pub solution: Option<Arc<Solution>>,
+    /// The result kept as A for comparison.
+    pub kept: Option<Arc<Solution>>,
 }
 
 /// What a run needs to remember about the moment it started.
@@ -68,6 +74,8 @@ pub(super) struct Meta {
 
 pub(super) struct HeatState {
     pub on: bool,
+    /// Show the difference map B minus A instead of the temperature.
+    pub delta: bool,
     pub map: bool,
     pub contours: bool,
     pub airflow: bool,
@@ -78,6 +86,8 @@ pub(super) struct HeatState {
     requested: bool,
     run: Option<Runner>,
     solution: Option<Arc<Solution>>,
+    /// Result kept as A for comparison.
+    kept: Option<Arc<Solution>>,
     pending: Option<Meta>,
     runs: u64,
     /// The last run's outcome in words: failed, cancelled or the bridge's
@@ -103,6 +113,8 @@ struct Cache {
     range: Range,
     contours: Vec<(Contour, bool)>,
     peaks: Vec<(Peak, String)>,
+    /// B minus A when a result is kept and a different one is shown.
+    diff: Option<Diff>,
     mean: f32,
     streams: Vec<Streamline>,
 }
@@ -111,6 +123,8 @@ impl HeatState {
     pub(super) fn new() -> HeatState {
         HeatState {
             on: false,
+            delta: false,
+            kept: None,
             map: true,
             contours: true,
             airflow: false,
@@ -125,9 +139,33 @@ impl HeatState {
         }
     }
 
+    /// The difference map to draw, when Δ is on and there is one.
+    fn delta_diff<'a>(&self, cache: &'a Cache) -> Option<&'a Diff> {
+        if self.delta {
+            cache.diff.as_ref()
+        } else {
+            None
+        }
+    }
+
+    /// Keeps the shown result as A, to compare the next run against.
+    pub(super) fn keep(&mut self) {
+        self.kept = self.solution.clone();
+        self.delta = false;
+    }
+
+    pub(super) fn clear_kept(&mut self) {
+        self.kept = None;
+        self.delta = false;
+    }
+
     /// The result the picture draws from.
     pub(super) fn solution(&self) -> Option<Arc<Solution>> {
         self.solution.clone()
+    }
+
+    pub(super) fn kept(&self) -> Option<Arc<Solution>> {
+        self.kept.clone()
     }
 
     pub(super) fn running(&self) -> bool {
@@ -198,6 +236,10 @@ impl HeatState {
                             messages: m.messages.clone(),
                         }));
                     }
+                }
+                Event::Lost => {
+                    done = true;
+                    self.notice = Some("The simulation stopped unexpectedly".into());
                 }
                 Event::Finished(result) => {
                     done = true;
@@ -271,6 +313,7 @@ pub(super) fn layout_key(input: &Input) -> u64 {
             i.w.to_bits(),
             i.h.to_bits(),
             i.loss_w.to_bits(),
+            i.loss_known,
         )
             .hash(&mut h);
     }
@@ -280,7 +323,12 @@ pub(super) fn layout_key(input: &Input) -> u64 {
 /// Cache key: the layout and which result is drawn.
 fn key(input: &Input) -> u64 {
     let mut h = DefaultHasher::new();
-    (layout_key(input), input.solution.as_ref().map(|s| s.id)).hash(&mut h);
+    (
+        layout_key(input),
+        input.solution.as_ref().map(|s| s.id),
+        input.kept.as_ref().map(|s| s.id),
+    )
+        .hash(&mut h);
     h.finish()
 }
 
@@ -327,14 +375,21 @@ fn build_solved(input: &Input, sol: &Arc<Solution>) -> Option<Cache> {
     let slice = cfd::as_2d(&sol.snapshot, window, CELL_MM)?;
     let smooth = slice.temperature.clone();
     let flow = slice.flow.clone();
-    Some(assemble(
+    let diff = input
+        .kept
+        .as_ref()
+        .filter(|a| a.id != sol.id)
+        .and_then(|a| heat_compare::diff(a, sol, &smooth, CELL_MM));
+    let mut cache = assemble(
         input,
         smooth,
         flow,
         sol.ambient,
         &|px, py| slice.is_solid(px + x, py + y),
         Source::Solved(sol.clone()),
-    ))
+    );
+    cache.diff = diff;
+    Some(cache)
 }
 
 /// Range, contours, hot spots and streamlines of a temperature and flow
@@ -389,6 +444,7 @@ fn assemble(
         range,
         contours,
         peaks,
+        diff: None,
         streams,
     }
 }
@@ -441,6 +497,63 @@ pub(super) fn chips(ui: &mut egui::Ui, state: &mut HeatState) {
     }
 }
 
+/// Keep as A, the Δ chip and Clear A.
+fn compare_controls(ui: &mut egui::Ui, state: &mut HeatState) {
+    let Some(shown) = state.solution.as_ref().map(|s| s.id) else {
+        return;
+    };
+    match state.kept.as_ref().map(|a| a.id) {
+        None => {
+            if ui
+                .button("Keep as A")
+                .on_hover_text("Keep this result, change the cabinet, run again and compare")
+                .clicked()
+            {
+                state.keep();
+            }
+        }
+        Some(a) => {
+            if a != shown
+                && ui
+                    .selectable_label(state.delta, "Δ B − A")
+                    .on_hover_text("Show how the new result differs from the kept one")
+                    .clicked()
+            {
+                state.delta = !state.delta;
+            }
+            if ui
+                .button("Clear A")
+                .on_hover_text("Forget the kept result")
+                .clicked()
+            {
+                state.clear_kept();
+            }
+        }
+    }
+}
+
+/// Fidelity as the header and legend say it: a result that has not been
+/// checked against benchmarks is a preview, never just "converged".
+fn status_label(p: &novo_cfd::Progress, validated: bool) -> String {
+    let state = if !validated {
+        "not validated"
+    } else if p.converged {
+        "converged"
+    } else {
+        "not converged"
+    };
+    format!("{} · {state}", p.fidelity.label())
+}
+
+/// Total loss of the devices that have a figure, and how many have none.
+fn totals(input: &Input) -> (f64, usize) {
+    let known = input.items.iter().filter(|i| i.loss_known);
+    (
+        known.map(|i| i.loss_w).sum(),
+        input.items.iter().filter(|i| !i.loss_known).count(),
+    )
+}
+
 /// Simulate / Cancel, the fidelity badge and the last notice.
 fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
     if state.running() {
@@ -472,15 +585,12 @@ fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
         {
             state.request_run();
         }
+        compare_controls(ui, state);
         if let Some(sol) = &state.solution {
             let p = &sol.snapshot.progress;
-            let verdict = if p.converged {
-                "converged"
-            } else {
-                "not converged"
-            };
+            let validated = !sol.snapshot.accuracy.benchmarks.is_empty();
             ui.label(
-                egui::RichText::new(format!("{} · {verdict}", p.fidelity.label()))
+                egui::RichText::new(status_label(p, validated))
                     .small()
                     .color(t::TEXT_MUTED),
             );
@@ -547,7 +657,8 @@ pub(super) fn paint_under(
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, 0.0, backdrop);
     if let Some(cache) = state.cache.as_ref() {
-        paint_map(&painter, cache, &screen_fn(rect, viewport));
+        let delta = state.delta_diff(cache);
+        paint_map(&painter, cache, &screen_fn(rect, viewport), delta);
     }
 }
 
@@ -570,22 +681,41 @@ pub(super) fn paint_over(
     };
     let painter = ui.painter_at(rect);
     let to_screen = screen_fn(rect, viewport);
+    let delta = state.delta_diff(cache);
     if state.airflow {
         paint_airflow(&painter, cache, &to_screen);
     }
-    if state.contours {
+    if state.contours && delta.is_none() {
         paint_contours(&painter, cache, &to_screen);
     }
     paint_rims(&painter, cache, input, &to_screen);
     if state.badges {
         paint_badges(&painter, cache, input, &to_screen, viewport.zoom);
     }
-    paint_peaks(&painter, cache, &to_screen);
+    if delta.is_none() {
+        paint_peaks(&painter, cache, &to_screen);
+    }
     let stale = matches!(&cache.source, Source::Solved(sol) if sol.layout_key != layout_key(input));
-    legend(ui.ctx(), rect, cache, stale);
+    if let Some(d) = delta {
+        let tag = |id: u64| {
+            input
+                .items
+                .iter()
+                .find(|i| i.id == id)
+                .map_or_else(|| format!("#{id}"), |i| i.tag.clone())
+        };
+        heat_compare::legend(ui.ctx(), rect, d, &tag);
+    } else {
+        legend(ui.ctx(), rect, cache, input, stale);
+    }
 }
 
-fn paint_map(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f64) -> Pos2) {
+fn paint_map(
+    painter: &egui::Painter,
+    cache: &Cache,
+    to_screen: &dyn Fn(f64, f64) -> Pos2,
+    delta: Option<&Diff>,
+) {
     // A mesh with a colour per vertex: the GPU blends between them, so the
     // field reads smooth whatever the cell size.
     let (w, h) = cache.size;
@@ -593,13 +723,18 @@ fn paint_map(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f64
         ((w / 5.0) as usize).clamp(2, 160),
         ((h / 5.0) as usize).clamp(2, 160),
     );
-    let grid = cache.smooth.resampled(cols, rows);
+    let grid = delta
+        .map_or(&cache.smooth, |d| &d.field)
+        .resampled(cols, rows);
     let mut mesh = egui::Mesh::default();
     for r in 0..rows {
         for c in 0..cols {
             let (x, y) = grid.grid.centre(c, r);
             let v = f64::from(grid.at(c, r));
-            let color = rgb(heat::ramp(cache.range.t(v)), MAP_ALPHA);
+            let color = match delta {
+                Some(d) => rgb(heat_compare::colour(v as f32, d.extent), MAP_ALPHA),
+                None => rgb(heat::ramp(cache.range.t(v)), MAP_ALPHA),
+            };
             // Cell centres stretched to the plate edge so the map fills it.
             let (px, py) = (
                 if c == 0 {
@@ -701,9 +836,26 @@ fn paint_rims(
     to_screen: &dyn Fn(f64, f64) -> Pos2,
 ) {
     for i in &input.items {
-        let temp = device_temp(cache, i);
         let a = to_screen(i.x, i.y);
         let b = to_screen(i.x + i.w, i.y + i.h);
+        if !i.loss_known {
+            let r = Rect::from_two_pos(a, b);
+            let corners = [
+                r.left_top(),
+                r.right_top(),
+                r.right_bottom(),
+                r.left_bottom(),
+                r.left_top(),
+            ];
+            painter.extend(Shape::dashed_line(
+                &corners,
+                Stroke::new(1.5, t::TEXT_MUTED),
+                6.0,
+                4.0,
+            ));
+            continue;
+        }
+        let temp = device_temp(cache, i);
         let color = rgb(heat::ramp(cache.range.t(temp)), 1.0);
         painter.rect_stroke(
             Rect::from_two_pos(a, b),
@@ -777,7 +929,15 @@ fn paint_badges(
     zoom: f32,
 ) {
     let font = FontId::monospace(t::FONT_SMALL);
-    for i in input.items.iter().filter(|i| i.loss_w > 0.0) {
+    for i in input
+        .items
+        .iter()
+        .filter(|i| i.loss_w > 0.0 || !i.loss_known)
+    {
+        if !i.loss_known {
+            paint_no_data(painter, i, to_screen, zoom, &font);
+            continue;
+        }
         let Reading {
             temp,
             verdict,
@@ -816,6 +976,35 @@ fn paint_badges(
             t::TEXT,
         );
     }
+}
+
+/// A device without loss data says so instead of showing a made-up temperature.
+fn paint_no_data(
+    painter: &egui::Painter,
+    i: &Item,
+    to_screen: &dyn Fn(f64, f64) -> Pos2,
+    zoom: f32,
+    font: &FontId,
+) {
+    if (i.w as f32) * zoom < 76.0 || (i.h as f32) * zoom < 30.0 {
+        return;
+    }
+    let br = to_screen(i.x + i.w, i.y + i.h);
+    let pill = Rect::from_min_size(br - Vec2::new(70.0, 26.0), Vec2::new(64.0, 20.0));
+    painter.rect(
+        pill,
+        10.0,
+        t::BG_2,
+        Stroke::new(1.0, t::BORDER_STRONG),
+        egui::StrokeKind::Inside,
+    );
+    painter.text(
+        pill.center(),
+        Align2::CENTER_CENTER,
+        "no data",
+        font.clone(),
+        t::TEXT_MUTED,
+    );
 }
 
 fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f64) -> Pos2) {
@@ -860,7 +1049,7 @@ fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f
     }
 }
 
-fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, stale: bool) {
+fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: bool) {
     egui::Area::new(egui::Id::new("heat_legend"))
         .fixed_pos(rect.right_top() + Vec2::new(-176.0, 12.0))
         .order(egui::Order::Foreground)
@@ -913,6 +1102,19 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, stale: bool) {
                 );
                 ui.add_space(4.0);
                 let small = |text: &str, color| egui::RichText::new(text).small().color(color);
+                let (total_w, unknown) = totals(input);
+                ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
+                if unknown > 0 {
+                    let (noun, verb) = if unknown == 1 {
+                        ("device", "has")
+                    } else {
+                        ("devices", "have")
+                    };
+                    ui.label(small(
+                        &format!("{unknown} {noun} {verb} no loss data (shown dashed)"),
+                        t::WARNING,
+                    ));
+                }
                 match &cache.source {
                     Source::Synthetic => {
                         ui.label(small(
@@ -923,7 +1125,8 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, stale: bool) {
                     }
                     Source::Solved(sol) => {
                         let p = &sol.snapshot.progress;
-                        ui.label(small(p.fidelity.label(), t::TEXT));
+                        let validated = !sol.snapshot.accuracy.benchmarks.is_empty();
+                        ui.label(small(&status_label(p, validated), t::TEXT));
                         if stale {
                             ui.label(small(
                                 "Out of date: the layout changed since this run.",
@@ -966,6 +1169,7 @@ mod tests {
                     w: 150.0,
                     h: 200.0,
                     loss_w: 80.0,
+                    loss_known: true,
                 },
                 Item {
                     id: 2,
@@ -975,9 +1179,11 @@ mod tests {
                     w: 45.0,
                     h: 90.0,
                     loss_w: 2.0,
+                    loss_known: true,
                 },
             ],
             solution: None,
+            kept: None,
         }
     }
 
@@ -1174,5 +1380,81 @@ mod tests {
         state.start(scenario(), meta(&i), || {});
         assert_eq!(state.runs, runs);
         run_to_end(&mut state);
+    }
+
+    #[test]
+    fn devices_without_loss_data_are_counted_not_summed() {
+        let mut i = input();
+        i.items[1].loss_known = false;
+        i.items[1].loss_w = 0.0;
+        assert_eq!(totals(&i), (80.0, 1));
+        assert_eq!(totals(&input()), (82.0, 0));
+        // Knowing a loss changes the picture's cache key.
+        assert_ne!(layout_key(&i), layout_key(&input()));
+    }
+
+    #[test]
+    fn a_result_nobody_validated_is_never_just_converged() {
+        let mut state = HeatState::new();
+        let i = input();
+        state.start(scenario(), meta(&i), || {});
+        run_to_end(&mut state);
+        let sol = state.solution().unwrap();
+        let p = &sol.snapshot.progress;
+        assert!(status_label(p, false).ends_with("not validated"));
+        assert!(status_label(p, true).ends_with("converged"));
+    }
+
+    #[test]
+    fn a_cooler_second_run_shows_as_a_negative_difference() {
+        let mut state = HeatState::new();
+        let mut i = input();
+        state.start(scenario(), meta(&i), || {});
+        run_to_end(&mut state);
+        state.keep();
+        assert!(state.kept().is_some());
+        let mut cooler = scenario();
+        cooler.devices[0].loss_w = 10.0;
+        state.start(cooler, meta(&i), || {});
+        run_to_end(&mut state);
+        i.solution = state.solution();
+        i.kept = state.kept();
+        let c = build(&i);
+        let d = c.diff.as_ref().expect("a difference");
+        let (lo, hi) = d.field.extent().unwrap();
+        assert!(lo < -0.1 && hi < 0.5, "cooler everywhere: {lo} {hi}");
+        assert_eq!(d.rows[0].id, 1, "the drive changed most");
+        assert!(d.rows[0].delta() < 0.0);
+        assert!(d.verdict.contains('→'), "{}", d.verdict);
+        // Δ is only drawn when switched on.
+        assert!(state.delta_diff(&c).is_none());
+        state.delta = true;
+        assert!(state.delta_diff(&c).is_some());
+    }
+
+    #[test]
+    fn comparing_a_result_with_itself_has_no_difference() {
+        let mut state = HeatState::new();
+        let mut i = input();
+        state.start(scenario(), meta(&i), || {});
+        run_to_end(&mut state);
+        state.keep();
+        i.solution = state.solution();
+        i.kept = state.kept();
+        assert!(build(&i).diff.is_none());
+        state.clear_kept();
+        assert!(state.kept().is_none() && !state.delta);
+    }
+
+    #[test]
+    fn difference_colours_run_cool_to_hot() {
+        let cold = heat_compare::colour(-5.0, 5.0);
+        let hot = heat_compare::colour(5.0, 5.0);
+        assert!(cold[2] > cold[0], "cooler is blue-ish {cold:?}");
+        assert!(hot[0] > hot[2], "hotter is red-ish {hot:?}");
+        assert_eq!(
+            heat_compare::colour(f32::NAN, 5.0),
+            heat_compare::colour(0.0, 5.0)
+        );
     }
 }

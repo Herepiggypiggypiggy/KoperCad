@@ -89,10 +89,6 @@ text_nl = "Opnieuw doen"
 text = "Updated"
 text_nl = "Bijgewerkt"
 
-[early_access]
-text = "Early access"
-text_nl = "Vroege toegang"
-
 [coming_soon]
 text = "Coming soon"
 text_nl = "Binnenkort"
@@ -136,3 +132,67 @@ text_nl = "Les: {title}"
 [no_match]
 text = "No lesson matches. Try fewer words."
 text_nl = "Geen les gevonden. Probeer minder woorden."
+
+[early_access]
+text = "Early access"
+text_nl = "Vroege toegang"
+
+[show_drafts]
+text = "Show draft lessons"
+text_nl = "Conceptlessen tonen"
+
+[how_title]
+text = "How"
+text_nl = "Zo doe je het"
+
+[demo_press]
+text = "Press {arg}"
+text_nl = "Druk op {arg}"
+
+[demo_hold]
+text = "Hold {arg} down"
+text_nl = "Houd {arg} ingedrukt"
+
+[demo_key]
+text = "Press {arg}"
+text_nl = "Druk op {arg}"
+
+[demo_type]
+text = "Type {arg}"
+text_nl = "Typ {arg}"
+
+[demo_click]
+text = "Click where the pointer is"
+text_nl = "Klik waar de aanwijzer staat"
+
+[demo_drag]
+text = "Drag the wire from the start marker to the end marker"
+text_nl = "Sleep de draad van de startmarkering naar de eindmarkering"
+
+[demo_double_click]
+text = "Double-click where the pointer is"
+text_nl = "Dubbelklik waar de aanwijzer staat"
+
+[demo_right_click]
+text = "Right-click where the pointer is"
+text_nl = "Klik met rechts waar de aanwijzer staat"
+
+[demo_start]
+text = "Start"
+text_nl = "Start"
+
+[demo_end]
+text = "End"
+text_nl = "Einde"
+
+[demo_replay]
+text = "Replay"
+text_nl = "Opnieuw tonen"
+
+[demo_stop]
+text = "Stop"
+text_nl = "Stoppen"
+
+[demo_say]
+text = "{arg}"
+text_nl = "{arg}"

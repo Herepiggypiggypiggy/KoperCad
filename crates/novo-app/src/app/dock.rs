@@ -122,7 +122,7 @@ impl NovoApp {
         let active = match view.editor.tool() {
             Tool::Place(_) => DockTool::Place,
             Tool::Wire(_) => DockTool::Connect,
-            Tool::Select | Tool::Move(_) | Tool::Cable(_) => DockTool::Select,
+            Tool::Select | Tool::Move(_) | Tool::Cable(_) | Tool::Paste(_) => DockTool::Select,
         };
         let band = view.band_count();
         let hint = view
@@ -133,6 +133,12 @@ impl NovoApp {
         let hint = match band {
             Some(n) => format!("{n} selected"),
             None => hint,
+        };
+        // Nothing else to say on an empty page: name the first move.
+        let hint = if hint.is_empty() {
+            self.empty_page_hint().unwrap_or(hint)
+        } else {
+            hint
         };
         // A refusal reads as one: the Error tint and a warning icon, never
         // colour alone (DESIGN.md §4).
@@ -156,7 +162,7 @@ impl NovoApp {
         let busy = dragging
             || match view.editor.tool() {
                 Tool::Wire(w) => w.start.is_some(),
-                Tool::Move(_) => true,
+                Tool::Move(_) | Tool::Paste(_) => true,
                 Tool::Cable(c) => !c.points.is_empty(),
                 Tool::Select | Tool::Place(_) => false,
             };
@@ -180,6 +186,14 @@ impl NovoApp {
             Some(key) => format!("Place symbol · {key} (hold for the wheel)"),
             None => "Place symbol".to_owned(),
         };
+        let select_tip = super::tips::tip_text(&self.wb.keymap, "Select", "edit.escape");
+        let connect_tip = match self.wb.keymap.shortcut_text("wire.mode") {
+            Some(key) => format!(
+                "{} · {key} switches",
+                super::tips::tip_text(&self.wb.keymap, "Connect", "tool.connect")
+            ),
+            None => super::tips::tip_text(&self.wb.keymap, "Connect", "tool.connect"),
+        };
         let chosen = self.settings.wiring_mode();
         let mut chip = None;
         let mut picked = None;
@@ -196,7 +210,7 @@ impl NovoApp {
                             (
                                 DockTool::Select,
                                 icons::tool::SELECT,
-                                "Select · Esc",
+                                select_tip.as_str(),
                                 "dock.select",
                             ),
                             (
@@ -208,7 +222,7 @@ impl NovoApp {
                             (
                                 DockTool::Connect,
                                 icons::tool::CONNECT,
-                                "Connect · W · Shift+W switches",
+                                connect_tip.as_str(),
                                 "dock.connect",
                             ),
                         ] {
