@@ -86,7 +86,11 @@ impl Solver for CabinetSolver {
         flow.cfg.pressure_tol = lvl.pressure_tol;
         let warm = lvl.warm_start && warm::warm_start(&setup, scenario, &mut flow);
         let view = snapshot::View::new(&setup, scenario, fidelity);
-        if lvl.method == Method::Steady {
+        // The steady path assembles laminar diffusion only: a run with an
+        // eddy viscosity (turbulence model, `flow.nu_t`) takes the march until
+        // the steady assembly follows `nu_t` (it reads it already, but the model
+        // is updated per march step).
+        if lvl.method == Method::Steady && flow.nu_t.is_none() && !lvl.turbulent {
             return solve_steady(
                 &setup, scenario, fidelity, lvl, control, publish, flow, view, warm, t0,
             );
@@ -179,6 +183,10 @@ fn solve_steady(
             } else {
                 steady::unconverged_note(&run.run.report())
             });
+            if status != RunStatus::Converged && run.run.report().stage == 0 {
+                // stopped inside the first-order stage: say so
+                done.notes.push(PREVIEW_NOTE.into());
+            }
             if warm {
                 done.notes.push(
                     "Started from the 2D estimate (the end state does not depend on it).".into(),

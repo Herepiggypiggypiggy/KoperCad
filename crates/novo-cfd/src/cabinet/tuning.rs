@@ -25,6 +25,9 @@ pub struct LevelTuning {
     /// `solid_speedup` only apply to the march (the iteration has its own
     /// convergence test).
     pub method: Method,
+    /// A turbulence model is coupled in this level: the steady path does not
+    /// follow the model's per-step update yet, so the level marches.
+    pub turbulent: bool,
     /// Overrides the cell count of the level (tests use small grids).
     pub target_cells: Option<usize>,
     /// Steadiness: the rate of change of the stored heat over the last
@@ -97,6 +100,7 @@ fn level(
 ) -> LevelTuning {
     LevelTuning {
         method: Method::Steady,
+        turbulent: false,
         target_cells: Some(cells),
         steady_tol,
         max_time_s,

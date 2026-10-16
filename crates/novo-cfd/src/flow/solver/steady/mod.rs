@@ -108,7 +108,7 @@ impl Default for SteadyConfig {
             energy_sweeps: 20,
             energy_drop: 0.1,
             pressure_tol: 0.05,
-            continuity_tol: 1e-4,
+            continuity_tol: 1e-5,
             pressure_max_iter: 50,
             defer_relax: 1.0,
             scheme: None,

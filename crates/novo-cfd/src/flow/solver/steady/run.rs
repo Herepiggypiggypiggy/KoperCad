@@ -322,7 +322,8 @@ impl FlowSolver {
             for j in 0..m.n[1] {
                 for i in 0..m.n[0] {
                     let id = m.cell([i, j, k]);
-                    sum += self.q_cell[id] * self.c_cell[id] * m.volume([i, j, k]);
+                    sum +=
+                        self.heat_scale * self.q_cell[id] * self.c_cell[id] * m.volume([i, j, k]);
                 }
             }
         }
