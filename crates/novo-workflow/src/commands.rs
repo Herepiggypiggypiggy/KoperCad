@@ -1154,6 +1154,26 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "report.cutlist",
+            "Cut list",
+            "View",
+            &["cut length", "wire lengths", "sleeves"],
+            Needs::Project,
+        ),
+        &["cut list"],
+    ),
+    verb(
+        cmd(
+            "report.labels",
+            "Labels",
+            "View",
+            &["label printer", "wire labels", "terminal labels"],
+            Needs::Project,
+        ),
+        &["labels"],
+    ),
+    verb(
+        cmd(
             "check.problems",
             "Problems",
             "Check",
