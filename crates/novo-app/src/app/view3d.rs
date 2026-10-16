@@ -28,6 +28,7 @@ use super::heat_spots;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
+use super::view3d_nudge::{self, Fields, Step};
 use super::view3d_place::{self, PlaceList};
 use super::view3d_rail;
 use super::view3d_stats::{Build, Stats};
@@ -40,6 +41,8 @@ pub(crate) struct View3dMode {
     pub(super) view: View3d,
     /// Dragging, turning and deleting devices, rails and ducts in the view.
     pub(super) mv: MoveState,
+    /// The Position box.
+    pub(super) position: Fields,
     /// The list of unplaced devices and the one picked from it.
     pub(super) place: PlaceList,
     /// The landing box drawn last frame, to redraw the overlays when it changes.
@@ -89,6 +92,7 @@ impl Default for View3dMode {
         View3dMode {
             view: View3d::new(VIEW_ID),
             mv: MoveState::default(),
+            position: Fields::default(),
             place: PlaceList::default(),
             ghost_shown: Vec::new(),
             library: Arc::new(MeshLibrary::new()),
@@ -582,6 +586,28 @@ impl NovoApp {
                 ui.ctx().request_repaint();
             }
             let keys = std::mem::take(&mut self.cabinet.keys);
+            // Arrow keys nudge the selection while the pointer is over the
+            // view and no text field has the keys. Plain Up and Down reach
+            // the app as the schematic's strip commands, so those count too.
+            if !ui.ctx().egui_wants_keyboard_input()
+                && ui
+                    .input(|i| i.pointer.hover_pos())
+                    .is_some_and(|p| out.rect.contains(p))
+            {
+                let strip = |name: &str| keys.iter().filter(|k| *k == name).count() as i32;
+                let (dir, step) = ui.input(|i| {
+                    let k = |key| i32::from(i.key_pressed(key));
+                    let dx = k(egui::Key::ArrowRight) - k(egui::Key::ArrowLeft);
+                    let raw = k(egui::Key::ArrowDown) - k(egui::Key::ArrowUp);
+                    let cmd = strip("terminal.strip_down") - strip("terminal.strip_up");
+                    let dy = if cmd != 0 { cmd } else { raw };
+                    (
+                        (dx.signum(), dy.signum()),
+                        Step::from_modifiers(i.modifiers),
+                    )
+                });
+                edits.extend(view3d_nudge::nudge(&stored, &state.selection, dir, step));
+            }
             edits.extend(view3d_move::key_edits(&keys, &state.selection, &stored));
         } else {
             self.cabinet.keys.clear();
@@ -602,6 +628,11 @@ impl NovoApp {
             .collect();
         let mut ask = None;
         if let Some(stored) = load(project, id) {
+            if let [one] = devices.as_slice()
+                && !mode.position.hidden
+            {
+                edits.extend(mode.position.show(ui.ctx(), out.rect, &stored, *one));
+            }
             if state.selection != mode.synced.1 {
                 self.cabinet.view.selection.apply(
                     devices.iter().map(|d| novo_canvas::cabinet::box_item(*d)),
