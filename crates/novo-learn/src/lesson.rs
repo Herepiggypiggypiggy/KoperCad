@@ -9,6 +9,7 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 
 use crate::check::Check;
+use crate::demo::DemoOp;
 use crate::markup::{self, MarkupError};
 
 /// The lesson format this build reads.
@@ -145,6 +146,10 @@ pub struct Step {
     /// "Do it for me" runs.
     #[serde(default)]
     pub solve: Vec<SolveOp>,
+    /// What "Show me how" plays (`demo`): key caps, typing, a moving pointer. A step
+    /// that gives none gets one derived from its check, `solve` and `point`.
+    #[serde(default)]
+    pub demo: Vec<DemoOp>,
 }
 
 /// A small callout next to a target. (Unknown keys are refused by
@@ -206,6 +211,11 @@ pub struct At {
     /// A wire by its two ends, `tag:pin`.
     #[serde(default)]
     pub wire: Option<[String; 2]>,
+    /// A potential feed by the name of its potential (`L1`). Use it for a
+    /// feed the person drew themselves, which lands wherever they dropped
+    /// it, never a coordinate.
+    #[serde(default)]
+    pub feed: Option<String>,
 }
 
 /// A rectangle on a page, in millimetres.
@@ -495,6 +505,18 @@ impl Lesson {
             if let Some(check) = &step.expect {
                 check.validate().map_err(|why| invalid(at(&step.id), why))?;
             }
+            for op in &step.demo {
+                let targets: Vec<&Target> = match op {
+                    DemoOp::Move(m) => vec![&m.to],
+                    DemoOp::Drag(d) => vec![&d.drag.from, &d.drag.to],
+                    _ => Vec::new(),
+                };
+                for target in targets {
+                    target
+                        .validate()
+                        .map_err(|why| invalid(at(&step.id), why))?;
+                }
+            }
             if step.expect.is_none() && !step.solve.is_empty() {
                 return Err(invalid(at(&step.id), "a reading step has nothing to solve"));
             }
@@ -544,14 +566,22 @@ impl Target {
             let device = at.device.is_some();
             let spot = at.page.is_some() && at.x.is_some() && at.y.is_some();
             let wire = at.wire.is_some();
-            if [device, spot, wire].iter().filter(|g| **g).count() != 1 {
+            let feed = at.feed.is_some();
+            // A pin on its own is written whole, `-K1:A1`.
+            let pin = at.pin.as_ref().is_some_and(|p| !device && p.contains(':'));
+            if [device, spot, wire, feed, pin]
+                .iter()
+                .filter(|g| **g)
+                .count()
+                != 1
+            {
                 return Err(
-                    "`at` is a device (with an optional pin), a page spot (page, x, y) or a wire"
+                    "`at` is a device (with an optional pin), a pin (`-K1:A1`), a feed (by potential name), a page spot (page, x, y) or a wire"
                         .to_owned(),
                 );
             }
-            if at.pin.is_some() && !device {
-                return Err("`pin` goes with `device`".to_owned());
+            if at.pin.is_some() && !device && !pin {
+                return Err("`pin` goes with `device`, or is a whole `-K1:A1`".to_owned());
             }
         }
         Ok(())

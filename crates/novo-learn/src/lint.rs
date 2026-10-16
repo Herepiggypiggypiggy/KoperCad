@@ -13,6 +13,7 @@ use novo_core::Project;
 
 use crate::catalog::{Catalog, Entry, Files, ProjectRef};
 use crate::check::{Check, Context, Event, Facts, page_matches, pins_named, tag_matches};
+use crate::demo::{DemoOp, HoldOp, PressOp};
 use crate::lesson::{At, Lesson, SolveOp, Status, Step, Target};
 use crate::markup::{self, Span};
 
@@ -240,6 +241,21 @@ fn lint_lesson(
         }
         let mut targets: Vec<&Target> = step.point.iter().collect();
         targets.extend(step.note.iter().map(|n| &n.target));
+        for op in &step.demo {
+            match op {
+                DemoOp::Move(m) => targets.push(&m.to),
+                DemoOp::Drag(d) => {
+                    targets.push(&d.drag.from);
+                    targets.push(&d.drag.to);
+                }
+                DemoOp::Press(PressOp { press: id }) | DemoOp::Hold(HoldOp { hold: id, .. })
+                    if !registry.commands.contains(id) =>
+                {
+                    sink.ahead(Some(step), format!("command `{id}` is not in this build"));
+                }
+                _ => {}
+            }
+        }
         for target in targets {
             if let Some(ui) = &target.ui {
                 for id in ui.ids() {
