@@ -5,6 +5,7 @@
 //! Nothing here touches the user's catalog: the caller previews and merges.
 
 mod parts;
+pub mod pxf;
 pub mod symbols;
 pub(crate) mod xml;
 

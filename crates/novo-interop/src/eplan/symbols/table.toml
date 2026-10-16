@@ -148,6 +148,11 @@ symbol = "connectivity/potential_feed"
 letters = []
 names = ["potential feed", "potential connection point", "potential marker", "potential source", "potentiaal", "potentiaalaansluiting", "potentialeinspeisung", "potentialanschluss"]
 
+[[entry]]
+symbol = "connectivity/potential_feed_pe"
+letters = []
+names = ["pe potential feed", "protective earth potential feed", "pe feed", "pe potential", "pe potentiaal", "pe aansluiting", "pe potentialeinspeisung", "pe einspeisung", "schutzleiter potential"]
+
 # ---------------------------------------------------------------- main contacts
 [[entry]]
 symbol = "contactors/main_3p"
