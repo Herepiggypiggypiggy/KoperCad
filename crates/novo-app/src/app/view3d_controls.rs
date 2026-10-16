@@ -22,6 +22,11 @@ pub(crate) struct Controls {
     pub(super) shadows: bool,
     /// Measuring lines: the enclosure's size and the selected part's.
     pub(super) dimensions: bool,
+    /// The frame governor has stepped the quality down: the toolbar offers
+    /// to restore it. Set by the host each frame.
+    pub(super) reduced: bool,
+    /// The user pressed "Restore quality"; the host acts on it and clears it.
+    pub(super) restore: bool,
 }
 
 impl Default for Controls {
@@ -32,6 +37,8 @@ impl Default for Controls {
             move_items: true,
             shadows: true,
             dimensions: false,
+            reduced: false,
+            restore: false,
         }
     }
 }
@@ -111,6 +118,17 @@ pub(super) fn toolbar(
                          size and its distances to neighbours and the plate edge (View > 3D > \
                          Dimensions)",
                     );
+                    if controls.reduced
+                        && ui
+                            .button("Restore quality")
+                            .on_hover_text(
+                                "The view slowed down, so it draws at lower quality. Draw at \
+                                 full quality again (View > 3D > Restore 3D quality).",
+                            )
+                            .clicked()
+                    {
+                        controls.restore = true;
+                    }
                     ui.separator();
                     if let Some(limit) = limit
                         && controls.layers.door

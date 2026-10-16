@@ -384,6 +384,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_wires",
     "view.3d_shadows",
     "view.3d_dimensions",
+    "view.3d_quality",
     "view.3d_stats",
     "view.iso",
     "view.front",
@@ -826,6 +827,10 @@ impl NovoApp {
             "view.3d_shadows" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.shadows ^= true;
+            }
+            "view.3d_quality" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.view.reset_quality();
             }
             "view.3d_dimensions" => {
                 self.switch_workspace(Workspace::View3d);

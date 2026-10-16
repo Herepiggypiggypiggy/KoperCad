@@ -987,6 +987,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_quality",
+        "Restore 3D quality",
+        "View",
+        &["quality", "slow", "full quality", "reduced"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_stats",
         "Show or hide the 3D frame statistics",
         "View",

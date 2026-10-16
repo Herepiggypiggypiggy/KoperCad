@@ -104,6 +104,14 @@ impl Stats {
                         {
                             ctx.copy_text(text.clone());
                         }
+                        if view.stepped_down().is_some()
+                            && ui
+                                .button("Restore quality")
+                                .on_hover_text("Draw at full quality again")
+                                .clicked()
+                        {
+                            view.reset_quality();
+                        }
                         if ui.button("Close").clicked() {
                             self.toggle();
                         }

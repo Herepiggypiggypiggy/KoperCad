@@ -409,3 +409,52 @@ fn dimensions_toggle_by_command_and_measure_the_selected_part_from_the_cabinet()
     d.frame();
     assert!(!d.app.view3d.view.state.display.dimensions);
 }
+
+#[test]
+fn restore_quality_returns_a_stepped_down_view_to_the_adapters_tier() {
+    use novo_view3d::render::Tier;
+    use novo_view3d::widget::register_adapter;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    register_adapter("Test GPU", "Vulkan", Tier::Discrete);
+    d.frame();
+    assert_eq!(d.app.view3d.view.stepped_down(), None);
+
+    // Moving frames at 40 ms for four seconds: the governor steps the
+    // quality down. (The window-less test drives the governor itself; the
+    // widget calls it every frame.)
+    for i in 0..110 {
+        let input = egui::RawInput {
+            time: Some(20.0 + i as f64 * 0.04),
+            ..Default::default()
+        };
+        let view = &mut d.app.view3d.view;
+        let mut out = ctx.run_ui(input, |_| {
+            view.govern(&ctx, true);
+        });
+        out.textures_delta.clear();
+    }
+    let down = d.app.view3d.view.stepped_down();
+    assert!(
+        matches!(down, Some(Tier::Integrated | Tier::Software)),
+        "{down:?}"
+    );
+    frame_at(&mut d, 30.0);
+    assert!(
+        d.app.view3d.controls.reduced,
+        "the toolbar offers to restore"
+    );
+
+    d.app.run_command(&ctx, "view.3d_quality", None);
+    assert_eq!(
+        d.app.view3d.view.stepped_down(),
+        None,
+        "back at the adapter's tier"
+    );
+    frame_at(&mut d, 31.0);
+    assert!(
+        !d.app.view3d.controls.reduced,
+        "nothing to restore any more"
+    );
+}

@@ -368,7 +368,11 @@ amber tint are never the only difference.
   resolution while moving, no MSAA on software, no shadow map there) and never
   steps up by itself. Idle intervals are not counted (an idle view repaints
   rarely). The statistics panel says "quality stepped down to ..." when it did
-  and `View3d::reset_quality` starts again from the adapter's tier. The tier
+  and the way back is in the UI: command `view.3d_quality` ("Restore 3D quality",
+  View > 3D, palette, right-click menu, Dutch "kwaliteit herstellen"), a
+  "Restore quality" button in the toolbar and in the statistics panel while
+  the quality is stepped down; all call `View3d::reset_quality`, which starts
+  again from the adapter's tier. The tier
   steps are the renderer's existing ones (`Quality::new`), not the palette's
   `QualityTier`, which stays unused until the renderer has more than two
   settings to move.

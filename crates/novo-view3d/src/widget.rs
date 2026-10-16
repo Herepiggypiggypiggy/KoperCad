@@ -141,18 +141,7 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
     );
     let info = render_state.adapter.get_info();
     let tier = Tier::of(&info);
-    if let Ok(mut guard) = STATS.lock() {
-        *guard = Some(Recorder {
-            adapter: info.name.clone(),
-            backend: format!("{:?}", info.backend),
-            tier,
-            adapter_tier: tier,
-            renders: 0,
-            cpu_ms: VecDeque::with_capacity(STATS_WINDOW),
-            last: Default::default(),
-            msaa: 1,
-        });
-    }
+    register_adapter(&info.name, &format!("{:?}", info.backend), tier);
     render_state
         .renderer
         .write()
@@ -164,6 +153,23 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
             views: HashMap::new(),
         });
     INSTALLED.store(true, Ordering::Relaxed);
+}
+
+/// Tells the statistics and the frame governor which adapter draws. [`install`]
+/// does it; a host without a window (tests, headless tools) calls it itself.
+pub fn register_adapter(name: &str, backend: &str, tier: Tier) {
+    if let Ok(mut guard) = STATS.lock() {
+        *guard = Some(Recorder {
+            adapter: name.to_owned(),
+            backend: backend.to_owned(),
+            tier,
+            adapter_tier: tier,
+            renders: 0,
+            cpu_ms: VecDeque::with_capacity(STATS_WINDOW),
+            last: Default::default(),
+            msaa: 1,
+        });
+    }
 }
 
 /// Whether [`install`] ran. Without it (no wgpu adapter) [`View3d::show`] paints a notice.
@@ -463,8 +469,11 @@ impl View3d {
 
     /// Feeds one frame interval to the frame governor while the view moves and
     /// returns the tier it stepped down to, if it did. Never steps up by
-    /// itself; `reset_quality` starts again from the adapter's tier.
-    fn govern(&mut self, ctx: &egui::Context, moving: bool) -> Option<Tier> {
+    /// itself; `reset_quality` starts again from the adapter's tier. [`show`]
+    /// calls it every frame; a host without a window can drive it itself.
+    ///
+    /// [`show`]: View3d::show
+    pub fn govern(&mut self, ctx: &egui::Context, moving: bool) -> Option<Tier> {
         if self.governor.is_none() {
             self.governor = adapter_tier().map(|t| FrameGovernor::new(t, false));
         }
@@ -475,6 +484,12 @@ impl View3d {
                 ctx.request_repaint();
             }
         }
+        (Some(gov.tier) != adapter_tier()).then_some(gov.tier)
+    }
+
+    /// The tier the frame governor stepped down to, if it did.
+    pub fn stepped_down(&self) -> Option<Tier> {
+        let gov = self.governor.as_ref()?;
         (Some(gov.tier) != adapter_tier()).then_some(gov.tier)
     }
 

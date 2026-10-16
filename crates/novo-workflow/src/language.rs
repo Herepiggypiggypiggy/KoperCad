@@ -584,6 +584,11 @@ pub const DUTCH: &[Aliases] = &[
         &["maten", "maatvoering", "afstand", "afstanden"],
     ),
     nl(
+        "view.3d_quality",
+        &["3d kwaliteit herstellen"],
+        &["kwaliteit", "trage weergave", "herstellen"],
+    ),
+    nl(
         "view.3d_stats",
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],
