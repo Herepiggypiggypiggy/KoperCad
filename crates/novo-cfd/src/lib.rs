@@ -11,6 +11,7 @@
 
 pub mod flow;
 pub mod mesh;
+pub mod rad;
 pub mod result;
 pub mod sched;
 pub mod solver;
