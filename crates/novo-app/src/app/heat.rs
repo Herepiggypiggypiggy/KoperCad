@@ -34,6 +34,8 @@ use super::heat_run::{self, Event, Runner, Solution};
 const MAP_ALPHA: f32 = 0.62;
 /// Solver cell for the synthetic model, mm.
 const CELL_MM: f64 = 10.0;
+/// Gap between the two plates of the side by side compare, mm.
+const SIDE_GAP_MM: f64 = 80.0;
 
 /// One placed device as the view needs it.
 #[derive(Debug, Clone, PartialEq)]
@@ -78,6 +80,10 @@ pub(super) struct HeatState {
     pub delta: bool,
     /// Wipe: A left of the split, B right of it.
     pub wipe: bool,
+    /// Side by side: B on the plate, A on a copy of it to the right.
+    pub side: bool,
+    /// The view should fit both plates on the next frame.
+    fit_wanted: bool,
     /// Where the wipe splits the plate, 0 to 1 of its width.
     pub split: f32,
     pub map: bool,
@@ -129,6 +135,8 @@ impl HeatState {
             on: false,
             delta: false,
             wipe: false,
+            side: false,
+            fit_wanted: false,
             split: 0.5,
             kept: None,
             map: true,
@@ -147,16 +155,36 @@ impl HeatState {
 
     /// The difference map to draw, when Δ is on and there is one.
     fn delta_diff<'a>(&self, cache: &'a Cache) -> Option<&'a Diff> {
-        if self.delta {
+        if self.delta && !self.side {
             cache.diff.as_ref()
         } else {
             None
         }
     }
 
+    /// The pair to show side by side, when Side is on and there is one.
+    fn side_diff<'a>(&self, cache: &'a Cache) -> Option<&'a Diff> {
+        if self.side { cache.diff.as_ref() } else { None }
+    }
+
+    /// True once after Side was switched on or off: fit the view to what
+    /// is shown.
+    pub(super) fn take_fit(&mut self) -> bool {
+        std::mem::take(&mut self.fit_wanted)
+    }
+
+    /// Width of what the Heat view draws, in plate widths (2 with Side).
+    pub(super) fn extent_mm(&self, plate_w: f64) -> f64 {
+        if self.side {
+            plate_w * 2.0 + SIDE_GAP_MM
+        } else {
+            plate_w
+        }
+    }
+
     /// The pair to wipe between, when Wipe is on and there is one.
     fn wipe_diff<'a>(&self, cache: &'a Cache) -> Option<&'a Diff> {
-        if self.wipe && !self.delta {
+        if self.wipe && !self.delta && !self.side {
             cache.diff.as_ref()
         } else {
             None
@@ -168,12 +196,21 @@ impl HeatState {
         self.kept = self.solution.clone();
         self.delta = false;
         self.wipe = false;
+        self.set_side(false);
+    }
+
+    fn set_side(&mut self, on: bool) {
+        if self.side != on {
+            self.side = on;
+            self.fit_wanted = true;
+        }
     }
 
     pub(super) fn clear_kept(&mut self) {
         self.kept = None;
         self.delta = false;
         self.wipe = false;
+        self.set_side(false);
     }
 
     /// The result the picture draws from.
@@ -538,6 +575,7 @@ fn compare_controls(ui: &mut egui::Ui, state: &mut HeatState) {
             {
                 state.delta = !state.delta;
                 state.wipe = false;
+                state.set_side(false);
             }
             if a != shown
                 && ui
@@ -547,6 +585,18 @@ fn compare_controls(ui: &mut egui::Ui, state: &mut HeatState) {
             {
                 state.wipe = !state.wipe;
                 state.delta = false;
+                state.set_side(false);
+            }
+            if a != shown
+                && ui
+                    .selectable_label(state.side, "Side")
+                    .on_hover_text("Two plates next to each other, same pan and zoom")
+                    .clicked()
+            {
+                let on = !state.side;
+                state.set_side(on);
+                state.delta = false;
+                state.wipe = false;
             }
             if ui
                 .button("Clear A")
@@ -687,6 +737,13 @@ pub(super) fn paint_under(
         let to_screen = screen_fn(rect, viewport);
         let delta = state.delta_diff(cache);
         paint_map(&painter, cache, &to_screen, delta);
+        if let Some(d) = state.side_diff(cache) {
+            let off = cache.size.0 + SIDE_GAP_MM;
+            let shifted = |x: f64, y: f64| to_screen(x + off, y);
+            painter.add(plate_mesh(&d.a_plate, cache.size, &shifted, &|v| {
+                rgb(heat::ramp(cache.range.t(v)), MAP_ALPHA)
+            }));
+        }
         if let Some(d) = state.wipe_diff(cache) {
             // A on the left of the split, drawn on the same ramp as B.
             let x = to_screen(f64::from(state.split) * cache.size.0, 0.0).x;
@@ -749,11 +806,60 @@ pub(super) fn paint_over(
     } else {
         legend(ui.ctx(), rect, cache, input, stale);
     }
+    if let Some(d) = state.side_diff(cache) {
+        paint_side_a(&painter, cache, d, input, &to_screen);
+    }
     if state.wipe_diff(cache).is_some() {
         let width = cache.size.0;
         let split = wipe_handle(ui, rect, &to_screen, viewport.zoom, width, state.split);
         state.split = split;
     }
+}
+
+/// The copy of the plate that shows A in the side by side compare: the
+/// plate frame, the device rims in A's colours and the captions A and B.
+fn paint_side_a(
+    painter: &egui::Painter,
+    cache: &Cache,
+    d: &Diff,
+    input: &Input,
+    to_screen: &dyn Fn(f64, f64) -> Pos2,
+) {
+    let (w, h) = cache.size;
+    let off = w + SIDE_GAP_MM;
+    let a = to_screen(off, 0.0);
+    let b = to_screen(off + w, h);
+    painter.rect_stroke(
+        Rect::from_two_pos(a, b),
+        0.0,
+        Stroke::new(1.0, t::BORDER_STRONG),
+        egui::StrokeKind::Inside,
+    );
+    for i in &input.items {
+        let p0 = to_screen(i.x + off, i.y);
+        let p1 = to_screen(i.x + i.w + off, i.y + i.h);
+        let r = Rect::from_two_pos(p0, p1);
+        let colour = match d.a_surface.iter().find(|(id, _)| *id == i.id) {
+            Some((_, temp)) => rgb(heat::ramp(cache.range.t(*temp)), 1.0),
+            None => t::TEXT_MUTED,
+        };
+        painter.rect_stroke(r, 2.0, Stroke::new(2.0, colour), egui::StrokeKind::Inside);
+    }
+    let font = FontId::proportional(t::FONT_SMALL);
+    painter.text(
+        a + Vec2::new(0.0, -6.0),
+        Align2::LEFT_BOTTOM,
+        "A (kept)",
+        font.clone(),
+        t::TEXT,
+    );
+    painter.text(
+        to_screen(0.0, 0.0) + Vec2::new(0.0, -6.0),
+        Align2::LEFT_BOTTOM,
+        "B (new)",
+        font,
+        t::TEXT,
+    );
 }
 
 /// The draggable split of the wipe: a line with the A and B labels. Returns
@@ -1585,5 +1691,19 @@ mod tests {
         assert!(d.a_plate.extent().unwrap().1 > c.smooth.extent().unwrap().1);
         state.clear_kept();
         assert!(!state.wipe && !state.delta);
+    }
+
+    #[test]
+    fn side_excludes_the_other_modes_and_asks_for_a_fit() {
+        let mut s = HeatState::new();
+        assert!(!s.take_fit());
+        s.set_side(true);
+        assert!(s.side && s.take_fit() && !s.take_fit());
+        assert_eq!(s.extent_mm(600.0), 1280.0);
+        s.set_side(true);
+        assert!(!s.take_fit(), "no change, no refit");
+        s.clear_kept();
+        assert!(!s.side && s.take_fit(), "leaving Side refits too");
+        assert_eq!(s.extent_mm(600.0), 600.0);
     }
 }

@@ -10,9 +10,11 @@
 //! (`cabinet.thermal.simulate`) starts a [`Job`]; the progress bar and cancel
 //! button read it. The app side is lane CFD-F.
 
+mod demo;
 mod job;
 mod pool;
 
+pub use demo::DemoLadder;
 pub use job::{Event, Job, JobStatus, Outcome};
 pub use pool::{Threads, default_threads, install};
 
@@ -27,7 +29,8 @@ use crate::solver::Solver;
 /// Which levels to run and how.
 #[derive(Debug, Clone)]
 pub struct Plan {
-    /// Levels in order; each later level refines the earlier one.
+    /// Levels in order, run one after the other (once grid sequencing lands,
+    /// each starts from the previous solution).
     pub levels: Vec<Fidelity>,
     /// Intermediate snapshots closer together than this are dropped (the
     /// last snapshot of a level is always delivered).
