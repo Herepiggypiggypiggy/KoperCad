@@ -12,7 +12,7 @@ use novo_core::{
 };
 
 use crate::catalog::{Catalog, CatalogPart, PartKey};
-use crate::fit::{DeviceNeed, Fit, fit, is_wrong_kind};
+use crate::fit::{DeviceNeed, Fit, fit};
 
 /// How a part is assigned to a device that may already have parts.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -494,9 +494,10 @@ pub fn suggest_for_device<'c>(
 }
 
 /// [`suggest_for_device`] with the match of each part. Without a query the
-/// parts rank by [`Fit`] (kind of device, coil voltage, rating); parts of a
-/// plainly different kind (a fuse holder for a breaker) are left out when
-/// better ones exist. With a query the catalog's text ranking stands, since
+/// parts rank by [`Fit`] (kind of device, coil voltage, rating); a part of a
+/// different kind (a fuse holder for a breaker) stays in the list, last,
+/// with a low match, because the kind is read from catalog text and may be
+/// wrong. With a query the catalog's text ranking stands, since
 /// the user asked for it; each part still carries its match.
 pub fn suggestions_for_device<'c>(
     catalog: &'c Catalog,
@@ -531,9 +532,6 @@ pub fn suggestions_for_device<'c>(
             .collect();
     }
     if !searching {
-        if hits.iter().any(|h| !is_wrong_kind(h.part, &need)) {
-            hits.retain(|h| !is_wrong_kind(h.part, &need));
-        }
         // Stable: equal matches keep the catalog's order.
         hits.sort_by_key(|h| std::cmp::Reverse(h.fit.percent));
     }

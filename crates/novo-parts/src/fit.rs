@@ -57,13 +57,15 @@ impl Role {
 /// description. `None` when nothing says (the part then neither wins nor
 /// loses on kind).
 pub fn part_role(part: &CatalogPart) -> Option<Role> {
-    let text = format!(
-        "{} {} {}",
-        part.function,
-        part.keywords.join(" "),
-        part.description
-    )
-    .to_lowercase();
+    // The explicit fields win over description prose: "Circuit breaker, overload
+    // and short-circuit protection" is not an overload relay.
+    role_of_text(&part.function)
+        .or_else(|| role_of_text(&part.keywords.join(" ")))
+        .or_else(|| role_of_text(&part.description))
+}
+
+fn role_of_text(text: &str) -> Option<Role> {
+    let text = text.to_lowercase();
     let has = |w: &str| text.contains(w);
     if has("motor protection") || has("motor circuit breaker") || has("mpcb") {
         Some(Role::Mpcb)
@@ -78,8 +80,8 @@ pub fn part_role(part: &CatalogPart) -> Option<Role> {
     } else if has("contactor") {
         Some(Role::Contactor)
     } else if has("push button") || has("pushbutton") {
-        let no = has("1 no") || has("1no") || text.contains(" no,") || text.ends_with(" no");
-        let nc = has("1 nc") || has("1nc") || text.contains(" nc,") || text.ends_with(" nc");
+        let no = has("1 no") || has("1no") || has(" no,") || text.ends_with(" no");
+        let nc = has("1 nc") || has("1nc") || has(" nc,") || text.ends_with(" nc");
         Some(match (no, nc) {
             (true, false) => Role::PushNo,
             (false, true) => Role::PushNc,
@@ -158,6 +160,32 @@ fn role_of_function(function: &str) -> Option<Role> {
 pub struct Supply {
     pub volts: f64,
     pub ac: bool,
+    /// A part's coil can take both (`24 V AC/DC`); a circuit has one kind.
+    pub dc: bool,
+}
+
+impl Supply {
+    fn ac(volts: f64) -> Self {
+        Supply {
+            volts,
+            ac: true,
+            dc: false,
+        }
+    }
+
+    fn dc(volts: f64) -> Self {
+        Supply {
+            volts,
+            ac: false,
+            dc: true,
+        }
+    }
+
+    /// Whether a coil rated `self` runs on a circuit of `circuit`.
+    fn runs_on(self, circuit: Supply) -> bool {
+        (self.volts - circuit.volts).abs() < 0.5
+            && ((circuit.ac && self.ac) || (circuit.dc && self.dc))
+    }
 }
 
 /// `24 V DC` or `230 V AC` (also `24VDC`, `230 V 50 Hz`) as a supply.
@@ -169,14 +197,12 @@ pub fn parse_supply(text: &str) -> Option<Supply> {
         .take_while(|c| c.is_ascii_digit() || *c == '.')
         .collect();
     let volts: f64 = digits.parse().ok()?;
-    let ac = if lower.contains("dc") || lower.contains('=') {
-        false
-    } else if lower.contains("ac") || lower.contains("hz") || lower.contains('~') {
-        true
-    } else {
+    let dc = lower.contains("dc") || lower.contains('=');
+    let ac = lower.contains("ac") || lower.contains("hz") || lower.contains('~');
+    if !ac && !dc {
         return None;
-    };
-    Some(Supply { volts, ac })
+    }
+    Some(Supply { volts, ac, dc })
 }
 
 /// The voltage a relay or contactor coil of `device` sees, when it can be
@@ -221,26 +247,11 @@ pub fn coil_supply(project: &Project, device: &Device) -> Option<Supply> {
         }
     };
     match (a.kind, b.kind) {
-        (Line, Neutral | Pen) => va.map(|v| Supply {
-            volts: phase(a, v),
-            ac: true,
-        }),
-        (Neutral | Pen, Line) => vb.map(|v| Supply {
-            volts: phase(b, v),
-            ac: true,
-        }),
-        (Line, Line) if a.id != b.id => va.zip(vb).map(|(x, y)| Supply {
-            volts: x.max(y),
-            ac: true,
-        }),
-        (DcPositive, DcNegative) => va.map(|v| Supply {
-            volts: v,
-            ac: false,
-        }),
-        (DcNegative, DcPositive) => vb.map(|v| Supply {
-            volts: v,
-            ac: false,
-        }),
+        (Line, Neutral | Pen) => va.map(|v| Supply::ac(phase(a, v))),
+        (Neutral | Pen, Line) => vb.map(|v| Supply::ac(phase(b, v))),
+        (Line, Line) if a.id != b.id => va.zip(vb).map(|(x, y)| Supply::ac(x.max(y))),
+        (DcPositive, DcNegative) => va.map(Supply::dc),
+        (DcNegative, DcPositive) => vb.map(Supply::dc),
         _ => None,
     }
 }
@@ -297,93 +308,111 @@ impl DeviceNeed {
     }
 }
 
-/// The match of `part` for a device: kind (60), letter code (10), coil
-/// voltage (20) and the device's own sizing values (10). A check that
-/// cannot be made because the data is missing gives half its points, so a
-/// part is never rewarded for silence over a match nor punished like a
-/// mismatch.
+/// The match of `part` for a device, as the share of points earned over
+/// the checks that could be made: kind (60), letter code (10), coil voltage
+/// (20, only for a device with a coil whose circuit voltage is known) and
+/// rating (10, only when the device states a sizing value). A check with
+/// nothing to compare is not counted, and the tooltip says which. A part
+/// whose data does not say what it is earns nothing for kind, and half for
+/// a coil voltage it does not state, so a part that cannot be confirmed
+/// never reaches the score of one that matches.
 pub fn fit(part: &CatalogPart, need: &DeviceNeed, device: &Device) -> Fit {
     let mut reasons = Vec::new();
-    let mut points = 0u32;
+    let (mut earned, mut possible) = (0u32, 0u32);
 
     match (need.role, part_role(part)) {
         (Some(want), Some(have)) => {
             let s = have.score_for(want);
-            points += s;
-            reasons.push(if s == 60 {
-                "right kind of device".to_owned()
-            } else if s > 0 {
-                "similar kind of device".to_owned()
-            } else {
-                "a different kind of device".to_owned()
-            });
+            possible += 60;
+            earned += s;
+            reasons.push(
+                match s {
+                    60 => "kind: right",
+                    0 => "kind: a different kind of device",
+                    _ => "kind: similar",
+                }
+                .to_owned(),
+            );
         }
-        _ => {
-            points += 30;
-            reasons.push("kind of device not stated".to_owned());
+        (Some(_), None) => {
+            possible += 60;
+            reasons.push("kind: the part does not say what it is".to_owned());
         }
+        (None, _) => reasons.push("kind: not checked, the device's kind is not known".to_owned()),
     }
 
+    possible += 10;
     match part
         .letter_codes
         .iter()
         .position(|c| c.eq_ignore_ascii_case(&need.letter_code))
     {
-        Some(0) => points += 10,
-        Some(_) => points += 6,
-        None if part.letter_codes.is_empty() => points += 3,
-        None => {}
+        Some(0) => {
+            earned += 10;
+            reasons.push("letter code: main use".to_owned());
+        }
+        Some(_) => {
+            earned += 6;
+            reasons.push("letter code: secondary use".to_owned());
+        }
+        None if part.letter_codes.is_empty() => {
+            earned += 3;
+            reasons.push("letter code: not stated".to_owned());
+        }
+        None => reasons.push("letter code: does not fit".to_owned()),
     }
 
     if let Some(want) = need.coil {
+        possible += 20;
+        let name = |s: Supply| if s.ac { "AC" } else { "DC" };
         let have = part.data.get("coil_voltage").and_then(|v| match v {
             Value::Text(t) => parse_supply(t),
             _ => None,
         });
         match have {
-            Some(h) if h.ac == want.ac && (h.volts - want.volts).abs() < 0.5 => {
-                points += 20;
+            Some(h) if h.runs_on(want) => {
+                earned += 20;
                 reasons.push(format!(
-                    "coil {} V {} matches the circuit",
+                    "coil: {} V {} matches the circuit",
                     want.volts,
-                    if want.ac { "AC" } else { "DC" }
+                    name(want)
                 ));
             }
             Some(h) => reasons.push(format!(
-                "coil {} V {}, the circuit has {} V {}",
+                "coil: {} V, the circuit has {} V {}",
                 h.volts,
-                if h.ac { "AC" } else { "DC" },
                 want.volts,
-                if want.ac { "AC" } else { "DC" }
+                name(want)
             )),
             None => {
-                points += 10;
-                reasons.push("coil voltage not stated".to_owned());
+                earned += 10;
+                reasons.push("coil: voltage not stated".to_owned());
             }
         }
     } else {
-        points += 20;
+        reasons.push("coil: not checked, no coil voltage known".to_owned());
     }
 
-    if crate::assign::sized_for(part, device) {
-        points += 10;
+    let sized = device
+        .properties
+        .iter()
+        .any(|(_, v)| matches!(v, Value::Int(_) | Value::Float(_)));
+    if sized {
+        possible += 10;
+        if crate::assign::sized_for(part, device) {
+            earned += 10;
+            reasons.push("rating: matches".to_owned());
+        } else {
+            reasons.push("rating: does not match the device".to_owned());
+        }
     } else {
-        reasons.push("does not match the device's rating".to_owned());
+        reasons.push("rating: not checked, the device states none".to_owned());
     }
 
     Fit {
-        percent: points.min(100) as u8,
+        percent: (earned * 100 / possible) as u8,
         reasons,
     }
-}
-
-/// Whether the part is of a plainly different kind than the device. Used to
-/// hide such parts when something better exists.
-pub fn is_wrong_kind(part: &CatalogPart, need: &DeviceNeed) -> bool {
-    matches!(
-        (need.role, part_role(part)),
-        (Some(want), Some(have)) if have.score_for(want) == 0
-    )
 }
 
 #[cfg(test)]
@@ -392,21 +421,39 @@ mod tests {
 
     #[test]
     fn supply_text_is_read() {
-        assert_eq!(
-            parse_supply("24 V DC"),
-            Some(Supply {
-                volts: 24.0,
-                ac: false
-            })
-        );
-        assert_eq!(
-            parse_supply("230 V AC"),
-            Some(Supply {
-                volts: 230.0,
-                ac: true
-            })
-        );
+        assert_eq!(parse_supply("24 V DC"), Some(Supply::dc(24.0)));
+        assert_eq!(parse_supply("230 V AC"), Some(Supply::ac(230.0)));
         assert_eq!(parse_supply("24"), None);
+    }
+
+    #[test]
+    fn an_ac_dc_coil_runs_on_either() {
+        let both = parse_supply("24 V AC/DC").unwrap();
+        assert!(both.runs_on(Supply::ac(24.0)));
+        assert!(both.runs_on(Supply::dc(24.0)));
+        assert!(!both.runs_on(Supply::dc(48.0)));
+        assert!(!parse_supply("24 V DC").unwrap().runs_on(Supply::ac(24.0)));
+    }
+
+    fn part(description: &str, keywords: &[&str]) -> CatalogPart {
+        let mut p = CatalogPart::new("Acme", "1");
+        p.description = description.to_owned();
+        p.keywords = keywords.iter().map(|k| k.to_string()).collect();
+        p
+    }
+
+    #[test]
+    fn keywords_win_over_description_prose() {
+        let p = part(
+            "Circuit breaker 1P C16, overload and short-circuit protection",
+            &["mcb"],
+        );
+        assert_eq!(part_role(&p), Some(Role::Mcb));
+        let p = part(
+            "Circuit breaker 1P C16, overload and short-circuit protection",
+            &[],
+        );
+        assert_eq!(part_role(&p), Some(Role::Overload), "prose only: a guess");
     }
 
     #[test]

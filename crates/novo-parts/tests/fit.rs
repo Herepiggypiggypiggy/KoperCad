@@ -2,7 +2,7 @@
 //! and the match percentage says something about each row.
 
 use novo_core::{Document, Potential};
-use novo_parts::{Catalog, Role, device_role, part_role, suggestions_for_device};
+use novo_parts::{Catalog, CatalogPart, Role, device_role, part_role, suggestions_for_device};
 use novo_tests::{MotorStarter, motor_starter};
 
 fn starter() -> (Document, MotorStarter, Catalog) {
@@ -30,28 +30,42 @@ fn the_device_kind_comes_from_its_symbol() {
 }
 
 #[test]
-fn an_overload_is_offered_overload_relays_only() {
+fn an_overload_is_offered_overload_relays_first() {
     let (doc, gate, catalog) = starter();
+    let rows = suggestions_for_device(&catalog, doc.project(), gate.f2, "", 50);
     let kinds = roles(&doc, &catalog, gate.f2);
-    assert!(!kinds.is_empty());
+    let n = kinds
+        .iter()
+        .take_while(|r| **r == Some(Role::Overload))
+        .count();
+    assert!(n >= 3, "{kinds:?}");
+    // What follows is of another kind and scores clearly lower.
     assert!(
-        kinds.iter().all(|r| *r == Some(Role::Overload)),
-        "{kinds:?}"
+        rows[n..]
+            .iter()
+            .all(|r| r.fit.percent < rows[n - 1].fit.percent)
     );
 }
 
 #[test]
-fn a_breaker_is_not_offered_a_fuse_holder_or_an_overload() {
+fn a_breaker_lists_breakers_before_fuse_holders_and_nothing_is_hidden() {
     let (doc, gate, catalog) = starter();
     let kinds = roles(&doc, &catalog, gate.f3);
-    assert!(
-        kinds
-            .iter()
-            .all(|r| matches!(r, Some(Role::Mcb | Role::Mpcb))),
-        "{kinds:?}"
-    );
-    // An MCB comes before a motor protection breaker.
+    // An MCB comes first, then the motor protection breaker; the fuse
+    // holder and overloads are still there, after them.
     assert_eq!(kinds[0], Some(Role::Mcb));
+    let first_other = kinds
+        .iter()
+        .position(|r| !matches!(r, Some(Role::Mcb | Role::Mpcb)))
+        .unwrap();
+    assert!(
+        kinds[first_other..]
+            .iter()
+            .all(|r| !matches!(r, Some(Role::Mcb | Role::Mpcb)))
+    );
+    assert!(kinds.contains(&Some(Role::FuseHolder)));
+    let all = catalog.suggest("F", "", usize::MAX).len();
+    assert_eq!(kinds.len(), all, "every part for the letter is listed");
 }
 
 #[test]
@@ -69,13 +83,10 @@ fn a_stop_button_lists_a_normally_closed_button_first() {
     let (doc, gate, catalog) = starter();
     let stop = suggestions_for_device(&catalog, doc.project(), gate.s0, "", 5);
     assert_eq!(part_role(stop[0].part), Some(Role::PushNc));
-    assert!(stop.iter().all(|s| part_role(s.part) == Some(Role::PushNc)));
+    assert_eq!(part_role(stop[1].part), Some(Role::PushNc));
+    assert!(stop[1].fit.percent > stop[2].fit.percent);
     let start = suggestions_for_device(&catalog, doc.project(), gate.s1, "", 5);
-    assert!(
-        start
-            .iter()
-            .all(|s| part_role(s.part) == Some(Role::PushNo))
-    );
+    assert_eq!(part_role(start[0].part), Some(Role::PushNo));
 }
 
 #[test]
@@ -131,4 +142,59 @@ fn the_match_differs_between_rows_and_is_not_the_data_quality() {
             assert!(row.fit.percent < 50);
         }
     }
+}
+
+#[test]
+fn a_match_counts_only_the_checks_that_could_be_made_and_says_so() {
+    let (doc, gate, catalog) = starter();
+    // A stop button states no coil and no rating: kind and letter code are
+    // the two checks, and the tooltip lists the skipped ones.
+    let top = &suggestions_for_device(&catalog, doc.project(), gate.s0, "", 1)[0];
+    assert!(
+        top.fit
+            .reasons
+            .iter()
+            .any(|r| r.starts_with("coil: not checked"))
+    );
+    assert!(
+        top.fit
+            .reasons
+            .iter()
+            .any(|r| r.starts_with("rating: not checked"))
+    );
+}
+
+#[test]
+fn a_part_that_does_not_say_what_it_is_ranks_below_a_confirmed_one() {
+    let (doc, gate, _) = starter();
+    let mut vague = CatalogPart::new("Acme", "V-1");
+    vague.letter_codes = vec!["F".into()];
+    let mut breaker = CatalogPart::new("Acme", "B-1");
+    breaker.letter_codes = vec!["F".into()];
+    breaker.keywords = vec!["mcb".into()];
+    let mut catalog = Catalog::new();
+    catalog.upsert(vague);
+    catalog.upsert(breaker);
+    let rows = suggestions_for_device(&catalog, doc.project(), gate.f3, "", 10);
+    assert_eq!(rows[0].part.order_number, "B-1");
+    assert_eq!(rows[0].fit.percent, 100);
+    assert!(rows[1].fit.percent < 50);
+}
+
+#[test]
+fn rating_a_large_catalog_is_fast() {
+    let (doc, gate, _) = starter();
+    let mut catalog = Catalog::new();
+    for i in 0..5_000 {
+        let mut part = CatalogPart::new("Acme", format!("K-{i:05}"));
+        part.description = format!("Contactor relay {i}, coil 24 V DC");
+        part.letter_codes = vec!["K".into()];
+        catalog.upsert(part);
+    }
+    let t = std::time::Instant::now();
+    let rows = suggestions_for_device(&catalog, doc.project(), gate.k1, "", 30);
+    assert_eq!(rows.len(), 30);
+    // Debug build, shared runner: a loose bound that still catches a
+    // quadratic or per-part netlist rebuild.
+    assert!(t.elapsed().as_millis() < 2000, "{:?}", t.elapsed());
 }

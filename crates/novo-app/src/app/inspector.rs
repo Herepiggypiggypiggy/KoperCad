@@ -354,11 +354,16 @@ impl NovoApp {
             self.wb.inspector.picker.open,
         ) {
             (Some(catalog), Some(doc), true) => {
+                // The match reads the circuit (coil voltage), so any edit,
+                // undo or redo makes the rows stale.
                 let scope = format!(
-                    "{device:?}{}",
+                    "{device:?}{}/{}/{:?}/{}",
                     doc.project()
                         .device(device)
-                        .map_or(String::new(), |d| d.tag.to_string())
+                        .map_or(String::new(), |d| d.tag.to_string()),
+                    doc.undo_depth(),
+                    doc.undo_label(),
+                    doc.can_redo()
                 );
                 self.wb.inspector.picker.rows(&scope, |query| {
                     device_candidates(catalog, doc.project(), device, query)
