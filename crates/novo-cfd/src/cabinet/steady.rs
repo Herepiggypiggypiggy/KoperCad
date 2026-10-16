@@ -95,7 +95,7 @@ impl CabinetSteady {
 pub fn unconverged_note(r: &SteadyReport) -> String {
     format!(
         "Stopped before a steady state ({} iterations, heat balance off by {:.1} %): the field is \
-         still developing; temperatures are not final.",
+         still developing; temperatures are not final. After a time-budget stop the fields are the last iterate, not a window mean.",
         r.iterations,
         100.0 * r.imbalance.abs()
     )
