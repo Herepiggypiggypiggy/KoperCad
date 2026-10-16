@@ -50,14 +50,13 @@ pub(crate) fn tab(
     state: &mut QualityTab,
     catalog: &Catalog,
 ) -> Option<Option<PartKey>> {
-    ui.horizontal(|ui| {
-        ui.selectable_value(&mut state.side, Side::Parts, "Parts");
-        ui.selectable_value(&mut state.side, Side::Quality, "Quality");
-    });
+    let mut at = usize::from(state.side == Side::Quality);
+    novo_theme::widgets::tabs(ui, &mut at, &["Parts", "Quality"]);
+    state.side = if at == 1 { Side::Quality } else { Side::Parts };
+    ui.add_space(4.0);
     if state.side != Side::Quality {
         return None;
     }
-    ui.separator();
     let jump = quality_ui(ui, state, catalog);
     if jump.is_some() {
         state.side = Side::Parts;
