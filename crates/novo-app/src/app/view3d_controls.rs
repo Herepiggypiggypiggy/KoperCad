@@ -3,7 +3,7 @@
 //! build and the door swing are applied in `view3d.rs`.
 
 use eframe::egui;
-use novo_view3d::Layers;
+use novo_view3d::{Layers, Section, SectionAxis};
 
 /// Margin from the view's corner, in points.
 const MARGIN: f32 = 12.0;
@@ -72,6 +72,7 @@ pub(super) fn toolbar(
     view: egui::Rect,
     controls: &mut Controls,
     limit: Option<f64>,
+    section: &mut Option<Section>,
 ) -> Changed {
     let mut changed = Changed::default();
     egui::Area::new(egui::Id::new("view3d_toolbar"))
@@ -100,6 +101,7 @@ pub(super) fn toolbar(
                         "Shadows",
                         "Soft shadows from the key light (View > 3D > Shadows)",
                     );
+                    section_menu(ui, section);
                     ui.separator();
                     if let Some(limit) = limit
                         && controls.layers.door
@@ -134,6 +136,47 @@ pub(super) fn toolbar(
             });
         });
     changed
+}
+
+/// The Section menu: a plane through the enclosure that cuts the front of
+/// the picture away so the inside shows. Only the picture is cut.
+fn section_menu(ui: &mut egui::Ui, section: &mut Option<Section>) {
+    let title = if section.is_some() {
+        "✔ Section"
+    } else {
+        "Section"
+    };
+    ui.menu_button(title, |ui| {
+        let mut on = section.is_some();
+        if ui
+            .checkbox(&mut on, "Cut the picture with a plane")
+            .on_hover_text("Hide everything on one side of a plane to see inside")
+            .changed()
+        {
+            *section = on.then(Section::default);
+        }
+        let Some(s) = section.as_mut() else {
+            return;
+        };
+        ui.horizontal(|ui| {
+            for (axis, name, hint) in [
+                (SectionAxis::X, "X", "Across the plate"),
+                (SectionAxis::Y, "Y", "Up the plate"),
+                (
+                    SectionAxis::Z,
+                    "Z",
+                    "Out of the plate: slices the depth of the enclosure",
+                ),
+            ] {
+                ui.selectable_value(&mut s.axis, axis, name)
+                    .on_hover_text(hint);
+            }
+            ui.checkbox(&mut s.flip, "Flip")
+                .on_hover_text("Hide the other side of the plane");
+        });
+        ui.add(egui::Slider::new(&mut s.at, 0.0..=1.0).show_value(false))
+            .on_hover_text("Where the plane stands");
+    });
 }
 
 /// A toggle button whose state is also in its look (a tick), so it never

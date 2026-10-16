@@ -145,6 +145,7 @@ struct Globals {
     viewport: [f32; 4],
     light_vp: [[f32; 4]; 4],
     shadow: [f32; 4],
+    clip: [f32; 4],
 }
 
 /// A vertex of an overlay mesh.
@@ -1103,6 +1104,10 @@ impl Renderer {
                 1.0 / SHADOW_MAP_SIZE as f32,
                 0.0,
             ],
+            clip: frame.state.section.map_or([0.0, 0.0, 0.0, -1.0], |s| {
+                let (n, w) = s.plane(&bounds);
+                [n.x, n.y, n.z, w]
+            }),
         };
         queue.write_buffer(&target.globals, 0, bytemuck::bytes_of(&globals));
 

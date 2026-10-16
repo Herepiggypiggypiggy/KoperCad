@@ -633,3 +633,38 @@ fn a_caster_outside_the_picture_still_shadows_what_is_in_it() {
         "the shadow reaches into the picture ({darker} px)"
     );
 }
+
+#[test]
+fn a_section_plane_cuts_the_near_box_away_and_shows_the_far_one() {
+    let Some(gpu) = gpu() else {
+        println!("no adapter, skipped");
+        return;
+    };
+    let mut scene = Scene::new(PlateFrame {
+        width: 100.0,
+        height: 100.0,
+    });
+    scene.push(boxed(
+        1,
+        Vec3::new(50.0, 50.0, 0.0),
+        Vec3::new(100.0, 100.0, 10.0),
+        [40, 40, 220],
+    ));
+    scene.push(boxed(
+        2,
+        Vec3::new(50.0, 50.0, 60.0),
+        Vec3::new(30.0, 30.0, 10.0),
+        [220, 40, 40],
+    ));
+    let cam = front_camera(&scene);
+    let whole = render(&gpu, &scene, &ViewState::default(), &cam, Mode::Interactive);
+    let c = px(&whole, SIZE.0 / 2, SIZE.1 / 2);
+    assert!(c[0] > c[2], "the near box is red, got {c:?}");
+    let state = ViewState {
+        section: Some(novo_view3d::Section::default()),
+        ..ViewState::default()
+    };
+    let cut = render(&gpu, &scene, &state, &cam, Mode::Interactive);
+    let c = px(&cut, SIZE.0 / 2, SIZE.1 / 2);
+    assert!(c[2] > c[0], "the plane hides the near box, got {c:?}");
+}

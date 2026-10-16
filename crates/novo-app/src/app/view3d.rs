@@ -291,7 +291,13 @@ impl NovoApp {
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
-        view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        view3d_controls::toolbar(
+            ui.ctx(),
+            view_rect,
+            &mut mode.controls,
+            limit,
+            &mut mode.view.state.section,
+        );
         let stale = run_heat(
             &mut self.cabinet.heat,
             project,

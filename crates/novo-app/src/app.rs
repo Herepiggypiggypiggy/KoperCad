@@ -964,6 +964,7 @@ impl NovoApp {
                     || *id == "view.3d"
                     || *id == "view.3d_door"
                     || *id == "view.3d_stats"
+                    || *id == "view.3d_section"
                     || id.starts_with("heat.")
             });
         }

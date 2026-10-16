@@ -67,6 +67,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
                 Some(("Front", "view.front")),
                 Some(("Top", "view.top")),
                 None,
+                Some(("Section plane on or off", "view.3d_section")),
                 Some(("Door open or closed", "view.3d_door")),
                 Some(("Enclosure on or off", "view.3d_shell")),
                 Some(("Wires on or off", "view.3d_wires")),

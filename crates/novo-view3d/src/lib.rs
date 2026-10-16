@@ -43,4 +43,4 @@ pub use scene::{
     CONTRACT_VERSION, Group, GroupId, Item, ItemId, ItemKind, Mark, PlateFrame, Pose, Profile,
     Scene, Shape, Wire,
 };
-pub use view_state::{Display, ViewState};
+pub use view_state::{Display, Section, SectionAxis, ViewState};
