@@ -404,6 +404,9 @@ impl Keymap {
         bind(Chord::ctrl(Digit(6)), Anywhere, "view.3d");
         bind(Chord::ctrl(Digit(7)), Anywhere, "view.commissioning");
         bind(Chord::shift(l('d')), Canvas, "view.3d_door");
+        bind(Chord::ctrl(l('h')), Canvas, "view.3d_hide");
+        bind(Chord::ctrl(l('i')), Canvas, "view.3d_isolate");
+        bind(Chord::ctrl_shift(l('h')), Canvas, "view.3d_show_all");
         bind(Chord::ctrl_shift(l('f')), Anywhere, "view.focus");
         bind(Chord::plain(F(11)), Anywhere, "view.full_screen");
         bind(Chord::ctrl(l('t')), Anywhere, "view.cabinet_table");

@@ -195,6 +195,39 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
     assert_eq!(d.app.view3d.controls.door_deg, 100.0);
 }
 
+#[test]
+fn select_by_type_hide_isolate_and_show_all_work_on_the_picture_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let count = |d: &Drive, kind| scene(d).items.iter().filter(|i| i.id.kind == kind).count();
+    let devices = count(&d, ItemKind::Device);
+    assert!(devices >= 2, "the example cabinet has devices");
+    d.app.run_command(&ctx, "view.3d_select_devices", None);
+    assert_eq!(d.app.view3d.view.state.selection.len(), devices);
+    d.app.run_command(&ctx, "view.3d_hide", None);
+    d.frame();
+    assert_eq!(count(&d, ItemKind::Device), 0);
+    assert!(d.app.view3d.view.state.selection.is_empty());
+    d.app.run_command(&ctx, "view.3d_show_all", None);
+    d.frame();
+    assert_eq!(count(&d, ItemKind::Device), devices);
+    // Isolate one device: the others go, the plate stays.
+    let one = *d.app.view3d.view.state.selection.iter().next().unwrap_or(
+        &scene(&d)
+            .items
+            .iter()
+            .find(|i| i.id.kind == ItemKind::Device)
+            .unwrap()
+            .id,
+    );
+    d.app.view3d.view.state.selection = std::collections::BTreeSet::from([one]);
+    d.app.run_command(&ctx, "view.3d_isolate", None);
+    d.frame();
+    assert_eq!(count(&d, ItemKind::Device), 1);
+    assert!(has(scene(&d), ItemKind::Plate));
+}
+
 /// One frame with `key` pressed, as the app sees a keystroke.
 fn press(d: &mut Drive, key: egui::Key, modifiers: egui::Modifiers) {
     d.frame_with(vec![egui::Event::Key {

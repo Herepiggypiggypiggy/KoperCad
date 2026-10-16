@@ -24,6 +24,7 @@ use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
 use novo_view3d::camera::ViewPreset;
+use novo_view3d::scene::ItemKind;
 
 use super::standards_report::StandardsFormat;
 use super::view3d::Pending;
@@ -384,6 +385,12 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_wires",
     "view.3d_shadows",
     "view.3d_stats",
+    "view.3d_select_devices",
+    "view.3d_select_rails",
+    "view.3d_select_ducts",
+    "view.3d_hide",
+    "view.3d_isolate",
+    "view.3d_show_all",
     "view.iso",
     "view.front",
     "view.top",
@@ -838,6 +845,18 @@ impl NovoApp {
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
                 }
+            }
+            "view.3d_select_devices" | "view.3d_select_rails" | "view.3d_select_ducts" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_select_kind(match id {
+                    "view.3d_select_devices" => ItemKind::Device,
+                    "view.3d_select_rails" => ItemKind::Rail,
+                    _ => ItemKind::Duct,
+                });
+            }
+            "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_visibility(id);
             }
             "view.3d_stats" => {
                 self.switch_workspace(Workspace::View3d);

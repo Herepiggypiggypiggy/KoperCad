@@ -3,7 +3,9 @@
 //! build and the door swing are applied in `view3d.rs`.
 
 use eframe::egui;
-use novo_view3d::Layers;
+use std::collections::BTreeSet;
+
+use novo_view3d::{ItemId, Layers};
 
 /// Margin from the view's corner, in points.
 const MARGIN: f32 = 12.0;
@@ -20,6 +22,8 @@ pub(crate) struct Controls {
     pub(super) move_items: bool,
     /// Soft shadows from the key light.
     pub(super) shadows: bool,
+    /// Devices, rails and ducts the user hid; the project is untouched.
+    pub(super) hidden: BTreeSet<ItemId>,
 }
 
 impl Default for Controls {
@@ -29,6 +33,7 @@ impl Default for Controls {
             door_deg: 0.0,
             move_items: true,
             shadows: true,
+            hidden: BTreeSet::new(),
         }
     }
 }
@@ -72,8 +77,10 @@ pub(super) fn toolbar(
     view: egui::Rect,
     controls: &mut Controls,
     limit: Option<f64>,
-) -> Changed {
+    selected: bool,
+) -> (Changed, Option<&'static str>) {
     let mut changed = Changed::default();
+    let mut command = None;
     egui::Area::new(egui::Id::new("view3d_toolbar"))
         .order(egui::Order::Middle)
         .fixed_pos(view.left_top() + egui::vec2(MARGIN, MARGIN))
@@ -101,6 +108,7 @@ pub(super) fn toolbar(
                         "Soft shadows from the key light (View > 3D > Shadows)",
                     );
                     ui.separator();
+                    command = selection_menu(ui, selected, controls.hidden.len());
                     if let Some(limit) = limit
                         && controls.layers.door
                     {
@@ -133,7 +141,44 @@ pub(super) fn toolbar(
                 });
             });
         });
-    changed
+    (changed, command)
+}
+
+/// The Select and Hide menu: pick every device, rail or duct, hide or isolate
+/// the selection, bring everything back. Returns the command asked for.
+fn selection_menu(ui: &mut egui::Ui, selected: bool, hidden: usize) -> Option<&'static str> {
+    let mut command = None;
+    let title = if hidden > 0 {
+        format!("Select and hide ({hidden} hidden)")
+    } else {
+        "Select and hide".to_owned()
+    };
+    ui.menu_button(title, |ui| {
+        let mut row = |ui: &mut egui::Ui, label: &str, id: &'static str, enabled: bool| {
+            if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+                command = Some(id);
+                ui.close();
+            }
+        };
+        row(ui, "Select all devices", "view.3d_select_devices", true);
+        row(ui, "Select all rails", "view.3d_select_rails", true);
+        row(ui, "Select all ducts", "view.3d_select_ducts", true);
+        ui.separator();
+        row(ui, "Hide selection   Ctrl+H", "view.3d_hide", selected);
+        row(
+            ui,
+            "Isolate selection   Ctrl+I",
+            "view.3d_isolate",
+            selected,
+        );
+        row(
+            ui,
+            "Show all   Ctrl+Shift+H",
+            "view.3d_show_all",
+            hidden > 0,
+        );
+    });
+    command
 }
 
 /// A toggle button whose state is also in its look (a tick), so it never
