@@ -1089,6 +1089,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_duplicate",
+        "Duplicate the selected devices in 3D",
+        "View",
+        &["duplicate", "copy", "clone", "same part"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_stats",
         "Show or hide the 3D frame statistics",
         "View",

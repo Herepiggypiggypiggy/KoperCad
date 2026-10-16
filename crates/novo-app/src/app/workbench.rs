@@ -402,6 +402,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_wires",
     "view.3d_shadows",
     "view.3d_stats",
+    "view.3d_duplicate",
     "view.iso",
     "view.front",
     "view.top",
@@ -785,6 +786,11 @@ impl NovoApp {
             }
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
+            "edit.duplicate" if self.workspace() == Workspace::View3d => self.view3d_duplicate(),
+            "view.3d_duplicate" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_duplicate();
+            }
             "edit.duplicate" => self.duplicate_selection(),
             "edit.copy" => self.copy_selection(ctx, false),
             "edit.cut" => self.copy_selection(ctx, true),

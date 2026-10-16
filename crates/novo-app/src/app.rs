@@ -123,6 +123,7 @@ mod userkeymap;
 mod variants;
 mod view3d;
 mod view3d_controls;
+mod view3d_duplicate;
 mod view3d_heat;
 mod view3d_move;
 #[cfg(test)]
@@ -984,6 +985,7 @@ impl NovoApp {
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
+                    || *id == "view.3d_duplicate"
                     || *id == "view.3d_stats"
                     || id.starts_with("heat.")
             });

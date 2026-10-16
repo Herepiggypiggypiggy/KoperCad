@@ -101,7 +101,10 @@ impl Default for View3dMode {
 
 /// The enclosure the 3D view shows: the one the Cabinet shows when it has a
 /// plate, else the first with a plate.
-fn enclosure(project: &Project, preferred: Option<&novo_core::DeviceTag>) -> Option<StructureId> {
+pub(super) fn enclosure(
+    project: &Project,
+    preferred: Option<&novo_core::DeviceTag>,
+) -> Option<StructureId> {
     let has_plate = |s: &&novo_core::Structure| s.enclosure && load(project, s.id).is_some();
     project
         .structures()
