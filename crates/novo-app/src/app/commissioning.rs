@@ -531,7 +531,7 @@ fn header_menu(
         ui.set_width(220.0);
         widgets::section_label(ui, "By");
         let who = ui.add(egui::TextEdit::singleline(&mut mode.who).desired_width(f32::INFINITY));
-        note_ctx(ui.ctx(), "commissioning.who", "By field", &who);
+        note_ctx(ui.ctx(), "commissioning.who", "By menu", &who);
         ui.add_space(space::S);
         widgets::section_label(ui, "Report");
         for (label, format) in [
@@ -544,7 +544,12 @@ fn header_menu(
             let item = widgets::menu_item(ui, Some(icons::FILE_TEXT), label, None, true)
                 .on_hover_text("Write the commissioning report next to the project file");
             if matches!(format, ReportFileFormat::Pdf) {
-                note_ctx(ui.ctx(), "commissioning.report", "Report PDF button", &item);
+                note_ctx(
+                    ui.ctx(),
+                    "commissioning.report",
+                    "Write PDF report item",
+                    &item,
+                );
             }
             if item.clicked() {
                 export = Some(format);
@@ -556,11 +561,11 @@ fn header_menu(
     });
     // The button stands in for the field and the PDF item until it is open.
     if menu.inner.is_none() {
-        note_ctx(ui.ctx(), "commissioning.who", "By field", &menu.response);
+        note_ctx(ui.ctx(), "commissioning.who", "By menu", &menu.response);
         note_ctx(
             ui.ctx(),
             "commissioning.report",
-            "Report PDF button",
+            "Write PDF report item",
             &menu.response,
         );
     }

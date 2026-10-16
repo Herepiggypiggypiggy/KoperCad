@@ -476,7 +476,7 @@ fn pill_parts(p: &Palette, errors: usize, warnings: usize) -> Vec<(String, egui:
 
 /// A progress bar with a caption line above it: `caption` on the left,
 /// `detail` (counts, in the number font) on the right. `done` and `failed`
-/// are fractions of the whole, 0 to 1; the done part is copper and the
+/// are fractions of the whole, 0 to 1; the done part is green and the
 /// failed part follows it in the error colour. The bar is 6 pt high at every
 /// density.
 pub fn progress_bar(ui: &mut Ui, caption: &str, detail: &str, done: f32, failed: f32) -> Response {
@@ -510,7 +510,7 @@ pub fn progress_bar(ui: &mut Ui, caption: &str, detail: &str, done: f32, failed:
         )
     };
     if done > 0.0 {
-        ui.painter().rect_filled(part(0.0, done), round, p.accent);
+        ui.painter().rect_filled(part(0.0, done), round, p.success);
     }
     if failed > 0.0 {
         ui.painter()
