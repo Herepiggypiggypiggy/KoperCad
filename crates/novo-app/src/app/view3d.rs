@@ -22,6 +22,7 @@ use super::cabinet_inspector;
 use super::NovoApp;
 use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
+use super::view3d_align;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
@@ -101,7 +102,10 @@ impl Default for View3dMode {
 
 /// The enclosure the 3D view shows: the one the Cabinet shows when it has a
 /// plate, else the first with a plate.
-fn enclosure(project: &Project, preferred: Option<&novo_core::DeviceTag>) -> Option<StructureId> {
+pub(super) fn enclosure(
+    project: &Project,
+    preferred: Option<&novo_core::DeviceTag>,
+) -> Option<StructureId> {
     let has_plate = |s: &&novo_core::Structure| s.enclosure && load(project, s.id).is_some();
     project
         .structures()
@@ -407,6 +411,16 @@ impl NovoApp {
             .map(|i| i.raw)
             .collect();
         let mut ask = None;
+        if devices.len() >= 2
+            && let Some(op) = view3d_align::strip(ui.ctx(), out.rect, devices.len())
+        {
+            self.wb.queued.push(
+                view3d_align::OPS
+                    .iter()
+                    .find(|o| o.3 == op)
+                    .map_or("view.3d_align_left", |o| o.0),
+            );
+        }
         if let Some(stored) = load(project, id) {
             if state.selection != mode.synced.1 {
                 self.cabinet.view.selection.apply(
