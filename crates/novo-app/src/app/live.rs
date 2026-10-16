@@ -545,11 +545,12 @@ impl NovoApp {
 
         // Wires: lit in their colour, dimmed when nothing reaches them. The
         // canvas draws them in its wire layer, under the symbols and text.
+        let dead_wire = novo_theme::POTENTIALS_DARK.dead;
         let looks = wires
             .iter()
             .map(|wire| {
                 let (color, width) = match &wire.live {
-                    Live::Dead => (tokens::BG_0.gamma_multiply(0.6), 2.5),
+                    Live::Dead => (novo_theme::canvas::to_color32(dead_wire), 2.5),
                     Live::Carries(p) => {
                         let color = colors.get(p).map_or(tokens::ACCENT, |c| c.1);
                         (color.gamma_multiply(0.9), LIT_WIDTH)
