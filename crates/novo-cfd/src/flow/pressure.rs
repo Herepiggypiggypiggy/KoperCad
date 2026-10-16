@@ -14,7 +14,10 @@ struct Level {
     /// `cf[a][cell]`: coupling between the cell and its lower neighbour along
     /// axis `a` (0 on the domain boundary).
     cf: [Vec<f64>; 3],
+    /// Operator diagonal: the face couplings plus any open-boundary term.
     diag: Vec<f64>,
+    /// Diagonal of the face couplings alone.
+    base: Vec<f64>,
 }
 
 impl Level {
@@ -31,6 +34,7 @@ impl Level {
             n,
             cf,
             diag: vec![0.0; n[0] * n[1] * n[2]],
+            base: Vec::new(),
         };
         for k in 0..n[2] {
             for j in 0..n[1] {
@@ -50,6 +54,7 @@ impl Level {
                 }
             }
         }
+        l.base = l.diag.clone();
         l
     }
 
@@ -168,6 +173,8 @@ impl Level {
 /// The Poisson operator of one mesh with its multigrid hierarchy.
 pub struct PressureSolver {
     levels: Vec<Level>,
+    /// No open boundary: the operator is singular (constants).
+    singular: bool,
     /// Iterations and relative residual of the last solve.
     pub last_iterations: usize,
     pub last_residual: f64,
@@ -202,6 +209,7 @@ impl PressureSolver {
         }
         PressureSolver {
             levels,
+            singular: true,
             last_iterations: 0,
             last_residual: 0.0,
         }
@@ -209,6 +217,30 @@ impl PressureSolver {
 
     pub fn level_count(&self) -> usize {
         self.levels.len()
+    }
+
+    /// Adds a conductance `g[cell]` to the diagonal: the cell is tied to a
+    /// fixed pressure (zero) through an open boundary face. With any
+    /// positive entry the operator is no longer singular and the mean is not
+    /// removed. All zeros restores the closed box.
+    pub fn set_open_conductance(&mut self, g: &[f64]) {
+        let mut cur = g.to_vec();
+        self.singular = g.iter().all(|v| *v == 0.0);
+        for l in 0..self.levels.len() {
+            let next = (l + 1 < self.levels.len()).then(|| {
+                let mut out = vec![0.0; self.levels[l + 1].cells()];
+                self.levels[l].restrict(&self.levels[l + 1], &cur, &mut out);
+                out
+            });
+            let lev = &mut self.levels[l];
+            for ((d, b), g) in lev.diag.iter_mut().zip(&lev.base).zip(&cur) {
+                *d = b + g;
+            }
+            match next {
+                Some(n) => cur = n,
+                None => break,
+            }
+        }
     }
 
     /// `y = A x` on the finest level.
@@ -245,7 +277,11 @@ impl PressureSolver {
     /// guess and the result. Returns the iteration count.
     pub fn solve(&mut self, b: &[f64], p: &mut [f64], rel_tol: f64, max_iter: usize) -> usize {
         let n = b.len();
-        let mean_b = b.iter().sum::<f64>() / n as f64;
+        let mean_b = if self.singular {
+            b.iter().sum::<f64>() / n as f64
+        } else {
+            0.0
+        };
         let b: Vec<f64> = b.iter().map(|v| v - mean_b).collect();
         let bnorm = dot(&b, &b).sqrt().max(1e-300);
         let mut r = vec![0.0; n];
@@ -286,8 +322,10 @@ impl PressureSolver {
                 }
             }
         }
-        let mean_p = p.iter().sum::<f64>() / n as f64;
-        p.iter_mut().for_each(|v| *v -= mean_p);
+        if self.singular {
+            let mean_p = p.iter().sum::<f64>() / n as f64;
+            p.iter_mut().for_each(|v| *v -= mean_p);
+        }
         self.last_iterations = it;
         self.last_residual = rel;
         it
