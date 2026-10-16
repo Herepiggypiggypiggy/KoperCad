@@ -13,11 +13,15 @@ novo-plc.workspace = true
 novo-routing.workspace = true
 novo-terminals.workspace = true
 rust_xlsxwriter.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+dirs.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
 novo-tests = { path = "../novo-tests" }
 calamine.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true
