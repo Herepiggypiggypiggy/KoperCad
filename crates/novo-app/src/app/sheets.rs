@@ -71,7 +71,7 @@ impl NovoApp {
             Ok(h) => {
                 self.wb.sheet_exports.insert(path.to_owned(), h);
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message_file(format!("{verb} {}", path.display()), &path);
+                self.message_file(format!("{verb} {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }

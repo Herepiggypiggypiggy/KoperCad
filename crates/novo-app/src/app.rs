@@ -1805,10 +1805,10 @@ impl NovoApp {
                             m.text.clone()
                         };
                         ui.add(egui::Label::new(egui::RichText::new(text).color(color)).wrap());
-                        if let Some(file) = &m.file {
-                            if ui.button("Open folder").clicked() {
-                                open = file.parent().map(Path::to_owned);
-                            }
+                        if let Some(file) = &m.file
+                            && ui.button("Open folder").clicked()
+                        {
+                            open = file.parent().map(Path::to_owned);
                         }
                     });
                     let response = frame.response.interact(egui::Sense::click());
@@ -1820,10 +1820,10 @@ impl NovoApp {
         for i in dismiss {
             self.messages[i].dismissed = true;
         }
-        if let Some(dir) = open {
-            if let Err(e) = parts_bulk::open_folder(&dir) {
-                self.message(Level::Error, format!("Could not open the folder: {e}"));
-            }
+        if let Some(dir) = open
+            && let Err(e) = parts_bulk::open_folder(&dir)
+        {
+            self.message(Level::Error, format!("Could not open the folder: {e}"));
         }
     }
 

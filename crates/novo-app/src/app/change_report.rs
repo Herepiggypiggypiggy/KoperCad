@@ -89,7 +89,7 @@ impl NovoApp {
                 } else {
                     ""
                 };
-                self.message_file(format!("{verb} {}{none}", path.display()), &path);
+                self.message_file(format!("{verb} {}{none}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
