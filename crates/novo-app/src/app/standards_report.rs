@@ -337,6 +337,7 @@ impl NovoApp {
                 let options = novo_pdf::ReportPdfOptions {
                     title: format!("{name}, standards compliance"),
                     footer_right: "Assists the engineer; not a certificate".to_owned(),
+                    language: self.report_translator(),
                     ..Default::default()
                 };
                 novo_pdf::export_report_pdf(&[&report_output(&doc)], &options)

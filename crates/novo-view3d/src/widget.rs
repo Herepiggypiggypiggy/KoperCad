@@ -149,6 +149,13 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
     INSTALLED.store(true, Ordering::Relaxed);
 }
 
+/// Marks the widget as installed without a window, so [`View3d::show`] runs
+/// all its CPU work (input, culling, picking, labels). Nothing is drawn by the
+/// GPU: for benchmarks and tests of the widget's own cost.
+pub fn install_headless() {
+    INSTALLED.store(true, Ordering::Relaxed);
+}
+
 /// Whether [`install`] ran. Without it (no wgpu adapter) [`View3d::show`] paints a notice.
 pub fn is_installed() -> bool {
     INSTALLED.load(Ordering::Relaxed)
@@ -336,6 +343,12 @@ fn color(c: [u8; 4], alpha: f32) -> Color32 {
         c[2],
         (c[3] as f32 * alpha.clamp(0.0, 1.0)) as u8,
     )
+}
+
+/// Whether a "?" (no part data) badge is drawn on `id`: on every device with
+/// the Missing data layer, else only under the pointer or in the selection.
+pub(crate) fn badge_shown(state: &ViewState, id: ItemId) -> bool {
+    state.display.missing_marks || state.hover == Some(id) || state.selection.contains(&id)
 }
 
 /// A chip's 1 px line: copper when selected, steel blue when hovered, the
@@ -557,8 +570,14 @@ impl View3d {
 
     /// Screen position of a world point inside `rect`.
     pub fn project(&self, rect: Rect, scene: &Scene, p: Vec3) -> Option<Pos2> {
+        self.project_in(rect, &scene.bounds(), p)
+    }
+
+    /// [`project`](Self::project) with the scene bounds at hand: the bounds
+    /// walk every item, so code that projects many points takes them once.
+    fn project_in(&self, rect: Rect, bounds: &crate::math::Aabb, p: Vec3) -> Option<Pos2> {
         let aspect = rect.width() / rect.height().max(1.0);
-        let (ndc, _) = self.camera.project(p, aspect, &scene.bounds())?;
+        let (ndc, _) = self.camera.project(p, aspect, bounds)?;
         Some(Pos2::new(
             rect.min.x + (ndc.x * 0.5 + 0.5) * rect.width(),
             rect.min.y + (0.5 - ndc.y * 0.5) * rect.height(),
@@ -1008,7 +1027,7 @@ impl View3d {
                 rect.height() * ppp,
             ) / ppp;
             if let (true, Some(label)) = (self.state.display.labels, &item.label)
-                && let Some(p) = self.project(rect, scene, front)
+                && let Some(p) = self.project_in(rect, &bounds, front)
             {
                 let galley =
                     painter.layout_no_wrap(label.to_string(), font.clone(), Color32::PLACEHOLDER);
@@ -1033,6 +1052,9 @@ impl View3d {
             }
             if item.mark != Mark::None && size_pt >= 12.0 {
                 let style = look.mark(item.mark);
+                if style.glyph == Glyph::DashedEdge && !badge_shown(&self.state, item.id) {
+                    continue;
+                }
                 let text = match style.glyph {
                     Glyph::Cross => "\u{00d7}",
                     Glyph::Bang => "!",
@@ -1040,7 +1062,7 @@ impl View3d {
                     Glyph::None => continue,
                 };
                 let top = world.transform_point3(Vec3::new(0.0, item.size.y * 0.5, item.size.z));
-                if let Some(p) = self.project(rect, scene, top) {
+                if let Some(p) = self.project_in(rect, &bounds, top) {
                     let c = style
                         .edge
                         .unwrap_or(look.overlay.chip_text[..3].try_into().unwrap());
@@ -1288,6 +1310,21 @@ mod chip_tests {
     use super::*;
 
     #[test]
+    fn the_missing_data_badge_shows_on_hover_selection_or_the_layer() {
+        let id = ItemId::new(ItemKind::Device, 1);
+        let mut state = ViewState::default();
+        assert!(!badge_shown(&state, id));
+        state.hover = Some(id);
+        assert!(badge_shown(&state, id));
+        state.hover = None;
+        state.selection.insert(id);
+        assert!(badge_shown(&state, id));
+        state.selection.clear();
+        state.display.missing_marks = true;
+        assert!(badge_shown(&state, id));
+    }
+
+    #[test]
     fn a_chip_border_follows_selection_then_hover() {
         let look = crate::look::Look::default();
         let quiet = chip_border(false, false, &look, 1.0);
@@ -1380,5 +1417,50 @@ mod wheel_tests {
     fn events_with_the_command_key_are_the_pinch_and_count_for_nothing() {
         let (zoom, pan) = split_wheel([(Point, Vec2::new(3.0, 3.0), true)].into_iter());
         assert_eq!((zoom, pan), (0.0, Vec2::ZERO));
+    }
+}
+
+#[cfg(test)]
+mod cost_tests {
+    use super::*;
+    use crate::demo::{self, DemoOptions};
+    use crate::scene::BOUNDS_CALLS;
+
+    /// One headless frame of the widget over `scene`.
+    fn frame(view: &mut View3d, ctx: &egui::Context, scene: &Arc<Scene>, t: f64) {
+        let lib = Arc::new(MeshLibrary::new());
+        let input = egui::RawInput {
+            time: Some(t),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1366.0, 768.0))),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            view.show(ui, scene, &lib, &Look::dark(), ViewOptions::default());
+        });
+        out.textures_delta.clear();
+    }
+
+    /// The scene bounds walk every item, so a frame takes them a few times,
+    /// not once per label: the label pass once cost 50 ms at 1000 devices.
+    #[test]
+    fn a_frame_walks_the_scene_bounds_a_fixed_number_of_times_however_many_labels_show() {
+        install_headless();
+        let calls = |devices: usize| {
+            let (scene, _) = demo::cabinet(&DemoOptions {
+                devices,
+                ..DemoOptions::default()
+            });
+            let scene = Arc::new(scene);
+            let ctx = egui::Context::default();
+            let mut view = View3d::new(9);
+            // Two frames: the first fits the camera.
+            frame(&mut view, &ctx, &scene, 0.0);
+            let before = BOUNDS_CALLS.with(|c| c.get());
+            frame(&mut view, &ctx, &scene, 0.02);
+            BOUNDS_CALLS.with(|c| c.get()) - before
+        };
+        let (small, large) = (calls(20), calls(600));
+        assert_eq!(small, large, "independent of the item count");
+        assert!(large <= 8, "{large} walks of the scene per frame");
     }
 }

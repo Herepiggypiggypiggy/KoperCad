@@ -17,6 +17,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_surfaces;
 mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
@@ -30,6 +31,7 @@ mod checks;
 mod clipboard;
 mod commissioning;
 mod compare;
+mod designer;
 mod device_renumber;
 mod dock;
 mod drawers;
@@ -60,6 +62,9 @@ mod heat_run_tests;
 mod heat_settings;
 mod inspector;
 mod interop;
+mod languages;
+#[cfg(test)]
+mod languages_tests;
 mod learn;
 mod learn_demo;
 mod learn_labels;
@@ -77,6 +82,7 @@ mod macro_browser_tests;
 mod macro_company_tests;
 mod macro_thumb;
 mod menu_bar;
+mod net_trace;
 mod numbering;
 mod onboarding;
 mod outline;
@@ -103,6 +109,7 @@ mod reports;
 mod reports_view;
 mod revisions;
 mod safety;
+mod safety_functions;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -153,6 +160,8 @@ mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
 #[cfg(test)]
+mod cabinet_surfaces_tests;
+#[cfg(test)]
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
@@ -197,6 +206,8 @@ mod shortcuts_sheet_tests;
 #[cfg(test)]
 mod tips_tests;
 #[cfg(test)]
+mod ui_gaps_tests;
+#[cfg(test)]
 mod variants_tests;
 #[cfg(test)]
 mod whats_new_tests;
@@ -217,7 +228,7 @@ use pages::PageView;
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
-use crate::{APP_MAKER, APP_NAME, PROJECT_EXTENSION};
+use crate::{APP_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::primary_button;
 pub(crate) use revisions::index_rule;
 use workbench::Workbench;
@@ -981,6 +992,7 @@ impl NovoApp {
                     || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
                     || *id == "cabinet.door"
+                    || *id == "cabinet.surface"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
@@ -1083,6 +1095,7 @@ impl NovoApp {
         self.whats_new_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
+        self.designer_window(&ctx);
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);
@@ -1105,7 +1118,9 @@ impl NovoApp {
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
         self.safety_window(&ctx);
+        self.languages_window(&ctx);
         self.numbering_window(&ctx);
+        self.net_trace_window(&ctx);
         self.terminal_edit_windows(&ctx);
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
@@ -1604,15 +1619,15 @@ impl NovoApp {
         ui.painter()
             .rect_filled(rect, 0.0, ui.visuals().extreme_bg_color);
         let width = 320.0_f32.min(rect.width() - 32.0);
-        let top = rect.top() + (rect.height() * 0.25).min(200.0);
+        let top = rect.top() + (rect.height() * 0.15).min(120.0);
         let column = egui::Rect::from_min_size(
             egui::pos2(rect.center().x - width / 2.0, top),
             egui::vec2(width, rect.bottom() - top),
         );
         ui.scope_builder(egui::UiBuilder::new().max_rect(column), |ui| {
             ui.with_layout(egui::Layout::top_down_justified(egui::Align::LEFT), |ui| {
-                ui.weak("No project open");
-                ui.add_space(8.0);
+                novo_theme::brand::lockup(ui, 64.0);
+                ui.add_space(novo_theme::space::XXL);
                 if self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
                     ui.weak("Two minutes: place, wire, cable, live view");
@@ -1825,13 +1840,16 @@ impl NovoApp {
             return;
         }
         let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
-            ui.set_width(320.0);
-            ui.heading(APP_NAME);
-            ui.label(format!("by {}", APP_MAKER));
-            ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-            ui.label(format!("Model API v{}", novo_core::MODEL_VERSION));
-            ui.add_space(8.0);
-            ui.button("Close").clicked()
+            ui.set_width(360.0);
+            ui.vertical_centered(|ui| {
+                novo_theme::brand::lockup(ui, 56.0);
+                ui.add_space(novo_theme::space::L);
+                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                ui.weak(format!("Model API v{}", novo_core::MODEL_VERSION));
+                ui.add_space(novo_theme::space::L);
+                ui.button("Close").clicked()
+            })
+            .inner
         });
         if modal.inner || modal.should_close() {
             self.show_about = false;
@@ -1841,6 +1859,7 @@ impl NovoApp {
 
 impl eframe::App for NovoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        fit_window_to_screen(ui.ctx());
         self.show(ui);
     }
 
@@ -2599,5 +2618,86 @@ mod tests {
         let mut reopened = storage_app();
         reopened.open_path(&path);
         assert_eq!(page_count(&reopened), 2);
+    }
+}
+
+/// Room the system keeps for the taskbar and the window's title bar, in
+/// points, when a window is made to fit the screen.
+const SCREEN_MARGIN: egui::Vec2 = egui::vec2(0.0, 80.0);
+
+/// The size a window of `inner` gets on a screen of `monitor`, or `None`
+/// when it already fits.
+fn fitted_size(inner: egui::Vec2, monitor: egui::Vec2) -> Option<egui::Vec2> {
+    let room = (monitor - SCREEN_MARGIN).max(egui::vec2(640.0, 400.0));
+    let fitted = inner.min(room);
+    (fitted != inner).then_some(fitted)
+}
+
+/// Whether the window was left maximized or full screen by the user.
+fn user_sized(maximized: Option<bool>, fullscreen: Option<bool>) -> bool {
+    maximized == Some(true) || fullscreen == Some(true)
+}
+
+/// Once, on the first frame: the default window is 1280 x 800, which on a
+/// 1366 x 768 screen puts the status bar below the edge. A window larger
+/// than the screen is made to fit; one that fits is left alone.
+fn fit_window_to_screen(ctx: &egui::Context) {
+    let id = egui::Id::new("window_fitted");
+    if ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false) {
+        return;
+    }
+    let (inner, monitor, maximized, fullscreen) = ctx.input(|i| {
+        let v = i.viewport();
+        (
+            v.inner_rect.map(|r| r.size()),
+            v.monitor_size,
+            v.maximized,
+            v.fullscreen,
+        )
+    });
+    let (Some(inner), Some(monitor)) = (inner, monitor) else {
+        return;
+    };
+    ctx.data_mut(|d| d.insert_temp(id, true));
+    // A restored maximized or full screen window already fills the screen;
+    // resizing it would undo that on every launch.
+    if user_sized(maximized, fullscreen) {
+        return;
+    }
+    if let Some(size) = fitted_size(inner, monitor) {
+        ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
+    }
+}
+
+#[cfg(test)]
+mod fit_tests {
+    use super::*;
+
+    #[test]
+    fn a_window_taller_than_a_small_screen_shrinks_to_it() {
+        let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1366.0, 768.0));
+        assert_eq!(got, Some(egui::vec2(1280.0, 688.0)));
+    }
+
+    #[test]
+    fn a_window_that_fits_is_left_alone() {
+        assert_eq!(
+            fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1920.0, 1080.0)),
+            None
+        );
+    }
+
+    #[test]
+    fn a_maximized_or_full_screen_window_is_never_resized() {
+        assert!(user_sized(Some(true), Some(false)));
+        assert!(user_sized(Some(false), Some(true)));
+        assert!(!user_sized(Some(false), Some(false)));
+        assert!(!user_sized(None, None));
+    }
+
+    #[test]
+    fn a_tiny_screen_never_goes_below_the_minimum() {
+        let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(500.0, 400.0));
+        assert_eq!(got, Some(egui::vec2(640.0, 400.0)));
     }
 }

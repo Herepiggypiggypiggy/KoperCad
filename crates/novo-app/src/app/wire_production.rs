@@ -1,7 +1,7 @@
 //! Wire production in the app (novo-reports `wirecut`): the cut list a wire
 //! machine or a wireman works from, written next to the project.
 //!
-//! Cabinet > Routes > Export wire cut, File > Export, or Ctrl+K "export wire
+//! Cabinet > Routes > Export wire cut, File > Export production, or Ctrl+K "export wire
 //! cut". The CSV is the generic job file (one row per wire: cut length,
 //! cross-section, colour, strip lengths, ferrules, labels), semicolon
 //! separated with a byte order mark as Excel in a decimal comma locale opens

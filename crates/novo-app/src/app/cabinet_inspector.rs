@@ -176,6 +176,14 @@ fn show(
                 if !d.description.is_empty() {
                     ui.weak(&d.description);
                 }
+                ui.horizontal(|ui| {
+                    if ui.button("Rotate").clicked() {
+                        ask = Some(Ask::Rotate(vec![d.id]));
+                    }
+                    if ui.button("Remove from plate").clicked() {
+                        ask = Some(Ask::Remove(vec![d.id]));
+                    }
+                });
                 ui.add_space(4.0);
                 widgets::field(ui, "Part", d.part.as_deref().unwrap_or("none assigned"));
                 widgets::field(
@@ -188,18 +196,37 @@ fn show(
                     },
                 );
                 widgets::field(ui, "Position", &d.position);
-                if d.rotated {
-                    widgets::field(ui, "Rotated", "90 degrees");
-                }
-                if let Some(rail) = &d.rail {
-                    widgets::field(ui, "Mounted on", rail);
-                }
-                if let Some(rule) = &d.rule {
-                    widgets::field(ui, "Place rule", rule);
-                }
-                if let Some(why) = &d.why {
-                    ui.add_space(2.0);
-                    ui.weak(why);
+                // How it is held on the plate: closed until asked for, since
+                // the position and size above are what is usually wanted.
+                let held = u32::from(d.rotated)
+                    + u32::from(d.rail.is_some())
+                    + u32::from(d.rule.is_some());
+                if held > 0 || d.why.is_some() {
+                    widgets::collapsing_section(
+                        ui,
+                        ("cabinet_inspector_placement", d.id),
+                        "Placement",
+                        &if held > 0 {
+                            held.to_string()
+                        } else {
+                            String::new()
+                        },
+                        false,
+                        |ui| {
+                            if d.rotated {
+                                widgets::field(ui, "Rotated", "90 degrees");
+                            }
+                            if let Some(rail) = &d.rail {
+                                widgets::field(ui, "Mounted on", rail);
+                            }
+                            if let Some(rule) = &d.rule {
+                                widgets::field(ui, "Place rule", rule);
+                            }
+                            if let Some(why) = &d.why {
+                                ui.weak(why);
+                            }
+                        },
+                    );
                 }
                 // One device only: the text buffers are shared, and bulk edits
                 // belong to the property sheet.
@@ -209,21 +236,19 @@ fn show(
                     ask = Some(Ask::SetPanelValue(edit));
                 }
                 if !d.problems.is_empty() {
-                    ui.add_space(4.0);
-                    widgets::section_label(ui, "Problems");
-                    for p in &d.problems {
-                        ui.label(format!("\u{2022} {p}"));
-                    }
+                    widgets::collapsing_section(
+                        ui,
+                        ("cabinet_inspector_problems", d.id),
+                        "Problems",
+                        &d.problems.len().to_string(),
+                        true,
+                        |ui| {
+                            for p in &d.problems {
+                                ui.label(format!("\u{2022} {p}"));
+                            }
+                        },
+                    );
                 }
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    if ui.button("Rotate").clicked() {
-                        ask = Some(Ask::Rotate(vec![d.id]));
-                    }
-                    if ui.button("Remove from plate").clicked() {
-                        ask = Some(Ask::Remove(vec![d.id]));
-                    }
-                });
                 ui.separator();
             }
         }
@@ -262,13 +287,18 @@ fn show(
             ui.add_space(6.0);
             // Inside size, door and depth checks (open by default: this is
             // where they are edited).
-            egui::CollapsingHeader::new("Inside and door")
-                .default_open(true)
-                .show(ui, |ui| {
+            widgets::collapsing_section(
+                ui,
+                "cabinet_inside_and_door",
+                "Inside and door",
+                "",
+                true,
+                |ui| {
                     if let Some(a) = door.state.show(ui, door.layout, door.tag_of) {
                         ask = Some(a);
                     }
-                });
+                },
+            );
         }
     }
     ask
