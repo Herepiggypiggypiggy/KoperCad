@@ -597,14 +597,17 @@ pub(super) fn toggle(ui: &mut egui::Ui, state: &mut HeatState) -> egui::Response
 /// Heat is on.
 pub(super) fn strip(ui: &mut egui::Ui, state: &mut HeatState) {
     let chip = |ui: &mut egui::Ui, on: &mut bool, label: &str| {
-        if novo_theme::widgets::filter_toggle(ui, label, *on).clicked() {
+        let r = novo_theme::widgets::filter_toggle(ui, label, *on);
+        if r.clicked() {
             *on = !*on;
         }
+        r.rect
     };
-    chip(ui, &mut state.map, "Map");
-    chip(ui, &mut state.contours, "Contours");
-    chip(ui, &mut state.airflow, "Airflow");
-    chip(ui, &mut state.badges, "Badges");
+    let mut chips = chip(ui, &mut state.map, "Map");
+    chips = chips.union(chip(ui, &mut state.contours, "Contours"));
+    chips = chips.union(chip(ui, &mut state.airflow, "Airflow"));
+    chips = chips.union(chip(ui, &mut state.badges, "Badges"));
+    super::cabinet_bar::note_rect(ui.ctx(), "heat.chips", "Heat chips", chips, false);
     simulate_controls(ui, state);
 }
 
@@ -747,11 +750,11 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
             }
         }
     } else {
-        if ui
+        let simulate = ui
             .button("Simulate")
-            .on_hover_text("Simulate the heat and airflow of this cabinet (Ctrl+K, heat)")
-            .clicked()
-        {
+            .on_hover_text("Simulate the heat and airflow of this cabinet (Ctrl+K, heat)");
+        super::cabinet_bar::note_ctx(ui.ctx(), "heat.simulate", "Simulate button", &simulate);
+        if simulate.clicked() {
             state.request_run();
         }
         compare_controls(ui, state);
@@ -1398,7 +1401,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
         .fixed_pos(rect.right_top() + Vec2::new(-176.0, 12.0))
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
+            let card = egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_width(140.0);
                 ui.label(
                     egui::RichText::new("TEMPERATURE")
@@ -1496,6 +1499,13 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                     }
                 }
             });
+            super::cabinet_bar::note_rect(
+                ctx,
+                "heat.legend",
+                "Heat legend",
+                card.response.rect,
+                false,
+            );
         });
 }
 
