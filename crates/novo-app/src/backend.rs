@@ -93,6 +93,13 @@ pub trait ProjectBackend {
     /// the open project as it was, if that one cannot be written first.
     fn new_project(&mut self, name: &str) -> Result<(), BackendError>;
 
+    /// Starts a new, unsaved project holding `project`, replacing any open
+    /// one, as [`Self::new_project`] does. It is the way a lesson's sample
+    /// project opens. The project counts as saved until the first edit.
+    fn new_project_from(&mut self, _project: Project) -> Result<(), BackendError> {
+        Err(BackendError::Unavailable("Opening a sample project"))
+    }
+
     /// Opens a project file, replacing any open project. A file from
     /// [`Self::unsaved_projects`] opens as an untitled project. Fails,
     /// leaving the open project as it was, if that one cannot be written
@@ -131,6 +138,16 @@ pub trait ProjectBackend {
     fn revision_snapshot(&self, _revision: novo_core::RevisionId) -> Option<Project> {
         None
     }
+
+    /// The commissioning document kept in the project file (checks and
+    /// punch list), as JSON. Not part of the model: not undone, not saved
+    /// with the drawing.
+    fn commissioning_json(&self) -> Option<String> {
+        None
+    }
+
+    /// Keeps the commissioning document at once.
+    fn set_commissioning_json(&mut self, _json: &str) {}
 
     /// Issues a revision: the model command and the snapshot kept in the
     /// project file, as one undo step (DESIGN §7). The caller passes
@@ -359,6 +376,13 @@ impl ProjectBackend for StorageBackend {
         Ok(())
     }
 
+    fn new_project_from(&mut self, project: Project) -> Result<(), BackendError> {
+        self.close_session()?;
+        self.document = Some(Document::new(project));
+        self.start_untitled();
+        Ok(())
+    }
+
     fn open(&mut self, path: &Path) -> Result<OpenReport, BackendError> {
         let opened = Session::open_in(path, self.recovery_dir_for(path))?;
         self.close_session()?;
@@ -418,6 +442,22 @@ impl ProjectBackend for StorageBackend {
 
     fn revision_snapshot(&self, revision: novo_core::RevisionId) -> Option<Project> {
         self.session.as_ref()?.snapshot(revision).ok().flatten()
+    }
+
+    fn commissioning_json(&self) -> Option<String> {
+        self.session
+            .as_ref()?
+            .sidecar(COMMISSIONING_KEY)
+            .ok()
+            .flatten()
+    }
+
+    fn set_commissioning_json(&mut self, json: &str) {
+        if let Some(session) = self.session.as_mut()
+            && let Err(e) = session.put_sidecar(COMMISSIONING_KEY, json)
+        {
+            log::warn!("could not keep the commissioning data: {e}");
+        }
     }
 
     fn issue_revision(
@@ -630,15 +670,32 @@ impl Drop for StorageBackend {
     }
 }
 
+/// The sidecar document the commissioning data is kept under.
+const COMMISSIONING_KEY: &str = "commissioning";
+
 /// Keeps projects in memory and cannot read or write files.
 #[derive(Default)]
 pub struct MemoryBackend {
     document: Option<Document>,
+    commissioning: Option<String>,
 }
 
 impl ProjectBackend for MemoryBackend {
+    fn commissioning_json(&self) -> Option<String> {
+        self.commissioning.clone()
+    }
+
+    fn set_commissioning_json(&mut self, json: &str) {
+        self.commissioning = Some(json.to_owned());
+    }
+
     fn new_project(&mut self, name: &str) -> Result<(), BackendError> {
         self.document = Some(new_document(name)?);
+        Ok(())
+    }
+
+    fn new_project_from(&mut self, project: Project) -> Result<(), BackendError> {
+        self.document = Some(Document::new(project));
         Ok(())
     }
 

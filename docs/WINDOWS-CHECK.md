@@ -55,5 +55,12 @@ No step needs admin rights. If one asks for it, stop and say so.
   wires are dimmed, a net where two potentials meet is red. Hover a wire for a tip about what it
   carries. Coils get a badge too and timers count down. Shift+L (or the close button) leaves the
   view and the drawing is unchanged.
+- **Example and fast-keys walk-through (needs a build that includes both).** On the start panel
+  click Open example: a motor starter opens over two pages plus generated pages. Close it with
+  Ctrl+W without touching it: nothing appears under Unsaved. Click Try the fast keys: a practice
+  page with a motor and three terminals opens and a card at the bottom right lists seven steps.
+  Press W, C, Ctrl+D, Ctrl+K, hold Q, Shift+L: each step gets a tick. Skip closes the card and it
+  does not return by itself; Ctrl+K, "Fast keys walk-through" brings it back. The card must not
+  cover the tool dock.
 
 Send the result to the thread you got the build from, or write it next to the build number.

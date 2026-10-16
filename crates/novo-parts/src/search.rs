@@ -41,23 +41,19 @@ impl Matcher {
     }
 
     /// Score of a catalog part, or `None` if some word does not match.
-    pub(crate) fn score_part(&self, part: &CatalogPart) -> Option<u32> {
-        let order = normalize_code(&part.order_number);
-        let type_number = normalize_code(&part.type_number);
-        let description = part.description.to_lowercase();
-        let manufacturer = part.manufacturer.to_lowercase();
-        let data = part.data_text().to_lowercase();
+    /// `doc` is the part's pre-lowered text, built once when the part is
+    /// added, so a search over 100,000 parts allocates nothing per part.
+    pub(crate) fn score_doc(&self, doc: &SearchDoc) -> Option<u32> {
         let mut total = 0;
         for (word, code) in &self.words {
             let mut best = 0;
             let long = code.len() >= 3;
             if !code.is_empty() {
-                best = best.max(code_score(&order, code, long, 100, 60, 30));
-                best = best.max(code_score(&type_number, code, long, 80, 50, 25));
+                best = best.max(code_score(&doc.order, code, long, 100, 60, 30));
+                best = best.max(code_score(&doc.type_number, code, long, 80, 50, 25));
             }
-            for keyword in &part.keywords {
-                let keyword = keyword.to_lowercase();
-                if keyword == *word {
+            for keyword in &doc.keywords {
+                if keyword == word {
                     best = best.max(45);
                 } else if keyword.split_whitespace().any(|k| k == word) {
                     best = best.max(30);
@@ -65,20 +61,28 @@ impl Matcher {
                     best = best.max(20);
                 }
             }
-            if part.letter_codes.iter().any(|c| c.to_lowercase() == *word) {
+            if doc.letter_codes.iter().any(|c| c == word) {
                 best = best.max(35);
             }
-            for text in [&description, &manufacturer] {
-                if text
-                    .split(|c: char| !c.is_alphanumeric() && c != '.')
-                    .any(|w| w == word)
-                {
-                    best = best.max(15);
-                } else if text.contains(word.as_str()) {
-                    best = best.max(8);
+            if !code.is_empty() && doc.class_codes.iter().any(|c| c == code) {
+                best = best.max(40);
+            }
+            if !doc.function.is_empty() && doc.function == *word {
+                best = best.max(35);
+            }
+            for text in [&doc.description, &doc.manufacturer] {
+                if text.contains(word.as_str()) {
+                    if text
+                        .split(|c: char| !c.is_alphanumeric() && c != '.')
+                        .any(|w| w == word)
+                    {
+                        best = best.max(15);
+                    } else {
+                        best = best.max(8);
+                    }
                 }
             }
-            if best == 0 && data.contains(word.as_str()) {
+            if best == 0 && doc.data.contains(word.as_str()) {
                 best = 5;
             }
             if best == 0 {
@@ -87,6 +91,42 @@ impl Matcher {
             total += best;
         }
         Some(total)
+    }
+}
+
+/// Lower-cased and normalised text of one part, kept next to it by the
+/// catalog so a search does not rebuild it per query.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct SearchDoc {
+    order: String,
+    type_number: String,
+    description: String,
+    manufacturer: String,
+    data: String,
+    keywords: Vec<String>,
+    letter_codes: Vec<String>,
+    /// Normalised ETIM and ECLASS codes.
+    class_codes: Vec<String>,
+    function: String,
+}
+
+impl SearchDoc {
+    pub(crate) fn new(part: &CatalogPart) -> Self {
+        SearchDoc {
+            order: normalize_code(&part.order_number),
+            type_number: normalize_code(&part.type_number),
+            description: part.description.to_lowercase(),
+            manufacturer: part.manufacturer.to_lowercase(),
+            data: part.data_text().to_lowercase(),
+            keywords: part.keywords.iter().map(|k| k.to_lowercase()).collect(),
+            letter_codes: part.letter_codes.iter().map(|c| c.to_lowercase()).collect(),
+            class_codes: [&part.class.etim, &part.class.eclass]
+                .into_iter()
+                .flatten()
+                .map(|c| normalize_code(c))
+                .collect(),
+            function: part.function.to_lowercase(),
+        }
     }
 }
 

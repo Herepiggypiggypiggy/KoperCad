@@ -13,6 +13,8 @@ novo-parts.workspace = true
 novo-plc.workspace = true
 novo-routing.workspace = true
 novo-terminals.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 novo-symbols.workspace = true

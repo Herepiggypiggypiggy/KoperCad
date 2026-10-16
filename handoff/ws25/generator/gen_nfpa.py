@@ -381,6 +381,8 @@ SAME = [
     "passive/zener_diode", "passive/thyristor", "passive/triac", "passive/transistor_npn",
     "passive/transistor_pnp", "passive/inductor", "transformers/reactor_3ph",
     "switches/changeover_switch_3p",
+    "sensors/inductive_*", "sensors/capacitive_*", "sensors/photoelectric_*", "sensors/encoder",
+    "signalling/beacon", "motors/fan_1ph", "motors/fan_dc",
 ]
 
 # New NFPA symbols: pilot lights carry the colour letter in the circle.

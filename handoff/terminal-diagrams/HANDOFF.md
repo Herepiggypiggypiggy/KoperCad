@@ -6,5 +6,5 @@ Data: novo-terminals `screen` (ScreenRow: wires_internal, wires_external, bridge
 Drawn diagram: novo-reports strip_diagram.rs (`strip_diagram`, `strip_sheet`): blocks per terminal, jumper bars, end plates, as a PageLayout; `LiveReports::layout_sheet` uses it for the `terminals` generated page, so canvas and PDF print it.
 
 How to reach it: add the generated page "Terminal diagram" (default generated pages, or Page > generated) ; each strip prints as a drawn sheet. Terminals drawer shows the same rows.
-Next: CSV verb for the strip rows, Terminals drawer columns for wire in/out and bridged-to (UI thread "UI integration: reports and checks", session_01TaTTPuTqhk8bHd277oJRFR), end-plate options (part-driven).
+Done: Terminals drawer columns (Terminals drawer in the dock), `kopercad-cli export terminals` (CSV or .xlsx).
 Check: cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace

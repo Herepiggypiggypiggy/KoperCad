@@ -28,11 +28,17 @@
 //! | [`WireOverlap`](ProblemKind::WireOverlap) | warning | Two wires on a page sharing a stretch of line |
 //! | [`OpenWire`](ProblemKind::OpenWire) | warning | A wire with an open end that is connected to nothing |
 //! | [`MissingPart`](ProblemKind::MissingPart) | info | A device or cable without a part |
-//! | [`VoltageDrop`](ProblemKind::VoltageDrop) | warning | Filled by novo-checks::calc, not yet |
-//! | [`ShortCircuit`](ProblemKind::ShortCircuit) | error | Filled by novo-checks::calc, not yet |
+//! | [`VoltageDrop`](ProblemKind::VoltageDrop) | warning, error above twice the limit | A wire whose voltage drop exceeds the limit (calc::drop) |
+//! | [`ShortCircuit`](ProblemKind::ShortCircuit) | error | A device that cannot break the supply's short-circuit current |
+//! | [`DisconnectionTime`](ProblemKind::DisconnectionTime) | error | A wire so long that an earth fault cannot trip its protective device in time |
+//! | [`ThermalWithstand`](ProblemKind::ThermalWithstand) | error | A wire that cannot take the let-through energy of its protective device |
+//! | [`CableRating`](ProblemKind::CableRating) | error | A wire whose cable carries less than its protective device allows, or the load draws more than the device is rated for |
+//! | [`MotorStarter`](ProblemKind::MotorStarter) | warning, error where it cannot work | A motor starter whose relay, contactor or fuse does not suit the motor |
+//! | [`ProtectiveConductor`](ProblemKind::ProtectiveConductor) | warning | A protective conductor thinner than its phase conductors need |
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
+//! | [`Standard`](ProblemKind::Standard) | per rule | A rule of a selected standard (IEC 60204-1, NFPA 79, UL 508A) is not met; see [`standards`] |
 //! | [`DeviceCollision`](ProblemKind::DeviceCollision) | error | Two devices overlapping on a mounting plate |
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
 //! | [`DevicesTooClose`](ProblemKind::DevicesTooClose) | warning | Two devices closer than their clearance |
@@ -58,9 +64,13 @@
 //! assert_eq!(Summary::of(&problems).pill_text(), "No issues");
 //! ```
 
+pub mod calc;
+mod calc_checks;
 mod checks;
 mod contacts;
 mod physical;
+pub mod protection;
+pub mod standards;
 mod waiver;
 
 use std::cmp::Ordering;
@@ -156,6 +166,18 @@ pub enum ProblemKind {
     /// or part property `breaking_capacity_ka` and the project property
     /// `supply.short_circuit_ka`.
     ShortCircuit,
+    /// A wire whose smallest earth-fault current is too low for its
+    /// protective device to trip at once (`calc::short_circuit`).
+    DisconnectionTime,
+    /// A wire thinner than its protective device's let-through energy
+    /// allows (`k²S²`).
+    ThermalWithstand,
+    /// A motor starter whose overload relay, contactor or short-circuit
+    /// device does not suit the motor or each other (`calc::motor`).
+    MotorStarter,
+    /// A protective conductor thinner than the rule for its phase
+    /// conductors (`calc::pe`).
+    ProtectiveConductor,
     /// A device drawn in the schematic but not placed on any mounting plate,
     /// in a project where the cabinet layout has been started.
     UnplacedDevice,
@@ -163,6 +185,16 @@ pub enum ProblemKind {
     WireWithoutDuct,
     /// A duct carrying more wires than its fill limit (novo-routing).
     OverfullDuct,
+    /// A rule of a selected standard is not met (IEC 60204-1, NFPA 79,
+    /// UL 508A; [`standards`]). Only produced for projects that selected a
+    /// standard. Each problem carries its rule id in [`Problem::rule`] and
+    /// its own severity, set by the rule.
+    Standard,
+    /// A wire whose cable cannot carry what its protective device allows
+    /// (`Ib ≤ In ≤ Iz`, with the installation method, ambient temperature
+    /// and grouping of IEC 60364-5-52), read from the planning tables
+    /// unless the user loaded a licensed copy (`calc::tables`).
+    CableRating,
     /// Two devices whose footprints overlap on a mounting plate
     /// (novo-layout).
     DeviceCollision,
@@ -176,7 +208,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 26] = [
+    pub const ALL: [ProblemKind; 32] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -196,9 +228,15 @@ impl ProblemKind {
         ProblemKind::OpenWire,
         ProblemKind::VoltageDrop,
         ProblemKind::ShortCircuit,
+        ProblemKind::DisconnectionTime,
+        ProblemKind::ThermalWithstand,
+        ProblemKind::MotorStarter,
+        ProblemKind::ProtectiveConductor,
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        ProblemKind::Standard,
+        ProblemKind::CableRating,
         ProblemKind::DeviceCollision,
         ProblemKind::DeviceOutsidePlate,
         ProblemKind::DevicesTooClose,
@@ -211,6 +249,9 @@ impl ProblemKind {
             | ProblemKind::TooManyContacts
             | ProblemKind::PotentialConflict
             | ProblemKind::ShortCircuit
+            | ProblemKind::DisconnectionTime
+            | ProblemKind::ThermalWithstand
+            | ProblemKind::CableRating
             | ProblemKind::DeviceCollision
             | ProblemKind::DeviceOutsidePlate => Severity::Error,
             ProblemKind::UnconnectedPin
@@ -226,8 +267,11 @@ impl ProblemKind {
             | ProblemKind::WireOverlap
             | ProblemKind::OpenWire
             | ProblemKind::VoltageDrop
+            | ProblemKind::MotorStarter
+            | ProblemKind::ProtectiveConductor
             | ProblemKind::WireWithoutDuct
             | ProblemKind::OverfullDuct
+            | ProblemKind::Standard
             | ProblemKind::DevicesTooClose
             | ProblemKind::RailOverflow
             | ProblemKind::Plc => Severity::Warning,
@@ -257,9 +301,15 @@ impl ProblemKind {
             ProblemKind::OpenWire => "Open wire end",
             ProblemKind::VoltageDrop => "Voltage drop",
             ProblemKind::ShortCircuit => "Short-circuit rating",
+            ProblemKind::DisconnectionTime => "Disconnection time",
+            ProblemKind::ThermalWithstand => "Thermal withstand",
+            ProblemKind::MotorStarter => "Motor starter",
+            ProblemKind::ProtectiveConductor => "Protective conductor",
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
             ProblemKind::OverfullDuct => "Overfull duct",
+            ProblemKind::Standard => "Standards",
+            ProblemKind::CableRating => "Cable rating",
             ProblemKind::DeviceCollision => "Devices overlap",
             ProblemKind::DeviceOutsidePlate => "Device off the plate",
             ProblemKind::DevicesTooClose => "Devices too close",
@@ -289,9 +339,15 @@ impl ProblemKind {
             ProblemKind::OpenWire => "check.open_wire",
             ProblemKind::VoltageDrop => "check.voltage_drop",
             ProblemKind::ShortCircuit => "check.short_circuit",
+            ProblemKind::DisconnectionTime => "check.disconnection_time",
+            ProblemKind::ThermalWithstand => "check.thermal_withstand",
+            ProblemKind::MotorStarter => "check.motor_starter",
+            ProblemKind::ProtectiveConductor => "check.protective_conductor",
+            ProblemKind::CableRating => "check.cable_rating",
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
             ProblemKind::OverfullDuct => "check.overfull_duct",
+            ProblemKind::Standard => "check.standard",
             ProblemKind::DeviceCollision => "check.device_collision",
             ProblemKind::DeviceOutsidePlate => "check.device_outside_plate",
             ProblemKind::DevicesTooClose => "check.devices_too_close",
@@ -316,6 +372,10 @@ pub struct Problem {
     pub position: Option<Point>,
     /// One plain sentence, shown on hover and in the Issues list.
     pub message: String,
+    /// The id of the standards rule this problem comes from
+    /// (`iec60204.pe-colour`), for [`ProblemKind::Standard`]; `None` for
+    /// every other kind.
+    pub rule: Option<&'static str>,
 }
 
 impl Problem {
@@ -327,6 +387,17 @@ impl Problem {
             page: None,
             position: None,
             message,
+            rule: None,
+        }
+    }
+
+    /// The name a waiver of this problem is stored under: the kind's key, or
+    /// for a standards problem the key of its rule (`check.std.<rule id>`),
+    /// so a waiver covers one rule and not every standards problem.
+    pub fn waiver_key(&self) -> String {
+        match self.rule {
+            Some(rule) => standards::waiver_key(rule),
+            None => self.kind.key().to_owned(),
         }
     }
 }
@@ -404,8 +475,10 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     checks::plc(&cx, &mut problems);
     checks::wire_overlaps(&cx, &mut problems);
     checks::open_wires(&cx, &mut problems);
+    calc_checks::run(&cx, netlist, &mut problems);
     physical::unplaced_devices(&cx, &mut problems);
     physical::routing(&cx, &mut problems);
+    standards::problems(&cx, netlist, &mut problems);
     physical::layout(&cx, &mut problems);
     cx.sort(&mut problems);
     problems
@@ -526,24 +599,28 @@ impl<'a> Context<'a> {
         }
     }
 
+    /// Fills in a problem's page and position from the first of its objects
+    /// in reading order and returns that spot.
+    fn locate(&self, problem: &mut Problem) -> Option<Spot> {
+        let spot = problem
+            .at
+            .iter()
+            .filter_map(|&id| self.spot(id))
+            .min_by(Spot::cmp);
+        if let Some(spot) = spot {
+            problem.page = Some(spot.page);
+            problem.position = Some(spot.at);
+        }
+        spot
+    }
+
     /// Fills in each problem's page and position and sorts them in reading
     /// order. Problems with nothing drawn come last; ties go by kind, then
     /// message, then the marked ids, so the order is the same every run.
     fn sort(&self, problems: &mut Vec<Problem>) {
         let mut keyed: Vec<(Option<Spot>, Problem)> = problems
             .drain(..)
-            .map(|mut problem| {
-                let spot = problem
-                    .at
-                    .iter()
-                    .filter_map(|&id| self.spot(id))
-                    .min_by(Spot::cmp);
-                if let Some(spot) = spot {
-                    problem.page = Some(spot.page);
-                    problem.position = Some(spot.at);
-                }
-                (spot, problem)
-            })
+            .map(|mut problem| (self.locate(&mut problem), problem))
             .collect();
         keyed.sort_unstable_by(|(a, p), (b, q)| {
             let place = match (a, b) {

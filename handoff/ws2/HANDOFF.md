@@ -125,5 +125,8 @@ claude/data-model-amzaxu origin/main`, then new PR for new work.
 - Macros: `Command::AdoptBlockDefinition { definition }` (`Tx::adopt_block_definition`) copies a
   definition from a macro file in under a fresh id; same checks as a captured one, now also no
   parts, feeds or potentials in members. Members keep their file-local ids.
+- Revision note: `Command::IssueRevision` has `note: String` (serde default); a non-blank note is
+  stored as `Revision.properties["note"]`, read with `Revision::note()`. An issued revision stays
+  immutable, so the note is set at issue time only.
 - PRs get squash-merged: rebase follow-ups with `git rebase --onto origin/main <old-head>`.
 - Commit trailers: Co-Authored-By Claude line + Claude-Session link (see git log).
