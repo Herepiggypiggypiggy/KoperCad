@@ -25,6 +25,7 @@ use super::heat_3d::{self, Heat3d, Place};
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
+use super::view3d_place::{self, PlaceList};
 use super::view3d_stats::{Build, Stats};
 
 /// The one view of the app.
@@ -35,6 +36,8 @@ pub(crate) struct View3dMode {
     pub(super) view: View3d,
     /// Dragging, turning and deleting devices, rails and ducts in the view.
     pub(super) mv: MoveState,
+    /// The list of unplaced devices and the one picked from it.
+    pub(super) place: PlaceList,
     /// The landing box drawn last frame, to redraw the overlays when it changes.
     ghost_shown: Vec<([i64; 4], bool)>,
     library: Arc<MeshLibrary>,
@@ -80,6 +83,7 @@ impl Default for View3dMode {
         View3dMode {
             view: View3d::new(VIEW_ID),
             mv: MoveState::default(),
+            place: PlaceList::default(),
             ghost_shown: Vec::new(),
             library: Arc::new(MeshLibrary::new()),
             built: None,
@@ -222,7 +226,12 @@ impl NovoApp {
         }
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
         // The landing box of a dragged device, rail or duct.
-        let landings = mode.mv.landings();
+        let mut landings = mode.mv.landings();
+        let stored_layout = load(project, id);
+        let cands = candidates(project, id);
+        if let Some(lay) = &stored_layout {
+            landings.extend(mode.place.landing(lay, &cands));
+        }
         let ghost_key: Vec<([i64; 4], bool)> = landings
             .iter()
             .map(|l| {
@@ -286,7 +295,7 @@ impl NovoApp {
             mode.view.set_overlays(all);
             ui.ctx().request_repaint();
         }
-        mode.view.drag_items = mode.controls.move_items;
+        mode.view.drag_items = mode.controls.move_items && mode.place.armed.is_none();
         mode.view.state.display.shadows = mode.controls.shadows;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
@@ -333,8 +342,49 @@ impl NovoApp {
         );
         super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
         mode.view.state.hover = out.hover;
+        // Placing: the pointer moves the landing box, a click drops the
+        // device, Escape lets go of it.
+        let placing = mode.place.armed.is_some();
+        let mut place_drop = None;
+        if mode.place.open {
+            let tag_of = |d: u64| {
+                project
+                    .get::<Device>(DeviceId::from(d))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_default()
+            };
+            let items: Vec<(u64, String, String)> = stored_layout
+                .as_ref()
+                .map(|l| {
+                    l.unplaced(&cands)
+                        .into_iter()
+                        .map(|c| {
+                            let size = format!("{} x {} mm", c.size.width, c.size.height);
+                            (c.id, tag_of(c.id), size)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if view3d_place::panel(ui.ctx(), out.rect, &mut mode.place, &items).close {
+                mode.place.toggle();
+            }
+        }
+        if mode.place.armed.is_some() {
+            mode.place.pointer = out.plate_point;
+            ui.ctx().request_repaint();
+            if out.clicked.is_some()
+                && let Some(l) = stored_layout
+                    .as_ref()
+                    .and_then(|lay| mode.place.landing(lay, &cands))
+            {
+                place_drop = Some((l.item.raw, l.at.0, l.at.1));
+                mode.place.armed = None;
+            } else if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                mode.place.armed = None;
+            }
+        }
         let state = &mut mode.view.state;
-        if let Some(click) = &out.clicked {
+        if let Some(click) = out.clicked.as_ref().filter(|_| !placing) {
             let extend = click.modifiers.shift || click.modifiers.command;
             match click.id {
                 Some(id) if extend => {
@@ -377,6 +427,10 @@ impl NovoApp {
 
         // Dragging a device, rail or duct moves it by the Cabinet's rules.
         let mut edits = Vec::new();
+        edits
+            .extend(place_drop.map(|(d, x, y)| {
+                view3d_move::Edit::Device(view3d_move::DeviceEdit::Drop(d, x, y))
+            }));
         if let Some(stored) = load(project, id) {
             if let Some(d) = &out.item_drag
                 && !mode.mv.dragging()

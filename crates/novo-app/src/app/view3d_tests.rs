@@ -355,3 +355,20 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
         "the run published a result to the 3D view"
     );
 }
+
+#[test]
+fn the_place_command_opens_the_list_in_3d_and_toggling_lets_go_of_the_device() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(!d.app.view3d.place.open);
+    d.app.run_command(&ctx, "view.3d_place", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.place.open);
+    d.app.view3d.place.armed = Some(1);
+    d.frame();
+    d.app.run_command(&ctx, "view.3d_place", None);
+    d.frame();
+    assert!(!d.app.view3d.place.open && d.app.view3d.place.armed.is_none());
+}

@@ -639,6 +639,11 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_place",
+        &["apparaat plaatsen in 3d"],
+        &["plaatsen", "apparaat", "component"],
+    ),
+    nl(
         "view.3d_stats",
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],
