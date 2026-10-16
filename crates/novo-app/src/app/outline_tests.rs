@@ -534,3 +534,46 @@ fn naming_prefixes_start_a_project_that_has_no_names() {
     assert_eq!(n.next_group(project), "Sec1");
     assert_eq!(n.next_cabinet(project), "K1");
 }
+
+#[test]
+fn the_outline_lists_wires_and_cables_and_a_click_goes_to_the_wire() {
+    use novo_core::{CableCore, Endpoint, Point, Wire};
+    let (_dir, mut d) = drive();
+    let page = d.app.current_page.unwrap();
+    let ((wire, cable), _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Wire and cable", |tx| {
+            let a = tx.add_junction(page, Point::new(0.0, 0.0))?;
+            let b = tx.add_junction(page, Point::new(20.0, 0.0))?;
+            let wire = tx.insert(|id| {
+                let mut w = Wire::new(id, page, Endpoint::junction(a), Endpoint::junction(b));
+                w.number = Some("105".into());
+                w
+            })?;
+            let cable =
+                tx.add_cable(DeviceTag::parse("-W1").unwrap(), vec![CableCore::new("1")])?;
+            tx.assign_core(cable, 0, Some(wire))?;
+            Ok((wire, cable))
+        })
+        .unwrap();
+    d.app.page_filter = "105".into();
+    d.frame();
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let groups = super::outline_items::wire_groups(project, "105");
+    assert_eq!(groups[0].wires[0].id, wire);
+    let cables = super::outline_items::cable_items(project, "");
+    assert_eq!(cables[0].id, cable);
+    assert_eq!(cables[0].first_wire, Some(wire));
+    // What a click on either row does.
+    d.app.go_to_wire(wire);
+    assert_eq!(
+        d.app.wb.pending_item,
+        Some((page, novo_core::AnyId::Wire(wire)))
+    );
+    d.frame();
+    assert!(d.app.wb.pending_item.is_none(), "the wire was selected");
+}

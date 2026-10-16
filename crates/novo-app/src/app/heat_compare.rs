@@ -96,65 +96,65 @@ pub(super) fn colour(value: f32, extent: f32) -> [u8; 3] {
 
 /// The legend of the Δ mode: ramp, verdict and the biggest changes.
 pub(super) fn legend(ctx: &egui::Context, rect: Rect, d: &Diff, tag_of: &dyn Fn(u64) -> String) {
-    egui::Area::new(egui::Id::new("heat_legend"))
-        .fixed_pos(rect.right_top() + Vec2::new(-196.0, 12.0))
-        .order(egui::Order::Foreground)
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_width(160.0);
-                ui.label(
-                    egui::RichText::new("CHANGE B − A")
-                        .small()
-                        .strong()
-                        .color(t::TEXT_MUTED),
+    super::panel::Panel::new(
+        "heat_legend",
+        "Change B − A",
+        rect,
+        super::panel::Side::Right,
+        184.0,
+    )
+    .top(12.0)
+    .fixed_open()
+    .fit()
+    .show(ctx, |ui| {
+        ui.scope(|ui| {
+            ui.set_width(160.0);
+            let height = 120.0;
+            let (bar, _) = ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
+            let mut mesh = egui::Mesh::default();
+            let steps = 24;
+            for s in 0..=steps {
+                let f = s as f32 / steps as f32;
+                let c = heat::diverging(f);
+                let c = egui::Color32::from_rgb(c[0], c[1], c[2]);
+                let y = bar.bottom() - f * height;
+                mesh.colored_vertex(Pos2::new(bar.left(), y), c);
+                mesh.colored_vertex(Pos2::new(bar.right(), y), c);
+            }
+            for s in 0..steps as u32 {
+                let i = s * 2;
+                mesh.add_triangle(i, i + 1, i + 2);
+                mesh.add_triangle(i + 1, i + 3, i + 2);
+            }
+            let p = ui.painter();
+            p.add(Shape::mesh(mesh));
+            let font = FontId::monospace(t::FONT_SMALL);
+            for (f, sign) in [(1.0, "+"), (0.5, ""), (0.0, "−")] {
+                let v = (f - 0.5) * 2.0 * d.extent;
+                p.text(
+                    Pos2::new(bar.right() + 8.0, bar.bottom() - f * height),
+                    Align2::LEFT_CENTER,
+                    format!("{sign}{:.1} K", v.abs()),
+                    font.clone(),
+                    t::TEXT_MUTED,
                 );
-                let height = 120.0;
-                let (bar, _) =
-                    ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
-                let mut mesh = egui::Mesh::default();
-                let steps = 24;
-                for s in 0..=steps {
-                    let f = s as f32 / steps as f32;
-                    let c = heat::diverging(f);
-                    let c = egui::Color32::from_rgb(c[0], c[1], c[2]);
-                    let y = bar.bottom() - f * height;
-                    mesh.colored_vertex(Pos2::new(bar.left(), y), c);
-                    mesh.colored_vertex(Pos2::new(bar.right(), y), c);
-                }
-                for s in 0..steps as u32 {
-                    let i = s * 2;
-                    mesh.add_triangle(i, i + 1, i + 2);
-                    mesh.add_triangle(i + 1, i + 3, i + 2);
-                }
-                let p = ui.painter();
-                p.add(Shape::mesh(mesh));
-                let font = FontId::monospace(t::FONT_SMALL);
-                for (f, sign) in [(1.0, "+"), (0.5, ""), (0.0, "−")] {
-                    let v = (f - 0.5) * 2.0 * d.extent;
-                    p.text(
-                        Pos2::new(bar.right() + 8.0, bar.bottom() - f * height),
-                        Align2::LEFT_CENTER,
-                        format!("{sign}{:.1} K", v.abs()),
-                        font.clone(),
-                        t::TEXT_MUTED,
-                    );
-                }
-                ui.add_space(4.0);
-                ui.label(egui::RichText::new(&d.verdict).small().color(t::TEXT));
-                for r in d.rows.iter().take(5) {
-                    ui.label(
-                        egui::RichText::new(format!(
-                            "{}  {:.0} → {:.0} °C  ({:+.1} K)",
-                            tag_of(r.id),
-                            r.a,
-                            r.b,
-                            r.delta()
-                        ))
-                        .small()
-                        .monospace()
-                        .color(t::TEXT_MUTED),
-                    );
-                }
-            });
+            }
+            ui.add_space(4.0);
+            ui.label(egui::RichText::new(&d.verdict).small().color(t::TEXT));
+            for r in d.rows.iter().take(5) {
+                ui.label(
+                    egui::RichText::new(format!(
+                        "{}  {:.0} → {:.0} °C  ({:+.1} K)",
+                        tag_of(r.id),
+                        r.a,
+                        r.b,
+                        r.delta()
+                    ))
+                    .small()
+                    .monospace()
+                    .color(t::TEXT_MUTED),
+                );
+            }
         });
+    });
 }
