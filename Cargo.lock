@@ -2115,6 +2115,7 @@ name = "novo-reports"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "dirs",
  "novo-cables",
  "novo-core",
  "novo-layout",
@@ -2123,6 +2124,9 @@ dependencies = [
  "novo-terminals",
  "novo-tests",
  "rust_xlsxwriter",
+ "serde",
+ "serde_json",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 
