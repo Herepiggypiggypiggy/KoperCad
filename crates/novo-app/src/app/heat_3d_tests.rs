@@ -8,7 +8,9 @@ use novo_heatview::cfd::Axis;
 use novo_heatview::range::Range;
 use novo_view3d::{Overlay, PlateFrame};
 
-use super::heat_3d::{Heat3d, Place, overlays, shell_mesh, slice_mesh, stream_lines};
+use super::heat_3d::{
+    Flow, Heat3d, Place, flow, overlays, shell_mesh, slice_mesh, stream_lines, tracers,
+};
 
 /// 100 x 80 x 60 mm; `T = 20 + x / 10` (20 to 30 C); a wind of 1 m/s along
 /// +x; a 20 mm cube device at the origin.
@@ -139,7 +141,7 @@ fn the_shell_sits_where_the_temperature_reaches_the_level() {
 
 #[test]
 fn streamlines_run_downwind_in_the_scene_frame() {
-    let l = stream_lines(&snapshot(), place());
+    let l = stream_lines(&flow(&snapshot(), place()));
     assert!(l.is_valid() && !l.starts.is_empty());
     for (k, &s) in l.starts.iter().enumerate() {
         let end = l
@@ -157,7 +159,8 @@ fn streamlines_run_downwind_in_the_scene_frame() {
 #[test]
 fn settings_choose_the_overlays() {
     let snap = snapshot();
-    let count = |s: Heat3d| overlays(&snap, 20.0, place(), &s).len();
+    let fl = flow(&snap, place());
+    let count = |s: Heat3d| overlays(&snap, 20.0, place(), &s, &fl).len();
     let off = Heat3d {
         slice: false,
         iso: false,
@@ -184,7 +187,8 @@ fn settings_choose_the_overlays() {
                 lines: true,
                 slice: false,
                 ..off
-            }
+            },
+            &fl
         )[0],
         Overlay::Lines(_)
     ));
@@ -194,5 +198,70 @@ fn settings_choose_the_overlays() {
 fn a_broken_snapshot_gives_no_overlays() {
     let mut snap = snapshot();
     snap.temperature_c.pop();
-    assert!(overlays(&snap, 20.0, place(), &Heat3d::default()).is_empty());
+    assert!(overlays(&snap, 20.0, place(), &Heat3d::default(), &Flow::default()).is_empty());
+    assert!(flow(&snap, place()).lines.is_empty());
+}
+
+/// Plate corner at solver (10, 30) and a plate 50 mm high: nothing symmetric.
+fn lopsided() -> Place {
+    Place {
+        plate_x: 10.0,
+        plate_y: 30.0,
+        frame: PlateFrame {
+            width: 80.0,
+            height: 50.0,
+        },
+    }
+}
+
+#[test]
+fn solver_corners_land_where_the_plate_frame_puts_them() {
+    // The device stands at solver x < 20, y < 20, z < 20, so a slice at
+    // z = 10 has a hole there: world x -10 to 10, y 60 to 80 on this plate.
+    let m = slice_mesh(&snapshot(), lopsided(), RANGE, Axis::Z, 10.0 / 60.0).unwrap();
+    let has = |x: f32, y: f32| {
+        m.positions
+            .iter()
+            .any(|p| (p.x - x).abs() < 1e-3 && (p.y - y).abs() < 1e-3)
+    };
+    assert!(!has(-2.0, 72.0), "the hole is where the device is");
+    assert!(has(-2.0, 8.0) && has(78.0, 72.0), "the rest is there");
+    // The extent is the solver box: plate x -10 to 90, world y 0 to 80.
+    let ys = m.positions.iter().map(|p| p.y);
+    assert!((ys.clone().fold(f32::MIN, f32::max) - 80.0).abs() < 1e-3);
+    assert!(ys.fold(f32::MAX, f32::min).abs() < 1e-3);
+}
+
+#[test]
+fn the_door_side_is_the_high_z() {
+    let snap = snapshot();
+    let near = slice_mesh(&snap, lopsided(), RANGE, Axis::Z, 0.1).unwrap();
+    let far = slice_mesh(&snap, lopsided(), RANGE, Axis::Z, 0.9).unwrap();
+    assert!(near.positions[0].z < far.positions[0].z);
+}
+
+#[test]
+fn tracers_move_downwind_and_stay_on_their_line() {
+    let fl = flow(&snapshot(), place());
+    let (a, b) = (tracers(&fl, 0.0), tracers(&fl, 0.5));
+    assert!(a.is_valid() && b.is_valid() && !a.positions.is_empty());
+    assert_ne!(a.positions, b.positions, "they move");
+    // Wind is along +x: within one dash, x never decreases.
+    for l in [&a, &b] {
+        for (k, &s) in l.starts.iter().enumerate() {
+            let end = l
+                .starts
+                .get(k + 1)
+                .map_or(l.positions.len(), |e| *e as usize);
+            assert!(
+                l.positions[s as usize..end]
+                    .windows(2)
+                    .all(|w| w[1].x >= w[0].x - 1e-3)
+            );
+        }
+    }
+    // The tail is fainter than the head.
+    let s = a.starts[0] as usize;
+    let e = a.starts.get(1).map_or(a.positions.len(), |e| *e as usize);
+    assert!(a.colors[s][3] < a.colors[e - 1][3]);
 }
