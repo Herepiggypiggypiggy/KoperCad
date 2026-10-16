@@ -830,7 +830,12 @@ fn depth_pipeline(
             bias: wgpu::DepthBiasState::default(),
         }),
         multisample: wgpu::MultisampleState::default(),
-        fragment: None,
+        fragment: Some(wgpu::FragmentState {
+            module,
+            entry_point: Some("fs_depth"),
+            compilation_options: Default::default(),
+            targets: &[],
+        }),
         multiview_mask: None,
         cache: None,
     })

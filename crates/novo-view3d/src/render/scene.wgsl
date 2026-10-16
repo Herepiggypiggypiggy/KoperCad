@@ -85,10 +85,25 @@ struct FaceOut {
     @location(3) spec: f32,
 }
 
+struct DepthOut {
+    @builtin(position) clip: vec4<f32>,
+    @location(0) world: vec3<f32>,
+}
+
 // Depth only, from the camera: the occlusion passes read it.
 @vertex
-fn vs_depth(v: Vertex, i: Instance) -> @builtin(position) vec4<f32> {
-    return g.view_proj * vec4<f32>(world_of(v, i), 1.0);
+fn vs_depth(v: Vertex, i: Instance) -> DepthOut {
+    let world = world_of(v, i);
+    return DepthOut(g.view_proj * vec4<f32>(world, 1.0), world);
+}
+
+// The section plane cuts the depth too, or cut-away parts would shade what
+// shows.
+@fragment
+fn fs_depth(f: DepthOut) {
+    if (cut_away(f.world)) {
+        discard;
+    }
 }
 
 // Depth only, from the key light.

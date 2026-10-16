@@ -862,3 +862,52 @@ fn a_section_plane_cuts_the_near_box_away_and_shows_the_far_one() {
     let c = px(&cut, SIZE.0 / 2, SIZE.1 / 2);
     assert!(c[2] > c[0], "the plane hides the near box, got {c:?}");
 }
+
+#[test]
+fn a_section_plane_cuts_the_depth_the_occlusion_reads() {
+    let Some(gpu) = gpu() else {
+        println!("no adapter, skipped");
+        return;
+    };
+    let mut scene = Scene::new(PlateFrame {
+        width: 300.0,
+        height: 300.0,
+    });
+    let mut plate = Item::new(
+        ItemId::new(ItemKind::Plate, 0),
+        Shape::Box,
+        Pose::at(Vec3::new(150.0, 150.0, -3.0)),
+        Vec3::new(300.0, 300.0, 3.0),
+    );
+    plate.tint = Some([200, 200, 200]);
+    scene.push(plate);
+    // A tall box cut through the middle of the scene's depth: from above, the
+    // plate shows where the cut-away lid would be, ringed by the lower walls.
+    scene.push(boxed(
+        1,
+        Vec3::new(150.0, 150.0, 0.0),
+        Vec3::new(60.0, 60.0, 80.0),
+        [180, 120, 90],
+    ));
+    let mut state = ViewState::default();
+    state.display.shadows = false;
+    state.display.edges = false;
+    state.section = Some(novo_view3d::Section::default());
+    let mut camera = Camera {
+        yaw: 0.0,
+        pitch: 1.3,
+        ..Camera::default()
+    };
+    camera.fit(&scene.bounds(), SIZE.0 as f32 / SIZE.1 as f32);
+    let picture = |ssao| render_ssao(&gpu, &scene, &state, &camera, Mode::Settled, &[], ssao);
+    let (flat, occluded) = (picture(false), picture(true));
+    let darker = flat
+        .chunks(4)
+        .zip(occluded.chunks(4))
+        .filter(|(a, b)| i32::from(b[0]) < i32::from(a[0]) - 10)
+        .count();
+    assert!(
+        darker > 20,
+        "the plate inside the cut box is occluded by its lower walls ({darker} px)"
+    );
+}
