@@ -5,20 +5,39 @@ use novo_canvas::cabinet::CabinetStyle;
 use novo_canvas::model::ModelStyle;
 use novo_canvas::widget::CanvasStyle;
 use novo_canvas::{Color, Highlight, Stroke};
-use novo_theme::{CANVAS_DARK, CanvasPalette};
+use novo_theme::{CanvasPalette, canvas_palette};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Whether the canvases draw with the dark palette. Set once per frame from
+/// the resolved egui theme by [`set_dark`]; canvases built later pick it up.
+static DARK: AtomicBool = AtomicBool::new(true);
+
+pub fn is_dark() -> bool {
+    DARK.load(Ordering::Relaxed)
+}
+
+/// Records the resolved theme; true when it changed, so the canvases that
+/// exist must be restyled.
+pub fn set_dark(dark: bool) -> bool {
+    DARK.swap(dark, Ordering::Relaxed) != dark
+}
+
+fn palette() -> &'static CanvasPalette {
+    canvas_palette(is_dark())
+}
 
 fn color(c: [u8; 4]) -> Color {
     Color(c)
 }
 
 pub fn canvas_style() -> CanvasStyle {
-    canvas_style_from(&CANVAS_DARK)
+    canvas_style_from(palette())
 }
 
 /// The Cabinet canvas: the plate in the page-frame greys, devices in the wire
 /// blue (copper stays the selection's), problems in the mark colours.
 pub fn cabinet_style() -> CabinetStyle {
-    let p = &CANVAS_DARK;
+    let p = palette();
     CabinetStyle {
         plate_edge: color(p.text),
         usable_edge: color(p.sheet_frame),
@@ -32,7 +51,7 @@ pub fn cabinet_style() -> CabinetStyle {
 }
 
 pub fn model_style() -> ModelStyle {
-    model_style_from(&CANVAS_DARK)
+    model_style_from(palette())
 }
 
 fn canvas_style_from(p: &CanvasPalette) -> CanvasStyle {
@@ -85,12 +104,16 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
         // Where wires meet and end (DESIGN.md §4): the junction dot is
         // copper, a wire landing on a pin uses the wire's own colour.
         joint_color: color(p.junction),
+        // The wire run under the pointer or being edited: the selection
+        // copper from the palette, not a literal orange.
+        focus_color: color(p.selection),
         pin_joint_color: color(p.wire),
         wire_end_color: color(p.wire_end),
         unconnected_color: color(p.unconnected_flag),
         tag_color: color(p.text),
         sheet_fill: Some(color(p.sheet)),
         frame_color: color(p.sheet_frame),
+        sheet_text_color: color(p.sheet_text),
         note_color: color(p.cross_reference),
         note_warning_color: color(p.warning),
         ..defaults
@@ -100,6 +123,7 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use novo_theme::{CANVAS_DARK, CANVAS_LIGHT};
 
     #[test]
     fn the_canvas_uses_the_dark_palette() {
@@ -107,6 +131,13 @@ mod tests {
         assert_eq!(style.background, Color(CANVAS_DARK.background));
         assert_eq!(model_style().symbol.color, Color(CANVAS_DARK.symbol));
         assert_eq!(model_style().sheet_fill, Some(Color(CANVAS_DARK.sheet)));
+    }
+
+    #[test]
+    fn the_wire_focus_is_the_palettes_selection_colour() {
+        for p in [&CANVAS_DARK, &novo_theme::CANVAS_LIGHT] {
+            assert_eq!(model_style_from(p).focus_color, Color(p.selection));
+        }
     }
 
     #[test]
@@ -171,5 +202,17 @@ mod tests {
             assert_ne!(mark, s.selection.color);
             assert!((hue(mark) - copper).abs() >= 8.0, "{mark:?}");
         }
+    }
+
+    #[test]
+    fn the_light_palette_gives_a_light_canvas() {
+        let dark = canvas_style_from(&CANVAS_DARK);
+        let light = canvas_style_from(&CANVAS_LIGHT);
+        assert_eq!(light.background, Color(CANVAS_LIGHT.background));
+        assert_ne!(light.background, dark.background);
+        assert_ne!(
+            model_style_from(&CANVAS_LIGHT).symbol.color,
+            model_style_from(&CANVAS_DARK).symbol.color
+        );
     }
 }
