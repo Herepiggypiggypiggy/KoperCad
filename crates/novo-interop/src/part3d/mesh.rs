@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use super::build::StepStats;
 use super::decimate::{cluster_to, simplify, weld};
 use super::math::*;
+use super::rotation::PartRotation;
 use super::tess::Soup;
 
 /// Why a part is drawn as a plain box.
@@ -524,17 +525,41 @@ pub fn finish(
     target: Option<[f64; 3]>,
     budget: MeshBudget,
 ) -> (Vec<MeshData>, Orientation, u32) {
+    finish_rotated(soup, target, budget, PartRotation::NONE)
+}
+
+/// [`finish`] with a stored per-part rotation: after the axes and the
+/// mounting side are chosen, the part is turned by whole quarter turns
+/// about its own x, y and z (in that order), then moved so that x and y
+/// are centred and the back is at z = 0 again. This is how a part whose
+/// orientation was guessed (or guessed wrong) is put right.
+pub fn finish_rotated(
+    soup: Soup,
+    target: Option<[f64; 3]>,
+    budget: MeshBudget,
+    rotation: PartRotation,
+) -> (Vec<MeshData>, Orientation, u32) {
     let (lo, hi) = bounds(&soup.pos);
     let ext = sub(hi, lo);
     let eps = (len(ext) * 1e-5).max(1e-4);
-    let (mut pos, mut tris) = weld(&soup.pos, &soup.tris, eps);
+    let (mut pos, tris) = weld(&soup.pos, &soup.tris, eps);
     let (perm, orientation) = assign_axes(ext, target);
     to_part_space(&mut pos, perm);
     let (_, hi) = bounds(&pos);
     if mounting_side_is_top(&pos, &tris, hi[2]) {
         flip_mounting_side(&mut pos, hi[2]);
     }
+    if !rotation.is_none() {
+        rotation.apply_in_place(&mut pos);
+    }
     let before = tris.len() as u32;
+    (levels(pos, tris, budget), orientation, before)
+}
+
+/// Levels of detail of a part-space triangle mesh: the detailed level
+/// within `budget`, a coarse one of at most 300 triangles when the first
+/// is bigger, and the 12-triangle box of the bounds.
+pub fn levels(mut pos: Vec<V3>, mut tris: Vec<[u32; 3]>, budget: MeshBudget) -> Vec<MeshData> {
     let mut lods = Vec::new();
     reduce(&mut pos, &mut tris, budget.max_triangles as usize);
     lods.push(with_normals(&pos, &tris, 40.0));
@@ -544,7 +569,7 @@ pub fn finish(
     }
     let bbox = lods[0].bounding_box();
     lods.push(bbox);
-    (lods, orientation, before)
+    lods
 }
 
 /// Simplifies to at most `target` triangles. Edge collapse stops on meshes

@@ -17,7 +17,8 @@ use std::time::Instant;
 
 use super::build::StepStats;
 use super::mesh::{Aabb, Fallback, MeshData, MeshOrigin, Orientation, PartGeometry, Quality};
-use super::{MAX_STEP_BYTES, fallback_box, fallback_for, geometry_from_step};
+use super::rotation::PartRotation;
+use super::{MAX_STEP_BYTES, fallback_box, fallback_for, geometry_from_step_rotated};
 
 /// Bump when tessellation, simplification or normals change: older cache
 /// files are then ignored (and pruned).
@@ -131,6 +132,17 @@ impl MeshCache {
 /// records, any identifier made of letters and digits works), algorithm
 /// version, quality and the size the axes were matched to.
 pub fn cache_key(content_id: &str, size_mm: Option<[f64; 3]>, quality: Quality) -> String {
+    cache_key_rotated(content_id, size_mm, quality, PartRotation::NONE)
+}
+
+/// [`cache_key`] for a part with a stored rotation. Without a rotation the
+/// key is the same as before, so existing cache files stay valid.
+pub fn cache_key_rotated(
+    content_id: &str,
+    size_mm: Option<[f64; 3]>,
+    quality: Quality,
+    rotation: PartRotation,
+) -> String {
     let id: String = content_id
         .chars()
         .filter(char::is_ascii_alphanumeric)
@@ -150,7 +162,12 @@ pub fn cache_key(content_id: &str, size_mm: Option<[f64; 3]>, quality: Quality) 
         }
         h | 1
     });
-    format!("{id}-a{ALGORITHM_VERSION}-{q}{dims:08x}")
+    let turned = if rotation.is_none() {
+        String::new()
+    } else {
+        format!("r{:02x}", rotation.code())
+    };
+    format!("{id}-a{ALGORITHM_VERSION}-{q}{dims:08x}{turned}")
 }
 
 /// The geometry for a model file, from the cache when it is there.
@@ -167,7 +184,31 @@ pub fn cached_part_geometry(
     cancel: &AtomicBool,
     deadline: Option<Instant>,
 ) -> PartGeometry {
-    let key = cache_key(content_id, size_mm, quality);
+    cached_part_geometry_rotated(
+        cache,
+        content_id,
+        size_mm,
+        quality,
+        PartRotation::NONE,
+        read_step,
+        cancel,
+        deadline,
+    )
+}
+
+/// [`cached_part_geometry`] for a part with a stored rotation.
+#[allow(clippy::too_many_arguments)]
+pub fn cached_part_geometry_rotated(
+    cache: &MeshCache,
+    content_id: &str,
+    size_mm: Option<[f64; 3]>,
+    quality: Quality,
+    rotation: PartRotation,
+    read_step: impl FnOnce() -> io::Result<Vec<u8>>,
+    cancel: &AtomicBool,
+    deadline: Option<Instant>,
+) -> PartGeometry {
+    let key = cache_key_rotated(content_id, size_mm, quality, rotation);
     match cache.get(&key) {
         Some(Cached::Geometry(g)) => return g,
         Some(Cached::Failed(r)) => return fallback_box(size_mm, r),
@@ -181,7 +222,7 @@ pub fn cached_part_geometry(
         let _ = cache.put_failure(&key, Fallback::TooComplex);
         return fallback_box(size_mm, Fallback::TooComplex);
     }
-    match geometry_from_step(&bytes, size_mm, quality, cancel, deadline) {
+    match geometry_from_step_rotated(&bytes, size_mm, quality, cancel, deadline, rotation) {
         Ok(g) => {
             let _ = cache.put(&key, &g);
             g

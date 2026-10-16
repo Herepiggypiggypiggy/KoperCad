@@ -14,9 +14,10 @@ use std::sync::mpsc::{Receiver, Sender, channel};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
-use super::cache::{MeshCache, cached_part_geometry};
+use super::cache::{MeshCache, cached_part_geometry_rotated};
 use super::mesh::{Fallback, MeshOrigin, PartGeometry, Quality};
-use super::{fallback_box, geometry_from_step, geometry_key};
+use super::rotation::{PartRotation, geometry_key_rotated};
+use super::{fallback_box, geometry_from_step_rotated};
 
 /// Import time allowed per model by the 3D design.
 pub const TIME_LIMIT: Duration = Duration::from_secs(10);
@@ -55,7 +56,7 @@ struct Shared {
 
 pub struct GeometryService {
     shared: Arc<Shared>,
-    tx: Sender<(u64, GeometryJob)>,
+    tx: Sender<(u64, GeometryJob, PartRotation)>,
 }
 
 impl GeometryService {
@@ -86,7 +87,14 @@ impl GeometryService {
 
     /// Queues a job unless the part is already known; returns its key.
     pub fn request(&self, job: GeometryJob) -> u64 {
-        let key = geometry_key(&job.part_id, &job.content_id);
+        self.request_rotated(job, PartRotation::NONE)
+    }
+
+    /// [`request`](Self::request) for a part with a stored rotation. The
+    /// key differs per rotation, so turning a part asks for (and keeps) its
+    /// own geometry; `PartRotation::NONE` gives the same key as `request`.
+    pub fn request_rotated(&self, job: GeometryJob, rotation: PartRotation) -> u64 {
+        let key = geometry_key_rotated(&job.part_id, &job.content_id, rotation);
         {
             let mut s = lock(&self.shared.states);
             if s.contains_key(&key) {
@@ -94,7 +102,7 @@ impl GeometryService {
             }
             s.insert(key, GeometryState::Pending);
         }
-        if self.tx.send((key, job)).is_err() {
+        if self.tx.send((key, job, rotation)).is_err() {
             lock(&self.shared.states).insert(
                 key,
                 GeometryState::Failed("the geometry worker is not running".into()),
@@ -130,33 +138,41 @@ fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     m.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-fn run(s: &Shared, rx: &Receiver<(u64, GeometryJob)>) {
-    while let Ok((key, job)) = rx.recv() {
+fn run(s: &Shared, rx: &Receiver<(u64, GeometryJob, PartRotation)>) {
+    while let Ok((key, job, rotation)) = rx.recv() {
         if s.stop.load(Ordering::Relaxed) {
             return;
         }
-        let state = load(s, &job);
+        let state = load(s, &job, rotation);
         lock(&s.states).insert(key, state);
         (s.wake)();
     }
 }
 
-fn load(s: &Shared, job: &GeometryJob) -> GeometryState {
+fn load(s: &Shared, job: &GeometryJob, rotation: PartRotation) -> GeometryState {
     let deadline = Some(Instant::now() + s.time_limit);
     let read = || std::fs::read(&job.step_path);
     let g = match &s.cache {
-        Some(c) => cached_part_geometry(
+        Some(c) => cached_part_geometry_rotated(
             c,
             &job.content_id,
             job.size_mm,
             s.quality,
+            rotation,
             read,
             &s.stop,
             deadline,
         ),
         None => match read() {
-            Ok(bytes) => geometry_from_step(&bytes, job.size_mm, s.quality, &s.stop, deadline)
-                .unwrap_or_else(|e| fallback_box(job.size_mm, super::fallback_for(e))),
+            Ok(bytes) => geometry_from_step_rotated(
+                &bytes,
+                job.size_mm,
+                s.quality,
+                &s.stop,
+                deadline,
+                rotation,
+            )
+            .unwrap_or_else(|e| fallback_box(job.size_mm, super::fallback_for(e))),
             Err(_) => fallback_box(job.size_mm, Fallback::Unreadable),
         },
     };
@@ -223,7 +239,7 @@ mod tests {
         let step = crate::part3d::build::test_support::block_step();
         let j = job(dir.path(), "a.step", step.as_bytes());
         assert!(matches!(
-            svc.geometry(geometry_key(&j.part_id, &j.content_id)),
+            svc.geometry(crate::part3d::geometry_key(&j.part_id, &j.content_id)),
             GeometryState::None
         ));
         let key = svc.request(j.clone());
