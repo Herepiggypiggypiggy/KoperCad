@@ -42,6 +42,10 @@ use novo_parts::{Catalog, display_value, parse_number};
 
 use super::create::{Ids, NewDevice, PartRef, new_device};
 use super::fields::{Field, Parsed, Slot, apply, fields, parse, property_of_header, read};
+use super::new_rows::{
+    AddedRow, CoreTarget, NewCable, NewCore, NewTerminal, PendingCore, StripRef,
+    core_target_by_tag, new_cable, new_terminal, pending_core, place_cores,
+};
 
 /// A row's key in the baseline: its Id, and on the cores sheet the core.
 type BaseKey = (u64, usize);
@@ -105,6 +109,12 @@ pub struct ImportPlan {
     pub changes: Vec<Change>,
     /// Devices the sheet adds (rows without an Id and with a new tag).
     pub new_devices: Vec<NewDevice>,
+    /// Terminals the sheet adds (Terminals rows without an Id).
+    pub new_terminals: Vec<NewTerminal>,
+    /// Cables the sheet adds (Cables rows without an Id).
+    pub new_cables: Vec<NewCable>,
+    /// Cores the sheet adds, on existing and on new cables.
+    pub new_cores: Vec<NewCore>,
     pub rejected: Vec<Rejected>,
     /// Things worth knowing that block nothing: ignored columns and
     /// sheets, rows matched by tag, a missing baseline.
@@ -134,6 +144,102 @@ impl ImportPlan {
     pub fn selected(&self) -> usize {
         self.changes.iter().filter(|c| c.selected).count()
             + self.new_devices.iter().filter(|n| n.selected).count()
+            + self
+                .new_terminals
+                .iter()
+                .filter(|t| self.terminal_on(t))
+                .count()
+            + self.new_cables.iter().filter(|c| c.selected).count()
+            + self.new_cores.iter().filter(|c| self.core_on(c)).count()
+    }
+
+    /// Whether a new terminal is added: selected, and its strip too when
+    /// the strip is a new device.
+    fn terminal_on(&self, t: &NewTerminal) -> bool {
+        t.selected
+            && match &t.strip {
+                StripRef::Existing(_) => true,
+                StripRef::New(tag) => self.new_devices.iter().any(|d| d.selected && &d.tag == tag),
+            }
+    }
+
+    /// Whether a new core is added: selected, and its cable too when the
+    /// cable is new.
+    fn core_on(&self, c: &NewCore) -> bool {
+        c.selected
+            && match &c.target {
+                CoreTarget::Existing(_) => true,
+                CoreTarget::New(tag) => self.new_cables.iter().any(|n| n.selected && &n.tag == tag),
+            }
+    }
+
+    /// Every row the sheet adds (devices, terminals, cables, cores), in
+    /// that order, for a preview list. [`ImportPlan::select_added`] takes
+    /// the index in this list.
+    pub fn added_rows(&self) -> Vec<AddedRow> {
+        let mut rows = Vec::new();
+        for n in &self.new_devices {
+            rows.push(AddedRow {
+                table: TableKind::Devices,
+                line: n.line,
+                label: format!("device {}", n.tag),
+                selected: n.selected,
+                left_out_with: None,
+            });
+        }
+        for t in &self.new_terminals {
+            rows.push(AddedRow {
+                table: TableKind::Terminals,
+                line: t.line,
+                label: format!("terminal {}:{}", t.strip_tag, t.name),
+                selected: t.selected,
+                left_out_with: (t.selected && !self.terminal_on(t))
+                    .then(|| t.strip_tag.to_string()),
+            });
+        }
+        for c in &self.new_cables {
+            rows.push(AddedRow {
+                table: TableKind::Cables,
+                line: c.line,
+                label: format!("cable {}", c.tag),
+                selected: c.selected,
+                left_out_with: None,
+            });
+        }
+        for c in &self.new_cores {
+            rows.push(AddedRow {
+                table: TableKind::Cores,
+                line: c.line,
+                label: format!("core {} ({}) of {}", c.no, c.name, c.cable_tag),
+                selected: c.selected,
+                left_out_with: (c.selected && !self.core_on(c)).then(|| c.cable_tag.to_string()),
+            });
+        }
+        rows
+    }
+
+    /// Selects or deselects one added row; `index` is its place in
+    /// [`ImportPlan::added_rows`].
+    pub fn select_added(&mut self, index: usize, selected: bool) {
+        let mut i = index;
+        if i < self.new_devices.len() {
+            self.new_devices[i].selected = selected;
+            return;
+        }
+        i -= self.new_devices.len();
+        if i < self.new_terminals.len() {
+            self.new_terminals[i].selected = selected;
+            return;
+        }
+        i -= self.new_terminals.len();
+        if i < self.new_cables.len() {
+            self.new_cables[i].selected = selected;
+            return;
+        }
+        i -= self.new_cables.len();
+        if let Some(core) = self.new_cores.get_mut(i) {
+            core.selected = selected;
+        }
     }
 
     /// Selects or deselects one new device.
@@ -181,6 +287,22 @@ impl ImportPlan {
         );
         if added > 0 {
             s.push_str(&format!(", {added} new device{}", plural(added)));
+        }
+        let terminals = self
+            .new_terminals
+            .iter()
+            .filter(|t| self.terminal_on(t))
+            .count();
+        if terminals > 0 {
+            s.push_str(&format!(", {terminals} new terminal{}", plural(terminals)));
+        }
+        let cables = self.new_cables.iter().filter(|c| c.selected).count();
+        if cables > 0 {
+            s.push_str(&format!(", {cables} new cable{}", plural(cables)));
+        }
+        let cores = self.new_cores.iter().filter(|c| self.core_on(c)).count();
+        if cores > 0 {
+            s.push_str(&format!(", {cores} new core{}", plural(cores)));
         }
         if conflicts > 0 {
             s.push_str(&format!(
@@ -232,12 +354,45 @@ impl ImportPlan {
                 }
             }
         }
-        let added: Vec<Command> = self
+        let mut added: Vec<Command> = self
             .new_devices
             .iter()
             .filter(|n| n.selected)
             .map(|n| ids.insert_device(n))
             .collect();
+        // New cores on cables the project has: after the edits to the cable.
+        for core in self.new_cores.iter().filter(|c| self.core_on(c)) {
+            let CoreTarget::Existing(cable) = core.target else {
+                continue;
+            };
+            let id = AnyId::Cable(cable);
+            let record = match records.get_mut(&id) {
+                Some(r) => r,
+                None => {
+                    let Some(record) = project.record(id) else {
+                        return Err(ApplyError::Outdated);
+                    };
+                    records.entry(id).or_insert(record)
+                }
+            };
+            if let Record::Cable(c) = record {
+                if c.cores.len() + 1 != core.no {
+                    return Err(ApplyError::Outdated);
+                }
+                super::new_rows::add_core(c, core);
+            }
+        }
+        for cable in self.new_cables.iter().filter(|c| c.selected) {
+            let cores: Vec<&NewCore> = self
+                .new_cores
+                .iter()
+                .filter(|c| c.selected && c.target == CoreTarget::New(cable.tag.clone()))
+                .collect();
+            added.push(ids.insert_cable(cable, &cores));
+        }
+        for terminal in self.new_terminals.iter().filter(|t| self.terminal_on(t)) {
+            added.push(ids.insert_terminal(terminal)?);
+        }
         if records.is_empty() && added.is_empty() {
             return Ok(None);
         }
@@ -484,6 +639,9 @@ pub fn plan_import_with(project: &Project, workbook: &Workbook, catalog: &Catalo
     let mut plan = ImportPlan {
         changes: Vec::new(),
         new_devices: Vec::new(),
+        new_terminals: Vec::new(),
+        new_cables: Vec::new(),
+        new_cores: Vec::new(),
         rejected: Vec::new(),
         notes: Vec::new(),
         warnings: Vec::new(),
@@ -514,7 +672,11 @@ pub fn plan_import_with(project: &Project, workbook: &Workbook, catalog: &Catalo
                 .into(),
         );
     }
-    for table in &workbook.tables {
+    // Devices before terminals, cables before cores: new rows name the
+    // new rows before them.
+    let mut tables: Vec<&Table> = workbook.tables.iter().collect();
+    tables.sort_by_key(|t| t.kind);
+    for table in tables {
         plan_table(project, catalog, workbook, table, &mut plan);
     }
     warn_duplicate_tags(project, &mut plan);
@@ -611,6 +773,7 @@ fn plan_table(
     // the project alone cannot tell that two rows want one free wire.
     let mut claims: BTreeMap<novo_core::WireId, (CableId, usize)> = BTreeMap::new();
     let mut matched_by_key = 0usize;
+    let mut pending_cores: Vec<PendingCore> = Vec::new();
     for row in &table.rows {
         if row.cells.iter().all(Cell::is_blank) {
             continue;
@@ -658,15 +821,54 @@ fn plan_table(
                 }
                 Err(why) => {
                     // A row added to an export (the sheet has an Id column) is a new
-                    // device; in a sheet without one an unknown tag is more likely a typo.
-                    if kind == TableKind::Devices && id_col.is_some() {
-                        match new_device(project, catalog, &columns, &row.cells, &plan.new_devices)
-                        {
-                            Some(Ok(mut new)) => {
-                                new.line = row.line;
-                                plan.new_devices.push(new);
-                                continue;
+                    // device, terminal, cable or core; in a sheet without one an
+                    // unknown name is more likely a typo.
+                    if id_col.is_some() {
+                        let added = match kind {
+                            TableKind::Devices => new_device(
+                                project,
+                                catalog,
+                                &columns,
+                                &row.cells,
+                                &plan.new_devices,
+                            )
+                            .map(|r| {
+                                r.map(|mut new| {
+                                    new.line = row.line;
+                                    plan.new_devices.push(new);
+                                })
+                            }),
+                            TableKind::Terminals => new_terminal(
+                                project,
+                                &columns,
+                                &row.cells,
+                                &plan.new_devices,
+                                &plan.new_terminals,
+                            )
+                            .map(|r| {
+                                r.map(|mut new| {
+                                    new.line = row.line;
+                                    plan.new_terminals.push(new);
+                                })
+                            }),
+                            TableKind::Cables => {
+                                new_cable(project, &columns, &row.cells, &plan.new_cables).map(
+                                    |r| {
+                                        r.map(|mut new| {
+                                            new.line = row.line;
+                                            plan.new_cables.push(new);
+                                        })
+                                    },
+                                )
                             }
+                            TableKind::Cores => core_without_id(
+                                project, &columns, &row.cells, core_col, row.line, plan,
+                            )
+                            .map(|r| r.map(|p| pending_cores.push(p))),
+                            TableKind::Wires => None,
+                        };
+                        match added {
+                            Some(Ok(())) => continue,
                             Some(Err(reasons)) => {
                                 reject(plan, String::new(), reasons);
                                 continue;
@@ -688,14 +890,35 @@ fn plan_table(
             };
             match n.as_ref().and_then(core_no) {
                 Some(n) if n >= 1 && n <= count => Some(n - 1),
+                Some(n) if n > count => {
+                    // One past the end adds a core; the rows are numbered together below.
+                    let tag = match id {
+                        AnyId::Cable(c) => project.cable(c).map(|c| c.tag.clone()),
+                        _ => None,
+                    };
+                    let (AnyId::Cable(cable), Some(tag)) = (id, tag) else {
+                        continue;
+                    };
+                    match pending_core(
+                        &columns,
+                        &row.cells,
+                        row.line,
+                        CoreTarget::Existing(cable),
+                        tag,
+                        Some(n),
+                    ) {
+                        Ok(p) => pending_cores.push(p),
+                        Err(reasons) => reject(plan, item_name(project, id, None), reasons),
+                    }
+                    continue;
+                }
                 Some(n) => {
                     reject(
                         plan,
                         item_name(project, id, None),
                         vec![format!(
-                            "{} has {count} core{}, no core {n}; the import does not add cores",
+                            "{} has no core {n}; cores are numbered from 1",
                             item_name(project, id, None),
-                            plural(count)
                         )],
                     );
                     continue;
@@ -867,6 +1090,9 @@ fn plan_table(
             plan.changes.extend(changes);
         }
     }
+    if kind == TableKind::Cores {
+        place_cores(project, pending_cores, &claims, plan);
+    }
     if matched_by_key > 0 {
         plan.notes.push(format!(
             "{}: {matched_by_key} row{} had no Id and {} matched by name",
@@ -911,6 +1137,45 @@ fn warn_duplicate_tags(project: &Project, plan: &mut ImportPlan) {
     }
 }
 
+/// A Cores row without an Id that names a cable by its tag (an existing
+/// cable or one the sheet adds): a core to add. `None` when it names no
+/// cable. `Some(Err)` when it is meant as a core but unusable.
+fn core_without_id(
+    project: &Project,
+    columns: &[Option<Field>],
+    cells: &[Cell],
+    core_col: Option<usize>,
+    line: usize,
+    plan: &ImportPlan,
+) -> Option<Result<PendingCore, Vec<String>>> {
+    let (target, tag) = core_target_by_tag(project, columns, cells, &plan.new_cables)?;
+    let cell = core_col
+        .and_then(|c| cells.get(c))
+        .cloned()
+        .unwrap_or_default();
+    let explicit = if cell.is_blank() {
+        None
+    } else {
+        match core_no(&cell) {
+            Some(n) if n >= 1 => Some(n),
+            _ => {
+                return Some(Err(vec![
+                    "Core No: needs the core's position (1, 2, ...)".into(),
+                ]));
+            }
+        }
+    };
+    if let (CoreTarget::Existing(id), Some(n)) = (&target, explicit) {
+        let count = project.cable(*id).map_or(0, |c| c.cores.len());
+        if n <= count {
+            return Some(Err(vec![format!(
+                "{tag} has a core {n} already; a row that edits a core needs the cable's Id                  (leave Core No empty to add a core)"
+            )]));
+        }
+    }
+    Some(pending_core(columns, cells, line, target, tag, explicit))
+}
+
 fn core_no(cell: &Cell) -> Option<usize> {
     parse_number(&cell.as_text())
         .filter(|n| *n >= 0.0 && n.fract() == 0.0 && *n < 1e9)
@@ -930,6 +1195,11 @@ fn warn_core_clashes(project: &Project, plan: &mut ImportPlan) {
             cables.insert(c);
         }
     }
+    for core in plan.new_cores.iter().filter(|c| c.selected) {
+        if let CoreTarget::Existing(c) = core.target {
+            cables.insert(c);
+        }
+    }
     for cable in cables {
         let Some(mut record) = project.record(cable.into()) else {
             continue;
@@ -941,9 +1211,16 @@ fn warn_core_clashes(project: &Project, plan: &mut ImportPlan) {
         {
             apply(&mut record, change.core, &change.field, &change.parsed);
         }
-        let Record::Cable(after) = record else {
+        let Record::Cable(mut after) = record else {
             continue;
         };
+        for core in plan
+            .new_cores
+            .iter()
+            .filter(|c| c.selected && c.target == CoreTarget::Existing(cable))
+        {
+            super::new_rows::add_core(&mut after, core);
+        }
         let mut names: BTreeMap<&str, usize> = BTreeMap::new();
         for core in &after.cores {
             *names.entry(core.name.as_str()).or_default() += 1;
