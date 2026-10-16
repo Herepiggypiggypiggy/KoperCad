@@ -114,6 +114,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     // Edit
     ("edit.rotate", at("Edit")),
     ("edit.mirror", at("Edit")),
+    ("edit.shared_properties", at("Edit")),
     ("edit.renumber", under("Edit", "Renumber")),
     ("interruption.renumber", under("Edit", "Renumber")),
     ("plc.renumber_io", under("Edit", "Renumber")),

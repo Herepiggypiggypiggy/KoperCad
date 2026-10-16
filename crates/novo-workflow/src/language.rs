@@ -131,6 +131,16 @@ pub const DUTCH: &[Aliases] = &[
         &["automatisch", "artikelen toewijzen", "voorstellen"],
     ),
     nl(
+        "edit.shared_properties",
+        &["eigenschappen bewerken"],
+        &[
+            "eigenschappen",
+            "eigenschappen selectie",
+            "meerdere bewerken",
+            "bulk bewerken",
+        ],
+    ),
+    nl(
         "parts.clear",
         &["onderdeel verwijderen"],
         &["artikel wissen", "ontkoppelen"],
