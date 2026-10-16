@@ -136,13 +136,30 @@ fn device_height(project: &Project, device: &novo_core::Device) -> Option<f64> {
     })
 }
 
+/// Where the part says terminal `marking` sits, in the schema frame
+/// (back-left-bottom corner, millimetres), from the first part of the device
+/// that has measured or estimated positions.
+fn terminal_in_part(
+    project: &Project,
+    device: &novo_core::Device,
+    marking: &str,
+) -> Option<[f64; 3]> {
+    device.parts.iter().find_map(|part| {
+        let part = project.get::<novo_core::Part>(*part)?;
+        novo_parts::terminal_position(&part.properties, marking)
+    })
+}
+
 /// Where a pin is on the mounting plate, or `None` when its device is not
 /// placed on one. The model does not know where a terminal sits inside its
 /// device, so the anchor is the middle of the footprint edge the pin leaves
 /// through, from the pin's direction in the symbol library, not its page
 /// direction (the centre when the pin has no direction or the device is
 /// turned): good to within the device size, which is what a cut length
-/// needs.
+/// needs. When the device's part has the position of the terminal (the Parts
+/// window's "Detect connection points", or the maker's data) the anchor is
+/// the terminal itself: x and y on the plate, turned with the device, and
+/// the height off the plate from the part.
 fn anchor_of(
     project: &Project,
     placements: &HashMap<DeviceId, &CabinetPlacement>,
@@ -171,6 +188,28 @@ fn anchor_of(
     };
     let z_mm = device_height(project, device);
     let (cx, cy) = (placed.x + w / 2.0, placed.y + h / 2.0);
+    let marking = &project
+        .symbol(pin.symbol)?
+        .pins
+        .get(usize::from(pin.pin))?
+        .name;
+    if let Some([px, py, pz]) = terminal_in_part(project, device, marking) {
+        // The schema frame has y up from the bottom; the plate has y down.
+        // Turned (R) the part goes clockwise seen from the door.
+        let pos = if placed.rotated {
+            Point::new(cx + py - size.height / 2.0, cy + px - size.width / 2.0)
+        } else {
+            Point::new(placed.x + px, placed.y + size.height - py)
+        };
+        return Some((
+            placed.structure,
+            Anchor {
+                pos,
+                facing,
+                z_mm: Some(pz),
+            },
+        ));
+    }
     let pos = match facing {
         Facing::Up => Point::new(cx, placed.y),
         Facing::Down => Point::new(cx, placed.y + h),

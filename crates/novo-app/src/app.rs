@@ -84,6 +84,9 @@ mod part_picker;
 mod parts;
 mod parts_bulk;
 mod parts_import;
+mod parts_pins;
+#[cfg(test)]
+mod parts_pins_tests;
 mod parts_quality;
 mod pdf;
 mod plate_export;
