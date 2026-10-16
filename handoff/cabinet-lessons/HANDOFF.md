@@ -71,3 +71,9 @@ All ten cabinet lessons now have what/why text, Dutch for every step and stand-a
 | view-3d | NOT verifiable | no 3D face, no cabinet.view3d command, no view cube |
 | commissioning | yes: tabs Checks and Punch list, Pass, Fail, N/A, punch items | Fail does not open a punch item (lesson says so); signal punch_added and anchors |
 The six lessons after wire-routing start from `../wire-routing/project.json`.
+
+## State after #624, #643 and #654 (2026-10-16, main 7ccc024c and later)
+
+- All ten cabinet lessons are `early`, with Dutch and `how`/`how_nl`. Samples come from Place all (trunk duct included): `cabinet-layout/finished.json` equals `wire-routing/project.json`; regenerate with `cargo run -p novo-app --example panel_lessons assets/lessons`.
+- Numbers on the sample: routes 490/579/643/1047 mm, 11 wires at fullest duct 10 %, wire list 19 rows (15 routed, 4 estimate), Cut list summary 4 wires 0.88 m and 15 wires 9.32 m, Labels 38/4/9/1, plate holes 20 + 4.
+- Still open: anchor `workspace.view3d` (3D steps), solve ops for cabinet actions and `solve = "manual"` for wire_cut_exported (runner thread), signals cabinet_dropped, cabinet_rotated, cabinet_removed, cabinet_plan_accepted, wire_cut_exported. Promote lessons to `ready` once those exist and the replay gate passes.
