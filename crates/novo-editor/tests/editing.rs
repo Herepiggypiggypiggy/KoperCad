@@ -3055,3 +3055,58 @@ fn changing_the_source_of_a_short_wire_keeps_the_wire_and_its_feed() {
     assert_eq!(doc.project().potential(pot).unwrap().name, "N");
     assert!(netlist.potential_conflicts().next().is_none());
 }
+
+#[test]
+fn a_feed_dropped_on_a_coils_low_side_is_neutral_and_the_high_side_is_l1() {
+    let (mut doc, page, _) = setup();
+    let lib = novo_symbols::Library::builtin().unwrap();
+    let coil_sym = lib.get("iec/coils/relay").unwrap().clone();
+    let feed_sym = lib.get(potential::FEED_SYMBOL).unwrap().clone();
+    let (coil, _) = doc
+        .transact("coil", |tx| {
+            edit::place(
+                tx,
+                page,
+                &coil_sym,
+                novo_core::Placement::at(p(40.0, 60.0)),
+                &PlaceOptions::new(),
+            )
+        })
+        .unwrap();
+    let feed_at = |doc: &mut Document, pin_name: &str, rotation| {
+        let at = pin_pos(doc, coil, pin_name);
+        let sym = feed_sym.clone();
+        doc.transact("feed", |tx| {
+            edit::place(
+                tx,
+                page,
+                &sym,
+                novo_core::Placement {
+                    origin: p(at.x, at.y + if rotation { 8.0 } else { -8.0 }),
+                    rotation: if rotation {
+                        novo_core::Rotation::R180
+                    } else {
+                        novo_core::Rotation::R0
+                    },
+                    mirrored: false,
+                },
+                &PlaceOptions::new(),
+            )
+        })
+        .unwrap()
+        .0
+    };
+    let high = feed_at(&mut doc, "A1", false);
+    let low = feed_at(&mut doc, "A2", true);
+    let name = |doc: &Document, feed| {
+        let SymbolRole::PotentialFeed { potential } = doc.project().symbol(feed).unwrap().role
+        else {
+            panic!("a feed")
+        };
+        doc.project().potential(potential).unwrap().name.clone()
+    };
+    assert!(connected(&doc, pin(&doc, high, "1"), pin(&doc, coil, "A1")));
+    assert!(connected(&doc, pin(&doc, low, "1"), pin(&doc, coil, "A2")));
+    assert_eq!(name(&doc, high), "L1");
+    assert_eq!(name(&doc, low), "N");
+}
