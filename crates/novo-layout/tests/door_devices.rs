@@ -121,3 +121,26 @@ fn other_surfaces_leave_the_plate_checks_but_are_not_door_devices() {
     assert_eq!(l.off_plate.get(&h1).map(String::as_str), Some("left"));
     assert!(l.report().collisions.is_empty());
 }
+
+#[test]
+fn a_door_device_does_not_push_the_plate_proposal_down() {
+    use novo_layout::Size;
+    use novo_layout::plan::Candidate;
+    let (mut p, cab, _k1, h1) = project(true);
+    let cands = [Candidate {
+        id: 99,
+        size: Size {
+            width: 40.0,
+            height: 40.0,
+            guessed: false,
+        },
+        sort_key: "Z".into(),
+    }];
+    let before = load(&p, cab).unwrap().preview(&cands);
+    p.transact("move", |tx| place_device(tx, cab, h1, 100.0, 700.0, false))
+        .unwrap();
+    put_on(&mut p, h1, "door");
+    let after = load(&p, cab).unwrap().preview(&cands);
+    assert_eq!(before.placements.len(), 1);
+    assert_eq!(after.placements[0].y, before.placements[0].y);
+}

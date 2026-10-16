@@ -200,7 +200,7 @@ impl CabinetLayout {
     pub fn preview(&self, all: &[Candidate]) -> Plan {
         let unplaced: Vec<Candidate> = self.unplaced(all).into_iter().cloned().collect();
         let top = self
-            .placements
+            .on_plate()
             .iter()
             .map(|p| p.footprint().bottom() + ROW_GAP_MM)
             .fold(0.0, f64::max);
