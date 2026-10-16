@@ -1,0 +1,1 @@
+- 2026-10-16: R1 READY on #752 (aef6e68). Slice 2 openings written on claude/panel-b2-openings.

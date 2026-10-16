@@ -5,7 +5,9 @@
 use std::collections::BTreeMap;
 
 use crate::enclosure::{DoorReport, Enclosure, check};
+use crate::openings::{Opening, OpeningConflict, conflicts};
 use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
+use crate::surfaces::MAIN_PLATE;
 use crate::{
     Duct, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions, outside,
     rail_overflows,
@@ -21,6 +23,8 @@ pub struct Report {
     pub outside: Vec<u64>,
     pub too_close: Vec<(u64, u64, f64)>,
     pub rail_overflows: Vec<(u64, f64)>,
+    /// Devices that cover a wiring opening of the plate.
+    pub opening_conflicts: Vec<OpeningConflict>,
     /// Placed devices whose size is the default guess.
     pub guessed: Vec<u64>,
 }
@@ -31,6 +35,7 @@ impl Report {
             && self.outside.is_empty()
             && self.too_close.is_empty()
             && self.rail_overflows.is_empty()
+            && self.opening_conflicts.is_empty()
     }
 }
 
@@ -46,6 +51,10 @@ pub struct CabinetLayout {
     pub enclosure: Option<Enclosure>,
     /// Depth of the parts of placed devices, by device id, where known.
     pub depths: BTreeMap<u64, f64>,
+    /// Wiring openings (`opening.<name>` structure properties).
+    pub openings: Vec<Opening>,
+    /// Opening properties that could not be read.
+    pub opening_problems: Vec<String>,
 }
 
 impl CabinetLayout {
@@ -58,6 +67,8 @@ impl CabinetLayout {
             grid: DEFAULT_GRID_MM,
             enclosure: None,
             depths: BTreeMap::new(),
+            openings: Vec::new(),
+            opening_problems: Vec::new(),
         }
     }
 
@@ -181,6 +192,7 @@ impl CabinetLayout {
             outside: outside(&self.plate, &self.placements),
             too_close: clearance_violations(&self.placements),
             rail_overflows: rail_overflows(&self.rails, &self.placements),
+            opening_conflicts: conflicts(&self.openings, MAIN_PLATE, &self.placements),
             guessed: self
                 .placements
                 .iter()

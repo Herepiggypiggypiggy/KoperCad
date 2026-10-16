@@ -10,6 +10,7 @@ pub mod collide;
 pub mod drill;
 pub mod enclosure;
 pub mod model;
+pub mod openings;
 pub mod plan;
 pub mod plate_drawing;
 pub mod rules;

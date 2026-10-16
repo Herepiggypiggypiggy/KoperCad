@@ -15,6 +15,7 @@ use crate::drill::{
     CUTOUT_KEY, DeviceFeatures, DrillTable, HOLE_PATTERN_KEY, MOUNTING_KEY, features_from_text,
 };
 use crate::enclosure::{DEFAULT_DOOR_ANGLE_DEG, DEPTH_KEY, Door, Enclosure, Hinge};
+use crate::openings::{OPENING_PREFIX, Opening};
 use crate::plan::{Candidate, Plan, PlannedDuct};
 use crate::plate_drawing::{PlateDocument, documents};
 use crate::rules::Class;
@@ -130,6 +131,7 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
         })
         .collect();
     layout.enclosure = enclosure_of(project, id);
+    (layout.openings, layout.opening_problems) = openings_of(project, id);
     layout.placements = project
         .all::<CabinetPlacement>()
         .filter(|p| p.structure == id)
@@ -413,6 +415,26 @@ pub fn device_depth(project: &Project, device: &Device) -> Option<f64> {
 /// The interior and door stored on an enclosure. `None` until width, height
 /// and depth of the interior are all set. A door exists once a hinge side is
 /// set.
+/// The wiring openings stored as `opening.<name>` structure properties, and
+/// the sentences for those that could not be read.
+pub fn openings_of(project: &Project, id: StructureId) -> (Vec<Opening>, Vec<String>) {
+    let Some(s) = structure(project, id) else {
+        return Default::default();
+    };
+    let props: Vec<(String, String)> = s
+        .properties
+        .iter()
+        .filter_map(|(k, v)| {
+            let name = k.strip_prefix(OPENING_PREFIX)?;
+            match v {
+                Value::Text(t) => Some((name.to_string(), t.clone())),
+                _ => Some((name.to_string(), String::new())),
+            }
+        })
+        .collect();
+    crate::openings::parse_all(&props)
+}
+
 pub fn enclosure_of(project: &Project, id: StructureId) -> Option<Enclosure> {
     let s = structure(project, id)?;
     let get = |key: &str| s.properties.get(key).and_then(number);
