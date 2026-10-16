@@ -504,17 +504,28 @@ pub(super) fn report_path(
     name: &str,
     ext: &str,
 ) -> Option<PathBuf> {
+    report_path_for("commissioning", file, dir, name, ext)
+}
+
+/// [`report_path`] for a report called `kind` (`<project> <kind>.<ext>`).
+pub(super) fn report_path_for(
+    kind: &str,
+    file: Option<&Path>,
+    dir: Option<&Path>,
+    name: &str,
+    ext: &str,
+) -> Option<PathBuf> {
     let base = match file {
         Some(file) => {
             let stem = file.file_stem()?.to_string_lossy().into_owned();
-            file.with_file_name(format!("{stem} commissioning.{ext}"))
+            file.with_file_name(format!("{stem} {kind}.{ext}"))
         }
         None => {
             let stem = Path::new(&super::project_file_name(name))
                 .with_extension("")
                 .to_string_lossy()
                 .into_owned();
-            dir?.join(format!("{stem} commissioning.{ext}"))
+            dir?.join(format!("{stem} {kind}.{ext}"))
         }
     };
     if ext == "pdf" {
