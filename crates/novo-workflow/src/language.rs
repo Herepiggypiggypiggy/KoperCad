@@ -279,7 +279,8 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["opdrachtveld bij de muis"],
     ),
-    nl("view.fit", &[], &["passend zoomen", "alles tonen"]),
+    nl("view.fit", &[], &["passend zoomen", "inhoud tonen"]),
+    nl("view.fit_sheet", &[], &["hele blad tonen", "heel blad"]),
     nl("view.schematic", &[], &["schema"]),
     nl("view.cabinet", &[], &["kast", "kastindeling"]),
     nl(
