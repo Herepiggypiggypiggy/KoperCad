@@ -367,7 +367,10 @@ fn fs_ssao(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
     }
     // Radius on screen: millimetres to pixels at this depth.
     let clip = g.view_proj * vec4<f32>(p, 1.0);
-    let radius_px = g.ssao.y * g.view_proj[1][1] * 0.5 * g.viewport.y / max(clip.w, 1e-4);
+    // The y scale of the projection: the length of the clip-y row of the 3x3,
+    // which does not depend on the camera orientation.
+    let scale_y = length(vec3<f32>(g.view_proj[0][1], g.view_proj[1][1], g.view_proj[2][1]));
+    let radius_px = g.ssao.y * scale_y * 0.5 * g.viewport.y / max(clip.w, 1e-4);
     if (radius_px < 2.0) {
         return vec4<f32>(1.0);
     }

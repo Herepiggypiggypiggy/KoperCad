@@ -669,29 +669,55 @@ fn screen_space_occlusion_darkens_the_corner_between_a_wall_and_the_plate() {
         Vec3::new(60.0, 60.0, 80.0),
         [180, 120, 90],
     ));
-    let mut camera = Camera::default();
-    camera.set_preset(ViewPreset::Iso);
-    camera.fit(&scene.bounds(), SIZE.0 as f32 / SIZE.1 as f32);
     let mut state = ViewState::default();
     state.display.shadows = false;
     state.display.edges = false;
-    let picture = |ssao| render_ssao(&gpu, &scene, &state, &camera, Mode::Settled, &[], ssao);
-    let (flat, occluded) = (picture(false), picture(true));
-    if let Ok(dir) = std::env::var("NOVO_DUMP_DIR") {
-        for (name, img) in [("ssao_off", &flat), ("ssao_on", &occluded)] {
-            let path = std::path::Path::new(&dir).join(format!("{name}.ppm"));
-            let mut out = format!("P6\n{} {}\n255\n", SIZE.0, SIZE.1).into_bytes();
-            out.extend(img.chunks(4).flat_map(|p| [p[0], p[1], p[2]]));
-            std::fs::write(path, out).unwrap();
+    // The radius must not depend on where the camera looks from: the world-y
+    // row of the combined matrix (a naive scale) shrinks with cos(pitch) and
+    // is zero when the camera looks straight along y.
+    for (yaw_deg, pitch) in [
+        (-45.0_f32, 0.3_f32),
+        (0.0, 0.3),
+        (45.0, 0.3),
+        (-45.0, 0.9),
+        (0.0, 0.9),
+        (45.0, 0.9),
+        (0.0, 1.45),
+    ] {
+        let preset = format!("yaw {yaw_deg} pitch {pitch}");
+        let least = 40;
+        let mut camera = Camera::default();
+        camera.yaw = yaw_deg.to_radians();
+        camera.pitch = pitch;
+        camera.fit(&scene.bounds(), SIZE.0 as f32 / SIZE.1 as f32);
+        let picture = |ssao| render_ssao(&gpu, &scene, &state, &camera, Mode::Settled, &[], ssao);
+        let (flat, occluded) = (picture(false), picture(true));
+        if let Ok(dir) = std::env::var("NOVO_DUMP_DIR") {
+            for (name, img) in [("ssao_off", &flat), ("ssao_on", &occluded)] {
+                let path = std::path::Path::new(&dir).join(format!("{name}_{preset}.ppm"));
+                let mut out = format!("P6\n{} {}\n255\n", SIZE.0, SIZE.1).into_bytes();
+                out.extend(img.chunks(4).flat_map(|p| [p[0], p[1], p[2]]));
+                std::fs::write(path, out).unwrap();
+            }
         }
+        let (mut darker, mut brighter) = (0, 0);
+        for (a, b) in flat.chunks(4).zip(occluded.chunks(4)) {
+            let (a, b) = (i32::from(a[0]), i32::from(b[0]));
+            darker += usize::from(b < a - 10);
+            brighter += usize::from(b > a + 3);
+        }
+        assert!(
+            darker > least,
+            "{preset}: the foot of the box is darker ({darker} px)"
+        );
+        assert!(
+            brighter < 20,
+            "{preset}: occlusion does not brighten ({brighter} px)"
+        );
+        assert_eq!(
+            px(&flat, 2, 2),
+            px(&occluded, 2, 2),
+            "{preset}: background untouched"
+        );
     }
-    let (mut darker, mut brighter) = (0, 0);
-    for (a, b) in flat.chunks(4).zip(occluded.chunks(4)) {
-        let (a, b) = (i32::from(a[0]), i32::from(b[0]));
-        darker += usize::from(b < a - 10);
-        brighter += usize::from(b > a + 3);
-    }
-    assert!(darker > 120, "the foot of the box is darker ({darker} px)");
-    assert!(brighter < 20, "occlusion does not brighten ({brighter} px)");
-    assert_eq!(px(&flat, 2, 2), px(&occluded, 2, 2), "background untouched");
 }
