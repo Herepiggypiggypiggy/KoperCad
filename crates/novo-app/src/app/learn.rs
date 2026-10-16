@@ -96,6 +96,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "switcher.reports",
     "switcher.commissioning",
     "outline.pages",
+    "outline.toggle",
     "commissioning.who",
     "commissioning.punch",
     "commissioning.report",

@@ -44,6 +44,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("switcher.reports", "Reports chip"),
     ("switcher.commissioning", "Commissioning chip"),
     ("outline.pages", "Pages list"),
+    ("outline.toggle", "Pages button"),
     ("commissioning.who", "By field"),
     ("commissioning.punch", "Punch tab"),
     ("commissioning.report", "Report PDF button"),
@@ -141,6 +142,9 @@ pub(crate) fn anchor_fallback(id: &str) -> Option<String> {
     match id {
         "cabinet.rules" | "cabinet.plate" | "cabinet.sizing" | "cabinet.cutlist"
         | "cabinet.heat" => Some("cabinet.more".to_owned()),
+        // The list and the field are not there until their button is pressed.
+        "outline.pages" => Some("outline.toggle".to_owned()),
+        "palette.field" => Some("palette.button".to_owned()),
         _ => None,
     }
 }
