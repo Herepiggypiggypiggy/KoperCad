@@ -144,6 +144,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["practice", "tutorial", "learn"],
         Needs::Nothing,
     ),
+    cmd(
+        "project.languages",
+        "Report languages",
+        "Project",
+        &[
+            "language",
+            "translate",
+            "dutch",
+            "nederlands",
+            "pdf language",
+            "translation",
+        ],
+        Needs::Project,
+    ),
     cmd("file.save", "Save", "Project", &[], Needs::Project),
     cmd(
         "file.save_as",
@@ -1576,6 +1590,79 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "report.wirecut",
+            "Wire cut list",
+            "View",
+            &["wire machine", "cut and strip", "production"],
+            Needs::Project,
+        ),
+        &["wire cut report"],
+    ),
+    verb(
+        cmd(
+            "report.io",
+            "I/O list",
+            "View",
+            &["plc", "inputs", "outputs", "addresses"],
+            Needs::Project,
+        ),
+        &["io list", "i/o list"],
+    ),
+    verb(
+        cmd(
+            "report.cable_schedule",
+            "Cable schedule",
+            "View",
+            &["cable list", "from to", "lengths"],
+            Needs::Project,
+        ),
+        &["cable schedule"],
+    ),
+    verb(
+        cmd(
+            "report.plugs",
+            "Plug list",
+            "View",
+            &["connectors", "plugs", "sockets", "mating"],
+            Needs::Project,
+        ),
+        &["plug list"],
+    ),
+    verb(
+        with_arguments(
+            cmd(
+                "report.add_page",
+                "Add report as drawing page",
+                "View",
+                &[
+                    "generated page",
+                    "cut list page",
+                    "labels page",
+                    "io list page",
+                    "strip diagram page",
+                    "print report",
+                ],
+                Needs::Project,
+            ),
+            &[
+                "toc",
+                "bom",
+                "devices",
+                "wires",
+                "cutlist",
+                "wirecut",
+                "terminals",
+                "cables",
+                "io",
+                "cableschedule",
+                "plugs",
+                "labels",
+            ],
+        ),
+        &["add report page", "add page"],
+    ),
+    verb(
+        cmd(
             "check.problems",
             "Problems",
             "Check",
@@ -1738,6 +1825,26 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["export pdf", "pdf"],
     ),
+    verb(
+        cmd(
+            "export.pdf_page",
+            "Export this page as PDF",
+            "Export",
+            &["current page", "one page", "print page"],
+            Needs::Project,
+        ),
+        &["export page", "export this page"],
+    ),
+    verb(
+        cmd(
+            "export.report_pdf",
+            "Export report (PDF)",
+            "Export",
+            &["report pdf", "bom pdf", "wire list pdf", "print report"],
+            Needs::Project,
+        ),
+        &["export report"],
+    ),
     cmd(
         "export.change_report",
         "Export change report",
@@ -1798,6 +1905,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export plate"],
+    ),
+    verb(
+        cmd(
+            "export.plate_dxf",
+            "Export plate drawing as DXF",
+            "Export",
+            &["mounting plate", "drill table", "cnc", "cad"],
+            Needs::Project,
+        ),
+        &["export plate dxf"],
     ),
     verb(
         cmd(

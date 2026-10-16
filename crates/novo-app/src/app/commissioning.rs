@@ -497,6 +497,7 @@ impl NovoApp {
         let options = ReportPdfOptions {
             title: format!("{name}, commissioning"),
             footer_right: now().chars().take(10).collect(),
+            language: self.report_translator(),
             ..ReportPdfOptions::default()
         };
         let result = novo_pdf::report_bytes(&report, format, &options)

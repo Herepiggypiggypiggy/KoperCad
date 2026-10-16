@@ -20,6 +20,10 @@ pub(crate) struct Controls {
     pub(super) move_items: bool,
     /// Soft shadows from the key light.
     pub(super) shadows: bool,
+    /// The "?" badge (no part data) on every device, not only on hover.
+    pub(super) missing_data: bool,
+    /// The Heat panel in the right-hand slot, under the view cube.
+    pub(super) heat_panel: bool,
 }
 
 impl Default for Controls {
@@ -29,6 +33,8 @@ impl Default for Controls {
             door_deg: 0.0,
             move_items: true,
             shadows: true,
+            missing_data: false,
+            heat_panel: false,
         }
     }
 }
@@ -80,27 +86,60 @@ pub(super) fn toolbar(
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    let layers = &mut controls.layers;
-                    changed.layers |=
-                        toggle(ui, &mut layers.shell, "Enclosure", "Show the enclosure box");
-                    changed.layers |= toggle(ui, &mut layers.door, "Door", "Show the door");
-                    changed.layers |=
-                        toggle(ui, &mut layers.wires, "Wires", "Show the routed wires");
+                    // Layers: things that are drawn or not, in one popover.
+                    let n_on = [
+                        controls.layers.shell,
+                        controls.layers.door,
+                        controls.layers.wires,
+                        controls.shadows,
+                        controls.missing_data,
+                    ]
+                    .iter()
+                    .filter(|b| **b)
+                    .count();
+                    let config = egui::containers::menu::MenuConfig::new()
+                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+                    egui::containers::menu::MenuButton::new(format!("Layers ({n_on})"))
+                        .config(config)
+                        .ui(ui, |ui| {
+                            let layers = &mut controls.layers;
+                            changed.layers |= ui
+                                .checkbox(&mut layers.shell, "Enclosure")
+                                .on_hover_text("Show the enclosure box")
+                                .changed();
+                            changed.layers |= ui
+                                .checkbox(&mut layers.door, "Door")
+                                .on_hover_text("Show the door")
+                                .changed();
+                            changed.layers |= ui
+                                .checkbox(&mut layers.wires, "Wires")
+                                .on_hover_text("Show the routed wires")
+                                .changed();
+                            ui.checkbox(&mut controls.shadows, "Shadows").on_hover_text(
+                                "Soft shadows from the key light (View > 3D > Shadows)",
+                            );
+                            ui.checkbox(&mut controls.missing_data, "Missing data")
+                                .on_hover_text(
+                                    "Mark every device that has no part data with a \"?\". Off: \
+                                     the \"?\" shows on the device under the pointer.",
+                                );
+                        });
+                    ui.separator();
+                    // Modes and panels: what the pointer does, what sits at the side.
                     toggle(
                         ui,
                         &mut controls.move_items,
                         "Move",
-                        "Drag a device, rail or duct to move it on the plate (grid and checks \
-                         as in the Cabinet). R turns the selection, Delete takes it off. Off: \
-                         a drag draws a selection box.",
+                        "Move mode. Drag a device, rail or duct to move it on the plate (grid \
+                         and checks as in the Cabinet). R turns the selection, Delete takes it \
+                         off. Off: a drag draws a selection box.",
                     );
                     toggle(
                         ui,
-                        &mut controls.shadows,
-                        "Shadows",
-                        "Soft shadows from the key light (View > 3D > Shadows)",
+                        &mut controls.heat_panel,
+                        "Heat",
+                        "The Heat panel: simulate how heat and air move in this cabinet",
                     );
-                    ui.separator();
                     if let Some(limit) = limit
                         && controls.layers.door
                     {
@@ -154,6 +193,14 @@ fn toggle(ui: &mut egui::Ui, on: &mut bool, name: &str, hint: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_quiet_defaults_hide_badges_and_the_heat_panel() {
+        let c = Controls::default();
+        assert!(!c.missing_data);
+        assert!(!c.heat_panel);
+        assert!(c.move_items);
+    }
 
     #[test]
     fn the_door_toggles_between_closed_and_its_limit() {
