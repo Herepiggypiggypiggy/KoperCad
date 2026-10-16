@@ -19,10 +19,16 @@ const TOL: f64 = 1.0;
 
 /// Steps whose `solve` the editor cannot carry out today, each with the
 /// reason. A step that starts working must come off this list.
-const KNOWN_BROKEN: &[(&str, &str)] = &[(
-    "interruption-points/same-name",
-    "needs a `rename` solve op (double-click the name, Ctrl+A, type, Enter); `xref.link` cannot pair points on two pages",
-)];
+const KNOWN_BROKEN: &[(&str, &str)] = &[
+    (
+        "interruption-points/same-name",
+        "needs a `rename` solve op (double-click the name, Ctrl+A, type, Enter); `xref.link` cannot pair points on two pages",
+    ),
+    (
+        "panel-plate-drawing/select-t1",
+        "-T1 is a cabinet device with no schematic symbol: `select` only clicks symbols, so this needs a cabinet selection op",
+    ),
+];
 
 /// What happened to one step.
 #[derive(Debug, Clone, PartialEq)]
