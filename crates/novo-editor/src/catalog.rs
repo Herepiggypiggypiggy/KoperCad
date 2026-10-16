@@ -238,7 +238,7 @@ impl Catalog {
         let query = query.trim().to_lowercase();
         let mut words: Vec<&str> = query.split_whitespace().collect();
         let mut parent = None;
-        if words.len() >= 2 && looks_like_device(words[0]) {
+        if words.len() >= 2 && looks_like_device(words[0]) && !self.is_symbol_word(words[0]) {
             let code = words.remove(0);
             parent = Some(normalize_parent(code));
         } else if let [.., last] = words[..]
@@ -457,6 +457,17 @@ mod tests {
             classify(catalog.get(&h.symbol).unwrap()),
             SymbolClass::Child { .. } | SymbolClass::Main { .. }
         )));
+    }
+
+    #[test]
+    fn a_symbol_mnemonic_with_a_tag_is_a_search_not_a_device_code() {
+        // `km3` looks like a device code, but it is the contactor's name:
+        // `km3 K1` is that contactor as -K1.
+        let catalog = Catalog::builtin();
+        let hits = catalog.search("km3 K1");
+        assert!(!hits.is_empty(), "the palette advertises this string");
+        assert_eq!(hits[0].parent.as_deref(), Some("-K1"));
+        assert_eq!(catalog.search("km3")[0].symbol, hits[0].symbol);
     }
 
     #[test]
