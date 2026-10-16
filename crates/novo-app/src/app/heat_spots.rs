@@ -15,6 +15,8 @@ pub(crate) struct Row {
     pub status: Status,
     /// Kelvin left to the tightest limit; negative is over.
     pub margin_k: Option<f64>,
+    /// The same at the pessimistic end of the uncertainty band.
+    pub margin_pessimistic_k: Option<f64>,
 }
 
 impl Row {
@@ -22,6 +24,13 @@ impl Row {
     pub(crate) fn text(&self) -> String {
         let margin = match (self.status, self.margin_k) {
             (Status::Over, Some(m)) => format!(", {:.0} K over its limit", -m),
+            (Status::Marginal, Some(m)) => match self.margin_pessimistic_k {
+                Some(p) if p < 0.0 => format!(
+                    ", {m:.0} K below its limit, but the uncertainty band reaches {:.0} K over",
+                    -p
+                ),
+                _ => format!(", {m:.0} K below its limit"),
+            },
             (_, Some(m)) => format!(", {m:.0} K below its limit"),
             _ => String::new(),
         };
@@ -55,6 +64,7 @@ pub(crate) fn rows(snap: &CfdSnapshot, tag_of: &dyn Fn(u64) -> String, limit: us
             loss_w: d.loss_w,
             status: d.status,
             margin_k: d.margin_k,
+            margin_pessimistic_k: d.margin_pessimistic_k,
         })
         .collect();
     out.sort_by(|a, b| {
@@ -174,6 +184,20 @@ mod tests {
         );
         assert!(r[1].text().contains("20 K below"));
         assert_eq!(rows(&snap, &tag, 2).len(), 2);
+    }
+
+    #[test]
+    fn marginal_says_where_the_uncertainty_band_reaches() {
+        let mut snap = snapshot();
+        let mut d = device(5, 75.0, 5.0, Status::Marginal, Some(3.0));
+        d.margin_pessimistic_k = Some(-2.0);
+        snap.devices = vec![d];
+        let r = rows(&snap, &|id| format!("-Q{id}"), 10);
+        let t = r[0].text();
+        assert!(
+            t.contains("3 K below its limit, but the uncertainty band reaches 2 K over"),
+            "{t}"
+        );
     }
 
     #[test]
