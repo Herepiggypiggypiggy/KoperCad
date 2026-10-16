@@ -1,0 +1,12 @@
+name: winprobe
+on: workflow_dispatch
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace --no-fail-fast 2>&1 | Select-String -Pattern "FAILED|failed|panicked|Running|left:|right:" | ForEach-Object { $_.Line.Substring(0, [Math]::Min(300, $_.Line.Length)) }
+        shell: pwsh
