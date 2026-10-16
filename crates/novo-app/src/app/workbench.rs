@@ -432,9 +432,11 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_shell",
     "view.3d_wires",
     "view.3d_shadows",
+    "view.3d_ssao",
     "view.3d_dimensions",
     "view.3d_quality",
     "view.3d_stats",
+    "view.3d_duplicate",
     "view.3d_position",
     "view.3d_place",
     "view.iso",
@@ -845,6 +847,11 @@ impl NovoApp {
             }
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
+            "edit.duplicate" if self.workspace() == Workspace::View3d => self.view3d_duplicate(),
+            "view.3d_duplicate" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_duplicate();
+            }
             "edit.reset_note" => {
                 let selection = self.selection();
                 self.with_editor(|editor, doc| editor.reset_notes(doc, &selection));
@@ -937,6 +944,10 @@ impl NovoApp {
             "view.3d_dimensions" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.dimensions ^= true;
+            }
+            "view.3d_ssao" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.controls.ssao ^= true;
             }
             "view.3d_door" | "view.3d_shell" | "view.3d_wires" => {
                 self.switch_workspace(Workspace::View3d);

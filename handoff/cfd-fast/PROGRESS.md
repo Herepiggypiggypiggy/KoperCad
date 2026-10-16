@@ -11,4 +11,5 @@ Coordinator relay: skip the momentum rewrite; make the results usable in 3D. One
 - Legend (own PR): 3D Heat strip result shows a key bottom right of the view: temperature scale in °C plus a note per active layer (shell level, streamline speed, device tint).
 - Hot spots (own PR): 3D Heat strip > Hot spots menu lists devices by margin to limit and hot-air pockets; a device row selects it and fits the view to it.
 - 2026-10-16 22:10 UTC probe polish: the probe line is in the Heat strip (clicked point, or the pointer's point), says "model, not validated", a new result drops the point, repaint only when the line changes, crosshair cursor while probing.
+- Slice plane (own PR): 3D Heat strip > Slice shows the plane position in mm, typed or dragged, with one-cell step buttons.
 - Arrows (own PR): 3D Heat strip > Arrows draws a grid of arrows on the slice plane, length follows air speed.
