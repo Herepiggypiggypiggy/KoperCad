@@ -168,9 +168,9 @@ pub(super) fn cable_candidates(catalog: &Catalog, query: &str) -> Vec<Candidate>
 /// check alone (the letter code) cannot call a part strong.
 fn match_color(fit: &Fit) -> egui::Color32 {
     match fit.percent {
-        80.. if fit.checks >= 2 => novo_theme::tokens::SUCCESS,
-        55.. => novo_theme::tokens::WARNING,
-        _ => novo_theme::tokens::ERROR,
+        80.. if fit.checks >= 2 => crate::theme::ui_palette().success,
+        55.. => crate::theme::ui_palette().warning,
+        _ => crate::theme::ui_palette().error,
     }
 }
 
