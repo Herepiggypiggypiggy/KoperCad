@@ -281,3 +281,17 @@ fn building_the_same_part_twice_gives_the_same_levels() {
         assert_eq!(first, again, "run {run}");
     }
 }
+
+#[test]
+fn zz_probe_many() {
+    let step = cylinder_step(5.0, 20.0);
+    let cancel = AtomicBool::new(false);
+    let a = geometry_from_step(step.as_bytes(), None, Quality::Normal, &cancel, None).unwrap();
+    let mut bad = 0;
+    for _ in 0..300 {
+        let b = geometry_from_step(step.as_bytes(), None, Quality::Normal, &cancel, None).unwrap();
+        if a != b { bad += 1; }
+    }
+    eprintln!("PROBE bad runs {bad} of 300");
+    assert_eq!(bad, 0);
+}
