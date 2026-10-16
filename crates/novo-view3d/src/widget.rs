@@ -161,6 +161,9 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
 
 /// Tells the statistics and the frame governor which adapter draws. [`install`]
 /// does it; a host without a window (tests, headless tools) calls it itself.
+/// It replaces the process-wide recorder the Stats panel reads, so a test that
+/// calls it, or reads that panel's height, takes `STATS_GUARD` (in the app's
+/// `view3d_move_tests`) to keep parallel tests apart.
 pub fn register_adapter(name: &str, backend: &str, tier: Tier) {
     if let Ok(mut guard) = STATS.lock() {
         *guard = Some(Recorder {

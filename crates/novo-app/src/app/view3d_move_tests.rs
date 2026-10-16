@@ -768,3 +768,31 @@ fn a_typed_position_is_one_undo_step() {
     d.app.run(&ctx, Action::Undo);
     assert_eq!(placed(&d, cab, a), start, "X and Y come back together");
 }
+
+#[test]
+fn duplicating_a_selection_of_two_is_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, a, b) = cabinet_with_two_devices(&mut d);
+    open_3d_with_selection(&mut d, a);
+    d.app.view3d.view.state.selection = BTreeSet::from([dev(a), dev(b)]);
+    let count = |d: &Drive| project(d).all::<novo_core::Device>().count();
+    let placements = |d: &Drive| {
+        novo_layout::model::load(project(d), cab)
+            .unwrap()
+            .placements
+            .len()
+    };
+    let (devices, placed_before) = (count(&d), placements(&d));
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.3d_duplicate", None);
+    d.frame();
+    assert_eq!(count(&d), devices + 2);
+    assert_eq!(placements(&d), placed_before + 2);
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    assert!(layout.report().collisions.is_empty() && layout.report().outside.is_empty());
+    assert_eq!(d.app.view3d.view.state.selection.len(), 2, "both copies");
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(count(&d), devices, "one undo takes both copies back");
+}
