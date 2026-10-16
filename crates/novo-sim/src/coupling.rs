@@ -137,9 +137,7 @@ pub fn is_coil(symbol: &SymbolInstance) -> bool {
 /// `..._nc`, changeover ones `co`, `..._co` or `changeover`; a timer contact
 /// adds `_delay_on` or `_delay_off`.
 fn contact_of(symbol: &SymbolInstance) -> Option<(Rest, Delay)> {
-    if symbol.device().is_none() {
-        return None;
-    }
+    symbol.device()?;
     rest_of(symbol)
 }
 
