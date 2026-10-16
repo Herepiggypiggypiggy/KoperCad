@@ -15,9 +15,7 @@ pub(super) struct Solution {
     pub snapshot: Arc<CfdSnapshot>,
     /// Counts the snapshots, for the cache key.
     pub id: u64,
-    /// The scenario this result solved.
-    pub scenario: Arc<novo_thermal::Scenario>,
-    /// `heat_live::scenario_key` of it.
+    /// `heat_live::scenario_key` of the scenario this result solved.
     pub scenario_key: u64,
     /// Hash of the layout the run was started from; a different one marks
     /// the result out of date.

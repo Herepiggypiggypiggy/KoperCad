@@ -160,7 +160,7 @@ fn an_edit_marks_the_result_out_of_date_and_auto_solves_again() {
     assert!(!state.live.is_stale(), "the new result matches the cabinet");
     let second = state.solution().unwrap();
     assert_ne!(first.id, second.id);
-    assert_ne!(*first.scenario, *second.scenario);
+    assert_ne!(first.scenario_key, second.scenario_key);
 }
 
 #[test]
@@ -232,6 +232,9 @@ fn a_move_during_a_run_cancels_it_and_starts_the_next() {
         }
     }
     let sol = state.solution().expect("a result for the moved cabinet");
-    assert_eq!(*sol.scenario, scenario(&p, cab));
+    assert_eq!(
+        sol.scenario_key,
+        super::heat_live::scenario_key(&scenario(&p, cab))
+    );
     assert!(!state.live.is_stale());
 }

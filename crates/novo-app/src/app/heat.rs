@@ -320,7 +320,6 @@ impl HeatState {
                             snapshot,
                             id: self.snap_seq,
                             scenario_key: super::heat_live::scenario_key(&m.scenario),
-                            scenario: m.scenario.clone(),
                             layout_key: m.layout_key,
                             ambient: m.ambient,
                             plate: m.plate,
