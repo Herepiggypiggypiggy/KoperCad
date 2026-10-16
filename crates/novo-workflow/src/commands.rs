@@ -170,6 +170,43 @@ pub const COMMANDS: &[CommandInfo] = &[
         // Not a bare "page": `page 2` goes to page 2.
         &["new page", "add page"],
     ),
+    // The page-tree actions of the outline, for the palette and the menus.
+    // They act on the page that is open.
+    cmd(
+        "page.rename",
+        "Rename page",
+        "Project",
+        &["title", "page title"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.duplicate",
+        "Duplicate page",
+        "Project",
+        &["copy page", "clone page"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.delete",
+        "Delete page",
+        "Project",
+        &["remove page"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.move_up",
+        "Move page up",
+        "Project",
+        &["reorder", "earlier"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.move_down",
+        "Move page down",
+        "Project",
+        &["reorder", "later"],
+        Needs::Page,
+    ),
     verb(
         cmd(
             "project.rules",
@@ -237,6 +274,24 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Nothing,
         ),
         &["parts", "part library"],
+    ),
+    verb(
+        cmd(
+            "parts.import_folder",
+            "Import parts from a folder",
+            "Project",
+            &[
+                "bulk",
+                "catalog",
+                "bmecat",
+                "csv",
+                "inbox",
+                "maker",
+                "parts import",
+            ],
+            Needs::Nothing,
+        ),
+        &["import parts", "import catalog"],
     ),
     verb(
         cmd(
@@ -601,6 +656,30 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["tag", "edit tag"],
         Needs::Device,
     ),
+    verb(
+        cmd(
+            "parts.auto_assign",
+            "Assign parts to all devices",
+            "Edit",
+            &["auto assign", "propose", "catalog", "part", "fill"],
+            Needs::Project,
+        ),
+        &["assign parts", "auto assign parts"],
+    ),
+    cmd(
+        "parts.clear",
+        "Remove parts from selected devices",
+        "Edit",
+        &["clear part", "unassign", "article"],
+        Needs::Selection,
+    ),
+    cmd(
+        "parts.remove_unused",
+        "Remove unused parts",
+        "Edit",
+        &["unused", "clean up", "purge", "article"],
+        Needs::Project,
+    ),
     with_arguments(
         verb(
             cmd(
@@ -794,16 +873,6 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd("nav.next_page", "Next page", "Navigate", &[], Needs::Page),
-    verb(
-        cmd(
-            "nav.changes",
-            "Changes since export",
-            "Navigate",
-            &["changed"],
-            Needs::Project,
-        ),
-        &["changes"],
-    ),
     // View
     cmd(
         "view.command_palette",
@@ -1075,14 +1144,14 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "sim.live",
-        "Show live potentials",
+        "Simulate live potentials",
         "View",
         &["simulate", "contacts", "close", "energized", "try"],
         Needs::Page,
     ),
     cmd(
         "sim.plc_program",
-        "PLC program",
+        "Simulate PLC program",
         "View",
         &[
             "plc",
@@ -1095,7 +1164,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "sim.faults",
-        "Fault scenarios",
+        "Simulate fault scenarios",
         "View",
         &[
             "short circuit",
@@ -1122,6 +1191,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show hints again",
         "View",
         &["hints", "tips", "reset", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "view.reset_panels",
+        "Reset panel layout",
+        "View",
+        &["panels", "windows", "layout", "reset", "position", "size"],
         Needs::Nothing,
     ),
     cmd(
@@ -1195,6 +1271,36 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "cabinet.rules",
+            "Placement rules (Cabinet)",
+            "View",
+            &["place rules", "where devices go", "zones", "rail rule"],
+            Needs::Project,
+        ),
+        &["placement rules"],
+    ),
+    verb(
+        cmd(
+            "cabinet.plate",
+            "Plate setup (Cabinet)",
+            "View",
+            &["plate size", "mounting plate", "margin", "fill", "door"],
+            Needs::Project,
+        ),
+        &["plate setup"],
+    ),
+    verb(
+        cmd(
+            "cabinet.cutlist",
+            "Rail and duct cut list (Cabinet)",
+            "View",
+            &["cut list", "bars", "rail length", "duct length", "buy"],
+            Needs::Project,
+        ),
+        &["cut list"],
+    ),
+    verb(
+        cmd(
             "cabinet.rails",
             "Rails and ducts (Cabinet)",
             "View",
@@ -1202,6 +1308,24 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["add rail", "add duct"],
+    ),
+    verb(
+        cmd(
+            "cabinet.door",
+            "Inside size and door (Cabinet)",
+            "View",
+            &[
+                "door",
+                "door swing",
+                "hinge",
+                "inside size",
+                "enclosure depth",
+                "opens to",
+                "setback",
+            ],
+            Needs::Project,
+        ),
+        &["door swing", "set door", "hinge side"],
     ),
     cmd(
         "view.background_place",
@@ -1446,6 +1570,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export standards", "standards report"],
+    ),
+    verb(
+        cmd(
+            "export.standards_xlsx",
+            "Export standards compliance report (Excel)",
+            "Export",
+            &[
+                "compliance",
+                "spreadsheet",
+                "xlsx",
+                "csv",
+                "iec 60204",
+                "ul 508a",
+            ],
+            Needs::Project,
+        ),
+        &["export standards excel"],
     ),
     verb(
         cmd(

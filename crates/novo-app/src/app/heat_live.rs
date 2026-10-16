@@ -35,7 +35,7 @@ pub(super) fn scenario_key(s: &Scenario) -> u64 {
 
 /// What the project gave at one revision.
 struct Current {
-    key: (StructureId, u64, u64),
+    key: (StructureId, u64, u64, u64),
     /// `None` when the bridge cannot build one (no plate).
     scenario: Option<Arc<Scenario>>,
     scenario_key: u64,
@@ -113,13 +113,25 @@ impl HeatState {
         now: f64,
         ctx: &egui::Context,
     ) {
-        let key = (structure, project.revision(), ambient.to_bits());
+        // The vents of the settings are part of the cabinet being solved.
+        let vents = {
+            let mut h = std::collections::hash_map::DefaultHasher::new();
+            format!("{:?}", self.settings.vents).hash(&mut h);
+            h.finish()
+        };
+        let key = (structure, project.revision(), ambient.to_bits(), vents);
         if self.live.current.as_ref().map(|c| c.key) != Some(key) {
             let options = BridgeOptions {
                 ambient_c: ambient,
                 ..Default::default()
             };
-            let built = scenario_from_project(project, structure, &options).ok();
+            let built = scenario_from_project(project, structure, &options)
+                .ok()
+                .map(|mut b| {
+                    let extra = self.settings.vents_for(&b.scenario.enclosure);
+                    b.scenario.vents.extend(extra);
+                    b
+                });
             let (scenario, plate, messages) = match built {
                 Some(b) => {
                     let p = b.scenario.enclosure.plate;
@@ -201,14 +213,15 @@ impl HeatState {
             plate: cur.plate,
             messages: cur.messages.clone(),
         };
-        self.start_to((*scenario).clone(), meta, novo_cfd::Fidelity::Fine);
+        let top = self.settings.top;
+        self.start_to((*scenario).clone(), meta, top);
     }
 }
 
 /// "Out of date" chip and the auto re-solve switch, in the Heat strips of
 /// the Cabinet and the 3D view.
-pub(super) fn controls(ui: &mut egui::Ui, state: &mut HeatState) {
-    if state.live.is_stale() {
+pub(super) fn controls(ui: &mut egui::Ui, state: &mut HeatState, chip: bool) {
+    if chip && state.live.is_stale() {
         let text = if state.running() && state.live.auto_on() {
             "Out of date: the cabinet changed, solving again"
         } else if state.live.auto_on() {

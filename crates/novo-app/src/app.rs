@@ -10,6 +10,7 @@ mod cabinet;
 mod cabinet_bar;
 mod cabinet_door;
 mod cabinet_inspector;
+mod cabinet_menu;
 mod cabinet_panel;
 mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
@@ -22,6 +23,7 @@ mod checks;
 mod clipboard;
 mod commissioning;
 mod compare;
+mod device_renumber;
 mod dock;
 mod drawers;
 mod duplicate;
@@ -45,6 +47,7 @@ mod heat_progress_tests;
 mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
+mod heat_settings;
 mod inspector;
 mod interop;
 mod learn;
@@ -69,8 +72,10 @@ mod onboarding;
 mod outline;
 mod outline_tree;
 mod pages;
+mod panel;
 mod part_picker;
 mod parts;
+mod parts_bulk;
 mod parts_import;
 mod parts_quality;
 mod pdf;
@@ -80,6 +85,7 @@ mod plc_link;
 mod plc_run;
 mod potentials;
 mod preferences;
+mod project_rules;
 mod project_settings;
 mod protection;
 mod reports;
@@ -97,12 +103,14 @@ mod standards_report_tests;
 mod status_bar;
 mod symbol_preview;
 mod terminals;
+mod tidy;
 mod tips;
 mod title_revisions;
 mod userkeymap;
 mod variants;
 mod view3d;
 mod view3d_controls;
+mod view3d_heat;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
@@ -145,6 +153,8 @@ mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
+mod greyed_commands_tests;
+#[cfg(test)]
 mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
@@ -160,6 +170,8 @@ mod numbering_tests;
 mod onboarding_tests;
 #[cfg(test)]
 mod outline_tests;
+#[cfg(test)]
+mod page_commands_tests;
 #[cfg(test)]
 mod protection_tests;
 #[cfg(test)]
@@ -925,6 +937,7 @@ impl NovoApp {
                     || *id == "view.cabinet_table"
                     || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
+                    || *id == "cabinet.door"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
@@ -1022,7 +1035,11 @@ impl NovoApp {
         self.background_panel(&ctx);
         self.bench_window(&ctx);
         self.parts_window(&ctx);
+        self.parts_bulk_dialog(&ctx);
+        self.auto_assign_dialog(&ctx);
         self.project_settings_dialog(&ctx);
+        self.project_rules_dialog(&ctx);
+        self.device_renumber_dialog(&ctx);
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
@@ -1427,6 +1444,7 @@ impl NovoApp {
                 ))
             })
             .inner;
+        self.anchor_response("outline.toggle", &toggle, "Pages button");
         if toggle.clicked() {
             self.outline_open ^= true;
         }

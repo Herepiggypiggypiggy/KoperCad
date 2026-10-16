@@ -125,3 +125,86 @@ fn the_example_replaces_an_open_project() {
     assert_eq!(d.doc().project().info().name, EXAMPLE_NAME);
     assert_eq!(tags(&d).len(), 8, "eight devices, the strip included");
 }
+
+#[test]
+fn the_example_cabinet_is_complete_and_simulates() {
+    use novo_core::{RailKind, Structure};
+    use novo_thermal::bridge::{BridgeOptions, scenario_from_project};
+
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let project = d.doc().project();
+
+    let cab: &Structure = project
+        .structures()
+        .find(|s| s.enclosure)
+        .expect("the example has a cabinet");
+    assert!(cab.plate.is_some(), "mounting plate");
+    let enclosure = novo_layout::model::enclosure_of(project, cab.id)
+        .expect("interior width, height and depth are set");
+    assert!(enclosure.plate_setback > 0.0, "plate setback");
+    assert!(enclosure.door.is_some(), "a door with a hinge side");
+    let rails = |kind| {
+        project
+            .all::<novo_core::Rail>()
+            .filter(move |r| r.kind == kind)
+    };
+    assert!(rails(RailKind::DinRail).count() > 0, "DIN rails");
+    assert!(rails(RailKind::Duct).count() > 0, "ducts");
+
+    // Every device of the cabinet is placed (Place all has nothing left).
+    let layout = novo_layout::model::load(project, cab.id).unwrap();
+    assert_eq!(
+        layout.placements.len(),
+        novo_layout::model::candidates(project, cab.id).len()
+    );
+    assert!(layout.placements.iter().all(|p| !p.size.guessed));
+
+    // The heat scenario builds with nothing guessed or missing.
+    let bridge = scenario_from_project(project, cab.id, &BridgeOptions::default())
+        .expect("no missing-interior or missing-plate error");
+    assert!(bridge.report.guessed_size.is_empty(), "{:?}", bridge.report);
+    assert!(bridge.report.without_loss.is_empty(), "{:?}", bridge.report);
+    assert!(
+        bridge.report.without_depth.is_empty(),
+        "{:?}",
+        bridge.report
+    );
+    assert!(bridge.report.unplaced.is_empty(), "{:?}", bridge.report);
+    assert!(bridge.report.total_loss_w > 10.0, "{:?}", bridge.report);
+
+    // A coarse steady solve gives a believable result: devices run warmer
+    // than the surroundings, and the hottest is well below boiling.
+    let result = novo_thermal::simulate_steady_with(
+        &bridge.scenario,
+        novo_thermal::Options {
+            bands: false,
+            advice: false,
+        },
+    )
+    .expect("the solve runs");
+    let hottest = result
+        .devices
+        .iter()
+        .map(|dev| dev.surface_c)
+        .fold(f64::MIN, f64::max);
+    assert!(
+        hottest > result.ambient_c && hottest < 100.0,
+        "hottest device {hottest} C, ambient {} C",
+        result.ambient_c
+    );
+
+    // The catalogue losses are planning estimates, and the heat view says so.
+    let items = crate::app::heat::items_of(project, &layout, &|id| id.to_string());
+    let with_loss = items.iter().filter(|i| i.loss_known).count();
+    assert!(with_loss > 0);
+    assert!(
+        items
+            .iter()
+            .filter(|i| i.loss_known)
+            .all(|i| i.loss_estimated),
+        "every loss of the example is an estimate: {items:?}"
+    );
+}

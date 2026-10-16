@@ -7,6 +7,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use novo_cfd::sched::{Event as SchedEvent, Outcome, Plan, Scheduler};
+use novo_cfd::turb::TurbModel;
 use novo_cfd::{CfdSnapshot, Fidelity, Progress, Solver};
 
 /// A published result with what the picture needs to place it on the plate.
@@ -49,16 +50,17 @@ pub(super) struct Runner {
 /// The solver the app uses: the cabinet solver of `novo-cfd` (mesh, solids,
 /// ducts, openings, buoyant flow). Tests run the synthetic demo ladder so
 /// they stay fast.
-pub(super) fn default_solver() -> Arc<dyn Solver> {
+pub(super) fn default_solver(turbulence: TurbModel) -> Arc<dyn Solver> {
     #[cfg(test)]
     {
+        let _ = turbulence;
         Arc::new(novo_cfd::sched::DemoLadder {
             step: std::time::Duration::ZERO,
         })
     }
     #[cfg(not(test))]
     {
-        Arc::new(novo_cfd::CabinetSolver::default())
+        Arc::new(novo_cfd::CabinetSolver::default().with_turbulence(turbulence))
     }
 }
 

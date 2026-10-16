@@ -50,12 +50,12 @@ title = "A device knows its rail"
 title_nl = "Een component kent zijn rail"
 text = """
 Click **-K1**. The inspector shows **Mounted on** with the number of its rail, **Position** in millimetres from the plate corner,
-and **Place rule**: the rule that decided where it goes, for example "A K zone=middle rail=own class=signal".
+and **Place rule**: the rule that decided where it goes, for example "rule A K zone=middle rail=own class=signal".
 A device that sits on a rail moves with it; the rail is the real mounting.
 """
 text_nl = """
 Klik op **-K1**. De inspector toont **Mounted on** met het nummer van de rail, **Position** in millimeters vanaf de hoek van de plaat
-en **Place rule**: de regel die bepaalde waar het komt, bijvoorbeeld "A K zone=middle rail=own class=signal".
+en **Place rule**: de regel die bepaalde waar het komt, bijvoorbeeld "rule A K zone=middle rail=own class=signal".
 Een component op een rail beweegt met de rail mee; de rail is de echte bevestiging.
 """
 point = { ui = "cabinet.inspector" }
@@ -86,8 +86,8 @@ manual = "the Rules button opens a window; no script clicks panel buttons yet"
 
 [[step]]
 id = "plate-card"
-how = ["Click an empty spot on the plate to clear the selection.", "Click Plate in the header.", "Read Placed and Plate used in the inspector."]
-how_nl = ["Klik op een lege plek op de plaat om de selectie te wissen.", "Klik op Plate in de kop.", "Lees Placed en Plate used in de inspecteur."]
+how = ["Click an empty spot on the plate to clear the selection.", "Click Plate setup in the Arrange group of the bar.", "Read Placed and Plate used in the inspector."]
+how_nl = ["Klik op een lege plek op de plaat om de selectie te wissen.", "Klik op Plate setup in de groep Arrange van de balk.", "Lees Placed en Plate used in de inspecteur."]
 title = "How full is the plate?"
 title_nl = "Hoe vol is de plaat?"
 text = """

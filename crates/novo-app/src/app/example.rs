@@ -3,7 +3,14 @@
 //! starter, built by the same fixture the tests use, so it cannot drift
 //! from what is tested.
 
-use novo_core::{Document, Result as ModelResult, Tx};
+use novo_core::{
+    Device, DeviceTag, Document, MountingPlate, Part, Result as ModelResult, Structure,
+    StructureId, Tx, Value,
+};
+use novo_layout::enclosure::{Door, Enclosure, Hinge};
+use novo_layout::model::{apply_plan, load, set_enclosure, set_plate};
+use novo_layout::rules::RuleSet;
+use novo_parts::{Catalog, DataSource, PartKey};
 
 use super::{Level, NovoApp};
 
@@ -25,12 +32,122 @@ pub(crate) fn build_example(doc: &mut Document) -> ModelResult<novo_core::Change
         // The pages are filed by their devices' tags (=A1, +CAB), so the
         // outline shows the example as a tree.
         super::outline_tree::auto_file(tx)?;
+        give_parts_their_data(tx)?;
+        add_cabinet(tx)?;
         tx.set_info(|info| {
             info.name = EXAMPLE_NAME.into();
             info.description = EXAMPLE_DESCRIPTION.into();
         })
     })?;
     Ok(changes)
+}
+
+/// Mounting plate of the example cabinet, mm.
+const PLATE: MountingPlate = MountingPlate {
+    width: 450.0,
+    height: 550.0,
+    margin: 10.0,
+};
+
+/// The fixture's parts are bare (maker and order number). Gives each one
+/// that the starter catalog knows its sizes and technical data, so the
+/// cabinet, 3D and heat have real numbers to work with. Catalog data is
+/// copied, never invented here.
+fn give_parts_their_data(tx: &mut Tx<'_>) -> ModelResult<()> {
+    let catalog = Catalog::starter();
+    let parts: Vec<_> = tx.project().all::<Part>().map(|p| p.id).collect();
+    for id in parts {
+        let Some(part) = tx.project().get::<Part>(id) else {
+            continue;
+        };
+        let Some(known) = catalog.get(&PartKey::new(&part.manufacturer, &part.order_number)) else {
+            continue;
+        };
+        let estimated = known.source_of(novo_parts::keys::POWER_LOSS_W) == DataSource::Estimated;
+        let known = known.to_model(id);
+        tx.update::<Part>(id, |p| {
+            p.type_number = known.type_number;
+            p.description = known.description;
+            p.properties = known.properties;
+            if estimated {
+                p.properties.insert(
+                    novo_thermal::bridge::LOSS_SOURCE_PROPERTY.into(),
+                    Value::Text("estimated".into()),
+                );
+            }
+        })?;
+    }
+    Ok(())
+}
+
+/// The cabinet `+CAB` of the example: enclosure interior with a plate
+/// setback, a right hinged door, and the rails, ducts and device places the
+/// rules planner proposes for the devices of the cabinet (what Place all
+/// would do), so Cabinet, 3D and Simulate work on the first click.
+fn add_cabinet(tx: &mut Tx<'_>) -> ModelResult<StructureId> {
+    // The outline filing has already made the structure of the location.
+    let tag = DeviceTag::parse("+CAB")?;
+    let existing = tx
+        .project()
+        .structures()
+        .find(|s| s.tag == tag)
+        .map(|s| s.id);
+    let cab = match existing {
+        Some(id) => id,
+        None => tx.add_structure(tag, "Control cabinet", true)?,
+    };
+    tx.update::<Structure>(cab, |s| {
+        s.enclosure = true;
+        s.description = "Control cabinet".into();
+    })?;
+    set_plate(tx, cab, PLATE)?;
+    set_enclosure(
+        tx,
+        cab,
+        &Enclosure {
+            width: 500.0,
+            height: 600.0,
+            depth: 250.0,
+            plate_setback: 20.0,
+            door: Some(Door {
+                hinge: Hinge::Right,
+                max_angle: 110.0,
+                inner_depth: 0.0,
+            }),
+            front_clearance: Some(400.0),
+            hinge_side_clearance: None,
+        },
+    )?;
+    // The terminal strip -X1 is four blocks side by side, so it has no
+    // single part to read its footprint from: its own size, the 4 blocks of
+    // 5.2 mm and two end covers, and the 0.3 W the starter catalog gives a
+    // terminal block at rated current.
+    let strip = tx
+        .project()
+        .devices_by_tag(&DeviceTag::parse("=A1+CAB-X1")?)
+        .first()
+        .copied();
+    if let Some(strip) = strip {
+        tx.update::<Device>(strip, |d| {
+            for (key, value) in [
+                ("width_mm", 26.0),
+                ("height_mm", 47.5),
+                ("depth_mm", 42.5),
+                ("power_loss_w", 1.2),
+            ] {
+                d.properties.insert(key.into(), Value::Float(value));
+            }
+            // 4 x 0.3 W, and the catalog marks that figure as an estimate.
+            d.properties.insert(
+                novo_thermal::bridge::LOSS_SOURCE_PROPERTY.into(),
+                Value::Text("estimated".into()),
+            );
+        })?;
+    }
+    let layout = load(tx.project(), cab).expect("the plate was just set");
+    let (plan, _) = super::cabinet_rules::plan(tx.project(), cab, &layout, &RuleSet::standard());
+    apply_plan(tx, cab, &plan)?;
+    Ok(cab)
 }
 
 impl NovoApp {

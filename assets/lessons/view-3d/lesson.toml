@@ -31,11 +31,11 @@ title = "Open the 3D view"
 title_nl = "Open het 3D-beeld"
 text = """
 The plate drawing shows width and height only. Click **3D** in the switcher at the top, or run **3D view** from the command field. The plate, the rails, the ducts and every device appear as solid boxes as deep as their parts.
-The view is read only: you look, and change the layout on the Cabinet tab. It is rebuilt from the layout whenever that changes.
+Drag a device in the view to move it, or turn or delete it there; the Cabinet tab shows the same layout. The view is rebuilt from the layout whenever that changes.
 """
 text_nl = """
 De plaattekening toont alleen breedte en hoogte. Klik bovenin op **3D** in de schakelaar, of voer **3D view** uit in het opdrachtveld. De plaat, de rails, de kanalen en elk component verschijnen als massieve blokken, zo diep als hun artikelen.
-Het beeld is alleen-lezen: je kijkt en past de indeling aan op het tabblad Cabinet. Het wordt opnieuw opgebouwd zodra de indeling verandert.
+Sleep een component in het beeld om het te verplaatsen, of draai of verwijder het daar; het tabblad Cabinet toont dezelfde indeling. Het beeld wordt opnieuw opgebouwd zodra de indeling verandert.
 """
 point = { ui = "workspace.view3d" }
 expect = { command = "view.3d" }
