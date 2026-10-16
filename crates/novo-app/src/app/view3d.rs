@@ -22,9 +22,13 @@ use super::cabinet_inspector;
 use super::NovoApp;
 use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
+use super::heat_legend;
+use super::heat_probe::{self, ProbeState};
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
+use super::view3d_place::{self, PlaceList};
+use super::view3d_rail;
 use super::view3d_stats::{Build, Stats};
 
 /// The one view of the app.
@@ -35,6 +39,8 @@ pub(crate) struct View3dMode {
     pub(super) view: View3d,
     /// Dragging, turning and deleting devices, rails and ducts in the view.
     pub(super) mv: MoveState,
+    /// The list of unplaced devices and the one picked from it.
+    pub(super) place: PlaceList,
     /// The landing box drawn last frame, to redraw the overlays when it changes.
     ghost_shown: Vec<([i64; 4], bool)>,
     library: Arc<MeshLibrary>,
@@ -54,6 +60,8 @@ pub(crate) struct View3dMode {
     /// What of the heat result the view shows, and the result and settings
     /// the overlays were built for.
     heat: Heat3d,
+    /// The probe tool and the point it reads.
+    probe: ProbeState,
     heat_shown: Option<(u64, Heat3d)>,
     /// Overlays without the moving tracers, and the lines the tracers follow.
     heat_base: Vec<novo_view3d::Overlay>,
@@ -65,9 +73,6 @@ pub(crate) struct View3dMode {
     built_layers: Layers,
     /// The hidden items the scene was built with.
     built_hidden: BTreeSet<ItemId>,
-    /// Counts the scene builds, so the renderer sees every rebuild (hiding A
-    /// then B leaves the same item count).
-    builds: u64,
     /// The routed wires of an enclosure at a project revision.
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
     /// The toolbar's layers and door.
@@ -88,6 +93,7 @@ impl Default for View3dMode {
         View3dMode {
             view: View3d::new(VIEW_ID),
             mv: MoveState::default(),
+            place: PlaceList::default(),
             ghost_shown: Vec::new(),
             library: Arc::new(MeshLibrary::new()),
             built: None,
@@ -96,13 +102,13 @@ impl Default for View3dMode {
             synced: (0, BTreeSet::new()),
             menu: None,
             heat: Heat3d::default(),
+            probe: ProbeState::default(),
             heat_shown: None,
             heat_base: Vec::new(),
             heat_flow: heat_3d::Flow::default(),
             heat_scene: None,
             built_layers: Layers::default(),
             built_hidden: BTreeSet::new(),
-            builds: 0,
             wires: None,
             controls: Controls::default(),
             stats: Stats::default(),
@@ -236,10 +242,16 @@ impl NovoApp {
             if let Some(built) = model::scene(project, id, &options) {
                 // Items deleted from the project are no longer hidden.
                 mode.controls.hidden.retain(|i| built.get(*i).is_some());
+                // The renderer redraws on a new scene revision only: `refresh`
+                // bumps it when the items differ (an edit that changes no
+                // selection or camera would otherwise stay unseen).
                 let mut shown =
                     novo_view3d::hide::without(layers.apply(built), &mode.controls.hidden);
-                mode.builds += 1;
-                shown.revision = shown.revision.wrapping_add(mode.builds);
+                if let Some((_, _, old)) = &mode.built {
+                    let mut current = Scene::clone(old);
+                    novo_view3d::build::refresh(&mut current, shown);
+                    shown = current;
+                }
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
                 mode.built_hidden = mode.controls.hidden.clone();
@@ -299,11 +311,16 @@ impl NovoApp {
         }
         let solution = self.cabinet.heat.solution();
         if let Some(sol) = &solution {
-            heat_controls(ui, &mut mode.heat, sol);
+            heat_controls(ui, &mut mode.heat, &mut mode.probe, sol, mode.heat_flow.top);
         }
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
         // The landing box of a dragged device, rail or duct.
-        let landings = mode.mv.landings();
+        let mut landings = mode.mv.landings();
+        let stored_layout = load(project, id);
+        let cands = candidates(project, id);
+        if let Some(lay) = &stored_layout {
+            landings.extend(mode.place.landing(lay, &cands));
+        }
         let ghost_key: Vec<([i64; 4], bool)> = landings
             .iter()
             .map(|l| {
@@ -340,6 +357,22 @@ impl NovoApp {
             })
             .collect();
         let mut heat_changed = false;
+        if !mode.probe.on {
+            mode.probe.at = None;
+        }
+        let probe_key = solution.as_ref().map(|s| (s.id, mode.probe.at));
+        let probe_changed = probe_key != mode.probe.shown;
+        mode.probe.shown = probe_key;
+        let probe_marker = |sol: &super::heat_run::Solution, at: [f64; 3]| {
+            heat_probe::marker(
+                Place {
+                    plate_x: sol.plate[0],
+                    plate_y: sol.plate[1],
+                    frame: scene.frame,
+                },
+                at,
+            )
+        };
         let tracing = solution.is_some() && mode.heat.lines && !self.settings.reduce_motion;
         if wanted != mode.heat_shown {
             let place = |sol: &super::heat_run::Solution| Place {
@@ -363,14 +396,20 @@ impl NovoApp {
             mode.heat_shown = wanted;
             heat_changed = true;
         }
-        if !tracing && (heat_changed || ghost_changed) {
+        let marker = solution
+            .as_ref()
+            .zip(mode.probe.at)
+            .map(|(sol, at)| probe_marker(sol, at));
+        if !tracing && (heat_changed || ghost_changed || probe_changed) {
             let mut all = mode.heat_base.clone();
             all.extend(ghost.iter().cloned());
+            all.extend(marker.clone());
             mode.view.set_overlays(all);
         }
         if tracing {
             let mut all = mode.heat_base.clone();
             all.extend(ghost.iter().cloned());
+            all.extend(marker);
             let t = heat_3d::tracers(&mode.heat_flow, ui.input(|i| i.time));
             if !t.positions.is_empty() {
                 all.push(novo_view3d::Overlay::Lines(t));
@@ -378,7 +417,7 @@ impl NovoApp {
             mode.view.set_overlays(all);
             ui.ctx().request_repaint();
         }
-        mode.view.drag_items = mode.controls.move_items;
+        mode.view.drag_items = mode.controls.move_items && mode.place.armed.is_none();
         mode.view.state.display.shadows = mode.controls.shadows;
         mode.view.state.display.dimensions = mode.controls.dimensions;
         mode.view.state.display.missing_marks = mode.controls.missing_data;
@@ -451,8 +490,95 @@ impl NovoApp {
         );
         super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
         mode.view.state.hover = out.hover;
+        // Placing: the pointer moves the landing box, a click drops the
+        // device, Escape lets go of it.
+        let placing = mode.place.armed.is_some();
+        let mut place_drop = None;
+        if mode.place.open {
+            let tag_of = |d: u64| {
+                project
+                    .get::<Device>(DeviceId::from(d))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_default()
+            };
+            let items: Vec<(u64, String, String)> = stored_layout
+                .as_ref()
+                .map(|l| {
+                    l.unplaced(&cands)
+                        .into_iter()
+                        .map(|c| {
+                            let size = format!("{} x {} mm", c.size.width, c.size.height);
+                            (c.id, tag_of(c.id), size)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            if view3d_place::panel(ui.ctx(), out.rect, &mut mode.place, &items).close {
+                mode.place.toggle();
+            }
+        }
+        if mode.place.armed.is_some() {
+            mode.place.pointer = out.plate_point;
+            ui.ctx().request_repaint();
+            if out.clicked.is_some()
+                && let Some(l) = stored_layout
+                    .as_ref()
+                    .and_then(|lay| mode.place.landing(lay, &cands))
+            {
+                place_drop = Some((l.item.raw, l.at.0, l.at.1));
+                mode.place.armed = None;
+            } else if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                mode.place.armed = None;
+            }
+        }
         let state = &mut mode.view.state;
-        if let Some(click) = &out.clicked {
+        if mode.probe.on
+            && let Some(sol) = &solution
+        {
+            if let Some(click) = &out.clicked {
+                let place = Place {
+                    plate_x: sol.plate[0],
+                    plate_y: sol.plate[1],
+                    frame: scene.frame,
+                };
+                let plane = mode.heat.slice.then(|| {
+                    let a = mode.heat.axis;
+                    (
+                        a,
+                        heat_3d::slice_offset(&sol.snapshot, a, mode.heat.slice_at),
+                    )
+                });
+                mode.probe.at = heat_probe::locate(&sol.snapshot, place, &click.ray, plane);
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                mode.probe.at = None;
+            }
+            if let Some(at) = mode.probe.at {
+                let reading = heat_probe::read(&sol.snapshot, sol.ambient, at);
+                egui::Area::new(egui::Id::new("heat_probe_readout"))
+                    .order(egui::Order::Foreground)
+                    .pivot(egui::Align2::LEFT_BOTTOM)
+                    .fixed_pos(out.rect.left_bottom() + egui::vec2(12.0, -12.0))
+                    .show(ui.ctx(), |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                            ui.label(reading.text());
+                        });
+                    });
+            } else {
+                egui::Area::new(egui::Id::new("heat_probe_readout"))
+                    .order(egui::Order::Foreground)
+                    .pivot(egui::Align2::LEFT_BOTTOM)
+                    .fixed_pos(out.rect.left_bottom() + egui::vec2(12.0, -12.0))
+                    .show(ui.ctx(), |ui| {
+                        egui::Frame::popup(ui.style()).show(ui, |ui| {
+                            ui.label("Probe: click the air to read it");
+                        });
+                    });
+            }
+            ui.ctx().request_repaint();
+        }
+        let probing = mode.probe.on && solution.is_some();
+        if let Some(click) = out.clicked.as_ref().filter(|_| !placing && !probing) {
             let extend = click.modifiers.shift || click.modifiers.command;
             match click.id {
                 Some(id) if extend => {
@@ -495,6 +621,10 @@ impl NovoApp {
 
         // Dragging a device, rail or duct moves it by the Cabinet's rules.
         let mut edits = Vec::new();
+        edits
+            .extend(place_drop.map(|(d, x, y)| {
+                view3d_move::Edit::Device(view3d_move::DeviceEdit::Drop(d, x, y))
+            }));
         if let Some(stored) = load(project, id) {
             if let Some(d) = &out.item_drag
                 && !mode.mv.dragging()
@@ -522,6 +652,12 @@ impl NovoApp {
             .selection
             .iter()
             .filter(|i| i.kind == ItemKind::Device)
+            .map(|i| i.raw)
+            .collect();
+        let selected_rails: Vec<u64> = state
+            .selection
+            .iter()
+            .filter(|i| matches!(i.kind, ItemKind::Rail | ItemKind::Duct))
             .map(|i| i.raw)
             .collect();
         let mut ask = None;
@@ -570,10 +706,45 @@ impl NovoApp {
                 );
             }
         }
+        // One rail or duct selected: its values to type, in millimetres.
+        let mut rail_ask = None;
+        if devices.is_empty()
+            && let [rail] = selected_rails.as_slice()
+            && let Some(stored) = load(project, id)
+        {
+            let tag_of = |d: u64| {
+                project
+                    .get::<Device>(DeviceId::from(d))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_default()
+            };
+            rail_ask = view3d_rail::card(
+                ui.ctx(),
+                (
+                    view_rect,
+                    if self.view3d.stats.shown {
+                        super::view3d_stats::ROOM
+                    } else {
+                        0.0
+                    },
+                ),
+                &mut self.cabinet.rails,
+                project,
+                &stored,
+                *rail,
+                &tag_of,
+            );
+        }
         if let Some(ask) = ask {
             let layout = load(project, id);
             let cands = candidates(project, id);
             self.cabinet_ask(ask, Some(id), layout, &cands);
+        }
+
+        if let Some(rail_ask) = rail_ask {
+            self.cabinet_rail_ask(Some(id), rail_ask);
+            // The scene is rebuilt on the next frame; nothing else asks for it.
+            ui.ctx().request_repaint();
         }
         for edit in edits {
             if let view3d_move::Edit::Group { devices, rails } = edit {
@@ -635,7 +806,13 @@ fn run_heat(
 
 /// The Heat strip above the 3D view: slice, shell and airflow of the last
 /// simulation result (Cabinet > Heat > Simulate makes one).
-fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solution) {
+fn heat_controls(
+    ui: &mut egui::Ui,
+    h: &mut Heat3d,
+    probe: &mut ProbeState,
+    sol: &super::heat_run::Solution,
+    top_speed: f32,
+) {
     use novo_heatview::cfd::Axis;
     let range = heat_3d::range(&sol.snapshot, sol.ambient);
     ui.horizontal_wrapped(|ui| {
@@ -661,10 +838,9 @@ fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solut
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
             "Colour each device by the air temperature in front of it, on the same scale as the slice",
         );
-        ui.label(
-            egui::RichText::new(format!("{:.0} to {:.0} °C", range.lo, range.hi))
-                .small()
-                .color(novo_theme::tokens::TEXT_MUTED),
+        ui.checkbox(&mut probe.on, "Probe").on_hover_text(
+            "Click the air to read its temperature and speed there (Esc clears the point)",
         );
+        heat_legend::strip(ui, h, range, top_speed);
     });
 }
