@@ -97,6 +97,8 @@ pub(super) struct SafetyWindow {
     pub hours: f64,
     pub cycle_s: f64,
     pub subsystems: Vec<SubsystemInput>,
+    /// The functions bound to project devices, kept in the project.
+    pub bound: super::safety_functions::BoundFunctions,
 }
 
 impl Default for SafetyWindow {
@@ -113,6 +115,7 @@ impl Default for SafetyWindow {
                 SubsystemInput::new("Logic (safety relay)"),
                 SubsystemInput::new("Output (contactors)"),
             ],
+            bound: Default::default(),
         }
     }
 }
@@ -180,6 +183,10 @@ impl NovoApp {
         let Some(mut win) = self.wb.safety.take() else {
             return;
         };
+        let Some(project) = self.backend.document().map(|d| d.project().clone()) else {
+            return;
+        };
+        win.bound.sync(&project);
         let mut open = true;
         let mut copy = None;
         super::panel::dialog(ctx, "Safety functions", [700.0, 640.0])
@@ -187,9 +194,12 @@ impl NovoApp {
             .show(ctx, |ui| {
                 ui.colored_label(tokens::WARNING, DISCLAIMER);
                 ui.weak(
-                    "ISO 13849-1. Kept for this session only; use Copy as text to keep the result.",
+                    "ISO 13849-1. Project safety functions are kept in the project; the free calculator below is kept for this session only.",
                 );
                 ui.separator();
+                super::safety_functions::section(ui, &project, &mut win.bound, &mut copy);
+                ui.separator();
+                widgets::section_label(ui, "Calculator (not bound to devices)");
                 body(ui, &mut win, &mut copy);
             });
         if let Some(text) = copy {
@@ -198,6 +208,7 @@ impl NovoApp {
         }
         if open {
             self.wb.safety = Some(win);
+            self.commit_safety_functions(ctx);
         }
     }
 }
