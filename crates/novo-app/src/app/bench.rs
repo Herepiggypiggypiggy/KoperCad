@@ -147,6 +147,13 @@ impl NovoApp {
     /// Writes the bench cut list PDF to `path`.
     pub fn export_bench_cut_to(&mut self, path: &Path) -> Option<PathBuf> {
         let inputs = self.bench_inputs()?;
+        if !inputs.standard.is_valid() {
+            self.message(
+                Level::Warning,
+                "The ferrule standard has a size twice or a value that is not a number above zero",
+            );
+            return None;
+        }
         let name = self.project_name().unwrap_or_default();
         let project = self.backend.document()?.project();
         let jobs = wire_cut_jobs_with(project, &inputs.standard);
@@ -170,6 +177,37 @@ impl NovoApp {
             )
         };
         self.bench_write(path, &bytes, &what)
+    }
+
+    /// The machine job file (CSV) under the window's draft standard, so it
+    /// agrees with the bench PDFs.
+    pub(super) fn export_machine_csv(&mut self) -> Option<PathBuf> {
+        let path = self.bench_path("wire cut", "csv")?;
+        self.export_machine_csv_to(&path)
+    }
+
+    /// Writes the machine job file to `path`.
+    pub fn export_machine_csv_to(&mut self, path: &Path) -> Option<PathBuf> {
+        let inputs = self.bench_inputs()?;
+        if !inputs.standard.is_valid() {
+            self.message(
+                Level::Warning,
+                "The ferrule standard has a size twice or a value that is not a number above zero",
+            );
+            return None;
+        }
+        let project = self.backend.document()?.project();
+        let jobs = wire_cut_jobs_with(project, &inputs.standard);
+        if jobs.is_empty() {
+            self.message(Level::Info, "No wires to cut yet: connect two device pins");
+            return None;
+        }
+        let options = novo_reports::CsvOptions {
+            delimiter: ';',
+            ..novo_reports::CsvOptions::default()
+        };
+        let text = novo_reports::wire_cut_csv(&jobs, &options);
+        self.bench_write(path, text.as_bytes(), &format!("{} wires", jobs.len()))
     }
 
     pub(super) fn export_ferrules(&mut self) -> Option<PathBuf> {
@@ -361,7 +399,7 @@ impl NovoApp {
                 self.export_bench_cut();
             }
             Some(Act::ExportMachineCsv) => {
-                self.export_wire_cut();
+                self.export_machine_csv();
             }
             Some(Act::ExportFerrules) => {
                 self.export_ferrules();
@@ -403,7 +441,7 @@ fn cut_tab(
     rules: &novo_routing::WireRules,
     act: &mut Option<Act>,
 ) {
-    let Some(cache) = &state.cache else {
+    let Some(cache) = state.cache.as_ref().filter(|_| state.standard.is_valid()) else {
         ui.colored_label(
             tokens::WARNING,
             "The ferrule standard is not valid: fix it on the Ferrules tab",

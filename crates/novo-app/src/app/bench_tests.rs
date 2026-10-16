@@ -166,3 +166,24 @@ fn the_brother_csv_has_one_file_per_chosen_kind() {
     assert_eq!(text.lines().count(), 2, "one row per wire end");
     assert!(files[0].starts_with(dir.path()));
 }
+
+#[test]
+fn an_invalid_draft_blocks_the_cut_list_and_the_machine_csv_follows_the_draft() {
+    let (dir, mut d) = app_with_wires();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.bench", None);
+    d.frame();
+    let state = d.app.wb.bench.as_mut().unwrap();
+    state.standard.sizes[3].length_mm = 0.0;
+    let cut = dir.path().join("cut.pdf");
+    let csv = dir.path().join("cut.csv");
+    assert_eq!(d.app.export_bench_cut_to(&cut), None);
+    assert_eq!(d.app.export_machine_csv_to(&csv), None);
+    assert!(!cut.exists() && !csv.exists());
+    // A valid draft with a longer contact length shows in the CSV (strip 14).
+    let state = d.app.wb.bench.as_mut().unwrap();
+    state.standard.sizes[3].length_mm = 14.0;
+    assert_eq!(d.app.export_machine_csv_to(&csv), Some(csv.clone()));
+    let text = std::fs::read_to_string(&csv).unwrap();
+    assert!(text.contains("A1.5-14"), "{text}");
+}
