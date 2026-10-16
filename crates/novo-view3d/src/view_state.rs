@@ -14,6 +14,9 @@ pub struct Display {
     /// Draw measuring lines: the enclosure's size and, for one selected part,
     /// its size and its distances to neighbours and the plate edge.
     pub dimensions: bool,
+    /// Show the "?" badge (no part data) on every device. Off: only on the
+    /// device under the pointer or in the selection.
+    pub missing_marks: bool,
 }
 
 impl Default for Display {
@@ -23,6 +26,7 @@ impl Default for Display {
             labels: true,
             shadows: true,
             dimensions: false,
+            missing_marks: false,
         }
     }
 }

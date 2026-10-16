@@ -76,6 +76,7 @@ impl NovoApp {
         let options = novo_pdf::ReportPdfOptions {
             title: title.clone(),
             footer_right: format!("since revision {index}"),
+            language: self.report_translator(),
             ..Default::default()
         };
         let bytes = novo_pdf::export_report_pdf(&[&report], &options);

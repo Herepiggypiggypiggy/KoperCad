@@ -71,6 +71,11 @@ pub const DUTCH: &[Aliases] = &[
     nl("learn.restart", &[], &["les opnieuw", "les herstarten"]),
     nl("learn.close", &[], &["les sluiten"]),
     nl("file.save", &[], &["opslaan", "bewaren"]),
+    nl(
+        "project.languages",
+        &[],
+        &["rapporttaal", "taal", "vertalingen", "pdf taal"],
+    ),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
     // Not a bare "pagina": `pagina 2` goes to page 2.
@@ -669,6 +674,38 @@ pub const DUTCH: &[Aliases] = &[
     nl("report.cables", &["kabellijst"], &["kabels"]),
     nl("report.cutlist", &["zaaglijst"], &["afkortlijst"]),
     nl("report.labels", &["labels", "etiketten"], &["markeringen"]),
+    nl("report.wirecut", &["afkortlijst draden"], &["kabelmachine"]),
+    nl(
+        "report.io",
+        &["io lijst", "i/o lijst"],
+        &["ingangen", "uitgangen"],
+    ),
+    nl("report.cable_schedule", &["kabelstaat"], &["kabelschema"]),
+    nl(
+        "report.plugs",
+        &["connectorenlijst"],
+        &["stekkers", "stekkerlijst"],
+    ),
+    nl(
+        "report.add_page",
+        &["rapport als pagina toevoegen"],
+        &["pagina toevoegen", "tekeningpagina"],
+    ),
+    nl(
+        "export.report_pdf",
+        &["exporteer rapport"],
+        &["rapport pdf", "rapport afdrukken"],
+    ),
+    nl(
+        "export.pdf_page",
+        &["exporteer pagina", "deze pagina exporteren"],
+        &["huidige pagina", "een pagina"],
+    ),
+    nl(
+        "export.plate_dxf",
+        &["exporteer montageplaat dxf"],
+        &["montageplaat dxf", "cnc"],
+    ),
     nl(
         "export.sheets",
         &[

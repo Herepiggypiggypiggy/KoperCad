@@ -289,6 +289,7 @@ impl NovoApp {
         mode.view.drag_items = mode.controls.move_items;
         mode.view.state.display.shadows = mode.controls.shadows;
         mode.view.state.display.dimensions = mode.controls.dimensions;
+        mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
@@ -304,7 +305,9 @@ impl NovoApp {
             stored.as_ref(),
             ambient,
         );
-        view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
+        if mode.controls.heat_panel {
+            view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
+        }
         mode.stats.frame(ui.ctx(), view_rect, &mut mode.view);
         mode.controls.clamp_door(limit);
         let target = mode.controls.door_target(limit);

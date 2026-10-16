@@ -362,6 +362,12 @@ fn color(c: [u8; 4], alpha: f32) -> Color32 {
     )
 }
 
+/// Whether a "?" (no part data) badge is drawn on `id`: on every device with
+/// the Missing data layer, else only under the pointer or in the selection.
+pub(crate) fn badge_shown(state: &ViewState, id: ItemId) -> bool {
+    state.display.missing_marks || state.hover == Some(id) || state.selection.contains(&id)
+}
+
 /// A chip's 1 px line: copper when selected, steel blue when hovered, the
 /// quiet border otherwise.
 fn chip_border(selected: bool, hovered: bool, look: &Look, alpha: f32) -> Color32 {
@@ -1067,6 +1073,9 @@ impl View3d {
             }
             if item.mark != Mark::None && size_pt >= 12.0 {
                 let style = look.mark(item.mark);
+                if style.glyph == Glyph::DashedEdge && !badge_shown(&self.state, item.id) {
+                    continue;
+                }
                 let text = match style.glyph {
                     Glyph::Cross => "\u{00d7}",
                     Glyph::Bang => "!",
@@ -1331,6 +1340,21 @@ fn frame_key(
 #[cfg(test)]
 mod chip_tests {
     use super::*;
+
+    #[test]
+    fn the_missing_data_badge_shows_on_hover_selection_or_the_layer() {
+        let id = ItemId::new(ItemKind::Device, 1);
+        let mut state = ViewState::default();
+        assert!(!badge_shown(&state, id));
+        state.hover = Some(id);
+        assert!(badge_shown(&state, id));
+        state.hover = None;
+        state.selection.insert(id);
+        assert!(badge_shown(&state, id));
+        state.selection.clear();
+        state.display.missing_marks = true;
+        assert!(badge_shown(&state, id));
+    }
 
     #[test]
     fn a_chip_border_follows_selection_then_hover() {
