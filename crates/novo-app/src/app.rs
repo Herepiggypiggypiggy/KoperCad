@@ -1147,7 +1147,21 @@ impl NovoApp {
         }
         self.sync_commissioning_workspace();
         self.drawer(ui);
-        let canvas_rect = egui::CentralPanel::no_frame()
+        // The canvases paint their own ground; the Reports tables and the
+        // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
+        let pal = novo_theme::Palette::of_ctx(&ctx);
+        let ground = if reports {
+            Some(pal.sunken)
+        } else if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
+            Some(pal.panel)
+        } else {
+            None
+        };
+        let central = match ground {
+            Some(fill) => egui::CentralPanel::no_frame().frame(egui::Frame::new().fill(fill)),
+            None => egui::CentralPanel::no_frame(),
+        };
+        let canvas_rect = central
             .show(ui, |ui| {
                 if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
