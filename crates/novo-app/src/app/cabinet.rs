@@ -924,12 +924,14 @@ impl NovoApp {
                 }
                 if let Some(j) = judged.as_ref().filter(|j| !j.violations.is_empty()) {
                     let n = j.violations.len();
-                    cabinet_bar::pill(
+                    let pill = cabinet_bar::pill(
                         ui,
                         &format!("{n} rule {}", if n == 1 { "problem" } else { "problems" }),
                         Some(novo_theme::widgets::Level::Warning),
                     )
-                    .on_hover_ui(|ui| {
+                    .on_hover_cursor(egui::CursorIcon::PointingHand);
+                    // A click opens the list, like the problems pill.
+                    egui::Popup::menu(&pill).show(|ui| {
                         for v in j.violations.iter().take(12) {
                             ui.label(v.describe(&self.cabinet.rules.rules, &|id| tag_of(id)));
                         }
