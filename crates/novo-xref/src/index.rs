@@ -76,6 +76,28 @@ impl Reference {
         }
     }
 
+    /// One row of the Shift+G list: the page first (`3.4`, then the page
+    /// title when it has one), then the connection (`NO 13-14`), so the
+    /// list reads down the project page by page.
+    pub fn list_row_from(&self, reader: &DeviceTag, page_title: &str) -> String {
+        let connection = [self.kind.label(), &self.pins]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let mut row = self.target_from(reader);
+        if !page_title.is_empty() {
+            row.push(' ');
+            row.push_str(page_title);
+        }
+        if !connection.is_empty() {
+            row.push_str("  \u{b7}  ");
+            row.push_str(&connection);
+        }
+        row
+    }
+
     /// [`Reference::row`] as read from a page with structure `reader`.
     pub fn row_from(&self, reader: &DeviceTag) -> String {
         [self.kind.label(), &self.pins, &self.target_from(reader)]

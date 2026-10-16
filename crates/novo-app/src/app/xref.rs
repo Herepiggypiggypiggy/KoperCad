@@ -138,6 +138,7 @@ impl NovoApp {
             .and_then(|p| self.backend.document().and_then(|d| d.project().page(p)))
             .map(|p| p.structure.clone())
             .unwrap_or_default();
+        let project = self.backend.document().map(|d| d.project());
         let mut chosen = None;
         let mut close = ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, egui::Key::Escape));
         let area = egui::Area::new(egui::Id::new("occurrences"))
@@ -149,7 +150,11 @@ impl NovoApp {
                     ui.set_min_width(280.0);
                     ui.small("EVERY OCCURRENCE");
                     for r in list {
-                        let text = r.row_from(&reader);
+                        let title = project
+                            .and_then(|p| p.page(r.location.page))
+                            .map(|p| p.title.as_str())
+                            .unwrap_or_default();
+                        let text = r.list_row_from(&reader, title);
                         if ui.selectable_label(false, text).clicked() {
                             chosen = Some(r.clone());
                         }
