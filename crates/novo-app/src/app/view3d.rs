@@ -282,6 +282,7 @@ impl NovoApp {
             &Look::for_theme(theme),
             options,
         );
+        super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
         mode.view.state.hover = out.hover;
         let state = &mut mode.view.state;
         if let Some(click) = &out.clicked {

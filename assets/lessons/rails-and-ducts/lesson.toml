@@ -82,6 +82,7 @@ Je kunt ze aanpassen en op **Save** drukken; deze les leest ze alleen. Sluit het
 """
 point = { ui = "cabinet.rules" }
 expect = { clicked = "cabinet.rules" }
+manual = "the Rules button opens a window; no script clicks panel buttons yet"
 
 [[step]]
 id = "plate-card"
@@ -99,6 +100,7 @@ Rails en kanalen nemen ruimte in die componenten niet kunnen gebruiken; daarom i
 """
 point = { ui = "cabinet.plate" }
 expect = { clicked = "cabinet.plate" }
+manual = "a click on the Plate setup button; no script clicks panel buttons yet"
 
 [[step]]
 id = "move-off-rail"
@@ -170,6 +172,7 @@ De vijf rails van 535 mm en de zes kanalen (vijf van 557,5 mm en de stam van 780
 """
 point = { ui = "cabinet.cutlist" }
 expect = { clicked = "cabinet.cutlist" }
+manual = "a click on the Cut list button; no script clicks panel buttons yet"
 
 [[step]]
 id = "done"
