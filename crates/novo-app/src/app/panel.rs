@@ -141,6 +141,13 @@ impl Panel {
     }
 }
 
+/// How much a dialog's default size grows on a screen wider than the 1366
+/// points its sizes were drawn for: in proportion, up to 1.5 times, so a
+/// large screen shows more of a table or form instead of scrolling it.
+pub(super) fn grow(screen_width: f32) -> f32 {
+    (screen_width / 1366.0).clamp(1.0, 1.5)
+}
+
 /// A window the person opens from a command: movable by its title bar,
 /// resizable, kept on screen and never shorter than a usable minimum.
 /// `size` is the default (a height of 0 fits the content); once the person
@@ -151,6 +158,10 @@ pub(super) fn dialog<'a>(
     size: [f32; 2],
 ) -> egui::Window<'a> {
     let screen = ctx.content_rect().shrink(MARGIN);
+    let size = [
+        size[0] * grow(screen.width()),
+        size[1] * grow(screen.width()),
+    ];
     let width = size[0].max(DIALOG_MIN_WIDTH).min(screen.width());
     let window = egui::Window::new(title)
         .resizable(true)
@@ -200,6 +211,44 @@ fn is_moved(ctx: &egui::Context, id: egui::Id) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dialogs_grow_on_big_screens_and_not_on_small_ones() {
+        assert_eq!(grow(1366.0), 1.0);
+        assert_eq!(grow(1100.0), 1.0);
+        assert!((grow(1920.0) - 1.405).abs() < 0.01);
+        assert_eq!(grow(3840.0), 1.5);
+    }
+
+    #[test]
+    fn a_dialog_is_larger_at_1920_than_at_1366_and_fits_both() {
+        let width_at = |w: f32| {
+            let ctx = egui::Context::default();
+            let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(w, 1080.0));
+            let mut width = 0.0;
+            for _ in 0..2 {
+                let mut out = ctx.run_ui(
+                    egui::RawInput {
+                        screen_rect: Some(screen),
+                        ..Default::default()
+                    },
+                    |ctx| {
+                        if let Some(r) = dialog(ctx, "Report designer", [1040.0, 640.0])
+                            .show(ctx, |ui| ui.label("content"))
+                        {
+                            width = r.response.rect.width();
+                        }
+                    },
+                );
+                out.textures_delta.clear();
+            }
+            (width, screen.width())
+        };
+        let (small, small_screen) = width_at(1366.0);
+        let (big, _) = width_at(1920.0);
+        assert!(small <= small_screen, "{small}");
+        assert!(big > small * 1.3, "{small} -> {big}");
+    }
 
     fn canvas() -> egui::Rect {
         egui::Rect::from_min_size(egui::pos2(0.0, 0.0), egui::vec2(1200.0, 800.0))
