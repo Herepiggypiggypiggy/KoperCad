@@ -617,7 +617,7 @@ fn a_lesson_stays_whole_when_the_live_view_goes_on_and_off() {
     d.app.start_lesson("tiny");
     d.frame();
     d.frame();
-    let card = eframe::egui::Id::new("lesson_card");
+    let card = super::panel::id("lesson_card");
     let height = |d: &Drive| d.ctx.memory(|m| m.area_rect(card)).unwrap().height();
     let before = height(&d);
     assert!(before > 60.0, "the full card has a step text: {before}");
