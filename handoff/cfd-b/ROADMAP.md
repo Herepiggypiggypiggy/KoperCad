@@ -8,9 +8,11 @@ Done
 
 - PR 3: solid cells of `cfg.medium` (fluid share below MIN_OPEN) are walls for the turbulence; zero-alpha guard.
 
+- PR 4: turbulence option in CabinetSolver, snapshot ratio, accuracy text, vented box study.
+
 Next, in order
 1. Openings (inflow/outflow turbulence values) once the open faces are stable in lane C2.
-2. Hook `TurbulentFlow` into the `Solver` trait glue / scheduler (lane E, CFD-A) and `turb_visc_ratio` into the snapshot; model choice option in CFD-F.
+2. Model choice in the UI (CFD-F); effect of solid walls on a cabinet temperature is still unmeasured against a reference.
 3. Second-order convection for k and omega; moving-wall velocity relative to the wall in the wall functions.
 4. A wall-function variant for buoyant boundary layers on coarse cells (coarse cells are 50 % low today); or mesh rule from lane C1: resolve the wall layer on hot surfaces.
 5. Hand the numbers to CFD-G for the accuracy statement.

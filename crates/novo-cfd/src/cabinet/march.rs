@@ -12,6 +12,7 @@ use crate::flow::FlowSolver;
 use crate::result::{Fidelity, Progress, Residuals};
 use crate::solids::{FlowSetup, STEADY_WINDOW_S};
 use crate::solver::Control;
+use crate::turb::TurbState;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MarchLimits {
@@ -48,6 +49,9 @@ impl MarchStatus {
     }
 }
 
+/// Gauss-Seidel sweeps of the turbulence equations per flow step.
+const TURB_SWEEPS: usize = 3;
+
 /// Sample every this many steps for the stored-heat window.
 const SAMPLE_EVERY: usize = 10;
 
@@ -71,6 +75,8 @@ pub struct MarchState {
     device_cells: Vec<usize>,
     heat_w: f64,
     ambient_c: f64,
+    /// The turbulence model, stepped together with the flow (none = laminar).
+    pub turb: Option<TurbState>,
 }
 
 impl MarchState {
@@ -94,6 +100,7 @@ impl MarchState {
             device_cells,
             heat_w: setup.heat_w,
             ambient_c: setup.ambient_c,
+            turb: None,
         };
         s.sample(flow);
         s
@@ -144,7 +151,13 @@ impl MarchState {
                 return MarchStatus::OutOfTime;
             }
             let dt = flow.max_dt(lim.cfl).clamp(1e-4, 5.0);
+            if let Some(t) = &self.turb {
+                t.push_to_flow(flow);
+            }
             let info = flow.step(dt);
+            if let Some(t) = &mut self.turb {
+                t.advance_with(flow, dt, TURB_SWEEPS);
+            }
             self.last_info = (info.max_accel, info.max_dtdt);
             self.steps += 1;
             if self.steps.is_multiple_of(SAMPLE_EVERY) {
