@@ -62,7 +62,7 @@ result now lies in a 5.4 to 5.8 K band on 1000 to 6000 cells, not exactly mesh i
   4.7% log-layer error (centreline U+ 20.69 vs DNS 21.3), SST with wall function 2.7%, k-epsilon 7.1%. Heated wall against
   Churchill-Chu: SST resolved +4.3% (Ra 1.0e9, 40x80) and +9.8% (Ra 3.4e9, 28x56); k-epsilon on the resolved grid +34.5% (not
   made for resolved buoyant layers); coarse wall cells (16x48): SST and k-epsilon agree with each other but are 52% low.
-  Hot/cold wall flux mismatch in these runs is 5%. The turbulent flow takes no solid mask yet, so it must not be used with solids.
+  Hot/cold wall flux mismatch in these runs is 5%. Until CFD-B's solid mask (#679) is merged the turbulent flow must not be used with solids; update this line when it lands.
 - Plate: a 2D slice with the far opening one plate height away, so the result depends somewhat on that domain
   width (not quantified). Two meshes show a trend, not a measured order.
 
@@ -82,7 +82,7 @@ Each becomes a `validation_*` test when its lane lands; the sign-off PR for a la
 > (Ghia 1982, de Vahl Davis 1983) to within 1% in heat transfer and about 3% in peak velocity on
 > meshes of 50 to 60 cells per side. Mesh convergence is second order. A heated plate in open air
 > is within about 4% of the Churchill-Chu correlation (itself good to about 5%); a sealed enclosure
-> lies 4% to 15% below the IEC 60890 estimate. Vents and fans match analytic operating points.
+> lies up to 15% below the IEC 60890 estimate. Vents and fans match analytic operating points.
 > Turbulence is validated only on a channel and a heated wall, and wall functions are not valid for
 > thin natural-convection layers. Radiation is not yet validated. Results for a cabinet are
 > estimates and carry the uncertainty of the input loss data and boundary conditions.

@@ -32,7 +32,7 @@ pub fn flow_core_statement() -> AccuracyStatement {
                 .into(),
             "Wall functions are not valid for natural-convection boundary layers thinner than the first cell: resolve the wall cells there (coarse wall cells read about 52% low)."
                 .into(),
-            "Sealed-enclosure air rise lies 4% to 15% below the IEC 60890 estimate and the 2D engine (stratified air)."
+            "Sealed-enclosure air rise lies up to 15% below the IEC 60890 estimate and the 2D engine (stratified air)."
                 .into(),
             "Results for a cabinet carry the uncertainty of the loss data and boundary conditions."
                 .into(),
