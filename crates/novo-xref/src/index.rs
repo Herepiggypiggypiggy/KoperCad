@@ -76,6 +76,28 @@ impl Reference {
         }
     }
 
+    /// One row of the Shift+G list: the page first (`3.4`, then the page
+    /// title when it has one), then the connection (`NO 13-14`), so the
+    /// list reads down the project page by page.
+    pub fn list_row_from(&self, reader: &DeviceTag, page_title: &str) -> String {
+        let connection = [self.kind.label(), &self.pins]
+            .iter()
+            .filter(|s| !s.is_empty())
+            .copied()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let mut row = self.target_from(reader);
+        if !page_title.is_empty() {
+            row.push(' ');
+            row.push_str(page_title);
+        }
+        if !connection.is_empty() {
+            row.push_str("  \u{b7}  ");
+            row.push_str(&connection);
+        }
+        row
+    }
+
     /// [`Reference::row`] as read from a page with structure `reader`.
     pub fn row_from(&self, reader: &DeviceTag) -> String {
         [self.kind.label(), &self.pins, &self.target_from(reader)]
@@ -151,6 +173,30 @@ pub struct Label {
     /// The device has more contacts of some kind drawn than it has
     /// (see [`Issue::TooManyContacts`]); draw the image as a warning.
     pub warning: bool,
+    /// A coil's contact image as table rows (`lines` has the same rows as
+    /// text, then the warnings): one row per contact group, for drawing a
+    /// contact table. Empty for every other label.
+    pub rows: Vec<LabelRow>,
+}
+
+impl Label {
+    /// The lines that are not table rows (`! 2 NO drawn, 1 available`).
+    pub fn extra_lines(&self) -> &[String] {
+        &self.lines[self.rows.len().min(self.lines.len())..]
+    }
+}
+
+/// One row of a coil's contact table: a contact group, where it is drawn.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LabelRow {
+    /// The contact symbol this row stands for: a click on the row can jump
+    /// there.
+    pub symbol: SymbolId,
+    pub kind: ContactKind,
+    /// Connection designations, `13-14` or `1-2 3-4 5-6`.
+    pub pins: String,
+    /// Where it is drawn as read from the coil's page: `3.4`, `=A2/3.4`.
+    pub location: String,
 }
 
 /// Device property giving how many contacts of a kind the device has,
@@ -429,10 +475,20 @@ impl XrefIndex {
     pub fn label(&self, symbol: SymbolId) -> Option<Label> {
         let me = self.refs.get(&symbol)?;
         let mut warning = false;
+        let mut rows: Vec<LabelRow> = Vec::new();
         let lines: Vec<String> = match &me.owner {
             Owner::Device(device) if me.main => {
-                let mut lines: Vec<String> = self
-                    .contact_image(*device)
+                let image = self.contact_image(*device);
+                rows = image
+                    .iter()
+                    .map(|r| LabelRow {
+                        symbol: r.symbol,
+                        kind: r.kind,
+                        pins: r.pins.clone(),
+                        location: r.target_from(&me.location.structure),
+                    })
+                    .collect();
+                let mut lines: Vec<String> = image
                     .into_iter()
                     .map(|r| r.image_row_from(&me.location.structure))
                     .collect();
@@ -469,6 +525,7 @@ impl XrefIndex {
             anchor,
             lines,
             warning,
+            rows,
         })
     }
 

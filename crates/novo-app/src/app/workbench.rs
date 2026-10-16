@@ -45,6 +45,9 @@ pub(crate) struct Workbench {
     pub(super) field: CommandField,
     pub(super) keymap: Keymap,
     pub(super) xref: LiveXref,
+    /// The symbol library as canvas art, for the inspector's symbol
+    /// previews; built once, when first needed.
+    pub(super) preview_art: Option<novo_editor::art::LibraryArt>,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
     /// The place wheel, when open.
@@ -52,6 +55,8 @@ pub(crate) struct Workbench {
     /// A key that opens the wheel went down at this time (egui seconds),
     /// with the keys then held: a tap runs Place, a hold opens the wheel.
     pub(super) place_hold: Option<(f64, Vec<egui::Key>)>,
+    /// The keys of a hold that opened the wheel, and since when all were up.
+    pub(super) place_latch: Option<(Vec<egui::Key>, Option<f64>)>,
     /// Commands the canvas asked for, run next frame by id.
     pub(super) queued: Vec<&'static str>,
     /// The `renumber io` preview waiting for Enter or Esc, per station.
@@ -151,6 +156,9 @@ pub(crate) struct Workbench {
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
     /// An AutomationML import waiting for the person to confirm.
     pub(super) aml_import: Option<super::interop::AmlImport>,
+    /// The "Get the EPLAN export script" guide, open after the files are
+    /// written.
+    pub(super) eplan_guide: Option<super::interop::EplanGuide>,
     /// A DWG being converted in the background.
     pub(super) dwg_job: Option<super::interop::DwgJob>,
 }
@@ -173,9 +181,11 @@ impl Default for Workbench {
             field: CommandField::default(),
             keymap: Keymap::workflow(),
             xref: LiveXref::default(),
+            preview_art: None,
             reports: Default::default(),
             wheel: None,
             place_hold: None,
+            place_latch: None,
             queued: Vec::new(),
             renumber: None,
             plc_import: None,
@@ -223,6 +233,7 @@ impl Default for Workbench {
             commissioning: None,
             underlay_seen: None,
             aml_import: None,
+            eplan_guide: None,
             dwg_job: None,
         }
     }
@@ -302,6 +313,8 @@ const APP_COMMANDS: &[&str] = &[
     "report.wires",
     "report.terminals",
     "report.cables",
+    "report.cutlist",
+    "report.labels",
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
@@ -314,6 +327,7 @@ const APP_COMMANDS: &[&str] = &[
     "file.import_aml",
     "file.import_dwg",
     "file.choose_dwg_converter",
+    "file.eplan_export_script",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
@@ -348,6 +362,17 @@ const APP_COMMANDS: &[&str] = &[
     "wires.check_numbers",
     "wires.set_number",
     "wires.unlock_number",
+    "edit.select_all",
+    "view.cabinet_table",
+    "heat.toggle",
+    "heat.airflow",
+    "heat.contours",
+    "heat.simulate",
+    "terminal.connect",
+    "terminal.disconnect",
+    "terminal.strip_up",
+    "terminal.strip_down",
+    "terminal.strip_lowest",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -647,6 +672,7 @@ impl NovoApp {
                 self.next_proposal();
             }
             "proposal.accept_all" => self.accept_all_proposals(),
+            "edit.select_all" => self.select_all_on_page(),
             "terminal.connect"
             | "terminal.toggle_pe"
             | "terminal.disconnect"
@@ -694,7 +720,10 @@ impl NovoApp {
             }
             "sim.faults" => self.toggle_faults(),
             "view.changes" => self.toggle_changes(argument),
-            "view.commissioning" => self.toggle_commissioning(),
+            "view.commissioning" if self.workspace() == Workspace::Commissioning => {
+                self.switch_workspace(Workspace::Schematic);
+            }
+            "view.commissioning" => self.switch_workspace(Workspace::Commissioning),
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
@@ -766,6 +795,7 @@ impl NovoApp {
             "file.import_aml" => self.import_aml(),
             "file.import_dwg" => self.import_dwg(),
             "file.choose_dwg_converter" => self.choose_dwg_converter(),
+            "file.eplan_export_script" => self.eplan_export_script(),
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
@@ -808,6 +838,41 @@ impl NovoApp {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));
             }
+        }
+    }
+
+    /// Selects everything drawn on the current page (Ctrl+A). Selection is
+    /// not a model edit, so there is nothing to undo.
+    pub(super) fn select_all_on_page(&mut self) {
+        let (Some(page), Some(doc)) = (self.current_page, self.backend.document()) else {
+            return;
+        };
+        let project = doc.project();
+        let ids: Vec<AnyId> = project
+            .symbols()
+            .filter(|s| s.page == page)
+            .map(|s| AnyId::Symbol(s.id))
+            .chain(
+                project
+                    .junctions()
+                    .filter(|j| j.page == page)
+                    .map(|j| AnyId::Junction(j.id)),
+            )
+            .chain(
+                project
+                    .wires()
+                    .filter(|w| w.page == page)
+                    .map(|w| AnyId::Wire(w.id)),
+            )
+            .chain(
+                project
+                    .texts()
+                    .filter(|t| t.page == page)
+                    .map(|t| AnyId::Text(t.id)),
+            )
+            .collect();
+        if let Some(view) = self.canvas.schematic() {
+            view.select_ids(&ids);
         }
     }
 
@@ -1028,10 +1093,15 @@ impl NovoApp {
             None => return,
         };
         let delta = pointer - from;
-        if let Some(view) = self.canvas.schematic() {
-            view.canvas
-                .viewport
-                .pan_by_screen(novo_canvas::Vec2::new(delta.x, delta.y));
+        let by = novo_canvas::Vec2::new(delta.x, delta.y);
+        match self.workspace() {
+            Workspace::Cabinet => self.cabinet.view.viewport.pan_by_screen(by),
+            Workspace::Reports => {}
+            _ => {
+                if let Some(view) = self.canvas.schematic() {
+                    view.canvas.viewport.pan_by_screen(by);
+                }
+            }
         }
         self.wb.space_pan = Some(pointer);
         ctx.set_cursor_icon(egui::CursorIcon::Grabbing);

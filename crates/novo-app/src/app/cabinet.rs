@@ -704,6 +704,11 @@ impl NovoApp {
                                 w: f.w,
                                 h: f.h,
                                 loss_w: loss,
+                                loss_known: project
+                                    .get::<Device>(DeviceId::from(p.id))
+                                    .is_some_and(|d| {
+                                        novo_thermal::bridge::device_loss_w(project, d).is_some()
+                                    }),
                             }
                         })
                         .collect();
@@ -946,6 +951,7 @@ impl NovoApp {
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::ExportPlate => {
+                self.learn_command("export.plate");
                 self.export_plate_pdf();
             }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,

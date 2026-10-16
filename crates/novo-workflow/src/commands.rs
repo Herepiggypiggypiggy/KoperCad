@@ -339,6 +339,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["import dwg"],
     ),
+    verb(
+        cmd(
+            "file.eplan_export_script",
+            "Get the EPLAN export script",
+            "Project",
+            &[
+                "eplan", "export", "pxf", "epj", "migrate", "bridge", "script",
+            ],
+            Needs::Nothing,
+        ),
+        &["get eplan script"],
+    ),
     cmd(
         "file.choose_dwg_converter",
         "Choose the DWG converter",
@@ -1151,6 +1163,26 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["cable diagram"],
+    ),
+    verb(
+        cmd(
+            "report.cutlist",
+            "Cut list",
+            "View",
+            &["cut length", "wire lengths", "sleeves"],
+            Needs::Project,
+        ),
+        &["cut list"],
+    ),
+    verb(
+        cmd(
+            "report.labels",
+            "Labels",
+            "View",
+            &["label printer", "wire labels", "terminal labels"],
+            Needs::Project,
+        ),
+        &["labels"],
     ),
     verb(
         cmd(
