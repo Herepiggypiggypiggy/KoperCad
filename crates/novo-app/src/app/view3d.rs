@@ -205,8 +205,17 @@ impl NovoApp {
             mode.synced = (cabinet_rev, mode.view.state.selection.clone());
         }
 
-        // A run started here advances here, not only in the Cabinet.
+        // A run started here advances here, not only in the Cabinet; the
+        // result follows the cabinet (out of date marking, auto re-solve).
         self.cabinet.heat.poll(ui.ctx());
+        {
+            let heat = &mut self.cabinet.heat;
+            if heat.solution().is_some() || heat.running() || heat.on {
+                let moving = !mode.mv.landings().is_empty();
+                let now = ui.input(|i| i.time);
+                heat.sync_live(project, id, ambient, moving, now, ui.ctx());
+            }
+        }
         let solution = self.cabinet.heat.solution();
         if let Some(sol) = &solution {
             heat_controls(ui, &mut mode.heat, sol);
@@ -492,8 +501,8 @@ fn run_heat(
     if wants_run {
         heat::start_run(heat, project, id, &input);
     }
-    heat.solution()
-        .is_some_and(|s| s.layout_key != heat::layout_key(&input))
+    // The scenario decides, so a vent added in the settings counts too.
+    heat.live.is_stale()
 }
 
 /// The Heat strip above the 3D view: slice, shell and airflow of the last

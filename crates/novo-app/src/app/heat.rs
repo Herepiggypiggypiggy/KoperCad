@@ -74,6 +74,9 @@ pub(super) struct Input {
 /// What a run needs to remember about the moment it started.
 #[derive(Debug, Clone)]
 pub(super) struct Meta {
+    /// The scenario the run solves; a result is out of date once the
+    /// cabinet's scenario differs from it.
+    pub scenario_key: u64,
     pub layout_key: u64,
     pub ambient: f64,
     pub plate: [f64; 4],
@@ -97,18 +100,25 @@ pub(super) struct HeatState {
     pub airflow: bool,
     pub badges: bool,
     cache: Option<Cache>,
+    /// Follows the cabinet while a result is shown: out of date marking and
+    /// the automatic re-solve.
+    pub(super) live: super::heat_live::Live,
+    /// Counts the snapshots, so each one gets its own cache key.
+    snap_seq: u64,
+    #[cfg(test)]
+    test_solver: Option<Arc<dyn novo_cfd::Solver>>,
     /// `heat.simulate` was asked for; the Cabinet view starts the run on its
     /// next frame, when it has the project.
     requested: bool,
-    run: Option<Runner>,
+    pub(super) run: Option<Runner>,
     /// Latest iteration report of the running level, with the residuals seen
     /// so far in this level for the sparkline.
     progress: Option<Progress>,
     history: Vec<f64>,
-    solution: Option<Arc<Solution>>,
+    pub(super) solution: Option<Arc<Solution>>,
     /// Result kept as A for comparison.
     kept: Option<Arc<Solution>>,
-    pending: Option<Meta>,
+    pub(super) pending: Option<Meta>,
     runs: u64,
     /// The last run's outcome in words: failed, cancelled or the bridge's
     /// complaint.
@@ -163,6 +173,10 @@ impl HeatState {
             solution: None,
             pending: None,
             runs: 0,
+            live: super::heat_live::Live::default(),
+            snap_seq: 0,
+            #[cfg(test)]
+            test_solver: None,
             notice: None,
             settings: HeatSettings::default(),
         }
@@ -255,19 +269,38 @@ impl HeatState {
     /// Starts a run unless one is going. The model can change while it
     /// runs; the result is then marked out of date.
     pub(super) fn start(&mut self, scenario: novo_thermal::Scenario, meta: Meta) {
+        self.start_to(scenario, meta, self.settings.top);
+    }
+
+    /// [`HeatState::start`] with the highest level to go up to.
+    pub(super) fn start_to(
+        &mut self,
+        scenario: novo_thermal::Scenario,
+        meta: Meta,
+        top: novo_cfd::Fidelity,
+    ) {
         if self.run.is_some() {
             return;
         }
         self.notice = None;
+        self.live.clear_superseded();
         self.runs += 1;
         self.pending = Some(meta);
-        self.run = Some(Runner::start(
-            self.settings.solver(),
-            scenario,
-            self.settings.top,
-        ));
+        #[cfg(test)]
+        let solver = self
+            .test_solver
+            .clone()
+            .unwrap_or_else(|| self.settings.solver());
+        #[cfg(not(test))]
+        let solver = self.settings.solver();
+        self.run = Some(Runner::start(solver, scenario, top));
         self.progress = None;
         self.history.clear();
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_solver_for_test(&mut self, s: Arc<dyn novo_cfd::Solver>) {
+        self.test_solver = Some(s);
     }
 
     /// Why a run could not start, shown next to the Simulate button.
@@ -292,9 +325,11 @@ impl HeatState {
             match e {
                 Event::Snapshot(snapshot) => {
                     if let Some(m) = &self.pending {
+                        self.snap_seq += 1;
                         self.solution = Some(Arc::new(Solution {
                             snapshot,
-                            id: self.runs,
+                            id: self.snap_seq,
+                            scenario_key: m.scenario_key,
                             layout_key: m.layout_key,
                             ambient: m.ambient,
                             plate: m.plate,
@@ -321,6 +356,9 @@ impl HeatState {
                     done = true;
                     self.notice = match outcome {
                         Outcome::Completed => None,
+                        // A run replaced by one for the edited cabinet is
+                        // not worth a warning.
+                        Outcome::Cancelled if self.live.take_superseded() => None,
                         Outcome::Cancelled => {
                             Some("Stopped: the last result is not converged".into())
                         }
@@ -670,6 +708,12 @@ fn estimate_note(input: &Input) -> Option<String> {
 
 /// Simulate / Cancel, the fidelity badge and the last notice.
 pub(super) fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
+    simulate_controls_with(ui, state, true);
+}
+
+/// [`simulate_controls`]; `chip` says whether to add the out of date line
+/// (the 3D panel has its own sentence for it).
+pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, chip: bool) {
     if state.running() {
         if ui
             .button("Cancel")
@@ -721,6 +765,7 @@ pub(super) fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
             );
         }
     }
+    super::heat_live::controls(ui, state, chip);
     if let Some(n) = &state.notice {
         ui.label(egui::RichText::new(n).small().color(t::WARNING));
     }
@@ -784,6 +829,7 @@ pub(super) fn start_run(
                 .extend(state.settings.vents_for(&bridge.scenario.enclosure));
             let plate = bridge.scenario.enclosure.plate;
             let meta = Meta {
+                scenario_key: super::heat_live::scenario_key(&bridge.scenario),
                 layout_key: layout_key(input),
                 ambient: input.ambient,
                 plate: [plate.x, plate.y, plate.w, plate.h],
@@ -881,7 +927,7 @@ pub(super) fn paint_over(
     if delta.is_none() {
         paint_peaks(&painter, cache, &to_screen);
     }
-    let stale = matches!(&cache.source, Source::Solved(sol) if sol.layout_key != layout_key(input));
+    let stale = matches!(&cache.source, Source::Solved(sol) if state.live.out_of_date(sol, layout_key(input)));
     if let Some(d) = delta {
         let tag = |id: u64| {
             input
@@ -1629,6 +1675,7 @@ mod tests {
 
     fn meta(i: &Input) -> Meta {
         Meta {
+            scenario_key: crate::app::heat_live::scenario_key(&scenario()),
             layout_key: layout_key(i),
             ambient: i.ambient,
             plate: [50.0, 50.0, 600.0, 800.0],
