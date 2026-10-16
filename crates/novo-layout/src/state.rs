@@ -8,6 +8,8 @@ use crate::enclosure::{DoorReport, Enclosure, check};
 use crate::openings::{Opening, OpeningConflict, conflicts};
 use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
 use crate::surfaces::MAIN_PLATE;
+use crate::surfaces::Surfaces;
+use crate::swing::{DoorDevice, PlateDevice, SweepSettings, SwingReport, sweep};
 use crate::{
     Duct, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions, outside,
     rail_overflows,
@@ -55,6 +57,9 @@ pub struct CabinetLayout {
     pub openings: Vec<Opening>,
     /// Opening properties that could not be read.
     pub opening_problems: Vec<String>,
+    /// Devices on the inside of the door (door coordinates), swept when the
+    /// door opens.
+    pub door_devices: Vec<DoorDevice>,
 }
 
 impl CabinetLayout {
@@ -69,6 +74,7 @@ impl CabinetLayout {
             depths: BTreeMap::new(),
             openings: Vec::new(),
             opening_problems: Vec::new(),
+            door_devices: Vec::new(),
         }
     }
 
@@ -81,6 +87,40 @@ impl CabinetLayout {
             .map(|p| (p.id, self.depths.get(&p.id).copied()))
             .collect();
         Some(check(enclosure, &self.plate, &depths))
+    }
+
+    /// Door devices swept against the plate devices and the walls; `None`
+    /// until the enclosure has an interior.
+    pub fn swing_report(&self) -> Option<SwingReport> {
+        let enclosure = self.enclosure.as_ref()?;
+        let (surfaces, _) = Surfaces::from_enclosure(enclosure, &self.plate, &[]);
+        let plate_devices: Vec<PlateDevice> = self
+            .placements
+            .iter()
+            .filter_map(|p| {
+                Some(PlateDevice {
+                    id: p.id,
+                    surface: crate::surfaces::MAIN_PLATE.into(),
+                    rect: p.footprint(),
+                    depth: *self.depths.get(&p.id)?,
+                    mesh: None,
+                })
+            })
+            .collect();
+        let mut report = sweep(
+            enclosure,
+            &surfaces,
+            &self.door_devices,
+            &plate_devices,
+            &SweepSettings::default(),
+        );
+        report.unchecked_plate = self
+            .placements
+            .iter()
+            .filter(|p| !self.depths.contains_key(&p.id))
+            .map(|p| p.id)
+            .collect();
+        Some(report)
     }
 
     /// A position snapped to the grid, for dropping and dragging.
