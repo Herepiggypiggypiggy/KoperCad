@@ -157,3 +157,61 @@ fn the_surface_command_explains_a_plate_only_cabinet() {
     let shown = d.app.messages().last().expect("a message").text.clone();
     assert!(shown.contains("only its mounting plate"), "{shown}");
 }
+
+#[test]
+fn a_picked_surface_is_drawn_from_its_own_layout_and_cannot_be_edited_yet() {
+    use super::cabinet::Ask;
+    use super::cabinet_surfaces::surface_layout;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let cab = cabinet(&mut d, true);
+    let (k1, s1) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Devices", |tx| {
+            let a = tx.add_device(DeviceTag::parse("-K1").unwrap(), "")?;
+            let b = tx.add_device(DeviceTag::parse("-S1").unwrap(), "")?;
+            place_device(tx, cab, a.raw(), 20.0, 20.0, false)?;
+            place_device(tx, cab, b.raw(), 80.0, 20.0, false)?;
+            Ok((a, b))
+        })
+        .unwrap()
+        .0;
+    let pid = project(&d)
+        .all::<novo_core::CabinetPlacement>()
+        .find(|p| p.device == s1)
+        .unwrap()
+        .id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Surface", |tx| {
+            tx.set_property(pid, "surface", Some(Value::Text("door".into())))
+        })
+        .unwrap();
+    let sum = summarize(project(&d), cab).unwrap();
+    let stored = novo_layout::model::load(project(&d), cab).unwrap();
+    let door = surface_layout(&stored, &sum, "door").unwrap();
+    assert_eq!((door.plate.width, door.plate.height), (800.0, 1000.0));
+    assert_eq!(door.placements.len(), 1);
+    assert_eq!(door.placements[0].id, s1.raw());
+    assert!(door.rails.is_empty() && door.enclosure.is_none());
+    let plate = surface_layout(&stored, &sum, "plate").unwrap();
+    assert_eq!(plate.placements.len(), 1);
+    assert_eq!(plate.placements[0].id, k1.raw());
+
+    // Picked in the app: edits are refused and the stored layout is kept.
+    d.app.cabinet.surface = Some("door".into());
+    d.frame();
+    d.app
+        .cabinet_ask(Ask::Remove(vec![s1.raw()]), Some(cab), None, &[]);
+    let after = novo_layout::model::load(project(&d), cab).unwrap();
+    assert_eq!(after.placements.len(), 2, "nothing was removed");
+    let msg = d.app.messages().last().unwrap().text.clone();
+    assert!(msg.contains("view only"), "{msg}");
+    let _ = &ctx;
+}

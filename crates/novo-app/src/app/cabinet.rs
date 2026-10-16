@@ -429,14 +429,32 @@ impl NovoApp {
         {
             self.cabinet.surface = None;
         }
+        // A picked surface other than the plate is drawn from its own
+        // layout; the stored plate layout is untouched (view only).
+        let on_surface: Option<String> = self
+            .cabinet
+            .surface
+            .clone()
+            .filter(|n| n.as_str() != MAIN_PLATE);
+        let layout = match (&on_surface, &surfaces, &layout) {
+            (Some(n), Some(sum), Some(l)) => {
+                super::cabinet_surfaces::surface_layout(l, sum, n).or(layout)
+            }
+            _ => layout,
+        };
         self.cabinet.rules.ensure_loaded();
         let judged = match (structure, &layout) {
-            (Some(s), Some(_)) => Some(cabinet_rules::judge(project, s, &self.cabinet.rules.rules)),
+            (Some(s), Some(_)) if on_surface.is_none() => {
+                Some(cabinet_rules::judge(project, s, &self.cabinet.rules.rules))
+            }
             _ => None,
         };
-        let cands = structure
+        let mut cands = structure
             .map(|s| candidates(project, s))
             .unwrap_or_default();
+        if let Some(l) = on_surface.as_ref().and(layout.as_ref()) {
+            cands.retain(|c| l.placements.iter().any(|p| p.id == c.id));
+        }
         let sizing_devices = structure
             .map(|s| novo_layout::sizing_model::sizing_devices(project, s))
             .unwrap_or_default();
@@ -826,7 +844,7 @@ impl NovoApp {
                     && let Some(note) = sum.note(name)
                 {
                     ui.label(note);
-                    ui.weak("The plate drawing stays until the surface view arrives.");
+                    ui.weak("Drawing of this surface only; placing devices on it comes next.");
                 }
                 if unplaced > 0 {
                     cabinet_bar::pill(
@@ -1578,6 +1596,29 @@ impl NovoApp {
         layout: Option<CabinetLayout>,
         cands: &[novo_layout::plan::Candidate],
     ) {
+        // A surface other than the plate is drawn from its own layout and
+        // cannot be edited yet: an edit would land on the plate.
+        if self
+            .cabinet
+            .surface
+            .as_deref()
+            .is_some_and(|n| n != MAIN_PLATE)
+            && matches!(
+                ask,
+                Ask::PlaceAll
+                    | Ask::Accept
+                    | Ask::Drop(..)
+                    | Ask::Rotate(_)
+                    | Ask::Remove(_)
+                    | Ask::SetRailLengths(_)
+            )
+        {
+            self.message(
+                Level::Info,
+                "This surface is view only for now. Pick the plate to place devices.",
+            );
+            return;
+        }
         // Editing the plate while a Place all preview is up takes the
         // preview first (one undo step), so a drag, turn or take-off never
         // acts on a layout that is not stored yet.
