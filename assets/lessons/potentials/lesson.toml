@@ -44,12 +44,12 @@ Feeds staan in de groep **Points** van het wiel, naast aarde en andere aansluitp
 """
 how = [
   "Hold {key:tool.place} to open the wheel.",
-  "Move toward **Points**, then toward **Feed**.",
+  "Move toward **Points**, then toward **Feed**. (Or tap {key:tool.place}, type **feed** and press Enter.)",
   "Release the key. A feed hangs on your pointer.",
 ]
 how_nl = [
   "Houd {key:tool.place} ingedrukt om het wiel te openen.",
-  "Beweeg naar **Points** en dan naar **Feed**.",
+  "Beweeg naar **Points** en dan naar **Feed**. (Of tik op {key:tool.place}, typ **feed** en druk op Enter.)",
   "Laat de toets los. Een feed hangt aan je aanwijzer.",
 ]
 point = { ui = "wheel" }
