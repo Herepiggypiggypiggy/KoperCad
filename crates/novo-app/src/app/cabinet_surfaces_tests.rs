@@ -204,14 +204,68 @@ fn a_picked_surface_is_drawn_from_its_own_layout_and_cannot_be_edited_yet() {
     assert_eq!(plate.placements.len(), 1);
     assert_eq!(plate.placements[0].id, k1.raw());
 
-    // Picked in the app: edits are refused and the stored layout is kept.
+    // Picked in the app: every edit that would land on the plate is refused
+    // and the stored plate, enclosure and placements are kept.
     d.app.cabinet.surface = Some("door".into());
     d.frame();
-    d.app
-        .cabinet_ask(Ask::Remove(vec![s1.raw()]), Some(cab), None, &[]);
+    let plate_before = project(&d)
+        .get::<novo_core::Structure>(cab)
+        .unwrap()
+        .plate
+        .unwrap();
+    let enclosure_before = novo_layout::model::enclosure_of(project(&d), cab).unwrap();
+    let mut bigger = enclosure_before.clone();
+    bigger.width += 100.0;
+    let asks = vec![
+        Ask::Remove(vec![s1.raw()]),
+        Ask::Rotate(vec![s1.raw()]),
+        Ask::Drop(s1.raw(), 300.0, 300.0),
+        Ask::PlaceAll,
+        Ask::Accept,
+        Ask::SetRailLengths(vec![(1, 100.0)]),
+        Ask::SetPlate(cab),
+        Ask::SetPlateSize(
+            cab,
+            MountingPlate {
+                width: 800.0,
+                height: 1000.0,
+                margin: 10.0,
+            },
+        ),
+        Ask::SetEnclosure(bigger),
+    ];
+    for ask in asks {
+        d.app.messages.clear();
+        d.app.cabinet_ask(ask, Some(cab), None, &[]);
+        let msg = d.app.messages().last().expect("a message").text.clone();
+        assert!(msg.contains("view only"), "{msg}");
+    }
     let after = novo_layout::model::load(project(&d), cab).unwrap();
-    assert_eq!(after.placements.len(), 2, "nothing was removed");
-    let msg = d.app.messages().last().unwrap().text.clone();
-    assert!(msg.contains("view only"), "{msg}");
+    assert_eq!(after.placements.len(), 2, "nothing was removed or moved");
+    assert_eq!(
+        project(&d).get::<novo_core::Structure>(cab).unwrap().plate,
+        Some(plate_before),
+        "the mounting plate size is untouched"
+    );
+    assert_eq!(
+        novo_layout::model::enclosure_of(project(&d), cab),
+        Some(enclosure_before),
+        "the enclosure is untouched"
+    );
+
+    // Back on the plate the same edits go through.
+    d.app.cabinet.surface = None;
+    d.frame();
+    d.app
+        .cabinet_ask(Ask::Remove(vec![k1.raw()]), Some(cab), None, &[]);
+    let after = novo_layout::model::load(project(&d), cab).unwrap();
+    assert_eq!(after.placements.len(), 1, "the plate is editable again");
+
+    // A surface that is gone is reported, and the plate is shown.
+    d.app.cabinet.surface = Some("attic".into());
+    d.frame();
+    assert_eq!(d.app.cabinet.surface, None);
+    let msg = d.app.messages().last().expect("a message").text.clone();
+    assert!(msg.contains("'attic' no longer exists"), "{msg}");
     let _ = &ctx;
 }

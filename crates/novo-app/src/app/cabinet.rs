@@ -421,14 +421,19 @@ impl NovoApp {
         });
         let layout = structure.and_then(|s| load(project, s));
         let surfaces = structure.and_then(|s| super::cabinet_surfaces::summarize(project, s));
+        // Said once the frame is done with the project borrow.
+        let mut notices: Vec<String> = Vec::new();
         if let Some(sum) = &surfaces
-            && self
+            && let Some(gone) = self
                 .cabinet
                 .surface
-                .as_deref()
-                .is_some_and(|n| sum.row(n).is_none())
+                .clone()
+                .filter(|n| sum.row(n).is_none())
         {
             self.cabinet.surface = None;
+            notices.push(format!(
+                "Surface '{gone}' no longer exists; showing the mounting plate."
+            ));
         }
         // A picked surface other than the plate is drawn from its own
         // layout; the stored plate layout is untouched (view only).
@@ -439,7 +444,16 @@ impl NovoApp {
             .filter(|n| n.as_str() != MAIN_PLATE);
         let layout = match (&on_surface, &surfaces, &layout) {
             (Some(n), Some(sum), Some(l)) => {
-                super::cabinet_surfaces::surface_layout(l, sum, n).or(layout)
+                let found = super::cabinet_surfaces::surface_layout(l, sum, n);
+                if found.is_none() {
+                    // The surface is gone: say so, and go back to the plate
+                    // instead of drawing the plate under another name.
+                    self.cabinet.surface = None;
+                    notices.push(format!(
+                        "Surface '{n}' no longer exists; showing the mounting plate."
+                    ));
+                }
+                found.or(layout)
             }
             _ => layout,
         };
@@ -1721,6 +1735,9 @@ impl NovoApp {
                 self.learn_event(novo_learn::Event::Clicked(a.id.to_owned()));
             }
         }
+        for text in notices {
+            self.message(Level::Warning, text);
+        }
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
         }
@@ -1816,11 +1833,14 @@ impl NovoApp {
                     | Ask::Rotate(_)
                     | Ask::Remove(_)
                     | Ask::SetRailLengths(_)
+                    | Ask::SetPlate(_)
+                    | Ask::SetPlateSize(..)
+                    | Ask::SetEnclosure(_)
             )
         {
             self.message(
                 Level::Info,
-                "This surface is view only for now. Pick the plate to place devices.",
+                "This surface is view only for now. Pick the plate to change the cabinet.",
             );
             return;
         }
