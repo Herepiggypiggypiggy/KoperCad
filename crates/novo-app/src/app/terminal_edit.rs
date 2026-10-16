@@ -79,6 +79,15 @@ pub(super) fn parse_kind(text: &str) -> Option<TerminalKind> {
         })
 }
 
+/// What joining duplicates did, in words.
+fn join_message(joined: usize) -> String {
+    if joined == 0 {
+        "No duplicate terminals on this strip".to_owned()
+    } else {
+        format!("Joined {joined} duplicate terminal records")
+    }
+}
+
 impl NovoApp {
     /// The strip the selection points at, if any.
     pub(super) fn selection_strip(&self) -> Option<DeviceId> {
@@ -168,16 +177,13 @@ impl NovoApp {
             "terminal.renumber" => self.wb.terminal_edit.window = Some(EditWindow::Renumber),
             "terminal.join_duplicates" => {
                 let mut joined = 0;
-                self.edit_strip("Join duplicate terminals", |tx| {
+                // A failed edit has already said why; only a real result is reported.
+                if self.edit_strip("Join duplicate terminals", |tx| {
                     joined = novo_terminals::join_duplicates(tx, strip)?.len();
                     Ok(())
-                });
-                let text = if joined == 0 {
-                    "No duplicate terminals on this strip".to_owned()
-                } else {
-                    format!("Joined {joined} duplicate terminal records")
-                };
-                self.message(Level::Info, text);
+                }) {
+                    self.message(Level::Info, join_message(joined));
+                }
             }
             "terminal.set_kind" => match argument.and_then(parse_kind) {
                 Some(kind) => self.set_kind(&targets, kind),
@@ -752,6 +758,18 @@ mod tests {
         assert_eq!(ids(&d), first);
         undo(&mut d);
         assert_eq!(ids(&d), [first[0], first[2], first[1]]);
+    }
+
+    #[test]
+    fn the_join_message_reports_the_count_and_a_failed_edit_says_nothing_else() {
+        assert_eq!(join_message(0), "No duplicate terminals on this strip");
+        assert_eq!(join_message(2), "Joined 2 duplicate terminal records");
+        // A failing edit returns false (and reports its own error) so the
+        // "no duplicates" line is not posted on top of it.
+        let (_dir, mut d, _, _) = drive_with_strip();
+        assert!(!d.app.edit_strip("Join duplicate terminals", |tx| {
+            tx.remove(novo_core::WireId(u64::MAX))
+        }));
     }
 
     #[test]
