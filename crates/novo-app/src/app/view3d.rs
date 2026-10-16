@@ -22,6 +22,7 @@ use super::cabinet_inspector;
 use super::NovoApp;
 use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
+use super::heat_legend;
 use super::heat_probe::{self, ProbeState};
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
@@ -233,7 +234,7 @@ impl NovoApp {
         }
         let solution = self.cabinet.heat.solution();
         if let Some(sol) = &solution {
-            heat_controls(ui, &mut mode.heat, &mut mode.probe, sol);
+            heat_controls(ui, &mut mode.heat, &mut mode.probe, sol, mode.heat_flow.top);
         }
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
         // The landing box of a dragged device, rail or duct.
@@ -674,6 +675,7 @@ fn heat_controls(
     h: &mut Heat3d,
     probe: &mut ProbeState,
     sol: &super::heat_run::Solution,
+    top_speed: f32,
 ) {
     use novo_heatview::cfd::Axis;
     let range = heat_3d::range(&sol.snapshot, sol.ambient);
@@ -703,10 +705,6 @@ fn heat_controls(
         ui.checkbox(&mut probe.on, "Probe").on_hover_text(
             "Click the air to read its temperature and speed there (Esc clears the point)",
         );
-        ui.label(
-            egui::RichText::new(format!("{:.0} to {:.0} °C", range.lo, range.hi))
-                .small()
-                .color(crate::theme::ui_palette().text_secondary),
-        );
+        heat_legend::strip(ui, h, range, top_speed);
     });
 }
