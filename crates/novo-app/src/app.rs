@@ -3,6 +3,7 @@
 //! toasts for messages, the dialogs and action dispatch. There is no menu
 //! bar and no status bar.
 
+mod appearance;
 mod assembly;
 mod background_panel;
 mod bench;
@@ -36,7 +37,9 @@ mod drawers;
 mod duplicate;
 mod dxf;
 mod electrical;
+mod eplan_export;
 mod eplan_import;
+mod eplan_parts;
 mod example;
 mod faults;
 mod heat;
@@ -89,6 +92,7 @@ mod parts_quality;
 mod pdf;
 mod plate_export;
 mod plc;
+mod plc_card;
 mod plc_link;
 mod plc_run;
 mod potentials;
@@ -111,6 +115,7 @@ mod standards_report;
 mod standards_report_tests;
 mod status_bar;
 mod symbol_preview;
+mod terminal_edit;
 mod terminals;
 mod tidy;
 mod tips;
@@ -126,6 +131,7 @@ mod view3d_move_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
+mod whats_new;
 mod wheel;
 mod wire_panel;
 #[cfg(test)]
@@ -160,6 +166,8 @@ mod commissioning_tests;
 #[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
+mod eplan_ui_tests;
+#[cfg(test)]
 mod example_tests;
 #[cfg(test)]
 mod gate1_tests;
@@ -193,6 +201,8 @@ mod shortcuts_sheet_tests;
 mod tips_tests;
 #[cfg(test)]
 mod variants_tests;
+#[cfg(test)]
+mod whats_new_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -298,12 +308,16 @@ pub struct NovoApp {
     wb: Workbench,
     messages: Vec<Message>,
     show_about: bool,
+    /// The What's new list is open (app/whats_new.rs).
+    show_whats_new: bool,
     standards_open: bool,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
     open_on_start: Option<PathBuf>,
     /// The first frame has run its start-up work.
     started: bool,
+    /// The theme and density last applied to the egui context.
+    appearance_applied: Option<(novo_theme::ThemeChoice, novo_theme::Density)>,
     /// When to give the backend its next chance to autosave.
     next_tick: Instant,
     /// The last autosave failed; reported once until it works again.
@@ -359,11 +373,15 @@ impl NovoApp {
         backend: Box<dyn ProjectBackend>,
         canvas: Box<dyn CanvasView>,
     ) -> Self {
-        let settings = cc
+        let settings: Settings = cc
             .storage
             .and_then(|s| eframe::get_value(s, Settings::STORAGE_KEY))
             .unwrap_or_default();
-        novo_theme::apply(&cc.egui_ctx);
+        novo_theme::apply_with(
+            &cc.egui_ctx,
+            settings.theme_choice(),
+            settings.density_choice(),
+        );
         let mut app = Self::with_settings(backend, canvas, settings);
         app.load_user_keymap();
         app.learn_init_paths();
@@ -385,10 +403,12 @@ impl NovoApp {
             wb,
             messages: Vec::new(),
             show_about: false,
+            show_whats_new: false,
             standards_open: false,
             window_title: String::new(),
             open_on_start: None,
             started: false,
+            appearance_applied: None,
             next_tick: Instant::now(),
             autosave_failing: false,
             focus_mode: false,
@@ -904,6 +924,7 @@ impl NovoApp {
             self.started = true;
             self.start();
         }
+        self.sync_appearance(&ctx);
         self.fix_current_page();
         self.tick(&ctx);
         self.settings.last_open = self.backend.file();
@@ -1056,9 +1077,14 @@ impl NovoApp {
         self.learn_window(&ctx);
         self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);
+        self.plc_card_dialog(&ctx);
+        self.plc_overview_window(&ctx);
+        self.eplan_parts_dialog(&ctx);
+        self.eplan_export_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
+        self.whats_new_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
         self.parts_window(&ctx);
@@ -1084,6 +1110,7 @@ impl NovoApp {
         self.electrical_window(&ctx);
         self.safety_window(&ctx);
         self.numbering_window(&ctx);
+        self.terminal_edit_windows(&ctx);
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);
@@ -1165,6 +1192,7 @@ impl NovoApp {
 
     fn modal_open_but_wheel(&self) -> bool {
         self.show_about
+            || self.show_whats_new
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
             || self.wb.sheet_import.is_some()
@@ -1258,6 +1286,7 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
+                self.whats_new_pill(ui);
                 let shortcut = Action::CommandPalette
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
@@ -1952,6 +1981,36 @@ mod tests {
     fn frame(ctx: &egui::Context, app: &mut NovoApp, input: egui::RawInput) {
         let mut output = ctx.run_ui(input, |ui| app.show(ui));
         output.textures_delta.clear();
+    }
+
+    #[test]
+    fn the_default_choice_is_dark_and_standard() {
+        let s = Settings::default();
+        assert_eq!(s.theme_choice(), novo_theme::ThemeChoice::Dark);
+        assert_eq!(s.density_choice(), novo_theme::Density::Standard);
+    }
+
+    #[test]
+    fn a_saved_choice_is_read_back() {
+        let s = Settings {
+            appearance_theme: "light".into(),
+            appearance_density: "compact".into(),
+            ..Default::default()
+        };
+        assert_eq!(s.theme_choice(), novo_theme::ThemeChoice::Light);
+        assert_eq!(s.density_choice(), novo_theme::Density::Compact);
+    }
+
+    #[test]
+    fn the_chosen_density_reaches_the_controls() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.settings.appearance_density = "compact".into();
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(
+            ctx.global_style().spacing.interact_size.y,
+            novo_theme::Density::Compact.metrics().control_height
+        );
     }
 
     #[test]

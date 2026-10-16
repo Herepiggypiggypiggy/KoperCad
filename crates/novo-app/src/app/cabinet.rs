@@ -92,6 +92,13 @@ struct Drag {
 }
 
 impl CabinetState {
+    /// The theme changed: the plate view and scene take the new colours
+    /// (the scene is filled again every frame).
+    pub(super) fn restyle(&mut self) {
+        self.view.style = theme::canvas_style();
+        self.scene = CabinetScene::new(theme::cabinet_style());
+    }
+
     pub(super) fn new() -> Self {
         let mut view = CanvasView::new();
         view.style = theme::canvas_style();
@@ -544,7 +551,7 @@ impl NovoApp {
                     });
                     let r = r
                         .response
-                        .on_hover_text("Surface to work on (View > Workspace > Cabinet surfaces)");
+                        .on_hover_text("Surface to work on (View > Cabinet > Cabinet surfaces)");
                     cabinet_bar::note(&mut anchors, "cabinet.surface", "Surface", &r);
                     if !sum.problems.is_empty() {
                         let text = format!("{} surface problems", sum.problems.len());
