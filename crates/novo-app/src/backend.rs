@@ -384,6 +384,16 @@ impl StorageBackend {
     }
 }
 
+/// Whether two paths name the same file: equal after canonicalising, which
+/// settles spelling and case on Windows. Falls back to a literal compare
+/// when either cannot be resolved.
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
 fn remove_file_if_exists(path: &Path) {
     match std::fs::remove_file(path) {
         Ok(()) => {}
@@ -436,7 +446,11 @@ impl ProjectBackend for StorageBackend {
     }
 
     fn save(&mut self, path: &Path) -> Result<(), BackendError> {
-        if self.read_only.as_deref() == Some(path) {
+        if self
+            .read_only
+            .as_deref()
+            .is_some_and(|ro| same_file(ro, path))
+        {
             return Err(BackendError::ReadOnly);
         }
         let recovery_dir = self.recovery_dir_for(path).map(Path::to_owned);
@@ -1148,6 +1162,20 @@ pub(crate) mod tests {
         assert!(!ro.is_read_only());
         assert_eq!(std::fs::read(&path).unwrap(), before, "file untouched");
         assert!(files_in(dir.path()).iter().all(|f| f == "plant.novo"));
+    }
+
+    #[test]
+    fn saving_over_a_read_only_file_is_refused_by_another_spelling() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let mut backend = StorageBackend::default();
+        backend.new_project("Plant").unwrap();
+        backend.save(&path).unwrap();
+        backend.close().unwrap();
+        let mut ro = StorageBackend::default();
+        ro.open_read_only(&path).unwrap();
+        let other = dir.path().join(".").join("plant.novo");
+        assert!(matches!(ro.save(&other), Err(BackendError::ReadOnly)));
     }
 
     #[test]

@@ -793,7 +793,9 @@ impl NovoApp {
                     self.project_path = None;
                 } else {
                     self.project_path = Some(path.to_owned());
-                    self.settings.remember_recent(path);
+                    if !read_only {
+                        self.settings.remember_recent(path);
+                    }
                     let how = if read_only { " read-only" } else { "" };
                     self.message(Level::Info, format!("Opened {}{how}", path.display()));
                 }

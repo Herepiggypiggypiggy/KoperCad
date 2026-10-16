@@ -97,3 +97,14 @@ fn a_normal_open_is_not_read_only() {
     assert!(!d.app.backend.is_read_only());
     assert!(d.app.is_enabled(Action::SaveProject));
 }
+
+#[test]
+fn open_read_only_is_not_added_to_recent() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, path) = saved_project(dir.path());
+    d.app.settings.recent_projects.clear();
+    d.app.open_path_as(&path, true);
+    assert!(d.app.settings.recent_projects.is_empty());
+    d.app.open_path(&path);
+    assert_eq!(d.app.settings.recent_projects.len(), 1);
+}
