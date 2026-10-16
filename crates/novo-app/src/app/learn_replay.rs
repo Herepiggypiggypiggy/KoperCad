@@ -375,6 +375,9 @@ impl Drive {
                 }
             }
         }
+        if found.is_empty() && !text.contains(':') {
+            return self.replay_select_on_plate(text, add);
+        }
         let first = *found
             .first()
             .ok_or_else(|| format!("nothing named `{text}` to select"))?;
@@ -385,6 +388,9 @@ impl Drive {
             .map(|s| s.page)
             .ok_or("symbol")?;
         self.replay_page_id(page);
+        if !add {
+            self.app.cabinet.view.selection.clear();
+        }
         let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
         if !add {
             view.canvas.selection.clear();
@@ -393,6 +399,28 @@ impl Drive {
             found
                 .iter()
                 .map(|s| novo_canvas::model::item_id(AnyId::Symbol(*s))),
+            novo_canvas::SelectOp::Add,
+        );
+        self.frame();
+        Ok(())
+    }
+
+    /// Selects a device that has no symbol but a place on the plate, as a
+    /// click on it in the Cabinet does.
+    fn replay_select_on_plate(&mut self, text: &str, add: bool) -> Result<(), String> {
+        let project = self.doc().project();
+        let id = project
+            .all::<novo_core::CabinetPlacement>()
+            .filter_map(|p| project.device(p.device))
+            .find(|d| novo_learn::check::tag_matches(&d.tag, text))
+            .map(|d| d.id)
+            .ok_or_else(|| format!("nothing named `{text}` to select"))?;
+        let selection = &mut self.app.cabinet.view.selection;
+        if !add {
+            selection.clear();
+        }
+        selection.apply(
+            [novo_canvas::cabinet::box_item(id.raw())],
             novo_canvas::SelectOp::Add,
         );
         self.frame();

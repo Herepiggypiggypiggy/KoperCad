@@ -498,6 +498,21 @@ impl NovoApp {
                 .collect();
             facts.zoom = f64::from(view.canvas.viewport.zoom) / self.learn_fit_zoom(view).max(1e-6);
         }
+        // Devices clicked on the cabinet plate count as selected too, so a
+        // plate-only device (no symbol on a page) can be picked in a lesson.
+        let plate: Vec<String> = self
+            .cabinet
+            .view
+            .selection
+            .ids()
+            .iter()
+            .filter_map(|i| novo_canvas::cabinet::box_of(*i))
+            .filter_map(|id| project.get::<novo_core::Device>(novo_core::DeviceId::from(id)))
+            .map(|d| d.tag.to_string())
+            .collect();
+        if !plate.is_empty() {
+            facts.selection = plate;
+        }
         if facts.live {
             let (coils, pins, closed) = self.wb.live.learn_facts(project);
             facts.live_coils = coils;
