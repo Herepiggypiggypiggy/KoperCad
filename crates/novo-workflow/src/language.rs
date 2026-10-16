@@ -446,6 +446,11 @@ pub const DUTCH: &[Aliases] = &[
         &["restpuntenlijst", "oplevering"],
     ),
     nl(
+        "export.standards_report",
+        &["exporteer normenrapport", "normenrapport exporteren"],
+        &["conformiteitsrapport", "normen pdf"],
+    ),
+    nl(
         "export.plate",
         &["exporteer montageplaat", "montageplaat exporteren"],
         &["boortabel", "boren"],
@@ -516,6 +521,26 @@ pub const DUTCH: &[Aliases] = &[
         "export.wirecut_page",
         &["voeg draadproductiepagina toe"],
         &["pdf", "afdrukken", "draadsnijden"],
+    ),
+    nl(
+        "view.bench",
+        &["werkbank uitvoer", "open werkbank"],
+        &["werkbank", "adereindhulzen", "etiketten", "draadsnijlijst"],
+    ),
+    nl(
+        "export.bench_cut",
+        &["exporteer werkbank snijlijst"],
+        &["snijlijst", "draden afkorten", "afstrippen"],
+    ),
+    nl(
+        "export.ferrules",
+        &["exporteer adereindhulzen"],
+        &["adereindhulzen", "krimpen", "kleurcode"],
+    ),
+    nl(
+        "export.labels",
+        &["exporteer etiketten", "print etiketten"],
+        &["etiketten", "stickers", "draadvlaggen"],
     ),
     nl(
         "export.wirecut_xlsx",

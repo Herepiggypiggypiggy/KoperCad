@@ -20,6 +20,19 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `dock.lines`
 - `dock.hint`
 - `dock.proposals`
+- `palette.field`
+- `issue.pill`
+- `drawer.terminals`
+- `drawer.terminals.tab`
+- `drawer.cables`
+- `drawer.cables.tab`
+- `drawer.cables.accept`
+- `drawer.devices`
+- `drawer.devices.tab`
+- `live.card`
+- `live.pole`
+- `live.coil`
+- `live.output`
 - `cabinet.place_all`
 - `cabinet.accept`
 - `cabinet.rules`
@@ -28,6 +41,17 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `cabinet.cutlist`
 - `cabinet.table`
 - `cabinet.heat`
+- `cabinet.canvas`
+- `cabinet.unplaced`
+- `cabinet.problems`
+- `cabinet.inspector`
+- `cabinet.door`
+- `cabinet.door.apply`
+- `cabinet.routes_panel`
+- `cabinet.wire_rules`
+- `cabinet.sizing`
+- `cabinet.rails`
+- `cabinet.plate_drawing`
 
 ## Signals
 

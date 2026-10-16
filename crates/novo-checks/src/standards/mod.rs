@@ -35,9 +35,11 @@
 //! is missing when a rule cannot be evaluated.
 
 mod ampacity;
+pub mod document;
 mod iec60204;
 mod netclass;
 mod nfpa79;
+pub mod provenance;
 mod report;
 pub mod rules;
 mod sccr;
@@ -349,6 +351,9 @@ pub struct RuleResult {
     pub open: Vec<Problem>,
     pub waived: Vec<WaivedFinding>,
     pub unknown: Vec<Unknown>,
+    /// What passed, one short line per thing (a device tag, a net): the
+    /// evidence behind a pass. May be shorter than `checked`.
+    pub evidence: Vec<String>,
 }
 
 /// Every rule of the selected standards, evaluated.
@@ -418,6 +423,7 @@ struct Acc {
     checked: usize,
     fails: Vec<(Vec<AnyId>, String)>,
     unknown: Vec<Unknown>,
+    evidence: Vec<String>,
 }
 
 /// What the rules read: the project, its circuits and the parameters. Shared
@@ -464,6 +470,15 @@ impl Sink {
     /// One more thing evaluated and found fine.
     pub(crate) fn pass(&mut self, id: &'static str) {
         self.acc.entry(id).or_default().checked += 1;
+    }
+
+    /// One more thing evaluated and found fine, with what it was.
+    pub(crate) fn pass_note(&mut self, id: &'static str, note: String) {
+        let acc = self.acc.entry(id).or_default();
+        acc.checked += 1;
+        if !acc.evidence.contains(&note) {
+            acc.evidence.push(note);
+        }
     }
 
     /// One thing evaluated and found wanting.
@@ -578,6 +593,7 @@ fn finish(env: &Env<'_>, mut sink: Sink) -> ComplianceReport {
             open,
             waived,
             unknown: acc.unknown,
+            evidence: acc.evidence,
         });
     }
     ComplianceReport {

@@ -10,6 +10,7 @@ use novo_core::{
 use novo_core::{Value, natural_cmp};
 
 use crate::CsvOptions;
+use crate::bench::FerruleStandard;
 use crate::lengths::{self, Connection as Measured};
 use crate::order::join_distinct;
 use crate::report::{Dependencies, Report};
@@ -131,13 +132,17 @@ fn end(
     section: Option<f64>,
     ferrule_override: Option<&str>,
     number: &str,
+    standard: &FerruleStandard,
 ) -> WireEnd {
     let designation = project.pin_designation(pin).unwrap_or_default();
     let from_part =
         device_of(project, pin).and_then(|d| number_property(project, d, STRIP_LENGTH_KEY));
     let (strip_mm, strip_basis) = match (from_part, section) {
         (Some(v), _) => (Some(v), StripBasis::Part),
-        (None, Some(s)) => (Some(typical_strip_mm(s)), StripBasis::Typical),
+        (None, Some(s)) => (
+            Some(standard.length_mm(s).unwrap_or_else(|| typical_strip_mm(s))),
+            StripBasis::Typical,
+        ),
         (None, None) => (None, StripBasis::Unknown),
     };
     let ferrule = match ferrule_override {
@@ -167,12 +172,19 @@ fn end(
 /// them: cross-section (smallest first, unknown last), colour, then longest
 /// first, then wire number.
 pub fn wire_cut_jobs(project: &Project) -> Vec<WireCutJob> {
-    produce(project).0
+    wire_cut_jobs_with(project, &FerruleStandard::of(project))
+}
+
+/// [`wire_cut_jobs`] with the ferrule standard given instead of the
+/// project's: the strip length of a wire end whose part does not give one is
+/// the standard's contact length for the cross-section.
+pub fn wire_cut_jobs_with(project: &Project, standard: &FerruleStandard) -> Vec<WireCutJob> {
+    produce(project, standard).0
 }
 
 type Plans = Vec<(StructureId, novo_routing::Plan)>;
 
-fn produce(project: &Project) -> (Vec<WireCutJob>, Plans) {
+fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, Plans) {
     let items = items(project);
     let measured: Vec<Measured> = items
         .iter()
@@ -210,8 +222,12 @@ fn produce(project: &Project) -> (Vec<WireCutJob>, Plans) {
                 length_mm: length.mm,
                 cut_mm: length.mm + 2.0 * cut_list.end_allowance_mm(section),
                 basis: length.basis.text().to_owned(),
-                end_a: end(project, item.from, item.to, section, ferrule, &number),
-                end_b: end(project, item.to, item.from, section, ferrule, &number),
+                end_a: end(
+                    project, item.from, item.to, section, ferrule, &number, standard,
+                ),
+                end_b: end(
+                    project, item.to, item.from, section, ferrule, &number, standard,
+                ),
                 ducts: length.ducts,
                 number,
             }
@@ -360,7 +376,7 @@ impl Report for WireCut {
     }
 
     fn generate(&self, project: &Project) -> ReportOutput {
-        let (jobs, plans) = produce(project);
+        let (jobs, plans) = produce(project, &FerruleStandard::of(project));
         if jobs.is_empty() {
             return ReportOutput {
                 report: Self::ID.into(),
