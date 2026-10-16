@@ -311,6 +311,7 @@ impl NovoApp {
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
+        mode.controls.ssao_available = mode.view.occlusion_available();
         mode.controls.reduced = mode.view.stepped_down().is_some() || mode.view.occlusion_paused();
         view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
         if std::mem::take(&mut mode.controls.restore) {

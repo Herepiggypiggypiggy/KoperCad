@@ -561,6 +561,12 @@ impl View3d {
         !gov.tier.ssao && adapter_tier().is_some_and(|t| Level::start(t).ssao)
     }
 
+    /// Whether this adapter draws screen-space occlusion at all (discrete
+    /// GPUs; the others start without it and never get it).
+    pub fn occlusion_available(&self) -> bool {
+        adapter_tier().is_some_and(|t| Level::start(t).ssao)
+    }
+
     /// Whether occlusion is drawn now: the switch is on and the governor
     /// still allows it.
     fn occlusion_now(&self) -> bool {
@@ -1612,6 +1618,29 @@ mod stats_tests {
         view.reset_quality();
         let again = drive(&mut view, &ctx, 3, 0.008, true);
         assert!(again.iter().all(Option::is_none), "{again:?}");
+        *STATS.lock().unwrap() = None;
+    }
+
+    #[test]
+    fn only_a_discrete_adapter_offers_occlusion_and_slowness_pauses_it_first() {
+        let _guard = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let ctx = egui::Context::default();
+        *STATS.lock().unwrap() = Some(recorder(Tier::Integrated));
+        let mut view = View3d::new(11);
+        view.govern(&ctx, false);
+        assert!(!view.occlusion_available());
+        assert!(!view.occlusion_paused(), "never had it, so not paused");
+        *STATS.lock().unwrap() = Some(recorder(Tier::Discrete));
+        let mut view = View3d::new(12);
+        view.govern(&ctx, false);
+        assert!(view.occlusion_available() && view.occlusion_now());
+        // Slow frames take occlusion away before the tier changes.
+        let slow = drive(&mut view, &ctx, 90, 0.04, true);
+        assert!(slow.iter().all(Option::is_none), "tier unchanged: {slow:?}");
+        assert!(view.occlusion_paused() && !view.occlusion_now());
+        view.reset_quality();
+        view.govern(&ctx, false);
+        assert!(view.occlusion_now(), "reset brings it back");
         *STATS.lock().unwrap() = None;
     }
 }

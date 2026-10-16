@@ -22,6 +22,8 @@ pub(crate) struct Controls {
     pub(super) shadows: bool,
     /// Screen-space ambient occlusion (the frame governor may pause it).
     pub(super) ssao: bool,
+    /// This GPU draws occlusion at all. Set by the host each frame.
+    pub(super) ssao_available: bool,
     /// Measuring lines: the enclosure's size and the selected part's.
     pub(super) dimensions: bool,
     /// The frame governor has stepped the quality down: the toolbar offers
@@ -43,6 +45,7 @@ impl Default for Controls {
             move_items: true,
             shadows: true,
             ssao: true,
+            ssao_available: true,
             dimensions: false,
             reduced: false,
             restore: false,
@@ -120,7 +123,7 @@ pub(super) fn toolbar(
                 controls.layers.door,
                 controls.layers.wires,
                 controls.shadows,
-                controls.ssao,
+                controls.ssao && controls.ssao_available,
                 controls.missing_data,
             ]
             .iter()
@@ -146,11 +149,19 @@ pub(super) fn toolbar(
                         .changed();
                     ui.checkbox(&mut controls.shadows, "Shadows")
                         .on_hover_text("Soft shadows from the key light (View > 3D > Shadows)");
-                    ui.checkbox(&mut controls.ssao, "Occlusion").on_hover_text(
-                        "Ambient occlusion: corners and contacts darken (View > 3D > Ambient \
-                         occlusion). The 3D view turns it off by itself when it runs slowly; \
-                         \"Restore quality\" or switching it off and on asks for it back.",
-                    );
+                    if controls.ssao_available {
+                        ui.checkbox(&mut controls.ssao, "Occlusion").on_hover_text(
+                            "Ambient occlusion: corners and contacts darken (View > 3D > \
+                             Ambient occlusion). The 3D view turns it off by itself when it \
+                             runs slowly; \"Restore quality\" or switching it off and on asks \
+                             for it back.",
+                        );
+                    } else {
+                        ui.add_enabled(false, egui::Checkbox::new(&mut false, "Occlusion"))
+                            .on_disabled_hover_text(
+                                "Needs a discrete GPU; this one cannot draw ambient occlusion",
+                            );
+                    }
                     ui.checkbox(&mut controls.missing_data, "Missing data")
                         .on_hover_text(
                             "Mark every device that has no part data with a \"?\". Off: \

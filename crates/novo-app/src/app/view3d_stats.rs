@@ -172,6 +172,8 @@ pub(super) fn report(
             "occlusion on"
         } else if occlusion_paused {
             "occlusion paused"
+        } else if s.adapter_tier != novo_view3d::render::Tier::Discrete {
+            "occlusion off (needs a discrete GPU)"
         } else {
             "occlusion off"
         };
@@ -264,6 +266,15 @@ mod tests {
         assert!(paused.contains("occlusion paused"), "{paused}");
         let plain = report(Some(&off), &[16.0], Build::default(), false);
         assert!(plain.contains("95th, occlusion off"), "{plain}");
+        let integrated = RenderStats {
+            adapter_tier: Tier::Integrated,
+            ..off
+        };
+        let text = report(Some(&integrated), &[16.0], Build::default(), false);
+        assert!(
+            text.contains("occlusion off (needs a discrete GPU)"),
+            "{text}"
+        );
     }
 
     #[test]
