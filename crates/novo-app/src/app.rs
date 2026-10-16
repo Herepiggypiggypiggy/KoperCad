@@ -20,6 +20,9 @@ mod cable_controls;
 mod cable_cores;
 #[cfg(test)]
 mod cable_cores_tests;
+mod calculations;
+#[cfg(test)]
+mod calculations_tests;
 mod change_report;
 mod changes;
 mod checks;
@@ -32,6 +35,7 @@ mod dock;
 mod drawers;
 mod duplicate;
 mod dxf;
+mod electrical;
 mod eplan_import;
 mod example;
 mod faults;
@@ -95,6 +99,7 @@ mod protection;
 mod reports;
 mod reports_view;
 mod revisions;
+mod safety;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -227,6 +232,16 @@ impl OutlineMode {
             OutlineMode::Commissioning => "Commissioning",
         }
     }
+
+    fn icon(self) -> &'static str {
+        use novo_theme::icons::{canvas, panel};
+        match self {
+            OutlineMode::Pages => panel::PAGES,
+            OutlineMode::Issues => panel::ISSUES,
+            OutlineMode::Changes => panel::CHANGES,
+            OutlineMode::Commissioning => canvas::COMMISSIONING,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -309,6 +324,9 @@ pub struct NovoApp {
     /// The breadcrumb's page link this frame. A click on it toggles the
     /// flyout, so the flyout must not count it as a click elsewhere.
     breadcrumb_link: Option<egui::Response>,
+    /// The top bar's outline button this frame (only shown while the outline
+    /// is a flyout). A click on it toggles the flyout, like the breadcrumb.
+    outline_toggle: Option<egui::Response>,
     /// Text in the outline's page filter.
     page_filter: String,
     /// Whether the outline files pages by page group or by panel.
@@ -381,6 +399,7 @@ impl NovoApp {
             outline_open: false,
             outline_mode: OutlineMode::Pages,
             breadcrumb_link: None,
+            outline_toggle: None,
             page_filter: String::new(),
             page_view: PageView::Function,
             ol: outline::OutlineState::new(),
@@ -957,6 +976,7 @@ impl NovoApp {
         }
 
         self.breadcrumb_link = None;
+        self.outline_toggle = None;
         egui::Panel::top("top_bar")
             .exact_size(TOP_BAR)
             .show(ui, |ui| self.top_bar(ui, &mut picked));
@@ -1058,6 +1078,9 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.calculations_window(&ctx);
+        self.electrical_window(&ctx);
+        self.safety_window(&ctx);
         self.numbering_window(&ctx);
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
@@ -1224,6 +1247,7 @@ impl NovoApp {
                 self.wb.queued.push(workspace.command());
             }
             ui.separator();
+            self.outline_toggle_button(ui);
             self.breadcrumb(ui, fit.name_chars);
             let left_end = ui.min_rect().right();
 
@@ -1256,6 +1280,34 @@ impl NovoApp {
             });
             self.top_bar_gap = right.response.rect.left() - left_end;
         });
+    }
+
+    /// Whether the outline is a flyout this frame (the window is too narrow
+    /// to pin it) that the top bar button opens.
+    fn outline_flyout_available(&self) -> bool {
+        self.is_open()
+            && !self.focus_mode
+            && !self.outline_pinned()
+            && self.workspace() != workspace::Workspace::Reports
+    }
+
+    /// The button that opens the outline flyout: a named toggle in the top
+    /// bar, left of the breadcrumb.
+    fn outline_toggle_button(&mut self, ui: &mut egui::Ui) {
+        if !self.outline_flyout_available() {
+            return;
+        }
+        let toggle = ui.add(egui::Button::selectable(
+            self.outline_open,
+            self.outline_mode.label(),
+        ));
+        if toggle.clicked() {
+            self.outline_open ^= true;
+            // The keys stay with the drawing after the click.
+            toggle.surrender_focus();
+        }
+        self.anchor_response("outline.toggle", &toggle, "Pages button");
+        self.outline_toggle = Some(toggle);
     }
 
     /// project / page. A click on the page opens the outline.
@@ -1320,15 +1372,30 @@ impl NovoApp {
     /// Picking a page or an issue closes the flyout.
     fn outline(&mut self, ui: &mut egui::Ui, picked: &mut Vec<Action>) {
         ui.set_min_width(ui.available_width());
+        // The current tab shows icon and name, the others only the icon (the
+        // name is in the tooltip), so four tabs and the pin fit the 248 pt
+        // column at every density.
         ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = novo_theme::space::XS;
             for mode in [
                 OutlineMode::Pages,
                 OutlineMode::Issues,
                 OutlineMode::Changes,
                 OutlineMode::Commissioning,
             ] {
+                let current = self.outline_mode == mode;
+                let text = if current && mode == OutlineMode::Commissioning {
+                    // The longest name: without its icon it still leaves room
+                    // for the other three icons and the pin.
+                    mode.label().to_owned()
+                } else if current {
+                    format!("{} {}", mode.icon(), mode.label())
+                } else {
+                    mode.icon().to_owned()
+                };
                 if ui
-                    .selectable_label(self.outline_mode == mode, mode.label())
+                    .selectable_label(current, text)
+                    .on_hover_text(mode.label())
                     .clicked()
                 {
                     self.outline_mode = mode;
@@ -1336,14 +1403,12 @@ impl NovoApp {
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let pinned = self.outline_pinned();
-                let pin = egui::Button::selectable(pinned, "Pin");
-                if ui
-                    .add(pin)
-                    .on_hover_text(if pinned {
-                        "Unpin outline"
-                    } else {
-                        "Pin outline"
-                    })
+                let tip = if pinned {
+                    "Unpin outline"
+                } else {
+                    "Pin outline"
+                };
+                if novo_theme::widgets::icon_toggle(ui, novo_theme::icons::action::PIN, pinned, tip)
                     .clicked()
                 {
                     picked.push(Action::PinOutline);
@@ -1432,31 +1497,21 @@ impl NovoApp {
     }
 
     /// Below the pinning width the outline floats over the canvas, opened
-    /// from the "Pages" button at its top left, so the drawing never moves.
+    /// from the "Pages" button in the top bar, so the drawing never moves and
+    /// nothing sits on top of a workspace's toolbar.
     fn outline_flyout(
         &mut self,
         ctx: &egui::Context,
         canvas: egui::Rect,
         picked: &mut Vec<Action>,
     ) {
-        let toggle = egui::Area::new(egui::Id::new("outline_toggle"))
-            .fixed_pos(canvas.left_top() + egui::vec2(8.0, 8.0))
-            .show(ctx, |ui| {
-                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Extend);
-                ui.add(egui::Button::selectable(
-                    self.outline_open,
-                    self.outline_mode.label(),
-                ))
-            })
-            .inner;
-        self.anchor_response("outline.toggle", &toggle, "Pages button");
-        if toggle.clicked() {
-            self.outline_open ^= true;
-        }
+        let Some(toggle) = self.outline_toggle.clone() else {
+            return;
+        };
         if !self.outline_open {
             return;
         }
-        let top = canvas.top() + 8.0 + toggle.rect.height() + 4.0;
+        let top = canvas.top() + 8.0;
         let height = (canvas.bottom() - top - 8.0).max(120.0);
         let area = egui::Area::new(egui::Id::new("outline_flyout"))
             .fixed_pos(egui::pos2(canvas.left() + 8.0, top))
@@ -2286,6 +2341,31 @@ mod tests {
         // A click on the canvas, away from the flyout, closes it.
         frame(&ctx, &mut app, click_at(egui::pos2(1000.0, 500.0)));
         frame(&ctx, &mut app, sized(1366.0));
+        assert!(!app.outline_open);
+    }
+
+    #[test]
+    fn the_pages_button_is_in_the_top_bar_and_only_while_the_outline_is_a_flyout() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        frame(&ctx, &mut app, sized(1366.0));
+        let button = app
+            .outline_toggle
+            .as_ref()
+            .expect("the button is drawn")
+            .rect;
+        assert!(
+            button.bottom() <= TOP_BAR,
+            "it sits in the top bar, not over the canvas: {button:?}"
+        );
+        frame(&ctx, &mut app, click_at(button.center()));
+        assert!(app.outline_open, "a click opens the flyout");
+
+        // Wide enough to pin the outline: no button, no flyout.
+        frame(&ctx, &mut app, sized(1920.0));
+        assert!(app.outline_pinned());
+        assert!(app.outline_toggle.is_none());
         assert!(!app.outline_open);
     }
 

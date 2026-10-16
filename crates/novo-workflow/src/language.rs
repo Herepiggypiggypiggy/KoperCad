@@ -418,6 +418,35 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.shortcuts", &[], &["sneltoetsen", "toetsen"]),
     // Check
     nl("check.problems", &["problemen", "fouten"], &["controles"]),
+    nl(
+        "check.calculations",
+        &[],
+        &[
+            "berekeningen",
+            "kabelberekening",
+            "spanningsval",
+            "kortsluiting",
+        ],
+    ),
+    nl(
+        "check.electrical_inputs",
+        &[],
+        &[
+            "elektrische gegevens",
+            "voeding",
+            "transformator",
+            "kortsluitstroom",
+        ],
+    ),
+    nl(
+        "check.safety",
+        &[],
+        &[
+            "veiligheidsfuncties",
+            "performance level",
+            "machineveiligheid",
+        ],
+    ),
     nl("check.next_problem", &[], &["volgend probleem"]),
     nl("check.previous_problem", &[], &["vorig probleem"]),
     nl(
