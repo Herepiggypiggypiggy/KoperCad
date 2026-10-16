@@ -20,9 +20,15 @@ struct Globals {
     view_dir: vec4<f32>,
     // xy: size of the image being drawn, in pixels.
     viewport: vec4<f32>,
+    // World to the key light's clip space.
+    light_vp: mat4x4<f32>,
+    // x: shadow strength (0 = off), y: depth bias, z: texel size in uv.
+    shadow: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> g: Globals;
+@group(0) @binding(1) var shadow_map: texture_depth_2d;
+@group(0) @binding(2) var shadow_sampler: sampler_comparison;
 
 struct Vertex {
     @location(0) pos: vec3<f32>,
@@ -54,6 +60,34 @@ struct FaceOut {
     @location(1) normal: vec3<f32>,
     @location(2) color: vec4<f32>,
     @location(3) spec: f32,
+}
+
+// Depth only, from the key light.
+@vertex
+fn vs_shadow(v: Vertex, i: Instance) -> @builtin(position) vec4<f32> {
+    return g.light_vp * vec4<f32>(world_of(v, i), 1.0);
+}
+
+// Share of the key light that reaches `world` (1 = fully lit): 3x3 PCF over
+// the shadow map, 1 outside it.
+fn key_visibility(world: vec3<f32>, n: vec3<f32>) -> f32 {
+    if (g.shadow.x <= 0.0) {
+        return 1.0;
+    }
+    // Push the point off the surface along its normal to avoid acne.
+    let p = g.light_vp * vec4<f32>(world + n * 1.5, 1.0);
+    let uv = vec2<f32>(p.x * 0.5 + 0.5, 0.5 - p.y * 0.5);
+    let ref_depth = p.z - g.shadow.y;
+    var lit = 0.0;
+    for (var dy = -1; dy <= 1; dy++) {
+        for (var dx = -1; dx <= 1; dx++) {
+            let o = vec2<f32>(f32(dx), f32(dy)) * g.shadow.z * 1.5;
+            lit += textureSampleCompareLevel(shadow_map, shadow_sampler, uv + o, ref_depth);
+        }
+    }
+    let inside = uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0 && p.z <= 1.0;
+    let v = select(1.0, lit / 9.0, inside);
+    return mix(1.0, v, g.shadow.x);
 }
 
 @vertex
@@ -93,7 +127,8 @@ fn fs_face(f: FaceOut, @builtin(front_facing) front: bool) -> @location(0) vec4<
     let hemi = mix(0.55, 1.0, n.y * 0.5 + 0.5);
     let diffuse = max(dot(n, l), 0.0);
     let head = max(dot(n, to_eye), 0.0);
-    var shade = ambient * hemi + (1.0 - ambient) * (0.7 * diffuse + 0.3 * head);
+    let vis = key_visibility(f.world, n);
+    var shade = ambient * hemi + (1.0 - ambient) * (0.7 * diffuse * vis + 0.3 * head);
     // Contact shade: the lower part of things standing on the plate is darker.
     if (f.world.z > 0.5) {
         let k = smoothstep(0.0, g.params.y, f.world.z);
@@ -101,7 +136,7 @@ fn fs_face(f: FaceOut, @builtin(front_facing) front: bool) -> @location(0) vec4<
     }
     // Weak Blinn highlight (power 24) from the key light only.
     let half_vec = normalize(l + to_eye);
-    let highlight = f.spec * pow(max(dot(n, half_vec), 0.0), 24.0) * (1.0 - ambient * 0.5);
+    let highlight = f.spec * pow(max(dot(n, half_vec), 0.0), 24.0) * (1.0 - ambient * 0.5) * vis;
     let rgb = to_srgb(to_linear(f.color.rgb) * shade + vec3<f32>(highlight));
     return vec4<f32>(rgb, f.color.a);
 }

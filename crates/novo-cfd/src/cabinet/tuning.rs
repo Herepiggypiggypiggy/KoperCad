@@ -4,9 +4,30 @@ use std::time::Duration;
 
 use crate::result::Fidelity;
 
+/// How a level reaches its steady state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Method {
+    /// Pseudo-transient iteration (`flow::solver::steady`): a first-order
+    /// preview, then the second-order scheme, converged on window means.
+    /// Roughly 30 to 40 times faster than the march for the same answer.
+    #[default]
+    Steady,
+    /// The false-transient march in time (the original path, kept for
+    /// comparison and as a fallback).
+    March,
+}
+
 /// What one level does.
 #[derive(Debug, Clone, PartialEq)]
 pub struct LevelTuning {
+    /// How the steady state is reached. For `Steady`, `max_steps` is the
+    /// iteration limit and `steady_tol`, `max_time_s`, `cfl` and
+    /// `solid_speedup` only apply to the march (the iteration has its own
+    /// convergence test).
+    pub method: Method,
+    /// A turbulence model is coupled in this level: the steady path does not
+    /// follow the model's per-step update yet, so the level marches.
+    pub turbulent: bool,
     /// Overrides the cell count of the level (tests use small grids).
     pub target_cells: Option<usize>,
     /// Mesh rules for the level (`None` = the defaults of the level's
@@ -47,6 +68,14 @@ pub struct Tuning {
 }
 
 impl Tuning {
+    /// The same levels, marched in time (the original path).
+    pub fn marched(mut self) -> Tuning {
+        for l in [&mut self.coarse, &mut self.medium, &mut self.fine] {
+            l.method = Method::March;
+        }
+        self
+    }
+
     pub fn level(&self, f: Fidelity) -> Option<&LevelTuning> {
         match f {
             Fidelity::Preview2d => None,
@@ -73,6 +102,8 @@ fn level(
     wall_s: u64,
 ) -> LevelTuning {
     LevelTuning {
+        method: Method::Steady,
+        turbulent: false,
         target_cells: Some(cells),
         mesh: None,
         steady_tol,

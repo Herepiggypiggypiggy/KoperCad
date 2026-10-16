@@ -248,6 +248,66 @@ fn the_keymap_has_the_3d_keys() {
     );
 }
 
+/// One frame at egui time `time` seconds.
+fn frame_at(d: &mut Drive, time: f64) {
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(1600.0, 900.0),
+        )),
+        time: Some(time),
+        ..Default::default()
+    };
+    let app = &mut d.app;
+    let mut output = d.ctx.run_ui(input, |ui| app.show(ui));
+    output.textures_delta.clear();
+}
+
+#[test]
+fn the_stats_command_shows_the_panel_and_spinning_turns_the_view_and_samples_frames() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(!d.app.view3d.stats.shown);
+    d.app.run_command(&ctx, "view.3d_stats", None);
+    assert!(d.app.view3d.stats.shown);
+
+    let yaw = d.app.view3d.view.camera.yaw;
+    d.app.view3d.stats.spin = true;
+    for i in 0..6 {
+        frame_at(&mut d, 10.0 + i as f64 * 0.016);
+    }
+    assert_ne!(d.app.view3d.view.camera.yaw, yaw, "the view turned");
+    let samples = d.app.view3d.stats.samples();
+    assert!(!samples.is_empty(), "frames were sampled");
+    assert!(
+        samples.iter().all(|ms| (15.0..17.0).contains(ms)),
+        "16 ms frames: {samples:?}"
+    );
+
+    // Closing the panel stops the spin and the sampling.
+    d.app.run_command(&ctx, "view.3d_stats", None);
+    assert!(!d.app.view3d.stats.shown && !d.app.view3d.stats.spin);
+    let yaw = d.app.view3d.view.camera.yaw;
+    frame_at(&mut d, 11.0);
+    frame_at(&mut d, 11.016);
+    assert_eq!(d.app.view3d.view.camera.yaw, yaw);
+}
+
+#[test]
+fn the_stats_command_is_in_the_view_menu_and_works_from_the_cabinet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.cabinet", None);
+    d.frame();
+    assert_ne!(d.app.workspace(), Workspace::View3d);
+    d.app.run_command(&ctx, "view.3d_stats", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.stats.shown);
+}
+
 #[test]
 fn the_3d_view_registers_the_anchor_lessons_point_at() {
     let dir = tempfile::tempdir().unwrap();
@@ -258,4 +318,19 @@ fn the_3d_view_registers_the_anchor_lessons_point_at() {
         .learn_anchor("workspace.view3d")
         .expect("`workspace.view3d` is not on screen");
     assert!(rect.width() > 0.0 && rect.height() > 0.0, "{rect:?}");
+}
+
+#[test]
+fn the_shadows_command_toggles_the_views_shadows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert!(d.app.view3d.view.state.display.shadows, "on by default");
+    d.app.run_command(&ctx, "view.3d_shadows", None);
+    d.frame();
+    assert!(!d.app.view3d.view.state.display.shadows);
+    d.app.run_command(&ctx, "view.3d_shadows", None);
+    d.frame();
+    assert!(d.app.view3d.view.state.display.shadows);
 }
