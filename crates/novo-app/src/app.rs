@@ -1069,7 +1069,13 @@ impl NovoApp {
         };
         // Shift+D swings the 3D door; elsewhere it is not a command.
         let in_3d = self.workspace() == workspace::Workspace::View3d;
-        commands.retain(|id| in_3d || *id != "view.3d_door");
+        commands.retain(|id| {
+            in_3d
+                || !matches!(
+                    *id,
+                    "view.3d_door" | "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all"
+                )
+        });
         if self.workspace() != workspace::Workspace::Schematic {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
@@ -1108,6 +1114,7 @@ impl NovoApp {
                     || *id == "view.3d_position"
                     || *id == "view.3d_place"
                     || *id == "view.3d_stats"
+                    || matches!(*id, "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all")
                     || id.starts_with("heat.")
             });
         }
