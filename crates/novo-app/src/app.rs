@@ -831,6 +831,7 @@ impl NovoApp {
             commands.retain(|id| {
                 Action::from_id(id).is_some()
                     || *id == "view.cabinet_table"
+                    || *id == "view.command_field_here"
                     || id.starts_with("heat.")
             });
         }

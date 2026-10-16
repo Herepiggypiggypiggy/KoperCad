@@ -1087,10 +1087,15 @@ impl NovoApp {
             None => return,
         };
         let delta = pointer - from;
-        if let Some(view) = self.canvas.schematic() {
-            view.canvas
-                .viewport
-                .pan_by_screen(novo_canvas::Vec2::new(delta.x, delta.y));
+        let by = novo_canvas::Vec2::new(delta.x, delta.y);
+        match self.workspace() {
+            Workspace::Cabinet => self.cabinet.view.viewport.pan_by_screen(by),
+            Workspace::Reports => {}
+            _ => {
+                if let Some(view) = self.canvas.schematic() {
+                    view.canvas.viewport.pan_by_screen(by);
+                }
+            }
         }
         self.wb.space_pan = Some(pointer);
         ctx.set_cursor_icon(egui::CursorIcon::Grabbing);
