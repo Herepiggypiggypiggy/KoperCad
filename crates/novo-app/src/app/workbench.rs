@@ -105,6 +105,8 @@ pub(crate) struct Workbench {
     pub(super) languages: Option<super::languages::LanguagesWindow>,
     /// The Renumber devices window, while it is open.
     pub(super) device_renumber: Option<super::device_renumber::DeviceRenumber>,
+    /// The shared property sheet of the selection (window and inspector).
+    pub(super) selection_sheet: super::selection_sheet::SelectionSheet,
     /// The Project rules window is open.
     pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
@@ -264,6 +266,7 @@ impl Default for Workbench {
             numbering: None,
             net_trace: None,
             device_renumber: None,
+            selection_sheet: Default::default(),
             project_rules: false,
             page_form: None,
             sheet_import: None,
@@ -498,6 +501,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "parts.import_step",
     "parts.import_folder",
     "parts.auto_assign",
+    "edit.shared_properties",
     "parts.clear",
     "parts.remove_unused",
     "project.standard",
@@ -1215,6 +1219,7 @@ impl NovoApp {
             "plc.overview" => self.wb.plc_overview = true,
             "parts.import_folder" => self.import_parts_folder(),
             "parts.auto_assign" => self.start_auto_assign(),
+            "edit.shared_properties" => self.open_selection_sheet(),
             "parts.clear" => self.clear_selected_parts(),
             "parts.remove_unused" => self.remove_unused_project_parts(),
             "project.standard" => self.wb.project_settings = true,

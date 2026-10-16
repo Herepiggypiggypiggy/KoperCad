@@ -120,6 +120,9 @@ mod revisions;
 mod safety;
 mod safety_functions;
 mod safety_report;
+mod selection_sheet;
+#[cfg(test)]
+mod selection_sheet_tests;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -1237,6 +1240,7 @@ impl NovoApp {
         self.project_settings_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);
+        self.selection_sheet_window(&ctx);
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);

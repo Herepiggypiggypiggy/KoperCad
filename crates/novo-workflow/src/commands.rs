@@ -781,6 +781,21 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Selection,
     ),
     cmd(
+        "edit.shared_properties",
+        "Properties of the selection",
+        "Edit",
+        &[
+            "property sheet",
+            "bulk edit",
+            "multiple",
+            "shared",
+            "inspector",
+            "fields",
+            "edit all",
+        ],
+        Needs::Selection,
+    ),
+    cmd(
         "edit.rename",
         "Rename",
         "Edit",

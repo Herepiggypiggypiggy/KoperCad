@@ -295,6 +295,13 @@ impl NovoApp {
         if device.is_none() && self.wire_panel(ctx, canvas) {
             return;
         }
+        if device.is_none() {
+            let devices = self.multi_selected_devices();
+            if devices.len() >= 2 && self.multi_inspector(ctx, canvas, &devices) {
+                self.wb.inspector.leaving = None;
+                return;
+            }
+        }
         let Some(device) = device else {
             let pinned = self.wb.inspector.pinned;
             let leaving = self.wb.inspector.leaving.take();
@@ -988,7 +995,7 @@ fn relation_card(ui: &mut egui::Ui, relation: &Relation) -> egui::Response {
 }
 
 /// Enter, or leaving the field after a change, commits it.
-fn committed(ui: &egui::Ui, response: &egui::Response) -> bool {
+pub(super) fn committed(ui: &egui::Ui, response: &egui::Response) -> bool {
     response.lost_focus() && !ui.input(|i| i.key_pressed(egui::Key::Escape))
 }
 
