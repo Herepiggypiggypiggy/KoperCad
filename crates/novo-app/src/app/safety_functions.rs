@@ -96,6 +96,7 @@ pub(super) fn section(
     project: &Project,
     state: &mut BoundFunctions,
     copy: &mut Option<String>,
+    export: &mut bool,
 ) {
     widgets::section_label(ui, "Project safety functions");
     ui.weak(format!(
@@ -220,9 +221,18 @@ pub(super) fn section(
             );
         }
     }
-    if ui.button("Copy function as text").clicked() {
-        *copy = Some(rating_text(&rating));
-    }
+    ui.horizontal(|ui| {
+        if ui.button("Copy function as text").clicked() {
+            *copy = Some(rating_text(&rating));
+        }
+        if ui
+            .button("Export report (PDF)")
+            .on_hover_text("Writes <project> safety.pdf next to the project file")
+            .clicked()
+        {
+            *export = true;
+        }
+    });
     if remove {
         let at = state.selected;
         state.list.remove(at);

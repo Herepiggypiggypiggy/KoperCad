@@ -672,6 +672,16 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_dimensions",
+        &["maatvoering tonen in 3d"],
+        &["maten", "maatvoering", "afstand", "afstanden"],
+    ),
+    nl(
+        "view.3d_quality",
+        &["3d kwaliteit herstellen"],
+        &["kwaliteit", "trage weergave", "herstellen"],
+    ),
+    nl(
         "view.3d_stats",
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],
@@ -739,6 +749,16 @@ pub const DUTCH: &[Aliases] = &[
         "export.report_pdf",
         &["exporteer rapport"],
         &["rapport pdf", "rapport afdrukken"],
+    ),
+    nl(
+        "export.pdf_options",
+        &["pdf opties", "exporteer pdf opties"],
+        &[
+            "paginabereik",
+            "bladwijzers",
+            "koppelingen",
+            "pagina's kiezen",
+        ],
     ),
     nl(
         "export.pdf_page",
