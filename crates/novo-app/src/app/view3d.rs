@@ -26,6 +26,7 @@ use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
 use super::view3d_stats::{Build, Stats};
+use super::view3d_views::{self, ViewsAction};
 
 /// The one view of the app.
 const VIEW_ID: u64 = 1;
@@ -187,7 +188,7 @@ impl NovoApp {
         match mode.pending.take() {
             Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
             Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
-            None => {}
+            _ => {}
         }
 
         // The Cabinet's selection reaches the 3D view when it changed there.
@@ -291,7 +292,32 @@ impl NovoApp {
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
-        view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        let changed = view3d_controls::toolbar(
+            ui.ctx(),
+            view_rect,
+            &mut mode.controls,
+            limit,
+            &self.settings.camera_views,
+        );
+        match changed.views {
+            Some(ViewsAction::Save) => {
+                // The menu disables Save when it is full.
+                view3d_views::save(&mut self.settings.camera_views, &mode.view.camera);
+            }
+            Some(ViewsAction::Go(i)) => {
+                if let Some(b) = self.settings.camera_views.get(i) {
+                    mode.view.go_to_camera(
+                        view3d_views::camera_of(b),
+                        now,
+                        self.settings.reduce_motion,
+                    );
+                }
+            }
+            Some(ViewsAction::Delete(i)) if i < self.settings.camera_views.len() => {
+                self.settings.camera_views.remove(i);
+            }
+            _ => {}
+        }
         let stale = run_heat(
             &mut self.cabinet.heat,
             project,

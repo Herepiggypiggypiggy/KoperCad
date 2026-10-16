@@ -77,6 +77,20 @@ pub struct Settings {
     /// The id of the newest What's new entry the person has opened the
     /// list over (`assets/whats-new.md`); empty on a first run.
     pub whats_new_seen: String,
+    /// Camera positions saved in the 3D view, per user, not in the project.
+    pub camera_views: Vec<CameraBookmark>,
+}
+
+/// A saved 3D camera: where it looks from, in the view's own units.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CameraBookmark {
+    pub name: String,
+    pub target: [f32; 3],
+    pub yaw: f32,
+    pub pitch: f32,
+    pub distance: f32,
+    pub fov_y: f32,
+    pub orthographic: bool,
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way

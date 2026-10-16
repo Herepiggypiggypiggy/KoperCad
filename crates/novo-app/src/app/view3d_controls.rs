@@ -38,6 +38,8 @@ impl Default for Controls {
 pub(super) struct Changed {
     pub(super) layers: bool,
     pub(super) door: bool,
+    /// What the Views menu asked for.
+    pub(super) views: Option<super::view3d_views::ViewsAction>,
 }
 
 impl Controls {
@@ -72,6 +74,7 @@ pub(super) fn toolbar(
     view: egui::Rect,
     controls: &mut Controls,
     limit: Option<f64>,
+    views: &[crate::settings::CameraBookmark],
 ) -> Changed {
     let mut changed = Changed::default();
     egui::Area::new(egui::Id::new("view3d_toolbar"))
@@ -100,6 +103,7 @@ pub(super) fn toolbar(
                         "Shadows",
                         "Soft shadows from the key light (View > 3D > Shadows)",
                     );
+                    changed.views = super::view3d_views::menu(ui, views);
                     ui.separator();
                     if let Some(limit) = limit
                         && controls.layers.door

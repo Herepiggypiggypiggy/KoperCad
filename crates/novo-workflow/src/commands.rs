@@ -1096,6 +1096,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_save_view",
+        "Save the current 3D camera as a view",
+        "View",
+        &["save view", "bookmark", "camera", "remember view"],
+        Needs::Project,
+    ),
+    cmd(
         "view.iso",
         "Isometric view",
         "View",

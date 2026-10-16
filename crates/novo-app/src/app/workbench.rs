@@ -402,6 +402,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_wires",
     "view.3d_shadows",
     "view.3d_stats",
+    "view.3d_save_view",
     "view.iso",
     "view.front",
     "view.top",
@@ -876,6 +877,18 @@ impl NovoApp {
                     }
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
+                }
+            }
+            "view.3d_save_view" => {
+                self.switch_workspace(Workspace::View3d);
+                let camera = self.view3d.view.camera;
+                if super::view3d_views::save(&mut self.settings.camera_views, &camera) {
+                    self.message(Level::Info, "View saved: Views menu in the 3D toolbar");
+                } else {
+                    self.message(
+                        Level::Info,
+                        "The Views menu holds twelve views: forget one first",
+                    );
                 }
             }
             "view.3d_stats" => {

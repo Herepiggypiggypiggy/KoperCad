@@ -195,6 +195,19 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
     assert_eq!(d.app.view3d.controls.door_deg, 100.0);
 }
 
+#[test]
+fn the_save_view_command_keeps_the_camera_in_the_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.view3d.view.camera.yaw = 0.9;
+    d.app.run_command(&ctx, "view.3d_save_view", None);
+    let views = &d.app.settings.camera_views;
+    assert_eq!(views.len(), 1);
+    assert_eq!(views[0].name, "View 1");
+    assert!((views[0].yaw - 0.9).abs() < 1e-6);
+}
+
 /// One frame with `key` pressed, as the app sees a keystroke.
 fn press(d: &mut Drive, key: egui::Key, modifiers: egui::Modifiers) {
     d.frame_with(vec![egui::Event::Key {

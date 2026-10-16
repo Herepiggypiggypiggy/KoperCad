@@ -643,6 +643,11 @@ pub const DUTCH: &[Aliases] = &[
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],
     ),
+    nl(
+        "view.3d_save_view",
+        &["3d zicht opslaan"],
+        &["zicht opslaan", "camera opslaan"],
+    ),
     nl("view.iso", &[], &["isometrisch", "hoekzicht"]),
     nl("view.front", &[], &["vooraanzicht", "deurzijde"]),
     nl("view.top", &[], &["bovenaanzicht", "van boven"]),

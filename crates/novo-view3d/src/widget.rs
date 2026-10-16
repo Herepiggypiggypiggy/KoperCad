@@ -501,6 +501,12 @@ impl View3d {
         self.animate_to(to, now, reduced);
     }
 
+    /// Eases the camera to `to` (a saved view).
+    pub fn go_to_camera(&mut self, to: Camera, now: f64, reduced: bool) {
+        self.auto_ortho = to.projection == Projection::Orthographic;
+        self.animate_to(to, now, reduced);
+    }
+
     /// `view.fit`: the selection, or everything when nothing is selected.
     pub fn fit(&mut self, scene: &Scene, now: f64, reduced: bool) {
         let mut b = crate::math::Aabb::EMPTY;
