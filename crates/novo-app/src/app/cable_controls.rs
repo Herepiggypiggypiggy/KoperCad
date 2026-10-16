@@ -131,7 +131,7 @@ pub(super) fn cable_controls(
             .on_hover_text("Pick the cable part: it sets the cores and the cross-section")
             .clicked()
         {
-            edit.picker.open = !edit.picker.open;
+            edit.picker.toggle();
         }
     });
     if edit.picker.open
@@ -143,7 +143,7 @@ pub(super) fn cable_controls(
         )
     {
         actions.push(CableAction::AssignPart(key));
-        edit.picker.open = false;
+        edit.picker.close();
     }
 
     ui.horizontal(|ui| {

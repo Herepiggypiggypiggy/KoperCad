@@ -14,7 +14,7 @@
     },
     "properties": {}
   },
-  "next_id": 82,
+  "next_id": 81,
   "parts": [
     {
       "id": 71,
@@ -154,60 +154,6 @@
         "landscape": true,
         "columns": 10
       },
-      "frozen": {
-        "revision": "A",
-        "name": "1",
-        "columns": [
-          [
-            17,
-            1
-          ],
-          [
-            18,
-            2
-          ],
-          [
-            19,
-            2
-          ],
-          [
-            20,
-            2
-          ],
-          [
-            21,
-            1
-          ],
-          [
-            22,
-            1
-          ],
-          [
-            23,
-            1
-          ],
-          [
-            25,
-            1
-          ],
-          [
-            27,
-            2
-          ],
-          [
-            29,
-            2
-          ],
-          [
-            31,
-            2
-          ],
-          [
-            32,
-            1
-          ]
-        ]
-      },
       "properties": {}
     },
     {
@@ -221,44 +167,6 @@
         "size": "A3",
         "landscape": true,
         "columns": 10
-      },
-      "frozen": {
-        "revision": "A",
-        "name": "2",
-        "columns": [
-          [
-            51,
-            1
-          ],
-          [
-            52,
-            1
-          ],
-          [
-            53,
-            1
-          ],
-          [
-            54,
-            1
-          ],
-          [
-            55,
-            2
-          ],
-          [
-            56,
-            1
-          ],
-          [
-            57,
-            1
-          ],
-          [
-            58,
-            1
-          ]
-        ]
       },
       "properties": {}
     }
@@ -1797,16 +1705,6 @@
         }
       ],
       "length_m": 12.0,
-      "properties": {}
-    }
-  ],
-  "revisions": [
-    {
-      "id": 81,
-      "index": "A",
-      "date": "2026-10-01",
-      "author": "TV",
-      "description": "First issue",
       "properties": {}
     }
   ]

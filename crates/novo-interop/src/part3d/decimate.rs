@@ -1,7 +1,7 @@
 //! Welding and quadric edge-collapse simplification to a triangle budget.
 
 use std::cmp::Ordering;
-use std::collections::{BinaryHeap, HashMap};
+use std::collections::{BTreeMap, BinaryHeap, HashMap};
 
 use super::math::*;
 
@@ -237,7 +237,7 @@ struct Cand {
 
 impl PartialEq for Cand {
     fn eq(&self, o: &Self) -> bool {
-        self.cost == o.cost
+        self.cmp(o) == Ordering::Equal
     }
 }
 impl Eq for Cand {}
@@ -247,9 +247,12 @@ impl PartialOrd for Cand {
     }
 }
 impl Ord for Cand {
-    // Smallest cost first out of a max-heap.
+    // Smallest cost first out of a max-heap; equal costs go lowest edge first
+    // so the collapse order does not depend on how the heap was filled.
     fn cmp(&self, o: &Self) -> Ordering {
-        o.cost.total_cmp(&self.cost)
+        o.cost
+            .total_cmp(&self.cost)
+            .then_with(|| (o.a, o.b).cmp(&(self.a, self.b)))
     }
 }
 
@@ -277,7 +280,9 @@ pub fn simplify(pos: &mut Vec<V3>, tris: &mut Vec<[u32; 3]>, target: usize) {
     // Quadrics: area-weighted planes of the incident triangles, plus stiff
     // planes along open boundary edges.
     let mut q: Vec<Quadric> = vec![[0.0; 10]; nv];
-    let mut edge_count: HashMap<(u32, u32), (u32, u32)> = HashMap::new();
+    // Ordered, so the boundary planes are added and the heap is filled in the
+    // same order on every run (a hash map's order is random per process).
+    let mut edge_count: BTreeMap<(u32, u32), (u32, u32)> = BTreeMap::new();
     for (i, t) in tris.iter().enumerate() {
         let n = tri_normal(pos, *t);
         let area2 = len(n);

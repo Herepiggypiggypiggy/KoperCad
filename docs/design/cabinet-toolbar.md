@@ -24,7 +24,7 @@ each group with a small-caps caption above it (`text_tertiary`, which the Palett
 | Place | **Place all** (primary), Rules | |
 | Arrange | Plate setup (size and fill), Size enclosure | |
 | Route | Route all, Rails and ducts, Cut list | Rails and ducts arrives with #612 |
-| View | Plate / Table segmented switch (the face), Heat toggle, Door | |
+| View | Plate / Table segmented switch (the face), Heat toggle | Door settings stay in Plate setup, where they are today |
 | Output | Export menu: Plate drawing (PDF), later DXF | right edge |
 
 A status strip below carries the counts as pills (`0 placed`, `5 unplaced`,
@@ -44,8 +44,8 @@ the toolbar, so the bar holds only things you press.
   bar does not jump. The reason is written in the status strip ("Every device
   of this panel is placed"), not only in the tooltip, so keyboard users see it.
 - While a preview is shown, the Place group becomes **Accept (Enter)**
-  (primary) and **Cancel (Esc)**, plus **Why here?** (opens the rule
-  explanation that exists today). Place all steps aside; nothing else changes
+  (primary) and **Cancel (Esc)**. Place all steps aside; the reason a device
+  went where it did stays in the inspector ("why"), not in the bar; nothing else changes
   position.
 - Lesson anchor id `cabinet.place-all`, so a step can point at it.
 
@@ -57,7 +57,7 @@ the toolbar, so the bar holds only things you press.
   Rules and Export fold into a **More** menu; Place all, Route all, the panel
   picker and the Plate/Table switch always stay. Labels never truncate: a
   group that does not fit folds whole.
-- Door stays in View at wide widths and folds into More with its group. Order of folding, last to first: Output, View's Heat and Door, Route's Rails and ducts and Cut list, Arrange, Rules. Place all, Route all, the panel picker and the Plate/Table switch never fold.
+- Door settings are part of Plate setup (there is no separate Door button). Order of folding, last to first: Output, View's Heat, Route's Rails and ducts and Cut list, Arrange, Rules. Place all, Route all, the panel picker and the Plate/Table switch never fold.
 - One rule: labels are never shortened or turned into icon-only buttons; whole groups fold into More.
 
 ### Design system fit

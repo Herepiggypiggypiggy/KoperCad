@@ -190,3 +190,35 @@ fn throttle_drops_intermediate_snapshots_but_not_the_final() {
         .count();
     assert_eq!(n, 2, "first publish plus final");
 }
+
+#[test]
+fn demo_ladder_reports_every_level_and_progress_unthrottled() {
+    use novo_cfd::sched::DemoLadder;
+    let mut s = Scheduler::new(Arc::new(DemoLadder {
+        step: Duration::ZERO,
+    }));
+    let mut p = Plan::up_to(Fidelity::Fine);
+    p.min_publish_interval = Duration::from_secs(3600);
+    p.threads = Threads::Fixed(1);
+    let job = s.start(scenario(), p);
+    let t = Instant::now();
+    while !job.is_finished() {
+        assert!(t.elapsed() < Duration::from_secs(120));
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let ev = job.poll();
+    let done = ev
+        .iter()
+        .filter(|e| matches!(e, Event::LevelDone { .. }))
+        .count();
+    assert_eq!(done, 3);
+    let prog = ev
+        .iter()
+        .filter(|e| matches!(e, Event::Progress(_)))
+        .count();
+    assert_eq!(prog, 20 + 40 + 60, "every iteration reported");
+    assert!(matches!(
+        ev.last(),
+        Some(Event::Finished(Outcome::Completed))
+    ));
+}

@@ -51,6 +51,40 @@ impl PickerCatalog {
 pub(super) struct PartPicker {
     pub(super) open: bool,
     pub(super) query: String,
+    /// The rows for the last `(scope, query)`, so a picker that stays open
+    /// does not search a large catalog again every frame.
+    cache: Option<(String, String, Vec<Candidate>)>,
+}
+
+impl PartPicker {
+    /// Opens or closes the list; each opening searches afresh.
+    pub(super) fn toggle(&mut self) {
+        self.open = !self.open;
+        self.cache = None;
+    }
+
+    pub(super) fn close(&mut self) {
+        self.open = false;
+        self.cache = None;
+    }
+
+    /// The rows for `scope` (what is being searched for: a device, the
+    /// cables) and the current query. `build` runs only when either changed.
+    pub(super) fn rows(
+        &mut self,
+        scope: &str,
+        build: impl FnOnce(&str) -> Vec<Candidate>,
+    ) -> Vec<Candidate> {
+        if let Some((s, q, rows)) = &self.cache
+            && s == scope
+            && *q == self.query
+        {
+            return rows.clone();
+        }
+        let rows = build(&self.query);
+        self.cache = Some((scope.to_owned(), self.query.clone(), rows.clone()));
+        rows
+    }
 }
 
 /// One row of the list.
@@ -255,6 +289,43 @@ mod tests {
         let fits = |c: &Candidate| catalog.get(&c.key).is_some_and(|p| p.fits("K"));
         assert!(rows.iter().all(fits));
         assert!(rows.iter().all(|c| c.percent <= 100 && !c.title.is_empty()));
+    }
+
+    #[test]
+    fn a_large_catalog_is_searched_once_per_query_not_every_frame() {
+        let mut catalog = Catalog::new();
+        for i in 0..50_000 {
+            let mut part = CatalogPart::new("Acme", format!("K-{i:05}"));
+            part.description = format!("Contactor {i}");
+            part.letter_codes = vec!["K".into()];
+            catalog.upsert(part);
+        }
+        let (project, device) = project_with_contactor();
+        let mut picker = PartPicker {
+            open: true,
+            ..PartPicker::default()
+        };
+        let searches = std::cell::Cell::new(0);
+        let frame = |picker: &mut PartPicker| {
+            picker.rows("device", |query| {
+                searches.set(searches.get() + 1);
+                device_candidates(&catalog, &project, device, query)
+            })
+        };
+        let first = frame(&mut picker);
+        assert_eq!(first.len(), LIMIT, "the list stays short on a big catalog");
+        for _ in 0..100 {
+            assert_eq!(frame(&mut picker), first);
+        }
+        assert_eq!(searches.get(), 1, "100 more frames reuse the rows");
+        picker.query = "Contactor 49999".into();
+        let narrowed = frame(&mut picker);
+        assert_eq!(searches.get(), 2, "a new query searches again");
+        assert!(narrowed.iter().any(|c| c.title.contains("K-49999")));
+        picker.toggle();
+        picker.toggle();
+        frame(&mut picker);
+        assert_eq!(searches.get(), 3, "reopening searches afresh");
     }
 
     #[test]

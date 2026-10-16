@@ -33,6 +33,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `live.pole`
 - `live.coil`
 - `live.output`
+- `cabinet.place-all`
 
 ## Signals
 

@@ -889,6 +889,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         &[],
         Needs::Nothing,
     ),
+    verb(
+        cmd(
+            "cabinet.place-all",
+            "Place all devices (Cabinet)",
+            "View",
+            &["place", "fill plate", "auto place", "layout", "din rail"],
+            Needs::Project,
+        ),
+        &["place all"],
+    ),
     cmd(
         "cabinet.size-enclosure",
         "Size the enclosure",

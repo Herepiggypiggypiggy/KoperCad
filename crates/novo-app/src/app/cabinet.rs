@@ -17,12 +17,14 @@ use novo_layout::model::{
 use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
 
+use super::cabinet_bar;
 use super::cabinet_door::DoorState;
 use super::cabinet_inspector;
 use super::cabinet_routes;
 use super::cabinet_rules;
 use super::{Level, NovoApp};
 use crate::theme;
+use novo_theme::icons;
 
 /// The plate a new cabinet gets, in millimetres: a common 600 x 800 panel.
 const DEFAULT_PLATE: MountingPlate = MountingPlate {
@@ -450,122 +452,279 @@ impl NovoApp {
         });
 
         let mut ask: Option<Ask> = None;
+        let narrow = ui.available_width() < cabinet_bar::WIDE;
+        let place_key = self.command_shortcut_text(ui.ctx(), "cabinet.place-all");
+        let plate_face = !self.cabinet.table;
+        let mut place_anchor: Option<(egui::Rect, bool)> = None;
+        let mut all_placed_note = false;
         let mut delete_rail: Option<u64> = None;
         let mut move_rail: Option<super::cabinet_rails::RailDrag> = None;
-        ui.horizontal(|ui| {
-            ui.add_space(8.0);
-            let current = location
-                .as_ref()
-                .map_or_else(|| "No panel".to_owned(), ToString::to_string);
-            egui::ComboBox::from_id_salt("cabinet_panel")
-                .selected_text(current)
-                .show_ui(ui, |ui| {
-                    for l in &locations {
-                        if ui
-                            .selectable_label(location.as_ref() == Some(l), l.to_string())
-                            .clicked()
-                        {
-                            ask = Some(Ask::Panel(l.clone()));
+        ui.horizontal_top(|ui| {
+            ui.add_space(4.0);
+            cabinet_bar::group(ui, "Panel", |ui| {
+                let current = location
+                    .as_ref()
+                    .map_or_else(|| "No panel".to_owned(), ToString::to_string);
+                egui::ComboBox::from_id_salt("cabinet_panel")
+                    .selected_text(current)
+                    .show_ui(ui, |ui| {
+                        for l in &locations {
+                            if ui
+                                .selectable_label(location.as_ref() == Some(l), l.to_string())
+                                .clicked()
+                            {
+                                ask = Some(Ask::Panel(l.clone()));
+                            }
+                        }
+                    });
+                match (structure, &location) {
+                    (None, Some(l)) => {
+                        if ui.button("Create cabinet").clicked() {
+                            ask = Some(Ask::CreateCabinet(l.clone()));
                         }
                     }
-                });
-            match (structure, &location) {
-                (None, Some(l)) => {
-                    if ui.button("Create cabinet").clicked() {
-                        ask = Some(Ask::CreateCabinet(l.clone()));
+                    (Some(s), _)
+                        if layout.is_none() && ui.button("Set plate 600 x 800 mm").clicked() =>
+                    {
+                        ask = Some(Ask::SetPlate(s));
                     }
+                    _ => {}
                 }
-                (Some(s), _)
-                    if layout.is_none() && ui.button("Set plate 600 x 800 mm").clicked() =>
-                {
-                    ask = Some(Ask::SetPlate(s));
-                }
-                _ => {}
+            });
+            if layout.is_none() {
+                return;
             }
-            if layout.is_some() {
-                if has_plan {
-                    if ui.button("Accept  (Enter)").clicked() {
-                        ask = Some(Ask::Accept);
-                    }
-                    if ui.button("Cancel  (Esc)").clicked() {
-                        ask = Some(Ask::Cancel);
-                    }
-                } else {
-                    let enabled = unplaced > 0 || homeless > 0;
-                    if ui
-                        .add_enabled(enabled, egui::Button::new("Place all"))
-                        .on_disabled_hover_text("Every device of this panel is placed")
+            if has_plan {
+                cabinet_bar::group(ui, "Preview, nothing stored yet", |ui| {
+                    if cabinet_bar::primary(ui, icons::CHECK, "Accept", Some("Enter"), true)
                         .clicked()
                     {
-                        ask = Some(Ask::PlaceAll);
+                        ask = Some(Ask::Accept);
                     }
+                    if ui.button(format!("{}  Cancel   Esc", icons::X)).clicked() {
+                        ask = Some(Ask::Cancel);
+                    }
+                });
+                return;
+            }
+            cabinet_bar::group(ui, "Place", |ui| {
+                let r = cabinet_bar::primary(
+                    ui,
+                    icons::SQUARES_FOUR,
+                    "Place all",
+                    place_key.as_deref(),
+                    unplaced > 0 || homeless > 0,
+                );
+                let r = if unplaced > 0 || homeless > 0 {
+                    r.on_hover_text(format!(
+                        "Place the {unplaced} unplaced devices by the rules. You review the \
+                         preview before anything is stored."
+                    ))
+                } else {
+                    r
+                };
+                place_anchor = Some((r.rect, r.clicked()));
+                if r.clicked() {
+                    ask = Some(Ask::PlaceAll);
                 }
-                if !self.cabinet.table
-                    && ui
-                        .selectable_label(self.cabinet.plate_card, "Plate")
-                        .on_hover_text("Size and fill of the mounting plate")
+                if !narrow
+                    && cabinet_bar::button(ui, icons::SLIDERS_HORIZONTAL, "Rules", false)
+                        .on_hover_text("Where Place all puts each kind of device")
                         .clicked()
-                {
-                    ask = Some(Ask::TogglePlateCard);
-                }
-                if !self.cabinet.table
-                    && ui
-                        .selectable_label(self.cabinet.routes, "Route all")
-                        .on_hover_text(
-                            "Route every wire through the ducts: lengths, duct fill and problems",
-                        )
-                        .clicked()
-                {
-                    ask = Some(Ask::ToggleRoutes);
-                }
-                if !self.cabinet.table {
-                    super::heat::chips(ui, &mut self.cabinet.heat);
-                }
-                if ui
-                    .selectable_label(self.cabinet.table, "Table")
-                    .on_hover_text("Devices as a table (Ctrl+T)")
-                    .clicked()
-                {
-                    ask = Some(Ask::ToggleTable);
-                }
-                if ui
-                    .button("Plate drawing")
-                    .on_hover_text("Plate drawing with drill table (PDF)")
-                    .clicked()
-                {
-                    ask = Some(Ask::ExportPlate);
-                }
-                if ui.button("Size enclosure").clicked() {
-                    self.sizing.panel_open = !self.sizing.panel_open;
-                }
-                if ui
-                    .button("Rules")
-                    .on_hover_text("Where Place all puts each kind of device")
-                    .clicked()
                 {
                     self.cabinet.rules.editor_open ^= true;
                 }
-                if ui
-                    .button("Cut list")
-                    .on_hover_text("Bars of rail and duct to buy and cut")
+            });
+            if !narrow && plate_face {
+                cabinet_bar::group(ui, "Arrange", |ui| {
+                    if cabinet_bar::button(ui, icons::RULER, "Plate setup", self.cabinet.plate_card)
+                        .on_hover_text("Size, fill and door of the mounting plate")
+                        .clicked()
+                    {
+                        ask = Some(Ask::TogglePlateCard);
+                    }
+                    if cabinet_bar::button(
+                        ui,
+                        icons::ARROWS_OUT,
+                        "Size enclosure",
+                        self.sizing.panel_open,
+                    )
                     .clicked()
-                {
-                    self.cabinet.rules.cut_open ^= true;
+                    {
+                        self.sizing.panel_open = !self.sizing.panel_open;
+                    }
+                });
+            }
+            if plate_face || !narrow {
+                cabinet_bar::group(ui, "Route", |ui| {
+                    if plate_face
+                        && cabinet_bar::button(ui, icons::PATH, "Route all", self.cabinet.routes)
+                            .on_hover_text(
+                                "Route every wire through the ducts: lengths, duct fill and problems",
+                            )
+                            .clicked()
+                    {
+                        ask = Some(Ask::ToggleRoutes);
+                    }
+                    if !narrow
+                        && cabinet_bar::button(
+                            ui,
+                            icons::ROWS,
+                            "Rails and ducts",
+                            self.cabinet.rails.open,
+                        )
+                        .on_hover_text("Add, move, resize and delete rails and ducts (Ctrl+Shift+R)")
+                        .clicked()
+                    {
+                        self.cabinet.rails.open ^= true;
+                    }
+                    if !narrow
+                        && cabinet_bar::button(
+                            ui,
+                            icons::SCISSORS,
+                            "Cut list",
+                            self.cabinet.rules.cut_open,
+                        )
+                        .on_hover_text("Bars of rail and duct to buy and cut")
+                        .clicked()
+                    {
+                        self.cabinet.rules.cut_open ^= true;
+                    }
+                });
+            }
+            cabinet_bar::group(ui, "View", |ui| {
+                ui.scope(|ui| {
+                    // One joined control: no gap between the two halves.
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    if cabinet_bar::segment(ui, "Plate", plate_face).clicked() && !plate_face {
+                        ask = Some(Ask::ToggleTable);
+                    }
+                    if cabinet_bar::segment(ui, "Table", !plate_face)
+                        .on_hover_text("Devices as a table (Ctrl+T)")
+                        .clicked()
+                        && plate_face
+                    {
+                        ask = Some(Ask::ToggleTable);
+                    }
+                });
+                if plate_face && !narrow {
+                    super::heat::toggle(ui, &mut self.cabinet.heat);
                 }
-                if ui
-                    .selectable_label(self.cabinet.rails.open, "Rails and ducts")
-                    .on_hover_text("Add, move, resize and delete rails and ducts (Ctrl+Shift+R)")
-                    .clicked()
-                {
-                    self.cabinet.rails.open ^= true;
+            });
+            if narrow {
+                cabinet_bar::group(ui, "More", |ui| {
+                    ui.menu_button(format!("{}  More", icons::DOTS_THREE), |ui| {
+                        if cabinet_bar::button(ui, icons::SLIDERS_HORIZONTAL, "Rules", false)
+                            .clicked()
+                        {
+                            self.cabinet.rules.editor_open ^= true;
+                            ui.close();
+                        }
+                        if plate_face {
+                            if cabinet_bar::button(
+                                ui,
+                                icons::RULER,
+                                "Plate setup",
+                                self.cabinet.plate_card,
+                            )
+                            .clicked()
+                            {
+                                ask = Some(Ask::TogglePlateCard);
+                                ui.close();
+                            }
+                            if cabinet_bar::button(
+                                ui,
+                                icons::ARROWS_OUT,
+                                "Size enclosure",
+                                self.sizing.panel_open,
+                            )
+                            .clicked()
+                            {
+                                self.sizing.panel_open = !self.sizing.panel_open;
+                                ui.close();
+                            }
+                        }
+                        if cabinet_bar::button(
+                            ui,
+                            icons::ROWS,
+                            "Rails and ducts",
+                            self.cabinet.rails.open,
+                        )
+                        .clicked()
+                        {
+                            self.cabinet.rails.open ^= true;
+                            ui.close();
+                        }
+                        if cabinet_bar::button(
+                            ui,
+                            icons::SCISSORS,
+                            "Cut list",
+                            self.cabinet.rules.cut_open,
+                        )
+                        .clicked()
+                        {
+                            self.cabinet.rules.cut_open ^= true;
+                            ui.close();
+                        }
+                        if plate_face {
+                            super::heat::toggle(ui, &mut self.cabinet.heat);
+                        }
+                        if cabinet_bar::button(ui, icons::EXPORT, "Plate drawing (PDF)", false)
+                            .on_hover_text("Plate drawing with drill table")
+                            .clicked()
+                        {
+                            ask = Some(Ask::ExportPlate);
+                            ui.close();
+                        }
+                    });
+                });
+            } else {
+                cabinet_bar::group(ui, "Output", |ui| {
+                    ui.menu_button(format!("{}  Export", icons::EXPORT), |ui| {
+                        if ui
+                            .button("Plate drawing (PDF)")
+                            .on_hover_text("Plate drawing with drill table")
+                            .clicked()
+                        {
+                            ask = Some(Ask::ExportPlate);
+                            ui.close();
+                        }
+                    });
+                });
+            }
+        });
+        if layout.is_some() {
+            ui.horizontal(|ui| {
+                ui.add_space(8.0);
+                if plate_face && self.cabinet.heat.on && !has_plan {
+                    ui.label(egui::RichText::new("Heat").strong());
+                    super::heat::strip(ui, &mut self.cabinet.heat);
+                    ui.add_space(12.0);
                 }
-                ui.weak(format!("{placed} placed, {unplaced} unplaced"));
+                cabinet_bar::pill(ui, &format!("{placed} placed"), None);
+                if unplaced > 0 {
+                    cabinet_bar::pill(
+                        ui,
+                        &format!("{unplaced} unplaced"),
+                        Some(novo_theme::widgets::Level::Warning),
+                    );
+                } else if homeless > 0 {
+                    cabinet_bar::pill(
+                        ui,
+                        &format!("{homeless} without a cabinet"),
+                        Some(novo_theme::widgets::Level::Warning),
+                    );
+                } else if cands.is_empty() {
+                    ui.weak("No devices on this panel");
+                } else {
+                    ui.weak("Every device of this panel is placed");
+                }
                 let label = format!(
                     "{problems} {}",
                     if problems == 1 { "problem" } else { "problems" }
                 );
                 if problems == 0 {
-                    ui.weak(label);
+                    cabinet_bar::pill(ui, &label, None);
                 } else if let Some(shown) = &shown {
                     // The count opens the list; a row selects its device.
                     ui.menu_button(label, |ui| {
@@ -596,8 +755,8 @@ impl NovoApp {
                         }
                     });
                 }
-            }
-        });
+            });
+        }
         ui.separator();
 
         match shown {
@@ -760,6 +919,16 @@ impl NovoApp {
                     backdrop
                 };
                 let canvas_rect = ui.available_rect_before_wrap();
+                if self.cabinet.heat.take_fit()
+                    && let Some(input) = &heat_input
+                {
+                    let extent = self.cabinet.heat.extent_mm(input.plate.0);
+                    let bounds = novo_canvas::Aabb::new(
+                        vec2(0.0, 0.0),
+                        vec2(extent as f32, input.plate.1 as f32),
+                    );
+                    self.cabinet.view.viewport.fit(&bounds, 24.0);
+                }
                 if let Some(input) = &heat_input {
                     let [r, g, b, a] = backdrop.0;
                     super::heat::paint_under(
@@ -1081,6 +1250,12 @@ impl NovoApp {
                             "edit.delete" if !selected.is_empty() => {
                                 ask = Some(Ask::Remove(selected.clone()));
                             }
+                            "cabinet.place-all" if (unplaced > 0 || homeless > 0) && !has_plan => {
+                                ask = Some(Ask::PlaceAll);
+                            }
+                            "cabinet.place-all" if !has_plan => {
+                                all_placed_note = true;
+                            }
                             "edit.delete" => {
                                 delete_rail = self.cabinet.rails.deletable(project);
                             }
@@ -1131,6 +1306,15 @@ impl NovoApp {
         }
         if let Some(d) = move_rail {
             rail_ask = Some(super::cabinet_rails::RailAsk::MoveTo(d.id, d.at.0, d.at.1));
+        }
+        if all_placed_note {
+            self.message(Level::Info, "Every device of this panel is placed");
+        }
+        if let Some((rect, clicked)) = place_anchor {
+            self.anchor("cabinet.place-all", rect, "Place all");
+            if clicked {
+                self.learn_event(novo_learn::Event::Clicked("cabinet.place-all".to_owned()));
+            }
         }
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
