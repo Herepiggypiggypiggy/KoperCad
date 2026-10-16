@@ -67,17 +67,17 @@ pub(crate) fn tab(
 
 fn grade_color(grade: Grade) -> egui::Color32 {
     match grade {
-        Grade::Good => novo_theme::tokens::SUCCESS,
-        Grade::Fair => novo_theme::tokens::WARNING,
-        Grade::Poor => novo_theme::tokens::ERROR,
+        Grade::Good => crate::theme::ui_palette().success,
+        Grade::Fair => crate::theme::ui_palette().warning,
+        Grade::Poor => crate::theme::ui_palette().error,
     }
 }
 
 fn fill_color(fill: Fill) -> egui::Color32 {
     match fill {
-        Fill::Complete => novo_theme::tokens::SUCCESS,
-        Fill::Partial => novo_theme::tokens::WARNING,
-        Fill::Missing => novo_theme::tokens::ERROR,
+        Fill::Complete => crate::theme::ui_palette().success,
+        Fill::Partial => crate::theme::ui_palette().warning,
+        Fill::Missing => crate::theme::ui_palette().error,
     }
 }
 

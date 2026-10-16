@@ -149,7 +149,7 @@ pub(super) fn draw_grips(
         let s = view.world_to_screen(novo_canvas::vec2(x as f32, y as f32));
         egui::pos2(rect.min.x + s.x, rect.min.y + s.y)
     };
-    let accent = novo_theme::tokens::ACCENT;
+    let accent = crate::theme::ui_palette().accent;
     for r in project.all::<Rail>().filter(|r| r.structure == structure) {
         let id = r.id.raw();
         let (l, t, rt, b) = grip_of(r, size);
@@ -452,7 +452,7 @@ pub(super) fn draw_selected(
         egui::pos2(rect.min.x + s.x, rect.min.y + s.y)
     };
     let area = egui::Rect::from_two_pos(to_screen(x, y), to_screen(x + w, y + h)).expand(2.0);
-    let colour = novo_theme::tokens::ACCENT;
+    let colour = crate::theme::ui_palette().accent;
     painter.rect_stroke(
         area,
         0.0,

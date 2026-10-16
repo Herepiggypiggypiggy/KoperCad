@@ -690,9 +690,9 @@ fn checks_tab(
             for info in &on_page {
                 let glyph = target_glyph(&mode.store, info.target);
                 let tint = match glyph {
-                    "✖" => novo_theme::tokens::ERROR,
-                    "✔" => novo_theme::tokens::SUCCESS,
-                    _ => novo_theme::tokens::TEXT_MUTED,
+                    "✖" => crate::theme::ui_palette().error,
+                    "✔" => crate::theme::ui_palette().success,
+                    _ => crate::theme::ui_palette().text_secondary,
                 };
                 let size = if mode.large { TEXT_LARGE } else { 13.0 };
                 let font = egui::FontId::proportional(size);

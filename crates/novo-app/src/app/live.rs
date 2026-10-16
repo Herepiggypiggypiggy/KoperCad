@@ -22,7 +22,7 @@ use novo_sim::{
     Clock, Live, PoleState, Settled, Solution, inputs_seen, is_coil, is_lamp, is_load, is_motor,
     is_plc_input, is_plc_output, loads_on, settle_timed,
 };
-use novo_theme::{tokens, widgets};
+use novo_theme::widgets;
 
 use super::live_anim::{Anim, Frame};
 use super::{Level, NovoApp};
@@ -627,10 +627,12 @@ impl NovoApp {
                 let (color, width) = match &wire.live {
                     Live::Dead => (novo_theme::canvas::to_color32(dead_wire), 2.5),
                     Live::Carries(p) => {
-                        let color = colors.get(p).map_or(tokens::ACCENT, |c| c.1);
+                        let color = colors
+                            .get(p)
+                            .map_or(crate::theme::ui_palette().accent, |c| c.1);
                         (color.gamma_multiply(0.9), LIT_WIDTH)
                     }
-                    Live::Shorted(_) => (tokens::ERROR, LIT_WIDTH + 1.0),
+                    Live::Shorted(_) => (crate::theme::ui_palette().error, LIT_WIDTH + 1.0),
                 };
                 let [r, g, b, a] = color.to_srgba_unmultiplied();
                 (
@@ -717,17 +719,17 @@ impl NovoApp {
                         p.circle_stroke(
                             rect.center(),
                             BADGE + 2.0,
-                            egui::Stroke::new(1.5, tokens::WARNING),
+                            egui::Stroke::new(1.5, crate::theme::ui_palette().warning),
                         );
                     }
                     if badge.closed {
-                        p.circle_filled(rect.center(), BADGE, tokens::SUCCESS);
+                        p.circle_filled(rect.center(), BADGE, crate::theme::ui_palette().success);
                     } else {
-                        p.circle_filled(rect.center(), BADGE, tokens::BG_1);
+                        p.circle_filled(rect.center(), BADGE, crate::theme::ui_palette().panel);
                         p.circle_stroke(
                             rect.center(),
                             BADGE,
-                            egui::Stroke::new(1.5, tokens::TEXT_MUTED),
+                            egui::Stroke::new(1.5, crate::theme::ui_palette().text_secondary),
                         );
                     }
                     pole_rect.get_or_insert(rect);
@@ -776,13 +778,13 @@ impl NovoApp {
                         egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(BADGE * 2.0));
                     let p = ui.painter();
                     if badge.on {
-                        p.rect_filled(square, 2.0, tokens::SUCCESS);
+                        p.rect_filled(square, 2.0, crate::theme::ui_palette().success);
                     } else {
-                        p.rect_filled(square, 2.0, tokens::BG_1);
+                        p.rect_filled(square, 2.0, crate::theme::ui_palette().panel);
                         p.rect_stroke(
                             square,
                             2.0,
-                            egui::Stroke::new(1.5, tokens::TEXT_MUTED),
+                            egui::Stroke::new(1.5, crate::theme::ui_palette().text_secondary),
                             egui::StrokeKind::Inside,
                         );
                     }
@@ -820,12 +822,16 @@ impl NovoApp {
                         .allocate_exact_size(egui::Vec2::splat(BADGE * 1.6), egui::Sense::hover());
                     let p = ui.painter();
                     if *high {
-                        p.circle_filled(rect.center(), BADGE * 0.7, tokens::SUCCESS);
+                        p.circle_filled(
+                            rect.center(),
+                            BADGE * 0.7,
+                            crate::theme::ui_palette().success,
+                        );
                     } else {
                         p.circle_stroke(
                             rect.center(),
                             BADGE * 0.7,
-                            egui::Stroke::new(1.5, tokens::TEXT_MUTED),
+                            egui::Stroke::new(1.5, crate::theme::ui_palette().text_secondary),
                         );
                     }
                 });
@@ -849,12 +855,12 @@ impl NovoApp {
                     p.circle_filled(
                         rect.center(),
                         BADGE * 2.5,
-                        tokens::WARNING.gamma_multiply(0.18),
+                        crate::theme::ui_palette().warning.gamma_multiply(0.18),
                     );
                     p.circle_filled(
                         rect.center(),
                         BADGE * 1.5,
-                        tokens::WARNING.gamma_multiply(0.35),
+                        crate::theme::ui_palette().warning.gamma_multiply(0.35),
                     );
                 });
         }
@@ -906,7 +912,7 @@ impl NovoApp {
                             open_plc = true;
                         }
                         if plc_running {
-                            ui.colored_label(tokens::SUCCESS, "running");
+                            ui.colored_label(crate::theme::ui_palette().success, "running");
                         }
                     });
                     ui.add_space(2.0);
@@ -924,7 +930,7 @@ impl NovoApp {
                     }
                     if legend.shorted > 0 {
                         ui.colored_label(
-                            tokens::ERROR,
+                            crate::theme::ui_palette().error,
                             format!(
                                 "{} short{}: potentials meet",
                                 legend.shorted,

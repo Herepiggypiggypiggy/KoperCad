@@ -7,7 +7,7 @@
 
 use eframe::egui;
 use novo_learn::{Demo, Entry, Phase, Span, Standing, Target, parse_markup};
-use novo_theme::{tokens, widgets::section_label};
+use novo_theme::widgets::section_label;
 
 use super::NovoApp;
 use super::learn::Move;
@@ -216,7 +216,7 @@ impl NovoApp {
             let mark = if card.ticked { "✓" } else { "●" };
             let title = egui::RichText::new(format!("{mark} {}", card.step_title)).strong();
             ui.label(if card.ticked {
-                title.color(tokens::SUCCESS)
+                title.color(crate::theme::ui_palette().success)
             } else {
                 title
             });
@@ -234,7 +234,7 @@ impl NovoApp {
                 for (line, active) in &card.how {
                     let text = egui::RichText::new(line);
                     ui.label(if *active {
-                        text.strong().color(tokens::ACCENT_HOVER)
+                        text.strong().color(crate::theme::ui_palette().accent_hover)
                     } else {
                         text
                     });
@@ -295,7 +295,7 @@ impl NovoApp {
         let spans = match parse_markup(text) {
             Ok(spans) => spans,
             Err(e) => {
-                ui.colored_label(tokens::ERROR, e.to_string());
+                ui.colored_label(crate::theme::ui_palette().error, e.to_string());
                 return;
             }
         };
@@ -315,8 +315,8 @@ impl NovoApp {
                             ui.label(
                                 egui::RichText::new(format!(" {key} "))
                                     .monospace()
-                                    .color(tokens::ACCENT_HOVER)
-                                    .background_color(tokens::ACCENT_SELECTION),
+                                    .color(crate::theme::ui_palette().accent_hover)
+                                    .background_color(crate::theme::ui_palette().accent_wash),
                             );
                         }
                         Span::Ui(id) => {
@@ -398,7 +398,9 @@ impl NovoApp {
             let Some(rect) = self.target_rect(&target, canvas) else {
                 continue;
             };
-            let color = tokens::ACCENT_HOVER.gamma_multiply(pulse);
+            let color = crate::theme::ui_palette()
+                .accent_hover
+                .gamma_multiply(pulse);
             let ring = rect.expand(4.0);
             painter.rect_stroke(
                 ring,
@@ -408,13 +410,13 @@ impl NovoApp {
             );
             if let Some(n) = number {
                 let badge = egui::pos2(ring.left() - 2.0, ring.top() - 2.0);
-                painter.circle_filled(badge, 9.0, tokens::ACCENT);
+                painter.circle_filled(badge, 9.0, crate::theme::ui_palette().accent);
                 painter.text(
                     badge,
                     egui::Align2::CENTER_CENTER,
                     n.to_string(),
                     egui::FontId::proportional(11.0),
-                    tokens::TEXT_ON_ACCENT,
+                    crate::theme::ui_palette().on_accent,
                 );
             }
             if let Some(text) = note {
@@ -588,7 +590,7 @@ impl NovoApp {
                         _ => "cannot_open",
                     };
                     ui.colored_label(
-                        tokens::WARNING,
+                        crate::theme::ui_palette().warning,
                         format!("{path}: {} ({error})", self.learn.say(why)),
                     );
                 }

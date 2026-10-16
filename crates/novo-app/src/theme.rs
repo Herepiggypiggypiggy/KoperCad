@@ -22,6 +22,12 @@ pub fn set_dark(dark: bool) -> bool {
     DARK.swap(dark, Ordering::Relaxed) != dark
 }
 
+/// The interface colour roles of the theme in use. Panels call this where
+/// no `Ui` is at hand; it follows the same flag as the canvases.
+pub fn ui_palette() -> &'static novo_theme::Palette {
+    novo_theme::Palette::for_mode(is_dark())
+}
+
 fn palette() -> &'static CanvasPalette {
     canvas_palette(is_dark())
 }
@@ -203,5 +209,52 @@ mod tests {
             model_style_from(&CANVAS_LIGHT).symbol.color,
             model_style_from(&CANVAS_DARK).symbol.color
         );
+    }
+}
+
+#[cfg(test)]
+mod role_tests {
+    /// Panels take colours from the palette of the theme in use. The raw
+    /// dark tokens stay for sizes and fonts; a colour token in a screen
+    /// would stay dark in the light theme.
+    #[test]
+    fn screens_use_palette_roles_not_dark_colour_tokens() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut hits = Vec::new();
+        let mut stack = vec![dir];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(d).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    let s = std::fs::read_to_string(&p).unwrap();
+                    let code = s.split("#[cfg(test)]").next().unwrap_or("");
+                    for (i, l) in code.lines().enumerate() {
+                        let t = l.trim_start();
+                        if t.starts_with("//") {
+                            continue;
+                        }
+                        for c in [
+                            "tokens::WARNING",
+                            "tokens::ERROR",
+                            "tokens::SUCCESS",
+                            "tokens::INFO",
+                            "tokens::TEXT_MUTED",
+                            "tokens::TEXT_FAINT",
+                            "tokens::ACCENT",
+                            "tokens::TEXT",
+                            "tokens::BORDER",
+                            "tokens::BG_",
+                        ] {
+                            if l.contains(c) {
+                                hits.push(format!("{}:{}", p.display(), i + 1));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(hits.is_empty(), "use ui_palette() instead: {hits:#?}");
     }
 }

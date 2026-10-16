@@ -219,7 +219,7 @@ pub(super) fn cable_controls(
         .map(|f| f.message(project))
         .collect();
     for text in findings {
-        ui.colored_label(novo_theme::tokens::WARNING, text);
+        ui.colored_label(crate::theme::ui_palette().warning, text);
     }
     ui.add_space(4.0);
 }

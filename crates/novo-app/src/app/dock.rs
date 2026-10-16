@@ -263,7 +263,7 @@ impl NovoApp {
                             ui.separator();
                             if refused {
                                 ui.colored_label(
-                                    novo_theme::tokens::ERROR,
+                                    crate::theme::ui_palette().error,
                                     format!("{} {hint}", icons::status::WARNING),
                                 );
                             } else {

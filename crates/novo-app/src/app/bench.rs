@@ -25,7 +25,6 @@ use novo_reports::{
     Labels, Report, ReportOutput, SheetGrid, TapeStock, WireCutJob, ferrule_counts, is_estimate,
     label_items, layout_labels, stock_presets, wire_cut_jobs_with, with_spares,
 };
-use novo_theme::tokens;
 
 use super::pdf::write_replacing;
 use super::sheets::{hash, ours_or_free};
@@ -441,7 +440,7 @@ fn cut_tab(
 ) {
     let Some(cache) = state.cache.as_ref().filter(|_| state.standard.is_valid()) else {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             "The ferrule standard is not valid: fix it on the Ferrules tab",
         );
         return;
@@ -464,13 +463,16 @@ fn cut_tab(
     ));
     if estimates > 0 {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             format!(
                 "{estimates} lengths are estimates and print with a ~: the wire is not routed through a duct, or a device has no pin position. Measure those on the plate."
             ),
         );
     } else {
-        ui.colored_label(tokens::SUCCESS, "Every length comes from a routed wire");
+        ui.colored_label(
+            crate::theme::ui_palette().success,
+            "Every length comes from a routed wire",
+        );
     }
     ui.add_space(4.0);
     ui.weak(format!(
@@ -576,7 +578,7 @@ fn ferrule_tab(
     let valid = state.standard.is_valid();
     if !valid {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             "Each size must be listed once, above zero, with a contact length above zero",
         );
     }
@@ -705,7 +707,7 @@ fn label_tab(
     let valid = state.labels.is_valid();
     if !valid {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             "The label sizes do not fit the sheet: check the sheet fields",
         );
     }
@@ -728,7 +730,7 @@ fn label_tab(
         }
         if run.too_small > 0 {
             ui.colored_label(
-                tokens::WARNING,
+                crate::theme::ui_palette().warning,
                 format!(
                     "{} labels have text under 2 mm: choose bigger labels or wider tape",
                     run.too_small

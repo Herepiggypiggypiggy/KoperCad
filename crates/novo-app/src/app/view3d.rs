@@ -536,7 +536,7 @@ fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solut
         ui.label(
             egui::RichText::new(format!("{:.0} to {:.0} °C", range.lo, range.hi))
                 .small()
-                .color(novo_theme::tokens::TEXT_MUTED),
+                .color(crate::theme::ui_palette().text_secondary),
         );
     });
 }

@@ -156,9 +156,9 @@ pub(super) fn cable_candidates(catalog: &Catalog, query: &str) -> Vec<Candidate>
 
 fn grade_color(grade: Grade) -> egui::Color32 {
     match grade {
-        Grade::Good => novo_theme::tokens::SUCCESS,
-        Grade::Fair => novo_theme::tokens::WARNING,
-        Grade::Poor => novo_theme::tokens::ERROR,
+        Grade::Good => crate::theme::ui_palette().success,
+        Grade::Fair => crate::theme::ui_palette().warning,
+        Grade::Poor => crate::theme::ui_palette().error,
     }
 }
 

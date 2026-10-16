@@ -15,7 +15,7 @@ use novo_safety::{
     Category, Combined, Component, DISCLAIMER, Frequency, PerformanceLevel, Probability, Severity,
     Subsystem, SubsystemResult, combine_series, mttfd_from_b10d, operations_per_year, required_pl,
 };
-use novo_theme::{tokens, widgets};
+use novo_theme::widgets;
 
 use super::{Level, NovoApp};
 
@@ -185,7 +185,7 @@ impl NovoApp {
         super::panel::dialog(ctx, "Safety functions", [700.0, 640.0])
             .open(&mut open)
             .show(ctx, |ui| {
-                ui.colored_label(tokens::WARNING, DISCLAIMER);
+                ui.colored_label(crate::theme::ui_palette().warning, DISCLAIMER);
                 ui.weak(
                     "ISO 13849-1. Kept for this session only; use Copy as text to keep the result.",
                 );
@@ -244,7 +244,11 @@ fn body(ui: &mut egui::Ui, win: &mut SafetyWindow, copy: &mut Option<String>) {
         let (_, total) = win.results();
         if let Some(t) = total {
             let ok = win.meets().unwrap_or(false);
-            let color = if ok { tokens::SUCCESS } else { tokens::ERROR };
+            let color = if ok {
+                crate::theme::ui_palette().success
+            } else {
+                crate::theme::ui_palette().error
+            };
             ui.colored_label(
                 color,
                 format!(
@@ -342,7 +346,7 @@ fn subsystem(
                 pl_text(result.pl)
             ));
             for p in &result.problems {
-                ui.colored_label(tokens::ERROR, &p.message);
+                ui.colored_label(crate::theme::ui_palette().error, &p.message);
             }
         });
 }

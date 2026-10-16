@@ -113,7 +113,7 @@ impl NovoApp {
                         body(ui, &mut win, &result);
                     }
                     Some(Err(why)) => {
-                        ui.colored_label(tokens::ERROR, why);
+                        ui.colored_label(crate::theme::ui_palette().error, why);
                     }
                     None => {}
                 });
@@ -185,7 +185,7 @@ fn header(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(Level, S
     });
     if win.example {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             "Example study: a built-in pump feeder, not your drawing. \
              Save study writes it next to the project to edit by hand.",
         );
@@ -261,7 +261,7 @@ fn export(
 
 fn body(ui: &mut egui::Ui, win: &mut FaultsWindow, r: &ScenarioResult) {
     for w in &r.warnings {
-        ui.colored_label(tokens::WARNING, w);
+        ui.colored_label(crate::theme::ui_palette().warning, w);
     }
     for f in &r.faults {
         ui.add_space(2.0);
@@ -280,7 +280,7 @@ fn body(ui: &mut egui::Ui, win: &mut FaultsWindow, r: &ScenarioResult) {
                     ui.label(format!("removed at {}", format_time(t)));
                 }
                 _ if f.ik > 0.0 => {
-                    ui.colored_label(tokens::ERROR, "never cleared");
+                    ui.colored_label(crate::theme::ui_palette().error, "never cleared");
                 }
                 _ => {}
             }
@@ -292,11 +292,11 @@ fn body(ui: &mut egui::Ui, win: &mut FaultsWindow, r: &ScenarioResult) {
             let (text, color) = match (&f.expected, f.selective, f.cleared_at) {
                 (_, _, None) => (
                     "Not cleared: no device reached its trip curve",
-                    tokens::ERROR,
+                    crate::theme::ui_palette().error,
                 ),
                 (Some(_), true, _) => (
                     "Selective: only the device nearest the fault tripped",
-                    tokens::SUCCESS,
+                    crate::theme::ui_palette().success,
                 ),
                 (Some(e), false, _) => {
                     let by = f.cleared_by.as_deref().unwrap_or("?");
@@ -304,10 +304,13 @@ fn body(ui: &mut egui::Ui, win: &mut FaultsWindow, r: &ScenarioResult) {
                     let _ = by;
                     (
                         "Not selective: more than the nearest device tripped, or a different one",
-                        tokens::WARNING,
+                        crate::theme::ui_palette().warning,
                     )
                 }
-                (None, _, _) => ("No protective device upstream of this fault", tokens::ERROR),
+                (None, _, _) => (
+                    "No protective device upstream of this fault",
+                    crate::theme::ui_palette().error,
+                ),
             };
             ui.colored_label(color, text);
         }
@@ -318,10 +321,12 @@ fn body(ui: &mut egui::Ui, win: &mut FaultsWindow, r: &ScenarioResult) {
     ui.strong("What happened");
     for e in &r.events {
         let color = match e.kind {
-            EventKind::TripShortCircuit | EventKind::TripOverload => tokens::WARNING,
-            EventKind::FaultStart => tokens::ERROR,
-            EventKind::FaultCleared | EventKind::Closed => tokens::SUCCESS,
-            _ => tokens::TEXT,
+            EventKind::TripShortCircuit | EventKind::TripOverload => {
+                crate::theme::ui_palette().warning
+            }
+            EventKind::FaultStart => crate::theme::ui_palette().error,
+            EventKind::FaultCleared | EventKind::Closed => crate::theme::ui_palette().success,
+            _ => crate::theme::ui_palette().text_primary,
         };
         ui.horizontal(|ui| {
             ui.monospace(format!("{:>10}", format_time(e.t)));
@@ -392,7 +397,7 @@ fn draw_timing(ui: &mut egui::Ui, d: &TimingDiagram, window: Option<(f64, f64)>)
     let width = ui.available_width().max(400.0);
     let (rect, _) = ui.allocate_exact_size(egui::vec2(width, height), egui::Sense::hover());
     let painter = ui.painter_at(rect);
-    painter.rect_filled(rect, 4.0, tokens::BG_1);
+    painter.rect_filled(rect, 4.0, crate::theme::ui_palette().panel);
     let plot_left = rect.left() + label_w;
     let plot_w = (rect.width() - label_w - 10.0).max(50.0);
     let x = |t: f64| plot_left + ((t - t0) / (t1 - t0)) as f32 * plot_w;
@@ -407,14 +412,14 @@ fn draw_timing(ui: &mut egui::Ui, d: &TimingDiagram, window: Option<(f64, f64)>)
                 egui::pos2(px, rect.top() + 18.0),
                 egui::pos2(px, rect.bottom()),
             ],
-            egui::Stroke::new(1.0, tokens::BORDER),
+            egui::Stroke::new(1.0, crate::theme::ui_palette().border_subtle),
         );
         painter.text(
             egui::pos2(px, rect.top() + 3.0),
             egui::Align2::CENTER_TOP,
             format_time(tick),
             font.clone(),
-            tokens::TEXT_MUTED,
+            crate::theme::ui_palette().text_secondary,
         );
         tick += step;
     }
@@ -425,7 +430,7 @@ fn draw_timing(ui: &mut egui::Ui, d: &TimingDiagram, window: Option<(f64, f64)>)
             egui::Align2::LEFT_TOP,
             *group,
             font.clone(),
-            tokens::TEXT_FAINT,
+            crate::theme::ui_palette().text_tertiary,
         );
         y += head_h;
         for c in channels {
@@ -434,7 +439,7 @@ fn draw_timing(ui: &mut egui::Ui, d: &TimingDiagram, window: Option<(f64, f64)>)
                 egui::Align2::RIGHT_CENTER,
                 &c.name,
                 font.clone(),
-                tokens::TEXT,
+                crate::theme::ui_palette().text_primary,
             );
             let (hi, lo) = (y + 3.0, y + row_h - 3.0);
             let mut prev: Option<f32> = None;
@@ -461,7 +466,7 @@ fn draw_timing(ui: &mut egui::Ui, d: &TimingDiagram, window: Option<(f64, f64)>)
                             egui::pos2(x(b).max(x(a) + 1.0), lo),
                         ),
                         0.0,
-                        tokens::ERROR.gamma_multiply(0.25),
+                        crate::theme::ui_palette().error.gamma_multiply(0.25),
                     );
                 }
             }
@@ -470,9 +475,9 @@ fn draw_timing(ui: &mut egui::Ui, d: &TimingDiagram, window: Option<(f64, f64)>)
                 egui::Stroke::new(
                     1.5,
                     if alarmed {
-                        tokens::ERROR
+                        crate::theme::ui_palette().error
                     } else {
-                        tokens::SUCCESS
+                        crate::theme::ui_palette().success
                     },
                 ),
             ));
@@ -503,21 +508,21 @@ fn draw_timing(ui: &mut egui::Ui, d: &TimingDiagram, window: Option<(f64, f64)>)
             egui::Align2::RIGHT_TOP,
             &tr.name,
             font.clone(),
-            tokens::TEXT,
+            crate::theme::ui_palette().text_primary,
         );
         painter.text(
             egui::pos2(plot_left - 8.0, y + 16.0),
             egui::Align2::RIGHT_TOP,
             format!("{hi_v:.4} {}", tr.unit),
             font.clone(),
-            tokens::TEXT_FAINT,
+            crate::theme::ui_palette().text_tertiary,
         );
         let plot =
             egui::Rect::from_min_size(egui::pos2(plot_left, y), egui::vec2(plot_w, analog_h));
         painter.rect_stroke(
             plot,
             0.0,
-            egui::Stroke::new(1.0, tokens::BORDER),
+            egui::Stroke::new(1.0, crate::theme::ui_palette().border_subtle),
             egui::StrokeKind::Inside,
         );
         let pts: Vec<egui::Pos2> =
@@ -530,7 +535,10 @@ fn draw_timing(ui: &mut egui::Ui, d: &TimingDiagram, window: Option<(f64, f64)>)
                     )
                 })
                 .collect();
-        painter.add(egui::Shape::line(pts, egui::Stroke::new(1.2, tokens::INFO)));
+        painter.add(egui::Shape::line(
+            pts,
+            egui::Stroke::new(1.2, crate::theme::ui_palette().info),
+        ));
         y += analog_h + gap;
     }
 }
