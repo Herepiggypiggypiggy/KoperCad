@@ -2000,6 +2000,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "report.designer",
+            "Report designer...",
+            "Export",
+            &["report template", "template", "title block", "designer"],
+            Needs::Project,
+        ),
+        &["report designer", "design a report", "edit report template"],
+    ),
+    verb(
+        cmd(
             "export.bench_cut",
             "Export bench cut list (PDF)",
             "Export",

@@ -45,6 +45,9 @@ pub(crate) struct ReportsView {
     reveal: bool,
     /// The object the clicked row describes, for the status bar.
     picked: Option<AnyId>,
+    /// Name of the report template the PDF button prints through; `None`
+    /// is the plain report layout.
+    pub(super) template: Option<String>,
 }
 
 /// A file format a report can be written in.
@@ -52,6 +55,8 @@ pub(crate) struct ReportsView {
 pub(crate) enum ReportFormat {
     Excel,
     Csv,
+    /// A PDF: through the template picked in the header, else the plain
+    /// report layout.
     Pdf,
 }
 
@@ -186,8 +191,8 @@ impl NovoApp {
                     if ui
                         .button("PDF")
                         .on_hover_text(
-                            "Write the whole report as a PDF next to the project \
-                             (ignores the filter and sort)",
+                            "Write the whole report as a PDF next to the project, through the \
+                             template picked next to Export (ignores the filter and sort)",
                         )
                         .clicked()
                     {
@@ -228,6 +233,7 @@ impl NovoApp {
                         ui.close();
                     }
                 });
+                self.template_picker(ui);
                 ui.add(
                     egui::TextEdit::singleline(&mut self.reports_view.filter)
                         .id(filter_id)
@@ -638,16 +644,7 @@ impl NovoApp {
                 .collect::<Vec<_>>()
                 .join("\r\n")
                 .into_bytes(),
-            ReportFormat::Pdf => {
-                let options = novo_pdf::ReportPdfOptions {
-                    title: match outputs {
-                        [one] => one.title.clone(),
-                        _ => "Reports".to_owned(),
-                    },
-                    ..Default::default()
-                };
-                novo_pdf::export_report_pdf(outputs, &options)
-            }
+            ReportFormat::Pdf => self.report_pdf_bytes(outputs)?,
         };
         match super::pdf::write_replacing(path, &bytes) {
             Ok(()) => {
@@ -663,6 +660,76 @@ impl NovoApp {
                 None
             }
         }
+    }
+
+    /// The template picker next to the PDF button: the report templates of
+    /// the project, the user folder and the built-in ones.
+    fn template_picker(&mut self, ui: &mut egui::Ui) {
+        let shown = self
+            .reports_view
+            .template
+            .clone()
+            .unwrap_or_else(|| "Plain layout".to_owned());
+        egui::ComboBox::from_id_salt("reports_template")
+            .selected_text(shown)
+            .width(150.0)
+            .show_ui(ui, |ui| {
+                let none = self.reports_view.template.is_none();
+                if ui.selectable_label(none, "Plain layout").clicked() {
+                    self.reports_view.template = None;
+                }
+                for t in self.report_templates() {
+                    let on = self.reports_view.template.as_deref() == Some(t.name.as_str());
+                    if ui.selectable_label(on, &t.name).clicked() {
+                        self.reports_view.template = Some(t.name);
+                    }
+                }
+            })
+            .response
+            .on_hover_text("Template the PDF is printed through");
+    }
+
+    /// The PDF of the (first) report in `outputs`.
+    fn report_pdf_bytes(&mut self, outputs: &[&ReportOutput]) -> Option<Vec<u8>> {
+        let output = outputs.first()?;
+        let name = self.project_name().unwrap_or_default();
+        let Some(chosen) = self.reports_view.template.clone() else {
+            let options = novo_pdf::ReportPdfOptions {
+                title: match outputs {
+                    [one] => one.title.clone(),
+                    _ => "Reports".to_owned(),
+                },
+                language: self.report_translator(),
+                ..novo_pdf::ReportPdfOptions::default()
+            };
+            return Some(novo_pdf::export_report_pdf(outputs, &options));
+        };
+        let Some(template) = self
+            .report_templates()
+            .into_iter()
+            .find(|t| t.name == chosen)
+        else {
+            self.reports_view.template = None;
+            self.message(
+                Level::Warning,
+                format!("Template {chosen} no longer exists, using the plain layout"),
+            );
+            return None;
+        };
+        let Some(template) = super::designer::retarget(&template, &output.report, &output.title)
+        else {
+            self.message(
+                Level::Warning,
+                format!("Template {chosen} has no table to put the report in"),
+            );
+            return None;
+        };
+        let rendered = self.render_with_project(&template);
+        Some(novo_pdf::export_layouts_pdf(
+            &rendered.pages,
+            &format!("{name}  {}", output.title),
+            &[],
+        ))
     }
 
     /// `<project> - <what>.xlsx`, or `... 2.xlsx` when that exists.
