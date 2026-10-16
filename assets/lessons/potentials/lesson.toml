@@ -29,7 +29,7 @@ text_nl = """
 De motorbeveiliging **-Q1**, de contactor **-K1** en de motor **-M1** zijn met elkaar verbonden, maar nergens staat waar de stroom vandaan komt.
 Een {tip:potential} is een benoemde voeding zoals **L1**. Een {tip:feed} zet een potentiaal op de pagina zodat draden eraan kunnen verbinden. Zodra de voeding als feeds getekend is, kent elke draad zijn potentiaal en kunnen rapporten en controles hem gebruiken.
 """
-point = { area = { page = "Motor feeder", x = 60, y = 16, w = 50, h = 110 } }
+point = { area = { page = "Motor feeder", x = 60, y = 16, w = 50, h = 130 } }
 pause = true
 
 [[step]]
@@ -52,7 +52,7 @@ how_nl = [
   "Beweeg naar **Points** en dan naar **Feed**. (Of tik op {key:tool.place}, typ **feed** en druk op Enter.)",
   "Laat de toets los. Een feed hangt aan je aanwijzer.",
 ]
-point = { ui = "wheel" }
+point = { ui = "dock.place" }
 expect = { tool = "place" }
 solve = [ { command = "tool.place", arg = "feed" } ]
 
@@ -67,14 +67,14 @@ text_nl = """
 Een driefasenmotor heeft drie voedingen naast elkaar nodig, één per pool. Slepen plaatst een hele rij in één keer, op de poolafstand, en noemt ze in volgorde **L1**, **L2** en **L3**.
 """
 how = [
-  "With the feed on your pointer, press the mouse button down just above the left pole of **-Q1**.",
-  "Drag to the right, across the three poles. The dock shows **Row x3, pitch 8 mm**.",
+  "With the feed on your pointer, press and hold the mouse button just above the left top pin of **-Q1**.",
+  "Drag to the right, to just above its right top pin. The dock shows **Row ×3 · pitch 8 mm**.",
   "Release above the right pole. Three feeds land above the three poles, each wired down to its pole.",
   "Press {key:edit.escape} to put the feed down.",
 ]
 how_nl = [
-  "Druk met de feed aan je aanwijzer de muisknop in, net boven de linker pool van **-Q1**.",
-  "Sleep naar rechts, over de drie polen. Het dock toont **Row x3, pitch 8 mm**.",
+  "Houd met de feed aan je aanwijzer de muisknop ingedrukt, net boven de linker bovenste pen van **-Q1**.",
+  "Sleep naar rechts, tot net boven de rechter bovenste pen. Het dock toont **Row ×3 · pitch 8 mm**.",
   "Laat los boven de rechter pool. Drie feeds landen boven de drie polen, elk met een draad omlaag naar zijn pool.",
   "Druk op {key:edit.escape} om de feed los te laten.",
 ]

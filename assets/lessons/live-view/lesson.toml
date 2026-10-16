@@ -31,7 +31,6 @@ how = [
 how_nl = [
   "Druk op {key:sim.live}. Er verschijnt een kaart **Live potentials** en op elke schakelaar en automaat staat een ronde knop.",
 ]
-point = { ui = "dock.live" }
 expect = { live = true }
 solve = [ { command = "sim.live" } ]
 
@@ -53,7 +52,6 @@ how_nl = [
   "Kijk naar de kaart. Er staat geen draaiende last op.",
   "Wijs een knop aan. De tip zegt of de schakelaar open of gesloten is en wat een klik doet.",
 ]
-point = { ui = "live.card" }
 pause = true
 
 [[step]]
@@ -196,5 +194,4 @@ how = [
 how_nl = [
   "Druk nogmaals op {key:sim.live}.",
 ]
-point = { ui = "dock.live" }
 pause = true

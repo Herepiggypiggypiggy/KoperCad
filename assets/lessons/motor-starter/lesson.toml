@@ -98,7 +98,6 @@ how = [
 how_nl = [
   "Druk op {key:nav.next_page} (Page Down). De pagina **Control circuit** opent, met een L1-feed bovenaan en een N-feed onderaan.",
 ]
-point = { ui = "pages.list" }
 expect = { page = "Control circuit" }
 solve = [ { command = "nav.next_page" } ]
 
@@ -219,7 +218,7 @@ how_nl = [
   "Druk op {key:edit.escape} om het onderdeel los te laten.",
 ]
 point = { at = { page = "Control circuit", x = 96, y = 104 } }
-expect = { count = { kind = "symbol", page = "Control circuit", at_least = 6 } }
+expect = { count = { kind = "symbol", page = "Control circuit", at_least = 7 } }
 solve = [ { place = { symbol = "iec/contacts/no", parent = "-K1", page = "Control circuit", x = 96, y = 104 } } ]
 
 [[step]]
@@ -227,18 +226,18 @@ id = "hold-top"
 title = "Join the contact's upper pin"
 title_nl = "Verbind de bovenste pen van het contact"
 text = """
-The top of the holding contact must join the same wire as the top of the start button, so that both can feed the coil.
+The new contact must be in parallel with the start button, so the coil stays on after you let go of the button. First you join its top.
 """
 text_nl = """
-De bovenkant van het houdcontact moet op dezelfde draad komen als de bovenkant van de startknop, zodat beide de spoel kunnen voeden.
+Het nieuwe contact moet parallel aan de startknop staan, zodat de spoel aan blijft nadat je de knop loslaat. Eerst verbind je de bovenkant.
 """
 how = [
-  "Press the mouse button down on the upper pin of the holding contact (pin 13).",
-  "Drag onto the wire between the stop button and the start button, and release on the wire. A junction appears where you let go.",
+  "Press on the upper pin (13) of the contact you just placed.",
+  "Drag left and let go on the short wire between the stop button and the start button. A dot appears where the two wires meet.",
 ]
 how_nl = [
-  "Druk de muisknop in op de bovenste pen van het houdcontact (pen 13).",
-  "Sleep naar de draad tussen de stopknop en de startknop en laat los op de draad. Waar je loslaat verschijnt een knooppunt.",
+  "Druk op de bovenste pen (13) van het contact dat je net plaatste.",
+  "Sleep naar links en laat los op de korte draad tussen de stopknop en de startknop. Waar de twee draden samenkomen verschijnt een punt.",
 ]
 point = { at = { page = "Control circuit", x = 80, y = 96 } }
 note = [ { at = { device = "-K1", pin = "13" }, text = "Start here" } ]
@@ -250,18 +249,18 @@ id = "hold-bottom"
 title = "Join the contact's lower pin"
 title_nl = "Verbind de onderste pen van het contact"
 text = """
-The bottom of the contact joins the wire to the coil, so closing the contact feeds the coil in the same way the start button does.
+Now the other side. When the contact closes, it must feed the coil the same way the start button does.
 """
 text_nl = """
-De onderkant van het contact komt op de draad naar de spoel, zodat het sluiten van het contact de spoel op dezelfde manier voedt als de startknop.
+Nu de andere kant. Als het contact sluit, moet het de spoel op dezelfde manier voeden als de startknop.
 """
 how = [
-  "Press the mouse button down on the lower pin of the holding contact (pin 14).",
-  "Drag onto the wire between the start button and the coil, and release on the wire.",
+  "Press on the lower pin (14) of the same contact.",
+  "Drag left and let go on the short wire between the start button and the coil. Another dot appears. The contact now bypasses the start button.",
 ]
 how_nl = [
-  "Druk de muisknop in op de onderste pen van het houdcontact (pen 14).",
-  "Sleep naar de draad tussen de startknop en de spoel en laat los op de draad.",
+  "Druk op de onderste pen (14) van hetzelfde contact.",
+  "Sleep naar links en laat los op de korte draad tussen de startknop en de spoel. Er verschijnt nog een punt. Het contact overbrugt nu de startknop.",
 ]
 point = { at = { page = "Control circuit", x = 80, y = 128 } }
 note = [ { at = { device = "-K1", pin = "14" }, text = "Start here" } ]
@@ -274,18 +273,17 @@ title = "Try it"
 title_nl = "Probeer het"
 text = """
 The starter is complete: on page 1 the supply runs through -Q1 and the main contacts of -K1 to the motor; on page 2 the stop button, the start button and the coil of -K1 sit between L1 and N, and the holding contact sits in parallel with the start button.
-The live view shows it working. The live-view lesson explains how to read it.
+The live view lets you try it. The next lessons show how to read it.
 """
 text_nl = """
 De starter is compleet: op pagina 1 loopt de voeding via -Q1 en de hoofdcontacten van -K1 naar de motor; op pagina 2 staan de stopknop, de startknop en de spoel van -K1 tussen L1 en N, en het houdcontact staat parallel aan de startknop.
-De live-weergave laat het werken zien. De les over de live-weergave legt uit hoe je die leest.
+Met de live-weergave kun je het proberen. De volgende lessen laten zien hoe je die leest.
 """
 how = [
-  "Press {key:sim.live} to switch the live view on, and press it again to switch it off.",
+  "Press {key:sim.live} to switch the live view on and look around. Nothing runs yet, because every switch starts open. Press it again to switch the live view off.",
 ]
 how_nl = [
-  "Druk op {key:sim.live} om de live-weergave aan te zetten, en nog een keer om hem uit te zetten.",
+  "Druk op {key:sim.live} om de live-weergave aan te zetten en rond te kijken. Er draait nog niets, omdat elke schakelaar open begint. Druk nogmaals om de live-weergave uit te zetten.",
 ]
-point = { ui = "dock.live" }
 expect = { command = "sim.live" }
 solve = [ { command = "sim.live" } ]

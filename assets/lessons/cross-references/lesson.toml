@@ -35,7 +35,7 @@ how_nl = [
   "Klik op de relaisspoel **-K1** onderaan het stuurcircuit om hem te selecteren.",
   "Lees de regel in het dock die begint met **-K1 elsewhere**. Die toont de andere delen van -K1 met hun pagina en kolom.",
 ]
-point = { at = { device = "-K1" } }
+point = { at = { page = "Control circuit", x = 80, y = 136 } }
 expect = { selected = "-K1" }
 solve = [ { select = "-K1" } ]
 
@@ -57,7 +57,7 @@ how_nl = [
   "Druk met -K1 nog geselecteerd op {key:nav.partner}.",
   "Het beeld springt naar een ander deel van -K1 en selecteert het.",
 ]
-point = { ui = "dock.xref" }
+point = { ui = "dock.hint" }
 expect = { command = "nav.partner" }
 solve = [ { command = "nav.partner" } ]
 
@@ -91,7 +91,7 @@ text_nl = """
 Als een apparaat veel delen heeft, is een lijst van alle delen sneller dan een voor een springen.
 """
 how = [
-  "Select the coil **-K1** again.",
+  "Select the coil **-K1** again if it is no longer selected.",
   "Press {key:nav.all_references}. A list of every place -K1 appears opens.",
   "Click a line in the list to jump there.",
 ]
@@ -124,7 +124,7 @@ how_nl = [
   "Druk op {key:edit.escape} om het onderdeel los te laten.",
 ]
 point = { at = { page = "Control circuit", x = 120, y = 104 } }
-expect = { count = { kind = "symbol", page = "Control circuit", at_least = 8 } }
+expect = { device = { tag = "-K1", symbol = "iec/contacts/no", at_least = 2 } }
 solve = [ { place = { symbol = "iec/contacts/no", parent = "-K1", page = "Control circuit", x = 120, y = 104 } } ]
 
 [[step]]
@@ -143,5 +143,5 @@ how = [
 how_nl = [
   "Kijk onder de spoel -K1. De drie groepen nummers zijn de contacten, elk gevolgd door de pagina en kolom waar het staat.",
 ]
-point = { at = { device = "-K1" } }
+point = { at = { page = "Control circuit", x = 80, y = 136 } }
 pause = true

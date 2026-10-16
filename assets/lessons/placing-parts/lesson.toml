@@ -28,7 +28,7 @@ text_nl = """
 Je tekent een stuurstroomtak: een automaat, een startknop en een relaisspoel onder elkaar tussen de voeding **L1** en de nul **N**.
 Onderdelen plaatsen met het toetsenbord is de snelste manier van tekenen. Je leert de drie manieren: op naam, met het wiel en met een favoriete cijfertoets.
 """
-point = { area = { page = "Control branch", x = 60, y = 16, w = 40, h = 130 } }
+point = { area = { page = "Control branch", x = 44, y = 16, w = 60, h = 134 } }
 pause = true
 
 [[step]]
@@ -66,14 +66,14 @@ text_nl = """
 De automaat beveiligt het stuurstroomcircuit, dus hij staat direct onder de voeding. Pennen die naar elkaar wijzen worden voor je bedraad.
 """
 how = [
-  "Move the pointer to the dot just under **L1**.",
-  "Click. The part is placed and a wire is drawn up to L1. It gets the tag **-F1**.",
-  "Press {key:edit.escape} to put the part down. Otherwise the next click places a second breaker.",
+  "Move the pointer to just below the **L1** arrow, about a finger's width down.",
+  "Click. The breaker lands there, a wire to L1 draws itself and it gets the tag **-F1**.",
+  "Press {key:edit.escape} to stop placing. Otherwise the next click places a second breaker.",
 ]
 how_nl = [
-  "Beweeg de aanwijzer naar het punt direct onder **L1**.",
-  "Klik. Het onderdeel staat er en er komt een draad naar L1. Het krijgt de tag **-F1**.",
-  "Druk op {key:edit.escape} om het onderdeel los te laten. Anders plaatst de volgende klik een tweede automaat.",
+  "Beweeg de aanwijzer net onder de pijl van **L1**, ongeveer een vingerbreedte omlaag.",
+  "Klik. De automaat staat er, een draad naar L1 tekent zichzelf en hij krijgt de tag **-F1**.",
+  "Druk op {key:edit.escape} om te stoppen met plaatsen. Anders plaatst de volgende klik een tweede automaat.",
 ]
 point = { at = { page = "Control branch", x = 80, y = 40 } }
 expect = { device = { symbol = "iec/protection/mcb_1p" } }
@@ -90,16 +90,16 @@ text_nl = """
 Als je de naam niet weet, toont het wiel de groepen onderdelen rond je aanwijzer. Eén vasthouden en één beweging kiest een onderdeel, zodat je hand op de tekening blijft.
 """
 how = [
-  "Hold {key:tool.place} down for a moment. The wheel opens around the pointer.",
-  "Keep the key held and look at the groups: Switch, Relay, Breaker, Points and more.",
-  "Release the key over an empty part of the wheel to close it again.",
+  "Hold {key:tool.place} down for a moment, until a ring of groups opens around the pointer.",
+  "Keep it held and move the pointer onto a group such as **Switch**: its parts fan out around it.",
+  "Press {key:edit.escape} to close the wheel again.",
 ]
 how_nl = [
-  "Houd {key:tool.place} even ingedrukt. Het wiel opent rond de aanwijzer.",
-  "Houd de toets vast en bekijk de groepen: Schakelaar, Relais, Automaat, Punten en meer.",
-  "Laat de toets los boven een lege plek van het wiel om het te sluiten.",
+  "Houd {key:tool.place} even ingedrukt, tot een ring met groepen opent rond de aanwijzer.",
+  "Houd de toets vast en beweeg de aanwijzer naar een groep zoals **Switch**: de onderdelen waaieren eromheen uit.",
+  "Druk op {key:edit.escape} om het wiel weer te sluiten.",
 ]
-point = { ui = "wheel" }
+point = { ui = "dock.place" }
 expect = { signal = "wheel_opened" }
 
 [[step]]
@@ -114,19 +114,19 @@ De startknop sluit het circuit zolang hij ingedrukt is, dus het is een **sluiten
 """
 how = [
   "Hold {key:tool.place} to open the wheel.",
-  "Move toward **Switch**, then toward **Push NO** (the push button that closes while pressed).",
-  "Release the key. The push button hangs on your pointer.",
+  "Still holding the key, move onto **Switch**, then onto **Push NO** (the push button that closes while pressed).",
+  "Let go of the key over **Push NO**. The push button hangs on your pointer.",
   "Click just under the breaker. It gets the tag **-S1** and is wired to the breaker.",
   "Press {key:edit.escape} to put the part down.",
 ]
 how_nl = [
   "Houd {key:tool.place} ingedrukt om het wiel te openen.",
-  "Beweeg naar **Switch** en dan naar **Push NO** (de drukknop die sluit zolang hij ingedrukt is).",
-  "Laat de toets los. De drukknop hangt aan je aanwijzer.",
+  "Houd de toets vast, beweeg naar **Switch** en dan naar **Push NO** (de drukknop die sluit zolang hij ingedrukt is).",
+  "Laat de toets los boven **Push NO**. De drukknop hangt aan je aanwijzer.",
   "Klik net onder de automaat. Hij krijgt de tag **-S1** en wordt met de automaat verbonden.",
   "Druk op {key:edit.escape} om het onderdeel los te laten.",
 ]
-point = { ui = "wheel" }
+point = { ui = "dock.place" }
 expect = { device = { symbol = "iec/operators/pushbutton_no" } }
 solve = [ { place = { symbol = "iec/operators/pushbutton_no", page = "Control branch", x = 80, y = 72 } } ]
 
@@ -211,12 +211,12 @@ Dupliceren kopieert het geselecteerde onderdeel en geeft de kopie het eerstvolge
 """
 how = [
   "Click the push button **-S1** to select it.",
-  "Press {key:edit.duplicate}. A copy appears beside it with the tag **-S2**.",
+  "Press {key:edit.duplicate}. A copy appears just to its right with the tag **-S2**.",
   "Press {key:edit.undo} to take the copy away again.",
 ]
 how_nl = [
   "Klik op de drukknop **-S1** om hem te selecteren.",
-  "Druk op {key:edit.duplicate}. Naast de knop verschijnt een kopie met de tag **-S2**.",
+  "Druk op {key:edit.duplicate}. Direct rechts ervan verschijnt een kopie met de tag **-S2**.",
   "Druk op {key:edit.undo} om de kopie weer weg te halen.",
 ]
 point = { at = { device = "-S1" } }
@@ -229,10 +229,10 @@ title = "What you have now"
 title_nl = "Wat je nu hebt"
 text = """
 Your page shows three parts in a column between L1 and N: the breaker **-F1**, the push button **-S1** and the relay coil **-K1**. Four wires join them: L1 to -F1, -F1 to -S1, -S1 to -K1 and -K1 to N. You drew none of them; they were drawn as the parts went down.
-Use **Compare with the finished result** to open the same drawing as the lesson ends with it.
+To compare, use **Open finished version** on this lesson card.
 """
 text_nl = """
 Op je pagina staan drie onderdelen onder elkaar tussen L1 en N: de automaat **-F1**, de drukknop **-S1** en de relaisspoel **-K1**. Vier draden verbinden ze: L1 met -F1, -F1 met -S1, -S1 met -K1 en -K1 met N. Je hebt er geen getekend; ze verschenen terwijl je de onderdelen neerzette.
-Gebruik **Vergelijk met het eindresultaat** om dezelfde tekening te openen zoals de les hem afsluit.
+Gebruik ter vergelijking **Open finished version** op deze lessenkaart.
 """
 pause = true
