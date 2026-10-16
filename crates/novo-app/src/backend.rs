@@ -378,7 +378,7 @@ impl ProjectBackend for StorageBackend {
 
     fn new_project_from(&mut self, project: Project) -> Result<(), BackendError> {
         self.close_session()?;
-        self.document = Some(Document::new(project));
+        self.document = Some(Document::new(healed(project)));
         self.start_untitled();
         Ok(())
     }
@@ -386,7 +386,7 @@ impl ProjectBackend for StorageBackend {
     fn open(&mut self, path: &Path) -> Result<OpenReport, BackendError> {
         let opened = Session::open_in(path, self.recovery_dir_for(path))?;
         self.close_session()?;
-        self.document = Some(Document::new(opened.project));
+        self.document = Some(Document::new(healed(opened.project)));
         self.session = Some(opened.session);
         self.recovery = opened.recovered;
         if self.in_untitled_dir(path) {
@@ -514,7 +514,7 @@ impl ProjectBackend for StorageBackend {
         };
         if restore {
             session.accept_recovery();
-            self.document = Some(Document::new(recovered.project));
+            self.document = Some(Document::new(healed(recovered.project)));
             self.restored_unsaved = true;
         } else if self.untitled.is_some() {
             // An untitled project is nothing without its unsaved work.
@@ -650,7 +650,7 @@ impl ProjectBackend for StorageBackend {
                 continue;
             }
             self.close_session()?;
-            self.document = Some(Document::new(opened.project));
+            self.document = Some(Document::new(healed(opened.project)));
             self.session = Some(opened.session);
             self.recovery = opened.recovered;
             self.untitled = Some(path);
@@ -695,7 +695,7 @@ impl ProjectBackend for MemoryBackend {
     }
 
     fn new_project_from(&mut self, project: Project) -> Result<(), BackendError> {
-        self.document = Some(Document::new(project));
+        self.document = Some(Document::new(healed(project)));
         Ok(())
     }
 
@@ -721,11 +721,26 @@ impl ProjectBackend for MemoryBackend {
     }
 }
 
+/// A loaded project with open wire ends that lie on a pin or junction
+/// linked to it (a project from an older file, a lesson start or a script
+/// can have such coincidences). Never fails: a project that cannot be
+/// healed is returned as it was.
+pub fn healed(project: Project) -> Project {
+    let mut copy = project.clone();
+    match novo_editor::edit::heal_project(&mut copy) {
+        Ok(_) => copy,
+        Err(e) => {
+            log::warn!("could not join coincident wire ends: {e}");
+            project
+        }
+    }
+}
+
 /// A fresh project with one empty page, saved and with no undo history.
 pub fn new_document(name: &str) -> Result<Document, ModelError> {
     let mut project = Project::new(name);
     project.transact("New project", |tx| tx.add_page("1"))?;
-    Ok(Document::new(project))
+    Ok(Document::new(healed(project)))
 }
 
 /// The project panel's labels in display order: each page, and each sheet

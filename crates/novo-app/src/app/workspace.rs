@@ -86,6 +86,7 @@ impl Workspace {
             self,
             Workspace::Schematic
                 | Workspace::Cabinet
+                | Workspace::View3d
                 | Workspace::Reports
                 | Workspace::Commissioning
         )
@@ -153,7 +154,11 @@ impl NovoApp {
             Workspace::Cabinet => None,
             Workspace::Reports if !self.is_open() => Some("Open a project first"),
             Workspace::Reports => None,
-            Workspace::View3d => Some("The 3D view is not built yet"),
+            Workspace::View3d if !self.is_open() => Some("Open a project first"),
+            Workspace::View3d if !self.view3d_has_cabinet() => {
+                Some("Set a mounting plate in the Cabinet first")
+            }
+            Workspace::View3d => None,
             Workspace::Commissioning if !self.is_open() => Some("Open a project first"),
             Workspace::Commissioning => None,
         }
@@ -319,6 +324,42 @@ mod tests {
         d.frame();
         assert!(!d.app.commissioning_locks_edits());
         assert!(d.app.wb.commissioning.is_none());
+    }
+
+    #[test]
+    fn commissioning_survives_jumps_a_new_project_and_stays_locked() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        d.app.switch_workspace(Workspace::Commissioning);
+        d.frame();
+        // A jump from the panel shows a page without leaving.
+        let page = d.app.current_page.expect("a page");
+        d.app.show_page(page);
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Commissioning);
+        assert!(d.app.wb.commissioning.is_some());
+        // A new project drops the store; the workspace loads it again and
+        // the lock never lets go.
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Commissioning);
+        assert!(d.app.wb.commissioning.is_some());
+        assert!(d.app.commissioning_locks_edits());
+        // Another outline tab leaves the workspace and unlocks.
+        d.app.outline_mode = OutlineMode::Pages;
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Schematic);
+        assert!(!d.app.commissioning_locks_edits());
+        // Closing the project leaves it too.
+        d.app.switch_workspace(Workspace::Commissioning);
+        d.frame();
+        d.app.run(&ctx, Action::CloseProject);
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Schematic);
     }
 
     #[test]

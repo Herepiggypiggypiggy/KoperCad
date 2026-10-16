@@ -73,6 +73,8 @@ pub(crate) const REPORT_COMMANDS: &[(&str, &str)] = &[
     ("report.wires", "wires"),
     ("report.terminals", "terminals"),
     ("report.cables", "cables"),
+    ("report.cutlist", "cutlist"),
+    ("report.labels", "labels"),
 ];
 
 impl NovoApp {

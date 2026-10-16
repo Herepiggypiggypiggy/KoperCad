@@ -30,6 +30,8 @@ pub(super) struct Solution {
 pub(super) enum Event {
     Snapshot(Arc<CfdSnapshot>),
     Finished(Result<(), CfdError>),
+    /// The worker ended without reporting (it panicked).
+    Lost,
 }
 
 /// A run in flight.
@@ -94,7 +96,7 @@ impl Runner {
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     if !matches!(out.last(), Some(Event::Finished(_))) {
-                        out.push(Event::Finished(Err(CfdError::Diverged(0))));
+                        out.push(Event::Lost);
                     }
                     break;
                 }

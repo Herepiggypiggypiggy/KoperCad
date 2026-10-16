@@ -1,11 +1,11 @@
 format = 1
 id = "live-view"
 version = 1
-status = "draft"
+status = "early"
 title = "The live view"
 summary = "Switch on the live view, press the start button and read what lights up."
-track = "basics"
-order = 60
+track = "circuits"
+order = 30
 level = "intermediate"
 minutes = 6
 topics = ["simulation", "live"]

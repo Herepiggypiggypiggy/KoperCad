@@ -8,7 +8,7 @@
 format = 1
 id = "cut-lengths"
 version = 1
-status = "draft"
+status = "early"
 title = "Wire list and cut lengths"
 title_nl = "Draadlijst en afkortlengtes"
 summary = "Read the length of every wire in the wire list, see where it comes from, and watch it change when a device moves."
@@ -20,7 +20,7 @@ minutes = 8
 topics = ["cabinet", "wire-list", "routing"]
 needs = ["wire-routing"]
 next = ["panel-plate-drawing"]
-project = "../rails-and-ducts/finished.json"
+project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-wire-list"

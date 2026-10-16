@@ -15,7 +15,7 @@ use clap::{Parser, Subcommand};
 use novo_checks::{Problem, ProblemKind, Severity, Summary};
 use novo_core::{PageId, Project};
 use novo_editor::art::LibraryArt;
-use novo_pdf::{NoteAnchor, PageSet, PdfOptions, SymbolNote};
+use novo_pdf::{NoteAnchor, NoteDensity, NoteGlyph, NoteRow, PageSet, PdfOptions, SymbolNote};
 use novo_py::ReportFormat;
 use novo_py::{comparison_json, group_name, kind_name, page_label, revisions_json};
 use novo_reports::CsvOptions;
@@ -23,6 +23,7 @@ use novo_revisions::{Comparison, FieldChange, Side, group_of};
 use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
+mod eplan;
 mod macros;
 
 /// Process exit codes.
@@ -64,6 +65,10 @@ enum Cmd {
     /// The macro library: list, export, import, install the starter set.
     #[command(subcommand)]
     Macros(macros::Macros),
+    /// The user-run "Export from EPLAN" helper: write the script, check an
+    /// export.
+    #[command(subcommand)]
+    Eplan(eplan::Eplan),
     /// Show a summary of a project file.
     Info {
         file: PathBuf,
@@ -393,6 +398,7 @@ where
 fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
         Cmd::Macros(cmd) => macros::run(cmd, out),
+        Cmd::Eplan(cmd) => eplan::run(cmd, out),
         Cmd::Info { file, json } => {
             let project = read(&file)?;
             let info = novo_py::info_json(&project, Some(&file));
@@ -1262,20 +1268,48 @@ fn pdf(project: &Project, pages: &[String]) -> Result<Vec<u8>, Failure> {
     options.notes = project
         .pages()
         .map(|p| {
-            let notes = xref.labels_on_page(p.id).into_iter().map(|l| SymbolNote {
-                symbol: l.symbol,
-                lines: l.lines,
-                warning: l.warning,
-                anchor: match l.anchor {
-                    novo_xref::LabelAnchor::Below => NoteAnchor::Below,
-                    novo_xref::LabelAnchor::Right => NoteAnchor::Right,
-                },
-            });
+            let notes = xref.labels_on_page(p.id).into_iter().map(note_of);
             (p.id, notes.collect())
         })
         .collect();
     novo_pdf::export_pdf_with_art(project, &options, &art)
         .map_err(|e| Failure::new(exit::WRITE, e.to_string()))
+}
+
+/// A cross-reference label as a note: a coil's contact image becomes the
+/// contact table, its warnings stay text below it.
+fn note_of(l: novo_xref::Label) -> SymbolNote {
+    use novo_xref::ContactKind;
+    let rows: Vec<NoteRow> = l
+        .rows
+        .iter()
+        .map(|r| NoteRow {
+            glyph: match r.kind {
+                ContactKind::Power => NoteGlyph::Power,
+                ContactKind::NormallyClosed => NoteGlyph::NormallyClosed,
+                ContactKind::Changeover => NoteGlyph::Changeover,
+                ContactKind::NormallyOpen | ContactKind::Other => NoteGlyph::NormallyOpen,
+            },
+            pins: r.pins.clone(),
+            location: r.location.clone(),
+        })
+        .collect();
+    let lines = if rows.is_empty() {
+        l.lines
+    } else {
+        l.extra_lines().to_vec()
+    };
+    SymbolNote {
+        symbol: l.symbol,
+        lines,
+        warning: l.warning,
+        anchor: match l.anchor {
+            novo_xref::LabelAnchor::Below => NoteAnchor::Below,
+            novo_xref::LabelAnchor::Right => NoteAnchor::Right,
+        },
+        rows,
+        density: NoteDensity::default(),
+    }
 }
 
 /// The pages to export (all when `names` is empty), as (name, id).

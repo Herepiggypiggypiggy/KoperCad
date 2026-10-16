@@ -339,6 +339,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["import dwg"],
     ),
+    verb(
+        cmd(
+            "file.eplan_export_script",
+            "Get the EPLAN export script",
+            "Project",
+            &[
+                "eplan", "export", "pxf", "epj", "migrate", "bridge", "script",
+            ],
+            Needs::Nothing,
+        ),
+        &["get eplan script"],
+    ),
     cmd(
         "file.choose_dwg_converter",
         "Choose the DWG converter",
@@ -511,9 +523,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "edit.paste_keep_tags",
-        "Paste with the original tags",
+        "Paste with the original tags where free",
         "Edit",
         &[],
+        Needs::Clipboard,
+    ),
+    cmd(
+        "edit.paste_in_place",
+        "Paste in place",
+        "Edit",
+        &["same position"],
         Needs::Clipboard,
     ),
     cmd(
@@ -801,6 +820,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Cabinet",
         "View",
         &["lens", "layout"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d",
+        "3D view",
+        "View",
+        &["3d", "cabinet in 3d", "orbit", "render"],
         Needs::Project,
     ),
     cmd(
@@ -1151,6 +1177,26 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["cable diagram"],
+    ),
+    verb(
+        cmd(
+            "report.cutlist",
+            "Cut list",
+            "View",
+            &["cut length", "wire lengths", "sleeves"],
+            Needs::Project,
+        ),
+        &["cut list"],
+    ),
+    verb(
+        cmd(
+            "report.labels",
+            "Labels",
+            "View",
+            &["label printer", "wire labels", "terminal labels"],
+            Needs::Project,
+        ),
+        &["labels"],
     ),
     verb(
         cmd(
