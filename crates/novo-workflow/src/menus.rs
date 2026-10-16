@@ -78,6 +78,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.keymap_file", at("Help")),
     // File > Export, split by what the file is for.
     ("export.pdf", under("File", "Export drawings")),
+    ("export.pdf_options", under("File", "Export drawings")),
     ("export.pdf_page", under("File", "Export drawings")),
     ("export.variant_pdf", under("File", "Export drawings")),
     ("export.dxf_page", under("File", "Export drawings")),

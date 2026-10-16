@@ -1858,6 +1858,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.pdf_options",
+            "Export PDF...",
+            "Export",
+            &[
+                "pdf options",
+                "pdf dialog",
+                "page range",
+                "bookmarks",
+                "links",
+                "choose pages",
+            ],
+            Needs::Project,
+        ),
+        &["export pdf options", "pdf options"],
+    ),
+    verb(
+        cmd(
             "export.pdf_page",
             "Export this page as PDF",
             "Export",

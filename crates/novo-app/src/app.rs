@@ -94,6 +94,7 @@ mod parts_bulk;
 mod parts_import;
 mod parts_quality;
 mod pdf;
+mod pdf_options;
 mod plate_export;
 mod plc;
 mod plc_card;
@@ -193,6 +194,8 @@ mod onboarding_tests;
 mod outline_tests;
 #[cfg(test)]
 mod page_commands_tests;
+#[cfg(test)]
+mod pdf_options_tests;
 #[cfg(test)]
 mod protection_tests;
 #[cfg(test)]
@@ -1090,6 +1093,7 @@ impl NovoApp {
         self.whats_new_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
+        self.pdf_options_window(&ctx);
         self.designer_window(&ctx);
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
