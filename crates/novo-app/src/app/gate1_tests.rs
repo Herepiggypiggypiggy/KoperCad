@@ -2707,6 +2707,16 @@ fn the_project_standard_defaults_to_iec_and_shows_in_the_title() {
     d.app.run(&ctx, Action::Undo);
     d.frame();
     assert!(d.app.project_property_is("tag.rule", "page-column"));
+    assert!(
+        !d.app
+            .project_property_is("neutral.rule", "supply-and-external")
+    );
+    d.app
+        .set_project_property("neutral.rule", "supply-and-external", true);
+    assert!(
+        d.app
+            .project_property_is("neutral.rule", "supply-and-external")
+    );
 }
 
 #[test]

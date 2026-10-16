@@ -119,6 +119,7 @@ demo = [
 ]
 point = { ui = "dock.place" }
 expect = { signal = "wheel_opened" }
+solve = [ { key = "Q", hold = 0.6 } ]
 
 [[step]]
 id = "wheel-pushbutton"

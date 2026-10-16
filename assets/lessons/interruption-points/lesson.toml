@@ -195,14 +195,11 @@ demo = [
 ]
 point = { area = { page = "Contactor coil", x = 36, y = 30, w = 14, h = 12 } }
 expect = { wire = { from = "-S1:14", to = "-K1:A1" } }
-solve = [ { command = "xref.link" } ]
+solve = [ { rename = { target = "IP2", to = "IP1" } } ]
 # The check reads the netlist: -S1:14 and -K1:A1 are on one net exactly when the two points
 #   share a name (novo-core graph.rs joins interruption partners), so it is false before the
 #   rename and true after it. `problem_free` is NOT usable: the engine never fills the problem
 #   set, so it is true from the start.
-# GAP solve: there is no `rename` op (interruption "IP2" to "IP1"); `xref.link` is the closest
-#   command but it needs two selected symbols and a selection never spans two pages, so it cannot
-#   pair points on different pages (checked again on current main: still so).
 # verified: double click on an interruption name renames it (novo-editor view.rs `LabelKind::
 #   InterruptionName`, `rename_label` edit.rs). F2 does NOT rename a point or a terminal (the F2
 #   handler looks for a device only), although the right-click row says "Rename   F2".

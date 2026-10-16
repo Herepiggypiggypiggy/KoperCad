@@ -115,6 +115,7 @@ impl NovoApp {
         let mut apply = false;
         let mut tag_rule = self.project_property_is("tag.rule", "page-column");
         let mut structure_complete = self.project_property_is("structure.list", "complete");
+        let mut neutral_rule = self.project_property_is("neutral.rule", "supply-and-external");
         let mut group_prefix = self.settings.group_prefix.clone();
         let mut cabinet_prefix = self.settings.cabinet_prefix.clone();
         // The preview uses what is typed now, over this project's names.
@@ -187,12 +188,18 @@ symbol: K031 on page 3, column 1; K031.2 for a repeat.",
                     "Report function and location codes on devices and pages that no \
 structure node names.",
                 );
+            ui.checkbox(&mut neutral_rule, "Neutral only to supply and external devices")
+                .on_hover_text(
+                    "Report a device on a neutral conductor unless it is a terminal or plug, \
+or its Supply or External property is set.",
+                );
             ui.add_space(8.0);
             ui.button("Close (Esc)").clicked()
         });
         self.set_standard(pack);
         self.set_project_property("tag.rule", "page-column", tag_rule);
         self.set_project_property("structure.list", "complete", structure_complete);
+        self.set_project_property("neutral.rule", "supply-and-external", neutral_rule);
         self.settings.group_prefix = group_prefix.trim().to_owned();
         self.settings.cabinet_prefix = cabinet_prefix.trim().to_owned();
         if apply {

@@ -159,6 +159,11 @@ pub struct Step {
     /// "Do it for me" runs.
     #[serde(default)]
     pub solve: Vec<SolveOp>,
+    /// Why the step has no `solve`: a file dialog, a drag no script can
+    /// make. The replay lists the step as "not scripted" with this reason
+    /// instead of leaving a silent gap.
+    #[serde(default)]
+    pub manual: Option<String>,
     /// What "Show me how" plays (`demo`): key caps, typing, a moving pointer. A step
     /// that gives none gets one derived from its check, `solve` and `point`.
     #[serde(default)]
@@ -270,6 +275,7 @@ pub enum SolveOp {
     LivePole(LivePoleOp),
     LiveCoil(LiveCoilOp),
     SetPotential(SetPotentialOp),
+    Rename(RenameOp),
     CabinetPlace(CabinetPlaceOp),
     CabinetRotate(CabinetRotateOp),
     CabinetRemove(CabinetRemoveOp),
@@ -318,6 +324,22 @@ pub struct CabinetOp {
 pub enum CabinetStep {
     PlaceAll,
     Accept,
+}
+
+/// Renames what a label names, as the rename box does: a device tag
+/// (`-K1`), a terminal by designation (`-X1:4`), an interruption point
+/// (`IP2`) or a feed's potential.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RenameOp {
+    pub rename: RenameArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RenameArgs {
+    pub target: String,
+    pub to: String,
 }
 
 /// A click on a pole badge of the live view (Shift+click: this pole only).
@@ -375,6 +397,10 @@ pub struct SetPotentialArgs {
 #[serde(deny_unknown_fields)]
 pub struct KeySolveOp {
     pub key: String,
+    /// Hold the key down this many seconds, then let go (a hold opens the
+    /// wheel); a plain press otherwise.
+    #[serde(default)]
+    pub hold: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
@@ -756,22 +782,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn how_lines_come_in_both_languages_with_markup() {
-        let text = format!(
-            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\n\
-             how = [\"Press {{key:tool.place}}\", \"Type a name\"]\n\
-             how_nl = [\"Druk op {{key:tool.place}}\", \"Typ een naam\"]\n"
-        );
-        let lesson = Lesson::parse(&text).unwrap();
-        let step = lesson.steps.last().unwrap();
-        assert_eq!(step.how(Lang::En).len(), 2);
-        assert_eq!(step.how(Lang::Nl)[1], "Typ een naam");
-        // Without a Dutch twin the English lines show.
-        let text = text.replace("how_nl", "x_nl");
-        assert!(Lesson::parse(&text).is_err(), "unknown field is refused");
-    }
-
-    #[test]
     fn cabinet_solve_ops_parse() {
         let text = format!(
             "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\n\
@@ -789,6 +799,22 @@ mod tests {
         assert!(matches!(&solve[4], SolveOp::Cabinet(c) if c.cabinet == CabinetStep::Accept));
         let bad = text.replace("place_all", "everything");
         assert!(Lesson::parse(&bad).is_err());
+    }
+
+    #[test]
+    fn how_lines_come_in_both_languages_with_markup() {
+        let text = format!(
+            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\n\
+             how = [\"Press {{key:tool.place}}\", \"Type a name\"]\n\
+             how_nl = [\"Druk op {{key:tool.place}}\", \"Typ een naam\"]\n"
+        );
+        let lesson = Lesson::parse(&text).unwrap();
+        let step = lesson.steps.last().unwrap();
+        assert_eq!(step.how(Lang::En).len(), 2);
+        assert_eq!(step.how(Lang::Nl)[1], "Typ een naam");
+        // Without a Dutch twin the English lines show.
+        let text = text.replace("how_nl", "x_nl");
+        assert!(Lesson::parse(&text).is_err(), "unknown field is refused");
     }
 
     #[test]

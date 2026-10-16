@@ -4,6 +4,7 @@
 
 use crate::flow::FlowSolver;
 use crate::result::Grid3;
+use crate::solids::MIN_OPEN;
 
 use super::{Buoyancy, FaceKind, TurbConfig, TurbModel, TurbState, WallCell};
 
@@ -35,7 +36,12 @@ impl TurbulentFlow {
     pub fn new(flow: FlowSolver, model: TurbModel, ref_speed: f64, length_scale: f64) -> Self {
         let mut cfg = TurbConfig::air(model);
         cfg.nu = flow.cfg.nu;
-        cfg.pr = flow.cfg.nu / flow.cfg.alpha;
+        // a flow config without a thermal diffusivity keeps air's Prandtl number
+        cfg.pr = if flow.cfg.alpha > 0.0 {
+            flow.cfg.nu / flow.cfg.alpha
+        } else {
+            cfg.pr
+        };
         cfg.pr_t = flow.cfg.prandtl_t;
         cfg.length_scale = length_scale;
         cfg.faces = std::array::from_fn(|f| {
@@ -50,7 +56,13 @@ impl TurbulentFlow {
             beta: flow.cfg.beta,
         });
         let grid = grid_of(&flow);
-        let turb = TurbState::new(&grid, None, cfg, ref_speed);
+        // cells the flow core treats as solid (almost no air) are walls here
+        let solid: Option<Vec<bool>> = flow
+            .cfg
+            .medium
+            .as_ref()
+            .map(|md| md.fluid_frac.iter().map(|f| *f < MIN_OPEN).collect());
+        let turb = TurbState::new(&grid, solid.as_deref(), cfg, ref_speed);
         TurbulentFlow {
             flow,
             turb,

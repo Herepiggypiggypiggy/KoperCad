@@ -1,0 +1,190 @@
+//! The cabinet solver: a small cabinet marched to a steady state.
+
+use std::time::Duration;
+
+use novo_cfd::cabinet::{CabinetSolver, Tuning};
+use novo_cfd::{CfdError, CfdSnapshot, Control, Fidelity, Solver};
+use novo_layout::Rect;
+use novo_layout::sizing::{Installation, Material};
+use novo_thermal::*;
+
+fn scenario(with_vent: bool) -> Scenario {
+    let opening = |placement| Opening {
+        placement,
+        width_mm: 200.0,
+        height_mm: 100.0,
+    };
+    Scenario {
+        enclosure: Enclosure {
+            width_mm: 600.0,
+            height_mm: 800.0,
+            depth_mm: 300.0,
+            wall_mm: 2.0,
+            material: Material::Steel,
+            installation: Installation::Wall,
+            plate: Rect {
+                x: 40.0,
+                y: 40.0,
+                w: 510.0,
+                h: 700.0,
+            },
+        },
+        ambient_c: 25.0,
+        devices: vec![Device {
+            id: 7,
+            footprint: Rect {
+                x: 200.0,
+                y: 450.0,
+                w: 150.0,
+                h: 150.0,
+            },
+            height_mm: Some(100.0),
+            loss_w: 50.0,
+            rated_max_ambient_c: Some(60.0),
+            rated_max_surface_c: Some(70.0),
+            heat_capacity_j_per_k: None,
+        }],
+        obstacles: vec![],
+        vents: if with_vent {
+            vec![
+                Vent {
+                    opening: opening(Placement::Bottom { x_mm: 300.0 }),
+                    free_area_fraction: 0.6,
+                },
+                Vent {
+                    opening: opening(Placement::Top { x_mm: 300.0 }),
+                    free_area_fraction: 0.6,
+                },
+            ]
+        } else {
+            vec![]
+        },
+        fans: vec![],
+        params: Params::default(),
+    }
+}
+
+fn small() -> CabinetSolver {
+    let mut t = Tuning::default().with_cells(700);
+    for l in [&mut t.coarse, &mut t.medium, &mut t.fine] {
+        l.steady_tol = 1e-2;
+        l.report_every = 20;
+        l.full_snapshot_every = Duration::ZERO;
+    }
+    CabinetSolver::new(t)
+}
+
+fn solve(scn: &Scenario) -> (CfdSnapshot, Vec<CfdSnapshot>) {
+    let mut seen = Vec::new();
+    let snap = small()
+        .solve(scn, Fidelity::Coarse, &Control::new(), &mut |s| {
+            if seen.len() < 400 {
+                seen.push(s.clone());
+            }
+        })
+        .unwrap();
+    (snap, seen)
+}
+
+#[test]
+fn a_sealed_cabinet_reaches_a_steady_state_that_balances() {
+    let (s, _) = solve(&scenario(false));
+    assert!(s.is_consistent());
+    let p = &s.progress;
+    assert!(p.converged, "{p:?}");
+    println!(
+        "CABINET | sealed | steps {} | balance {:.4} | max T {:.1}",
+        p.iteration,
+        p.energy_balance_rel,
+        s.max_temperature_c()
+    );
+    assert!(p.energy_balance_rel < 0.03, "{}", p.energy_balance_rel);
+    let d = &s.devices[0];
+    assert!(d.surface_c > d.air_c && d.air_c > 25.0);
+    assert!((0.0..=1.0).contains(&d.plate_share));
+    // nothing is colder than the outside air, nothing is hotter than the device core
+    let min = s.temperature_c.iter().copied().fold(f32::MAX, f32::min);
+    assert!(min > 24.9, "{min}");
+    assert!(s.max_temperature_c() < 200.0);
+    // the heat leaves through the wall: some solid cell has a positive flux
+    assert!(s.wall_flux_w_m2.iter().any(|f| *f > 1.0));
+}
+
+#[test]
+fn progress_is_published_and_the_energy_residual_falls() {
+    let (_, seen) = solve(&scenario(false));
+    assert!(seen.len() > 5);
+    assert!(
+        seen.windows(2)
+            .all(|w| w[1].progress.iteration >= w[0].progress.iteration)
+    );
+    let first = seen.first().unwrap().progress.residuals.energy;
+    let last = seen.last().unwrap().progress.residuals.energy;
+    assert!(last < first, "{first} -> {last}");
+    assert!(seen.iter().all(|s| s.is_consistent()));
+}
+
+#[test]
+fn vents_carry_heat_out_and_cool_the_device() {
+    let (sealed, _) = solve(&scenario(false));
+    let (vented, _) = solve(&scenario(true));
+    println!(
+        "CABINET | vented | surface {:.1} vs sealed {:.1}",
+        vented.devices[0].surface_c, sealed.devices[0].surface_c
+    );
+    assert!(vented.progress.converged);
+    assert!(vented.progress.energy_balance_rel < 0.05);
+    assert!(vented.devices[0].surface_c < sealed.devices[0].surface_c);
+}
+
+#[test]
+fn cancelling_returns_promptly() {
+    let control = Control::new();
+    let c2 = control.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(200));
+        c2.cancel();
+    });
+    let mut tuning = Tuning::default().with_cells(1200);
+    tuning.coarse.steady_tol = 1e-12;
+    let t0 = std::time::Instant::now();
+    let r =
+        CabinetSolver::new(tuning).solve(&scenario(false), Fidelity::Coarse, &control, &mut |_| {});
+    assert!(matches!(r, Err(CfdError::Cancelled)));
+    assert!(t0.elapsed() < Duration::from_secs(5));
+}
+
+#[test]
+fn the_time_budget_ends_an_unfinished_level_honestly() {
+    let mut tuning = Tuning::default().with_cells(1200);
+    tuning.coarse.steady_tol = 1e-12;
+    tuning.coarse.max_wall = Some(Duration::from_millis(300));
+    let s = CabinetSolver::new(tuning)
+        .solve(
+            &scenario(false),
+            Fidelity::Coarse,
+            &Control::new(),
+            &mut |_| {},
+        )
+        .unwrap();
+    assert!(!s.progress.converged);
+    assert!(
+        s.notes
+            .iter()
+            .any(|n| n.contains("Stopped before a steady state"))
+    );
+}
+
+#[test]
+fn preview_is_not_a_cabinet_level_and_nothing_is_called_validated_yet() {
+    let r = small().solve(
+        &scenario(false),
+        Fidelity::Preview2d,
+        &Control::new(),
+        &mut |_| {},
+    );
+    assert!(matches!(r, Err(CfdError::Unsupported(Fidelity::Preview2d))));
+    let (s, _) = solve(&scenario(false));
+    assert_eq!(s.accuracy.validated, novo_cfd::cabinet::ENCLOSURE_VALIDATED);
+    assert!(!s.accuracy.headline.is_empty() && !s.accuracy.limits.is_empty());
+}
