@@ -19,6 +19,23 @@ pub const MIN_DOOR_GAP_MM: f64 = 10.0;
 /// Opening angle used when none is given.
 pub const DEFAULT_DOOR_ANGLE_DEG: f64 = 90.0;
 
+/// Property key of a device's depth in millimetres. On a part it is the
+/// catalog value; on a device it overrides the part (a mounted add-on, a
+/// deeper plug), so the door check and the thermal model read one number.
+pub const DEPTH_KEY: &str = "depth_mm";
+
+/// The one device-depth rule: a positive value on the device wins over the
+/// first positive value on its parts (`part_depths` in part order). `None`
+/// when neither has a depth.
+pub fn device_depth(
+    device: Option<f64>,
+    part_depths: impl IntoIterator<Item = Option<f64>>,
+) -> Option<f64> {
+    device
+        .filter(|d| *d > 0.0)
+        .or_else(|| part_depths.into_iter().flatten().find(|d| *d > 0.0))
+}
+
 /// Which side of the door the hinge is on, seen from the front.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Hinge {

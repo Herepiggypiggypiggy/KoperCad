@@ -14,7 +14,7 @@ use novo_core::{
 use crate::drill::{
     CUTOUT_KEY, DeviceFeatures, DrillTable, HOLE_PATTERN_KEY, MOUNTING_KEY, features_from_text,
 };
-use crate::enclosure::{DEFAULT_DOOR_ANGLE_DEG, Door, Enclosure, Hinge};
+use crate::enclosure::{DEFAULT_DOOR_ANGLE_DEG, DEPTH_KEY, Door, Enclosure, Hinge};
 use crate::plan::{Candidate, Plan, PlannedDuct};
 use crate::plate_drawing::{PlateDocument, documents};
 use crate::rules::Class;
@@ -361,17 +361,16 @@ pub mod keys {
     pub const HINGE_SIDE_CLEARANCE: &str = "hinge_side_clearance_mm";
 }
 
-/// Part property key of a device's depth, the same as `novo_parts::keys`.
-const DEPTH_KEY: &str = "depth_mm";
-
-/// The depth of a device from the first of its parts that has one.
+/// The depth of a device: its own `depth_mm` property, else the first of its
+/// parts that has one (the rule in [`crate::enclosure::device_depth`]).
 pub fn device_depth(project: &Project, device: &Device) -> Option<f64> {
-    device
-        .parts
-        .iter()
-        .filter_map(|part| project.get::<novo_core::Part>(*part))
-        .filter_map(|part| part.properties.get(DEPTH_KEY).and_then(number))
-        .find(|d| *d > 0.0)
+    let own = device.properties.get(DEPTH_KEY).and_then(number);
+    let parts = device.parts.iter().map(|part| {
+        project
+            .get::<novo_core::Part>(*part)
+            .and_then(|part| part.properties.get(DEPTH_KEY).and_then(number))
+    });
+    crate::enclosure::device_depth(own, parts)
 }
 
 /// The interior and door stored on an enclosure. `None` until width, height

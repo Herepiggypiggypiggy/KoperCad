@@ -37,3 +37,15 @@ Updated 2026-10-15.
 - Door-mounted devices (hole and cut-out work, R5).
 - Main reviewer B's notes: say in the form hint that the plate is centred
   (done); the form draft resets when the stored enclosure changes.
+
+## DOOR-1 (2026-10-16, branch claude/door-1)
+
+- Done: `crates/novo-checks/src/door.rs` turns `CabinetLayout::door_report()` into
+  Problems: `DeviceTooDeep` (error), `PlateTooBig` (error), `DoorGapTight`
+  (warning), `DoorSwing` (warning, front and hinge side), `DepthUnknown` (info).
+  Quiet without an enclosure interior. Tests: `crates/novo-checks/tests/door_checks.rs`.
+- One depth rule: `novo_layout::enclosure::device_depth` (device `depth_mm`
+  property overrides the part); `model::device_depth` uses it. Thermal should
+  call `model::device_depth`.
+- User finds it: Issues list, outline Issues mode, header count.
+- Still open: door-mounted devices.
