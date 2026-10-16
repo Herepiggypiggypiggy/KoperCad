@@ -122,7 +122,7 @@ to `ready` without its Dutch titles and step texts.
 
 | Status | Learn window | Badge | Meaning |
 | --- | --- | --- | --- |
-| `ready` | Shown | none | Every step has a `how`, a working check, a demo; replayed headless in CI |
+| `ready` | Shown | none | Every step has a `demo`, a working check, a demo; replayed headless in CI |
 | `early` | Shown by default | "Early access" | Runs, but steps may be rough or name controls that are unfinished |
 | `draft` | Hidden (Preferences, "Show draft lessons") | "Draft" | May name commands or anchors this build does not have |
 
@@ -135,10 +135,10 @@ Tadjiro's test of "Placing parts fast": the card said "Hold Q for the wheel" but
 "Show me how" flickered an area. A step is complete only if it has all of:
 
 1. **What and why**: one sentence on the goal of the step and why a person would do it.
-2. **How** (`how = [...]`): the concrete keys and clicks as a short numbered list ("Hold Q", "move toward
-   Switch", "release on Push button NO"), keys written as `{key:command.id}` so a rebound key reads right.
+2. **How** (`demo = [...]`, PR #601; the card lists these as the "How" lines): the concrete keys and clicks (`press`, `type`, `hold`,
+   `move`, `drag`, `ghost`, `say`), keys written as `{key:command.id}` so a rebound key reads right.
 3. **Show me** (a demo, not a highlight): the pointer moves along the real path, keycaps appear as the
-   demo presses them, and the result shows as a ghost on the canvas. Driven by the step's `solve` actions
+   demo presses them, and the result shows as a ghost on the canvas. Driven by the step's `demo` list (PR #601), or derived from `expect`, `solve` and `point`; the `solve` actions
    (already written for CI) or an explicit `demo` list. It never changes the drawing.
 4. **Try it**: after the demo the step waits for the person's own action and ticks on `expect`.
    The demo can be replayed; "Do it for me" (applies `solve`) is offered after two tries.
@@ -163,10 +163,10 @@ Tadjiro's test of "Placing parts fast": the card said "Hold Q for the wheel" but
      offers **Compare with the finished result**: the lesson's `finished.json` opens in a second tab, or as
      a ghost overlay on the page. Lines that point at something outside the card are rewritten.
    - The lesson threads do a full wording pass over all 33 lessons, First hour path first; the lint flags
-     the phrases "the finished one", "as before", "as above", and an `expect` with no `how`.
+     the phrases "the finished one", "as before", "as above", and an `expect` with no `demo`.
 
-Who changes what: the runner (the `how` field, the demo player, the lint rule that a step with an `expect`
-and no `how` is an error for `ready` and `early` lessons) belongs to the Learning modules thread. The
+Who changes what: the runner (the `demo` field, the demo player, the lint rule that a step with an `expect`
+and no `demo` is an error for `ready` and `early` lessons) belongs to the Learning modules thread. The
 content threads rewrite their steps to the standard. This plan sets the order they do it in: First hour
 path first, then the rest in track order.
 
@@ -205,7 +205,7 @@ Findability rule from discoverability.md applies: a feature PR that adds a topic
 | 4 | Paths (`paths.toml`) | Learn window, top |
 | 5 | "Lesson:" chips on panels | Terminals, Cables, Wire list, Cabinet drawers |
 | 6 | Ctrl+K lessons and `help.next_lesson` | Ctrl+K |
-| runner | `how`, demo player, lint (Learning modules thread) | Every lesson card, "Show me" |
+| runner | `demo` field, demo player, lint (Learning modules thread) | Every lesson card, "Show me" |
 | content | Steps rewritten to the standard, First hour first | Learn, First hour |
 
 ## 6. Open points
