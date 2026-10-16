@@ -195,4 +195,16 @@ fn the_example_cabinet_is_complete_and_simulates() {
         "hottest device {hottest} C, ambient {} C",
         result.ambient_c
     );
+
+    // The catalogue losses are planning estimates, and the heat view says so.
+    let items = crate::app::heat::items_of(project, &layout, &|id| id.to_string());
+    let with_loss = items.iter().filter(|i| i.loss_known).count();
+    assert!(with_loss > 0);
+    assert!(
+        items
+            .iter()
+            .filter(|i| i.loss_known)
+            .all(|i| i.loss_estimated),
+        "every loss of the example is an estimate: {items:?}"
+    );
 }

@@ -1,6 +1,6 @@
 //! Numbers about a grid for the UI, before or after classification.
 
-use super::Mesh;
+use super::{BodyResolution, Mesh};
 use crate::result::Grid3;
 
 /// Cell counts and sizes of a mesh; shown in the Simulate dialog.
@@ -19,6 +19,11 @@ pub struct MeshPreview {
     pub memory_mb: f64,
     /// `(fluid, solid, cut)` cells; `None` before classification.
     pub class_counts: Option<(usize, usize, usize)>,
+    /// Solid bodies the grid does not resolve (see
+    /// [`BodyResolution::is_resolved`]); `None` before classification.
+    pub unresolved_bodies: Option<Vec<String>>,
+    /// The bodies alone need more cells than the target.
+    pub over_budget: bool,
 }
 
 /// Bytes per cell the flow core is expected to hold (fields, matrices).
@@ -60,6 +65,8 @@ impl MeshPreview {
             max_aspect_ratio: longest / shortest,
             memory_mb: cells as f64 * BYTES_PER_CELL / 1.0e6,
             class_counts: None,
+            unresolved_bodies: None,
+            over_budget: false,
         }
     }
 
@@ -82,6 +89,14 @@ impl Mesh {
     pub fn preview(&self) -> MeshPreview {
         let mut p = MeshPreview::from_grid(&self.grid);
         p.class_counts = Some(self.class_counts());
+        p.unresolved_bodies = Some(
+            self.bodies
+                .iter()
+                .filter(|b| !BodyResolution::is_resolved(b))
+                .map(|b| b.name.clone())
+                .collect(),
+        );
+        p.over_budget = self.over_budget;
         p
     }
 }

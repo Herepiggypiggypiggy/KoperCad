@@ -79,7 +79,7 @@ pub(super) fn show(ctx: &egui::Context, view: egui::Rect, state: &mut HeatState,
                         } else {
                             t::TEXT_MUTED
                         }));
-                        ui.horizontal_wrapped(|ui| heat::simulate_controls(ui, state));
+                        ui.horizontal_wrapped(|ui| heat::simulate_controls_with(ui, state, false));
                         let running = state.running();
                         egui::CollapsingHeader::new("Settings for the next run")
                             .id_salt("view3d_heat_settings")

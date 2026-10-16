@@ -52,6 +52,12 @@ fn group_default(group: &str) -> Option<MenuPlace> {
 
 /// Commands whose menu differs from their group's.
 const PLACEMENTS: &[(&str, MenuPlace)] = &[
+    ("page.new", under("File", "Pages")),
+    ("page.rename", under("File", "Pages")),
+    ("page.duplicate", under("File", "Pages")),
+    ("page.delete", under("File", "Pages")),
+    ("page.move_up", under("File", "Pages")),
+    ("page.move_down", under("File", "Pages")),
     ("revision.issue", under("File", "Revisions")),
     ("revision.compare", under("File", "Revisions")),
     ("file.import_dxf_background", under("File", "Import")),
@@ -65,6 +71,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("plc.import_tags", under("File", "Import")),
     ("help.walkthrough", at("Help")),
     ("help.show_hints", at("Help")),
+    ("help.whats_new", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
     // File > Export, split by what the file is for.
@@ -133,20 +140,44 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.iso", under("View", "3D")),
     ("view.front", under("View", "3D")),
     ("view.top", under("View", "3D")),
-    ("view.cabinet_table", under("View", "Workspace")),
-    ("cabinet.rails", under("View", "Workspace")),
-    ("cabinet.door", under("View", "Workspace")),
+    ("view.cabinet_table", under("View", "Cabinet")),
+    ("cabinet.rails", under("View", "Cabinet")),
+    ("cabinet.rules", under("View", "Cabinet")),
+    ("cabinet.plate", under("View", "Cabinet")),
+    ("cabinet.cutlist", under("View", "Cabinet")),
+    ("cabinet.door", under("View", "Cabinet")),
     ("view.terminals_drawer", under("View", "Panels")),
     ("view.cables_drawer", under("View", "Panels")),
     ("view.devices_drawer", under("View", "Panels")),
     ("view.pin_outline", under("View", "Panels")),
     ("view.reports", under("View", "Workspace")),
+    ("view.commissioning", under("View", "Workspace")),
+    ("cabinet.place-all", under("View", "Cabinet")),
+    ("cabinet.size-enclosure", under("View", "Cabinet")),
+    ("cabinet.enclosures", under("View", "Cabinet")),
+    ("cabinet.routes", under("View", "Cabinet")),
+    // Layers: what is drawn on top of the page
+    ("view.toggle_marks", under("View", "Layers")),
+    ("view.override_marks", under("View", "Layers")),
+    ("view.changes", under("View", "Layers")),
+    ("view.background", under("View", "Layers")),
+    ("view.background_place", under("View", "Layers")),
+    ("heat.toggle", under("View", "Layers")),
+    ("heat.airflow", under("View", "Layers")),
+    ("heat.contours", under("View", "Layers")),
+    // Lessons live with Help
+    ("help.learn", at("Help")),
+    ("learn.next", under("Help", "Lesson")),
+    ("learn.back", under("Help", "Lesson")),
+    ("learn.restart", under("Help", "Lesson")),
+    ("learn.close", under("Help", "Lesson")),
     // Simulate
     ("sim.live", at("Simulate")),
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
     ("view.protection", at("Simulate")),
+    ("heat.simulate", under("Simulate", "Heat")),
     // Reports
     ("export.reports", at("Reports")),
     ("export.assembly", at("Reports")),
@@ -159,6 +190,10 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.devices", at("Reports")),
     ("report.wires", at("Reports")),
     ("report.terminals", at("Reports")),
+    ("cable.rename", under("Draw", "Cables")),
+    ("cable.delete", under("Draw", "Cables")),
+    ("cable.retype", under("Draw", "Cables")),
+    ("cable.restore_proposals", under("Draw", "Cables")),
     ("report.cables", at("Reports")),
     ("report.cutlist", at("Reports")),
     ("report.labels", at("Reports")),
@@ -215,6 +250,18 @@ pub fn entries(menu: &str) -> Vec<(&'static CommandInfo, MenuPlace)> {
 /// Commands drawn at the bottom of their menu.
 const LAST: &[&str] = &["file.quit"];
 
+/// Submenus drawn first, in this order; others follow in registry order.
+const SUBMENU_ORDER: &[&str] = &[
+    "Workspace",
+    "Layers",
+    "Cabinet",
+    "3D",
+    "Panels",
+    "Go to",
+    "Heat",
+    "Lesson",
+];
+
 /// One row of a drawn menu.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuItem {
@@ -246,6 +293,13 @@ pub fn layout(menu: &str) -> Vec<MenuItem> {
             plain.push(MenuItem::Command(info));
         }
     }
+    let rank = |name: &str| {
+        SUBMENU_ORDER
+            .iter()
+            .position(|n| *n == name)
+            .unwrap_or(SUBMENU_ORDER.len())
+    };
+    subs.sort_by_key(|(name, _)| rank(name));
     let mut out = plain;
     let blocks = [
         subs.into_iter()

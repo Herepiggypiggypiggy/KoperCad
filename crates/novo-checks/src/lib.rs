@@ -95,6 +95,7 @@
 
 pub mod calc;
 mod calc_checks;
+pub mod calc_view;
 mod checks;
 mod connection_rules;
 mod contacts;

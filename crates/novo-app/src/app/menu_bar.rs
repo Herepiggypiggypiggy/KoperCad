@@ -139,6 +139,13 @@ impl NovoApp {
                         }
                     }
                     MenuItem::Submenu { name, items } => {
+                        // The lesson steps only exist while a lesson runs;
+                        // outside one they would be permanently greyed.
+                        if *name == "Lesson"
+                            && items.iter().all(|i| self.command_unavailable(i).is_some())
+                        {
+                            continue;
+                        }
                         ui.menu_button(*name, |ui| {
                             for info in items {
                                 self.command_row(ui, info);
@@ -311,6 +318,28 @@ mod width_tests {
             frame_at(&mut d, width);
             frame_at(&mut d, width);
             assert!(d.app.menu_bar_wide(), "menus are words at {width}");
+            assert!(
+                d.app.top_bar_gap >= 0.0,
+                "the top bar overlaps by {} at {width}",
+                -d.app.top_bar_gap
+            );
+        }
+    }
+
+    #[test]
+    fn the_top_bar_fits_with_the_longest_outline_button_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.app.outline_mode = super::super::OutlineMode::Commissioning;
+        for width in [1280.0, 1100.0, 1000.0] {
+            frame_at(&mut d, width);
+            frame_at(&mut d, width);
+            assert!(
+                d.app.outline_toggle.is_some(),
+                "the button is shown at {width}"
+            );
             assert!(
                 d.app.top_bar_gap >= 0.0,
                 "the top bar overlaps by {} at {width}",

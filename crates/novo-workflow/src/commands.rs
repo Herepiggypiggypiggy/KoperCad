@@ -170,6 +170,43 @@ pub const COMMANDS: &[CommandInfo] = &[
         // Not a bare "page": `page 2` goes to page 2.
         &["new page", "add page"],
     ),
+    // The page-tree actions of the outline, for the palette and the menus.
+    // They act on the page that is open.
+    cmd(
+        "page.rename",
+        "Rename page",
+        "Project",
+        &["title", "page title"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.duplicate",
+        "Duplicate page",
+        "Project",
+        &["copy page", "clone page"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.delete",
+        "Delete page",
+        "Project",
+        &["remove page"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.move_up",
+        "Move page up",
+        "Project",
+        &["reorder", "earlier"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.move_down",
+        "Move page down",
+        "Project",
+        &["reorder", "later"],
+        Needs::Page,
+    ),
     verb(
         cmd(
             "project.rules",
@@ -474,6 +511,41 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Draw",
         &["cable", "cores", "bundle"],
         Needs::Page,
+    ),
+    // Cables that exist: the Cables drawer (Ctrl+4) shows the one they act on.
+    verb(
+        cmd(
+            "cable.rename",
+            "Rename cable",
+            "Draw",
+            &["cable tag", "-W1"],
+            Needs::Project,
+        ),
+        &["rename cable"],
+    ),
+    cmd(
+        "cable.delete",
+        "Delete cable",
+        "Draw",
+        &["remove cable", "cores"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "cable.retype",
+            "Change cable type",
+            "Draw",
+            &["cores", "4G1.5", "shielded", "section"],
+            Needs::Project,
+        ),
+        &["cable type"],
+    ),
+    cmd(
+        "cable.restore_proposals",
+        "Restore declined cable proposals",
+        "Draw",
+        &["declined", "undo decline", "propose again"],
+        Needs::Project,
     ),
     // Only while a wire is being drawn (Keymap::resolve_while_wiring).
     cmd(
@@ -836,16 +908,6 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd("nav.next_page", "Next page", "Navigate", &[], Needs::Page),
-    verb(
-        cmd(
-            "nav.changes",
-            "Changes since export",
-            "Navigate",
-            &["changed"],
-            Needs::Project,
-        ),
-        &["changes"],
-    ),
     // View
     cmd(
         "view.command_palette",
@@ -1167,6 +1229,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "help.whats_new",
+        "What's new",
+        "View",
+        &["new", "changes", "release", "news", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
         "view.reset_panels",
         "Reset panel layout",
         "View",
@@ -1241,6 +1310,36 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["route all", "route wires"],
+    ),
+    verb(
+        cmd(
+            "cabinet.rules",
+            "Placement rules (Cabinet)",
+            "View",
+            &["place rules", "where devices go", "zones", "rail rule"],
+            Needs::Project,
+        ),
+        &["placement rules"],
+    ),
+    verb(
+        cmd(
+            "cabinet.plate",
+            "Plate setup (Cabinet)",
+            "View",
+            &["plate size", "mounting plate", "margin", "fill", "door"],
+            Needs::Project,
+        ),
+        &["plate setup"],
+    ),
+    verb(
+        cmd(
+            "cabinet.cutlist",
+            "Rail and duct cut list (Cabinet)",
+            "View",
+            &["cut list", "bars", "rail length", "duct length", "buy"],
+            Needs::Project,
+        ),
+        &["cut list"],
     ),
     verb(
         cmd(
@@ -1463,6 +1562,56 @@ pub const COMMANDS: &[CommandInfo] = &[
             "508a",
             "sccr",
             "compliance",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "check.calculations",
+        "Calculations",
+        "Check",
+        &[
+            "calculation sheet",
+            "cable rating",
+            "voltage drop",
+            "short circuit",
+            "disconnection",
+            "starter sizing",
+            "sccr",
+            "smallest section",
+            "ampacity",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "check.electrical_inputs",
+        "Electrical inputs",
+        "Check",
+        &[
+            "supply",
+            "transformer",
+            "short circuit current",
+            "ik",
+            "system voltage",
+            "voltage drop limit",
+            "panel sccr",
+            "machine data",
+            "estop",
+            "e-stop",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "check.safety",
+        "Safety functions",
+        "Check",
+        &[
+            "iso 13849",
+            "performance level",
+            "pl",
+            "mttfd",
+            "diagnostic coverage",
+            "category",
+            "b10d",
         ],
         Needs::Project,
     ),

@@ -68,6 +68,10 @@ pub(super) struct CabinetState {
     pub(super) heat: super::heat::HeatState,
     /// The list for adding, moving, resizing and deleting rails and ducts.
     pub(super) rails: super::cabinet_rails::RailsState,
+    /// The right-click menu of the plate, while open.
+    pub(super) menu: Option<super::cabinet_menu::PlateMenu>,
+    /// Where the plate canvas was drawn last frame (for tests and menus).
+    pub(super) plate_rect: Option<egui::Rect>,
 }
 
 /// A placed device being dragged across the plate.
@@ -81,6 +85,13 @@ struct Drag {
 }
 
 impl CabinetState {
+    /// The theme changed: the plate view and scene take the new colours
+    /// (the scene is filled again every frame).
+    pub(super) fn restyle(&mut self) {
+        self.view.style = theme::canvas_style();
+        self.scene = CabinetScene::new(theme::cabinet_style());
+    }
+
     pub(super) fn new() -> Self {
         let mut view = CanvasView::new();
         view.style = theme::canvas_style();
@@ -104,6 +115,8 @@ impl CabinetState {
             rules: cabinet_rules::RulesState::new(),
             heat: super::heat::HeatState::new(),
             rails: Default::default(),
+            menu: None,
+            plate_rect: None,
         }
     }
 }
@@ -354,7 +367,7 @@ pub(super) fn cabinet_table(
 
 impl NovoApp {
     /// The devices selected on the plate.
-    fn cabinet_selected(&self) -> Vec<u64> {
+    pub(super) fn cabinet_selected(&self) -> Vec<u64> {
         self.cabinet
             .view
             .selection
@@ -955,6 +968,18 @@ impl NovoApp {
                         kept: self.cabinet.heat.kept(),
                     }
                 });
+                if let (Some(s), true) = (structure, heat_input.is_some()) {
+                    let ambient = self.sizing.request().ambient_max;
+                    let dragging = self.cabinet.drag.is_some();
+                    self.cabinet.heat.sync_live(
+                        project,
+                        s,
+                        ambient,
+                        dragging,
+                        ui.input(|i| i.time),
+                        ui.ctx(),
+                    );
+                }
                 if self.cabinet.heat.take_request() {
                     match (structure, &heat_input) {
                         (Some(s), Some(input)) => {
@@ -1074,6 +1099,52 @@ impl NovoApp {
                     )
                 {
                     ask = Some(a);
+                }
+                self.cabinet.plate_rect = Some(out.response.rect);
+                // Right-click: select what is under the pointer and open the
+                // plate menu for it.
+                if let Some(click) = out.context_click.as_ref().filter(|_| layout.is_some()) {
+                    use super::cabinet_menu::{Face, PlateMenu, Target};
+                    // The raw pointer, not the snapped point, which may sit on a
+                    // grid line outside the box it was meant for.
+                    let raw = ui.ctx().pointer_latest_pos().unwrap_or(egui::Pos2::ZERO);
+                    let rect = out.response.rect;
+                    let w = self
+                        .cabinet
+                        .view
+                        .viewport
+                        .screen_to_world(vec2(raw.x - rect.min.x, raw.y - rect.min.y));
+                    let (wx, wy) = (f64::from(w.x), f64::from(w.y));
+                    let _ = click;
+                    let zoom = f64::from(self.cabinet.view.viewport.zoom.max(0.01));
+                    let device = shown.placements.iter().rev().find(|p| {
+                        let f = p.footprint();
+                        wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
+                    });
+                    let target = if let Some(p) = device {
+                        self.cabinet.view.selection.apply(
+                            [novo_canvas::cabinet::box_item(p.id)],
+                            novo_canvas::selection::SelectOp::Replace,
+                        );
+                        self.cabinet.rails.selected = None;
+                        Target::Device(p.id)
+                    } else if let Some(rail) = structure
+                        .and_then(|s| super::cabinet_rails::pick(project, s, wx, wy, 3.0 / zoom))
+                    {
+                        self.cabinet.view.selection.clear();
+                        self.cabinet.rails.selected = Some(rail);
+                        Target::Rail(rail)
+                    } else {
+                        Target::Plate
+                    };
+                    let anchor = ui
+                        .ctx()
+                        .pointer_latest_pos()
+                        .unwrap_or_else(|| out.response.rect.center());
+                    self.cabinet.menu = Some(PlateMenu::new(Face::Plate, target, anchor));
+                }
+                if let Some(command) = super::cabinet_menu::show(ui.ctx(), &mut self.cabinet.menu) {
+                    self.wb.queued.push(command);
                 }
                 if let Some(id) = out.hovered.and_then(novo_canvas::cabinet::box_of) {
                     let lines = problem_lines(&shown, id, &tag_of);
@@ -1314,6 +1385,9 @@ impl NovoApp {
                             }
                             "edit.delete" if !selected.is_empty() => {
                                 ask = Some(Ask::Remove(selected.clone()));
+                            }
+                            "cabinet.plate" => {
+                                ask = Some(Ask::TogglePlateCard);
                             }
                             "cabinet.place-all" if (unplaced > 0 || homeless > 0) && !has_plan => {
                                 ask = Some(Ask::PlaceAll);

@@ -55,6 +55,8 @@ pub(super) struct Item {
     /// False when no loss figure exists for the device (drawn as "no data",
     /// not as a cool 0 W device).
     pub loss_known: bool,
+    /// True when the loss figure is a planning estimate, not a maker value.
+    pub loss_estimated: bool,
 }
 
 /// What the view draws from: the plate and its devices.
@@ -72,6 +74,9 @@ pub(super) struct Input {
 /// What a run needs to remember about the moment it started.
 #[derive(Debug, Clone)]
 pub(super) struct Meta {
+    /// The scenario the run solves; a result is out of date once the
+    /// cabinet's scenario differs from it.
+    pub scenario_key: u64,
     pub layout_key: u64,
     pub ambient: f64,
     pub plate: [f64; 4],
@@ -95,18 +100,25 @@ pub(super) struct HeatState {
     pub airflow: bool,
     pub badges: bool,
     cache: Option<Cache>,
+    /// Follows the cabinet while a result is shown: out of date marking and
+    /// the automatic re-solve.
+    pub(super) live: super::heat_live::Live,
+    /// Counts the snapshots, so each one gets its own cache key.
+    snap_seq: u64,
+    #[cfg(test)]
+    test_solver: Option<Arc<dyn novo_cfd::Solver>>,
     /// `heat.simulate` was asked for; the Cabinet view starts the run on its
     /// next frame, when it has the project.
     requested: bool,
-    run: Option<Runner>,
+    pub(super) run: Option<Runner>,
     /// Latest iteration report of the running level, with the residuals seen
     /// so far in this level for the sparkline.
     progress: Option<Progress>,
     history: Vec<f64>,
-    solution: Option<Arc<Solution>>,
+    pub(super) solution: Option<Arc<Solution>>,
     /// Result kept as A for comparison.
     kept: Option<Arc<Solution>>,
-    pending: Option<Meta>,
+    pub(super) pending: Option<Meta>,
     runs: u64,
     /// The last run's outcome in words: failed, cancelled or the bridge's
     /// complaint.
@@ -161,6 +173,10 @@ impl HeatState {
             solution: None,
             pending: None,
             runs: 0,
+            live: super::heat_live::Live::default(),
+            snap_seq: 0,
+            #[cfg(test)]
+            test_solver: None,
             notice: None,
             settings: HeatSettings::default(),
         }
@@ -253,19 +269,38 @@ impl HeatState {
     /// Starts a run unless one is going. The model can change while it
     /// runs; the result is then marked out of date.
     pub(super) fn start(&mut self, scenario: novo_thermal::Scenario, meta: Meta) {
+        self.start_to(scenario, meta, self.settings.top);
+    }
+
+    /// [`HeatState::start`] with the highest level to go up to.
+    pub(super) fn start_to(
+        &mut self,
+        scenario: novo_thermal::Scenario,
+        meta: Meta,
+        top: novo_cfd::Fidelity,
+    ) {
         if self.run.is_some() {
             return;
         }
         self.notice = None;
+        self.live.clear_superseded();
         self.runs += 1;
         self.pending = Some(meta);
-        self.run = Some(Runner::start(
-            self.settings.solver(),
-            scenario,
-            self.settings.top,
-        ));
+        #[cfg(test)]
+        let solver = self
+            .test_solver
+            .clone()
+            .unwrap_or_else(|| self.settings.solver());
+        #[cfg(not(test))]
+        let solver = self.settings.solver();
+        self.run = Some(Runner::start(solver, scenario, top));
         self.progress = None;
         self.history.clear();
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_solver_for_test(&mut self, s: Arc<dyn novo_cfd::Solver>) {
+        self.test_solver = Some(s);
     }
 
     /// Why a run could not start, shown next to the Simulate button.
@@ -290,9 +325,11 @@ impl HeatState {
             match e {
                 Event::Snapshot(snapshot) => {
                     if let Some(m) = &self.pending {
+                        self.snap_seq += 1;
                         self.solution = Some(Arc::new(Solution {
                             snapshot,
-                            id: self.runs,
+                            id: self.snap_seq,
+                            scenario_key: m.scenario_key,
                             layout_key: m.layout_key,
                             ambient: m.ambient,
                             plate: m.plate,
@@ -319,6 +356,9 @@ impl HeatState {
                     done = true;
                     self.notice = match outcome {
                         Outcome::Completed => None,
+                        // A run replaced by one for the edited cabinet is
+                        // not worth a warning.
+                        Outcome::Cancelled if self.live.take_superseded() => None,
                         Outcome::Cancelled => {
                             Some("Stopped: the last result is not converged".into())
                         }
@@ -389,6 +429,7 @@ pub(super) fn layout_key(input: &Input) -> u64 {
             i.h.to_bits(),
             i.loss_w.to_bits(),
             i.loss_known,
+            i.loss_estimated,
         )
             .hash(&mut h);
     }
@@ -556,14 +597,17 @@ pub(super) fn toggle(ui: &mut egui::Ui, state: &mut HeatState) -> egui::Response
 /// Heat is on.
 pub(super) fn strip(ui: &mut egui::Ui, state: &mut HeatState) {
     let chip = |ui: &mut egui::Ui, on: &mut bool, label: &str| {
-        if ui.selectable_label(*on, label).clicked() {
+        let r = ui.selectable_label(*on, label);
+        if r.clicked() {
             *on = !*on;
         }
+        r.rect
     };
-    chip(ui, &mut state.map, "Map");
-    chip(ui, &mut state.contours, "Contours");
-    chip(ui, &mut state.airflow, "Airflow");
-    chip(ui, &mut state.badges, "Badges");
+    let mut chips = chip(ui, &mut state.map, "Map");
+    chips = chips.union(chip(ui, &mut state.contours, "Contours"));
+    chips = chips.union(chip(ui, &mut state.airflow, "Airflow"));
+    chips = chips.union(chip(ui, &mut state.badges, "Badges"));
+    super::cabinet_bar::note_rect(ui.ctx(), "heat.chips", "Heat chips", chips, false);
     simulate_controls(ui, state);
 }
 
@@ -647,8 +691,32 @@ fn totals(input: &Input) -> (f64, usize) {
     )
 }
 
+/// Tells a first-time user that some loss figures are planning estimates, so
+/// the temperatures follow from them and are not maker-verified. `None` when
+/// every known loss is a maker or typed value.
+fn estimate_note(input: &Input) -> Option<String> {
+    let known = input.items.iter().filter(|i| i.loss_known).count();
+    let estimated = input
+        .items
+        .iter()
+        .filter(|i| i.loss_known && i.loss_estimated)
+        .count();
+    (estimated > 0).then(|| {
+        format!(
+            "{estimated} of {known} loss figures are planning estimates; \
+             check them against maker data."
+        )
+    })
+}
+
 /// Simulate / Cancel, the fidelity badge and the last notice.
 pub(super) fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
+    simulate_controls_with(ui, state, true);
+}
+
+/// [`simulate_controls`]; `chip` says whether to add the out of date line
+/// (the 3D panel has its own sentence for it).
+pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, chip: bool) {
     if state.running() {
         if ui
             .button("Cancel")
@@ -682,11 +750,11 @@ pub(super) fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
             }
         }
     } else {
-        if ui
+        let simulate = ui
             .button("Simulate")
-            .on_hover_text("Simulate the heat and airflow of this cabinet (Ctrl+K, heat)")
-            .clicked()
-        {
+            .on_hover_text("Simulate the heat and airflow of this cabinet (Ctrl+K, heat)");
+        super::cabinet_bar::note_ctx(ui.ctx(), "heat.simulate", "Simulate button", &simulate);
+        if simulate.clicked() {
             state.request_run();
         }
         compare_controls(ui, state);
@@ -700,6 +768,7 @@ pub(super) fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
             );
         }
     }
+    super::heat_live::controls(ui, state, chip);
     if let Some(n) = &state.notice {
         ui.label(egui::RichText::new(n).small().color(t::WARNING));
     }
@@ -735,6 +804,9 @@ pub(super) fn items_of(
                 loss_known: project
                     .get::<Device>(DeviceId::from(p.id))
                     .is_some_and(|d| novo_thermal::bridge::device_loss_w(project, d).is_some()),
+                loss_estimated: project
+                    .get::<Device>(DeviceId::from(p.id))
+                    .is_some_and(|d| novo_thermal::bridge::device_loss_estimated(project, d)),
             }
         })
         .collect()
@@ -760,6 +832,7 @@ pub(super) fn start_run(
                 .extend(state.settings.vents_for(&bridge.scenario.enclosure));
             let plate = bridge.scenario.enclosure.plate;
             let meta = Meta {
+                scenario_key: super::heat_live::scenario_key(&bridge.scenario),
                 layout_key: layout_key(input),
                 ambient: input.ambient,
                 plate: [plate.x, plate.y, plate.w, plate.h],
@@ -857,7 +930,7 @@ pub(super) fn paint_over(
     if delta.is_none() {
         paint_peaks(&painter, cache, &to_screen);
     }
-    let stale = matches!(&cache.source, Source::Solved(sol) if sol.layout_key != layout_key(input));
+    let stale = matches!(&cache.source, Source::Solved(sol) if state.live.out_of_date(sol, layout_key(input)));
     if let Some(d) = delta {
         let tag = |id: u64| {
             input
@@ -1328,7 +1401,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
         .fixed_pos(rect.right_top() + Vec2::new(-176.0, 12.0))
         .order(egui::Order::Foreground)
         .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
+            let card = egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_width(140.0);
                 ui.label(
                     egui::RichText::new("TEMPERATURE")
@@ -1378,6 +1451,9 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                 let small = |text: &str, color| egui::RichText::new(text).small().color(color);
                 let (total_w, unknown) = totals(input);
                 ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
+                if let Some(note) = estimate_note(input) {
+                    ui.label(small(&note, t::WARNING));
+                }
                 if unknown > 0 {
                     let (noun, verb) = if unknown == 1 {
                         ("device", "has")
@@ -1423,6 +1499,13 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                     }
                 }
             });
+            super::cabinet_bar::note_rect(
+                ctx,
+                "heat.legend",
+                "Heat legend",
+                card.response.rect,
+                false,
+            );
         });
 }
 
@@ -1444,6 +1527,7 @@ mod tests {
                     h: 200.0,
                     loss_w: 80.0,
                     loss_known: true,
+                    loss_estimated: false,
                 },
                 Item {
                     id: 2,
@@ -1454,6 +1538,7 @@ mod tests {
                     h: 90.0,
                     loss_w: 2.0,
                     loss_known: true,
+                    loss_estimated: false,
                 },
             ],
             solution: None,
@@ -1542,6 +1627,20 @@ mod tests {
         assert!(device_temp(&c, &i.items[0]) > device_temp(&c, &i.items[1]));
     }
 
+    #[test]
+    fn estimated_losses_get_a_note_and_maker_losses_do_not() {
+        let mut i = input();
+        assert_eq!(estimate_note(&i), None);
+        i.items[0].loss_estimated = true;
+        assert_eq!(
+            estimate_note(&i).as_deref(),
+            Some("1 of 2 loss figures are planning estimates; check them against maker data.")
+        );
+        // A device without a loss figure is not counted either way.
+        i.items[0].loss_known = false;
+        assert_eq!(estimate_note(&i), None);
+    }
+
     /// A scenario matching `input()`: a 700 x 900 x 300 mm interior, the
     /// plate 600 x 800 at (50, 50).
     fn scenario() -> novo_thermal::Scenario {
@@ -1586,6 +1685,7 @@ mod tests {
 
     fn meta(i: &Input) -> Meta {
         Meta {
+            scenario_key: crate::app::heat_live::scenario_key(&scenario()),
             layout_key: layout_key(i),
             ambient: i.ambient,
             plate: [50.0, 50.0, 600.0, 800.0],
