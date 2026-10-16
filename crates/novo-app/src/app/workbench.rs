@@ -365,6 +365,7 @@ const APP_COMMANDS: &[&str] = &[
     "import.spreadsheet",
     "export.step",
     "export.aml",
+    "export.eplan",
     "file.import_aml",
     "file.import_eplan",
     "file.import_dwg",
@@ -872,6 +873,9 @@ impl NovoApp {
             "import.spreadsheet" => self.import_sheet(),
             "export.step" => {
                 self.export_step();
+            }
+            "export.eplan" => {
+                self.export_eplan();
             }
             "export.aml" => {
                 self.export_aml();

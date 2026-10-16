@@ -1353,6 +1353,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.eplan",
+            "Export EPLAN project (PXF)",
+            "Export",
+            &[
+                "eplan",
+                "pxf",
+                "epj",
+                "hand back",
+                "exchange",
+                "engineering",
+            ],
+            Needs::Project,
+        ),
+        &["export eplan", "export pxf"],
+    ),
+    verb(
+        cmd(
             "export.pdf",
             "Export PDF",
             "Export",
