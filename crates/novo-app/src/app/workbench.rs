@@ -402,6 +402,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_wires",
     "view.3d_shadows",
     "view.3d_stats",
+    "view.3d_wire_runs",
     "view.iso",
     "view.front",
     "view.top",
@@ -879,6 +880,13 @@ impl NovoApp {
                     }
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
+                }
+            }
+            "view.3d_wire_runs" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.wire_runs ^= true;
+                if self.view3d.wire_runs {
+                    self.view3d.controls.layers.wires = true;
                 }
             }
             "view.3d_stats" => {

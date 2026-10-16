@@ -1089,6 +1089,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_wire_runs",
+        "Show the wire runs and lengths in 3D",
+        "View",
+        &["wire runs", "wire lengths", "cut length", "routes", "ducts"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_stats",
         "Show or hide the 3D frame statistics",
         "View",

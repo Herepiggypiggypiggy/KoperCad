@@ -130,6 +130,7 @@ mod view3d_move_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
+mod view3d_wires;
 mod whats_new;
 mod wheel;
 mod wire_panel;
@@ -984,6 +985,7 @@ impl NovoApp {
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
+                    || *id == "view.3d_wire_runs"
                     || *id == "view.3d_stats"
                     || id.starts_with("heat.")
             });
