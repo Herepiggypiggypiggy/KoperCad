@@ -530,6 +530,9 @@ fn heat_controls(ui: &mut egui::Ui, h: &mut Heat3d, sol: &super::heat_run::Solut
         }
         ui.checkbox(&mut h.lines, "Airflow")
             .on_hover_text("Streamlines from in front of the devices; faster air is brighter");
+        ui.checkbox(&mut h.arrows, "Arrows").on_hover_text(
+            "Arrows on the slice plane: they point where the air goes and are longer where it is faster",
+        );
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
             "Colour each device by the air temperature in front of it, on the same scale as the slice",
         );
