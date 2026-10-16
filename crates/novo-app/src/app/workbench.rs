@@ -357,6 +357,17 @@ const APP_COMMANDS: &[&str] = &[
     "wires.check_numbers",
     "wires.set_number",
     "wires.unlock_number",
+    "edit.select_all",
+    "view.cabinet_table",
+    "heat.toggle",
+    "heat.airflow",
+    "heat.contours",
+    "heat.simulate",
+    "terminal.connect",
+    "terminal.disconnect",
+    "terminal.strip_up",
+    "terminal.strip_down",
+    "terminal.strip_lowest",
 ];
 
 /// Whether the app can run a command now (not "comes later").
@@ -656,6 +667,7 @@ impl NovoApp {
                 self.next_proposal();
             }
             "proposal.accept_all" => self.accept_all_proposals(),
+            "edit.select_all" => self.select_all_on_page(),
             "terminal.connect"
             | "terminal.toggle_pe"
             | "terminal.disconnect"
@@ -820,6 +832,41 @@ impl NovoApp {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));
             }
+        }
+    }
+
+    /// Selects everything drawn on the current page (Ctrl+A). Selection is
+    /// not a model edit, so there is nothing to undo.
+    pub(super) fn select_all_on_page(&mut self) {
+        let (Some(page), Some(doc)) = (self.current_page, self.backend.document()) else {
+            return;
+        };
+        let project = doc.project();
+        let ids: Vec<AnyId> = project
+            .symbols()
+            .filter(|s| s.page == page)
+            .map(|s| AnyId::Symbol(s.id))
+            .chain(
+                project
+                    .junctions()
+                    .filter(|j| j.page == page)
+                    .map(|j| AnyId::Junction(j.id)),
+            )
+            .chain(
+                project
+                    .wires()
+                    .filter(|w| w.page == page)
+                    .map(|w| AnyId::Wire(w.id)),
+            )
+            .chain(
+                project
+                    .texts()
+                    .filter(|t| t.page == page)
+                    .map(|t| AnyId::Text(t.id)),
+            )
+            .collect();
+        if let Some(view) = self.canvas.schematic() {
+            view.select_ids(&ids);
         }
     }
 

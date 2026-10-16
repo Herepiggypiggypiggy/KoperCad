@@ -951,6 +951,7 @@ impl NovoApp {
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::ExportPlate => {
+                self.learn_command("export.plate");
                 self.export_plate_pdf();
             }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
