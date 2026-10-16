@@ -13,7 +13,7 @@ use novo_checks::safety::{
     encode, functions, rate,
 };
 use novo_core::Project;
-use novo_theme::{tokens, widgets};
+use novo_theme::widgets;
 
 use super::NovoApp;
 
@@ -96,6 +96,7 @@ pub(super) fn section(
     project: &Project,
     state: &mut BoundFunctions,
     copy: &mut Option<String>,
+    export: &mut bool,
 ) {
     widgets::section_label(ui, "Project safety functions");
     ui.weak(format!(
@@ -103,7 +104,7 @@ pub(super) fn section(
     ));
     if novo_checks::safety::unreadable(project) && !state.dirty {
         ui.colored_label(
-            tokens::ERROR,
+            crate::theme::ui_palette().error,
             "The stored safety functions cannot be read. Editing here replaces them.",
         );
     }
@@ -180,7 +181,7 @@ pub(super) fn section(
                 changed |= block_ui(ui, i, block, &devices);
                 if let Some(b) = shown {
                     for text in &b.binding {
-                        ui.colored_label(tokens::WARNING, text);
+                        ui.colored_label(crate::theme::ui_palette().warning, text);
                     }
                 }
             });
@@ -200,7 +201,11 @@ pub(super) fn section(
         Some(t) => {
             let ok = rating.met() == Some(true);
             ui.colored_label(
-                if ok { tokens::SUCCESS } else { tokens::ERROR },
+                if ok {
+                    crate::theme::ui_palette().success
+                } else {
+                    crate::theme::ui_palette().error
+                },
                 format!(
                     "Achieved {} (PFHd {:.2e} /h) against required {}: {}",
                     t.pl,
@@ -212,7 +217,7 @@ pub(super) fn section(
         }
         None => {
             ui.colored_label(
-                tokens::WARNING,
+                crate::theme::ui_palette().warning,
                 format!(
                     "Required {}. Not rated until every part has a device and data.",
                     rating.required
@@ -220,9 +225,18 @@ pub(super) fn section(
             );
         }
     }
-    if ui.button("Copy function as text").clicked() {
-        *copy = Some(rating_text(&rating));
-    }
+    ui.horizontal(|ui| {
+        if ui.button("Copy function as text").clicked() {
+            *copy = Some(rating_text(&rating));
+        }
+        if ui
+            .button("Export report (PDF)")
+            .on_hover_text("Writes <project> safety.pdf next to the project file")
+            .clicked()
+        {
+            *export = true;
+        }
+    });
     if remove {
         let at = state.selected;
         state.list.remove(at);

@@ -2086,6 +2086,7 @@ dependencies = [
  "novo-cables",
  "novo-core",
  "novo-reports",
+ "novo-tests",
 ]
 
 [[package]]
