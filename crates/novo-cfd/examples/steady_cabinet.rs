@@ -1,6 +1,6 @@
 //! One 50 W device in a 600x800x300 wall enclosure: the steady path against
 //! the time march. `steady_cabinet <cells> steady|march [cfl]`
-use novo_cfd::flow::{FlowSolver, SteadyConfig, SteadyState};
+use novo_cfd::flow::{FlowSolver, RunStatus, SteadyConfig, SteadyLimits, SteadyRun};
 use novo_cfd::mesh::MeshSettings;
 use novo_cfd::sched::{Threads, install};
 use novo_cfd::solids::{FlowSetup, SolidsSettings};
@@ -118,55 +118,78 @@ fn main() {
                 .ok()
                 .and_then(|v| v.parse().ok())
                 .unwrap_or(3);
+            let window: usize = std::env::var("WINDOW")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(100);
             let cfg = SteadyConfig {
                 cfl,
                 defer_relax: relax,
                 energy_factor: ef,
                 momentum_sweeps: msw,
+                buoyancy_cfl: std::env::var("BCFL")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(1.0),
                 ..SteadyConfig::default()
             };
-            let mut ss = SteadyState::new(&s, cfg);
-            let mut it = 0;
+            let probes: Vec<usize> = (0..setup.classified.grid.cells())
+                .filter(|&c| {
+                    setup.classified.material[c] != 0
+                        && setup
+                            .cfg
+                            .medium
+                            .as_ref()
+                            .is_some_and(|m| m.heat_w_m3[c] > 0.0)
+                })
+                .collect();
+            let limits = SteadyLimits {
+                window,
+                ..SteadyLimits::default()
+            };
+            let stages = if std::env::var("STAGED").is_ok() {
+                vec![SteadyConfig::first_order(), SteadyConfig::second_order()]
+            } else {
+                vec![cfg]
+            };
+            let mut run = SteadyRun::staged(&s, stages, limits, setup.ambient_c, probes);
             loop {
-                let info = s.steady_iterate(&mut ss);
-                it += 1;
-                if let Ok(path) = std::env::var("SERIES") {
-                    use std::io::Write;
-                    let walls: f64 = (0..6).map(|f| s.wall_heat_w(f)).sum();
-                    let tmax = s.t.iter().cloned().fold(f64::MIN, f64::max);
-                    let mut f = std::fs::OpenOptions::new()
-                        .create(true)
-                        .append(true)
-                        .open(path)
-                        .unwrap();
-                    writeln!(
-                        f,
-                        "{it} {tmax:.4} {walls:.4} {:.5} {:.5}",
-                        s.mean_temperature(),
-                        info.max_du
-                    )
-                    .unwrap();
-                }
-                if it % 25 == 0 || it < 3 {
-                    let walls: f64 = (0..6).map(|f| s.wall_heat_w(f)).sum();
-                    let tmax = s.t.iter().cloned().fold(f64::MIN, f64::max);
+                let status = run.advance(&mut s, window);
+                let r = run.report();
+                if let (Ok(_), Some(i)) = (std::env::var("LOG"), run.last) {
                     println!(
-                        "it {it} dt {:.2} du {:.1e} dT {:.1e} cont {:.1e} pit {} esw {} | Tmax {tmax:.2} walls {walls:.2} W  {:.1}s",
-                        info.dt,
-                        info.max_du,
-                        info.max_dt_k,
-                        info.continuity,
-                        info.pressure_iterations,
-                        info.energy_sweeps,
-                        t0.elapsed().as_secs_f64()
+                        "   dt {:.3} du {:.2e} dT {:.2e} cont {:.2e} pit {} esw {}",
+                        i.dt,
+                        i.max_du,
+                        i.max_dt_k,
+                        i.continuity,
+                        i.pressure_iterations,
+                        i.energy_sweeps
                     );
                 }
-                if (info.max_du < 1e-6 && info.max_dt_k < 1e-5) || it >= 4000 {
+                let tmax = s.t.iter().cloned().fold(f64::MIN, f64::max);
+                println!(
+                    "it {} stage {} imbalance {:+.2}% drift {:.3} K wobble {:.2}% Tmax {tmax:.2} {:.1}s",
+                    r.iterations,
+                    r.stage,
+                    100.0 * r.imbalance,
+                    r.drift_k,
+                    100.0 * r.wobble,
+                    t0.elapsed().as_secs_f64()
+                );
+                if status != RunStatus::Running {
                     break;
                 }
             }
-            report("steady", &setup, &s, t0.elapsed().as_secs_f64(), it);
-            let p = ss.phase_s;
+            report(
+                "steady",
+                &setup,
+                &s,
+                t0.elapsed().as_secs_f64(),
+                run.report().iterations,
+            );
+            println!("  converged {}", run.report().converged);
+            let p = run.state.phase_s;
             println!(
                 "  phases s: energy asm {:.2} sweeps {:.2} | momentum asm {:.2} sweeps {:.2} | pressure {:.2}",
                 p[0], p[1], p[2], p[3], p[4]

@@ -17,5 +17,6 @@ pub use mesh::{Mesh, other_axes};
 pub use pressure::PressureSolver;
 pub use scheme::Scheme;
 pub use solver::{
-    Face, FaceBc, FlowConfig, FlowSolver, SteadyConfig, SteadyInfo, SteadyState, ThermalBc,
+    Face, FaceBc, FlowConfig, FlowSolver, RunStatus, SteadyConfig, SteadyInfo, SteadyLimits,
+    SteadyReport, SteadyRun, SteadyState, ThermalBc,
 };

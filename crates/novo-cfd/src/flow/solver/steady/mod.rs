@@ -20,11 +20,15 @@
 //! untouched and stays the reference (and the way to transients).
 
 mod assemble;
+mod run;
 mod sweep;
+
+pub use run::{RunStatus, SteadyLimits, SteadyReport, SteadyRun};
 
 use super::FlowSolver;
 use super::with;
 use crate::flow::par::for_planes;
+use crate::flow::scheme::Scheme;
 use sweep::{Coef, apply_defer, residual, sweep};
 
 /// Tuning of the steady iteration.
@@ -32,6 +36,11 @@ use sweep::{Coef, apply_defer, residual, sweep};
 pub struct SteadyConfig {
     /// Courant number of the momentum pseudo step (`dt = cfl / max(|u|/h)`).
     pub cfl: f64,
+    /// Buoyancy limit of the pseudo step: `dt <= buoyancy_cfl / N`, with `N` the
+    /// largest buoyancy frequency `sqrt(g beta |dT/dz|)` between neighbouring
+    /// air cells. The temperature feeds the momentum equation one iteration
+    /// late, which is unstable for steps beyond about `2 / N` (internal waves).
+    pub buoyancy_cfl: f64,
     /// Largest pseudo step, s.
     pub dt_max: f64,
     /// The pseudo step may grow by this factor per iteration at most.
@@ -52,12 +61,39 @@ pub struct SteadyConfig {
     pub pressure_max_iter: usize,
     /// Share of the new deferred correction (1 = no damping).
     pub defer_relax: f64,
+    /// Convection scheme of the deferred correction; `None` = the solver's
+    /// own. `Some(Scheme::Upwind)` is the fast first order mode: no
+    /// correction, smears gradients, converges to a true fixed point.
+    pub scheme: Option<Scheme>,
+}
+
+impl SteadyConfig {
+    /// Fast first order mode: upwind convection, no correction. Converges to
+    /// a true fixed point in a few hundred iterations; gradients are smeared
+    /// (device temperatures a little low, plume speeds low).
+    pub fn first_order() -> SteadyConfig {
+        SteadyConfig {
+            scheme: Some(Scheme::Upwind),
+            ..SteadyConfig::default()
+        }
+    }
+
+    /// The solver's own scheme (second order by default), restored by the
+    /// deferred correction. The correction limits the step: `cfl` 1.
+    pub fn second_order() -> SteadyConfig {
+        SteadyConfig {
+            cfl: 1.0,
+            scheme: None,
+            ..SteadyConfig::default()
+        }
+    }
 }
 
 impl Default for SteadyConfig {
     fn default() -> Self {
         SteadyConfig {
             cfl: 10.0,
+            buoyancy_cfl: 1.0,
             dt_max: 100.0,
             dt_growth: 1.5,
             energy_factor: 10.0,
@@ -68,6 +104,7 @@ impl Default for SteadyConfig {
             pressure_tol: 0.05,
             pressure_max_iter: 50,
             defer_relax: 1.0,
+            scheme: None,
         }
     }
 }
@@ -131,6 +168,12 @@ impl FlowSolver {
         let cfg = st.cfg.clone();
         // pseudo step
         let mut dt = self.max_dt(cfg.cfl).min(cfg.dt_max);
+        if cfg.buoyancy_cfl > 0.0 {
+            let n2 = self.buoyancy_frequency_sq();
+            if n2 > 0.0 {
+                dt = dt.min(cfg.buoyancy_cfl / n2.sqrt());
+            }
+        }
         if st.dt > 0.0 {
             dt = dt.min(st.dt * cfg.dt_growth);
         } else {
@@ -151,7 +194,8 @@ impl FlowSolver {
         self.update_drag_rate();
         // ---- energy
         let old_t = self.t.clone();
-        self.assemble_energy(dt_t, &mut st.coef_t);
+        let sch = cfg.scheme.unwrap_or(self.cfg.scheme);
+        self.assemble_energy(dt_t, sch, &mut st.coef_t);
         apply_defer(&mut st.coef_t, &mut st.defer_t, cfg.defer_relax);
         lap(&mut st.phase_s[0]);
         let n = self.mesh.n;
@@ -178,7 +222,7 @@ impl FlowSolver {
         // ---- momentum
         let old_vel = self.vel.clone();
         for c in 0..3 {
-            self.assemble_momentum(c, dt, &mut st.coef_u[c]);
+            self.assemble_momentum(c, dt, sch, &mut st.coef_u[c]);
             apply_defer(&mut st.coef_u[c], &mut st.defer_u[c], cfg.defer_relax);
         }
         lap(&mut st.phase_s[2]);
@@ -211,6 +255,35 @@ impl FlowSolver {
             pressure_iterations: iters,
             energy_sweeps: sweeps,
         }
+    }
+
+    /// Largest `g beta |dT| / dz` between neighbouring air cells, 1/s2.
+    fn buoyancy_frequency_sq(&self) -> f64 {
+        let m = &self.mesh;
+        let mut worst: f64 = 0.0;
+        for a in 0..3 {
+            let g = self.cfg.gravity[a].abs() * self.cfg.beta;
+            if g == 0.0 {
+                continue;
+            }
+            for k in 0..m.n[2] {
+                for j in 0..m.n[1] {
+                    for i in 0..m.n[0] {
+                        let ix = [i, j, k];
+                        if ix[a] == 0 {
+                            continue;
+                        }
+                        let (lo, hi) = (m.cell(with(ix, a, ix[a] - 1)), m.cell(ix));
+                        if self.conv_scale[lo] != 1.0 || self.conv_scale[hi] != 1.0 {
+                            continue;
+                        }
+                        let dist = m.centre[a][ix[a]] - m.centre[a][ix[a] - 1];
+                        worst = worst.max(g * (self.t[hi] - self.t[lo]).abs() / dist);
+                    }
+                }
+            }
+        }
+        worst
     }
 
     fn mesh_h_min(&self) -> f64 {
@@ -340,7 +413,7 @@ impl FlowSolver {
     /// Equation residual and scale of the energy equation at the current
     /// state (diagnostic; assembles with the given step).
     pub fn steady_energy_residual(&self, st: &mut SteadyState, dt: f64) -> (f64, f64) {
-        self.assemble_energy(dt, &mut st.coef_t);
+        self.assemble_energy(dt, self.cfg.scheme, &mut st.coef_t);
         residual(&st.coef_t, &self.t, self.mesh.n)
     }
 }

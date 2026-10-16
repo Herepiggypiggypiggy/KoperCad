@@ -5,7 +5,7 @@
 
 use super::super::{FlowSolver, ThermalBc, harmonic, wall_value, with};
 use super::sweep::{Coef, par_planes};
-use crate::flow::scheme::{Sample, face_value};
+use crate::flow::scheme::{Sample, Scheme, face_value};
 
 /// Convection of one direction as implicit upwind coefficients plus the
 /// deferred correction. `f_lo`, `f_hi`: advecting velocities (flux per unit
@@ -57,11 +57,10 @@ impl FlowSolver {
     /// Momentum equations of component `c` with pseudo step `dt` into
     /// `coef` (sized like the component). The pressure gradient of the
     /// current `p` is on the right side.
-    pub(super) fn assemble_momentum(&self, c: usize, dt: f64, coef: &mut [Coef]) {
+    pub(super) fn assemble_momentum(&self, c: usize, dt: f64, sch: Scheme, coef: &mut [Coef]) {
         let m = &self.mesh;
         let d = m.dims(c);
         let u = &self.vel;
-        let sch = self.cfg.scheme;
         let nu = self.cfg.nu;
         let (nu_t, wall_nu) = (self.nu_t.as_deref(), self.wall_nu.as_deref());
         let nu_cell = |cell: [usize; 3]| nu + nu_t.map_or(0.0, |v| v[m.cell(cell)]);
@@ -247,10 +246,9 @@ impl FlowSolver {
     }
 
     /// Energy equation with pseudo step `dt` into `coef` (sized like the cells).
-    pub(super) fn assemble_energy(&self, dt: f64, coef: &mut [Coef]) {
+    pub(super) fn assemble_energy(&self, dt: f64, sch: Scheme, coef: &mut [Coef]) {
         let m = &self.mesh;
         let n = m.n;
-        let sch = self.cfg.scheme;
         let (nu_t, wall_alpha) = (self.nu_t.as_deref(), self.wall_alpha.as_deref());
         let pr_t = self.cfg.prandtl_t;
         let k_eff =
