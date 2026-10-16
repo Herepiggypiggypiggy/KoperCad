@@ -59,7 +59,7 @@ pub use template::{
 pub use validate::{DesignProblem, validate};
 
 /// Where the user finds the designer: the Reports workspace, Designer tab.
-/// The editor UI (a later lane) registers this command; the engine exposes
+/// The app registers this command (Reports menu); the engine exposes
 /// the entry so the shell, the palette and the tests agree on its name.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DesignerEntry {
@@ -71,7 +71,7 @@ pub struct DesignerEntry {
 
 /// The Reports workspace > Designer entry.
 pub const ENTRY: DesignerEntry = DesignerEntry {
-    command_id: "reports.designer",
+    command_id: "report.designer",
     label: "Designer",
     workspace: "Reports",
     tab: "Designer",
