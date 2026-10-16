@@ -24,6 +24,7 @@ mod dxf;
 mod example;
 mod faults;
 mod heat;
+mod heat_compare;
 mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
