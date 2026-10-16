@@ -16,6 +16,7 @@ use novo_layout::model::{
 };
 use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
+use novo_layout::surfaces::MAIN_PLATE;
 
 use super::cabinet_bar;
 use super::cabinet_door::DoorState;
@@ -62,6 +63,8 @@ pub(super) struct CabinetState {
     /// the picker asked to open by `cabinet.surface`.
     pub(super) surface: Option<String>,
     pub(super) surface_open: bool,
+    /// The id of the picker's popup, as egui's combo box keys it.
+    pub(super) surface_popup: Option<egui::Id>,
     /// Every wire's route is drawn over the plate, with the route table
     /// beside it (Route all).
     pub(super) routes: bool,
@@ -109,6 +112,7 @@ impl CabinetState {
             plate_card: false,
             surface: None,
             surface_open: false,
+            surface_popup: None,
             routes: false,
             routes_cache: Default::default(),
             rules: cabinet_rules::RulesState::new(),
@@ -520,14 +524,13 @@ impl NovoApp {
             if let Some(sum) = surfaces.as_ref().filter(|s| s.rows.len() > 1) {
                 cabinet_bar::group(ui, "Surface", |ui| {
                     let picked = self.cabinet.surface.clone();
-                    let current = picked.clone().unwrap_or_else(|| "plate".to_owned());
+                    let current = picked.clone().unwrap_or_else(|| MAIN_PLATE.to_owned());
                     let combo = egui::ComboBox::from_id_salt("cabinet_surface")
                         .selected_text(current.clone());
+                    let popup = ui.make_persistent_id("cabinet_surface").with("popup");
+                    self.cabinet.surface_popup = Some(popup);
                     if std::mem::take(&mut self.cabinet.surface_open) {
-                        egui::Popup::open_id(
-                            ui.ctx(),
-                            ui.make_persistent_id("cabinet_surface").with("popup"),
-                        );
+                        egui::Popup::open_id(ui.ctx(), popup);
                     }
                     let r = combo.show_ui(ui, |ui| {
                         for row in &sum.rows {
@@ -535,7 +538,7 @@ impl NovoApp {
                             let line = ui.selectable_label(on, row.label());
                             if line.clicked() {
                                 self.cabinet.surface =
-                                    (row.name != "plate").then(|| row.name.clone());
+                                    (row.name != MAIN_PLATE).then(|| row.name.clone());
                             }
                         }
                     });

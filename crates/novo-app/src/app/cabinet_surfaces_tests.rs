@@ -4,6 +4,8 @@ use novo_core::{CabinetPlacement, DeviceTag, MountingPlate, Project, StructureId
 use novo_layout::enclosure::{Door, Enclosure, Hinge};
 use novo_layout::model::{place_device, set_enclosure};
 
+use eframe::egui;
+
 use super::cabinet_surfaces::summarize;
 use super::gate1_tests::Drive;
 use crate::actions::Action;
@@ -132,7 +134,26 @@ fn the_surface_command_opens_the_picker_and_has_a_menu_row() {
     assert!(d.app.cabinet.surface_open);
     d.frame();
     assert!(!d.app.cabinet.surface_open, "the frame took the request");
+    let popup = d.app.cabinet.surface_popup.expect("the picker was drawn");
+    assert!(egui::Popup::is_id_open(&ctx, popup), "the picker is open");
     assert!(d.app.learn_anchor("cabinet.surface").is_some());
     let info = novo_workflow::commands::get("cabinet.surface").expect("registered");
     assert!(novo_workflow::menus::place(info).is_some());
+}
+
+#[test]
+fn the_surface_command_explains_a_plate_only_cabinet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let _ = cabinet(&mut d, false);
+    d.app.run_command(&ctx, "cabinet.surface", None);
+    assert!(!d.app.cabinet.surface_open);
+    d.frame();
+    assert!(
+        d.app.cabinet.surface_popup.is_none(),
+        "no picker on a plate"
+    );
+    let shown = d.app.messages().last().expect("a message").text.clone();
+    assert!(shown.contains("only its mounting plate"), "{shown}");
 }

@@ -154,3 +154,27 @@ pub(super) fn summarize(project: &Project, structure: StructureId) -> Option<Sur
         .collect();
     Some(SurfaceSummary { rows, problems })
 }
+
+impl super::NovoApp {
+    /// `cabinet.surface`: opens the header's picker, or says why there is
+    /// none when the shown cabinet has only its mounting plate.
+    pub(super) fn open_cabinet_surfaces(&mut self) {
+        let many = self.backend.document().is_some_and(|doc| {
+            let project = doc.project();
+            let loc = self.cabinet.location.as_ref();
+            project
+                .structures()
+                .find(|s| s.enclosure && loc == Some(&s.tag))
+                .and_then(|s| summarize(project, s.id))
+                .is_some_and(|sum| sum.rows.len() > 1)
+        });
+        if many {
+            self.cabinet.surface_open = true;
+        } else {
+            self.message(
+                super::Level::Info,
+                "This cabinet has only its mounting plate; add an enclosure in Door and depth to get more surfaces.",
+            );
+        }
+    }
+}
