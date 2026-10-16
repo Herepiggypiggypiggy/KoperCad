@@ -256,22 +256,47 @@ pub fn snap_along_wire(project: &Project, wire: WireId, q: Point, grid: f64) -> 
         return q;
     };
     let (a, b) = (pts[seg], pts[seg + 1]);
-    let g = if a.y == b.y {
-        Point::new(snap(q, grid).x, a.y)
-    } else if a.x == b.x {
-        Point::new(a.x, snap(q, grid).y)
-    } else {
+    let horizontal = a.y == b.y;
+    if !horizontal && a.x != b.x {
         return q;
-    };
-    let end = |e: Point| g.approx_eq(e, EPS);
-    match locate_on_polyline(&pts, g) {
-        Some((_, at, d))
-            if d < EPS && at.approx_eq(g, EPS) && !end(pts[0]) && !end(pts[pts.len() - 1]) =>
-        {
-            g
-        }
-        _ => q,
     }
+    let nearest = snap(q, grid);
+    let on_line = |g: Point| {
+        if horizontal {
+            Point::new(g.x, a.y)
+        } else {
+            Point::new(a.x, g.y)
+        }
+    };
+    let step = if horizontal {
+        Point::new(grid, 0.0)
+    } else {
+        Point::new(0.0, grid)
+    };
+    let end = |g: Point, e: Point| g.approx_eq(e, EPS);
+    let inside = |g: Point| {
+        matches!(
+            locate_on_polyline(&pts, g),
+            Some((_, at, d))
+                if d < EPS
+                    && at.approx_eq(g, EPS)
+                    && !end(g, pts[0])
+                    && !end(g, pts[pts.len() - 1])
+        )
+    };
+    // The nearest grid line, or when that one is a wire end or beyond it
+    // the next one inward, so the pointer never glides along the wire
+    // while a grid point lies on it.
+    let g0 = on_line(nearest);
+    [
+        g0,
+        on_line(Point::new(nearest.x - step.x, nearest.y - step.y)),
+        on_line(Point::new(nearest.x + step.x, nearest.y + step.y)),
+    ]
+    .into_iter()
+    .filter(|&g| inside(g))
+    .min_by(|x, y| x.distance(q).total_cmp(&y.distance(q)))
+    .unwrap_or(q)
 }
 
 /// Wires of a page with a point inside them (not at an end), with the
