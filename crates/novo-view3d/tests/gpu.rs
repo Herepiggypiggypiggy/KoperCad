@@ -41,7 +41,17 @@ fn render_with(
     mode: Mode,
     overlays: &[Overlay],
 ) -> Vec<u8> {
-    let look = Look::dark();
+    render_look(gpu, scene, state, camera, mode, overlays, &Look::dark())
+}
+fn render_look(
+    gpu: &Gpu,
+    scene: &Scene,
+    state: &ViewState,
+    camera: &Camera,
+    mode: Mode,
+    overlays: &[Overlay],
+    look: &Look,
+) -> Vec<u8> {
     let library = MeshLibrary::new();
     let mut renderer = Renderer::new(&gpu.device);
     let mut target = ViewTarget::new(&renderer, &gpu.device);
@@ -58,7 +68,7 @@ fn render_with(
             state,
             camera,
             library: &library,
-            look: &look,
+            look,
             size_px: SIZE,
             quality,
             overlays,
@@ -632,4 +642,54 @@ fn a_caster_outside_the_picture_still_shadows_what_is_in_it() {
         darker > 200,
         "the shadow reaches into the picture ({darker} px)"
     );
+}
+
+#[test]
+fn the_plate_is_darker_around_a_device_than_far_from_it() {
+    let Some(gpu) = gpu() else {
+        println!("no adapter, skipped");
+        return;
+    };
+    let mut scene = Scene::new(PlateFrame {
+        width: 300.0,
+        height: 300.0,
+    });
+    let mut plate = Item::new(
+        ItemId::new(ItemKind::Plate, 0),
+        Shape::Box,
+        Pose::at(Vec3::new(150.0, 150.0, -3.0)),
+        Vec3::new(300.0, 300.0, 3.0),
+    );
+    plate.tint = Some([200, 200, 200]);
+    scene.push(plate);
+    scene.push(boxed(
+        1,
+        Vec3::new(150.0, 150.0, 0.0),
+        Vec3::new(40.0, 40.0, 20.0),
+        [180, 120, 90],
+    ));
+    let mut camera = Camera::default();
+    camera.set_preset(ViewPreset::Top);
+    camera.fit(&scene.bounds(), SIZE.0 as f32 / SIZE.1 as f32);
+    let mut state = ViewState::default();
+    state.display.shadows = false;
+    state.display.edges = false;
+    let (mut open, mut occluded) = (Look::dark(), Look::dark());
+    open.contact_shade = 0.0;
+    occluded.contact_shade = 0.35;
+    let picture =
+        |look: &Look| render_look(&gpu, &scene, &state, &camera, Mode::Settled, &[], look);
+    let (a, b) = (picture(&open), picture(&occluded));
+    let (mut darker, mut brighter) = (0, 0);
+    for (x, y) in a.chunks(4).zip(b.chunks(4)) {
+        let (x, y) = (i32::from(x[0]), i32::from(y[0]));
+        darker += usize::from(y < x - 6);
+        brighter += usize::from(y > x + 2);
+    }
+    assert!(
+        darker > 150,
+        "a ring of plate around the device is darker ({darker} px)"
+    );
+    assert_eq!(brighter, 0, "occlusion never brightens anything");
+    assert_eq!(px(&a, 2, 2), px(&b, 2, 2), "the far corner is untouched");
 }
