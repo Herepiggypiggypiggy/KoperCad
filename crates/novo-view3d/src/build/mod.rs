@@ -17,6 +17,7 @@ use std::sync::Arc;
 use glam::{Quat, Vec3};
 use novo_layout::state::CabinetLayout;
 
+use crate::appearance::DeviceClass;
 use crate::scene::{
     Group, GroupId, Item, ItemId, ItemKind, Mark, PlateFrame, Pose, Profile, Scene, Shape, Wire,
 };
@@ -137,6 +138,8 @@ pub struct Inputs {
     pub ducts: Vec<DuctShape>,
     /// Device labels, for example `-K1`.
     pub labels: BTreeMap<u64, Arc<str>>,
+    /// Device family by id; drives the body colour.
+    pub classes: BTreeMap<u64, DeviceClass>,
 }
 
 /// Builder options.
@@ -285,6 +288,7 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
             Mark::None
         };
         item.label = inputs.labels.get(&p.id).cloned();
+        item.tint = inputs.classes.get(&p.id).map(|c| c.tint());
         scene.push(item);
     }
 

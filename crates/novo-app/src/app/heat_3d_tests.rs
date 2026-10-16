@@ -9,7 +9,8 @@ use novo_heatview::range::Range;
 use novo_view3d::{Overlay, PlateFrame};
 
 use super::heat_3d::{
-    Flow, Heat3d, Place, flow, overlays, shell_mesh, slice_mesh, stream_lines, tracers,
+    Flow, Heat3d, Place, flow, overlays, shell_mesh, slice_mesh, stream_lines, tint_devices,
+    tracers,
 };
 
 /// 100 x 80 x 60 mm; `T = 20 + x / 10` (20 to 30 C); a wind of 1 m/s along
@@ -264,4 +265,34 @@ fn tracers_move_downwind_and_stay_on_their_line() {
     let s = a.starts[0] as usize;
     let e = a.starts.get(1).map_or(a.positions.len(), |e| *e as usize);
     assert!(a.colors[s][3] < a.colors[e - 1][3]);
+}
+
+#[test]
+fn devices_are_coloured_by_the_air_in_front_of_them() {
+    use novo_view3d::{Item, ItemId, ItemKind, Pose, Scene, Shape};
+    let frame = PlateFrame {
+        width: 100.0,
+        height: 80.0,
+    };
+    let place = Place {
+        plate_x: 0.0,
+        plate_y: 0.0,
+        frame,
+    };
+    let mut scene = Scene::new(frame);
+    // Two 10 mm devices on the plate: one near x = 10 (cool), one near x = 90 (warm).
+    for (raw, x) in [(1, 10.0), (2, 90.0)] {
+        scene.push(Item::new(
+            ItemId::new(ItemKind::Device, raw),
+            Shape::Box,
+            Pose::at(frame.world(x, 40.0, 0.0)),
+            glam::Vec3::new(10.0, 10.0, 20.0),
+        ));
+    }
+    let tinted = tint_devices(&scene, &snapshot(), 20.0, place, 7);
+    assert_ne!(tinted.revision, scene.revision);
+    let (a, b) = (tinted.items[0].tint, tinted.items[1].tint);
+    assert!(a.is_some() && b.is_some() && a != b, "{a:?} {b:?}");
+    // The original is untouched.
+    assert!(scene.items.iter().all(|i| i.tint.is_none()));
 }
