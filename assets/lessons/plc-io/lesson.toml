@@ -288,18 +288,18 @@ id = "press-button"
 title = "Press the start button"
 title_nl = "Druk op de startknop"
 text = """
-In the live view every switch shows a small round badge between its two pins. Click the badge on -S1: the button closes and stays closed until you click again, the wire lights up and the dot on the DI box fills.
+In the live view every switch shows a small round badge between its two pins. Press and hold the mouse button on the badge of -S1: a pushbutton is closed only while you hold it, so the wire lights up and the dot on the DI box fills as long as you keep holding. Let go and it springs back.
 """
 text_nl = """
-In de live-weergave toont elke schakelaar een klein rond knopje tussen zijn twee pinnen. Klik op het knopje van -S1: de knop sluit en blijft gesloten tot je opnieuw klikt, de draad licht op en de stip op de DI-box wordt gevuld.
+In de live-weergave toont elke schakelaar een klein rond knopje tussen zijn twee pinnen. Houd de muisknop ingedrukt op het knopje van -S1: een drukknop is alleen gesloten zolang je hem vasthoudt, dus de draad licht op en de stip op de DI-box wordt gevuld zolang je blijft drukken. Laat los en hij veert terug.
 """
 how = [
-  "Click the round badge halfway between the two pins of -S1",
-  "The wire lights up and the dot on the DI box fills",
+  "Press and hold the mouse button on the round badge halfway between the two pins of -S1",
+  "While you hold, the wire lights up and the dot on the DI box fills",
 ]
 how_nl = [
-  "Klik op het ronde knopje halverwege de twee pinnen van -S1",
-  "De draad licht op en de stip op de DI-box wordt gevuld",
+  "Houd de muisknop ingedrukt op het ronde knopje halverwege de twee pinnen van -S1",
+  "Zolang je vasthoudt licht de draad op en wordt de stip op de DI-box gevuld",
 ]
 demo = [
   { move = { at = { page = "Pump control", x = 48, y = 44 } } },

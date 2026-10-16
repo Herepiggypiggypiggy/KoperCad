@@ -145,6 +145,9 @@ pub struct FlowSolver {
     pub p: Vec<f64>,
     pub t: Vec<f64>,
     pub time: f64,
+    /// Multiplies every heat source (config and medium): the load share of a
+    /// transient run. 1 = rated.
+    pub heat_scale: f64,
     /// Eddy viscosity per cell, m2/s, set by a turbulence model each step.
     /// Momentum diffuses with `nu + nu_t`, heat with `k + rho cp nu_t / prandtl_t`,
     /// both as the harmonic mean over a face. The cross terms of the stress
@@ -259,6 +262,7 @@ impl FlowSolver {
             p: vec![0.0; cells],
             t: vec![t_init; cells],
             time: 0.0,
+            heat_scale: 1.0,
             nu_t: None,
             wall_nu: None,
             wall_alpha: None,
@@ -920,7 +924,7 @@ impl FlowSolver {
                         conv += (face(ix[a] + 1) - face(ix[a])) / m.dx[a][ix[a]];
                     }
                     let id = m.cell(ix);
-                    rhs[id] = -conv * self.conv_scale[id] + self.q_cell[id];
+                    rhs[id] = -conv * self.conv_scale[id] + self.heat_scale * self.q_cell[id];
                 }
             }
         }

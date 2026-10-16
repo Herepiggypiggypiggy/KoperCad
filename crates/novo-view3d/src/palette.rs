@@ -34,6 +34,10 @@ pub const ENCLOSURE_RAL7035: Material = mat(0xD7D7D7, 10);
 pub const DEVICE_DARK: Material = mat(0x4A4B4F, 15);
 pub const DEVICE_LIGHT: Material = mat(0xC9C8C3, 15);
 pub const TERMINAL: Material = mat(0xBDB9AD, 15);
+pub const DEVICE_CONTROLLER: Material = mat(0x6E8196, 15);
+pub const DEVICE_DRIVE: Material = mat(0x3F5A73, 20);
+pub const DEVICE_SUPPLY: Material = mat(0x8A9C6B, 15);
+pub const DEVICE_CONNECTOR: Material = mat(0xA89377, 15);
 pub const NAMEPLATE: Material = mat(0xECEAE5, 0);
 
 /// Opacity of enclosure parts in the ghost view, in percent.

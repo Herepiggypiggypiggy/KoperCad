@@ -116,6 +116,7 @@ een component dat je met de hand plaatst hoort niet meer bij een rail, dus de ra
 """
 point = { ui = "cabinet.canvas" }
 expect = { signal = "cabinet_dropped" }
+solve = [ { cabinet_place = { device = "-K1", x = 75, y = 210 } } ]
 
 [[step]]
 id = "undo"
