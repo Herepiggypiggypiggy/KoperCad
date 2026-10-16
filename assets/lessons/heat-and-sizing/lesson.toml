@@ -155,18 +155,30 @@ id = "balance"
 title = "What the heat means for the box"
 title_nl = "Wat de warmte voor de kast betekent"
 text = """
-Click **Size enclosure** (or run {key:cabinet.size-enclosure}). The window **Size the enclosure** opens with four inputs: **Free space** (spare room on the plate, 20 %), **Ducts** (room for ducts, 20 %),
-**Ambient max** (35 C) and **Inside max** (40 C), and a choice of how the cabinet stands, "Floor standing, free" at first.
-Below them is the result. Your enclosure list is empty, so it says "Your enclosure list is empty. Add sizes under Enclosures... to get a recommendation." but still gives the plate area and the loss.
+Click **Size enclosure** (or run {key:cabinet.size-enclosure}). The window **Size the enclosure** opens with the inputs **Free space** (spare room on the plate, 20 %), **Ducts** (room for ducts, 20 %),
+**Ambient max** (35 C) and **Inside max** (40 C), and a choice of how the cabinet stands, at first "Floor standing, free".
 """
 text_nl = """
-Klik op **Size enclosure** (of voer {key:cabinet.size-enclosure} uit). Het venster **Size the enclosure** opent met vier invoeren: **Free space** (reserveruimte op de plaat, 20 %), **Ducts** (ruimte voor kanalen, 20 %),
+Klik op **Size enclosure** (of voer {key:cabinet.size-enclosure} uit). Het venster **Size the enclosure** opent met de invoeren **Free space** (reserveruimte op de plaat, 20 %), **Ducts** (ruimte voor kanalen, 20 %),
 **Ambient max** (35 C) en **Inside max** (40 C) en een keuze hoe de kast staat, eerst "Floor standing, free".
-Daaronder staat het resultaat. Je kastenlijst is leeg, dus er staat "Your enclosure list is empty. Add sizes under Enclosures... to get a recommendation." maar de plaatoppervlakte en het verlies staan er wel.
 """
 point = { ui = "cabinet.sizing" }
 expect = { command = "cabinet.size-enclosure" }
 solve = [ { command = "cabinet.size-enclosure" } ]
+
+[[step]]
+id = "empty-list"
+title = "The enclosure list starts empty"
+title_nl = "De kastenlijst begint leeg"
+text = """
+Below the inputs is the result. Your enclosure list is empty, so it says "Your enclosure list is empty. Add sizes under Enclosures... to get a recommendation."
+It still gives the plate area needed and the loss, 34 W.
+"""
+text_nl = """
+Onder de invoeren staat het resultaat. Je kastenlijst is leeg, dus er staat "Your enclosure list is empty. Add sizes under Enclosures... to get a recommendation."
+De benodigde plaatoppervlakte en het verlies, 34 W, staan er wel.
+"""
+point = { ui = "cabinet.sizing" }
 
 [[step]]
 id = "add-enclosure"

@@ -30,14 +30,23 @@ id = "what-labels"
 title = "Four kinds of label"
 title_nl = "Vier soorten labels"
 text = """
-The workshop sticks a label on every wire end, every terminal, every device and every cable. KoperCAD makes the text from the project, so the label always says what the drawing says.
-**Wire** labels (a sleeve or flag) carry the wire number, where the other end goes and this end. **Terminal** labels carry the strip and the terminal name.
-**Device** labels carry the tag and the description. **Cable** labels carry the tag, the description and the number of cores. A label has three lines of text at most.
+The workshop sticks a label on every wire end, terminal, device and cable. KoperCAD makes the text from the project, so a label always says what the drawing says. A label has three lines of text at most.
 """
 text_nl = """
-De werkplaats plakt een label op elk draaduiteinde, elke klem, elk component en elke kabel. KoperCAD maakt de tekst uit het project, dus het label zegt altijd wat de tekening zegt.
+De werkplaats plakt een label op elk draaduiteinde, elke klem, elk component en elke kabel. KoperCAD maakt de tekst uit het project, dus een label zegt altijd wat de tekening zegt. Een label heeft hooguit drie regels tekst.
+"""
+
+[[step]]
+id = "label-contents"
+title = "What each label says"
+title_nl = "Wat elk label zegt"
+text = """
+**Wire** labels (a sleeve or flag) carry the wire number, where the other end goes and this end. **Terminal** labels carry the strip and the terminal name.
+**Device** labels carry the tag and the description. **Cable** labels carry the tag, the description and the number of cores.
+"""
+text_nl = """
 **Draad**labels (een hulsje of vlag) dragen het draadnummer, waar het andere einde heen gaat en dit einde. **Klem**labels dragen de strook en de klemnaam.
-**Component**labels dragen de tag en de omschrijving. **Kabel**labels dragen de tag, de omschrijving en het aantal aders. Een label heeft hooguit drie regels tekst.
+**Component**labels dragen de tag en de omschrijving. **Kabel**labels dragen de tag, de omschrijving en het aantal aders.
 """
 
 [[step]]

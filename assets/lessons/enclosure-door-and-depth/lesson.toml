@@ -56,19 +56,29 @@ expect = { clicked = "cabinet.plate" }
 
 [[step]]
 id = "read-form"
-title = "What the form asks"
-title_nl = "Wat het formulier vraagt"
+title = "What the form asks: the box"
+title_nl = "Wat het formulier vraagt: de kast"
 text = """
-**Inside width**, **Inside height** and **Inside depth** of the enclosure (inside, not the outside), **Plate setback** (how far the plate stands from the back wall),
-and the door: **Hinge** side, **Opens to** an angle, **On the door** (how deep what is mounted on the inside of the door is), **Free in front** and **Free at hinge**.
-The two free-space values are optional; tick one to enter the space you really have in the room.
-Right now the numbers are filled in for you: the plate size, a depth of 250 mm, a setback of 20 mm and a door hinged on the left that opens 90 degrees.
+**Inside width**, **Inside height** and **Inside depth** are the size of the enclosure inside, not the outside. **Plate setback** is how far the plate stands from the back wall.
+Right now they are filled in for you: the plate size, a depth of 250 mm and a setback of 20 mm.
 """
 text_nl = """
-**Inside width**, **Inside height** en **Inside depth** van de kast (binnenmaten, niet buitenmaten), **Plate setback** (hoever de plaat van de achterwand staat)
-en de deur: de kant van de scharnier **Hinge**, **Opens to** een hoek, **On the door** (hoe diep wat aan de binnenkant van de deur zit), **Free in front** en **Free at hinge**.
-De twee vrije ruimtes zijn optioneel; vink er een aan om de ruimte in te vullen die je werkelijk hebt.
-Nu zijn de getallen alvast ingevuld: de plaatmaat, een diepte van 250 mm, een setback van 20 mm en een deur met scharnier links die 90 graden opent.
+**Inside width**, **Inside height** en **Inside depth** zijn de maten van de kast aan de binnenkant, niet de buitenkant. **Plate setback** is hoever de plaat van de achterwand staat.
+Nu zijn ze alvast ingevuld: de plaatmaat, een diepte van 250 mm en een setback van 20 mm.
+"""
+point = { ui = "cabinet.door" }
+
+[[step]]
+id = "read-door"
+title = "What the form asks: the door"
+title_nl = "Wat het formulier vraagt: de deur"
+text = """
+**Hinge** is the side the door hangs on, **Opens to** the angle it opens, and **On the door** how deep what is mounted on the inside of the door is.
+**Free in front** and **Free at hinge** are optional: tick one to enter the space you really have in the room. Now: hinge left, 90 degrees.
+"""
+text_nl = """
+**Hinge** is de kant waar de deur aan hangt, **Opens to** de hoek waarmee hij opent en **On the door** hoe diep wat aan de binnenkant van de deur zit.
+**Free in front** en **Free at hinge** zijn optioneel: vink er een aan om de ruimte in te vullen die je werkelijk hebt. Nu: scharnier links, 90 graden.
 """
 point = { ui = "cabinet.door" }
 
