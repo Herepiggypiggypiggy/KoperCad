@@ -848,6 +848,27 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_door",
+        "Open or close the door in 3D",
+        "View",
+        &["door", "open door", "close door", "swing"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_shell",
+        "Show or hide the enclosure in 3D",
+        "View",
+        &["shell", "enclosure", "box", "see through"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_wires",
+        "Show or hide the wires in 3D",
+        "View",
+        &["wires", "routes", "cables"],
+        Needs::Project,
+    ),
+    cmd(
         "view.iso",
         "Isometric view",
         "View",
@@ -1350,6 +1371,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export aml", "export automationml"],
+    ),
+    verb(
+        cmd(
+            "export.eplan",
+            "Export EPLAN project (PXF)",
+            "Export",
+            &[
+                "eplan",
+                "pxf",
+                "epj",
+                "hand back",
+                "exchange",
+                "engineering",
+            ],
+            Needs::Project,
+        ),
+        &["export eplan", "export pxf"],
     ),
     verb(
         cmd(

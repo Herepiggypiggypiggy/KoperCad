@@ -399,6 +399,11 @@ pub const DUTCH: &[Aliases] = &[
         &["installatie", "automationml", "uitwisselen"],
     ),
     nl(
+        "export.eplan",
+        &["exporteer eplan"],
+        &["eplan", "pxf", "terugsturen", "uitwisselen"],
+    ),
+    nl(
         "file.import_aml",
         &["importeer aml"],
         &["automationml", "installatie", "overnemen", "migreren"],
@@ -461,6 +466,21 @@ pub const DUTCH: &[Aliases] = &[
         &["alle rapporten", "excel exporteren"],
     ),
     nl("view.3d", &[], &["3d", "driedimensionaal"]),
+    nl(
+        "view.3d_door",
+        &["deur openen in 3d"],
+        &["deur", "deur open", "deur dicht"],
+    ),
+    nl(
+        "view.3d_shell",
+        &["kast tonen in 3d"],
+        &["behuizing", "kast zien"],
+    ),
+    nl(
+        "view.3d_wires",
+        &["draden tonen in 3d"],
+        &["draden", "bedrading"],
+    ),
     nl("view.iso", &[], &["isometrisch", "hoekzicht"]),
     nl("view.front", &[], &["vooraanzicht", "deurzijde"]),
     nl("view.top", &[], &["bovenaanzicht", "van boven"]),

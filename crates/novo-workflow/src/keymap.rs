@@ -401,6 +401,8 @@ impl Keymap {
         bind(Chord::ctrl(Digit(3)), Anywhere, "view.terminals_drawer");
         bind(Chord::ctrl(Digit(4)), Anywhere, "view.cables_drawer");
         bind(Chord::ctrl(Digit(5)), Anywhere, "view.devices_drawer");
+        bind(Chord::ctrl(Digit(6)), Anywhere, "view.3d");
+        bind(Chord::shift(l('d')), Canvas, "view.3d_door");
         bind(Chord::ctrl_shift(l('f')), Anywhere, "view.focus");
         bind(Chord::plain(F(11)), Anywhere, "view.full_screen");
         bind(Chord::ctrl(l('t')), Anywhere, "view.cabinet_table");
@@ -662,6 +664,11 @@ mod tests {
         assert_eq!(ctrl(3), Some("view.terminals_drawer"));
         assert_eq!(ctrl(4), Some("view.cables_drawer"));
         assert_eq!(ctrl(5), Some("view.devices_drawer"));
+        assert_eq!(ctrl(6), Some("view.3d"));
+        assert_eq!(
+            map.resolve(Chord::shift(Key::Letter('D')), Focus::Canvas),
+            Some("view.3d_door")
+        );
         assert_eq!(
             map.resolve(Chord::plain(Key::F(8)), Focus::Panel),
             Some("check.next_problem")

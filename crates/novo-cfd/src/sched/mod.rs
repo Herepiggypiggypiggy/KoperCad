@@ -10,10 +10,12 @@
 //! (`cabinet.thermal.simulate`) starts a [`Job`]; the progress bar and cancel
 //! button read it. The app side is lane CFD-F.
 
+#[cfg(feature = "demo")]
 mod demo;
 mod job;
 mod pool;
 
+#[cfg(feature = "demo")]
 pub use demo::DemoLadder;
 pub use job::{Event, Job, JobStatus, Outcome};
 pub use pool::{Threads, default_threads, install};

@@ -345,6 +345,9 @@ const APP_COMMANDS: &[&str] = &[
     "export.reports",
     "view.reports",
     "view.3d",
+    "view.3d_door",
+    "view.3d_shell",
+    "view.3d_wires",
     "view.iso",
     "view.front",
     "view.top",
@@ -365,6 +368,7 @@ const APP_COMMANDS: &[&str] = &[
     "import.spreadsheet",
     "export.step",
     "export.aml",
+    "export.eplan",
     "file.import_aml",
     "file.import_eplan",
     "file.import_dwg",
@@ -761,6 +765,19 @@ impl NovoApp {
             "view.toggle_marks" => self.wb.marks ^= true,
             "view.reports" => self.switch_workspace(super::workspace::Workspace::Reports),
             "view.3d" => self.switch_workspace(Workspace::View3d),
+            "view.3d_door" | "view.3d_shell" | "view.3d_wires" => {
+                self.switch_workspace(Workspace::View3d);
+                let limit = self.view3d_door_limit();
+                let controls = &mut self.view3d.controls;
+                match id {
+                    "view.3d_door" => {
+                        controls.layers.door = true;
+                        controls.toggle_door(limit);
+                    }
+                    "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
+                    _ => controls.layers.wires = !controls.layers.wires,
+                }
+            }
             "view.iso" | "view.front" | "view.top" if self.is_open() => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.pending = Some(match id {
@@ -872,6 +889,9 @@ impl NovoApp {
             "import.spreadsheet" => self.import_sheet(),
             "export.step" => {
                 self.export_step();
+            }
+            "export.eplan" => {
+                self.export_eplan();
             }
             "export.aml" => {
                 self.export_aml();

@@ -10,48 +10,64 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 
 ## Anchors
 
-- `start.learn`
-- `menu.project`
-- `palette.button`
-- `dock.select`
-- `dock.place`
-- `dock.connect`
-- `dock.corners`
-- `dock.lines`
-- `dock.hint`
-- `dock.proposals`
-- `palette.field`
-- `issue.pill`
-- `drawer.terminals`
-- `drawer.terminals.tab`
-- `drawer.cables`
-- `drawer.cables.tab`
-- `drawer.cables.accept`
-- `drawer.devices`
-- `drawer.devices.tab`
-- `live.card`
-- `live.pole`
-- `live.coil`
-- `live.output`
-- `cabinet.place_all`
-- `cabinet.accept`
-- `cabinet.rules`
-- `cabinet.plate`
-- `cabinet.routes`
-- `cabinet.cutlist`
-- `cabinet.table`
-- `cabinet.heat`
-- `cabinet.canvas`
-- `cabinet.unplaced`
-- `cabinet.problems`
-- `cabinet.inspector`
-- `cabinet.door`
-- `cabinet.door.apply`
-- `cabinet.routes_panel`
-- `cabinet.wire_rules`
-- `cabinet.sizing`
-- `cabinet.rails`
-- `cabinet.plate_drawing`
+- `start.learn`: {ui:start.learn} shows **Learn**
+- `menu.project`: {ui:menu.project} shows **KoperCAD menu**
+- `palette.button`: {ui:palette.button} shows **Search or run**
+- `dock.select`: {ui:dock.select} shows **Select**
+- `dock.place`: {ui:dock.place} shows **Place**
+- `dock.connect`: {ui:dock.connect} shows **Connect**
+- `dock.corners`: {ui:dock.corners} shows **Corners**
+- `dock.lines`: {ui:dock.lines} shows **Lines**
+- `dock.hint`: {ui:dock.hint} shows **Hint line**
+- `dock.proposals`: {ui:dock.proposals} shows **Proposals**
+- `palette.field`: {ui:palette.field} shows **Command field**
+- `issue.pill`: {ui:issue.pill} shows **Issues**
+- `drawer.terminals`: {ui:drawer.terminals} shows **Terminals drawer**
+- `drawer.terminals.tab`: {ui:drawer.terminals.tab} shows **Terminals tab**
+- `drawer.cables`: {ui:drawer.cables} shows **Cables drawer**
+- `drawer.cables.tab`: {ui:drawer.cables.tab} shows **Cables tab**
+- `drawer.cables.accept`: {ui:drawer.cables.accept} shows **Accept proposed cables**
+- `drawer.devices`: {ui:drawer.devices} shows **Devices drawer**
+- `drawer.devices.tab`: {ui:drawer.devices.tab} shows **Devices tab**
+- `live.card`: {ui:live.card} shows **Live potentials**
+- `live.pole`: {ui:live.pole} shows **Pole badge**
+- `live.coil`: {ui:live.coil} shows **Coil badge**
+- `live.output`: {ui:live.output} shows **Output badge**
+- `cabinet.place_all`: {ui:cabinet.place_all} shows **Place all**
+- `cabinet.accept`: {ui:cabinet.accept} shows **Accept**
+- `cabinet.rules`: {ui:cabinet.rules} shows **Rules**
+- `cabinet.plate`: {ui:cabinet.plate} shows **Plate setup**
+- `cabinet.routes`: {ui:cabinet.routes} shows **Route all**
+- `cabinet.cutlist`: {ui:cabinet.cutlist} shows **Cut list**
+- `cabinet.table`: {ui:cabinet.table} shows **Table**
+- `cabinet.heat`: {ui:cabinet.heat} shows **Heat**
+- `cabinet.canvas`: {ui:cabinet.canvas} shows **Cabinet canvas**
+- `cabinet.unplaced`: {ui:cabinet.unplaced} shows **Unplaced list**
+- `cabinet.problems`: {ui:cabinet.problems} shows **Problems**
+- `cabinet.inspector`: {ui:cabinet.inspector} shows **Cabinet inspector**
+- `cabinet.door`: {ui:cabinet.door} shows **Door and depth**
+- `cabinet.door.apply`: {ui:cabinet.door.apply} shows **Apply**
+- `cabinet.routes_panel`: {ui:cabinet.routes_panel} shows **Routes panel**
+- `cabinet.wire_rules`: {ui:cabinet.wire_rules} shows **Wire rules**
+- `cabinet.sizing`: {ui:cabinet.sizing} shows **Size enclosure**
+- `cabinet.rails`: {ui:cabinet.rails} shows **Rails**
+- `cabinet.plate_drawing`: {ui:cabinet.plate_drawing} shows **Plate drawing**
+- `cabinet.more`: {ui:cabinet.more} shows **More**
+- `issues.list`: {ui:issues.list} shows **Issues list**
+- `macro.place`: {ui:macro.place} shows **Place macro**
+- `macros.window`: {ui:macros.window} shows **Macros**
+
+## Menus and their commands
+
+Every menu of the bar and every command row in it is an anchor too, with no list to keep:
+`{ui:menu.File}` is the menu in the bar and `{ui:cmd.export.sheets}` is the row of the command
+with that id (`cmd.` + the command id). The card shows the row's own label. While the menu is
+closed the ring points at the menu that holds the row.
+
+## Folded controls
+
+A cabinet bar button that has folded into **More** (a narrow window) points at
+`cabinet.more` while it is not on screen.
 
 ## Signals
 
@@ -62,3 +78,8 @@ For `expect = { signal = "name" }`; raised where a key does not pass through a c
 - `proposal_accept`
 - `problem_waived`
 - `waiver_restored`
+- `cabinet_dropped`
+- `cabinet_rotated`
+- `cabinet_removed`
+- `cabinet_plan_accepted`
+- `wire_cut_exported`

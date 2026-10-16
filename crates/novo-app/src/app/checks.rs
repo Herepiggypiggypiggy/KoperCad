@@ -78,6 +78,18 @@ impl NovoApp {
     /// severity's count, then the problems, errors first. A click goes to
     /// the problem; returns whether one was clicked.
     pub(super) fn issues_list(&mut self, ui: &mut egui::Ui) -> bool {
+        let top = ui.cursor().min;
+        let clicked = self.issues_list_rows(ui);
+        let bottom = ui.min_rect().max;
+        let rect = egui::Rect::from_min_max(
+            top,
+            egui::pos2(bottom.x.max(top.x + 1.0), bottom.y.max(top.y + 1.0)),
+        );
+        self.anchor("issues.list", rect, "Issues list");
+        clicked
+    }
+
+    fn issues_list_rows(&mut self, ui: &mut egui::Ui) -> bool {
         let summary = Summary::of(self.problems());
         let counts = [summary.errors, summary.warnings, summary.infos];
         ui.horizontal_wrapped(|ui| {
