@@ -638,7 +638,7 @@ impl NovoApp {
             )
         });
         let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
-        let shown = super::panel::dialog(ctx, "Parts", [820.0, 520.0])
+        let shown = super::panel::dialog(ctx, "Parts", [900.0, 580.0])
             .open(&mut open)
             .show(ctx, |ui| parts_ui(ui, win, dragging, &mut actions));
         // A file dropped on the window, or one the watch found.
@@ -832,37 +832,57 @@ fn new_part_ui(ui: &mut egui::Ui, win: &mut PartsWindow) {
     };
     let (mut create, mut cancel) = (false, false);
     ui.group(|ui| {
-        ui.strong("New part");
-        egui::Grid::new("new_part").num_columns(2).show(ui, |ui| {
-            for (label, text, hint) in [
-                ("Maker", &mut form.maker, "Phoenix Contact"),
-                (
-                    "Order number",
-                    &mut form.order_number,
-                    "required, unique per maker",
-                ),
-                ("Type", &mut form.type_number, ""),
-                ("Description", &mut form.description, ""),
-                (
-                    "Letter codes",
-                    &mut form.letter_codes,
-                    "K, Q (what devices it fits)",
-                ),
-                ("Width (mm)", &mut form.width, ""),
-                ("Height (mm)", &mut form.height, ""),
-                ("Depth (mm)", &mut form.depth, ""),
-            ] {
-                ui.label(label);
-                ui.add(egui::TextEdit::singleline(text).hint_text(hint));
+        novo_theme::widgets::section_label(ui, "New part");
+        ui.add_space(4.0);
+        egui::Grid::new("new_part")
+            .num_columns(2)
+            .spacing([12.0, 6.0])
+            .show(ui, |ui| {
+                for (label, text, hint) in [
+                    ("Maker", &mut form.maker, "Phoenix Contact"),
+                    (
+                        "Order number",
+                        &mut form.order_number,
+                        "required, unique per maker",
+                    ),
+                    ("Type", &mut form.type_number, ""),
+                    ("Description", &mut form.description, ""),
+                    (
+                        "Letter codes",
+                        &mut form.letter_codes,
+                        "K, Q (what devices it fits)",
+                    ),
+                ] {
+                    ui.label(egui::RichText::new(label).weak());
+                    ui.add(
+                        egui::TextEdit::singleline(text)
+                            .hint_text(hint)
+                            .desired_width(280.0),
+                    );
+                    ui.end_row();
+                }
+                ui.label(egui::RichText::new("Size (mm)").weak());
+                ui.horizontal(|ui| {
+                    for (text, hint) in [
+                        (&mut form.width, "width"),
+                        (&mut form.height, "height"),
+                        (&mut form.depth, "depth"),
+                    ] {
+                        ui.add(
+                            egui::TextEdit::singleline(text)
+                                .hint_text(hint)
+                                .desired_width(84.0),
+                        );
+                    }
+                });
                 ui.end_row();
-            }
-        });
+            });
         if let Some(e) = &form.error {
             ui.colored_label(novo_theme::tokens::WARNING, e);
         }
         ui.horizontal(|ui| {
-            create = ui.button("Save to my catalog").clicked();
-            cancel = ui.button("Cancel").clicked();
+            create = novo_theme::widgets::primary_button(ui, "Save to my catalog").clicked();
+            cancel = novo_theme::widgets::ghost_button(ui, "Cancel").clicked();
         });
     });
     if create {
@@ -915,52 +935,56 @@ fn parts_ui(
                 }
             });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.small_button("Close").clicked() {
-                actions.push(PartsAction::Close);
+            // The things done now sit at the right; the rarer ones fold into
+            // More, each with its explanation on hover.
+            ui.menu_button("More", |ui| {
+                for (label, hint, action) in [
+                    (
+                        "Import inbox",
+                        "Import every file in the inbox folder.",
+                        PartsAction::ImportInbox,
+                    ),
+                    (
+                        "Open inbox folder",
+                        "The folder to save downloaded catalog files in, one folder per maker.",
+                        PartsAction::OpenInbox,
+                    ),
+                    (
+                        "Open library folder",
+                        "Where the STEP files and source records of imported parts are kept.",
+                        PartsAction::OpenLibrary,
+                    ),
+                ] {
+                    if ui.button(label).on_hover_text(hint).clicked() {
+                        actions.push(action);
+                        ui.close();
+                    }
+                }
+                if ui
+                    .button("Maker guide")
+                    .on_hover_text("What to download from each maker and where to save it.")
+                    .clicked()
+                {
+                    win.guide ^= true;
+                    ui.close();
+                }
+            });
+            if ui
+                .button("Import catalog files")
+                .on_hover_text(
+                    "Read BMEcat, CSV or ZIP catalog files from a maker or wholesaler into your catalog. You can also drop them on this window.",
+                )
+                .clicked()
+            {
+                actions.push(PartsAction::ImportCatalogFiles);
+            }
+            if novo_theme::widgets::primary_button(ui, "New part...")
+                .on_hover_text("Add a part by hand to your own catalog.")
+                .clicked()
+            {
+                actions.push(PartsAction::NewPart);
             }
         });
-    });
-    ui.horizontal_wrapped(|ui| {
-        for (label, hint, action) in [
-            (
-                "Import catalog files",
-                "Read BMEcat, CSV or ZIP catalog files from a maker or wholesaler into your catalog. You can also drop them on this window.",
-                PartsAction::ImportCatalogFiles,
-            ),
-            (
-                "Import inbox",
-                "Import every file in the inbox folder.",
-                PartsAction::ImportInbox,
-            ),
-            (
-                "Open inbox folder",
-                "The folder to save downloaded catalog files in, one folder per maker.",
-                PartsAction::OpenInbox,
-            ),
-            (
-                "Open library folder",
-                "Where the STEP files and source records of imported parts are kept.",
-                PartsAction::OpenLibrary,
-            ),
-        ] {
-            if ui.small_button(label).on_hover_text(hint).clicked() {
-                actions.push(action);
-            }
-        }
-        if ui
-            .small_button("Maker guide")
-            .on_hover_text("What to download from each maker and where to save it.")
-            .clicked()
-        {
-            win.guide ^= true;
-        }
-        if ui
-            .small_button("New part...")
-            .on_hover_text("Add a part by hand to your own catalog.")
-            .clicked()
-        {
-            actions.push(PartsAction::NewPart);
-        }
     });
     if win.guide {
         guide_ui(ui, win);
@@ -1000,48 +1024,78 @@ fn parts_ui(
     egui::Panel::right("parts_detail")
         .exact_size(300.0)
         .resizable(false)
-        .show(ui, |ui| detail_ui(ui, win, actions));
+        .show(ui, |ui| {
+            let not_imported = win
+                .selected
+                .as_ref()
+                .and_then(|k| rows.iter().find(|(r, _)| r == k))
+                .is_some_and(|(_, a)| *a != RowAction::InLibrary);
+            detail_ui(ui, win, not_imported, actions)
+        });
     egui::CentralPanel::default().show(ui, |ui| {
         if rows.is_empty() {
             ui.weak("No part matches.");
             return;
         }
-        egui::ScrollArea::vertical().show_rows(ui, 24.0, rows.len(), |ui, range| {
+        use novo_theme::table::{
+            ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths, table_header,
+            table_row,
+        };
+        let columns = [
+            ("Maker", TableAlign::Left),
+            ("Order no.", TableAlign::Left),
+            ("Description", TableAlign::Left),
+            ("Library", TableAlign::Right),
+        ]
+        .map(|(h, align)| TableColumn {
+            header: h.to_owned(),
+            align,
+        });
+        let widths = column_widths(ui.available_width(), &[0.9, 1.8, 2.5, 1.5]);
+        table_header(ui, &columns, &widths, None);
+        egui::ScrollArea::vertical().show_rows(ui, ROW_HEIGHT, rows.len(), |ui, range| {
+            ui.spacing_mut().item_spacing.y = 0.0;
             for (key, action) in &rows[range] {
                 let Some(part) = win.catalog.get(key) else {
                     continue;
                 };
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    match action {
-                        RowAction::InLibrary => {
-                            ui.colored_label(novo_theme::tokens::SUCCESS, "In library");
-                        }
-                        RowAction::Import | RowAction::OpenPage(_) => {
-                            let hint = match action {
-                                RowAction::OpenPage(Some(_)) => {
-                                    "Opens the maker's page. Save the file there and KoperCAD imports it from Downloads."
-                                }
-                                _ => "Save the maker's file, then drop it on this window.",
-                            };
-                            if ui.small_button("Import").on_hover_text(hint).clicked() {
-                                actions.push(PartsAction::Import(key.clone()));
-                            }
-                        }
-                    }
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        let selected = win.selected.as_ref() == Some(key);
-                        let text = format!(
-                            "{}  {}  {}",
-                            part.manufacturer, part.order_number, part.description
-                        );
-                        if ui
-                            .add(egui::Button::selectable(selected, text).truncate())
-                            .clicked()
-                        {
-                            actions.push(PartsAction::Select(key.clone()));
-                        }
-                    });
-                });
+                let status = match action {
+                    RowAction::InLibrary => "In library",
+                    RowAction::Import | RowAction::OpenPage(_) => "Not imported",
+                };
+                let selected = win.selected.as_ref() == Some(key);
+                let response = table_row(
+                    ui,
+                    &columns,
+                    &widths,
+                    &[
+                        TableCell {
+                            text: &part.manufacturer,
+                            numeric: false,
+                        },
+                        TableCell {
+                            text: &part.order_number,
+                            numeric: true,
+                        },
+                        TableCell {
+                            text: &part.description,
+                            numeric: false,
+                        },
+                        TableCell {
+                            text: status,
+                            numeric: false,
+                        },
+                    ],
+                    if selected {
+                        RowState::Selected
+                    } else {
+                        RowState::Normal
+                    },
+                    key,
+                );
+                if response.clicked() {
+                    actions.push(PartsAction::Select(key.clone()));
+                }
             }
         });
     });
@@ -1148,76 +1202,116 @@ on the maker's site and drop the file here.",
     }
 }
 
-fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction>) {
+fn detail_ui(
+    ui: &mut egui::Ui,
+    win: &PartsWindow,
+    not_imported: bool,
+    actions: &mut Vec<PartsAction>,
+) {
     let Some(part) = win.selected.as_ref().and_then(|k| win.catalog.get(k)) else {
         ui.weak("Pick a part to see its data.");
         return;
     };
     egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.heading(&part.order_number);
+        // Keep clear of the scroll bar.
+        ui.set_max_width((ui.available_width() - 14.0).max(120.0));
+        ui.label(
+            egui::RichText::new(&part.order_number)
+                .size(15.0)
+                .family(novo_theme::fonts::strong_family()),
+        );
         ui.label(&part.manufacturer);
         if !part.description.is_empty() {
-            ui.weak(&part.description);
-        }
-        for section in detail_sections(part) {
-            ui.add_space(6.0);
-            ui.strong(section.title);
-            egui::Grid::new(("parts_detail_grid", section.title))
-                .num_columns(2)
-                .show(ui, |ui| {
-                    for (label, value) in &section.rows {
-                        ui.label(label);
-                        ui.label(value);
-                        ui.end_row();
-                    }
-                });
+            ui.add(egui::Label::new(egui::RichText::new(&part.description).weak()).wrap());
         }
         let key = part.key();
-        ui.add_space(8.0);
-        if ui
-            .button("Use for selected device")
-            .on_hover_text("Gives the devices selected on the drawing this part (one undo step)")
-            .clicked()
-        {
-            actions.push(PartsAction::UseForSelection(key.clone()));
-        }
-        ui.add_space(8.0);
-        ui.strong("Source");
-        let records = win.records(&key);
-        if records.is_empty() {
-            ui.weak(if win.in_library(&key) {
-                "In the library."
-            } else {
-                "Not imported yet. Import saves the maker's file on this computer."
-            });
-        }
-        for r in &records {
-            ui.label(format!("{} ({} bytes)", r.file_name, r.bytes));
-            ui.weak(format!(
-                "imported {} \u{b7} sha256 {}",
-                r.imported,
-                &r.sha256[..12.min(r.sha256.len())]
-            ));
-            if let Some(url) = &r.url {
-                ui.hyperlink(url);
-            }
-            if let Some(url) = &r.terms_url {
-                ui.hyperlink_to("Terms", url);
-            }
-        }
-        ui.add_space(8.0);
-        ui.strong("3D model");
-        ui.label(model_status(win.model_state(part, &records).as_ref()));
+        ui.add_space(6.0);
         ui.horizontal(|ui| {
-            if ui.small_button("Import 3D model (STEP)...").clicked() {
-                actions.push(PartsAction::ChooseModel);
+            if novo_theme::widgets::primary_button(ui, "Use for selected device")
+                .on_hover_text(
+                    "Gives the devices selected on the drawing this part (one undo step)",
+                )
+                .clicked()
+            {
+                actions.push(PartsAction::UseForSelection(key.clone()));
+            }
+            if not_imported && ui.button("Import").clicked() {
+                actions.push(PartsAction::Import(key.clone()));
             }
         });
+        for (i, section) in detail_sections(part).into_iter().enumerate() {
+            novo_theme::widgets::collapsing_section(
+                ui,
+                ("parts_detail_section", section.title),
+                section.title,
+                &section.rows.len().to_string(),
+                i < 2,
+                |ui| {
+                    egui::Grid::new(("parts_detail_grid", section.title))
+                        .num_columns(2)
+                        .spacing([12.0, 4.0])
+                        .show(ui, |ui| {
+                            for (label, value) in &section.rows {
+                                ui.label(egui::RichText::new(label).weak());
+                                ui.add(egui::Label::new(value).wrap());
+                                ui.end_row();
+                            }
+                        });
+                },
+            );
+        }
+        let records = win.records(&key);
+        novo_theme::widgets::collapsing_section(
+            ui,
+            "parts_detail_source",
+            "Source",
+            "",
+            !records.is_empty(),
+            |ui| {
+                if records.is_empty() {
+                    ui.weak(if win.in_library(&key) {
+                        "In the library."
+                    } else {
+                        "Not imported yet. Import saves the maker's file on this computer."
+                    });
+                }
+                for r in &records {
+                    ui.label(format!("{} ({} bytes)", r.file_name, r.bytes));
+                    ui.weak(format!(
+                        "imported {} \u{b7} sha256 {}",
+                        r.imported,
+                        &r.sha256[..12.min(r.sha256.len())]
+                    ));
+                    if let Some(url) = &r.url {
+                        ui.hyperlink(url);
+                    }
+                    if let Some(url) = &r.terms_url {
+                        ui.hyperlink_to("Terms", url);
+                    }
+                }
+            },
+        );
+        novo_theme::widgets::collapsing_section(
+            ui,
+            "parts_detail_model",
+            "3D model",
+            "",
+            true,
+            |ui| {
+                ui.add(
+                    egui::Label::new(model_status(win.model_state(part, &records).as_ref())).wrap(),
+                );
+                if ui.small_button("Import 3D model (STEP)...").clicked() {
+                    actions.push(PartsAction::ChooseModel);
+                }
+            },
+        );
         if !records.is_empty() {
+            ui.add_space(8.0);
             if win.confirm_remove.as_ref() == Some(&key) {
                 ui.label("Delete the saved files? You can download them again from the maker.");
                 ui.horizontal(|ui| {
-                    if ui.small_button("Remove").clicked() {
+                    if novo_theme::widgets::danger_button(ui, "Remove").clicked() {
                         actions.push(PartsAction::Remove(key.clone()));
                     }
                     if ui.small_button("Cancel").clicked() {
