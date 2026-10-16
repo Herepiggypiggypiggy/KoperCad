@@ -637,7 +637,7 @@ fn apply_core(cable: &mut novo_core::Cable, index: usize, slot: &Slot, value: &P
 
 /// Marks a core name spare or not, keeping the list in core order as
 /// `novo_cables::set_spare` does.
-fn set_spare(cable: &mut novo_core::Cable, name: &str, spare: bool) {
+pub(crate) fn set_spare(cable: &mut novo_core::Cable, name: &str, spare: bool) {
     let mut list = novo_cables::spare_cores(cable);
     list.retain(|s| s != name);
     if spare {
