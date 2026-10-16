@@ -5,6 +5,11 @@ use super::scheme::{Sample, Scheme, face_value};
 use crate::openings::{OpenPatch, OpenSet};
 use crate::solids::Medium;
 
+mod steady;
+pub use steady::{
+    RunStatus, SteadyConfig, SteadyInfo, SteadyLimits, SteadyReport, SteadyRun, SteadyState,
+};
+
 /// Thermal condition on a wall.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ThermalBc {

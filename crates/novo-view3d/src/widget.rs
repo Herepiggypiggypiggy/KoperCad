@@ -22,9 +22,10 @@ use egui::{
 };
 use glam::Vec3;
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 /// GPU state of a view not painted for this long is freed.
@@ -32,6 +33,86 @@ const IDLE_VIEW_TTL: Duration = Duration::from_secs(30);
 /// Seconds without input before the settled (sharp) frame is drawn.
 const SETTLE_AFTER: f64 = 0.25;
 static INSTALLED: AtomicBool = AtomicBool::new(false);
+static STATS: Mutex<Option<Recorder>> = Mutex::new(None);
+/// Renders kept for the percentiles.
+const STATS_WINDOW: usize = 120;
+
+/// What the renderer reports about itself, for the app's frame statistics.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RenderStats {
+    /// The graphics adapter, for example `NVIDIA GeForce RTX 3060`.
+    pub adapter: String,
+    /// The graphics API the adapter is used through, for example `Dx12`.
+    pub backend: String,
+    pub tier: Tier,
+    /// Frames rendered since start (an unchanged view is not rendered again).
+    pub renders: u64,
+    /// Items drawn, draw calls and triangles of the last render.
+    pub visible_items: usize,
+    pub draw_calls: u32,
+    pub triangles: u64,
+    /// Size of the last image, and its MSAA samples.
+    pub rendered_px: (u32, u32),
+    pub msaa: u32,
+    /// CPU time the renderer took (cull, instances, encoding), milliseconds,
+    /// median and 95th percentile of the last renders. GPU time is not in it.
+    pub cpu_p50_ms: f32,
+    pub cpu_p95_ms: f32,
+}
+
+struct Recorder {
+    adapter: String,
+    backend: String,
+    tier: Tier,
+    renders: u64,
+    cpu_ms: VecDeque<f32>,
+    last: crate::render::FrameStats,
+    msaa: u32,
+}
+
+/// The percentile `p` (0 to 1) of unsorted samples; 0 for none.
+pub fn percentile(samples: &[f32], p: f32) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    let mut v = samples.to_vec();
+    v.sort_by(f32::total_cmp);
+    v[((v.len() - 1) as f32 * p).round() as usize]
+}
+
+/// The renderer's statistics; `None` before [`install`].
+pub fn render_stats() -> Option<RenderStats> {
+    let guard = STATS.lock().ok()?;
+    let r = guard.as_ref()?;
+    let cpu: Vec<f32> = r.cpu_ms.iter().copied().collect();
+    Some(RenderStats {
+        adapter: r.adapter.clone(),
+        backend: r.backend.clone(),
+        tier: r.tier,
+        renders: r.renders,
+        visible_items: r.last.visible_items,
+        draw_calls: r.last.draw_calls,
+        triangles: r.last.triangles,
+        rendered_px: r.last.rendered_px,
+        msaa: r.msaa,
+        cpu_p50_ms: percentile(&cpu, 0.5),
+        cpu_p95_ms: percentile(&cpu, 0.95),
+    })
+}
+
+fn record(stats: crate::render::FrameStats, msaa: u32) {
+    if let Ok(mut guard) = STATS.lock()
+        && let Some(r) = guard.as_mut()
+    {
+        if r.cpu_ms.len() == STATS_WINDOW {
+            r.cpu_ms.pop_front();
+        }
+        r.cpu_ms.push_back(stats.cpu_ms);
+        r.renders += 1;
+        r.last = stats;
+        r.msaa = msaa;
+    }
+}
 
 /// Registers the renderer with egui's wgpu renderer. Call once at start-up.
 /// `msaa_samples` is eframe's `NativeOptions::multisampling` (0 or 1 = off).
@@ -42,7 +123,19 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
         render_state.target_format,
         msaa_samples.max(1),
     );
-    let tier = Tier::of(&render_state.adapter.get_info());
+    let info = render_state.adapter.get_info();
+    let tier = Tier::of(&info);
+    if let Ok(mut guard) = STATS.lock() {
+        *guard = Some(Recorder {
+            adapter: info.name.clone(),
+            backend: format!("{:?}", info.backend),
+            tier,
+            renders: 0,
+            cpu_ms: VecDeque::with_capacity(STATS_WINDOW),
+            last: Default::default(),
+            msaa: 1,
+        });
+    }
     render_state
         .renderer
         .write()
@@ -117,7 +210,8 @@ impl egui_wgpu::CallbackTrait for Callback {
         });
         slot.used = now;
         if slot.key != Some(self.key) {
-            renderer.render(
+            let quality = Quality::new(self.mode, *tier);
+            let stats = renderer.render(
                 device,
                 queue,
                 encoder,
@@ -129,11 +223,12 @@ impl egui_wgpu::CallbackTrait for Callback {
                     library: &self.library,
                     look: &self.look,
                     size_px: self.size_px,
-                    quality: Quality::new(self.mode, *tier),
+                    quality,
                     overlays: &self.overlays,
                     overlay_revision: self.overlay_revision,
                 },
             );
+            record(stats, quality.msaa);
             slot.key = Some(self.key);
         }
         if slot
@@ -319,6 +414,17 @@ impl View3d {
             door: None,
             door_scene: None,
         }
+    }
+
+    /// Turns the camera round the cabinet at `rad_per_s` for this frame and
+    /// asks for the next one: a steady load for measuring frame times without
+    /// a hand on the mouse. Call it before [`View3d::show`] every frame.
+    pub fn spin(&mut self, ctx: &egui::Context, rad_per_s: f32) {
+        let dt = ctx.input(|i| i.unstable_dt).clamp(0.0, 0.1);
+        self.camera.yaw += rad_per_s * dt;
+        self.last_activity = ctx.input(|i| i.time);
+        self.transition = None;
+        ctx.request_repaint();
     }
 
     /// Replaces the overlays drawn over the cabinet (see `overlay`); an empty
@@ -1071,5 +1177,49 @@ mod chip_tests {
         assert_eq!(hover, color3(look.hover.edge, 255));
         assert_ne!(quiet, hover);
         assert_ne!(selected, hover);
+    }
+}
+
+#[cfg(test)]
+mod stats_tests {
+    use super::*;
+
+    #[test]
+    fn percentiles_pick_the_sample_at_the_rank() {
+        assert_eq!(percentile(&[], 0.5), 0.0);
+        assert_eq!(percentile(&[5.0], 0.95), 5.0);
+        let v: Vec<f32> = (1..=100).map(|i| i as f32).collect();
+        assert_eq!(percentile(&v, 0.0), 1.0);
+        assert_eq!(percentile(&v, 1.0), 100.0);
+        assert_eq!(percentile(&v, 0.5), 51.0);
+    }
+
+    #[test]
+    fn recording_fills_the_statistics_and_keeps_a_window() {
+        *STATS.lock().unwrap() = Some(Recorder {
+            adapter: "Test".into(),
+            backend: "Vulkan".into(),
+            tier: Tier::Software,
+            renders: 0,
+            cpu_ms: VecDeque::new(),
+            last: Default::default(),
+            msaa: 1,
+        });
+        for i in 0..(STATS_WINDOW + 30) {
+            record(
+                crate::render::FrameStats {
+                    cpu_ms: i as f32,
+                    draw_calls: 11,
+                    ..Default::default()
+                },
+                4,
+            );
+        }
+        let s = render_stats().unwrap();
+        assert_eq!(s.renders as usize, STATS_WINDOW + 30);
+        assert_eq!((s.draw_calls, s.msaa), (11, 4));
+        // Only the last window counts: samples 30 to 149.
+        assert!(s.cpu_p50_ms > 80.0 && s.cpu_p95_ms > 140.0, "{s:?}");
+        *STATS.lock().unwrap() = None;
     }
 }

@@ -419,7 +419,8 @@ impl NovoApp {
         let Some(layout) = layout else {
             return;
         };
-        self.cabinet_edit("Move selection", move |tx| {
+        let moves_devices = !devices.is_empty();
+        let done = self.cabinet_edit("Move selection", move |tx| {
             for (id, x, y) in devices {
                 let rotated = layout
                     .placements
@@ -437,6 +438,10 @@ impl NovoApp {
             }
             Ok(())
         });
+        // A dragged group counts as a drop for the lessons, like a single one.
+        if done && moves_devices {
+            self.learn_signal("cabinet_dropped");
+        }
     }
 }
 
