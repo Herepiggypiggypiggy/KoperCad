@@ -316,6 +316,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.wiring_dxf",
     "export.wirecut_page",
     "cabinet.routes",
+    "cabinet.rails",
     "export.bom",
     "export.reports",
     "view.reports",
@@ -782,6 +783,7 @@ impl NovoApp {
                 self.export_spreadsheet();
             }
             "cabinet.routes" => self.toggle_cabinet_routes(),
+            "cabinet.rails" => self.toggle_cabinet_rails(),
             "export.wirecut" => {
                 self.export_wire_cut();
             }

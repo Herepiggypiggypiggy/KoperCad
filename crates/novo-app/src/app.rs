@@ -9,6 +9,7 @@ mod cabinet;
 mod cabinet_door;
 mod cabinet_inspector;
 mod cabinet_panel;
+mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
@@ -90,6 +91,8 @@ mod xref;
 mod assembly_pack_tests;
 #[cfg(test)]
 mod assembly_tests;
+#[cfg(test)]
+mod cabinet_rails_tests;
 #[cfg(test)]
 mod cabinet_routes_tests;
 #[cfg(test)]
@@ -834,13 +837,19 @@ impl NovoApp {
             // file and undo actions.
             let cabinet = self.workspace() == workspace::Workspace::Cabinet;
             for id in &commands {
-                if cabinet && matches!(*id, "edit.rotate" | "edit.delete") {
+                if cabinet
+                    && matches!(
+                        *id,
+                        "edit.rotate" | "edit.delete" | "terminal.strip_up" | "terminal.strip_down"
+                    )
+                {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
             commands.retain(|id| {
                 Action::from_id(id).is_some()
                     || *id == "view.cabinet_table"
+                    || *id == "cabinet.rails"
                     || *id == "view.command_field_here"
                     || id.starts_with("heat.")
             });

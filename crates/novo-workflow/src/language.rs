@@ -475,6 +475,11 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
     nl(
+        "cabinet.rails",
+        &["rails en kanalen", "voeg kanaal toe"],
+        &["din-rail", "kabelgoot", "kanaal", "rail"],
+    ),
+    nl(
         "cabinet.routes",
         &["bedraad alles", "routeer alle draden"],
         &["draadlengte", "bedrading", "kanaalvulling"],
