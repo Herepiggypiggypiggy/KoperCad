@@ -16,6 +16,9 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `dock.select`: {ui:dock.select} shows **Select**
 - `dock.place`: {ui:dock.place} shows **Place**
 - `dock.connect`: {ui:dock.connect} shows **Connect**
+- `dock.cable`: {ui:dock.cable} shows **Cable tool**
+- `dock.undo`: {ui:dock.undo} shows **Undo**
+- `dock.redo`: {ui:dock.redo} shows **Redo**
 - `dock.corners`: {ui:dock.corners} shows **Corners**
 - `dock.lines`: {ui:dock.lines} shows **Lines**
 - `dock.hint`: {ui:dock.hint} shows **Hint line**
@@ -41,6 +44,9 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `cabinet.cutlist`: {ui:cabinet.cutlist} shows **Cut list**
 - `cabinet.table`: {ui:cabinet.table} shows **Table**
 - `cabinet.heat`: {ui:cabinet.heat} shows **Heat**
+- `heat.chips`: {ui:heat.chips} shows **Heat chips**
+- `heat.legend`: {ui:heat.legend} shows **Heat legend**
+- `heat.simulate`: {ui:heat.simulate} shows **Simulate button**
 - `cabinet.canvas`: {ui:cabinet.canvas} shows **Cabinet canvas**
 - `workspace.view3d`: {ui:workspace.view3d} shows **3D canvas**
 - `switcher.schematic`: {ui:switcher.schematic} shows **Schematic chip**
@@ -50,9 +56,9 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `switcher.commissioning`: {ui:switcher.commissioning} shows **Commissioning chip**
 - `outline.pages`: {ui:outline.pages} shows **Pages list**
 - `outline.toggle`: {ui:outline.toggle} shows **Pages button**
-- `commissioning.who`: {ui:commissioning.who} shows **By field**
+- `commissioning.who`: {ui:commissioning.who} shows **By menu**
 - `commissioning.punch`: {ui:commissioning.punch} shows **Punch tab**
-- `commissioning.report`: {ui:commissioning.report} shows **Report PDF button**
+- `commissioning.report`: {ui:commissioning.report} shows **Write PDF report item**
 - `commissioning.next_open`: {ui:commissioning.next_open} shows **Next open button**
 - `commissioning.pass`: {ui:commissioning.pass} shows **Pass button**
 - `commissioning.fail`: {ui:commissioning.fail} shows **Fail button**
@@ -61,6 +67,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `cabinet.problems`: {ui:cabinet.problems} shows **Problems**
 - `cabinet.inspector`: {ui:cabinet.inspector} shows **Cabinet inspector**
 - `cabinet.door`: {ui:cabinet.door} shows **Door and depth**
+- `cabinet.surface`: {ui:cabinet.surface} shows **Surface**
 - `cabinet.door.apply`: {ui:cabinet.door.apply} shows **Apply**
 - `cabinet.routes_panel`: {ui:cabinet.routes_panel} shows **Routes panel**
 - `cabinet.wire_rules`: {ui:cabinet.wire_rules} shows **Wire rules**

@@ -58,6 +58,9 @@ pub struct Label {
     /// Drawn bold (a table header). The screen fakes it with a second pass
     /// shifted sideways; a print backend picks a bold face.
     pub bold: bool,
+    /// What is hidden first when the screen is too small to read everything
+    /// (see [`crate::declutter`]).
+    pub priority: crate::declutter::Priority,
 }
 
 /// Average glyph advance relative to the font size, used for the estimated
@@ -95,7 +98,15 @@ impl Label {
             rotation: 0.0,
             keep_color: false,
             bold: false,
+            priority: crate::declutter::Priority::Primary,
         }
+    }
+
+    /// Marks the label as secondary text: the first to go when the drawing
+    /// is too small to read it.
+    pub fn secondary(mut self) -> Self {
+        self.priority = crate::declutter::Priority::Secondary;
+        self
     }
 
     /// See [`Label::keep_color`].
