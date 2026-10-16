@@ -541,49 +541,49 @@ fn cut_table(ui: &mut egui::Ui, jobs: &[WireCutJob]) {
         .show_rows(ui, ROW_HEIGHT + 1.0, jobs.len(), |ui, range| {
             for i in range {
                 let j = &jobs[i];
-                let size = j
-                    .cross_section_mm2
-                    .map_or_else(|| "?".to_owned(), |v| format!("{v}"));
-                let est = is_estimate(&j.basis);
-                let cut = format!("{}{:.0}", if est { "~" } else { "" }, j.cut_mm);
-                let cells = [
-                    TableCell {
-                        text: if j.number.is_empty() { "-" } else { &j.number },
-                        numeric: false,
-                    },
-                    TableCell {
-                        text: &size,
-                        numeric: true,
-                    },
-                    TableCell {
-                        text: if j.colour.is_empty() { "-" } else { &j.colour },
-                        numeric: false,
-                    },
-                    TableCell {
-                        text: &j.end_a.designation,
-                        numeric: false,
-                    },
-                    TableCell {
-                        text: &j.end_b.designation,
-                        numeric: false,
-                    },
-                    TableCell {
-                        text: &cut,
-                        numeric: true,
-                    },
-                    TableCell {
-                        text: &j.basis,
-                        numeric: false,
-                    },
-                ];
-                let state = if est {
-                    RowState::Selected
+                let texts = cut_row_texts(j);
+                let cells: Vec<TableCell<'_>> = texts
+                    .iter()
+                    .enumerate()
+                    .map(|(c, text)| TableCell {
+                        text,
+                        numeric: c == 1 || c == 5,
+                    })
+                    .collect();
+                let state = if is_estimate(&j.basis) {
+                    RowState::Flagged
                 } else {
                     RowState::Normal
                 };
                 table_row(ui, &columns, &widths, &cells, state, ("bench_cut", i));
             }
         });
+}
+
+/// The seven cells of one cut-list row: wire, mm², colour, from, to, cut
+/// length (`~` when it is an estimate) and basis. Missing values show `-` or `?`.
+pub(super) fn cut_row_texts(j: &WireCutJob) -> [String; 7] {
+    let or_dash = |s: &str| {
+        if s.is_empty() {
+            "-".to_owned()
+        } else {
+            s.to_owned()
+        }
+    };
+    [
+        or_dash(&j.number),
+        j.cross_section_mm2
+            .map_or_else(|| "?".to_owned(), |v| format!("{v}")),
+        or_dash(&j.colour),
+        j.end_a.designation.clone(),
+        j.end_b.designation.clone(),
+        format!(
+            "{}{:.0}",
+            if is_estimate(&j.basis) { "~" } else { "" },
+            j.cut_mm
+        ),
+        j.basis.clone(),
+    ]
 }
 
 fn ferrule_tab(

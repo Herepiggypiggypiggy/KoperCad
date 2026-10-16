@@ -49,6 +49,8 @@ pub enum RowState {
     /// The copper wash: the row the keys act on, or one the drawing has
     /// selected.
     Selected,
+    /// The warning wash: a row whose value needs a second look (an estimate).
+    Flagged,
 }
 
 /// Splits `available` width between columns in proportion to `weights`,
@@ -158,6 +160,7 @@ pub fn table_row(
     let response = ui.interact(rect, ui.id().with(id), Sense::click());
     let fill: Option<Color32> = match state {
         RowState::Selected => Some(p.accent_wash),
+        RowState::Flagged => Some(p.warning_wash),
         RowState::Normal if response.hovered() => Some(p.control),
         RowState::Normal => None,
     };
