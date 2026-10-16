@@ -19,7 +19,7 @@ use crate::plan::{Candidate, Plan, PlannedDuct};
 use crate::plate_drawing::{PlateDocument, documents};
 use crate::rules::Class;
 use crate::state::CabinetLayout;
-use crate::{Margins, Placement, Plate, Rail, Size};
+use crate::{DEFAULT_DUCT_MM, Duct, Margins, Placement, Plate, Rail, Size};
 
 /// Property of a duct: what its wiring carries (`power`, `signal`, `mixed`).
 pub const DUCT_CLASS_KEY: &str = "duct_class";
@@ -102,6 +102,22 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
             x: r.x,
             y: r.y,
             length: r.length,
+            vertical: r.vertical,
+        })
+        .collect();
+    layout.ducts = project
+        .all::<ModelRail>()
+        .filter(|r| r.structure == id && r.kind == RailKind::Duct)
+        .map(|r| Duct {
+            id: r.id.raw(),
+            x: r.x,
+            y: r.y,
+            length: r.length,
+            width: if r.width > 0.0 {
+                r.width
+            } else {
+                DEFAULT_DUCT_MM
+            },
             vertical: r.vertical,
         })
         .collect();

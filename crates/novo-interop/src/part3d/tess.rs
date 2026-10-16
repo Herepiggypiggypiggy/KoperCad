@@ -11,12 +11,15 @@ use std::f64::consts::{FRAC_PI_2, PI, TAU};
 
 use super::brep::{Face, Surface};
 use super::math::*;
+use super::pins::RawFeature;
 
 /// Triangles with their own vertex list (positions in millimetres).
 #[derive(Debug, Clone, Default)]
 pub struct Soup {
     pub pos: Vec<V3>,
     pub tris: Vec<[u32; 3]>,
+    /// Connection-like features read from the faces (see `pins`).
+    pub features: Vec<RawFeature>,
 }
 
 impl Soup {
@@ -32,6 +35,12 @@ impl Soup {
                 [base + t[0], base + t[1], base + t[2]]
             }
         }));
+        self.features
+            .extend(other.features.iter().map(|f| RawFeature {
+                centre: xf.apply(f.centre),
+                axis: xf.apply_dir(f.axis),
+                ..*f
+            }));
     }
 }
 
@@ -337,7 +346,11 @@ fn polygon(s: &Surface, mut loops: Vec<UvLoop>, tol: f64) -> Option<Soup> {
         });
         refine(s, &mut uvs, &mut pos, &mut tris, &fixed, tol);
     }
-    Some(Soup { pos, tris })
+    Some(Soup {
+        pos,
+        tris,
+        features: Vec::new(),
+    })
 }
 
 /// Sag-driven refinement: interior edges whose midpoint on the surface is
@@ -490,7 +503,11 @@ fn strip(loops: Vec<UvLoop>, periodic: Vec<usize>) -> Option<Soup> {
         };
         tris.push(t);
     }
-    Some(Soup { pos, tris })
+    Some(Soup {
+        pos,
+        tris,
+        features: Vec::new(),
+    })
 }
 
 /// Flat triangulation from the boundary, for surfaces we do not evaluate.

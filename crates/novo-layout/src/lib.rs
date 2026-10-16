@@ -270,6 +270,43 @@ pub struct Rail {
     pub vertical: bool,
 }
 
+/// Default duct cross-section in mm when the model has none yet.
+pub const DEFAULT_DUCT_MM: f64 = 30.0;
+
+/// A wiring duct on the plate. Like a rail, `(x, y)` is the start of its
+/// centre line, running for `length` to the right, or down when `vertical`;
+/// `width` is its size across the run, centred on that line.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Duct {
+    pub id: u64,
+    pub x: f64,
+    pub y: f64,
+    pub length: f64,
+    pub width: f64,
+    pub vertical: bool,
+}
+
+impl Duct {
+    /// The plate area the duct covers.
+    pub fn footprint(&self) -> Rect {
+        if self.vertical {
+            Rect {
+                x: self.x - self.width / 2.0,
+                y: self.y,
+                w: self.width,
+                h: self.length,
+            }
+        } else {
+            Rect {
+                x: self.x,
+                y: self.y - self.width / 2.0,
+                w: self.length,
+                h: self.width,
+            }
+        }
+    }
+}
+
 /// Length used on a rail: the footprint extents of its devices along the
 /// rail (widths on a horizontal rail, heights on a vertical one) plus the
 /// default gap between neighbours.

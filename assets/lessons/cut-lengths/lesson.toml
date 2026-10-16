@@ -1,0 +1,101 @@
+# Cabinet track, lesson 4. Sample: the finished cabinet of rails-and-ducts.
+#
+# On main: the wire list with Cut length mm and Length basis (#417), the cut list engine and
+# `kopercad-cli export cutlist` (#437), generated pages that follow the project live.
+# NOT ON MAIN yet (keep status = "draft" until they are):
+#   - the Reports hub with the Cut list as a table and CSV/Excel export: #452
+#   - the cut list as a page in the app (no command adds it; "add the page by hand" today)
+format = 1
+id = "cut-lengths"
+version = 1
+status = "draft"
+title = "Wire list and cut lengths"
+title_nl = "Draadlijst en afkortlengtes"
+summary = "Read the length of every wire in the wire list, see where it comes from, and watch it change when a device moves."
+summary_nl = "Lees de lengte van elke draad in de draadlijst, zie waar die vandaan komt en zie hem veranderen als een component verschuift."
+track = "cabinet"
+order = 40
+level = "intermediate"
+minutes = 8
+topics = ["cabinet", "wire-list", "routing"]
+needs = ["wire-routing"]
+next = ["panel-plate-drawing"]
+project = "../rails-and-ducts/finished.json"
+
+[[step]]
+id = "open-wire-list"
+title = "Open the wire list"
+text = """
+Go back to the schematic with {key:view.schematic}, then open the page **Wire list** from the outline.
+It is rebuilt from the drawing every time something changes.
+"""
+point = { ui = "outline.pages" }
+expect = { page = "Wire list" }
+solve = [ { command = "view.schematic" }, { page = "Wire list" } ]
+
+[[step]]
+id = "last-columns"
+title = "Two columns at the end"
+text = """
+**Cut length mm** is how long to cut the wire. **Length basis** says how that length was found.
+Most rows here say **routed**.
+"""
+
+[[step]]
+id = "routed"
+title = "Routed"
+text = """
+Both devices are on the plate and a duct path joins them: stub, duct run, stub and a {tip:service-loop} at each end.
+That is the number the workshop cuts to.
+"""
+
+[[step]]
+id = "estimate"
+title = "Estimate"
+text = """
+The motor is in the field, not on this plate, so its wires say **estimate**: the distance on the schematic plus the loops.
+It is a planning figure and always labelled.
+"""
+
+[[step]]
+id = "back-to-cabinet"
+title = "Back to the cabinet"
+text = "Press {key:view.cabinet}. We will move one device and look at the number again."
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "move-k1"
+title = "Move -K1 to the right"
+text = "Drag **-K1** a hand's width to the right along its rail. Mind the neighbours: a red box means an overlap."
+point = { ui = "cabinet.canvas" }
+expect = { signal = "cabinet_dropped" }
+
+[[step]]
+id = "check-again"
+title = "Read the wire list again"
+text = """
+Return to **Wire list**. The wires to **-K1** have new lengths, and nobody typed them.
+"""
+point = { ui = "outline.pages" }
+expect = { page = "Wire list" }
+solve = [ { page = "Wire list" } ]
+
+[[step]]
+id = "cut-list"
+title = "From wires to a cut list"
+text = """
+The **Cut list** report groups the wires by cross-section and colour, longest first, and adds the end allowance:
+10 mm for a ferrule, 20 mm for a lug.
+"""
+# NOT ON MAIN: opening the Cut list in the app (#452). Today: kopercad-cli export cutlist.
+point = { ui = "reports.cutlist" }
+expect = { opened = "reports.cutlist" }
+
+[[step]]
+id = "done"
+title = "Lengths that follow the layout"
+text = """
+Move a device and the numbers follow. Next: the drawing the workshop drills the plate from.
+"""

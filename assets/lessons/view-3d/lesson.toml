@@ -1,0 +1,89 @@
+# Cabinet track, lesson 9. Sample: the finished cabinet of rails-and-ducts. Part depths in the
+# sample: -F1 68, -K1 90, -F2 90, -F3 70, -X1 45, -T1 85, -S0 and -S1 50 mm.
+#
+# NOT ON MAIN yet (the whole lesson; keep status = "draft" until the 3D face has an entry):
+#   - the renderer and widget: #481; camera feel, view cube, labels: #457; scene builder: #391
+#   - the third face of the Cabinet canvas (Plate / Table / 3D) and the command cabinet.view3d,
+#     see docs/design/3d-view.md section 12. Steps follow the input table in section 6.
+format = 1
+id = "view-3d"
+version = 1
+status = "draft"
+title = "The cabinet in 3D"
+title_nl = "De kast in 3D"
+summary = "Orbit the finished cabinet, click a device to find it on the plate, and use the view cube."
+summary_nl = "Draai om de afgebouwde kast, klik een component om het op de plaat te vinden en gebruik de kijkkubus."
+track = "cabinet"
+order = 90
+level = "beginner"
+minutes = 5
+topics = ["cabinet", "3d"]
+needs = ["cabinet-layout"]
+project = "../rails-and-ducts/finished.json"
+
+[[step]]
+id = "open-3d"
+title = "Switch to 3D"
+text = "Open the Cabinet with {key:view.cabinet}, then click **3D** in the face switch next to Plate and Table."
+point = { ui = "cabinet.view3d" }
+expect = { command = "cabinet.view3d" }
+solve = [ { command = "view.cabinet" }, { command = "cabinet.view3d" } ]
+
+[[step]]
+id = "orbit"
+title = "Look around"
+text = """
+Drag with the **right** mouse button, or hold **Alt** and drag with the left. The cabinet turns around its middle and never rolls.
+"""
+point = { ui = "cabinet.canvas" }
+
+[[step]]
+id = "zoom-pan"
+title = "Zoom and pan"
+text = """
+The wheel zooms towards the pointer. Hold **Space** and drag, or drag with the middle button, to pan.
+"""
+point = { ui = "cabinet.canvas" }
+
+[[step]]
+id = "click-device"
+title = "Click a device"
+text = "Click the contactor. It is selected, and the inspector shows the same data as on the plate."
+point = { ui = "cabinet.canvas" }
+expect = { selected = "-K1" }
+solve = [ { select = "-K1" } ]
+
+[[step]]
+id = "view-cube"
+title = "Use the view cube"
+text = "Click **Front** on the view cube. The camera eases to look straight at the plate, as the 2D plate shows it."
+point = { ui = "cabinet.view3d.cube" }
+expect = { clicked = "cabinet.view3d.cube" }
+
+[[step]]
+id = "iso"
+title = "Show it from a corner"
+text = "Click the corner of the cube for an isometric view. {key:view.fit} fits the whole panel again."
+point = { ui = "cabinet.view3d.cube" }
+expect = { command = "view.fit" }
+solve = [ { command = "view.fit" } ]
+
+[[step]]
+id = "depth"
+title = "Depth you could not see"
+text = """
+The 2D plate shows only width and height. Here every device is as deep as its part, so you can see which ones stand out towards the door.
+"""
+point = { ui = "cabinet.canvas" }
+
+[[step]]
+id = "back"
+title = "Back to the plate"
+text = "Click **Plate** in the face switch. Selecting a device in 3D selected it on the plate too."
+point = { ui = "cabinet.plate" }
+expect = { clicked = "cabinet.plate" }
+
+[[step]]
+id = "done"
+title = "That is the cabinet track"
+text = "From placing a first device to a labelled, drilled and viewable panel. Take the schematic track to design what goes in it."
