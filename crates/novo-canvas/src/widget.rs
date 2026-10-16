@@ -260,6 +260,10 @@ pub struct CanvasView {
     pub wheel_zoom_step: f32,
     /// Labels smaller than this many screen points are not drawn.
     pub min_label_size: f32,
+    /// Text on screen is never smaller than this many points: smaller
+    /// labels are enlarged to it, or hidden by priority when that does not
+    /// fit (see [`crate::declutter`]). 0 turns the floor off.
+    pub min_text_px: f32,
     /// Screen points per world unit that [`Self::reveal`] zooms in to at
     /// least: 4 shows 2.5 mm text at 10 points.
     pub reveal_zoom: f32,
@@ -406,6 +410,7 @@ impl CanvasView {
             pick_tolerance: 5.0,
             wheel_zoom_step: 1.2,
             min_label_size: 4.0,
+            min_text_px: crate::declutter::MIN_TEXT_PX,
             label_budget: 3000,
             pixel_snap: true,
             marks: Marks::default(),
@@ -1138,7 +1143,41 @@ impl CanvasView {
             todo.select_nth_unstable_by(self.label_budget, |a, b| b.0.total_cmp(&a.0));
             todo.truncate(self.label_budget);
         }
-        for (size, id, i) in todo {
+        // The floor: lift small text to it, hide what cannot fit.
+        let mut boosts = vec![1.0_f32; todo.len()];
+        let mut shown: Vec<bool> = vec![true; todo.len()];
+        if self.min_text_px > 0.0 {
+            let candidates = todo
+                .iter()
+                .enumerate()
+                .filter_map(|(key, &(size, id, i))| {
+                    let l = &scene.get(id)?.labels[i];
+                    let b = l.bounds();
+                    let a = self.viewport.world_to_screen(l.pos);
+                    let (p, q) = (
+                        self.viewport.world_to_screen(b.min),
+                        self.viewport.world_to_screen(b.max),
+                    );
+                    Some(crate::declutter::Candidate {
+                        key,
+                        priority: l.priority,
+                        size,
+                        anchor: a,
+                        bounds: Aabb::from_corners(p, q),
+                    })
+                })
+                .collect();
+            shown = vec![false; todo.len()];
+            for placed in crate::declutter::plan(candidates, self.min_text_px) {
+                shown[placed.key] = true;
+                boosts[placed.key] = placed.boost;
+            }
+        }
+        for (n, (size, id, i)) in todo.into_iter().enumerate() {
+            if !shown[n] {
+                continue;
+            }
+            let size = size * boosts[n];
             let Some(item) = scene.get(id) else { continue };
             let l = &item.labels[i];
             let highlight = if self.selection.contains(id) {
