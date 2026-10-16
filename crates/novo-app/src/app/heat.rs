@@ -1441,7 +1441,7 @@ fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f
 }
 
 fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: bool) {
-    super::panel::Panel::new(
+    let shown = super::panel::Panel::new(
         "heat_legend",
         "Temperature",
         rect,
@@ -1452,7 +1452,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
     .fixed_open()
     .fit()
     .show(ctx, |ui| {
-        let card = ui.scope(|ui| {
+        ui.scope(|ui| {
             ui.set_width(140.0);
             let height = 180.0;
             let (bar, _) = ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
@@ -1545,8 +1545,17 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                 }
             }
         });
-        super::cabinet_bar::note_rect(ctx, "heat.legend", "Heat legend", card.response.rect, false);
     });
+    // The whole panel, title bar and frame, is what the tour points at.
+    if let Some(shown) = shown {
+        super::cabinet_bar::note_rect(
+            ctx,
+            "heat.legend",
+            "Heat legend",
+            shown.response.rect,
+            false,
+        );
+    }
 }
 
 #[cfg(test)]
