@@ -1,0 +1,3 @@
+# Move in 3D handoff
+Code: `crates/novo-app/src/app/view3d_move.rs` (landing, step, key_edits, ghost), hooks in `view3d.rs`, widget support in `novo-view3d/src/widget.rs` (`drag_items`, `ItemDrag`). Edits go through `cabinet_ask` / `cabinet_rail_ask`, so rules and undo are the Cabinet's.
+Known limits: only the grabbed item moves (not the whole selection); the landing box is drawn one frame behind the pointer; the pointer is projected on the plate plane, so a tall device under a steep camera drifts a little from the cursor; the Move toggle is a checkbox row above the view until #673's toolbar lands.

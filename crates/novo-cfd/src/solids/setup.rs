@@ -196,10 +196,11 @@ impl Medium {
         let mut add = |cell: usize, id: u16, share: f64| {
             if let Some((_, p, q)) = find(id) {
                 if let Some((_, o)) = duct_of(id) {
-                    let solid = 1.0 - duct.porosity;
+                    let porosity = duct.porosity.clamp(0.0, 1.0);
+                    let solid = 1.0 - porosity;
                     md.c_solid[cell] += share * solid * p.rho_cp / speed;
                     md.k_solid[cell] += share * solid * p.k;
-                    extra_air[cell] += share * duct.porosity;
+                    extra_air[cell] += share * porosity;
                     let w = (o.rect.w.min(o.rect.h) / 1000.0).max(1e-3);
                     let slot = (duct.cd * duct.slot_free).max(1e-3);
                     let cross = 1.0 / (slot * slot) / w;

@@ -100,6 +100,9 @@ mod userkeymap;
 mod variants;
 mod view3d;
 mod view3d_controls;
+mod view3d_move;
+#[cfg(test)]
+mod view3d_move_tests;
 #[cfg(test)]
 mod view3d_tests;
 mod wheel;
@@ -894,7 +897,10 @@ impl NovoApp {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
             // file and undo actions.
-            let cabinet = self.workspace() == workspace::Workspace::Cabinet;
+            let cabinet = matches!(
+                self.workspace(),
+                workspace::Workspace::Cabinet | workspace::Workspace::View3d
+            );
             for id in &commands {
                 if cabinet
                     && matches!(
