@@ -17,6 +17,7 @@ pub mod dimension;
 pub mod door;
 pub mod feel;
 pub mod governor;
+pub mod hide;
 pub mod labels;
 pub mod layers;
 pub mod look;

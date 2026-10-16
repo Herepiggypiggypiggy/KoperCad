@@ -409,6 +409,8 @@ pub struct NovoApp {
     /// Free room between the top bar's left and right groups last frame;
     /// below zero they overlap. Read by the width test.
     top_bar_gap: f32,
+    /// Width the right side of the top bar took last frame.
+    top_bar_right: f32,
     /// Width the menu names took last frame (`menu_bar`).
     menu_bar_width: f32,
     /// Lessons: the catalog, the running lesson and the person's progress.
@@ -482,6 +484,7 @@ impl NovoApp {
             ol: outline::OutlineState::new(),
             window_width: 0.0,
             top_bar_gap: 0.0,
+            top_bar_right: 0.0,
             menu_bar_width: 380.0,
             learn: learn::LearnState::new(),
         };
@@ -1067,7 +1070,13 @@ impl NovoApp {
         };
         // Shift+D swings the 3D door; elsewhere it is not a command.
         let in_3d = self.workspace() == workspace::Workspace::View3d;
-        commands.retain(|id| in_3d || *id != "view.3d_door");
+        commands.retain(|id| {
+            in_3d
+                || !matches!(
+                    *id,
+                    "view.3d_door" | "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all"
+                )
+        });
         if self.workspace() != workspace::Workspace::Schematic {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
@@ -1107,6 +1116,7 @@ impl NovoApp {
                     || *id == "view.3d_position"
                     || *id == "view.3d_place"
                     || *id == "view.3d_stats"
+                    || matches!(*id, "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all")
                     || id.starts_with("heat.")
             });
         }
@@ -1453,7 +1463,22 @@ impl NovoApp {
             }
             ui.separator();
             self.outline_toggle_button(ui);
-            self.breadcrumb(ui, fit.name_chars);
+            // The breadcrumb gets what the right side left free last frame
+            // and cuts its text to it, so a long page name or a row of
+            // badges never pushes it under the Search button.
+            let room =
+                (ui.available_width() - self.top_bar_right - ui.spacing().item_spacing.x).max(0.0);
+            let breadcrumb =
+                egui::Rect::from_min_size(ui.cursor().min, egui::vec2(room, ui.available_height()));
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(breadcrumb)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                |ui| {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    self.breadcrumb(ui, fit.name_chars);
+                },
+            );
             let left_end = ui.min_rect().right();
 
             let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1488,6 +1513,7 @@ impl NovoApp {
                 }
             });
             self.top_bar_gap = right.response.rect.left() - left_end;
+            self.top_bar_right = right.response.rect.width();
         });
     }
 
@@ -1506,10 +1532,15 @@ impl NovoApp {
         if !self.outline_flyout_available() {
             return;
         }
-        let toggle = ui.add(egui::Button::selectable(
-            self.outline_open,
-            self.outline_mode.label(),
-        ));
+        // Commissioning is the longest name and the panel names itself in
+        // its header: the button is its icon, the name in the tooltip.
+        let text = match self.outline_mode {
+            OutlineMode::Commissioning => self.outline_mode.icon(),
+            mode => mode.label(),
+        };
+        let toggle = ui
+            .add(egui::Button::selectable(self.outline_open, text))
+            .on_hover_text(self.outline_mode.label());
         if toggle.clicked() {
             self.outline_open ^= true;
             // The keys stay with the drawing after the click.
@@ -1604,16 +1635,16 @@ impl NovoApp {
                 };
                 let font = egui::FontId::proportional(13.0);
                 let color = if current {
-                    novo_theme::tokens::TEXT
+                    crate::theme::ui_palette().text_primary
                 } else {
-                    novo_theme::tokens::TEXT_MUTED
+                    crate::theme::ui_palette().text_secondary
                 };
                 let galley = ui.painter().layout_no_wrap(text, font, color);
                 let size = egui::vec2((galley.size().x + 10.0).max(26.0), 26.0);
                 let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
                 let response = response.on_hover_text(mode.label());
                 let color = if response.hovered() {
-                    novo_theme::tokens::TEXT
+                    crate::theme::ui_palette().text_primary
                 } else {
                     color
                 };
@@ -1630,7 +1661,7 @@ impl NovoApp {
                             egui::pos2(rect.right() - 4.0, rect.bottom()),
                         ),
                         1,
-                        novo_theme::tokens::ACCENT,
+                        crate::theme::ui_palette().accent,
                     );
                 }
                 if response.clicked() {

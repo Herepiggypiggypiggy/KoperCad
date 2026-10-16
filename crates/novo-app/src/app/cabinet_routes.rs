@@ -279,10 +279,10 @@ pub(super) fn tone(d: &DuctFill) -> Tone {
 
 fn colour(tone: Tone) -> egui::Color32 {
     match tone {
-        Tone::Idle | Tone::NoSize => tokens::TEXT_MUTED,
-        Tone::Ok => tokens::SUCCESS,
-        Tone::Busy => tokens::WARNING,
-        Tone::Over => tokens::ERROR,
+        Tone::Idle | Tone::NoSize => crate::theme::ui_palette().text_secondary,
+        Tone::Ok => crate::theme::ui_palette().success,
+        Tone::Busy => crate::theme::ui_palette().warning,
+        Tone::Over => crate::theme::ui_palette().error,
     }
 }
 
@@ -354,7 +354,7 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
             }
             ui.weak(overlay.summary());
             for note in &overlay.notes {
-                ui.colored_label(tokens::WARNING, note);
+                ui.colored_label(crate::theme::ui_palette().warning, note);
             }
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
@@ -492,7 +492,7 @@ fn rules_section(ui: &mut egui::Ui, rules: &WireRules) -> Option<Ask> {
             }
             if !rules.ignored.is_empty() {
                 ui.colored_label(
-                    tokens::WARNING,
+                    crate::theme::ui_palette().warning,
                     format!(
                         "{} in the file could not be read and use the default",
                         rules.ignored.join(", ")
@@ -544,10 +544,10 @@ pub(super) fn draw(painter: &egui::Painter, rect: egui::Rect, view: &Viewport, o
     for r in &overlay.routes {
         let points: Vec<egui::Pos2> = r.points.iter().map(|&(x, y)| to_screen(x, y)).collect();
         if r.free_air {
-            let stroke = egui::Stroke::new(1.5, tokens::ERROR);
+            let stroke = egui::Stroke::new(1.5, crate::theme::ui_palette().error);
             painter.extend(egui::Shape::dashed_line(&points, stroke, 6.0, 4.0));
         } else {
-            let stroke = egui::Stroke::new(1.5, tokens::INFO);
+            let stroke = egui::Stroke::new(1.5, crate::theme::ui_palette().info);
             painter.add(egui::Shape::line(points, stroke));
         }
     }
