@@ -60,6 +60,8 @@ pub(crate) struct Workbench {
     pub(super) plc_import: Option<(String, novo_plc::link::ImportPlan)>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
+    /// The macro browser window.
+    pub(super) macros: super::macro_browser::MacroBrowser,
     /// The Parts window (browser and one-click import), while open.
     pub(super) parts: Option<super::parts::PartsWindow>,
     /// The Save as macro window, while it is open.
@@ -176,6 +178,7 @@ impl Default for Workbench {
             renumber: None,
             plc_import: None,
             preferences: false,
+            macros: Default::default(),
             parts: None,
             macro_save: None,
             macro_place: Default::default(),
@@ -322,6 +325,8 @@ const APP_COMMANDS: &[&str] = &[
     "parts.browser",
     "parts.import_step",
     "project.standard",
+    "macro.browser",
+    "macro.import",
     "project.options",
     "project.variant",
     "project.generate",
@@ -779,6 +784,8 @@ impl NovoApp {
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "project.standard" => self.wb.project_settings = true,
+            "macro.browser" => self.wb.macros.show(),
+            "macro.import" => self.macro_import(),
             "project.options" => self.open_options(),
             "project.variant" => self.switch_variant(argument),
             "project.generate" => self.open_generate(),

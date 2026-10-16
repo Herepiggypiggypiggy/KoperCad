@@ -34,6 +34,9 @@ mod live_anim;
 mod macro_actions;
 #[cfg(test)]
 mod macro_actions_tests;
+mod macro_browser;
+#[cfg(test)]
+mod macro_browser_tests;
 mod menu_bar;
 mod numbering;
 mod onboarding;
@@ -892,6 +895,7 @@ impl NovoApp {
         self.background_panel(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
+        self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
         self.options_window(&ctx);

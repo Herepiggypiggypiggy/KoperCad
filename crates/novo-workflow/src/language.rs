@@ -66,6 +66,8 @@ pub const DUTCH: &[Aliases] = &[
         &["voorkeuren"],
         &["instellingen", "opties"],
     ),
+    nl("macro.browser", &["bibliotheek"], &["macro's", "macros"]),
+    nl("macro.import", &["macro importeren"], &["importeer macro"]),
     nl(
         "parts.browser",
         &["onderdelen"],
