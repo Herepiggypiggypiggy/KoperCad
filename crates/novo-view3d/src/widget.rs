@@ -631,11 +631,19 @@ impl View3d {
             self.last_activity = now;
         }
 
-        let (space, alt, scroll, zoom, hover_pos) = ctx.input(|i| {
+        let (space, alt, (scroll, touch_pan), zoom, hover_pos) = ctx.input(|i| {
             (
                 i.key_down(Key::Space),
                 i.modifiers.alt,
-                i.smooth_scroll_delta.y,
+                split_wheel(i.events.iter().filter_map(|e| match e {
+                    egui::Event::MouseWheel {
+                        unit,
+                        delta,
+                        modifiers,
+                        ..
+                    } => Some((*unit, *delta, modifiers.command)),
+                    _ => None,
+                })),
                 i.zoom_delta(),
                 i.pointer.hover_pos(),
             )
@@ -698,6 +706,14 @@ impl View3d {
             }
             self.orbited = false;
             self.cube_drag = false;
+        }
+
+        // Two fingers on a trackpad pan (a pinch zooms, below); a mouse wheel
+        // zooms.
+        if response.hovered() && touch_pan != Vec2::ZERO {
+            self.transition = None;
+            self.inertia.stop();
+            self.camera.pan(touch_pan.x, touch_pan.y, rect.height());
         }
 
         // Zoom towards the pointer.
@@ -1180,6 +1196,26 @@ fn paint_face_label(
     painter.add(egui::Shape::mesh(mesh));
 }
 
+/// Splits this frame's wheel events: points of mouse-wheel zoom (a line is
+/// 50 points, a page three times that) and the pan of a trackpad, which
+/// reports in pixels. Events with Ctrl or Cmd held are the pinch gesture's
+/// (egui turns them into a zoom delta) and count for neither.
+fn split_wheel(events: impl Iterator<Item = (egui::MouseWheelUnit, Vec2, bool)>) -> (f32, Vec2) {
+    let mut zoom = 0.0;
+    let mut pan = Vec2::ZERO;
+    for (unit, delta, command) in events {
+        if command {
+            continue;
+        }
+        match unit {
+            egui::MouseWheelUnit::Line => zoom += delta.y * POINTS_PER_NOTCH,
+            egui::MouseWheelUnit::Page => zoom += delta.y * POINTS_PER_NOTCH * 3.0,
+            egui::MouseWheelUnit::Point => pan += delta,
+        }
+    }
+    (zoom, pan)
+}
+
 /// Everything that changes the picture, hashed: when it is the same as the
 /// last frame the renderer does nothing.
 fn frame_key(
@@ -1274,5 +1310,27 @@ mod stats_tests {
         // Only the last window counts: samples 30 to 149.
         assert!(s.cpu_p50_ms > 80.0 && s.cpu_p95_ms > 140.0, "{s:?}");
         *STATS.lock().unwrap() = None;
+    }
+}
+
+#[cfg(test)]
+mod wheel_tests {
+    use super::*;
+    use egui::MouseWheelUnit::{Line, Page, Point};
+
+    #[test]
+    fn a_mouse_wheel_zooms_and_a_trackpad_pans() {
+        let (zoom, pan) = split_wheel([(Line, Vec2::new(0.0, 1.0), false)].into_iter());
+        assert_eq!((zoom, pan), (POINTS_PER_NOTCH, Vec2::ZERO));
+        let (zoom, pan) = split_wheel([(Point, Vec2::new(4.0, -7.0), false)].into_iter());
+        assert_eq!((zoom, pan), (0.0, Vec2::new(4.0, -7.0)));
+        let (zoom, _) = split_wheel([(Page, Vec2::new(0.0, 1.0), false)].into_iter());
+        assert_eq!(zoom, POINTS_PER_NOTCH * 3.0);
+    }
+
+    #[test]
+    fn events_with_the_command_key_are_the_pinch_and_count_for_nothing() {
+        let (zoom, pan) = split_wheel([(Point, Vec2::new(3.0, 3.0), true)].into_iter());
+        assert_eq!((zoom, pan), (0.0, Vec2::ZERO));
     }
 }
