@@ -92,6 +92,7 @@ mod net_trace;
 mod numbering;
 mod onboarding;
 mod outline;
+mod outline_items;
 mod outline_tree;
 mod pages;
 mod panel;
@@ -218,6 +219,8 @@ mod pdf_options_tests;
 #[cfg(test)]
 mod protection_tests;
 #[cfg(test)]
+mod read_only_tests;
+#[cfg(test)]
 mod route_all_tests;
 #[cfg(test)]
 mod shortcuts_sheet_tests;
@@ -339,6 +342,7 @@ const PIN_OUTLINE_FROM: f32 = 1700.0;
 enum Leaving {
     New,
     Open,
+    OpenReadOnly,
     OpenPath(PathBuf),
     Example,
     Practice,
@@ -586,8 +590,8 @@ impl NovoApp {
         let open = self.is_open();
         let doc = self.backend.document();
         match action {
-            Action::SaveProject
-            | Action::SaveProjectAs
+            Action::SaveProject => open && !self.backend.is_read_only(),
+            Action::SaveProjectAs
             | Action::CloseProject
             | Action::ZoomToFit
             | Action::SizeEnclosure
@@ -598,8 +602,16 @@ impl NovoApp {
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
-            Action::Undo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_undo()),
-            Action::Redo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_redo()),
+            Action::Undo => {
+                !self.commissioning_locks_edits()
+                    && !self.backend.is_read_only()
+                    && doc.is_some_and(|d| d.can_undo())
+            }
+            Action::Redo => {
+                !self.commissioning_locks_edits()
+                    && !self.backend.is_read_only()
+                    && doc.is_some_and(|d| d.can_redo())
+            }
             _ => true,
         }
     }
@@ -618,6 +630,7 @@ impl NovoApp {
         match action {
             Action::NewProject => self.leave_then(ctx, Leaving::New),
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
+            Action::OpenReadOnly => self.leave_then(ctx, Leaving::OpenReadOnly),
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
@@ -734,6 +747,17 @@ impl NovoApp {
                     self.open_path(&path);
                 }
             }
+            Leaving::OpenReadOnly => {
+                let mut dialog = rfd::FileDialog::new()
+                    .set_title("Open project read-only")
+                    .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
+                if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
+                    dialog = dialog.set_directory(dir);
+                }
+                if let Some(path) = dialog.pick_file() {
+                    self.open_path_as(&path, true);
+                }
+            }
             Leaving::OpenPath(path) => self.open_path(&path),
             Leaving::Example => self.open_example(),
             Leaving::Practice => self.start_practice(),
@@ -757,7 +781,18 @@ impl NovoApp {
     }
 
     fn open_path(&mut self, path: &Path) {
-        match self.backend.open(path) {
+        self.open_path_as(path, false);
+    }
+
+    /// Opens `path`; with `read_only` the project can be looked at but not
+    /// changed or written (File > Open read-only).
+    fn open_path_as(&mut self, path: &Path, read_only: bool) {
+        let opened = if read_only {
+            self.backend.open_read_only(path)
+        } else {
+            self.backend.open(path)
+        };
+        match opened {
             Ok(report) => {
                 self.current_page = None;
                 self.document_replaced();
@@ -766,8 +801,11 @@ impl NovoApp {
                     self.project_path = None;
                 } else {
                     self.project_path = Some(path.to_owned());
-                    self.settings.remember_recent(path);
-                    self.message(Level::Info, format!("Opened {}", path.display()));
+                    if !read_only {
+                        self.settings.remember_recent(path);
+                    }
+                    let how = if read_only { " read-only" } else { "" };
+                    self.message(Level::Info, format!("Opened {}{how}", path.display()));
                 }
                 if let Some(aside) = report.set_aside {
                     self.message(
@@ -1208,14 +1246,43 @@ impl NovoApp {
         for command in commands {
             self.run_key_command(&ctx, command);
         }
+        self.enforce_read_only();
         self.learn_end_frame();
+    }
+
+    /// A project opened read-only is never changed. Every edit path goes
+    /// through the document, so whatever got through this frame (a canvas
+    /// gesture, an outline rename, a menu command) is undone at once, and
+    /// the user is told once how to get an editable copy. Nothing is
+    /// recorded, so nothing reaches the file.
+    fn enforce_read_only(&mut self) {
+        if !self.backend.is_read_only() {
+            return;
+        }
+        let mut undone = false;
+        for _ in 0..10_000 {
+            if !self.backend.document().is_some_and(|d| d.can_undo()) {
+                break;
+            }
+            self.undo_redo(false);
+            undone = true;
+        }
+        if undone {
+            self.message(
+                Level::Info,
+                "This project is open read-only, so the change was taken back. Use File > Save as to keep an editable copy.",
+            );
+        }
     }
 
     /// Follows up on what the canvas did this frame: its edits reach the
     /// other views, and a page it asked for is opened.
     fn after_canvas(&mut self) {
         let changes = self.canvas.take_changes();
-        if !changes.is_empty() && self.commissioning_locks_edits() {
+
+        if self.backend.is_read_only() {
+            self.enforce_read_only();
+        } else if !changes.is_empty() && self.commissioning_locks_edits() {
             // Commissioning mode checks the drawing against the machine; a
             // stray touch must not move a wire. One undo takes it back.
             self.undo_redo(false);
@@ -1284,7 +1351,14 @@ impl NovoApp {
 
     fn update_title(&mut self, ctx: &egui::Context) {
         let title = match self.project_name() {
-            Some(name) => format!("{name}{} - {APP_NAME}", self.standard_suffix()),
+            Some(name) => {
+                let ro = if self.backend.is_read_only() {
+                    " (read-only)"
+                } else {
+                    ""
+                };
+                format!("{name}{ro}{} - {APP_NAME}", self.standard_suffix())
+            }
             None => APP_NAME.to_owned(),
         };
         if title != self.window_title {
@@ -1344,6 +1418,8 @@ impl NovoApp {
     fn saved_state(&self) -> &'static str {
         if !self.is_open() {
             ""
+        } else if self.backend.is_read_only() {
+            "Read-only"
         } else if self.project_path.is_none() {
             "Not saved yet"
         } else if self.autosave_failing {

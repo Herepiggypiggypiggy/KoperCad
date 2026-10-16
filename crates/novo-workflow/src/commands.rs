@@ -131,6 +131,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.open_read_only",
+        "Open read-only",
+        "Project",
+        &["view only", "look", "locked", "share"],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.example",
         "Open example",
         "Project",

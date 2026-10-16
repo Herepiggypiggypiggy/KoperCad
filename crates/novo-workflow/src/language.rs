@@ -35,6 +35,11 @@ pub const DUTCH: &[Aliases] = &[
     // Project
     nl("file.new", &[], &["nieuw project", "nieuw"]),
     nl("file.open", &[], &["project openen", "openen"]),
+    nl(
+        "file.open_read_only",
+        &[],
+        &["alleen lezen openen", "alleen lezen", "inzien", "bekijken"],
+    ),
     nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
