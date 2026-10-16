@@ -250,7 +250,7 @@ impl NovoApp {
                 if !report.skipped.is_empty() {
                     ui.add_space(6.0);
                     ui.colored_label(
-                        novo_theme::tokens::WARNING,
+                        crate::theme::ui_palette().warning,
                         format!("{} row(s) rejected", report.skipped.len()),
                     );
                     egui::ScrollArea::vertical()

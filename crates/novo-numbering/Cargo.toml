@@ -11,6 +11,7 @@ novo-core.workspace = true
 [dev-dependencies]
 novo-reports.workspace = true
 novo-cables.workspace = true
+novo-tests.workspace = true
 
 [lints]
 workspace = true

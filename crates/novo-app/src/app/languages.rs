@@ -18,7 +18,7 @@ use novo_reports::i18n::{
     self, ENGLISH, LANGUAGE_KEY, ProjectTable, TABLE_KEY, Translator, strings_of_output,
     strings_of_template,
 };
-use novo_theme::{tokens, widgets};
+use novo_theme::widgets;
 
 use super::{Level, NovoApp};
 
@@ -185,7 +185,7 @@ impl NovoApp {
                         ));
                     } else {
                         ui.colored_label(
-                            tokens::WARNING,
+                            crate::theme::ui_palette().warning,
                             format!(
                                 "{missing} of {} texts have no translation and print in English.",
                                 table_rows.len()
@@ -201,7 +201,7 @@ impl NovoApp {
                         }
                     });
                     if let Some(error) = &win.error {
-                        ui.colored_label(tokens::ERROR, error);
+                        ui.colored_label(crate::theme::ui_palette().error, error);
                     }
                     ui.separator();
                     egui::ScrollArea::vertical()

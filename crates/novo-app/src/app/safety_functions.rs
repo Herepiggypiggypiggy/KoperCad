@@ -13,7 +13,7 @@ use novo_checks::safety::{
     encode, functions, rate,
 };
 use novo_core::Project;
-use novo_theme::{tokens, widgets};
+use novo_theme::widgets;
 
 use super::NovoApp;
 
@@ -104,7 +104,7 @@ pub(super) fn section(
     ));
     if novo_checks::safety::unreadable(project) && !state.dirty {
         ui.colored_label(
-            tokens::ERROR,
+            crate::theme::ui_palette().error,
             "The stored safety functions cannot be read. Editing here replaces them.",
         );
     }
@@ -181,7 +181,7 @@ pub(super) fn section(
                 changed |= block_ui(ui, i, block, &devices);
                 if let Some(b) = shown {
                     for text in &b.binding {
-                        ui.colored_label(tokens::WARNING, text);
+                        ui.colored_label(crate::theme::ui_palette().warning, text);
                     }
                 }
             });
@@ -201,7 +201,11 @@ pub(super) fn section(
         Some(t) => {
             let ok = rating.met() == Some(true);
             ui.colored_label(
-                if ok { tokens::SUCCESS } else { tokens::ERROR },
+                if ok {
+                    crate::theme::ui_palette().success
+                } else {
+                    crate::theme::ui_palette().error
+                },
                 format!(
                     "Achieved {} (PFHd {:.2e} /h) against required {}: {}",
                     t.pl,
@@ -213,7 +217,7 @@ pub(super) fn section(
         }
         None => {
             ui.colored_label(
-                tokens::WARNING,
+                crate::theme::ui_palette().warning,
                 format!(
                     "Required {}. Not rated until every part has a device and data.",
                     rating.required

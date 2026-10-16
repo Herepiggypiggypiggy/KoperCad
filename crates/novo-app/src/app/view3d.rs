@@ -54,6 +54,9 @@ pub(crate) struct View3dMode {
     /// A standard view or a fit asked for by a command, run on the next frame
     /// (when the scene is at hand).
     pub(super) pending: Option<Pending>,
+    /// A select-by-type asked for before the scene was built, applied right
+    /// after it is.
+    pub(super) pending_select: Option<ItemKind>,
     /// The Cabinet selection revision and the 3D selection as last synced, to
     /// tell which side changed.
     synced: (u64, BTreeSet<ItemId>),
@@ -73,6 +76,8 @@ pub(crate) struct View3dMode {
     heat_scene: Option<((u64, u64), Arc<novo_view3d::Scene>)>,
     /// The layers the scene was built with.
     built_layers: Layers,
+    /// The hidden items the scene was built with.
+    built_hidden: BTreeSet<ItemId>,
     /// The routed wires of an enclosure at a project revision.
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
     /// The toolbar's layers and door.
@@ -101,6 +106,7 @@ impl Default for View3dMode {
             library: Arc::new(MeshLibrary::new()),
             built: None,
             pending: None,
+            pending_select: None,
             synced: (0, BTreeSet::new()),
             menu: None,
             heat: Heat3d::default(),
@@ -110,6 +116,7 @@ impl Default for View3dMode {
             heat_flow: heat_3d::Flow::default(),
             heat_scene: None,
             built_layers: Layers::default(),
+            built_hidden: BTreeSet::new(),
             wires: None,
             controls: Controls::default(),
             hints: Hints::default(),
@@ -142,6 +149,64 @@ impl NovoApp {
         model::door_limit_deg(project, id)
     }
 
+    /// `view.3d_select_*`: selects every device, rail or duct in the view.
+    pub(super) fn view3d_select_kind(&mut self, kind: ItemKind) {
+        let mode = &mut self.view3d;
+        let Some((_, _, scene)) = &mode.built else {
+            // The scene is built on the next frame; select then.
+            mode.pending_select = Some(kind);
+            return;
+        };
+        mode.view.state.selection = novo_view3d::hide::of_kind(scene, kind);
+        let n = mode.view.state.selection.len();
+        let noun = match kind {
+            ItemKind::Device => "device",
+            ItemKind::Rail => "rail",
+            _ => "duct",
+        };
+        let text = if n == 0 {
+            format!("No {noun}s on the plate")
+        } else {
+            format!("Selected {n} {noun}{}", if n == 1 { "" } else { "s" })
+        };
+        self.message(super::Level::Info, text);
+    }
+
+    /// `view.3d_hide`, `view.3d_isolate` and `view.3d_show_all`: the
+    /// selection goes out of the picture, or alone stays in it, or everything
+    /// comes back. The project is untouched.
+    pub(super) fn view3d_visibility(&mut self, id: &str) {
+        let mode = &mut self.view3d;
+        match id {
+            "view.3d_show_all" => mode.controls.hidden.clear(),
+            "view.3d_hide" => {
+                let parts: Vec<_> = mode
+                    .view
+                    .state
+                    .selection
+                    .iter()
+                    .copied()
+                    .filter(|i| novo_view3d::hide::is_part(i.kind))
+                    .collect();
+                mode.controls.hidden.extend(parts);
+                mode.view.state.selection.clear();
+            }
+            _ => {
+                // Isolate from what is in the picture now, so a second
+                // isolate narrows the first.
+                let Some((_, _, scene)) = &mode.built else {
+                    return;
+                };
+                let keep = mode.view.state.selection.clone();
+                if keep.iter().any(|i| novo_view3d::hide::is_part(i.kind)) {
+                    let out = novo_view3d::hide::all_but(scene, &keep);
+                    mode.controls.hidden.extend(out);
+                    mode.pending = Some(Pending::Fit);
+                }
+            }
+        }
+    }
+
     /// Whether some enclosure has a plate to draw.
     pub(super) fn view3d_has_cabinet(&self) -> bool {
         self.backend
@@ -167,7 +232,8 @@ impl NovoApp {
         let mode = &mut self.view3d;
         let layers = mode.controls.layers;
         let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
-            || mode.built_layers != layers;
+            || mode.built_layers != layers
+            || mode.built_hidden != mode.controls.hidden;
         if stale {
             let started = Instant::now();
             let mut routing_ms = None;
@@ -186,10 +252,13 @@ impl NovoApp {
                 wires,
             };
             if let Some(built) = model::scene(project, id, &options) {
+                // Items deleted from the project are no longer hidden.
+                mode.controls.hidden.retain(|i| built.get(*i).is_some());
                 // The renderer redraws on a new scene revision only: `refresh`
                 // bumps it when the items differ (an edit that changes no
                 // selection or camera would otherwise stay unseen).
-                let mut shown = layers.apply(built);
+                let mut shown =
+                    novo_view3d::hide::without(layers.apply(built), &mode.controls.hidden);
                 if let Some((_, _, old)) = &mode.built {
                     let mut current = Scene::clone(old);
                     novo_view3d::build::refresh(&mut current, shown);
@@ -197,6 +266,7 @@ impl NovoApp {
                 }
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
+                mode.built_hidden = mode.controls.hidden.clone();
                 let total = started.elapsed().as_secs_f32() * 1000.0;
                 mode.stats.build = Build {
                     scene_ms: total - routing_ms.unwrap_or(0.0),
@@ -216,6 +286,9 @@ impl NovoApp {
             reduced_motion: self.settings.reduce_motion,
         };
         let now = ui.input(|i| i.time);
+        if let Some(kind) = mode.pending_select.take() {
+            mode.view.state.selection = novo_view3d::hide::of_kind(scene, kind);
+        }
         match mode.pending.take() {
             Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
             Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
@@ -392,7 +465,16 @@ impl NovoApp {
         let view_rect = ui.available_rect_before_wrap();
         mode.controls.ssao_available = mode.view.occlusion_available();
         mode.controls.reduced = mode.view.stepped_down().is_some() || mode.view.occlusion_paused();
-        view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        let (_, asked) = view3d_controls::toolbar(
+            ui.ctx(),
+            view_rect,
+            &mut mode.controls,
+            limit,
+            !mode.view.state.selection.is_empty(),
+        );
+        if let Some(command) = asked {
+            self.wb.queued.push(command);
+        }
         if std::mem::take(&mut mode.controls.restore) {
             mode.view.reset_quality();
         }

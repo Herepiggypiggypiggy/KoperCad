@@ -1070,7 +1070,13 @@ impl NovoApp {
         };
         // Shift+D swings the 3D door; elsewhere it is not a command.
         let in_3d = self.workspace() == workspace::Workspace::View3d;
-        commands.retain(|id| in_3d || *id != "view.3d_door");
+        commands.retain(|id| {
+            in_3d
+                || !matches!(
+                    *id,
+                    "view.3d_door" | "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all"
+                )
+        });
         if self.workspace() != workspace::Workspace::Schematic {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
@@ -1110,6 +1116,7 @@ impl NovoApp {
                     || *id == "view.3d_place"
                     || *id == "view.3d_stats"
                     || *id == "view.3d_hints"
+                    || matches!(*id, "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all")
                     || id.starts_with("heat.")
             });
         }
@@ -1628,16 +1635,16 @@ impl NovoApp {
                 };
                 let font = egui::FontId::proportional(13.0);
                 let color = if current {
-                    novo_theme::tokens::TEXT
+                    crate::theme::ui_palette().text_primary
                 } else {
-                    novo_theme::tokens::TEXT_MUTED
+                    crate::theme::ui_palette().text_secondary
                 };
                 let galley = ui.painter().layout_no_wrap(text, font, color);
                 let size = egui::vec2((galley.size().x + 10.0).max(26.0), 26.0);
                 let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
                 let response = response.on_hover_text(mode.label());
                 let color = if response.hovered() {
-                    novo_theme::tokens::TEXT
+                    crate::theme::ui_palette().text_primary
                 } else {
                     color
                 };
@@ -1654,7 +1661,7 @@ impl NovoApp {
                             egui::pos2(rect.right() - 4.0, rect.bottom()),
                         ),
                         1,
-                        novo_theme::tokens::ACCENT,
+                        crate::theme::ui_palette().accent,
                     );
                 }
                 if response.clicked() {

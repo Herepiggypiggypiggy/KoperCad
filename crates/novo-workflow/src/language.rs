@@ -752,6 +752,32 @@ pub const DUTCH: &[Aliases] = &[
         &["3d hulp tonen"],
         &["muis en toetsen", "bediening"],
     ),
+    nl(
+        "view.3d_select_devices",
+        &["alle apparaten kiezen in 3d"],
+        &["apparaten kiezen"],
+    ),
+    nl(
+        "view.3d_select_rails",
+        &["alle rails kiezen in 3d"],
+        &["rails kiezen"],
+    ),
+    nl(
+        "view.3d_select_ducts",
+        &["alle kanalen kiezen in 3d"],
+        &["kanalen kiezen"],
+    ),
+    nl(
+        "view.3d_hide",
+        &["selectie verbergen in 3d"],
+        &["verbergen"],
+    ),
+    nl(
+        "view.3d_isolate",
+        &["selectie isoleren in 3d"],
+        &["isoleren"],
+    ),
+    nl("view.3d_show_all", &["alles tonen in 3d"], &["alles tonen"]),
     nl("view.iso", &[], &["isometrisch", "hoekzicht"]),
     nl("view.front", &[], &["vooraanzicht", "deurzijde"]),
     nl("view.top", &[], &["bovenaanzicht", "van boven"]),

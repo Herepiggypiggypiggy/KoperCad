@@ -24,6 +24,7 @@ use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
 use novo_view3d::camera::ViewPreset;
+use novo_view3d::scene::ItemKind;
 
 use super::standards_report::StandardsFormat;
 use super::view3d::Pending;
@@ -437,6 +438,12 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_quality",
     "view.3d_stats",
     "view.3d_hints",
+    "view.3d_select_devices",
+    "view.3d_select_rails",
+    "view.3d_select_ducts",
+    "view.3d_hide",
+    "view.3d_isolate",
+    "view.3d_show_all",
     "view.3d_duplicate",
     "view.3d_position",
     "view.3d_place",
@@ -966,6 +973,18 @@ impl NovoApp {
             "view.3d_hints" => {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.hints.toggle();
+            }
+            "view.3d_select_devices" | "view.3d_select_rails" | "view.3d_select_ducts" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_select_kind(match id {
+                    "view.3d_select_devices" => ItemKind::Device,
+                    "view.3d_select_rails" => ItemKind::Rail,
+                    _ => ItemKind::Duct,
+                });
+            }
+            "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_visibility(id);
             }
             "view.3d_position" => {
                 self.switch_workspace(Workspace::View3d);

@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use eframe::egui;
 use novo_core::AnyId;
-use novo_theme::tokens;
 
 use super::workspace::Workspace;
 use super::{Level, NovoApp, TOAST_INFO};
@@ -55,7 +54,8 @@ impl NovoApp {
             .exact_size(STATUS_BAR)
             .show(ui, |ui| {
                 ui.style_mut().override_text_style = Some(egui::TextStyle::Small);
-                ui.visuals_mut().override_text_color = Some(tokens::TEXT_MUTED);
+                ui.visuals_mut().override_text_color =
+                    Some(crate::theme::ui_palette().text_secondary);
                 ui.horizontal_centered(|ui| {
                     // The message gives way to the slots on its right: it is
                     // cut to half the bar, with the whole text on hover.
@@ -144,9 +144,10 @@ impl NovoApp {
                         }
                         for chip in &chips {
                             let button = egui::Button::new(
-                                egui::RichText::new(chip.label).color(tokens::TEXT),
+                                egui::RichText::new(chip.label)
+                                    .color(crate::theme::ui_palette().text_primary),
                             )
-                            .fill(tokens::BG_3)
+                            .fill(crate::theme::ui_palette().control)
                             .small();
                             if ui.add(button).on_hover_text(chip.hover).clicked() {
                                 run = Some(chip.command);

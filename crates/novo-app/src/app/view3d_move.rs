@@ -582,7 +582,7 @@ pub(super) fn show_warning(ctx: &egui::Context, text: &str) {
         .interactable(false)
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.label(egui::RichText::new(text).color(novo_theme::tokens::ERROR));
+                ui.label(egui::RichText::new(text).color(crate::theme::ui_palette().error));
             });
         });
 }
