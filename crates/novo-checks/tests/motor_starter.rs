@@ -253,6 +253,8 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::TagRule,
         ProblemKind::DisplayedTag,
         ProblemKind::StructureCode,
+        ProblemKind::SafetyLevelNotMet,
+        ProblemKind::SafetyBinding,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()

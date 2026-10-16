@@ -23,11 +23,18 @@ pub(super) struct Hint {
 }
 
 /// Every hint, declared next to its text so a new hint is one line.
-pub(super) const HINTS: &[Hint] = &[Hint {
-    id: "empty_page",
-    command: "tool.place",
-    text: "Press {key} to place a symbol · {keys} for keys",
-}];
+pub(super) const HINTS: &[Hint] = &[
+    Hint {
+        id: "empty_page",
+        command: "tool.place",
+        text: "Press {key} to place a symbol · {keys} for keys",
+    },
+    Hint {
+        id: "empty_3d",
+        command: "cabinet.place-all",
+        text: "Nothing is on the plate yet · {key} places all devices",
+    },
+];
 
 /// `Label · Key`, or just the label when the command has no key.
 pub(crate) fn tip_text(keymap: &Keymap, label: &str, command: &str) -> String {
@@ -51,6 +58,24 @@ pub(super) fn hint_text(keymap: &Keymap, hint: &Hint) -> String {
 /// Whether a hint still shows.
 pub(super) fn hint_due(settings: &Settings, id: &str) -> bool {
     settings.hints_seen.get(id).copied().unwrap_or(0) < HINT_LIMIT
+}
+
+/// The hint for a 3D view whose plate holds no devices, while it is due.
+pub(super) fn empty_3d_hint(
+    settings: &Settings,
+    keymap: &Keymap,
+    project: &novo_core::Project,
+    enclosure: novo_core::StructureId,
+) -> Option<String> {
+    let hint = HINTS.iter().find(|h| h.id == "empty_3d")?;
+    if !hint_due(settings, hint.id) {
+        return None;
+    }
+    let layout = novo_layout::model::load(project, enclosure)?;
+    layout
+        .placements
+        .is_empty()
+        .then(|| hint_text(keymap, hint))
 }
 
 impl NovoApp {
