@@ -4,11 +4,12 @@
 use std::sync::Arc;
 
 use novo_core::{
-    CabinetPlacement, Device, Project, Rail as ModelRail, RailKind, StructureId, Value,
+    CabinetPlacement, Device, DeviceKind, Project, Rail as ModelRail, RailKind, StructureId, Value,
 };
 use novo_layout::model::load;
 
 use super::{Depth, DuctShape, Inputs, Options, from_layout};
+use crate::appearance::{DeviceClass, KindHint};
 use crate::scene::Scene;
 
 const DEPTH_KEY: &str = "depth_mm";
@@ -44,6 +45,16 @@ pub fn inputs(project: &Project, id: StructureId) -> Inputs {
             inputs
                 .depths
                 .insert(p.device.raw(), device_depth(project, device));
+            let hint = match device.kind {
+                DeviceKind::General => KindHint::General,
+                DeviceKind::TerminalStrip => KindHint::TerminalStrip,
+                DeviceKind::Connector => KindHint::Connector,
+                DeviceKind::Plc => KindHint::Plc,
+            };
+            inputs.classes.insert(
+                p.device.raw(),
+                DeviceClass::of(hint, device.tag.letter_code()),
+            );
             if let Some(code) = device.tag.device_code() {
                 inputs
                     .labels
