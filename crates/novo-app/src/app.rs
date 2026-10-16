@@ -70,6 +70,7 @@ mod macro_browser_tests;
 mod macro_company_tests;
 mod macro_thumb;
 mod menu_bar;
+mod net_trace;
 mod numbering;
 mod onboarding;
 mod outline;
@@ -183,6 +184,8 @@ mod route_all_tests;
 mod shortcuts_sheet_tests;
 #[cfg(test)]
 mod tips_tests;
+#[cfg(test)]
+mod ui_gaps_tests;
 #[cfg(test)]
 mod variants_tests;
 
@@ -1057,6 +1060,7 @@ impl NovoApp {
         self.protection_window(&ctx);
         self.faults_window(&ctx);
         self.numbering_window(&ctx);
+        self.net_trace_window(&ctx);
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);

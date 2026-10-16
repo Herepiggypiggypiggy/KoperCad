@@ -512,6 +512,30 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["cable", "cores", "bundle"],
         Needs::Page,
     ),
+    // T: a click on the page, then the words of a free note.
+    cmd(
+        "draw.text",
+        "Add text",
+        "Draw",
+        &["note", "annotation", "comment"],
+        Needs::Page,
+    ),
+    // The whole net of the selected wire, junction or part: select it on this
+    // page, or list the devices and pages it reaches.
+    cmd(
+        "net.select",
+        "Select net",
+        "Edit",
+        &["whole net", "connected wires"],
+        Needs::Selection,
+    ),
+    cmd(
+        "net.trace",
+        "Pages and devices on this net",
+        "Edit",
+        &["where does this go", "net devices", "net pages"],
+        Needs::Selection,
+    ),
     // Cables that exist: the Cables drawer (Ctrl+4) shows the one they act on.
     verb(
         cmd(
@@ -1220,6 +1244,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "View",
         &["overrides", "manual"],
         Needs::Page,
+    ),
+    cmd(
+        "help.keymap_file",
+        "Open keymap file",
+        "View",
+        &["rebind", "customise keys", "change shortcuts", "keymap.txt"],
+        Needs::Nothing,
     ),
     cmd(
         "help.show_hints",

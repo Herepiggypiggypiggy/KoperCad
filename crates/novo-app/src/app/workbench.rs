@@ -97,6 +97,8 @@ pub(crate) struct Workbench {
     pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
+    /// The net trace window (`net.trace`), while it is open.
+    pub(super) net_trace: Option<super::net_trace::NetTrace>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
     /// The spreadsheet import preview, while it is open.
@@ -226,6 +228,7 @@ impl Default for Workbench {
             compare: None,
             faults: None,
             numbering: None,
+            net_trace: None,
             device_renumber: None,
             project_rules: false,
             page_form: None,
@@ -296,6 +299,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "tool.repeat",
     "tool.connect",
     "tool.cable",
+    "draw.text",
+    "net.select",
+    "net.trace",
+    "help.keymap_file",
     "wire.end_on_part",
     "wire.next_pin",
     "view.command_field_here",
@@ -730,6 +737,14 @@ impl NovoApp {
                     view.editor.begin_cable();
                 }
             }
+            "draw.text" => {
+                if let Some(view) = self.canvas.schematic() {
+                    view.editor.begin_text();
+                }
+            }
+            "net.select" => self.select_net(),
+            "net.trace" => self.trace_net(),
+            "help.keymap_file" => self.open_keymap_file(),
             "wire.end_on_part" => self.editor_key(EditorKey::EndOnPart),
             "wire.next_pin" => {
                 // Tab must not leave the drawing: egui's own focus move to

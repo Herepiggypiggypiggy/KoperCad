@@ -72,6 +72,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.show_hints", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
+    ("help.keymap_file", at("Help")),
     // Edit
     ("edit.rotate", at("Edit")),
     ("edit.mirror", at("Edit")),
@@ -80,6 +81,9 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("plc.renumber_io", under("Edit", "Renumber")),
     // Draw
     ("xref.link", at("Draw")),
+    ("draw.text", at("Draw")),
+    ("net.select", under("Edit", "Net")),
+    ("net.trace", under("Edit", "Net")),
     ("plc.add_card", under("Draw", "PLC")),
     ("plc.to_plc", under("Draw", "PLC")),
     ("macro.save", under("Draw", "Macros")),
