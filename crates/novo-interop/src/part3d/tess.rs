@@ -3,7 +3,9 @@
 //! Curved faces (cylinder, cone, sphere, torus) are triangulated in the
 //! surface's (u, v) parameter space and then refined by splitting interior
 //! edges whose chord strays from the surface by more than the tolerance.
-//! Faces on other surfaces (B-spline, swept) are triangulated flat from
+//! B-spline surfaces are inverted the same way (a Gauss-Newton search for
+//! the parameters of each boundary point) and refined on the true surface.
+//! Faces on other surfaces (swept, revolved) are triangulated flat from
 //! their boundary and counted as approximated.
 
 use std::collections::{HashMap, HashSet};
@@ -11,6 +13,7 @@ use std::f64::consts::{FRAC_PI_2, PI, TAU};
 
 use super::brep::{Face, Surface};
 use super::math::*;
+use super::nurbs::SplineSurface;
 use super::pins::RawFeature;
 
 /// Triangles with their own vertex list (positions in millimetres).
@@ -54,6 +57,29 @@ pub enum Outcome {
     Skipped,
 }
 
+/// A surface with the data a B-spline needs besides its kind.
+#[derive(Clone, Copy)]
+struct Sf<'a> {
+    kind: Surface,
+    nurbs: Option<&'a SplineSurface>,
+}
+
+impl Sf<'_> {
+    fn is_plane(&self) -> bool {
+        matches!(self.kind, Surface::Plane(_))
+    }
+    fn is_nurbs(&self) -> bool {
+        self.nurbs.is_some()
+    }
+    /// Surfaces whose u runs round in a circle.
+    fn periodic(&self) -> bool {
+        matches!(
+            self.kind,
+            Surface::Cylinder(..) | Surface::Cone(..) | Surface::Sphere(..) | Surface::Torus(..)
+        )
+    }
+}
+
 pub fn tessellate(face: &Face, tol: f64) -> (Soup, Outcome) {
     if !matches!(face.surface, Surface::Other)
         && let Some(s) = uv_path(face, tol)
@@ -68,8 +94,11 @@ pub fn tessellate(face: &Face, tol: f64) -> (Soup, Outcome) {
 
 // ---- surface parameterisation ------------------------------------------
 
-fn eval(s: &Surface, u: f64, v: f64) -> V3 {
-    match *s {
+fn eval(sf: &Sf, u: f64, v: f64) -> V3 {
+    if let Some(n) = sf.nurbs {
+        return n.eval(u, v);
+    }
+    match sf.kind {
         Surface::Plane(f) => f.from_local([u, v, 0.0]),
         Surface::Cylinder(f, r) => f.from_local([r * u.cos(), r * u.sin(), v]),
         Surface::Cone(f, r, a) => {
@@ -83,11 +112,11 @@ fn eval(s: &Surface, u: f64, v: f64) -> V3 {
             let rho = big + small * v.cos();
             f.from_local([rho * u.cos(), rho * u.sin(), small * v.sin()])
         }
-        Surface::Other => [0.0; 3],
+        Surface::BSpline | Surface::Other => [0.0; 3],
     }
 }
 
-/// Raw (u, v) of a point; angles in (-pi, pi].
+/// Raw (u, v) of a point; angles in (-pi, pi]. Not for B-splines.
 fn project(s: &Surface, p: V3) -> [f64; 2] {
     match *s {
         Surface::Plane(f) => {
@@ -107,7 +136,7 @@ fn project(s: &Surface, p: V3) -> [f64; 2] {
             let h = l[0].hypot(l[1]);
             [l[1].atan2(l[0]), l[2].atan2(h - big)]
         }
-        Surface::Other => [0.0; 2],
+        Surface::BSpline | Surface::Other => [0.0; 2],
     }
 }
 
@@ -129,19 +158,28 @@ struct UvLoop {
     winding: i32,
 }
 
-fn unwrap_loop(s: &Surface, pts: &[V3]) -> Option<UvLoop> {
-    if matches!(s, Surface::Plane(_)) {
+fn unwrap_loop(sf: &Sf, pts: &[V3], tol: f64) -> Option<UvLoop> {
+    if sf.is_plane() {
         return Some(UvLoop {
-            uv: pts.iter().map(|&p| project(s, p)).collect(),
+            uv: pts.iter().map(|&p| project(&sf.kind, p)).collect(),
             pos: pts.to_vec(),
             winding: 0,
         });
     }
+    if let Some(n) = sf.nurbs {
+        return unwrap_nurbs(n, pts, tol);
+    }
+    let s = &sf.kind;
     let torus = matches!(s, Surface::Torus(..));
     let mut uv: Vec<[f64; 2]> = Vec::with_capacity(pts.len());
     for &p in pts {
         let mut q = project(s, p);
         if let Some(prev) = uv.last() {
+            if let Surface::Torus(f, big, small) = *s
+                && small > big
+            {
+                q = spindle_branch(&f, big, p, q, *prev);
+            }
             q[0] = prev[0] + wrap(q[0] - prev[0]);
             if matches!(s, Surface::Sphere(..)) || torus {
                 q[1] = prev[1] + wrap(q[1] - prev[1]);
@@ -167,6 +205,64 @@ fn unwrap_loop(s: &Surface, pts: &[V3]) -> Option<UvLoop> {
     })
 }
 
+/// A spindle torus (tube radius larger than the ring radius) crosses its
+/// own axis: past the axis the tube's radius `big + small * cos v` is
+/// negative, and the same point has a second (u, v), half a turn round in
+/// u. `project` always answers with the first; of the two, this takes the
+/// one that continues the walk from `prev`, so a boundary that runs through
+/// the axis stays one smooth curve in parameter space.
+fn spindle_branch(f: &Frame, big: f64, p: V3, q: [f64; 2], prev: [f64; 2]) -> [f64; 2] {
+    let l = f.to_local(p);
+    let h = l[0].hypot(l[1]);
+    let alt = [q[0] + PI, l[2].atan2(-h - big)];
+    let gap = |c: [f64; 2]| wrap(c[0] - prev[0]).abs() + wrap(c[1] - prev[1]).abs();
+    if gap(alt) < gap(q) { alt } else { q }
+}
+
+/// Boundary points of a B-spline face in (u, v): each found by searching
+/// from the previous one, so the loop stays continuous. `None` when a
+/// point is not on the surface, or when the surface between two neighbours
+/// is not where the boundary runs (a walk across a closed surface's seam,
+/// or a boundary that is not an isoline), which only the flat fallback can
+/// mend.
+fn unwrap_nurbs(n: &SplineSurface, pts: &[V3], tol: f64) -> Option<UvLoop> {
+    // A boundary point is on the surface up to the model's own accuracy.
+    let reach = (tol * 4.0).max(0.05);
+    let mut uv: Vec<[f64; 2]> = Vec::with_capacity(pts.len());
+    for &p in pts {
+        let (q, d) = n.project(p, uv.last().copied());
+        // A NaN distance fails too.
+        if d.is_nan() || d > reach {
+            return None;
+        }
+        uv.push(q);
+    }
+    for i in 0..uv.len() {
+        let j = (i + 1) % uv.len();
+        let mid = n.eval((uv[i][0] + uv[j][0]) * 0.5, (uv[i][1] + uv[j][1]) * 0.5);
+        let off = distance_to_segment(mid, pts[i], pts[j]);
+        if off.is_nan() || off > reach {
+            return None;
+        }
+    }
+    Some(UvLoop {
+        uv,
+        pos: pts.to_vec(),
+        winding: 0,
+    })
+}
+
+fn distance_to_segment(p: V3, a: V3, b: V3) -> f64 {
+    let ab = sub(b, a);
+    let l2 = dot(ab, ab);
+    let t = if l2 < 1e-24 {
+        0.0
+    } else {
+        (dot(sub(p, a), ab) / l2).clamp(0.0, 1.0)
+    };
+    dist(p, add(a, scale(ab, t)))
+}
+
 fn area2(uv: &[[f64; 2]]) -> f64 {
     let mut a = 0.0;
     for i in 0..uv.len() {
@@ -178,16 +274,23 @@ fn area2(uv: &[[f64; 2]]) -> f64 {
 }
 
 fn uv_path(face: &Face, tol: f64) -> Option<Soup> {
+    let sf = &Sf {
+        kind: face.surface,
+        nurbs: face.nurbs.as_deref(),
+    };
+    if matches!(face.surface, Surface::BSpline) && sf.nurbs.is_none() {
+        return None;
+    }
     let s = &face.surface;
     let mut loops: Vec<UvLoop> = Vec::new();
     for l in &face.loops {
-        loops.push(unwrap_loop(s, l)?);
+        loops.push(unwrap_loop(sf, l, tol)?);
     }
     let periodic: Vec<usize> = (0..loops.len())
         .filter(|&i| loops[i].winding != 0)
         .collect();
     let mut soup = match (s, periodic.len()) {
-        (_, 0) => polygon(s, loops, tol)?,
+        (_, 0) => polygon(sf, loops, tol)?,
         (Surface::Cylinder(..) | Surface::Cone(..), 2) if loops.len() == 2 => {
             strip(loops, periodic)?
         }
@@ -201,13 +304,13 @@ fn uv_path(face: &Face, tol: f64) -> Option<Soup> {
             let (u0, v0) = (l.uv[0][0], l.uv[0][1]);
             let u1 = u0 + f64::from(l.winding) * TAU;
             for q in [[u1, v0], [u1, pole], [u0, pole]] {
-                l.pos.push(eval(s, q[0], q[1]));
+                l.pos.push(eval(sf, q[0], q[1]));
                 l.uv.push(q);
             }
             l.winding = 0;
             let mut all = vec![l];
             all.extend(loops);
-            polygon(s, all, tol)?
+            polygon(sf, all, tol)?
         }
         _ => return None,
     };
@@ -263,13 +366,13 @@ fn orientation_votes(loops: &[Vec<V3>], soup: &Soup) -> (usize, usize) {
 }
 
 /// Outer loop, holes and ear clipping in parameter space, then refinement.
-fn polygon(s: &Surface, mut loops: Vec<UvLoop>, tol: f64) -> Option<Soup> {
+fn polygon(s: &Sf, mut loops: Vec<UvLoop>, tol: f64) -> Option<Soup> {
     let outer = (0..loops.len()).max_by(|&a, &b| {
         area2(&loops[a].uv)
             .abs()
             .total_cmp(&area2(&loops[b].uv).abs())
     })?;
-    let periodic = !matches!(s, Surface::Plane(_));
+    let periodic = s.periodic();
     let cu = loops[outer].uv.iter().map(|p| p[0]).sum::<f64>() / loops[outer].uv.len() as f64;
     let mut flat: Vec<f64> = Vec::new();
     let mut pos: Vec<V3> = Vec::new();
@@ -329,7 +432,7 @@ fn polygon(s: &Surface, mut loops: Vec<UvLoop>, tol: f64) -> Option<Soup> {
             }
         })
         .collect();
-    if !matches!(s, Surface::Plane(_)) {
+    if !s.is_plane() {
         // Triangles with no area in parameter space (three corners on one
         // seam or boundary line) carry nothing and only confuse welding.
         let (mut lo, mut hi) = ([f64::MAX; 2], [f64::MIN; 2]);
@@ -344,7 +447,16 @@ fn polygon(s: &Surface, mut loops: Vec<UvLoop>, tol: f64) -> Option<Soup> {
             let (a, b, c) = (uvs[t[0] as usize], uvs[t[1] as usize], uvs[t[2] as usize]);
             ((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])).abs() > floor
         });
-        refine(s, &mut uvs, &mut pos, &mut tris, &fixed, tol);
+        // A B-spline has no cheap test for where it bends: its first passes
+        // split every free edge, and the sag test takes over after them.
+        let force = if s.is_nurbs() {
+            NURBS_FORCED_PASSES
+        } else if matches!(s.kind, Surface::Torus(..)) {
+            2
+        } else {
+            0
+        };
+        refine(s, &mut uvs, &mut pos, &mut tris, &fixed, tol, force);
     }
     Some(Soup {
         pos,
@@ -353,19 +465,23 @@ fn polygon(s: &Surface, mut loops: Vec<UvLoop>, tol: f64) -> Option<Soup> {
     })
 }
 
+/// Passes of unconditional splitting before the sag test on a B-spline.
+const NURBS_FORCED_PASSES: usize = 2;
+
 /// Sag-driven refinement: interior edges whose midpoint on the surface is
 /// farther than `tol` from the chord are split; neighbours agree because
 /// the decision depends only on the edge.
 fn refine(
-    s: &Surface,
+    s: &Sf,
     uv: &mut Vec<[f64; 2]>,
     pos: &mut Vec<V3>,
     tris: &mut Vec<[u32; 3]>,
     fixed: &HashSet<(u32, u32)>,
     tol: f64,
+    force: usize,
 ) {
     const MAX_TRIS: usize = 12_000;
-    for _ in 0..6 {
+    for pass in 0..6 + force {
         if tris.len() > MAX_TRIS {
             return;
         }
@@ -384,7 +500,7 @@ fn refine(
                     let mq = [(qa[0] + qb[0]) * 0.5, (qa[1] + qb[1]) * 0.5];
                     let mp = eval(s, mq[0], mq[1]);
                     let chord = lerp(pos[a as usize], pos[b as usize], 0.5);
-                    if dist(mp, chord) > tol {
+                    if pass < force || dist(mp, chord) > tol {
                         uv.push(mq);
                         pos.push(mp);
                         m = Some((uv.len() - 1) as u32);
@@ -543,7 +659,14 @@ fn flat_path(face: &Face) -> Option<Soup> {
             winding: 0,
         });
     }
-    polygon(&Surface::Plane(fr), loops, 0.0)
+    polygon(
+        &Sf {
+            kind: Surface::Plane(fr),
+            nurbs: None,
+        },
+        loops,
+        0.0,
+    )
 }
 
 #[cfg(test)]
@@ -554,6 +677,7 @@ mod tests {
         Face {
             loops,
             surface: Surface::Plane(Frame::IDENTITY),
+            nurbs: None,
             same_sense: true,
         }
     }
@@ -619,6 +743,7 @@ mod tests {
         let f = Face {
             loops: vec![circle(5.0, 0.0, 24), circle(5.0, 20.0, 24)],
             surface: Surface::Cylinder(Frame::IDENTITY, 5.0),
+            nurbs: None,
             same_sense: true,
         };
         let (s, o) = tessellate(&f, 0.05);
@@ -646,6 +771,7 @@ mod tests {
         let f = Face {
             loops: vec![circle(10.0, 0.0, 32)],
             surface: Surface::Sphere(Frame::IDENTITY, 10.0),
+            nurbs: None,
             same_sense: true,
         };
         let (s, o) = tessellate(&f, 0.05);

@@ -22,7 +22,7 @@ use super::{MAX_STEP_BYTES, fallback_box, fallback_for, geometry_from_step_rotat
 
 /// Bump when tessellation, simplification or normals change: older cache
 /// files are then ignored (and pruned).
-pub const ALGORITHM_VERSION: u32 = 2;
+pub const ALGORITHM_VERSION: u32 = 3;
 const FORMAT: u32 = 2;
 const MAGIC: &[u8; 4] = b"KMSH";
 
