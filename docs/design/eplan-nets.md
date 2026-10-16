@@ -81,11 +81,22 @@ are written against a project or device property and stay quiet without it.
 | `DisplayedTag` (F04) | A typed text on a device symbol that starts with `-`, `=` or `+` and is neither the full tag nor the short tag. | texts |
 | `StructureCode` (H01) | With project property `structure.list` = `complete`, a function or location code (on devices or pages) that no structure node names, parents included. | structure list |
 
-Conventions: plug halves are two `Connector` devices, each naming the other in
-`plug.mate` (a tag). KoperCAD's netlist does not join plug halves; C17 and C02
-report the wiring, not a joined net. The two opt-in properties have no settings
-dialog yet (they are set with a script, the CLI or an import); a project-rules
-entry in novo-core would be the next step and is WS-02's call.
+Where the user sets what a rule needs:
+
+- **F01 and H01:** File > Project settings (command `project.standard`), section
+  "Extra design checks": "Device names follow page and column" sets
+  `tag.rule` = `page-column`; "My structure list is complete" sets
+  `structure.list` = `complete`. Both are stored in the project's properties
+  (`ProjectInfo::properties`, so no novo-core change), one undo step, off by
+  default.
+- **Plug halves (C17, C02):** a plug or socket is a `Connector` device. Select
+  it and fill "Other half" in the inspector with the tag of its mate
+  (`-XF1`); the property is `plug.mate`. Set it on both halves; the check
+  reads either. KoperCAD's netlist does not join plug halves; C17 and C02
+  report the wiring, not a joined net.
+- **C06:** the device properties `contacts.no`, `contacts.nc`, `contacts.co`
+  (also read by the too-many-contacts check) say how many auxiliary contacts a
+  device has; they come with its part.
 
 Not carried: C08, C12, C16 and C18 are not in this lane; D, E and G are house
 rule packs. A real-sample test for these rules waits for the PXF reader

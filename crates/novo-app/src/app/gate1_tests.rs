@@ -2692,6 +2692,21 @@ fn the_project_standard_defaults_to_iec_and_shows_in_the_title() {
     d.frame();
     assert_eq!(d.app.standard(), Pack::Iec);
     assert!(!d.app.window_title.contains("NFPA"));
+
+    // The opt-in design checks are switches in the same window: each is a
+    // project property, one undo step, and off by default.
+    assert!(!d.app.project_property_is("tag.rule", "page-column"));
+    d.app.set_project_property("tag.rule", "page-column", true);
+    d.app
+        .set_project_property("structure.list", "complete", true);
+    assert!(d.app.project_property_is("tag.rule", "page-column"));
+    assert!(d.app.project_property_is("structure.list", "complete"));
+    d.app.set_project_property("tag.rule", "page-column", false);
+    assert!(!d.app.project_property_is("tag.rule", "page-column"));
+    assert!(d.app.project_property_is("structure.list", "complete"));
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert!(d.app.project_property_is("tag.rule", "page-column"));
 }
 
 #[test]

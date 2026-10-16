@@ -10,7 +10,6 @@ Done
 Next
 - Adapter from EPLAN-PXF-READ's reader to `ConnGraph` (theirs; the interface was sent to cse_01SaP8ogQQJ4nBhYv3qCTcBm).
 - Call `compare` after the import creates wires and show `NetComparison` in the import preview.
-- Settings entry for `tag.rule` and `structure.list` (needs a ProjectRules field, WS-02).
 - C08, C12, C16, C18 and the opt-in real-sample tests.
 
 Open
