@@ -14,7 +14,7 @@
     },
     "properties": {}
   },
-  "next_id": 64,
+  "next_id": 63,
   "parts": [
     {
       "id": 48,
@@ -113,13 +113,6 @@
       "kind": "dc_positive",
       "voltage": 24.0,
       "properties": {}
-    },
-    {
-      "id": 57,
-      "name": "L+",
-      "kind": "dc_positive",
-      "voltage": null,
-      "properties": {}
     }
   ],
   "pages": [
@@ -139,7 +132,7 @@
       "properties": {}
     },
     {
-      "id": 58,
+      "id": 57,
       "name": "0",
       "title": "Table of contents",
       "kind": {
@@ -154,7 +147,7 @@
       "properties": {}
     },
     {
-      "id": 59,
+      "id": 58,
       "name": "10",
       "title": "Bill of materials",
       "kind": {
@@ -169,7 +162,7 @@
       "properties": {}
     },
     {
-      "id": 60,
+      "id": 59,
       "name": "20",
       "title": "Device list",
       "kind": {
@@ -184,7 +177,7 @@
       "properties": {}
     },
     {
-      "id": 61,
+      "id": 60,
       "name": "30",
       "title": "Wire list",
       "kind": {
@@ -199,7 +192,7 @@
       "properties": {}
     },
     {
-      "id": 62,
+      "id": 61,
       "name": "40",
       "title": "Terminal diagram",
       "kind": {
@@ -214,7 +207,7 @@
       "properties": {}
     },
     {
-      "id": 63,
+      "id": 62,
       "name": "50",
       "title": "Cable diagram",
       "kind": {
@@ -977,7 +970,7 @@
         "pin": 0
       },
       "route": [],
-      "number": null,
+      "number": "1",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -996,7 +989,7 @@
         "pin": 0
       },
       "route": [],
-      "number": null,
+      "number": "2",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1015,7 +1008,7 @@
         "pin": 2
       },
       "route": [],
-      "number": null,
+      "number": "3",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1034,7 +1027,7 @@
         "pin": 0
       },
       "route": [],
-      "number": null,
+      "number": "6",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1053,7 +1046,7 @@
         "pin": 4
       },
       "route": [],
-      "number": null,
+      "number": "4",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1072,7 +1065,7 @@
         "pin": 0
       },
       "route": [],
-      "number": null,
+      "number": "7",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1091,7 +1084,7 @@
         "pin": 0
       },
       "route": [],
-      "number": null,
+      "number": "5",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1110,7 +1103,7 @@
         "pin": 0
       },
       "route": [],
-      "number": null,
+      "number": "100",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1129,7 +1122,7 @@
         "pin": 0
       },
       "route": [],
-      "number": null,
+      "number": "8",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1148,7 +1141,7 @@
         "pin": 0
       },
       "route": [],
-      "number": "1",
+      "number": "2",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1167,7 +1160,7 @@
         "pin": 1
       },
       "route": [],
-      "number": "2",
+      "number": "6",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1186,7 +1179,7 @@
         "pin": 2
       },
       "route": [],
-      "number": "3",
+      "number": "7",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1214,7 +1207,7 @@
           "y": 116.0
         }
       ],
-      "number": null,
+      "number": "5",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1233,7 +1226,7 @@
         "pin": 0
       },
       "route": [],
-      "number": null,
+      "number": "100",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1252,7 +1245,7 @@
         "pin": 1
       },
       "route": [],
-      "number": null,
+      "number": "8",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}

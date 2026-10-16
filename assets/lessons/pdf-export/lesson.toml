@@ -1,15 +1,17 @@
 # Lesson: issue a revision, export the set as a vector PDF and check it.
 # Sample project: the pump starter after the wire-list-and-bom lesson, lamp
 # -P1 wired and with its part (project.json); builder and tests:
-# crates/novo-tests/tests/lessons/documents.rs. Reviewer notes: NOTES.md.
+# crates/novo-tests/tests/lessons/documents.rs. Verified step by step in
+# crates/novo-app/src/app/lesson_verify_outputs.rs. Reviewer notes: NOTES.md.
 #
 # GAPS in the app that this lesson meets (the lesson stays draft):
-#  - choose pages: the app always exports every page (pdf.rs:38-60 builds
-#    PdfOptions with PageSet::All). A page set exists in novo-pdf
-#    (PdfOptions::pages) and the command line (`export pdf --page NAME`).
-#  - no check kind or solve op for "a revision was issued".
-#  - the PDF opens outside the app: the lesson cannot see what the person
-#    checks there, so those steps are reading steps.
+#  - choose pages: the app always exports every page (pdf.rs export_pdf_to
+#    builds PdfOptions with the default page set). A page set exists in
+#    novo-pdf (PdfOptions::pages) and the command line (`export pdf --page`).
+#  - no check kind for "a revision was issued": issue-submit is a reading step
+#    with a solve (issue_revision); a `revision` check would let it tick.
+#  - the PDF opens outside the app (nothing opens it for you): the checking
+#    steps are reading steps.
 
 format = 1
 id = "pdf-export"
@@ -29,29 +31,35 @@ next = []
 project = "project.json"
 page = "Control circuit"
 
+
 [[step]]
 id = "intro"
 title = "What you will have"
 title_nl = "Wat je straks hebt"
 text = """
-By the end you have a PDF of the whole set from an issued revision, and you know what to look at in it: bookmarks, links and the title block.
+You will issue revision A and have a PDF of the whole set, and you will know what to look at in it: bookmarks, links and the title block.
+It saves sending a drawing nobody can tell from the last one: the issue marks which pages changed.
 """
 text_nl = """
-Straks heb je een PDF van de hele set van een uitgegeven revisie, en weet je waar je op let: bladwijzers, koppelingen en titelblok.
+Je geeft revisie A uit en hebt een PDF van de hele set, en je weet waar je op let: bladwijzers, koppelingen en titelblok.
+Zo stuur je nooit een tekening waarvan niemand het verschil met de vorige ziet: de uitgifte markeert welke pagina's veranderd zijn.
 """
-pause = true
 
 [[step]]
 id = "issue-open"
 title = "Start an issue"
 title_nl = "Begin een uitgifte"
-# verified: view.command_palette is Ctrl+K (keymap.rs:313); the verb "issue"
-# finds revision.issue "Issue revision" (commands.rs:215-223), which opens the
-# window with the next index, today's date and your initials
-# (revisions.rs:71-84); text after the verb becomes the description.
-text = "Press {key:view.command_palette}, type **issue** and press Enter."
-text_nl = "Druk op {key:view.command_palette}, typ **issue** en druk op Enter."
-point = { ui = "palette.field" }
+# verified: lesson_verify_outputs.rs pdf_export. view.command_palette is
+# Ctrl+K (keymap.rs); the verb "issue" finds revision.issue "Issue revision"
+# (commands.rs), which opens the window with the next index, today's date and
+# your initials (revisions.rs open_issue_revision). Menu: File > Revisions >
+# Issue revision (menus.rs).
+text = """
+Open the Issue revision window. It proposes the next index (**A**), today's date and your initials.
+"""
+text_nl = """
+Open het venster Issue revision. Het stelt de volgende index (**A**), de datum van vandaag en je initialen voor.
+"""
 expect = { command = "revision.issue" }
 solve = [ { command = "revision.issue" } ]
 
@@ -59,64 +67,56 @@ solve = [ { command = "revision.issue" } ]
 id = "issue-submit"
 title = "Say what changed and issue"
 title_nl = "Zeg wat er veranderd is en geef uit"
-# verified: the window "Issue revision A" proposes index, date and initials;
-# only the description is asked; the button reads "Issue A", Enter issues too
-# (revisions.rs:86-149). It says "Freezes the pages as they are now and keeps
-# a copy to compare with." (revisions.rs:99).
-# GAP: the click check misses Enter, and a state check `revision` (index A
-# exists) would be the honest one; needs solve op `issue_revision`.
+# verified: the window "Issue revision A" asks only **What changed**; the
+# fields Index, Date and By are filled in; the button reads "Issue A" and
+# Enter issues too (revisions.rs issue_revision_dialog). The text says
+# "Freezes the pages as they are now and keeps a copy to compare with."
+# GAP solve/check: no check kind for an issued revision (a click check on an
+# unregistered anchor would never tick) and a reading step cannot have a
+# solve, so this is a reading step; wished: check `revision = { index = "A" }`.
+# The test confirms revision A exists and the drawn pages are frozen.
 text = """
-Type **First issue** as the description and click **Issue A**.
-Index and date are filled in. Add your initials if that field is empty.
+Type **First issue** under **What changed**, check **Index**, **Date** and **By** (your initials), then click **Issue A**.
+Press Next here once the message says the revision is issued.
 """
 text_nl = """
-Typ **First issue** als omschrijving en klik op **Issue A**.
-Index en datum staan er al. Vul je initialen in als dat veld leeg is.
+Typ **First issue** onder **What changed**, controleer **Index**, **Date** en **By** (je initialen) en klik op **Issue A**.
+Druk hier op Next als de melding zegt dat de revisie is uitgegeven.
 """
-point = { ui = "revision.submit" }
-note = [
-  { ui = "revision.description", text = "What changed", text_nl = "Wat is er veranderd" },
-]
-expect = { clicked = "revision.submit" }
-solve = [ { issue_revision = { description = "First issue" } } ]
 
 [[step]]
 id = "title-block"
 title = "The title block carries it"
 title_nl = "Het titelblok draagt het"
 # verified: the title block is the 140 x 36 mm box at the bottom right of the
-# inner frame, rows Project, Page, Sheet, Structure, Revision, Drawn /
-# checked (novo-canvas model.rs:1197-1285, 328-331). The Revision row reads
-# "A  <date>"; drawn by and checked by come from the project's drawn_by and
-# checked_by properties. GAP: there is no control to set drawn_by / checked_by
-# (project_settings.rs has none), so the sample project sets them.
+# inner frame, rows Project, Page, Sheet, Structure, Revision, Drawn / checked
+# (novo-canvas model.rs). The Revision row reads "A  <date>"; drawn by and
+# checked by come from the project's drawn_by and checked_by properties.
+# GAP: there is no control to set drawn_by / checked_by, so the sample
+# project sets them.
 text = """
-Every page now prints **A** and the date in the Revision row of its title block.
-Project, sheet, structure and drawn / checked are there too.
+Every drawn page now prints **A** and the date in the Revision row of its title block, bottom right.
+Project, sheet, structure and drawn / checked are there too, so a printout says which issue it is.
 """
 text_nl = """
-Elke pagina toont nu **A** en de datum in de regel Revision van het titelblok.
-Project, blad, structuur en getekend / gecontroleerd staan er ook.
+Elke getekende pagina toont nu **A** en de datum in de regel Revision van het titelblok, rechtsonder.
+Project, blad, structuur en getekend / gecontroleerd staan er ook, zodat een uitdraai zegt welke uitgifte het is.
 """
 point = { area = { page = "Control circuit", x = 270, y = 251, w = 140, h = 36 } }
-pause = true
 
 [[step]]
 id = "export"
 title = "Export the set"
 title_nl = "Exporteer de set"
-# verified: export.pdf has no key (keymap.rs); the command is in APP_COMMANDS
-# (workbench.rs:216) and the KoperCAD menu has the button "Export PDF"
-# (app.rs:959-963). The palette verb "export pdf" (commands.rs:714-721).
+# verified: export.pdf has no key (keymap.rs); it is in File > Export > Export
+# PDF (commands.rs, menus.rs) and the palette verb "export pdf". The KoperCAD
+# brand button opens About, it is not an export menu.
 text = """
-Press {key:view.command_palette}, type **export pdf** and press Enter.
-Or open the **KoperCAD** menu and click **Export PDF**.
+Write the whole set as one vector PDF: press {key:view.command_palette}, type **export pdf** and press Enter, or choose **File > Export > Export PDF**.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **export pdf** en druk op Enter.
-Of open het menu **KoperCAD** en klik op **Export PDF**.
+Schrijf de hele set als één vector-PDF: druk op {key:view.command_palette}, typ **export pdf** en druk op Enter, of kies **File > Export > Export PDF**.
 """
-point = { ui = "mark.menu.export" }
 expect = { command = "export.pdf" }
 solve = [ { command = "export.pdf" } ]
 
@@ -124,40 +124,39 @@ solve = [ { command = "export.pdf" } ]
 id = "where-is-it"
 title = "Where the file went"
 title_nl = "Waar het bestand staat"
-# verified: a saved project's PDF goes next to its file with the same name; a
-# project with no file yet goes to <Documents>\KoperCAD\<name>.pdf under a name
-# not used yet. Only a PDF KoperCAD wrote is replaced; the toast says
-# "Exported <path>" or "Replaced <path>", with "(N remain)" when design checks
-# still have problems: an export is never blocked (pdf.rs:1-12, 38-78).
+# verified: pdf.rs. A saved project's PDF goes next to its file with the same
+# name; a project with no file yet (this lesson's) goes to
+# <Documents>\KoperCAD\<name>.pdf under a name not used yet. Only a PDF
+# KoperCAD wrote is replaced. The message says "Exported <path>" or
+# "Replaced <path>", with "(N remain)" when design checks still have problems:
+# an export is never blocked. Nothing in the app opens the file.
 text = """
-The message names the file: next to your project, with its name and .pdf.
-A PDF of your own with that name is never replaced.
+The message at the bottom names the file. A saved project's PDF sits next to the project file; this lesson project is not saved yet, so it is in your Documents folder under **KoperCAD**.
+Open it from there with your PDF viewer. A PDF of your own with the same name is never replaced.
 """
 text_nl = """
-De melding noemt het bestand: naast je project, met zijn naam en .pdf.
-Een eigen PDF met die naam wordt nooit overschreven.
+De melding onderaan noemt het bestand. De PDF van een opgeslagen project staat naast het projectbestand; dit lesproject is nog niet opgeslagen, dus staat hij in je map Documenten onder **KoperCAD**.
+Open hem daar met je PDF-lezer. Een eigen PDF met dezelfde naam wordt nooit overschreven.
 """
-pause = true
 
 [[step]]
 id = "check-bookmarks"
 title = "Check the bookmarks"
 title_nl = "Controleer de bladwijzers"
 # verified: one bookmark per sheet, "<name>  <title>" and for a generated
-# sheet "<sheet>  <title> · <what it shows>", e.g. "50b  Cable diagram · ..."
-# (novo-pdf lib.rs:522-543); the PDF opens with the bookmark panel
-# (PageMode::UseOutlines, lib.rs:280) and the page labels are the page names
-# (lib.rs:284-296). A bookmark with a dot in front is a page changed since the
-# latest revision (lib.rs:522-529, app/title_revisions.rs:71-88).
+# sheet "<sheet>  <title> · <what it shows>" (novo-pdf lib.rs); the PDF opens
+# with the bookmark panel (PageMode::UseOutlines) and the page labels are the
+# page names. A bookmark with a dot in front is a page changed since the
+# latest revision. If design checks still have problems a "Design checks"
+# page is appended (pdf.rs checks_appendix).
 text = """
-Open the PDF. The bookmarks list every page: **1  Main circuit**, **2  Control circuit**, then the generated sheets such as **50b  Cable diagram**.
-A dot in front means the page changed since the last issue.
+In the PDF viewer the bookmark panel lists every page: **1  Main circuit**, **2  Control circuit**, then the written sheets such as **50b  Cable diagram**.
+A dot in front of a page means it changed since the last issue. If the drawing still has problems, a **Design checks** page follows at the end.
 """
 text_nl = """
-Open de PDF. De bladwijzers tonen elke pagina: **1  Main circuit**, **2  Control circuit**, daarna de gegenereerde bladen zoals **50b  Cable diagram**.
-Een stip ervoor betekent: gewijzigd sinds de laatste uitgifte.
+In de PDF-lezer toont het bladwijzerpaneel elke pagina: **1  Main circuit**, **2  Control circuit**, daarna de geschreven bladen zoals **50b  Cable diagram**.
+Een stip voor een pagina betekent: gewijzigd sinds de laatste uitgifte. Zijn er nog problemen in de tekening, dan volgt achteraan een pagina **Design checks**.
 """
-pause = true
 
 [[step]]
 id = "check-links"
@@ -166,51 +165,47 @@ title_nl = "Controleer de koppelingen"
 # verified: link annotations go from a device's symbol (and its tag text) to
 # its partner symbol on another page: contact to coil, coil to its first
 # contact elsewhere; interruption points link to their partner (novo-pdf
-# lib.rs:556-612). The contact images under a coil are not separate links yet
-# (TODO(WS-10) in the same function).
+# lib.rs). The contact images under a coil are not separate links yet.
 text = """
-On page 1, click the main contacts of **-K1**: the PDF jumps to its coil on page 2.
-Click the coil there to come back.
+On page 1 click the three-pole contactor symbol **-K1**: the PDF jumps to its coil (the round box) on page 2.
+Click the coil there to come back. A reader can follow a circuit across pages without searching.
 """
 text_nl = """
-Klik op pagina 1 op de hoofdcontacten van **-K1**: de PDF springt naar de spoel op pagina 2.
-Klik daar op de spoel om terug te gaan.
+Klik op pagina 1 op het driepolige contactorsymbool **-K1**: de PDF springt naar de spoel (het ronde vak) op pagina 2.
+Klik daar op de spoel om terug te gaan. Een lezer volgt zo een stroomkring over pagina's zonder te zoeken.
 """
-pause = true
 
 [[step]]
 id = "freeze"
 title = "What the issue froze"
 title_nl = "Wat de uitgifte heeft vastgezet"
-# verified: Tx::issue_revision freezes every drawn page with the index; it
-# skips generated pages (novo-core tx.rs:402-433). A plain export freezes
-# nothing (pdf.rs has no freeze). A project with frozen pages is not changed
-# on open: missing generated pages are not added and the app says so
-# (reports.rs:112-122), so issue after the generated pages you want exist.
+# verified: Tx::issue_revision freezes every drawn page with the index and
+# skips generated pages (novo-core tx.rs); a plain export freezes nothing. A
+# project with frozen pages is not changed on open: missing generated pages
+# are not added and the app says so (reports.rs add_generated_pages), so
+# issue after the generated pages you want exist.
 text = """
-The issue froze the drawn pages: a reference like **2.1** keeps its page and column when you move things later.
-Generated pages never freeze. They reflow. A plain export freezes nothing.
+The drawn pages are locked as they were. A cross reference like **2.1** (page 2, column 1) keeps meaning that place when you move things later.
+Generated lists are rewritten every time, so they are never locked. A plain export locks nothing.
 """
 text_nl = """
-De uitgifte zette de getekende pagina's vast: een verwijzing als **2.1** houdt pagina en kolom als je later iets verplaatst.
-Gegenereerde pagina's bevriezen nooit. Ze lopen door. Een gewone export bevriest niets.
+De getekende pagina's zijn vastgezet zoals ze waren. Een verwijzing als **2.1** (pagina 2, kolom 1) blijft die plek betekenen als je later iets verplaatst.
+Gegenereerde lijsten worden steeds opnieuw geschreven en worden dus nooit vastgezet. Een gewone export zet niets vast.
 """
-pause = true
 
 [[step]]
 id = "pages-and-next-time"
 title = "Only some pages, and the next issue"
 title_nl = "Maar een deel van de pagina's, en de volgende uitgifte"
 # GAP: the app exports every page; choosing pages exists only in the engine
-# (novo_pdf::PageSet) and the command line `kopercad-cli export pdf FILE -o
-# OUT --page 1 --page 2`. Owner: the outputs thread (WS-09) with the app
-# shell (an export dialog).
+# (novo_pdf::PdfOptions::pages) and the command line `kopercad-cli export pdf
+# FILE -o OUT --page 1 --page 2`. Owner: the outputs thread (WS-09) with the
+# app shell (an export dialog).
 text = """
-The app exports every page. For a few pages use the command line: **kopercad-cli export pdf --page 1**.
-Change something and export again: that page gets a dot, until you issue **B**.
+The app cannot export only some pages yet; for a few pages use the command line: **kopercad-cli export pdf --page 1**.
+Change something and export again: that page gets a dot until you issue **B**. Compare with the result of this lesson: pages 1 and 2 are frozen at A and the written lists are not.
 """
 text_nl = """
-De app exporteert alle pagina's. Voor een paar pagina's gebruik je de opdrachtregel: **kopercad-cli export pdf --page 1**.
-Wijzig iets en exporteer opnieuw: die pagina krijgt een stip, tot je **B** uitgeeft.
+De app kan nog niet alleen een deel van de pagina's exporteren; gebruik daarvoor de opdrachtregel: **kopercad-cli export pdf --page 1**.
+Wijzig iets en exporteer opnieuw: die pagina krijgt een stip tot je **B** uitgeeft. Vergelijk met het resultaat van deze les: pagina 1 en 2 staan vast op A en de geschreven lijsten niet.
 """
-pause = true

@@ -14,14 +14,12 @@ use novo_cables::{
     proposal_for_wires, propose_cables,
 };
 use novo_core::{
-    Cable, CableId, Command, DeviceId, DeviceTag, Document, Endpoint, Page, PageId, PinRef,
-    Placement, Point, PotentialKind, Project, Rotation, SymbolId, SymbolRole, Tx, Value, Wire,
-    WireId,
+    Cable, CableId, DeviceId, DeviceTag, Document, Endpoint, Page, PageId, PinRef, Placement,
+    Point, PotentialKind, Project, Rotation, SymbolId, Tx, Value, Wire, WireId,
 };
 use novo_editor::catalog::Catalog;
 use novo_editor::edit::{PlaceOptions, draw_wire, place};
 use novo_editor::geometry::Target;
-use novo_editor::potential::{PotentialSpec, set_feed_potential};
 use novo_parts::{Catalog as PartsCatalog, assign_cable_part};
 use novo_reports::{Report, WireList, add_generated_pages, default_generated_pages};
 
@@ -128,19 +126,6 @@ fn cable_named(project: &Project, text: &str) -> CableId {
         .cables()
         .find(|c| c.tag.to_string().ends_with(text))
         .unwrap_or_else(|| panic!("no cable {text}"))
-        .id
-}
-
-fn feed_of(project: &Project, name: &str) -> SymbolId {
-    project
-        .symbols()
-        .find(|s| match s.role {
-            SymbolRole::PotentialFeed { potential } => {
-                project.potential(potential).is_some_and(|p| p.name == name)
-            }
-            _ => false,
-        })
-        .unwrap_or_else(|| panic!("no feed {name}"))
         .id
 }
 
@@ -329,9 +314,9 @@ pub fn cables_and_shields_finished() -> Project {
 
 // ----- wire numbers ---------------------------------------------------------
 
-/// The pump station after the cables lesson, with the supply of the level
-/// loop still called `L+`, three motor wires numbered by hand (the last
-/// number is a typo) and the generated pages the program adds on open.
+/// The pump station after the cables lesson, with three motor wires
+/// numbered by hand (the last number is a typo: 2 twice) and the generated
+/// pages the program adds on open. Nothing else has a number.
 pub fn wire_numbers_start() -> Project {
     let mut doc = Document::new(cables_and_shields_finished());
     doc.transact("Prepare wire numbers", |tx| {
@@ -341,13 +326,6 @@ pub fn wire_numbers_start() -> Project {
 wire number lesson. Parts are illustrative, not a verified parts list."
                 .into();
         })?;
-        // The supply of the level loop was named `L+` by hand.
-        let feed = feed_of(tx.project(), "+24 V");
-        set_feed_potential(
-            tx,
-            &[feed],
-            &PotentialSpec::new("L+", PotentialKind::DcPositive, None),
-        )?;
         for (end, number) in [("-M1:U1", "1"), ("-M1:V1", "2"), ("-M1:W1", "2")] {
             let wire = wire_between(tx.project(), end, "-X1:");
             tx.update::<Wire>(wire, |w| w.number = Some(number.into()))?;
@@ -362,25 +340,47 @@ wire number lesson. Parts are illustrative, not a verified parts list."
     doc.into_project()
 }
 
-/// The lesson steps: name the supply `+24 V`, fix the typed number.
+/// The wire numbers the lesson ends with, by a pin each net touches: what
+/// "Number wires", the typed `number wire 100` and "Renumber wires" leave
+/// (the app test `wire_numbers_each_instruction_works_in_the_app` replays
+/// the steps and compares).
+pub const WIRE_NUMBERS_FINISHED: &[(&str, &str)] = &[
+    ("-K1:1", "1"),
+    ("-X1:1", "2"),
+    ("-K1:3", "3"),
+    ("-K1:5", "4"),
+    ("-X1:PE", "5"),
+    ("-X1:2", "6"),
+    ("-X1:3", "7"),
+    ("-X1:5", "8"),
+    ("-X1:4", "100"),
+];
+
+/// The lesson steps done: every net numbered, the level loop typed as 100.
 pub fn wire_numbers_finished() -> Project {
     let mut doc = Document::new(wire_numbers_start());
-    doc.transact("Set potential +24 V", |tx| {
-        let feed = feed_of(tx.project(), "L+");
-        set_feed_potential(
-            tx,
-            &[feed],
-            &PotentialSpec::new("+24 V", PotentialKind::DcPositive, Some(24.0)),
-        )
-        .map(|_| ())
+    doc.transact("Number wires", |tx| {
+        for (pin, number) in WIRE_NUMBERS_FINISHED {
+            let wires: Vec<WireId> = tx
+                .project()
+                .wires()
+                .filter(|w| {
+                    [w.from, w.to].iter().any(|end| {
+                        end.as_pin()
+                            .and_then(|p| tx.project().pin_designation(p))
+                            .is_some_and(|d| d.ends_with(pin))
+                    })
+                })
+                .map(|w| w.id)
+                .collect();
+            assert!(!wires.is_empty(), "no wire at {pin}");
+            for wire in wires {
+                tx.update::<Wire>(wire, |w| w.number = Some((*number).into()))?;
+            }
+        }
+        Ok(())
     })
-    .expect("potential is set");
-    let wire = wire_between(doc.project(), "-M1:W1", "-X1:");
-    doc.execute(Command::SetWireNumber {
-        wire,
-        number: Some("3".into()),
-    })
-    .expect("number is set");
+    .expect("numbers are set");
     doc.into_project()
 }
 
@@ -478,30 +478,18 @@ fn the_unshielded_signal_cable_has_nothing_to_report_before_the_shield_step() {
 fn every_wire_numbers_step_expect_holds_on_the_finished_project() {
     let start = wire_numbers_start();
     let finished = wire_numbers_finished();
-    let carries = |p: &Project, name: &str, a: &str, b: &str| {
-        let wire = p.wire(wire_between(p, a, b)).unwrap().clone();
-        let netlist = p.netlist();
-        let net = netlist.net_of_wire(&wire).expect("wire is on a net");
-        netlist
-            .net(net)
-            .potentials
-            .iter()
-            .filter_map(|&id| p.potential(id))
-            .any(|pot| pot.name == name)
-    };
-    assert!(carries(&start, "L+", "-X1:4", "-B1:+"));
-    assert!(!carries(&start, "+24 V", "-X1:4", "-B1:+"));
-    assert!(carries(&finished, "+24 V", "-X1:4", "-B1:+"));
-    let number = |p: &Project| {
-        p.wire(wire_between(p, "-M1:W1", "-X1:"))
-            .unwrap()
-            .number
-            .clone()
-    };
-    assert_eq!(number(&start).as_deref(), Some("2"));
-    assert_eq!(number(&finished).as_deref(), Some("3"));
+    // The start has the typo (2 twice) and only three numbers; the finished one numbers every wire.
+    let numbers =
+        |p: &Project| -> Vec<Option<String>> { p.wires().map(|w| w.number.clone()).collect() };
+    assert_eq!(numbers(&start).iter().flatten().count(), 3);
+    assert!(numbers(&finished).iter().all(Option::is_some));
+    let number =
+        |p: &Project, a: &str, b: &str| p.wire(wire_between(p, a, b)).unwrap().number.clone();
+    assert_eq!(number(&start, "-M1:V1", "-X1:").as_deref(), Some("2"));
+    assert_eq!(number(&start, "-M1:W1", "-X1:").as_deref(), Some("2"));
+    assert_eq!(number(&finished, "-B1:+", "-X1:4").as_deref(), Some("100"));
 
-    // The wire list shows both: the number column and the potential column.
+    // The wire list shows the numbers and the potential and cable core columns.
     let list = WireList.generate(&finished);
     let rows = list.sections[0].rows.len();
     assert_eq!(rows, 10, "K1 to strip 3, strip to field 6, input 1");

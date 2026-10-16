@@ -26,66 +26,31 @@ id = "intro"
 title = "What you will have"
 title_nl = "Wat je straks hebt"
 text = """
-By the end you know which pages KoperCAD writes by itself, where they sit, and that they follow every change you draw.
-You never draw them by hand.
+KoperCAD writes the contents, parts list, device list, wire list, terminal diagram and cable diagram for you and keeps them current.
+You will find them, change the drawing and watch a list follow. That saves the evening before an issue date, when every list would be redone by hand.
 """
 text_nl = """
-Straks weet je welke pagina's KoperCAD zelf schrijft, waar ze staan en dat ze elke wijziging in je tekening volgen.
-Je tekent ze nooit met de hand.
+KoperCAD schrijft de inhoudsopgave, stuklijst, apparatenlijst, draadlijst, klemmenschema en kabelschema voor je en houdt ze bij.
+Je zoekt ze op, wijzigt de tekening en ziet een lijst meebewegen. Dat scheelt de avond voor de uitgiftedatum, waarop je anders elke lijst met de hand moet herzien.
 """
-pause = true
-
-[[step]]
-id = "open-outline"
-title = "Open the page list"
-title_nl = "Open de paginalijst"
-# verified: the flyout button is labelled with the outline mode, "Pages"
-# (app.rs:1529-1545, no hover text); a window of 1700 px or more keeps the
-# outline open beside the drawing (app.rs:110, 857-861), so on a wide window
-# this step is already true when it opens and ticks at once.
-text = """
-Click {ui:outline.toggle} at the top left of the drawing.
-On a wide window the list is already open beside the drawing.
-"""
-text_nl = """
-Klik linksboven bij de tekening op {ui:outline.toggle}.
-Op een breed scherm staat de lijst al open naast de tekening.
-"""
-point = { ui = "outline.toggle" }
-expect = { opened = "outline.pages" }
-solve = [ { command = "view.pin_outline" } ]
-
-[[step]]
-id = "spot-generated"
-title = "Spot the generated pages"
-title_nl = "Zoek de gegenereerde pagina's"
-# verified: rows are "<sheet name>  <report title> · <section>" for generated
-# pages and "<name> <title>" for drawn ones (backend.rs:700-742); order is
-# pages_in_order: contents first, drawn pages, then the other reports.
-text = """
-Your drawn pages are **1** and **2**. The rest is written by KoperCAD: {tip:generated-page} for the contents, parts, devices, wires, terminals and cables.
-"""
-text_nl = """
-Je getekende pagina's zijn **1** en **2**. De rest schrijft KoperCAD zelf: {tip:generated-page} voor inhoud, onderdelen, apparaten, draden, klemmen en kabels.
-"""
-point = { ui = "outline.pages" }
-note = [
-  { ui = "outline.page.0a", text = "Contents. It opens the set.", text_nl = "Inhoudsopgave. Opent de set." },
-  { ui = "outline.page.20", text = "Device list", text_nl = "Apparatenlijst" },
-  { ui = "outline.page.50a", text = "Cable diagram", text_nl = "Kabelschema" },
-]
-pause = true
 
 [[step]]
 id = "open-contents"
-title = "Open the contents"
+title = "Open the contents page"
 title_nl = "Open de inhoudsopgave"
-# verified: a click on a row shows that page and sheet and closes the flyout
-# (app.rs:1113-1117, show_sheet at app.rs:873); the page title of the
-# contents is "Table of contents" (novo-reports defaults.rs, title()).
-text = "Click **0a  Table of contents** in the list."
-text_nl = "Klik in de lijst op **0a  Table of contents**."
-point = { ui = "outline.page.0a" }
+# verified: lesson_verify_outputs.rs generated_pages. The flyout button is
+# labelled with the outline mode, "Pages" (app.rs outline_flyout); a window of
+# 1700 px or more keeps the list open beside the drawing. The page list is a
+# tree: groups =A1 and +CAB with the drawn pages, then the group "Contents and
+# reports" with the six generated pages (outline.rs outline_pages). A click on
+# a row shows the page and closes the flyout. The title of the contents page is
+# "Table of contents" (novo-reports defaults.rs).
+text = """
+Open the table of contents, the first page KoperCAD writes. In the page list your drawn pages are **1** and **2**; the six written pages are under **Contents and reports**.
+"""
+text_nl = """
+Open de inhoudsopgave, de eerste pagina die KoperCAD schrijft. In de paginalijst zijn **1** en **2** je getekende pagina's; de zes geschreven pagina's staan onder **Contents and reports**.
+"""
 expect = { page = "Table of contents" }
 solve = [ { page = "Table of contents" } ]
 
@@ -94,30 +59,30 @@ id = "read-contents"
 title = "A table, not a drawing"
 title_nl = "Een tabel, geen tekening"
 # verified: columns Page, Title, Page group, Panel, Kind; Kind reads
-# "Schematic" or "Generated: <report>" (novo-reports toc.rs:150-170); the
-# canvas draws the sheet inside the page frame (reports.rs:78-107).
+# "Schematic" or "Generated: <report>" (novo-reports toc.rs); the canvas
+# draws the sheet inside the page frame (reports.rs).
 text = """
-KoperCAD filled this table from the project: page, title, group, panel and kind.
-There is nothing to select here. It changes when the drawing changes.
+The table has one row per page: page, title, group, panel and kind (Schematic, or Generated).
+There is nothing to select here. It changes when the drawing changes, so nobody retypes the index.
 """
 text_nl = """
-KoperCAD heeft deze tabel uit het project gevuld: pagina, titel, groep, kast en soort.
-Hier valt niets te selecteren. De tabel verandert als de tekening verandert.
+De tabel heeft één regel per pagina: pagina, titel, groep, kast en soort (Schematic of Generated).
+Hier valt niets te selecteren. De tabel verandert als de tekening verandert, dus niemand typt de index opnieuw.
 """
 point = { area = { page = "Table of contents", x = 15, y = 27, w = 390, h = 90 } }
 note = [
   { area = { page = "Table of contents", x = 336.9, y = 27, w = 66.6, h = 8 }, text = "Drawn or generated", text_nl = "Getekend of gegenereerd" },
 ]
-pause = true
 
 [[step]]
 id = "back-to-drawing"
 title = "Back to the drawing"
 title_nl = "Terug naar de tekening"
-# verified: PageDown is nav.next_page on the canvas (keymap.rs:385); it steps through pages_in_order (workbench.rs:480-487), so from the
-# contents (0) it takes two presses to reach page 2.
-text = "Press {key:nav.next_page} twice to reach **Control circuit**."
-text_nl = "Druk twee keer op {key:nav.next_page} om bij **Control circuit** te komen."
+# verified: PageDown is nav.next_page on the canvas (keymap.rs); it steps
+# through the pages in order (workbench.rs), so from the contents it takes
+# two presses to reach page 2 (checked in lesson_verify_outputs.rs).
+text = "Go back to your drawing: **Control circuit** is page 2, two pages on from the contents. Page Down steps one page at a time; a click on the row in the page list works too."
+text_nl = "Ga terug naar je tekening: **Control circuit** is pagina 2, twee pagina's na de inhoudsopgave. Page Down gaat een pagina per keer verder; een klik op de regel in de paginalijst werkt ook."
 expect = { page = "Control circuit" }
 solve = [ { page = "Control circuit" } ]
 
@@ -125,20 +90,16 @@ solve = [ { page = "Control circuit" } ]
 id = "place-lamp"
 title = "Add a pilot lamp"
 title_nl = "Plaats een signaallamp"
-# verified: Q is tool.place (keymap.rs:344); the field opens in
-# Place mode (workbench.rs:448-451, command_field.rs:185) and "lamp green"
-# finds exactly "Indicator lamp, green" (Catalog::search, checked in
-# documents.rs); Enter picks it, a click places it (dock tooltip "Place symbol
-# · Q (hold for the wheel)", dock.rs:143-146). The lamp gets the next free
-# tag of the page structure, here -P1. It is left unwired on purpose: the
-# problem pill shows a warning for it, wiring comes in another lesson.
+# verified: Q is tool.place (keymap.rs); the field opens in Place mode and
+# "lamp green" finds "Indicator lamp, green"; Enter picks it, a click places
+# it (lesson_verify_outputs.rs). The lamp gets the next free tag of the page
+# structure. It stays unwired on purpose: the problem pill shows a warning
+# for it; wiring is another lesson.
 text = """
-Press {key:tool.place}, type **lamp green**, press Enter and click the empty spot right of the coil.
-The lamp is a new device, so it gets a tag.
+Add a green pilot lamp to the right of the coil, so you can watch the lists react. A new device gets its own name, such as -P1: its **tag**.
 """
 text_nl = """
-Druk op {key:tool.place}, typ **lamp green**, druk op Enter en klik op de lege plek rechts van de spoel.
-De lamp is een nieuw apparaat en krijgt dus een tag.
+Plaats een groene signaallamp rechts van de spoel, zodat je de lijsten kunt zien reageren. Een nieuw apparaat krijgt een eigen naam, zoals -P1: zijn **tag**.
 """
 point = { area = { page = "Control circuit", x = 96, y = 164, w = 16, h = 24 } }
 note = [
@@ -154,9 +115,9 @@ id = "open-device-list"
 title = "Open the device list"
 title_nl = "Open de apparatenlijst"
 # verified: nav.next_page from page 2 goes to 10 (Bill of materials), then 20
-# (Device list) (pages_in_order).
-text = "Press {key:nav.next_page} twice: past the bill of materials to the **Device list**."
-text_nl = "Druk twee keer op {key:nav.next_page}: langs de stuklijst naar de **Device list**."
+# (Device list).
+text = "Open the **Device list**, two pages on from the control circuit, past the bill of materials."
+text_nl = "Open de **Device list**, twee pagina's na het stroomkringschema, voorbij de stuklijst."
 expect = { page = "Device list" }
 solve = [ { page = "Device list" } ]
 
@@ -166,23 +127,21 @@ title = "The list already knows the lamp"
 title_nl = "De lijst kent de lamp al"
 # verified: the device list has one row per device in tag order, columns Tag,
 # Function, Location, Description, Kind, Part, Manufacturer, Drawn at
-# (novo-reports devices.rs:36-56); LiveReports regenerates a report when a
-# change set touches what it reads (reports.rs:45-52). Row y=59 is the fifth
-# row of the sheet (documents.rs prints it).
+# (novo-reports devices.rs); LiveReports regenerates a report when a change
+# set touches what it reads (reports.rs). Row y=59 is the fifth row.
 text = """
 A new row appeared: the lamp, with its tag, its description and where it is drawn.
-You did not update anything. The page follows the drawing.
+You updated nothing. The list follows the drawing, so it is never out of date.
 """
 text_nl = """
 Er staat een nieuwe regel: de lamp, met tag, omschrijving en waar hij getekend is.
-Je hebt niets bijgewerkt. De pagina volgt de tekening.
+Je hebt niets bijgewerkt. De lijst volgt de tekening en loopt dus nooit achter.
 """
 point = { area = { page = "Device list", x = 15, y = 59, w = 390, h = 6 } }
 note = [
   { area = { page = "Device list", x = 16.5, y = 59, w = 52, h = 6 }, text = "Next free tag", text_nl = "Eerstvolgende vrije tag" },
   { area = { page = "Device list", x = 351.5, y = 59, w = 52, h = 6 }, text = "Page and column", text_nl = "Pagina en kolom" },
 ]
-pause = true
 
 [[step]]
 id = "sheet-names"
@@ -190,44 +149,33 @@ title = "How the sheets are named"
 title_nl = "Hoe de bladen heten"
 # verified: sheet names are the page name plus a letter when a report needs
 # more than one sheet, skipping i, l and o; never a dot (novo-reports
-# sheets.rs:1-20, DESIGN.md section 8). The lamp has no part, so the bill of
+# sheets.rs, DESIGN.md section 8). The lamp has no part, so the bill of
 # materials gained its section "Devices without parts" and with it a second
-# sheet: 10 became 10a and 10b (checked in documents.rs). The contents and the
-# cable diagram have two sheets each. The path points at the toggle first
-# because picking a page closed the list.
+# sheet: 10 became 10a and 10b (checked in documents.rs and in
+# lesson_verify_outputs.rs).
 text = """
-A report that needs more room continues on a lettered sheet. The lamp has no part yet, so the bill of materials grew from **10** to **10a** and **10b**.
-The letters skip i, l and o, and there is never a dot: **2.4** always means page 2, column 4.
+A long list continues on another sheet, named with a letter. The lamp has no part yet, so the bill of materials grew from **10** to **10a** and **10b** in the page list.
+The letters skip i, l and o because they look like numbers, and there is never a dot: **2.4** always means page 2, column 4.
 """
 text_nl = """
-Een lijst die meer ruimte nodig heeft gaat door op een blad met letter. De lamp heeft nog geen onderdeel, dus de stuklijst groeide van **10** naar **10a** en **10b**.
-De letters slaan i, l en o over en er staat nooit een punt: **2.4** is altijd pagina 2, kolom 4.
+Een lange lijst gaat door op een volgend blad, met een letter in de naam. De lamp heeft nog geen onderdeel, dus de stuklijst groeide in de paginalijst van **10** naar **10a** en **10b**.
+De letters slaan i, l en o over omdat ze op cijfers lijken, en er staat nooit een punt: **2.4** is altijd pagina 2, kolom 4.
 """
-point = { ui = ["outline.toggle", "outline.page.10b"] }
-note = [
-  { ui = "outline.page.10b", text = "New: devices without a part", text_nl = "Nieuw: apparaten zonder onderdeel" },
-  { ui = "outline.page.50a", text = "Overview of all cables", text_nl = "Overzicht van alle kabels" },
-  { ui = "outline.page.50b", text = "Cores of cable -W1", text_nl = "Aders van kabel -W1" },
-]
-pause = true
 
 [[step]]
 id = "what-you-edit"
 title = "What you change, what follows"
 title_nl = "Wat je wijzigt, wat meebeweegt"
-# verified: double-click renames a drawn page only (app.rs:1454-1466: the
-# rename starts only for pages that are not Generated). GAP: DESIGN.md
-# section 8 says deleting a generated page turns its kind off and Rules turns
-# it back on; there is no page delete and no such rule in the app yet, so the
-# lesson does not teach it.
+# verified: a generated page cannot be renamed (the Rename entry of its menu
+# is off: "Generated pages are named by the program") and cannot be deleted
+# (the Delete page entry is off). GAP: DESIGN.md section 8 says deleting a
+# generated page turns its kind off; tx.delete_page does it, but no control
+# reaches it, so the lesson does not teach it.
 text = """
-Change the drawing, never the table: parts, tags and wires flow into every list.
-A drawn page can be renamed with a double click, a generated page cannot.
-Next: the wire list and the bill of materials.
+Change the drawing, never the table: parts, tags and wires flow into every list. A generated page cannot be renamed or deleted; a drawn page can.
+Compare with the result of this lesson: the control page has one extra green lamp right of the coil, with no wires, and the device list has a row for it. Next: the wire list and the bill of materials.
 """
 text_nl = """
-Wijzig de tekening, nooit de tabel: onderdelen, tags en draden stromen door naar elke lijst.
-Een getekende pagina hernoem je met een dubbelklik, een gegenereerde niet.
-Straks: de draadlijst en de stuklijst.
+Wijzig de tekening, nooit de tabel: onderdelen, tags en draden stromen door naar elke lijst. Een gegenereerde pagina kun je niet hernoemen of verwijderen; een getekende wel.
+Vergelijk met het resultaat van deze les: de stroomkringpagina heeft rechts van de spoel één extra groene lamp zonder draden, en de apparatenlijst heeft er een regel voor. Straks: de draadlijst en de stuklijst.
 """
-pause = true
