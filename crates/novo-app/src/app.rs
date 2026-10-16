@@ -142,6 +142,7 @@ mod title_revisions;
 mod userkeymap;
 mod variants;
 mod view3d;
+mod view3d_align;
 mod view3d_controls;
 mod view3d_duplicate;
 mod view3d_heat;
@@ -1114,6 +1115,8 @@ impl NovoApp {
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
+                    || id.starts_with("view.3d_align")
+                    || id.starts_with("view.3d_spread")
                     || *id == "view.3d_wire_runs"
                     || *id == "view.3d_duplicate"
                     || (*id == "edit.duplicate" && in_3d)

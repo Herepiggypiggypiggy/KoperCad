@@ -25,6 +25,7 @@ use super::heat_3d::{self, Heat3d, Place};
 use super::heat_legend;
 use super::heat_probe::{self, ProbeState};
 use super::heat_spots;
+use super::view3d_align;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_hints::Hints;
@@ -768,6 +769,16 @@ impl NovoApp {
             .map(|i| i.raw)
             .collect();
         let mut ask = None;
+        if devices.len() >= 2
+            && let Some(op) = view3d_align::strip(ui.ctx(), out.rect, devices.len())
+        {
+            self.wb.queued.push(
+                view3d_align::OPS
+                    .iter()
+                    .find(|o| o.3 == op)
+                    .map_or("view.3d_align_left", |o| o.0),
+            );
+        }
         if let Some(stored) = load(project, id) {
             if let [one] = devices.as_slice()
                 && !mode.position.hidden

@@ -436,6 +436,14 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_shell",
     "view.3d_wires",
     "view.3d_shadows",
+    "view.3d_align_left",
+    "view.3d_align_hcentre",
+    "view.3d_align_right",
+    "view.3d_align_top",
+    "view.3d_align_vcentre",
+    "view.3d_align_bottom",
+    "view.3d_spread_h",
+    "view.3d_spread_v",
     "view.3d_ssao",
     "view.3d_dimensions",
     "view.3d_quality",
@@ -973,6 +981,19 @@ impl NovoApp {
                     }
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
+                }
+            }
+            "view.3d_align_left"
+            | "view.3d_align_hcentre"
+            | "view.3d_align_right"
+            | "view.3d_align_top"
+            | "view.3d_align_vcentre"
+            | "view.3d_align_bottom"
+            | "view.3d_spread_h"
+            | "view.3d_spread_v" => {
+                self.switch_workspace(Workspace::View3d);
+                if let Some(op) = super::view3d_align::Op::from_command(id) {
+                    self.view3d_arrange(op);
                 }
             }
             "view.3d_wire_runs" => {
