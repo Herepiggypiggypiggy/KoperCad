@@ -478,6 +478,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "terminal.toggle_pe",
     "terminal.reset_pe",
     "wire.mode",
+    "edit.reset_note",
     "interruption.renumber",
     "wires.number",
     "wires.numbering",
@@ -799,6 +800,10 @@ impl NovoApp {
             }
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
+            "edit.reset_note" => {
+                let selection = self.selection();
+                self.with_editor(|editor, doc| editor.reset_notes(doc, &selection));
+            }
             "edit.duplicate" => self.duplicate_selection(),
             "edit.copy" => self.copy_selection(ctx, false),
             "edit.cut" => self.copy_selection(ctx, true),

@@ -204,6 +204,11 @@ pub const DUTCH: &[Aliases] = &[
         &["volgend aansluitpunt", "volgende pin"],
     ),
     nl("edit.rotate", &[], &["draaien", "roteren"]),
+    nl(
+        "edit.reset_note",
+        &[],
+        &["notitie", "verwijzing", "terugzetten"],
+    ),
     nl("edit.mirror", &[], &["spiegelen"]),
     nl(
         "proposal.accept",
