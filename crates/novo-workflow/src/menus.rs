@@ -128,6 +128,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("plc.overview", under("Draw", "PLC")),
     ("macro.save", under("Draw", "Macros")),
     ("macro.place", under("Draw", "Macros")),
+    ("macro.edit", under("Draw", "Macros")),
+    ("macro.export_pack", at("File")),
     ("terminal.connect", under("Draw", "Terminals")),
     ("terminal.disconnect", under("Draw", "Terminals")),
     ("terminal.toggle_pe", under("Draw", "Terminals")),
@@ -195,6 +197,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
+    ("sim.add_fault", at("Simulate")),
     ("view.protection", at("Simulate")),
     ("heat.simulate", under("Simulate", "Heat")),
     // Reports
