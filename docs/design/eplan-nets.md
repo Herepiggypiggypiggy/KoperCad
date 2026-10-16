@@ -48,7 +48,7 @@ These appear in the Issues list, the issue pill and F8 like every other check
 | Kind | Severity | Rule | Source |
 | --- | --- | --- | --- |
 | `AmbiguousInterruption` | warning | A name used by more than two interruption points. EPLAN pairs two by two; KoperCAD joins all, so an imported project and this one read it differently. | Findings 2.1 |
-| `WireNumber` | warning | A wire number on two nets, or several numbers on one net. | Drafting practice (EPLAN reports non-unique connection designations) |
+| `WireNumber` | warning | A wire number used on two nets. Several numbers on one net are not reported: the sides of a terminal or device are separate connections, and the shipped lessons number junction branches separately. | Drafting practice (EPLAN reports non-unique connection designations) |
 | `UntaggedDevice` | warning | A device without a product level (`-K1`). | Drafting practice |
 | `UnnamedTerminal` | warning | A terminal without a number or name (C13). | Findings 9.3 C13 |
 | `SameShortTag` | info | One short tag under two function or location levels: separate devices (F03). | Findings 9.3 F03 |
