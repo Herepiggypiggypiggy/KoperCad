@@ -819,13 +819,19 @@ impl NovoApp {
             // file and undo actions.
             let cabinet = self.workspace() == workspace::Workspace::Cabinet;
             for id in &commands {
-                if cabinet && matches!(*id, "edit.rotate" | "edit.delete") {
+                if cabinet
+                    && matches!(
+                        *id,
+                        "edit.rotate" | "edit.delete" | "terminal.strip_up" | "terminal.strip_down"
+                    )
+                {
                     self.cabinet.keys.push((*id).to_owned());
                 }
             }
             commands.retain(|id| {
                 Action::from_id(id).is_some()
                     || *id == "view.cabinet_table"
+                    || *id == "cabinet.rails"
                     || id.starts_with("heat.")
             });
         }

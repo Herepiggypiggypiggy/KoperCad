@@ -776,6 +776,19 @@ impl NovoApp {
                         overlay,
                     );
                 }
+                if let Some(s) = structure {
+                    let rect = out.response.rect;
+                    let zoom = f64::from(self.cabinet.view.viewport.zoom.max(0.01));
+                    super::cabinet_rails::draw_grips(
+                        &ui.painter_at(rect),
+                        rect,
+                        &self.cabinet.view.viewport,
+                        project,
+                        s,
+                        (self.cabinet.rails.hover, self.cabinet.rails.selected),
+                        (14.0 / zoom).max(8.0),
+                    );
+                }
                 if let Some(rail) = self.cabinet.rails.selected {
                     let rect = out.response.rect;
                     let moved = self
@@ -886,10 +899,24 @@ impl NovoApp {
                             .viewport
                             .screen_to_world(vec2(press.x - rect.min.x, press.y - rect.min.y));
                         let (wx, wy) = (f64::from(world.x), f64::from(world.y));
-                        if let Some(p) = layout.placements.iter().rev().find(|p| {
-                            let f = p.footprint();
-                            wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
-                        }) {
+                        let zoom = f64::from(self.cabinet.view.viewport.zoom.max(0.01));
+                        let on_grip = structure.is_some_and(|s| {
+                            super::cabinet_rails::pick_grip(
+                                project,
+                                s,
+                                wx,
+                                wy,
+                                3.0 / zoom,
+                                (14.0 / zoom).max(8.0),
+                            )
+                            .is_some()
+                        });
+                        if !on_grip
+                            && let Some(p) = layout.placements.iter().rev().find(|p| {
+                                let f = p.footprint();
+                                wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
+                            })
+                        {
                             let f = p.footprint();
                             self.cabinet.drag = Some(Drag {
                                 id: p.id,
@@ -916,25 +943,42 @@ impl NovoApp {
                                 wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
                             })
                         };
-                        let slack = f64::from(3.0 / self.cabinet.view.viewport.zoom.max(0.01));
+                        let zoom = f64::from(self.cabinet.view.viewport.zoom.max(0.01));
+                        let slack = 3.0 / zoom;
+                        let grip = (14.0 / zoom).max(8.0);
+                        // A grip wins over the devices on its rail; the rail
+                        // itself only where no device is.
+                        let pick_at = |w: (f64, f64)| {
+                            super::cabinet_rails::pick_grip(project, s, w.0, w.1, slack, grip)
+                                .or_else(|| {
+                                    if on_device(w) {
+                                        None
+                                    } else {
+                                        super::cabinet_rails::pick(project, s, w.0, w.1, slack)
+                                    }
+                                })
+                        };
+                        self.cabinet.rails.hover = if self.cabinet.drag.is_some() {
+                            None
+                        } else {
+                            out.response.hover_pos().and_then(|p| pick_at(to_world(p)))
+                        };
+                        if self.cabinet.rails.drag.is_some() {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::Grabbing);
+                        } else if self.cabinet.rails.hover.is_some() {
+                            ui.ctx().set_cursor_icon(egui::CursorIcon::Grab);
+                        }
                         if out.response.clicked_by(egui::PointerButton::Primary)
                             && let Some(p) = out.response.interact_pointer_pos()
                         {
-                            let w = to_world(p);
-                            self.cabinet.rails.selected = if on_device(w) {
-                                None
-                            } else {
-                                super::cabinet_rails::pick(project, s, w.0, w.1, slack)
-                            };
+                            self.cabinet.rails.selected = pick_at(to_world(p));
                         }
                         if self.cabinet.drag.is_none()
                             && out.response.drag_started_by(egui::PointerButton::Primary)
                             && let Some(press) = press
                         {
                             let w = to_world(press);
-                            if !on_device(w)
-                                && let Some(id) =
-                                    super::cabinet_rails::pick(project, s, w.0, w.1, slack)
+                            if let Some(id) = pick_at(w)
                                 && let Some(r) =
                                     project.get::<novo_core::Rail>(novo_core::RailId::from(id))
                             {
@@ -967,6 +1011,55 @@ impl NovoApp {
                         && let Some(d) = self.cabinet.drag.take()
                     {
                         ask = Some(Ask::Drop(d.id, d.at.0, d.at.1));
+                    }
+                    // Arrow keys nudge the selected rail or duct by a grid
+                    // step (1 mm with Shift) when no device is selected and
+                    // no text field has the keys.
+                    if self.cabinet.rails.drag.is_none()
+                        && self.cabinet_selected().is_empty()
+                        && !ui.ctx().egui_wants_keyboard_input()
+                        && let Some(id) = self.cabinet.rails.deletable(project)
+                        && let Some(r) = project.get::<novo_core::Rail>(novo_core::RailId::from(id))
+                    {
+                        // Plain Up and Down are the schematic's strip keys, so
+                        // the app hands them over as commands.
+                        let from_keys = |name: &str| {
+                            f64::from(self.cabinet.keys.iter().filter(|k| *k == name).count() as i32)
+                        };
+                        let (up, down) = (
+                            from_keys("terminal.strip_up"),
+                            from_keys("terminal.strip_down"),
+                        );
+                        let (dx, dy, fine) = ui.input(|i| {
+                            let key = |k| i.key_pressed(k);
+                            (
+                                f64::from(
+                                    i32::from(key(egui::Key::ArrowRight))
+                                        - i32::from(key(egui::Key::ArrowLeft)),
+                                ),
+                                f64::from(
+                                    i32::from(key(egui::Key::ArrowDown))
+                                        - i32::from(key(egui::Key::ArrowUp)),
+                                ) + down
+                                    - up,
+                                i.modifiers.shift
+                                    || i.events.iter().any(|e| {
+                                        matches!(e, egui::Event::Key { pressed: true, modifiers, .. } if modifiers.shift)
+                                    }),
+                            )
+                        });
+                        if dx != 0.0 || dy != 0.0 {
+                            let step = if fine || layout.grid <= 0.0 {
+                                1.0
+                            } else {
+                                layout.grid
+                            };
+                            move_rail = Some(super::cabinet_rails::RailDrag {
+                                id,
+                                grab: (0.0, 0.0),
+                                at: (r.x + dx * step, r.y + dy * step),
+                            });
+                        }
                     }
                     // Rotate and delete act on the selected devices, and
                     // Delete on the selected rail when no device is.

@@ -57,6 +57,8 @@ pub(super) struct RailsState {
     pending: HashMap<(u64, Field), f64>,
     /// A rail or duct being dragged across the plate.
     pub(super) drag: Option<RailDrag>,
+    /// The rail or duct under the pointer, set by the canvas each frame.
+    pub(super) hover: Option<u64>,
 }
 
 /// A rail or duct being dragged: where its start would land.
@@ -97,6 +99,88 @@ pub(super) fn pick(
         .collect();
     hits.sort_by_key(|r| (r.kind != RailKind::Duct, std::cmp::Reverse(r.id.raw())));
     hits.first().map(|r| r.id.raw())
+}
+
+/// The grip at the start of a rail or duct, in mm: a tab outside its start
+/// that stays grabbable when devices cover the rail. `(left, top, right,
+/// bottom)`.
+fn grip_of(r: &Rail, size: f64) -> (f64, f64, f64, f64) {
+    let across = across_of(r).max(size);
+    if r.vertical {
+        (r.x - across / 2.0, r.y - size, r.x + across / 2.0, r.y)
+    } else {
+        (r.x - size, r.y - across / 2.0, r.x, r.y + across / 2.0)
+    }
+}
+
+/// The rail or duct whose grip is under a point (mm); the grip wins over
+/// devices on the rail.
+pub(super) fn pick_grip(
+    project: &novo_core::Project,
+    structure: StructureId,
+    x: f64,
+    y: f64,
+    slack: f64,
+    size: f64,
+) -> Option<u64> {
+    project
+        .all::<Rail>()
+        .filter(|r| r.structure == structure)
+        .filter(|r| {
+            let (l, t, rt, b) = grip_of(r, size);
+            x >= l - slack && x <= rt + slack && y >= t - slack && y <= b + slack
+        })
+        .max_by_key(|r| r.id.raw())
+        .map(|r| r.id.raw())
+}
+
+/// Draws a grip on every rail and duct of the plate, brighter under the
+/// pointer or when selected, and outlines the one under the pointer.
+pub(super) fn draw_grips(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    view: &Viewport,
+    project: &novo_core::Project,
+    structure: StructureId,
+    (hover, selected): (Option<u64>, Option<u64>),
+    size: f64,
+) {
+    let to_screen = |x: f64, y: f64| {
+        let s = view.world_to_screen(novo_canvas::vec2(x as f32, y as f32));
+        egui::pos2(rect.min.x + s.x, rect.min.y + s.y)
+    };
+    let accent = novo_theme::tokens::ACCENT;
+    for r in project.all::<Rail>().filter(|r| r.structure == structure) {
+        let id = r.id.raw();
+        let (l, t, rt, b) = grip_of(r, size);
+        let area = egui::Rect::from_two_pos(to_screen(l, t), to_screen(rt, b));
+        let lit = hover == Some(id) || selected == Some(id);
+        let fill = if lit {
+            accent
+        } else {
+            accent.gamma_multiply(0.45)
+        };
+        painter.rect_filled(area, 2.0, fill);
+        if hover == Some(id) && selected != Some(id) {
+            let across = across_of(r);
+            let (w, h) = if r.vertical {
+                (across, r.length)
+            } else {
+                (r.length, across)
+            };
+            let (x, y) = if r.vertical {
+                (r.x - across / 2.0, r.y)
+            } else {
+                (r.x, r.y - across / 2.0)
+            };
+            painter.rect_stroke(
+                egui::Rect::from_two_pos(to_screen(x, y), to_screen(x + w, y + h)).expand(1.0),
+                0.0,
+                egui::Stroke::new(1.0, accent),
+                egui::StrokeKind::Outside,
+            );
+        }
+    }
 }
 
 /// How wide a rail or duct lies on the plate, across its run.

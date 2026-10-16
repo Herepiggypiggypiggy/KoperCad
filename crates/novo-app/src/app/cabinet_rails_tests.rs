@@ -1,9 +1,10 @@
 //! Rails and ducts by hand in the Cabinet: add, move, resize, turn, pick and
 //! delete, each one undo step.
 
+use eframe::egui;
 use novo_core::{DeviceTag, MountingPlate, Project, Rail, RailKind};
 
-use super::cabinet_rails::{RailAsk, RailEdit, new_rail_at, pick};
+use super::cabinet_rails::{RailAsk, RailEdit, new_rail_at, pick, pick_grip};
 use super::gate1_tests::Drive;
 use crate::actions::Action;
 
@@ -185,5 +186,71 @@ fn the_rails_and_ducts_list_has_a_command_a_menu_row_and_a_shortcut() {
             .bindings()
             .iter()
             .any(|b| b.command == "cabinet.rails")
+    );
+}
+
+/// In the Cabinet the chord and the arrow keys reach the rails: Ctrl+Shift+R
+/// opens and closes the list, an arrow nudges the selected rail by a grid
+/// step and Shift by 1 mm, and the devices on it go along.
+#[test]
+fn keys_in_the_cabinet_toggle_the_list_and_nudge_the_selected_rail() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let cab = cabinet(&mut d);
+    d.app.run(&d.ctx.clone(), Action::ShowCabinet);
+    d.frame();
+    assert_eq!(d.app.workspace(), super::workspace::Workspace::Cabinet);
+    assert!(!d.app.cabinet.rails.open);
+    let chord = egui::Modifiers {
+        ctrl: true,
+        command: true,
+        shift: true,
+        ..Default::default()
+    };
+    d.key(egui::Key::R, chord);
+    assert!(d.app.cabinet.rails.open, "the chord opens the list");
+    d.key(egui::Key::R, chord);
+    assert!(!d.app.cabinet.rails.open, "and closes it again");
+
+    d.app.cabinet_rail_ask(
+        Some(cab),
+        RailAsk::Add {
+            kind: RailKind::DinRail,
+            vertical: false,
+        },
+    );
+    let rail = rails(&d)[0].clone();
+    let grid = novo_layout::state::DEFAULT_GRID_MM;
+    d.app.cabinet.rails.selected = Some(rail.id.raw());
+    d.key(egui::Key::ArrowDown, egui::Modifiers::NONE);
+    let moved = rails(&d)[0].clone();
+    assert_eq!((moved.x, moved.y), (rail.x, rail.y + grid));
+    d.key(egui::Key::ArrowRight, egui::Modifiers::SHIFT);
+    assert_eq!(rails(&d)[0].x, rail.x + 1.0);
+}
+
+/// The grip at a rail's start is grabbable where devices cover the rail, and
+/// ducts and rails alike have one.
+#[test]
+fn a_rail_has_a_grip_outside_its_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let cab = cabinet(&mut d);
+    d.app.cabinet_rail_ask(
+        Some(cab),
+        RailAsk::Add {
+            kind: RailKind::DinRail,
+            vertical: false,
+        },
+    );
+    let r = rails(&d)[0].clone();
+    let id = r.id.raw();
+    assert_eq!(
+        pick_grip(project(&d), cab, r.x - 5.0, r.y, 0.0, 10.0),
+        Some(id)
+    );
+    assert_eq!(
+        pick_grip(project(&d), cab, r.x + 100.0, r.y, 0.0, 10.0),
+        None
     );
 }
