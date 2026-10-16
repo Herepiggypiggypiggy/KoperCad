@@ -152,6 +152,11 @@ bottom. Numbers used outside the scope are skipped. Terminal strips keep their t
                         win.scope = scopes[scope];
                     }
                 }
+                if win.page.is_none() {
+                    ui.weak("This page: open a page first");
+                } else if win.selected.is_empty() {
+                    ui.weak("Selection: select devices on the drawing first");
+                }
                 ui.add_space(8.0);
                 let plan: &[Renaming] = win.shown.as_ref().map_or(&[], |(_, _, p)| p);
                 if plan.is_empty() {

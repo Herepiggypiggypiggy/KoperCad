@@ -365,7 +365,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
                 .striped(true)
                 .show(ui, |ui| {
                     for head in ["Name", "W (mm)", "H (mm)", "D (mm)", "Plate W (mm)", "Plate H (mm)", "Margin (mm)", "Material", ""] {
-                        ui.label(egui::RichText::new(head).small().weak());
+                        ui.label(egui::RichText::new(head).size(12.0).weak());
                     }
                     ui.end_row();
                     for (i, e) in state.catalog.items.iter_mut().enumerate() {

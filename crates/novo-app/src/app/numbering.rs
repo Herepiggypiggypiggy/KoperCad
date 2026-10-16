@@ -242,6 +242,11 @@ impl NovoApp {
                             win.scope = scopes[scope];
                         }
                     }
+                    if page.is_none() {
+                        ui.weak("This page: open a page first");
+                    } else if selected.is_empty() {
+                        ui.weak("Selection: select wires on the drawing first");
+                    }
                 });
                 let Some(shown) = &win.shown else { return };
                 ui.add_space(8.0);
