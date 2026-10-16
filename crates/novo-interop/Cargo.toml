@@ -13,6 +13,7 @@ novo-layout.workspace = true
 novo-routing.workspace = true
 novo-parts.workspace = true
 novo-cables.workspace = true
+novo-symbols.workspace = true
 # Scene builder only (`model`): headless users such as novo-cli and novo-py must not link wgpu.
 novo-view3d = { path = "../novo-view3d", default-features = false, features = ["model"] }
 glam.workspace = true
@@ -24,6 +25,9 @@ dirs.workspace = true
 # Pure-Rust Excel writer and reader: no Excel install, nothing to elevate.
 rust_xlsxwriter.workspace = true
 calamine.workspace = true
+# EPLAN symbol mapping tables (data files).
+serde.workspace = true
+toml.workspace = true
 
 [dev-dependencies]
 novo-tests = { path = "../novo-tests" }
