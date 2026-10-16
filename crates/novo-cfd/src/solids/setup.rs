@@ -79,8 +79,11 @@ impl Default for SolidsSettings {
 /// air inside to the air outside, wall sheet and both films included; the
 /// effective surface weights each face by a factor `b` (covered faces give
 /// off less, a floor-standing enclosure none through the bottom). The solver
-/// applies `k b A_outside / A_inside` as the film of each interior face, so
-/// the sum over the faces is the IEC conductance `k * A_effective` (tested).
+/// applies `k b A_outside / A_inside` to each interior face as an overall
+/// air-to-air coefficient (`ThermalBc::Overall`: no extra half cell of
+/// conduction or inner film on top), so the sum over the faces is the IEC
+/// conductance `k * A_effective` (tested) and a sealed enclosure does not
+/// depend on the mesh.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Walls {
     /// Film coefficient of each domain face in the order of [`Face`],
@@ -300,8 +303,8 @@ impl FlowSetup {
         for (f, bc) in cfg.faces.iter_mut().enumerate() {
             *bc = FaceBc {
                 thermal: if walls.h[f] > 0.0 {
-                    ThermalBc::Convective {
-                        h: walls.h[f],
+                    ThermalBc::Overall {
+                        u: walls.h[f],
                         t_out: scn.ambient_c,
                     }
                 } else {
