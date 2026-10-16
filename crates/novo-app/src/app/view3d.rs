@@ -469,8 +469,18 @@ impl NovoApp {
                     cabinet_inspector::gather(project, id, &stored, &stored, &devices, &tag_of);
                 ask = cabinet_inspector::overlay(
                     ui.ctx(),
-                    out.rect,
-                    false,
+                    view_rect,
+                    // Left, under the toolbar: the right edge is the view cube
+                    // and the Heat panel, the bottom left the statistics.
+                    cabinet_inspector::Room {
+                        left: true,
+                        top: Some(view3d_controls::BELOW),
+                        bottom: if self.view3d.stats.shown {
+                            super::view3d_stats::ROOM
+                        } else {
+                            0.0
+                        },
+                    },
                     &facts,
                     project,
                     &mut self.cabinet.panel_fields,
@@ -496,6 +506,12 @@ impl NovoApp {
             };
             rail_ask = view3d_rail::card(
                 ui.ctx(),
+                view_rect,
+                if self.view3d.stats.shown {
+                    super::view3d_stats::ROOM
+                } else {
+                    0.0
+                },
                 &mut self.cabinet.rails,
                 project,
                 &stored,

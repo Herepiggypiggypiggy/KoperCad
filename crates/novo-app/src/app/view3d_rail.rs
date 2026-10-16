@@ -142,6 +142,8 @@ pub(super) fn problems(
 /// value was committed, or a turn.
 pub(super) fn card(
     ctx: &egui::Context,
+    view_rect: egui::Rect,
+    bottom_room: f32,
     state: &mut RailsState,
     project: &novo_core::Project,
     layout: &CabinetLayout,
@@ -151,82 +153,93 @@ pub(super) fn card(
     let (now, kind, vertical) = current(project, id)?;
     let duct = kind == RailKind::Duct;
     let mut ask = None;
-    egui::Area::new(egui::Id::new("view3d.rail_card"))
-        .order(egui::Order::Foreground)
-        .anchor(egui::Align2::LEFT_BOTTOM, egui::vec2(12.0, -32.0))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                let on = layout
-                    .placements
-                    .iter()
-                    .filter(|p| p.rail == Some(id))
-                    .count();
-                ui.horizontal(|ui| {
-                    ui.strong(format!(
-                        "{} {}{}",
-                        if duct { "Duct" } else { "DIN rail" },
-                        id,
-                        if vertical { " (down)" } else { "" }
-                    ));
-                    if ui
-                        .small_button("Turn")
-                        .on_hover_text("Swap between along and down the plate (R)")
-                        .clicked()
-                    {
-                        ask = Some(RailAsk::Turn(id));
+    // Left, under the toolbar, like the Inspector it stands in for (a rail
+    // has none): the right edge is the view cube and the Heat panel, the
+    // bottom left the statistics.
+    let title = format!(
+        "{} {}{}",
+        if duct { "Duct" } else { "DIN rail" },
+        id,
+        if vertical { " (down)" } else { "" }
+    );
+    super::panel::Panel::new(
+        "view3d_rail",
+        title,
+        view_rect,
+        super::panel::Side::Left,
+        240.0,
+    )
+    .fit()
+    .fixed_open()
+    .top(super::view3d_controls::BELOW)
+    .bottom_room(bottom_room)
+    .show(ctx, |ui| {
+        let on = layout
+            .placements
+            .iter()
+            .filter(|p| p.rail == Some(id))
+            .count();
+        let mut edit = now;
+        let mut changed = false;
+        // Two values to a row keep the card short enough to sit above the
+        // statistics on a small window.
+        let mut fields = vec![
+            ("Left", Field::X, now.x, -5000.0),
+            ("Top", Field::Y, now.y, -5000.0),
+            ("Length", Field::Length, now.length, 1.0),
+        ];
+        if duct {
+            fields.push(("Across", Field::Width, now.width, 5.0));
+            fields.push(("Stands", Field::Height, now.height, 5.0));
+        }
+        egui::Grid::new("view3d_rail_grid")
+            .num_columns(4)
+            .show(ui, |ui| {
+                for (i, (label, field, current, min)) in fields.into_iter().enumerate() {
+                    ui.label(label);
+                    if let Some(v) = value(ui, state, id, field, current, min) {
+                        changed = true;
+                        match field {
+                            Field::X => edit.x = v,
+                            Field::Y => edit.y = v,
+                            Field::Length => edit.length = v,
+                            Field::Width => edit.width = v,
+                            Field::Height => edit.height = v,
+                        }
                     }
-                });
-                let mut edit = now;
-                let mut changed = false;
-                egui::Grid::new("view3d_rail_grid")
-                    .num_columns(2)
-                    .show(ui, |ui| {
-                        let mut fields = vec![
-                            ("Left", Field::X, now.x, -5000.0),
-                            ("Top", Field::Y, now.y, -5000.0),
-                            ("Length", Field::Length, now.length, 1.0),
-                        ];
-                        if duct {
-                            fields.push(("Across", Field::Width, now.width, 5.0));
-                            fields.push(("Stands", Field::Height, now.height, 5.0));
-                        }
-                        for (label, field, current, min) in fields {
-                            ui.label(label);
-                            if let Some(v) = value(ui, state, id, field, current, min) {
-                                changed = true;
-                                match field {
-                                    Field::X => edit.x = v,
-                                    Field::Y => edit.y = v,
-                                    Field::Length => edit.length = v,
-                                    Field::Width => edit.width = v,
-                                    Field::Height => edit.height = v,
-                                }
-                            }
-                            ui.end_row();
-                        }
-                    });
-                if on > 0 {
-                    ui.weak(format!(
-                        "Carries {on} device{}; they move with it",
-                        if on == 1 { "" } else { "s" }
-                    ));
+                    if i % 2 == 1 {
+                        ui.end_row();
+                    }
                 }
-                // What the typed (not yet committed) values would do.
-                let typed = RailEdit {
-                    id,
-                    x: state.typed(id, Field::X).unwrap_or(now.x),
-                    y: state.typed(id, Field::Y).unwrap_or(now.y),
-                    length: state.typed(id, Field::Length).unwrap_or(now.length),
-                    width: state.typed(id, Field::Width).unwrap_or(now.width),
-                    height: state.typed(id, Field::Height).unwrap_or(now.height),
-                };
-                for line in problems(layout, &typed, kind, vertical, tag_of) {
-                    ui.colored_label(novo_theme::tokens::ERROR, line);
-                }
-                if changed {
-                    ask = Some(RailAsk::Set(edit));
+                if ui
+                    .small_button("Turn")
+                    .on_hover_text("Swap between along and down the plate (R)")
+                    .clicked()
+                {
+                    ask = Some(RailAsk::Turn(id));
                 }
             });
-        });
+        if on > 0 {
+            ui.weak(format!(
+                "Carries {on} device{}; they move with it",
+                if on == 1 { "" } else { "s" }
+            ));
+        }
+        // What the typed (not yet committed) values would do.
+        let typed = RailEdit {
+            id,
+            x: state.typed(id, Field::X).unwrap_or(now.x),
+            y: state.typed(id, Field::Y).unwrap_or(now.y),
+            length: state.typed(id, Field::Length).unwrap_or(now.length),
+            width: state.typed(id, Field::Width).unwrap_or(now.width),
+            height: state.typed(id, Field::Height).unwrap_or(now.height),
+        };
+        for line in problems(layout, &typed, kind, vertical, tag_of) {
+            ui.colored_label(novo_theme::tokens::ERROR, line);
+        }
+        if changed {
+            ask = Some(RailAsk::Set(edit));
+        }
+    });
     ask
 }
