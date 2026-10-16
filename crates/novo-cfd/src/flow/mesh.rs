@@ -75,6 +75,12 @@ impl Mesh {
         (i[2] * self.n[1] + i[1]) * self.n[0] + i[0]
     }
 
+    /// Inverse of [`Mesh::cell`].
+    pub fn unindex(&self, id: usize) -> [usize; 3] {
+        let (i, rest) = (id % self.n[0], id / self.n[0]);
+        [i, rest % self.n[1], rest / self.n[1]]
+    }
+
     pub fn volume(&self, i: [usize; 3]) -> f64 {
         self.dx[0][i[0]] * self.dx[1][i[1]] * self.dx[2][i[2]]
     }

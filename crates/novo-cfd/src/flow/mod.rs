@@ -11,9 +11,11 @@ mod mesh;
 mod par;
 mod pressure;
 mod scheme;
+mod sheet;
 mod solver;
 
 pub use mesh::{Mesh, other_axes};
 pub use pressure::{PressureSolver, Smoother};
 pub use scheme::Scheme;
+pub use sheet::PlateSheet;
 pub use solver::{Face, FaceBc, FlowConfig, FlowSolver, ThermalBc};
