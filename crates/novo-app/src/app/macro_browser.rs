@@ -11,7 +11,9 @@
 use std::path::{Path, PathBuf};
 
 use eframe::egui;
-use novo_parts::{Imported, MacroEntry, MacroLibrary, OnConflict};
+use novo_parts::{
+    Imported, MacroEntry, MacroLibrary, MacroUpdate, OnConflict, Thumbnail, macro_updates,
+};
 
 use super::{Level, NovoApp};
 
@@ -21,6 +23,13 @@ pub(crate) struct MacroBrowser {
     /// The library shown; the per-user one unless a test or a company
     /// folder says otherwise.
     pub(super) library: Option<MacroLibrary>,
+    /// The person's own library and the company folder (Preferences).
+    user_library: Option<MacroLibrary>,
+    company_library: Option<MacroLibrary>,
+    /// Which of the two `library` is.
+    pub(super) company: bool,
+    /// The picture of the selected macro, with what it was built from.
+    thumb: Option<(ThumbKey, Option<Thumbnail>)>,
     started: bool,
     pub(super) query: String,
     /// Library path of the selected macro.
@@ -31,11 +40,18 @@ pub(crate) struct MacroBrowser {
     pub(super) status: String,
 }
 
+/// What a cached picture belongs to; any change rebuilds it.
+type ThumbKey = (std::path::PathBuf, String, u32);
+
 impl Default for MacroBrowser {
     fn default() -> Self {
         MacroBrowser {
             open: false,
             library: MacroLibrary::user(),
+            user_library: MacroLibrary::user(),
+            company_library: None,
+            company: false,
+            thumb: None,
             started: false,
             query: String::new(),
             selected: None,
@@ -50,9 +66,88 @@ impl MacroBrowser {
     #[cfg(test)]
     pub(crate) fn with_library(library: MacroLibrary) -> Self {
         MacroBrowser {
+            user_library: Some(library.clone()),
             library: Some(library),
             ..Default::default()
         }
+    }
+
+    /// Follows the Preferences setting: the company folder, if any. When it
+    /// is cleared while shown, the browser goes back to the person's own.
+    pub(super) fn set_company_folder(&mut self, folder: Option<&Path>) {
+        let same = self.company_library.as_ref().map(MacroLibrary::root) == folder;
+        if same {
+            return;
+        }
+        self.company_library = folder.map(|f| MacroLibrary::new(f, "company"));
+        if self.company_library.is_none() {
+            self.company = false;
+        }
+        self.pick_library();
+    }
+
+    pub(super) fn show_company(&mut self, company: bool) {
+        self.company = company && self.company_library.is_some();
+        self.pick_library();
+    }
+
+    fn pick_library(&mut self) {
+        self.library = if self.company {
+            self.company_library.clone()
+        } else {
+            self.user_library.clone()
+        };
+        self.selected = None;
+        self.renaming = None;
+        self.thumb = None;
+    }
+
+    pub(super) fn has_company(&self) -> bool {
+        self.company_library.is_some()
+    }
+
+    /// The picture of the selected macro, built when the pick, its revision
+    /// or the library changed. `None` when nothing is selected or the file
+    /// cannot be read.
+    pub(super) fn thumbnail(&mut self) -> Option<&Thumbnail> {
+        let (lib, sel) = (self.library.as_ref()?, self.selected.as_ref()?);
+        let revision = lib.search("").iter().find(|e| &e.path == sel)?.revision;
+        let key = (lib.root().to_path_buf(), sel.clone(), revision);
+        if self.thumb.as_ref().is_none_or(|(k, _)| *k != key) {
+            let built = lib
+                .load(sel)
+                .ok()
+                .map(|f| novo_parts::thumbnail(&f.definition));
+            self.thumb = Some((key, built));
+        }
+        self.thumb.as_ref().and_then(|(_, t)| t.as_ref())
+    }
+
+    /// Newer library revisions of the macros the project was built from,
+    /// from both libraries.
+    pub(super) fn updates_for(&self, project: &novo_core::Project) -> Vec<MacroUpdate> {
+        let sources: Vec<_> = project
+            .block_definitions()
+            .filter_map(|d| d.source.as_ref().map(|s| (d.name.as_str(), s)))
+            .collect();
+        [&self.user_library, &self.company_library]
+            .into_iter()
+            .flatten()
+            .flat_map(|lib| macro_updates(lib, sources.iter().copied()))
+            .collect()
+    }
+
+    /// Copies the selected macro into the person's own library (a company
+    /// macro is placed from there); the copy gets a free name.
+    pub(super) fn copy_selected_to_user(&mut self) {
+        let (Some(from), Some(to), Some(sel)) = (&self.library, &self.user_library, &self.selected)
+        else {
+            return;
+        };
+        self.status = match to.copy_from(from, sel, "", OnConflict::KeepBoth) {
+            Ok(_) => "Copied to your macros".into(),
+            Err(e) => format!("Copy failed: {e}"),
+        };
     }
 
     /// Opens the window; the first time it also puts the starter macros in
@@ -167,6 +262,38 @@ impl NovoApp {
         }
     }
 
+    /// Renames the project's definition `name` to `name (rev N)`, so the
+    /// library's newer macro of that name can be placed without the
+    /// duplicate-name refusal. Placed circuits keep the old definition.
+    pub(super) fn set_old_macro_aside(&mut self, name: &str, revision: u32) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let Some(id) = doc.project().block_definition_by_name(name).map(|d| d.id) else {
+            return;
+        };
+        let mut new_name = format!("{name} (rev {revision})");
+        let mut n = 2;
+        while doc.project().block_definition_by_name(&new_name).is_some() {
+            new_name = format!("{name} (rev {revision}) {n}");
+            n += 1;
+        }
+        let renamed = new_name.clone();
+        let result = doc.transact("Set old macro copy aside", |tx| {
+            tx.update::<novo_core::BlockDefinition>(id, |d| d.name = renamed)
+        });
+        match result {
+            Ok((_, changes)) => {
+                self.changed_outside_canvas(&changes);
+                self.message(
+                    Level::Info,
+                    format!("{name} is now {new_name}; place the macro again for the new revision"),
+                );
+            }
+            Err(e) => self.message(Level::Warning, format!("Could not rename {name}: {e}")),
+        }
+    }
+
     pub(super) fn macro_browser_window(&mut self, ctx: &egui::Context) {
         if !self.wb.macros.open {
             return;
@@ -175,6 +302,14 @@ impl NovoApp {
         let mut import = false;
         let mut export: Option<PathBuf> = None;
         let mut place: Option<String> = None;
+        let mut retire: Option<(String, u32)> = None;
+        let company_folder = self.settings.company_macros.clone();
+        self.wb.macros.set_company_folder(company_folder.as_deref());
+        let updates = self
+            .backend
+            .document()
+            .map(|d| self.wb.macros.updates_for(d.project()))
+            .unwrap_or_default();
         egui::Window::new("Macros")
             .id(egui::Id::new("macro_browser"))
             .open(&mut open)
@@ -186,6 +321,18 @@ impl NovoApp {
                     return;
                 };
                 novo_theme::widgets::section_label(ui, "Macro library");
+                if b.has_company() {
+                    ui.horizontal(|ui| {
+                        let company = b.company;
+                        if ui.selectable_label(!company, "My macros").clicked() {
+                            b.show_company(false);
+                        }
+                        if ui.selectable_label(company, "Company").clicked() {
+                            b.show_company(true);
+                        }
+                    });
+                }
+                let lib = b.library.clone().unwrap_or(lib);
                 ui.horizontal(|ui| {
                     ui.label("Search");
                     ui.text_edit_singleline(&mut b.query);
@@ -234,8 +381,9 @@ impl NovoApp {
                         ui.label(&e.description);
                     }
                     ui.weak(format!(
-                        "{} parts, {} parameters, revision {}{}{}",
+                        "{} symbols and wires, {} parts carried, {} parameters, revision {}{}{}",
                         e.members,
+                        e.parts,
                         e.parameters,
                         e.revision,
                         if e.author.is_empty() {
@@ -249,6 +397,13 @@ impl NovoApp {
                             format!(" \u{b7} {}", e.tags.join(", "))
                         },
                     ));
+                    if let Some(thumb) = b.thumbnail() {
+                        let (rect, _) = ui.allocate_exact_size(
+                            egui::vec2(ui.available_width().min(320.0), 120.0),
+                            egui::Sense::hover(),
+                        );
+                        super::macro_thumb::paint(ui, rect, thumb);
+                    }
                     ui.horizontal(|ui| {
                         if let Some(name) = &mut b.renaming {
                             let edit = ui.text_edit_singleline(name);
@@ -287,7 +442,15 @@ impl NovoApp {
                                     .set_file_name(format!("{}.kcmacro", e.name))
                                     .save_file();
                             }
-                            if ui.button("Place").clicked() {
+                            if b.company {
+                                if ui
+                                    .button("Copy to my macros")
+                                    .on_hover_text("Place it from your own library")
+                                    .clicked()
+                                {
+                                    b.copy_selected_to_user();
+                                }
+                            } else if ui.button("Place").clicked() {
                                 place = Some(e.name.clone());
                             }
                             if ui.button("Delete").clicked() {
@@ -316,6 +479,24 @@ impl NovoApp {
                         });
                     }
                 });
+                if !updates.is_empty() {
+                    ui.separator();
+                    novo_theme::widgets::section_label(ui, "Newer in the library");
+                    ui.weak(
+                        "This project holds older copies. Setting one aside renames it, so placing the macro again brings the new revision; circuits already placed keep the old one.",
+                    );
+                    for u in &updates {
+                        ui.horizontal(|ui| {
+                            ui.label(format!(
+                                "{}: revision {} in the project, {} in the library",
+                                u.definition, u.project_revision, u.library_revision
+                            ));
+                            if ui.button("Set old copy aside").clicked() {
+                                retire = Some((u.definition.clone(), u.project_revision));
+                            }
+                        });
+                    }
+                }
                 if !b.status.is_empty() {
                     ui.weak(&b.status);
                 }
@@ -328,6 +509,9 @@ impl NovoApp {
         }
         if let Some(name) = place {
             self.open_macro_place(Some(&name));
+        }
+        if let Some((name, revision)) = retire {
+            self.set_old_macro_aside(&name, revision);
         }
         self.wb.macros.open = open && self.wb.macros.open;
     }

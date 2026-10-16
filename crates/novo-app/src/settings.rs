@@ -51,6 +51,10 @@ pub struct Settings {
     /// The DWG converter program the person chose (`dwg2dxf` or the ODA File
     /// Converter), tried before the ones KoperCAD finds itself.
     pub dwg_converter: Option<PathBuf>,
+    /// A shared macro folder (a company library on a network drive): the
+    /// macro browser lists it beside the person's own macros and offers
+    /// newer revisions of macros a project was built from.
+    pub company_macros: Option<PathBuf>,
     /// The start of the name a new page group gets (`G` makes `=G1`) in a
     /// project with no group to continue. Empty: the default.
     pub group_prefix: String,

@@ -37,6 +37,9 @@ mod macro_actions_tests;
 mod macro_browser;
 #[cfg(test)]
 mod macro_browser_tests;
+#[cfg(test)]
+mod macro_company_tests;
+mod macro_thumb;
 mod menu_bar;
 mod numbering;
 mod onboarding;
