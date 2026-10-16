@@ -1,0 +1,74 @@
+# Cabinet track, lesson 8. Sample: the finished cabinet of rails-and-ducts. The wires are
+# numbered 2, 3, 4, ... (gaps are the feed wires of the drawing), terminals -X1:1 to :PE exist,
+# the motor cable is -W1.
+#
+# NOT ON MAIN yet (the whole lesson; keep status = "draft" until it is):
+#   - the Labels report with generic and Brother CSV layouts and `kopercad-cli export labels`: #482
+#   - the Reports hub (Ctrl+6): #452; PDF label sheets and an in-app preview are not planned yet
+format = 1
+id = "panel-labels"
+version = 1
+status = "draft"
+title = "Labels for wires, terminals and devices"
+title_nl = "Labels voor draden, klemmen en componenten"
+summary = "Export the four kinds of labels to a CSV for your label printer."
+summary_nl = "Exporteer de vier soorten labels naar een CSV voor je labelprinter."
+track = "cabinet"
+order = 80
+level = "beginner"
+minutes = 6
+topics = ["cabinet", "labels", "export"]
+needs = ["cut-lengths"]
+next = ["view-3d"]
+project = "../rails-and-ducts/finished.json"
+
+[[step]]
+id = "open-reports"
+title = "Open the Reports hub"
+text = "Press {key:view.reports} to see every report KoperCAD can build from the project."
+point = { ui = "switcher.reports" }
+expect = { command = "view.reports" }
+
+[[step]]
+id = "pick-labels"
+title = "Pick Labels"
+text = "Click **Labels**. It has four tables: wires, terminals, devices and cables."
+point = { ui = "reports.labels" }
+expect = { clicked = "reports.labels" }
+
+[[step]]
+id = "wire-labels"
+title = "Wire labels"
+text = """
+A wire gets one label per end for a sleeve or flag: its number, where the other end goes, and this end.
+Three lines at most.
+"""
+point = { ui = "reports.table" }
+
+[[step]]
+id = "pick-layout"
+title = "Choose a layout"
+text = """
+Pick **Generic CSV** or **Brother**. The columns and the delimiter match what that printer's software imports.
+"""
+point = { ui = "reports.layout" }
+expect = { clicked = "reports.layout" }
+
+[[step]]
+id = "export"
+title = "Export the CSV"
+text = "Click **Export** and save the file. Open it in the label software and map Line 1 to Line 3."
+point = { ui = "reports.export" }
+expect = { clicked = "reports.export" }
+
+[[step]]
+id = "cli"
+title = "The same from a script"
+text = """
+`kopercad-cli export labels project.kopercad -o labels.csv` writes the same file, so the labels can be part of a release routine.
+"""
+
+[[step]]
+id = "done"
+title = "Everything is labelled"
+text = "Labels come from the wire list, the strips and the cables, so they follow the drawing. Last: the cabinet in 3D."

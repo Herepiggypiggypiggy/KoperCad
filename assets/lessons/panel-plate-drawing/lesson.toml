@@ -1,0 +1,115 @@
+# Cabinet track, lesson 7. Sample: the finished cabinet of rails-and-ducts. Parts in the sample:
+# -T1 mounts with four 6 mm screw holes (`hole_pattern`), -S0 and -S1 are pushbuttons with a round
+# 22 mm door cut-out (`mounting = door_cutout`, `cutout`). Expected drill table: 8 holes of 5.5 mm
+# (rail screws) and 4 of 6 mm on the plate, plus 2 cut-outs.
+#
+# On main: the engine and the PDF/DXF writers (#397).
+# NOT ON MAIN yet (keep status = "draft" until they are):
+#   - the "Export plate drawing" command export.plate and the CLI: #470
+#   - the door sheet at the enclosure's real size: #477 (needs #409)
+#   - a button on the Cabinet canvas (no PR yet; the command works from the palette)
+format = 1
+id = "panel-plate-drawing"
+version = 1
+status = "draft"
+title = "The plate drawing and drill table"
+title_nl = "De plaattekening en boortabel"
+summary = "Export a dimensioned plate drawing with a numbered drill table for the workshop."
+summary_nl = "Exporteer een gemaatvoerde plaattekening met een genummerde boortabel voor de werkplaats."
+track = "cabinet"
+order = 70
+level = "intermediate"
+minutes = 8
+topics = ["cabinet", "plate-drawing", "export"]
+needs = ["cabinet-layout"]
+next = ["panel-labels"]
+project = "../rails-and-ducts/finished.json"
+
+[[step]]
+id = "open-cabinet"
+title = "Open the cabinet"
+text = "Press {key:view.cabinet}. The workshop drills the plate from what is placed here."
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "select-t1"
+title = "A device that is screwed on"
+text = """
+Click **-T1**, the transformer. Its part says it mounts on the plate with four 6 mm holes, in a pattern measured from the device's top left corner.
+"""
+point = { ui = "cabinet.inspector" }
+expect = { selected = "-T1" }
+solve = [ { select = "-T1" } ]
+
+[[step]]
+id = "select-s0"
+title = "A device that goes through the door"
+text = """
+Click **-S0**, a pushbutton. Its part says it needs a round 22 mm {tip:cutout} in the **door**, not holes in the plate.
+"""
+point = { ui = "cabinet.inspector" }
+expect = { selected = "-S0" }
+solve = [ { select = "-S0" } ]
+
+[[step]]
+id = "rail-holes"
+title = "Rails get holes too"
+text = """
+Each DIN rail gets 5.5 mm clearance holes, 10 mm in from each end and at most 200 mm apart. You do not have to add them.
+"""
+point = { ui = "cabinet.canvas" }
+
+[[step]]
+id = "open-palette"
+title = "Find the command"
+text = "Press {key:view.command_palette} and type **plate**."
+point = { ui = "palette.field" }
+expect = { command = "view.command_palette" }
+solve = [ { command = "view.command_palette" } ]
+
+[[step]]
+id = "export"
+title = "Export the plate drawing"
+text = """
+Run **Export plate drawing**. The PDF is written next to the project and the message says where.
+Sheet 1 is the plate, then the door, then the drill table.
+"""
+# NOT ON MAIN: export.plate (#470).
+point = { ui = "palette.field" }
+expect = { command = "export.plate" }
+solve = [ { command = "export.plate" } ]
+
+[[step]]
+id = "read-sheet"
+title = "Read the plate sheet"
+text = """
+The outline of the plate, the rails, each device with its tag, numbered holes and cut-outs, overall size and the X and Y of every feature along the edges.
+"""
+
+[[step]]
+id = "read-table"
+title = "Read the drill table"
+text = """
+The {tip:drill-table} groups holes by diameter, so the drill is changed once per size. Coordinates are in mm from the top left of the plate.
+"""
+
+[[step]]
+id = "turn-t1"
+title = "Turn the transformer and export again"
+text = """
+Select **-T1** and press {key:edit.rotate}, then run **Export plate drawing** again.
+The hole pattern turns 90 degrees with the device, and the table follows.
+"""
+# NOT ON MAIN: export.plate (#470).
+point = { ui = "cabinet.canvas" }
+expect = { all = [ { command = "edit.rotate" }, { command = "export.plate" } ] }
+
+[[step]]
+id = "done"
+title = "From layout to workshop"
+text = """
+The drawing comes from the same placements as the cabinet and the wire list, so they cannot disagree.
+Next: labels for the wires and devices.
+"""

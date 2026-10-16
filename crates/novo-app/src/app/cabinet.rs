@@ -5,7 +5,7 @@
 
 use eframe::egui;
 use novo_canvas::cabinet::{
-    BoxState, BoxView, CabinetScene, CabinetView, PlateView, RailView, view_bounds,
+    BoxState, BoxView, CabinetScene, CabinetView, DuctView, PlateView, RailView, view_bounds,
 };
 use novo_canvas::widget::CanvasView;
 use novo_canvas::{Vec2, vec2};
@@ -170,6 +170,18 @@ pub(super) fn cabinet_view(layout: &CabinetLayout, tag_of: &impl Fn(u64) -> Stri
                 x: r.x as f32,
                 y: r.y as f32,
                 length: r.length as f32,
+            })
+            .collect(),
+        ducts: layout
+            .ducts
+            .iter()
+            .map(|d| DuctView {
+                id: d.id,
+                x: d.x as f32,
+                y: d.y as f32,
+                length: d.length as f32,
+                width: d.width as f32,
+                vertical: d.vertical,
             })
             .collect(),
         boxes: layout
