@@ -84,6 +84,13 @@ fn a_cooler_b_gives_negative_changes_and_a_falling_peak() {
     assert!(d.rows[0].delta() < 0.0);
     assert!(d.rows[0].a > d.rows[0].b);
     assert_eq!(d.rows[0].id, 1);
+    assert_eq!(
+        d.a_surface.len(),
+        1,
+        "A's device readings for the side view"
+    );
+    assert_eq!(d.a_surface[0].0, 1);
+    assert!((d.a_surface[0].1 - d.rows[0].a).abs() < 1e-9);
     assert!(d.extent >= 1.0);
     let after = d.verdict.split('→').nth(1).unwrap();
     let peak_b: f64 = after.trim().split(' ').next().unwrap().parse().unwrap();

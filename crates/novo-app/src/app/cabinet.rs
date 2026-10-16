@@ -760,6 +760,16 @@ impl NovoApp {
                     backdrop
                 };
                 let canvas_rect = ui.available_rect_before_wrap();
+                if self.cabinet.heat.take_fit()
+                    && let Some(input) = &heat_input
+                {
+                    let extent = self.cabinet.heat.extent_mm(input.plate.0);
+                    let bounds = novo_canvas::Aabb::new(
+                        vec2(0.0, 0.0),
+                        vec2(extent as f32, input.plate.1 as f32),
+                    );
+                    self.cabinet.view.viewport.fit(&bounds, 24.0);
+                }
                 if let Some(input) = &heat_input {
                     let [r, g, b, a] = backdrop.0;
                     super::heat::paint_under(
