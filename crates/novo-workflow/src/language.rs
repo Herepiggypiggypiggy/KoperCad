@@ -74,6 +74,15 @@ pub const DUTCH: &[Aliases] = &[
         &["nieuwe pagina", "pagina toevoegen"],
         &["pagina", "blad"],
     ),
+    nl("page.rename", &[], &["pagina hernoemen", "paginatitel"]),
+    nl(
+        "page.duplicate",
+        &[],
+        &["pagina kopieren", "pagina dupliceren"],
+    ),
+    nl("page.delete", &[], &["pagina verwijderen"]),
+    nl("page.move_up", &[], &["pagina omhoog"]),
+    nl("page.move_down", &[], &["pagina omlaag"]),
     nl("project.rules", &["regels"], &["nummering", "instellingen"]),
     nl(
         "app.preferences",
@@ -237,7 +246,6 @@ pub const DUTCH: &[Aliases] = &[
     nl("nav.forward", &[], &["vooruit"]),
     nl("nav.previous_page", &[], &["vorige pagina"]),
     nl("nav.next_page", &[], &["volgende pagina"]),
-    nl("nav.changes", &["wijzigingen"], &["gewijzigd sinds export"]),
     // View
     nl("view.command_palette", &[], &["opdrachtveld", "zoeken"]),
     nl(
@@ -610,6 +618,21 @@ pub const DUTCH: &[Aliases] = &[
         "cabinet.place-all",
         &["plaats alles", "plaats alle componenten"],
         &["plaat", "indeling", "din-rail"],
+    ),
+    nl(
+        "cabinet.rules",
+        &["plaatsingsregels", "regels voor plaatsing"],
+        &["regels", "afstand", "plaatsing"],
+    ),
+    nl(
+        "cabinet.plate",
+        &["plaat instellen", "montageplaat"],
+        &["plaat", "montageplaat", "afmetingen"],
+    ),
+    nl(
+        "cabinet.cutlist",
+        &["zaaglijst", "knippenlijst"],
+        &["zaaglijst", "lengtes", "knippen"],
     ),
     nl(
         "cabinet.rails",

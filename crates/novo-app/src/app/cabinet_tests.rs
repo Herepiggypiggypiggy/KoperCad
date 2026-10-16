@@ -1160,3 +1160,66 @@ fn the_selection_travels_between_the_cabinet_and_3d_and_view_commands_run() {
     d.frame();
     assert!(d.app.view3d.pending.is_none());
 }
+
+/// A right-click on the plate opens a menu for what is under it; its rows
+/// run the same commands as the toolbar.
+#[test]
+fn right_click_on_the_plate_opens_a_menu_for_what_is_under_it() {
+    use super::cabinet_menu::Target;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let device = novo_layout::model::candidates(project(&d), cab)[0].id;
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 100.0, 120.0), Some(cab), l, &[]);
+    d.frame();
+    d.frame();
+
+    let right_click = |d: &mut Drive, at: egui::Pos2| {
+        let ev = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Secondary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        d.frame_with(vec![egui::Event::PointerMoved(at)]);
+        d.frame_with(vec![ev(true)]);
+        d.frame_with(vec![ev(false)]);
+        d.frame();
+    };
+
+    // On the device: the menu is the device's, and the device is selected.
+    let canvas = d.app.cabinet.plate_rect.expect("the plate was shown");
+    let view = &d.app.cabinet.view;
+    let world = novo_canvas::vec2(100.0 + 20.0, 120.0 + 40.0);
+    let s = view.viewport.world_to_screen(world);
+    right_click(&mut d, egui::pos2(canvas.left() + s.x, canvas.top() + s.y));
+    let menu = d.app.cabinet.menu.expect("a menu opened on the device");
+    assert_eq!(menu.target, Target::Device(device));
+    assert_eq!(d.app.cabinet_selected(), vec![device]);
+
+    // Escape closes it; a click on empty plate opens the plate menu.
+    d.frame_with(vec![egui::Event::Key {
+        key: egui::Key::Escape,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }]);
+    assert!(d.app.cabinet.menu.is_none());
+    let view = &d.app.cabinet.view;
+    let s = view
+        .viewport
+        .world_to_screen(novo_canvas::vec2(400.0, 500.0));
+    right_click(&mut d, egui::pos2(canvas.left() + s.x, canvas.top() + s.y));
+    let menu = d.app.cabinet.menu.expect("a menu opened on the plate");
+    assert_eq!(menu.target, Target::Plate);
+}

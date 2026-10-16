@@ -52,13 +52,7 @@ fn a_hint_fades_after_it_was_followed_three_times_and_comes_back() {
 /// command field and the menus grey them "Comes later". The audit fails for
 /// a command with no handler that is not here, so a command never ships
 /// dead by accident; remove an id when its handler lands.
-const COMES_LATER: &[&str] = &[
-    // No handler anywhere in novo-app yet; found by the audit, owners told.
-    "project.rules",
-    "draw.tidy",
-    "edit.renumber",
-    "nav.changes",
-];
+const COMES_LATER: &[&str] = &[];
 
 #[test]
 fn dead_command_audit() {

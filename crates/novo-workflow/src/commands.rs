@@ -170,6 +170,43 @@ pub const COMMANDS: &[CommandInfo] = &[
         // Not a bare "page": `page 2` goes to page 2.
         &["new page", "add page"],
     ),
+    // The page-tree actions of the outline, for the palette and the menus.
+    // They act on the page that is open.
+    cmd(
+        "page.rename",
+        "Rename page",
+        "Project",
+        &["title", "page title"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.duplicate",
+        "Duplicate page",
+        "Project",
+        &["copy page", "clone page"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.delete",
+        "Delete page",
+        "Project",
+        &["remove page"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.move_up",
+        "Move page up",
+        "Project",
+        &["reorder", "earlier"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.move_down",
+        "Move page down",
+        "Project",
+        &["reorder", "later"],
+        Needs::Page,
+    ),
     verb(
         cmd(
             "project.rules",
@@ -912,16 +949,6 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd("nav.next_page", "Next page", "Navigate", &[], Needs::Page),
-    verb(
-        cmd(
-            "nav.changes",
-            "Changes since export",
-            "Navigate",
-            &["changed"],
-            Needs::Project,
-        ),
-        &["changes"],
-    ),
     // View
     cmd(
         "view.command_palette",
@@ -1317,6 +1344,36 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["route all", "route wires"],
+    ),
+    verb(
+        cmd(
+            "cabinet.rules",
+            "Placement rules (Cabinet)",
+            "View",
+            &["place rules", "where devices go", "zones", "rail rule"],
+            Needs::Project,
+        ),
+        &["placement rules"],
+    ),
+    verb(
+        cmd(
+            "cabinet.plate",
+            "Plate setup (Cabinet)",
+            "View",
+            &["plate size", "mounting plate", "margin", "fill", "door"],
+            Needs::Project,
+        ),
+        &["plate setup"],
+    ),
+    verb(
+        cmd(
+            "cabinet.cutlist",
+            "Rail and duct cut list (Cabinet)",
+            "View",
+            &["cut list", "bars", "rail length", "duct length", "buy"],
+            Needs::Project,
+        ),
+        &["cut list"],
     ),
     verb(
         cmd(

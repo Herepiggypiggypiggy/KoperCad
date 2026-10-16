@@ -91,6 +91,10 @@ pub(crate) struct Workbench {
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
     pub(super) faults: Option<super::faults::FaultsWindow>,
+    /// The Renumber devices window, while it is open.
+    pub(super) device_renumber: Option<super::device_renumber::DeviceRenumber>,
+    /// The Project rules window is open.
+    pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
     /// The new pages, group and panel form, while open.
@@ -224,6 +228,8 @@ impl Default for Workbench {
             compare: None,
             faults: None,
             numbering: None,
+            device_renumber: None,
+            project_rules: false,
             page_form: None,
             sheet_import: None,
             sheet: 0,
@@ -313,6 +319,11 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "nav.next_page",
     "nav.previous_page",
     "page.new",
+    "page.rename",
+    "page.duplicate",
+    "page.delete",
+    "page.move_up",
+    "page.move_down",
     "nav.partner",
     "nav.all_references",
     "nav.back",
@@ -351,6 +362,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.labels",
     "cabinet.routes",
     "cabinet.rails",
+    "cabinet.rules",
+    "cabinet.plate",
+    "cabinet.cutlist",
     "cabinet.door",
     "export.bom",
     "export.reports",
@@ -408,6 +422,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "parts.clear",
     "parts.remove_unused",
     "project.standard",
+    "project.rules",
+    "edit.renumber",
+    "draw.tidy",
     "macro.browser",
     "macro.import",
     "project.options",
@@ -752,6 +769,8 @@ impl NovoApp {
                 }
             }
             "page.new" => self.new_page(),
+            "page.rename" | "page.duplicate" | "page.delete" | "page.move_up"
+            | "page.move_down" => self.page_command(id),
             "nav.partner" => self.go_partner(),
             "nav.all_references" => self.list_occurrences(),
             "nav.back" | "nav.forward" => self.go_history(id == "nav.back"),
@@ -929,6 +948,21 @@ impl NovoApp {
             }
             "cabinet.routes" => self.toggle_cabinet_routes(),
             "cabinet.rails" => self.toggle_cabinet_rails(),
+            "cabinet.rules" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.rules.editor_open ^= true;
+            }
+            "cabinet.cutlist" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.rules.cut_open ^= true;
+            }
+            "cabinet.plate" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.keys.push(id.to_owned());
+            }
             "cabinet.door" => self.open_cabinet_door(),
             "export.wirecut" => {
                 self.export_wire_cut();
@@ -1007,6 +1041,9 @@ impl NovoApp {
             "parts.clear" => self.clear_selected_parts(),
             "parts.remove_unused" => self.remove_unused_project_parts(),
             "project.standard" => self.wb.project_settings = true,
+            "project.rules" => self.wb.project_rules = true,
+            "edit.renumber" => self.open_device_renumber(argument),
+            "draw.tidy" => self.tidy_selection(),
             "macro.browser" => self.wb.macros.show(),
             "macro.import" => self.macro_import(),
             "project.options" => self.open_options(),

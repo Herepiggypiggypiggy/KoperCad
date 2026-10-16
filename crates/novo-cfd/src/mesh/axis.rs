@@ -1,89 +1,188 @@
 //! One-dimensional grading: cell edges along an axis with fine cells at the
-//! hard planes (walls, device faces, opening edges) growing geometrically
-//! towards a coarse size, with a hard bound on the size ratio of neighbours.
+//! planes that matter (walls, faces of solid bodies, opening edges) growing
+//! geometrically towards a coarse size, a guaranteed number of cells across
+//! every body, and a hard bound on the size ratio of neighbours.
+//!
+//! The grid is a tensor product, so a plane placed for one body runs through
+//! the whole cabinet. That is why the coarse size is the free variable of
+//! the cell budget (see `plan_grid`): bodies take what they need and empty
+//! air takes the rest.
 
 /// Size rules for one grid level, mm.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Spacing {
-    /// Largest cell size, far from every plane.
+    /// Largest cell size in empty air.
     pub far: f64,
-    /// Cell size at a plane.
+    /// Cell size at a plane, before bodies tighten it.
     pub near: f64,
-    /// Geometric growth from `near` to `far`.
+    /// Geometric growth away from a plane.
     pub growth: f64,
     /// Hard bound on `larger / smaller` for neighbouring cells.
     pub max_ratio: f64,
 }
 
-/// Planes of an axis. `boxes` are intervals of solid regions: both faces
-/// become planes unless the interval is thinner than two near cells (then
-/// the faces are left to cut cells). `points` always become planes.
-#[derive(Debug, Clone, Default)]
-pub struct AxisFeatures {
-    pub boxes: Vec<(f64, f64)>,
-    pub points: Vec<f64>,
+/// An interval of an axis that is wanted resolved: a solid body or an
+/// opening. Its faces become planes and it gets at least `need` cells.
+/// A `sheet` is a thin body that keeps its own cell layer: its planes are
+/// never merged away and it is one cell thick, whatever the neighbours do.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Span {
+    pub lo: f64,
+    pub hi: f64,
+    pub need: usize,
+    pub sheet: bool,
+}
+
+#[derive(Clone, Copy)]
+struct Plane {
+    pos: f64,
+    keep: bool,
 }
 
 /// Cell edges `0 ..= len`, increasing, first `0.0`, last `len`.
-pub fn axis_edges(len: f64, feats: &AxisFeatures, sp: &Spacing) -> Vec<f64> {
-    let mut cand: Vec<f64> = Vec::new();
-    for &(lo, hi) in &feats.boxes {
-        if hi - lo >= 2.0 * sp.near {
-            cand.push(lo);
-            cand.push(hi);
-        }
-    }
-    cand.extend_from_slice(&feats.points);
-    cand.retain(|&p| p.is_finite() && p > 0.0 && p < len);
-    cand.sort_by(|a, b| a.total_cmp(b));
-    let min_gap = 0.25 * sp.near;
-    let mut planes = vec![0.0];
-    for p in cand {
-        let last = *planes.last().unwrap();
-        if p - last >= min_gap && len - p >= min_gap {
-            planes.push(p);
-        }
-    }
-    planes.push(len);
+pub fn axis_edges(len: f64, spans: &[Span], sp: &Spacing) -> Vec<f64> {
+    let planes = merge_planes(len, spans, sp);
+    let n_seg = planes.len() - 1;
+    // Size limit of each segment: far in air, extent / need inside a body.
+    let cap: Vec<f64> = (0..n_seg)
+        .map(|i| {
+            let mid = 0.5 * (planes[i].pos + planes[i + 1].pos);
+            spans
+                .iter()
+                .filter(|s| s.need > 0 && s.lo <= mid && mid <= s.hi)
+                .map(|s| (s.hi - s.lo) / s.need as f64)
+                .fold(sp.far, f64::min)
+        })
+        .collect();
+    // Inside a body the cells may grow faster: conduction in a solid needs
+    // no boundary layer, and the cells saved go to the air.
+    let growth: Vec<f64> = (0..n_seg)
+        .map(|i| {
+            let mid = 0.5 * (planes[i].pos + planes[i + 1].pos);
+            if spans
+                .iter()
+                .any(|s| s.need > 1 && s.lo <= mid && mid <= s.hi)
+            {
+                sp.growth.max(0.97 * sp.max_ratio)
+            } else {
+                sp.growth
+            }
+        })
+        .collect();
+    // Size at a plane: the finer of what the segments on both sides allow.
+    let q: Vec<f64> = (0..planes.len())
+        .map(|i| {
+            let left = if i > 0 { cap[i - 1] } else { f64::MAX };
+            let right = if i < n_seg { cap[i] } else { f64::MAX };
+            sp.near.min(left).min(right)
+        })
+        .collect();
 
     let mut edges = vec![0.0];
-    for w in planes.windows(2) {
-        let (a, b) = (w[0], w[1]);
-        let mut x = a;
-        let steps = segment_steps(b - a, sp);
+    for i in 0..n_seg {
+        let (a, b) = (planes[i].pos, planes[i + 1].pos);
+        let steps = segment_steps(b - a, q[i], q[i + 1], cap[i], growth[i]);
         let n = steps.len();
-        for (i, s) in steps.into_iter().enumerate() {
+        let mut x = a;
+        for (k, s) in steps.into_iter().enumerate() {
             x += s;
-            edges.push(if i + 1 == n { b } else { x });
+            edges.push(if k + 1 == n { b } else { x });
         }
     }
     enforce_ratio(&mut edges, sp.max_ratio);
     edges
 }
 
-/// Cell sizes filling a segment of length `l`: fine at both ends.
-fn segment_steps(l: f64, sp: &Spacing) -> Vec<f64> {
-    let half = 0.5 * l;
-    let mut left = Vec::new();
-    let mut cum = 0.0;
-    let mut h = sp.near.min(sp.far);
-    while cum + h <= half + 1e-12 {
-        left.push(h);
-        cum += h;
-        h = (h * sp.growth).min(sp.far);
+/// Largest gap between two planes that counts as a sliver: the faces stay
+/// planes of their own above this, however coarse the air is.
+const MAX_SLIVER_MM: f64 = 5.0;
+
+/// Planes from the span faces: dedup, drop slivers (a plane within 15
+/// percent of the coarse size, at most [`MAX_SLIVER_MM`], of another one is
+/// left to cut cells) except the faces of thin sheets.
+fn merge_planes(len: f64, spans: &[Span], sp: &Spacing) -> Vec<Plane> {
+    let mut cand: Vec<Plane> = Vec::new();
+    for s in spans.iter().filter(|s| s.need > 0) {
+        for p in [s.lo, s.hi] {
+            if p.is_finite() && p > 0.0 && p < len {
+                cand.push(Plane {
+                    pos: p,
+                    keep: s.sheet,
+                });
+            }
+        }
     }
-    if left.is_empty() {
-        let n = ((l / h).round() as usize).max(1);
+    cand.sort_by(|a, b| a.pos.total_cmp(&b.pos));
+    let min_gap = (0.15 * sp.far).clamp(0.2, MAX_SLIVER_MM);
+    let mut out = vec![Plane {
+        pos: 0.0,
+        keep: true,
+    }];
+    for p in cand {
+        let last = *out.last().unwrap();
+        let gap = p.pos - last.pos;
+        if gap >= min_gap || (p.keep && last.keep && gap >= 0.2) {
+            out.push(p);
+        } else if p.keep && !last.keep && out.len() > 1 {
+            // a sheet face wins over a nearby ordinary plane
+            *out.last_mut().unwrap() = p;
+            let n = out.len();
+            if n > 2 && out[n - 1].pos - out[n - 2].pos < 0.2 {
+                out.remove(n - 2);
+            }
+        }
+    }
+    // the far end: ordinary planes too close to it go
+    while out.len() > 1 {
+        let l = *out.last().unwrap();
+        if len - l.pos < if l.keep { 0.2 } else { min_gap } {
+            out.pop();
+        } else {
+            break;
+        }
+    }
+    out.push(Plane {
+        pos: len,
+        keep: true,
+    });
+    out
+}
+
+/// Cell sizes filling a segment of length `l`: `qa` and `qb` at its ends,
+/// growing by `growth` up to `cap` in between.
+fn segment_steps(l: f64, qa: f64, qb: f64, cap: f64, growth: f64) -> Vec<f64> {
+    let (mut ha, mut hb) = (qa.min(cap), qb.min(cap));
+    let (mut left, mut right) = (Vec::new(), Vec::new());
+    let (mut cl, mut cr) = (0.0, 0.0);
+    loop {
+        let from_left = cl <= cr;
+        let h = if from_left { ha } else { hb };
+        if cl + cr + h > l + 1e-12 {
+            break;
+        }
+        if from_left {
+            left.push(ha);
+            cl += ha;
+            ha = (ha * growth).min(cap);
+        } else {
+            right.push(hb);
+            cr += hb;
+            hb = (hb * growth).min(cap);
+        }
+    }
+    let h_mid = 0.5 * (ha + hb);
+    let rem = l - cl - cr;
+    let n_mid = (rem / h_mid).round().max(0.0) as usize;
+    let mut steps = left;
+    steps.extend(std::iter::repeat_n(h_mid, n_mid));
+    steps.extend(right.iter().rev());
+    if steps.is_empty() {
+        let n = ((l / h_mid).round() as usize).max(1);
         return vec![l / n as f64; n];
     }
-    // Graded cells from both ends plus uniform ones between. The slack is
-    // taken up by the cells at the coarse size (and the middle ones), so
+    // The slack goes to the cells at the coarse size and the middle ones, so
     // the graded part keeps its growth and no ratio cascade starts.
-    let n_mid = ((l - 2.0 * cum) / h).round().max(0.0) as usize;
-    let mut steps = left.clone();
-    steps.extend(std::iter::repeat_n(h, n_mid));
-    steps.extend(left.iter().rev());
-    let is_flex = |v: f64| v >= sp.far * (1.0 - 1e-12) || v == h;
+    let is_flex = |v: f64| v >= cap * (1.0 - 1e-12) || v == h_mid;
     let flex_sum: f64 = steps.iter().filter(|v| is_flex(**v)).sum();
     let fixed_sum: f64 = steps.iter().filter(|v| !is_flex(**v)).sum();
     if flex_sum == 0.0 {
