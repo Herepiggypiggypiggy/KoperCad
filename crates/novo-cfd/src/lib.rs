@@ -14,6 +14,7 @@ pub mod result;
 pub mod sched;
 pub mod solver;
 mod stub;
+pub mod turb;
 
 pub use result::*;
 pub use solver::{CfdError, Control, Solver};
