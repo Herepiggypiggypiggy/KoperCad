@@ -65,11 +65,11 @@ id = "summary-line"
 title = "Read the summary"
 title_nl = "Lees de samenvatting"
 text = """
-Under the title the panel says "11 wires routed, fullest duct 10%". If a wire had no duct to run in, it would say how many are "in free air".
+Below the folded {ui:cabinet.wire_rules} header the panel says "11 wires routed, fullest duct 10%". If a wire had no duct to run in, it would say how many are "in free air".
 The amber line "11 wires have no size: duct fill assumes 3 mm" means the wires carry no cross-section yet, so KoperCAD counts each as a 3 mm wire.
 """
 text_nl = """
-Onder de titel staat "11 wires routed, fullest duct 10%". Had een draad geen kanaal om in te lopen, dan stond er hoeveel er "in free air" lopen.
+Onder de ingeklapte kop {ui:cabinet.wire_rules} staat "11 wires routed, fullest duct 10%". Had een draad geen kanaal om in te lopen, dan stond er hoeveel er "in free air" lopen.
 De oranje regel "11 wires have no size: duct fill assumes 3 mm" betekent dat de draden nog geen doorsnede hebben, dus KoperCAD rekent elke draad als 3 mm.
 """
 point = { ui = "cabinet.routes_panel" }

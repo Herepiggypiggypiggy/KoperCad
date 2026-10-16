@@ -72,6 +72,107 @@ pub fn section_label(ui: &mut Ui, text: &str) -> Response {
     )
 }
 
+/// A panel section that folds: a caret, the title in caption caps and, on the
+/// right, a short `summary` ("3 set", "12") that says what is inside while it
+/// is closed. A hairline above separates it from the section before. The
+/// open state is remembered by `id_salt`; `default_open` is the first look.
+pub fn collapsing_section<R>(
+    ui: &mut Ui,
+    id_salt: impl std::hash::Hash + std::fmt::Debug,
+    title: &str,
+    summary: &str,
+    default_open: bool,
+    body: impl FnOnce(&mut Ui) -> R,
+) -> Option<R> {
+    let p = Palette::of(ui);
+    let id = ui.make_persistent_id(id_salt);
+    let mut state = egui::collapsing_header::CollapsingState::load_with_default_open(
+        ui.ctx(),
+        id,
+        default_open,
+    );
+    ui.add_space(space::S);
+    let height = control_height(ui) + 2.0;
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(ui.available_width(), height), Sense::click());
+    ui.painter().hline(
+        rect.x_range(),
+        rect.top() - space::XS,
+        Stroke::new(1.0, p.border_subtle),
+    );
+    if response.clicked() {
+        state.toggle(ui);
+    }
+    let color = if response.hovered() {
+        p.text_primary
+    } else {
+        p.text_secondary
+    };
+    let caret = if state.is_open() {
+        crate::icons::CARET_DOWN
+    } else {
+        crate::icons::CARET_RIGHT
+    };
+    let small = ui.style().text_styles[&egui::TextStyle::Small]
+        .size
+        .max(12.0);
+    let painter = ui.painter();
+    painter.text(
+        egui::pos2(rect.left() + 2.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        caret,
+        FontId::proportional(small + 1.0),
+        color,
+    );
+    painter.text(
+        egui::pos2(rect.left() + 18.0, rect.center().y),
+        Align2::LEFT_CENTER,
+        title.to_uppercase(),
+        FontId::new(small, fonts::strong_family()),
+        color,
+    );
+    if !summary.is_empty() {
+        painter.text(
+            egui::pos2(rect.right() - 2.0, rect.center().y),
+            Align2::RIGHT_CENTER,
+            summary,
+            FontId::proportional(small),
+            p.text_secondary,
+        );
+    }
+    let out = state.show_body_unindented(ui, |ui| {
+        ui.add_space(space::XS);
+        body(ui)
+    });
+    state.store(ui.ctx());
+    out.map(|o| o.inner)
+}
+
+/// Paints one line of text left-aligned at `pos` (vertically centred) and
+/// cuts it with an ellipsis at `max_width`, never in the middle of a glyph.
+/// Returns the rectangle it took.
+pub fn paint_text_ellipsis(
+    painter: &egui::Painter,
+    pos: egui::Pos2,
+    text: &str,
+    font: FontId,
+    color: egui::Color32,
+    max_width: f32,
+) -> Rect {
+    let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font, color);
+    job.wrap = egui::text::TextWrapping {
+        max_width: max_width.max(1.0),
+        max_rows: 1,
+        break_anywhere: true,
+        overflow_character: Some('\u{2026}'),
+    };
+    let galley = painter.layout_job(job);
+    let top_left = egui::pos2(pos.x, pos.y - galley.size().y / 2.0);
+    let rect = Rect::from_min_size(top_left, galley.size());
+    painter.galley(top_left, galley, color);
+    rect
+}
+
 /// A read-only label and value row for the inspector.
 pub fn field(ui: &mut Ui, label: &str, value: &str) {
     let p = Palette::of(ui);
