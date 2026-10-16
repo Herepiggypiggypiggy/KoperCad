@@ -3,7 +3,9 @@ id = "placing-parts"
 version = 1
 status = "early"
 title = "Placing parts fast"
+title_nl = "Snel onderdelen plaatsen"
 summary = "Put a breaker, a button and a relay on the page with the wheel and the fast keys."
+summary_nl = "Plaats een automaat, een drukknop en een relais met het wiel en de snelle toetsen."
 track = "start"
 order = 10
 level = "beginner"
@@ -17,90 +19,278 @@ page = "Control branch"
 [[step]]
 id = "intro"
 title = "What you will build"
+title_nl = "Wat je gaat tekenen"
 text = """
-A control branch: a breaker, a start button and a relay coil between the supply **L1** and the neutral **N**.
-You place each part with the keyboard. The mouse only chooses where it lands.
+You will draw a control branch: a breaker, a start button and a relay coil in a column between the supply **L1** and the neutral **N**.
+Placing parts from the keyboard is the fastest way to draw, so you will learn the three ways in turn: by name, with the wheel, and with a favourite digit.
 """
-point = { area = { page = "Control branch", x = 60, y = 16, w = 40, h = 130 } }
+text_nl = """
+Je tekent een stuurstroomtak: een automaat, een startknop en een relaisspoel onder elkaar tussen de voeding **L1** en de nul **N**.
+Onderdelen plaatsen met het toetsenbord is de snelste manier van tekenen. Je leert de drie manieren: op naam, met het wiel en met een favoriete cijfertoets.
+"""
+point = { area = { page = "Control branch", x = 44, y = 16, w = 60, h = 134 } }
 pause = true
 
 [[step]]
 id = "type-mcb"
 title = "Ask for a breaker by name"
+title_nl = "Vraag een automaat bij naam"
 text = """
-Tap {key:tool.place}, type **mcb** and press Enter. The breaker hangs on your pointer.
+Typing a short name is quicker than hunting through menus, and the name stays the same every day.
 """
+text_nl = """
+Een korte naam typen gaat sneller dan zoeken in menu's, en de naam blijft elke dag gelijk.
+"""
+how = [
+  "Tap {key:tool.place}. A search field opens.",
+  "Type **mcb**. The single-pole breaker is the first match.",
+  "Press Enter. The breaker hangs on your pointer.",
+]
+how_nl = [
+  "Tik op {key:tool.place}. Er opent een zoekveld.",
+  "Typ **mcb**. De eenpolige automaat is de eerste treffer.",
+  "Druk op Enter. De automaat hangt aan je aanwijzer.",
+]
+demo = [
+  { press = "tool.place" },
+  { type = "mcb" },
+  { key = "Enter" },
+]
 point = { ui = "dock.place" }
 expect = { tool = "place" }
+solve = [ { command = "tool.place", arg = "mcb" } ]
 
 [[step]]
 id = "drop-breaker"
 title = "Drop it under L1"
+title_nl = "Zet hem onder L1"
 text = """
-Move to the dot just under **L1** and click. The wire to L1 draws itself and the part gets the tag **-F1**.
-Press {key:edit.escape} to put the part down.
+The breaker protects the control circuit, so it goes directly under the supply. Facing pins are wired for you.
 """
+text_nl = """
+De automaat beveiligt het stuurstroomcircuit, dus hij staat direct onder de voeding. Pennen die naar elkaar wijzen worden voor je bedraad.
+"""
+how = [
+  "Move the pointer to just below the **L1** arrow, about a finger's width down.",
+  "Click. The breaker lands there, a wire to L1 draws itself and it gets the tag **-F1**.",
+  "Press {key:edit.escape} to stop placing. Otherwise the next click places a second breaker.",
+]
+how_nl = [
+  "Beweeg de aanwijzer net onder de pijl van **L1**, ongeveer een vingerbreedte omlaag.",
+  "Klik. De automaat staat er, een draad naar L1 tekent zichzelf en hij krijgt de tag **-F1**.",
+  "Druk op {key:edit.escape} om te stoppen met plaatsen. Anders plaatst de volgende klik een tweede automaat.",
+]
+demo = [
+  { ghost = { symbol = "iec/protection/mcb_1p", page = "Control branch", x = 80, y = 40 } },
+  { move = { at = { page = "Control branch", x = 80, y = 40 } } },
+  { click = true },
+  { say = "A wire to L1 draws itself and the breaker gets the tag -F1.", say_nl = "Een draad naar L1 tekent zichzelf en de automaat krijgt de tag -F1." },
+  { press = "edit.escape" },
+]
 point = { at = { page = "Control branch", x = 80, y = 40 } }
 expect = { device = { symbol = "iec/protection/mcb_1p" } }
 solve = [ { place = { symbol = "iec/protection/mcb_1p", page = "Control branch", x = 80, y = 40 } } ]
 
 [[step]]
 id = "hold-wheel"
-title = "Hold Q for the wheel"
+title = "Open the wheel"
+title_nl = "Open het wiel"
 text = """
-Hold {key:tool.place} down. The wheel opens around the pointer with the groups of parts.
-Release the key over a group to choose it.
+When you do not know the name, the wheel shows the groups of parts around your pointer. One hold and one move picks a part, so your hand stays on the drawing.
 """
-point = { ui = "wheel" }
+text_nl = """
+Als je de naam niet weet, toont het wiel de groepen onderdelen rond je aanwijzer. Eén vasthouden en één beweging kiest een onderdeel, zodat je hand op de tekening blijft.
+"""
+how = [
+  "Hold {key:tool.place} down for a moment, until a ring of groups opens around the pointer.",
+  "Keep it held and move the pointer onto a group such as **Switch**: its parts fan out around it.",
+  "Press {key:edit.escape} to close the wheel again.",
+]
+how_nl = [
+  "Houd {key:tool.place} even ingedrukt, tot een ring met groepen opent rond de aanwijzer.",
+  "Houd de toets vast en beweeg de aanwijzer naar een groep zoals **Switch**: de onderdelen waaieren eromheen uit.",
+  "Druk op {key:edit.escape} om het wiel weer te sluiten.",
+]
+demo = [
+  { hold = "tool.place", secs = 1.5 },
+  { say = "Move onto a group such as Switch: its parts fan out around it.", say_nl = "Beweeg naar een groep zoals Switch: de onderdelen waaieren eromheen uit." },
+  { wait = 0.8 },
+  { press = "edit.escape" },
+]
+point = { ui = "dock.place" }
 expect = { signal = "wheel_opened" }
 
 [[step]]
 id = "wheel-pushbutton"
 title = "Pick a push button from the wheel"
+title_nl = "Kies een drukknop uit het wiel"
 text = """
-With the wheel open choose **Switch**, then **Push button NO**. Drop it under the breaker.
-The tag becomes **-S1**.
+The start button closes the circuit while it is pressed, so it is a **normally open** push button. It goes under the breaker.
 """
-point = { ui = "wheel" }
+text_nl = """
+De startknop sluit het circuit zolang hij ingedrukt is, dus het is een **sluitende** drukknop. Hij komt onder de automaat.
+"""
+how = [
+  "Hold {key:tool.place} to open the wheel.",
+  "Still holding the key, move onto **Switch**, then onto **Push NO** (the push button that closes while pressed).",
+  "Let go of the key over **Push NO**. The push button hangs on your pointer.",
+  "Click just under the breaker. It gets the tag **-S1** and is wired to the breaker.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Houd {key:tool.place} ingedrukt om het wiel te openen.",
+  "Houd de toets vast, beweeg naar **Switch** en dan naar **Push NO** (de drukknop die sluit zolang hij ingedrukt is).",
+  "Laat de toets los boven **Push NO**. De drukknop hangt aan je aanwijzer.",
+  "Klik net onder de automaat. Hij krijgt de tag **-S1** en wordt met de automaat verbonden.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
+demo = [
+  { hold = "tool.place", secs = 1.5 },
+  { say = "Move onto Switch, then onto Push NO, and let go of the key over it.", say_nl = "Beweeg naar Switch en dan naar Push NO, en laat de toets los erboven." },
+  { ghost = { symbol = "iec/operators/pushbutton_no", page = "Control branch", x = 80, y = 72 } },
+  { move = { at = { page = "Control branch", x = 80, y = 72 } } },
+  { click = true },
+  { say = "The push button gets the tag -S1 and is wired to the breaker.", say_nl = "De drukknop krijgt de tag -S1 en wordt met de automaat verbonden." },
+  { press = "edit.escape" },
+]
+point = { ui = "dock.place" }
 expect = { device = { symbol = "iec/operators/pushbutton_no" } }
 solve = [ { place = { symbol = "iec/operators/pushbutton_no", page = "Control branch", x = 80, y = 72 } } ]
 
 [[step]]
-id = "digit-coil"
-title = "Use a favourite digit"
+id = "type-coil"
+title = "Place the relay coil by name"
+title_nl = "Plaats de relaisspoel bij naam"
 text = """
-Tap {key:tool.place}, then the digit **3**. The relay coil is the third favourite.
-Drop it under the button. It gets the tag **-K1**.
+The same field also lists your favourite parts with a digit beside each; typing that digit picks the part. Which digit is which depends on your favourites, so read it off the list. Here you simply type the name.
 """
+text_nl = """
+Hetzelfde veld toont ook je favoriete onderdelen met een cijfer ernaast; dat cijfer typen kiest het onderdeel. Welk cijfer bij welk onderdeel hoort hangt af van je favorieten, dus lees het af van de lijst. Hier typ je gewoon de naam.
+"""
+how = [
+  "Tap {key:tool.place}, type **coil** and press Enter. The relay coil hangs on your pointer.",
+  "Click just under the push button. It gets the tag **-K1** and is wired to the button.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Tik op {key:tool.place}, typ **coil** en druk op Enter. De relaisspoel hangt aan je aanwijzer.",
+  "Klik net onder de drukknop. Hij krijgt de tag **-K1** en wordt met de knop verbonden.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
+demo = [
+  { press = "tool.place" },
+  { type = "coil" },
+  { key = "Enter" },
+  { ghost = { symbol = "iec/coils/relay", page = "Control branch", x = 80, y = 104 } },
+  { move = { at = { page = "Control branch", x = 80, y = 104 } } },
+  { click = true },
+  { say = "The coil gets the tag -K1 and is wired to the push button.", say_nl = "De spoel krijgt de tag -K1 en wordt met de drukknop verbonden." },
+  { press = "edit.escape" },
+]
 point = { at = { page = "Control branch", x = 80, y = 104 } }
 expect = { device = { symbol = "iec/coils/relay" } }
 solve = [ { place = { symbol = "iec/coils/relay", page = "Control branch", x = 80, y = 104 } } ]
 
 [[step]]
 id = "rotate"
-title = "Turn a part and undo it"
+title = "Turn a part before you drop it"
+title_nl = "Draai een onderdeel voordat je het neerzet"
 text = """
-Select the push button and press {key:edit.rotate}. It turns a quarter.
-Press {key:edit.undo} to turn it back.
+A part can be turned while it hangs on the pointer, before any wire is attached to it. You will put a spare push button to the right of the branch, turned a quarter, and take it away again.
 """
-point = { at = { device = "-S1" } }
-expect = { command = "edit.rotate" }
+text_nl = """
+Een onderdeel kun je draaien terwijl het aan de aanwijzer hangt, voordat er draden aan zitten. Je zet een reserve-drukknop rechts van de tak, een kwartslag gedraaid, en haalt hem daarna weer weg.
+"""
+how = [
+  "Tap {key:tool.place}, type **pb** and press Enter.",
+  "Press {key:edit.rotate}. The push button on your pointer turns a quarter.",
+  "Click on the empty page to the right of the branch.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Tik op {key:tool.place}, typ **pb** en druk op Enter.",
+  "Druk op {key:edit.rotate}. De drukknop aan je aanwijzer draait een kwartslag.",
+  "Klik op de lege pagina rechts van de tak.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
+demo = [
+  { press = "tool.place" },
+  { type = "pb" },
+  { key = "Enter" },
+  { press = "edit.rotate" },
+  { say = "The push button on the pointer turns a quarter.", say_nl = "De drukknop aan de aanwijzer draait een kwartslag." },
+  { move = { at = { page = "Control branch", x = 130, y = 72 } } },
+  { click = true },
+  { press = "edit.escape" },
+]
+point = { at = { page = "Control branch", x = 130, y = 72 } }
+expect = { device = { symbol = "iec/operators/pushbutton_no", at_least = 2 } }
+solve = [ { place = { symbol = "iec/operators/pushbutton_no", page = "Control branch", x = 130, y = 72, turns = 1 } } ]
+
+[[step]]
+id = "undo-spare"
+title = "Take it back with undo"
+title_nl = "Haal hem terug met ongedaan maken"
+text = """
+Everything you do can be undone, so trying is free.
+"""
+text_nl = """
+Alles wat je doet kan ongedaan worden gemaakt, dus proberen kost niets.
+"""
+how = [
+  "Press {key:edit.undo}. The spare push button disappears.",
+]
+how_nl = [
+  "Druk op {key:edit.undo}. De reserve-drukknop verdwijnt.",
+]
+demo = [
+  { press = "edit.undo" },
+  { say = "The spare push button disappears.", say_nl = "De reserve-drukknop verdwijnt." },
+]
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
 
 [[step]]
 id = "duplicate"
-title = "Duplicate and undo"
+title = "Copy a part with one key"
+title_nl = "Kopieer een onderdeel met één toets"
 text = """
-With the button still selected press {key:edit.duplicate}. A copy follows the pointer, numbered for you.
-Press {key:edit.undo} to take it back.
+Duplicating copies the selected part and gives the copy the next free number, so a second button never needs renaming.
 """
+text_nl = """
+Dupliceren kopieert het geselecteerde onderdeel en geeft de kopie het eerstvolgende vrije nummer, zodat een tweede knop nooit hernoemd hoeft te worden.
+"""
+how = [
+  "Click the push button **-S1** to select it.",
+  "Press {key:edit.duplicate}. A copy appears just to its right with the tag **-S2**.",
+  "Press {key:edit.undo} to take the copy away again.",
+]
+how_nl = [
+  "Klik op de drukknop **-S1** om hem te selecteren.",
+  "Druk op {key:edit.duplicate}. Direct rechts ervan verschijnt een kopie met de tag **-S2**.",
+  "Druk op {key:edit.undo} om de kopie weer weg te halen.",
+]
+demo = [
+  { move = { at = { device = "-S1" } } },
+  { click = true },
+  { press = "edit.duplicate" },
+  { say = "A copy appears just to its right with the tag -S2.", say_nl = "Direct rechts ervan verschijnt een kopie met de tag -S2." },
+  { press = "edit.undo" },
+]
 point = { at = { device = "-S1" } }
 expect = { command = "edit.duplicate" }
+solve = [ { select = "-S1" }, { command = "edit.duplicate" } ]
 
 [[step]]
 id = "done"
-title = "Compare with the finished drawing"
+title = "What you have now"
+title_nl = "Wat je nu hebt"
 text = """
-Your branch should look like the finished one, with the supply and neutral joined by wires.
-Next lesson: how a wire bends.
+Your page shows three parts in a column between L1 and N: the breaker **-F1**, the push button **-S1** and the relay coil **-K1**. Four wires join them: L1 to -F1, -F1 to -S1, -S1 to -K1 and -K1 to N. You drew none of them; they were drawn as the parts went down.
+To compare, use **Open finished version** on this lesson card.
+"""
+text_nl = """
+Op je pagina staan drie onderdelen onder elkaar tussen L1 en N: de automaat **-F1**, de drukknop **-S1** en de relaisspoel **-K1**. Vier draden verbinden ze: L1 met -F1, -F1 met -S1, -S1 met -K1 en -K1 met N. Je hebt er geen getekend; ze verschenen terwijl je de onderdelen neerzette.
+Gebruik ter vergelijking **Open finished version** op deze lessenkaart.
 """
 pause = true
