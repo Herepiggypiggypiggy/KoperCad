@@ -395,6 +395,71 @@ fn link_plan(
     (!mine.is_empty()).then_some((mine, partner))
 }
 
+/// How far apart (mm, vertically) two symbols' origins may be and still count
+/// as standing on the same row.
+const ROW_TOLERANCE: f64 = 5.0;
+
+/// What clearing the tag of `device` joins: its symbols and the device on its
+/// left. Left means the nearest symbol of another device, on the same page,
+/// whose origin is further left than the device's leftmost symbol and no more
+/// than [`ROW_TOLERANCE`] above or below it. A tie in distance goes to the
+/// closer row, then the lower symbol id. Following the chain makes K1, K2, K3
+/// side by side all end up on K1 when K2 and K3 are cleared. The reason when
+/// there is nothing on the left is plain words.
+fn join_left_plan(
+    project: &Project,
+    device: DeviceId,
+) -> Result<(Vec<SymbolId>, SymbolId, DeviceId), String> {
+    let mine: Vec<&SymbolInstance> = project.symbols_of_device(device);
+    let Some(anchor) = mine
+        .iter()
+        .min_by(|a, b| {
+            a.placement
+                .origin
+                .x
+                .total_cmp(&b.placement.origin.x)
+                .then(a.id.cmp(&b.id))
+        })
+        .copied()
+    else {
+        return Err("A tag cannot be empty: nothing is drawn for this device to join".into());
+    };
+    let origin = anchor.placement.origin;
+    let found = project
+        .page_contents(anchor.page)
+        .symbols
+        .into_iter()
+        .filter_map(|id| project.symbol(id))
+        .filter_map(|s| match s.role {
+            SymbolRole::Device { device: d, .. } if d != device => Some((s, d)),
+            _ => None,
+        })
+        .filter(|(s, _)| {
+            let o = s.placement.origin;
+            o.x < origin.x && (o.y - origin.y).abs() <= ROW_TOLERANCE
+        })
+        .min_by(|(a, _), (b, _)| {
+            let key = |s: &SymbolInstance| {
+                (
+                    origin.x - s.placement.origin.x,
+                    (s.placement.origin.y - origin.y).abs(),
+                )
+            };
+            let (ka, kb) = (key(a), key(b));
+            ka.0.total_cmp(&kb.0)
+                .then(ka.1.total_cmp(&kb.1))
+                .then(a.id.cmp(&b.id))
+        });
+    match found {
+        Some((s, d)) => Ok((mine.iter().map(|s| s.id).collect(), s.id, d)),
+        None => Err(
+            "A tag cannot be empty: there is no device on its left to join (clear it \
+             only next to the device it belongs to)"
+                .into(),
+        ),
+    }
+}
+
 /// The reason shown when a line would lie over another wire.
 fn overlap_notice(_refusal: &Refusal) -> String {
     "Overlaps another wire".into()
@@ -2202,7 +2267,9 @@ impl Editor {
     }
 
     /// Renames a device from what the user typed (F2). A tag in use or a
-    /// malformed one is refused with the reason, and nothing changes.
+    /// malformed one is refused with the reason, and nothing changes. An
+    /// emptied tag makes the device part of the device on its left (the
+    /// nearest on its row, see `join_left_plan`), as one undo step.
     pub fn rename(
         &mut self,
         doc: &mut Document,
@@ -2214,6 +2281,18 @@ impl Editor {
             .device(device)
             .map(|d| d.tag.clone())
             .ok_or("The device no longer exists")?;
+        if input.trim().is_empty() {
+            // An emptied tag joins the device on the left.
+            let (mine, partner, other) = join_left_plan(doc.project(), device)?;
+            let tag = doc
+                .project()
+                .device(other)
+                .map(|d| d.tag.clone())
+                .ok_or("The device on its left no longer exists")?;
+            return self
+                .check_link(doc.project(), &mine, partner)
+                .and_then(|()| self.link_contacts(doc, &mine, partner, &tag));
+        }
         let tag = parse_tag_input(input, &old)?;
         if tag == old {
             return Ok(());
@@ -2340,6 +2419,15 @@ impl Editor {
             .device(device)
             .map(|d| d.tag.clone())
             .ok_or("The device no longer exists")?;
+        if input.trim().is_empty() {
+            let (mine, partner, other) = join_left_plan(doc.project(), device)?;
+            self.check_link(doc.project(), &mine, partner)?;
+            return doc
+                .project()
+                .device(other)
+                .map(|d| d.tag.clone())
+                .ok_or_else(|| "The device on its left no longer exists".into());
+        }
         let tag = parse_tag_input(input, &old)?;
         if tag != old
             && let Some(reason) = tag_conflict(doc.project(), device, &tag)
