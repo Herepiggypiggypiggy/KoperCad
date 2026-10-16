@@ -128,8 +128,11 @@ pub(super) fn surface_split(
             problems,
         };
     };
-    let (surfaces, _) =
-        novo_layout::surfaces::Surfaces::from_enclosure(enclosure, &layout.plate, &[]);
+    let (surfaces, _) = novo_layout::surfaces::Surfaces::from_enclosure(
+        enclosure,
+        &layout.plate,
+        &novo_layout::model::extra_surfaces(project, structure),
+    );
     let mut out = split(&specs, &rules, &surfaces);
     problems.append(&mut out.problems);
     out.problems = problems;

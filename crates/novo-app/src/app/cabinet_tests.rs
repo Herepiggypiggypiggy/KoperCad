@@ -1256,11 +1256,20 @@ fn surface_rules_keep_door_devices_off_the_plate_plan() {
                     hinge_side_clearance: None,
                 },
             )?;
-            tx.set_property(cab, "surface_rules", Some(Value::Text("door: H".into())))?;
+            tx.set_property(
+                cab,
+                "surface_rules",
+                Some(Value::Text("door: H\nplate2: Q".into())),
+            )?;
+            tx.set_property(
+                cab,
+                "surface.plate2",
+                Some(Value::Text("300 400 10".into())),
+            )?;
             let part = tx.add_part("ACME", "C1")?;
             tx.set_property(part, "width_mm", Some(Value::Float(22.0)))?;
             tx.set_property(part, "height_mm", Some(Value::Float(22.0)))?;
-            for tag in ["=A1+CAB1-K1", "=A1+CAB1-H1"] {
+            for tag in ["=A1+CAB1-K1", "=A1+CAB1-H1", "=A1+CAB1-Q1"] {
                 let d = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
                 tx.assign_part(d, part)?;
             }
@@ -1271,9 +1280,12 @@ fn surface_rules_keep_door_devices_off_the_plate_plan() {
     let split = super::cabinet_rules::surface_split(&p, cab, &layout);
     assert_eq!(split.plate.len(), 1);
     assert_eq!(split.plate[0].kind, "K");
-    assert_eq!(split.others.len(), 1);
+    // Q belongs on the extra plate `plate2` from the `surface.plate2`
+    // property: known, so no sentence, and not on the main plate plan.
+    assert_eq!(split.others.len(), 2);
     assert_eq!(split.others[0].0, "door");
-    assert!(split.problems.is_empty());
+    assert_eq!(split.others[1].0, "plate2");
+    assert!(split.problems.is_empty(), "{:?}", split.problems);
     let (plan, _) =
         super::cabinet_rules::plan(&p, cab, &layout, &novo_layout::rules::RuleSet::standard());
     assert_eq!(plan.placements.len(), 1);
