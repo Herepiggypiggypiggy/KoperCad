@@ -322,6 +322,51 @@ pub const DUTCH: &[Aliases] = &[
         &["laagste"],
         &["klemmenstrook", "nummer"],
     ),
+    nl(
+        "terminal.add_spares",
+        &["reserveklemmen"],
+        &["reserve", "klemmenstrook", "extra klemmen"],
+    ),
+    nl(
+        "terminal.rename",
+        &[],
+        &["klemmen hernoemen", "zoeken en vervangen", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.renumber",
+        &[],
+        &["klemmen hernummeren", "klemmenstrook", "nummering"],
+    ),
+    nl(
+        "terminal.join_duplicates",
+        &[],
+        &["dubbele klemmen samenvoegen", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.set_kind",
+        &[],
+        &["klemtype", "soort klem", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.order_up",
+        &[],
+        &["klem omhoog", "volgorde", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.order_down",
+        &[],
+        &["klem omlaag", "volgorde", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.style",
+        &[],
+        &["klemmenstrook stijl", "symbool", "uiterlijk"],
+    ),
+    nl(
+        "terminal.restore_declined",
+        &[],
+        &["geweigerde voorstellen", "afgewezen klemmen", "herstellen"],
+    ),
     nl("view.terminals_drawer", &[], &["klemmen", "klemmenstroken"]),
     nl("view.cables_drawer", &[], &["kabels", "aders"]),
     nl("view.devices_drawer", &[], &["apparaten", "onderdelen"]),

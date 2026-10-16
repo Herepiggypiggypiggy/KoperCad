@@ -111,6 +111,7 @@ mod standards_report;
 mod standards_report_tests;
 mod status_bar;
 mod symbol_preview;
+mod terminal_edit;
 mod terminals;
 mod tidy;
 mod tips;
@@ -1096,6 +1097,7 @@ impl NovoApp {
         self.electrical_window(&ctx);
         self.safety_window(&ctx);
         self.numbering_window(&ctx);
+        self.terminal_edit_windows(&ctx);
         self.page_form_dialog(&ctx);
         self.sheet_import_dialog(&ctx);
         self.outline_dialogs(&ctx);
