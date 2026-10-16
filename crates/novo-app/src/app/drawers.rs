@@ -115,9 +115,11 @@ impl NovoApp {
                     },
                     Drawer::Cables => {
                         let candidates = match self.wb.part_catalog.get() {
-                            Some(catalog) if self.wb.cable_edit.picker.open => {
-                                cable_candidates(catalog, &self.wb.cable_edit.picker.query)
-                            }
+                            Some(catalog) if self.wb.cable_edit.picker.open => self
+                                .wb
+                                .cable_edit
+                                .picker
+                                .rows("cables", |query| cable_candidates(catalog, query)),
                             _ => Vec::new(),
                         };
                         cables_tab(

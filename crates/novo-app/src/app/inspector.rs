@@ -287,12 +287,17 @@ impl NovoApp {
             self.backend.document(),
             self.wb.inspector.picker.open,
         ) {
-            (Some(catalog), Some(doc), true) => device_candidates(
-                catalog,
-                doc.project(),
-                device,
-                &self.wb.inspector.picker.query,
-            ),
+            (Some(catalog), Some(doc), true) => {
+                let scope = format!(
+                    "{device:?}{}",
+                    doc.project()
+                        .device(device)
+                        .map_or(String::new(), |d| d.tag.to_string())
+                );
+                self.wb.inspector.picker.rows(&scope, |query| {
+                    device_candidates(catalog, doc.project(), device, query)
+                })
+            }
             _ => Vec::new(),
         };
 
@@ -649,7 +654,7 @@ fn inspector_body(
             .on_hover_text("Pick this device's part from the catalog (Parts window: Ctrl+K, Parts)")
             .clicked()
         {
-            state.picker.open = !state.picker.open;
+            state.picker.toggle();
         }
     });
     if state.picker.open
@@ -661,7 +666,7 @@ fn inspector_body(
         )
     {
         actions.push(InspectorAction::AssignPart(key));
-        state.picker.open = false;
+        state.picker.close();
     }
 
     ui.add_space(6.0);
