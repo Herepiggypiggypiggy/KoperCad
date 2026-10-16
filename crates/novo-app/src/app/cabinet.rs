@@ -450,6 +450,7 @@ impl NovoApp {
         let place_key = self.command_shortcut_text(ui.ctx(), "cabinet.place-all");
         let plate_face = !self.cabinet.table;
         let mut place_anchor: Option<(egui::Rect, bool)> = None;
+        let mut all_placed_note = false;
         ui.horizontal_top(|ui| {
             ui.add_space(4.0);
             cabinet_bar::group(ui, "Panel", |ui| {
@@ -546,40 +547,46 @@ impl NovoApp {
                     }
                 });
             }
-            cabinet_bar::group(ui, "Route", |ui| {
-                if plate_face
-                    && cabinet_bar::button(ui, icons::PATH, "Route all", self.cabinet.routes)
-                        .on_hover_text(
-                            "Route every wire through the ducts: lengths, duct fill and problems",
+            if plate_face || !narrow {
+                cabinet_bar::group(ui, "Route", |ui| {
+                    if plate_face
+                        && cabinet_bar::button(ui, icons::PATH, "Route all", self.cabinet.routes)
+                            .on_hover_text(
+                                "Route every wire through the ducts: lengths, duct fill and problems",
+                            )
+                            .clicked()
+                    {
+                        ask = Some(Ask::ToggleRoutes);
+                    }
+                    if !narrow
+                        && cabinet_bar::button(
+                            ui,
+                            icons::SCISSORS,
+                            "Cut list",
+                            self.cabinet.rules.cut_open,
                         )
+                        .on_hover_text("Bars of rail and duct to buy and cut")
                         .clicked()
-                {
-                    ask = Some(Ask::ToggleRoutes);
-                }
-                if !narrow
-                    && cabinet_bar::button(
-                        ui,
-                        icons::SCISSORS,
-                        "Cut list",
-                        self.cabinet.rules.cut_open,
-                    )
-                    .on_hover_text("Bars of rail and duct to buy and cut")
-                    .clicked()
-                {
-                    self.cabinet.rules.cut_open ^= true;
-                }
-            });
+                    {
+                        self.cabinet.rules.cut_open ^= true;
+                    }
+                });
+            }
             cabinet_bar::group(ui, "View", |ui| {
-                if cabinet_bar::segment(ui, "Plate", plate_face).clicked() && !plate_face {
-                    ask = Some(Ask::ToggleTable);
-                }
-                if cabinet_bar::segment(ui, "Table", !plate_face)
-                    .on_hover_text("Devices as a table (Ctrl+T)")
-                    .clicked()
-                    && plate_face
-                {
-                    ask = Some(Ask::ToggleTable);
-                }
+                ui.scope(|ui| {
+                    // One joined control: no gap between the two halves.
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    if cabinet_bar::segment(ui, "Plate", plate_face).clicked() && !plate_face {
+                        ask = Some(Ask::ToggleTable);
+                    }
+                    if cabinet_bar::segment(ui, "Table", !plate_face)
+                        .on_hover_text("Devices as a table (Ctrl+T)")
+                        .clicked()
+                        && plate_face
+                    {
+                        ask = Some(Ask::ToggleTable);
+                    }
+                });
                 if plate_face && !narrow {
                     super::heat::toggle(ui, &mut self.cabinet.heat);
                 }
@@ -1027,6 +1034,9 @@ impl NovoApp {
                             "cabinet.place-all" if unplaced > 0 && !has_plan => {
                                 ask = Some(Ask::PlaceAll);
                             }
+                            "cabinet.place-all" if !has_plan => {
+                                all_placed_note = true;
+                            }
                             _ => {}
                         }
                     }
@@ -1062,6 +1072,9 @@ impl NovoApp {
             ask = Some(a);
         }
 
+        if all_placed_note {
+            self.message(Level::Info, "Every device of this panel is placed");
+        }
         if let Some((rect, clicked)) = place_anchor {
             self.anchor("cabinet.place-all", rect, "Place all");
             if clicked {

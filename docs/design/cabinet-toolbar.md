@@ -44,8 +44,8 @@ the toolbar, so the bar holds only things you press.
   bar does not jump. The reason is written in the status strip ("Every device
   of this panel is placed"), not only in the tooltip, so keyboard users see it.
 - While a preview is shown, the Place group becomes **Accept (Enter)**
-  (primary) and **Cancel (Esc)**, plus **Why here?** (opens the rule
-  explanation that exists today). Place all steps aside; nothing else changes
+  (primary) and **Cancel (Esc)**. Place all steps aside; the reason a device
+  went where it did stays in the inspector ("why"), not in the bar; nothing else changes
   position.
 - Lesson anchor id `cabinet.place-all`, so a step can point at it.
 
