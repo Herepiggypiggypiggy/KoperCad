@@ -1,6 +1,7 @@
 //! The hooks a turbulence model uses: eddy viscosity and wall values.
 
 use novo_cfd::flow::*;
+use novo_cfd::solids::Medium;
 
 fn setup() -> (Mesh, FlowConfig) {
     let mesh = Mesh::uniform([10, 10, 3], [0.3, 0.3, 0.1]);
@@ -103,4 +104,57 @@ fn nan_wall_entries_keep_the_molecular_value() {
     s.wall_nu = Some(vec![[f64::NAN; 6]; cells]);
     s.wall_alpha = Some(vec![[f64::NAN; 6]; cells]);
     assert!(same(&laminar, &run(s), 0.0));
+}
+
+#[test]
+fn a_wall_function_next_to_a_solid_conserves_heat() {
+    // Air | heated solid column, the air side wall fixed at 20 C, everything
+    // else adiabatic. The wall function on the air side of the interface
+    // changes the face conductance; the heat leaving the air cell must be
+    // the heat entering the solid cell, so at steady state the wall takes
+    // exactly the heating.
+    let mesh = Mesh::uniform([12, 3, 3], [0.12, 0.03, 0.03]);
+    let cells = mesh.cells();
+    let mut md = Medium::air(cells);
+    let heat = 5000.0; // W/m3 in the solid
+    for k in 0..3 {
+        for j in 0..3 {
+            for i in 6..12 {
+                let id = mesh.cell([i, j, k]);
+                md.fluid_frac[id] = 0.0;
+                md.k_solid[id] = 2.0;
+                md.c_solid[id] = 2.0e6;
+                md.heat_w_m3[id] = heat;
+            }
+        }
+    }
+    let mut cfg = FlowConfig::air();
+    cfg.gravity = [0.0; 3];
+    cfg.faces[Face::XMin as usize].thermal = ThermalBc::Fixed(20.0);
+    cfg.medium = Some(md);
+    let mut s = FlowSolver::new(mesh, cfg, 20.0);
+    // the air cell at the interface: its upper x face gets a wall value
+    // three times the molecular diffusivity
+    let mut table = vec![[f64::NAN; 6]; cells];
+    for k in 0..3 {
+        for j in 0..3 {
+            table[s.mesh.cell([5, j, k])][1] = 3.0 * 2.2e-5;
+        }
+    }
+    s.wall_alpha = Some(table);
+    let mut steps = 0;
+    let mut dtdt = 0.0;
+    for _ in 0..40000 {
+        let info = s.step(2000.0);
+        steps += 1;
+        dtdt = info.max_dtdt;
+        if dtdt < 1e-12 {
+            break;
+        }
+    }
+    println!("steps {steps}, dT/dt {dtdt:.2e}");
+    let q_in = heat * 6.0 * 0.01 * 0.03 * 0.03;
+    let q_out = s.wall_heat_w(Face::XMin as usize);
+    println!("wall function at a solid: heating {q_in:.6} W, wall takes {q_out:.6} W");
+    assert!((q_out - q_in).abs() / q_in < 1e-6, "{q_out} vs {q_in}");
 }

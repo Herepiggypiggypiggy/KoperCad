@@ -844,9 +844,9 @@ impl FlowSolver {
                             let w = m.dx[a][s];
                             for upper in [false, true] {
                                 let face = 2 * a + upper as usize;
-                                // wall function: replaces kc / cc (alpha) on this face
-                                let a_wall = wall_value(wall_alpha, m, &[ix], face);
                                 if (!upper && s == 0) || (upper && s + 1 == n[a]) {
+                                    // wall function: replaces kc / cc (alpha) on this face
+                                    let a_wall = wall_value(wall_alpha, m, &[ix], face);
                                     let kc = a_wall.map_or(kc, |aw| aw * cc);
                                     // an opening takes its share of the face off the wall
                                     let closed = 1.0
@@ -871,16 +871,30 @@ impl FlowSolver {
                                     let q = if upper { s + 1 } else { s - 1 };
                                     let dist = (m.centre[a][q] - m.centre[a][s]).abs();
                                     let nb = m.cell(with(ix, a, q));
-                                    let lo = if upper { nb } else { id };
-                                    let mut kf = self.k_face[a][lo];
-                                    if let Some(aw) = a_wall {
-                                        // fluid half cell with the wall function in series
-                                        // with the half cell of whatever lies beyond
-                                        let dn = 0.5 * m.dx[a][q];
-                                        kf = dist / (0.5 * w / (aw * cc) + dn / self.k_cell[nb]);
+                                    // one conductance for the face, the same from both
+                                    // cells so the heat leaving one enters the other
+                                    let (lo, hi) = if upper { (id, nb) } else { (nb, id) };
+                                    let (lo_ix, hi_ix) = if upper {
+                                        (ix, with(ix, a, q))
+                                    } else {
+                                        (with(ix, a, q), ix)
+                                    };
+                                    let mut kf = self.k_face[a][hi];
+                                    let (c_lo, c_hi) = (self.c_cell[lo], self.c_cell[hi]);
+                                    let (w_lo, w_hi) = (m.dx[a][lo_ix[a]], m.dx[a][hi_ix[a]]);
+                                    let wall_lo = wall_value(wall_alpha, m, &[lo_ix], 2 * a + 1);
+                                    let wall_hi = wall_value(wall_alpha, m, &[hi_ix], 2 * a);
+                                    if let Some(aw) = wall_lo {
+                                        kf = dist
+                                            / (0.5 * w_lo / (aw * c_lo)
+                                                + 0.5 * w_hi / self.k_cell[hi]);
+                                    } else if let Some(aw) = wall_hi {
+                                        kf = dist
+                                            / (0.5 * w_hi / (aw * c_hi)
+                                                + 0.5 * w_lo / self.k_cell[lo]);
                                     } else if nu_t.is_some() {
-                                        let eff = harmonic(k_eff(id), k_eff(nb));
-                                        let mol = harmonic(self.k_cell[id], self.k_cell[nb]);
+                                        let eff = harmonic(k_eff(lo), k_eff(hi));
+                                        let mol = harmonic(self.k_cell[lo], self.k_cell[hi]);
                                         kf *= eff / mol;
                                     }
                                     let cn = kf / (cc * dist * w);
@@ -921,10 +935,13 @@ fn wall_value(
     face: usize,
 ) -> Option<f64> {
     let table = table?;
-    let vals: Vec<f64> = cells
-        .iter()
-        .map(|c| table[m.cell(*c)][face])
-        .filter(|v| !v.is_nan())
-        .collect();
-    (!vals.is_empty()).then(|| vals.iter().sum::<f64>() / vals.len() as f64)
+    let (mut sum, mut count) = (0.0, 0);
+    for c in cells {
+        let v = table[m.cell(*c)][face];
+        if !v.is_nan() {
+            sum += v;
+            count += 1;
+        }
+    }
+    (count > 0).then(|| sum / count as f64)
 }
