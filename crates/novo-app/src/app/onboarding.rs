@@ -9,7 +9,6 @@ use novo_core::{Document, Placement, Point, Tx};
 use novo_editor::edit::{PlaceOptions, place};
 use novo_editor::{Tool, naming::Numbering};
 use novo_symbols::Library;
-use novo_theme::widgets::section_label;
 
 use super::{Level, NovoApp};
 
@@ -229,23 +228,24 @@ impl NovoApp {
         let on_example = self.project_name().as_deref() == Some(super::example::EXAMPLE_NAME);
         let mut example = false;
         let mut close = false;
-        super::panel::Panel::new(
+        let panel = super::panel::Panel::new(
             "walkthrough",
-            "Fast keys",
+            format!("Fast keys · {done} of {}", STEPS.len()),
             canvas,
             super::panel::Side::BottomRight,
             300.0,
         )
         .fixed_open()
-        .fit()
-        .show(ctx, |ui| {
+        .fit();
+        // The pill has no heading of its own to put in a title bar.
+        let panel = if pill { panel.bare() } else { panel };
+        panel.show(ctx, |ui| {
             if pill {
                 ui.weak(format!("Fast keys {done} of {}", STEPS.len()));
                 return;
             }
             ui.set_max_width(300.0);
             ui.horizontal(|ui| {
-                section_label(ui, &format!("Fast keys · {done} of {}", STEPS.len()));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let label = if next.is_none() { "Close" } else { "Skip" };
                     if ui.small_button(label).clicked() {

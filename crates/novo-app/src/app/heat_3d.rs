@@ -21,6 +21,8 @@ pub(crate) struct Heat3d {
     /// Temperature of the shell between ambient (0) and the hottest cell (1).
     pub iso_at: f32,
     pub lines: bool,
+    /// Arrows on the slice plane instead of (or besides) streamlines.
+    pub arrows: bool,
     /// Colour the device bodies by the air temperature in front of them.
     pub devices: bool,
 }
@@ -34,6 +36,7 @@ impl Default for Heat3d {
             iso: false,
             iso_at: 0.6,
             lines: false,
+            arrows: false,
             devices: false,
         }
     }
@@ -49,7 +52,7 @@ pub(crate) struct Place {
 }
 
 impl Place {
-    fn world(&self, p: [f64; 3]) -> Vec3 {
+    pub(super) fn world(&self, p: [f64; 3]) -> Vec3 {
         self.frame
             .world(p[0] - self.plate_x, p[1] - self.plate_y, p[2])
     }
@@ -137,6 +140,12 @@ pub(crate) fn overlays(
     }
     if settings.lines {
         let l = stream_lines(flow);
+        if !l.positions.is_empty() {
+            out.push(Overlay::Lines(l));
+        }
+    }
+    if settings.arrows {
+        let l = super::heat_arrows::arrows(snap, place, settings.axis, settings.slice_at);
         if !l.positions.is_empty() {
             out.push(Overlay::Lines(l));
         }
