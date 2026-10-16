@@ -99,6 +99,19 @@ fn fit(text: &str, width: f32, size: f32, bold: bool) -> String {
 
 fn draw_layout(w: &mut draw::PageWriter, layout: &PageLayout) {
     for t in &layout.texts {
+        if t.text == novo_reports::TICK_BOX {
+            // The base fonts have no ballot box: draw a square to tick.
+            let side = (t.height * 0.6).min(t.width * 0.8).min(4.0) as f32;
+            let (cx, cy) = ((t.x + t.width / 2.0) as f32, (t.y + t.height / 2.0) as f32);
+            w.primitive(&Primitive::stroked(
+                Shape::Rect {
+                    min: Vec2::new(cx - side / 2.0, cy - side / 2.0),
+                    max: Vec2::new(cx + side / 2.0, cy + side / 2.0),
+                },
+                Stroke::world(0.25, Color::BLACK),
+            ));
+            continue;
+        }
         let size = t.text_mm as f32;
         let text = fit(&t.text, t.width as f32, size, t.bold);
         if text.is_empty() {

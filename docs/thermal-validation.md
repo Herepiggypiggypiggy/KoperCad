@@ -28,6 +28,7 @@ Errors are signed, relative to the reference unless marked abs.
 | Steady slab, fixed walls | linear profile | max error, dT 60 K | below 1e-6 K |
 | Slab with heat source, 10 / 20 / 40 cells | parabola | mean temperature rise | +2.0% / +0.5% / +0.125% (second order) |
 | Heat balance of a source | generated = wall flux | ratio error | below 1e-6 |
+| Heated vertical plate in open air, Ra_H 5.2e7, Pr 0.705, 24x40 then 36x60 | Churchill-Chu 1975 (laminar) | mean Nu | +7.8% then +3.9% (correlation itself good to about 5%) |
 | Transient slab, dt = tau/200 and tau/400 | Fourier series | centre temperature at 0.1 tau | +2.34% and +1.19% (first order in dt) |
 
 ## What this says
@@ -44,7 +45,6 @@ Errors are signed, relative to the reference unless marked abs.
 
 | Case | Blocked on |
 | --- | --- |
-| Heated vertical plate, local Nusselt against Churchill-Chu | open boundaries and solids (lane C1/C2): the current core has closed walls only |
 | Cabinet temperature rise against IEC 60890 hand calculation and the 2D engine | scenario-to-mesh (C1) and heat loss through walls (C2) |
 | Conjugate slab layers with different conductivity | solids with own conductivity (C2); the core has one diffusivity |
 | Fan and chimney against the 2D formulas | openings and fans (C2) |

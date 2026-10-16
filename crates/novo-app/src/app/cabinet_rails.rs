@@ -281,7 +281,7 @@ pub(super) fn show_window(
     }
     let mut open = true;
     let mut ask = None;
-    egui::Window::new("Rails and ducts")
+    let window = egui::Window::new("Rails and ducts")
         .open(&mut open)
         .default_width(560.0)
         .show(ctx, |ui| {
@@ -411,6 +411,15 @@ pub(super) fn show_window(
                     }
                 });
         });
+    if let Some(w) = window {
+        super::cabinet_bar::note_rect(
+            ctx,
+            "cabinet.rails",
+            "Rails and ducts",
+            w.response.rect,
+            false,
+        );
+    }
     state.open = open;
     ask
 }

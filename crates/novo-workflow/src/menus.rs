@@ -100,6 +100,10 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     // Reports
     ("export.reports", at("Reports")),
     ("export.assembly", at("Reports")),
+    ("view.bench", at("Reports")),
+    ("export.bench_cut", at("Reports")),
+    ("export.ferrules", at("Reports")),
+    ("export.labels", at("Reports")),
     ("report.toc", at("Reports")),
     ("report.bom", at("Reports")),
     ("report.devices", at("Reports")),

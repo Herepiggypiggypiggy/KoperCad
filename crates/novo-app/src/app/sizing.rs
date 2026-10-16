@@ -260,11 +260,20 @@ pub(super) fn show_window(ctx: &egui::Context, state: &mut SizingState, devices:
         return;
     }
     let mut open = true;
-    egui::Window::new("Size the enclosure")
+    let window = egui::Window::new("Size the enclosure")
         .open(&mut open)
         .default_width(280.0)
         .resizable(false)
         .show(ctx, |ui| show_panel(ui, state, devices));
+    if let Some(w) = window {
+        super::cabinet_bar::note_rect(
+            ctx,
+            "cabinet.sizing",
+            "Size enclosure",
+            w.response.rect,
+            false,
+        );
+    }
     state.panel_open = open;
 }
 

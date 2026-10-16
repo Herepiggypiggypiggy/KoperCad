@@ -74,7 +74,11 @@ pub(super) fn primary(
 }
 
 /// A count in the status strip. `level` colours it when it needs a look.
-pub(super) fn pill(ui: &mut egui::Ui, text: &str, level: Option<novo_theme::widgets::Level>) {
+pub(super) fn pill(
+    ui: &mut egui::Ui,
+    text: &str,
+    level: Option<novo_theme::widgets::Level>,
+) -> egui::Response {
     let p = Palette::of(ui);
     let (fill, color) = match level {
         Some(l) => (l.wash(p), l.color(p)),
@@ -86,16 +90,59 @@ pub(super) fn pill(ui: &mut egui::Ui, text: &str, level: Option<novo_theme::widg
         .inner_margin(egui::Margin::symmetric(9, 2))
         .show(ui, |ui| {
             ui.label(egui::RichText::new(text).size(12.0).color(color));
-        });
+        })
+        .response
 }
 
-/// A bar control a lesson may point at; reported to the learning layer once
-/// the frame has released its borrow of the project.
+/// A control or panel of the Cabinet a lesson may point at; reported to the
+/// learning layer once the frame has released its borrow of the project.
+#[derive(Clone)]
 pub(super) struct Anchor {
     pub(super) id: &'static str,
     pub(super) label: &'static str,
     pub(super) rect: egui::Rect,
     pub(super) clicked: bool,
+}
+
+fn sink() -> egui::Id {
+    egui::Id::new("cabinet_lesson_anchors")
+}
+
+/// Remembers `rect` as the anchor `id` from code that has the context but
+/// not the frame's list: windows, panels and the cards of the inspector.
+/// [`take_noted`] collects them at the end of the frame.
+pub(super) fn note_rect(
+    ctx: &egui::Context,
+    id: &'static str,
+    label: &'static str,
+    rect: egui::Rect,
+    clicked: bool,
+) {
+    ctx.data_mut(|d| {
+        d.get_temp_mut_or_default::<Vec<Anchor>>(sink())
+            .push(Anchor {
+                id,
+                label,
+                rect,
+                clicked,
+            });
+    });
+}
+
+/// [`note_rect`] for a response, with its click.
+pub(super) fn note_ctx(
+    ctx: &egui::Context,
+    id: &'static str,
+    label: &'static str,
+    response: &egui::Response,
+) {
+    note_rect(ctx, id, label, response.rect, response.clicked());
+}
+
+/// The anchors noted with [`note_rect`] since the last call.
+pub(super) fn take_noted(ctx: &egui::Context) -> Vec<Anchor> {
+    ctx.data_mut(|d| d.remove_temp::<Vec<Anchor>>(sink()))
+        .unwrap_or_default()
 }
 
 /// Remembers `response` as the anchor `id` and hands it back.

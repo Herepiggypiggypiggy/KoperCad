@@ -164,6 +164,8 @@ pub(crate) struct Workbench {
     /// The DXF background panel, while open; inside, the values being
     /// edited before they are committed.
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
+    /// The Bench output window (cut list, ferrules, labels), while open.
+    pub(super) bench: Option<super::bench::BenchState>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
     /// An AutomationML import waiting for the person to confirm.
     pub(super) aml_import: Option<super::interop::AmlImport>,
@@ -247,6 +249,7 @@ impl Default for Workbench {
             sim: super::simulate::SimState::new(),
             changes: None,
             background_panel: None,
+            bench: None,
             commissioning: None,
             underlay_seen: None,
             aml_import: None,
@@ -327,6 +330,10 @@ const APP_COMMANDS: &[&str] = &[
     "export.wirecut_xlsx",
     "export.wiring_dxf",
     "export.wirecut_page",
+    "view.bench",
+    "export.bench_cut",
+    "export.ferrules",
+    "export.labels",
     "cabinet.routes",
     "cabinet.rails",
     "export.bom",
@@ -831,6 +838,16 @@ impl NovoApp {
             }
             "export.wiring_dxf" => self.export_wiring_dxf_of_panel(),
             "export.wirecut_page" => self.add_wire_production_page(),
+            "view.bench" => self.open_bench(),
+            "export.bench_cut" => {
+                self.export_bench_cut();
+            }
+            "export.ferrules" => {
+                self.export_ferrules();
+            }
+            "export.labels" => {
+                self.export_labels();
+            }
             "export.sheets_csv" => {
                 self.export_spreadsheet_csv();
             }
