@@ -585,6 +585,8 @@ struct NoteSlot {
     /// The symbol's ink, which the free places are measured from.
     ink: crate::Aabb,
     what: NoteWhat,
+    /// The user's offset from the default place (zero when never moved).
+    offset: Vec2,
     /// Where the anchor asks for the note (with the user's offset).
     preferred: (Vec2, Anchor),
     /// Where the note is drawn now: `(position, anchor of the whole note)`.
@@ -600,6 +602,11 @@ enum NoteWhat {
     /// A contact table (and the warning under it), `size` big.
     Table { note: SymbolNote, size: Vec2 },
 }
+
+/// How far from its symbol's ink a note can end up, in mm: the search's
+/// last ring plus room for the note itself. A change farther away than this
+/// cannot move the note.
+const NOTE_REACH: f32 = 60.0;
 
 /// Symbol properties (in mm) a user-moved note's offset is kept in, from
 /// the place its anchor asks for.
@@ -686,9 +693,13 @@ pub enum LabelKind {
     Potential,
     Literal,
     Property,
-    /// Text the canvas adds itself (a symbol's art text, the strip name, a
-    /// cross-reference note): shown, not edited by double click.
+    /// Text the canvas adds itself (a symbol's art text, the strip name):
+    /// shown, not edited by double click.
     Fixed,
+    /// A cross-reference note next to a symbol (text or a contact table's
+    /// text): not edited by double click, but dragged by hand
+    /// ([`PageScene::note_offset_after`]).
+    Note,
 }
 
 /// The kind of the name a symbol of this role shows.
@@ -933,6 +944,8 @@ impl PageScene {
                     text: None,
                     kind: if tag {
                         role_label_kind(&sym.role)
+                    } else if self.note_slots.get(&s).is_some_and(|n| index >= n.labels) {
+                        LabelKind::Note
                     } else {
                         LabelKind::Fixed
                     },
@@ -945,6 +958,30 @@ impl PageScene {
             }),
             _ => None,
         }
+    }
+
+    /// The offset (mm, from the default place) that puts `symbol`'s note
+    /// `delta` further on than it is drawn now. It is what a drag of the
+    /// note stores in the symbol's `note_dx` and `note_dy` properties; the
+    /// note keeps the anchor its symbol gives it, so the whole note ends
+    /// exactly `delta` from where it was, whichever free place it was at.
+    /// `None` when the symbol has no text note on this page.
+    pub fn note_offset_after(&self, symbol: SymbolId, delta: Vec2) -> Option<Vec2> {
+        let slot = self.note_slots.get(&symbol)?;
+        let item = self.scene.get(item_id(AnyId::Symbol(symbol)))?;
+        let (min, size) = match &slot.what {
+            NoteWhat::Text(_) => {
+                let b = item.labels.get(slot.labels)?.bounds();
+                (b.min, b.max - b.min)
+            }
+            NoteWhat::Table { size, .. } => (slot.at.0 - slot.at.1.fractions() * *size, *size),
+        };
+        let size = match &slot.what {
+            NoteWhat::Table { size, .. } => *size,
+            NoteWhat::Text(_) => size,
+        };
+        let default = slot.preferred.0 - slot.offset;
+        Some(min + delta + slot.preferred.1.fractions() * size - default)
     }
 
     /// Replaces the notes drawn next to symbols (cross references). Only
@@ -1067,7 +1104,7 @@ impl PageScene {
         for id in contents.texts {
             self.sync_text(project, id);
         }
-        self.refresh_notes();
+        self.refresh_notes(None);
     }
 
     /// Updates the scene after an edit. Returns whether anything changed.
@@ -1219,7 +1256,12 @@ impl PageScene {
         if frame_dirty {
             self.frame(project);
         }
+        // Where the drawing changed, so only the notes near it are placed
+        // again.
+        let mut touched = Vec::new();
         for id in dirty {
+            let key = item_id(id);
+            touched.extend(self.scene.item_bounds(key));
             match id {
                 AnyId::Symbol(s) => self.sync_symbol(project, s, art),
                 AnyId::Junction(j) => self.sync_junction(project, j),
@@ -1227,8 +1269,9 @@ impl PageScene {
                 AnyId::Text(t) => self.sync_text(project, t),
                 _ => {}
             }
+            touched.extend(self.scene.item_bounds(key));
         }
-        self.refresh_notes();
+        self.refresh_notes(Some(&touched));
         self.scene.revision() != rev
     }
 
@@ -1620,6 +1663,7 @@ impl PageScene {
                 primitives,
                 labels,
                 ink,
+                offset: offset.unwrap_or(Vec2::ZERO),
                 preferred: (base.pos, base.anchor),
                 at: (base.pos, base.anchor),
                 what: NoteWhat::Text(base),
@@ -1642,6 +1686,7 @@ impl PageScene {
                 primitives,
                 labels,
                 ink,
+                offset: offset.unwrap_or(Vec2::ZERO),
                 preferred: (origin, Anchor::TopLeft),
                 at: (origin, Anchor::TopLeft),
                 what: NoteWhat::Table {
@@ -1729,11 +1774,19 @@ impl PageScene {
         if slot.moved {
             return preferred;
         }
+        let later = |key: ItemId| match self.ids.get(&key) {
+            Some(AnyId::Symbol(s)) if *s > id => self
+                .note_slots
+                .get(s)
+                .map(|slot| (slot.primitives, slot.labels)),
+            _ => None,
+        };
         let obstacles = crate::note_place::Obstacles {
             scene: &self.scene,
             own: item,
             own_id: item_id(AnyId::Symbol(id)),
             keep: (slot.primitives, slot.labels),
+            later: &later,
         };
         let height = self.style.tag_height;
         for at in crate::note_place::candidates(preferred, &slot.ink, height) {
@@ -1749,9 +1802,10 @@ impl PageScene {
     /// drawn through a note, or a symbol moved onto it, moves the note to a
     /// free place, and a note moves back when the way is clear. Returns
     /// whether any note moved.
-    fn refresh_notes(&mut self) -> bool {
+    fn refresh_notes(&mut self, changed: Option<&[crate::Aabb]>) -> bool {
         let mut ids: Vec<SymbolId> = self.note_slots.keys().copied().collect();
         ids.sort();
+        let mut changed: Option<Vec<crate::Aabb>> = changed.map(<[_]>::to_vec);
         let mut moved = false;
         for id in ids {
             let key = item_id(AnyId::Symbol(id));
@@ -1762,11 +1816,18 @@ impl PageScene {
             if slot.moved {
                 continue;
             }
+            if let Some(boxes) = &changed {
+                let reach = slot.ink.expand(NOTE_REACH);
+                if !boxes.iter().any(|b| b.intersects(&reach)) {
+                    continue;
+                }
+            }
             let at = self.chosen_place(slot, item, id);
             if at == slot.at {
                 continue;
             }
             let (p, l) = self.note_parts(slot, at);
+            let before = self.scene.item_bounds(key);
             let mut item = item.clone();
             item.primitives.truncate(slot.primitives);
             item.labels.truncate(slot.labels);
@@ -1775,6 +1836,11 @@ impl PageScene {
             self.scene.insert(key, item);
             if let Some(slot) = self.note_slots.get_mut(&id) {
                 slot.at = at;
+            }
+            // Notes after this one may now have to move, or move back.
+            if let Some(boxes) = &mut changed {
+                boxes.extend(before);
+                boxes.extend(self.scene.item_bounds(key));
             }
             moved = true;
         }
@@ -2585,6 +2651,71 @@ mod tests {
                 l.text
             );
         }
+    }
+
+    #[test]
+    fn two_competing_notes_settle_and_stay_put() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        // A third symbol right beside the coil, so both notes want the
+        // same room.
+        let (x, _) = doc
+            .transact("beside", |tx| {
+                let d = tx.add_device(DeviceTag::parse("-K2")?, "Relay")?;
+                tx.place_symbol(
+                    page,
+                    "iec/coil",
+                    MPlacement::at(Point::new(112.0, 100.0)),
+                    vec![Pin::new("A1", 0.0, -5.0), Pin::new("A2", 0.0, 5.0)],
+                    SymbolRole::Device {
+                        device: d,
+                        main: true,
+                    },
+                )
+            })
+            .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_notes(
+            doc.project(),
+            [right_note(k1), right_note(x)],
+            &PlaceholderArt,
+        );
+        let both = |ps: &PageScene| (note_label_of(ps, k1), note_label_of(ps, x));
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        let (a, b) = both(&ps);
+        assert!(
+            !a.bounds().intersects(&b.bounds()),
+            "the two notes overlap: {:?} {:?}",
+            a.bounds(),
+            b.bounds()
+        );
+        // Placing again changes nothing.
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        assert_eq!(both(&ps), (a.clone(), b.clone()));
+        // Nor does an edit far away.
+        let ((far, _), _) = doc
+            .transact("far", |tx| {
+                let d = tx.add_device(DeviceTag::parse("-K9")?, "Far")?;
+                let far = tx.place_symbol(
+                    page,
+                    "iec/coil",
+                    MPlacement::at(Point::new(500.0, 500.0)),
+                    vec![Pin::new("A1", 0.0, -5.0), Pin::new("A2", 0.0, 5.0)],
+                    SymbolRole::Device {
+                        device: d,
+                        main: true,
+                    },
+                )?;
+                Ok((far, ()))
+            })
+            .unwrap();
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        let (_, changes) = doc
+            .transact("move", |tx| {
+                tx.move_symbol(far, MPlacement::at(Point::new(520.0, 500.0)))
+            })
+            .unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        assert_eq!(both(&ps), (a, b));
     }
 
     #[test]

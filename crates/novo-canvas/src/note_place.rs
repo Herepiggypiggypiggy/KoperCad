@@ -69,6 +69,12 @@ pub struct Obstacles<'a> {
     pub own: &'a Item,
     pub own_id: ItemId,
     pub keep: (usize, usize),
+    /// For another item that carries a note placed after this one: how many
+    /// of its primitives and labels are not that note. Notes go down one
+    /// symbol at a time in a fixed order and a note keeps clear only of the
+    /// notes before it, so the result does not depend on where the others
+    /// happen to be drawn at the moment.
+    pub later: &'a dyn Fn(ItemId) -> Option<(usize, usize)>,
 }
 
 impl Obstacles<'_> {
@@ -83,12 +89,10 @@ impl Obstacles<'_> {
     }
 
     fn blocks_box(&self, rect: &Aabb) -> bool {
-        let own = Item {
-            primitives: self.own.primitives[..self.keep.0.min(self.own.primitives.len())].to_vec(),
-            labels: self.own.labels[..self.keep.1.min(self.own.labels.len())].to_vec(),
-            ..Item::new(self.own.layer)
-        };
-        if item_touches(&own, rect) {
+        let own = &self.own;
+        let primitives = &own.primitives[..self.keep.0.min(own.primitives.len())];
+        let labels = &own.labels[..self.keep.1.min(own.labels.len())];
+        if parts_touch(primitives, labels, rect) {
             return true;
         }
         self.scene.query(rect).into_iter().any(|id| {
@@ -96,16 +100,29 @@ impl Obstacles<'_> {
                 && self
                     .scene
                     .get(id)
-                    .is_some_and(|item| item.selectable && item_touches(item, rect))
+                    .is_some_and(|item| item.selectable && self.item_blocks(id, item, rect))
         })
+    }
+
+    fn item_blocks(&self, id: ItemId, item: &Item, rect: &Aabb) -> bool {
+        match (self.later)(id) {
+            Some((p, l)) => parts_touch(
+                &item.primitives[..p.min(item.primitives.len())],
+                &item.labels[..l.min(item.labels.len())],
+                rect,
+            ),
+            None => item_touches(item, rect),
+        }
     }
 }
 
 fn item_touches(item: &Item, rect: &Aabb) -> bool {
-    item.primitives
-        .iter()
-        .any(|p| shape_touches(&p.shape, rect))
-        || item.labels.iter().any(|l| l.intersects(rect))
+    parts_touch(&item.primitives, &item.labels, rect)
+}
+
+fn parts_touch(primitives: &[Primitive], labels: &[Label], rect: &Aabb) -> bool {
+    primitives.iter().any(|p| shape_touches(&p.shape, rect))
+        || labels.iter().any(|l| l.intersects(rect))
 }
 
 /// Lines count along their length, so the corner of an L-shaped wire does
@@ -185,6 +202,7 @@ mod tests {
             own: &own,
             own_id: ItemId(99),
             keep: (1, 0),
+            later: &|_| None,
         };
         let ink = Aabb::from_corners(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let base = note_at(Vec2::new(11.0, 5.0), Anchor::CenterLeft);
@@ -201,6 +219,7 @@ mod tests {
             own: &own,
             own_id: ItemId(99),
             keep: (1, 0),
+            later: &|_| None,
         };
         let ink = Aabb::from_corners(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let base = note_at(Vec2::new(11.0, 5.0), Anchor::CenterLeft);
@@ -241,6 +260,7 @@ mod tests {
             own: &own,
             own_id: ItemId(99),
             keep: (1, 0),
+            later: &|_| None,
         };
         let base = note_at(Vec2::new(11.0, 5.0), Anchor::CenterLeft);
         assert!(!ob.blocks(&[], std::slice::from_ref(&base)));
@@ -259,6 +279,7 @@ mod tests {
             own: &own,
             own_id: ItemId(99),
             keep: (1, 0),
+            later: &|_| None,
         };
         let on_ink = note_at(Vec2::new(2.0, 5.0), Anchor::CenterLeft);
         assert!(
@@ -287,6 +308,7 @@ mod tests {
             own: &own,
             own_id: ItemId(99),
             keep: (1, 0),
+            later: &|_| None,
         };
         let ink = Aabb::from_corners(Vec2::new(0.0, 0.0), Vec2::new(10.0, 10.0));
         let base = note_at(Vec2::new(11.0, 5.0), Anchor::CenterLeft);
