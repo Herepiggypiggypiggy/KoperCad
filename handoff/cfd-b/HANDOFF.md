@@ -10,6 +10,7 @@ Validated (numbers printed by the tests):
 Traps
 - Start the wall layer from the log-law guess (`new` does it); a uniform start falls on a laminar-like branch.
 - Wall-cell strain is overridden by u_tau^2/(nu + kappa u_tau d).
+- `TurbulentFlow::new` reads the solid mask from `flow.cfg.medium` (fluid_frac < `solids::MIN_OPEN`); partly-open cells count as fluid.
 - `StepInfo` of the flow core is not exported, so `TurbulentFlow::step` returns `(max_accel, max_dtdt)`.
 - The wall functions use the absolute tangential speed (moving walls not subtracted yet).
 - Plate test with the cavity uses the core temperature at mid height; it is a cavity, not an infinite plate.
