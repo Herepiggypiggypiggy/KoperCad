@@ -32,6 +32,8 @@ pub fn flow_core_statement() -> AccuracyStatement {
             "Open vents, fans, turbulence and radiation are not yet validated.".into(),
             "Results for a cabinet carry the uncertainty of the loss data and boundary conditions."
                 .into(),
+            "Enclosure air temperatures from the 3D engine are not yet validated: a sealed-enclosure check against IEC 60890 fails (known, being fixed)."
+                .into(),
             "Time integration is first order: heat-up curves need small steps.".into(),
         ],
     }
