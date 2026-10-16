@@ -1,7 +1,6 @@
 format = 1
 id = "dxf-and-backgrounds"
 version = 1
-# Draft until File > Export DXF and the DXF background (PR #385) are on main.
 status = "early"
 title = "Hand over DXF and trace a floor plan"
 summary = "Export pages as DXF for the workshop and place a DXF drawing behind a page."
