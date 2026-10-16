@@ -137,13 +137,14 @@ jobs:
   linux:
     name: ubuntu-latest
     if: always() && github.event_name != 'schedule'
-    needs: [lint, test, test-cfd]
+    needs: [lint, test, changes, test-cfd]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - run: |
-          echo "lint: ${{ needs.lint.result }}, test: ${{ needs.test.result }}, cfd: ${{ needs.test-cfd.result }}"
+          echo "lint: ${{ needs.lint.result }}, test: ${{ needs.test.result }}, changes: ${{ needs.changes.result }}, cfd: ${{ needs.test-cfd.result }}"
           [ "${{ needs.lint.result }}" = success ] && [ "${{ needs.test.result }}" = success ] \
+            && [ "${{ needs.changes.result }}" = success ] \
             && { [ "${{ needs.test-cfd.result }}" = success ] || [ "${{ needs.test-cfd.result }}" = skipped ]; }
 
   # Decides whether the Windows job runs. Pull requests never get one.
