@@ -3,11 +3,11 @@
 # cut-out (`mounting = door_cutout`, `cutout`).
 #
 # Verified on main (59a37de0): the drill table of this sample is 20 holes of 5.5 mm (rail screws,
-# four per 535 mm rail) and 4 of 6 mm on the plate, plus 2 cut-outs on the door. The Cabinet header
-# button "Plate drawing" and the command export.plate write "<project> <+CAB> plate.pdf" next to the
+# four per 535 mm rail) and 4 of 6 mm on the plate, plus 2 cut-outs on the door. The Cabinet bar's
+# Export > "Plate drawing (PDF)" (Output group) and the command export.plate write "<project> <+CAB> plate.pdf" next to the
 # project and show "Exported <path>"; sheets are Plate, then Door when something goes through it;
 # each sheet has the tables "Holes by diameter", "Drill holes" and "Cut-outs".
-# Needs from the Cabinet owner: the anchors named below. The header button does not raise the
+# Needs from the Cabinet owner: the anchors named below. The bar's Export item does not raise the
 # command export.plate (so the steps use the palette); Ask::ExportPlate should call it.
 format = 1
 id = "panel-plate-drawing"
@@ -94,11 +94,11 @@ how_nl = ["Druk op {key:view.command_palette}.", "Typ plate.", "Voer Export plat
 title = "Export the plate drawing"
 title_nl = "Exporteer de plaattekening"
 text = """
-Press {key:view.command_palette}, type **plate** and run **Export plate drawing** (the **Plate drawing** button in the Cabinet header does the same).
+Press {key:view.command_palette}, type **plate** and run **Export plate drawing** (**Export** > **Plate drawing (PDF)** in the Output group of the Cabinet bar does the same).
 A PDF named like "Motor starter cabinet (lesson) +CAB plate.pdf" is written next to the project, and the message says "Exported" with the full path.
 """
 text_nl = """
-Druk op {key:view.command_palette}, typ **plate** en voer **Export plate drawing** uit (de knop **Plate drawing** in de kopregel van de Cabinet-weergave doet hetzelfde).
+Druk op {key:view.command_palette}, typ **plate** en voer **Export plate drawing** uit (**Export** > **Plate drawing (PDF)** in de groep Output van de Cabinet-balk doet hetzelfde).
 Een PDF met een naam als "Motor starter cabinet (lesson) +CAB plate.pdf" wordt naast het project geschreven en de melding zegt "Exported" met het volledige pad.
 """
 point = { ui = "cabinet.plate_drawing" }

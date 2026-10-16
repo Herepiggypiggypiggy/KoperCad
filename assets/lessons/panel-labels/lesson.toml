@@ -4,10 +4,10 @@
 # Verified on main (aa5977ab) with the Labels report on this sample: wires 38 labels (two per wire
 # list row), terminals 4, devices 9, cables 1. Labels exist in novo-reports and as
 # `kopercad-cli export labels <file.novo> [-k wires|terminals|devices|cables] [--layout generic|brother]
-# [-o file.csv]`; the CLI reads the saved .novo file, not the JSON of the sample. THE APP HAS NO
-# LABELS PAGE YET (the Reports workspace lists only the live reports, labels are exported on
-# demand), so this lesson works from the command line and stays a draft until Labels are in the
-# Reports workspace. Then the steps become clicks.
+# [-o file.csv]`; the CLI reads the saved .novo file, not the JSON of the sample. Since #597 the Reports workspace has a Labels report
+# (command report.labels, Reports menu) with CSV and Excel buttons; the label printer layouts
+# (generic, brother) are still only in the command line, so the lesson shows the labels in the app
+# first and then exports the printer file with the tool.
 format = 1
 id = "panel-labels"
 version = 2
@@ -48,6 +48,23 @@ text_nl = """
 **Draad**labels (een hulsje of vlag) dragen het draadnummer, waar het andere einde heen gaat en dit einde. **Klem**labels dragen de strook en de klemnaam.
 **Component**labels dragen de tag en de omschrijving. **Kabel**labels dragen de tag, de omschrijving en het aantal aders.
 """
+
+[[step]]
+id = "see-labels"
+how = ["Run Labels from the command field, or open Reports in the switcher and click Labels in the list.", "Read the first rows of the table."]
+how_nl = ["Voer Labels uit in het opdrachtveld, of open Reports in de schakelaar en klik op Labels in de lijst.", "Lees de eerste rijen van de tabel."]
+title = "See the labels in the app"
+title_nl = "Bekijk de labels in de app"
+text = """
+Run **Labels** from the command field, or open **Reports** in the switcher at the top and click **Labels** in the list. The report has one table per kind: wires (38 rows, one per wire end), terminals (4), devices (9) and cables (1).
+Each row is one label with up to three lines, exactly the text that will be printed.
+"""
+text_nl = """
+Voer **Labels** uit in het opdrachtveld, of open **Reports** in de schakelaar bovenin en klik op **Labels** in de lijst. Het rapport heeft per soort een tabel: draden (38 rijen, één per draaduiteinde), klemmen (4), componenten (9) en kabels (1).
+Elke rij is één label met hooguit drie regels, precies de tekst die wordt afgedrukt.
+"""
+expect = { command = "report.labels" }
+solve = [ { command = "report.labels" } ]
 
 [[step]]
 id = "save"
