@@ -212,3 +212,59 @@ fn wires_to_a_supply_feed_are_jobs_too() {
         .any(|r| r.cells.iter().any(|c| c.to_string().ends_with("(feed)")));
     assert!(!to_feed);
 }
+
+#[test]
+fn two_feeds_in_one_net_never_pair_with_each_other() {
+    use novo_core::{Endpoint, Pin, Placement, PotentialKind, SymbolRole};
+    let mut doc = Document::default();
+    doc.transact("Draw", |tx| {
+        let page = tx.add_page("1")?;
+        let device = tx.add_device(DeviceTag::parse("-X9")?, "Block")?;
+        let pins = (0..2).map(|i| Pin::new(i.to_string(), 8.0 * f64::from(i), 0.0));
+        let block = tx.place_symbol(
+            page,
+            "test/block",
+            Placement::at(Point::new(40.0, 60.0)),
+            pins.collect(),
+            SymbolRole::Device { device, main: true },
+        )?;
+        let mut feed = |name: &str, x: f64| {
+            let potential = tx.add_potential(name, PotentialKind::Line)?;
+            tx.place_symbol(
+                page,
+                "iec/connectivity/potential_feed",
+                Placement::at(Point::new(x, 20.0)),
+                vec![Pin::new("1", 0.0, 8.0)],
+                SymbolRole::PotentialFeed { potential },
+            )
+        };
+        let (fa, fb) = (feed("A", 40.0)?, feed("B", 48.0)?);
+        // Both feeds meet in a junction above pin 0.
+        let j = Endpoint::Junction {
+            junction: tx.add_junction(page, Point::new(44.0, 40.0))?,
+        };
+        tx.connect(Endpoint::pin(fa, 0), j)?;
+        tx.connect(Endpoint::pin(fb, 0), j)?;
+        tx.connect(j, Endpoint::pin(block, 0))?;
+        Ok(())
+    })
+    .expect("draw");
+    let jobs = wire_cut_jobs(doc.project());
+    let ends =
+        |j: &novo_reports::WireCutJob| (j.end_a.designation.clone(), j.end_b.designation.clone());
+    let all: Vec<_> = jobs.iter().map(ends).collect();
+    assert!(
+        all.iter()
+            .all(|(a, b)| !(a.ends_with("(feed)") && b.ends_with("(feed)"))),
+        "{all:?}"
+    );
+    assert_eq!(all.len(), 2, "{all:?}");
+    assert!(
+        all.contains(&("-X9:0".into(), "A (feed)".into())),
+        "{all:?}"
+    );
+    assert!(
+        all.contains(&("-X9:0".into(), "B (feed)".into())),
+        "{all:?}"
+    );
+}

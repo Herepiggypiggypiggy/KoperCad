@@ -283,22 +283,58 @@ pub(crate) fn items(project: &Project, with_feeds: bool) -> Vec<Item<'_>> {
             .collect();
         pins.sort();
         pins.dedup();
-        // Feed pins close the chain after the device pins.
-        let mut feeds: Vec<PinRef> = Vec::new();
+        // Each feed attaches to the first device pin it reaches without
+        // passing another feed; two feeds in one net never pair.
+        let mut feeds: Vec<(PinRef, PinRef)> = Vec::new();
         if with_feeds && !pins.is_empty() {
-            feeds = members
+            let is_feed = |p: PinRef| {
+                project
+                    .symbol(p.symbol)
+                    .is_some_and(|s| matches!(s.role, SymbolRole::PotentialFeed { .. }))
+            };
+            let mut at_joint: HashMap<Joint<'_>, Vec<usize>> = HashMap::new();
+            for &i in &members {
+                for end in wires[i].ends() {
+                    if let Some(j) = joint(end) {
+                        at_joint.entry(j).or_default().push(i);
+                    }
+                }
+            }
+            let mut feed_pins: Vec<PinRef> = members
                 .iter()
                 .flat_map(|&i| wires[i].ends())
-                .filter(|&end| matches!(joint(end), Some(Joint::End(Endpoint::Pin { .. }))))
                 .filter_map(Endpoint::as_pin)
-                .filter(|p| {
-                    project
-                        .symbol(p.symbol)
-                        .is_some_and(|s| matches!(s.role, SymbolRole::PotentialFeed { .. }))
-                })
+                .filter(|&p| joint(p.into()).is_some() && is_feed(p))
                 .collect();
-            feeds.sort();
-            feeds.dedup();
+            feed_pins.sort();
+            feed_pins.dedup();
+            for feed in feed_pins {
+                let start = Joint::End(Endpoint::from(feed));
+                let mut seen = vec![start.clone()];
+                let mut queue = vec![start];
+                let mut reached: Vec<PinRef> = Vec::new();
+                while let Some(at) = queue.pop() {
+                    for &i in at_joint.get(&at).into_iter().flatten() {
+                        for end in wires[i].ends() {
+                            match joint(end) {
+                                None => reached.extend(end.as_pin()),
+                                // Another feed ends the walk.
+                                Some(_) if end.as_pin().is_some_and(is_feed) => {}
+                                Some(j) if !seen.contains(&j) => {
+                                    seen.push(j.clone());
+                                    queue.push(j);
+                                }
+                                Some(_) => {}
+                            }
+                        }
+                    }
+                }
+                reached.sort();
+                reached.dedup();
+                if let Some(&pin) = reached.first() {
+                    feeds.push((pin, feed));
+                }
+            }
         }
         if pins.len() + feeds.len() < 2 {
             continue;
@@ -311,13 +347,14 @@ pub(crate) fn items(project: &Project, with_feeds: bool) -> Vec<Item<'_>> {
                 .then(a.cmp(&b))
         });
         let (page, first) = pin_key(pins[0]);
-        pins.extend(feeds);
-        for pair in pins.windows(2) {
+        let mut pairs: Vec<(PinRef, PinRef)> = pins.windows(2).map(|p| (p[0], p[1])).collect();
+        pairs.extend(feeds);
+        for (from, to) in pairs {
             connections.push(Reading {
                 reading: (page, first.x, first.y),
                 item: Item {
-                    from: pair[0],
-                    to: pair[1],
+                    from,
+                    to,
                     wires: members.iter().map(|&i| wires[i]).collect(),
                 },
             });
