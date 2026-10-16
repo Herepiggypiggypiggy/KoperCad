@@ -51,16 +51,16 @@ solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "heat-on"
-how = ["Click Heat in the header, or press {key:heat.toggle}.", "Find the chips Map, Contours, Airflow and Badges."]
-how_nl = ["Klik op Heat in de kop of druk op {key:heat.toggle}.", "Zoek de chips Map, Contours, Airflow en Badges."]
+how = ["Click Heat in the View group of the Cabinet bar, or press {key:heat.toggle}.", "Find the chips Map, Contours, Airflow and Badges."]
+how_nl = ["Klik op Heat in de groep View van de Cabinet-balk of druk op {key:heat.toggle}.", "Zoek de chips Map, Contours, Airflow en Badges."]
 title = "Turn on Heat"
 title_nl = "Zet Heat aan"
 text = """
-Click **Heat** in the header (or press {key:heat.toggle}). A coloured {tip:heat-map} appears under the devices, a legend **TEMPERATURE** appears in the corner,
+Click **Heat** in the View group of the Cabinet bar (or press {key:heat.toggle}; in a narrow window the bar folds Heat into **More**). A coloured {tip:heat-map} appears under the devices, a legend **TEMPERATURE** appears in the corner,
 and four chips appear next to the button: **Map**, **Contours**, **Airflow** and **Badges**. Each chip switches one layer on or off.
 """
 text_nl = """
-Klik op **Heat** in de kopregel (of druk op {key:heat.toggle}). Onder de componenten verschijnt een gekleurde {tip:heat-map}, in de hoek een legenda **TEMPERATURE**
+Klik op **Heat** in de groep View van de Cabinet-balk (of druk op {key:heat.toggle}; in een smal venster zit Heat in **More**). Onder de componenten verschijnt een gekleurde {tip:heat-map}, in de hoek een legenda **TEMPERATURE**
 en naast de knop vier chips: **Map**, **Contours**, **Airflow** en **Badges**. Elke chip zet één laag aan of uit.
 """
 point = { ui = "cabinet.heat" }
@@ -143,8 +143,8 @@ expect = { signal = "cabinet_dropped" }
 
 [[step]]
 id = "simulate"
-how = ["Click Simulate in the header.", "Wait until the legend says the run finished."]
-how_nl = ["Klik op Simulate in de kop.", "Wacht tot de legenda zegt dat de run klaar is."]
+how = ["Click Simulate next to the Heat chips.", "Wait until the legend says the run finished."]
+how_nl = ["Klik op Simulate naast de Heat-chips.", "Wacht tot de legenda zegt dat de run klaar is."]
 title = "Simulate it for real"
 title_nl = "Simuleer het echt"
 text = """
@@ -174,16 +174,16 @@ Zowel het voorbeeld als de simulatie zijn planningshulpmiddelen. Ze tonen waar w
 
 [[step]]
 id = "balance"
-how = ["Click Size enclosure in the header.", "Click Add to add Enclosure 1.", "Read the result under the list."]
-how_nl = ["Klik op Size enclosure in de kop.", "Klik op Add om Enclosure 1 toe te voegen.", "Lees het resultaat onder de lijst."]
+how = ["Click Size enclosure in the Arrange group (under More in a narrow window).", "Click Add to add Enclosure 1.", "Read the result under the list."]
+how_nl = ["Klik op Size enclosure in de groep Arrange (in een smal venster onder More).", "Klik op Add om Enclosure 1 toe te voegen.", "Lees het resultaat onder de lijst."]
 title = "What the heat means for the box"
 title_nl = "Wat de warmte voor de kast betekent"
 text = """
-Click **Size enclosure** in the header (or press {key:view.command_palette} and search for it). The window **Size the enclosure** opens with the inputs **Free space** (spare room on the plate, 20 %), **Ducts** (room for ducts, 20 %),
+Click **Size enclosure** in the Arrange group of the Cabinet bar, under **More** in a narrow window (or press {key:view.command_palette} and search for it). The window **Size the enclosure** opens with the inputs **Free space** (spare room on the plate, 20 %), **Ducts** (room for ducts, 20 %),
 **Ambient max** (35 C) and **Inside max** (40 C), and a choice of how the cabinet stands, at first "Floor standing, free".
 """
 text_nl = """
-Klik op **Size enclosure** in de kopregel (of druk op {key:view.command_palette} en zoek het). Het venster **Size the enclosure** opent met de invoeren **Free space** (reserveruimte op de plaat, 20 %), **Ducts** (ruimte voor kanalen, 20 %),
+Klik op **Size enclosure** in de groep Arrange van de Cabinet-balk, in een smal venster onder **More** (of druk op {key:view.command_palette} en zoek het). Het venster **Size the enclosure** opent met de invoeren **Free space** (reserveruimte op de plaat, 20 %), **Ducts** (ruimte voor kanalen, 20 %),
 **Ambient max** (35 C) en **Inside max** (40 C) en een keuze hoe de kast staat, eerst "Floor standing, free".
 """
 point = { ui = "cabinet.sizing" }

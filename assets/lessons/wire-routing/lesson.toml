@@ -44,8 +44,8 @@ solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "routes-on"
-how = ["Click Route all in the header.", "The Routes panel opens on the right and lines appear."]
-how_nl = ["Klik op Route all in de kop.", "Het paneel Routes opent rechts en er verschijnen lijnen."]
+how = ["Click Route all in the Route group of the Cabinet bar.", "The Routes panel opens on the right and lines appear."]
+how_nl = ["Klik op Route all in de groep Route van de Cabinet-balk.", "Het paneel Routes opent rechts en er verschijnen lijnen."]
 title = "Route all the wires"
 title_nl = "Route alle draden"
 text = """

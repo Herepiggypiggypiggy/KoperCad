@@ -11,6 +11,8 @@
 //!   values across a selection, one command per edit.
 //! - [`BulkTable`]: spreadsheet-style bulk edit with Excel copy and paste.
 //! - [`import_catalog`]: CSV import with English, German and Dutch headers.
+//! - [`import_inbox`]: the bulk import of every catalog file in one folder
+//!   (`kopercad-cli parts import`), with a per-maker report.
 //! - [`ImportJob`], [`LocalLibrary`], [`import_bmecat`], [`step_box`]: the
 //!   one-click part import and the per-user library of downloaded maker
 //!   files (design: `docs/PARTS-LIBRARY-DESIGN.md`). No network code here.
@@ -25,6 +27,7 @@
 mod assign;
 mod bmecat;
 mod browser;
+mod bulk;
 mod catalog;
 mod csv;
 mod import;
@@ -48,6 +51,10 @@ pub use assign::{
 };
 pub use bmecat::{BmecatError, ECLASS_CLASS_KEY, ETIM_CLASS_KEY, import_bmecat};
 pub use browser::{BrowserRow, RowAction, browser_rows};
+pub use bulk::{
+    InboxError, InboxOptions, InboxReport, MakerSummary, default_inbox, import_inbox, maker_guide,
+    prepare_inbox,
+};
 pub use catalog::{
     CATALOG_FORMAT_VERSION, Catalog, CatalogError, CatalogPart, Dimensions, MergePreview, PartKey,
     keys, user_catalog_path,

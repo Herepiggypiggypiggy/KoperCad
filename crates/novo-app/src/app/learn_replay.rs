@@ -19,7 +19,10 @@ const TOL: f64 = 1.0;
 
 /// Steps whose `solve` the editor cannot carry out today, each with the
 /// reason. A step that starts working must come off this list.
-const KNOWN_BROKEN: &[(&str, &str)] = &[];
+const KNOWN_BROKEN: &[(&str, &str)] = &[(
+    "interruption-points/same-name",
+    "needs a `rename` solve op (double-click the name, Ctrl+A, type, Enter); `xref.link` cannot pair points on two pages",
+)];
 
 /// What happened to one step.
 #[derive(Debug, Clone, PartialEq)]
@@ -83,7 +86,7 @@ impl Drive {
         self.frame();
     }
 
-    fn replay_op(&mut self, op: &SolveOp) -> Result<(), String> {
+    pub(super) fn replay_op(&mut self, op: &SolveOp) -> Result<(), String> {
         let ctx = self.ctx.clone();
         match op {
             SolveOp::Command(c) => {
@@ -115,8 +118,22 @@ impl Drive {
             SolveOp::Wire(w) => self.replay_wire(w),
             SolveOp::LivePole(l) => self.replay_live_pole(&l.live_pole.device, l.live_pole.shift),
             SolveOp::LiveCoil(l) => {
-                let symbol = self.replay_symbols(&l.live_coil.device)?[0];
-                self.app.live_coil_clicked(symbol, l.live_coil.output);
+                if !self.app.wb.live.on {
+                    return Err("the live view is not on (turn it on first)".into());
+                }
+                let device = &l.live_coil.device;
+                let symbols = self.replay_symbols(device)?;
+                let page = self.app.current_page().ok_or("no page")?;
+                let badge = super::live::coil_badges(
+                    self.doc().project(),
+                    page,
+                    &Default::default(),
+                    &Default::default(),
+                )
+                .into_iter()
+                .find(|b| b.output == l.live_coil.output && symbols.contains(&b.symbol))
+                .ok_or_else(|| format!("`{device}` has no coil badge on this page"))?;
+                self.app.live_coil_clicked(badge.symbol, badge.output);
                 self.frame();
                 Ok(())
             }
@@ -452,6 +469,7 @@ fn every_shipped_lesson_replays_from_its_own_solve() {
                     if let Some((_, reason)) = KNOWN_BROKEN.iter().find(|(k, _)| *k == key) {
                         known_seen.push(format!("{key}: {reason}"));
                         eprintln!("  known broken: {key}: {reason}");
+                        gap = true;
                     } else if ahead.contains(&(id.clone(), step.clone())) {
                         waiting.push(format!("{key}: {why}"));
                         gap = true;
