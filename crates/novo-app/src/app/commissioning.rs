@@ -26,6 +26,7 @@ use novo_xref::Place;
 use super::changes::shown_on;
 use super::pdf::{replaceable_path, write_replacing};
 use super::revisions::iso_date;
+use super::workspace::Workspace;
 use super::{Level, NovoApp, OutlineMode, projects_dir};
 
 /// Minimum height of the buttons: comfortable for a finger on a tablet.
@@ -259,7 +260,25 @@ impl NovoApp {
     /// Commissioning mode is showing, so the drawing is not edited: a change
     /// the canvas makes is taken back (see `after_canvas`).
     pub(super) fn commissioning_locks_edits(&self) -> bool {
-        self.wb.commissioning.is_some() && self.outline_mode == OutlineMode::Commissioning
+        self.workspace() == Workspace::Commissioning
+            || (self.wb.commissioning.is_some() && self.outline_mode == OutlineMode::Commissioning)
+    }
+
+    /// Each frame in the Commissioning workspace: its store is loaded (a
+    /// project opened or created meanwhile dropped it) and its panel is the
+    /// outline's tab. Picking another outline tab leaves the workspace for
+    /// the schematic, keeping that tab.
+    pub(super) fn sync_commissioning_workspace(&mut self) {
+        if self.workspace() != Workspace::Commissioning || !self.is_open() {
+            return;
+        }
+        if self.outline_mode != OutlineMode::Commissioning {
+            let chosen = self.outline_mode;
+            self.switch_workspace(Workspace::Schematic);
+            self.outline_mode = chosen;
+            return;
+        }
+        self.load_commissioning();
     }
 
     /// Reads the project's commissioning data when the mode has none yet.

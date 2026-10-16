@@ -24,6 +24,7 @@ use novo_heatview::streamline::{self, Spacing, Streamline};
 use novo_heatview::synthetic::{SynthDevice, SynthScene};
 use novo_heatview::{Scalar, Vector};
 use novo_theme::heat::{self, Verdict};
+use novo_theme::icons;
 use novo_theme::tokens as t;
 use novo_thermal::Status;
 
@@ -519,36 +520,31 @@ fn rgb(c: [u8; 3], alpha: f32) -> Color32 {
     )
 }
 
-/// The Heat chip and layer chips of the Cabinet header.
-pub(super) fn chips(ui: &mut egui::Ui, state: &mut HeatState) {
+/// The Heat toggle of the Cabinet bar (View group).
+pub(super) fn toggle(ui: &mut egui::Ui, state: &mut HeatState) -> egui::Response {
     state.poll(ui.ctx());
-    if ui
-        .selectable_label(state.on, "Heat")
-        .on_hover_text("Show how heat spreads over the plate (Shift+H)")
-        .clicked()
-    {
+    let r = ui
+        .add(egui::Button::new(format!("{}  Heat", icons::FLAME)).selected(state.on))
+        .on_hover_text("Show how heat spreads over the plate (Shift+H)");
+    if r.clicked() {
         state.on = !state.on;
     }
-    if state.on {
-        let wide = ui.available_width() > 360.0;
-        let layers = |ui: &mut egui::Ui, state: &mut HeatState| {
-            let chip = |ui: &mut egui::Ui, on: &mut bool, label: &str| {
-                if ui.selectable_label(*on, label).clicked() {
-                    *on = !*on;
-                }
-            };
-            chip(ui, &mut state.map, "Map");
-            chip(ui, &mut state.contours, "Contours");
-            chip(ui, &mut state.airflow, "Airflow");
-            chip(ui, &mut state.badges, "Badges");
-        };
-        if wide {
-            layers(ui, state);
-        } else {
-            ui.menu_button("Layers", |ui| layers(ui, state));
+    r
+}
+
+/// The layer chips and simulate controls, in the strip under the bar while
+/// Heat is on.
+pub(super) fn strip(ui: &mut egui::Ui, state: &mut HeatState) {
+    let chip = |ui: &mut egui::Ui, on: &mut bool, label: &str| {
+        if ui.selectable_label(*on, label).clicked() {
+            *on = !*on;
         }
-        simulate_controls(ui, state);
-    }
+    };
+    chip(ui, &mut state.map, "Map");
+    chip(ui, &mut state.contours, "Contours");
+    chip(ui, &mut state.airflow, "Airflow");
+    chip(ui, &mut state.badges, "Badges");
+    simulate_controls(ui, state);
 }
 
 /// Keep as A, the Δ chip and Clear A.
