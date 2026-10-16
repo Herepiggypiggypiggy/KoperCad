@@ -187,6 +187,15 @@ pub struct PageLayout {
     pub lines: Vec<Line>,
 }
 
+impl PageLayout {
+    /// The lowest y of any rule or text box, mm (0 for an empty page).
+    pub fn bottom(&self) -> f64 {
+        let lines = self.lines.iter().flat_map(|l| [l.from.1, l.to.1]);
+        let texts = self.texts.iter().map(|t| t.y + t.height);
+        lines.chain(texts).fold(0.0, f64::max)
+    }
+}
+
 /// Lays out one page of a report: a heading (`Bill of materials · Devices
 /// without parts`, `continued` on follow-on pages, `page n / count` on the
 /// right), the column header row and the page's rows, each cell a

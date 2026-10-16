@@ -12,8 +12,9 @@ use std::collections::BTreeMap;
 use novo_canvas::{Anchor, Color, Label, Primitive, Shape, Stroke, Vec2};
 use novo_core::{PageFormat, PaperSize};
 use novo_reports::{
-    Align, CsvOptions, ExportError, PageLayout, PageSetup, ReportOutput, i18n::Translator,
-    i18n::translate_layout, i18n::translate_output, layout_page, paginate, to_csv, xlsx_bytes,
+    Align, CsvOptions, ExportError, PageLayout, PageSetup, ReportOutput, ReportPage,
+    i18n::Translator, i18n::translate_layout, i18n::translate_output, layout_page, paginate,
+    to_csv, xlsx_bytes,
 };
 use pdf_writer::types::PageMode;
 use pdf_writer::{Finish, Name, Pdf, Rect, Ref, TextStr};
@@ -152,7 +153,15 @@ struct Sheet {
     layout: PageLayout,
     bookmark: Option<String>,
     height: f32,
+    /// The report the sheet belongs to, and where its content ends (mm).
+    report: String,
+    bottom: f64,
 }
+
+/// Space between a section and the one flowing on under it, in mm.
+const FLOW_GAP_MM: f64 = 8.0;
+/// Fewest rows that make it worth starting a flowing section on a sheet.
+const FLOW_MIN_ROWS: f64 = 3.0;
 
 /// The footer line of a report PDF: document title on the left, `right` and
 /// the page number on the right.
@@ -179,7 +188,73 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
                 sections: vec![section.clone()],
                 ..(*report).clone()
             };
-            let pages = paginate(&single, &setup);
+            let mut pages = paginate(&single, &setup);
+            // A flowing section starts under the previous one when a few
+            // rows fit there; the rest follows on its own pages.
+            let mut flowed = false;
+            if section.flow
+                && let Some(prev) = sheets.last_mut()
+                && prev.report == report.report
+            {
+                let room = setup.format.size_mm().1
+                    - setup.margins.bottom
+                    - setup.title_block_mm
+                    - prev.bottom
+                    - FLOW_GAP_MM
+                    - setup.heading_mm
+                    - setup.header_row_mm;
+                let fit_rows = (room / setup.row_mm).floor();
+                if fit_rows >= FLOW_MIN_ROWS && !section.rows.is_empty() {
+                    let k = (fit_rows as usize).min(section.rows.len());
+                    let first = ReportPage {
+                        number: 1,
+                        count: 1,
+                        section: 0,
+                        rows: 0..k,
+                        continued: false,
+                    };
+                    let mut layout = layout_page(&single, &first, &setup);
+                    let heading_number = "page 1 / 1".to_owned();
+                    let heading_y = setup.margins.top;
+                    layout
+                        .texts
+                        .retain(|t| !(t.text == heading_number && t.y == heading_y && !t.bold));
+                    let layout = translate_layout(&layout, &options.language);
+                    let dy = prev.bottom + FLOW_GAP_MM - setup.margins.top;
+                    for t in layout.texts {
+                        prev.layout
+                            .texts
+                            .push(novo_reports::TextBox { y: t.y + dy, ..t });
+                    }
+                    for l in layout.lines {
+                        prev.layout.lines.push(novo_reports::Line {
+                            from: (l.from.0, l.from.1 + dy),
+                            to: (l.to.0, l.to.1 + dy),
+                            ..l
+                        });
+                    }
+                    prev.bottom = prev.layout.bottom();
+                    let per_page = setup.rows_per_page();
+                    pages.clear();
+                    let mut start = k;
+                    while start < section.rows.len() {
+                        let end = (start + per_page).min(section.rows.len());
+                        pages.push(ReportPage {
+                            number: pages.len() + 1,
+                            count: 0,
+                            section: 0,
+                            rows: start..end,
+                            continued: true,
+                        });
+                        start = end;
+                    }
+                    let count = pages.len();
+                    for page in &mut pages {
+                        page.count = count;
+                    }
+                    flowed = true;
+                }
+            }
             for (n, page) in pages.iter().enumerate() {
                 let mut layout = layout_page(&single, page, &setup);
                 // layout_page prints "page n / m" within the one-section
@@ -191,6 +266,7 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
                     .texts
                     .retain(|t| !(t.text == heading_number && t.y == heading_y && !t.bold));
                 let layout = translate_layout(&layout, &options.language);
+                let layout_bottom = layout.bottom();
                 let title = if section.title.is_empty() {
                     report.title.clone()
                 } else {
@@ -199,7 +275,9 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
                 sheets.push(Sheet {
                     height: layout.height as f32,
                     layout,
-                    bookmark: (n == 0).then_some(title),
+                    bookmark: (n == 0 && !flowed).then_some(title),
+                    report: report.report.clone(),
+                    bottom: layout_bottom,
                 });
             }
         }
@@ -230,6 +308,8 @@ pub fn export_layouts_pdf(
                 .iter()
                 .find(|(p, _)| *p == i)
                 .map(|(_, t)| t.clone()),
+            report: String::new(),
+            bottom: layout.bottom(),
         })
         .collect();
     let format = layouts
