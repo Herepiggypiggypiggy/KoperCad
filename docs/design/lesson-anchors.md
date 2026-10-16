@@ -20,7 +20,14 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `dock.lines`
 - `dock.hint`
 - `dock.proposals`
-- `cabinet.place-all`
+- `cabinet.place_all`
+- `cabinet.accept`
+- `cabinet.rules`
+- `cabinet.plate`
+- `cabinet.routes`
+- `cabinet.cutlist`
+- `cabinet.table`
+- `cabinet.heat`
 
 ## Signals
 

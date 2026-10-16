@@ -5,4 +5,5 @@ Scope: read EPLAN PXF (.epj project, .emp macro) into KoperCAD, counted and undo
 - [x] Slice 3: File > Import > EPLAN project (PXF), preview dialog, kopercad-cli import-eplan
 - [ ] Slice 4: interruption points to xrefs, .emp into macro library
 - [ ] Slice 5: nets (with EPLAN-NETS), symbol mapping (EPLAN-SYMBOLS)
-Open: a real non-customer .epj from Tadjiro would confirm the field table (findings doc section 6).
+- [x] Survey tool: `kopercad-cli eplan survey file.epj` (structure only, no values)
+Open: run the survey on a real .epj, then fill the O31/O42/O20 rows in docs/design/eplan-pxf.md section 2; a real non-customer .epj from Tadjiro would confirm the field table (findings doc section 6).

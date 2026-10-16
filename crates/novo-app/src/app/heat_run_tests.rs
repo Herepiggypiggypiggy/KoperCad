@@ -8,6 +8,7 @@ use novo_cfd::{CfdError, CfdSnapshot, Control, Fidelity, Solver};
 use novo_thermal::Scenario;
 
 use super::heat_run::{Event, Runner};
+use novo_cfd::sched::Outcome;
 
 struct Spin;
 
@@ -83,20 +84,23 @@ fn drain(r: &mut Runner) -> Vec<Event> {
 
 #[test]
 fn cancel_ends_the_run_promptly() {
-    let mut r = Runner::start(Arc::new(Spin), scenario(), Fidelity::Coarse, || {});
+    let mut r = Runner::start(Arc::new(Spin), scenario(), Fidelity::Coarse);
     r.cancel();
     let events = drain(&mut r);
     assert!(matches!(
         events.last(),
-        Some(Event::Finished(Err(CfdError::Cancelled)))
+        Some(Event::Finished(Outcome::Cancelled))
     ));
 }
 
 #[test]
-fn a_dead_worker_is_reported_as_a_failed_run() {
-    let mut r = Runner::start(Arc::new(Panics), scenario(), Fidelity::Coarse, || {});
+fn a_panicking_solver_is_reported_as_a_failed_run() {
+    let mut r = Runner::start(Arc::new(Panics), scenario(), Fidelity::Coarse);
     let events = drain(&mut r);
-    assert!(matches!(events.last(), Some(Event::Lost)));
+    assert!(matches!(
+        events.last(),
+        Some(Event::Finished(Outcome::Failed(_)))
+    ));
 }
 
 #[test]
@@ -105,7 +109,6 @@ fn the_stub_solver_publishes_then_finishes() {
         super::heat_run::default_solver(),
         scenario(),
         Fidelity::Coarse,
-        || {},
     );
     let events = drain(&mut r);
     assert!(
@@ -113,5 +116,28 @@ fn the_stub_solver_publishes_then_finishes() {
             .iter()
             .any(|e| matches!(e, Event::Snapshot(s) if s.is_consistent()))
     );
-    assert!(matches!(events.last(), Some(Event::Finished(Ok(())))));
+    assert!(matches!(
+        events.last(),
+        Some(Event::Finished(Outcome::Completed))
+    ));
+}
+
+#[test]
+fn the_demo_ladder_reports_progress_for_every_level() {
+    let mut r = Runner::start(
+        super::heat_run::default_solver(),
+        scenario(),
+        Fidelity::Fine,
+    );
+    let events = drain(&mut r);
+    let levels: Vec<Fidelity> = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::Progress(p) => Some(p.fidelity),
+            _ => None,
+        })
+        .collect();
+    for f in [Fidelity::Coarse, Fidelity::Medium, Fidelity::Fine] {
+        assert!(levels.contains(&f), "no progress for {f:?}");
+    }
 }

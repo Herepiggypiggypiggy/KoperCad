@@ -531,14 +531,14 @@ impl ImportJob<'_> {
     }
 }
 
-fn looks_like_bmecat(text: &str) -> bool {
+pub(crate) fn looks_like_bmecat(text: &str) -> bool {
     let head: String = text.chars().take(4096).collect();
     head.to_ascii_uppercase().contains("<BMECAT")
 }
 
 /// Text of a downloaded table: UTF-8 (with or without BOM), else the
 /// Windows-1252 that German spreadsheet exports use.
-fn decode_text(bytes: &[u8]) -> String {
+pub(crate) fn decode_text(bytes: &[u8]) -> String {
     let bytes = bytes.strip_prefix(&[0xEF, 0xBB, 0xBF]).unwrap_or(bytes);
     match std::str::from_utf8(bytes) {
         Ok(t) => t.to_owned(),
@@ -563,13 +563,13 @@ fn cp1252(b: u8) -> char {
 pub type ScriptedAnswer = Result<Vec<(RemoteFile, Vec<u8>)>, FetchError>;
 
 /// What a maker's ZIP holds.
-struct ZipContent {
+pub(crate) struct ZipContent {
     /// Name and text of the first STEP file.
     step: Option<(String, String)>,
     /// The first link to terms of use found in a readme.
     terms_url: Option<String>,
     /// XML members (name, text), at most [`ZIP_MAX_XML`].
-    xml: Vec<(String, String)>,
+    pub(crate) xml: Vec<(String, String)>,
     /// DXF members (name, text), at most [`ZIP_MAX_DXF`].
     dxf: Vec<(String, String)>,
 }
@@ -583,7 +583,7 @@ const ZIP_MAX_TOTAL_BYTES: u64 = 256 * 1024 * 1024;
 
 /// Reads a ZIP in memory (nothing is written to disk, so member names can
 /// never escape anywhere). Only the first STEP file and text files are read.
-fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
+pub(crate) fn read_zip(bytes: &[u8]) -> Result<ZipContent, String> {
     use std::io::Read;
     let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes))
         .map_err(|e| format!("not a readable ZIP ({e})"))?;
