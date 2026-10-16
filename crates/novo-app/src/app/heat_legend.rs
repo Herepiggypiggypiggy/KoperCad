@@ -3,7 +3,7 @@
 
 use eframe::egui;
 use novo_heatview::range::{self, Range};
-use novo_theme::{heat, tokens};
+use novo_theme::heat;
 
 use super::heat_3d::Heat3d;
 
