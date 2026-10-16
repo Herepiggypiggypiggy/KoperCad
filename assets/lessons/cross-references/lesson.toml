@@ -1,0 +1,72 @@
+format = 1
+id = "cross-references"
+version = 1
+status = "draft"
+title = "Cross references"
+summary = "Jump between the coil and its contacts, and add a contact on another page."
+track = "basics"
+order = 50
+level = "intermediate"
+minutes = 8
+topics = ["cross references", "contacts"]
+needs = ["motor-starter"]
+next = ["live-view"]
+project = "project.json"
+finished = "finished.json"
+page = "Control circuit"
+
+[[step]]
+id = "select-coil"
+title = "Select the coil"
+text = """
+Click the coil **-K1**. The dock tells you where its other parts are: the main contacts on page 1 and a contact on page 2.
+"""
+point = { at = { device = "-K1" } }
+expect = { selected = "-K1" }
+solve = [ { select = "-K1" } ]
+
+[[step]]
+id = "go-partner"
+title = "Jump to a partner"
+text = """
+Press {key:nav.partner} to jump to the next part of -K1.
+"""
+point = { ui = "dock.xref" }
+expect = { command = "nav.partner" }
+
+[[step]]
+id = "back"
+title = "Come back"
+text = """
+Press {key:nav.back} to return where you were.
+"""
+expect = { command = "nav.back" }
+
+[[step]]
+id = "all"
+title = "See every occurrence"
+text = """
+Press {key:nav.all_references} to list every place -K1 appears.
+"""
+expect = { command = "nav.all_references" }
+
+[[step]]
+id = "lamp-contact"
+title = "Add a contact for the lamp"
+text = """
+The lamp **-P1** should light when -K1 is on. Type {key:tool.place} and **no K1**, and drop the contact between the feed and the lamp.
+It is numbered 23-24 and the wires draw themselves.
+"""
+point = { at = { page = "Control circuit", x = 120, y = 104 } }
+expect = { count = { kind = "symbol", page = "Control circuit", at_least = 8 } }
+solve = [ { place = { symbol = "iec/contacts/no", parent = "-K1", page = "Control circuit", x = 120, y = 104 } } ]
+
+[[step]]
+id = "read-image"
+title = "Read the contact image"
+text = """
+Under the coil, the {tip:contact-image} now shows the main contacts, 13-14 and 23-24, each with its page and column.
+This is how a reader of the printed drawing finds each contact.
+"""
+point = { at = { device = "-K1" } }
+pause = true

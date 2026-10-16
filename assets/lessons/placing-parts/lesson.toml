@@ -1,0 +1,106 @@
+format = 1
+id = "placing-parts"
+version = 1
+status = "draft"
+title = "Placing parts fast"
+summary = "Put a breaker, a button and a relay on the page with the wheel and the fast keys."
+track = "basics"
+order = 10
+level = "beginner"
+minutes = 6
+topics = ["placing", "fast keys"]
+next = ["wiring-modes"]
+project = "project.json"
+finished = "finished.json"
+page = "Control branch"
+
+[[step]]
+id = "intro"
+title = "What you will build"
+text = """
+A control branch: a breaker, a start button and a relay coil between the supply **L1** and the neutral **N**.
+You place each part with the keyboard. The mouse only chooses where it lands.
+"""
+point = { area = { page = "Control branch", x = 60, y = 16, w = 40, h = 130 } }
+pause = true
+
+[[step]]
+id = "type-mcb"
+title = "Ask for a breaker by name"
+text = """
+Tap {key:tool.place}, type **mcb** and press Enter. The breaker hangs on your pointer.
+"""
+point = { ui = "dock.place" }
+expect = { tool = "place" }
+
+[[step]]
+id = "drop-breaker"
+title = "Drop it under L1"
+text = """
+Move to the dot just under **L1** and click. The wire to L1 draws itself and the part gets the tag **-F1**.
+Press {key:edit.escape} to put the part down.
+"""
+point = { at = { page = "Control branch", x = 80, y = 40 } }
+expect = { device = { symbol = "iec/protection/mcb_1p" } }
+solve = [ { place = { symbol = "iec/protection/mcb_1p", page = "Control branch", x = 80, y = 40 } } ]
+
+[[step]]
+id = "hold-wheel"
+title = "Hold Q for the wheel"
+text = """
+Hold {key:tool.place} down. The wheel opens around the pointer with the groups of parts.
+Release the key over a group to choose it.
+"""
+point = { ui = "wheel" }
+expect = { signal = "wheel_opened" }
+
+[[step]]
+id = "wheel-pushbutton"
+title = "Pick a push button from the wheel"
+text = """
+With the wheel open choose **Switch**, then **Push button NO**. Drop it under the breaker.
+The tag becomes **-S1**.
+"""
+point = { ui = "wheel" }
+expect = { device = { symbol = "iec/operators/pushbutton_no" } }
+solve = [ { place = { symbol = "iec/operators/pushbutton_no", page = "Control branch", x = 80, y = 72 } } ]
+
+[[step]]
+id = "digit-coil"
+title = "Use a favourite digit"
+text = """
+Tap {key:tool.place}, then the digit **3**. The relay coil is the third favourite.
+Drop it under the button. It gets the tag **-K1**.
+"""
+point = { at = { page = "Control branch", x = 80, y = 104 } }
+expect = { device = { symbol = "iec/coils/relay" } }
+solve = [ { place = { symbol = "iec/coils/relay", page = "Control branch", x = 80, y = 104 } } ]
+
+[[step]]
+id = "rotate"
+title = "Turn a part and undo it"
+text = """
+Select the push button and press {key:edit.rotate}. It turns a quarter.
+Press {key:edit.undo} to turn it back.
+"""
+point = { at = { device = "-S1" } }
+expect = { command = "edit.rotate" }
+
+[[step]]
+id = "duplicate"
+title = "Duplicate and undo"
+text = """
+With the button still selected press {key:edit.duplicate}. A copy follows the pointer, numbered for you.
+Press {key:edit.undo} to take it back.
+"""
+point = { at = { device = "-S1" } }
+expect = { command = "edit.duplicate" }
+
+[[step]]
+id = "done"
+title = "Compare with the finished drawing"
+text = """
+Your branch should look like the finished one, with the supply and neutral joined by wires.
+Next lesson: how a wire bends.
+"""
+pause = true
