@@ -1438,7 +1438,7 @@ fn paint_peaks(
             .iter()
             .find(|i| !tag.is_empty() && i.tag == *tag && i.loss_known)
             .map(|i| device_temp(cache, i));
-        let mut card = Rect::from_min_size(at + Vec2::new(14.0, -30.0), Vec2::new(190.0, 34.0));
+        let mut card = Rect::from_min_size(at + Vec2::new(14.0, -30.0), Vec2::new(210.0, 34.0));
         // Cards never overlap each other: step down until there is room.
         while placed.iter().any(|q| q.intersects(card.expand(2.0))) {
             card = card.translate(Vec2::new(0.0, 38.0));
