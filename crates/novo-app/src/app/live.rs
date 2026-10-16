@@ -5,8 +5,8 @@
 //! workbench and the wires are lit in the canvas's own wire layer.
 //!
 //! Poles start open (a plant at rest). A badge sits on every switched pole of
-//! the page: click it to close or open that pole, Shift+click to switch every
-//! pole of the symbol. A wire carrying one potential is lit in that
+//! the page: click it to close or open every pole of the device together,
+//! Shift+click to drive that one pole apart (its badge then gets an amber ring). A wire carrying one potential is lit in that
 //! potential's colour, wires nothing reaches are dimmed, and a net where two
 //! potentials meet is drawn red.
 
@@ -203,9 +203,11 @@ impl LiveView {
         self.poles.set(symbol, group, !closed);
     }
 
-    /// Flips every pole of a symbol to the opposite of its first pole.
-    pub(super) fn flip_all(&mut self, project: &Project, symbol: SymbolId) {
-        let closed = self.poles.is_closed(symbol, 0);
+    /// Switches every pole of a symbol (one device, poles joined by its
+    /// mechanical link) to the opposite of the pole that was clicked. After a
+    /// per-pole override this puts the poles back in step.
+    pub(super) fn flip_together(&mut self, project: &Project, symbol: SymbolId, group: usize) {
+        let closed = self.poles.is_closed(symbol, group);
         self.poles.set_all(project, symbol, !closed);
     }
 }
@@ -265,11 +267,17 @@ pub(super) struct PoleBadge {
     /// Page position (mm) halfway between the pole's pins.
     pub at: egui::Vec2,
     pub closed: bool,
+    /// The poles of this symbol are not all in the same state (a per-pole override).
+    pub mixed: bool,
 }
 
 pub(super) fn pole_badges(project: &Project, page: PageId, poles: &PoleState) -> Vec<PoleBadge> {
     let mut badges = Vec::new();
     for symbol in project.symbols().filter(|s| s.page == page) {
+        let closed_poles = (0..symbol.pass_through.len())
+            .filter(|&g| poles.is_closed(symbol.id, g))
+            .count();
+        let mixed = closed_poles != 0 && closed_poles != symbol.pass_through.len();
         for (group, pins) in symbol.pass_through.iter().enumerate() {
             let at: Vec<_> = pins
                 .iter()
@@ -286,6 +294,7 @@ pub(super) fn pole_badges(project: &Project, page: PageId, poles: &PoleState) ->
                 group,
                 at: egui::vec2(x as f32, y as f32),
                 closed: poles.is_closed(symbol.id, group),
+                mixed,
             });
         }
     }
@@ -633,6 +642,13 @@ impl NovoApp {
                     let (rect, response) = ui
                         .allocate_exact_size(egui::Vec2::splat(BADGE * 2.4), egui::Sense::click());
                     let p = ui.painter();
+                    if badge.mixed {
+                        p.circle_stroke(
+                            rect.center(),
+                            BADGE + 2.0,
+                            egui::Stroke::new(1.5, tokens::WARNING),
+                        );
+                    }
                     if badge.closed {
                         p.circle_filled(rect.center(), BADGE, tokens::SUCCESS);
                     } else {
@@ -644,18 +660,23 @@ impl NovoApp {
                         );
                     }
                     let name = names.get(&badge.symbol).map_or("", String::as_str);
-                    let state = if badge.closed { "closed" } else { "open" };
+                    let state = match (badge.closed, badge.mixed) {
+                        (true, true) => "closed, driven apart from its other poles",
+                        (false, true) => "open, driven apart from its other poles",
+                        (true, false) => "closed",
+                        (false, false) => "open",
+                    };
                     let tip = if driven.contains(&badge.symbol) {
                         format!("{name} · {state}, follows its coil")
                     } else {
                         format!(
-                            "{name} · {state} · click to {}, Shift+click for every pole",
+                            "{name} · {state} · click to {} every pole, Shift+click for this pole only",
                             if badge.closed { "open" } else { "close" },
                         )
                     };
                     if response.on_hover_text(tip).clicked() {
                         let shift = ui.input(|i| i.modifiers.shift);
-                        clicked = Some((badge.symbol, badge.group, shift));
+                        clicked = Some((badge.symbol, badge.group, !shift));
                     }
                 });
         }
@@ -864,12 +885,12 @@ impl NovoApp {
         {
             self.wb.live.forced.insert(coil);
         }
-        if let Some((symbol, group, all)) = clicked
+        if let Some((symbol, group, together)) = clicked
             && !driven.contains(&symbol)
         {
-            if all {
+            if together {
                 if let Some(doc) = self.backend.document() {
-                    self.wb.live.flip_all(doc.project(), symbol);
+                    self.wb.live.flip_together(doc.project(), symbol, group);
                 }
             } else {
                 self.wb.live.flip(symbol, group);
@@ -951,8 +972,54 @@ mod tests {
         assert_eq!(carrying(&mut live), 2);
         live.flip(contact, 0);
         assert_eq!(carrying(&mut live), 1);
-        live.flip_all(doc.project(), contact);
+        live.flip_together(doc.project(), contact, 0);
         assert!(live.poles.is_closed(contact, 0));
+    }
+
+    fn three_pole(doc: &mut Document) -> SymbolId {
+        let (id, _) = doc
+            .transact("Breaker", |tx| {
+                let page = tx.add_page("1")?;
+                let q = block(tx, page, 0.0, SymbolRole::Unassigned);
+                tx.update::<novo_core::SymbolInstance>(q, |s| {
+                    s.pass_through = vec![vec![0, 1]; 3]
+                })?;
+                Ok(q)
+            })
+            .unwrap();
+        id
+    }
+
+    #[test]
+    fn a_click_switches_all_poles_of_a_breaker_together() {
+        let mut doc = Document::default();
+        let q = three_pole(&mut doc);
+        let mut live = LiveView::default();
+        live.flip_together(doc.project(), q, 1);
+        assert!((0..3).all(|g| live.poles.is_closed(q, g)));
+        live.flip_together(doc.project(), q, 2);
+        assert!((0..3).all(|g| !live.poles.is_closed(q, g)));
+    }
+
+    #[test]
+    fn a_pole_override_moves_one_pole_and_the_next_click_puts_them_back_in_step() {
+        let mut doc = Document::default();
+        let q = three_pole(&mut doc);
+        let page = doc.project().symbol(q).unwrap().page;
+        let mut live = LiveView::default();
+        live.flip_together(doc.project(), q, 0);
+        live.flip(q, 1);
+        assert!(live.poles.is_closed(q, 0) && !live.poles.is_closed(q, 1));
+        let badges = pole_badges(doc.project(), page, &live.poles);
+        assert!(badges.iter().all(|b| b.mixed));
+        // Clicking the open pole closes every pole; clicking a closed one opens them.
+        live.flip_together(doc.project(), q, 1);
+        assert!((0..3).all(|g| live.poles.is_closed(q, g)));
+        let badges = pole_badges(doc.project(), page, &live.poles);
+        assert!(badges.iter().all(|b| !b.mixed));
+        live.flip(q, 2);
+        live.flip_together(doc.project(), q, 0);
+        assert!((0..3).all(|g| !live.poles.is_closed(q, g)));
     }
 
     #[test]
