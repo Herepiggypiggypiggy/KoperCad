@@ -137,7 +137,7 @@ impl MarchState {
     /// Marches `report_every` steps or until the run is over.
     pub fn advance(
         &mut self,
-        setup: &FlowSetup,
+        _setup: &FlowSetup,
         flow: &mut FlowSolver,
         lim: &MarchLimits,
         control: &Control,
@@ -161,7 +161,6 @@ impl MarchState {
             self.last_info = (info.max_accel, info.max_dtdt);
             self.steps += 1;
             if self.steps.is_multiple_of(SAMPLE_EVERY) {
-                setup.update_device_films(flow);
                 self.sample(flow);
                 if let Some((a, b)) = self.window() {
                     self.storage_rate = if self.heat_w > 0.0 {

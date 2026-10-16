@@ -6,6 +6,11 @@ use super::sheet::{PlateSheet, SheetGeometry};
 use crate::openings::{OpenPatch, OpenSet};
 use crate::solids::Medium;
 
+mod steady;
+pub use steady::{
+    RunStatus, SteadyConfig, SteadyInfo, SteadyLimits, SteadyReport, SteadyRun, SteadyState,
+};
+
 /// Thermal condition on a wall.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ThermalBc {
@@ -113,7 +118,16 @@ pub struct FlowConfig {
     pub device_exposed_m2: Vec<f64>,
     /// True contact area of each device on the plate sheet, m2; same idea.
     pub device_contact_m2: Vec<f64>,
+    /// Height of each device (the 2D engine's characteristic length), m, and
+    /// the radiation constants: with them the solver refreshes the films
+    /// itself every [`FILM_EVERY`] steps or iterations.
+    pub device_length_m: Vec<f64>,
+    pub device_emissivity: f64,
+    pub device_view: f64,
 }
+
+/// Steps (or steady iterations) between refreshes of the device films.
+pub const FILM_EVERY: usize = 10;
 
 impl FlowConfig {
     /// Air near 25 degrees C with closed no-slip adiabatic walls.
@@ -137,6 +151,9 @@ impl FlowConfig {
             device_film_h: Vec::new(),
             device_exposed_m2: Vec::new(),
             device_contact_m2: Vec::new(),
+            device_length_m: Vec::new(),
+            device_emissivity: 0.85,
+            device_view: 0.5,
         }
     }
 }
@@ -206,6 +223,7 @@ pub struct FlowSolver {
     film_faces: Vec<FilmFace>,
     /// Factor on each device's film coefficient (true area over grid area).
     film_scale: Vec<f64>,
+    film_clock: usize,
 }
 
 /// Temperatures and constants of the plate sheet.
@@ -412,6 +430,7 @@ impl FlowSolver {
             sheet,
             film_faces,
             film_scale,
+            film_clock: 0,
             vel,
             p: vec![0.0; cells],
             t: vec![t_init; cells],
@@ -433,6 +452,39 @@ impl FlowSolver {
         self.pressure.set_smoother(smoother);
     }
 
+    /// Counts a step or iteration and refreshes the films every
+    /// [`FILM_EVERY`].
+    pub(crate) fn tick_films(&mut self) {
+        if self.cfg.device_length_m.is_empty() {
+            return;
+        }
+        self.film_clock += 1;
+        if self.film_clock.is_multiple_of(FILM_EVERY) {
+            self.update_device_films();
+        }
+    }
+
+    /// Sets the surface film of every device from the present state: the
+    /// 2D engine's correlation (natural plus forced convection and
+    /// radiation), relaxed halfway as it does.
+    pub fn update_device_films(&mut self) {
+        for slot in 0..self.cfg.device_length_m.len() {
+            let Some((t_dev, t_air, speed)) = self.device_film_state(slot) else {
+                continue;
+            };
+            let h = novo_thermal::device_h(
+                self.cfg.device_length_m[slot],
+                t_dev,
+                t_air,
+                speed,
+                self.cfg.device_emissivity,
+                self.cfg.device_view,
+            );
+            let old = self.cfg.device_film_h.get(slot).copied().unwrap_or(h);
+            self.set_device_film(slot, 0.5 * old + 0.5 * h);
+        }
+    }
+
     /// Sets the film coefficient of device `slot`, W/m2K, on every face it
     /// shares with air (see [`FlowConfig::device_film_h`]).
     pub fn set_device_film(&mut self, slot: usize, h: f64) {
@@ -443,6 +495,37 @@ impl FlowSolver {
             let h = h.max(1e-3) * self.film_scale[slot];
             self.k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / h);
         }
+    }
+
+    /// One Gauss-Seidel sweep of the plate sheet against the present cell
+    /// temperatures, implicit over `dt` from the temperatures `po` at its
+    /// start; returns the largest change, K.
+    pub(crate) fn sheet_sweep(&mut self, dt: f64, po: &[f64]) -> f64 {
+        match (self.sheet.as_mut(), self.cfg.plate.as_ref()) {
+            (Some(sh), Some(pl)) => sheet_sweep(&self.mesh, sh, pl, &self.t, dt, po),
+            _ => 0.0,
+        }
+    }
+
+    /// Steady path: the sheet follows the cells over the pseudo step `dt`
+    /// (a few sweeps; its capacity is small, so it is nearly algebraic).
+    pub(crate) fn advance_sheet_pseudo(&mut self, dt: f64) {
+        let Some(po) = self.sheet.as_ref().map(|s| s.t.clone()) else {
+            return;
+        };
+        for _ in 0..20 {
+            if self.sheet_sweep(dt, &po) < 1e-9 {
+                break;
+            }
+        }
+    }
+
+    /// Plate sheet constants for the steady assembly: exchange with the cell
+    /// in front of column (`i`, `j`), W/K, and the plate temperature there.
+    pub(crate) fn sheet_coupling(&self, i: usize, j: usize) -> Option<(f64, f64)> {
+        let sh = self.sheet.as_ref()?;
+        let c = i + self.mesh.n[0] * j;
+        Some((sh.g_col[c], sh.t[c]))
     }
 
     /// Mean temperature of device `slot` (weighted by its volume share),
@@ -616,6 +699,7 @@ impl FlowSolver {
 
     /// Advances one step of `dt` seconds.
     pub fn step(&mut self, dt: f64) -> StepInfo {
+        self.tick_films();
         let old_t = self.t.clone();
         let old_vel = self.vel.clone();
         self.update_drag_rate();
@@ -1321,45 +1405,53 @@ impl FlowSolver {
                 self.cfg.plate.as_ref(),
                 plate_old.as_ref(),
             ) {
-                let nx = sh.geo.nx;
-                #[allow(clippy::needless_range_loop)]
-                for c in 0..sh.t.len() {
-                    let area = sh.geo.area[c];
-                    if area <= 0.0 {
-                        continue;
-                    }
-                    let (i, j) = (c % nx, c / nx);
-                    let cap = pl.cap * area / dt;
-                    let g_out = pl.u_out * area;
-                    let (mut num, mut den) = (cap * po[c] + g_out * pl.t_out, cap + g_out);
-                    let mut link = |g: f64, other: usize| {
-                        num += g * sh.t[other];
-                        den += g;
-                    };
-                    if i + 1 < nx {
-                        link(sh.geo.g_x[c], c + 1);
-                    }
-                    if i > 0 {
-                        link(sh.geo.g_x[c - 1], c - 1);
-                    }
-                    if c + nx < sh.t.len() {
-                        link(sh.geo.g_y[c], c + nx);
-                    }
-                    if c >= nx {
-                        link(sh.geo.g_y[c - nx], c - nx);
-                    }
-                    num += sh.g_col[c] * self.t[m.cell([i, j, 0])];
-                    den += sh.g_col[c];
-                    let new = num / den;
-                    change = change.max((new - sh.t[c]).abs());
-                    sh.t[c] = new;
-                }
+                change = change.max(sheet_sweep(m, sh, pl, &self.t, dt, po));
             }
             if change <= 1e-12 * scale {
                 break;
             }
         }
     }
+}
+
+/// One Gauss-Seidel sweep of the plate sheet `sh` against cell temperatures
+/// `t`; see [`FlowSolver::sheet_sweep`].
+fn sheet_sweep(m: &Mesh, sh: &mut Sheet, pl: &PlateSheet, t: &[f64], dt: f64, po: &[f64]) -> f64 {
+    let mut change: f64 = 0.0;
+    let nx = sh.geo.nx;
+    #[allow(clippy::needless_range_loop)]
+    for c in 0..sh.t.len() {
+        let area = sh.geo.area[c];
+        if area <= 0.0 {
+            continue;
+        }
+        let (i, j) = (c % nx, c / nx);
+        let cap = pl.cap * area / dt;
+        let g_out = pl.u_out * area;
+        let (mut num, mut den) = (cap * po[c] + g_out * pl.t_out, cap + g_out);
+        let mut link = |g: f64, other: usize| {
+            num += g * sh.t[other];
+            den += g;
+        };
+        if i + 1 < nx {
+            link(sh.geo.g_x[c], c + 1);
+        }
+        if i > 0 {
+            link(sh.geo.g_x[c - 1], c - 1);
+        }
+        if c + nx < sh.t.len() {
+            link(sh.geo.g_y[c], c + nx);
+        }
+        if c >= nx {
+            link(sh.geo.g_y[c - nx], c - nx);
+        }
+        num += sh.g_col[c] * t[m.cell([i, j, 0])];
+        den += sh.g_col[c];
+        let new = num / den;
+        change = change.max((new - sh.t[c]).abs());
+        sh.t[c] = new;
+    }
+    change
 }
 
 fn with(mut ix: [usize; 3], axis: usize, v: usize) -> [usize; 3] {

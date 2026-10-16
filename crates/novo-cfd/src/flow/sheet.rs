@@ -17,6 +17,8 @@
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlateSheet {
     /// Share of each column's footprint that lies on the plate, 0 to 1.
+    /// Precondition: one entry per x-y cell of the mesh (`nx * ny`);
+    /// `FlowSolver::new` panics with a clear message otherwise.
     pub cover: Vec<f64>,
     /// In-plane conductance of the sheet, `k * thickness`, W/K.
     pub kp: f64,

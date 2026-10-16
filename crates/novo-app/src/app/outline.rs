@@ -218,6 +218,7 @@ impl NovoApp {
     /// page was opened (the flyout closes).
     pub(super) fn outline_pages(&mut self, ui: &mut egui::Ui) -> bool {
         self.ol.rect = Some(ui.max_rect());
+        self.anchor("outline.pages", ui.max_rect(), "Pages list");
         self.toolbar(ui);
         ui.add(
             egui::TextEdit::singleline(&mut self.page_filter)

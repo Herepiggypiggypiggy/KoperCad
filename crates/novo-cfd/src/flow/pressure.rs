@@ -73,20 +73,20 @@ impl Level {
         l
     }
 
-    /// Sum of neighbour values weighted by couplings.
+    /// Sum of neighbour values weighted by couplings (same summation order
+    /// as before: per axis the lower then the upper neighbour).
+    #[inline(always)]
     fn off(&self, x: &[f64], i: [usize; 3]) -> f64 {
         let c = self.idx(i);
+        let stride = [1, self.n[0], self.n[0] * self.n[1]];
         let mut s = 0.0;
         for a in 0..3 {
             if i[a] > 0 {
-                let mut m = i;
-                m[a] -= 1;
-                s += self.cf[a][c] * x[self.idx(m)];
+                s += self.cf[a][c] * x[c - stride[a]];
             }
             if i[a] + 1 < self.n[a] {
-                let mut m = i;
-                m[a] += 1;
-                s += self.cf[a][self.idx(m)] * x[self.idx(m)];
+                let m = c + stride[a];
+                s += self.cf[a][m] * x[m];
             }
         }
         s

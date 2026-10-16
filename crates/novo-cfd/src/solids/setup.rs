@@ -404,14 +404,11 @@ pub struct FlowSetup {
     pub heat_w: f64,
     pub classified: mesh::Mesh,
     devices: Vec<FilmDevice>,
-    emissivity: f64,
-    view: f64,
 }
 
 #[derive(Debug, Clone)]
 struct FilmDevice {
     id: u64,
-    length_m: f64,
 }
 
 /// One device in a running solver, see [`FlowSetup::device_report`].
@@ -540,6 +537,13 @@ impl FlowSetup {
                     (foot + perimeter * d.height() * 1e-3, on_plate)
                 })
                 .unzip();
+            cfg.device_length_m = scn
+                .devices
+                .iter()
+                .map(|d| (d.footprint.h / 1000.0).max(0.02))
+                .collect();
+            cfg.device_emissivity = scn.params.emissivity;
+            cfg.device_view = scn.params.radiation_view_factor;
             cfg.device_exposed_m2 = exposed;
             cfg.device_contact_m2 = contact;
         }
@@ -555,30 +559,16 @@ impl FlowSetup {
             devices: scn
                 .devices
                 .iter()
-                .map(|d| FilmDevice {
-                    id: d.id,
-                    length_m: (d.footprint.h / 1000.0).max(0.02),
-                })
+                .map(|d| FilmDevice { id: d.id })
                 .collect(),
-            emissivity: scn.params.emissivity,
-            view: scn.params.radiation_view_factor,
         })
     }
 
-    /// Sets the surface film of every device from the state of `solver`
-    /// (natural plus forced convection and radiation, the correlation of the
-    /// 2D engine), relaxed halfway as the 2D engine does. Call it every few
-    /// steps while marching; a no-op for [`DeviceModel::Volume`].
+    /// Refreshes the surface film of every device now. The solver does it
+    /// itself every few steps or iterations ([`crate::flow::FILM_EVERY`]), so
+    /// calling this is only needed to prime a state read before marching.
     pub fn update_device_films(&self, solver: &mut FlowSolver) {
-        for (slot, d) in self.devices.iter().enumerate() {
-            let Some((t_dev, t_air, speed)) = solver.device_film_state(slot) else {
-                continue;
-            };
-            let h =
-                novo_thermal::device_h(d.length_m, t_dev, t_air, speed, self.emissivity, self.view);
-            let old = solver.cfg.device_film_h.get(slot).copied().unwrap_or(h);
-            solver.set_device_film(slot, 0.5 * old + 0.5 * h);
-        }
+        solver.update_device_films();
     }
 
     /// What each device is doing in `solver`: temperature, surrounding air and
@@ -666,7 +656,6 @@ impl FlowSetup {
                 every(solver, steps);
             }
             if steps % 10 == 0 {
-                self.update_device_films(solver);
                 samples.push(sample(solver));
                 let now = samples.last().unwrap().0;
                 let first = samples.partition_point(|x| x.0 < now - STEADY_WINDOW_S);
