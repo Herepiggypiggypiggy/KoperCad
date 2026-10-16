@@ -169,7 +169,7 @@ pub fn cabinet(opts: &DemoOptions) -> (Scene, Arc<MeshLibrary>) {
         let lane = duct_y - 4.0 + (k % 5) as f32 * 2.0;
         let body = palette[k % palette.len()];
         let z = 20.0;
-        let at = |x: f32, y: f32| frame.world(x as f64, y as f64, z as f64);
+        let at = |x: f32, y: f32| frame.world(x as f64, y as f64, z);
         scene.wires.push(Wire {
             id: ItemId::new(ItemKind::Wire, 50_000 + k as u64),
             points: vec![
