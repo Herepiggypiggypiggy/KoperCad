@@ -1197,6 +1197,9 @@ fn frame_key(
         scene.pose_revision,
         library.revision(),
         overlay_revision,
+        // Hiding or showing items changes the scene without a revision.
+        scene.items.len(),
+        scene.wires.len(),
     )
         .hash(&mut h);
     for v in [
