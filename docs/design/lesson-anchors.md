@@ -16,6 +16,9 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `dock.select`: {ui:dock.select} shows **Select**
 - `dock.place`: {ui:dock.place} shows **Place**
 - `dock.connect`: {ui:dock.connect} shows **Connect**
+- `dock.cable`: {ui:dock.cable} shows **Cable tool**
+- `dock.undo`: {ui:dock.undo} shows **Undo**
+- `dock.redo`: {ui:dock.redo} shows **Redo**
 - `dock.corners`: {ui:dock.corners} shows **Corners**
 - `dock.lines`: {ui:dock.lines} shows **Lines**
 - `dock.hint`: {ui:dock.hint} shows **Hint line**
