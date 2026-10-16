@@ -8,7 +8,7 @@ use novo_canvas::marks::{Mark, MarkKind, MarkTarget};
 use novo_canvas::model::item_id;
 use novo_core::{AnyId, PageId, Project, RevisionId};
 use novo_revisions::{Change, ChangeKind, ChangeRow, ChangeSet, diff, list_of};
-use novo_theme::widgets::{self, section_label};
+use novo_theme::widgets::section_label;
 
 use super::{Level, NovoApp};
 
@@ -281,44 +281,47 @@ impl NovoApp {
         let mut compare = false;
         // Below the live potentials card when both are on.
         let live = self.wb.live.on;
-        egui::Area::new(egui::Id::new("changes_card"))
-            .order(egui::Order::Middle)
-            .fixed_pos(canvas.left_top() + egui::vec2(12.0, if live { 150.0 } else { 10.0 }))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_max_width(260.0);
-                    ui.horizontal(|ui| {
-                        widgets::section_label(ui, "Changes");
-                        if ui.small_button("✕").on_hover_text("Close").clicked() {
-                            leave = true;
-                        }
-                    });
-                    pick = base_picker(ui, &revisions, mode.base);
-                    if ui
-                        .small_button("Compare…")
-                        .on_hover_text("List what changed, field by field")
-                        .clicked()
-                    {
-                        compare = true;
-                    }
-                    if nothing_here {
-                        ui.weak("Nothing changed on this page");
-                    } else {
-                        ui.label(format!(
-                            "This page: {added} added · {changed} changed · {removed} removed"
-                        ));
-                    }
-                    ui.weak(format!(
-                        "{pages} page{} changed{}",
-                        if pages == 1 { "" } else { "s" },
-                        if elsewhere > 0 {
-                            format!(" · {elsewhere} in the project")
-                        } else {
-                            String::new()
-                        }
-                    ));
-                });
+        super::panel::Panel::new(
+            "changes_card",
+            "Changes",
+            canvas,
+            super::panel::Side::Left,
+            260.0,
+        )
+        .top(if live { 150.0 } else { 10.0 })
+        .fixed_open()
+        .fit()
+        .show(ctx, |ui| {
+            pick = base_picker(ui, &revisions, mode.base);
+            ui.horizontal(|ui| {
+                if ui
+                    .small_button("Compare…")
+                    .on_hover_text("List what changed, field by field")
+                    .clicked()
+                {
+                    compare = true;
+                }
+                if ui.small_button("✕").on_hover_text("Close").clicked() {
+                    leave = true;
+                }
             });
+            if nothing_here {
+                ui.weak("Nothing changed on this page");
+            } else {
+                ui.label(format!(
+                    "This page: {added} added · {changed} changed · {removed} removed"
+                ));
+            }
+            ui.weak(format!(
+                "{pages} page{} changed{}",
+                if pages == 1 { "" } else { "s" },
+                if elsewhere > 0 {
+                    format!(" · {elsewhere} in the project")
+                } else {
+                    String::new()
+                }
+            ));
+        });
         if let Some(id) = pick
             && id != mode.base
             && let Some(index) = project.issued_revision(id).map(|r| r.index.clone())
