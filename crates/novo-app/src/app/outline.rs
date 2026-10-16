@@ -1215,6 +1215,37 @@ impl NovoApp {
         }
     }
 
+    /// The `page.*` commands: the outline's page actions, on the page that
+    /// is open, for the palette and the File > Pages menu. Generated pages
+    /// are not drawn by hand, so the outline offers these on drawn pages
+    /// only and so do the commands.
+    pub(super) fn page_command(&mut self, id: &str) {
+        let Some(page) = self.current_page else {
+            return;
+        };
+        let drawn = self
+            .backend
+            .document()
+            .and_then(|d| d.project().page(page))
+            .is_some_and(|p| !matches!(p.kind, PageKind::Generated { .. }));
+        if !drawn {
+            self.message(
+                Level::Info,
+                "Generated pages are kept by the project: change them under Reports",
+            );
+            return;
+        }
+        let act = match id {
+            "page.rename" => Act::RenamePage(page),
+            "page.duplicate" => Act::DuplicatePage(page),
+            "page.delete" => Act::DeletePage(page),
+            "page.move_up" => Act::MoveUp(page),
+            "page.move_down" => Act::MoveDown(page),
+            _ => return,
+        };
+        self.perform(act);
+    }
+
     fn step_page(&mut self, page: PageId, down: bool) {
         let Some(siblings) = self
             .backend

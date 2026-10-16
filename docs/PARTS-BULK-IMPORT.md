@@ -20,6 +20,20 @@ reads, checks and merges them. No admin rights; it writes only under
 is needed and where to save. `--dry-run` reads and reports without writing.
 `--inbox DIR` and `--catalog FILE` override the locations (used by tests).
 
+## In the app
+
+The same import runs from the app, no command line needed:
+
+- **File > Import > Import parts from a folder** (command `parts.import_folder`,
+  also in the Ctrl+K palette as "import parts"): pick a folder of catalog files
+  (the picker opens in the inbox); the result and the files that held no parts
+  are listed afterwards.
+- **File > Parts**, header buttons: *Import catalog files* (pick files),
+  *Import inbox*, *Open inbox folder*, *Open library folder*, *Maker guide*
+  (what to download per maker) and *New part...* (add a part by hand to your
+  own catalog). A catalog file dropped on the window with no part selected is
+  imported as a catalog.
+
 ## What it does
 
 Same readers and maker recipes as the one-click Import in the app

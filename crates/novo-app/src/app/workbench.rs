@@ -91,6 +91,10 @@ pub(crate) struct Workbench {
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
     pub(super) faults: Option<super::faults::FaultsWindow>,
+    /// The Renumber devices window, while it is open.
+    pub(super) device_renumber: Option<super::device_renumber::DeviceRenumber>,
+    /// The Project rules window is open.
+    pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
     /// The new pages, group and panel form, while open.
@@ -172,6 +176,10 @@ pub(crate) struct Workbench {
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
     /// An AutomationML import waiting for the person to confirm.
     pub(super) aml_import: Option<super::interop::AmlImport>,
+    /// The result of a parts bulk import, until closed.
+    pub(super) parts_bulk: Option<super::parts_bulk::BulkReport>,
+    /// Part proposals waiting for Accept all or Cancel.
+    pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// The "Get the EPLAN export script" guide, open after the files are
@@ -218,6 +226,8 @@ impl Default for Workbench {
             compare: None,
             faults: None,
             numbering: None,
+            device_renumber: None,
+            project_rules: false,
             page_form: None,
             sheet_import: None,
             sheet: 0,
@@ -257,6 +267,8 @@ impl Default for Workbench {
             commissioning: None,
             underlay_seen: None,
             aml_import: None,
+            parts_bulk: None,
+            auto_assign: None,
             eplan_import: None,
             eplan_guide: None,
             dwg_job: None,
@@ -279,7 +291,7 @@ const EDITOR_KEYS: &[&str] = &[
 
 /// Commands the app runs besides the shell actions (`Action`) and the
 /// favourites; the command field shows the rest as "Comes later".
-const APP_COMMANDS: &[&str] = &[
+pub(super) const APP_COMMANDS: &[&str] = &[
     "tool.place",
     "tool.repeat",
     "tool.connect",
@@ -304,6 +316,11 @@ const APP_COMMANDS: &[&str] = &[
     "nav.next_page",
     "nav.previous_page",
     "page.new",
+    "page.rename",
+    "page.duplicate",
+    "page.delete",
+    "page.move_up",
+    "page.move_down",
     "nav.partner",
     "nav.all_references",
     "nav.back",
@@ -327,6 +344,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.change_report",
     "export.commissioning",
     "export.standards_report",
+    "export.standards_xlsx",
     "export.plate",
     "export.assembly",
     "export.sheets",
@@ -341,6 +359,9 @@ const APP_COMMANDS: &[&str] = &[
     "export.labels",
     "cabinet.routes",
     "cabinet.rails",
+    "cabinet.rules",
+    "cabinet.plate",
+    "cabinet.cutlist",
     "cabinet.door",
     "export.bom",
     "export.reports",
@@ -393,7 +414,14 @@ const APP_COMMANDS: &[&str] = &[
     "view.reset_panels",
     "parts.browser",
     "parts.import_step",
+    "parts.import_folder",
+    "parts.auto_assign",
+    "parts.clear",
+    "parts.remove_unused",
     "project.standard",
+    "project.rules",
+    "edit.renumber",
+    "draw.tidy",
     "macro.browser",
     "macro.import",
     "project.options",
@@ -413,6 +441,10 @@ const APP_COMMANDS: &[&str] = &[
     "wires.check_numbers",
     "wires.set_number",
     "wires.unlock_number",
+    "cable.rename",
+    "cable.delete",
+    "cable.retype",
+    "cable.restore_proposals",
     "edit.select_all",
     "view.cabinet_table",
     "cabinet.place-all",
@@ -675,8 +707,11 @@ impl NovoApp {
             "heat.toggle" | "heat.airflow" | "heat.contours" | "heat.simulate"
                 if self.is_open() =>
             {
-                self.switch_workspace(Workspace::Cabinet);
-                self.cabinet.table = false;
+                // Simulate stays in the 3D view when it is the one open.
+                if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
+                    self.switch_workspace(Workspace::Cabinet);
+                    self.cabinet.table = false;
+                }
                 self.cabinet.heat.command(id);
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
@@ -726,6 +761,8 @@ impl NovoApp {
                 }
             }
             "page.new" => self.new_page(),
+            "page.rename" | "page.duplicate" | "page.delete" | "page.move_up"
+            | "page.move_down" => self.page_command(id),
             "nav.partner" => self.go_partner(),
             "nav.all_references" => self.list_occurrences(),
             "nav.back" | "nav.forward" => self.go_history(id == "nav.back"),
@@ -763,6 +800,10 @@ impl NovoApp {
             }
             "wires.set_number" => self.set_wire_number(argument),
             "wires.unlock_number" => self.unlock_wire_number(),
+            "cable.rename" => self.rename_cable_command(argument),
+            "cable.delete" => self.delete_cable_command(),
+            "cable.retype" => self.retype_cable_command(argument),
+            "cable.restore_proposals" => self.restore_declined_cables(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
@@ -804,8 +845,22 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" => self.toggle_live(),
-            "sim.plc_program" => self.open_plc_program(),
+            "sim.live" | "sim.plc_program" => {
+                // The live view and the PLC window draw only over the
+                // schematic: go there first so the command is not silent.
+                if self.workspace() != Workspace::Schematic && self.is_open() {
+                    self.switch_workspace(Workspace::Schematic);
+                    self.message(
+                        Level::Info,
+                        "Simulation runs on the schematic: switched to it",
+                    );
+                }
+                if id == "sim.live" {
+                    self.toggle_live();
+                } else {
+                    self.open_plc_program();
+                }
+            }
             _ if super::reports_view::REPORT_COMMANDS
                 .iter()
                 .any(|(c, _)| *c == id) =>
@@ -826,7 +881,17 @@ impl NovoApp {
             "check.problems" => self.show_issues(false),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
-            "edit.properties" => {
+            "edit.escape" => {
+                // The same ladder Esc climbs on the drawing: the step in
+                // progress, then the tool, then the selection.
+                if let Some(view) = self.canvas.schematic()
+                    && !view.editor.cancel_step()
+                    && !view.editor.leave_tool()
+                {
+                    view.canvas.selection.clear();
+                }
+            }
+            "edit.properties" | "edit.rename" => {
                 // The inspector shows with the selection; the cursor goes in
                 // its tag.
                 let selection = self.selection();
@@ -856,6 +921,9 @@ impl NovoApp {
             "export.standards_report" => {
                 self.export_standards_report(StandardsFormat::Pdf);
             }
+            "export.standards_xlsx" => {
+                self.export_standards_report(StandardsFormat::Excel);
+            }
             "export.plate" => {
                 self.export_plate_pdf();
             }
@@ -867,6 +935,21 @@ impl NovoApp {
             }
             "cabinet.routes" => self.toggle_cabinet_routes(),
             "cabinet.rails" => self.toggle_cabinet_rails(),
+            "cabinet.rules" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.rules.editor_open ^= true;
+            }
+            "cabinet.cutlist" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.rules.cut_open ^= true;
+            }
+            "cabinet.plate" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.keys.push(id.to_owned());
+            }
             "cabinet.door" => self.open_cabinet_door(),
             "export.wirecut" => {
                 self.export_wire_cut();
@@ -940,7 +1023,14 @@ impl NovoApp {
             "view.reset_panels" => super::panel::reset_layout(ctx),
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
+            "parts.import_folder" => self.import_parts_folder(),
+            "parts.auto_assign" => self.start_auto_assign(),
+            "parts.clear" => self.clear_selected_parts(),
+            "parts.remove_unused" => self.remove_unused_project_parts(),
             "project.standard" => self.wb.project_settings = true,
+            "project.rules" => self.wb.project_rules = true,
+            "edit.renumber" => self.open_device_renumber(argument),
+            "draw.tidy" => self.tidy_selection(),
             "macro.browser" => self.wb.macros.show(),
             "macro.import" => self.macro_import(),
             "project.options" => self.open_options(),
@@ -1028,6 +1118,8 @@ impl NovoApp {
                     );
                 }
             }
+            Target::Cable(cable) => self.show_cable(cable),
+            Target::Wire(wire) => self.go_to_wire(wire),
             Target::Symbol(symbol) => self.begin_place(&symbol, None),
             Target::Child { symbol, device } => {
                 let tag = self

@@ -20,8 +20,10 @@ use novo_view3d::{Layers, Look, MeshLibrary, Scene};
 use super::cabinet_inspector;
 
 use super::NovoApp;
+use super::heat::{self, HeatState};
 use super::heat_3d::{self, Heat3d, Place};
 use super::view3d_controls::{self, Controls};
+use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
 use super::view3d_stats::{Build, Stats};
 
@@ -44,6 +46,8 @@ pub(crate) struct View3dMode {
     /// The Cabinet selection revision and the 3D selection as last synced, to
     /// tell which side changed.
     synced: (u64, BTreeSet<ItemId>),
+    /// The right-click menu, while open.
+    pub(super) menu: Option<super::cabinet_menu::PlateMenu>,
     /// What of the heat result the view shows, and the result and settings
     /// the overlays were built for.
     heat: Heat3d,
@@ -81,6 +85,7 @@ impl Default for View3dMode {
             built: None,
             pending: None,
             synced: (0, BTreeSet::new()),
+            menu: None,
             heat: Heat3d::default(),
             heat_shown: None,
             heat_base: Vec::new(),
@@ -135,6 +140,7 @@ impl NovoApp {
             return;
         };
         let revision = project.revision();
+        let ambient = self.sizing.request().ambient_max;
         let mode = &mut self.view3d;
         let layers = mode.controls.layers;
         let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
@@ -199,6 +205,17 @@ impl NovoApp {
             mode.synced = (cabinet_rev, mode.view.state.selection.clone());
         }
 
+        // A run started here advances here, not only in the Cabinet; the
+        // result follows the cabinet (out of date marking, auto re-solve).
+        self.cabinet.heat.poll(ui.ctx());
+        {
+            let heat = &mut self.cabinet.heat;
+            if heat.solution().is_some() || heat.running() || heat.on {
+                let moving = !mode.mv.landings().is_empty();
+                let now = ui.input(|i| i.time);
+                heat.sync_live(project, id, ambient, moving, now, ui.ctx());
+            }
+        }
         let solution = self.cabinet.heat.solution();
         if let Some(sol) = &solution {
             heat_controls(ui, &mut mode.heat, sol);
@@ -275,6 +292,14 @@ impl NovoApp {
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
         view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        let stale = run_heat(
+            &mut self.cabinet.heat,
+            project,
+            id,
+            stored.as_ref(),
+            ambient,
+        );
+        view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
         mode.stats.frame(ui.ctx(), view_rect, &mut mode.view);
         mode.controls.clamp_door(limit);
         let target = mode.controls.door_target(limit);
@@ -321,6 +346,27 @@ impl NovoApp {
                 None if !extend => state.selection.clear(),
                 None => {}
             }
+        }
+        // Right-click: select what is under the pointer and offer the same
+        // actions as the Cabinet's plate menu, plus the view's own.
+        if let Some((pos, item)) = out.context {
+            use super::cabinet_menu::{Face, PlateMenu, Target};
+            let target = match item {
+                Some(i) if i.kind == ItemKind::Device => {
+                    state.selection = BTreeSet::from([i]);
+                    Target::Device(i.raw)
+                }
+                Some(i) if matches!(i.kind, ItemKind::Rail | ItemKind::Duct) => {
+                    state.selection = BTreeSet::from([i]);
+                    self.cabinet.rails.selected = Some(i.raw);
+                    Target::Rail(i.raw)
+                }
+                _ => Target::Plate,
+            };
+            mode.menu = Some(PlateMenu::new(Face::View3d, target, pos));
+        }
+        if let Some(command) = super::cabinet_menu::show(ui.ctx(), &mut mode.menu) {
+            self.wb.queued.push(command);
         }
         if let Some(items) = &out.marquee {
             if !ui.input(|i| i.modifiers.shift) {
@@ -418,6 +464,45 @@ impl NovoApp {
             }
         }
     }
+}
+
+/// Starts the run Simulate asked for (here or by command) and says whether
+/// the shown result belongs to another layout than the plate now has.
+fn run_heat(
+    heat: &mut HeatState,
+    project: &Project,
+    id: StructureId,
+    layout: Option<&novo_layout::state::CabinetLayout>,
+    ambient: f64,
+) -> bool {
+    let wants_run = heat.take_request();
+    if !wants_run && heat.solution().is_none() {
+        return false;
+    }
+    let Some(layout) = layout else {
+        if wants_run {
+            heat.fail("Open an enclosure with a mounting plate to simulate".into());
+        }
+        return false;
+    };
+    let tag_of = |id: u64| {
+        project
+            .get::<Device>(DeviceId::from(id))
+            .and_then(|d| d.tag.device_code().map(str::to_owned))
+            .unwrap_or_default()
+    };
+    let input = heat::Input {
+        plate: (layout.plate.width, layout.plate.height),
+        ambient,
+        items: heat::items_of(project, layout, &tag_of),
+        solution: None,
+        kept: None,
+    };
+    if wants_run {
+        heat::start_run(heat, project, id, &input);
+    }
+    // The scenario decides, so a vent added in the settings counts too.
+    heat.live.is_stale()
 }
 
 /// The Heat strip above the 3D view: slice, shell and airflow of the last

@@ -45,15 +45,15 @@ id = "open-diagram"
 title = "Open the terminal diagram"
 title_nl = "Open het klemmenplan"
 text = """
-The page list lists every page, including the {tip:generated-page}s; if you only see a **Pages** button at the top left, click it first.
+The page list lists every page, including the {tip:generated-page}s; if you only see a **Pages** button in the top bar, click it first.
 Open the row **40  Terminal diagram · +CAB-X1**: KoperCAD drew the connection screen of strip -X1 itself.
 """
 text_nl = """
-De paginalijst toont alle pagina's, ook de {tip:generated-page}s; zie je alleen een knop **Pages** linksboven, klik daar dan eerst op.
+De paginalijst toont alle pagina's, ook de {tip:generated-page}s; zie je alleen een knop **Pages** in de bovenbalk, klik daar dan eerst op.
 Open de rij **40  Terminal diagram · +CAB-X1**: KoperCAD tekende het klemmenplan van strook -X1 zelf.
 """
-how = ["If the page list is not on the left, click **Pages** at the top left", "Click the row **40  Terminal diagram · +CAB-X1**"]
-how_nl = ["Staat de paginalijst niet links, klik dan linksboven op **Pages**", "Klik op de rij **40  Terminal diagram · +CAB-X1**"]
+how = ["If the page list is not on the left, click **Pages** in the top bar", "Click the row **40  Terminal diagram · +CAB-X1**"]
+how_nl = ["Staat de paginalijst niet links, klik dan in de bovenbalk op **Pages**", "Klik op de rij **40  Terminal diagram · +CAB-X1**"]
 expect = { page = "Terminal diagram" }
 solve = [ { page = "Terminal diagram" } ]
 # verified: the outline is the "Pages" button (flyout) or the pinned panel; rows are built by

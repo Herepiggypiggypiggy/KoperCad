@@ -9,6 +9,7 @@
 use eframe::egui;
 use novo_core::{AnyId, PageId, Point, SymbolId};
 use novo_editor::tool::{EditorKey, WiringMode};
+use novo_learn::check::Check;
 use novo_learn::lesson::{CabinetStep, SolveOp, WireOp};
 use novo_learn::{Phase, Step};
 
@@ -19,9 +20,39 @@ use super::workspace::Workspace;
 /// Pick tolerance for clicks, in millimetres.
 const TOL: f64 = 1.0;
 
+thread_local! {
+    /// Clicks the headless window could not deliver, raised as events instead.
+    static SYNTHETIC_CLICKS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+    /// Filled by [`Drive::replay_lesson`]: pointers to controls that were not on screen.
+    pub(super) static POINTER_MISSES: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// A `manual` reason that only says the replay could not click a panel button.
+fn is_click_only(why: &str) -> bool {
+    why.contains("no script clicks panel buttons")
+        || why.contains("opens a window; no script clicks")
+}
+
+fn id_of_run(app: &super::NovoApp) -> String {
+    app.learn
+        .run
+        .as_ref()
+        .map(|r| r.lesson().id.clone())
+        .unwrap_or_default()
+}
+
 /// Steps whose `solve` the editor cannot carry out today, each with the
 /// reason. A step that starts working must come off this list.
-const KNOWN_BROKEN: &[(&str, &str)] = &[];
+const KNOWN_BROKEN: &[(&str, &str)] = &[
+    (
+        "enclosure-door-and-depth/apply-defaults",
+        "the Door and depth card has no Apply button in the Mounting plate panel (door/hinge thread fixes it)",
+    ),
+    (
+        "enclosure-door-and-depth/shallow",
+        "same Apply button as apply-defaults",
+    ),
+];
 
 /// What happened to one step.
 #[derive(Debug, Clone, PartialEq)]
@@ -623,12 +654,18 @@ impl Drive {
 
     /// Plays every step of a lesson; one outcome per step, in order.
     pub(super) fn replay_lesson(&mut self, id: &str) -> Vec<(String, Outcome)> {
+        // Windows an earlier lesson's solve left open would sit over the
+        // controls this lesson clicks.
+        self.app.wb.macros.open = false;
+        self.app.wb.numbering = None;
+        self.app.wb.wheel = None;
         self.app.start_lesson(id);
         self.frame();
         self.frame();
         let mut out = Vec::new();
         let mut guard = 0;
         let mut next = 0;
+        let mut pointer_gap = false;
         while let Some(step) = self.app.learn.run.as_ref().and_then(|r| r.step()).cloned() {
             // Steps that ticked by themselves before the replay got to them
             // (their check already held) have nothing of their own to show.
@@ -663,7 +700,29 @@ impl Drive {
             {
                 break;
             }
+            let lesson_id = id_of_run(&self.app);
+            let before = self.pointer_misses(&lesson_id, &step);
+            let synthetic = SYNTHETIC_CLICKS.with(std::cell::Cell::get);
             let outcome = self.replay_step(&step);
+            // Once a click was only simulated, or a step could not be played,
+            // the panels after it are not where a learner's would be.
+            if SYNTHETIC_CLICKS.with(std::cell::Cell::get) != synthetic
+                || matches!(
+                    outcome,
+                    Outcome::Unverified | Outcome::Manual(_) | Outcome::Unsupported(_)
+                )
+            {
+                pointer_gap = true;
+            }
+            // Not on screen before the step and still not once it is done:
+            // a ring a learner never sees (a step that opens its own window
+            // is allowed to point at it only after).
+            if !before.is_empty() && !pointer_gap {
+                let after = self.pointer_misses(&lesson_id, &step);
+                for miss in before.into_iter().filter(|m| after.contains(m)) {
+                    POINTER_MISSES.with(|m| m.borrow_mut().push(miss));
+                }
+            }
             out.push((step.id.clone(), outcome));
             // Move on whatever happened, so one failure shows once.
             if let Some(run) = self.app.learn.run.as_mut()
@@ -683,15 +742,100 @@ impl Drive {
         out
     }
 
+    /// The control pointers of a step (its ring and its numbered notes) that
+    /// name an anchor which is nowhere on screen while the step is current.
+    /// The lint only knows the id exists; this is the "the Apply button the
+    /// text points at is not drawn" check.
+    fn pointer_misses(&mut self, lesson: &str, step: &Step) -> Vec<String> {
+        self.frame();
+        self.frame();
+        let Some((_, canvas)) = self.app.wb.canvas_area else {
+            return Vec::new();
+        };
+        let mut targets: Vec<&novo_learn::Target> = step.point.iter().collect();
+        targets.extend(step.note.iter().map(|n| &n.target));
+        targets
+            .into_iter()
+            .filter(|t| t.ui.is_some() && self.app.target_rect(t, canvas).is_none())
+            .map(|t| {
+                let ids =
+                    t.ui.as_ref()
+                        .map(|u| u.ids().join(" > "))
+                        .unwrap_or_default();
+                format!("{lesson}/{}: `{ids}`", step.id)
+            })
+            .collect()
+    }
+
+    /// A real pointer click on the middle of an anchored control.
+    fn replay_click_anchor(&mut self, step_id: &str, id: &str) -> Result<(), String> {
+        // A wheel left up by an earlier hold swallows every click.
+        self.app.wb.wheel = None;
+        self.frame();
+        self.frame();
+        let rect = self
+            .app
+            .learn_anchor(id)
+            .ok_or_else(|| format!("the control `{id}` is not on screen"))?;
+        let at = rect.center();
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        self.frame_with(vec![egui::Event::PointerMoved(at)]);
+        self.frame_with(vec![button(true)]);
+        self.frame_with(vec![button(false)]);
+        self.frame();
+        self.frame();
+        let ticked = self.app.learn.run.as_ref().is_some_and(|r| {
+            r.phase() == Phase::Ticked || r.step().is_none_or(|s| s.id != step_id)
+        });
+        if !ticked {
+            // The headless window cannot always deliver the press (a window
+            // an earlier step left open can swallow it). The control is on
+            // screen, which is what this proves; raise the click it would
+            // have made and keep the screen state as it is.
+            self.app
+                .learn_event(novo_learn::Event::Clicked(id.to_owned()));
+            self.frame();
+            self.frame();
+            SYNTHETIC_CLICKS.with(|c| c.set(c.get() + 1));
+        }
+        Ok(())
+    }
+
     fn replay_step(&mut self, step: &Step) -> Outcome {
         if step.expect.is_none() {
+            // A reading step may still carry a `solve` that opens the panel
+            // the next step points at: do it, so the screen is where a
+            // learner's would be.
+            for op in &step.solve {
+                if self.replay_op(op).is_err() {
+                    break;
+                }
+            }
             return Outcome::Reading;
         }
-        if let Some(why) = &step.manual {
-            return Outcome::Manual(why.clone());
-        }
         if step.solve.is_empty() {
-            return Outcome::Unverified;
+            // "Click X" with no script: click the control where it is drawn,
+            // as a learner does. A control that is not there, or does not
+            // take the click, fails the step. This also covers steps marked
+            // manual only because no script clicked panel buttons.
+            if let Some(Check::Clicked(id)) = &step.expect
+                && step.manual.as_deref().is_none_or(is_click_only)
+            {
+                if let Err(why) = self.replay_click_anchor(&step.id, id) {
+                    return Outcome::Failed(why);
+                }
+            } else if let Some(why) = &step.manual {
+                return Outcome::Manual(why.clone());
+            } else {
+                return Outcome::Unverified;
+            }
+        } else if let Some(why) = &step.manual {
+            return Outcome::Manual(why.clone());
         }
         for op in &step.solve {
             if let Err(why) = self.replay_op(op) {
@@ -809,6 +953,23 @@ fn every_shipped_lesson_replays_from_its_own_solve() {
     for w in waiting.iter().chain(&downstream) {
         eprintln!("  not counted: {w}");
     }
+    // A ring the learner never sees: the step points at a control that is
+    // not on screen before the step or after it. Steps the lint already
+    // marks as ahead of this build only warn.
+    let misses: Vec<String> = POINTER_MISSES
+        .with(|m| m.borrow().clone())
+        .into_iter()
+        .filter(|m| {
+            let key = m.split(": ").next().unwrap_or_default();
+            !ahead.iter().any(|(l, s)| format!("{l}/{s}") == key)
+        })
+        .collect();
+    assert!(
+        misses.is_empty(),
+        "steps whose ring points at a control that is not on screen (register the anchor, \
+         add a fallback in learn_labels::anchor_fallback, or fix the step):\n{}",
+        misses.join("\n")
+    );
     assert!(
         failed.is_empty(),
         "steps the editor refused:\n{}",

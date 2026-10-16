@@ -207,6 +207,25 @@ pub fn device_loss_w(project: &Project, device: &Device) -> Option<f64> {
     })
 }
 
+/// Property a part or device carries when its `power_loss_w` is a planning
+/// estimate rather than a maker figure (value `"estimated"`).
+pub const LOSS_SOURCE_PROPERTY: &str = "power_loss_source";
+
+fn says_estimated(properties: &Properties) -> bool {
+    matches!(properties.get(LOSS_SOURCE_PROPERTY), Some(Value::Text(t)) if t == "estimated")
+}
+
+/// Whether the loss [`device_loss_w`] reads is, in whole or in part, a
+/// planning estimate. False when the device has no loss figure.
+pub fn device_loss_estimated(project: &Project, device: &Device) -> bool {
+    if usable(&device.properties, keys::POWER_LOSS_W).is_some() {
+        return says_estimated(&device.properties);
+    }
+    parts(project, device).iter().any(|p| {
+        usable(&p.properties, keys::POWER_LOSS_W).is_some() && says_estimated(&p.properties)
+    })
+}
+
 /// Standoff of a device from the plate, mm: its own `depth_mm`, else the
 /// first part with a positive one.
 pub fn device_depth_mm(project: &Project, device: &Device) -> Option<f64> {
