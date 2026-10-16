@@ -270,6 +270,54 @@ pub enum SolveOp {
     LivePole(LivePoleOp),
     LiveCoil(LiveCoilOp),
     SetPotential(SetPotentialOp),
+    CabinetPlace(CabinetPlaceOp),
+    CabinetRotate(CabinetRotateOp),
+    CabinetRemove(CabinetRemoveOp),
+    Cabinet(CabinetOp),
+}
+
+/// A drop on the Cabinet plate: the device (by tag) with its top left corner
+/// at `x`, `y` millimetres on the plate, as dragging it there does.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CabinetPlaceOp {
+    pub cabinet_place: CabinetPlaceArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CabinetPlaceArgs {
+    pub device: String,
+    pub x: f64,
+    pub y: f64,
+}
+
+/// A device on the plate turned a quarter (the R key in the Cabinet).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CabinetRotateOp {
+    pub cabinet_rotate: String,
+}
+
+/// A device taken off the plate (Delete in the Cabinet).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CabinetRemoveOp {
+    pub cabinet_remove: String,
+}
+
+/// The Place all preview: `place_all` shows it, `accept` takes it.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CabinetOp {
+    pub cabinet: CabinetStep,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CabinetStep {
+    PlaceAll,
+    Accept,
 }
 
 /// A click on a pole badge of the live view (Shift+click: this pole only).
@@ -721,6 +769,26 @@ mod tests {
         // Without a Dutch twin the English lines show.
         let text = text.replace("how_nl", "x_nl");
         assert!(Lesson::parse(&text).is_err(), "unknown field is refused");
+    }
+
+    #[test]
+    fn cabinet_solve_ops_parse() {
+        let text = format!(
+            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\n\
+             expect = {{ signal = \"cabinet_dropped\" }}\n\
+             solve = [ {{ cabinet_place = {{ device = \"-F1\", x = 20, y = 20 }} }}, \
+             {{ cabinet_rotate = \"-F1\" }}, {{ cabinet_remove = \"-F1\" }}, \
+             {{ cabinet = \"place_all\" }}, {{ cabinet = \"accept\" }} ]\n"
+        );
+        let lesson = Lesson::parse(&text).unwrap();
+        let solve = &lesson.steps.last().unwrap().solve;
+        assert!(matches!(&solve[0], SolveOp::CabinetPlace(p) if p.cabinet_place.x == 20.0));
+        assert!(matches!(&solve[1], SolveOp::CabinetRotate(_)));
+        assert!(matches!(&solve[2], SolveOp::CabinetRemove(_)));
+        assert!(matches!(&solve[3], SolveOp::Cabinet(c) if c.cabinet == CabinetStep::PlaceAll));
+        assert!(matches!(&solve[4], SolveOp::Cabinet(c) if c.cabinet == CabinetStep::Accept));
+        let bad = text.replace("place_all", "everything");
+        assert!(Lesson::parse(&bad).is_err());
     }
 
     #[test]

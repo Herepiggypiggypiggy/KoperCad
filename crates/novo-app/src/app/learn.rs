@@ -23,6 +23,7 @@ use novo_learn::{
 };
 use novo_workflow::commands::COMMANDS;
 
+use super::workspace::Workspace;
 use super::{Level, NovoApp};
 
 include!(concat!(env!("OUT_DIR"), "/lessons_embedded.rs"));
@@ -503,8 +504,9 @@ impl NovoApp {
                 .collect();
             facts.zoom = f64::from(view.canvas.viewport.zoom) / self.learn_fit_zoom(view).max(1e-6);
         }
-        // Devices clicked on the cabinet plate count as selected too, so a
-        // plate-only device (no symbol on a page) can be picked in a lesson.
+        // In the Cabinet and the 3D view the selection is the one on the
+        // plate, so a plate-only device (no symbol on a page) can be picked
+        // in a lesson and a stale schematic selection does not mask it.
         let plate: Vec<String> = self
             .cabinet
             .view
@@ -515,7 +517,7 @@ impl NovoApp {
             .filter_map(|id| project.get::<novo_core::Device>(novo_core::DeviceId::from(id)))
             .map(|d| d.tag.to_string())
             .collect();
-        if !plate.is_empty() {
+        if matches!(self.workspace(), Workspace::Cabinet | Workspace::View3d) {
             facts.selection = plate;
         }
         if facts.live {

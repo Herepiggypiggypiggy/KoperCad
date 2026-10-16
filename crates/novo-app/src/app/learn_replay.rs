@@ -9,7 +9,10 @@
 use eframe::egui;
 use novo_core::{AnyId, PageId, Point, SymbolId};
 use novo_editor::tool::{EditorKey, WiringMode};
-use novo_learn::lesson::{SolveOp, WireOp};
+use novo_learn::lesson::{CabinetStep, SolveOp, WireOp};
+
+use super::cabinet::Ask;
+use super::workspace::Workspace;
 use novo_learn::{Phase, Step};
 
 use super::gate1_tests::Drive;
@@ -152,8 +155,68 @@ impl Drive {
                 Ok(())
             }
             SolveOp::Select(s) => self.replay_select(&s.select, s.add),
+            SolveOp::CabinetPlace(c) => {
+                let a = &c.cabinet_place;
+                self.replay_cabinet(&a.device, |id| Ask::Drop(id, a.x, a.y))
+            }
+            SolveOp::CabinetRotate(c) => {
+                self.replay_cabinet(&c.cabinet_rotate, |id| Ask::Rotate(vec![id]))
+            }
+            SolveOp::CabinetRemove(c) => {
+                self.replay_cabinet(&c.cabinet_remove, |id| Ask::Remove(vec![id]))
+            }
+            SolveOp::Cabinet(c) => self.replay_cabinet_preview(c.cabinet),
             other => Err(format!("unsupported:{}", op_name(other))),
         }
+    }
+
+    /// An action on one device of the Cabinet plate, as the canvas raises it.
+    fn replay_cabinet(&mut self, tag: &str, ask: impl FnOnce(u64) -> Ask) -> Result<(), String> {
+        let (structure, layout, cands) = self
+            .app
+            .cabinet_plate()
+            .ok_or("the Cabinet shows no plate (open it first)")?;
+        let id = self
+            .doc()
+            .project()
+            .devices()
+            .find(|d| novo_learn::check::tag_matches(&d.tag, tag))
+            .map(|d| d.id.raw())
+            .ok_or_else(|| format!("nothing named `{tag}`"))?;
+        self.app
+            .cabinet_ask(ask(id), Some(structure), layout, &cands);
+        self.frame();
+        Ok(())
+    }
+
+    /// Place all (the preview) or accepting it.
+    fn replay_cabinet_preview(&mut self, step: CabinetStep) -> Result<(), String> {
+        let (structure, layout, cands) = self
+            .app
+            .cabinet_plate()
+            .ok_or("the Cabinet shows no plate (open it first)")?;
+        match step {
+            CabinetStep::PlaceAll => {
+                self.app
+                    .cabinet_ask(Ask::PlaceAll, Some(structure), layout, &cands);
+                self.frame();
+                if self.app.cabinet.preview.is_none() {
+                    return Err("Place all found nothing to place".into());
+                }
+                // The button click that raises the preview.
+                self.app
+                    .learn_event(novo_learn::Event::Clicked("cabinet.place_all".into()));
+            }
+            CabinetStep::Accept => {
+                if self.app.cabinet.preview.is_none() {
+                    return Err("there is no Place all preview to accept".into());
+                }
+                self.app
+                    .cabinet_ask(Ask::Accept, Some(structure), None, &[]);
+                self.frame();
+            }
+        }
+        Ok(())
     }
 
     fn replay_wire(&mut self, w: &WireOp) -> Result<(), String> {
@@ -188,6 +251,13 @@ impl Drive {
     /// Selects a device (all its symbols) or one pin's symbol, as a click
     /// (or Shift+click) on it does.
     fn replay_select(&mut self, text: &str, add: bool) -> Result<(), String> {
+        // In the Cabinet a click lands on the plate.
+        if !text.contains(':')
+            && matches!(self.app.workspace(), Workspace::Cabinet | Workspace::View3d)
+            && self.replay_select_on_plate(text, add).is_ok()
+        {
+            return Ok(());
+        }
         let project = self.doc().project();
         let mut found: Vec<SymbolId> = Vec::new();
         if text.contains(':') {
@@ -451,6 +521,10 @@ fn op_name(op: &SolveOp) -> &'static str {
         SolveOp::LivePole(_) => "live_pole",
         SolveOp::LiveCoil(_) => "live_coil",
         SolveOp::SetPotential(_) => "set_potential",
+        SolveOp::CabinetPlace(_) => "cabinet_place",
+        SolveOp::CabinetRotate(_) => "cabinet_rotate",
+        SolveOp::CabinetRemove(_) => "cabinet_remove",
+        SolveOp::Cabinet(_) => "cabinet",
     }
 }
 
