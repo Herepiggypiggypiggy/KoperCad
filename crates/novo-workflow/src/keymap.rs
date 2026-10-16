@@ -394,8 +394,8 @@ impl Keymap {
         bind(Chord::shift(l('g')), Canvas, "nav.all_references");
         bind(Chord::alt(ArrowLeft), Anywhere, "nav.back");
         bind(Chord::alt(ArrowRight), Anywhere, "nav.forward");
-        bind(Chord::plain(PageUp), Canvas, "nav.previous_page");
-        bind(Chord::plain(PageDown), Canvas, "nav.next_page");
+        bind(Chord::plain(PageUp), OutsideText, "nav.previous_page");
+        bind(Chord::plain(PageDown), OutsideText, "nav.next_page");
 
         // View: lenses and drawers.
         bind(Chord::plain(Home), Canvas, "view.fit");
@@ -522,6 +522,15 @@ mod tests {
         assert_eq!(map.resolve(w, Focus::TextField), None);
         assert_eq!(map.resolve(w, Focus::Panel), None);
         assert_eq!(map.resolve(w, Focus::PlaceFieldEmpty), None);
+    }
+
+    #[test]
+    fn page_keys_turn_pages_from_a_panel_but_not_inside_a_text_field() {
+        let map = Keymap::workflow();
+        let down = Chord::plain(Key::PageDown);
+        assert_eq!(map.resolve(down, Focus::Canvas), Some("nav.next_page"));
+        assert_eq!(map.resolve(down, Focus::Panel), Some("nav.next_page"));
+        assert_eq!(map.resolve(down, Focus::TextField), None);
     }
 
     #[test]
