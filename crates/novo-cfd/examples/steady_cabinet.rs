@@ -226,6 +226,14 @@ fn main() {
                 run.report().iterations,
             );
             println!("  converged {}", run.report().converged);
+            let flows: Vec<f64> = (0..s.cfg.openings.len())
+                .map(|i| s.patch_flow_m3s(i))
+                .collect();
+            println!(
+                "  patch flows m3/s {flows:?}, net {:.2e}; series imbalance {:+.2}%",
+                flows.iter().sum::<f64>(),
+                100.0 * run.report().imbalance
+            );
             let p = run.state.phase_s;
             println!(
                 "  phases s: energy asm {:.2} sweeps {:.2} | momentum asm {:.2} sweeps {:.2} | pressure {:.2}",
