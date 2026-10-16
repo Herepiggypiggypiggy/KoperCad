@@ -1,11 +1,12 @@
 # Cabinet track, lesson 2. Starts from the end of cabinet-layout (Place all with the standard rules:
 # five DIN rails and five wiring ducts). There is no finished state: the lesson only reads and moves.
 #
-# Verified against main (e2fa0013): the inspector fields (Mounted on, Place rule, Position), the
-# Plate card, the Rules window and the Cut list window. There is no tool to add a rail or duct, so
-# this lesson does not ask for one: Place all makes them. A device dragged by hand leaves its rail
+# Since #612 Place all adds the joining trunk duct and the Rails and ducts list (cabinet.rails,
+# Ctrl+Shift+R) selects, moves, turns and deletes rails and ducts. Verified against main (e2fa0013): the inspector fields (Mounted on, Place rule, Position), the
+# Plate card, the Rules window and the Cut list window. Place all makes the rails and ducts; the
+# lesson only opens the editing list and does not ask for new ones. A device dragged by hand leaves its rail
 # (novo_layout::model::place_device passes rail: None).
-# Needs from the Cabinet owner: the anchors named below. Ducts are not selectable yet.
+# Needs from the Cabinet owner: the anchors named below.
 format = 1
 id = "rails-and-ducts"
 version = 2
@@ -131,6 +132,24 @@ Druk op {key:edit.undo}. **-K1** staat weer op zijn rail en **Mounted on** is te
 point = { ui = "cabinet.canvas" }
 expect = { command = "edit.undo" }
 solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "rails-list"
+title = "Open the list of rails and ducts"
+title_nl = "Open de lijst met rails en kanalen"
+how = ["Press {key:cabinet.rails}, or run Rails and ducts from the command field.", "Click a row to select that rail or duct on the plate."]
+how_nl = ["Druk op {key:cabinet.rails} of voer Rails and ducts uit in het opdrachtveld.", "Klik op een rij om die rail of dat kanaal op de plaat te selecteren."]
+text = """
+Press {key:cabinet.rails}. The window **Rails and ducts** lists every rail and duct with its position and length, and its buttons **Add DIN rail**, **Add duct** and **Add vertical duct**.
+The vertical duct on the right-hand end is the trunk that joins the ducts of all rows: Place all adds it. Click a row to select that piece on the plate, then drag it by its grip tab or nudge it with the arrow keys; **Turn** swaps along and down, **Delete** removes it.
+"""
+text_nl = """
+Druk op {key:cabinet.rails}. Het venster **Rails and ducts** toont elke rail en elk kanaal met positie en lengte, en de knoppen **Add DIN rail**, **Add duct** en **Add vertical duct**.
+Het verticale kanaal aan de rechterkant is de stam die de kanalen van alle rijen verbindt: Place all legt het neer. Klik op een rij om dat stuk op de plaat te selecteren, sleep het dan aan zijn greep of verschuif het met de pijltjestoetsen; **Turn** wisselt langs en omlaag, **Delete** verwijdert het.
+"""
+point = { ui = "cabinet.rails" }
+expect = { command = "cabinet.rails" }
+solve = [ { command = "cabinet.rails" } ]
 
 [[step]]
 id = "cut-list"
