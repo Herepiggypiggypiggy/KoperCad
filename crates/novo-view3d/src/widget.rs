@@ -1042,7 +1042,7 @@ impl View3d {
             },
         ));
 
-        self.paint_overlay(ui, rect, scene, look, dt, reduced);
+        self.paint_overlay(ui, rect, scene, &bounds, look, (dt, reduced));
         if let Some(cr) = cube_rect {
             self.paint_cube(&ui.painter_at(rect), cr, cube_hover, look);
         }
@@ -1055,15 +1055,14 @@ impl View3d {
         ui: &egui::Ui,
         rect: Rect,
         scene: &Scene,
+        bounds: &crate::math::Aabb,
         look: &Look,
-        dt: f32,
-        reduced: bool,
+        (dt, reduced): (f32, bool),
     ) {
         let painter = ui.painter_at(rect);
         let ppp = ui.ctx().pixels_per_point();
         let aspect = rect.width() / rect.height().max(1.0);
-        let bounds = scene.bounds();
-        let vp = self.camera.view_proj(aspect, &bounds);
+        let vp = self.camera.view_proj(aspect, bounds);
         let eye = self.camera.eye();
         let mut frustum_ok = Vec::new();
         crate::cull::visible(scene, &self.state, &vp, &mut frustum_ok);
@@ -1093,7 +1092,7 @@ impl View3d {
                 rect.height() * ppp,
             ) / ppp;
             if let (true, Some(label)) = (self.state.display.labels, &item.label)
-                && let Some(p) = self.project_in(rect, &bounds, front)
+                && let Some(p) = self.project_in(rect, bounds, front)
             {
                 let galley =
                     painter.layout_no_wrap(label.to_string(), font.clone(), Color32::PLACEHOLDER);
@@ -1128,7 +1127,7 @@ impl View3d {
                     Glyph::None => continue,
                 };
                 let top = world.transform_point3(Vec3::new(0.0, item.size.y * 0.5, item.size.z));
-                if let Some(p) = self.project_in(rect, &bounds, top) {
+                if let Some(p) = self.project_in(rect, bounds, top) {
                     let c = style
                         .edge
                         .unwrap_or(look.overlay.chip_text[..3].try_into().unwrap());
@@ -1184,19 +1183,26 @@ impl View3d {
         }
         self.label_fades = touched;
         if self.state.display.dimensions {
-            self.paint_dimensions(&painter, rect, scene, look);
+            self.paint_dimensions(&painter, rect, scene, bounds, look);
         }
     }
 
     /// Measuring lines with end ticks and the length on a chip (see
     /// `dimension`). Lines too short on screen to carry their text are left
     /// out; zoom in and they appear.
-    fn paint_dimensions(&self, painter: &egui::Painter, rect: Rect, scene: &Scene, look: &Look) {
+    fn paint_dimensions(
+        &self,
+        painter: &egui::Painter,
+        rect: Rect,
+        scene: &Scene,
+        bounds: &crate::math::Aabb,
+        look: &Look,
+    ) {
         let font = FontId::monospace(11.0);
         for d in dimension::dimensions(scene, &self.state.selection) {
             let (Some(a), Some(b)) = (
-                self.project(rect, scene, d.a),
-                self.project(rect, scene, d.b),
+                self.project_in(rect, bounds, d.a),
+                self.project_in(rect, bounds, d.b),
             ) else {
                 continue;
             };
@@ -1616,10 +1622,10 @@ mod cost_tests {
         out.textures_delta.clear();
     }
 
-    /// The scene bounds walk every item, so a frame takes them a few times,
-    /// not once per label: the label pass once cost 50 ms at 1000 devices.
+    /// The scene bounds walk every item, so a frame takes them once, not once
+    /// per label: the label pass once cost 50 ms at 1000 devices.
     #[test]
-    fn a_frame_walks_the_scene_bounds_a_fixed_number_of_times_however_many_labels_show() {
+    fn a_frame_walks_the_scene_bounds_once_however_many_labels_show() {
         install_headless();
         let calls = |devices: usize| {
             let (scene, _) = demo::cabinet(&DemoOptions {
@@ -1637,6 +1643,6 @@ mod cost_tests {
         };
         let (small, large) = (calls(20), calls(600));
         assert_eq!(small, large, "independent of the item count");
-        assert!(large <= 8, "{large} walks of the scene per frame");
+        assert!(large <= 1, "{large} walks of the scene per frame");
     }
 }
