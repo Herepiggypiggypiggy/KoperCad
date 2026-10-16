@@ -559,6 +559,26 @@ fn checks_tab(
                     mode.dirty = true;
                 }
             });
+            // A failure raises a punch item by itself; say so and link to it.
+            if state == CheckState::Failed {
+                let item = mode
+                    .store
+                    .punch_items()
+                    .find(|p| {
+                        p.target == Some(info.target)
+                            && p.check == Some(check)
+                            && !p.state.is_closed()
+                    })
+                    .map(|p| (p.title.clone(), severity_label(p.severity)));
+                if let Some((title, severity)) = item {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.weak(format!("Punch item raised: {title} ({severity})"));
+                        if ui.small_button("Open punch list").clicked() {
+                            mode.tab = Tab::Punch;
+                        }
+                    });
+                }
+            }
             if let Some(r) = mode.store.record(info.target, check)
                 && !r.by.is_empty()
             {
