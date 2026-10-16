@@ -486,6 +486,13 @@ impl NovoApp {
     pub(super) fn claims_key(&self, command: &str) -> bool {
         // Delete with the pointer on the highlighted terminal proposal
         // declines it (DESIGN.md §5); otherwise it is the editor's.
+        // The Cabinet has no editor to read these keys itself, so the shell
+        // takes them and hands them to the plate.
+        if self.workspace() == Workspace::Cabinet
+            && matches!(command, "edit.rotate" | "edit.delete" | "edit.mirror")
+        {
+            return true;
+        }
         if command == "edit.delete" {
             return self.declines_proposal();
         }

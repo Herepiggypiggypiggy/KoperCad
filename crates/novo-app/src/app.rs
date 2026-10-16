@@ -824,6 +824,11 @@ impl NovoApp {
             for id in &commands {
                 if cabinet && matches!(*id, "edit.rotate" | "edit.delete") {
                     self.cabinet.keys.push((*id).to_owned());
+                } else if cabinet && *id == "edit.mirror" {
+                    self.message(
+                        Level::Info,
+                        "Mirror does not apply on the plate: a device only turns a quarter (R).",
+                    );
                 }
             }
             commands.retain(|id| {

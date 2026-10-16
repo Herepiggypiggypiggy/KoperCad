@@ -1,5 +1,6 @@
 //! The Cabinet canvas: plate, place all as one undo step.
 
+use eframe::egui;
 use novo_core::{CabinetPlacement, DeviceTag, Project, Rail, Value};
 
 use super::cabinet::Ask;
@@ -575,4 +576,84 @@ fn plate_export_before_the_cabinet_was_opened_says_what_to_do() {
     assert!(d.app.export_plate_pdf().is_none());
     let last = d.app.messages().last().unwrap();
     assert!(last.text.contains("Open the Cabinet"), "{}", last.text);
+}
+
+/// Cabinet with one placed, selected device and the plate on screen.
+fn selected_on_plate(d: &mut Drive) -> (novo_core::StructureId, u64) {
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let device = novo_layout::model::candidates(project(d), cab)[0].id;
+    let l = layout_of(d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 100.0, 120.0), Some(cab), l, &[]);
+    d.frame();
+    d.app.cabinet_ask(Ask::Select(device), Some(cab), None, &[]);
+    d.frame();
+    (cab, device)
+}
+
+fn press(d: &mut Drive, key: egui::Key) {
+    d.frame_with(vec![egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }]);
+}
+
+#[test]
+fn r_on_the_plate_turns_the_selected_device_in_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, _) = selected_on_plate(&mut d);
+    let size = |d: &Drive| {
+        let l = layout_of(d, cab).unwrap();
+        let p = &l.placements[0];
+        (p.rotated, p.footprint().w, p.footprint().h)
+    };
+    let (r0, w0, h0) = size(&d);
+    assert!(!r0);
+    press(&mut d, egui::Key::R);
+    d.frame();
+    let (r1, w1, h1) = size(&d);
+    assert!(r1, "R turned the device");
+    assert_eq!((w1, h1), (h0, w0));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(size(&d), (false, w0, h0));
+}
+
+#[test]
+fn delete_on_the_plate_unplaces_the_device_and_keeps_it_in_the_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, device) = selected_on_plate(&mut d);
+    let devices = |d: &Drive| project(d).devices().count();
+    let before = devices(&d);
+    press(&mut d, egui::Key::Delete);
+    d.frame();
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
+    assert_eq!(devices(&d), before, "the device stays in the project");
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    let l = layout_of(&d, cab).unwrap();
+    assert!(l.unplaced(&cands).iter().any(|c| c.id == device));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 1);
+}
+
+#[test]
+fn x_on_the_plate_says_why_it_does_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (_, _) = selected_on_plate(&mut d);
+    press(&mut d, egui::Key::X);
+    assert!(d.app.messages().iter().any(|m| m.text.contains("Mirror")));
 }
