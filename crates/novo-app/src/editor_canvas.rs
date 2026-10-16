@@ -72,6 +72,10 @@ impl CanvasView for EditorCanvas {
         self.view.zoom_to_fit();
     }
 
+    fn zoom_to_sheet(&mut self) {
+        self.view.zoom_to_sheet();
+    }
+
     fn status_text(&self) -> Option<String> {
         self.view.status_text()
     }
