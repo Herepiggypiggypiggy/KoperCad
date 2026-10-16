@@ -38,3 +38,54 @@ text = "A contact of a relay that keeps its own coil on after the start button i
 
 [term.contact-image]
 text = "The list under a coil showing its contacts, with the page and column of each."
+[term.mounting-plate]
+text = "The metal or insulating plate inside the cabinet that the devices are screwed or clipped to. Sizes are in millimetres from its top left corner."
+text_nl = "De montageplaat in de kast waarop de componenten worden bevestigd. Maten in millimeters vanaf de linkerbovenhoek."
+
+[term.din-rail]
+text = "A 35 mm top-hat rail on the plate. Devices clip onto it and slide along it."
+text_nl = "Een DIN-rail van 35 mm op de plaat. Componenten klikken erop en schuiven erlangs."
+
+[term.wiring-duct]
+text = "A slotted plastic trough on the plate that the wires run in. Its cross-section limits how many wires fit."
+text_nl = "Een gleufkanaal op de plaat waarin de draden lopen. De doorsnede bepaalt hoeveel draden erin passen."
+
+[term.duct-fill]
+text = "How much of a duct's allowed wire area is used. Above 100 % the duct is overfull; the allowed share of the cross-section is the fill limit."
+text_nl = "Hoeveel van de toegestane draaddoorsnede van een kanaal in gebruik is. Boven 100 % is het kanaal te vol."
+
+[term.cut-length]
+text = "The length to cut a wire to: the route along the ducts plus a service loop at each end, and the stripped end for the ferrule or lug."
+text_nl = "De lengte waarop een draad wordt afgekort: de route langs de kanalen plus een lus aan elk uiteinde en de ader-eindhuls of kabelschoen."
+
+[term.free-air]
+text = "A wire with no duct path between its ends. KoperCAD measures it as a straight L-shaped line and reports it as a problem."
+text_nl = "Een draad zonder kanaalroute tussen de uiteinden. KoperCAD meet die langs een rechte L-lijn en meldt het als probleem."
+
+[term.service-loop]
+text = "Spare wire at each end so the wire can be connected and re-connected. Default 50 mm."
+text_nl = "Extra draad aan elk uiteinde om aan te sluiten en opnieuw aan te sluiten. Standaard 50 mm."
+
+[term.power-loss]
+text = "The heat a device gives off in watts at its rated load, from the part's data sheet."
+text_nl = "De warmte die een component afgeeft in watt bij nominale belasting, uit het gegevensblad van het onderdeel."
+
+[term.heat-map]
+text = "A colour layer on the plate that shows where the heat of the devices collects. It is a planning aid, not a thermal simulation."
+text_nl = "Een kleurlaag op de plaat die laat zien waar de warmte van de componenten zich ophoopt. Een hulpmiddel, geen thermische simulatie."
+
+[term.usable-depth]
+text = "The room between the mounting plate and the inside of the door: inside depth minus plate setback minus what stands out on the door."
+text_nl = "De ruimte tussen de montageplaat en de binnenkant van de deur: binnendiepte min plaatafstand min wat aan de deur uitsteekt."
+
+[term.door-swing]
+text = "The space in front of and beside the cabinet that the open door needs."
+text_nl = "De ruimte voor en naast de kast die de geopende deur nodig heeft."
+
+[term.cutout]
+text = "A hole in the plate or door for a device that is not screwed on, such as a round 22 mm hole for a pushbutton."
+text_nl = "Een gat in de plaat of deur voor een component dat niet wordt vastgeschroefd, zoals een rond gat van 22 mm voor een drukknop."
+
+[term.drill-table]
+text = "A numbered list of every hole and cut-out with its position from the plate's top left corner, grouped by diameter."
+text_nl = "Een genummerde lijst van alle gaten en uitsparingen met hun positie vanaf de linkerbovenhoek, gegroepeerd per diameter."
