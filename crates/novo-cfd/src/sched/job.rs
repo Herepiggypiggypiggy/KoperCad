@@ -9,7 +9,7 @@ use std::time::Instant;
 use novo_thermal::Scenario;
 
 use super::Plan;
-use crate::result::{CfdSnapshot, Fidelity};
+use crate::result::{CfdSnapshot, Fidelity, Progress};
 use crate::solver::{CfdError, Control, Solver};
 
 /// What the UI hears from the worker.
@@ -17,6 +17,9 @@ use crate::solver::{CfdError, Control, Solver};
 pub enum Event {
     /// A better state of the solution (shared, not copied again).
     Snapshot(Arc<CfdSnapshot>),
+    /// Cheap per-publish progress (iteration, residuals), never throttled:
+    /// feeds the progress bar and the residual sparkline.
+    Progress(Progress),
     /// A level converged or ran out of iterations.
     LevelDone { fidelity: Fidelity, elapsed_s: f64 },
     /// A level was left out (the solver does not offer it).
@@ -170,6 +173,7 @@ fn run_levels(
         let t0 = Instant::now();
         let mut last_sent: Option<Instant> = None;
         let mut publish = |snap: &CfdSnapshot| {
+            let _ = tx.send(Event::Progress(snap.progress.clone()));
             let due = last_sent.is_none_or(|t| t.elapsed() >= plan.min_publish_interval);
             if !due {
                 return;
