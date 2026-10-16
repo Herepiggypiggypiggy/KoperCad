@@ -238,7 +238,7 @@ fn turbulence_is_an_option_that_shows_in_the_snapshot_and_the_statement() {
 
 #[test]
 fn a_device_the_grid_cannot_resolve_says_so() {
-    let mut t = Tuning::default().with_cells(450);
+    let mut t = Tuning::default().with_cells(120);
     t.coarse.steady_tol = 1e-2;
     let s = CabinetSolver::new(t)
         .solve(
@@ -256,4 +256,27 @@ fn a_device_the_grid_cannot_resolve_says_so() {
     let d = &s.devices[0];
     // the band spans the whole range from the air to twice the rise
     assert!(d.surface_band_c.1 - d.surface_band_c.0 >= 1.9 * (d.surface_c - 25.0).max(0.0));
+}
+
+/// The default solver (plate sheet, lumped devices) lands near the 2D engine
+/// for the sealed reference case, with the films updated during the march.
+#[test]
+fn the_default_cabinet_run_follows_the_2d_engine_for_housing_and_plate() {
+    let scn = scenario(false);
+    let two_d = novo_thermal::simulate_steady(&scn).unwrap();
+    let d2 = &two_d.devices[0];
+    let (s, _) = solve(&scn);
+    let d = &s.devices[0];
+    println!(
+        "CABINET | housing {:.1} (2D {:.1}) | plate share {:.3} (2D {:.3}) | h {:.1}",
+        d.surface_c, d2.surface_c, d.plate_share, d2.plate_share, d.h_w_m2k
+    );
+    assert!(s.progress.converged, "{:?}", s.progress);
+    assert!(((d.surface_c - 25.0) / (d2.surface_c - 25.0) - 1.0).abs() < 0.15);
+    assert!((d.plate_share - d2.plate_share).abs() < 0.06);
+    assert!(
+        d.h_w_m2k > 5.0 && d.h_w_m2k < 15.0,
+        "film never updated: {}",
+        d.h_w_m2k
+    );
 }
