@@ -3,6 +3,7 @@ use super::par::{for_planes, max_over_planes};
 use super::pressure::PressureSolver;
 use super::scheme::{Sample, Scheme, face_value};
 use crate::openings::{OpenPatch, OpenSet};
+use crate::solids::Medium;
 
 /// Thermal condition on a wall.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -78,6 +79,8 @@ pub struct FlowConfig {
     pub t_ref: Option<f64>,
     /// Density, kg/m3: turns fan curves in Pa into the kinematic pressure.
     pub rho: f64,
+    /// Solids in the grid (conjugate heat transfer). `None` = all air.
+    pub medium: Option<Medium>,
 }
 
 impl FlowConfig {
@@ -95,6 +98,7 @@ impl FlowConfig {
             openings: Vec::new(),
             t_ref: None,
             rho: 1.18,
+            medium: None,
         }
     }
 }
@@ -128,14 +132,66 @@ pub struct FlowSolver {
     open_alpha: Vec<f64>,
     /// Inflow temperature of each patch, degrees C.
     t_in: Vec<f64>,
+    /// Volumetric heat capacity per cell, J/m3K (air where there is no solid).
+    c_cell: Vec<f64>,
+    /// Conductivity per cell, W/mK.
+    k_cell: Vec<f64>,
+    /// Conductivity of the face below each cell along each axis (harmonic
+    /// mean of the two cells), W/mK; 0 on the domain boundary.
+    k_face: [Vec<f64>; 3],
+    /// Convection scale per cell: heat capacity of air over the cell's.
+    conv_scale: Vec<f64>,
+    /// Heating per cell, K/s (from the config and the medium).
+    q_cell: Vec<f64>,
 }
 
 impl FlowSolver {
     pub fn new(mesh: Mesh, cfg: FlowConfig, t_init: f64) -> FlowSolver {
         let vel = std::array::from_fn(|c| vec![0.0; mesh.len(c)]);
         let cells = mesh.cells();
-        let pressure = PressureSolver::new(&mesh);
-        let open = OpenSet::resolve(&mesh, &cfg.openings);
+        let mut open = OpenSet::resolve(&mesh, &cfg.openings);
+        let rho_cp_air = cfg.conductivity / cfg.alpha;
+        let (c_cell, k_cell, conv_scale, mut q_cell) = match &cfg.medium {
+            Some(md) => {
+                assert_eq!(md.cells(), cells, "medium and mesh differ in size");
+                md.block_faces(&mesh, &mut open.afrac);
+                let c: Vec<f64> = (0..cells).map(|i| md.cell_rho_cp(i, rho_cp_air)).collect();
+                let k: Vec<f64> = (0..cells).map(|i| md.cell_k(i, cfg.conductivity)).collect();
+                let sc = c.iter().map(|c| rho_cp_air / c).collect();
+                let q = (0..cells).map(|i| md.heat_w_m3(i) / c[i]).collect();
+                (c, k, sc, q)
+            }
+            None => (
+                vec![rho_cp_air; cells],
+                vec![cfg.conductivity; cells],
+                vec![1.0; cells],
+                vec![0.0; cells],
+            ),
+        };
+        if let Some(h) = &cfg.heat_source {
+            for (q, h) in q_cell.iter_mut().zip(h) {
+                *q += h;
+            }
+        }
+        let k_face = std::array::from_fn(|a| {
+            let mut kf = vec![0.0; cells];
+            for k in 0..mesh.n[2] {
+                for j in 0..mesh.n[1] {
+                    for i in 0..mesh.n[0] {
+                        let ix = [i, j, k];
+                        if ix[a] == 0 {
+                            continue;
+                        }
+                        let (dl, du) = (0.5 * mesh.dx[a][ix[a] - 1], 0.5 * mesh.dx[a][ix[a]]);
+                        let kl = k_cell[mesh.cell(with(ix, a, ix[a] - 1))];
+                        let ku = k_cell[mesh.cell(ix)];
+                        kf[mesh.cell(ix)] = (dl + du) / (dl / kl + du / ku);
+                    }
+                }
+            }
+            kf
+        });
+        let pressure = PressureSolver::with_openness(&mesh, Some(&open.afrac));
         let t_in = cfg
             .openings
             .iter()
@@ -147,6 +203,11 @@ impl FlowSolver {
             open_speed: vec![0.0; nf],
             open_alpha: vec![1.0; nf],
             t_in,
+            c_cell,
+            k_cell,
+            k_face,
+            conv_scale,
+            q_cell,
             vel,
             p: vec![0.0; cells],
             t: vec![t_init; cells],
@@ -288,7 +349,7 @@ impl FlowSolver {
             for j in 0..d[1] {
                 for i in 0..d[0] {
                     let ix = [i, j, k];
-                    if ix[c] == 0 || ix[c] == m.n[c] {
+                    if ix[c] == 0 || ix[c] == m.n[c] || self.open.afrac[c][m.idx(c, ix)] == 0.0 {
                         continue;
                     }
                     let mut conv = 0.0;
@@ -340,8 +401,9 @@ impl FlowSolver {
                                 ia[c] = lo;
                                 let mut ib = ia;
                                 ib[c] = hi;
-                                let ub =
-                                    w_lo * u[b][m.idx(b, ia)] + (1.0 - w_lo) * u[b][m.idx(b, ib)];
+                                let (va, vb) = (m.idx(b, ia), m.idx(b, ib));
+                                let ub = w_lo * u[b][va] * self.open.afrac[b][va]
+                                    + (1.0 - w_lo) * u[b][vb] * self.open.afrac[b][vb];
                                 let at = |q: usize| -> Sample {
                                     (m.centre[b][q], u[c][m.idx(c, with(ix, b, q))])
                                 };
@@ -389,7 +451,8 @@ impl FlowSolver {
                 for j in 0..d[1] {
                     for i in 0..d[0] {
                         let ix = [i, j, k];
-                        if ix[c] == 0 || ix[c] == m.n[c] {
+                        if ix[c] == 0 || ix[c] == m.n[c] || self.open.afrac[c][m.idx(c, ix)] == 0.0
+                        {
                             continue;
                         }
                         let id = m.idx(c, ix);
@@ -415,10 +478,16 @@ impl FlowSolver {
                                         }
                                     } else {
                                         let q = if upper { s + 1 } else { s - 1 };
-                                        let dist = (m.centre[b][q] - m.centre[b][s]).abs();
-                                        let cn = nu / (dist * w);
-                                        a_sum += cn;
-                                        a_nb += cn * self.vel[c][m.idx(c, with(ix, b, q))];
+                                        let nbr = m.idx(c, with(ix, b, q));
+                                        if self.open.afrac[c][nbr] == 0.0 {
+                                            // a solid next door: no-slip wall half a cell away
+                                            a_sum += nu / (0.5 * w * w);
+                                        } else {
+                                            let dist = (m.centre[b][q] - m.centre[b][s]).abs();
+                                            let cn = nu / (dist * w);
+                                            a_sum += cn;
+                                            a_nb += cn * self.vel[c][nbr];
+                                        }
                                     }
                                 }
                             }
@@ -465,7 +534,7 @@ impl FlowSolver {
                 for j in 0..d[1] {
                     for i in 0..d[0] {
                         let ix = [i, j, k];
-                        if ix[a] == 0 || ix[a] == m.n[a] {
+                        if ix[a] == 0 || ix[a] == m.n[a] || af[a][m.idx(a, ix)] == 0.0 {
                             continue;
                         }
                         let lo = with(ix, a, ix[a] - 1);
@@ -586,6 +655,70 @@ impl FlowSolver {
         }
     }
 
+    /// Heat leaving through the thermal wall conditions of domain face
+    /// `face` (index of [`Face`]), W; positive = out of the domain.
+    pub fn wall_heat_w(&self, face: usize) -> f64 {
+        let m = &self.mesh;
+        let (a, upper) = (face / 2, face % 2 == 1);
+        let (b, c) = super::mesh::other_axes(a);
+        let bc = self.cfg.faces[face].thermal;
+        let mut sum = 0.0;
+        for kc in 0..m.n[c] {
+            for jb in 0..m.n[b] {
+                let mut ix = [0; 3];
+                ix[a] = if upper { m.n[a] - 1 } else { 0 };
+                ix[b] = jb;
+                ix[c] = kc;
+                let edge = if upper { m.n[a] } else { 0 };
+                let closed = 1.0 - self.open.afrac[a][m.idx(a, with(ix, a, edge))];
+                let id = m.cell(ix);
+                let (t, k) = (self.t[id], self.k_cell[id]);
+                let half = 0.5 * m.dx[a][ix[a]];
+                let g = match bc {
+                    ThermalBc::Adiabatic => 0.0,
+                    ThermalBc::Fixed(tw) => k / half * (t - tw),
+                    ThermalBc::Convective { h, t_out } => (t - t_out) / (half / k + 1.0 / h),
+                };
+                sum += closed * g * m.area(a, ix);
+            }
+        }
+        sum
+    }
+
+    /// Heat carried out through the openings relative to `t_ref`, W.
+    pub fn open_heat_out_w(&self, t_ref: f64) -> f64 {
+        let rho_cp = self.cfg.conductivity / self.cfg.alpha;
+        self.open
+            .faces
+            .iter()
+            .map(|f| {
+                let u = f.outward() * self.vel[f.axis][f.vel];
+                let tb = if u < 0.0 {
+                    self.t_in[f.patch]
+                } else {
+                    self.t[f.cell]
+                };
+                rho_cp * u * f.area * (tb - t_ref)
+            })
+            .sum()
+    }
+
+    /// Heat stored in the grid relative to `t_ref`, J.
+    pub fn stored_heat_j(&self, t_ref: f64) -> f64 {
+        let m = &self.mesh;
+        let mut sum = 0.0;
+        for k in 0..m.n[2] {
+            for j in 0..m.n[1] {
+                for i in 0..m.n[0] {
+                    let ix = [i, j, k];
+                    let id = m.cell(ix);
+                    sum += self.c_cell[id] * m.volume(ix) * (self.t[id] - t_ref);
+                }
+            }
+        }
+        sum
+    }
+
     /// Volume flow out through patch `patch`, m3/s (negative = in).
     pub fn patch_flow_m3s(&self, patch: usize) -> f64 {
         self.open
@@ -633,22 +766,27 @@ impl FlowSolver {
                             if e == 0 || e == n[a] {
                                 return self.open_enthalpy_flux(a, e, ix);
                             }
-                            let ua = self.vel[a][m.idx(a, with(ix, a, e))];
+                            let v = m.idx(a, with(ix, a, e));
+                            let ua = self.vel[a][v];
+                            if ua == 0.0 {
+                                return 0.0;
+                            }
                             let at = |q: usize| -> Sample {
                                 (m.centre[a][q], self.t[m.cell(with(ix, a, q))])
                             };
                             let ll = (e >= 2).then(|| at(e - 2));
                             let uu = (e + 1 < n[a]).then(|| at(e + 1));
-                            ua * face_value(sch, m.edges[a][e], ll, at(e - 1), at(e), uu, ua > 0.0)
+                            self.open.afrac[a][v]
+                                * ua
+                                * face_value(sch, m.edges[a][e], ll, at(e - 1), at(e), uu, ua > 0.0)
                         };
                         conv += (face(ix[a] + 1) - face(ix[a])) / m.dx[a][ix[a]];
                     }
-                    let q = self.cfg.heat_source.as_ref().map_or(0.0, |s| s[m.cell(ix)]);
-                    rhs[m.cell(ix)] = -conv + q;
+                    let id = m.cell(ix);
+                    rhs[id] = -conv * self.conv_scale[id] + self.q_cell[id];
                 }
             }
         }
-        let alpha = self.cfg.alpha;
         let old = self.t.clone();
         for _ in 0..200 {
             let mut change: f64 = 0.0;
@@ -658,24 +796,28 @@ impl FlowSolver {
                     for i in 0..n[0] {
                         let ix = [i, j, k];
                         let id = m.cell(ix);
+                        let (kc, cc) = (self.k_cell[id], self.c_cell[id]);
                         let (mut a_sum, mut a_nb) = (0.0, 0.0);
                         for a in 0..3 {
                             let s = ix[a];
                             let w = m.dx[a][s];
                             for upper in [false, true] {
                                 if (!upper && s == 0) || (upper && s + 1 == n[a]) {
+                                    // an opening takes its share of the face off the wall
+                                    let closed = 1.0
+                                        - self.open.afrac[a]
+                                            [m.idx(a, with(ix, a, if upper { n[a] } else { 0 }))];
                                     match self.cfg.faces[2 * a + upper as usize].thermal {
                                         ThermalBc::Adiabatic => {}
                                         ThermalBc::Fixed(tw) => {
-                                            let cw = alpha / (0.5 * w * w);
+                                            let cw = closed * kc / (cc * 0.5 * w * w);
                                             a_sum += cw;
                                             a_nb += cw * tw;
                                         }
                                         ThermalBc::Convective { h, t_out } => {
-                                            // half cell of air in series with the film
-                                            let r = 0.5 * w / self.cfg.conductivity + 1.0 / h;
-                                            let cw =
-                                                self.cfg.alpha / (self.cfg.conductivity * r * w);
+                                            // half cell in series with the film
+                                            let r = 0.5 * w / kc + 1.0 / h;
+                                            let cw = closed / (cc * r * w);
                                             a_sum += cw;
                                             a_nb += cw * t_out;
                                         }
@@ -683,9 +825,11 @@ impl FlowSolver {
                                 } else {
                                     let q = if upper { s + 1 } else { s - 1 };
                                     let dist = (m.centre[a][q] - m.centre[a][s]).abs();
-                                    let cn = alpha / (dist * w);
+                                    let nb = m.cell(with(ix, a, q));
+                                    let kf = self.k_face[a][if upper { nb } else { id }];
+                                    let cn = kf / (cc * dist * w);
                                     a_sum += cn;
-                                    a_nb += cn * self.t[m.cell(with(ix, a, q))];
+                                    a_nb += cn * self.t[nb];
                                 }
                             }
                         }

@@ -6,6 +6,7 @@
 mod assembly;
 mod background_panel;
 mod cabinet;
+mod cabinet_bar;
 mod cabinet_door;
 mod cabinet_inspector;
 mod cabinet_panel;
@@ -857,6 +858,7 @@ impl NovoApp {
             commands.retain(|id| {
                 Action::from_id(id).is_some()
                     || *id == "view.cabinet_table"
+                    || *id == "cabinet.place-all"
                     || *id == "cabinet.rails"
                     || *id == "view.command_field_here"
                     || id.starts_with("heat.")
