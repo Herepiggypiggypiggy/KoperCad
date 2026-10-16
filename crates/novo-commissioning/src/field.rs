@@ -7,9 +7,12 @@
 //! by who raised them, when and the title, because two devices number their
 //! items independently.
 
+use std::collections::BTreeMap;
+
 use serde::{Deserialize, Serialize};
 
 use crate::check::{CheckKind, Target};
+use crate::progress::targets;
 use crate::punch::{PunchItem, PunchState};
 use crate::store::CommissioningStore;
 
@@ -38,6 +41,16 @@ pub struct FieldPackage {
     pub exported_by: String,
     pub exported_at: String,
     pub store: CommissioningStore,
+    /// The tag or wire number every target had when exported. Object ids are
+    /// only numbers, so a file from another project is told apart by these:
+    /// a decision is merged only where the label still matches.
+    labels: Vec<TargetLabel>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct TargetLabel {
+    target: Target,
+    label: String,
 }
 
 /// What a merge did, for the message after an import.
@@ -49,6 +62,9 @@ pub struct MergeReport {
     pub checks_kept: usize,
     /// Decisions about objects this project does not have.
     pub unknown_targets: usize,
+    /// Decisions whose object has another tag or number here: the file is
+    /// probably from a different project. They are not merged.
+    pub mismatched_targets: usize,
     pub punch_added: usize,
     pub punch_updated: usize,
 }
@@ -69,6 +85,12 @@ impl MergeReport {
                 self.checks_kept
             ));
         }
+        if self.mismatched_targets > 0 {
+            text.push_str(&format!(
+                ", {} skipped (tag does not match, other project?)",
+                self.mismatched_targets
+            ));
+        }
         if self.unknown_targets > 0 {
             text.push_str(&format!(
                 ", {} skipped (not in this project)",
@@ -80,11 +102,25 @@ impl MergeReport {
 }
 
 impl FieldPackage {
-    pub fn new(project: &str, by: &str, at: &str, store: &CommissioningStore) -> Self {
+    pub fn new(
+        project_name: &str,
+        by: &str,
+        at: &str,
+        store: &CommissioningStore,
+        project: &novo_core::Project,
+    ) -> Self {
+        let labels = targets(project)
+            .into_iter()
+            .map(|t| TargetLabel {
+                target: t.target,
+                label: t.label,
+            })
+            .collect();
         FieldPackage {
+            labels,
             format: FORMAT.to_owned(),
             version: VERSION,
-            project: project.to_owned(),
+            project: project_name.to_owned(),
             exported_by: by.to_owned(),
             exported_at: at.to_owned(),
             store: store.clone(),
@@ -117,10 +153,33 @@ impl FieldPackage {
         project: &novo_core::Project,
     ) -> MergeReport {
         let mut report = MergeReport::default();
+        let here: BTreeMap<Target, String> = targets(project)
+            .into_iter()
+            .map(|t| (t.target, t.label))
+            .collect();
+        let there: BTreeMap<Target, &str> = self
+            .labels
+            .iter()
+            .map(|l| (l.target, l.label.as_str()))
+            .collect();
+        let verdict = |target: Target| -> Verdict {
+            match (here.get(&target), there.get(&target)) {
+                (None, _) if !target_exists(project, target) => Verdict::Unknown,
+                (Some(a), Some(b)) if a == b => Verdict::Same,
+                _ => Verdict::Other,
+            }
+        };
         for incoming in self.store.records() {
-            if !target_exists(project, incoming.target) {
-                report.unknown_targets += 1;
-                continue;
+            match verdict(incoming.target) {
+                Verdict::Same => {}
+                Verdict::Unknown => {
+                    report.unknown_targets += 1;
+                    continue;
+                }
+                Verdict::Other => {
+                    report.mismatched_targets += 1;
+                    continue;
+                }
             }
             match store.record(incoming.target, incoming.check) {
                 None => {
@@ -136,6 +195,14 @@ impl FieldPackage {
             }
         }
         for incoming in self.store.punch_items() {
+            // An item about an object that is not the same here is kept as a
+            // free-standing one, so the finding is not lost.
+            let mut incoming = incoming.clone();
+            if incoming.target.is_some_and(|t| verdict(t) != Verdict::Same) {
+                incoming.target = None;
+                incoming.check = None;
+            }
+            let incoming = &incoming;
             let key = punch_key(incoming);
             let found = store
                 .punch_items()
@@ -158,6 +225,13 @@ impl FieldPackage {
         }
         report
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Verdict {
+    Same,
+    Other,
+    Unknown,
 }
 
 fn target_exists(project: &novo_core::Project, target: Target) -> bool {

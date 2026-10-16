@@ -262,7 +262,14 @@ fn field_results_from_a_file_merge_into_the_project() {
     let file = dir.path().join("walk.kcfield");
     std::fs::write(
         &file,
-        FieldPackage::new("Example", "tablet", "2026-10-16T10:00:00Z", &field).to_json(),
+        FieldPackage::new(
+            "Example",
+            "tablet",
+            "2026-10-16T10:00:00Z",
+            &field,
+            d.doc().project(),
+        )
+        .to_json(),
     )
     .unwrap();
     d.app.import_field_results_from(&file);

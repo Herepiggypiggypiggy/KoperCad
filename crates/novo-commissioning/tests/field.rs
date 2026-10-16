@@ -21,7 +21,7 @@ fn starter() -> (Document, novo_tests::motor_starter::MotorStarter) {
 
 #[test]
 fn a_package_round_trips_and_rejects_other_json() {
-    let (_, m) = starter();
+    let (doc, m) = starter();
     let mut store = CommissioningStore::new();
     let wire = Target::Wire(m.motor_wires[0]);
     store
@@ -32,7 +32,14 @@ fn a_package_round_trips_and_rejects_other_json() {
             "2026-10-16T09:00:00Z",
         ))
         .unwrap();
-    let json = FieldPackage::new("Starter", "tv", "2026-10-16T10:00:00Z", &store).to_json();
+    let json = FieldPackage::new(
+        "Starter",
+        "tv",
+        "2026-10-16T10:00:00Z",
+        &store,
+        doc.project(),
+    )
+    .to_json();
     let back = FieldPackage::from_json(&json).unwrap();
     assert_eq!(back.store, store);
     assert_eq!(back.project, "Starter");
@@ -95,7 +102,7 @@ fn merging_keeps_the_newer_decision_per_check() {
             "2026-10-16T08:30:00Z",
         ))
         .unwrap();
-    let package = FieldPackage::new("P", "tv", "2026-10-16T13:00:00Z", &field);
+    let package = FieldPackage::new("P", "tv", "2026-10-16T13:00:00Z", &field, project);
     let report = package.merge_into(&mut desk, project);
     assert_eq!(report.checks_updated, 1);
     assert_eq!(report.checks_added, 1);
@@ -144,7 +151,7 @@ fn punch_items_from_two_devices_do_not_collide() {
     let mut field2 = CommissioningStore::new();
     field2.add_punch(signed);
     let _ = wire;
-    let package = FieldPackage::new("P", "ab", "2026-10-16T12:00:00Z", &field);
+    let package = FieldPackage::new("P", "ab", "2026-10-16T12:00:00Z", &field, project);
     let report = package.merge_into(&mut desk, project);
     assert_eq!((report.punch_added, report.punch_updated), (1, 1));
     assert_eq!(
@@ -153,7 +160,7 @@ fn punch_items_from_two_devices_do_not_collide() {
         "the shared item is not doubled"
     );
     assert_eq!(desk.open_punch_count(), 1);
-    let json = FieldPackage::new("P", "ab", "t", &field2).to_json();
+    let json = FieldPackage::new("P", "ab", "t", &field2, project).to_json();
     let back = FieldPackage::from_json(&json).unwrap();
     assert_eq!(
         back.store
@@ -170,7 +177,7 @@ fn punch_items_from_two_devices_do_not_collide() {
 
 #[test]
 fn decisions_about_deleted_objects_are_skipped() {
-    let (_, m) = starter();
+    let (doc, m) = starter();
     let other = Document::default();
     let mut field = CommissioningStore::new();
     field
@@ -182,7 +189,39 @@ fn decisions_about_deleted_objects_are_skipped() {
         ))
         .unwrap();
     let mut desk = CommissioningStore::new();
-    let report = FieldPackage::new("P", "tv", "t", &field).merge_into(&mut desk, other.project());
+    let report = FieldPackage::new("P", "tv", "t", &field, doc.project())
+        .merge_into(&mut desk, other.project());
     assert_eq!(report.unknown_targets, 1);
     assert!(desk.is_empty());
+}
+
+#[test]
+fn a_file_from_another_project_does_not_merge_onto_wrong_ids() {
+    // The same ids exist in both projects, but the second one has other tags.
+    let (doc_a, m) = starter();
+    let (mut doc_b, _) = starter();
+    let wire = m.motor_wires[0];
+    doc_b
+        .execute(novo_core::Command::SetWireNumber {
+            wire,
+            number: Some("ZZ99".into()),
+        })
+        .unwrap();
+    let mut field = CommissioningStore::new();
+    field
+        .set_check(rec(
+            Target::Wire(wire),
+            CheckKind::Continuity,
+            CheckState::Passed,
+            "2026-10-16T09:00:00Z",
+        ))
+        .unwrap();
+    let package = FieldPackage::new("A", "tv", "t", &field, doc_a.project());
+    let mut desk = CommissioningStore::new();
+    let report = package.merge_into(&mut desk, doc_b.project());
+    assert_eq!(report.mismatched_targets, 1);
+    assert!(desk.is_empty());
+    // the same project still merges
+    let ok = package.merge_into(&mut desk, doc_a.project());
+    assert_eq!(ok.checks_added, 1);
 }

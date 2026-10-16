@@ -473,10 +473,11 @@ impl NovoApp {
             return;
         };
         self.load_commissioning();
-        let Some(mode) = self.wb.commissioning.as_ref() else {
+        let (Some(mode), Some(doc)) = (self.wb.commissioning.as_ref(), self.backend.document())
+        else {
             return;
         };
-        let package = FieldPackage::new(&name, &mode.who, &now(), &mode.store);
+        let package = FieldPackage::new(&name, &mode.who, &now(), &mode.store, doc.project());
         let mut dialog = rfd::FileDialog::new()
             .set_title("Export field results")
             .set_file_name(format!("{name} field results.kcfield"))
