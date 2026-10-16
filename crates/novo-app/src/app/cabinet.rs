@@ -1306,7 +1306,10 @@ impl NovoApp {
                     && let Some(a) = cabinet_inspector::overlay(
                         ui.ctx(),
                         out.response.rect,
-                        *left,
+                        cabinet_inspector::Room {
+                            left: *left,
+                            ..Default::default()
+                        },
                         facts,
                         project,
                         &mut self.cabinet.panel_fields,
