@@ -24,9 +24,10 @@ pub enum SetupError {
 /// The slotted wire duct as a porous medium.
 ///
 /// A duct is a hollow channel with slots in both side walls. Air crosses it
-/// through the slots (an orifice loss at each wall, `K = 1 / (cd slot_free)^2`
-/// on the speed in the duct) and runs along it almost freely (the clutter drag
-/// of the scenario per metre). The lid and the plate close the third
+/// through the slots: it passes two slotted walls in series, each with loss
+/// `K u^2 / 2` and `K = 1 / (cd slot_free)^2` on the speed in the duct, so
+/// `K u^2` in total, spread over the duct width `w` as drag `K / w`. Along the
+/// duct it runs almost freely (the clutter drag of the scenario per metre). The lid and the plate close the third
 /// direction, ten times the cross drag. Planning values, not a measurement of
 /// a maker's duct.
 #[derive(Debug, Clone, Copy, PartialEq)]
