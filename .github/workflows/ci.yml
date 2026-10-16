@@ -2,7 +2,8 @@ name: CI
 
 # Sized for the free Actions allowance (2000 minutes a month on a free
 # private repo; Windows minutes count double):
-# - Linux fmt, clippy and tests on every pull request and every push to main.
+# - Linux fmt, clippy and tests on every pull request and every push to main,
+#   as parallel jobs (lint, workspace tests, three novo-cfd test shards).
 # - Windows (the slow, double-priced one) only on main pushes, a nightly run
 #   and manual dispatch, never per pull request. The experimental build is
 #   the Windows build of open PRs.
@@ -32,10 +33,15 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Line tables keep panic backtraces readable; full debuginfo only costs
+  # compile, link and cache time in CI.
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
 
 jobs:
-  linux:
-    name: ubuntu-latest
+  # Formatting and lints. Fast on a warm cache, and it fails first so a
+  # trivial mistake does not wait for the test shards.
+  lint:
+    name: lint
     # The nightly run only checks Windows; Linux was checked on every push.
     if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
@@ -46,9 +52,63 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: linux-lint
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+
+  # All tests, split over parallel jobs. novo-cfd holds the physics validation
+  # runs (minutes each) and used to be most of the old single job's time, so it
+  # gets three shards of its own, cut by test (nextest partitions the list of
+  # tests, so a new test is always in exactly one shard). Every test of the
+  # workspace runs in exactly one job: nextest for the unit and integration
+  # tests, `cargo test --doc` for doc tests (nextest does not run those).
+  test:
+    name: test (${{ matrix.name }})
+    if: github.event_name != 'schedule'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: workspace
+            nextest: --workspace --exclude novo-cfd
+            doc: --workspace --exclude novo-cfd
+          - name: cfd 1/3
+            nextest: -p novo-cfd --partition count:1/3
+            doc: -p novo-cfd
+          - name: cfd 2/3
+            nextest: -p novo-cfd --partition count:2/3
+          - name: cfd 3/3
+            nextest: -p novo-cfd --partition count:3/3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: linux-test
+          # One job saves the shared cache; the others only read it.
+          save-if: ${{ matrix.name == 'workspace' }}
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: nextest
+      - run: cargo nextest run ${{ matrix.nextest }} --no-fail-fast
+      - if: matrix.doc
+        run: cargo test ${{ matrix.doc }} --doc
+
+  # One required check for branch protection and the merge leads: green only
+  # when lint and every test shard passed.
+  linux:
+    name: ubuntu-latest
+    if: always() && github.event_name != 'schedule'
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          echo "lint: ${{ needs.lint.result }}, test: ${{ needs.test.result }}"
+          [ "${{ needs.lint.result }}" = success ] && [ "${{ needs.test.result }}" = success ]
 
   # Decides whether the Windows job runs. Pull requests never get one.
   gate:
