@@ -135,9 +135,7 @@ fn merge_planes(len: f64, spans: &[Span], sp: &Spacing) -> Vec<Plane> {
     // the far end: ordinary planes too close to it go
     while out.len() > 1 {
         let l = *out.last().unwrap();
-        if !l.keep && len - l.pos < min_gap {
-            out.pop();
-        } else if l.keep && len - l.pos < 0.2 {
+        if len - l.pos < if l.keep { 0.2 } else { min_gap } {
             out.pop();
         } else {
             break;

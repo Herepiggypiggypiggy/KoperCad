@@ -113,7 +113,7 @@ impl MeshSettings {
         if self.min_cells_across == 0 {
             return Err(MeshError::Settings("min_cells_across must be at least 1"));
         }
-        if !(self.thin_mm >= 0.0) {
+        if self.thin_mm.is_nan() || self.thin_mm < 0.0 {
             return Err(MeshError::Settings("thin_mm must not be negative"));
         }
         if self.max_ratio < 1.1 {
