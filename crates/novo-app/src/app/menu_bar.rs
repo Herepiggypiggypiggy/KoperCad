@@ -371,6 +371,34 @@ mod width_tests {
     }
 
     #[test]
+    fn the_breadcrumb_stays_clear_of_search_in_every_workspace_with_the_example_open() {
+        use super::super::workspace::Workspace;
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::OpenExample);
+        for workspace in [
+            Workspace::Schematic,
+            Workspace::Cabinet,
+            Workspace::View3d,
+            Workspace::Commissioning,
+        ] {
+            d.app.switch_workspace(workspace);
+            // Unpinned, so the outline's own button is in the bar too.
+            d.app.settings.outline_pinned = Some(false);
+            for width in [1366.0, 1280.0, 1100.0] {
+                frame_at(&mut d, width);
+                frame_at(&mut d, width);
+                assert!(
+                    d.app.top_bar_gap >= 0.0,
+                    "{workspace:?} at {width}: the top bar overlaps by {}",
+                    -d.app.top_bar_gap
+                );
+            }
+        }
+    }
+
+    #[test]
     fn below_1100_the_menus_fold_into_the_mark() {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
