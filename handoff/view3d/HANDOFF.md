@@ -1,14 +1,12 @@
 # 3D view (WS-29): handoff
 
-Updated 2026-10-15 19:45 UTC.
+Updated 2026-10-16 UTC.
 
 ## State
-- Repo herepiggypiggypiggy/kopercad. Branch `claude/project-thread-8laqbm` (the only branch this thread may push to; after a merge, `git fetch origin main && git merge origin/main`, since forced restarts are denied here).
-- Merged: #395 design doc, #439 skeleton, #481 renderer (offscreen wgpu, egui widget `widget::View3d`, `orbit` and `window` examples, GPU tests, wires as tubes with picking). Also on main from other threads: scene model `build` (#391), look values, feel, cube, labels, governor (#457).
-- Overlays (`set_overlays`) and the door driver (`set_door`) are on main (#647). The follow-up PR of 2026-10-16 adds layers (enclosure, door, wires), routed wires, the enclosure's own shell and door, the 3D toolbar with door angle, commands `view.3d_door/_shell/_wires` and keys Ctrl+6 / Shift+D (UI in `crates/novo-app/src/app/view3d_controls.rs`; selection, inspector and view presets are the UI integration thread's, #655).
-- Open work for this thread (follow-up PR): hinge/door animation driver, overlay colours in widget.rs moving into Look/palette, "?" badge vs dashed edge for guessed size (doc), hover tooltip and label chip, feel constants from the look thread's feel module. The look thread said it will wire cube, labels, outlines and governor into widget.rs: agree the split with it before touching widget.rs.
-- UI entry point (section 12): third face of the Cabinet canvas (Plate / Table / 3D) and command `cabinet.view3d`; host wiring belongs to the UI integration thread (session_01G52sVY5N34jPsrkqWukApR), who got the exact calls: `widget::install`, `View3d::new`, `View3d::show`. No menu entry until hands-on tested.
-- Not done: no measurement on a real GPU (owner's Windows laptop: `cargo run --release -p novo-view3d --example window`); coordinator PR to move dev-dependencies naga and pollster into `[workspace.dependencies]`.
+- Repo herepiggypiggypiggy/kopercad. Work on a new branch from main per PR (a merged PR cannot be reused; the old branch name is stale).
+- On main: design doc, crate, renderer, egui widget (`widget::View3d`), overlays, door driver, layers, routed wires, shell and door from the enclosure, toolbar (layers, door angle, shadows, dimensions, move, stats), wire colours, frame statistics (`widget::render_stats`, View > 3D), dimensions (`dimension.rs`), frame governor connected to the widget. Selection, inspector, move and Heat in the 3D face are other threads' (UI integration, CFD-F, 3D look).
+- Commands: view.3d, view.3d_door, view.3d_shell, view.3d_wires, view.3d_shadows, view.3d_dimensions, view.3d_stats; keys Ctrl+6 and Shift+D.
+- Not done: no measurement on a real GPU yet (steps in the design doc, "Measuring on your own machine"; the owner copies the panel's lines). Colour by potential waits for the potential's role in the model.
 
 ## Resume
 ```
