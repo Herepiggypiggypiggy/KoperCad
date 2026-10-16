@@ -53,6 +53,8 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `commissioning.who`: {ui:commissioning.who} shows **By field**
 - `commissioning.punch`: {ui:commissioning.punch} shows **Punch tab**
 - `commissioning.report`: {ui:commissioning.report} shows **Report PDF button**
+- `commissioning.field_export`: {ui:commissioning.field_export} shows **Field results Export button**
+- `commissioning.field_import`: {ui:commissioning.field_import} shows **Field results Import button**
 - `commissioning.next_open`: {ui:commissioning.next_open} shows **Next open button**
 - `commissioning.pass`: {ui:commissioning.pass} shows **Pass button**
 - `commissioning.fail`: {ui:commissioning.fail} shows **Fail button**

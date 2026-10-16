@@ -15,8 +15,8 @@ use eframe::egui;
 use novo_canvas::marks::{Mark, MarkKind};
 use novo_canvas::model::item_id;
 use novo_commissioning::{
-    CheckKind, CheckRecord, CheckState, CommissioningStore, Progress, PunchItem, PunchState, Scope,
-    Severity, Target, TargetInfo, progress, targets,
+    CheckKind, CheckRecord, CheckState, CommissioningStore, FieldPackage, Progress, PunchItem,
+    PunchState, Scope, Severity, Target, TargetInfo, progress, targets,
 };
 use novo_core::{PageId, Project};
 use novo_pdf::{ReportFileFormat, ReportPdfOptions};
@@ -39,6 +39,12 @@ const TOUCH_LARGE: f32 = 64.0;
 const ARM_SECONDS: f64 = 5.0;
 /// Row and label text size with large buttons on.
 const TEXT_LARGE: f32 = 18.0;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FieldAction {
+    Export,
+    Import,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -336,6 +342,7 @@ impl NovoApp {
         let current = self.current_page;
         let mut go: Option<Place> = None;
         let mut export: Option<ReportFileFormat> = None;
+        let mut field: Option<FieldAction> = None;
         {
             let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
             else {
@@ -394,6 +401,40 @@ impl NovoApp {
                     }
                 }
             });
+            ui.horizontal_wrapped(|ui| {
+                ui.weak("Field results");
+                for (label, action, hint) in [
+                    (
+                        "Export",
+                        FieldAction::Export,
+                        "Save your ticks and punch items as a file to carry to the desk (no cloud)",
+                    ),
+                    (
+                        "Import",
+                        FieldAction::Import,
+                        "Merge a field results file into this project; newer decisions win",
+                    ),
+                ] {
+                    let button = big_button(ui, mode.large, label).on_hover_text(hint);
+                    note_ctx(
+                        ui.ctx(),
+                        if action == FieldAction::Export {
+                            "commissioning.field_export"
+                        } else {
+                            "commissioning.field_import"
+                        },
+                        if action == FieldAction::Export {
+                            "Field results Export button"
+                        } else {
+                            "Field results Import button"
+                        },
+                        &button,
+                    );
+                    if button.clicked() {
+                        field = Some(action);
+                    }
+                }
+            });
             ui.add_space(4.0);
             match mode.tab {
                 Tab::Checks => checks_tab(ui, mode, project, current, &mut go),
@@ -417,7 +458,87 @@ impl NovoApp {
         if let Some(format) = export {
             self.export_commissioning_report(format);
         }
+        match field {
+            Some(FieldAction::Export) => self.export_field_results(),
+            Some(FieldAction::Import) => self.import_field_results(),
+            None => {}
+        }
         false
+    }
+
+    /// Writes the field results (checks and punch items) to a `.kcfield`
+    /// file the person picks, to carry to another machine.
+    pub(super) fn export_field_results(&mut self) {
+        let Some(name) = self.project_name() else {
+            return;
+        };
+        self.load_commissioning();
+        let Some(mode) = self.wb.commissioning.as_ref() else {
+            return;
+        };
+        let package = FieldPackage::new(&name, &mode.who, &now(), &mode.store);
+        let mut dialog = rfd::FileDialog::new()
+            .set_title("Export field results")
+            .set_file_name(format!("{name} field results.kcfield"))
+            .add_filter("KoperCAD field results", &["kcfield"]);
+        if let Some(dir) = projects_dir() {
+            dialog = dialog.set_directory(dir);
+        }
+        let Some(path) = dialog.save_file() else {
+            return;
+        };
+        match write_replacing(&path, package.to_json().as_bytes()) {
+            Ok(()) => self.message(Level::Info, format!("Exported {}", path.display())),
+            Err(e) => self.message(Level::Error, format!("Could not export field results: {e}")),
+        }
+    }
+
+    /// Merges a `.kcfield` file into this project's commissioning data.
+    pub(super) fn import_field_results(&mut self) {
+        let mut dialog = rfd::FileDialog::new()
+            .set_title("Import field results")
+            .add_filter("KoperCAD field results", &["kcfield"]);
+        if let Some(dir) = projects_dir() {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(path) = dialog.pick_file() {
+            self.import_field_results_from(&path);
+        }
+    }
+
+    pub(super) fn import_field_results_from(&mut self, path: &Path) {
+        self.load_commissioning();
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not read {}: {e}", path.display()),
+                );
+                return;
+            }
+        };
+        let package = match FieldPackage::from_json(&text) {
+            Ok(package) => package,
+            Err(e) => {
+                self.message(Level::Error, e.to_string());
+                return;
+            }
+        };
+        let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
+        else {
+            return;
+        };
+        let report = package.merge_into(&mut mode.store, doc.project());
+        if report.changed() {
+            mode.dirty = true;
+        }
+        let text = format!(
+            "Imported field results from {}: {}",
+            package.exported_by,
+            report.summary()
+        );
+        self.message(Level::Info, text);
     }
 
     /// The `export.commissioning` command: the report as a PDF.
@@ -720,6 +841,7 @@ fn punch_tab(
                 raised_at: now(),
                 closed_by: None,
                 closed_at: None,
+                signature: None,
             });
             mode.dirty = true;
         }
