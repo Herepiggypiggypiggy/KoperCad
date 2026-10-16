@@ -214,7 +214,7 @@ pub fn prepare_inbox(inbox: &Path) -> Result<Vec<PathBuf>, InboxError> {
             &readme,
             "KoperCAD parts inbox\r\n\r\n\
 Drop the catalog files you downloaded (BMEcat .xml, .csv, or .zip holding BMEcat)\r\n\
-into the folder of the maker, then run:  scripts\\import-parts.ps1\r\n\
+into the folder of the maker, then run:  import-parts.cmd (in the KoperCAD-latest folder)\r\n\
 \r\n\
 A file from a wholesaler or a maker without a folder: make a new folder named after\r\n\
 the maker (its name is used as the manufacturer) or use _wholesaler when the file\r\n\
