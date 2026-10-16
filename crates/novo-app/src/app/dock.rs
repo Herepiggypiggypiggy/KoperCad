@@ -67,6 +67,19 @@ impl NovoApp {
         }
     }
 
+    /// Gives the context menu the keys the keymap binds, so its rows show
+    /// the current key and never a stale one.
+    pub(super) fn sync_menu_keys(&mut self) {
+        let keys: std::collections::HashMap<&'static str, String> =
+            novo_editor::view::SchematicView::MENU_COMMANDS
+                .iter()
+                .filter_map(|&id| self.wb.keymap.shortcut_text(id).map(|k| (id, k)))
+                .collect();
+        if let Some(view) = self.canvas.schematic() {
+            view.set_shortcuts(keys);
+        }
+    }
+
     /// Keeps the editor's symbol catalog on the project's drawing standard.
     /// The recently used symbols follow to the new pack.
     pub(super) fn sync_catalog(&mut self) {

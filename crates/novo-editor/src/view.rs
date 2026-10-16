@@ -145,6 +145,10 @@ pub struct SchematicView {
     goto: Option<PageId>,
     /// Commands the context menu asked the shell to run, by workflow id.
     commands: Vec<&'static str>,
+    /// The key shown beside a context-menu row, by workflow id; the shell
+    /// fills it from the keymap so the menu never names a key that is not
+    /// bound.
+    shortcuts: HashMap<&'static str, String>,
     /// Items a release would select while a selection box is dragged.
     band_count: Option<usize>,
     /// The Preferences default for moving a symbol: its wires go along
@@ -278,6 +282,7 @@ impl SchematicView {
             status: None,
             goto: None,
             commands: Vec::new(),
+            shortcuts: HashMap::new(),
             band_count: None,
             move_carries: false,
             swallow: false,
@@ -413,6 +418,39 @@ impl SchematicView {
     /// The shell opens it and passes it to the next [`show`](Self::show).
     pub fn take_page_request(&mut self) -> Option<PageId> {
         self.goto.take()
+    }
+
+    /// The workflow ids whose key the context menu shows. The shell passes
+    /// their keys to [`set_shortcuts`](Self::set_shortcuts).
+    pub const MENU_COMMANDS: &'static [&'static str] = &[
+        "tool.place",
+        "tool.connect",
+        "tool.cable",
+        "edit.cut",
+        "edit.copy",
+        "edit.paste",
+        "edit.duplicate",
+        "edit.select_all",
+        "edit.delete",
+        "edit.rename",
+        "edit.rotate",
+        "edit.mirror",
+        "edit.undo",
+        "edit.redo",
+        "nav.partner",
+        "nav.all_references",
+        "xref.link",
+        "view.fit",
+        "proposal.accept_all",
+        "terminal.toggle_pe",
+        "terminal.strip_up",
+        "terminal.strip_down",
+        "terminal.strip_lowest",
+    ];
+
+    /// The keys shown beside context-menu rows, by workflow id.
+    pub fn set_shortcuts(&mut self, keys: HashMap<&'static str, String>) {
+        self.shortcuts = keys;
     }
 
     /// The commands the context menu chose that only the shell can run
@@ -1694,6 +1732,7 @@ impl SchematicView {
             return;
         }
         let repeat = self.editor.repeat_label();
+        let proposals = self.editor.proposals().len();
         let mut chosen: Option<MenuChoice> = None;
         let area = egui::Area::new(egui::Id::new("novo-editor-context"))
             .order(egui::Order::Foreground)
@@ -1710,20 +1749,65 @@ impl SchematicView {
                             chosen = Some(MenuChoice::Repeat);
                         }
                         for (label, id) in [
-                            ("Place component  ▸", "tool.place_wheel"),
-                            ("Connect   W", "tool.connect"),
-                            ("Zoom to fit   Home", "view.fit"),
+                            ("Place symbol  ▸", "tool.place_wheel"),
+                            ("Connect", "tool.connect"),
+                            ("Cable", "tool.cable"),
                         ] {
-                            if ui.button(label).clicked() {
+                            if menu_row(ui, &self.shortcuts, label, id) {
                                 chosen = Some(MenuChoice::Command(id));
                             }
                         }
-                        if ui.button("Paste   Ctrl+V").clicked() {
-                            chosen = Some(MenuChoice::Command("edit.paste"));
+                        ui.separator();
+                        for (label, id) in
+                            [("Paste", "edit.paste"), ("Select all", "edit.select_all")]
+                        {
+                            if menu_row(ui, &self.shortcuts, label, id) {
+                                chosen = Some(MenuChoice::Command(id));
+                            }
                         }
-                        if ui.button("New page after this").clicked() {
-                            chosen = Some(MenuChoice::NewPage);
+                        ui.menu_button("Paste special", |ui| {
+                            for (label, id) in [
+                                ("Paste, keep the original tags", "edit.paste_keep_tags"),
+                                ("Paste in place", "edit.paste_in_place"),
+                            ] {
+                                if menu_row(ui, &self.shortcuts, label, id) {
+                                    chosen = Some(MenuChoice::Command(id));
+                                    ui.close();
+                                }
+                            }
+                        });
+                        ui.separator();
+                        if proposals > 0
+                            && menu_row(
+                                ui,
+                                &self.shortcuts,
+                                &format!("Accept all {proposals} proposals"),
+                                "proposal.accept_all",
+                            )
+                        {
+                            chosen = Some(MenuChoice::Command("proposal.accept_all"));
                         }
+                        if menu_row(ui, &self.shortcuts, "Zoom to fit", "view.fit") {
+                            chosen = Some(MenuChoice::Command("view.fit"));
+                        }
+                        ui.menu_button("Page", |ui| {
+                            if ui.button("New page after this").clicked() {
+                                chosen = Some(MenuChoice::NewPage);
+                                ui.close();
+                            }
+                            for (label, id) in [
+                                ("Rename page", "page.rename"),
+                                ("Duplicate page", "page.duplicate"),
+                                ("Delete page", "page.delete"),
+                                ("Move page up", "page.move_up"),
+                                ("Move page down", "page.move_down"),
+                            ] {
+                                if ui.button(label).clicked() {
+                                    chosen = Some(MenuChoice::Command(id));
+                                    ui.close();
+                                }
+                            }
+                        });
                         return;
                     }
                     let p = &menu.potentials;
@@ -1818,7 +1902,14 @@ impl SchematicView {
                     if let Some(pe) = &menu.pe {
                         let mark = if pe.all_pe { "✓ " } else { "" };
                         if ui
-                            .button(format!("{mark}Toggle PE terminal   pe"))
+                            .add(
+                                egui::Button::new(format!("{mark}Toggle PE terminal"))
+                                    .shortcut_text(
+                                        self.shortcuts
+                                            .get("terminal.toggle_pe")
+                                            .map_or("pe", String::as_str),
+                                    ),
+                            )
                             .clicked()
                         {
                             chosen = Some(MenuChoice::Command("terminal.toggle_pe"));
@@ -1828,14 +1919,30 @@ impl SchematicView {
                         }
                         ui.separator();
                     }
-                    if menu.device.is_some() && ui.button("Rename   F2").clicked() {
-                        chosen = Some(MenuChoice::Rename);
-                    }
-                    if menu.device.is_some() && ui.button("Go to partner   G").clicked() {
-                        chosen = Some(MenuChoice::Command("nav.partner"));
+                    if menu.device.is_some() {
+                        if menu_row(ui, &self.shortcuts, "Rename", "edit.rename") {
+                            chosen = Some(MenuChoice::Rename);
+                        }
+                        if ui
+                            .button("Properties…")
+                            .on_hover_text("Double-click the device does the same")
+                            .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("edit.properties"));
+                        }
+                        if ui
+                            .button("Choose part…")
+                            .on_hover_text("Opens the parts browser for this device")
+                            .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("parts.browser"));
+                        }
+                        if menu_row(ui, &self.shortcuts, "Go to partner", "nav.partner") {
+                            chosen = Some(MenuChoice::Command("nav.partner"));
+                        }
                     }
                     if menu.interruptions > 0 {
-                        if ui.button("Rename   F2").clicked() {
+                        if menu_row(ui, &self.shortcuts, "Rename", "edit.rename") {
                             chosen = Some(MenuChoice::RenameLabel);
                         }
                         if ui.button("Number automatically").clicked() {
@@ -1852,15 +1959,18 @@ impl SchematicView {
                                 chosen = Some(MenuChoice::Command("terminal.disconnect"));
                             }
                         }
-                        if ui.button("Strip number up   Up").clicked() {
-                            chosen = Some(MenuChoice::Command("terminal.strip_up"));
-                        }
-                        if ui.button("Strip number down   Down").clicked() {
-                            chosen = Some(MenuChoice::Command("terminal.strip_down"));
-                        }
-                        if ui.button("Lowest free strip number   Ctrl+Up").clicked() {
-                            chosen = Some(MenuChoice::Command("terminal.strip_lowest"));
-                        }
+                        ui.menu_button("Strip number", |ui| {
+                            for (label, id) in [
+                                ("Up", "terminal.strip_up"),
+                                ("Down", "terminal.strip_down"),
+                                ("Lowest free", "terminal.strip_lowest"),
+                            ] {
+                                if menu_row(ui, &self.shortcuts, label, id) {
+                                    chosen = Some(MenuChoice::Command(id));
+                                    ui.close();
+                                }
+                            }
+                        });
                         ui.separator();
                     }
                     for action in &menu.xref {
@@ -1886,6 +1996,17 @@ impl SchematicView {
                         {
                             chosen = Some(MenuChoice::Command("draw.tidy"));
                         }
+                        ui.menu_button("Wire number", |ui| {
+                            for (label, id) in [
+                                ("Set wire number…", "wires.set_number"),
+                                ("Unlock wire number", "wires.unlock_number"),
+                            ] {
+                                if ui.button(label).clicked() {
+                                    chosen = Some(MenuChoice::Command(id));
+                                    ui.close();
+                                }
+                            }
+                        });
                         if ui
                             .button("Make cable")
                             .on_hover_text("The selected wires become the cores of one cable")
@@ -1896,10 +2017,11 @@ impl SchematicView {
                     }
                     ui.separator();
                     for (label, id) in [
-                        ("Duplicate   Ctrl+D", "edit.duplicate"),
-                        ("Copy   Ctrl+C", "edit.copy"),
+                        ("Cut", "edit.cut"),
+                        ("Copy", "edit.copy"),
+                        ("Duplicate", "edit.duplicate"),
                     ] {
-                        if ui.button(label).clicked() {
+                        if menu_row(ui, &self.shortcuts, label, id) {
                             chosen = Some(MenuChoice::Command(id));
                         }
                     }
@@ -1907,13 +2029,13 @@ impl SchematicView {
                         chosen = Some(MenuChoice::Command("macro.save"));
                     }
                     ui.separator();
-                    for (label, choice) in [
-                        ("Move   M", MenuChoice::Key(EditorKey::Move)),
-                        ("Rotate   R", MenuChoice::Key(EditorKey::Rotate)),
-                        ("Mirror   X", MenuChoice::Key(EditorKey::Mirror)),
-                        ("Delete   Del", MenuChoice::Key(EditorKey::Delete)),
+                    for (label, id, choice) in [
+                        ("Move", "", MenuChoice::Key(EditorKey::Move)),
+                        ("Rotate", "edit.rotate", MenuChoice::Key(EditorKey::Rotate)),
+                        ("Mirror", "edit.mirror", MenuChoice::Key(EditorKey::Mirror)),
+                        ("Delete", "edit.delete", MenuChoice::Key(EditorKey::Delete)),
                     ] {
-                        if ui.button(label).clicked() {
+                        if menu_row(ui, &self.shortcuts, label, id) {
                             chosen = Some(choice);
                         }
                     }
@@ -2027,6 +2149,24 @@ impl SchematicView {
             None => {}
         }
     }
+}
+
+/// One context-menu row: the label, and the command's key from the keymap
+/// on the right. An empty `id` (Move: a key the drawing reads itself) shows
+/// "M".
+fn menu_row(
+    ui: &mut egui::Ui,
+    keys: &HashMap<&'static str, String>,
+    label: &str,
+    id: &str,
+) -> bool {
+    let mut button = egui::Button::new(label);
+    match keys.get(id) {
+        Some(key) => button = button.shortcut_text(key.as_str()),
+        None if id.is_empty() => button = button.shortcut_text("M"),
+        None => {}
+    }
+    ui.add(button).clicked()
 }
 
 #[derive(Clone, Copy)]
@@ -2999,7 +3139,8 @@ mod tests {
         h.view.editor.begin_place("iec/coils/relay", None);
         h.click(100.0, 100.0, egui::PointerButton::Secondary);
         assert!(h.view.menu.is_some());
-        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        // Up and left of the menu, which opens down and right of (100, 100).
+        h.click(40.0, 40.0, egui::PointerButton::Primary);
         assert!(h.view.menu.is_none());
         assert_eq!(h.doc.project().symbols().count(), 0);
         // The next click places as usual.
