@@ -251,13 +251,15 @@ impl NovoApp {
         );
         let mut method = shown.method.clone();
         let mut insulation = shown.insulation.clone();
-        egui::Area::new(egui::Id::new("inspector"))
-            .order(egui::Order::Middle)
-            .pivot(egui::Align2::RIGHT_TOP)
-            .fixed_pos(canvas.right_top() + egui::vec2(-12.0, 40.0))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_width(INSPECTOR_WIDTH);
+        super::panel::Panel::new(
+            "inspector",
+            "Inspector",
+            canvas,
+            super::panel::Side::Right,
+            INSPECTOR_WIDTH,
+        )
+        .fixed_open()
+        .show(ctx, |ui| {
                     ui.heading(if wires.len() > 1 {
                         format!("{} wires", wires.len())
                     } else if shown.number.is_empty() {
@@ -334,7 +336,8 @@ impl NovoApp {
                     text_row(ui, &mut edits, "Load current A", "wire_load", &mut load, &shown.load, "14", WireEdit::Load);
                     ui.weak("Voltage drop, cable rating and disconnection time are calculated from these (Check > Calculations). Blank means unknown, never guessed.");
                     ui.weak("The standards check reads these. A wire with no installation method is not rated, never guessed; set a default for the project in Standards check.");
-                });
+
+
             });
         let panel = &mut self.wb.wire_panel;
         (panel.number, panel.colour, panel.section, panel.grouped) =

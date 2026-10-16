@@ -27,6 +27,8 @@ pub enum BackendError {
     NotWritten(StorageError),
     /// No index follows the latest revision under the rule; type one.
     NoNextIndex,
+    /// The project is open read-only; saving over its file is refused.
+    ReadOnly,
 }
 
 impl fmt::Display for BackendError {
@@ -38,6 +40,10 @@ impl fmt::Display for BackendError {
             BackendError::NoNextIndex => {
                 write!(f, "no index follows the latest revision, type one")
             }
+            BackendError::ReadOnly => write!(
+                f,
+                "the project is open read-only, so its file is not written; use Save as to keep a copy"
+            ),
             BackendError::NotWritten(e) => {
                 write!(
                     f,
@@ -105,6 +111,20 @@ pub trait ProjectBackend {
     /// leaving the open project as it was, if that one cannot be written
     /// first.
     fn open(&mut self, path: &Path) -> Result<OpenReport, BackendError>;
+
+    /// Opens a project file for looking only, replacing any open project:
+    /// the file is read without a lock, never written, and nothing is
+    /// autosaved. [`Self::save`] to the same file is refused; saving to
+    /// another file keeps a writable copy and ends the read-only state.
+    fn open_read_only(&mut self, _path: &Path) -> Result<OpenReport, BackendError> {
+        Err(BackendError::Unavailable("Opening read-only"))
+    }
+
+    /// True while the open project is read-only (see
+    /// [`Self::open_read_only`]).
+    fn is_read_only(&self) -> bool {
+        false
+    }
 
     /// Writes the open project to `path` and clears the unsaved flag.
     fn save(&mut self, path: &Path) -> Result<(), BackendError>;
@@ -227,6 +247,9 @@ pub struct StorageBackend {
     /// The open untitled project came from a kept file, so it is kept
     /// again on close even without new changes.
     keep: bool,
+    /// The file the open project was read from without being able to write
+    /// it back. There is no session then: no lock, no recovery file.
+    read_only: Option<PathBuf>,
     /// Tests: writes to the project file fail, as for a locked file or a
     /// drive that went away.
     #[cfg(test)]
@@ -270,7 +293,8 @@ impl StorageBackend {
         // recovery file), so an untitled project's file must stay with it
         // to be offered again on the next start.
         let undecided = self.recovery.is_some();
-        let changed = self.restored_unsaved || self.document().is_some_and(|d| d.is_dirty());
+        let changed = self.read_only.is_none()
+            && (self.restored_unsaved || self.document().is_some_and(|d| d.is_dirty()));
         let keep_untitled = self.untitled.is_some() && !undecided && (changed || self.keep);
         let write = !undecided && changed && (self.untitled.is_none() || keep_untitled);
         let fail = self.writes_fail();
@@ -288,6 +312,7 @@ impl StorageBackend {
         self.recovery = None;
         self.restored_unsaved = false;
         self.keep = false;
+        self.read_only = None;
         let untitled = self.untitled.take();
         let Some(session) = self.session.take() else {
             return Ok(());
@@ -359,6 +384,16 @@ impl StorageBackend {
     }
 }
 
+/// Whether two paths name the same file: equal after canonicalising, which
+/// settles spelling and case on Windows. Falls back to a literal compare
+/// when either cannot be resolved.
+fn same_file(a: &Path, b: &Path) -> bool {
+    match (a.canonicalize(), b.canonicalize()) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => a == b,
+    }
+}
+
 fn remove_file_if_exists(path: &Path) {
     match std::fs::remove_file(path) {
         Ok(()) => {}
@@ -398,7 +433,26 @@ impl ProjectBackend for StorageBackend {
         })
     }
 
+    fn open_read_only(&mut self, path: &Path) -> Result<OpenReport, BackendError> {
+        let project = novo_storage::ProjectFile::read(path)?;
+        self.close_session()?;
+        self.document = Some(Document::new(healed(project)));
+        self.read_only = Some(path.to_owned());
+        Ok(OpenReport::default())
+    }
+
+    fn is_read_only(&self) -> bool {
+        self.read_only.is_some()
+    }
+
     fn save(&mut self, path: &Path) -> Result<(), BackendError> {
+        if self
+            .read_only
+            .as_deref()
+            .is_some_and(|ro| same_file(ro, path))
+        {
+            return Err(BackendError::ReadOnly);
+        }
         let recovery_dir = self.recovery_dir_for(path).map(Path::to_owned);
         let Some(document) = self.document.as_mut() else {
             return Ok(());
@@ -419,6 +473,7 @@ impl ProjectBackend for StorageBackend {
         }
         document.mark_saved();
         self.restored_unsaved = false;
+        self.read_only = None;
         if let Some(temp) = self.untitled.take() {
             remove_file_if_exists(&temp);
         }
@@ -499,7 +554,8 @@ impl ProjectBackend for StorageBackend {
     }
 
     fn is_dirty(&self) -> bool {
-        self.restored_unsaved || self.document().is_some_and(|d| d.is_dirty())
+        self.read_only.is_none()
+            && (self.restored_unsaved || self.document().is_some_and(|d| d.is_dirty()))
     }
 
     fn recovery_offer(&self) -> Option<RecoveryOffer> {
@@ -552,11 +608,15 @@ impl ProjectBackend for StorageBackend {
     }
 
     fn file(&self) -> Option<PathBuf> {
-        self.session.as_ref().map(|s| s.path().to_owned())
+        self.read_only
+            .clone()
+            .or_else(|| self.session.as_ref().map(|s| s.path().to_owned()))
     }
 
     fn is_untitled(&self) -> bool {
-        self.document.is_some() && (self.session.is_none() || self.untitled.is_some())
+        self.document.is_some()
+            && self.read_only.is_none()
+            && (self.session.is_none() || self.untitled.is_some())
     }
 
     fn unsaved_projects(&self) -> Vec<(PathBuf, SystemTime)> {
@@ -1075,6 +1135,83 @@ pub(crate) mod tests {
         assert!(report.set_aside.is_none());
         assert!(reopened.recovery_offer().is_none());
         assert_eq!(page_names(&reopened), vec!["1", "2", "3"]);
+    }
+
+    #[test]
+    fn a_read_only_project_is_never_written() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let mut backend = StorageBackend::default();
+        backend.new_project("Plant").unwrap();
+        backend.save(&path).unwrap();
+        backend.close().unwrap();
+        let before = std::fs::read(&path).unwrap();
+
+        let mut ro = StorageBackend::default();
+        ro.open_read_only(&path).unwrap();
+        assert!(ro.is_read_only());
+        assert_eq!(ro.file().as_deref(), Some(path.as_path()));
+        assert!(!ro.is_untitled());
+        assert_eq!(page_names(&ro), vec!["1"]);
+
+        edit(&mut ro, "2");
+        assert!(!ro.is_dirty(), "a read-only project is never unsaved");
+        assert_eq!(ro.tick().unwrap(), None, "no autosave");
+        assert!(matches!(ro.save(&path), Err(BackendError::ReadOnly)));
+        ro.close().unwrap();
+        assert!(!ro.is_read_only());
+        assert_eq!(std::fs::read(&path).unwrap(), before, "file untouched");
+        assert!(files_in(dir.path()).iter().all(|f| f == "plant.novo"));
+    }
+
+    #[test]
+    fn saving_over_a_read_only_file_is_refused_by_another_spelling() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let mut backend = StorageBackend::default();
+        backend.new_project("Plant").unwrap();
+        backend.save(&path).unwrap();
+        backend.close().unwrap();
+        let mut ro = StorageBackend::default();
+        ro.open_read_only(&path).unwrap();
+        let other = dir.path().join(".").join("plant.novo");
+        assert!(matches!(ro.save(&other), Err(BackendError::ReadOnly)));
+    }
+
+    #[test]
+    fn save_as_from_read_only_makes_a_writable_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let copy = dir.path().join("copy.novo");
+        let mut backend = StorageBackend::default();
+        backend.new_project("Plant").unwrap();
+        backend.save(&path).unwrap();
+        backend.close().unwrap();
+
+        let mut ro = StorageBackend::default();
+        ro.open_read_only(&path).unwrap();
+        edit(&mut ro, "2");
+        ro.save(&copy).unwrap();
+        assert!(!ro.is_read_only());
+        ro.close().unwrap();
+
+        let mut reopened = StorageBackend::default();
+        reopened.open(&copy).unwrap();
+        assert_eq!(page_names(&reopened), vec!["1", "2"]);
+        let mut original = StorageBackend::default();
+        original.open(&path).unwrap();
+        assert_eq!(page_names(&original), vec!["1"]);
+    }
+
+    #[test]
+    fn a_file_open_elsewhere_still_reads_or_says_why() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut ro = StorageBackend::default();
+        let err = ro
+            .open_read_only(&dir.path().join("missing.novo"))
+            .unwrap_err();
+        assert!(matches!(err, BackendError::Storage(_)), "{err:?}");
+        assert!(!ro.is_read_only());
     }
 
     #[test]

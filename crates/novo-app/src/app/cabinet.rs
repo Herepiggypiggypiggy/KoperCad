@@ -271,6 +271,19 @@ pub(super) fn problem_lines(
             }
         }
     }
+    for o in &report.duct_overlaps {
+        if let novo_layout::DuctHit::Device {
+            id: device,
+            across,
+            along,
+        } = o.hit
+            && device == id
+        {
+            lines.push(format!(
+                "Lies under a duct ({across:.0} x {along:.0} mm): move it clear"
+            ));
+        }
+    }
     if let Some(p) = layout.placements.iter().find(|p| p.id == id) {
         for &(rail, over) in &report.rail_overflows {
             if p.rail == Some(rail) {
@@ -282,6 +295,30 @@ pub(super) fn problem_lines(
         }
     }
     lines
+}
+
+/// One line for every rail that runs under a duct (a rail has no tag, so
+/// it is named by where it lies).
+pub(super) fn rail_duct_lines(layout: &CabinetLayout) -> Vec<String> {
+    layout
+        .report()
+        .duct_overlaps
+        .iter()
+        .filter_map(|o| {
+            let novo_layout::DuctHit::Rail { id, by } = o.hit else {
+                return None;
+            };
+            let rail = layout.rails.iter().find(|r| r.id == id)?;
+            let (axis, at) = if rail.vertical {
+                ("x", rail.x)
+            } else {
+                ("y", rail.y)
+            };
+            Some(format!(
+                "The rail at {axis} {at:.0} mm runs under a duct for {by:.0} mm: move the rail or the duct"
+            ))
+        })
+        .collect()
 }
 
 /// The table face (Ctrl+T): every device of the panel with where it is and
@@ -476,6 +513,7 @@ impl NovoApp {
                     + r.outside.len()
                     + r.too_close.len()
                     + r.rail_overflows.len()
+                    + r.duct_overlaps.len()
                     + s.door_report().map_or(0, |d| d.problems())
                     + s.swing_report().map_or(0, |d| d.problems());
                 (l.placements.len(), l.unplaced(&cands).len(), problems)
@@ -995,6 +1033,9 @@ impl NovoApp {
                                 ui.close();
                             }
                         }
+                        for line in rail_duct_lines(shown) {
+                            ui.label(line);
+                        }
                     });
                     cabinet_bar::note(&mut anchors, "cabinet.problems", "Problems", &pill);
                 }
@@ -1306,7 +1347,10 @@ impl NovoApp {
                     && let Some(a) = cabinet_inspector::overlay(
                         ui.ctx(),
                         out.response.rect,
-                        *left,
+                        cabinet_inspector::Room {
+                            left: *left,
+                            ..Default::default()
+                        },
                         facts,
                         project,
                         &mut self.cabinet.panel_fields,

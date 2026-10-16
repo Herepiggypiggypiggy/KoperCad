@@ -18,7 +18,7 @@ use novo_sim::program::{
     Address, Bench, ClosedLoop, Element, ElementKind, IoMap, Program, Size, Space, Value,
 };
 use novo_sim::{Clock, PoleState, Settled};
-use novo_theme::{tokens, widgets};
+use novo_theme::widgets;
 
 use super::{Level, NovoApp};
 
@@ -281,7 +281,7 @@ impl NovoApp {
                     }
                 });
                 if let Some(e) = &plc.error {
-                    ui.colored_label(tokens::ERROR, e);
+                    ui.colored_label(crate::theme::ui_palette().error, e);
                 }
                 if let Some(f) = plc
                     .looped
@@ -289,10 +289,13 @@ impl NovoApp {
                     .filter(|_| plc.running)
                     .and_then(|l| l.bench.fault())
                 {
-                    ui.colored_label(tokens::ERROR, format!("Program fault, outputs held: {f}"));
+                    ui.colored_label(
+                        crate::theme::ui_palette().error,
+                        format!("Program fault, outputs held: {f}"),
+                    );
                 }
                 for n in &plc.notes {
-                    ui.colored_label(tokens::WARNING, n);
+                    ui.colored_label(crate::theme::ui_palette().warning, n);
                 }
                 if let Some(looped) = plc.looped.as_mut().filter(|_| plc.running) {
                     monitor(ui, looped);
@@ -388,9 +391,9 @@ fn elements(ui: &mut egui::Ui, runtime: &novo_sim::program::Runtime, list: &[Ele
         let colored = |text: String| {
             let t = egui::RichText::new(text).monospace();
             if on {
-                t.color(tokens::SUCCESS)
+                t.color(crate::theme::ui_palette().success)
             } else {
-                t.color(tokens::TEXT_FAINT)
+                t.color(crate::theme::ui_palette().text_tertiary)
             }
         };
         match &e.kind {

@@ -213,7 +213,7 @@ impl NovoApp {
                 let colour = if *current {
                     ui.visuals().weak_text_color()
                 } else {
-                    novo_theme::tokens::WARNING
+                    crate::theme::ui_palette().warning
                 };
                 ui.colored_label(colour, text);
             }
