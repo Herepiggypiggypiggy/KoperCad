@@ -27,13 +27,14 @@ pub mod strings;
 
 pub use check::{Finding, check, check_with};
 pub use edit::{
-    ShieldConnection, add_shield, assign_core, connect_shield, is_spare, set_spare,
-    shield_connection, spare_cores, swap_cores, unassign_core, unassign_wire,
+    ShieldConnection, add_shield, assign_core, connect_shield, delete_cable, is_spare,
+    rename_cable, retype_cable, set_spare, shield_connection, spare_cores, swap_cores,
+    unassign_core, unassign_wire,
 };
 pub use kind::{CableType, default_types, type_label};
 pub use propose::{
-    CableProposal, CableSide, Conductor, accept_proposals, dismiss_proposal, proposal_for_wires,
-    propose_cables, restore_proposal, summarize_proposals,
+    CableProposal, CableSide, Conductor, accept_proposals, declined_wires, dismiss_proposal,
+    proposal_for_wires, propose_cables, restore_proposal, summarize_proposals,
 };
 pub use screen::{
     CableScreen, CoreEnd, CoreRow, OverviewRow, cable_screen, cable_screens, overview,

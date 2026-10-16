@@ -19,7 +19,7 @@
 //! when it can't run now, the reason. In place mode (Q) the field searches
 //! symbols only and an empty query shows the favourites (1 to 9 first).
 
-use novo_core::{AnyId, DeviceId, Match, PageId, Project, SymbolId};
+use novo_core::{AnyId, CableId, DeviceId, Match, PageId, Project, SymbolId, WireId};
 use novo_symbols::Library;
 
 use crate::commands::{self, COMMANDS, CommandInfo, Context, GROUPS};
@@ -46,6 +46,10 @@ pub enum Target {
     Device(DeviceId),
     /// Jump to one place a device is drawn.
     Location { device: DeviceId, symbol: SymbolId },
+    /// Show a cable in the Cables drawer.
+    Cable(CableId),
+    /// Open the page a wire is drawn on and select it.
+    Wire(WireId),
     /// Start placing a symbol (by library id).
     Symbol(String),
     /// Start placing a symbol as a function of an existing device.
@@ -59,6 +63,8 @@ pub enum Kind {
     Page,
     Device,
     Location,
+    Cable,
+    Wire,
     Symbol,
 }
 
@@ -69,6 +75,8 @@ impl Kind {
             Kind::Page => "Page",
             Kind::Device => "Device",
             Kind::Location => "Location",
+            Kind::Cable => "Cable",
+            Kind::Wire => "Wire",
             Kind::Symbol => "Symbol",
         }
     }
@@ -531,9 +539,108 @@ fn project_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
                     score: base,
                 });
             }
+            AnyId::Cable(cable_id) => {
+                let Some(cable) = project.cable(cable_id) else {
+                    continue;
+                };
+                let used = cable.cores.iter().filter(|c| c.wire.is_some()).count();
+                rows.push(Row {
+                    target: Target::Cable(cable_id),
+                    kind: Kind::Cable,
+                    label: cable.tag.to_string(),
+                    detail: join_detail(
+                        &cable.description,
+                        &format!("{used} of {} cores", cable.cores.len()),
+                    ),
+                    group: "",
+                    completion: None,
+                    shortcut: None,
+                    disabled: None,
+                    score: base,
+                });
+            }
             _ => {}
         }
     }
+    wire_rows(project, query, rows);
+}
+
+/// Wires by number: `105` or `wire 105`. An exact number comes after an
+/// exact page or device (a bare `12` opens page 12 first), unless the
+/// query says `wire`.
+fn wire_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
+    let (named, text) = match wire_query(query) {
+        Some(rest) => (true, rest),
+        None => (false, query),
+    };
+    let wanted = text.to_lowercase();
+    if wanted.is_empty() {
+        return;
+    }
+    let mut hits: Vec<(Match, &novo_core::Wire)> = project
+        .wires()
+        .filter_map(|w| {
+            let number = w.number.as_deref()?.to_lowercase();
+            let quality = if number == wanted {
+                Match::Exact
+            } else if number.starts_with(&wanted) && (named || wanted.len() >= 2) {
+                Match::Prefix
+            } else {
+                return None;
+            };
+            Some((quality, w))
+        })
+        .collect();
+    hits.sort_by(|a, b| {
+        a.0.cmp(&b.0)
+            .then_with(|| {
+                novo_core::natural_cmp(
+                    a.1.number.as_deref().unwrap_or_default(),
+                    b.1.number.as_deref().unwrap_or_default(),
+                )
+            })
+            .then(a.1.id.cmp(&b.1.id))
+    });
+    for (n, (quality, wire)) in hits.into_iter().take(12).enumerate() {
+        let order = i32::try_from(n).unwrap_or(0);
+        let base = match (quality, named) {
+            (Match::Exact, true) => EXACT,
+            (Match::Exact, false) => EXACT / 2,
+            _ => 1_500,
+        };
+        let page = project
+            .page(wire.page)
+            .map_or(String::new(), |p| format!("page {}", p.name));
+        let cable = project.core_of_wire(wire.id).and_then(|(c, core)| {
+            let cable = project.cable(c)?;
+            Some(format!(
+                "{} core {}",
+                cable.tag,
+                cable.cores.get(core)?.name
+            ))
+        });
+        rows.push(Row {
+            target: Target::Wire(wire.id),
+            kind: Kind::Wire,
+            label: format!("Wire {}", wire.number.as_deref().unwrap_or_default()),
+            detail: join_detail(&page, &cable.unwrap_or_default()),
+            group: "",
+            completion: None,
+            shortcut: None,
+            disabled: None,
+            score: base - order,
+        });
+    }
+}
+
+/// Words that name a wire, in English and Dutch.
+const WIRE_WORDS: [&str; 4] = ["wire", "draad", "wires", "net"];
+
+/// What follows a wire word (`wire 105` gives `105`).
+fn wire_query(query: &str) -> Option<&str> {
+    let (word, rest) = query.split_once(char::is_whitespace)?;
+    let rest = rest.trim();
+    (WIRE_WORDS.iter().any(|w| w.eq_ignore_ascii_case(word)) && !rest.is_empty()).then_some(rest)
 }
 
 /// Words that name a page, in English and Dutch.

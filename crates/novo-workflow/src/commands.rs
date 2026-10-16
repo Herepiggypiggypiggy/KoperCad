@@ -512,6 +512,41 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["cable", "cores", "bundle"],
         Needs::Page,
     ),
+    // Cables that exist: the Cables drawer (Ctrl+4) shows the one they act on.
+    verb(
+        cmd(
+            "cable.rename",
+            "Rename cable",
+            "Draw",
+            &["cable tag", "-W1"],
+            Needs::Project,
+        ),
+        &["rename cable"],
+    ),
+    cmd(
+        "cable.delete",
+        "Delete cable",
+        "Draw",
+        &["remove cable", "cores"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "cable.retype",
+            "Change cable type",
+            "Draw",
+            &["cores", "4G1.5", "shielded", "section"],
+            Needs::Project,
+        ),
+        &["cable type"],
+    ),
+    cmd(
+        "cable.restore_proposals",
+        "Restore declined cable proposals",
+        "Draw",
+        &["declined", "undo decline", "propose again"],
+        Needs::Project,
+    ),
     // Only while a wire is being drawn (Keymap::resolve_while_wiring).
     cmd(
         "wire.end_on_part",
