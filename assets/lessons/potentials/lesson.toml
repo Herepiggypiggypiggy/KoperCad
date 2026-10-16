@@ -149,6 +149,7 @@ demo = [
 ]
 point = { at = { feed = "L4" } }
 expect = { potential_kind = { kind = "protective_earth", page = "Motor feeder" } }
+solve = [ { set_potential = { feed_at = [104, 92], page = "Motor feeder", chip = "PE" } } ]
 
 [[step]]
 id = "where-it-goes"

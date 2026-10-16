@@ -148,6 +148,24 @@ impl Drive {
             SolveOp::Key(k) => {
                 let key =
                     egui::Key::from_name(&k.key).ok_or_else(|| format!("no key `{}`", k.key))?;
+                if let Some(seconds) = k.hold {
+                    let event = |pressed| egui::Event::Key {
+                        key,
+                        physical_key: None,
+                        pressed,
+                        repeat: false,
+                        modifiers: egui::Modifiers::NONE,
+                    };
+                    let start = self.ctx.input(|i| i.time) + 1.0;
+                    self.frame_at(start, vec![event(true)]);
+                    let mut elapsed = 0.0;
+                    while elapsed < seconds {
+                        elapsed += 0.1;
+                        self.frame_at(start + elapsed, Vec::new());
+                    }
+                    self.frame_at(start + elapsed + 0.05, vec![event(false)]);
+                    return Ok(());
+                }
                 self.frame_with(vec![egui::Event::Key {
                     key,
                     physical_key: None,
@@ -325,6 +343,22 @@ impl Drive {
         result
     }
 
+    /// One frame at egui time `time` seconds, so a held key counts time.
+    fn frame_at(&mut self, time: f64, events: Vec<egui::Event>) {
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1600.0, 900.0),
+            )),
+            time: Some(time),
+            events,
+            ..Default::default()
+        };
+        let app = &mut self.app;
+        let mut output = self.ctx.run_ui(input, |ui| app.show(ui));
+        output.textures_delta.clear();
+    }
+
     fn replay_wire(&mut self, w: &WireOp) -> Result<(), String> {
         let (page, from) = self.replay_pin(&w.wire[0])?;
         let (_, to) = self.replay_pin(&w.wire[1])?;
@@ -455,8 +489,17 @@ impl Drive {
             .into_iter()
             .find(|b| symbols.contains(&b.symbol))
             .ok_or_else(|| format!("`{device}` has no pole badge on this page"))?;
-        self.app
-            .live_pole_clicked(badge.symbol, badge.group, !shift);
+        if !shift && super::live::is_momentary(self.doc().project(), badge.symbol) {
+            // A pushbutton goes down with the click and springs back on the
+            // frame after, when no pointer holds it. The lesson's check is
+            // read while it is down, as it is on the frames of a real press.
+            self.app.live_pole_pressed(badge.symbol, badge.group);
+            let ctx = self.ctx.clone();
+            self.app.learn_step(&ctx);
+        } else {
+            self.app
+                .live_pole_clicked(badge.symbol, badge.group, !shift);
+        }
         self.frame();
         Ok(())
     }

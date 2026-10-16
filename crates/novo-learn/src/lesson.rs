@@ -349,6 +349,10 @@ pub struct SetPotentialArgs {
 #[serde(deny_unknown_fields)]
 pub struct KeySolveOp {
     pub key: String,
+    /// Hold the key down this many seconds, then let go (a hold opens the
+    /// wheel); a plain press otherwise.
+    #[serde(default)]
+    pub hold: Option<f64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]
