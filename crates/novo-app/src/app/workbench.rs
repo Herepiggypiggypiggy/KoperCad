@@ -66,6 +66,10 @@ pub(crate) struct Workbench {
     pub(super) macros: super::macro_browser::MacroBrowser,
     /// The Parts window (browser and one-click import), while open.
     pub(super) parts: Option<super::parts::PartsWindow>,
+    /// The catalog the part pickers search (inspector, Cables drawer).
+    pub(super) part_catalog: super::part_picker::PickerCatalog,
+    /// The cable controls of the Cables drawer.
+    pub(super) cable_edit: super::cable_controls::CableEdit,
     /// The Save as macro window, while it is open.
     pub(super) macro_save: Option<super::macro_actions::SaveDraft>,
     /// The Place macro window.
@@ -202,6 +206,8 @@ impl Default for Workbench {
             occurrences: None,
             drawer: None,
             drawer_cable: None,
+            part_catalog: Default::default(),
+            cable_edit: Default::default(),
             proposal: 0,
             space_down: None,
             pointer_world: None,
