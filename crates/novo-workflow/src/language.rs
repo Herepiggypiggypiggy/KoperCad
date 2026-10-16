@@ -644,6 +644,11 @@ pub const DUTCH: &[Aliases] = &[
         &["werkbank", "adereindhulzen", "etiketten", "draadsnijlijst"],
     ),
     nl(
+        "report.designer",
+        &["rapportontwerper", "open rapportontwerper"],
+        &["sjabloon", "titelblok", "ontwerper"],
+    ),
+    nl(
         "export.bench_cut",
         &["exporteer werkbank snijlijst"],
         &["snijlijst", "draden afkorten", "afstrippen"],

@@ -26,6 +26,7 @@ mod checks;
 mod clipboard;
 mod commissioning;
 mod compare;
+mod designer;
 mod device_renumber;
 mod dock;
 mod drawers;
@@ -1037,6 +1038,7 @@ impl NovoApp {
         self.shortcuts_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
+        self.designer_window(&ctx);
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
         self.auto_assign_dialog(&ctx);

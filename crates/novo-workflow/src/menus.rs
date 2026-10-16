@@ -124,6 +124,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("export.reports", at("Reports")),
     ("export.assembly", at("Reports")),
     ("view.bench", at("Reports")),
+    ("report.designer", at("Reports")),
     ("export.bench_cut", at("Reports")),
     ("export.ferrules", at("Reports")),
     ("export.labels", at("Reports")),

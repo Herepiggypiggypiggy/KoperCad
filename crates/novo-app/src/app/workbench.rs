@@ -173,6 +173,8 @@ pub(crate) struct Workbench {
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
+    /// The Report designer window, while open.
+    pub(super) designer: Option<super::designer::DesignerState>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
     /// An AutomationML import waiting for the person to confirm.
     pub(super) aml_import: Option<super::interop::AmlImport>,
@@ -264,6 +266,7 @@ impl Default for Workbench {
             changes: None,
             background_panel: None,
             bench: None,
+            designer: None,
             commissioning: None,
             underlay_seen: None,
             aml_import: None,
@@ -354,6 +357,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.wiring_dxf",
     "export.wirecut_page",
     "view.bench",
+    "report.designer",
     "export.bench_cut",
     "export.ferrules",
     "export.labels",
@@ -960,6 +964,7 @@ impl NovoApp {
             "export.wiring_dxf" => self.export_wiring_dxf_of_panel(),
             "export.wirecut_page" => self.add_wire_production_page(),
             "view.bench" => self.open_bench(),
+            "report.designer" => self.open_designer(),
             "export.bench_cut" => {
                 self.export_bench_cut();
             }

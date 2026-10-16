@@ -11,3 +11,9 @@ Decisions: templates never store rows (live data only); unknown fields print as 
 Not done: the editor UI and the menu/command registration (only `designer::ENTRY` exists), writing templates into a project from the app, barcodes and images, label printer sheets.
 
 Contacts: reviewer R2 and integration lead A (cse_01FiLvRBKEcNNHbQEGhYyL1S); roster in coordination/threads.md.
+
+## Designer UI (ui-report-designer)
+
+Done: command `report.designer` (Reports menu, palette, Dutch words), window in `crates/novo-app/src/app/designer.rs`: template picker (project, mine, built-in), Duplicate, New table of <report>, name/description, A4/A3 + orientation, frame, title block rows, text elements, table report/heading/sizes/columns (choose, reorder, header, width), problems list, live preview (sample rows or project data), Save to my templates, Save in project (one undo step), Export PDF. Reports workspace: template picker and PDF button (`ReportFormat::Pdf`).
+
+Left: drag-placing elements on the preview, line/rect add, filters and sort keys in the table editor, delete a saved template, section picker, images and barcodes (engine), forms with custom fields.
