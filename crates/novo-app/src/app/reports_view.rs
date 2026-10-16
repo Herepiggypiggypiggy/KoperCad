@@ -629,9 +629,10 @@ impl NovoApp {
             .into_iter()
             .find(|t| t.name == chosen)
         else {
+            self.reports_view.template = None;
             self.message(
                 Level::Warning,
-                format!("Template {chosen} no longer exists"),
+                format!("Template {chosen} no longer exists, using the plain layout"),
             );
             return None;
         };

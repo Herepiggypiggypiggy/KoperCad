@@ -58,6 +58,9 @@ pub(super) struct DesignerState {
     project_data: bool,
     /// The last render, kept while the draft and data are unchanged.
     cache: Option<(Template, bool, u64, Rendered)>,
+    /// A pick or a new template waiting for the person to agree to drop
+    /// the unsaved edits.
+    pending: Option<Act>,
 }
 
 impl DesignerState {
@@ -72,6 +75,7 @@ impl DesignerState {
             page: 0,
             project_data: false,
             cache: None,
+            pending: None,
         };
         s.reload(project);
         s
@@ -229,6 +233,10 @@ enum Act {
     SaveUser,
     SaveProject,
     ExportPdf,
+    /// Drop the edits and do the waiting pick.
+    Discard,
+    /// Keep editing; forget the waiting pick.
+    Keep,
 }
 
 impl NovoApp {
@@ -339,6 +347,14 @@ impl NovoApp {
 
     fn designer_act(&mut self, st: &mut DesignerState, act: Act) {
         match act {
+            Act::Pick(_) | Act::NewFrom(..) if st.is_dirty() => st.pending = Some(act),
+            Act::Discard => {
+                st.base = st.draft.clone();
+                if let Some(next) = st.pending.take() {
+                    self.designer_act(st, next);
+                }
+            }
+            Act::Keep => st.pending = None,
             Act::Pick(i) => {
                 if let Some((origin, t)) = st.library.get(i).cloned() {
                     st.load(origin, t);
@@ -512,6 +528,20 @@ fn editor(ui: &mut egui::Ui, st: &mut DesignerState, rendered: &Rendered, act: &
                 }
             });
     });
+    if st.pending.is_some() {
+        ui.horizontal(|ui| {
+            ui.colored_label(
+                tokens::WARNING,
+                format!("Discard changes to {}?", st.draft.name),
+            );
+            if ui.button("Discard").clicked() {
+                *act = Some(Act::Discard);
+            }
+            if ui.button("Keep editing").clicked() {
+                *act = Some(Act::Keep);
+            }
+        });
+    }
     if let Some(o) = st.origin {
         ui.weak(match o {
             Origin::Builtin => "Built-in: Duplicate it, or save it under another name",
@@ -1178,6 +1208,43 @@ mod tests {
         // A name that does not exist is a message, not a file.
         d.app.reports_view.template = Some("Gone".into());
         assert_eq!(d.app.export_report("devices", ReportFormat::Pdf), None);
+        assert_eq!(
+            d.app.reports_view.template, None,
+            "reset to the plain layout"
+        );
+    }
+
+    #[test]
+    fn picking_while_dirty_asks_first() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = app(dir.path());
+        open(&mut d, &dir.path().join("templates"));
+        state(&mut d).draft.description = "edited".into();
+        let other = state(&mut d)
+            .library
+            .iter()
+            .position(|(_, t)| t.name == "Wire list")
+            .unwrap();
+        act(&mut d, Act::Pick(other));
+        assert_eq!(state(&mut d).draft.description, "edited");
+        assert!(state(&mut d).pending.is_some());
+        act(&mut d, Act::Keep);
+        assert!(state(&mut d).pending.is_none());
+        act(&mut d, Act::NewFrom("bom".into(), "Parts".into()));
+        assert_eq!(state(&mut d).draft.description, "edited");
+        act(&mut d, Act::Discard);
+        assert_eq!(state(&mut d).draft.name, "Parts (new)");
+        // A new, unsaved template is itself unsaved work; a saved one is not.
+        act(&mut d, Act::Pick(other));
+        assert!(state(&mut d).pending.is_some());
+        act(&mut d, Act::Discard);
+        assert_eq!(state(&mut d).draft.name, "Wire list");
+        act(&mut d, Act::Pick(0));
+        assert!(
+            state(&mut d).pending.is_none(),
+            "clean drafts switch freely"
+        );
+        assert_ne!(state(&mut d).draft.name, "Wire list");
     }
 
     #[test]
