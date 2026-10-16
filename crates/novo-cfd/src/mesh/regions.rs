@@ -48,6 +48,13 @@ const K_PARTITION: f64 = 50.0;
 /// then devices and obstacles in scenario order (ids of dropped ones are
 /// skipped so ids stay stable when an item moves out of the domain).
 pub fn regions(scn: &Scenario) -> (Vec<Region>, Vec<MaterialInfo>) {
+    regions_with(scn, true)
+}
+
+/// [`regions`], with the mounting plate left out when `plate_slab` is false
+/// (the caller models it as a sheet on the rear face; the material id 1
+/// stays reserved so ids do not move).
+pub fn regions_with(scn: &Scenario, plate_slab: bool) -> (Vec<Region>, Vec<MaterialInfo>) {
     let dom = domain_mm(scn);
     let t = scn.params.plate_thickness_mm.clamp(0.0, dom[2]);
     let mut mats = vec![
@@ -125,7 +132,8 @@ pub fn regions(scn: &Scenario) -> (Vec<Region>, Vec<MaterialInfo>) {
             hi: [p.right(), p.bottom(), t],
         },
         dom,
-    ) {
+    ) && plate_slab
+    {
         plate.push(r);
     }
     let mut all = dev;
@@ -164,10 +172,6 @@ pub fn opening_spans(o: &Opening) -> [Option<(f64, f64)>; 3] {
         Placement::Left { y_mm } | Placement::Right { y_mm } => {
             [None, span(y_mm, o.width_mm), None]
         }
-        Placement::Front { x_mm, y_mm } => [
-            span(x_mm, o.width_mm),
-            span(y_mm, o.height_mm),
-            None,
-        ],
+        Placement::Front { x_mm, y_mm } => [span(x_mm, o.width_mm), span(y_mm, o.height_mm), None],
     }
 }

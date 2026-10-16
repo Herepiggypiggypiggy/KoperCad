@@ -2,7 +2,7 @@
 
 use novo_thermal::Scenario;
 
-use super::regions::{Region, regions};
+use super::regions::Region;
 use super::{MeshError, MeshSettings, THIN_MM, plan_grid_report};
 use crate::result::{Grid3, MaterialInfo};
 
@@ -56,10 +56,11 @@ pub struct BodyResolution {
 }
 
 impl BodyResolution {
-    /// At least two cells across every axis, one across a thin sheet: what a
-    /// temperature on the body's surface needs to mean something.
+    /// At least two cells across every axis that is not a thin sheet: what a
+    /// temperature on the body's surface needs to mean something. A sheet
+    /// (the mounting plate) lives in cut cells unless `resolve_thin` is on.
     pub fn is_resolved(&self) -> bool {
-        (0..3).all(|a| self.cells_across[a] >= if self.thin[a] { 1 } else { 2 })
+        (0..3).all(|a| self.thin[a] || self.cells_across[a] >= 2)
     }
 }
 
@@ -67,7 +68,7 @@ impl Mesh {
     /// Mesh a scenario with the given settings.
     pub fn build(scn: &Scenario, st: &MeshSettings) -> Result<Mesh, MeshError> {
         let plan = plan_grid_report(scn, st)?;
-        let (regs, materials) = regions(scn);
+        let (regs, materials) = super::regions_with(scn, st.plate_slab);
         let mut mesh = Mesh::classify(plan.grid, &regs, materials);
         mesh.over_budget = plan.over_budget;
         Ok(mesh)

@@ -61,7 +61,10 @@ fn main() {
         "2D engine: surface {:.1} C, plate share {:.2}",
         d.surface_c, d.plate_share
     );
-    let sizes: Vec<usize> = std::env::args().skip(1).filter_map(|s| s.parse().ok()).collect();
+    let sizes: Vec<usize> = std::env::args()
+        .skip(1)
+        .filter_map(|s| s.parse().ok())
+        .collect();
     for n in sizes {
         let t0 = Instant::now();
         let mut tuning = Tuning::default().with_cells(n);
@@ -80,19 +83,34 @@ fn main() {
         if let Some(v) = env("THIN") {
             m.thin_mm = v;
         }
+        if let Some(v) = env("RESOLVE_THIN") {
+            m.resolve_thin = v > 0.0;
+        }
         tuning.coarse.mesh = Some(m);
-        let r = CabinetSolver::new(tuning).solve(&scn, Fidelity::Coarse, &Control::new(), &mut |_| {});
+        let r =
+            CabinetSolver::new(tuning).solve(&scn, Fidelity::Coarse, &Control::new(), &mut |_| {});
         match r {
             Ok(s) => {
                 let g = &s.grid;
                 let dv = &s.devices[0];
                 println!(
                     "{n:>7} -> {:>6} cells {}x{}x{} | surface {:.1} air {:.1} plate share {:.2} | steps {} conv {} | {:.0}s | notes: {}",
-                    g.cells(), g.nx, g.ny, g.nz,
-                    dv.surface_c, dv.air_c, dv.plate_share,
-                    s.progress.iteration, s.progress.converged,
+                    g.cells(),
+                    g.nx,
+                    g.ny,
+                    g.nz,
+                    dv.surface_c,
+                    dv.air_c,
+                    dv.plate_share,
+                    s.progress.iteration,
+                    s.progress.converged,
                     t0.elapsed().as_secs_f64(),
-                    s.notes.iter().filter(|x| x.contains("resolved")).cloned().collect::<Vec<_>>().join("; ")
+                    s.notes
+                        .iter()
+                        .filter(|x| x.contains("resolved"))
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join("; ")
                 );
             }
             Err(e) => println!("{n}: {e}"),

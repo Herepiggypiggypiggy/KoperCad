@@ -23,7 +23,7 @@ mod regions;
 pub use axis::Spacing;
 pub use classify::{BodyResolution, CellClass, Mesh, MixedCell};
 pub use preview::MeshPreview;
-pub use regions::{Region, domain_mm, regions};
+pub use regions::{Region, domain_mm, regions, regions_with};
 
 use novo_thermal::Scenario;
 
@@ -59,6 +59,15 @@ pub struct MeshSettings {
     /// Bodies thinner than this (mm) along an axis, such as the mounting
     /// plate, are one cell thick there, exactly aligned.
     pub thin_mm: f64,
+    /// Give thin bodies (below `thin_mm`) their own aligned cell layer. Off:
+    /// they are left to cut cells, which keeps the cells near the plate as
+    /// wide as the rest (a 2.5 mm layer under 40 mm cells makes the
+    /// pressure solve several times slower).
+    pub resolve_thin: bool,
+    /// The mounting plate is a volume slab of the grid (aligned, one cell
+    /// thick). `false` leaves it out, for a solver that models it as a sheet
+    /// on the rear face.
+    pub plate_slab: bool,
 }
 
 /// Default of [`MeshSettings::thin_mm`].
@@ -73,6 +82,8 @@ impl Default for MeshSettings {
             max_ratio: 1.5,
             min_cells_across: 3,
             thin_mm: THIN_MM,
+            resolve_thin: false,
+            plate_slab: true,
         }
     }
 }
@@ -116,13 +127,32 @@ impl MeshSettings {
 /// openings (`need` is lowered for thin sheets).
 fn spans(scn: &Scenario, regs: &[Region], need: usize, st: &MeshSettings) -> [Vec<Span>; 3] {
     let mut f: [Vec<Span>; 3] = Default::default();
+    let first_obstacle = 2 + scn.devices.len();
     let mut add = |a: usize, lo: f64, hi: f64, n: usize| {
-        let n = if hi - lo < st.thin_mm { 1 } else { n };
-        f[a].push(Span { lo, hi, need: n });
+        let thin = hi - lo < st.thin_mm;
+        let (n, sheet) = match (thin, st.resolve_thin) {
+            (true, true) => (1, true),
+            (true, false) => (0, false),
+            _ => (n, false),
+        };
+        f[a].push(Span {
+            lo,
+            hi,
+            need: n,
+            sheet,
+        });
     };
     for r in regs {
+        // Devices get the full requirement. Ducts and rails are minor
+        // obstacles (porous or low), one cell fewer; the plate's edges are
+        // planes of their own and it needs no cells along its length.
+        let n = match r.material {
+            1 => 1,
+            m if m as usize >= first_obstacle => need.saturating_sub(1).max(1),
+            _ => need,
+        };
         for a in 0..3 {
-            add(a, r.lo[a], r.hi[a], need);
+            add(a, r.lo[a], r.hi[a], n);
         }
     }
     let mut openings = |o: &novo_thermal::Opening| {
@@ -179,7 +209,7 @@ pub fn plan_grid_report(scn: &Scenario, st: &MeshSettings) -> Result<GridPlan, M
     if !dom.iter().all(|d| *d > 0.0 && d.is_finite()) {
         return Err(MeshError::EmptyDomain);
     }
-    let (regs, _) = regions(scn);
+    let (regs, _) = regions_with(scn, st.plate_slab);
     let target = st.target_cells as f64;
     let s_max = dom.iter().cloned().fold(0.0, f64::max) * 2.0;
     let count = |sp: &[Vec<Span>; 3], s: f64| -> usize {

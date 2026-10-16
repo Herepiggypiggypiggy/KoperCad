@@ -23,13 +23,14 @@ pub struct Spacing {
 
 /// An interval of an axis that is wanted resolved: a solid body or an
 /// opening. Its faces become planes and it gets at least `need` cells.
-/// A span with `need == 1` is a thin sheet: its planes are never merged
-/// away and it is one cell thick, whatever the neighbours do.
+/// A `sheet` is a thin body that keeps its own cell layer: its planes are
+/// never merged away and it is one cell thick, whatever the neighbours do.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Span {
     pub lo: f64,
     pub hi: f64,
     pub need: usize,
+    pub sheet: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -58,7 +59,10 @@ pub fn axis_edges(len: f64, spans: &[Span], sp: &Spacing) -> Vec<f64> {
     let growth: Vec<f64> = (0..n_seg)
         .map(|i| {
             let mid = 0.5 * (planes[i].pos + planes[i + 1].pos);
-            if spans.iter().any(|s| s.need > 1 && s.lo <= mid && mid <= s.hi) {
+            if spans
+                .iter()
+                .any(|s| s.need > 1 && s.lo <= mid && mid <= s.hi)
+            {
                 sp.growth.max(0.97 * sp.max_ratio)
             } else {
                 sp.growth
@@ -89,9 +93,13 @@ pub fn axis_edges(len: f64, spans: &[Span], sp: &Spacing) -> Vec<f64> {
     edges
 }
 
+/// Largest gap between two planes that counts as a sliver: the faces stay
+/// planes of their own above this, however coarse the air is.
+const MAX_SLIVER_MM: f64 = 5.0;
+
 /// Planes from the span faces: dedup, drop slivers (a plane within 15
-/// percent of the coarse size of another one is left to cut cells) except
-/// the faces of thin sheets.
+/// percent of the coarse size, at most [`MAX_SLIVER_MM`], of another one is
+/// left to cut cells) except the faces of thin sheets.
 fn merge_planes(len: f64, spans: &[Span], sp: &Spacing) -> Vec<Plane> {
     let mut cand: Vec<Plane> = Vec::new();
     for s in spans.iter().filter(|s| s.need > 0) {
@@ -99,13 +107,13 @@ fn merge_planes(len: f64, spans: &[Span], sp: &Spacing) -> Vec<Plane> {
             if p.is_finite() && p > 0.0 && p < len {
                 cand.push(Plane {
                     pos: p,
-                    keep: s.need == 1,
+                    keep: s.sheet,
                 });
             }
         }
     }
     cand.sort_by(|a, b| a.pos.total_cmp(&b.pos));
-    let min_gap = (0.15 * sp.far).max(0.2);
+    let min_gap = (0.15 * sp.far).clamp(0.2, MAX_SLIVER_MM);
     let mut out = vec![Plane {
         pos: 0.0,
         keep: true,
