@@ -3,7 +3,7 @@
 # cut-out (`mounting = door_cutout`, `cutout`).
 #
 # Verified on main (59a37de0): the drill table of this sample is 20 holes of 5.5 mm (rail screws,
-# four per 580 mm rail) and 4 of 6 mm on the plate, plus 2 cut-outs on the door. The Cabinet header
+# four per 535 mm rail) and 4 of 6 mm on the plate, plus 2 cut-outs on the door. The Cabinet header
 # button "Plate drawing" and the command export.plate write "<project> <+CAB> plate.pdf" next to the
 # project and show "Exported <path>"; sheets are Plate, then Door when something goes through it;
 # each sheet has the tables "Holes by diameter", "Drill holes" and "Cut-outs".
@@ -79,7 +79,7 @@ id = "rail-holes"
 title = "Rails get holes too"
 title_nl = "Rails krijgen ook gaten"
 text = """
-Each DIN rail gets 5.5 mm clearance holes, 10 mm in from each end and at most 200 mm apart: four holes on each 580 mm rail here, 20 in all.
+Each DIN rail gets 5.5 mm clearance holes, 10 mm in from each end and at most 200 mm apart: four holes on each 535 mm rail here, 20 in all.
 You do not add them; they come from the rails.
 """
 text_nl = """
