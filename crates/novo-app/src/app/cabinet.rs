@@ -1169,8 +1169,13 @@ impl NovoApp {
                         project,
                         s,
                         (self.cabinet.rails.hover, self.cabinet.rails.selected),
-                        (14.0 / zoom).max(8.0),
+                        ((14.0 / zoom).max(8.0), novo_theme::Palette::of(ui)),
                     );
+                    if self.cabinet.rails.hover.is_some() {
+                        out.response
+                            .clone()
+                            .on_hover_text("Drag to move. Click to select, Delete removes.");
+                    }
                 }
                 if let Some(rail) = self.cabinet.rails.selected {
                     let rect = out.response.rect;
@@ -1187,6 +1192,7 @@ impl NovoApp {
                         project,
                         rail,
                         moved,
+                        novo_theme::Palette::of(ui),
                     );
                 }
                 if let Some(input) = &heat_input {

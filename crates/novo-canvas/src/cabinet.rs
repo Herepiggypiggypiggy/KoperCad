@@ -628,4 +628,28 @@ mod tests {
             (Vec2::new(25.0, 300.0), Vec2::new(55.0, 1200.0))
         );
     }
+
+    #[test]
+    fn a_rail_has_a_slot_and_a_duct_a_comb_of_slats() {
+        let mut c = CabinetScene::new(CabinetStyle::default());
+        let v = view();
+        c.set(&v);
+        let rail = c.scene().get(rail_item(1)).unwrap();
+        // Fill, outline and the mounting slot.
+        assert_eq!(rail.primitives.len(), 3);
+        let duct = c.scene().get(rail_item(9)).unwrap();
+        // Fill and outline, then two slats per 8 mm of length.
+        let slats = ((v.ducts[0].length / 8.0) as usize).saturating_sub(1) * 2;
+        assert_eq!(duct.primitives.len(), 2 + slats);
+    }
+
+    #[test]
+    fn a_very_long_duct_is_capped_at_four_hundred_slats() {
+        let mut c = CabinetScene::new(CabinetStyle::default());
+        let mut v = view();
+        v.ducts[0].length = 100_000.0;
+        c.set(&v);
+        let duct = c.scene().get(rail_item(9)).unwrap();
+        assert_eq!(duct.primitives.len(), 2 + 399 * 2);
+    }
 }
