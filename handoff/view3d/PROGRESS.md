@@ -13,3 +13,4 @@
 - 2026-10-16 PR: performance pass. Found the label pass costing 51 ms per frame at 1000 devices (View3d::project walked the scene bounds per label); now 0.45 ms. Examples: `uicost` (widget CPU headless), `orbit --tier --shadows --no-edges --heat N`. Numbers in the design doc.
 - 2026-10-16 PR: label pass 1.50 to 0.51 ms at 3000 devices: chips are only laid out for devices that could show one (the overlap check was not the cost; a grid for it measured the same and was dropped).
 - 2026-10-16 PR: a frame walks the scene bounds once (show passes them to paint_overlay and paint_dimensions; test now requires one walk).
+- 2026-10-16 PR (R7 follow-ups on #755): toolbar says "Reduced quality" next to Restore quality; the overall size has no depth line when there is no shell (it was the plate thickness); docs say hardware floors at Integrated.
