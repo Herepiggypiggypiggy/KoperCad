@@ -86,14 +86,23 @@ pub(super) fn toolbar(
                     changed.layers |= toggle(ui, &mut layers.door, "Door", "Show the door");
                     changed.layers |=
                         toggle(ui, &mut layers.wires, "Wires", "Show the routed wires");
-                    toggle(
-                        ui,
-                        &mut controls.move_items,
-                        "Move",
-                        "Drag a device, rail or duct to move it on the plate (grid and checks \
-                         as in the Cabinet). R turns the selection, Delete takes it off. Off: \
-                         a drag draws a selection box.",
-                    );
+                    // A mode, not a layer: keeps the copper wash of a tool.
+                    let mode = if controls.move_items {
+                        "✔ Move"
+                    } else {
+                        "Move"
+                    };
+                    if ui
+                        .selectable_label(controls.move_items, mode)
+                        .on_hover_text(
+                            "Drag a device, rail or duct to move it on the plate (grid and \
+                             checks as in the Cabinet). R turns the selection, Delete takes it \
+                             off. Off: a drag draws a selection box.",
+                        )
+                        .clicked()
+                    {
+                        controls.move_items ^= true;
+                    }
                     toggle(
                         ui,
                         &mut controls.shadows,
@@ -136,15 +145,13 @@ pub(super) fn toolbar(
     changed
 }
 
-/// A toggle button whose state is also in its look (a tick), so it never
-/// relies on colour alone.
+/// A layer toggle: neutral, with a tick when on, so it never relies on
+/// colour alone and never reads as copper.
 fn toggle(ui: &mut egui::Ui, on: &mut bool, name: &str, hint: &str) -> bool {
-    let text = if *on {
-        format!("✔ {name}")
-    } else {
-        name.to_owned()
-    };
-    if ui.selectable_label(*on, text).on_hover_text(hint).clicked() {
+    if novo_theme::widgets::filter_toggle(ui, name, *on)
+        .on_hover_text(hint)
+        .clicked()
+    {
         *on = !*on;
         return true;
     }

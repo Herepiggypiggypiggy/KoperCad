@@ -7,6 +7,12 @@ use novo_canvas::widget::CanvasStyle;
 use novo_canvas::{Color, Highlight, Stroke};
 use novo_theme::{CANVAS_DARK, CanvasPalette};
 
+/// `a` over `b` at `amount` (0..=1), opaque.
+fn mix(a: [u8; 4], b: [u8; 4], amount: f32) -> [u8; 4] {
+    let ch = |i: usize| (f32::from(a[i]) * amount + f32::from(b[i]) * (1.0 - amount)).round() as u8;
+    [ch(0), ch(1), ch(2), 255]
+}
+
 fn color(c: [u8; 4]) -> Color {
     Color(c)
 }
@@ -85,6 +91,9 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
         // Where wires meet and end (DESIGN.md §4): the junction dot is
         // copper, a wire landing on a pin uses the wire's own colour.
         joint_color: color(p.junction),
+        // A cable's sheath and tag are the symbol colour at 60 percent over
+        // the sheet, never copper (design/direction.md section 3).
+        cable_color: color(mix(p.symbol, p.sheet, 0.6)),
         pin_joint_color: color(p.wire),
         wire_end_color: color(p.wire_end),
         unconnected_color: color(p.unconnected_flag),
@@ -161,6 +170,16 @@ mod tests {
         ] {
             assert_ne!(ours, default);
         }
+    }
+
+    #[test]
+    fn cables_are_neutral_not_copper() {
+        let m = model_style_from(&CANVAS_DARK);
+        assert_ne!(m.cable_color, m.joint_color);
+        // Grey: the channels stay close together.
+        let Color([r, _, b, a]) = m.cable_color;
+        assert_eq!(a, 255);
+        assert!(r.abs_diff(b) < 24, "{:?}", m.cable_color);
     }
 
     #[test]

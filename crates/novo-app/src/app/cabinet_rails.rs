@@ -149,7 +149,10 @@ pub(super) fn draw_grips(
         let s = view.world_to_screen(novo_canvas::vec2(x as f32, y as f32));
         egui::pos2(rect.min.x + s.x, rect.min.y + s.y)
     };
-    let accent = novo_theme::tokens::ACCENT;
+    // Copper means "here": a grip at rest is a neutral handle, and turns
+    // copper only under the pointer or when selected.
+    let palette = novo_theme::Palette::of_ctx(painter.ctx());
+    let accent = palette.accent;
     for r in project.all::<Rail>().filter(|r| r.structure == structure) {
         let id = r.id.raw();
         let (l, t, rt, b) = grip_of(r, size);
@@ -158,7 +161,7 @@ pub(super) fn draw_grips(
         let fill = if lit {
             accent
         } else {
-            accent.gamma_multiply(0.45)
+            palette.text_secondary.gamma_multiply(0.55)
         };
         painter.rect_filled(area, 2.0, fill);
         if hover == Some(id) && selected != Some(id) {
@@ -452,7 +455,8 @@ pub(super) fn draw_selected(
         egui::pos2(rect.min.x + s.x, rect.min.y + s.y)
     };
     let area = egui::Rect::from_two_pos(to_screen(x, y), to_screen(x + w, y + h)).expand(2.0);
-    let colour = novo_theme::tokens::ACCENT;
+    // The selected rail is "here": copper.
+    let colour = novo_theme::Palette::of_ctx(painter.ctx()).accent;
     painter.rect_stroke(
         area,
         0.0,

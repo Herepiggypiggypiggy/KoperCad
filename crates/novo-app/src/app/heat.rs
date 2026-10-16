@@ -597,7 +597,7 @@ pub(super) fn toggle(ui: &mut egui::Ui, state: &mut HeatState) -> egui::Response
 /// Heat is on.
 pub(super) fn strip(ui: &mut egui::Ui, state: &mut HeatState) {
     let chip = |ui: &mut egui::Ui, on: &mut bool, label: &str| {
-        if ui.selectable_label(*on, label).clicked() {
+        if novo_theme::widgets::filter_toggle(ui, label, *on).clicked() {
             *on = !*on;
         }
     };

@@ -300,6 +300,36 @@ pub fn tabs(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
     changed
 }
 
+/// A visibility or filter toggle (a layer, a map, a badge): neutral, so it
+/// never competes with the drawing. On is a `hover` fill, primary text and
+/// an accent check; off is quiet text. The copper wash is for tools and
+/// modes only (design-system.md section 3).
+pub fn filter_toggle(ui: &mut Ui, text: &str, on: bool) -> Response {
+    let p = Palette::of(ui);
+    let font = egui::TextStyle::Button.resolve(ui.style());
+    let mut job = egui::text::LayoutJob::default();
+    if on {
+        job.append(
+            "\u{2714} ",
+            0.0,
+            egui::TextFormat::simple(font.clone(), p.accent_hover),
+        );
+    }
+    let color = if on { p.text_primary } else { p.text_secondary };
+    job.append(text, 0.0, egui::TextFormat::simple(font, color));
+    let mut button = Button::new(job);
+    button = if on {
+        button
+            .fill(p.hover)
+            .stroke(Stroke::new(1.0, p.border_strong))
+    } else {
+        button
+            .fill(p.control)
+            .stroke(Stroke::new(1.0, p.border_subtle))
+    };
+    ui.add(button)
+}
+
 /// A compact value or filter: `selected` fills it with the copper wash.
 pub fn chip(ui: &mut Ui, text: &str, selected: bool) -> Response {
     let p = Palette::of(ui);
@@ -557,6 +587,24 @@ mod tests {
             .split_whitespace()
             .collect::<Vec<_>>()
             .join(" ")
+    }
+
+    #[test]
+    fn a_filter_toggle_is_never_the_copper_wash() {
+        let ctx = egui::Context::default();
+        crate::apply(&ctx);
+        let mut seen = Vec::new();
+        for on in [false, true] {
+            let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+                let r = filter_toggle(ui, "Contours", on);
+                assert!(r.rect.width() > 10.0);
+            });
+            out.textures_delta.clear();
+            seen.push(on);
+        }
+        assert_eq!(seen, [false, true]);
+        let p = Palette::DARK;
+        assert_ne!(p.hover, p.accent_wash);
     }
 
     #[test]
