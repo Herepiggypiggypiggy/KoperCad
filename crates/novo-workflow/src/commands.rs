@@ -1108,7 +1108,14 @@ pub const COMMANDS: &[CommandInfo] = &[
         "view.fit",
         "Zoom to fit",
         "View",
-        &["zoom", "extents"],
+        &["zoom", "extents", "drawing", "content"],
+        Needs::Page,
+    ),
+    cmd(
+        "view.fit_sheet",
+        "Fit whole sheet",
+        "View",
+        &["zoom", "paper", "page", "extents"],
         Needs::Page,
     ),
     cmd(
@@ -1158,6 +1165,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide shadows in 3D",
         "View",
         &["shadows", "light", "soft shadows"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_place",
+        "Place a device in 3D",
+        "View",
+        &["place", "put", "add device", "unplaced", "drop"],
         Needs::Project,
     ),
     cmd(
@@ -1424,6 +1438,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "sim.add_fault",
+        "Add fault to selection",
+        "View",
+        &[
+            "add fault",
+            "open circuit",
+            "short to earth",
+            "stuck contact",
+            "what if",
+            "failure",
+        ],
+        Needs::Selection,
+    ),
+    cmd(
         "view.override_marks",
         "Show override marks",
         "View",
@@ -1674,7 +1702,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.cutlist",
-            "Cut list",
+            "Cut list (wire by the metre)",
             "View",
             &["cut length", "wire lengths", "sleeves"],
             Needs::Project,
@@ -1694,7 +1722,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.wirecut",
-            "Wire cut list",
+            "Wire cut list (machine job)",
             "View",
             &["wire machine", "cut and strip", "production"],
             Needs::Project,

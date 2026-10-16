@@ -50,6 +50,7 @@ mod heat_3d_tests;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
+mod heat_legend;
 mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
@@ -141,6 +142,10 @@ mod view3d_hints;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
+mod view3d_place;
+mod view3d_rail;
+#[cfg(test)]
+mod view3d_rail_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
@@ -182,6 +187,8 @@ mod compare_tests;
 mod eplan_ui_tests;
 #[cfg(test)]
 mod example_tests;
+#[cfg(test)]
+mod faults_tests;
 #[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
@@ -1052,6 +1059,7 @@ impl NovoApp {
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
+                    || *id == "view.3d_place"
                     || *id == "view.3d_stats"
                     || *id == "view.3d_hints"
                     || id.starts_with("heat.")
@@ -1174,6 +1182,7 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
         self.safety_window(&ctx);

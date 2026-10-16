@@ -357,7 +357,7 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
                 ui.colored_label(tokens::WARNING, note);
             }
             ui.add_space(4.0);
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 if ui
                     .button("Export wire cut")
                     .on_hover_text("Cut list for a wire machine: CSV next to the project")
@@ -664,5 +664,37 @@ mod tests {
         assert_eq!(cache.get(&p, cab).routes.len(), 1);
         // Another panel is another key.
         assert!(cache.get(&p, StructureId::from(9999)).routes.is_empty());
+    }
+
+    #[test]
+    fn the_panel_fits_its_width_and_leaves_the_rest_to_the_plate() {
+        let ctx = egui::Context::default();
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1340.0, 700.0));
+        let input = egui::RawInput {
+            screen_rect: Some(screen),
+            ..Default::default()
+        };
+        let overlay = Overlay {
+            rows: vec![RouteRow {
+                wire: 1,
+                label: "#1".into(),
+                ends: "=A1+CAB-F2:2 > =A1+CAB-X1:1".into(),
+                length_mm: 120.0,
+                basis: "routed, no depth",
+                ducts: 2,
+            }],
+            ..Overlay::default()
+        };
+        let mut left = 0.0;
+        for _ in 0..3 {
+            let mut output = ctx.run_ui(input.clone(), |ui| {
+                panel(ui, &overlay, StructureId(1));
+                left = ui.available_rect_before_wrap().right();
+            });
+            output.textures_delta.clear();
+        }
+        // The panel is its 340 points wide, inside the window, and the
+        // buttons wrap instead of widening it.
+        assert_eq!(left, 1000.0);
     }
 }

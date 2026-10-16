@@ -400,6 +400,12 @@ fn color3(c: [u8; 3], alpha: u8) -> Color32 {
     Color32::from_rgba_unmultiplied(c[0], c[1], c[2], alpha)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Label chips laid out so far on this thread (tests only).
+    static LAID_OUT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// One 3D view: camera, user state and input handling.
 pub struct View3d {
     id: u64,
@@ -1100,14 +1106,22 @@ impl View3d {
                 dist,
                 rect.height() * ppp,
             ) / ppp;
-            if let (true, Some(label)) = (self.state.display.labels, &item.label)
+            let selected = self.state.selection.contains(&item.id);
+            let hovered = self.state.hover == Some(item.id);
+            // A chip that cannot show (too small on screen, neither selected
+            // nor hovered) is not laid out, unless it is still fading out.
+            let could_show = selected
+                || hovered
+                || size_pt >= labels::MIN_DEVICE_PX
+                || self.label_fades.contains_key(&item.id);
+            if let (true, true, Some(label)) = (self.state.display.labels, could_show, &item.label)
                 && let Some(p) = self.project_in(rect, bounds, front)
             {
                 let galley =
                     painter.layout_no_wrap(label.to_string(), font.clone(), Color32::PLACEHOLDER);
+                #[cfg(test)]
+                LAID_OUT.with(|c| c.set(c.get() + 1));
                 let size = galley.size() + Vec2::new(8.0, 4.0);
-                let selected = self.state.selection.contains(&item.id);
-                let hovered = self.state.hover == Some(item.id);
                 candidates.push(LabelCandidate {
                     id: chips.len() as u64,
                     rect: [p.x - size.x * 0.5, p.y - size.y * 0.5, size.x, size.y],
@@ -1154,7 +1168,8 @@ impl View3d {
         }
 
         // Label chips: which ones show, then fade them in and out.
-        let shown = labels::visible_labels(&candidates);
+        let shown: std::collections::HashSet<u64> =
+            labels::visible_labels(&candidates).into_iter().collect();
         let mut touched: HashMap<ItemId, Fade> = HashMap::new();
         for (n, chip) in chips.iter().enumerate() {
             let on = shown.contains(&(n as u64));
@@ -1428,7 +1443,12 @@ fn frame_key(
     (camera.projection as u8, size_px, mode as u8).hash(&mut h);
     governed.map(|t| t as u8 + 1).hash(&mut h);
     (&state.selection, state.hover, &state.hidden, &state.related).hash(&mut h);
-    (state.display.edges, state.display.labels).hash(&mut h);
+    (
+        state.display.edges,
+        state.display.labels,
+        state.display.shadows,
+    )
+        .hash(&mut h);
     h.finish()
 }
 
@@ -1653,5 +1673,71 @@ mod cost_tests {
         let (small, large) = (calls(20), calls(600));
         assert_eq!(small, large, "independent of the item count");
         assert!(large <= 1, "{large} walks of the scene per frame");
+    }
+
+    /// Chips for devices too small on screen to ever carry a label are not
+    /// laid out (a galley each): 3000 devices cost 1.5 ms per frame with them,
+    /// 0.5 ms without.
+    #[test]
+    fn labels_are_only_laid_out_for_devices_that_could_show_one() {
+        install_headless();
+        let (scene, _) = demo::cabinet(&DemoOptions {
+            devices: 600,
+            ..DemoOptions::default()
+        });
+        let labelled = scene.items.iter().filter(|i| i.label.is_some()).count();
+        let scene = Arc::new(scene);
+        let ctx = egui::Context::default();
+        let mut view = View3d::new(11);
+        frame(&mut view, &ctx, &scene, 0.0);
+        let before = LAID_OUT.with(|c| c.get());
+        frame(&mut view, &ctx, &scene, 0.5);
+        let chips = LAID_OUT.with(|c| c.get()) - before;
+        assert!(chips < labelled / 2, "{chips} chips for {labelled} labels");
+        // A selected device still gets its chip, however small.
+        let id = scene.items.iter().find(|i| i.label.is_some()).unwrap().id;
+        view.state.selection.insert(id);
+        let before = LAID_OUT.with(|c| c.get());
+        frame(&mut view, &ctx, &scene, 1.0);
+        assert!(LAID_OUT.with(|c| c.get()) > before, "the selected chip");
+    }
+}
+
+#[cfg(test)]
+mod key_tests {
+    use super::*;
+
+    #[test]
+    fn every_display_switch_changes_the_frame_key() {
+        let scene = Scene::new(crate::scene::PlateFrame {
+            width: 100.0,
+            height: 100.0,
+        });
+        let library = MeshLibrary::new();
+        let camera = Camera::default();
+        let key = |state: &ViewState| {
+            frame_key(
+                &scene,
+                &library,
+                &camera,
+                state,
+                (64, 64),
+                (Mode::Settled, None),
+                0,
+            )
+        };
+        let base = ViewState::default();
+        let mut seen = vec![key(&base)];
+        for flip in [
+            |s: &mut ViewState| s.display.edges = !s.display.edges,
+            |s: &mut ViewState| s.display.labels = !s.display.labels,
+            |s: &mut ViewState| s.display.shadows = !s.display.shadows,
+        ] {
+            let mut s = base.clone();
+            flip(&mut s);
+            let k = key(&s);
+            assert!(!seen.contains(&k), "a switch left the picture key alone");
+            seen.push(k);
+        }
     }
 }

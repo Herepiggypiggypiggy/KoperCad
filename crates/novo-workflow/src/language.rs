@@ -327,7 +327,8 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["opdrachtveld bij de muis"],
     ),
-    nl("view.fit", &[], &["passend zoomen", "alles tonen"]),
+    nl("view.fit", &[], &["passend zoomen", "inhoud tonen"]),
+    nl("view.fit_sheet", &[], &["hele blad tonen", "heel blad"]),
     nl("view.schematic", &[], &["schema"]),
     nl("view.cabinet", &[], &["kast", "kastindeling"]),
     nl(
@@ -497,6 +498,16 @@ pub const DUTCH: &[Aliases] = &[
         "sim.plc_program",
         &["plc programma"],
         &["ladder", "programma draaien", "plc simuleren"],
+    ),
+    nl(
+        "sim.add_fault",
+        &["storing toevoegen"],
+        &[
+            "fout toevoegen",
+            "kortsluiting toevoegen",
+            "onderbreking",
+            "contact blijft hangen",
+        ],
     ),
     nl(
         "sim.faults",
@@ -685,6 +696,11 @@ pub const DUTCH: &[Aliases] = &[
         "view.3d_shadows",
         &["schaduw tonen in 3d"],
         &["schaduw", "schaduwen"],
+    ),
+    nl(
+        "view.3d_place",
+        &["apparaat plaatsen in 3d"],
+        &["plaatsen", "apparaat", "component"],
     ),
     nl(
         "view.3d_dimensions",

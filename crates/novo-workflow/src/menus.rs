@@ -158,6 +158,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.3d_quality", under("View", "3D")),
     ("view.3d_stats", under("View", "3D")),
     ("view.3d_hints", under("View", "3D")),
+    ("view.3d_place", under("View", "3D")),
     ("view.iso", under("View", "3D")),
     ("view.front", under("View", "3D")),
     ("view.top", under("View", "3D")),
@@ -198,6 +199,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
+    ("sim.add_fault", at("Simulate")),
     ("view.protection", at("Simulate")),
     ("heat.simulate", under("Simulate", "Heat")),
     // Reports
