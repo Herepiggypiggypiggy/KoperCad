@@ -10,7 +10,7 @@ Three tests every screen has to pass (reviewers use them):
 
 1. **Squint test.** Blur the screenshot. You should still see: the drawing, then the one active thing (tool, selection, primary action) in copper, then quiet panels. If three areas compete, remove something.
 2. **Count test.** No toolbar shows more than 7 controls at rest, no menu more than 12 items, no panel more than 3 text styles. The rest lives under "More", in a popover or in the command field.
-3. **Overlap test.** Nothing floats over a toolbar, a title block or another panel. Floating things dock to a named slot (section 6).
+3. **Overlap test.** Nothing permanent floats over a toolbar, a title block or another panel. Floating things dock to a named slot (section 6). The one allowed transient overlay is the outline flyout (opened from the top bar, closes on Esc or a click elsewhere); it covers the left end of the canvas and toolbar while open.
 
 ## 2. Brand identity
 
@@ -41,8 +41,8 @@ The dark theme is the default and the one screenshots are judged on; the light t
 
 - **Type scale** is the spec's: display 20, title 15, body 13, caption 11, label 10.5 caps, mono 12. Decision: drop body to **12.5 in Compact** only; nothing else changes. Numbers in columns are mono and right aligned. At most three styles per panel.
 - **Drawing text** has a floor: tags and values never render below **9 px on screen** at any zoom; at "fit" the sheet is scaled so the sheet width fills the canvas minus 24 pt (audit E1).
-- **Icons**: Phosphor, regular at rest, fill when active; 16 pt in buttons, 14 in rows, 20 in panel headers; electrical concepts in `icons::custom` on the same grid. Icon-only buttons always have a tooltip with name and key. A toolbar button is **icon + word only for the primary action of that toolbar**, icon-only for the others (tooltips carry the words); this alone removes about a third of the width of the Cabinet bar.
-- **Space**: the spec's 4 pt grid. Decision: a panel's inner padding is `M` (8), between groups `L` (12), a toolbar is **32 pt high** with 4 pt gaps, a panel header is 28 pt, a table row is 24 pt (Standard). Four control heights are allowed and nothing else: 20 (Compact), 22 (Standard), 28 (toolbar button with label), 36 (Touch).
+- **Icons**: Phosphor, regular at rest, fill when active; 16 pt in buttons, 14 in rows, 20 in panel headers; electrical concepts in `icons::custom` on the same grid. Icon-only buttons always have a tooltip with name and key. Toolbar buttons keep their words: labels are never shortened or turned into icon-only buttons, and whole groups fold into More when the width runs out (as `cabinet-toolbar.md` decided). Icon-only is for the dock's tools, panel header buttons, tab icons and the pin, always with a tooltip.
+- **Space**: the spec's 4 pt grid. Decision: a panel's inner padding is `M` (8), between groups `L` (12), a workspace toolbar is **32 pt high** with 4 pt gaps (the Cabinet bar keeps its approved 56 px with 28 px controls and captions, `cabinet-toolbar.md`), a panel header is 28 pt, a table row is 24 pt (Standard). Four control heights are allowed and nothing else: 20 (Compact), 22 (Standard), 28 (toolbar button with label), 36 (Touch).
 
 ## 5. Density modes
 
@@ -68,9 +68,9 @@ The window has five named slots. Anything that appears on screen occupies one; n
 
 Rules:
 
-1. **Left slot**: Outline with tabs Pages, Issues, Changes, Commissioning. Pin by default at 1700 px and wider (as now); below that it is a **flyout opened from a panel icon button in the top bar** (not a floating button over the canvas: fixes G1 for good). The tab row never clips: tabs shrink to icons with tooltips below 280 pt width.
+1. **Left slot**: Outline with tabs Pages, Issues, Changes, Commissioning. Pin by default at 1700 px and wider (as now); below that it is a **flyout opened from the named "Pages" button in the top bar** (not a floating button over the canvas: fixes G1 for good). The tab row never clips: tabs shrink to icons with tooltips below 280 pt width.
 2. **Right slot**: one panel at a time, tabbed if there are several (Inspector, Heat, Properties). The Heat panel (#714) and the 3D tools use it. Width 280 default, resizable (panels thread's helper, #712), remembered per workspace.
-3. **Toolbar**: one row, 32 pt, left to right: primary actions for the workspace (at most 4, first one labelled), a spacer, view toggles (segmented), then a "More" menu button. Everything else is under More or in the command field.
+3. **Toolbar**: one row, left to right: primary actions for the workspace, a spacer, view toggles (segmented), then a "More" menu where groups fold when narrow. A mode (Heat) may add a second strip below the row; the main row never grows. Everything else is in the command field. The Cabinet toolbar is specified by `cabinet-toolbar.md` and this page does not change it.
 4. **Dock** (schematic only): bottom centre, tools as icon buttons with one segmented control for wiring mode (Corners | Lines, with icons). Messages never go in the dock; they go in the status bar, or as a toast for results.
 5. **Panels** have a header (icon, title in `title`, trailing icon buttons for pin/close), then sections introduced by a `section_label`. No panel uses `Heading` or bare `label`.
 6. **Floating overlays** (legends, view cube, badges) live in the four corners of the canvas, inset 12 pt, and never over a toolbar. Legends are cards on `raised` with `radius::SURFACE`.
@@ -96,7 +96,7 @@ Every empty state has an icon (32 pt, `text.tertiary`), one sentence of what thi
 | **Top bar** | mark, 7 menus, workspace tabs, breadcrumb, search field, issue pill | window actions |
 | **Menus** | File, Edit, Draw, View (zoom, focus, full screen, marks, potentials, panels), **Simulate (new: motor start, heat, airflow, PLC program, fault scenarios, live potentials)**, Check, Reports, Help. Maximum 12 items per menu, section labels between groups, no permanently disabled items (hide or grey with a reason only when a project is open). Lessons commands leave the View menu and live under Help > Learn. | the rest through the command field |
 | **Schematic dock** | Select, Place, Wire, wiring mode (Corners / Lines as icons), Text | all other tools: command field or Draw menu |
-| **Cabinet toolbar** | Panel selector, **Place all** (primary, labelled), Plate / Table (segmented), Heat (toggle), **More** | More: Rules, Plate setup, Size enclosure, Route all, Rails and ducts, Cut list, Export. Heat controls (Map, Contours, Airflow, Badges, Simulate) move into the Heat panel in the right slot |
+| **Cabinet toolbar** | As approved in `cabinet-toolbar.md`: captioned groups, Place all, Route all, panel picker and Plate/Table never fold; Heat strip only while Heat is on | Folding into More below 1100 px as specified there. No change from this page |
 | **3D** | toolbar: Layers (popover), Move (mode toggle), Heat (toggle) | Layers popover holds Enclosure, Door, Wires, Shadows as checkboxes; "?" badges only when hovering a device or in a "Missing data" layer |
 | **Inspector** | title, description, relations, part | Properties section hidden when empty; advanced fields behind "All properties" |
 | **Reports** | report list, table, filter, Excel/CSV as one "Export" button | settings |
@@ -115,7 +115,7 @@ Each PR names where the user sees it, carries before/after screenshots at 1366x7
 | 4 | **Start screen and brand**: mark in the top bar, start screen with mark and wordmark, About card, recent list | M | design lead | launch with no project; click the mark |
 | 5 | `widgets::table` (sticky header, alignment, hairlines, ellipsis) + Reports migrated | M | design lead for the widget; Reports owner (R5 lane) for migration | Reports workspace |
 | 6 | Commissioning column on shared widgets (progress bar, grouped list, one header menu) | S | Commissioning owner | Outline > Commissioning |
-| 7 | Cabinet toolbar: primary row plus More, Heat controls into the Heat panel slot | M | cabinet owner with #714 | Cabinet workspace |
+| 7 | Implement `cabinet-toolbar.md` as approved (groups, 28 px controls, folding, Heat strip); no amendments from this plan | M | cabinet owner | Cabinet workspace |
 | 8 | View menu split into View and Simulate, no permanently disabled items | S | workspaces/workflow threads | menu bar |
 | 9 | 3D Layers popover, Move as a mode, "?" badges to hover | S | 3D view owner | 3D workspace |
 | 10 | Copper discipline pass: layer toggles neutral, cable cores neutral, duct anchors neutral, selected colours only | M | design lead with canvas thread | all canvases |
