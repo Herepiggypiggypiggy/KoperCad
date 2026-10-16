@@ -217,7 +217,7 @@ use pages::PageView;
 use crate::backend::{BackendError, PageRow, ProjectBackend, page_rows};
 use crate::canvas::{CanvasView, OpenPage};
 use crate::settings::Settings;
-use crate::{APP_MAKER, APP_NAME, PROJECT_EXTENSION};
+use crate::{APP_NAME, PROJECT_EXTENSION};
 use novo_theme::widgets::primary_button;
 pub(crate) use revisions::index_rule;
 use workbench::Workbench;
@@ -1825,13 +1825,16 @@ impl NovoApp {
             return;
         }
         let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
-            ui.set_width(320.0);
-            ui.heading(APP_NAME);
-            ui.label(format!("by {}", APP_MAKER));
-            ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
-            ui.label(format!("Model API v{}", novo_core::MODEL_VERSION));
-            ui.add_space(8.0);
-            ui.button("Close").clicked()
+            ui.set_width(360.0);
+            ui.vertical_centered(|ui| {
+                novo_theme::brand::lockup(ui, 56.0);
+                ui.add_space(novo_theme::space::L);
+                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                ui.weak(format!("Model API v{}", novo_core::MODEL_VERSION));
+                ui.add_space(novo_theme::space::L);
+                ui.button("Close").clicked()
+            })
+            .inner
         });
         if modal.inner || modal.should_close() {
             self.show_about = false;
