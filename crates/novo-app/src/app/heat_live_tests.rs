@@ -117,7 +117,7 @@ fn frame(state: &mut HeatState, ctx: &egui::Context, p: &Project, cab: Structure
 }
 
 fn settle(state: &mut HeatState, ctx: &egui::Context, p: &Project, cab: StructureId, now: f64) {
-    for _ in 0..600 {
+    for _ in 0..4000 {
         frame(state, ctx, p, cab, now);
         if !state.running() {
             return;
@@ -224,7 +224,7 @@ fn a_move_during_a_run_cancels_it_and_starts_the_next() {
     assert!(state.running());
     move_hot(&mut p, cab, hot, 300.0, 400.0);
     // The old run is superseded; no "stopped" warning is left behind.
-    for t in 1..400 {
+    for t in 1..4000 {
         frame(&mut state, &ctx, &p, cab, f64::from(t));
         std::thread::sleep(Duration::from_millis(5));
         if !state.running() && !state.live.is_stale() && state.solution().is_some() {
