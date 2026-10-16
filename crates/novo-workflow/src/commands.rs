@@ -624,14 +624,14 @@ pub const COMMANDS: &[CommandInfo] = &[
     cmd("edit.cut", "Cut", "Edit", &[], Needs::Selection),
     cmd(
         "edit.paste",
-        "Paste with next free tags",
+        "Paste",
         "Edit",
-        &["smart"],
+        &["smart", "next free tags"],
         Needs::Clipboard,
     ),
     cmd(
         "edit.paste_keep_tags",
-        "Paste with the original tags where free",
+        "Paste, keep the original tags",
         "Edit",
         &[],
         Needs::Clipboard,
