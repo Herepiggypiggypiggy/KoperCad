@@ -94,6 +94,59 @@ fn a_second_place_all_skips_placed_devices_and_stays_below_them() {
 }
 
 #[test]
+fn part_clearances_reach_the_clearance_check_and_a_device_can_override_them() {
+    use novo_core::{Command, Device};
+    let (mut p, cab) = project();
+    let part = p.all::<novo_core::Part>().next().unwrap().id;
+    let devices: Vec<_> = p
+        .all::<Device>()
+        .filter(|d| d.tag.location == ["CAB1"] && !d.parts.is_empty())
+        .map(|d| d.id)
+        .collect();
+    let (k1, q1) = (devices[0], devices[1]);
+    p.transact("place", |tx| {
+        for (device, x) in [(k1, 10.0), (q1, 75.0)] {
+            // 20 mm between the 45 mm wide footprints.
+            tx.execute(Command::PlaceDevice {
+                device,
+                structure: cab,
+                x,
+                y: 10.0,
+                rotated: false,
+                rail: None,
+            })?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    // Without data the default 10 mm gap is kept.
+    assert!(load(&p, cab).unwrap().report().too_close.is_empty());
+
+    // The part asks for 40 mm at its right; the left neighbour is its own.
+    p.transact("part data", |tx| {
+        tx.set_property(part, "clearance_right_mm", Some(Value::Int(40)))
+    })
+    .unwrap();
+    let too_close = load(&p, cab).unwrap().report().too_close;
+    assert_eq!(too_close.len(), 1);
+    assert_eq!(too_close[0].2, 20.0);
+
+    // A device can say it needs less than its part does (and a negative
+    // value is ignored, falling back to the part).
+    p.transact("override", |tx| {
+        tx.set_property(k1, "clearance_right_mm", Some(Value::Float(-5.0)))?;
+        tx.set_property(q1, "clearance_left_mm", Some(Value::Int(0)))
+    })
+    .unwrap();
+    assert_eq!(load(&p, cab).unwrap().report().too_close.len(), 1);
+    p.transact("override", |tx| {
+        tx.set_property(k1, "clearance_right_mm", Some(Value::Int(15)))
+    })
+    .unwrap();
+    assert!(load(&p, cab).unwrap().report().too_close.is_empty());
+}
+
+#[test]
 fn place_rotate_move_and_remove_a_device() {
     let (mut p, cab) = project();
     let cands = candidates(&p, cab);
@@ -124,4 +177,84 @@ fn place_rotate_move_and_remove_a_device() {
         unplace_device(tx, id)
     })
     .unwrap();
+}
+
+#[test]
+fn the_enclosure_is_stored_as_properties_in_one_undo_step() {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    use novo_layout::model::{enclosure_of, set_enclosure};
+    let (mut p, cab) = project();
+    assert!(enclosure_of(&p, cab).is_none());
+    let e = Enclosure {
+        width: 600.0,
+        height: 800.0,
+        depth: 250.0,
+        plate_setback: 20.0,
+        door: Some(Door {
+            hinge: Hinge::Right,
+            max_angle: 110.0,
+            inner_depth: 15.0,
+        }),
+        front_clearance: Some(500.0),
+        hinge_side_clearance: None,
+    };
+    let (_, set) = p
+        .transact("enclosure", |tx| set_enclosure(tx, cab, &e))
+        .unwrap();
+    assert_eq!(enclosure_of(&p, cab), Some(e));
+    assert_eq!(load(&p, cab).unwrap().enclosure, Some(e));
+    // One transaction: undoing it takes the whole enclosure away.
+    p.apply(&set.inverse()).unwrap();
+    assert!(enclosure_of(&p, cab).is_none());
+    p.transact("enclosure", |tx| set_enclosure(tx, cab, &e))
+        .unwrap();
+    // Removing the door and a clearance takes their properties away.
+    let e2 = Enclosure {
+        door: None,
+        front_clearance: None,
+        ..e
+    };
+    p.transact("enclosure", |tx| set_enclosure(tx, cab, &e2))
+        .unwrap();
+    assert_eq!(enclosure_of(&p, cab), Some(e2));
+}
+
+#[test]
+fn placed_devices_carry_the_depth_of_their_part() {
+    use novo_layout::enclosure::{Enclosure, check};
+    let (mut p, cab) = project();
+    p.transact("depth", |tx| {
+        let part = tx.add_part("ACME", "DEEP")?;
+        tx.set_property(part, "width_mm", Some(Value::Float(45.0)))?;
+        tx.set_property(part, "height_mm", Some(Value::Float(90.0)))?;
+        tx.set_property(part, "depth_mm", Some(Value::Float(120.0)))?;
+        let d = tx.add_device(DeviceTag::parse("=A1+CAB1-K9").unwrap(), "")?;
+        tx.assign_part(d, part)?;
+        tx.execute(novo_core::Command::PlaceDevice {
+            device: d,
+            structure: cab,
+            x: 20.0,
+            y: 20.0,
+            rotated: false,
+            rail: None,
+        })?;
+        Ok(())
+    })
+    .unwrap();
+    let layout = load(&p, cab).unwrap();
+    let id = layout.placements[0].id;
+    assert_eq!(layout.depths.get(&id), Some(&120.0));
+    // Shallow enclosure: the device is too deep. No interior set: no report.
+    assert!(layout.door_report().is_none());
+    let e = Enclosure {
+        width: 400.0,
+        height: 400.0,
+        depth: 100.0,
+        plate_setback: 0.0,
+        door: None,
+        front_clearance: None,
+        hinge_side_clearance: None,
+    };
+    let r = check(&e, &layout.plate, &[(id, layout.depths.get(&id).copied())]);
+    assert_eq!(r.too_deep, vec![(id, 20.0)]);
 }

@@ -10,7 +10,11 @@ novo-core.workspace = true
 # Only the model adapter, as novo-pdf: no egui widget.
 novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
 novo-layout.workspace = true
+novo-routing.workspace = true
 novo-parts.workspace = true
+# Scene builder only (`model`): headless users such as novo-cli and novo-py must not link wgpu.
+novo-view3d = { path = "../novo-view3d", default-features = false, features = ["model"] }
+glam.workspace = true
 thiserror.workspace = true
 # Polygon triangulation (port of Mapbox earcut), pure Rust.
 earcutr = "0.5"

@@ -1,0 +1,15 @@
+{
+  "supply": { "voltage": 400, "transformer": { "kva": 630, "uk_percent": 4, "pk_w": 6500 } },
+  "circuits": [
+    { "name": "Q1", "load_a": 120, "phases": 3,
+      "device": { "type": "mccb", "rated_a": 160, "icu_ka": 36,
+                  "ir_a": 160, "tr_s": 12, "isd_x": 8, "tsd_s": 0.2, "ii_x": 12 },
+      "cable": { "section_mm2": 70, "length_m": 40, "insulation": "XLPE", "method": "C", "pe_mm2": 35 } },
+    { "name": "M1", "from": "Q1", "load_a": 14, "power_factor": 0.85,
+      "device": { "type": "mcb", "curve": "C", "rated_a": 16, "icu_ka": 10 },
+      "cable": { "section_mm2": 2.5, "length_m": 20, "pe_mm2": 2.5 } },
+    { "name": "M2 (long)", "from": "Q1", "load_a": 10, "power_factor": 0.85,
+      "device": { "type": "mcb", "curve": "C", "rated_a": 16, "icu_ka": 10 },
+      "cable": { "section_mm2": 1.5, "length_m": 150, "pe_mm2": 1.5 } }
+  ]
+}

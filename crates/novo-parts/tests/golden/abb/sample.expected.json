@@ -1,0 +1,103 @@
+{
+  "notes": [],
+  "parts": [
+    {
+      "class": {
+        "etim": "EC000042"
+      },
+      "data": {
+        "breaking_capacity_ics_ka": 7.5,
+        "breaking_capacity_icu_ka": 10.0,
+        "number_of_poles": 1,
+        "poles": 1,
+        "power_loss_per_pole": "2.1 W",
+        "product_lifecycle": "Active",
+        "rated_current_a": 16.0,
+        "rated_current_in": "16 A",
+        "rated_service_short_circuit_breaking_capacity_ics": "7.5 kA",
+        "rated_ultimate_short_circuit_breaking_capacity_icu": "10 kA",
+        "trip_curve": "C",
+        "tripping_characteristic": "C",
+        "width": "17.5 mm",
+        "width_mm": 17.5
+      },
+      "description": "Miniature circuit breaker, 1 pole, C characteristic, 16 A",
+      "function": "miniature_circuit_breaker",
+      "letter_codes": [
+        "F",
+        "Q"
+      ],
+      "lifecycle": "active",
+      "manufacturer": "ABB",
+      "order_number": "2CDS251001R0164",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from ABB; not redistributable",
+        "source": "import:bmecat"
+      },
+      "sources": {
+        "breaking_capacity_ics_ka": "maker_datasheet",
+        "breaking_capacity_icu_ka": "maker_datasheet",
+        "poles": "maker_datasheet",
+        "rated_current_a": "maker_datasheet",
+        "trip_curve": "maker_datasheet"
+      },
+      "type_number": "S201-C16"
+    },
+    {
+      "data": {
+        "breaking_capacity_icu_ka": 36.0,
+        "number_of_poles": 3,
+        "poles": 3,
+        "rated_current_a": 160.0,
+        "rated_current_in": "160 A",
+        "rated_ultimate_short_circuit_breaking_capacity_icu": "36 kA"
+      },
+      "description": "Moulded case circuit breaker XT2, 3 poles, 160 A",
+      "function": "circuit_breaker",
+      "letter_codes": [
+        "Q",
+        "F"
+      ],
+      "manufacturer": "ABB",
+      "order_number": "1SDA066721R1",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from ABB; not redistributable",
+        "source": "import:bmecat"
+      },
+      "sources": {
+        "breaking_capacity_icu_ka": "maker_datasheet",
+        "poles": "maker_datasheet",
+        "rated_current_a": "maker_datasheet"
+      },
+      "type_number": "XT2N 160"
+    }
+  ],
+  "report": {
+    "mapped": [
+      "2CDS251001R0164: number_of_poles -> poles = 1",
+      "2CDS251001R0164: product_lifecycle -> lifecycle Active",
+      "2CDS251001R0164: rated_current_in -> rated_current_a = 16",
+      "2CDS251001R0164: rated_service_short_circuit_breaking_capacity_ics -> breaking_capacity_ics_ka = 7.5",
+      "2CDS251001R0164: rated_ultimate_short_circuit_breaking_capacity_icu -> breaking_capacity_icu_ka = 10",
+      "2CDS251001R0164: tripping_characteristic -> trip_curve = C",
+      "2CDS251001R0164: width -> size width = 17.5 mm",
+      "1SDA066721R1: number_of_poles -> poles = 3",
+      "1SDA066721R1: rated_current_in -> rated_current_a = 160",
+      "1SDA066721R1: rated_ultimate_short_circuit_breaking_capacity_icu -> breaking_capacity_icu_ka = 36"
+    ],
+    "parts": 2,
+    "skipped": [
+      "2CDS251001R0164: power_loss_per_pole (power loss given per pole or conductor, not for the whole part)"
+    ],
+    "summary": [
+      "Read 10 value(s) into structured part data for 2 part(s), marked as from the maker's data.",
+      "Left as written: 1 power loss given per pole or conductor, not for the whole part."
+    ],
+    "unmapped": {},
+    "warnings": []
+  }
+}

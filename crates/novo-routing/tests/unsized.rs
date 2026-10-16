@@ -14,6 +14,7 @@ fn job(id: u64, y: f64) -> Job {
     let anchor = |x| Anchor {
         pos: Point::new(x, y),
         facing: Facing::Any,
+        z_mm: None,
     };
     Job {
         id,

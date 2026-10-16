@@ -40,6 +40,15 @@ pub struct Highlight {
     pub edge: Rgb,
 }
 
+/// Colours of what the widget draws over the image: label chips and the view
+/// cube (straight sRGB with alpha).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Overlay {
+    pub chip: [u8; 4],
+    pub chip_text: [u8; 4],
+    pub chip_border: [u8; 4],
+}
+
 /// Plain data, rebuilt when the app theme changes (no function pointers, so a
 /// theme can fill it from its own state).
 #[derive(Debug, Clone, Copy)]
@@ -53,6 +62,7 @@ pub struct Look {
     pub selection: Highlight,
     pub hover: Highlight,
     pub related: Highlight,
+    pub overlay: Overlay,
     /// Direction the light comes from (towards the light), world space.
     pub light: [f32; 3],
     /// Share of the shading that comes from the hemisphere term, 0 to 1.
@@ -60,6 +70,12 @@ pub struct Look {
     /// Darkening at the foot of things standing on the plate, 0 = off.
     pub contact_shade: f32,
 }
+
+/// Copies of the design tokens `ERROR`, `WARNING` and `TEXT_MUTED`; a test
+/// keeps them equal to `novo-theme` so a theme change cannot drift silently.
+pub const MARK_ERROR: Rgb = [0xE0, 0x76, 0x6C];
+pub const MARK_WARNING: Rgb = [0xD6, 0xA5, 0x5C];
+pub const MARK_MUTED: Rgb = [0x98, 0x96, 0x91];
 
 fn rgb3(c: crate::palette::Rgba) -> Rgb {
     [c[0], c[1], c[2]]
@@ -98,8 +114,8 @@ fn mark_style(mark: Mark) -> MarkStyle {
         tint_amount: amount,
         edge: Some(c),
     };
-    const ERROR: Rgb = [0xE0, 0x76, 0x6C];
-    const WARNING: Rgb = [0xD6, 0xA5, 0x5C];
+    const ERROR: Rgb = MARK_ERROR;
+    const WARNING: Rgb = MARK_WARNING;
     match mark {
         Mark::Collision => status(Glyph::Cross, ERROR, 0.40),
         Mark::TooClose => status(Glyph::Bang, WARNING, 0.30),
@@ -108,7 +124,7 @@ fn mark_style(mark: Mark) -> MarkStyle {
             glyph: Glyph::DashedEdge,
             tint: None,
             tint_amount: 0.0,
-            edge: Some([0x98, 0x96, 0x91]),
+            edge: Some(MARK_MUTED),
         },
         Mark::GeometryMismatch => MarkStyle {
             glyph: Glyph::Bang,
@@ -181,6 +197,11 @@ impl Look {
                 tint: rgb3(c.hover),
                 tint_amount: 0.15,
                 edge: rgb3(c.hover),
+            },
+            overlay: Overlay {
+                chip: c.label_chip,
+                chip_text: c.label_text,
+                chip_border: c.label_border,
             },
             // Towards the light: front left above, +Y up, +Z out of the plate.
             light: [az.sin() * el.cos(), el.sin(), az.cos() * el.cos()],
@@ -265,5 +286,18 @@ mod tests {
         let look = Look::dark();
         assert!(look.surface(ItemKind::Enclosure).alpha < 0.2);
         assert!(look.surface(ItemKind::Door).alpha < look.surface(ItemKind::Enclosure).alpha);
+    }
+
+    #[test]
+    fn literals_equal_the_design_tokens() {
+        use novo_theme::tokens as t;
+        let rgb = |c: egui::Color32| [c.r(), c.g(), c.b()];
+        assert_eq!(MARK_ERROR, rgb(t::ERROR));
+        assert_eq!(MARK_WARNING, rgb(t::WARNING));
+        assert_eq!(MARK_MUTED, rgb(t::TEXT_MUTED));
+        let look = Look::dark();
+        assert_eq!(look.selection.edge, rgb(t::ACCENT));
+        assert_eq!(look.hover.edge, rgb(t::INFO));
+        assert_eq!(look.background[0], rgb(t::BG_0));
     }
 }

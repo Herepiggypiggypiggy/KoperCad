@@ -1867,8 +1867,11 @@ dependencies = [
  "novo-commissioning",
  "novo-core",
  "novo-editor",
+ "novo-heatview",
  "novo-interop",
  "novo-layout",
+ "novo-learn",
+ "novo-numbering",
  "novo-parts",
  "novo-pdf",
  "novo-plc",
@@ -1923,9 +1926,12 @@ dependencies = [
  "novo-core",
  "novo-parts",
  "novo-plc",
+ "novo-routing",
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -1935,10 +1941,14 @@ dependencies = [
  "calamine",
  "clap",
  "novo-checks",
+ "novo-commissioning",
  "novo-core",
  "novo-editor",
  "novo-interop",
+ "novo-layout",
+ "novo-parts",
  "novo-pdf",
+ "novo-plc",
  "novo-py",
  "novo-reports",
  "novo-revisions",
@@ -1983,17 +1993,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-heatview"
+version = "0.1.0"
+
+[[package]]
 name = "novo-interop"
 version = "0.1.0"
 dependencies = [
  "calamine",
  "dirs",
  "earcutr",
+ "glam",
  "novo-canvas",
  "novo-core",
  "novo-layout",
  "novo-parts",
+ "novo-routing",
  "novo-tests",
+ "novo-view3d",
  "rust_xlsxwriter",
  "tempfile",
  "thiserror 2.0.21",
@@ -2004,6 +2021,27 @@ name = "novo-layout"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+]
+
+[[package]]
+name = "novo-learn"
+version = "0.1.0"
+dependencies = [
+ "novo-core",
+ "novo-tests",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "toml",
+]
+
+[[package]]
+name = "novo-numbering"
+version = "0.1.0"
+dependencies = [
+ "novo-cables",
+ "novo-core",
+ "novo-reports",
 ]
 
 [[package]]
@@ -2044,9 +2082,12 @@ dependencies = [
 name = "novo-plc"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "novo-core",
  "novo-editor",
  "novo-symbols",
+ "quick-xml",
+ "rust_xlsxwriter",
  "thiserror 2.0.21",
 ]
 
@@ -2074,6 +2115,7 @@ dependencies = [
  "calamine",
  "novo-cables",
  "novo-core",
+ "novo-layout",
  "novo-plc",
  "novo-routing",
  "novo-terminals",
@@ -2087,6 +2129,7 @@ name = "novo-revisions"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-pdf",
  "novo-reports",
  "novo-storage",
  "novo-tests",
@@ -2110,6 +2153,8 @@ version = "0.1.0"
 dependencies = [
  "novo-core",
  "novo-symbols",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2174,13 +2219,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "novo-thermal"
+version = "0.1.0"
+dependencies = [
+ "novo-layout",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "novo-view3d"
 version = "0.1.0"
 dependencies = [
  "bytemuck",
+ "eframe",
+ "egui",
+ "egui-wgpu",
+ "flate2",
  "glam",
+ "naga",
  "novo-core",
  "novo-layout",
+ "novo-theme",
+ "pollster 1.0.1",
+ "wgpu",
 ]
 
 [[package]]
@@ -2188,8 +2249,12 @@ name = "novo-workflow"
 version = "0.1.0"
 dependencies = [
  "novo-core",
+ "novo-numbering",
  "novo-symbols",
  "novo-tests",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
 ]
 
 [[package]]
