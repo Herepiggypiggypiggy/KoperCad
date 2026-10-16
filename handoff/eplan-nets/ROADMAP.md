@@ -13,3 +13,4 @@ Next
 
 Open
 - Real `.epj` sample to confirm lines ending inside a pin, non-orthogonal lines and the node leg table.
+- Private sample at /mnt/project-files/interop/private/ (README there): real data validation of node legs and interruption pairing waits for the PXF reader's pxf::conn; opt-in tests via KOPERCAD_PRIVATE_SAMPLES only, no sample content in the repo.
