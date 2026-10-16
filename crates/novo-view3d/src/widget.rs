@@ -487,6 +487,13 @@ impl View3d {
         adjusted.clone()
     }
 
+    /// Whether the camera has been put somewhere on purpose (fitted when the
+    /// view was first shown, or moved by a fit or a saved view) rather than
+    /// still being the default.
+    pub fn is_fitted(&self) -> bool {
+        !self.needs_fit
+    }
+
     /// Frames the whole scene on the next frame.
     pub fn request_fit(&mut self) {
         self.needs_fit = true;
@@ -524,6 +531,8 @@ impl View3d {
     }
 
     fn animate_to(&mut self, to: Camera, now: f64, reduced: bool) {
+        // Moving the camera on purpose replaces the first-show fit.
+        self.needs_fit = false;
         self.inertia.stop();
         let mut tr = Transition::new(self.camera, to, reduced);
         if tr.done() {

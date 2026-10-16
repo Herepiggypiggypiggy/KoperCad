@@ -880,16 +880,9 @@ impl NovoApp {
                 }
             }
             "view.3d_save_view" => {
+                // Saved in the view's next frame, once the camera is fitted.
                 self.switch_workspace(Workspace::View3d);
-                let camera = self.view3d.view.camera;
-                if super::view3d_views::save(&mut self.settings.camera_views, &camera) {
-                    self.message(Level::Info, "View saved: Views menu in the 3D toolbar");
-                } else {
-                    self.message(
-                        Level::Info,
-                        "The Views menu holds twelve views: forget one first",
-                    );
-                }
+                self.view3d.save_view = true;
             }
             "view.3d_stats" => {
                 self.switch_workspace(Workspace::View3d);

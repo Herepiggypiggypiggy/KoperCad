@@ -44,6 +44,11 @@ pub(crate) struct View3dMode {
     /// A standard view or a fit asked for by a command, run on the next frame
     /// (when the scene is at hand).
     pub(super) pending: Option<Pending>,
+    /// `view.3d_save_view` asked for: saved after the view has been shown, so
+    /// the camera is the fitted one a person saw.
+    pub(super) save_view: bool,
+    /// A message for the next frame (the save's result).
+    pub(super) notice: Option<&'static str>,
     /// The Cabinet selection revision and the 3D selection as last synced, to
     /// tell which side changed.
     synced: (u64, BTreeSet<ItemId>),
@@ -85,6 +90,8 @@ impl Default for View3dMode {
             library: Arc::new(MeshLibrary::new()),
             built: None,
             pending: None,
+            save_view: false,
+            notice: None,
             synced: (0, BTreeSet::new()),
             menu: None,
             heat: Heat3d::default(),
@@ -130,6 +137,9 @@ impl NovoApp {
 
     /// The 3D view in the central area.
     pub(super) fn view3d_show(&mut self, ui: &mut egui::Ui) {
+        if let Some(text) = self.view3d.notice.take() {
+            self.message(super::Level::Info, text);
+        }
         let Some(document) = self.backend.document() else {
             return;
         };
@@ -358,6 +368,18 @@ impl NovoApp {
             options,
         );
         super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
+        // A save asked for from another workspace waits for the first shown
+        // (and fitted) camera.
+        if mode.save_view && mode.view.is_fitted() {
+            mode.save_view = false;
+            mode.notice = Some(
+                if view3d_views::save(&mut self.settings.camera_views, &mode.view.camera) {
+                    "View saved: Views menu in the 3D toolbar"
+                } else {
+                    "The Views menu holds twelve views: forget one first"
+                },
+            );
+        }
         mode.view.state.hover = out.hover;
         let state = &mut mode.view.state;
         if let Some(click) = &out.clicked {
