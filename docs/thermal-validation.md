@@ -32,7 +32,7 @@ Errors are signed, relative to the reference unless marked abs.
 
 ## What this says
 
-- Flow and natural convection: Nusselt within 0.7% of the benchmark at every Ra tested; peak velocities within 3%.
+- Flow and natural convection: Nusselt within 0.7% of the benchmark at every Ra tested; peak velocities within about 3% (worst +3.06%).
   Mesh convergence is clean second order (p = 1.95), so the error is discretisation, not a bug.
 - The solver is axis independent (turned problem, extra depth cells) and conserves heat.
 - Conduction in solids is exact to rounding for linear profiles and second order for sources.
@@ -56,7 +56,7 @@ Each becomes a `validation_*` test when its lane lands; the sign-off PR for a la
 ## Accuracy statement (text the app may quote today)
 
 > Laminar natural convection and conduction in closed boxes reproduce published benchmarks
-> (Ghia 1982, de Vahl Davis 1983) to within 1% in heat transfer and 3% in peak velocity on
+> (Ghia 1982, de Vahl Davis 1983) to within 1% in heat transfer and about 3% in peak velocity on
 > meshes of 50 to 60 cells per side. Mesh convergence is second order. This build has not yet
 > been validated for open vents, fans, turbulence or radiation; results for a cabinet are
 > estimates and carry the uncertainty of the input loss data and boundary conditions.
