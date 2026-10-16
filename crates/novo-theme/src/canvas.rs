@@ -26,6 +26,8 @@ pub struct CanvasPalette {
     pub wire: [u8; 4],
     /// Device tags, terminal numbers and page text.
     pub text: [u8; 4],
+    /// A cable: its sheath over the core wires and its tag.
+    pub cable: [u8; 4],
     /// Cross reference text, which reads as a link.
     pub cross_reference: [u8; 4],
     /// Unconnected connection points.
@@ -115,6 +117,7 @@ pub const CANVAS_DARK: CanvasPalette = CanvasPalette {
     symbol: [0xEC, 0xEA, 0xE5, 0xFF],
     wire: [0x6F, 0x9B, 0xDB, 0xFF],
     text: [0xC4, 0xC2, 0xBD, 0xFF],
+    cable: [0xA9, 0xA6, 0xC8, 0xFF],
     cross_reference: [0x8F, 0xA8, 0xC8, 0xFF],
     connection_point: [0x7F, 0xB0, 0x86, 0xFF],
     selection: [0xE0, 0xA0, 0x70, 0xFF],
@@ -145,6 +148,7 @@ pub const CANVAS_LIGHT: CanvasPalette = CanvasPalette {
     symbol: [0x1E, 0x1D, 0x1B, 0xFF],
     wire: [0x25, 0x63, 0xC4, 0xFF],
     text: [0x3A, 0x38, 0x35, 0xFF],
+    cable: [0x4F, 0x4A, 0x86, 0xFF],
     cross_reference: [0x28, 0x54, 0x88, 0xFF],
     connection_point: [0x27, 0x6B, 0x36, 0xFF],
     selection: [0xB3, 0x5A, 0x18, 0xFF],
@@ -221,6 +225,7 @@ mod tests {
                 p.symbol,
                 p.wire,
                 p.text,
+                p.cable,
                 p.cross_reference,
                 p.connection_point,
                 p.selection,

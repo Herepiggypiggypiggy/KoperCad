@@ -191,6 +191,9 @@ pub struct ModelStyle {
     /// Accent (copper) colour of junction dots: true junctions only, where
     /// three or more conductors meet.
     pub joint_color: Color,
+    /// A cable: the sheath under its core wires and its tag. Not copper,
+    /// which belongs to junctions and the selection.
+    pub cable_color: Color,
     /// Colour of the small dot where a wire lands on a pin (the wire
     /// colour, not the junction accent).
     pub pin_joint_color: Color,
@@ -239,6 +242,7 @@ impl Default for ModelStyle {
             wire: Stroke::world(0.35, Color::rgb(30, 70, 200)),
             junction_radius: 0.7,
             joint_color: Color::rgb(176, 104, 56),
+            cable_color: Color::rgb(150, 150, 180),
             pin_joint_color: Color::rgb(30, 70, 200),
             pin_joint_radius: 0.6,
             wire_end_color: Color::rgb(176, 104, 56),
@@ -1711,7 +1715,7 @@ impl PageScene {
             .get(&id)
             .map_or(self.style.wire, |l| Stroke::screen(l.width, l.color));
         // A wire that is a core of a cable lies in a wide sheath in the
-        // accent colour, with the cable's tag along it, so the cable shows
+        // cable colour, with the cable's tag along it, so the cable shows
         // on the drawing and not only in the Cables drawer.
         let cable = project.cable_of_wire(id).and_then(|c| project.cable(c));
         match cable {
@@ -1720,9 +1724,11 @@ impl PageScene {
         };
         let mut item = Item::new(self.layers.wires);
         if cable.is_some() {
+            // A translucent band a little wider than the wire: the cable
+            // reads as a group without outweighing the wires in it.
             let sheath = Stroke::world(
-                (self.style.wire.width * 5.0).max(1.2),
-                self.style.joint_color,
+                (self.style.wire.width * 3.0).max(0.9),
+                self.style.cable_color.with_alpha(0x66),
             );
             item = item.with(Primitive::stroked(
                 Shape::polyline(pts.clone(), false),
@@ -1839,7 +1845,7 @@ impl PageScene {
                 )
                 .anchored(Anchor::TopCenter)
             };
-            item.labels.push(label.colored(self.style.joint_color));
+            item.labels.push(label.colored(self.style.cable_color));
         }
         self.put(id.into(), item);
     }

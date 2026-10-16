@@ -104,6 +104,7 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
         // Where wires meet and end (DESIGN.md §4): the junction dot is
         // copper, a wire landing on a pin uses the wire's own colour.
         joint_color: color(p.junction),
+        cable_color: color(p.cable),
         pin_joint_color: color(p.wire),
         wire_end_color: color(p.wire_end),
         unconnected_color: color(p.unconnected_flag),
