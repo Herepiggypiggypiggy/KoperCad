@@ -481,7 +481,9 @@ fn pill_parts(p: &Palette, errors: usize, warnings: usize) -> Vec<(String, egui:
 /// density.
 pub fn progress_bar(ui: &mut Ui, caption: &str, detail: &str, done: f32, failed: f32) -> Response {
     let p = Palette::of(ui);
-    let small = egui::TextStyle::Small.resolve(ui.style());
+    let mut small = egui::TextStyle::Small.resolve(ui.style());
+    // Never below 12 pt, so the caption and counts read at every density.
+    small.size = small.size.max(12.0);
     let width = ui.available_width();
     ui.horizontal(|ui| {
         ui.set_width(width);

@@ -193,7 +193,8 @@ fn pass_all_open(ui: &mut egui::Ui, mode: &mut CommissioningMode, target: Target
     ui.add_space(space::M);
     ui.horizontal(|ui| {
         if mode.armed.is_some() {
-            if widgets::primary_button(ui, &format!("Pass {} open · Pass them", open.len()))
+            if ui
+                .button(format!("Pass {} open · Pass them", open.len()))
                 .clicked()
             {
                 for check in open {
@@ -867,12 +868,19 @@ fn punch_tab(
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.label(
                             egui::RichText::new(format!("{:?}", item.state))
-                                .small()
+                                .size(12.0)
                                 .color(p.text_secondary),
                         );
                         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                             let label = info.map_or(String::new(), |i| format!(" · {}", i.label));
-                            ui.add(egui::Label::new(format!("{}{label}", item.title)).truncate())
+                            ui.add(
+                                egui::Label::new(format!(
+                                    "{} · {}{label}",
+                                    severity_label(item.severity),
+                                    item.title
+                                ))
+                                .truncate(),
+                            )
                         });
                     });
                 })
