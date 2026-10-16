@@ -295,6 +295,25 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.import_eplan",
+            "Import parts from an EPLAN export",
+            "Project",
+            &[
+                "eplan",
+                "parts",
+                "artikel",
+                "xml",
+                "csv",
+                "catalog",
+                "migrate",
+                "other tool",
+            ],
+            Needs::Nothing,
+        ),
+        &["import eplan parts"],
+    ),
+    verb(
+        cmd(
             "parts.import_step",
             "Import 3D model (STEP)",
             "Project",
@@ -540,6 +559,20 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Page,
         ),
         &["add card"],
+    ),
+    cmd(
+        "plc.overview",
+        "PLC overview (cards, channels, addresses)",
+        "Draw",
+        &[
+            "plc",
+            "cards",
+            "channels",
+            "addresses",
+            "i/o",
+            "address plan",
+        ],
+        Needs::Project,
     ),
     verb(
         cmd(

@@ -220,6 +220,11 @@ pub const DUTCH: &[Aliases] = &[
         &["plc kaart", "plc module"],
     ),
     nl(
+        "plc.overview",
+        &["plc overzicht"],
+        &["plc kaarten", "adressen", "kanalen", "adresoverzicht"],
+    ),
+    nl(
         "plc.to_plc",
         &["naar plc"],
         &["signaal naar plc", "ingang uitgang"],
@@ -449,6 +454,11 @@ pub const DUTCH: &[Aliases] = &[
         "file.import_aml",
         &["importeer aml"],
         &["automationml", "installatie", "overnemen", "migreren"],
+    ),
+    nl(
+        "parts.import_eplan",
+        &["importeer eplan onderdelen"],
+        &["eplan artikelen", "eplan onderdelen", "artikelexport"],
     ),
     nl(
         "file.import_eplan",

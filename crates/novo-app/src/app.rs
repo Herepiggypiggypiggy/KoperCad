@@ -28,7 +28,9 @@ mod dock;
 mod drawers;
 mod duplicate;
 mod dxf;
+mod eplan_export;
 mod eplan_import;
+mod eplan_parts;
 mod example;
 mod faults;
 mod heat;
@@ -78,6 +80,7 @@ mod parts_quality;
 mod pdf;
 mod plate_export;
 mod plc;
+mod plc_card;
 mod plc_link;
 mod plc_run;
 mod potentials;
@@ -145,6 +148,8 @@ mod clipboard_tests;
 mod commissioning_tests;
 #[cfg(test)]
 mod compare_tests;
+#[cfg(test)]
+mod eplan_ui_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
@@ -1026,6 +1031,10 @@ impl NovoApp {
         self.learn_window(&ctx);
         self.motor_start_window(&ctx);
         self.renumber_dialog(&ctx);
+        self.plc_card_dialog(&ctx);
+        self.plc_overview_window(&ctx);
+        self.eplan_parts_dialog(&ctx);
+        self.eplan_export_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
