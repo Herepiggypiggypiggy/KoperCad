@@ -27,6 +27,7 @@ pub mod decimate;
 pub mod instances;
 pub mod math;
 pub mod mesh;
+pub mod nurbs;
 pub mod parse;
 pub mod pins;
 pub mod service;
