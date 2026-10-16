@@ -127,6 +127,7 @@ mod view3d_heat;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
+mod view3d_nudge;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
@@ -984,6 +985,7 @@ impl NovoApp {
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
+                    || *id == "view.3d_position"
                     || *id == "view.3d_stats"
                     || id.starts_with("heat.")
             });

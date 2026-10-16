@@ -1089,6 +1089,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_position",
+        "Show or hide the Position box in 3D",
+        "View",
+        &["position", "coordinates", "offset", "nudge", "x y"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_stats",
         "Show or hide the 3D frame statistics",
         "View",
