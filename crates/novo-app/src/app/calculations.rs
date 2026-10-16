@@ -17,7 +17,6 @@ use novo_checks::calc::starter::{Coordination, Scheme};
 use novo_checks::calc::tables::TableSet;
 use novo_checks::calc_view::{self, CalcSheet, CircuitEntry, StarterChoice, StarterEntry};
 use novo_core::AnyId;
-use novo_theme::tokens;
 use novo_xref::Place;
 
 use super::{Level, NovoApp};
@@ -47,10 +46,10 @@ pub(super) const PLANNING_NOTE: &str = "Ampacity tables and defaults are plannin
 
 fn status_label(status: Status) -> (&'static str, egui::Color32) {
     match status {
-        Status::Pass => ("Pass", tokens::SUCCESS),
-        Status::Fail => ("Fail", tokens::ERROR),
-        Status::Warning => ("Warning", tokens::WARNING),
-        Status::Unknown => ("Unknown", tokens::WARNING),
+        Status::Pass => ("Pass", crate::theme::ui_palette().success),
+        Status::Fail => ("Fail", crate::theme::ui_palette().error),
+        Status::Warning => ("Warning", crate::theme::ui_palette().warning),
+        Status::Unknown => ("Unknown", crate::theme::ui_palette().warning),
     }
 }
 
@@ -281,7 +280,10 @@ fn header(ui: &mut egui::Ui, sheet: &CalcSheet, to_inputs: &mut bool, copy: &mut
     ui.horizontal_wrapped(|ui| {
         match &sheet.supply {
             Some(s) => ui.label(format!("Supply: {s}")),
-            None => ui.colored_label(tokens::WARNING, "Supply not stated: nothing can be judged."),
+            None => ui.colored_label(
+                crate::theme::ui_palette().warning,
+                "Supply not stated: nothing can be judged.",
+            ),
         };
         if ui.button("Electrical inputs...").clicked() {
             *to_inputs = true;
@@ -291,11 +293,11 @@ fn header(ui: &mut egui::Ui, sheet: &CalcSheet, to_inputs: &mut bool, copy: &mut
         }
     });
     if sheet.planning_values {
-        ui.colored_label(tokens::WARNING, PLANNING_NOTE);
+        ui.colored_label(crate::theme::ui_palette().warning, PLANNING_NOTE);
     }
     ui.weak(&sheet.tables);
     for m in &sheet.missing {
-        ui.colored_label(tokens::WARNING, format!("Missing: {m}"));
+        ui.colored_label(crate::theme::ui_palette().warning, format!("Missing: {m}"));
     }
 }
 
@@ -326,7 +328,7 @@ fn circuits(
         let failing = entry.report.as_ref().is_some_and(|r| r.has_failure());
         let title = egui::RichText::new(circuit_summary(entry));
         let title = if failing {
-            title.color(tokens::ERROR)
+            title.color(crate::theme::ui_palette().error)
         } else {
             title
         };
@@ -379,7 +381,7 @@ fn circuit_body(ui: &mut egui::Ui, entry: &CircuitEntry, go: &mut Option<Vec<Any
         match (entry.smallest_section_mm2, entry.section_mm2) {
             (Some(Some(s)), Some(now)) => {
                 ui.colored_label(
-                    tokens::WARNING,
+                    crate::theme::ui_palette().warning,
                     format!(
                         "Smallest passing section: {} mm² (now {} mm²)",
                         amount(s),
@@ -389,7 +391,7 @@ fn circuit_body(ui: &mut egui::Ui, entry: &CircuitEntry, go: &mut Option<Vec<Any
             }
             (Some(None), _) => {
                 ui.colored_label(
-                    tokens::ERROR,
+                    crate::theme::ui_palette().error,
                     "No listed section passes: change the device, the length or the installation.",
                 );
             }
@@ -412,7 +414,7 @@ fn circuit_body(ui: &mut egui::Ui, entry: &CircuitEntry, go: &mut Option<Vec<Any
         }
     }
     for m in &entry.missing {
-        ui.colored_label(tokens::WARNING, format!("Missing: {m}"));
+        ui.colored_label(crate::theme::ui_palette().warning, format!("Missing: {m}"));
     }
 }
 
@@ -470,7 +472,7 @@ fn starter(ui: &mut egui::Ui, s: &StarterEntry) {
                         amount(p.pe_mm2)
                     ));
                     for u in &p.unresolved {
-                        ui.colored_label(tokens::WARNING, u);
+                        ui.colored_label(crate::theme::ui_palette().warning, u);
                     }
                     for a in &p.assumptions {
                         ui.weak(format!("- {a}"));
@@ -478,7 +480,10 @@ fn starter(ui: &mut egui::Ui, s: &StarterEntry) {
                 }
                 Some(Err(e)) => {
                     for r in &e.reasons {
-                        ui.colored_label(tokens::ERROR, format!("No proposal: {r}"));
+                        ui.colored_label(
+                            crate::theme::ui_palette().error,
+                            format!("No proposal: {r}"),
+                        );
                     }
                 }
                 None => {}
@@ -487,7 +492,7 @@ fn starter(ui: &mut egui::Ui, s: &StarterEntry) {
                 ui.weak(format!("- {n}"));
             }
             for m in &s.missing {
-                ui.colored_label(tokens::WARNING, format!("Missing: {m}"));
+                ui.colored_label(crate::theme::ui_palette().warning, format!("Missing: {m}"));
             }
         });
 }
@@ -516,9 +521,12 @@ fn panel(ui: &mut egui::Ui, sheet: &CalcSheet) {
     }
     if let Some(a) = p.available_ka {
         let (text, color) = match p.fit {
-            Some(true) => ("covers", tokens::SUCCESS),
-            Some(false) => ("is BELOW", tokens::ERROR),
-            None => ("cannot be compared with", tokens::WARNING),
+            Some(true) => ("covers", crate::theme::ui_palette().success),
+            Some(false) => ("is BELOW", crate::theme::ui_palette().error),
+            None => (
+                "cannot be compared with",
+                crate::theme::ui_palette().warning,
+            ),
         };
         ui.colored_label(
             color,
@@ -529,7 +537,7 @@ fn panel(ui: &mut egui::Ui, sheet: &CalcSheet) {
         );
     } else {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             "Available short-circuit current not stated: enter it in Electrical inputs.",
         );
     }
@@ -544,7 +552,7 @@ fn panel(ui: &mut egui::Ui, sheet: &CalcSheet) {
     }
     if !p.result.unknown.is_empty() {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             format!("No rating known: {}", p.result.unknown.join(", ")),
         );
     }

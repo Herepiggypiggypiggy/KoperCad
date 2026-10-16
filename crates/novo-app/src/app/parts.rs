@@ -858,7 +858,7 @@ fn new_part_ui(ui: &mut egui::Ui, win: &mut PartsWindow) {
             }
         });
         if let Some(e) = &form.error {
-            ui.colored_label(novo_theme::tokens::WARNING, e);
+            ui.colored_label(crate::theme::ui_palette().warning, e);
         }
         ui.horizontal(|ui| {
             create = ui.button("Save to my catalog").clicked();
@@ -1014,7 +1014,7 @@ fn parts_ui(
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     match action {
                         RowAction::InLibrary => {
-                            ui.colored_label(novo_theme::tokens::SUCCESS, "In library");
+                            ui.colored_label(crate::theme::ui_palette().success, "In library");
                         }
                         RowAction::Import | RowAction::OpenPage(_) => {
                             let hint = match action {
@@ -1121,7 +1121,7 @@ on the maker's site and drop the file here.",
         }
         Phase::Done(summary) => {
             ui.colored_label(
-                novo_theme::tokens::SUCCESS,
+                crate::theme::ui_palette().success,
                 format!("Imported {} ({})", import.label, summary.file),
             );
             for line in &summary.lines {

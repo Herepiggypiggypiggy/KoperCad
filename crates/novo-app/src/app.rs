@@ -1426,16 +1426,16 @@ impl NovoApp {
                 };
                 let font = egui::FontId::proportional(13.0);
                 let color = if current {
-                    novo_theme::tokens::TEXT
+                    crate::theme::ui_palette().text_primary
                 } else {
-                    novo_theme::tokens::TEXT_MUTED
+                    crate::theme::ui_palette().text_secondary
                 };
                 let galley = ui.painter().layout_no_wrap(text, font, color);
                 let size = egui::vec2((galley.size().x + 10.0).max(26.0), 26.0);
                 let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
                 let response = response.on_hover_text(mode.label());
                 let color = if response.hovered() {
-                    novo_theme::tokens::TEXT
+                    crate::theme::ui_palette().text_primary
                 } else {
                     color
                 };
@@ -1452,7 +1452,7 @@ impl NovoApp {
                             egui::pos2(rect.right() - 4.0, rect.bottom()),
                         ),
                         1,
-                        novo_theme::tokens::ACCENT,
+                        crate::theme::ui_palette().accent,
                     );
                 }
                 if response.clicked() {

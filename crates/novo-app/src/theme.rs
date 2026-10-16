@@ -229,7 +229,20 @@ mod role_tests {
                     stack.push(p);
                 } else if p.extension().is_some_and(|x| x == "rs") {
                     let s = std::fs::read_to_string(&p).unwrap();
-                    let code = s.split("#[cfg(test)]").next().unwrap_or("");
+                    // Whole file, except an inline `#[cfg(test)] mod x { .. }`
+                    // (an early `#[cfg(test)]` on one item must not hide the rest).
+                    let mut code = s.as_str();
+                    let lines: Vec<&str> = s.lines().collect();
+                    for w in 0..lines.len().saturating_sub(1) {
+                        if lines[w].trim() == "#[cfg(test)]"
+                            && lines[w + 1].trim_start().starts_with("mod ")
+                            && lines[w + 1].trim_end().ends_with('{')
+                        {
+                            let at: usize = lines[..w].iter().map(|l| l.len() + 1).sum();
+                            code = &s[..at.min(s.len())];
+                            break;
+                        }
+                    }
                     for (i, l) in code.lines().enumerate() {
                         let t = l.trim_start();
                         if t.starts_with("//") {
