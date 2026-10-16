@@ -50,14 +50,13 @@ pub(crate) fn tab(
     state: &mut QualityTab,
     catalog: &Catalog,
 ) -> Option<Option<PartKey>> {
-    ui.horizontal(|ui| {
-        ui.selectable_value(&mut state.side, Side::Parts, "Parts");
-        ui.selectable_value(&mut state.side, Side::Quality, "Quality");
-    });
+    let mut at = usize::from(state.side == Side::Quality);
+    novo_theme::widgets::tabs(ui, &mut at, &["Parts", "Quality"]);
+    state.side = if at == 1 { Side::Quality } else { Side::Parts };
+    ui.add_space(4.0);
     if state.side != Side::Quality {
         return None;
     }
-    ui.separator();
     let jump = quality_ui(ui, state, catalog);
     if jump.is_some() {
         state.side = Side::Parts;
@@ -67,17 +66,17 @@ pub(crate) fn tab(
 
 fn grade_color(grade: Grade) -> egui::Color32 {
     match grade {
-        Grade::Good => novo_theme::tokens::SUCCESS,
-        Grade::Fair => novo_theme::tokens::WARNING,
-        Grade::Poor => novo_theme::tokens::ERROR,
+        Grade::Good => crate::theme::ui_palette().success,
+        Grade::Fair => crate::theme::ui_palette().warning,
+        Grade::Poor => crate::theme::ui_palette().error,
     }
 }
 
 fn fill_color(fill: Fill) -> egui::Color32 {
     match fill {
-        Fill::Complete => novo_theme::tokens::SUCCESS,
-        Fill::Partial => novo_theme::tokens::WARNING,
-        Fill::Missing => novo_theme::tokens::ERROR,
+        Fill::Complete => crate::theme::ui_palette().success,
+        Fill::Partial => crate::theme::ui_palette().warning,
+        Fill::Missing => crate::theme::ui_palette().error,
     }
 }
 

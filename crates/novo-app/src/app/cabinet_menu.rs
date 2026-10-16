@@ -52,6 +52,7 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
         return match target {
             Target::Device(_) => vec![
                 Some(("Rotate   R", "edit.rotate")),
+                Some(("Duplicate   Ctrl+D", "view.3d_duplicate")),
                 Some(("Take off the plate   Del", "edit.delete")),
                 None,
                 Some(("Show in Cabinet", "view.cabinet")),
@@ -62,6 +63,8 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
                 Some(("Rails and ducts…   Ctrl+Shift+R", "cabinet.rails")),
             ],
             Target::Plate => vec![
+                Some(("Place a device…", "view.3d_place")),
+                None,
                 Some(("Zoom to fit   F", "view.fit")),
                 Some(("Isometric", "view.iso")),
                 Some(("Front", "view.front")),
@@ -71,6 +74,9 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
                 Some(("Enclosure on or off", "view.3d_shell")),
                 Some(("Wires on or off", "view.3d_wires")),
                 Some(("Shadows on or off", "view.3d_shadows")),
+                Some(("Ambient occlusion on or off", "view.3d_ssao")),
+                Some(("Dimensions on or off", "view.3d_dimensions")),
+                Some(("Restore 3D quality", "view.3d_quality")),
                 None,
                 Some(("Simulate heat", "heat.simulate")),
                 Some(("Show in Cabinet", "view.cabinet")),

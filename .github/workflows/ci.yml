@@ -57,6 +57,10 @@ jobs:
           shared-key: linux-lint
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
+      # The workspace build unifies features, so a headless build of novo-editor
+      # (novo-cli, novo-py) only breaks when checked on its own.
+      - run: cargo check -p novo-editor --all-targets --no-default-features
+      - run: cargo check -p novo-editor --all-targets --no-default-features --features art
 
   # Which pull request files matter to the slow novo-cfd physics runs (about
   # 10 minutes per shard, three shards). On a pull request they run only when

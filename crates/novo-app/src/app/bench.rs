@@ -29,7 +29,6 @@ use novo_theme::table::{
     ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths, table_header,
     table_row,
 };
-use novo_theme::{Palette, tokens};
 
 use super::pdf::write_replacing;
 use super::sheets::{hash, ours_or_free};
@@ -134,7 +133,7 @@ impl NovoApp {
             Ok(()) => {
                 self.wb.sheet_exports.insert(path.to_owned(), hash(bytes));
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {what}: {}", path.display()));
+                self.message_file(format!("{verb} {what}: {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
@@ -452,7 +451,7 @@ fn cut_tab(
 ) {
     let Some(cache) = state.cache.as_ref().filter(|_| state.standard.is_valid()) else {
         ui.colored_label(
-            Palette::of(ui).warning,
+            crate::theme::ui_palette().warning,
             "The ferrule standard is not valid: fix it on the Ferrules tab",
         );
         return;
@@ -475,14 +474,14 @@ fn cut_tab(
     ));
     if estimates > 0 {
         ui.colored_label(
-            Palette::of(ui).warning,
+            crate::theme::ui_palette().warning,
             format!(
                 "{estimates} lengths are estimates and print with a ~: the wire is not routed through a duct, or a device has no pin position. Measure those on the plate."
             ),
         );
     } else {
         ui.colored_label(
-            Palette::of(ui).success,
+            crate::theme::ui_palette().success,
             "Every length comes from a routed wire",
         );
     }
@@ -666,7 +665,7 @@ fn ferrule_tab(
     let valid = state.standard.is_valid();
     if !valid {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             "Each size must be listed once, above zero, with a contact length above zero",
         );
     }
@@ -795,7 +794,7 @@ fn label_tab(
     let valid = state.labels.is_valid();
     if !valid {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             "The label sizes do not fit the sheet: check the sheet fields",
         );
     }
@@ -818,7 +817,7 @@ fn label_tab(
         }
         if run.too_small > 0 {
             ui.colored_label(
-                tokens::WARNING,
+                crate::theme::ui_palette().warning,
                 format!(
                     "{} labels have text under 2 mm: choose bigger labels or wider tape",
                     run.too_small

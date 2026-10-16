@@ -94,6 +94,7 @@ mod order;
 mod page;
 mod plugs;
 mod report;
+pub mod safety;
 mod schedule;
 mod sheets;
 mod strip_diagram;

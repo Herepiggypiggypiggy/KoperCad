@@ -406,3 +406,24 @@ fn the_entry_names_where_the_user_finds_the_designer() {
         ("Reports", "Designer", "report.designer")
     );
 }
+
+#[test]
+fn narrow_columns_get_a_number_as_sample_text_and_wide_ones_the_key() {
+    let template = builtin::report_a4("Parts list", "bom");
+    let data = preview_data(&template, 3);
+    let section = &data[0].sections[0];
+    let total: f64 = section.columns.iter().map(|c| c.width).sum();
+    let mut narrow = 0;
+    for (i, c) in section.columns.iter().enumerate() {
+        let Cell::Text(text) = &section.rows[0].cells[i] else {
+            panic!("sample cells are text");
+        };
+        if c.width / total < 0.12 {
+            narrow += 1;
+            assert_eq!(text, "1", "{} is narrow", c.key);
+        } else {
+            assert_eq!(text, &format!("{}-1", c.key));
+        }
+    }
+    assert!(narrow > 0, "the parts list has a narrow position column");
+}
