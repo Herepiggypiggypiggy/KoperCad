@@ -296,10 +296,10 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "parts.import_eplan",
-            "Import parts from an EPLAN export",
+            "Import parts from a CAD parts export",
             "Project",
             &[
-                "eplan",
+                "eplan parts",
                 "parts",
                 "artikel",
                 "xml",
@@ -310,7 +310,7 @@ pub const COMMANDS: &[CommandInfo] = &[
             ],
             Needs::Nothing,
         ),
-        &["import eplan parts"],
+        &["import cad parts"],
     ),
     verb(
         cmd(
