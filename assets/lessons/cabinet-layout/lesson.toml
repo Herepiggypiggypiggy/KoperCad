@@ -84,6 +84,7 @@ Daarna staat **-F1** als kader van 54 x 90 mm op de plaat, is het uit de lijst v
 """
 point = { ui = "cabinet.unplaced" }
 expect = { signal = "cabinet_dropped" }
+solve = [ { cabinet_place = { device = "-F1", x = 20, y = 20 } } ]
 
 [[step]]
 id = "rotate"
@@ -103,6 +104,7 @@ Nog een keer drukken draait terug. Zonder selectie gebeurt er niets.
 """
 point = { ui = "cabinet.canvas" }
 expect = { signal = "cabinet_rotated" }
+solve = [ { cabinet_rotate = "-F1" } ]
 
 [[step]]
 id = "overlap"
@@ -120,6 +122,7 @@ KoperCAD laat het toe en kleurt beide kaders rood: twee componenten kunnen niet 
 """
 point = { ui = "cabinet.canvas" }
 expect = { signal = "cabinet_dropped" }
+solve = [ { cabinet_place = { device = "-K1", x = 30, y = 30 } } ]
 
 [[step]]
 id = "read-problem"
@@ -169,6 +172,7 @@ Het component verlaat de plaat en staat weer in de lijst Unplaced. Het wordt nie
 """
 point = { ui = "cabinet.unplaced" }
 expect = { signal = "cabinet_removed" }
+solve = [ { cabinet_remove = "-F1" } ]
 
 [[step]]
 id = "place-all"
@@ -190,6 +194,7 @@ Vermogens- en signaalcomponenten worden door een tussenruimte gescheiden. Acht c
 """
 point = { ui = "cabinet.place_all" }
 expect = { clicked = "cabinet.place_all" }
+solve = [ { cabinet = "place_all" } ]
 
 [[step]]
 id = "accept"
@@ -209,6 +214,7 @@ Het hele plan is één stap om ongedaan te maken.
 """
 point = { ui = "cabinet.accept" }
 expect = { signal = "cabinet_plan_accepted" }
+solve = [ { cabinet = "accept" } ]
 
 [[step]]
 id = "table"

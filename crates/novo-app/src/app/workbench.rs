@@ -557,8 +557,8 @@ impl NovoApp {
         // Delete with the pointer on the highlighted terminal proposal
         // declines it (DESIGN.md §5); otherwise it is the editor's.
         // The Cabinet has no editor to read these keys itself, so the shell
-        // takes them and hands them to the plate.
-        if self.workspace() == Workspace::Cabinet
+        // takes them and hands them to the plate (the 3D view edits the same plate).
+        if matches!(self.workspace(), Workspace::Cabinet | Workspace::View3d)
             && matches!(command, "edit.rotate" | "edit.delete" | "edit.mirror")
         {
             return true;

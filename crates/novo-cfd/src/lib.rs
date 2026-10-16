@@ -20,6 +20,7 @@ pub mod sched;
 pub mod solids;
 pub mod solver;
 mod stub;
+pub mod transient;
 pub mod turb;
 
 pub use cabinet::CabinetSolver;
@@ -27,3 +28,6 @@ pub use result::*;
 pub use solids::SolidProps;
 pub use solver::{CfdError, Control, Solver};
 pub use stub::StubSolver;
+pub use transient::{
+    DeviceSeries, TransientFrame, TransientSolver, TransientSpec, TransientSummary,
+};
