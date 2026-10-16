@@ -398,8 +398,16 @@ impl NovoApp {
             .show(ctx, |ui| {
                 ui.set_width(180.0);
                 ui.vertical_centered(|ui| {
-                    ui.weak(format!("{} symbols have no {pack} version", hidden.len()))
-                        .on_hover_text(hidden.join(", "));
+                    ui.weak(format!(
+                        "{} {} no {pack} version",
+                        hidden.len(),
+                        if hidden.len() == 1 {
+                            "symbol has"
+                        } else {
+                            "symbols have"
+                        }
+                    ))
+                    .on_hover_text(hidden.join(", "));
                 });
             });
     }
