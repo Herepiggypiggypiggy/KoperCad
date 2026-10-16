@@ -191,8 +191,9 @@ De draadlijst en de stuklijst gebruiken ze.
 #      Owner: Parts / UI integration (inspector for cables).
 # GAP: needs check kind `field` on a cable (part set, length).
 point = { ui = "inspector.cable.part" }
-expect = { field = { cable = "-W2", name = "part", is_set = true } }
-solve = [ { cable_part = { name = "-W2", maker = "Lapp", order_number = "1119304", length_m = 12 } } ]  # GAP: new solve operation
+# GAP: pause until the engine has a cable `field` check (expect = { field = { cable = "-W2", name = "part", is_set = true } })
+#      and a `cable_part` solve (name, maker, order_number, length_m); the learning thread agreed to add both.
+pause = true
 
 [[step]]
 id = "shield"
@@ -214,8 +215,8 @@ Een scherm dat niet is aangesloten, wordt als probleem gemeld.
 #      Owner: Cables (WS-12) engine is done; the Cables drawer / inspector owner adds the control.
 # GAP: needs check kind `cable` with shield_connected = true (or `problem_free = "cable.core"`).
 point = { ui = "drawer.cables.cores" }
-expect = { cable = { name = "-W1", shield_connected = true } }
-solve = [ { cable_shield = { name = "-W1", connect = "pe" } } ]  # GAP: new solve operation
+# GAP: reading step until the engine has `cable = { name, shield_connected }` and a `cable_shield` solve.
+pause = true
 
 [[step]]
 id = "done"

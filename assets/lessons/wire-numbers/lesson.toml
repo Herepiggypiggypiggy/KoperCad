@@ -113,7 +113,7 @@ Kies de chip **+24 V**: alle draden op dat net volgen.
 # GAP: needs check kind `potential` (the potential name on a wire's net), see NOTES.md.
 point = { area = { page = "Pump station", x = 84, y = 38, w = 8, h = 12 } }
 expect = { potential = { wire = ["-X1:4", "-B1:+"], is = "+24 V" } }
-solve = [ { set_potential = { feed_at = [88, 40], name = "+24 V" } } ]  # GAP: new solve operation
+# GAP: solve `set_potential = { feed_at = [88, 40], name = "+24 V" }` is agreed with the learning thread, not in the engine yet.
 
 [[step]]
 id = "type-number"
@@ -138,8 +138,8 @@ Enter wijzigt het nummer, Esc annuleert.
 #      app has no property sheet.
 # GAP: needs check kind `field` on a wire (its number), see NOTES.md.
 point = { at = { wire = ["-X1:3", "-M1:W1"] } }
-expect = { field = { wire = ["-X1:3", "-M1:W1"], name = "number", equals = "3" } }
-solve = [ { wire_number = { wire = ["-X1:3", "-M1:W1"], number = "3" } } ]  # GAP: new solve operation
+# GAP: reading step until the engine has `field` on a wire and a `wire_number` solve.
+pause = true
 
 [[step]]
 id = "limits"

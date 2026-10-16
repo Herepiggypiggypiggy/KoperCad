@@ -194,7 +194,7 @@ Dubbelklik op het nummer **4** naast de klem, typ **11** en druk op Enter.
 """
 point = { area = { page = "Pump and valve feeder", x = 102, y = 100, w = 10, h = 8 } }
 expect = { terminal = { strip = "-X1", name = "11" } }
-solve = [ { rename = { terminal = "-X1:4", to = "11" } } ]
+# GAP: solve `rename = { terminal = "-X1:4", to = "11" }` is agreed with the learning thread, not in the engine yet.
 # verified: double click on a terminal name opens the rename box (crates/novo-editor/src/view.rs:
 #   966 `LabelKind::TerminalName`); the edit is `rename_label` (edit.rs:310), which refuses a
 #   name already on the strip. F2 does NOT rename a terminal (view.rs F2 handler looks for a
