@@ -1,7 +1,6 @@
 format = 1
 id = "commissioning"
 version = 1
-# Draft until the Commissioning tab (PR #471) is on main.
 status = "early"
 title = "Commission a panel with a tick list"
 summary = "Walk the commissioning checks, pass and fail them and keep a punch list."
@@ -15,54 +14,116 @@ needs = []
 next = []
 project = "project.json"
 page = "Main circuit"
+title_nl = "Neem een kast in bedrijf met een afvinklijst"
+summary_nl = "Loop de inbedrijfstellingscontroles af, keur ze goed of af en houd een restpuntenlijst bij."
 
 [[step]]
 id = "what"
 title = "What commissioning mode is"
-text = "At the panel you test what was drawn. This mode turns the drawing into a tick list, so the checks and their results live with the project."
+title_nl = "Wat de modus inbedrijfstelling is"
+text = "Commissioning means testing at the panel that what was drawn really works. This mode turns the drawing into a tick list, so the checks and their results are saved with the project."
+text_nl = "Inbedrijfstellen betekent in de kast testen of wat getekend is echt werkt. Deze modus maakt van de tekening een afvinklijst, zodat de controles en hun resultaten met het project worden bewaard."
 
 [[step]]
 id = "open"
 title = "Open Commissioning"
-text = "Run **commissioning** from the command field, or pick the Commissioning tab."
-point = { ui = "workspace.commissioning" }
+title_nl = "Open Inbedrijfstelling"
+text = "The commissioning list replaces the outline on the left. It has two tabs: **Checks** and **Punch list**."
+text_nl = "De lijst voor inbedrijfstelling vervangt links de inhoud. Hij heeft twee tabbladen: **Checks** en **Punch list**."
+how = [
+  "Press {key:view.command_palette}, type **commissioning** and press Enter.",
+  "The outline changes to the commissioning list. The command works as a switch: run it again to close the list.",
+]
+how_nl = [
+  "Druk op {key:view.command_palette}, typ **commissioning** en druk op Enter.",
+  "De inhoud verandert in de lijst voor inbedrijfstelling. Het commando werkt als een schakelaar: nog een keer uitvoeren sluit de lijst.",
+]
+point = { ui = "palette.button" }
 expect = { command = "view.commissioning" }
 solve = [ { command = "view.commissioning" } ]
 
 [[step]]
 id = "next-open"
 title = "Go to the next open check"
-text = "Press **Next open**. It selects the first check nobody has done yet, and shows which device it belongs to."
-point = { ui = "commissioning.next_open" }
-expect = { clicked = "commissioning.next_open" }
+title_nl = "Ga naar de volgende open controle"
+text = "A check is open until somebody has decided it. **Next open** takes you straight to the first one on this page, so you never have to look for where you stopped."
+text_nl = "Een controle staat open tot iemand hem heeft beslist. **Next open** brengt je direct naar de eerste op deze pagina, zodat je nooit hoeft te zoeken waar je was gebleven."
+how = [
+  "On the **Checks** tab press **Next open**.",
+  "The first undecided device is selected on the drawing and its row is highlighted.",
+]
+how_nl = [
+  "Druk op het tabblad **Checks** op **Next open**.",
+  "Het eerste onbeslist apparaat wordt geselecteerd op de tekening en zijn rij wordt gemarkeerd.",
+]
 
 [[step]]
 id = "pass"
 title = "Pass one"
-text = "Press **Pass** when the check holds. The big buttons are made for a tablet or a gloved hand."
-point = { ui = "commissioning.pass" }
-expect = { clicked = "commissioning.pass" }
+title_nl = "Keur er een goed"
+text = "Press **Pass** when the check holds. The big buttons are made for a tablet or a gloved hand; **Large buttons** makes them bigger still."
+text_nl = "Druk op **Pass** als de controle klopt. De grote knoppen zijn gemaakt voor een tablet of een handschoen; **Large buttons** maakt ze nog groter."
+how = [
+  "With a device selected, optionally type a measured value (such as 2.5 Nm) or a note.",
+  "Press **Pass**. The row gets a tick and the progress bar moves.",
+]
+how_nl = [
+  "Typ bij een geselecteerd apparaat eventueel een gemeten waarde (zoals 2.5 Nm) of een notitie.",
+  "Druk op **Pass**. De rij krijgt een vinkje en de voortgangsbalk schuift op.",
+]
 
 [[step]]
 id = "fail"
 title = "Fail one"
-text = "Press **Fail** on the next check. A failed check offers to open a punch item with the device already filled in."
-point = { ui = "commissioning.fail" }
-expect = { clicked = "commissioning.fail" }
+title_nl = "Keur er een af"
+text = "Press **Fail** on the next check. It is marked failed with a cross. Failing a check does not open a punch item by itself; you add that by hand in the next step."
+text_nl = "Druk op **Fail** bij de volgende controle. Hij wordt afgekeurd met een kruisje. Afkeuren opent niet vanzelf een restpunt; dat voeg je in de volgende stap met de hand toe."
+how = [
+  "Press **Next open**, then **Fail**.",
+  "Press **Reset** if you pressed the wrong button; the check goes back to open.",
+]
+how_nl = [
+  "Druk op **Next open** en dan op **Fail**.",
+  "Druk op **Reset** als je op de verkeerde knop drukte; de controle staat dan weer open.",
+]
 
 [[step]]
 id = "punch"
-title = "Fill in the punch item"
-text = "Give it a severity and a short note. The punch list keeps everything that is not right yet."
-point = { ui = "commissioning.punch" }
+title = "Add a punch item"
+title_nl = "Voeg een restpunt toe"
+text = "The punch list keeps everything that is not right yet, linked to the device you had selected, so nothing is forgotten after you leave the panel."
+text_nl = "De restpuntenlijst bewaart alles wat nog niet goed is, gekoppeld aan het geselecteerde apparaat, zodat niets vergeten wordt als je de kast verlaat."
+how = [
+  "With the failed device still selected, open the **Punch list** tab.",
+  "Type a short title in the **New punch item** box, for example **Loose wire on pin 2**.",
+  "Pick **Minor**, **Major** or **Blocking** and press **Add**.",
+]
+how_nl = [
+  "Open met het mislukte apparaat nog geselecteerd het tabblad **Punch list**.",
+  "Typ een korte titel in het vak **New punch item**, bijvoorbeeld **Losse draad op pin 2**.",
+  "Kies **Minor**, **Major** of **Blocking** en druk op **Add**.",
+]
 
 [[step]]
 id = "resolve"
 title = "Close it out"
-text = "When the fault is fixed, resolve the item. **Won't fix** closes it with your reason on record."
-point = { ui = "commissioning.resolve" }
+title_nl = "Sluit het af"
+text = "A punch item moves through steps so that the person who repairs it is not the only one who signs it off."
+text_nl = "Een restpunt doorloopt stappen, zodat degene die het repareert niet de enige is die het afvinkt."
+how = [
+  "When the fault is repaired press **Fixed** on the item.",
+  "A second person presses **Verified**. **Won't fix** closes the item without a repair.",
+  "**Reopen** puts an item back to open if the fault returns.",
+]
+how_nl = [
+  "Druk als de fout hersteld is op **Fixed** bij het item.",
+  "Een tweede persoon drukt op **Verified**. **Won't fix** sluit het item zonder reparatie.",
+  "**Reopen** zet een item terug op open als de fout terugkomt.",
+]
 
 [[step]]
 id = "done"
 title = "A tick list that goes with the project"
-text = "Progress is saved in the project, so the next person sees what was done and what is open."
+title_nl = "Een afvinklijst die met het project meegaat"
+text = "Progress is saved in the project, so the next person sees what was done and what is still open."
+text_nl = "De voortgang wordt in het project bewaard, zodat de volgende ziet wat gedaan is en wat nog openstaat."

@@ -324,19 +324,19 @@ fn device_in(project: &Project, short: &str) -> novo_core::DeviceId {
 
 // ----- revisions-and-compare ----------------------------------------------
 
-/// Revision A is issued, nothing changed since.
-fn revisions_start(doc: &mut Document, _: &MotorStarter) -> Result<()> {
-    doc.transact("Lesson start", |tx| {
-        tx.issue_revision("A", "2026-10-01", "TV", "First issue")?;
-        Ok(())
-    })?;
+/// No revision yet: the lesson issues A itself, because a lesson project
+/// carries no kept copy of an earlier revision to compare with.
+fn revisions_start(_: &mut Document, _: &MotorStarter) -> Result<()> {
     Ok(())
 }
 
-/// The description of -M1 changed and the control breaker was renamed, then
-/// revision B was issued.
+/// Revision A was issued, the description of -M1 changed and the control
+/// breaker was renamed, then revision B was issued.
 fn revisions_end(doc: &mut Document, s: &MotorStarter) -> Result<()> {
-    revisions_start(doc, s)?;
+    doc.transact("Lesson A", |tx| {
+        tx.issue_revision("A", "2026-10-01", "TV", "First issue")?;
+        Ok(())
+    })?;
     doc.transact("Lesson end", |tx| {
         tx.update::<Device>(s.m1, |d| d.description = "Pump motor 3 kW".into())?;
         tx.update::<Device>(s.f3, |d| {
