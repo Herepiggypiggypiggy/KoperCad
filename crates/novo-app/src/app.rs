@@ -29,6 +29,9 @@ mod eplan_import;
 mod example;
 mod faults;
 mod heat;
+mod heat_3d;
+#[cfg(test)]
+mod heat_3d_tests;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
