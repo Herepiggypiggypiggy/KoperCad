@@ -17,9 +17,28 @@ impl NovoApp {
     /// canvas. Says why when there is nothing to export.
     pub(super) fn export_plate_pdf(&mut self) -> Option<PathBuf> {
         let name = self.project_name()?;
-        let Some(location) = self.cabinet.location.clone() else {
-            self.message(Level::Warning, "No enclosure to export a plate drawing for");
-            return None;
+        let location = match self.cabinet.location.clone() {
+            Some(location) => location,
+            None => {
+                // Not in the Cabinet: take the only enclosure that has a plate,
+                // as the command line does.
+                let only = self.backend.document().and_then(|doc| {
+                    let mut with_plate = doc
+                        .project()
+                        .structures()
+                        .filter(|s| s.enclosure && s.plate.is_some());
+                    let first = with_plate.next()?;
+                    with_plate.next().is_none().then(|| first.tag.clone())
+                });
+                let Some(only) = only else {
+                    self.message(
+                        Level::Warning,
+                        "Open the Cabinet and pick an enclosure first",
+                    );
+                    return None;
+                };
+                only
+            }
         };
         let docs = {
             let doc = self.backend.document()?;
