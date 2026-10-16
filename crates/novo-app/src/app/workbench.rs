@@ -97,6 +97,7 @@ pub(crate) struct Workbench {
     pub(super) electrical: Option<super::electrical::ElectricalWindow>,
     /// The Safety functions window, while it is open.
     pub(super) safety: Option<super::safety::SafetyWindow>,
+    pub(super) languages: Option<super::languages::LanguagesWindow>,
     /// The Renumber devices window, while it is open.
     pub(super) device_renumber: Option<super::device_renumber::DeviceRenumber>,
     /// The Project rules window is open.
@@ -190,6 +191,16 @@ pub(crate) struct Workbench {
     pub(super) auto_assign: Option<super::parts_bulk::AutoAssignPreview>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
+    /// Parts read from an EPLAN parts export, waiting for Add.
+    pub(super) eplan_parts: Option<super::eplan_parts::EplanPartsImport>,
+    /// The EPLAN export options being chosen.
+    pub(super) eplan_export: Option<super::eplan_export::EplanExport>,
+    /// The options the last EPLAN export used, offered again next time.
+    pub(super) eplan_export_last: Option<super::eplan_export::EplanExport>,
+    /// The Add PLC card layout dialog.
+    pub(super) plc_card: Option<super::plc_card::PlcCardForm>,
+    /// Whether the PLC overview window is open.
+    pub(super) plc_overview: bool,
     /// The "Get the EPLAN export script" guide, open after the files are
     /// written.
     pub(super) eplan_guide: Option<super::interop::EplanGuide>,
@@ -236,6 +247,7 @@ impl Default for Workbench {
             calculations: None,
             electrical: None,
             safety: None,
+            languages: None,
             numbering: None,
             device_renumber: None,
             project_rules: false,
@@ -282,6 +294,11 @@ impl Default for Workbench {
             parts_bulk: None,
             auto_assign: None,
             eplan_import: None,
+            eplan_parts: None,
+            eplan_export: None,
+            eplan_export_last: None,
+            plc_card: None,
+            plc_overview: false,
             eplan_guide: None,
             dwg_job: None,
         }
@@ -353,6 +370,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "check.calculations",
     "check.electrical_inputs",
     "check.safety",
+    "project.languages",
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
@@ -361,6 +379,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.standards_report",
     "export.standards_xlsx",
     "export.plate",
+    "export.plate_dxf",
+    "export.pdf_page",
+    "export.report_pdf",
+    "report.add_page",
     "export.assembly",
     "export.sheets",
     "export.sheets_csv",
@@ -398,6 +420,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "report.cables",
     "report.cutlist",
     "report.labels",
+    "report.wirecut",
+    "report.io",
+    "report.cable_schedule",
+    "report.plugs",
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
@@ -414,6 +440,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "file.choose_dwg_converter",
     "file.eplan_export_script",
     "plc.add_card",
+    "plc.overview",
+    "parts.import_eplan",
     "plc.to_plc",
     "plc.renumber_io",
     "plc.import_tags",
@@ -736,6 +764,9 @@ impl NovoApp {
                 if !(id == "heat.simulate" && self.workspace() == Workspace::View3d) {
                     self.switch_workspace(Workspace::Cabinet);
                     self.cabinet.table = false;
+                } else {
+                    // The run's progress and stop button live in the panel.
+                    self.view3d.controls.heat_panel = true;
                 }
                 self.cabinet.heat.command(id);
             }
@@ -916,6 +947,7 @@ impl NovoApp {
             "check.calculations" => self.toggle_calculations(),
             "check.electrical_inputs" => self.toggle_electrical(),
             "check.safety" => self.toggle_safety(),
+            "project.languages" => self.toggle_languages(),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
             "edit.escape" => {
@@ -964,6 +996,16 @@ impl NovoApp {
             "export.plate" => {
                 self.export_plate_pdf();
             }
+            "export.plate_dxf" => {
+                self.export_plate_dxf();
+            }
+            "export.pdf_page" => {
+                self.export_pdf_page();
+            }
+            "export.report_pdf" => {
+                self.export_selected_report_pdf();
+            }
+            "report.add_page" => self.add_report_page_command(argument),
             "export.assembly" => {
                 self.export_assembly();
             }
@@ -1023,9 +1065,7 @@ impl NovoApp {
             "export.step" => {
                 self.export_step();
             }
-            "export.eplan" => {
-                self.export_eplan();
-            }
+            "export.eplan" => self.open_eplan_export(),
             "export.aml" => {
                 self.export_aml();
             }
@@ -1061,6 +1101,8 @@ impl NovoApp {
             "view.reset_panels" => super::panel::reset_layout(ctx),
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
+            "parts.import_eplan" => self.import_eplan_parts(),
+            "plc.overview" => self.wb.plc_overview = true,
             "parts.import_folder" => self.import_parts_folder(),
             "parts.auto_assign" => self.start_auto_assign(),
             "parts.clear" => self.clear_selected_parts(),

@@ -20,7 +20,7 @@ each group with a small-caps caption above it (`text_tertiary`, which the Palett
 
 | Group | Contents | Notes |
 | --- | --- | --- |
-| Panel | panel picker; Create cabinet and Set plate when the panel has none | left edge |
+| Panel | panel picker (Create cabinet and Set plate are in the empty state under the bar, with the sentence that asks for them) | left edge |
 | Place | **Place all** (primary), Rules | |
 | Arrange | Plate setup (size and fill), Size enclosure | |
 | Route | Route all, Rails and ducts, Cut list | Rails and ducts arrives with #612 |
@@ -53,12 +53,9 @@ the toolbar, so the bar holds only things you press.
 
 - Heat controls (Map, Contours, Airflow, Badges, Simulate, status) live in a
   second strip that appears only while Heat is on. The main bar never grows.
-- Below 1100 px the group captions drop, Arrange, Rails and ducts, Cut list,
-  Rules and Export fold into a **More** menu; Place all, Route all, the panel
-  picker and the Plate/Table switch always stay. Labels never truncate: a
-  group that does not fit folds whole.
-- Door settings are part of Plate setup (there is no separate Door button). Order of folding, last to first: Output, View's Heat, Route's Rails and ducts and Cut list, Arrange, Rules. Place all, Route all, the panel picker and the Plate/Table switch never fold.
-- One rule: labels are never shortened or turned into icon-only buttons; whole groups fold into More.
+- Below 1100 px the group captions drop. Items fold into a **More** menu one at a time, from the measured width of the real labels and the width of the pane (not one breakpoint): a wide pane folds nothing, a narrow one folds only what it must. Place all, Route all, the panel picker and the Plate/Table switch always stay. Labels never truncate.
+- Door settings are part of Plate setup (there is no separate Door button). Order of folding: Export, Heat, Cut list, Rails and ducts, Arrange (Plate setup and Size enclosure together), Rules last. More lists only what folded; a lesson that points at a folded control points at More until it is open. Place all, Route all, the panel picker and the Plate/Table switch never fold.
+- One rule: labels are never shortened or turned into icon-only buttons; an item that does not fit folds into More.
 
 ### Design system fit
 

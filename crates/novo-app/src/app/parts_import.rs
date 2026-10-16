@@ -183,6 +183,21 @@ pub(crate) fn import_path(
         other => return Err(format!("the import stopped early ({other:?})")),
     };
     let mut changed: Vec<CatalogPart> = outcome.parts.clone();
+    // EPLAN XML found inside an EDZ or ZIP: read it as parts too.
+    let mut eplan_lines = Vec::new();
+    for (name, text) in &outcome.xml_members {
+        match super::eplan_parts::read_eplan_parts(text, &part.manufacturer) {
+            Ok(r) => {
+                eplan_lines.push(format!(
+                    "{name}: {} EPLAN part(s) read, {} row(s) rejected.",
+                    r.parts.len(),
+                    r.skipped.len()
+                ));
+                changed.extend(r.parts);
+            }
+            Err(e) => eplan_lines.push(format!("{name}: no EPLAN parts ({e}).")),
+        }
+    }
     if let Some(d) = outcome.dimensions
         && part.dimensions.is_none()
     {
@@ -240,10 +255,10 @@ pub(crate) fn import_path(
         ));
         summary.lines.extend(outcome.recipe.summary_lines());
     }
-    if !outcome.xml_members.is_empty() || !outcome.dxf_members.is_empty() {
+    summary.lines.extend(eplan_lines);
+    if !outcome.dxf_members.is_empty() {
         summary.lines.push(format!(
-            "{} EPLAN XML and {} DXF file(s) inside are stored; reading them into the part comes later.",
-            outcome.xml_members.len(),
+            "{} DXF file(s) inside are stored; reading them into the part comes later.",
             outcome.dxf_members.len()
         ));
     }
