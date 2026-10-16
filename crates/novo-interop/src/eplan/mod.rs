@@ -4,6 +4,7 @@
 //! produces [`novo_parts::CatalogPart`]s in a [`novo_parts::ImportReport`].
 //! Nothing here touches the user's catalog: the caller previews and merges.
 
+pub mod export_script;
 mod parts;
 pub(crate) mod xml;
 

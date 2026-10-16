@@ -918,6 +918,7 @@ impl NovoApp {
         self.issue_revision_dialog(&ctx);
         self.compare_window(&ctx);
         self.aml_import_dialog(&ctx);
+        self.eplan_guide_dialog(&ctx);
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
