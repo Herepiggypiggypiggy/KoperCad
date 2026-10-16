@@ -269,3 +269,28 @@ fn a_duct_is_an_open_channel_whose_fingers_are_cut_down_to_the_floor() {
     let n = (volume(&solid) - volume(&comb)) / (5.0 * 2.0 * 2.0 * 58.0);
     assert!((n - 19.0).abs() < 0.01, "19 slots, got {n}");
 }
+
+#[test]
+fn zz_probe_determinism() {
+    let step = cylinder_step(5.0, 20.0);
+    let cancel = AtomicBool::new(false);
+    let a = geometry_from_step(step.as_bytes(), None, Quality::Normal, &cancel, None).unwrap();
+    let mut bad = 0;
+    for i in 0..200 {
+        let b = geometry_from_step(step.as_bytes(), None, Quality::Normal, &cancel, None).unwrap();
+        if a != b {
+            bad += 1;
+            if bad < 4 {
+                for (k, (x, y)) in a.lods.iter().zip(&b.lods).enumerate() {
+                    eprintln!("run {i} lod {k}: pos {} vs {}, idx {} vs {}, posdiff {}",
+                        x.positions.len(), y.positions.len(), x.indices.len(), y.indices.len(),
+                        x.positions.iter().zip(&y.positions).filter(|(p, q)| p != q).count());
+                }
+            }
+        }
+    }
+    eprintln!("PROBE bad runs {bad} of 200");
+    // first-stage determinism: the bounds
+    eprintln!("PROBE bounds {:?}", a.detail().bounds);
+    assert_eq!(bad, 0);
+}
