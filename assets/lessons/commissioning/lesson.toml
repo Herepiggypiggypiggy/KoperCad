@@ -57,11 +57,11 @@ id = "who"
 title = "Say who is testing"
 title_nl = "Zeg wie er test"
 text = """
-Type your name in the **By** field at the top. Every result you record carries your name and the time, which the commissioning report prints.
+Open the {ui:commissioning.who} at the top and type your name. Every result you record carries your name and the time, which the commissioning report prints.
 Tick **Large buttons** when you work on a tablet or in gloves.
 """
 text_nl = """
-Typ je naam in het veld **By** bovenaan. Elk resultaat dat je vastlegt draagt je naam en de tijd, die het inbedrijfstellingsrapport afdrukt.
+Open het {ui:commissioning.who} bovenaan en typ je naam. Elk resultaat dat je vastlegt draagt je naam en de tijd, die het inbedrijfstellingsrapport afdrukt.
 Vink **Large buttons** aan als je op een tablet of met handschoenen werkt.
 """
 point = { ui = "commissioning.who" }
@@ -157,10 +157,10 @@ id = "report"
 title = "Write the report"
 title_nl = "Schrijf het rapport"
 text = """
-Back on **Checks**, click **PDF** or **CSV** next to **Report**. The commissioning report is written next to the project file, with the results of the checks and the punch list.
+Back on **Checks**, open the {ui:commissioning.who} and choose {ui:commissioning.report} or the CSV report. The commissioning report is written next to the project file, with the results of the checks and the punch list.
 """
 text_nl = """
-Klik terug op **Checks** op **PDF** of **CSV** naast **Report**. Het inbedrijfstellingsrapport wordt naast het projectbestand geschreven, met de resultaten van de controles en de puntenlijst.
+Open het {ui:commissioning.who} en kies {ui:commissioning.report} of het CSV-rapport. Het inbedrijfstellingsrapport wordt naast het projectbestand geschreven, met de resultaten van de controles en de puntenlijst.
 """
 point = { ui = "commissioning.report" }
 
