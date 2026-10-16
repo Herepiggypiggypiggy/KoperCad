@@ -107,3 +107,41 @@ fn device_and_plate_follow_the_2d_engine_on_every_mesh() {
         .fold((f64::MAX, f64::MIN), |a, v| (a.0.min(*v), a.1.max(*v)));
     assert!(hi - lo < 2.0, "housing depends on the mesh: {surfaces:?}");
 }
+
+/// The full cabinet (CabinetSolver, steady path) on finer meshes: the air next
+/// to the device is resolved and comes out hotter than the 2D slice average,
+/// so the housing rises 10 to 20 % above the 2D estimate and creeps up with
+/// refinement. This test states that difference, it does not hide it: it
+/// fails if the gap grows past 20 % or the trend runs away.
+#[test]
+fn the_full_cabinet_housing_rise_stays_within_20_percent_of_2d_and_creeps_up_slowly() {
+    use novo_cfd::cabinet::{CabinetSolver, Tuning};
+    use novo_cfd::{Fidelity, Solver};
+    let scn = scenario(50.0);
+    let two_d = simulate_steady(&scn).unwrap();
+    let rise2 = two_d.devices[0].surface_c - 25.0;
+    let mut rises = Vec::new();
+    for cells in [1500, 6000, 20000] {
+        let mut t = Tuning::default().with_cells(cells);
+        for l in [&mut t.coarse, &mut t.medium, &mut t.fine] {
+            l.max_wall = None;
+        }
+        let s = CabinetSolver::new(t)
+            .solve(&scn, Fidelity::Coarse, &Control::new(), &mut |_| {})
+            .unwrap();
+        let rise = s.devices[0].surface_c - 25.0;
+        report(
+            &format!("full cabinet 50 W, {cells} cells"),
+            "housing rise K vs 2D",
+            rise,
+            rise2,
+        );
+        assert!(rise / rise2 < 1.20, "{rise} against {rise2} at {cells}");
+        rises.push(rise);
+    }
+    assert!(
+        rises.windows(2).all(|w| w[1] >= w[0] - 1.0),
+        "{rises:?} should not fall with refinement"
+    );
+    assert!(rises[2] - rises[1] < 5.0, "{rises:?} runs away");
+}
