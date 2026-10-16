@@ -52,9 +52,23 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "help.keymap_file",
+        &[],
+        &[
+            "toetsenbestand openen",
+            "sneltoetsen aanpassen",
+            "toetsen wijzigen",
+        ],
+    ),
+    nl(
         "help.show_hints",
         &[],
         &["hints opnieuw tonen", "tips opnieuw", "hints"],
+    ),
+    nl(
+        "help.whats_new",
+        &[],
+        &["nieuw", "wat is nieuw", "nieuwigheden"],
     ),
     nl(
         "help.learn",
@@ -66,6 +80,11 @@ pub const DUTCH: &[Aliases] = &[
     nl("learn.restart", &[], &["les opnieuw", "les herstarten"]),
     nl("learn.close", &[], &["les sluiten"]),
     nl("file.save", &[], &["opslaan", "bewaren"]),
+    nl(
+        "project.languages",
+        &[],
+        &["rapporttaal", "taal", "vertalingen", "pdf taal"],
+    ),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
     // Not a bare "pagina": `pagina 2` goes to page 2.
@@ -236,6 +255,11 @@ pub const DUTCH: &[Aliases] = &[
         &["plc kaart", "plc module"],
     ),
     nl(
+        "plc.overview",
+        &["plc overzicht"],
+        &["plc kaarten", "adressen", "kanalen", "adresoverzicht"],
+    ),
+    nl(
         "plc.to_plc",
         &["naar plc"],
         &["signaal naar plc", "ingang uitgang"],
@@ -249,6 +273,25 @@ pub const DUTCH: &[Aliases] = &[
         "xref.link",
         &["koppel", "koppelen"],
         &["contact aan spoel koppelen", "kruisverwijzing koppelen"],
+    ),
+    nl(
+        "draw.text",
+        &["tekst"],
+        &["tekst toevoegen", "notitie", "opmerking"],
+    ),
+    nl(
+        "net.select",
+        &[],
+        &["net selecteren", "heel net selecteren", "verbonden draden"],
+    ),
+    nl(
+        "net.trace",
+        &[],
+        &[
+            "waar gaat dit heen",
+            "apparaten aan dit net",
+            "paginas van dit net",
+        ],
     ),
     nl("edit.escape", &[], &["annuleren"]),
     // Navigate
@@ -316,6 +359,51 @@ pub const DUTCH: &[Aliases] = &[
         "terminal.strip_lowest",
         &["laagste"],
         &["klemmenstrook", "nummer"],
+    ),
+    nl(
+        "terminal.add_spares",
+        &["reserveklemmen"],
+        &["reserve", "klemmenstrook", "extra klemmen"],
+    ),
+    nl(
+        "terminal.rename",
+        &[],
+        &["klemmen hernoemen", "zoeken en vervangen", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.renumber",
+        &[],
+        &["klemmen hernummeren", "klemmenstrook", "nummering"],
+    ),
+    nl(
+        "terminal.join_duplicates",
+        &[],
+        &["dubbele klemmen samenvoegen", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.set_kind",
+        &[],
+        &["klemtype", "soort klem", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.order_up",
+        &[],
+        &["klem omhoog", "volgorde", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.order_down",
+        &[],
+        &["klem omlaag", "volgorde", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.style",
+        &[],
+        &["klemmenstrook stijl", "symbool", "uiterlijk"],
+    ),
+    nl(
+        "terminal.restore_declined",
+        &[],
+        &["geweigerde voorstellen", "afgewezen klemmen", "herstellen"],
     ),
     nl("view.terminals_drawer", &[], &["klemmen", "klemmenstroken"]),
     nl("view.cables_drawer", &[], &["kabels", "aders"]),
@@ -496,6 +584,11 @@ pub const DUTCH: &[Aliases] = &[
         &["automationml", "installatie", "overnemen", "migreren"],
     ),
     nl(
+        "parts.import_eplan",
+        &["importeer eplan onderdelen"],
+        &["eplan artikelen", "eplan onderdelen", "artikelexport"],
+    ),
+    nl(
         "file.import_eplan",
         &["importeer eplan"],
         &["eplan", "pxf", "migreren", "overnemen", "paginamacro"],
@@ -604,6 +697,38 @@ pub const DUTCH: &[Aliases] = &[
     nl("report.cables", &["kabellijst"], &["kabels"]),
     nl("report.cutlist", &["zaaglijst"], &["afkortlijst"]),
     nl("report.labels", &["labels", "etiketten"], &["markeringen"]),
+    nl("report.wirecut", &["afkortlijst draden"], &["kabelmachine"]),
+    nl(
+        "report.io",
+        &["io lijst", "i/o lijst"],
+        &["ingangen", "uitgangen"],
+    ),
+    nl("report.cable_schedule", &["kabelstaat"], &["kabelschema"]),
+    nl(
+        "report.plugs",
+        &["connectorenlijst"],
+        &["stekkers", "stekkerlijst"],
+    ),
+    nl(
+        "report.add_page",
+        &["rapport als pagina toevoegen"],
+        &["pagina toevoegen", "tekeningpagina"],
+    ),
+    nl(
+        "export.report_pdf",
+        &["exporteer rapport"],
+        &["rapport pdf", "rapport afdrukken"],
+    ),
+    nl(
+        "export.pdf_page",
+        &["exporteer pagina", "deze pagina exporteren"],
+        &["huidige pagina", "een pagina"],
+    ),
+    nl(
+        "export.plate_dxf",
+        &["exporteer montageplaat dxf"],
+        &["montageplaat dxf", "cnc"],
+    ),
     nl(
         "export.sheets",
         &[
@@ -645,6 +770,11 @@ pub const DUTCH: &[Aliases] = &[
         &["din-rail", "kabelgoot", "kanaal", "rail"],
     ),
     nl(
+        "cabinet.surface",
+        &["kastvlakken", "kies vlak"],
+        &["vlak", "wand", "dak", "bodem"],
+    ),
+    nl(
         "cabinet.door",
         &["binnenmaat en deur", "deurdraaiing", "scharnierkant"],
         &["deur", "scharnier", "binnenmaat", "diepte"],
@@ -676,6 +806,11 @@ pub const DUTCH: &[Aliases] = &[
         "view.bench",
         &["werkbank uitvoer", "open werkbank"],
         &["werkbank", "adereindhulzen", "etiketten", "draadsnijlijst"],
+    ),
+    nl(
+        "report.designer",
+        &["rapportontwerper", "open rapportontwerper"],
+        &["sjabloon", "titelblok", "ontwerper"],
     ),
     nl(
         "export.bench_cut",
