@@ -85,7 +85,7 @@ pub(crate) fn run(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
     cable_rating(cx, netlist, out);
 }
 
-fn number(properties: &Properties, key: &str) -> Option<f64> {
+pub(crate) fn number(properties: &Properties, key: &str) -> Option<f64> {
     match properties.get(key)? {
         Value::Int(i) => Some(*i as f64),
         Value::Float(f) => Some(*f),
@@ -93,7 +93,7 @@ fn number(properties: &Properties, key: &str) -> Option<f64> {
     }
 }
 
-fn text<'a>(properties: &'a Properties, key: &str) -> Option<&'a str> {
+pub(crate) fn text<'a>(properties: &'a Properties, key: &str) -> Option<&'a str> {
     match properties.get(key)? {
         Value::Text(t) => Some(t.as_str()),
         _ => None,
@@ -101,7 +101,7 @@ fn text<'a>(properties: &'a Properties, key: &str) -> Option<&'a str> {
 }
 
 /// A number on a device, else on the first of its parts that has it.
-fn device_number(project: &Project, device: DeviceId, key: &str) -> Option<f64> {
+pub(crate) fn device_number(project: &Project, device: DeviceId, key: &str) -> Option<f64> {
     let device = project.device(device)?;
     number(&device.properties, key).or_else(|| {
         device
@@ -112,7 +112,7 @@ fn device_number(project: &Project, device: DeviceId, key: &str) -> Option<f64> 
     })
 }
 
-fn device_text(project: &Project, device: DeviceId, key: &str) -> Option<String> {
+pub(crate) fn device_text(project: &Project, device: DeviceId, key: &str) -> Option<String> {
     let device = project.device(device)?;
     text(&device.properties, key)
         .map(str::to_owned)
@@ -125,7 +125,7 @@ fn device_text(project: &Project, device: DeviceId, key: &str) -> Option<String>
         })
 }
 
-fn wire_length(project: &Project, wire: &Wire) -> Option<f64> {
+pub(crate) fn wire_length(project: &Project, wire: &Wire) -> Option<f64> {
     number(&wire.properties, LENGTH_M)
         .or_else(|| {
             let (cable, _) = project.core_of_wire(wire.id)?;
@@ -134,7 +134,7 @@ fn wire_length(project: &Project, wire: &Wire) -> Option<f64> {
         .filter(|l| *l > 0.0)
 }
 
-fn wire_section(project: &Project, wire: &Wire) -> Option<f64> {
+pub(crate) fn wire_section(project: &Project, wire: &Wire) -> Option<f64> {
     wire.cross_section_mm2
         .or_else(|| {
             let (cable, core) = project.core_of_wire(wire.id)?;
@@ -143,7 +143,7 @@ fn wire_section(project: &Project, wire: &Wire) -> Option<f64> {
         .filter(|s| *s > 0.0)
 }
 
-fn wire_insulation(project: &Project, wire: &Wire) -> Insulation {
+pub(crate) fn wire_insulation(project: &Project, wire: &Wire) -> Insulation {
     let name = text(&wire.properties, INSULATION)
         .or_else(|| {
             let (cable, _) = project.core_of_wire(wire.id)?;
@@ -183,7 +183,7 @@ fn supply_ik_ka(project: &Project) -> Option<f64> {
     number(&project.info().properties, SUPPLY_SHORT_CIRCUIT_KA).filter(|k| *k > 0.0)
 }
 
-fn supply_voltage(project: &Project) -> f64 {
+pub(crate) fn supply_voltage(project: &Project) -> f64 {
     number(&project.info().properties, SUPPLY_VOLTAGE_V)
         .filter(|v| *v > 0.0)
         .unwrap_or(DEFAULT_SUPPLY_VOLTAGE)
@@ -192,7 +192,7 @@ fn supply_voltage(project: &Project) -> f64 {
 /// The supply as a source model: a transformer (with the network behind it
 /// when stated) or a stated short-circuit current, with the smallest
 /// current the supply can deliver when given. `None` when neither is.
-fn supply_source(project: &Project) -> Option<SourceModel> {
+pub(crate) fn supply_source(project: &Project) -> Option<SourceModel> {
     let props = &project.info().properties;
     let voltage = supply_voltage(project);
     if let (Some(kva), Some(uk)) = (
@@ -216,7 +216,7 @@ fn supply_source(project: &Project) -> Option<SourceModel> {
 
 /// The largest three-phase short-circuit current the supply can deliver at
 /// its terminals, kA.
-fn supply_max_ka(project: &Project) -> Option<f64> {
+pub(crate) fn supply_max_ka(project: &Project) -> Option<f64> {
     let source = supply_source(project)?;
     let network = Network::new(supply_voltage(project), source);
     network.fault(network.root()).map(|f| f.ik3_max_a / 1000.0)
@@ -306,7 +306,7 @@ fn breaking_capacity(cx: &Context<'_>, out: &mut Vec<Problem>) {
 /// Wires that end on a protective device or lie on its load side (the
 /// even-numbered connection points, IEC 60445), through terminals and cable
 /// cores up to the next device.
-fn protected_wires(
+pub(crate) fn protected_wires(
     project: &Project,
     netlist: &Netlist,
     symbol: &SymbolInstance,
@@ -466,7 +466,7 @@ fn cable_rating(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
             let Some(section) = wire_section(project, wire) else {
                 continue;
             };
-            let Some(method) = wire_text(project, wire, INSTALL_METHOD)
+            let Some(method) = installation_method_text(project, wire)
                 .as_deref()
                 .and_then(Method::parse)
             else {
@@ -499,15 +499,22 @@ fn cable_rating(cx: &Context<'_>, netlist: &Netlist, out: &mut Vec<Problem>) {
     }
 }
 
+/// The installation method a wire states: `install_method`, or the
+/// `installation_method` the wire panel and the standards check write.
+pub(crate) fn installation_method_text(project: &Project, wire: &Wire) -> Option<String> {
+    wire_text(project, wire, INSTALL_METHOD)
+        .or_else(|| wire_text(project, wire, crate::standards::keys::INSTALLATION_METHOD))
+}
+
 /// A number on the wire, else on its cable.
-fn wire_number(project: &Project, wire: &Wire, key: &str) -> Option<f64> {
+pub(crate) fn wire_number(project: &Project, wire: &Wire, key: &str) -> Option<f64> {
     number(&wire.properties, key).or_else(|| {
         let (cable, _) = project.core_of_wire(wire.id)?;
         number(&project.cable(cable)?.properties, key)
     })
 }
 
-fn wire_text(project: &Project, wire: &Wire, key: &str) -> Option<String> {
+pub(crate) fn wire_text(project: &Project, wire: &Wire, key: &str) -> Option<String> {
     text(&wire.properties, key).map(str::to_owned).or_else(|| {
         let (cable, _) = project.core_of_wire(wire.id)?;
         text(&project.cable(cable)?.properties, key).map(str::to_owned)
@@ -516,7 +523,7 @@ fn wire_text(project: &Project, wire: &Wire, key: &str) -> Option<String> {
 
 /// Two loaded conductors for single-phase and DC nets, three for a 400 V
 /// line net. `None` when the net or its potential is not known.
-fn wire_loaded(project: &Project, netlist: &Netlist, wire: &Wire) -> Option<Loaded> {
+pub(crate) fn wire_loaded(project: &Project, netlist: &Netlist, wire: &Wire) -> Option<Loaded> {
     let net = netlist.net_of_wire(wire)?;
     let potential = project.potential(netlist.net(net).potential()?)?;
     let voltage = potential.voltage?;
@@ -530,7 +537,7 @@ fn wire_loaded(project: &Project, netlist: &Netlist, wire: &Wire) -> Option<Load
 }
 
 /// The protective core's section in the cable that carries `wire`.
-fn protective_section(project: &Project, wire: &Wire) -> Option<f64> {
+pub(crate) fn protective_section(project: &Project, wire: &Wire) -> Option<f64> {
     let (cable, _) = project.core_of_wire(wire.id)?;
     project
         .cable(cable)?

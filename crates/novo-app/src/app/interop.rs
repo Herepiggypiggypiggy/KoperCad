@@ -170,13 +170,13 @@ impl NovoApp {
     /// The project as an EPLAN PXF file (`.epj`) for EPLAN to import. The
     /// report says what was left out and that no real EPLAN has opened a
     /// KoperCAD file yet.
-    pub(super) fn export_eplan(&mut self) -> Option<PathBuf> {
+    pub(super) fn export_eplan(
+        &mut self,
+        options: novo_interop::eplan::pxf::PxfWriteOptions,
+    ) -> Option<PathBuf> {
         let (dir, stem) = self.export_base()?;
         let doc = self.backend.document()?;
-        let export = novo_interop::eplan::pxf::write_pxf(
-            doc.project(),
-            &novo_interop::eplan::pxf::PxfWriteOptions::default(),
-        );
+        let export = novo_interop::eplan::pxf::write_pxf(doc.project(), &options);
         let path = replaceable(
             &dir,
             &stem,

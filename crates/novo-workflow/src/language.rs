@@ -66,6 +66,11 @@ pub const DUTCH: &[Aliases] = &[
         &["hints opnieuw tonen", "tips opnieuw", "hints"],
     ),
     nl(
+        "help.whats_new",
+        &[],
+        &["nieuw", "wat is nieuw", "nieuwigheden"],
+    ),
+    nl(
         "help.learn",
         &["leren", "les"],
         &["leren", "training", "cursus", "uitleg"],
@@ -245,6 +250,11 @@ pub const DUTCH: &[Aliases] = &[
         &["plc kaart", "plc module"],
     ),
     nl(
+        "plc.overview",
+        &["plc overzicht"],
+        &["plc kaarten", "adressen", "kanalen", "adresoverzicht"],
+    ),
+    nl(
         "plc.to_plc",
         &["naar plc"],
         &["signaal naar plc", "ingang uitgang"],
@@ -344,6 +354,51 @@ pub const DUTCH: &[Aliases] = &[
         "terminal.strip_lowest",
         &["laagste"],
         &["klemmenstrook", "nummer"],
+    ),
+    nl(
+        "terminal.add_spares",
+        &["reserveklemmen"],
+        &["reserve", "klemmenstrook", "extra klemmen"],
+    ),
+    nl(
+        "terminal.rename",
+        &[],
+        &["klemmen hernoemen", "zoeken en vervangen", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.renumber",
+        &[],
+        &["klemmen hernummeren", "klemmenstrook", "nummering"],
+    ),
+    nl(
+        "terminal.join_duplicates",
+        &[],
+        &["dubbele klemmen samenvoegen", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.set_kind",
+        &[],
+        &["klemtype", "soort klem", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.order_up",
+        &[],
+        &["klem omhoog", "volgorde", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.order_down",
+        &[],
+        &["klem omlaag", "volgorde", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.style",
+        &[],
+        &["klemmenstrook stijl", "symbool", "uiterlijk"],
+    ),
+    nl(
+        "terminal.restore_declined",
+        &[],
+        &["geweigerde voorstellen", "afgewezen klemmen", "herstellen"],
     ),
     nl("view.terminals_drawer", &[], &["klemmen", "klemmenstroken"]),
     nl("view.cables_drawer", &[], &["kabels", "aders"]),
@@ -446,6 +501,35 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.shortcuts", &[], &["sneltoetsen", "toetsen"]),
     // Check
     nl("check.problems", &["problemen", "fouten"], &["controles"]),
+    nl(
+        "check.calculations",
+        &[],
+        &[
+            "berekeningen",
+            "kabelberekening",
+            "spanningsval",
+            "kortsluiting",
+        ],
+    ),
+    nl(
+        "check.electrical_inputs",
+        &[],
+        &[
+            "elektrische gegevens",
+            "voeding",
+            "transformator",
+            "kortsluitstroom",
+        ],
+    ),
+    nl(
+        "check.safety",
+        &[],
+        &[
+            "veiligheidsfuncties",
+            "performance level",
+            "machineveiligheid",
+        ],
+    ),
     nl("check.next_problem", &[], &["volgend probleem"]),
     nl("check.previous_problem", &[], &["vorig probleem"]),
     nl(
@@ -493,6 +577,11 @@ pub const DUTCH: &[Aliases] = &[
         "file.import_aml",
         &["importeer aml"],
         &["automationml", "installatie", "overnemen", "migreren"],
+    ),
+    nl(
+        "parts.import_eplan",
+        &["importeer eplan onderdelen"],
+        &["eplan artikelen", "eplan onderdelen", "artikelexport"],
     ),
     nl(
         "file.import_eplan",

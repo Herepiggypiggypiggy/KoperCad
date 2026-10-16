@@ -63,6 +63,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.remove_background", under("File", "Import")),
     ("file.import_aml", under("File", "Import")),
     ("file.import_eplan", under("File", "Import")),
+    ("parts.import_eplan", under("File", "Import")),
     ("file.import_dwg", under("File", "Import")),
     ("file.choose_dwg_converter", under("File", "Import")),
     ("file.eplan_export_script", under("File", "Import")),
@@ -70,6 +71,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("plc.import_tags", under("File", "Import")),
     ("help.walkthrough", at("Help")),
     ("help.show_hints", at("Help")),
+    ("help.whats_new", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
     ("help.keymap_file", at("Help")),
@@ -86,6 +88,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("net.trace", under("Edit", "Net")),
     ("plc.add_card", under("Draw", "PLC")),
     ("plc.to_plc", under("Draw", "PLC")),
+    ("plc.overview", under("Draw", "PLC")),
     ("macro.save", under("Draw", "Macros")),
     ("macro.place", under("Draw", "Macros")),
     ("terminal.connect", under("Draw", "Terminals")),
@@ -95,6 +98,15 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("terminal.strip_up", under("Draw", "Terminals")),
     ("terminal.strip_down", under("Draw", "Terminals")),
     ("terminal.strip_lowest", under("Draw", "Terminals")),
+    ("terminal.add_spares", under("Draw", "Terminals")),
+    ("terminal.rename", under("Draw", "Terminals")),
+    ("terminal.renumber", under("Draw", "Terminals")),
+    ("terminal.join_duplicates", under("Draw", "Terminals")),
+    ("terminal.set_kind", under("Draw", "Terminals")),
+    ("terminal.order_up", under("Draw", "Terminals")),
+    ("terminal.order_down", under("Draw", "Terminals")),
+    ("terminal.style", under("Draw", "Terminals")),
+    ("terminal.restore_declined", under("Draw", "Terminals")),
     // View
     ("view.schematic", under("View", "Workspace")),
     ("view.cabinet", under("View", "Workspace")),
@@ -107,23 +119,44 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.iso", under("View", "3D")),
     ("view.front", under("View", "3D")),
     ("view.top", under("View", "3D")),
-    ("view.cabinet_table", under("View", "Workspace")),
-    ("cabinet.rails", under("View", "Workspace")),
-    ("cabinet.rules", under("View", "Workspace")),
-    ("cabinet.plate", under("View", "Workspace")),
-    ("cabinet.cutlist", under("View", "Workspace")),
-    ("cabinet.door", under("View", "Workspace")),
+    ("view.cabinet_table", under("View", "Cabinet")),
+    ("cabinet.rails", under("View", "Cabinet")),
+    ("cabinet.rules", under("View", "Cabinet")),
+    ("cabinet.plate", under("View", "Cabinet")),
+    ("cabinet.cutlist", under("View", "Cabinet")),
+    ("cabinet.door", under("View", "Cabinet")),
     ("view.terminals_drawer", under("View", "Panels")),
     ("view.cables_drawer", under("View", "Panels")),
     ("view.devices_drawer", under("View", "Panels")),
     ("view.pin_outline", under("View", "Panels")),
     ("view.reports", under("View", "Workspace")),
+    ("view.commissioning", under("View", "Workspace")),
+    ("cabinet.place-all", under("View", "Cabinet")),
+    ("cabinet.size-enclosure", under("View", "Cabinet")),
+    ("cabinet.enclosures", under("View", "Cabinet")),
+    ("cabinet.routes", under("View", "Cabinet")),
+    // Layers: what is drawn on top of the page
+    ("view.toggle_marks", under("View", "Layers")),
+    ("view.override_marks", under("View", "Layers")),
+    ("view.changes", under("View", "Layers")),
+    ("view.background", under("View", "Layers")),
+    ("view.background_place", under("View", "Layers")),
+    ("heat.toggle", under("View", "Layers")),
+    ("heat.airflow", under("View", "Layers")),
+    ("heat.contours", under("View", "Layers")),
+    // Lessons live with Help
+    ("help.learn", at("Help")),
+    ("learn.next", under("Help", "Lesson")),
+    ("learn.back", under("Help", "Lesson")),
+    ("learn.restart", under("Help", "Lesson")),
+    ("learn.close", under("Help", "Lesson")),
     // Simulate
     ("sim.live", at("Simulate")),
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
     ("view.protection", at("Simulate")),
+    ("heat.simulate", under("Simulate", "Heat")),
     // Reports
     ("export.reports", at("Reports")),
     ("export.assembly", at("Reports")),
@@ -196,6 +229,18 @@ pub fn entries(menu: &str) -> Vec<(&'static CommandInfo, MenuPlace)> {
 /// Commands drawn at the bottom of their menu.
 const LAST: &[&str] = &["file.quit"];
 
+/// Submenus drawn first, in this order; others follow in registry order.
+const SUBMENU_ORDER: &[&str] = &[
+    "Workspace",
+    "Layers",
+    "Cabinet",
+    "3D",
+    "Panels",
+    "Go to",
+    "Heat",
+    "Lesson",
+];
+
 /// One row of a drawn menu.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuItem {
@@ -227,6 +272,13 @@ pub fn layout(menu: &str) -> Vec<MenuItem> {
             plain.push(MenuItem::Command(info));
         }
     }
+    let rank = |name: &str| {
+        SUBMENU_ORDER
+            .iter()
+            .position(|n| *n == name)
+            .unwrap_or(SUBMENU_ORDER.len())
+    };
+    subs.sort_by_key(|(name, _)| rank(name));
     let mut out = plain;
     let blocks = [
         subs.into_iter()
