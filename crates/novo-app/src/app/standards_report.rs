@@ -16,6 +16,7 @@ use super::{Level, NovoApp, projects_dir};
 pub(super) enum StandardsFormat {
     Pdf,
     Html,
+    Excel,
 }
 
 /// `text` broken at spaces into lines of at most `width` characters. A word
@@ -299,10 +300,10 @@ impl NovoApp {
     /// went. A PDF KoperCAD wrote is replaced; an HTML page is always ours.
     pub(super) fn export_standards_report(&mut self, format: StandardsFormat) -> Option<PathBuf> {
         let name = self.project_name()?;
-        let ext = if format == StandardsFormat::Pdf {
-            "pdf"
-        } else {
-            "html"
+        let ext = match format {
+            StandardsFormat::Pdf => "pdf",
+            StandardsFormat::Html => "html",
+            StandardsFormat::Excel => "xlsx",
         };
         let file = self.backend.file().filter(|_| !self.backend.is_untitled());
         let Some(path) = report_path(file.as_deref(), projects_dir().as_deref(), &name, ext) else {
@@ -341,6 +342,13 @@ impl NovoApp {
                 novo_pdf::export_report_pdf(&[&report_output(&doc)], &options)
             }
             StandardsFormat::Html => document::to_html(&doc, "").into_bytes(),
+            StandardsFormat::Excel => match novo_reports::xlsx_bytes(&[&report_output(&doc)]) {
+                Ok(bytes) => bytes,
+                Err(e) => {
+                    self.message(Level::Error, format!("Could not write the report: {e}"));
+                    return None;
+                }
+            },
         };
         match write_replacing(path, &bytes) {
             Ok(()) => {

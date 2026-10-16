@@ -339,7 +339,12 @@ pub const DUTCH: &[Aliases] = &[
     nl(
         "sim.live",
         &[],
-        &["live potentialen tonen", "contacten sluiten", "spanning"],
+        &[
+            "simuleer live potentialen",
+            "live potentialen tonen",
+            "contacten sluiten",
+            "spanning",
+        ],
     ),
     nl(
         "sim.plc_program",
@@ -463,6 +468,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.standards_report",
         &["exporteer normenrapport", "normenrapport exporteren"],
         &["conformiteitsrapport", "normen pdf"],
+    ),
+    nl(
+        "export.standards_xlsx",
+        &["exporteer normenrapport excel", "normenrapport excel"],
+        &["conformiteitsrapport excel", "normen spreadsheet"],
     ),
     nl(
         "export.plate",
