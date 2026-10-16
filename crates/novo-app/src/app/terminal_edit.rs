@@ -340,7 +340,7 @@ impl NovoApp {
                 EditWindow::Kind => ("Terminal kind", "terminal_kind"),
                 EditWindow::Style => ("Strip style", "terminal_style"),
             };
-            egui::Window::new(format!("{title} {tag}"))
+            super::panel::dialog(ctx, format!("{title} {tag}"), [420.0, 0.0])
                 .id(egui::Id::new(id))
                 .collapsible(false)
                 .open(&mut keep)
@@ -367,11 +367,15 @@ impl NovoApp {
                             };
                             ui.label(format!("{}  ->  {}{note}", c.old, c.new));
                         }
+                        ui.add_space(6.0);
                         if ui
-                            .add_enabled(
-                                !changes.is_empty() && !blocked,
-                                egui::Button::new(format!("Rename {}", changes.len())),
-                            )
+                            .add_enabled_ui(!changes.is_empty() && !blocked, |ui| {
+                                novo_theme::widgets::primary_button(
+                                    ui,
+                                    &format!("Rename {}", changes.len()),
+                                )
+                            })
+                            .inner
                             .clicked()
                         {
                             apply = Some(Apply::Rename(find.clone(), replace.clone()));
@@ -388,11 +392,15 @@ impl NovoApp {
                         for (_, old, new) in &rows {
                             ui.label(format!("{old}  ->  {new}"));
                         }
+                        ui.add_space(6.0);
                         if ui
-                            .add_enabled(
-                                !rows.is_empty(),
-                                egui::Button::new(format!("Renumber {}", rows.len())),
-                            )
+                            .add_enabled_ui(!rows.is_empty(), |ui| {
+                                novo_theme::widgets::primary_button(
+                                    ui,
+                                    &format!("Renumber {}", rows.len()),
+                                )
+                            })
+                            .inner
                             .clicked()
                         {
                             apply = Some(Apply::Renumber);

@@ -81,7 +81,7 @@ impl NovoApp {
         match write_replacing(&path, &bytes) {
             Ok(()) => {
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {}", path.display()));
+                self.message_file(format!("{verb} {}", path.display()), &path);
                 self.wb.last_export = Some(path.clone());
                 Some(path)
             }
@@ -124,7 +124,7 @@ impl NovoApp {
             let text = novo_interop::dxf::write_dxf(&novo_interop::plate::plate_dxf(doc));
             match write_replacing(&path, text.as_bytes()) {
                 Ok(()) => {
-                    self.message(Level::Info, format!("Exported {}", path.display()));
+                    self.message_file(format!("Exported {}", path.display()), &path);
                     self.wb.last_export = Some(path.clone());
                     first.get_or_insert(path);
                 }
