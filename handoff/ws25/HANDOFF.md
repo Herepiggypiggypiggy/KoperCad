@@ -1,13 +1,18 @@
 # WS-25 symbols (packs and library growth): handoff
 
-Updated 2026-10-15 17:50 UTC.
+Updated 2026-10-15 19:00 UTC.
 
 ## State
 
 - **Repo and branch:** `Herepiggypiggypiggy/kopercad`, branch `claude/project-thread-ds56oi` (reset to main for each PR once the previous one merged).
-- **PRs:** #335 design merged. #351 packs and NFPA core merged. The growth PR is open.
-- **Library:** IEC pack 168 symbols after the growth PR (150 before); NFPA pack 148.
-- **Half-done:** nothing.
+- **PRs:** all merged: #335 design, #351 packs, growth, audit #380 #390 #407 #418 #424 #427, #447 switch caller, #458 26 more NFPA symbols. Nothing open.
+- **Library:** IEC pack 174 symbols; NFPA pack 174 (every IEC symbol has a twin; reactor, inductor and changeover switch share artwork).
+- **Half-done:** the "Switch placed symbols" button (WS-01 owns it, built on `novo_workflow::switch::plan`); menu entry is `project.standard`.
+- **Stray remote branch `x`:** created by mistake, cannot be deleted through the proxy; someone with branch rights should delete it.
+
+## Switching the standard
+
+`novo_workflow::switch::plan(project, pack)` lists re-keys and the symbols with no counterpart; `plan.command()` is one `Command::SwitchStandard` (one undo step).
 
 ## Layout
 

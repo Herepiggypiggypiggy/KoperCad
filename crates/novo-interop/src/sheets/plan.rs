@@ -38,8 +38,9 @@ use novo_core::{
     AnyId, CableId, Command, DeviceId, DeviceTag, Document, ModelError, Project, Record,
     TerminalId, WireId,
 };
-use novo_parts::{display_value, parse_number};
+use novo_parts::{Catalog, display_value, parse_number};
 
+use super::create::{Ids, NewDevice, PartRef, new_device};
 use super::fields::{Field, Parsed, Slot, apply, fields, parse, property_of_header, read};
 
 /// A row's key in the baseline: its Id, and on the cores sheet the core.
@@ -102,6 +103,8 @@ pub enum ApplyError {
 #[derive(Debug, Clone)]
 pub struct ImportPlan {
     pub changes: Vec<Change>,
+    /// Devices the sheet adds (rows without an Id and with a new tag).
+    pub new_devices: Vec<NewDevice>,
     pub rejected: Vec<Rejected>,
     /// Things worth knowing that block nothing: ignored columns and
     /// sheets, rows matched by tag, a missing baseline.
@@ -130,6 +133,14 @@ impl ImportPlan {
     /// How many changes would be made.
     pub fn selected(&self) -> usize {
         self.changes.iter().filter(|c| c.selected).count()
+            + self.new_devices.iter().filter(|n| n.selected).count()
+    }
+
+    /// Selects or deselects one new device.
+    pub fn select_new(&mut self, index: usize, selected: bool) {
+        if let Some(new) = self.new_devices.get_mut(index) {
+            new.selected = selected;
+        }
     }
 
     /// Selects or deselects one change.
@@ -160,13 +171,17 @@ impl ImportPlan {
             .map(|c| (c.id, c.core))
             .collect();
         let conflicts = self.conflicts().count();
+        let changes = self.changes.iter().filter(|c| c.selected).count();
+        let added = self.new_devices.iter().filter(|n| n.selected).count();
         let mut s = format!(
-            "{} change{} in {} row{}",
-            self.selected(),
-            plural(self.selected()),
+            "{changes} change{} in {} row{}",
+            plural(changes),
             items.len(),
             plural(items.len()),
         );
+        if added > 0 {
+            s.push_str(&format!(", {added} new device{}", plural(added)));
+        }
         if conflicts > 0 {
             s.push_str(&format!(
                 ", {conflicts} conflict{} with later edits",
@@ -191,6 +206,7 @@ impl ImportPlan {
         if project.revision() != self.revision {
             return Err(ApplyError::Outdated);
         }
+        let mut ids = Ids::new(project);
         let mut records: BTreeMap<AnyId, Record> = BTreeMap::new();
         for change in self.changes.iter().filter(|c| c.selected) {
             let record = match records.get_mut(&change.id) {
@@ -203,16 +219,38 @@ impl ImportPlan {
                 }
             };
             apply(record, change.core, &change.field, &change.parsed);
+            if let (Record::Device(d), Parsed::Part(part)) = (&mut *record, &change.parsed) {
+                // The sheet names one part; it replaces the first.
+                match part {
+                    Some(part) => {
+                        let id = ids.part(part);
+                        d.parts.retain(|&p| p != id);
+                        d.parts.insert(0, id);
+                        d.parts.truncate(1);
+                    }
+                    None => d.parts.clear(),
+                }
+            }
         }
-        if records.is_empty() {
+        let added: Vec<Command> = self
+            .new_devices
+            .iter()
+            .filter(|n| n.selected)
+            .map(|n| ids.insert_device(n))
+            .collect();
+        if records.is_empty() && added.is_empty() {
             return Ok(None);
         }
+        let mut commands = std::mem::take(&mut ids.inserts);
+        commands.extend(added);
+        commands.extend(
+            records
+                .into_values()
+                .map(|record| Command::Replace { record }),
+        );
         Ok(Some(Command::Batch {
             label: "Import from spreadsheet".into(),
-            commands: records
-                .into_values()
-                .map(|record| Command::Replace { record })
-                .collect(),
+            commands,
         }))
     }
 
@@ -223,7 +261,17 @@ impl ImportPlan {
             return Ok(0);
         };
         let count = match &command {
-            Command::Batch { commands, .. } => commands.len(),
+            Command::Batch { commands, .. } => commands
+                .iter()
+                .filter(|c| {
+                    !matches!(
+                        c,
+                        Command::Insert {
+                            record: Record::Part(_)
+                        }
+                    )
+                })
+                .count(),
             _ => 1,
         };
         doc.execute(command)?;
@@ -426,8 +474,16 @@ fn match_field(known: &[Field], header: &str) -> Option<Field> {
 /// Compares a workbook with the project. See the [module](self) for how
 /// rows are matched and conflicts found.
 pub fn plan_import(project: &Project, workbook: &Workbook) -> ImportPlan {
+    plan_import_with(project, workbook, &Catalog::new())
+}
+
+/// [`plan_import`] with a parts catalog: an order number the project does
+/// not have is looked up there (manufacturer, type, data) before a bare
+/// part is made from the order number alone.
+pub fn plan_import_with(project: &Project, workbook: &Workbook, catalog: &Catalog) -> ImportPlan {
     let mut plan = ImportPlan {
         changes: Vec::new(),
+        new_devices: Vec::new(),
         rejected: Vec::new(),
         notes: Vec::new(),
         warnings: Vec::new(),
@@ -459,7 +515,7 @@ pub fn plan_import(project: &Project, workbook: &Workbook) -> ImportPlan {
         );
     }
     for table in &workbook.tables {
-        plan_table(project, workbook, table, &mut plan);
+        plan_table(project, catalog, workbook, table, &mut plan);
     }
     warn_duplicate_tags(project, &mut plan);
     warn_core_clashes(project, &mut plan);
@@ -467,7 +523,13 @@ pub fn plan_import(project: &Project, workbook: &Workbook) -> ImportPlan {
     plan
 }
 
-fn plan_table(project: &Project, workbook: &Workbook, table: &Table, plan: &mut ImportPlan) {
+fn plan_table(
+    project: &Project,
+    catalog: &Catalog,
+    workbook: &Workbook,
+    table: &Table,
+    plan: &mut ImportPlan,
+) {
     let kind = table.kind;
     let known = fields(project, kind);
     let mut columns: Vec<Option<Field>> = Vec::with_capacity(table.headers.len());
@@ -592,6 +654,23 @@ fn plan_table(project: &Project, workbook: &Workbook, table: &Table, plan: &mut 
                     id
                 }
                 Err(why) => {
+                    // A row added to an export (the sheet has an Id column) is a new
+                    // device; in a sheet without one an unknown tag is more likely a typo.
+                    if kind == TableKind::Devices && id_col.is_some() {
+                        match new_device(project, catalog, &columns, &row.cells, &plan.new_devices)
+                        {
+                            Some(Ok(mut new)) => {
+                                new.line = row.line;
+                                plan.new_devices.push(new);
+                                continue;
+                            }
+                            Some(Err(reasons)) => {
+                                reject(plan, String::new(), reasons);
+                                continue;
+                            }
+                            None => {}
+                        }
+                    }
                     reject(plan, String::new(), vec![why]);
                     continue;
                 }
@@ -675,16 +754,33 @@ fn plan_table(project: &Project, workbook: &Workbook, table: &Table, plan: &mut 
                 Slot::Property(key) => current_value(project, id, key),
                 _ => None,
             };
-            let parsed = match parse(field, &cell, like.as_ref()) {
+            let mut parsed = match parse(field, &cell, like.as_ref()) {
                 Ok(p) => p,
                 Err(e) => {
                     errors.push(e);
                     continue;
                 }
             };
+            if let Parsed::Part(Some(part)) = &mut parsed {
+                let manufacturer = table
+                    .column("Manufacturer")
+                    .and_then(|c| row.cells.get(c))
+                    .map(|c| c.as_text().trim().to_owned())
+                    .unwrap_or_default();
+                *part = PartRef::new(catalog, &part.order_number, &manufacturer);
+            }
             let now = project_canon(project, id, core, field, like.as_ref());
             let sheet = parsed.canon();
             if sheet == now {
+                continue;
+            }
+            if matches!(parsed, Parsed::Part(_))
+                && matches!(id, AnyId::Device(d) if project.device(d).is_some_and(|d| d.parts.len() > 1))
+            {
+                errors.push(format!(
+                    "{}: the device has several parts; change them in the part panel",
+                    field.header
+                ));
                 continue;
             }
             let base_canon = base

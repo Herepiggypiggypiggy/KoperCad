@@ -34,6 +34,20 @@ impl NovoApp {
         self.export_pdf_to(&path)
     }
 
+    /// The design checks as report pages after the drawing. A clean
+    /// project prints none, so its PDF is the drawing alone.
+    fn checks_appendix(&self) -> Option<novo_pdf::Appendix> {
+        let lines = novo_checks::report_lines(self.backend.document()?.project());
+        // Headline and summary only: nothing to report.
+        (lines.len() > 2).then(|| novo_pdf::Appendix {
+            title: "Design checks".into(),
+            lines: lines
+                .into_iter()
+                .map(|(bold, text)| novo_pdf::AppendixLine { text, bold })
+                .collect(),
+        })
+    }
+
     /// Exports every page to `path`.
     pub fn export_pdf_to(&mut self, path: &Path) -> Option<PathBuf> {
         let summary = Summary::of(self.problems());
@@ -42,6 +56,7 @@ impl NovoApp {
             notes: self.xref_notes_by_page(),
             title_revisions: self.all_title_revisions(),
             changed_pages: self.pages_changed_since_latest(),
+            appendix: self.checks_appendix(),
             ..Default::default()
         };
         let doc = self.backend.document()?;
@@ -100,7 +115,7 @@ fn is_ours(path: &Path) -> bool {
 
 /// `path` itself when it is free or ours to replace, else the first free or
 /// ours of `<stem> 2.pdf`, `<stem> 3.pdf`...
-fn replaceable_path(path: &Path) -> PathBuf {
+pub(super) fn replaceable_path(path: &Path) -> PathBuf {
     let stem = path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -121,7 +136,7 @@ fn replaceable_path(path: &Path) -> PathBuf {
 
 /// Writes `bytes` to a temporary file beside `path`, then renames it over
 /// `path`. The temporary file is removed when anything fails.
-fn write_replacing(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(super) fn write_replacing(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -137,7 +152,7 @@ fn write_replacing(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 
 /// `<dir>/<name>.pdf`, or `<name> 2.pdf`, `<name> 3.pdf`... when taken, so
 /// an untitled project never replaces another project's PDF.
-fn free_path(dir: &Path, name: &str) -> PathBuf {
+pub(super) fn free_path(dir: &Path, name: &str) -> PathBuf {
     let base = Path::new(&super::project_file_name(name))
         .with_extension("")
         .to_string_lossy()

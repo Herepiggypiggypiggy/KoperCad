@@ -110,9 +110,19 @@ is turned). A connection whose device is not placed, or whose ends are on
 different plates, or whose id is shared with another connection, is returned as **unrouted**: it gets no length rather than
 a wrong one. Terminals of a strip sit on the strip device.
 
+## 6b. The third dimension
+
+A route is also a path in space (`Route::points3`). A terminal stands off the plate by its
+device's depth (the part's `depth_mm`, `Anchor::z_mm`); wires lie at the middle of the duct's
+height. The wire rises or falls between the two, which adds `Route::rise_mm` at each end and in
+every duct change. `Rules::bend_mm` adds a laying allowance per 90 degree bend (0 by default, so
+lengths stay on the centre line until the workshop sets it). A part without a depth is reported
+(`Routed::unknown_height`; the wire list basis reads "routed, no depth") and measured as if the
+terminals sat on the plate, never guessed. A duct without a height holds the wire on the plate.
+
 ## 7. Out of scope here
 
-3D routing, bend radius, wire bundles with twisted pairs, cable (as opposed to
+Bend radius, wire bundles with twisted pairs, cable (as opposed to
 wire) routing, door and cable-entry cut-outs, and tray or conduit outside the
 cabinet. The cabinet canvas drawing of routes is UI work after the engine.
 

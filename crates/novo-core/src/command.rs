@@ -9,9 +9,9 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entity::{
-    BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, MountingPlate, PageFormat,
-    PageKind, PeOverride, Pin, PotentialKind, PotentialSet, PotentialSpec, ProjectInfo, RailKind,
-    SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
+    BlockDefinition, BlockOverride, BlockParameter, CableCore, DeviceKind, Endpoint, MountingPlate,
+    PageFormat, PageKind, PeOverride, Pin, PotentialKind, PotentialSet, PotentialSpec, ProjectInfo,
+    RailKind, SymbolKey, SymbolRole, TextContent, TextPlacement, Value,
 };
 use crate::error::{ModelError, Result};
 use crate::geom::{Placement, Point};
@@ -120,6 +120,10 @@ pub enum Command {
         author: String,
         #[serde(default)]
         description: String,
+        /// A longer note on why; kept as the revision's `note` property
+        /// when it is not blank (see [`crate::Revision::note`]).
+        #[serde(default)]
+        note: String,
     },
     /// Freezes a page as issued; see [`Tx::freeze_page`].
     FreezePage {
@@ -238,6 +242,11 @@ pub enum Command {
         #[serde(default)]
         parameters: Vec<BlockParameter>,
     },
+    /// Copies a block definition from outside the project (a macro file)
+    /// into it; see [`Tx::adopt_block_definition`].
+    AdoptBlockDefinition {
+        definition: BlockDefinition,
+    },
     /// Places a block; see [`Tx::place_block`].
     PlaceBlock {
         definition: BlockDefinitionId,
@@ -333,14 +342,14 @@ pub enum Command {
     RemovePlacement {
         placement: CabinetPlacementId,
     },
-    /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
-    /// dismissal to bring the proposal back.
     /// Switches the drawing standard and re-keys the listed symbols to its
     /// pack, in one undo step; see [`Tx::switch_standard`].
     SwitchStandard {
         standard: String,
         symbols: Vec<(SymbolId, SymbolKey)>,
     },
+    /// Records a declined proposal; see [`Tx::dismiss`]. Remove the
+    /// dismissal to bring the proposal back.
     Dismiss {
         proposal: String,
         subjects: Vec<AnyId>,
@@ -439,6 +448,9 @@ impl Command {
             Command::MoveToPage { .. } => "Move to page".into(),
             Command::AddStructure { .. } => "Add structure".into(),
             Command::DefineBlock { .. } => "Define block".into(),
+            Command::AdoptBlockDefinition { definition } => {
+                format!("Add block {}", definition.name)
+            }
             Command::PlaceBlock { .. } => "Place block".into(),
             Command::SetBlockValues { .. } => "Set block parameters".into(),
             Command::SetBlockOverride { .. } => "Mark block edit".into(),
@@ -679,9 +691,14 @@ impl Tx<'_> {
                 date,
                 author,
                 description,
-            } => self
-                .issue_revision(index, date, author, description)?
-                .into(),
+                note,
+            } => {
+                let revision = self.issue_revision(index, date, author, description)?;
+                if !note.trim().is_empty() {
+                    self.set_property(revision, "note", Some(Value::Text(note)))?;
+                }
+                revision.into()
+            }
             Command::FreezePage { page, revision } => {
                 self.freeze_page(page, revision)?;
                 return Ok(Vec::new());
@@ -696,6 +713,9 @@ impl Tx<'_> {
                 origin,
                 parameters,
             } => self.define_block(name, &items, origin, parameters)?.into(),
+            Command::AdoptBlockDefinition { definition } => {
+                self.adopt_block_definition(definition)?.into()
+            }
             Command::PlaceBlock {
                 definition,
                 page,

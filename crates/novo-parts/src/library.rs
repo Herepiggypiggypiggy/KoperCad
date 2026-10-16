@@ -26,6 +26,9 @@ pub enum FileKind {
     Step,
     Dxf,
     Bmecat,
+    /// A price list or product table saved as CSV (a spreadsheet must be saved
+    /// as CSV first).
+    Csv,
     /// A ZIP holding a STEP or DXF file and a readme, as maker portals serve them.
     Zip,
     /// An EPLAN data package (`.edz`, a ZIP of part data and macros).
@@ -45,6 +48,7 @@ impl FileKind {
             Some("stp" | "step" | "p21") => FileKind::Step,
             Some("dxf") => FileKind::Dxf,
             Some("xml" | "bmecat") => FileKind::Bmecat,
+            Some("csv") => FileKind::Csv,
             Some("zip") => FileKind::Zip,
             Some("edz") => FileKind::Edz,
             _ => FileKind::Other,
@@ -254,6 +258,9 @@ impl LocalLibrary {
             imported: imported.to_owned(),
             flow,
         };
+        // Read the records first: a newer or damaged records file must not
+        // leave a stored file nobody knows about.
+        let mut file = self.read()?;
         let target = self.path_of(&record);
         let io_err = |source| LibraryError::Io {
             path: target.clone(),
@@ -261,7 +268,6 @@ impl LocalLibrary {
         };
         fs::create_dir_all(target.parent().expect("stored path has a parent")).map_err(io_err)?;
         fs::write(&target, bytes).map_err(io_err)?;
-        let mut file = self.read()?;
         file.records.retain(|r| r.stored_path != record.stored_path);
         file.records.push(record.clone());
         self.write(file)?;
@@ -327,7 +333,16 @@ fn safe_file_name(name: &str) -> String {
         .trim_matches(|c: char| c == '.' || c == ' ')
         .to_owned();
     if cleaned.is_empty() {
-        "file".into()
+        return "file".into();
+    }
+    // Windows device names (`CON`, `NUL`, `COM1`, also as `nul.step`) cannot be files.
+    let stem = cleaned.split('.').next().unwrap_or("").to_ascii_uppercase();
+    let numbered = stem.len() == 4
+        && (stem.starts_with("COM") || stem.starts_with("LPT"))
+        && matches!(stem.as_bytes()[3], b'1'..=b'9');
+    let reserved = numbered || matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL");
+    if reserved {
+        format!("_{cleaned}")
     } else {
         cleaned
     }

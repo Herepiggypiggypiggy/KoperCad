@@ -9,6 +9,9 @@ pub enum Action {
     NewProject,
     OpenProject,
     OpenExample,
+    TryFastKeys,
+    ShowWalkthrough,
+    Learn,
     SaveProject,
     SaveProjectAs,
     CloseProject,
@@ -18,6 +21,11 @@ pub enum Action {
     ZoomToFit,
     ShowSchematic,
     ShowCabinet,
+    SizeEnclosure,
+    EnclosureList,
+    StandardsCheck,
+    Protection,
+    MotorStart,
     PinOutline,
     FocusMode,
     FullScreen,
@@ -30,6 +38,9 @@ impl Action {
         Action::NewProject,
         Action::OpenProject,
         Action::OpenExample,
+        Action::TryFastKeys,
+        Action::ShowWalkthrough,
+        Action::Learn,
         Action::SaveProject,
         Action::SaveProjectAs,
         Action::CloseProject,
@@ -39,6 +50,11 @@ impl Action {
         Action::ZoomToFit,
         Action::ShowSchematic,
         Action::ShowCabinet,
+        Action::SizeEnclosure,
+        Action::EnclosureList,
+        Action::StandardsCheck,
+        Action::Protection,
+        Action::MotorStart,
         Action::PinOutline,
         Action::FocusMode,
         Action::FullScreen,
@@ -53,6 +69,9 @@ impl Action {
             Action::NewProject => "file.new",
             Action::OpenProject => "file.open",
             Action::OpenExample => "file.example",
+            Action::TryFastKeys => "file.practice",
+            Action::ShowWalkthrough => "help.walkthrough",
+            Action::Learn => "help.learn",
             Action::SaveProject => "file.save",
             Action::SaveProjectAs => "file.save_as",
             Action::CloseProject => "file.close",
@@ -62,6 +81,11 @@ impl Action {
             Action::ZoomToFit => "view.fit",
             Action::ShowSchematic => "view.schematic",
             Action::ShowCabinet => "view.cabinet",
+            Action::SizeEnclosure => "cabinet.size-enclosure",
+            Action::EnclosureList => "cabinet.enclosures",
+            Action::StandardsCheck => "check.standards",
+            Action::Protection => "view.protection",
+            Action::MotorStart => "simulate.motor-start",
             Action::PinOutline => "view.pin_outline",
             Action::FocusMode => "view.focus",
             Action::FullScreen => "view.full_screen",
@@ -79,6 +103,9 @@ impl Action {
             Action::NewProject => "New project",
             Action::OpenProject => "Open project…",
             Action::OpenExample => "Open example",
+            Action::TryFastKeys => "Try the fast keys",
+            Action::ShowWalkthrough => "Fast keys walk-through",
+            Action::Learn => "Learn…",
             Action::SaveProject => "Save",
             Action::SaveProjectAs => "Save as…",
             Action::CloseProject => "Close project",
@@ -88,6 +115,11 @@ impl Action {
             Action::ZoomToFit => "Zoom to fit",
             Action::ShowSchematic => "Schematic",
             Action::ShowCabinet => "Cabinet",
+            Action::SizeEnclosure => "Size the enclosure…",
+            Action::EnclosureList => "Enclosures…",
+            Action::StandardsCheck => "Standards check…",
+            Action::Protection => "Protection: curves, selectivity, rating…",
+            Action::MotorStart => "Simulate motor start…",
             Action::PinOutline => "Pin outline",
             Action::FocusMode => "Focus mode",
             Action::FullScreen => "Full screen",
@@ -103,6 +135,7 @@ impl Action {
             Action::NewProject
             | Action::OpenProject
             | Action::OpenExample
+            | Action::TryFastKeys
             | Action::SaveProject
             | Action::SaveProjectAs
             | Action::CloseProject
@@ -112,9 +145,16 @@ impl Action {
             Action::ZoomToFit
             | Action::ShowSchematic
             | Action::ShowCabinet
+            | Action::SizeEnclosure
+            | Action::EnclosureList
+            | Action::StandardsCheck
+            | Action::Protection
+            | Action::MotorStart
             | Action::PinOutline
             | Action::FocusMode
             | Action::FullScreen
+            | Action::ShowWalkthrough
+            | Action::Learn
             | Action::CommandPalette => "View",
         }
     }
@@ -137,7 +177,17 @@ impl Action {
             Action::FocusMode => (cmd_shift, Key::F),
             Action::FullScreen => (Modifiers::NONE, Key::F11),
             Action::CommandPalette => (cmd, Key::K),
-            Action::PinOutline | Action::About | Action::OpenExample => return None,
+            Action::PinOutline
+            | Action::About
+            | Action::OpenExample
+            | Action::TryFastKeys
+            | Action::ShowWalkthrough
+            | Action::Learn
+            | Action::SizeEnclosure
+            | Action::StandardsCheck
+            | Action::EnclosureList
+            | Action::Protection
+            | Action::MotorStart => return None,
         };
         Some(KeyboardShortcut::new(modifiers, key))
     }
@@ -260,6 +310,20 @@ mod tests {
     fn ids_round_trip() {
         for &a in Action::ALL {
             assert_eq!(Action::from_id(a.id()), Some(a));
+        }
+    }
+
+    #[test]
+    fn every_action_is_a_command_in_the_registry() {
+        // One list of commands (docs/design/workspaces.md §5.1): the menus
+        // and the command field read novo-workflow's registry, so an
+        // action missing there would have no menu row and no palette row.
+        for &a in Action::ALL {
+            assert!(
+                novo_workflow::commands::is_known(a.id()),
+                "{a:?} ({}) is not in the command registry",
+                a.id()
+            );
         }
     }
 

@@ -120,3 +120,4 @@
 - 15:00 Merged #232 (WS-03 open end ring + flag, label_hit, double_click_target; main + design READY cffbfd1, 916 by design). WS-01 next: N selected, xref.link, text rename; then build 3.
 - 15:20 Merged #233 (WS-01 N selected; main + design READY 21ef470) and #234 (WS-01 xref.link; main + design READY e6e2780, 919 by design). Build 3 waits only on text/wire-number rename (WS-01 next).
 - 2026-10-15 16:40 UTC (UTC from here on) Merged #279, #280, #281, #282, #283, #284, #285, #286, #287, #288, #289, #290, #291, #292, #293, #294, #295, #296, #297, #298, #299, #301, #302, #303, #304, #305, #306, #307, #308, #309, #310, #312, #313, #314, #315, #316. Tasks sent to all idle threads (no build). Open: #311, #300. Combined local run 1022 passed.
+- 2026-10-15 19:20 UTC Merged #447, #458, #456, #396, #462, #446, #388, #468, #474, #476 (main red fix), #422, #428, #438, #448, #450, #460, #480, #436, #466. Second merge lead B started (odd PRs). See MAIN-HANDOFF 0f.

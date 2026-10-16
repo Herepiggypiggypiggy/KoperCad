@@ -123,7 +123,7 @@ Direction: the user downloads the models themselves, the data is saved on
 their device, and importing a part is one click, like the Eplan Data
 Portal. Nothing goes through our servers and nothing is bundled.
 
-**The part browser.** A drawer lists parts from the local catalog (the
+**The part browser.** A window (opened by the `parts` command) lists parts from the local catalog (the
 authored core set plus everything already imported) and from a small
 bundled **index of article numbers and maker page links** (links only,
 no maker content; to be confirmed with the makers in section 2a). Each row
@@ -362,6 +362,41 @@ watch imports the DXF, DWG or STEP the user saves. Notes:
 - Because the se.com website terms limit copying to personal, non-commercial
   use, the first-use notice stays in place and the question list (section 2a)
   asks Schneider about CAD use in commercial projects.
+
+## 3e. Maker recipes (parts: maker packs)
+
+One recipe per maker (`crates/novo-parts/src/recipes/`): WAGO, Phoenix
+Contact, Weidmüller, Siemens, Schneider Electric, ABB, Rittal,
+Murrelektronik, Lapp. A recipe is where KoperCAD keeps what it knows about
+getting and reading one maker's data. It never signs in, never fetches and
+never copies EPLAN's library; the user's download stays the only way in.
+
+- **Route and steps.** The page, whether it needs a login, whether the route
+  was captured by the owner (`Verified::OwnerCapture`: WAGO and Phoenix only)
+  or is written from public descriptions (`Unverified`: the rest, which open
+  the maker's home page and tell the user to search for the number). The Parts
+  window shows the steps while it waits for the download.
+- **Recognition.** The shape of the maker's order numbers (a type name such as
+  `UT 2,5` where a number belongs gets a warning, not a refusal), the number
+  variants in file names (ABB leaves off the `R1` suffix, Rittal the dot and
+  series), the catalog packages and file types the Downloads watch accepts.
+- **Reading.** `MakerRecipe::apply` turns BMEcat or CSV features (English,
+  German, Dutch; units in the text or the name) into schema v2: rated values
+  in SI under the `eng` keys, tagged `maker_datasheet`; connection kind and
+  conductor range; terminals for a terminal block that states its connection
+  count (names `1..N`, warned); ETIM/ECLASS codes; dimensions; price with its
+  currency; lifecycle and successor; function and letter codes; provenance
+  (`import:bmecat` / `import:csv`, not redistributable). Raw features stay in
+  `data`. Nothing is guessed: a price without a currency, a power loss given
+  per pole, a unit that does not fit, or a status wording it does not know is
+  left as written and listed in the import summary.
+- **Inputs.** BMEcat XML (also inside a catalog ZIP; other XML in a ZIP is
+  still handed to the EPLAN reader), CSV (UTF-8 or Windows-1252, any
+  delimiter; a spreadsheet must be saved as CSV first), STEP, DXF, EDZ, WAGO's
+  ZIP.
+- **Tests.** `tests/golden/<maker>/sample.*` with a recorded
+  `sample.expected.json`, one per recipe. The samples are synthetic (see the
+  README there); a real file replaces one with one command.
 
 ## 4. Offline and no admin rights
 

@@ -77,8 +77,27 @@ half-applied. Warnings cover tags two devices would share.
 replacements: one undo step. A plan made against an older project
 revision refuses to apply (`ApplyError::Outdated`); preview again.
 
+## New devices and parts (import thread)
+
+A Devices row **without an Id** whose tag no device has is a **new
+device**, when the sheet has an Id column (rows added to an export). It
+is listed in `ImportPlan::new_devices` with its description, kind
+(`general`, `terminal strip`, `connector`, `plc`), properties and order
+number, selected by default (`select_new` leaves it out). In a sheet with
+no Id column an unknown tag is rejected as before (more likely a typo).
+A new tag must have a device part (`-M1`) and be unused; a second row for
+it is rejected.
+
+**Order number** is editable: it sets the device's part. The row's
+Manufacturer cell narrows the match. `plan_import_with(project, workbook,
+&catalog)` also looks the part up in the catalog; without a catalog a bare
+part is made from the order number. Order numbers match without case,
+spaces and dashes, so retyping one changes nothing. A device with several
+parts is not edited this way. An empty cell removes the part. New parts,
+new devices and edits are one batch: one undo step.
+
 ## Later
 
-New rows and new cores (add devices), terminal Kind, rejected rows
+Cable core additions and removals, terminal Kind, rejected rows
 written back as a fix-and-reimport workbook, `kopercad-cli` and Python
 entry points, app dialog (open file, preview table, conflict choice).

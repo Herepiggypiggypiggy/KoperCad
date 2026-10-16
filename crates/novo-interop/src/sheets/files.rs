@@ -20,6 +20,8 @@ pub enum SheetError {
     Write(#[from] XlsxError),
     #[error("could not read the workbook: {0}")]
     Read(String),
+    #[error("{0:?} files cannot be imported; use .xlsx or .csv")]
+    UnknownFormat(String),
     #[error("the file is empty")]
     Empty,
     #[error("a quote that opens a cell on line {0} is never closed")]

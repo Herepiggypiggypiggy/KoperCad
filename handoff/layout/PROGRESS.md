@@ -26,3 +26,7 @@ Merged: #199 (canvas contrast, copper junction token, ring/flag tokens, canvas-f
 
 ## 2026-10-15 15:45 UTC
 Merged earlier: #216 (grid palette), #242 (label rule, workflow looks, connected terminals). Cabinet layout started on the lead's task: design doc docs/design/cabinet-layout.md and novo-layout engine (plate, footprints, collisions, clearance) merged as #284/#287; #289 adds rails and the overflow warning plus three doc fixes from design review. Next: ask WS-02 for placement storage and commands, then the place-all planner, then thin Cabinet canvas UI.
+
+## 2026-10-15 19:55 UTC
+Cabinet: #372/#378 (canvas and edit), #403 (table face, hover text) merged. #461 ducts READY (4ce992b, ducts centred like rails), #472 table polish READY (2c2274a, merged with main), #444 theme icons for Reports, Commissioning and 3D. Wind-down: handoff written, no new work. Not hands-on tested: the cabinet drag.
+
