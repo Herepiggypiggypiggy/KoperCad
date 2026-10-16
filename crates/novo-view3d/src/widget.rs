@@ -1668,7 +1668,15 @@ mod key_tests {
         let library = MeshLibrary::new();
         let camera = Camera::default();
         let key = |state: &ViewState| {
-            frame_key(&scene, &library, &camera, state, (64, 64), Mode::Settled, 0)
+            frame_key(
+                &scene,
+                &library,
+                &camera,
+                state,
+                (64, 64),
+                (Mode::Settled, None),
+                0,
+            )
         };
         let base = ViewState::default();
         let mut seen = vec![key(&base)];
