@@ -2006,8 +2006,30 @@ impl SchematicView {
                             chosen = Some(MenuChoice::Command(id));
                         }
                     }
-                    if menu.symbols > 0 && ui.button("Save as macro").clicked() {
-                        chosen = Some(MenuChoice::Command("macro.save"));
+                    // A selection of terminals already has a tall menu, so there the
+                    // two short rows share a line.
+                    let fault_row = !menu.wires.is_empty() || menu.symbols > 0;
+                    let mut rows = |ui: &mut egui::Ui| {
+                        if menu.symbols > 0 && ui.button("Save as macro").clicked() {
+                            chosen = Some(MenuChoice::Command("macro.save"));
+                        }
+                        if fault_row
+                            && ui
+                                .button("Add fault...")
+                                .on_hover_text(
+                                    "Open circuit, short between phases, to neutral or to earth, stuck \
+                                     contact: added to the fault list, run in Simulate > Fault \
+                                     scenarios",
+                                )
+                                .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("sim.add_fault"));
+                        }
+                    };
+                    if menu.terminals > 0 {
+                        ui.horizontal(|ui| rows(ui));
+                    } else {
+                        rows(ui);
                     }
                     ui.separator();
                     for (label, choice) in [

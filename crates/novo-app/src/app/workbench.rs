@@ -93,6 +93,8 @@ pub(crate) struct Workbench {
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
     pub(super) faults: Option<super::faults::FaultsWindow>,
+    /// The Add fault window (`sim.add_fault`), while it is open.
+    pub(super) add_fault: Option<super::faults::AddFault>,
     /// The Calculations window, while it is open.
     pub(super) calculations: Option<super::calculations::CalcWindow>,
     /// The Electrical inputs window, while it is open.
@@ -253,6 +255,7 @@ impl Default for Workbench {
             issue: None,
             compare: None,
             faults: None,
+            add_fault: None,
             calculations: None,
             electrical: None,
             safety: None,
@@ -381,6 +384,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "sim.live",
     "sim.plc_program",
     "sim.faults",
+    "sim.add_fault",
     "view.changes",
     "view.commissioning",
     "check.problems",
@@ -983,6 +987,7 @@ impl NovoApp {
                 }
             }
             "sim.faults" => self.toggle_faults(),
+            "sim.add_fault" => self.begin_add_fault(),
             "view.changes" => self.toggle_changes(argument),
             "view.commissioning" if self.workspace() == Workspace::Commissioning => {
                 self.switch_workspace(Workspace::Schematic);
