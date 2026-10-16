@@ -978,7 +978,7 @@ fn parts_ui(
             {
                 actions.push(PartsAction::ImportCatalogFiles);
             }
-            if novo_theme::widgets::primary_button(ui, "New part...")
+            if novo_theme::widgets::ghost_button(ui, "New part...")
                 .on_hover_text("Add a part by hand to your own catalog.")
                 .clicked()
             {
@@ -1301,7 +1301,7 @@ fn detail_ui(
                 ui.add(
                     egui::Label::new(model_status(win.model_state(part, &records).as_ref())).wrap(),
                 );
-                if ui.small_button("Import 3D model (STEP)...").clicked() {
+                if ui.button("Import 3D model (STEP)...").clicked() {
                     actions.push(PartsAction::ChooseModel);
                 }
             },
@@ -1314,11 +1314,11 @@ fn detail_ui(
                     if novo_theme::widgets::danger_button(ui, "Remove").clicked() {
                         actions.push(PartsAction::Remove(key.clone()));
                     }
-                    if ui.small_button("Cancel").clicked() {
+                    if ui.button("Cancel").clicked() {
                         actions.push(PartsAction::CancelRemove);
                     }
                 });
-            } else if ui.small_button("Remove from library").clicked() {
+            } else if ui.button("Remove from library").clicked() {
                 actions.push(PartsAction::AskRemove(key));
             }
         }
