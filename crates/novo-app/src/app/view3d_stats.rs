@@ -13,8 +13,6 @@ use novo_view3d::widget::{RenderStats, View3d, percentile, render_stats};
 const WINDOW: usize = 240;
 /// A gap longer than this is the view standing still, not a slow frame.
 const IDLE_GAP_MS: f32 = 250.0;
-/// Margin from the view's corner, in points.
-const MARGIN: f32 = 12.0;
 /// How fast the view turns while measuring: a full turn in 12 seconds.
 const SPIN_RAD_PER_S: f32 = std::f32::consts::TAU / 12.0;
 
@@ -76,49 +74,74 @@ impl Stats {
             view.spin(ctx, SPIN_RAD_PER_S);
         }
         let text = report(render_stats().as_ref(), &self.samples(), self.build);
-        egui::Area::new(egui::Id::new("view3d_stats"))
-            .order(egui::Order::Middle)
-            .pivot(egui::Align2::LEFT_BOTTOM)
-            .fixed_pos(view_rect.left_bottom() + egui::vec2(MARGIN, -MARGIN))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.label(egui::RichText::new(&text).monospace().small());
-                    ui.horizontal(|ui| {
-                        let label = if self.spin {
-                            "✔ Spin the view"
-                        } else {
-                            "Spin the view"
-                        };
-                        if ui
-                            .selectable_label(self.spin, label)
-                            .on_hover_text("Turn the view steadily so every frame is a moving one")
-                            .clicked()
-                        {
-                            self.spin = !self.spin;
-                            self.intervals.clear();
-                        }
-                        if ui
-                            .button("Copy")
-                            .on_hover_text("Copy these lines to paste into a message")
-                            .clicked()
-                        {
-                            ctx.copy_text(text.clone());
-                        }
-                        if ui.button("Close").clicked() {
-                            self.toggle();
-                        }
-                    });
-                });
+        super::panel::Panel::new(
+            "view3d_stats",
+            "Frame statistics",
+            view_rect,
+            super::panel::Side::BottomLeft,
+            400.0,
+        )
+        .fit()
+        .show(ctx, |ui| {
+            ui.label(egui::RichText::new(&text).monospace().small());
+            ui.horizontal(|ui| {
+                let label = if self.spin {
+                    "✔ Spin the view"
+                } else {
+                    "Spin the view"
+                };
+                if ui
+                    .selectable_label(self.spin, label)
+                    .on_hover_text("Turn the view steadily so every frame is a moving one")
+                    .clicked()
+                {
+                    self.spin = !self.spin;
+                    self.intervals.clear();
+                }
+                if ui
+                    .button("Copy")
+                    .on_hover_text("Copy these lines to paste into a message")
+                    .clicked()
+                {
+                    ctx.copy_text(text.clone());
+                }
+                if view.stepped_down().is_some()
+                    && ui
+                        .button("Restore quality")
+                        .on_hover_text("Draw at full quality again")
+                        .clicked()
+                {
+                    view.reset_quality();
+                }
+                if ui.button("Close").clicked() {
+                    self.toggle();
+                }
             });
+        });
     }
 }
+
+/// How much of the view bottom the panel takes, for a panel above it.
+pub(super) const ROOM: f32 = 200.0;
 
 /// The lines of the panel, also what Copy puts on the clipboard.
 pub(super) fn report(stats: Option<&RenderStats>, intervals: &[f32], build: Build) -> String {
     let mut out = String::from("KoperCAD 3D frame statistics\n");
     match stats {
         Some(s) => {
-            let _ = writeln!(out, "GPU: {} ({}, {:?})", s.adapter, s.backend, s.tier);
+            let _ = write!(
+                out,
+                "GPU: {} ({}, {:?})",
+                s.adapter, s.backend, s.adapter_tier
+            );
+            if s.tier != s.adapter_tier {
+                let _ = write!(
+                    out,
+                    ", quality stepped down to {:?} after slow frames",
+                    s.tier
+                );
+            }
+            out.push('\n');
         }
         None => out.push_str("GPU: none (the 3D view is not drawn)\n"),
     }
@@ -163,6 +186,7 @@ mod tests {
             adapter: "Test GPU".into(),
             backend: "Vulkan".into(),
             tier: Tier::Discrete,
+            adapter_tier: Tier::Discrete,
             renders: 10,
             visible_items: 1016,
             draw_calls: 11,
@@ -192,6 +216,21 @@ mod tests {
         );
         assert!(
             text.ends_with("Scene build: 3.2 ms, routing 41.0 ms"),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn the_report_says_when_the_governor_stepped_the_quality_down() {
+        let stepped = RenderStats {
+            tier: Tier::Integrated,
+            ..stats()
+        };
+        let text = report(Some(&stepped), &[16.0], Build::default());
+        assert!(
+            text.contains(
+                "GPU: Test GPU (Vulkan, Discrete), quality stepped down to Integrated after slow frames"
+            ),
             "{text}"
         );
     }

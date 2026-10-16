@@ -300,11 +300,16 @@ impl NovoApp {
         }
         mode.view.drag_items = mode.controls.move_items;
         mode.view.state.display.shadows = mode.controls.shadows;
+        mode.view.state.display.dimensions = mode.controls.dimensions;
         mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
+        mode.controls.reduced = mode.view.stepped_down().is_some();
         view3d_controls::toolbar(ui.ctx(), view_rect, &mut mode.controls, limit);
+        if std::mem::take(&mut mode.controls.restore) {
+            mode.view.reset_quality();
+        }
         let stale = run_heat(
             &mut self.cabinet.heat,
             project,
@@ -453,8 +458,18 @@ impl NovoApp {
                     cabinet_inspector::gather(project, id, &stored, &stored, &devices, &tag_of);
                 ask = cabinet_inspector::overlay(
                     ui.ctx(),
-                    out.rect,
-                    false,
+                    view_rect,
+                    // Left, under the toolbar: the right edge is the view cube
+                    // and the Heat panel, the bottom left the statistics.
+                    cabinet_inspector::Room {
+                        left: true,
+                        top: Some(view3d_controls::BELOW),
+                        bottom: if self.view3d.stats.shown {
+                            super::view3d_stats::ROOM
+                        } else {
+                            0.0
+                        },
+                    },
                     &facts,
                     project,
                     &mut self.cabinet.panel_fields,
