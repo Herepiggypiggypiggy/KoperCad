@@ -70,6 +70,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("plc.import_tags", under("File", "Import")),
     ("help.walkthrough", at("Help")),
     ("help.show_hints", at("Help")),
+    ("help.whats_new", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
     // Edit

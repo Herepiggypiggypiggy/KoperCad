@@ -70,6 +70,9 @@ pub struct Settings {
     /// stops showing once followed [`HINT_LIMIT`] times; Help > Show hints
     /// again clears the counters.
     pub hints_seen: BTreeMap<String, u32>,
+    /// The id of the newest What's new entry the person has opened the
+    /// list over (`assets/whats-new.md`); empty on a first run.
+    pub whats_new_seen: String,
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way

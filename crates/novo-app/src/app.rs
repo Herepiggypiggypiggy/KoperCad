@@ -125,6 +125,7 @@ mod view3d_move_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
+mod whats_new;
 mod wheel;
 mod wire_panel;
 #[cfg(test)]
@@ -190,6 +191,8 @@ mod shortcuts_sheet_tests;
 mod tips_tests;
 #[cfg(test)]
 mod variants_tests;
+#[cfg(test)]
+mod whats_new_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -295,6 +298,8 @@ pub struct NovoApp {
     wb: Workbench,
     messages: Vec<Message>,
     show_about: bool,
+    /// The What's new list is open (app/whats_new.rs).
+    show_whats_new: bool,
     standards_open: bool,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
@@ -382,6 +387,7 @@ impl NovoApp {
             wb,
             messages: Vec::new(),
             show_about: false,
+            show_whats_new: false,
             standards_open: false,
             window_title: String::new(),
             open_on_start: None,
@@ -1055,6 +1061,7 @@ impl NovoApp {
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
+        self.whats_new_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
         self.parts_window(&ctx);
@@ -1161,6 +1168,7 @@ impl NovoApp {
 
     fn modal_open_but_wheel(&self) -> bool {
         self.show_about
+            || self.show_whats_new
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
             || self.wb.sheet_import.is_some()
@@ -1254,6 +1262,7 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
+                self.whats_new_pill(ui);
                 let shortcut = Action::CommandPalette
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
