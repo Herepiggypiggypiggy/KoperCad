@@ -6,3 +6,4 @@
 2026-10-15 19:30 UTC macro browser window (macro.browser, macro.import) with tests; Place button waits on Macros thread
 2026-10-15 22:25 UTC #455 merged with main; Place button now opens macro.place (open_macro_place) since #489 is in
 - 2026-10-16: merged main into #455 (conflicts in app.rs, workbench.rs; kept both sides), fmt/clippy/tests green; sent SHA to reviewer C.
+2026-10-16 08:00 UTC FU-MACRO PR (branch claude/project-thread-piifil): .kcmacro `parts` field typed (MacroFile::parts/set_parts, format v2 only when parts are carried, v1 files load), thumbnail data (novo_parts::thumbnail) painted in the browser, company folder (Preferences > Macros) with My macros / Company switch, update offers (macro_updates) with "Set old copy aside", kopercad-cli macros list/export/import/install-starters. Tests green.

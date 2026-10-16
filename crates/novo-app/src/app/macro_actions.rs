@@ -309,10 +309,19 @@ impl NovoApp {
             .ok_or_else(|| plain("There is no macro folder on this computer".into()))?;
         let parts = macro_place::captured_parts(project, &definition);
         let mut file = MacroFile::new(definition).with_author(self.settings.initials.clone());
-        if !parts.is_empty() {
-            file.extra
-                .insert("parts".into(), macro_place::parts_to_json(&parts));
-        }
+        // Carried parts make the file format version 2.
+        file.set_parts(
+            &parts
+                .iter()
+                .map(|p| novo_parts::MacroPart {
+                    device: p.device.raw(),
+                    manufacturer: p.manufacturer.clone(),
+                    order_number: p.order_number.clone(),
+                    type_number: p.type_number.clone(),
+                    description: p.description.clone(),
+                })
+                .collect::<Vec<_>>(),
+        );
         if replace {
             // The file `save` refused is the top-level macro of this name;
             // its path comes from the library, not from the raw name, which

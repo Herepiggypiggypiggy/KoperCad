@@ -65,9 +65,10 @@ pub use library::{
     SourceRecord, default_library_root,
 };
 pub use macros::{
-    Imported, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION, MACRO_PACK_EXTENSION,
-    MACRO_PACK_FORMAT, MacroEntry, MacroError, MacroFile, MacroLibrary, MacroPack, OnConflict,
-    PackEntry, STARTER_FOLDER, starter_macros, user_macros_dir,
+    Imported, MACRO_BASE_VERSION, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION,
+    MACRO_PACK_EXTENSION, MACRO_PACK_FORMAT, MacroEntry, MacroError, MacroFile, MacroLibrary,
+    MacroPack, MacroPart, MacroUpdate, OnConflict, PackEntry, STARTER_FOLDER, SYMBOL_PAD,
+    ThumbSymbol, Thumbnail, macro_updates, starter_macros, thumbnail, user_macros_dir,
 };
 pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_properties};
 pub use pins::{

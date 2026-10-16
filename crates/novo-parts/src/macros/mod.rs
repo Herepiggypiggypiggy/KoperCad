@@ -29,16 +29,26 @@ use thiserror::Error;
 
 use crate::search::Matcher;
 
+mod extras;
 mod starter;
+pub use extras::{
+    MacroPart, MacroUpdate, SYMBOL_PAD, ThumbSymbol, Thumbnail, macro_updates, thumbnail,
+};
 pub use starter::{STARTER_FOLDER, starter_macros};
 
 /// The `format` value of a macro file.
 pub const MACRO_FORMAT: &str = "kopercad-macro";
 /// The `format` value of a pack file.
 pub const MACRO_PACK_FORMAT: &str = "kopercad-macro-pack";
-/// Version written to macro and pack files. A newer file is refused, not
+/// The newest macro format this build reads. A newer file is refused, not
 /// guessed at.
-pub const MACRO_FORMAT_VERSION: u32 = 1;
+///
+/// Version 2 adds the `parts` field ([`MacroFile::parts`]). A file is written
+/// as version 1 unless it carries parts, so older builds keep reading
+/// everything that does not need the new field.
+pub const MACRO_FORMAT_VERSION: u32 = 2;
+/// The version of a file that uses no field added after the first release.
+pub const MACRO_BASE_VERSION: u32 = 1;
 /// File extension of one macro, without the dot.
 pub const MACRO_EXTENSION: &str = "kcmacro";
 /// File extension of a pack, without the dot.
@@ -102,7 +112,7 @@ impl MacroFile {
     pub fn new(definition: BlockDefinition) -> Self {
         MacroFile {
             format: MACRO_FORMAT.into(),
-            version: MACRO_FORMAT_VERSION,
+            version: MACRO_BASE_VERSION,
             name: definition.name.clone(),
             description: definition.description.clone(),
             author: String::new(),
@@ -199,6 +209,8 @@ pub struct MacroEntry {
     pub revision: u32,
     pub parameters: usize,
     pub members: usize,
+    /// How many parts the file carries (see [`MacroFile::parts`]).
+    pub parts: usize,
     /// Seconds since the Unix epoch, if the file system says.
     pub modified: Option<u64>,
 }
@@ -240,6 +252,11 @@ impl MacroLibrary {
         user_macros_dir().map(|d| Self::new(d, "user"))
     }
 
+    /// The label placements remember (`user`, `company`).
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
     }
@@ -279,23 +296,27 @@ impl MacroLibrary {
                 self.walk(&path, &sub, out, problems);
             } else if has_extension(&path, MACRO_EXTENSION) {
                 match read_macro(&path) {
-                    Ok(file) => out.push(MacroEntry {
-                        path: join(folder, &name),
-                        folder: folder.to_string(),
-                        name: file.name,
-                        description: file.description,
-                        author: file.author,
-                        tags: file.tags,
-                        revision: file.revision,
-                        parameters: file.definition.parameters.len(),
-                        members: file.definition.members.len(),
-                        modified: item
-                            .metadata()
-                            .ok()
-                            .and_then(|m| m.modified().ok())
-                            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                            .map(|d| d.as_secs()),
-                    }),
+                    Ok(file) => {
+                        let parts = file.parts().len();
+                        out.push(MacroEntry {
+                            path: join(folder, &name),
+                            folder: folder.to_string(),
+                            name: file.name,
+                            description: file.description,
+                            author: file.author,
+                            tags: file.tags,
+                            revision: file.revision,
+                            parameters: file.definition.parameters.len(),
+                            members: file.definition.members.len(),
+                            parts,
+                            modified: item
+                                .metadata()
+                                .ok()
+                                .and_then(|m| m.modified().ok())
+                                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                                .map(|d| d.as_secs()),
+                        });
+                    }
                     Err(e) => problems.push(e),
                 }
             }
@@ -520,9 +541,14 @@ impl MacroLibrary {
                 file: self.load(path)?,
             });
         }
+        let version = macros
+            .iter()
+            .map(|m| m.file.version)
+            .max()
+            .unwrap_or(MACRO_BASE_VERSION);
         let pack = MacroPack {
             format: MACRO_PACK_FORMAT.into(),
-            version: MACRO_FORMAT_VERSION,
+            version,
             macros,
         };
         let text = serde_json::to_string_pretty(&pack).expect("packs always serialize") + "\n";
@@ -563,7 +589,31 @@ impl MacroLibrary {
         } else {
             vec![(folder.to_string(), MacroFile::from_json(&text, source)?)]
         };
+        self.add_items(items, on_conflict)
+    }
 
+    /// Copies a macro of `other` (a company library, say) into this library's
+    /// `folder`, by `on_conflict` when the name is taken.
+    pub fn copy_from(
+        &self,
+        other: &MacroLibrary,
+        path: &str,
+        folder: &str,
+        on_conflict: OnConflict,
+    ) -> Result<Imported> {
+        let file = other.load(path)?;
+        let done = self.add_items(vec![(folder.to_string(), file)], on_conflict)?;
+        Ok(done
+            .into_iter()
+            .next()
+            .expect("one macro in, one result out"))
+    }
+
+    fn add_items(
+        &self,
+        items: Vec<(String, MacroFile)>,
+        on_conflict: OnConflict,
+    ) -> Result<Vec<Imported>> {
         let mut done = Vec::new();
         for (target_folder, mut file) in items {
             let path = self.target(&target_folder, &file.name)?;
