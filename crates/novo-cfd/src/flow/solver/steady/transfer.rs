@@ -50,8 +50,7 @@ fn interpolate(
         let (k0, k1, wk) = w[2][k];
         for j in 0..td[1] {
             let (j0, j1, wj) = w[1][j];
-            for i in 0..td[0] {
-                let (i0, i1, wi) = w[0][i];
+            for &(i0, i1, wi) in &w[0] {
                 let lerp_i = |j: usize, k: usize| at(i0, j, k) * (1.0 - wi) + at(i1, j, k) * wi;
                 let lerp_j = |k: usize| lerp_i(j0, k) * (1.0 - wj) + lerp_i(j1, k) * wj;
                 out.push(lerp_j(k0) * (1.0 - wk) + lerp_j(k1) * wk);
