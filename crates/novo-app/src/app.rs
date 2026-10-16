@@ -45,6 +45,7 @@ mod outline_tree;
 mod pages;
 mod parts;
 mod parts_import;
+mod parts_quality;
 mod pdf;
 mod plate_export;
 mod plc;

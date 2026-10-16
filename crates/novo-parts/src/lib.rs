@@ -32,6 +32,7 @@ mod library;
 mod macros;
 mod panel;
 mod pins;
+mod quality;
 mod recipes;
 mod schema;
 mod search;
@@ -73,6 +74,10 @@ pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_pr
 pub use pins::{
     POSITIONS_SOURCE_KEY, POSITIONS_SOURCE_PROPERTY, placed_terminals, positions_estimated,
     terminal_position, write_properties as write_terminal_positions,
+};
+pub use quality::{
+    Completeness, Criterion, Fill, Finding, Grade, PartQuality, QualityReport, assess,
+    report as quality_report,
 };
 pub use recipes::{
     ApplyContext, Dim, GENERIC, Login, MakerRecipe, Mapped, Quantity, RECIPES, RecipeReport, Route,
