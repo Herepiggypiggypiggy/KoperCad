@@ -121,6 +121,16 @@ impl CommissioningStore {
         Ok(Some(id))
     }
 
+    /// Drops the decisions about objects the project no longer has. Punch
+    /// items stay, with their link, so a report can still list them.
+    pub fn prune(&mut self, project: &novo_core::Project) {
+        self.checks.retain(|(target, _), _| match target {
+            Target::Wire(id) => project.wire(*id).is_some(),
+            Target::Terminal(id) => project.terminal(*id).is_some(),
+            Target::Device(id) => project.device(*id).is_some(),
+        });
+    }
+
     /// Forgets a decision, back to `Pending`.
     pub fn clear_check(&mut self, target: Target, check: CheckKind) {
         self.checks.remove(&(target, check));
@@ -150,7 +160,10 @@ impl CommissioningStore {
         self.punch.values().filter(|p| !p.state.is_closed()).count()
     }
 
-    /// Moves an item along. `Fixed` puts the linked failed check back to
+    /// Moves an item along. Deciding a check as passed does not close its
+    /// linked item: the person verifies it. Reopening a `Fixed` item does
+    /// not bring the failure back; the check stays `Pending` until decided
+    /// again. `Fixed` puts the linked failed check back to
     /// `Pending` so it is tested again; `Verified` and `WontFix` record who
     /// closed it and when.
     pub fn set_punch_state(

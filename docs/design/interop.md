@@ -115,6 +115,6 @@ becomes a fixture and a test.
 
 ## 7. Out of scope here
 
-DWG (closed format; DXF is the exchange), DXF 3D, import of symbols as
+DWG as a native format (closed; a free converter turns it into DXF, see `interop-migration.md`), DXF 3D, import of symbols as
 KoperCAD symbols (a later, separate design), writing to EPLAN's own project
 formats.

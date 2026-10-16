@@ -1,6 +1,6 @@
 use novo_layout::plan::{Candidate, ROW_GAP_MM, place_all};
 use novo_layout::{
-    Placement, Plate, Size, clearance_violations, collisions, outside, rail_overflows,
+    Margins, Placement, Plate, Size, clearance_violations, collisions, outside, rail_overflows,
 };
 
 fn cand(id: u64, key: &str, w: f64, h: f64) -> Candidate {
@@ -21,6 +21,7 @@ fn placements(plan: &novo_layout::plan::Plan, cands: &[Candidate]) -> Vec<Placem
             rotated: false,
             size: cands.iter().find(|c| c.id == p.id).unwrap().size,
             clearance: None,
+            margins: Margins::default(),
             rail: Some(p.rail),
         })
         .collect()
