@@ -238,6 +238,10 @@ fn label_drag_at(
     }
     let label = scene.scene().get(hit.id)?.labels.get(hit.label?)?.clone();
     let source = match found.text {
+        _ if found.kind == LabelKind::Note => match found.owner {
+            AnyId::Symbol(s) => LabelSource::Note(s),
+            _ => return None,
+        },
         Some(text) => LabelSource::Record(text),
         None => LabelSource::Drawn {
             owner: found.owner,
@@ -930,7 +934,20 @@ impl SchematicView {
                 let delta = self.editor.label_delta(drag.from, drag.to);
                 let source = drag.source.clone();
                 self.label_drag = None;
-                self.editor.move_label(document, page, &source, delta);
+                if let LabelSource::Note(symbol) = source {
+                    // The note's offset comes from where it is drawn now.
+                    let by = Vec2::new(delta.x as f32, delta.y as f32);
+                    let offset = self
+                        .scene
+                        .as_ref()
+                        .and_then(|s| s.note_offset_after(symbol, by));
+                    if let Some(o) = offset.filter(|_| delta != Point::ZERO) {
+                        let o = Point::new(f64::from(o.x), f64::from(o.y));
+                        self.editor.set_note_offset(document, symbol, Some(o));
+                    }
+                } else {
+                    self.editor.move_label(document, page, &source, delta);
+                }
             }
         }
         if self.drag_move
@@ -1989,8 +2006,30 @@ impl SchematicView {
                             chosen = Some(MenuChoice::Command(id));
                         }
                     }
-                    if menu.symbols > 0 && ui.button("Save as macro").clicked() {
-                        chosen = Some(MenuChoice::Command("macro.save"));
+                    // A selection of terminals already has a tall menu, so there the
+                    // two short rows share a line.
+                    let fault_row = !menu.wires.is_empty() || menu.symbols > 0;
+                    let mut rows = |ui: &mut egui::Ui| {
+                        if menu.symbols > 0 && ui.button("Save as macro").clicked() {
+                            chosen = Some(MenuChoice::Command("macro.save"));
+                        }
+                        if fault_row
+                            && ui
+                                .button("Add fault...")
+                                .on_hover_text(
+                                    "Open circuit, short between phases, to neutral or to earth, stuck \
+                                     contact: added to the fault list, run in Simulate > Fault \
+                                     scenarios",
+                                )
+                                .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("sim.add_fault"));
+                        }
+                    };
+                    if menu.terminals > 0 {
+                        ui.horizontal(|ui| rows(ui));
+                    } else {
+                        rows(ui);
                     }
                     ui.separator();
                     for (label, choice) in [
@@ -2996,6 +3035,51 @@ mod tests {
             "{at:?}"
         );
         assert!(at.x > f64::from(tag.pos.x) && at.y > f64::from(tag.pos.y));
+        assert!(h.view.label_drag.is_none());
+    }
+
+    #[test]
+    fn dragging_a_note_stores_an_offset_and_leaves_the_device() {
+        use novo_canvas::model::{NOTE_DX, NOTE_DY, NoteAnchor, NoteDensity, SymbolNote};
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let sym = h.doc.project().symbols().next().unwrap().id;
+        h.view.set_notes(vec![SymbolNote {
+            symbol: sym,
+            lines: vec!["13-14 2.1".into()],
+            warning: false,
+            anchor: NoteAnchor::Right,
+            rows: Vec::new(),
+            density: NoteDensity::default(),
+        }]);
+        h.frame(vec![]);
+        let origin = h.doc.project().symbol(sym).unwrap().placement.origin;
+        let depth = h.doc.undo_depth();
+        let note_at = |h: &Harness| {
+            let scene = h.view.scene.as_ref().unwrap().scene();
+            let item = scene.get(item_id(AnyId::Symbol(sym))).unwrap();
+            item.labels.last().unwrap().bounds()
+        };
+        let before = note_at(&h);
+        let grab = before.center();
+        let grab = (f64::from(grab.x), f64::from(grab.y));
+        h.drag(grab, (grab.0 + 20.0, grab.1 + 10.0));
+        h.frame(vec![]);
+        let s = h.doc.project().symbol(sym).unwrap();
+        assert_eq!(s.placement.origin, origin, "the device stays");
+        assert_eq!(h.doc.undo_depth(), depth + 1);
+        assert!(s.properties.contains_key(NOTE_DX) && s.properties.contains_key(NOTE_DY));
+        // The note now sits where it was dragged to (within a grid step).
+        let after = note_at(&h);
+        let step = h.view.editor.grid as f32;
+        assert!(
+            (after.min.x - before.min.x - 20.0).abs() <= step
+                && (after.min.y - before.min.y - 10.0).abs() <= step,
+            "{before:?} -> {after:?}"
+        );
         assert!(h.view.label_drag.is_none());
     }
 
