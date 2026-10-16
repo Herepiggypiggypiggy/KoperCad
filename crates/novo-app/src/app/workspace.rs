@@ -327,6 +327,42 @@ mod tests {
     }
 
     #[test]
+    fn commissioning_survives_jumps_a_new_project_and_stays_locked() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        d.app.switch_workspace(Workspace::Commissioning);
+        d.frame();
+        // A jump from the panel shows a page without leaving.
+        let page = d.app.current_page.expect("a page");
+        d.app.show_page(page);
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Commissioning);
+        assert!(d.app.wb.commissioning.is_some());
+        // A new project drops the store; the workspace loads it again and
+        // the lock never lets go.
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Commissioning);
+        assert!(d.app.wb.commissioning.is_some());
+        assert!(d.app.commissioning_locks_edits());
+        // Another outline tab leaves the workspace and unlocks.
+        d.app.outline_mode = OutlineMode::Pages;
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Schematic);
+        assert!(!d.app.commissioning_locks_edits());
+        // Closing the project leaves it too.
+        d.app.switch_workspace(Workspace::Commissioning);
+        d.frame();
+        d.app.run(&ctx, Action::CloseProject);
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Schematic);
+    }
+
+    #[test]
     fn each_workspace_keeps_its_panels() {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));

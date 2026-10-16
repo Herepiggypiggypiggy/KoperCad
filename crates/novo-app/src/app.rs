@@ -673,6 +673,10 @@ impl NovoApp {
         self.wb.commissioning = None;
         self.wb.sheet = 0;
         self.add_generated_pages();
+        // Nothing to commission in a closed project.
+        if !self.is_open() && self.workspace() == workspace::Workspace::Commissioning {
+            self.switch_workspace(workspace::Workspace::Schematic);
+        }
     }
 
     fn close_project(&mut self) {
@@ -868,6 +872,7 @@ impl NovoApp {
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
+        self.sync_commissioning_workspace();
         self.drawer(ui);
         let canvas_rect = egui::CentralPanel::no_frame()
             .show(ui, |ui| {
@@ -1062,8 +1067,12 @@ impl NovoApp {
         if self.wb.pending.is_some_and(|p| p.page != page) {
             self.wb.pending = None;
         }
-        // A page is a schematic page: picking one leaves the Cabinet.
-        self.switch_workspace(workspace::Workspace::Schematic);
+        // A page is a schematic page: picking one leaves the Cabinet, the
+        // Reports and the 3D view. Commissioning is the schematic page, so
+        // a jump inside it stays there.
+        if self.workspace() != workspace::Workspace::Commissioning {
+            self.switch_workspace(workspace::Workspace::Schematic);
+        }
     }
 
     /// Shows sheet `sheet` of a generated page (0 for any other page).
