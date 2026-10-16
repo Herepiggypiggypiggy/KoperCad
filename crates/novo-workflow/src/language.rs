@@ -738,6 +738,11 @@ pub const DUTCH: &[Aliases] = &[
         &["kwaliteit", "trage weergave", "herstellen"],
     ),
     nl(
+        "view.3d_ssao",
+        &["omgevingsocclusie tonen in 3d"],
+        &["occlusie", "contactschaduw", "hoeken"],
+    ),
+    nl(
         "view.3d_stats",
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],

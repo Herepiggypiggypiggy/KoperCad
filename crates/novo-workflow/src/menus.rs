@@ -160,6 +160,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.3d_shell", under("View", "3D")),
     ("view.3d_wires", under("View", "3D")),
     ("view.3d_shadows", under("View", "3D")),
+    ("view.3d_ssao", under("View", "3D")),
     ("view.3d_dimensions", under("View", "3D")),
     ("view.3d_quality", under("View", "3D")),
     ("view.3d_stats", under("View", "3D")),

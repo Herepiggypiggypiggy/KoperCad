@@ -73,7 +73,12 @@ impl Stats {
         if self.spin {
             view.spin(ctx, SPIN_RAD_PER_S);
         }
-        let text = report(render_stats().as_ref(), &self.samples(), self.build);
+        let text = report(
+            render_stats().as_ref(),
+            &self.samples(),
+            self.build,
+            view.occlusion_paused(),
+        );
         super::panel::Panel::new(
             "view3d_stats",
             "Frame statistics",
@@ -105,7 +110,7 @@ impl Stats {
                 {
                     ctx.copy_text(text.clone());
                 }
-                if view.stepped_down().is_some()
+                if (view.stepped_down().is_some() || view.occlusion_paused())
                     && ui
                         .button("Restore quality")
                         .on_hover_text("Draw at full quality again")
@@ -125,7 +130,12 @@ impl Stats {
 pub(super) const ROOM: f32 = 200.0;
 
 /// The lines of the panel, also what Copy puts on the clipboard.
-pub(super) fn report(stats: Option<&RenderStats>, intervals: &[f32], build: Build) -> String {
+pub(super) fn report(
+    stats: Option<&RenderStats>,
+    intervals: &[f32],
+    build: Build,
+    occlusion_paused: bool,
+) -> String {
     let mut out = String::from("KoperCAD 3D frame statistics\n");
     match stats {
         Some(s) => {
@@ -158,9 +168,18 @@ pub(super) fn report(stats: Option<&RenderStats>, intervals: &[f32], build: Buil
         );
     }
     if let Some(s) = stats {
+        let occlusion = if s.ssao {
+            "AO on"
+        } else if occlusion_paused {
+            "AO paused"
+        } else if s.adapter_tier != novo_view3d::render::Tier::Discrete {
+            "AO n/a"
+        } else {
+            "AO off"
+        };
         let _ = writeln!(
             out,
-            "Renderer CPU: {:.2} ms median, {:.2} ms 95th percentile",
+            "Renderer CPU: {:.2} ms median, {:.2} ms 95th, {occlusion}",
             s.cpu_p50_ms, s.cpu_p95_ms
         );
         let _ = writeln!(
@@ -195,6 +214,7 @@ mod tests {
             msaa: 1,
             cpu_p50_ms: 0.18,
             cpu_p95_ms: 0.4,
+            ssao: true,
         }
     }
 
@@ -205,11 +225,12 @@ mod tests {
             scene_ms: 3.2,
             routing_ms: Some(41.0),
         };
-        let text = report(Some(&stats()), &intervals, build);
+        let text = report(Some(&stats()), &intervals, build, false);
         assert!(text.contains("GPU: Test GPU (Vulkan, Discrete)"), "{text}");
         assert!(text.contains("18.0 ms median"), "{text}");
         assert!(text.contains("56 fps (100 frames)"), "{text}");
         assert!(text.contains("Renderer CPU: 0.18 ms median"), "{text}");
+        assert!(text.contains("0.40 ms 95th, AO on"), "{text}");
         assert!(
             text.contains("1016 items, 11 draw calls, 12700 triangles"),
             "{text}"
@@ -226,7 +247,7 @@ mod tests {
             tier: Tier::Integrated,
             ..stats()
         };
-        let text = report(Some(&stepped), &[16.0], Build::default());
+        let text = report(Some(&stepped), &[16.0], Build::default(), false);
         assert!(
             text.contains(
                 "GPU: Test GPU (Vulkan, Discrete), quality stepped down to Integrated after slow frames"
@@ -236,8 +257,26 @@ mod tests {
     }
 
     #[test]
+    fn the_report_says_when_the_governor_paused_occlusion() {
+        let off = RenderStats {
+            ssao: false,
+            ..stats()
+        };
+        let paused = report(Some(&off), &[16.0], Build::default(), true);
+        assert!(paused.contains("AO paused"), "{paused}");
+        let plain = report(Some(&off), &[16.0], Build::default(), false);
+        assert!(plain.contains("95th, AO off"), "{plain}");
+        let integrated = RenderStats {
+            adapter_tier: Tier::Integrated,
+            ..off
+        };
+        let text = report(Some(&integrated), &[16.0], Build::default(), false);
+        assert!(text.contains("AO n/a"), "{text}");
+    }
+
+    #[test]
     fn without_samples_or_an_adapter_the_report_says_so() {
-        let text = report(None, &[], Build::default());
+        let text = report(None, &[], Build::default(), false);
         assert!(text.contains("GPU: none"), "{text}");
         assert!(text.contains("no samples yet"), "{text}");
         assert!(text.ends_with("Scene build: 0.0 ms"), "{text}");
