@@ -73,6 +73,12 @@ impl Controls {
     }
 }
 
+/// Wide enough for every toggle and the door slider on one row.
+const TOOLBAR_WIDTH: f32 = 900.0;
+
+/// Where a panel under the toolbar starts, from the top of the view.
+pub(super) const BELOW: f32 = 140.0;
+
 /// The toolbar, top left of the view. `limit` is how far the enclosure's door
 /// opens, `None` when it has none.
 pub(super) fn toolbar(
@@ -83,99 +89,106 @@ pub(super) fn toolbar(
     views: &[crate::settings::CameraBookmark],
 ) -> Changed {
     let mut changed = Changed::default();
-    egui::Area::new(egui::Id::new("view3d_toolbar"))
-        .order(egui::Order::Middle)
-        .fixed_pos(view.left_top() + egui::vec2(MARGIN, MARGIN))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    // Layers: things that are drawn or not, in one popover.
-                    let n_on = [
-                        controls.layers.shell,
-                        controls.layers.door,
-                        controls.layers.wires,
-                        controls.shadows,
-                        controls.missing_data,
-                    ]
-                    .iter()
-                    .filter(|b| **b)
-                    .count();
-                    let config = egui::containers::menu::MenuConfig::new()
-                        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
-                    egui::containers::menu::MenuButton::new(format!("Layers ({n_on})"))
-                        .config(config)
-                        .ui(ui, |ui| {
-                            let layers = &mut controls.layers;
-                            changed.layers |= ui
-                                .checkbox(&mut layers.shell, "Enclosure")
-                                .on_hover_text("Show the enclosure box")
-                                .changed();
-                            changed.layers |= ui
-                                .checkbox(&mut layers.door, "Door")
-                                .on_hover_text("Show the door")
-                                .changed();
-                            changed.layers |= ui
-                                .checkbox(&mut layers.wires, "Wires")
-                                .on_hover_text("Show the routed wires")
-                                .changed();
-                            ui.checkbox(&mut controls.shadows, "Shadows").on_hover_text(
-                                "Soft shadows from the key light (View > 3D > Shadows)",
-                            );
-                            ui.checkbox(&mut controls.missing_data, "Missing data")
-                                .on_hover_text(
-                                    "Mark every device that has no part data with a \"?\". Off: \
-                                     the \"?\" shows on the device under the pointer.",
-                                );
-                        });
-                    ui.separator();
-                    // Modes and panels: what the pointer does, what sits at the side.
-                    toggle(
-                        ui,
-                        &mut controls.move_items,
-                        "Move",
-                        "Move mode. Drag a device, rail or duct to move it on the plate (grid \
-                         and checks as in the Cabinet). R turns the selection, Delete takes it \
-                         off. Off: a drag draws a selection box.",
-                    );
-                    toggle(
-                        ui,
-                        &mut controls.heat_panel,
-                        "Heat",
-                        "The Heat panel: simulate how heat and air move in this cabinet",
-                    );
-                    changed.views = super::view3d_views::menu(ui, views);
-                    if let Some(limit) = limit
-                        && controls.layers.door
-                    {
-                        ui.separator();
-                        let label = if controls.door_deg > 0.0 {
-                            "Close door"
-                        } else {
-                            "Open door"
-                        };
-                        if ui
-                            .button(label)
-                            .on_hover_text("Open or close the door (Shift+D)")
-                            .clicked()
-                        {
-                            controls.toggle_door(Some(limit));
-                            changed.door = true;
-                        }
-                        ui.spacing_mut().slider_width = SLIDER_WIDTH;
-                        let slider = egui::Slider::new(&mut controls.door_deg, 0.0..=limit)
-                            .suffix("°")
-                            .max_decimals(0);
-                        if ui
-                            .add(slider)
-                            .on_hover_text("How far the door is open")
-                            .changed()
-                        {
-                            changed.door = true;
-                        }
-                    }
+    // Leave the view cube (top right) uncovered.
+    let width = TOOLBAR_WIDTH
+        .min(view.width() - super::view3d_heat::CUBE_SIZE - 3.0 * MARGIN)
+        .max(300.0);
+    super::panel::Panel::new(
+        "view3d_toolbar",
+        "3D view",
+        view,
+        super::panel::Side::Left,
+        width,
+    )
+    .top(MARGIN)
+    .fit()
+    .show(ctx, |ui| {
+        ui.horizontal_wrapped(|ui| {
+            // Layers: things that are drawn or not, in one popover.
+            let n_on = [
+                controls.layers.shell,
+                controls.layers.door,
+                controls.layers.wires,
+                controls.shadows,
+                controls.missing_data,
+            ]
+            .iter()
+            .filter(|b| **b)
+            .count();
+            let config = egui::containers::menu::MenuConfig::new()
+                .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+            egui::containers::menu::MenuButton::new(format!("Layers ({n_on})"))
+                .config(config)
+                .ui(ui, |ui| {
+                    let layers = &mut controls.layers;
+                    changed.layers |= ui
+                        .checkbox(&mut layers.shell, "Enclosure")
+                        .on_hover_text("Show the enclosure box")
+                        .changed();
+                    changed.layers |= ui
+                        .checkbox(&mut layers.door, "Door")
+                        .on_hover_text("Show the door")
+                        .changed();
+                    changed.layers |= ui
+                        .checkbox(&mut layers.wires, "Wires")
+                        .on_hover_text("Show the routed wires")
+                        .changed();
+                    ui.checkbox(&mut controls.shadows, "Shadows")
+                        .on_hover_text("Soft shadows from the key light (View > 3D > Shadows)");
+                    ui.checkbox(&mut controls.missing_data, "Missing data")
+                        .on_hover_text(
+                            "Mark every device that has no part data with a \"?\". Off: \
+                             the \"?\" shows on the device under the pointer.",
+                        );
                 });
-            });
+            ui.separator();
+            // Modes and panels: what the pointer does, what sits at the side.
+            toggle(
+                ui,
+                &mut controls.move_items,
+                "Move",
+                "Move mode. Drag a device, rail or duct to move it on the plate (grid \
+                 and checks as in the Cabinet). R turns the selection, Delete takes it \
+                 off. Off: a drag draws a selection box.",
+            );
+            toggle(
+                ui,
+                &mut controls.heat_panel,
+                "Heat",
+                "The Heat panel: simulate how heat and air move in this cabinet",
+            );
+            changed.views = super::view3d_views::menu(ui, views);
+            if let Some(limit) = limit
+                && controls.layers.door
+            {
+                ui.separator();
+                let label = if controls.door_deg > 0.0 {
+                    "Close door"
+                } else {
+                    "Open door"
+                };
+                if ui
+                    .button(label)
+                    .on_hover_text("Open or close the door (Shift+D)")
+                    .clicked()
+                {
+                    controls.toggle_door(Some(limit));
+                    changed.door = true;
+                }
+                ui.spacing_mut().slider_width = SLIDER_WIDTH;
+                let slider = egui::Slider::new(&mut controls.door_deg, 0.0..=limit)
+                    .suffix("°")
+                    .max_decimals(0);
+                if ui
+                    .add(slider)
+                    .on_hover_text("How far the door is open")
+                    .changed()
+                {
+                    changed.door = true;
+                }
+            }
         });
+    });
     changed
 }
 
