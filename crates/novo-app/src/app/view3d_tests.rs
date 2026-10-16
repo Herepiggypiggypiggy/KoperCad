@@ -358,6 +358,10 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
     assert!(d.app.cabinet.heat.solution().is_none());
     d.app.run_command(&ctx, "heat.simulate", None);
     assert_eq!(d.app.workspace(), Workspace::View3d, "Simulate stays here");
+    assert!(
+        d.app.view3d.controls.heat_panel,
+        "the panel with progress and stop opens with the run"
+    );
     for _ in 0..400 {
         d.frame();
         if d.app.cabinet.heat.solution().is_some() && !d.app.cabinet.heat.running() {

@@ -141,6 +141,7 @@ impl NovoApp {
         };
         let revision = project.revision();
         let ambient = self.sizing.request().ambient_max;
+        let empty_hint = super::tips::empty_3d_hint(&self.settings, &self.wb.keymap, project, id);
         let mode = &mut self.view3d;
         let layers = mode.controls.layers;
         let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
@@ -236,6 +237,17 @@ impl NovoApp {
         let ghost_changed = mode.ghost_shown != ghost_key;
         mode.ghost_shown = ghost_key;
         let stored = load(project, id);
+        if let Some(lay) = &stored {
+            let tag_of = |d: u64| {
+                project
+                    .get::<Device>(DeviceId::from(d))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_default()
+            };
+            if let Some(text) = view3d_move::warning(lay, &landings, &tag_of) {
+                view3d_move::show_warning(ui.ctx(), &text);
+            }
+        }
         let ghost: Vec<_> = landings
             .iter()
             .flat_map(|l| {
@@ -288,6 +300,7 @@ impl NovoApp {
         }
         mode.view.drag_items = mode.controls.move_items;
         mode.view.state.display.shadows = mode.controls.shadows;
+        mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
@@ -305,7 +318,18 @@ impl NovoApp {
             stored.as_ref(),
             ambient,
         );
-        view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
+        if mode.controls.heat_panel {
+            view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
+        }
+        if let Some(text) = empty_hint {
+            ui.painter().text(
+                view_rect.center_bottom() - egui::vec2(0.0, 40.0),
+                egui::Align2::CENTER_BOTTOM,
+                text,
+                egui::FontId::proportional(14.0),
+                ui.visuals().weak_text_color(),
+            );
+        }
         mode.stats.frame(ui.ctx(), view_rect, &mut mode.view);
         mode.controls.clamp_door(limit);
         let target = mode.controls.door_target(limit);
@@ -435,8 +459,18 @@ impl NovoApp {
                     cabinet_inspector::gather(project, id, &stored, &stored, &devices, &tag_of);
                 ask = cabinet_inspector::overlay(
                     ui.ctx(),
-                    out.rect,
-                    false,
+                    view_rect,
+                    // Left, under the toolbar: the right edge is the view cube
+                    // and the Heat panel, the bottom left the statistics.
+                    cabinet_inspector::Room {
+                        left: true,
+                        top: Some(view3d_controls::BELOW),
+                        bottom: if self.view3d.stats.shown {
+                            super::view3d_stats::ROOM
+                        } else {
+                            0.0
+                        },
+                    },
                     &facts,
                     project,
                     &mut self.cabinet.panel_fields,

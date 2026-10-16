@@ -13,6 +13,9 @@ pub struct Display {
     pub labels: bool,
     /// Soft shadows from the key light (software renderers skip them).
     pub shadows: bool,
+    /// Show the "?" badge (no part data) on every device. Off: only on the
+    /// device under the pointer or in the selection.
+    pub missing_marks: bool,
 }
 
 impl Default for Display {
@@ -21,6 +24,7 @@ impl Default for Display {
             edges: true,
             labels: true,
             shadows: true,
+            missing_marks: false,
         }
     }
 }
