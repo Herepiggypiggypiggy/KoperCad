@@ -247,3 +247,15 @@ fn the_keymap_has_the_3d_keys() {
         Some("view.3d_door")
     );
 }
+
+#[test]
+fn the_3d_view_registers_the_anchor_lessons_point_at() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.frame();
+    let rect = d
+        .app
+        .learn_anchor("workspace.view3d")
+        .expect("`workspace.view3d` is not on screen");
+    assert!(rect.width() > 0.0 && rect.height() > 0.0, "{rect:?}");
+}

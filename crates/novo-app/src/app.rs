@@ -959,6 +959,9 @@ impl NovoApp {
                     self.cabinet_show(ui);
                 } else if self.is_open() && self.workspace() == workspace::Workspace::View3d {
                     self.view3d_show(ui);
+                    for a in cabinet_bar::take_noted(ui.ctx()) {
+                        self.anchor(a.id, a.rect, a.label);
+                    }
                 } else if reports {
                     self.reports_central(ui);
                 } else if self.is_open() {

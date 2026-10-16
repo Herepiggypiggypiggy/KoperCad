@@ -42,6 +42,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `cabinet.table`: {ui:cabinet.table} shows **Table**
 - `cabinet.heat`: {ui:cabinet.heat} shows **Heat**
 - `cabinet.canvas`: {ui:cabinet.canvas} shows **Cabinet canvas**
+- `workspace.view3d`: {ui:workspace.view3d} shows **3D canvas**
 - `cabinet.unplaced`: {ui:cabinet.unplaced} shows **Unplaced list**
 - `cabinet.problems`: {ui:cabinet.problems} shows **Problems**
 - `cabinet.inspector`: {ui:cabinet.inspector} shows **Cabinet inspector**
