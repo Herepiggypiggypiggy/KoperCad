@@ -456,6 +456,15 @@ pub fn dismiss_proposal(tx: &mut Tx<'_>, proposal: &CableProposal) -> Result<()>
     Ok(())
 }
 
+/// The wires whose proposal was declined and not restored.
+pub fn declined_wires(project: &Project) -> Vec<WireId> {
+    project
+        .wires()
+        .filter(|w| matches!(w.properties.get(DISMISS_KEY), Some(Value::Bool(false))))
+        .map(|w| w.id)
+        .collect()
+}
+
 /// Forgets a declined proposal on these wires.
 pub fn restore_proposal(tx: &mut Tx<'_>, wires: &[WireId]) -> Result<()> {
     for &wire in wires {

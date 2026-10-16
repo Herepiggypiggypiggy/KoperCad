@@ -848,3 +848,37 @@ fn link_is_a_verb_bare_or_with_two_tags() {
     assert_eq!(link_tags("-K3"), None);
     assert_eq!(link_tags("-K3 -K1 -K2"), None);
 }
+
+#[test]
+fn cables_are_found_by_tag_and_wires_by_number() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let wire = gate.motor_wires[0];
+    doc.transact("Number", |tx| {
+        tx.update::<novo_core::Wire>(wire, |w| w.number = Some("105".into()))
+    })
+    .unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+
+    let rows = palette.search("W1", &src);
+    let cable = rows
+        .iter()
+        .find(|r| r.kind == Kind::Cable)
+        .expect("a cable row");
+    assert_eq!(cable.target, Target::Cable(gate.w1));
+
+    for query in ["wire 105", "105", "draad 105"] {
+        let rows = palette.search(query, &src);
+        let found = rows.iter().find(|r| r.kind == Kind::Wire);
+        assert_eq!(
+            found.map(|r| r.target.clone()),
+            Some(Target::Wire(wire)),
+            "{query}"
+        );
+    }
+    let rows = palette.search("wire 999", &src);
+    assert!(!rows.iter().any(|r| r.kind == Kind::Wire));
+}

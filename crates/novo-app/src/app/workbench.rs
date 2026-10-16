@@ -91,6 +91,12 @@ pub(crate) struct Workbench {
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
     pub(super) faults: Option<super::faults::FaultsWindow>,
+    /// The Calculations window, while it is open.
+    pub(super) calculations: Option<super::calculations::CalcWindow>,
+    /// The Electrical inputs window, while it is open.
+    pub(super) electrical: Option<super::electrical::ElectricalWindow>,
+    /// The Safety functions window, while it is open.
+    pub(super) safety: Option<super::safety::SafetyWindow>,
     /// The Renumber devices window, while it is open.
     pub(super) device_renumber: Option<super::device_renumber::DeviceRenumber>,
     /// The Project rules window is open.
@@ -227,6 +233,9 @@ impl Default for Workbench {
             issue: None,
             compare: None,
             faults: None,
+            calculations: None,
+            electrical: None,
+            safety: None,
             numbering: None,
             device_renumber: None,
             project_rules: false,
@@ -341,6 +350,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.changes",
     "view.commissioning",
     "check.problems",
+    "check.calculations",
+    "check.electrical_inputs",
+    "check.safety",
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
@@ -444,6 +456,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "wires.check_numbers",
     "wires.set_number",
     "wires.unlock_number",
+    "cable.rename",
+    "cable.delete",
+    "cable.retype",
+    "cable.restore_proposals",
     "edit.select_all",
     "view.cabinet_table",
     "cabinet.place-all",
@@ -817,6 +833,10 @@ impl NovoApp {
             }
             "wires.set_number" => self.set_wire_number(argument),
             "wires.unlock_number" => self.unlock_wire_number(),
+            "cable.rename" => self.rename_cable_command(argument),
+            "cable.delete" => self.delete_cable_command(),
+            "cable.retype" => self.retype_cable_command(argument),
+            "cable.restore_proposals" => self.restore_declined_cables(),
             "view.terminals_drawer" => self.toggle_drawer(Drawer::Terminals),
             "view.cables_drawer" => self.toggle_drawer(Drawer::Cables),
             "view.devices_drawer" => self.toggle_drawer(Drawer::Devices),
@@ -892,6 +912,9 @@ impl NovoApp {
             }
             "view.commissioning" => self.switch_workspace(Workspace::Commissioning),
             "check.problems" => self.show_issues(false),
+            "check.calculations" => self.toggle_calculations(),
+            "check.electrical_inputs" => self.toggle_electrical(),
+            "check.safety" => self.toggle_safety(),
             "check.next_problem" => self.step_problem(true),
             "check.previous_problem" => self.step_problem(false),
             "edit.escape" => {
@@ -1131,6 +1154,8 @@ impl NovoApp {
                     );
                 }
             }
+            Target::Cable(cable) => self.show_cable(cable),
+            Target::Wire(wire) => self.go_to_wire(wire),
             Target::Symbol(symbol) => self.begin_place(&symbol, None),
             Target::Child { symbol, device } => {
                 let tag = self

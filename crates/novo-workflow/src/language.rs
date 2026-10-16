@@ -165,6 +165,22 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("tool.cable", &["kabel"], &["kabel tekenen", "aders"]),
     nl(
+        "cable.rename",
+        &["hernoem kabel"],
+        &["kabel hernoemen", "kabelnaam"],
+    ),
+    nl("cable.delete", &[], &["kabel verwijderen", "kabel wissen"]),
+    nl(
+        "cable.retype",
+        &["kabeltype"],
+        &["kabeltype wijzigen", "aders", "afgeschermd"],
+    ),
+    nl(
+        "cable.restore_proposals",
+        &[],
+        &["afgewezen kabels terugzetten", "opnieuw voorstellen"],
+    ),
+    nl(
         "wire.end_on_part",
         &[],
         &[
@@ -447,6 +463,35 @@ pub const DUTCH: &[Aliases] = &[
     nl("view.shortcuts", &[], &["sneltoetsen", "toetsen"]),
     // Check
     nl("check.problems", &["problemen", "fouten"], &["controles"]),
+    nl(
+        "check.calculations",
+        &[],
+        &[
+            "berekeningen",
+            "kabelberekening",
+            "spanningsval",
+            "kortsluiting",
+        ],
+    ),
+    nl(
+        "check.electrical_inputs",
+        &[],
+        &[
+            "elektrische gegevens",
+            "voeding",
+            "transformator",
+            "kortsluitstroom",
+        ],
+    ),
+    nl(
+        "check.safety",
+        &[],
+        &[
+            "veiligheidsfuncties",
+            "performance level",
+            "machineveiligheid",
+        ],
+    ),
     nl("check.next_problem", &[], &["volgend probleem"]),
     nl("check.previous_problem", &[], &["vorig probleem"]),
     nl(

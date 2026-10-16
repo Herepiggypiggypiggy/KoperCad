@@ -8,6 +8,7 @@ use novo_core::{AnyId, CableId, Project, natural_cmp};
 use novo_xref::Place;
 
 use super::cable_controls::{CableAction, CableEdit, cable_controls};
+use super::cable_cores::{candidate_wires, core_cells, header_controls, proposals_section};
 use super::part_picker::{Candidate, cable_candidates};
 use super::terminal_edit::{ToolbarAction, strip_toolbar};
 use super::terminals::strip_table;
@@ -15,7 +16,7 @@ use super::workbench::{DRAWER_SHARE, Drawer};
 use super::{Level, NovoApp};
 
 /// What a click in the drawer asks for.
-enum DrawerAction {
+pub(super) enum DrawerAction {
     Go(Place),
     ShowCable(CableId),
     /// A change from the cable controls, for this cable.
@@ -23,6 +24,11 @@ enum DrawerAction {
     AcceptCables,
     AcceptTerminals,
     Terminal(ToolbarAction),
+    /// Accept one proposed cable (its first wire's raw id), maybe on
+    /// another type.
+    AcceptOne(u64, Option<novo_cables::CableType>),
+    DeclineOne(u64),
+    RestoreDeclined,
     Tab(Drawer),
     Close,
 }
@@ -51,7 +57,7 @@ impl NovoApp {
         let selected = self.selection();
         self.sync_strip_follow();
         let strip = self.drawer_strip();
-        let declined = self.declined_wires();
+        let declined_terminals = self.declined_wires();
         if tab == Drawer::Cables
             && self.wb.cable_edit.picker.open
             && let Some(problem) = self.wb.part_catalog.ensure()
@@ -61,9 +67,19 @@ impl NovoApp {
         let Some(project) = self.backend.document().map(|d| d.project()) else {
             return;
         };
+        let cable_proposals = if tab == Drawer::Cables {
+            novo_cables::propose_cables(project)
+        } else {
+            Vec::new()
+        };
+        let declined = if tab == Drawer::Cables {
+            novo_cables::declined_wires(project).len()
+        } else {
+            0
+        };
         let proposed = match tab {
             Drawer::Terminals => novo_terminals::suggest_terminals(project).len(),
-            Drawer::Cables => novo_cables::propose_cables(project).len(),
+            Drawer::Cables => cable_proposals.len(),
             Drawer::Devices => 0,
         };
         let mut actions = Vec::new();
@@ -134,7 +150,7 @@ impl NovoApp {
                             project,
                             strip,
                             &mut self.wb.terminal_edit,
-                            &declined,
+                            &declined_terminals,
                             &mut toolbar,
                         );
                         match strip {
@@ -178,7 +194,7 @@ impl NovoApp {
                             ui,
                             project,
                             self.wb.drawer_cable,
-                            proposed,
+                            (&cable_proposals, declined),
                             (&mut self.wb.cable_edit, &candidates),
                             &mut actions,
                         );
@@ -216,6 +232,9 @@ impl NovoApp {
                 DrawerAction::Terminal(ToolbarAction::Restore(wires)) => {
                     self.restore_declined(&wires);
                 }
+                DrawerAction::AcceptOne(key, cable_type) => self.accept_one_cable(key, cable_type),
+                DrawerAction::DeclineOne(key) => self.decline_one_cable(key),
+                DrawerAction::RestoreDeclined => self.restore_declined_cables(),
                 DrawerAction::Tab(t) => self.wb.drawer = Some(t),
                 DrawerAction::Close => self.wb.drawer = None,
             }
@@ -277,12 +296,14 @@ fn cables_tab(
     ui: &mut egui::Ui,
     project: &Project,
     picked: Option<CableId>,
-    proposed: usize,
+    (proposals, declined): (&[novo_cables::CableProposal], usize),
     (edit, candidates): (&mut CableEdit, &[Candidate]),
     actions: &mut Vec<DrawerAction>,
 ) {
     let overview = novo_cables::overview(project);
+    let proposed = proposals.len();
     if overview.is_empty() {
+        proposals_section(ui, project, proposals, declined, &mut edit.ui, actions);
         ui.weak(if proposed > 0 {
             "No cables yet. Accept the proposed ones, or draw wires between locations."
         } else {
@@ -295,6 +316,14 @@ fn cables_tab(
         .unwrap_or(overview[0].cable);
     egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
         ui.columns(2, |cols| {
+            proposals_section(
+                &mut cols[0],
+                project,
+                proposals,
+                declined,
+                &mut edit.ui,
+                actions,
+            );
             egui::Grid::new("cables")
                 .striped(true)
                 .num_columns(5)
@@ -322,16 +351,18 @@ fn cables_tab(
                     ui.weak(&screen.type_name);
                 });
                 let mut changes = Vec::new();
+                header_controls(ui, project, shown, edit, &mut changes);
                 cable_controls(ui, project, shown, edit, candidates, &mut changes);
-                actions.extend(changes.into_iter().map(|a| DrawerAction::Cable(shown, a)));
+                let wires = candidate_wires(project, shown);
+                let record = project.cable(shown);
                 egui::Grid::new("cable_cores")
                     .striped(true)
-                    .num_columns(4)
-                    .spacing([20.0, 4.0])
+                    .num_columns(7)
+                    .spacing([14.0, 4.0])
                     .show(ui, |ui| {
                         let from = side_head(&screen.from, "From");
                         let to = side_head(&screen.to, "To");
-                        for head in ["Core", from, to, "Potential"] {
+                        for head in ["Core", from, to, "Potential", "Wire", "Swap", "Spare"] {
                             ui.small(head);
                         }
                         ui.end_row();
@@ -351,9 +382,18 @@ fn cables_tab(
                                 ui.label(end(1));
                             }
                             ui.weak(core.potential.clone().unwrap_or_default());
+                            if let Some(record) = record {
+                                let current = core.wire_number.clone().unwrap_or_else(|| {
+                                    core.wire
+                                        .map(|w| format!("#{}", w.raw()))
+                                        .unwrap_or_default()
+                                });
+                                core_cells(ui, record, core.index, &wires, &current, &mut changes);
+                            }
                             ui.end_row();
                         }
                     });
+                actions.extend(changes.into_iter().map(|a| DrawerAction::Cable(shown, a)));
             }
         });
     });
