@@ -574,7 +574,7 @@ impl NovoApp {
                 return;
             }
             if let Some(sum) = surfaces.as_ref().filter(|s| s.rows.len() > 1) {
-                cabinet_bar::group(ui, "Surface", |ui| {
+                cabinet_bar::group(ui, caption("Surface"), |ui| {
                     let picked = self.cabinet.surface.clone();
                     let current = picked.clone().unwrap_or_else(|| MAIN_PLATE.to_owned());
                     let combo = egui::ComboBox::from_id_salt("cabinet_surface")
@@ -951,12 +951,6 @@ impl NovoApp {
             ui.horizontal_wrapped(|ui| {
                 ui.add_space(8.0);
                 cabinet_bar::pill(ui, &format!("{placed} placed"), None);
-                if let (Some(sum), Some(name)) = (&surfaces, &self.cabinet.surface)
-                    && let Some(note) = sum.note(name)
-                {
-                    ui.label(note);
-                    ui.weak("The plate drawing stays until the surface view arrives.");
-                }
                 if unplaced > 0 {
                     cabinet_bar::pill(
                         ui,
@@ -1020,6 +1014,34 @@ impl NovoApp {
                     });
                 }
             });
+        }
+        // The picked surface and what is wrong with surface names, in full
+        // and wrapped to the width (not squeezed into the status strip).
+        if let Some(sum) = &surfaces {
+            let note = self.cabinet.surface.as_deref().and_then(|n| sum.note(n));
+            if note.is_some() || !sum.problems.is_empty() {
+                ui.vertical(|ui| {
+                    ui.add_space(2.0);
+                    if let Some(note) = note {
+                        ui.add(egui::Label::new(note).wrap());
+                        ui.add(
+                            egui::Label::new(egui::RichText::new(
+                                "The plate drawing stays until the surface view arrives.",
+                            ))
+                            .wrap(),
+                        );
+                    }
+                    for problem in &sum.problems {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(problem)
+                                    .color(novo_theme::Palette::of(ui).warning),
+                            )
+                            .wrap(),
+                        );
+                    }
+                });
+            }
         }
         ui.separator();
 
