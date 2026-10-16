@@ -117,7 +117,10 @@ impl NovoApp {
             (DxfScope::CurrentPage, [one]) => one.display().to_string(),
             _ => format!("{} pages to {}", written.len(), target.display()),
         };
-        self.message(Level::Info, format!("{verb} {shown}"));
+        match written.last() {
+            Some(last) => self.message_file(format!("{verb} {shown}"), last),
+            None => self.message(Level::Info, format!("{verb} {shown}")),
+        }
         if let Some(last) = written.last() {
             self.wb.last_export = Some(last.clone());
         }

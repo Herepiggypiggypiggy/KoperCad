@@ -192,7 +192,7 @@ Every interactive thing has the same six states, drawn the same way:
 | Hover | `surface.hover` fill, `border.strong` hairline, text one step brighter |
 | Pressed | `surface.hover` fill, `accent` hairline |
 | Focus (keyboard) | 2 pt `accent` ring, 1 pt outside the control; never removed |
-| Selected | `accent.wash` fill and a 2 pt `accent` bar on the left of a row; a toggle fills with `accent.wash` and an accent icon |
+| Selected | `accent.wash` fill and a 2 pt `accent` bar on the left of a row; a tool or mode toggle fills with `accent.wash` and an accent icon; a visibility or filter toggle is neutral (`filter_toggle`) |
 | Disabled | `text.tertiary` text and icon, no hover, no pointer change; the reason is in the tooltip |
 
 Accent as a fill is for the single primary action of a dialog (`primary`
@@ -207,6 +207,7 @@ not restyle them.
 | Widget | Job |
 | --- | --- |
 | `ui.button`, `ghost_button`, `primary_button`, `danger_button` | Actions. Ghost has no frame until hover (toolbars, row actions); primary is the copper fill, one per dialog |
+| `filter_toggle` | A visibility or filter toggle (layers, map, contours, badges): `surface.hover` fill, primary text and an accent check when on; never the copper wash |
 | `icon_button`, `icon_toggle`, `tool_button` | Icon only, tooltip required; a toggle fills with the copper wash when on; `tool_button` is the dock's |
 | `segmented` (`segment` for one option) | Two to four exclusive options in a pill track |
 | `tabs` | Switch a panel's content: text with a 2 pt accent underline under the current one |

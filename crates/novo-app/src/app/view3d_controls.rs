@@ -20,6 +20,13 @@ pub(crate) struct Controls {
     pub(super) move_items: bool,
     /// Soft shadows from the key light.
     pub(super) shadows: bool,
+    /// Measuring lines: the enclosure's size and the selected part's.
+    pub(super) dimensions: bool,
+    /// The frame governor has stepped the quality down: the toolbar offers
+    /// to restore it. Set by the host each frame.
+    pub(super) reduced: bool,
+    /// The user pressed "Restore quality"; the host acts on it and clears it.
+    pub(super) restore: bool,
     /// The "?" badge (no part data) on every device, not only on hover.
     pub(super) missing_data: bool,
     /// The Heat panel in the right-hand slot, under the view cube.
@@ -33,6 +40,9 @@ impl Default for Controls {
             door_deg: 0.0,
             move_items: true,
             shadows: true,
+            dimensions: false,
+            reduced: false,
+            restore: false,
             missing_data: false,
             heat_panel: false,
         }
@@ -118,42 +128,69 @@ pub(super) fn toolbar(
                 .config(config)
                 .ui(ui, |ui| {
                     let layers = &mut controls.layers;
-                    changed.layers |= ui
-                        .checkbox(&mut layers.shell, "Enclosure")
-                        .on_hover_text("Show the enclosure box")
-                        .changed();
-                    changed.layers |= ui
-                        .checkbox(&mut layers.door, "Door")
-                        .on_hover_text("Show the door")
-                        .changed();
-                    changed.layers |= ui
-                        .checkbox(&mut layers.wires, "Wires")
-                        .on_hover_text("Show the routed wires")
-                        .changed();
-                    ui.checkbox(&mut controls.shadows, "Shadows")
-                        .on_hover_text("Soft shadows from the key light (View > 3D > Shadows)");
-                    ui.checkbox(&mut controls.missing_data, "Missing data")
-                        .on_hover_text(
-                            "Mark every device that has no part data with a \"?\". Off: \
-                             the \"?\" shows on the device under the pointer.",
-                        );
+                    changed.layers |=
+                        toggle(ui, &mut layers.shell, "Enclosure", "Show the enclosure box");
+                    changed.layers |= toggle(ui, &mut layers.door, "Door", "Show the door");
+                    changed.layers |=
+                        toggle(ui, &mut layers.wires, "Wires", "Show the routed wires");
+                    toggle(
+                        ui,
+                        &mut controls.shadows,
+                        "Shadows",
+                        "Soft shadows from the key light (View > 3D > Shadows)",
+                    );
+                    toggle(
+                        ui,
+                        &mut controls.missing_data,
+                        "Missing data",
+                        "Mark every device that has no part data with a \"?\". Off: \
+                         the \"?\" shows on the device under the pointer.",
+                    );
                 });
             ui.separator();
             // Modes and panels: what the pointer does, what sits at the side.
-            toggle(
-                ui,
-                &mut controls.move_items,
-                "Move",
-                "Move mode. Drag a device, rail or duct to move it on the plate (grid \
-                 and checks as in the Cabinet). R turns the selection, Delete takes it \
-                 off. Off: a drag draws a selection box.",
-            );
+            // A mode, not a layer: keeps the copper wash of a tool.
+            let mode = if controls.move_items {
+                "✔ Move"
+            } else {
+                "Move"
+            };
+            if ui
+                .selectable_label(controls.move_items, mode)
+                .on_hover_text(
+                    "Move mode. Drag a device, rail or duct to move it on the plate (grid \
+                     and checks as in the Cabinet). R turns the selection, Delete takes it \
+                     off. Off: a drag draws a selection box.",
+                )
+                .clicked()
+            {
+                controls.move_items ^= true;
+            }
             toggle(
                 ui,
                 &mut controls.heat_panel,
                 "Heat",
                 "The Heat panel: simulate how heat and air move in this cabinet",
             );
+            toggle(
+                ui,
+                &mut controls.dimensions,
+                "Dimensions",
+                "Measuring lines in mm: the enclosure, and for one selected part its \
+                 size and its distances to neighbours and the plate edge (View > 3D > \
+                 Dimensions)",
+            );
+            if controls.reduced
+                && ui
+                    .button("Restore quality")
+                    .on_hover_text(
+                        "The view slowed down, so it draws at lower quality. Draw at \
+                         full quality again (View > 3D > Restore 3D quality).",
+                    )
+                    .clicked()
+            {
+                controls.restore = true;
+            }
             if let Some(limit) = limit
                 && controls.layers.door
             {
@@ -188,15 +225,13 @@ pub(super) fn toolbar(
     changed
 }
 
-/// A toggle button whose state is also in its look (a tick), so it never
-/// relies on colour alone.
+/// A layer toggle: neutral, with a tick when on, so it never relies on
+/// colour alone and never reads as copper.
 fn toggle(ui: &mut egui::Ui, on: &mut bool, name: &str, hint: &str) -> bool {
-    let text = if *on {
-        format!("✔ {name}")
-    } else {
-        name.to_owned()
-    };
-    if ui.selectable_label(*on, text).on_hover_text(hint).clicked() {
+    if novo_theme::widgets::filter_toggle(ui, name, *on)
+        .on_hover_text(hint)
+        .clicked()
+    {
         *on = !*on;
         return true;
     }
