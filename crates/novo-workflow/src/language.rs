@@ -34,7 +34,22 @@ const fn nl(
 pub const DUTCH: &[Aliases] = &[
     // Project
     nl("file.new", &[], &["nieuw project", "nieuw"]),
-    nl("file.open", &[], &["project openen", "openen"]),
+    nl(
+        "file.open",
+        &[],
+        &[
+            "project openen",
+            "openen",
+            "bestand openen",
+            "recent",
+            "onlangs geopend",
+        ],
+    ),
+    nl(
+        "file.open_read_only",
+        &[],
+        &["alleen lezen openen", "alleen lezen", "inzien", "bekijken"],
+    ),
     nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
     nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
     nl(
@@ -327,7 +342,8 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["opdrachtveld bij de muis"],
     ),
-    nl("view.fit", &[], &["passend zoomen", "alles tonen"]),
+    nl("view.fit", &[], &["passend zoomen", "inhoud tonen"]),
+    nl("view.fit_sheet", &[], &["hele blad tonen", "heel blad"]),
     nl("view.schematic", &[], &["schema"]),
     nl("view.cabinet", &[], &["kast", "kastindeling"]),
     nl(
@@ -497,6 +513,16 @@ pub const DUTCH: &[Aliases] = &[
         "sim.plc_program",
         &["plc programma"],
         &["ladder", "programma draaien", "plc simuleren"],
+    ),
+    nl(
+        "sim.add_fault",
+        &["storing toevoegen"],
+        &[
+            "fout toevoegen",
+            "kortsluiting toevoegen",
+            "onderbreking",
+            "contact blijft hangen",
+        ],
     ),
     nl(
         "sim.faults",
@@ -687,6 +713,21 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_duplicate",
+        &["apparaat dupliceren in 3d"],
+        &["dupliceren", "kopie", "kopieren"],
+    ),
+    nl(
+        "view.3d_position",
+        &["positie tonen in 3d"],
+        &["positie", "coordinaten", "afstand"],
+    ),
+    nl(
+        "view.3d_place",
+        &["apparaat plaatsen in 3d"],
+        &["plaatsen", "apparaat", "component"],
+    ),
+    nl(
         "view.3d_dimensions",
         &["maatvoering tonen in 3d"],
         &["maten", "maatvoering", "afstand", "afstanden"],
@@ -695,6 +736,11 @@ pub const DUTCH: &[Aliases] = &[
         "view.3d_quality",
         &["3d kwaliteit herstellen"],
         &["kwaliteit", "trage weergave", "herstellen"],
+    ),
+    nl(
+        "view.3d_ssao",
+        &["omgevingsocclusie tonen in 3d"],
+        &["occlusie", "contactschaduw", "hoeken"],
     ),
     nl(
         "view.3d_stats",
@@ -706,6 +752,37 @@ pub const DUTCH: &[Aliases] = &[
         &["3d zicht opslaan"],
         &["zicht opslaan", "camera opslaan"],
     ),
+    nl(
+        "view.3d_hints",
+        &["3d hulp tonen"],
+        &["muis en toetsen", "bediening"],
+    ),
+    nl(
+        "view.3d_select_devices",
+        &["alle apparaten kiezen in 3d"],
+        &["apparaten kiezen"],
+    ),
+    nl(
+        "view.3d_select_rails",
+        &["alle rails kiezen in 3d"],
+        &["rails kiezen"],
+    ),
+    nl(
+        "view.3d_select_ducts",
+        &["alle kanalen kiezen in 3d"],
+        &["kanalen kiezen"],
+    ),
+    nl(
+        "view.3d_hide",
+        &["selectie verbergen in 3d"],
+        &["verbergen"],
+    ),
+    nl(
+        "view.3d_isolate",
+        &["selectie isoleren in 3d"],
+        &["isoleren"],
+    ),
+    nl("view.3d_show_all", &["alles tonen in 3d"], &["alles tonen"]),
     nl("view.iso", &[], &["isometrisch", "hoekzicht"]),
     nl("view.front", &[], &["vooraanzicht", "deurzijde"]),
     nl("view.top", &[], &["bovenaanzicht", "van boven"]),

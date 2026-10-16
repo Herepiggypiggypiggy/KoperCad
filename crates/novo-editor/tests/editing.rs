@@ -2998,6 +2998,7 @@ fn joining_a_wire_never_glides_along_it_off_the_grid() {
     );
 }
 
+#[cfg(feature = "art")]
 #[test]
 fn a_note_offset_is_one_undo_step_and_reset_clears_it() {
     use novo_canvas::model::{NOTE_DX, NOTE_DY};

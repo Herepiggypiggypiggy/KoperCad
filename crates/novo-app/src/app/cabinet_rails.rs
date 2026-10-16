@@ -205,6 +205,11 @@ fn across_of(r: &Rail) -> f64 {
 }
 
 impl RailsState {
+    /// A value typed or dragged in a field that is not committed yet.
+    pub(super) fn typed(&self, id: u64, field: Field) -> Option<f64> {
+        self.pending.get(&(id, field)).copied()
+    }
+
     /// The selected rail or duct, if it still exists; Delete removes it.
     pub(super) fn deletable(&self, project: &novo_core::Project) -> Option<u64> {
         self.selected
@@ -252,7 +257,7 @@ pub(super) fn new_rail_at(
     Some((usable.x, y.max(usable.y + half), usable.w, width, height))
 }
 
-fn value(
+pub(super) fn value(
     ui: &mut egui::Ui,
     state: &mut RailsState,
     id: u64,

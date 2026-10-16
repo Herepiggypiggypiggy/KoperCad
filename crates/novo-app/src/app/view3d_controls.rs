@@ -3,7 +3,9 @@
 //! build and the door swing are applied in `view3d.rs`.
 
 use eframe::egui;
-use novo_view3d::Layers;
+use std::collections::BTreeSet;
+
+use novo_view3d::{ItemId, Layers};
 
 /// Margin from the view's corner, in points.
 const MARGIN: f32 = 12.0;
@@ -20,6 +22,12 @@ pub(crate) struct Controls {
     pub(super) move_items: bool,
     /// Soft shadows from the key light.
     pub(super) shadows: bool,
+    /// Devices, rails and ducts the user hid; the project is untouched.
+    pub(super) hidden: BTreeSet<ItemId>,
+    /// Screen-space ambient occlusion (the frame governor may pause it).
+    pub(super) ssao: bool,
+    /// This GPU draws occlusion at all. Set by the host each frame.
+    pub(super) ssao_available: bool,
     /// Measuring lines: the enclosure's size and the selected part's.
     pub(super) dimensions: bool,
     /// The frame governor has stepped the quality down: the toolbar offers
@@ -40,6 +48,9 @@ impl Default for Controls {
             door_deg: 0.0,
             move_items: true,
             shadows: true,
+            hidden: BTreeSet::new(),
+            ssao: true,
+            ssao_available: true,
             dimensions: false,
             reduced: false,
             restore: false,
@@ -97,8 +108,10 @@ pub(super) fn toolbar(
     controls: &mut Controls,
     limit: Option<f64>,
     views: &[crate::settings::CameraBookmark],
-) -> Changed {
+    selected: bool,
+) -> (Changed, Option<&'static str>) {
     let mut changed = Changed::default();
+    let mut command = None;
     // Leave the view cube (top right) uncovered.
     let width = TOOLBAR_WIDTH
         .min(view.width() - super::view3d_heat::CUBE_SIZE - 3.0 * MARGIN)
@@ -120,6 +133,7 @@ pub(super) fn toolbar(
                 controls.layers.door,
                 controls.layers.wires,
                 controls.shadows,
+                controls.ssao && controls.ssao_available,
                 controls.missing_data,
             ]
             .iter()
@@ -142,6 +156,24 @@ pub(super) fn toolbar(
                         "Shadows",
                         "Soft shadows from the key light (View > 3D > Shadows)",
                     );
+                    if controls.ssao_available {
+                        toggle(
+                            ui,
+                            &mut controls.ssao,
+                            "Occlusion",
+                            "Ambient occlusion: corners and contacts darken (View > 3D > \
+                             Ambient occlusion). The 3D view turns it off by itself when it \
+                             runs slowly; \"Restore quality\" or switching it off and on asks \
+                             for it back.",
+                        );
+                    } else {
+                        ui.add_enabled_ui(false, |ui| {
+                            novo_theme::widgets::filter_toggle(ui, "Occlusion", false)
+                                .on_disabled_hover_text(
+                                    "Needs a discrete GPU; this one cannot draw ambient occlusion",
+                                );
+                        });
+                    }
                     toggle(
                         ui,
                         &mut controls.missing_data,
@@ -176,6 +208,7 @@ pub(super) fn toolbar(
                 "The Heat panel: simulate how heat and air move in this cabinet",
             );
             changed.views = super::view3d_views::menu(ui, views);
+            command = selection_menu(ui, selected, controls.hidden.len());
             toggle(
                 ui,
                 &mut controls.dimensions,
@@ -184,16 +217,22 @@ pub(super) fn toolbar(
                  size and its distances to neighbours and the plate edge (View > 3D > \
                  Dimensions)",
             );
-            if controls.reduced
-                && ui
+            if controls.reduced {
+                ui.label(
+                    egui::RichText::new("Reduced quality")
+                        .color(ui.visuals().warn_fg_color)
+                        .small(),
+                )
+                .on_hover_text(
+                    "The view stayed slow, so it draws at lower resolution while it moves.",
+                );
+                if ui
                     .button("Restore quality")
-                    .on_hover_text(
-                        "The view slowed down, so it draws at lower quality. Draw at \
-                         full quality again (View > 3D > Restore 3D quality).",
-                    )
+                    .on_hover_text("Draw at full quality again (View > 3D > Restore 3D quality).")
                     .clicked()
-            {
-                controls.restore = true;
+                {
+                    controls.restore = true;
+                }
             }
             if let Some(limit) = limit
                 && controls.layers.door
@@ -226,7 +265,44 @@ pub(super) fn toolbar(
             }
         });
     });
-    changed
+    (changed, command)
+}
+
+/// The Select and Hide menu: pick every device, rail or duct, hide or isolate
+/// the selection, bring everything back. Returns the command asked for.
+fn selection_menu(ui: &mut egui::Ui, selected: bool, hidden: usize) -> Option<&'static str> {
+    let mut command = None;
+    let title = if hidden > 0 {
+        format!("Select and hide ({hidden} hidden)")
+    } else {
+        "Select and hide".to_owned()
+    };
+    ui.menu_button(title, |ui| {
+        let mut row = |ui: &mut egui::Ui, label: &str, id: &'static str, enabled: bool| {
+            if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+                command = Some(id);
+                ui.close();
+            }
+        };
+        row(ui, "Select all devices", "view.3d_select_devices", true);
+        row(ui, "Select all rails", "view.3d_select_rails", true);
+        row(ui, "Select all ducts", "view.3d_select_ducts", true);
+        ui.separator();
+        row(ui, "Hide selection   Ctrl+H", "view.3d_hide", selected);
+        row(
+            ui,
+            "Isolate selection   Ctrl+I",
+            "view.3d_isolate",
+            selected,
+        );
+        row(
+            ui,
+            "Show all   Ctrl+Shift+H",
+            "view.3d_show_all",
+            hidden > 0,
+        );
+    });
+    command
 }
 
 /// A layer toggle: neutral, with a tick when on, so it never relies on
