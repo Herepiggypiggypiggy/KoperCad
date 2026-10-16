@@ -21,6 +21,8 @@ pub(crate) struct Heat3d {
     /// Temperature of the shell between ambient (0) and the hottest cell (1).
     pub iso_at: f32,
     pub lines: bool,
+    /// Arrows on the slice plane instead of (or besides) streamlines.
+    pub arrows: bool,
     /// Colour the device bodies by the air temperature in front of them.
     pub devices: bool,
 }
@@ -34,6 +36,7 @@ impl Default for Heat3d {
             iso: false,
             iso_at: 0.6,
             lines: false,
+            arrows: false,
             devices: false,
         }
     }
@@ -49,7 +52,7 @@ pub(crate) struct Place {
 }
 
 impl Place {
-    fn world(&self, p: [f64; 3]) -> Vec3 {
+    pub(super) fn world(&self, p: [f64; 3]) -> Vec3 {
         self.frame
             .world(p[0] - self.plate_x, p[1] - self.plate_y, p[2])
     }
@@ -141,6 +144,12 @@ pub(crate) fn overlays(
             out.push(Overlay::Lines(l));
         }
     }
+    if settings.arrows {
+        let l = super::heat_arrows::arrows(snap, place, settings.axis, settings.slice_at);
+        if !l.positions.is_empty() {
+            out.push(Overlay::Lines(l));
+        }
+    }
     out
 }
 
@@ -153,6 +162,12 @@ fn extent(snap: &CfdSnapshot, axis: Axis) -> (f64, f64) {
     (e[0], e[e.len() - 1])
 }
 
+/// Where the plane at `at` (0 to 1 along `axis`) sits in the solver frame, mm.
+pub(crate) fn slice_offset(snap: &CfdSnapshot, axis: Axis, at: f32) -> f64 {
+    let (lo, hi) = extent(snap, axis);
+    lo + f64::from(at.clamp(0.0, 1.0)) * (hi - lo)
+}
+
 /// The plane at `at` (0 to 1 along `axis`) as coloured quads; cells inside
 /// solids are left out so devices stay visible.
 pub(crate) fn slice_mesh(
@@ -162,8 +177,7 @@ pub(crate) fn slice_mesh(
     axis: Axis,
     at: f32,
 ) -> Option<OverlayMesh> {
-    let (lo, hi) = extent(snap, axis);
-    let offset = lo + f64::from(at.clamp(0.0, 1.0)) * (hi - lo);
+    let offset = slice_offset(snap, axis, at);
     let window = cfd::whole_window(snap, axis);
     let cell = (window.w.max(window.h) / SLICE_CELLS).max(4.0);
     let s = cfd::slice(

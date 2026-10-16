@@ -568,6 +568,76 @@ pub enum NoteAnchor {
     Right,
 }
 
+/// How far the user moved the symbol's note from where its anchor puts it.
+fn note_offset(sym: &SymbolInstance) -> Option<Vec2> {
+    let get = |key: &str| match sym.properties.get(key) {
+        Some(novo_core::Value::Float(v)) => Some(*v as f32),
+        Some(novo_core::Value::Int(v)) => Some(*v as f32),
+        _ => None,
+    };
+    let (dx, dy) = (get(NOTE_DX), get(NOTE_DY));
+    (dx.is_some() || dy.is_some()).then(|| Vec2::new(dx.unwrap_or(0.0), dy.unwrap_or(0.0)))
+}
+
+/// A note in its symbol's item: its text, or under a coil its contact
+/// table, drawn after everything else the item has.
+#[derive(Clone, Debug)]
+struct NoteSlot {
+    /// How many primitives and labels the item has before the note.
+    primitives: usize,
+    labels: usize,
+    /// The symbol's ink, which the free places are measured from.
+    ink: crate::Aabb,
+    what: NoteWhat,
+    /// The user's offset from the default place (zero when never moved).
+    offset: Vec2,
+    /// Where the anchor asks for the note (with the user's offset).
+    preferred: (Vec2, Anchor),
+    /// Where the note is drawn now: `(position, anchor of the whole note)`.
+    at: (Vec2, Anchor),
+    /// The note's place when the user moved it: it stays there.
+    moved: bool,
+}
+
+#[derive(Clone, Debug)]
+enum NoteWhat {
+    /// A line or lines of text, at the place its anchor asks for.
+    Text(Label),
+    /// A contact table (and the warning under it), `size` big.
+    Table { note: SymbolNote, size: Vec2 },
+}
+
+/// The least distance from its symbol's ink, in mm, that a change can still
+/// move a note from (see [`NoteSlot::reach`] for the real, per-note value).
+const NOTE_REACH: f32 = 60.0;
+
+impl NoteSlot {
+    /// How far from the symbol's ink a change can reach the note: the last
+    /// search ring, the slide along a side, and the note's own size, but not
+    /// less than [`NOTE_REACH`]. A tall contact table reaches farther than a
+    /// line of text.
+    fn reach(&self, height: f32) -> f32 {
+        let size = match &self.what {
+            NoteWhat::Table { size, .. } => *size,
+            NoteWhat::Text(base) => {
+                let b = base.bounds();
+                b.max - b.min
+            }
+        };
+        (crate::note_place::MAX_RING
+            + 1.0
+            + 4.0 * height
+            + size.x.max(size.y)
+            + crate::note_place::PAD)
+            .max(NOTE_REACH)
+    }
+}
+
+/// Symbol properties (in mm) a user-moved note's offset is kept in, from
+/// the place its anchor asks for.
+pub const NOTE_DX: &str = "note_dx";
+pub const NOTE_DY: &str = "note_dy";
+
 /// The canvas scene of one model page, kept in sync with the project.
 pub struct PageScene {
     page: PageId,
@@ -582,6 +652,10 @@ pub struct PageScene {
     text_hosts: HashMap<TextId, AnyId>,
     /// Notes by symbol, kept across rebuilds; see [`Self::set_notes`].
     notes: HashMap<SymbolId, SymbolNote>,
+    /// Where each text note sits in its symbol's item, and what it was
+    /// drawn from, so it can be placed again when the drawing around it
+    /// changes (see [`crate::note_place`]).
+    note_slots: HashMap<SymbolId, NoteSlot>,
     /// What a generated page shows; see [`Self::set_sheet`].
     sheet: Option<SheetContent>,
     /// The revision fields of the title block; see [`Self::set_revisions`].
@@ -644,9 +718,13 @@ pub enum LabelKind {
     Potential,
     Literal,
     Property,
-    /// Text the canvas adds itself (a symbol's art text, the strip name, a
-    /// cross-reference note): shown, not edited by double click.
+    /// Text the canvas adds itself (a symbol's art text, the strip name):
+    /// shown, not edited by double click.
     Fixed,
+    /// A cross-reference note next to a symbol (text or a contact table's
+    /// text): not edited by double click, but dragged by hand
+    /// ([`PageScene::note_offset_after`]).
+    Note,
 }
 
 /// The kind of the name a symbol of this role shows.
@@ -712,6 +790,7 @@ impl PageScene {
             wire_junctions: HashMap::new(),
             text_hosts: HashMap::new(),
             notes: HashMap::new(),
+            note_slots: HashMap::new(),
             sheet: None,
             revisions: None,
             strip_heads: HashMap::new(),
@@ -890,6 +969,8 @@ impl PageScene {
                     text: None,
                     kind: if tag {
                         role_label_kind(&sym.role)
+                    } else if self.note_slots.get(&s).is_some_and(|n| index >= n.labels) {
+                        LabelKind::Note
                     } else {
                         LabelKind::Fixed
                     },
@@ -902,6 +983,26 @@ impl PageScene {
             }),
             _ => None,
         }
+    }
+
+    /// The offset (mm, from the default place) that puts `symbol`'s note
+    /// `delta` further on than it is drawn now. It is what a drag of the
+    /// note stores in the symbol's `note_dx` and `note_dy` properties; the
+    /// note keeps the anchor its symbol gives it, so the whole note ends
+    /// exactly `delta` from where it was, whichever free place it was at.
+    /// `None` when the symbol has no text note on this page.
+    pub fn note_offset_after(&self, symbol: SymbolId, delta: Vec2) -> Option<Vec2> {
+        let slot = self.note_slots.get(&symbol)?;
+        let item = self.scene.get(item_id(AnyId::Symbol(symbol)))?;
+        let (min, size) = match &slot.what {
+            NoteWhat::Text(_) => {
+                let b = item.labels.get(slot.labels)?.bounds();
+                (b.min, b.max - b.min)
+            }
+            NoteWhat::Table { size, .. } => (slot.at.0 - slot.at.1.fractions() * *size, *size),
+        };
+        let default = slot.preferred.0 - slot.offset;
+        Some(min + delta + slot.preferred.1.fractions() * size - default)
     }
 
     /// Replaces the notes drawn next to symbols (cross references). Only
@@ -1006,6 +1107,7 @@ impl PageScene {
         self.art_cache.clear();
         self.wire_junctions.clear();
         self.text_hosts.clear();
+        self.note_slots.clear();
         self.frame(project);
         self.draw_underlay();
         self.strip_heads = strip_heads(project, self.page);
@@ -1023,6 +1125,7 @@ impl PageScene {
         for id in contents.texts {
             self.sync_text(project, id);
         }
+        self.refresh_notes(None);
     }
 
     /// Updates the scene after an edit. Returns whether anything changed.
@@ -1174,7 +1277,12 @@ impl PageScene {
         if frame_dirty {
             self.frame(project);
         }
+        // Where the drawing changed, so only the notes near it are placed
+        // again.
+        let mut touched = Vec::new();
         for id in dirty {
+            let key = item_id(id);
+            touched.extend(self.scene.item_bounds(key));
             match id {
                 AnyId::Symbol(s) => self.sync_symbol(project, s, art),
                 AnyId::Junction(j) => self.sync_junction(project, j),
@@ -1182,7 +1290,9 @@ impl PageScene {
                 AnyId::Text(t) => self.sync_text(project, t),
                 _ => {}
             }
+            touched.extend(self.scene.item_bounds(key));
         }
+        self.refresh_notes(Some(&touched));
         self.scene.revision() != rev
     }
 
@@ -1447,6 +1557,7 @@ impl PageScene {
     fn sync_symbol(&mut self, project: &Project, id: SymbolId, art: &dyn SymbolArt) {
         let Some(sym) = project.symbol(id).filter(|s| s.page == self.page) else {
             self.remove(id.into());
+            self.note_slots.remove(&id);
             return;
         };
         let place = placement(&sym.placement);
@@ -1537,31 +1648,89 @@ impl PageScene {
                     .colored(self.style.tag_color),
             );
         }
-        if let Some(note) = self.notes.get(&id) {
-            self.add_note(&mut item, tag.as_ref(), note);
-        }
+        let slot = self
+            .notes
+            .get(&id)
+            .and_then(|note| self.add_note(id, &mut item, tag.as_ref(), note, sym));
+        match slot {
+            Some(slot) => self.note_slots.insert(id, slot),
+            None => self.note_slots.remove(&id),
+        };
         self.put(id.into(), item);
     }
 
     /// Adds a note to the symbol's item: its text, and under a coil the
-    /// contact table with the text of any warning below it.
-    fn add_note(&self, item: &mut Item, tag: Option<&Label>, note: &SymbolNote) {
-        if note.rows.is_empty() || note.anchor != NoteAnchor::Below {
-            if !note.lines.is_empty() {
-                item.labels.push(self.note_label(item, tag, note));
+    /// contact table with the text of any warning below it. The note goes
+    /// to its preferred place next to the symbol or, when wires, symbols or
+    /// text cover that, to the first free place nearby (see
+    /// [`crate::note_place`]).
+    fn add_note(
+        &self,
+        id: SymbolId,
+        item: &mut Item,
+        tag: Option<&Label>,
+        note: &SymbolNote,
+        sym: &SymbolInstance,
+    ) -> Option<NoteSlot> {
+        let offset = note_offset(sym);
+        let (primitives, labels) = (item.primitives.len(), item.labels.len());
+        let mut slot = if note.rows.is_empty() || note.anchor != NoteAnchor::Below {
+            if note.lines.is_empty() {
+                return None;
             }
-            return;
-        }
-        let ink = item
-            .primitives
-            .iter()
-            .fold(crate::Aabb::EMPTY, |b, p| b.union(&p.shape.bounds()));
-        let (left, top) = if ink.is_empty() {
-            let at = item.snap_points.first().map_or(Vec2::ZERO, |s| s.pos);
-            (at.x, at.y)
+            let (ink, mut base) = self.note_label(item, tag, note);
+            base.pos += offset.unwrap_or(Vec2::ZERO);
+            NoteSlot {
+                primitives,
+                labels,
+                ink,
+                offset: offset.unwrap_or(Vec2::ZERO),
+                preferred: (base.pos, base.anchor),
+                at: (base.pos, base.anchor),
+                what: NoteWhat::Text(base),
+                moved: offset.is_some(),
+            }
         } else {
-            (ink.min.x, ink.max.y)
+            let ink = item
+                .primitives
+                .iter()
+                .fold(crate::Aabb::EMPTY, |b, p| b.union(&p.shape.bounds()));
+            let (left, top) = if ink.is_empty() {
+                let at = item.snap_points.first().map_or(Vec2::ZERO, |s| s.pos);
+                (at.x, at.y)
+            } else {
+                (ink.min.x, ink.max.y)
+            };
+            let origin = Vec2::new(left, top + 1.0) + offset.unwrap_or(Vec2::ZERO);
+            let (_, _, bounds) = self.table_parts(note, origin);
+            NoteSlot {
+                primitives,
+                labels,
+                ink,
+                offset: offset.unwrap_or(Vec2::ZERO),
+                preferred: (origin, Anchor::TopLeft),
+                at: (origin, Anchor::TopLeft),
+                what: NoteWhat::Table {
+                    note: note.clone(),
+                    size: bounds.max - bounds.min,
+                },
+                moved: offset.is_some(),
+            }
         };
+        slot.at = self.chosen_place(&slot, item, id);
+        let (p, l) = self.note_parts(&slot, slot.at);
+        item.primitives.extend(p);
+        item.labels.extend(l);
+        Some(slot)
+    }
+
+    /// The contact table of `note` with its top left corner at `origin`,
+    /// and the warning text under it: what is drawn, and the box it takes.
+    fn table_parts(
+        &self,
+        note: &SymbolNote,
+        origin: Vec2,
+    ) -> (Vec<crate::Primitive>, Vec<Label>, crate::Aabb) {
         let h = self.style.tag_height;
         let color = if note.warning {
             self.style.note_warning_color
@@ -1571,32 +1740,146 @@ impl PageScene {
         let table = note_table::layout(
             &note.rows,
             note.density,
-            Vec2::new(left, top + 1.0),
+            origin,
             h,
             Stroke::world(0.25, color),
             self.style.note_color,
         );
-        item.primitives.extend(table.primitives.iter().cloned());
-        item.labels.extend(table.labels.iter().cloned());
+        let mut bounds = table.bounds;
+        let mut labels = table.labels.clone();
         if !note.lines.is_empty() {
             let warn = Label::new(
-                Vec2::new(left, table.bottom() + 0.3 * h),
+                Vec2::new(origin.x, table.bottom() + 0.3 * h),
                 note.lines.join("\n"),
                 h,
             )
             .anchored(Anchor::TopLeft);
-            item.labels.push(if note.warning {
+            let warn = if note.warning {
                 warn.colored(self.style.note_warning_color).keeping_color()
             } else {
                 warn.colored(self.style.note_color)
-            });
+            };
+            bounds = bounds.union(&warn.bounds());
+            labels.push(warn);
         }
+        (table.primitives, labels, bounds)
+    }
+
+    /// What `slot` draws with its note at `at`.
+    fn note_parts(
+        &self,
+        slot: &NoteSlot,
+        at: (Vec2, Anchor),
+    ) -> (Vec<crate::Primitive>, Vec<Label>) {
+        match &slot.what {
+            NoteWhat::Text(base) => {
+                let mut label = base.clone();
+                label.pos = at.0;
+                label.anchor = at.1;
+                (Vec::new(), vec![label])
+            }
+            NoteWhat::Table { note, size } => {
+                let origin = at.0 - at.1.fractions() * *size;
+                let (p, l, _) = self.table_parts(note, origin);
+                (p, l)
+            }
+        }
+    }
+
+    /// Where `slot`'s note goes: where the user put it, else the first
+    /// free place. `item` is the symbol's item as it is now (the note's own
+    /// parts, after `slot.primitives` and `slot.labels`, do not count as
+    /// obstacles).
+    fn chosen_place(&self, slot: &NoteSlot, item: &Item, id: SymbolId) -> (Vec2, Anchor) {
+        let preferred = slot.preferred;
+        if slot.moved {
+            return preferred;
+        }
+        let later = |key: ItemId| match self.ids.get(&key) {
+            Some(AnyId::Symbol(s)) if *s > id => self
+                .note_slots
+                .get(s)
+                // A note the user put somewhere is fixed: it is there
+                // whatever its id, so everything keeps clear of it.
+                .filter(|slot| !slot.moved)
+                .map(|slot| (slot.primitives, slot.labels)),
+            _ => None,
+        };
+        let obstacles = crate::note_place::Obstacles {
+            scene: &self.scene,
+            own: item,
+            own_id: item_id(AnyId::Symbol(id)),
+            keep: (slot.primitives, slot.labels),
+            later: &later,
+        };
+        let height = self.style.tag_height;
+        for at in crate::note_place::candidates(preferred, &slot.ink, height) {
+            let (p, l) = self.note_parts(slot, at);
+            if !obstacles.blocks(&p, &l) {
+                return at;
+            }
+        }
+        preferred
+    }
+
+    /// Places every note again against the drawing as it is now: a wire
+    /// drawn through a note, or a symbol moved onto it, moves the note to a
+    /// free place, and a note moves back when the way is clear. Returns
+    /// whether any note moved.
+    fn refresh_notes(&mut self, changed: Option<&[crate::Aabb]>) -> bool {
+        let mut ids: Vec<SymbolId> = self.note_slots.keys().copied().collect();
+        ids.sort();
+        let mut changed: Option<Vec<crate::Aabb>> = changed.map(<[_]>::to_vec);
+        let mut moved = false;
+        for id in ids {
+            let key = item_id(AnyId::Symbol(id));
+            let Some(item) = self.scene.get(key) else {
+                continue;
+            };
+            let slot = &self.note_slots[&id];
+            if slot.moved {
+                continue;
+            }
+            if let Some(boxes) = &changed {
+                let reach = slot.ink.expand(slot.reach(self.style.tag_height));
+                if !boxes.iter().any(|b| b.intersects(&reach)) {
+                    continue;
+                }
+            }
+            let at = self.chosen_place(slot, item, id);
+            if at == slot.at {
+                continue;
+            }
+            let (p, l) = self.note_parts(slot, at);
+            let before = self.scene.item_bounds(key);
+            let mut item = item.clone();
+            item.primitives.truncate(slot.primitives);
+            item.labels.truncate(slot.labels);
+            item.primitives.extend(p);
+            item.labels.extend(l);
+            self.scene.insert(key, item);
+            if let Some(slot) = self.note_slots.get_mut(&id) {
+                slot.at = at;
+            }
+            // Notes after this one may now have to move, or move back.
+            if let Some(boxes) = &mut changed {
+                boxes.extend(before);
+                boxes.extend(self.scene.item_bounds(key));
+            }
+            moved = true;
+        }
+        moved
     }
 
     /// A note next to the symbol's ink (see [`NoteAnchor`]), in the tag's
     /// size so both read alike. A warning keeps its colour while the
     /// symbol is selected.
-    fn note_label(&self, item: &Item, tag: Option<&Label>, note: &SymbolNote) -> Label {
+    fn note_label(
+        &self,
+        item: &Item,
+        tag: Option<&Label>,
+        note: &SymbolNote,
+    ) -> (crate::Aabb, Label) {
         let ink = item
             .primitives
             .iter()
@@ -1629,11 +1912,12 @@ impl PageScene {
         let label = Label::new(pos, note.lines.join("\n"), h)
             .anchored(anchor)
             .secondary();
-        if note.warning {
+        let label = if note.warning {
             label.colored(self.style.note_warning_color).keeping_color()
         } else {
             label.colored(self.style.note_color)
-        }
+        };
+        (ink, label)
     }
 
     fn sync_junction(&mut self, project: &Project, id: JunctionId) {
@@ -2192,7 +2476,7 @@ pub fn key(s: &str) -> SymbolKey {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use novo_core::{DeviceTag, Document, Pin, Placement as MPlacement};
+    use novo_core::{DeviceTag, Document, Pin, Placement as MPlacement, Value};
 
     fn doc() -> (Document, PageId, SymbolId, SymbolId, WireId) {
         let mut doc = Document::default();
@@ -2252,6 +2536,353 @@ mod tests {
         // Picking the wire on the canvas gives back the model wire.
         let hit = scene.pick(Vec2::new(100.2, 80.0), 1.0, 2.0).unwrap();
         assert_eq!(ps.model_id(hit.id), Some(AnyId::Wire(w)));
+    }
+
+    /// A vertical wire at `x` between two new symbols, from y 80 to y 120.
+    fn wire_at(doc: &mut Document, page: PageId, x: f32) -> (WireId, novo_core::ChangeSet) {
+        wire_span(doc, page, x, 75.0, 125.0)
+    }
+
+    /// A vertical wire at `x` between two new symbols at `top` and `bottom`.
+    fn wire_span(
+        doc: &mut Document,
+        page: PageId,
+        x: f32,
+        top: f32,
+        bottom: f32,
+    ) -> (WireId, novo_core::ChangeSet) {
+        doc.transact("wire", |tx| {
+            let d = tx.add_device(DeviceTag::parse("-X9")?, "Terminal")?;
+            let mut place = |y: f32| {
+                tx.place_symbol(
+                    page,
+                    "iec/no",
+                    MPlacement::at(Point::new(f64::from(x), f64::from(y))),
+                    vec![Pin::new("1", 0.0, -5.0), Pin::new("2", 0.0, 5.0)],
+                    SymbolRole::Device {
+                        device: d,
+                        main: false,
+                    },
+                )
+            };
+            let top = place(top)?;
+            let bottom = place(bottom)?;
+            tx.connect(Endpoint::pin(top, 1), Endpoint::pin(bottom, 0))
+        })
+        .unwrap()
+    }
+
+    fn right_note(symbol: SymbolId) -> SymbolNote {
+        SymbolNote {
+            symbol,
+            lines: vec!["95-96 2.1".into()],
+            warning: false,
+            anchor: NoteAnchor::Right,
+            rows: Vec::new(),
+            density: NoteDensity::default(),
+        }
+    }
+
+    fn note_label_of(ps: &PageScene, symbol: SymbolId) -> Label {
+        ps.scene()
+            .get(item_id(symbol))
+            .unwrap()
+            .labels
+            .last()
+            .unwrap()
+            .clone()
+    }
+
+    #[test]
+    fn a_note_a_wire_would_cross_moves_to_a_free_place_and_back() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_notes(doc.project(), [right_note(k1)], &PlaceholderArt);
+        let home = note_label_of(&ps, k1);
+        // A wire is drawn right through the note.
+        let x = home.bounds().center().x;
+        let (wire, _) = wire_at(&mut doc, page, x);
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        let moved = note_label_of(&ps, k1);
+        assert_ne!(moved.pos, home.pos, "the note left the wire");
+        let wire_item = ps.scene().get(item_id(wire)).unwrap();
+        for p in &wire_item.primitives {
+            if let Shape::Polyline { points, .. } = &p.shape {
+                for pair in points.windows(2) {
+                    assert!(
+                        !crate::geom::segment_intersects_aabb(pair[0], pair[1], &moved.bounds()),
+                        "{:?} still crosses the wire",
+                        moved.bounds()
+                    );
+                }
+            }
+        }
+        // Same drawing, same place.
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        assert_eq!(note_label_of(&ps, k1), moved);
+        // Deleting the wire brings the note back.
+        let (_, changes) = doc.transact("delete", |tx| tx.remove(wire)).unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        assert_eq!(note_label_of(&ps, k1).pos, home.pos);
+    }
+
+    #[test]
+    fn a_contact_table_moves_off_a_wire_as_a_whole() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let table = SymbolNote {
+            symbol: k1,
+            lines: Vec::new(),
+            warning: false,
+            anchor: NoteAnchor::Below,
+            rows: vec![
+                NoteRow {
+                    glyph: NoteGlyph::NormallyClosed,
+                    pins: "95-96".into(),
+                    location: "2.1".into(),
+                },
+                NoteRow {
+                    glyph: NoteGlyph::NormallyOpen,
+                    pins: "13-14".into(),
+                    location: "2.2".into(),
+                },
+            ],
+            density: NoteDensity::default(),
+        };
+        ps.set_notes(doc.project(), [table], &PlaceholderArt);
+        let item = |ps: &PageScene| ps.scene().get(item_id(k1)).unwrap().clone();
+        let home = item(&ps);
+        let rows_box = |it: &Item, from: usize| -> crate::Aabb {
+            it.labels[from..]
+                .iter()
+                .map(Label::bounds)
+                .fold(crate::Aabb::EMPTY, |b, l| b.union(&l))
+        };
+        let first = home.labels.iter().position(|l| l.text == "95-96").unwrap();
+        let home_box = rows_box(&home, first);
+        // A wire runs down through the middle of the table.
+        let (wire, _) = wire_at(&mut doc, page, home_box.center().x);
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        let moved = item(&ps);
+        let at = moved.labels.iter().position(|l| l.text == "95-96").unwrap();
+        let moved_box = rows_box(&moved, at);
+        assert_ne!(moved_box.min, home_box.min, "the table moved");
+        // It moved whole: every row kept its place inside the table.
+        assert!(
+            ((moved_box.max - moved_box.min) - (home_box.max - home_box.min))
+                .abs()
+                .max_element()
+                < 1e-3
+        );
+        assert_eq!(moved.primitives.len(), home.primitives.len());
+        let wire_item = ps.scene().get(item_id(wire)).unwrap();
+        let Shape::Polyline { points, .. } = &wire_item.primitives[0].shape else {
+            panic!()
+        };
+        for l in &moved.labels[at..] {
+            assert!(
+                !crate::geom::segment_intersects_aabb(points[0], points[1], &l.bounds()),
+                "{:?} is still crossed",
+                l.text
+            );
+        }
+    }
+
+    #[test]
+    fn two_competing_notes_settle_and_stay_put() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        // A third symbol right beside the coil, so both notes want the
+        // same room.
+        let (x, _) = doc
+            .transact("beside", |tx| {
+                let d = tx.add_device(DeviceTag::parse("-K2")?, "Relay")?;
+                tx.place_symbol(
+                    page,
+                    "iec/coil",
+                    MPlacement::at(Point::new(112.0, 100.0)),
+                    vec![Pin::new("A1", 0.0, -5.0), Pin::new("A2", 0.0, 5.0)],
+                    SymbolRole::Device {
+                        device: d,
+                        main: true,
+                    },
+                )
+            })
+            .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_notes(
+            doc.project(),
+            [right_note(k1), right_note(x)],
+            &PlaceholderArt,
+        );
+        let both = |ps: &PageScene| (note_label_of(ps, k1), note_label_of(ps, x));
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        let (a, b) = both(&ps);
+        assert!(
+            !a.bounds().intersects(&b.bounds()),
+            "the two notes overlap: {:?} {:?}",
+            a.bounds(),
+            b.bounds()
+        );
+        // Placing again changes nothing.
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        assert_eq!(both(&ps), (a.clone(), b.clone()));
+        // Nor does an edit far away.
+        let ((far, _), _) = doc
+            .transact("far", |tx| {
+                let d = tx.add_device(DeviceTag::parse("-K9")?, "Far")?;
+                let far = tx.place_symbol(
+                    page,
+                    "iec/coil",
+                    MPlacement::at(Point::new(500.0, 500.0)),
+                    vec![Pin::new("A1", 0.0, -5.0), Pin::new("A2", 0.0, 5.0)],
+                    SymbolRole::Device {
+                        device: d,
+                        main: true,
+                    },
+                )?;
+                Ok((far, ()))
+            })
+            .unwrap();
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        let (_, changes) = doc
+            .transact("move", |tx| {
+                tx.move_symbol(far, MPlacement::at(Point::new(520.0, 500.0)))
+            })
+            .unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        assert_eq!(both(&ps), (a, b));
+    }
+
+    #[test]
+    fn a_note_the_user_placed_is_an_obstacle_whatever_its_id() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        let (x, _) = doc
+            .transact("beside", |tx| {
+                let d = tx.add_device(DeviceTag::parse("-K2")?, "Relay")?;
+                tx.place_symbol(
+                    page,
+                    "iec/coil",
+                    MPlacement::at(Point::new(112.0, 160.0)),
+                    vec![Pin::new("A1", 0.0, -5.0), Pin::new("A2", 0.0, 5.0)],
+                    SymbolRole::Device {
+                        device: d,
+                        main: true,
+                    },
+                )
+            })
+            .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_notes(
+            doc.project(),
+            [right_note(k1), right_note(x)],
+            &PlaceholderArt,
+        );
+        let home = note_label_of(&ps, k1).bounds();
+        let default_x = note_label_of(&ps, x).bounds();
+        // The later symbol's note is put by hand exactly on the first one's
+        // place.
+        let by = home.min - default_x.min;
+        doc.transact("put", |tx| {
+            tx.update::<SymbolInstance>(x, |s| {
+                s.properties
+                    .insert(NOTE_DX.into(), Value::Float(f64::from(by.x)));
+                s.properties
+                    .insert(NOTE_DY.into(), Value::Float(f64::from(by.y)));
+            })
+        })
+        .unwrap();
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        let (a, b) = (note_label_of(&ps, k1), note_label_of(&ps, x));
+        assert!(
+            (b.bounds().min - home.min).abs().max_element() < 1e-3,
+            "the placed note stays"
+        );
+        assert!(
+            !a.bounds().intersects(&b.bounds()),
+            "the automatic note moved off it: {:?} {:?}",
+            a.bounds(),
+            b.bounds()
+        );
+    }
+
+    #[test]
+    fn a_wire_far_below_a_tall_table_still_moves_it() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        let rows: Vec<NoteRow> = (0..40)
+            .map(|i| NoteRow {
+                glyph: NoteGlyph::NormallyOpen,
+                pins: "13-14".into(),
+                location: format!("2.{i}"),
+            })
+            .collect();
+        let table = SymbolNote {
+            symbol: k1,
+            lines: Vec::new(),
+            warning: false,
+            anchor: NoteAnchor::Below,
+            rows,
+            density: NoteDensity::default(),
+        };
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_notes(doc.project(), [table], &PlaceholderArt);
+        let labels_of = |ps: &PageScene| {
+            ps.scene()
+                .get(item_id(k1))
+                .unwrap()
+                .labels
+                .iter()
+                .filter(|l| l.text == "13-14")
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let home = labels_of(&ps);
+        assert_eq!(home.len(), 40);
+        let ink = ps.scene().get(item_id(k1)).unwrap().primitives[0]
+            .shape
+            .bounds();
+        let x = home[0].bounds().center().x;
+        // Far more than 60 mm below the ink, inside the table's lower rows.
+        let top = ink.max.y + 110.0;
+        assert!(home[39].bounds().max.y > top + 10.0, "the table is tall");
+        let (_, changes) = wire_span(&mut doc, page, x, top - 5.0, top + 15.0);
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        let moved = labels_of(&ps);
+        assert_ne!(moved[0].pos, home[0].pos, "the table moved off the wire");
+    }
+
+    #[test]
+    fn a_wire_drawn_later_moves_the_note_through_apply() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_notes(doc.project(), [right_note(k1)], &PlaceholderArt);
+        let home = note_label_of(&ps, k1);
+        let x = home.bounds().center().x;
+        let (_, (_, changes)) = (0, wire_at(&mut doc, page, x));
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        assert_ne!(note_label_of(&ps, k1).pos, home.pos);
+    }
+
+    #[test]
+    fn a_note_the_user_moved_stays_where_it_is() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_notes(doc.project(), [right_note(k1)], &PlaceholderArt);
+        let home = note_label_of(&ps, k1);
+        doc.transact("move the note", |tx| {
+            tx.update::<SymbolInstance>(k1, |s| {
+                s.properties.insert(NOTE_DX.into(), Value::Float(30.0));
+                s.properties.insert(NOTE_DY.into(), Value::Float(-8.0));
+            })
+        })
+        .unwrap();
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        let by = Vec2::new(30.0, -8.0);
+        assert_eq!(note_label_of(&ps, k1).pos, home.pos + by);
+        // A wire through its new place does not move it.
+        let x = note_label_of(&ps, k1).bounds().center().x;
+        let _ = wire_at(&mut doc, page, x);
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        assert_eq!(note_label_of(&ps, k1).pos, home.pos + by);
     }
 
     #[test]

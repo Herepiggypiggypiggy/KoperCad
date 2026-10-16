@@ -131,6 +131,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.open_read_only",
+        "Open read-only",
+        "Project",
+        &["view only", "look", "locked", "share"],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.example",
         "Open example",
         "Project",
@@ -260,6 +267,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Nothing,
         ),
         &["import macro"],
+    ),
+    verb(
+        cmd(
+            "macro.export_pack",
+            "Export macro pack",
+            "Project",
+            &["macro", "pack", "export", "kcmacropack", "share", "team"],
+            Needs::Nothing,
+        ),
+        &["export macros", "macro pack"],
     ),
     verb(
         cmd(
@@ -604,6 +621,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd("edit.rotate", "Rotate", "Draw", &["turn"], Needs::Selection),
+    cmd(
+        "edit.reset_note",
+        "Reset note position",
+        "Draw",
+        &["note", "cross reference", "contact image", "label"],
+        Needs::Selection,
+    ),
     cmd("edit.mirror", "Mirror", "Draw", &["flip"], Needs::Selection),
     // PLC and I/O (docs/design/plc.md section 4): the command surface only
     // names them; the app shell runs them through novo-plc.
@@ -724,6 +748,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Page,
         ),
         &["place macro", "macro"],
+    ),
+    verb(
+        cmd(
+            "macro.edit",
+            "Edit macro parameters",
+            "Edit",
+            &[
+                "macro",
+                "block",
+                "parameter",
+                "default",
+                "author",
+                "library",
+            ],
+            Needs::Nothing,
+        ),
+        &["edit macro"],
     ),
     cmd(
         "edit.select_all",
@@ -1074,7 +1115,14 @@ pub const COMMANDS: &[CommandInfo] = &[
         "view.fit",
         "Zoom to fit",
         "View",
-        &["zoom", "extents"],
+        &["zoom", "extents", "drawing", "content"],
+        Needs::Page,
+    ),
+    cmd(
+        "view.fit_sheet",
+        "Fit whole sheet",
+        "View",
+        &["zoom", "paper", "page", "extents"],
         Needs::Page,
     ),
     cmd(
@@ -1124,6 +1172,27 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide shadows in 3D",
         "View",
         &["shadows", "light", "soft shadows"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_duplicate",
+        "Duplicate the selected devices in 3D",
+        "View",
+        &["duplicate", "copy", "clone", "same part"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_position",
+        "Show or hide the Position box in 3D",
+        "View",
+        &["position", "coordinates", "offset", "nudge", "x y"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_place",
+        "Place a device in 3D",
+        "View",
+        &["place", "put", "add device", "unplaced", "drop"],
         Needs::Project,
     ),
     cmd(
@@ -1376,6 +1445,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "sim.add_fault",
+        "Add fault to selection",
+        "View",
+        &[
+            "add fault",
+            "open circuit",
+            "short to earth",
+            "stuck contact",
+            "what if",
+            "failure",
+        ],
+        Needs::Selection,
+    ),
+    cmd(
         "view.override_marks",
         "Show override marks",
         "View",
@@ -1626,7 +1709,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.cutlist",
-            "Cut list",
+            "Cut list (wire by the metre)",
             "View",
             &["cut length", "wire lengths", "sleeves"],
             Needs::Project,
@@ -1646,7 +1729,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.wirecut",
-            "Wire cut list",
+            "Wire cut list (machine job)",
             "View",
             &["wire machine", "cut and strip", "production"],
             Needs::Project,

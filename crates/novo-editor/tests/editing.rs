@@ -2998,6 +2998,51 @@ fn joining_a_wire_never_glides_along_it_off_the_grid() {
     );
 }
 
+#[cfg(feature = "art")]
+#[test]
+fn a_note_offset_is_one_undo_step_and_reset_clears_it() {
+    use novo_canvas::model::{NOTE_DX, NOTE_DY};
+    let (mut doc, _page, mut editor, [a, b, _]) = three_contacts();
+    let depth = doc.undo_depth();
+    assert!(editor.set_note_offset(&mut doc, a, Some(p(7.0, -3.0))));
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let props = &doc.project().symbol(a).unwrap().properties;
+    assert_eq!(props.get(NOTE_DX), Some(&novo_core::Value::Float(7.0)));
+    assert_eq!(props.get(NOTE_DY), Some(&novo_core::Value::Float(-3.0)));
+
+    // Reset only touches selected symbols that were moved.
+    assert!(!editor.reset_notes(&mut doc, &[AnyId::Symbol(b)]));
+    assert_eq!(
+        editor.notice(),
+        Some("No moved note on the selection"),
+        "says why nothing happened"
+    );
+    assert!(editor.reset_notes(&mut doc, &[AnyId::Symbol(a), AnyId::Symbol(b)]));
+    assert!(
+        !doc.project()
+            .symbol(a)
+            .unwrap()
+            .properties
+            .contains_key(NOTE_DX)
+    );
+    doc.undo().unwrap();
+    assert!(
+        doc.project()
+            .symbol(a)
+            .unwrap()
+            .properties
+            .contains_key(NOTE_DX)
+    );
+    assert!(editor.set_note_offset(&mut doc, a, None));
+    assert!(
+        !doc.project()
+            .symbol(a)
+            .unwrap()
+            .properties
+            .contains_key(NOTE_DY)
+    );
+}
+
 #[test]
 fn changing_the_source_of_a_short_wire_keeps_the_wire_and_its_feed() {
     let (mut doc, page, mut editor) = setup();
