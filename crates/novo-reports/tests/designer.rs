@@ -403,6 +403,6 @@ fn the_entry_names_where_the_user_finds_the_designer() {
     use novo_reports::designer::ENTRY;
     assert_eq!(
         (ENTRY.workspace, ENTRY.tab, ENTRY.command_id),
-        ("Reports", "Designer", "reports.designer")
+        ("Reports", "Designer", "report.designer")
     );
 }

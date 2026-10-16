@@ -85,6 +85,7 @@ pub mod designer;
 mod devices;
 mod diagrams;
 mod export;
+pub mod i18n;
 mod io;
 mod label_sheet;
 mod labels;

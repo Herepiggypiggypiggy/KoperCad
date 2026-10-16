@@ -882,3 +882,29 @@ fn cables_are_found_by_tag_and_wires_by_number() {
     let rows = palette.search("wire 999", &src);
     assert!(!rows.iter().any(|r| r.kind == Kind::Wire));
 }
+
+#[test]
+fn the_report_designer_is_findable_in_both_languages() {
+    let mut doc = Document::default();
+    motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+    for query in [
+        "report designer",
+        "report template",
+        "title block",
+        "rapportontwerper",
+        "sjabloon",
+    ] {
+        let rows = palette.search(query, &src);
+        assert!(
+            rows.iter()
+                .take(3)
+                .any(|r| r.target == Target::Command("report.designer")),
+            "{query}: {:?}",
+            rows.iter().take(3).map(|r| &r.target).collect::<Vec<_>>()
+        );
+    }
+}
