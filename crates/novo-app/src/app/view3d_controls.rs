@@ -39,6 +39,9 @@ pub(crate) struct Controls {
     pub(super) missing_data: bool,
     /// The Heat panel in the right-hand slot, under the view cube.
     pub(super) heat_panel: bool,
+    /// The door, walls, roof, floor and extra plates as faint panes (View
+    /// > Cabinet > Cabinet surfaces picks one to highlight).
+    pub(super) surfaces: bool,
 }
 
 impl Default for Controls {
@@ -56,6 +59,7 @@ impl Default for Controls {
             restore: false,
             missing_data: false,
             heat_panel: false,
+            surfaces: false,
         }
     }
 }
@@ -132,6 +136,7 @@ pub(super) fn toolbar(
                 controls.shadows,
                 controls.ssao && controls.ssao_available,
                 controls.missing_data,
+                controls.surfaces,
             ]
             .iter()
             .filter(|b| **b)
@@ -147,6 +152,13 @@ pub(super) fn toolbar(
                     changed.layers |= toggle(ui, &mut layers.door, "Door", "Show the door");
                     changed.layers |=
                         toggle(ui, &mut layers.wires, "Wires", "Show the routed wires");
+                    toggle(
+                        ui,
+                        &mut controls.surfaces,
+                        "Surfaces",
+                        "Show the door, walls, roof, floor and extra plates as faint panes. \
+                         The surface picked in the Cabinet header is highlighted.",
+                    );
                     toggle(
                         ui,
                         &mut controls.shadows,

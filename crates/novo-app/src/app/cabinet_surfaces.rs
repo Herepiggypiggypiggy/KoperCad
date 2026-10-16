@@ -26,6 +26,11 @@ pub(super) struct SurfaceRow {
     pub assumed: bool,
     /// The surface as a plate, in mm.
     pub plate: Plate,
+    /// Where the surface is in the enclosure frame (mm): its corner and the
+    /// directions of its width and height.
+    pub origin: [f64; 3],
+    pub u: [f64; 3],
+    pub v: [f64; 3],
 }
 
 impl SurfaceRow {
@@ -186,6 +191,9 @@ pub(super) fn summarize(project: &Project, structure: StructureId) -> Option<Sur
             devices: counts.get(&s.name).copied().unwrap_or(0),
             assumed: s.assumed,
             plate: s.plate(),
+            origin: s.origin,
+            u: s.u,
+            v: s.v,
         })
         .collect();
     Some(SurfaceSummary {

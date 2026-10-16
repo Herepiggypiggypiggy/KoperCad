@@ -48,6 +48,10 @@ pub(crate) struct View3dMode {
     pub(super) place: PlaceList,
     /// The landing box drawn last frame, to redraw the overlays when it changes.
     ghost_shown: Vec<([i64; 4], bool)>,
+    /// The surface panes drawn, and what they were built for (enclosure,
+    /// project revision, picked surface, shown).
+    surfaces_shown: Option<(StructureId, u64, Option<String>, bool)>,
+    surface_panes: Vec<novo_view3d::Overlay>,
     library: Arc<MeshLibrary>,
     /// The enclosure and project revision the scene was built for.
     pub(super) built: Option<(StructureId, u64, Arc<Scene>)>,
@@ -103,6 +107,8 @@ impl Default for View3dMode {
             position: Fields::default(),
             place: PlaceList::default(),
             ghost_shown: Vec::new(),
+            surfaces_shown: None,
+            surface_panes: Vec::new(),
             library: Arc::new(MeshLibrary::new()),
             built: None,
             pending: None,
@@ -364,8 +370,23 @@ impl NovoApp {
                 )
             })
             .collect();
-        let ghost_changed = mode.ghost_shown != ghost_key;
+        let mut ghost_changed = mode.ghost_shown != ghost_key;
         mode.ghost_shown = ghost_key;
+        // The surfaces as faint panes: rebuilt when the model, the picked
+        // surface or the toggle changed.
+        let picked = self.cabinet.surface.clone();
+        let panes_on = super::view3d_surfaces::wanted(mode.controls.surfaces, picked.as_deref());
+        let panes_key = (id, revision, picked.clone(), panes_on);
+        if mode.surfaces_shown.as_ref() != Some(&panes_key) {
+            mode.surface_panes = match super::cabinet_surfaces::summarize(project, id) {
+                Some(sum) if panes_on => {
+                    super::view3d_surfaces::overlays(&sum, picked.as_deref(), scene.frame)
+                }
+                _ => Vec::new(),
+            };
+            mode.surfaces_shown = Some(panes_key);
+            ghost_changed = true;
+        }
         let stored = load(project, id);
         if let Some(lay) = &stored {
             let tag_of = |d: u64| {
@@ -435,12 +456,14 @@ impl NovoApp {
             .map(|(sol, at)| probe_marker(sol, at));
         if !tracing && (heat_changed || ghost_changed || probe_changed) {
             let mut all = mode.heat_base.clone();
+            all.extend(mode.surface_panes.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker.clone());
             mode.view.set_overlays(all);
         }
         if tracing {
             let mut all = mode.heat_base.clone();
+            all.extend(mode.surface_panes.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
             let t = heat_3d::tracers(&mode.heat_flow, ui.input(|i| i.time));
