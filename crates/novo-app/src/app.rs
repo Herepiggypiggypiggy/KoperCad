@@ -2520,6 +2520,11 @@ fn fitted_size(inner: egui::Vec2, monitor: egui::Vec2) -> Option<egui::Vec2> {
     (fitted != inner).then_some(fitted)
 }
 
+/// Whether the window was left maximized or full screen by the user.
+fn user_sized(maximized: Option<bool>, fullscreen: Option<bool>) -> bool {
+    maximized == Some(true) || fullscreen == Some(true)
+}
+
 /// Once, on the first frame: the default window is 1280 x 800, which on a
 /// 1366 x 768 screen puts the status bar below the edge. A window larger
 /// than the screen is made to fit; one that fits is left alone.
@@ -2528,14 +2533,24 @@ fn fit_window_to_screen(ctx: &egui::Context) {
     if ctx.data(|d| d.get_temp::<bool>(id)).unwrap_or(false) {
         return;
     }
-    let (inner, monitor) = ctx.input(|i| {
+    let (inner, monitor, maximized, fullscreen) = ctx.input(|i| {
         let v = i.viewport();
-        (v.inner_rect.map(|r| r.size()), v.monitor_size)
+        (
+            v.inner_rect.map(|r| r.size()),
+            v.monitor_size,
+            v.maximized,
+            v.fullscreen,
+        )
     });
     let (Some(inner), Some(monitor)) = (inner, monitor) else {
         return;
     };
     ctx.data_mut(|d| d.insert_temp(id, true));
+    // A restored maximized or full screen window already fills the screen;
+    // resizing it would undo that on every launch.
+    if user_sized(maximized, fullscreen) {
+        return;
+    }
     if let Some(size) = fitted_size(inner, monitor) {
         ctx.send_viewport_cmd(egui::ViewportCommand::InnerSize(size));
     }
@@ -2557,6 +2572,14 @@ mod fit_tests {
             fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1920.0, 1080.0)),
             None
         );
+    }
+
+    #[test]
+    fn a_maximized_or_full_screen_window_is_never_resized() {
+        assert!(user_sized(Some(true), Some(false)));
+        assert!(user_sized(Some(false), Some(true)));
+        assert!(!user_sized(Some(false), Some(false)));
+        assert!(!user_sized(None, None));
     }
 
     #[test]
