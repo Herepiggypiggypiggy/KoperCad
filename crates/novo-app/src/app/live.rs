@@ -954,6 +954,111 @@ mod tests {
         assert!(live.poles.is_closed(contact, 0));
     }
 
+    fn part(
+        tx: &mut novo_core::Tx<'_>,
+        page: PageId,
+        key: &str,
+        y: f64,
+        role: SymbolRole,
+    ) -> SymbolId {
+        let id = tx
+            .place_symbol(
+                page,
+                key,
+                Placement::at(Point::new(0.0, y)),
+                vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 8.0)],
+                role,
+            )
+            .unwrap();
+        if key.contains("contact") {
+            tx.update::<novo_core::SymbolInstance>(id, |s| s.pass_through = vec![vec![0, 1]])
+                .unwrap();
+        }
+        id
+    }
+
+    /// Start button, hold contact of -K1 in parallel, coil -K1.
+    fn seal_in(doc: &mut Document) -> (SymbolId, SymbolId, SymbolId, novo_core::DeviceId) {
+        let (out, _) = doc
+            .transact("Draw", |tx| {
+                let page = tx.add_page("1")?;
+                let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+                let n = tx.add_potential("N", PotentialKind::Neutral)?;
+                let k1 = tx.add_device(novo_core::DeviceTag::product("K1"), "")?;
+                let feed = part(
+                    tx,
+                    page,
+                    "t/feed",
+                    0.0,
+                    SymbolRole::PotentialFeed { potential: l1 },
+                );
+                let neutral = part(
+                    tx,
+                    page,
+                    "t/feed",
+                    10.0,
+                    SymbolRole::PotentialFeed { potential: n },
+                );
+                let start = part(tx, page, "t/contact/no", 20.0, SymbolRole::Unassigned);
+                // Not -K1's yet: only the hand moves it.
+                let hold = part(tx, page, "t/contact/no", 30.0, SymbolRole::Unassigned);
+                let role = SymbolRole::Device {
+                    device: k1,
+                    main: true,
+                };
+                let coil = part(tx, page, "t/coil", 40.0, role);
+                tx.connect(Endpoint::pin(feed, 1), Endpoint::pin(start, 0))?;
+                tx.connect(Endpoint::pin(feed, 1), Endpoint::pin(hold, 0))?;
+                tx.connect(Endpoint::pin(start, 1), Endpoint::pin(coil, 0))?;
+                tx.connect(Endpoint::pin(hold, 1), Endpoint::pin(coil, 0))?;
+                tx.connect(Endpoint::pin(coil, 1), Endpoint::pin(neutral, 1))?;
+                Ok((start, hold, coil, k1))
+            })
+            .unwrap();
+        out
+    }
+
+    /// A contact closed by hand before it belonged to the coil must not
+    /// stay latched once the coil drops out.
+    #[test]
+    fn a_contact_follows_its_coil_not_an_old_click() {
+        let mut doc = Document::default();
+        let (start, hold, coil, k1) = seal_in(&mut doc);
+        let mut live = LiveView::default();
+        let state = |live: &mut LiveView, doc: &Document| {
+            let s = live.solved(doc.project(), 0.0);
+            (
+                s.settled.energized.contains(&coil),
+                s.settled.poles.is_closed(hold, 0),
+            )
+        };
+        // The stale click: the hold contact closed by hand feeds the coil.
+        live.flip(hold, 0);
+        assert_eq!(state(&mut live, &doc), (true, true));
+        // The view is restarted before the contact is assigned.
+        live.invalidate();
+        // It becomes -K1's contact: the coil is off, so it opens.
+        doc.transact("Assign", |tx| {
+            tx.update::<novo_core::SymbolInstance>(hold, |s| {
+                s.role = SymbolRole::Device {
+                    device: k1,
+                    main: false,
+                };
+            })
+        })
+        .unwrap();
+        assert_eq!(state(&mut live, &doc), (false, false), "follows the coil");
+        // Press start: the coil pulls in and closes it; released: it holds.
+        live.flip(start, 0);
+        assert_eq!(state(&mut live, &doc), (true, true));
+        live.flip(start, 0);
+        assert_eq!(state(&mut live, &doc), (true, true), "sealed in");
+        // Breaker open (nothing feeds): both drop and stay down.
+        live.poles = PoleState::all_open();
+        live.invalidate();
+        assert_eq!(state(&mut live, &doc), (false, false));
+    }
+
     #[test]
     fn the_legend_counts_nets_and_each_pole_gets_a_badge() {
         let mut doc = Document::default();

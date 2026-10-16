@@ -11,7 +11,9 @@
 //! the coil went off. Nothing moves until the caller advances the clock.
 //!
 //! Only devices that draw a coil are driven. A contact of a device without
-//! one (a push button) stays under the hand-set [`PoleState`], as before.
+//! one (a push button) stays under the hand-set [`PoleState`], as before. A
+//! contact a coil does drive ignores any hand-set state: it is closed or open
+//! by its coil alone.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -168,7 +170,7 @@ pub struct Settled {
     pub solution: Solution,
     /// Coils that are energized (fed by two different potentials, or forced).
     pub energized: BTreeSet<SymbolId>,
-    /// Contacts a coil drives; a hand-set state can only add to them.
+    /// Contacts a coil drives; they follow the coil, whatever was set by hand.
     pub driven: BTreeSet<SymbolId>,
     /// A timer is counting: the state will change by itself as the clock
     /// advances, so the caller should keep stepping.
@@ -295,6 +297,10 @@ fn poles_for(
         let Some((rest, delay)) = contact_of(symbol) else {
             continue;
         };
+        // A driven contact follows its coil alone: a state set by hand while
+        // it was not driven yet (or by a click that landed before the coil
+        // was drawn) must not survive the coil dropping out.
+        poles.set_all(project, symbol.id, false);
         let coil = coils.iter().find(|c| c.device() == symbol.device());
         let on = coil.is_some_and(|c| energized.contains(&c.id));
         let seen = coil.and_then(|c| clock.coils.get(&c.id)).copied();
