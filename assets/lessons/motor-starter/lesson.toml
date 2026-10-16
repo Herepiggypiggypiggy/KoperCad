@@ -1,11 +1,11 @@
 format = 1
 id = "motor-starter"
 version = 1
-status = "draft"
+status = "early"
 title = "A motor starter"
 summary = "Draw the power circuit and the control circuit of a direct-on-line motor starter."
-track = "basics"
-order = 40
+track = "circuits"
+order = 10
 level = "intermediate"
 minutes = 12
 topics = ["motor", "control circuit", "tags"]

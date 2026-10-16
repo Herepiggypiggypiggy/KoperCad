@@ -8,7 +8,7 @@
 format = 1
 id = "view-3d"
 version = 1
-status = "draft"
+status = "early"
 title = "The cabinet in 3D"
 title_nl = "De kast in 3D"
 summary = "Orbit the finished cabinet, click a device to find it on the plate, and use the view cube."

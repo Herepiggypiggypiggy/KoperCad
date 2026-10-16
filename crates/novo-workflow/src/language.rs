@@ -160,6 +160,7 @@ pub const DUTCH: &[Aliases] = &[
     nl("edit.cut", &[], &["knippen"]),
     nl("edit.paste", &[], &["plakken"]),
     nl("edit.paste_keep_tags", &[], &["plakken met originele tags"]),
+    nl("edit.paste_in_place", &[], &["plakken op dezelfde plek"]),
     nl("edit.duplicate", &[], &["dupliceren", "kopie"]),
     nl("macro.save", &["macro opslaan"], &["opslaan als macro"]),
     nl(
@@ -408,6 +409,11 @@ pub const DUTCH: &[Aliases] = &[
         &["autocad", "converter", "achtergrond"],
     ),
     nl(
+        "file.eplan_export_script",
+        &["eplan script ophalen"],
+        &["eplan", "exporteren", "migreren", "overstappen", "pxf"],
+    ),
+    nl(
         "file.choose_dwg_converter",
         &[],
         &["dwg converter", "dwg2dxf", "omzetter"],
@@ -444,6 +450,7 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["alle rapporten", "excel exporteren"],
     ),
+    nl("view.3d", &[], &["3d", "driedimensionaal"]),
     nl("view.reports", &[], &["rapporten", "lijsten"]),
     nl("report.toc", &["inhoud", "inhoudsopgave"], &["paginalijst"]),
     nl(
