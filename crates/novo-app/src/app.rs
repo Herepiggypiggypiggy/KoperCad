@@ -31,6 +31,7 @@ mod heat_run_tests;
 mod inspector;
 mod interop;
 mod learn;
+mod learn_demo;
 mod learn_ui;
 mod link;
 mod live;
@@ -72,6 +73,7 @@ mod simulate;
 mod sizing;
 mod standards;
 mod status_bar;
+mod symbol_preview;
 mod terminals;
 mod title_revisions;
 mod userkeymap;
@@ -130,7 +132,7 @@ use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
 const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
-const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Export only: bringing the edited file back comes with the import dialog. The generated reports are under Export all reports to Excel.";
+const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Edit the file in Excel and bring it back with File > Import spreadsheet. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
 use pages::PageView;
 
@@ -835,6 +837,7 @@ impl NovoApp {
             commands.retain(|id| {
                 Action::from_id(id).is_some()
                     || *id == "view.cabinet_table"
+                    || *id == "view.command_field_here"
                     || id.starts_with("heat.")
             });
         }

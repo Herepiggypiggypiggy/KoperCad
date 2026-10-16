@@ -20,7 +20,7 @@ minutes = 8
 topics = ["cabinet", "wire-list", "routing"]
 needs = ["wire-routing"]
 next = ["panel-plate-drawing"]
-project = "../rails-and-ducts/finished.json"
+project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-wire-list"

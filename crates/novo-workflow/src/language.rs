@@ -451,6 +451,8 @@ pub const DUTCH: &[Aliases] = &[
     nl("report.wires", &["draadlijst"], &["draden", "aders"]),
     nl("report.terminals", &["klemmenlijst"], &["klemmenstrook"]),
     nl("report.cables", &["kabellijst"], &["kabels"]),
+    nl("report.cutlist", &["zaaglijst"], &["afkortlijst"]),
+    nl("report.labels", &["labels", "etiketten"], &["markeringen"]),
     nl(
         "export.sheets",
         &[

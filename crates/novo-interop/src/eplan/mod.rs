@@ -6,6 +6,7 @@
 
 mod parts;
 pub mod pxf;
+pub mod symbols;
 pub(crate) mod xml;
 
 pub use parts::{EplanError, import_auto, import_delimited, import_xml};
