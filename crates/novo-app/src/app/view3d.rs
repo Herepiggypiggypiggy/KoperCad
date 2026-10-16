@@ -199,9 +199,24 @@ impl NovoApp {
             mode.synced = (cabinet_rev, mode.view.state.selection.clone());
         }
 
-        let solution = self.cabinet.heat.solution();
+        // The heat result follows the cabinet: out of date marking, auto
+        // re-solve and the Simulate button live here too.
+        let heat_state = &mut self.cabinet.heat;
+        heat_state.poll(ui.ctx());
+        let moving = !mode.mv.landings().is_empty();
+        let ambient = self.sizing.request().ambient_max;
+        if heat_state.solution().is_some() || heat_state.running() || heat_state.on {
+            heat_state.sync_live(project, id, ambient, moving, ui.input(|i| i.time), ui.ctx());
+        }
+        if heat_state.take_request() {
+            heat_state.start_current();
+        }
+        let solution = heat_state.solution();
         if let Some(sol) = &solution {
             heat_controls(ui, &mut mode.heat, sol);
+        }
+        if solution.is_some() || heat_state.running() {
+            ui.horizontal_wrapped(|ui| super::heat::simulate_controls(ui, heat_state));
         }
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
         // The landing box of a dragged device, rail or duct.

@@ -960,6 +960,18 @@ impl NovoApp {
                         kept: self.cabinet.heat.kept(),
                     }
                 });
+                if let (Some(s), true) = (structure, heat_input.is_some()) {
+                    let ambient = self.sizing.request().ambient_max;
+                    let dragging = self.cabinet.drag.is_some();
+                    self.cabinet.heat.sync_live(
+                        project,
+                        s,
+                        ambient,
+                        dragging,
+                        ui.input(|i| i.time),
+                        ui.ctx(),
+                    );
+                }
                 if self.cabinet.heat.take_request() {
                     match (structure, &heat_input) {
                         (Some(s), Some(input)) => {
