@@ -263,6 +263,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "macro.export_pack",
+            "Export macro pack",
+            "Project",
+            &["macro", "pack", "export", "kcmacropack", "share", "team"],
+            Needs::Nothing,
+        ),
+        &["export macros", "macro pack"],
+    ),
+    verb(
+        cmd(
             "app.preferences",
             "Preferences",
             "Project",
@@ -604,6 +614,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd("edit.rotate", "Rotate", "Draw", &["turn"], Needs::Selection),
+    cmd(
+        "edit.reset_note",
+        "Reset note position",
+        "Draw",
+        &["note", "cross reference", "contact image", "label"],
+        Needs::Selection,
+    ),
     cmd("edit.mirror", "Mirror", "Draw", &["flip"], Needs::Selection),
     // PLC and I/O (docs/design/plc.md section 4): the command surface only
     // names them; the app shell runs them through novo-plc.
@@ -724,6 +741,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Page,
         ),
         &["place macro", "macro"],
+    ),
+    verb(
+        cmd(
+            "macro.edit",
+            "Edit macro parameters",
+            "Edit",
+            &[
+                "macro",
+                "block",
+                "parameter",
+                "default",
+                "author",
+                "library",
+            ],
+            Needs::Nothing,
+        ),
+        &["edit macro"],
     ),
     cmd(
         "edit.select_all",
@@ -1124,6 +1158,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide shadows in 3D",
         "View",
         &["shadows", "light", "soft shadows"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_dimensions",
+        "Show or hide dimensions in 3D",
+        "View",
+        &["dimensions", "measure", "distance", "mm", "sizes"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_quality",
+        "Restore 3D quality",
+        "View",
+        &["quality", "slow", "full quality", "reduced"],
         Needs::Project,
     ),
     cmd(
@@ -1865,6 +1913,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export pdf", "pdf"],
+    ),
+    verb(
+        cmd(
+            "export.pdf_options",
+            "Export PDF...",
+            "Export",
+            &[
+                "pdf options",
+                "pdf dialog",
+                "page range",
+                "bookmarks",
+                "links",
+                "choose pages",
+            ],
+            Needs::Project,
+        ),
+        &["export pdf options", "pdf options"],
     ),
     verb(
         cmd(

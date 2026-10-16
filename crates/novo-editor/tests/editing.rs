@@ -2997,3 +2997,105 @@ fn joining_a_wire_never_glides_along_it_off_the_grid() {
         p(52.4, 88.0)
     );
 }
+
+#[test]
+fn a_note_offset_is_one_undo_step_and_reset_clears_it() {
+    use novo_canvas::model::{NOTE_DX, NOTE_DY};
+    let (mut doc, _page, mut editor, [a, b, _]) = three_contacts();
+    let depth = doc.undo_depth();
+    assert!(editor.set_note_offset(&mut doc, a, Some(p(7.0, -3.0))));
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let props = &doc.project().symbol(a).unwrap().properties;
+    assert_eq!(props.get(NOTE_DX), Some(&novo_core::Value::Float(7.0)));
+    assert_eq!(props.get(NOTE_DY), Some(&novo_core::Value::Float(-3.0)));
+
+    // Reset only touches selected symbols that were moved.
+    assert!(!editor.reset_notes(&mut doc, &[AnyId::Symbol(b)]));
+    assert_eq!(
+        editor.notice(),
+        Some("No moved note on the selection"),
+        "says why nothing happened"
+    );
+    assert!(editor.reset_notes(&mut doc, &[AnyId::Symbol(a), AnyId::Symbol(b)]));
+    assert!(
+        !doc.project()
+            .symbol(a)
+            .unwrap()
+            .properties
+            .contains_key(NOTE_DX)
+    );
+    doc.undo().unwrap();
+    assert!(
+        doc.project()
+            .symbol(a)
+            .unwrap()
+            .properties
+            .contains_key(NOTE_DX)
+    );
+    assert!(editor.set_note_offset(&mut doc, a, None));
+    assert!(
+        !doc.project()
+            .symbol(a)
+            .unwrap()
+            .properties
+            .contains_key(NOTE_DY)
+    );
+}
+
+#[test]
+fn changing_the_source_of_a_short_wire_keeps_the_wire_and_its_feed() {
+    let (mut doc, page, mut editor) = setup();
+    editor.auto_connect = false;
+    editor.begin_place("iec/protection/fuse_3p", None);
+    editor.click(&mut doc, page, p(40.0, 80.0), TOL);
+    let f = symbol_at(&doc, page, p(40.0, 80.0));
+    // A feed standing right under the fuse, turned half way round, with a
+    // short wire from its pin to the fuse pin.
+    let lib = novo_symbols::Library::builtin().unwrap();
+    let sym = lib.get(potential::FEED_SYMBOL).unwrap().clone();
+    let (feed, _) = doc
+        .transact("feed", |tx| {
+            edit::place(
+                tx,
+                page,
+                &sym,
+                novo_core::Placement::at(p(40.0, 56.0)),
+                &PlaceOptions::new(),
+            )
+        })
+        .unwrap();
+    assert!(editor.rotate_selection(&mut doc, &[AnyId::Symbol(feed)]));
+    assert!(editor.rotate_selection(&mut doc, &[AnyId::Symbol(feed)]));
+    let feed_pin = pin(&doc, feed, "1");
+    let (a, b) = (
+        doc.project().endpoint_position(feed_pin).unwrap(),
+        pin_pos(&doc, f, "1"),
+    );
+    editor.begin_wire();
+    editor.click(&mut doc, page, a, TOL);
+    editor.click(&mut doc, page, b, TOL);
+    editor.leave_tool();
+    let wire = doc.project().wires().next().expect("the short wire").id;
+    let menu = editor.potential_menu(&doc, &[AnyId::Wire(wire)]);
+    assert!(menu.declare[0].label.starts_with("Change source: "));
+    let n = menu
+        .declare
+        .iter()
+        .find(|s| s.specs[0].name == "N")
+        .unwrap()
+        .clone();
+    let wires_before = doc.project().wires().count();
+    let symbols_before = doc.project().page_contents(page).symbols.len();
+    editor.assign_potentials(&mut doc, &[wire], &n);
+    assert_eq!(doc.project().wires().count(), wires_before, "wire kept");
+    assert_eq!(
+        doc.project().page_contents(page).symbols.len(),
+        symbols_before,
+        "feed kept"
+    );
+    assert!(connected(&doc, pin(&doc, feed, "1"), pin(&doc, f, "1")));
+    let netlist = doc.project().netlist();
+    let pot = netlist.potential_of(pin(&doc, f, "1")).unwrap();
+    assert_eq!(doc.project().potential(pot).unwrap().name, "N");
+    assert!(netlist.potential_conflicts().next().is_none());
+}

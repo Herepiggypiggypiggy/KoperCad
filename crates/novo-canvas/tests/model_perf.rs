@@ -103,6 +103,20 @@ fn big_page_cpu_budget() {
     let same_notes = time("set 10k notes (unchanged)", 5, || {
         ps.set_notes(doc.project(), notes.clone(), &PlaceholderArt)
     });
+    // An edit with 10k notes on the page only places the notes near it.
+    let mut with_notes_worst = Duration::ZERO;
+    for _ in 0..20 {
+        k += 1.0;
+        let (_, changes) = doc
+            .transact("move", |tx| {
+                tx.move_symbol(first, Placement::at(Point::new(k, 0.0)))
+            })
+            .unwrap();
+        let start = Instant::now();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        with_notes_worst = with_notes_worst.max(start.elapsed());
+    }
+    eprintln!("apply one moved symbol, 10k notes (worst of 20): {with_notes_worst:?}");
     let zoom = 1.0;
     let mut j = 0usize;
     let pick = time("pick under the pointer", 200, || {
@@ -117,6 +131,7 @@ fn big_page_cpu_budget() {
     let limit = if cfg!(debug_assertions) { 2000 } else { 50 };
     assert!(edit_worst < Duration::from_millis(if cfg!(debug_assertions) { 1000 } else { 40 }));
     let debug = cfg!(debug_assertions);
+    assert!(with_notes_worst < Duration::from_millis(if debug { 1000 } else { 40 }));
     assert!(first_notes < Duration::from_secs(if debug { 30 } else { 2 }));
     assert!(same_notes < Duration::from_millis(if debug { 500 } else { 40 }));
     assert!(pick < Duration::from_millis(if debug { 50 } else { 2 }));

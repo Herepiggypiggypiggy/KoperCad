@@ -187,7 +187,7 @@ impl NovoApp {
         match write_replacing(path, &bytes) {
             Ok(()) => {
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {}", path.display()));
+                self.message_file(format!("{verb} {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }

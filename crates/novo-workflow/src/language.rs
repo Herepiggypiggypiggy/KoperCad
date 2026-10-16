@@ -111,6 +111,11 @@ pub const DUTCH: &[Aliases] = &[
     nl("macro.browser", &["bibliotheek"], &["macro's", "macros"]),
     nl("macro.import", &["macro importeren"], &["importeer macro"]),
     nl(
+        "macro.export_pack",
+        &["macropakket exporteren"],
+        &["exporteer macro's", "macropakket", "macro pakket"],
+    ),
+    nl(
         "parts.browser",
         &["onderdelen"],
         &["artikelen", "onderdeel"],
@@ -213,6 +218,11 @@ pub const DUTCH: &[Aliases] = &[
         &["volgend aansluitpunt", "volgende pin"],
     ),
     nl("edit.rotate", &[], &["draaien", "roteren"]),
+    nl(
+        "edit.reset_note",
+        &[],
+        &["notitie", "verwijzing", "terugzetten"],
+    ),
     nl("edit.mirror", &[], &["spiegelen"]),
     nl(
         "proposal.accept",
@@ -236,6 +246,11 @@ pub const DUTCH: &[Aliases] = &[
     nl("edit.paste_in_place", &[], &["plakken op dezelfde plek"]),
     nl("edit.duplicate", &[], &["dupliceren", "kopie"]),
     nl("macro.save", &["macro opslaan"], &["opslaan als macro"]),
+    nl(
+        "macro.edit",
+        &["macro bewerken"],
+        &["bewerk macro", "macroparameters", "parameters bewerken"],
+    ),
     nl(
         "macro.place",
         &["macro plaatsen"],
@@ -672,6 +687,16 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_dimensions",
+        &["maatvoering tonen in 3d"],
+        &["maten", "maatvoering", "afstand", "afstanden"],
+    ),
+    nl(
+        "view.3d_quality",
+        &["3d kwaliteit herstellen"],
+        &["kwaliteit", "trage weergave", "herstellen"],
+    ),
+    nl(
         "view.3d_stats",
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],
@@ -713,6 +738,16 @@ pub const DUTCH: &[Aliases] = &[
         "export.report_pdf",
         &["exporteer rapport"],
         &["rapport pdf", "rapport afdrukken"],
+    ),
+    nl(
+        "export.pdf_options",
+        &["pdf opties", "exporteer pdf opties"],
+        &[
+            "paginabereik",
+            "bladwijzers",
+            "koppelingen",
+            "pagina's kiezen",
+        ],
     ),
     nl(
         "export.pdf_page",
