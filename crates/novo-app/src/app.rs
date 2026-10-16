@@ -81,6 +81,9 @@ mod macro_browser;
 mod macro_browser_tests;
 #[cfg(test)]
 mod macro_company_tests;
+mod macro_editor;
+#[cfg(test)]
+mod macro_editor_tests;
 mod macro_thumb;
 mod menu_bar;
 mod net_trace;
@@ -1158,6 +1161,7 @@ impl NovoApp {
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
+        self.macro_editor_window(&ctx);
         self.options_window(&ctx);
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
