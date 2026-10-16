@@ -1362,6 +1362,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "sim.add_fault",
+        "Add fault to selection",
+        "View",
+        &[
+            "add fault",
+            "open circuit",
+            "short to earth",
+            "stuck contact",
+            "what if",
+            "failure",
+        ],
+        Needs::Selection,
+    ),
+    cmd(
         "view.override_marks",
         "Show override marks",
         "View",

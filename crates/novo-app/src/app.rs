@@ -172,6 +172,8 @@ mod eplan_ui_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
+mod faults_tests;
+#[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
 mod greyed_commands_tests;
@@ -1110,6 +1112,7 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
         self.safety_window(&ctx);

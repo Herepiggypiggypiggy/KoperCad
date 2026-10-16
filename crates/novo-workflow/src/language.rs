@@ -484,6 +484,16 @@ pub const DUTCH: &[Aliases] = &[
         &["ladder", "programma draaien", "plc simuleren"],
     ),
     nl(
+        "sim.add_fault",
+        &["storing toevoegen"],
+        &[
+            "fout toevoegen",
+            "kortsluiting toevoegen",
+            "onderbreking",
+            "contact blijft hangen",
+        ],
+    ),
+    nl(
         "sim.faults",
         &["storingen"],
         &[

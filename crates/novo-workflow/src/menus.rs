@@ -191,6 +191,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
+    ("sim.add_fault", at("Simulate")),
     ("view.protection", at("Simulate")),
     ("heat.simulate", under("Simulate", "Heat")),
     // Reports

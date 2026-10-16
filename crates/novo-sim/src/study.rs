@@ -94,9 +94,224 @@ pub struct Study {
     pub nodes: Vec<NodeSpec>,
     pub devices: Vec<DeviceSpec>,
     pub scenarios: Vec<Scenario>,
+    /// Faults the person added from the schematic editor (right-click >
+    /// Add fault). Each one becomes a scenario when the study runs, see
+    /// [`Study::prepared`].
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub faults: Vec<ProjectFault>,
+}
+
+/// What a fault added from the drawing does.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "what", rename_all = "snake_case")]
+pub enum FaultWhat {
+    /// A short circuit or open phase at the target.
+    Short { kind: FaultKind },
+    /// The target device opens by itself (a stuck or failed contact that
+    /// drops out).
+    DeviceOpens,
+    /// The target device closes by itself (a contact stuck closed, welded).
+    DeviceCloses,
+}
+
+impl FaultWhat {
+    pub fn label(&self) -> String {
+        match self {
+            FaultWhat::Short { kind } => kind.label().to_owned(),
+            FaultWhat::DeviceOpens => "Device opens by itself".to_owned(),
+            FaultWhat::DeviceCloses => "Device closes by itself".to_owned(),
+        }
+    }
+}
+
+/// One fault of the project: where (a device tag, a wire or a terminal name
+/// from the drawing), what, and when.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ProjectFault {
+    /// `F1`, `F2`, ...: unique in the study.
+    pub id: String,
+    /// The name the person picked in the drawing: `-Q1`, `-X1:3`, `L1`.
+    pub target: String,
+    pub what: FaultWhat,
+    /// Resistance of the fault itself (arc, earth contact), ohm.
+    #[serde(default)]
+    pub fault_ohm: f64,
+    /// Seconds from the start of the run.
+    #[serde(default = "default_at")]
+    pub at_s: f64,
+}
+
+fn default_at() -> f64 {
+    0.1
+}
+
+/// Impedance of a stub segment hung on the busbar for a target the study
+/// does not list (ohm).
+const STUB_R: f64 = 0.01;
+const STUB_X: f64 = 0.005;
+
+/// A study ready to run: the project faults are scenarios, targets the
+/// network lacks are stub nodes, and `warnings` says what was assumed.
+#[derive(Debug, Clone)]
+pub struct Prepared {
+    pub study: Study,
+    pub warnings: Vec<String>,
+}
+
+fn norm(name: &str) -> String {
+    name.trim().trim_start_matches('-').to_lowercase()
 }
 
 impl Study {
+    /// An empty study for a project that has none yet: a 400 V / 50 Hz
+    /// source (the example's), no nodes, no devices.
+    pub fn empty(name: &str) -> Self {
+        let mut s = Study::example();
+        s.name = name.to_owned();
+        s.nodes.clear();
+        s.devices.clear();
+        s.scenarios.clear();
+        s.faults.clear();
+        s
+    }
+
+    /// The next free fault id (`F1`, `F2`, ...).
+    pub fn next_fault_id(&self) -> String {
+        (1..)
+            .map(|n| format!("F{n}"))
+            .find(|id| !self.faults.iter().any(|f| &f.id == id))
+            .expect("an unused id exists")
+    }
+
+    /// Adds a fault and returns its id.
+    pub fn add_fault(
+        &mut self,
+        target: &str,
+        what: FaultWhat,
+        fault_ohm: f64,
+        at_s: f64,
+    ) -> String {
+        let id = self.next_fault_id();
+        self.faults.push(ProjectFault {
+            id: id.clone(),
+            target: target.trim().to_owned(),
+            what,
+            fault_ohm,
+            at_s,
+        });
+        id
+    }
+
+    /// Removes a fault by id; whether it existed.
+    pub fn remove_fault(&mut self, id: &str) -> bool {
+        let before = self.faults.len();
+        self.faults.retain(|f| f.id != id);
+        self.faults.len() != before
+    }
+
+    fn node_for(&self, target: &str) -> Option<String> {
+        let t = norm(target);
+        self.nodes
+            .iter()
+            .find(|n| norm(&n.name) == t)
+            .or_else(|| {
+                self.nodes
+                    .iter()
+                    .find(|n| n.device.as_deref().is_some_and(|d| norm(d) == t))
+            })
+            .map(|n| n.name.clone())
+            .or_else(|| (norm(&self.source.busbar) == t).then(|| self.source.busbar.clone()))
+    }
+
+    fn device_for(&self, target: &str) -> Option<String> {
+        let t = norm(target);
+        self.devices
+            .iter()
+            .find(|d| norm(&d.key) == t)
+            .or_else(|| {
+                self.devices.iter().find(|d| {
+                    d.label
+                        .to_lowercase()
+                        .split_whitespace()
+                        .any(|w| w.trim_start_matches('-') == t)
+                })
+            })
+            .map(|d| d.key.clone())
+    }
+
+    /// The study with the project faults turned into scenarios (after the
+    /// hand-written ones). A fault whose target is not a node of the network
+    /// gets a stub node on the busbar, and the warning says so; a device
+    /// fault on an unknown device is left out with a warning.
+    pub fn prepared(&self) -> Prepared {
+        let mut study = self.clone();
+        let mut warnings = Vec::new();
+        for f in &self.faults {
+            let name = format!("{}: {} at {}", f.id, f.what.label(), f.target);
+            let mut scenario = match &f.what {
+                FaultWhat::Short { kind } => {
+                    let node = match study.node_for(&f.target) {
+                        Some(n) => n,
+                        None => {
+                            let node = f.target.trim().to_owned();
+                            study.nodes.push(NodeSpec {
+                                name: node.clone(),
+                                parent: study.source.busbar.clone(),
+                                r: STUB_R,
+                                x: STUB_X,
+                                loop_r: None,
+                                loop_x: None,
+                                device: None,
+                            });
+                            warnings.push(format!(
+                                "{}: {} is not in the study's network; it is assumed to hang on \
+                                 {} through {STUB_R} + j{STUB_X} ohm with no protection. Add it \
+                                 as a node in the study file for real numbers.",
+                                f.id, f.target, study.source.busbar
+                            ));
+                            node
+                        }
+                    };
+                    let tail = if *kind == FaultKind::OpenPhase {
+                        60.0
+                    } else {
+                        0.5
+                    };
+                    Scenario::new(name, f.at_s + tail).at(
+                        f.at_s,
+                        Action::Fault {
+                            id: f.id.clone(),
+                            node,
+                            kind: *kind,
+                            fault_ohm: f.fault_ohm,
+                            inception_deg: None,
+                        },
+                    )
+                }
+                FaultWhat::DeviceOpens | FaultWhat::DeviceCloses => {
+                    let Some(device) = study.device_for(&f.target) else {
+                        warnings.push(format!(
+                            "{}: {} is not a protective device of the study, so \"{}\" was \
+                             left out.",
+                            f.id,
+                            f.target,
+                            f.what.label()
+                        ));
+                        continue;
+                    };
+                    let action = if f.what == FaultWhat::DeviceOpens {
+                        Action::Open { device }
+                    } else {
+                        Action::Close { device }
+                    };
+                    Scenario::new(name, f.at_s + 1.0).at(f.at_s, action)
+                }
+            };
+            scenario.description = format!("Added from the drawing: {}.", f.what.label());
+            study.scenarios.push(scenario);
+        }
+        Prepared { study, warnings }
+    }
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("a study always serializes")
     }
@@ -228,6 +443,7 @@ impl Study {
             inception_deg: None,
         };
         Study {
+            faults: Vec::new(),
             format: STUDY_FORMAT,
             name: "Pump feeder (example)".into(),
             source: SourceSpec {
