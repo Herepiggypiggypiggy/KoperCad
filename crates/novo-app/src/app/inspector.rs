@@ -43,6 +43,46 @@ pub(super) struct DeviceInfo {
     /// For a plug or socket: the tag of its other half (`plug.mate`),
     /// empty when none is named. `None` for any other device.
     pub mate: Option<String>,
+    /// The calculation inputs ([`DEVICE_INPUTS`]) as the checks read them:
+    /// the device's own value, else its part's. `(value, from the part)`.
+    pub calc_inputs: Vec<(String, bool)>,
+}
+
+/// The numbers a device states for the calculations: property key, label,
+/// unit and what a typical entry looks like. `trip_curve` is a letter.
+pub(super) const DEVICE_INPUTS: [(&str, &str, &str, &str); 8] = [
+    ("rated_current_a", "Rated current", "A", "16"),
+    ("breaking_capacity_ka", "Breaking capacity", "kA", "10"),
+    ("trip_curve", "Trip curve", "B C D", "C"),
+    ("sccr_ka", "SCCR", "kA", "10"),
+    (
+        "let_through_i2t",
+        "Let-through I\u{b2}t",
+        "A\u{b2}s",
+        "30000",
+    ),
+    ("setting_min_a", "Relay setting min", "A", "6"),
+    ("setting_max_a", "Relay setting max", "A", "10"),
+    ("ac3_current_a", "AC-3 current", "A", "25"),
+];
+
+/// Reads an entry for a calculation input: empty clears it, `trip_curve`
+/// takes B, C or D, every other input a positive number.
+pub(super) fn parse_device_input(key: &str, text: &str) -> Result<Option<Value>, String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    if key == "trip_curve" {
+        return match text.to_ascii_uppercase().as_str() {
+            c @ ("B" | "C" | "D") => Ok(Some(Value::Text(c.to_owned()))),
+            _ => Err(format!("\"{text}\" is not a trip curve: use B, C or D")),
+        };
+    }
+    match text.replace(',', ".").parse::<f64>() {
+        Ok(v) if v.is_finite() && v > 0.0 => Ok(Some(Value::Float(v))),
+        _ => Err(format!("\"{text}\" is not a positive number")),
+    }
 }
 
 /// One place the device is drawn: `NO 13-14 2.6`.
@@ -93,6 +133,8 @@ enum InspectorAction {
     Pin(bool),
     /// A part picked in the Part row.
     AssignPart(novo_parts::PartKey),
+    /// A calculation input edited: property key and the text typed.
+    SetInput(&'static str, String),
 }
 
 /// The one device the selection draws, if it draws exactly one.
@@ -187,6 +229,16 @@ pub(super) fn device_info(
                 .collect()
         })
         .unwrap_or_default();
+    let part_props = d.parts.first().and_then(|&p| project.part(p));
+    let calc_inputs = DEVICE_INPUTS
+        .iter()
+        .map(|(key, ..)| match d.properties.get(*key) {
+            Some(v) => (value_text(v), false),
+            None => part_props
+                .and_then(|p| p.properties.get(*key))
+                .map_or((String::new(), false), |v| (value_text(v), true)),
+        })
+        .collect();
     let timed = project
         .symbols()
         .filter(|s| s.device() == Some(device))
@@ -205,6 +257,7 @@ pub(super) fn device_info(
             Some(Value::Text(t)) => t.clone(),
             _ => String::new(),
         }),
+        calc_inputs,
     })
 }
 
@@ -370,6 +423,7 @@ impl NovoApp {
                 InspectorAction::ResetProperty(key) => self.reset_property(device, &key),
                 InspectorAction::Pin(on) => self.wb.inspector.pinned = on,
                 InspectorAction::AssignPart(key) => self.assign_device_part(device, &key),
+                InspectorAction::SetInput(key, text) => self.set_device_input(device, key, &text),
             }
         }
     }
@@ -469,6 +523,28 @@ impl NovoApp {
 
     /// The reset arrow of an overridden property: the device goes back to
     /// its part's value, as one undo step.
+    /// Writes a calculation input on the device: one undo step.
+    pub(super) fn set_device_input(&mut self, device: DeviceId, key: &str, text: &str) {
+        let value = match parse_device_input(key, text) {
+            Ok(v) => v,
+            Err(why) => {
+                self.message(Level::Warning, why);
+                return;
+            }
+        };
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let Some(old) = doc.project().device(device) else {
+            return;
+        };
+        let label = format!("Set {key} of {}", old.tag);
+        match doc.transact(label, |tx| tx.set_property(device, key, value)) {
+            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Err(e) => self.message(Level::Error, format!("Could not change it: {e}")),
+        }
+    }
+
     fn reset_property(&mut self, device: DeviceId, key: &str) {
         let Some(doc) = self.backend.document_mut() else {
             return;
@@ -730,6 +806,8 @@ fn inspector_body(
     }
 
     ui.add_space(6.0);
+    calc_inputs_section(ui, info, actions);
+    ui.add_space(6.0);
     widgets::section_label(ui, "Properties");
     if info.properties.is_empty() {
         ui.weak("None");
@@ -869,6 +947,53 @@ fn pin_row(ui: &mut egui::Ui, pinned: bool, toggle: &mut bool) {
 /// Enter, or leaving the field after a change, commits it.
 fn committed(ui: &egui::Ui, response: &egui::Response) -> bool {
     response.lost_focus() && !ui.input(|i| i.key_pressed(egui::Key::Escape))
+}
+
+/// The "Calculation inputs" rows: the numbers the cable, short-circuit and
+/// starter calculations read from the device. A value the part supplies is
+/// shown dimmed with a hint; typing overrides it on this device only.
+fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
+    let any = info.calc_inputs.iter().any(|(v, _)| !v.is_empty());
+    egui::CollapsingHeader::new("Calculation inputs")
+        .id_salt("inspector_calc_inputs")
+        .default_open(any)
+        .show(ui, |ui| {
+            for ((key, label, unit, hint), (shown, from_part)) in
+                DEVICE_INPUTS.iter().zip(&info.calc_inputs)
+            {
+                let id = egui::Id::new(("inspector_input", *key));
+                let focused = ui.memory(|m| m.has_focus(id));
+                let mut text = if focused {
+                    ui.data(|d| d.get_temp::<String>(id))
+                        .unwrap_or_else(|| shown.clone())
+                } else {
+                    shown.clone()
+                };
+                ui.horizontal(|ui| {
+                    ui.label(*label);
+                    let edit = egui::TextEdit::singleline(&mut text)
+                        .id(id)
+                        .hint_text(*hint)
+                        .desired_width(70.0);
+                    let r = ui.add(edit).on_hover_text(if *from_part {
+                        format!("{key}: from the part. Type to override on this device.")
+                    } else {
+                        (*key).to_owned()
+                    });
+                    ui.weak(*unit);
+                    if r.has_focus() {
+                        ui.data_mut(|d| d.insert_temp(id, text.clone()));
+                    }
+                    if r.lost_focus() {
+                        ui.data_mut(|d| d.remove::<String>(id));
+                        if text.trim() != shown.trim() {
+                            actions.push(InspectorAction::SetInput(key, text.clone()));
+                        }
+                    }
+                });
+            }
+            ui.weak("Blank is unknown: the checks stay silent, nothing is guessed. Results: Check > Calculations.");
+        });
 }
 
 #[cfg(test)]
