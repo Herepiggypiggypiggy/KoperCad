@@ -132,6 +132,9 @@ fn main() {
                 setup.heat_w
             );
             let mut s = setup.solver();
+            if std::env::var("REDBLACK").is_ok() {
+                s.set_pressure_smoother(novo_cfd::flow::Smoother::RedBlack);
+            }
             let t0 = std::time::Instant::now();
             if mode == "march" {
                 let r = setup.run_steady(

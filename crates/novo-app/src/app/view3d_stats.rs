@@ -169,13 +169,13 @@ pub(super) fn report(
     }
     if let Some(s) = stats {
         let occlusion = if s.ssao {
-            "occlusion on"
+            "AO on"
         } else if occlusion_paused {
-            "occlusion paused"
+            "AO paused"
         } else if s.adapter_tier != novo_view3d::render::Tier::Discrete {
-            "occlusion off (needs a discrete GPU)"
+            "AO n/a"
         } else {
-            "occlusion off"
+            "AO off"
         };
         let _ = writeln!(
             out,
@@ -230,7 +230,7 @@ mod tests {
         assert!(text.contains("18.0 ms median"), "{text}");
         assert!(text.contains("56 fps (100 frames)"), "{text}");
         assert!(text.contains("Renderer CPU: 0.18 ms median"), "{text}");
-        assert!(text.contains("0.40 ms 95th, occlusion on"), "{text}");
+        assert!(text.contains("0.40 ms 95th, AO on"), "{text}");
         assert!(
             text.contains("1016 items, 11 draw calls, 12700 triangles"),
             "{text}"
@@ -263,18 +263,15 @@ mod tests {
             ..stats()
         };
         let paused = report(Some(&off), &[16.0], Build::default(), true);
-        assert!(paused.contains("occlusion paused"), "{paused}");
+        assert!(paused.contains("AO paused"), "{paused}");
         let plain = report(Some(&off), &[16.0], Build::default(), false);
-        assert!(plain.contains("95th, occlusion off"), "{plain}");
+        assert!(plain.contains("95th, AO off"), "{plain}");
         let integrated = RenderStats {
             adapter_tier: Tier::Integrated,
             ..off
         };
         let text = report(Some(&integrated), &[16.0], Build::default(), false);
-        assert!(
-            text.contains("occlusion off (needs a discrete GPU)"),
-            "{text}"
-        );
+        assert!(text.contains("AO n/a"), "{text}");
     }
 
     #[test]

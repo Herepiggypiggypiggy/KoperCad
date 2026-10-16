@@ -24,6 +24,8 @@ struct Globals {
     light_vp: mat4x4<f32>,
     // x: shadow strength (0 = off), y: depth bias, z: texel size in uv.
     shadow: vec4<f32>,
+    // x: 1 when the plate occlusion map is valid, yz: 1 / plate size (mm).
+    ao: vec4<f32>,
     // Screen to world, for the ambient occlusion passes.
     inv_view_proj: mat4x4<f32>,
     // x: 1 when the screen-space occlusion map is valid, y: radius (mm),
@@ -34,6 +36,8 @@ struct Globals {
 @group(0) @binding(0) var<uniform> g: Globals;
 @group(0) @binding(1) var shadow_map: texture_depth_2d;
 @group(0) @binding(2) var shadow_sampler: sampler_comparison;
+@group(0) @binding(3) var ao_map: texture_2d<f32>;
+@group(0) @binding(4) var ao_sampler: sampler;
 // Blurred screen-space occlusion, half resolution (main pass only).
 @group(0) @binding(5) var ssao_map: texture_2d<f32>;
 @group(0) @binding(6) var ssao_sampler: sampler;
@@ -157,6 +161,11 @@ fn fs_face(f: FaceOut, @builtin(front_facing) front: bool) -> @location(0) vec4<
     if (f.world.z > 0.5) {
         let k = smoothstep(0.0, g.params.y, f.world.z);
         shade = shade * (1.0 - g.params.x * (1.0 - k));
+    }
+    // Plate occlusion: the top of the plate darkens next to what stands on it.
+    if (g.ao.x > 0.5 && n.z > 0.9 && abs(f.world.z) < 0.05) {
+        let o = textureSampleLevel(ao_map, ao_sampler, f.world.xy * g.ao.yz, 0.0).r;
+        shade = shade * (1.0 - o);
     }
     // Weak Blinn highlight (power 24) from the key light only.
     let half_vec = normalize(l + to_eye);
