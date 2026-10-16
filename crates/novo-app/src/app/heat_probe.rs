@@ -45,13 +45,27 @@ impl Reading {
 }
 
 /// The probe's state in the 3D view.
-#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub(crate) struct ProbeState {
     pub on: bool,
     /// The probed point in the solver frame, mm.
     pub at: Option<[f64; 3]>,
     /// What the overlays were last built with: result id and point.
     pub shown: Option<(u64, Option<[f64; 3]>)>,
+    /// The result the point was read from; a new result drops the point.
+    pub result: Option<u64>,
+    /// The line the Heat strip shows for the probe.
+    pub text: String,
+}
+
+/// The probe's line in the Heat strip. A reading is a model result; the line
+/// says so, since no enclosure run has been checked against measurements.
+pub(crate) fn strip_text(reading: Option<Reading>, pointed: bool) -> String {
+    match reading {
+        Some(r) if pointed => format!("Pointer: {} (model, not validated)", r.text()),
+        Some(r) => format!("Probe: {} (model, not validated)", r.text()),
+        None => String::from("Click the air to read it, Esc clears"),
+    }
 }
 
 /// The scene ray in the solver frame (origin, direction).
@@ -220,6 +234,17 @@ mod tests {
     fn a_ray_beside_the_enclosure_reads_nothing() {
         let (snap, place) = (snapshot(), place());
         assert!(locate(&snap, place, &down_at(500.0, 40.0), None).is_none());
+    }
+
+    #[test]
+    fn the_strip_line_says_it_is_a_model_and_what_it_reads() {
+        let (snap, place) = (snapshot(), place());
+        let p = locate(&snap, place, &down_at(50.0, 40.0), Some((Axis::Z, 40.0))).unwrap();
+        let r = read(&snap, 20.0, p);
+        assert!(strip_text(Some(r), false).starts_with("Probe: 26.0 °C"));
+        assert!(strip_text(Some(r), true).starts_with("Pointer: "));
+        assert!(strip_text(Some(r), false).contains("model, not validated"));
+        assert!(strip_text(None, true).contains("Esc clears"));
     }
 
     #[test]
