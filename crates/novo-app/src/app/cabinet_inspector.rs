@@ -153,7 +153,7 @@ pub(super) fn overlay(
         )
     };
     let max_height = (canvas.height() - TOP - 72.0).max(120.0);
-    egui::Area::new(egui::Id::new("cabinet_inspector"))
+    let area = egui::Area::new(egui::Id::new("cabinet_inspector"))
         .order(egui::Order::Middle)
         .pivot(pivot)
         .fixed_pos(at)
@@ -167,8 +167,15 @@ pub(super) fn overlay(
                         .inner
                 })
                 .inner
-        })
-        .inner
+        });
+    super::cabinet_bar::note_rect(
+        ctx,
+        "cabinet.inspector",
+        "Inspector",
+        area.response.rect,
+        false,
+    );
+    area.inner
 }
 
 fn show(

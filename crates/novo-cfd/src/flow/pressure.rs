@@ -7,6 +7,7 @@
 //! solution is returned with zero mean.
 
 use super::mesh::Mesh;
+use super::par::for_planes;
 
 /// Face coupling coefficients and the diagonal of one level.
 struct Level {
@@ -78,14 +79,15 @@ impl Level {
     }
 
     fn apply(&self, x: &[f64], y: &mut [f64]) {
-        for k in 0..self.n[2] {
-            for j in 0..self.n[1] {
-                for i in 0..self.n[0] {
+        let (nx, ny) = (self.n[0], self.n[1]);
+        for_planes(y, nx * ny, |k, plane| {
+            for j in 0..ny {
+                for i in 0..nx {
                     let c = self.idx([i, j, k]);
-                    y[c] = self.diag[c] * x[c] - self.off(x, [i, j, k]);
+                    plane[j * nx + i] = self.diag[c] * x[c] - self.off(x, [i, j, k]);
                 }
             }
-        }
+        });
     }
 
     fn sweep(&self, x: &mut [f64], b: &[f64], forward: bool) {

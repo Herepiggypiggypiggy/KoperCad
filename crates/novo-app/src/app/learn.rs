@@ -74,6 +74,17 @@ pub(crate) const ANCHORS: &[&str] = &[
     "cabinet.cutlist",
     "cabinet.table",
     "cabinet.heat",
+    "cabinet.canvas",
+    "cabinet.unplaced",
+    "cabinet.problems",
+    "cabinet.inspector",
+    "cabinet.door",
+    "cabinet.door.apply",
+    "cabinet.routes_panel",
+    "cabinet.wire_rules",
+    "cabinet.sizing",
+    "cabinet.rails",
+    "cabinet.plate_drawing",
 ];
 
 /// What the shell keeps about learning.

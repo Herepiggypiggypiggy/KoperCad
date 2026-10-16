@@ -1878,6 +1878,7 @@ dependencies = [
  "dirs",
  "eframe",
  "env_logger",
+ "glam",
  "log",
  "lopdf",
  "novo-cables",

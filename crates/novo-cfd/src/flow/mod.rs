@@ -8,6 +8,7 @@
 //! (see [`crate::openings`]).
 
 mod mesh;
+mod par;
 mod pressure;
 mod scheme;
 mod solver;
