@@ -89,11 +89,11 @@ how_nl = ["Klik op een lege plek op de plaat om de selectie te wissen.", "Klik o
 title = "How full is the plate?"
 title_nl = "Hoe vol is de plaat?"
 text = """
-Click an empty spot on the plate to clear the selection, then click **Plate**. The inspector now shows the plate: width, height and margin, **Placed** (8) and **Plate used** as a percentage.
+Click an empty spot on the plate to clear the selection, then click **Plate setup**. The inspector now shows the plate: width, height and margin, **Placed** (8) and **Plate used** as a percentage.
 Rails and ducts take space that devices cannot use, which is why a plate with eight small devices is already well filled.
 """
 text_nl = """
-Klik op een lege plek op de plaat om de selectie te wissen en klik dan op **Plate**. De inspector toont nu de plaat: breedte, hoogte en marge, **Placed** (8) en **Plate used** als percentage.
+Klik op een lege plek op de plaat om de selectie te wissen en klik dan op **Plate setup**. De inspector toont nu de plaat: breedte, hoogte en marge, **Placed** (8) en **Plate used** als percentage.
 Rails en kanalen nemen ruimte in die componenten niet kunnen gebruiken; daarom is een plaat met acht kleine componenten al flink gevuld.
 """
 point = { ui = "cabinet.plate" }
