@@ -59,6 +59,7 @@ mod reports_view;
 mod revisions;
 mod sheet_import;
 mod sheets;
+mod shortcuts_sheet;
 mod simulate;
 mod sizing;
 mod standards;
@@ -101,6 +102,8 @@ mod outline_tests;
 mod protection_tests;
 #[cfg(test)]
 mod route_all_tests;
+#[cfg(test)]
+mod shortcuts_sheet_tests;
 #[cfg(test)]
 mod variants_tests;
 
@@ -892,6 +895,7 @@ impl NovoApp {
         self.renumber_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.preferences_dialog(&ctx);
+        self.shortcuts_window(&ctx);
         self.background_panel(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
