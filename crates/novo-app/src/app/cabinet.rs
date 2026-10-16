@@ -929,13 +929,9 @@ impl NovoApp {
                 });
                 if self.cabinet.heat.take_request() {
                     match (structure, &heat_input) {
-                        (Some(s), Some(input)) => super::heat::start_run(
-                            &mut self.cabinet.heat,
-                            project,
-                            s,
-                            input,
-                            ui.ctx(),
-                        ),
+                        (Some(s), Some(input)) => {
+                            super::heat::start_run(&mut self.cabinet.heat, project, s, input)
+                        }
                         _ => self
                             .cabinet
                             .heat
