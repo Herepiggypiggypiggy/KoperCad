@@ -423,6 +423,7 @@ pub fn export_pdf_with_reports(
                     rotation: 0.0,
                     keep_color: false,
                     bold: *bold,
+                    priority: Default::default(),
                 });
             }
         }
