@@ -22,7 +22,6 @@ pub(super) const ROWS: &[(&str, &str)] = &[
         "F or Home (everything if nothing is selected)",
     ),
     ("Standard views", "Click a face, edge or corner of the cube"),
-    ("Hide, isolate", "Ctrl+H, Ctrl+I; Ctrl+Shift+H shows all"),
     ("Door", "Shift+D opens or closes it"),
     ("Menu", "Right-click without dragging"),
 ];
