@@ -1397,6 +1397,9 @@ pub const COMMANDS: &[CommandInfo] = &[
             "every workspace",
             "every size",
         ],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.whats_new",
         "What's new",
         "View",
