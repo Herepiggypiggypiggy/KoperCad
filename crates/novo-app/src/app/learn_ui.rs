@@ -311,11 +311,7 @@ impl NovoApp {
                             ui.label(egui::RichText::new(t).strong());
                         }
                         Span::Key(command) => {
-                            let key = self
-                                .wb
-                                .keymap
-                                .shortcut_text(command)
-                                .unwrap_or_else(|| "(no key)".to_owned());
+                            let key = self.learn_key_text(command);
                             ui.label(
                                 egui::RichText::new(format!(" {key} "))
                                     .monospace()

@@ -58,7 +58,7 @@ demo = [
 ]
 point = { ui = "dock.place" }
 expect = { tool = "place" }
-solve = [ { command = "tool.place", arg = "feed" } ]
+solve = [ { command = "tool.place", arg = "feed" }, { key = "Enter" } ]
 
 [[step]]
 id = "row"

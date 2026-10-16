@@ -150,7 +150,7 @@ demo = [
   { press = "edit.escape" },
 ]
 point = { at = { page = "Control circuit", x = 120, y = 104 } }
-expect = { device = { tag = "-K1", symbol = "iec/contacts/no", at_least = 2 } }
+expect = { count = { kind = "symbol", symbol = "iec/contacts/no", page = "Control circuit", at_least = 2 } }
 solve = [ { place = { symbol = "iec/contacts/no", parent = "-K1", page = "Control circuit", x = 120, y = 104 } } ]
 
 [[step]]
