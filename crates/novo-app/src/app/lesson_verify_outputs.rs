@@ -77,7 +77,7 @@ impl Ox {
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
-                egui::vec2(1600.0, 1000.0),
+                egui::vec2(1600.0, 900.0),
             )),
             time: Some(self.time),
             events,
