@@ -274,7 +274,9 @@ takes a key and never blocks input.
 - **Back** returns the card to the previous step (it does not undo the drawing). **Skip step**
   moves on without the tick and records "skipped". **Restart lesson** reopens a fresh copy of the
   sample project and clears this lesson's progress after a confirm. ✕ closes the card and keeps
-  progress; the Learn window offers **Continue**.
+  progress; the Learn window offers **Continue** while the lesson's own project is still open. The
+  sample project is not saved between sessions, so in a later session the same lesson offers
+  **Start** (or **Do again**) and begins at step 1, with the old progress still shown as steps done.
 - Esc does not close the card: Esc belongs to the editor.
 - The last step shows "Done", a summary of what was covered, and the lessons in `next`.
 
@@ -340,8 +342,9 @@ CI (all run in the normal `cargo test --workspace`, Linux, no window)
 
 Authoring loop for a thread with no window: write `lesson.toml` and `project.json`, run
 `cargo test -p novo-learn -p novo-app learn`, read the report. For someone with the app:
-`kopercad --lessons <folder>` loads lessons from a folder on top of the built-in ones, and the Learn
-window has a **Reload** button, so edits show without a rebuild.
+setting the environment variable `KOPERCAD_LESSONS` to a folder loads its lessons on top of the
+built-in ones (so does `%APPDATA%\KoperCAD\lessons`), and the Learn window has a **Reload** button, so
+edits show without a rebuild.
 
 ## Language
 

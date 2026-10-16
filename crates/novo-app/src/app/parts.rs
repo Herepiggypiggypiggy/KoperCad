@@ -11,10 +11,13 @@ use std::path::{Path, PathBuf};
 
 use eframe::egui;
 use novo_core::Value;
+use novo_interop::part3d::cache::MeshCache;
+use novo_interop::part3d::service::{GeometryJob, GeometryService, GeometryState, TIME_LIMIT};
+use novo_interop::part3d::{Fallback, MeshOrigin, Quality};
 use novo_parts::{
-    Catalog, CatalogPart, ConnectionKind, DataSource, ImportFlow, Lifecycle, LocalLibrary, PartKey,
-    RowAction, Side, SourceRecord, SourceTable, browser_rows, default_downloads_dir, display_value,
-    is_internal_key, property_label, user_catalog_path,
+    Catalog, CatalogPart, ConnectionKind, DataSource, FileKind, ImportFlow, Lifecycle,
+    LocalLibrary, PartKey, RowAction, Side, SourceRecord, SourceTable, browser_rows,
+    default_downloads_dir, display_value, is_internal_key, property_label, user_catalog_path,
 };
 
 use super::parts_import::{Import, Phase, import_path};
@@ -39,6 +42,9 @@ pub(crate) struct PartsWindow {
     /// The part whose Remove from library awaits a second click.
     confirm_remove: Option<PartKey>,
     focus_search: bool,
+    /// Builds the 3D models of imported STEP files in the background;
+    /// created on the first frame, when the repaint handle is known.
+    geometry: Option<GeometryService>,
 }
 
 impl PartsWindow {
@@ -59,6 +65,7 @@ impl PartsWindow {
             catalog_path: user_catalog_path(),
             confirm_remove: None,
             focus_search: true,
+            geometry: None,
         }
     }
 
@@ -118,6 +125,28 @@ impl PartsWindow {
         if let Some(i) = self.import.as_mut() {
             i.phase = phase;
         }
+    }
+
+    /// Asks for a STEP file and stores it for the selected part.
+    fn choose_model(&mut self) {
+        if let Some(path) = rfd::FileDialog::new()
+            .set_title("Choose the 3D model (STEP)")
+            .add_filter("STEP model", &["stp", "step"])
+            .pick_file()
+        {
+            self.import_file(&path, ImportFlow::Manual);
+        }
+    }
+
+    /// The model state of a part with a stored STEP file; asks the service
+    /// to build it the first time. `None` when the part has no STEP file.
+    fn model_state(&self, part: &CatalogPart, records: &[SourceRecord]) -> Option<GeometryState> {
+        let record = records
+            .iter()
+            .find(|r| FileKind::of_file_name(&r.file_name) == FileKind::Step)?;
+        let (service, library) = (self.geometry.as_ref()?, self.library.as_ref()?);
+        let key = service.request(model_job(part, record, library));
+        Some(service.geometry(key))
     }
 
     /// The makers in the catalog, sorted, each once.
@@ -423,6 +452,7 @@ enum PartsAction {
     Import(PartKey),
     OpenPage(String),
     ChooseFile,
+    ChooseModel,
     ChooseFolder,
     StopImport,
     ConfirmFile(PathBuf),
@@ -453,12 +483,35 @@ impl NovoApp {
         ));
     }
 
+    /// The command `parts.import_step`: with a part picked in the Parts
+    /// window it asks for the file; otherwise it opens the window and says
+    /// what to do.
+    pub(super) fn import_part_model(&mut self) {
+        self.open_parts_browser();
+        match self.wb.parts.as_mut() {
+            Some(win) if win.selected.is_some() => win.choose_model(),
+            _ => self.message(
+                Level::Info,
+                "Pick a part in the Parts window, then import its 3D model",
+            ),
+        }
+    }
+
     pub(super) fn parts_window(&mut self, ctx: &egui::Context) {
         let Some(win) = self.wb.parts.as_mut() else {
             return;
         };
         let mut open = true;
         let mut actions = Vec::new();
+        win.geometry.get_or_insert_with(|| {
+            let wake = ctx.clone();
+            GeometryService::new(
+                MeshCache::open_default(),
+                Quality::Normal,
+                TIME_LIMIT,
+                move || wake.request_repaint(),
+            )
+        });
         let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
         let shown = egui::Window::new("Parts")
             .open(&mut open)
@@ -520,6 +573,7 @@ impl NovoApp {
                         win.import_file(&path, ImportFlow::Manual);
                     }
                 }
+                PartsAction::ChooseModel => win.choose_model(),
                 PartsAction::ChooseFolder => {
                     if let Some(dir) = rfd::FileDialog::new()
                         .set_title("Folder to watch for downloads")
@@ -696,6 +750,12 @@ you can also drop it on this window.",
                 )),
                 _ => ui.label("Drop the downloaded file on this window, or choose it."),
             };
+            if let Some(w) = &import.order_warning {
+                ui.colored_label(ui.visuals().warn_fg_color, w);
+            }
+            for (i, step) in import.steps.iter().enumerate() {
+                ui.label(format!("{}. {step}", i + 1));
+            }
             if import.page_url.is_some() && !import.page_verified {
                 ui.weak(
                     "This page address is not confirmed. If it does not show the part, find it \
@@ -813,6 +873,14 @@ fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction
                 ui.hyperlink_to("Terms", url);
             }
         }
+        ui.add_space(8.0);
+        ui.strong("3D model");
+        ui.label(model_status(win.model_state(part, &records).as_ref()));
+        ui.horizontal(|ui| {
+            if ui.small_button("Import 3D model (STEP)...").clicked() {
+                actions.push(PartsAction::ChooseModel);
+            }
+        });
         if !records.is_empty() {
             if win.confirm_remove.as_ref() == Some(&key) {
                 ui.label("Delete the saved files? You can download them again from the maker.");
@@ -829,6 +897,53 @@ fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction
             }
         }
     });
+}
+
+fn model_job(part: &CatalogPart, record: &SourceRecord, library: &LocalLibrary) -> GeometryJob {
+    GeometryJob {
+        part_id: format!("{}|{}", part.manufacturer, part.order_number),
+        content_id: record.sha256.clone(),
+        step_path: library.path_of(record),
+        size_mm: part
+            .dimensions
+            .map(|d| [d.width_mm, d.height_mm, d.depth_mm]),
+    }
+}
+
+/// The status line of a part's 3D model.
+pub(crate) fn model_status(state: Option<&GeometryState>) -> String {
+    match state {
+        None => "No 3D model. The part is drawn as a box from its catalog size.".into(),
+        Some(GeometryState::None | GeometryState::Pending) => "Building the 3D model...".into(),
+        Some(GeometryState::Failed(why)) => why.clone(),
+        Some(GeometryState::Ready(geometry)) => match &geometry.origin {
+            MeshOrigin::Step { .. } => format!(
+                "3D model: STEP, {} triangles",
+                geometry.detail().triangle_count()
+            ),
+            MeshOrigin::Box => {
+                "No 3D model. The part is drawn as a box from its catalog size.".into()
+            }
+            MeshOrigin::Fallback(why) => fallback_text(why).to_owned(),
+        },
+    }
+}
+
+fn fallback_text(why: &Fallback) -> &'static str {
+    match why {
+        Fallback::NoModel => "No 3D model. The part is drawn as a box from its catalog size.",
+        Fallback::Unreadable => {
+            "KoperCAD cannot read this file as a STEP model. Import a different export from the maker."
+        }
+        Fallback::NoGeometry => {
+            "The STEP file holds no solid shapes. Import a different export from the maker."
+        }
+        Fallback::TooComplex => {
+            "The model is too detailed for a quick preview. Import a simpler export from the maker."
+        }
+        Fallback::TimedOut => "Reading the model took too long.",
+        Fallback::Cancelled => "Building the model was cancelled.",
+    }
 }
 
 #[cfg(test)]
@@ -1032,5 +1147,24 @@ mod tests {
         let row = win.rows().into_iter().find(|(k, _)| *k == key).unwrap();
         assert_eq!(row.1, RowAction::InLibrary);
         assert_eq!(win.records(&key)[0].flow, ImportFlow::Manual);
+    }
+
+    #[test]
+    fn model_status_says_what_is_drawn() {
+        assert!(model_status(None).starts_with("No 3D model"));
+        assert_eq!(
+            model_status(Some(&GeometryState::Pending)),
+            "Building the 3D model..."
+        );
+        let timed_out = novo_interop::part3d::fallback_box(None, Fallback::TimedOut);
+        let state = GeometryState::Ready(std::sync::Arc::new(timed_out));
+        assert!(model_status(Some(&state)).contains("too long"));
+        let unreadable = novo_interop::part3d::fallback_box(None, Fallback::Unreadable);
+        let state = GeometryState::Ready(std::sync::Arc::new(unreadable));
+        assert!(model_status(Some(&state)).contains("Import a different export"));
+        let boxed = GeometryState::Ready(std::sync::Arc::new(novo_interop::part3d::box_mesh([
+            18.0, 90.0, 60.0,
+        ])));
+        assert!(model_status(Some(&boxed)).starts_with("No 3D model"));
     }
 }

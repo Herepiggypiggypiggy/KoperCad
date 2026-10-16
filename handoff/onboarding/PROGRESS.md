@@ -5,3 +5,4 @@
 2026-10-15 18:34 UTC #394 (Open example) merged. #392 (Release thread) held by its author; the walk-through here supersedes it.
 2026-10-15 18:50 UTC Walk-through rebased onto main, Dutch words for help.walkthrough added; fmt, clippy, tests for novo-app, novo-workflow, novo-tests pass locally; PR opened.
 2026-10-15 18:55 UTC Design review of #428 asked for changes: dropped the "? shows the keys" promise (no sheet yet), clearer wire and skip text, tick note only below three ticks. Card/inspector overlap left for a by-eye check on Windows.
+2026-10-15 19:18 UTC #428 (walk-through, seven steps, practice project) merged as 72e7fce; #392 superseded. Learning modules (#456, engine #479) will take over: lesson fast-keys replaces the card.

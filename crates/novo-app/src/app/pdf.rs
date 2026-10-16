@@ -152,7 +152,7 @@ pub(super) fn write_replacing(path: &Path, bytes: &[u8]) -> std::io::Result<()> 
 
 /// `<dir>/<name>.pdf`, or `<name> 2.pdf`, `<name> 3.pdf`... when taken, so
 /// an untitled project never replaces another project's PDF.
-fn free_path(dir: &Path, name: &str) -> PathBuf {
+pub(super) fn free_path(dir: &Path, name: &str) -> PathBuf {
     let base = Path::new(&super::project_file_name(name))
         .with_extension("")
         .to_string_lossy()

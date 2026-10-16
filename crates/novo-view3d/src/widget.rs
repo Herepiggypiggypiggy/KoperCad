@@ -5,8 +5,11 @@
 //! rendered unless the scene, camera, selection or size changed, and after the
 //! camera stops the image is refined once (4x MSAA, full scale).
 
-use crate::camera::{Camera, ViewPreset, ease_out};
-use crate::look::{Glyph, Look};
+use crate::camera::{Camera, Projection, ViewPreset};
+use crate::cube::{self, CubeHit};
+use crate::feel::{self, Inertia, Transition};
+use crate::labels::{self, Fade, LabelCandidate};
+use crate::look::{self, Glyph, Look};
 use crate::mesh::MeshLibrary;
 use crate::pick::{self, Hit};
 use crate::render::{BlitBind, Blitter, Frame, Mode, Quality, Renderer, Tier, ViewTarget};
@@ -26,7 +29,6 @@ use std::time::{Duration, Instant};
 const IDLE_VIEW_TTL: Duration = Duration::from_secs(30);
 /// Seconds without input before the settled (sharp) frame is drawn.
 const SETTLE_AFTER: f64 = 0.25;
-const ANIM_SECONDS: f64 = 0.25;
 static INSTALLED: AtomicBool = AtomicBool::new(false);
 
 /// Registers the renderer with egui's wgpu renderer. Call once at start-up.
@@ -200,10 +202,25 @@ pub struct View3dOutput {
     pub camera_changed: bool,
 }
 
-struct Anim {
-    from: Camera,
-    to: Camera,
-    start: f64,
+/// View cube: size and distance from the top-right corner of the view, in points.
+const CUBE_SIZE: f32 = 88.0;
+const CUBE_MARGIN: f32 = 12.0;
+/// The cube is left out of views smaller than this on either side.
+const CUBE_MIN_VIEW: f32 = 200.0;
+/// One mouse wheel notch in egui's scroll points.
+const POINTS_PER_NOTCH: f32 = 50.0;
+
+fn color(c: [u8; 4], alpha: f32) -> Color32 {
+    Color32::from_rgba_unmultiplied(
+        c[0],
+        c[1],
+        c[2],
+        (c[3] as f32 * alpha.clamp(0.0, 1.0)) as u8,
+    )
+}
+
+fn color3(c: [u8; 3], alpha: u8) -> Color32 {
+    Color32::from_rgba_unmultiplied(c[0], c[1], c[2], alpha)
 }
 
 /// One 3D view: camera, user state and input handling.
@@ -211,13 +228,24 @@ pub struct View3d {
     id: u64,
     pub camera: Camera,
     pub state: ViewState,
-    anim: Option<Anim>,
+    transition: Option<Transition>,
+    inertia: Inertia,
+    /// Set by a drag that orbited, so release hands its speed to `inertia`.
+    orbited: bool,
+    /// Distance travelled by the current right drag, for the click threshold.
+    orbit_travel: f32,
+    /// The current left drag started on the view cube.
+    cube_drag: bool,
+    /// The camera is in an axis view entered from the cube: the first orbit
+    /// returns to perspective.
+    auto_ortho: bool,
     needs_fit: bool,
     last_activity: f64,
     marquee_from: Option<Pos2>,
     /// Where the last Alt + click landed and how many times in a row.
     alt_cycle: Option<(Pos2, usize)>,
     last_aspect: f32,
+    label_fades: HashMap<ItemId, Fade>,
 }
 
 impl View3d {
@@ -227,12 +255,18 @@ impl View3d {
             id,
             camera: Camera::default(),
             state: ViewState::default(),
-            anim: None,
+            transition: None,
+            inertia: Inertia::default(),
+            orbited: false,
+            orbit_travel: 0.0,
+            cube_drag: false,
+            auto_ortho: false,
             needs_fit: true,
             last_activity: f64::NEG_INFINITY,
             marquee_from: None,
             alt_cycle: None,
             last_aspect: 1.0,
+            label_fades: HashMap::new(),
         }
     }
 
@@ -244,8 +278,9 @@ impl View3d {
     /// Eases to a view cube face from where the camera is (`view.iso` and the cube).
     pub fn go_to(&mut self, preset: ViewPreset, scene: &Scene, now: f64, reduced: bool) {
         let mut to = self.camera;
-        to.set_preset(preset);
+        feel::enter_standard(&mut to, preset);
         to.fit(&scene.bounds(), self.last_aspect);
+        self.auto_ortho = to.projection == Projection::Orthographic;
         self.animate_to(to, now, reduced);
     }
 
@@ -266,17 +301,36 @@ impl View3d {
     }
 
     fn animate_to(&mut self, to: Camera, now: f64, reduced: bool) {
-        if reduced {
-            self.camera = to;
-            self.anim = None;
+        self.inertia.stop();
+        let mut tr = Transition::new(self.camera, to, reduced);
+        if tr.done() {
+            self.camera = tr.step(0.0);
+            self.transition = None;
         } else {
-            self.anim = Some(Anim {
-                from: self.camera,
-                to,
-                start: now,
-            });
+            self.transition = Some(tr);
         }
         self.last_activity = now;
+    }
+
+    /// A click on a view cube region: a face goes to its standard view, an
+    /// edge or corner turns to that direction in perspective.
+    fn cube_go(&mut self, hit: CubeHit, scene: &Scene, now: f64, reduced: bool) {
+        if let Some(preset) = cube::preset_of(&hit) {
+            self.go_to(preset, scene, now, reduced);
+        } else {
+            let mut to = self.camera;
+            feel::look_from(&mut to, hit.eye_dir());
+            feel::leave_auto_ortho(&mut to);
+            self.auto_ortho = false;
+            self.animate_to(to, now, reduced);
+        }
+    }
+
+    fn cube_at(&self, cube_rect: Option<Rect>, p: Pos2) -> Option<CubeHit> {
+        let r = cube_rect.filter(|r| r.contains(p))?;
+        let half = CUBE_SIZE * 0.5;
+        let c = r.center();
+        cube::view_cube_hit(&self.camera, [(p.x - c.x) / half, -(p.y - c.y) / half])
     }
 
     /// Screen position of a world point inside `rect`.
@@ -326,6 +380,8 @@ impl View3d {
         }
         let ctx = ui.ctx().clone();
         let now = ctx.input(|i| i.time);
+        let dt = ctx.input(|i| i.stable_dt).clamp(0.0, 0.1);
+        let reduced = options.reduced_motion;
         let aspect = rect.width() / rect.height().max(1.0);
         self.last_aspect = aspect;
         let before = self.camera;
@@ -334,20 +390,25 @@ impl View3d {
         if self.needs_fit && !bounds.is_empty() {
             self.camera.fit(&bounds, aspect);
             self.needs_fit = false;
-            self.anim = None;
+            self.transition = None;
             self.last_activity = now;
         }
 
-        // Camera animation.
-        if let Some(a) = &self.anim {
-            let t = ((now - a.start) / ANIM_SECONDS) as f32;
-            self.camera = Camera::lerp(&a.from, &a.to, ease_out(t));
-            if t >= 1.0 {
-                self.camera = a.to;
-                self.anim = None;
+        // Camera transition and orbit momentum.
+        if let Some(tr) = &mut self.transition {
+            self.camera = tr.step(dt);
+            if tr.done() {
+                self.transition = None;
             } else {
                 ctx.request_repaint();
             }
+            self.last_activity = now;
+        }
+        if response.is_pointer_button_down_on() {
+            self.inertia.stop();
+        } else if self.inertia.active() {
+            self.inertia.step(&mut self.camera, dt);
+            ctx.request_repaint();
             self.last_activity = now;
         }
 
@@ -361,50 +422,96 @@ impl View3d {
             )
         });
 
+        let cube_rect =
+            (rect.width() >= CUBE_MIN_VIEW && rect.height() >= CUBE_MIN_VIEW).then(|| {
+                Rect::from_min_size(
+                    Pos2::new(
+                        rect.max.x - CUBE_MARGIN - CUBE_SIZE,
+                        rect.min.y + CUBE_MARGIN,
+                    ),
+                    Vec2::splat(CUBE_SIZE),
+                )
+            });
+        let cube_hover = hover_pos.and_then(|p| self.cube_at(cube_rect, p));
+        let pointer_on_cube = response
+            .interact_pointer_pos()
+            .is_some_and(|p| self.cube_at(cube_rect, p).is_some());
+
+        if response.drag_started_by(PointerButton::Primary) {
+            let origin = ctx.input(|i| i.pointer.press_origin());
+            self.cube_drag = origin.is_some_and(|p| self.cube_at(cube_rect, p).is_some());
+        }
+        if response.drag_started_by(PointerButton::Secondary) {
+            self.orbit_travel = 0.0;
+        }
+
         // Orbit and pan.
         let drag = response.drag_delta();
         if drag != Vec2::ZERO {
-            let orbit = response.dragged_by(PointerButton::Secondary)
+            let secondary = response.dragged_by(PointerButton::Secondary);
+            let orbit = secondary
+                || self.cube_drag
                 || (response.dragged_by(PointerButton::Primary) && alt && !space);
             let pan = response.dragged_by(PointerButton::Middle)
-                || (response.dragged_by(PointerButton::Primary) && space);
+                || (response.dragged_by(PointerButton::Primary) && space && !self.cube_drag);
             if orbit {
-                self.anim = None;
-                self.camera.orbit(-drag.x * 0.008, drag.y * 0.008);
+                self.transition = None;
+                // A short right drag is a click for the context menu.
+                self.orbit_travel += drag.length();
+                if !secondary || self.orbit_travel >= feel::DRAG_THRESHOLD_PX {
+                    if self.auto_ortho {
+                        feel::leave_auto_ortho(&mut self.camera);
+                        self.auto_ortho = false;
+                    }
+                    let (dyaw, dpitch) = feel::orbit_delta(drag.x, drag.y);
+                    self.camera.orbit(dyaw, dpitch);
+                    self.orbited = true;
+                }
             } else if pan {
-                self.anim = None;
+                self.transition = None;
                 self.camera.pan(drag.x, drag.y, rect.height());
             }
+        }
+        if response.drag_stopped() {
+            if self.orbited {
+                let v = ctx.input(|i| i.pointer.velocity());
+                self.inertia = Inertia::release(v.x, v.y, reduced);
+            }
+            self.orbited = false;
+            self.cube_drag = false;
         }
 
         // Zoom towards the pointer.
         if response.hovered() && (scroll != 0.0 || zoom != 1.0) {
-            let factor = (-scroll * 0.0012).exp() / zoom;
+            let factor = feel::zoom_factor(scroll / POINTS_PER_NOTCH) / zoom;
             let pointer = hover_pos.unwrap_or(rect.center());
             let anchor = self.pick_at(rect, scene, pointer).map(|h| h.point);
-            self.anim = None;
+            self.transition = None;
+            self.inertia.stop();
             self.camera
                 .zoom_at(factor, Self::ndc(rect, pointer), aspect, anchor);
         }
 
         // Marquee: a plain left drag.
-        let plain_left = response.dragged_by(PointerButton::Primary) && !alt && !space;
-        if response.drag_started_by(PointerButton::Primary) && !alt && !space {
+        let plain_left =
+            response.dragged_by(PointerButton::Primary) && !alt && !space && !self.cube_drag;
+        if response.drag_started_by(PointerButton::Primary) && !alt && !space && !self.cube_drag {
             self.marquee_from = ctx.input(|i| i.pointer.press_origin());
         }
         if let (true, Some(from), Some(to)) = (plain_left, self.marquee_from, hover_pos) {
             let band = Rect::from_two_pos(from, to);
+            let edge = look.selection.edge;
             ui.painter().rect(
                 band,
                 0.0,
-                Color32::from_rgba_unmultiplied(255, 168, 92, 28),
-                Stroke::new(1.0, Color32::from_rgb(255, 168, 92)),
+                color3(edge, 28),
+                Stroke::new(1.0, color3(edge, 255)),
                 egui::StrokeKind::Inside,
             );
         }
         if response.drag_stopped_by(PointerButton::Primary)
             && let (Some(from), Some(to)) = (self.marquee_from.take(), hover_pos)
-            && (to - from).length() > 4.0
+            && (to - from).length() > feel::DRAG_THRESHOLD_PX
         {
             out.marquee = Some(pick::marquee(
                 scene,
@@ -417,7 +524,7 @@ impl View3d {
         }
 
         // Hover, plate point.
-        let hovering = response.hovered() && !response.dragged();
+        let hovering = response.hovered() && !response.dragged() && cube_hover.is_none();
         let hit = hover_pos
             .filter(|p| rect.contains(*p))
             .and_then(|p| self.pick_at(rect, scene, p));
@@ -438,29 +545,34 @@ impl View3d {
         if response.clicked_by(PointerButton::Primary)
             && let Some(p) = response.interact_pointer_pos()
         {
-            let ray = self.camera.ray(Self::ndc(rect, p), aspect);
-            if alt {
-                let k = match self.alt_cycle {
-                    Some((at, k)) if (at - p).length() < 4.0 => k + 1,
-                    _ => 0,
-                };
-                self.alt_cycle = Some((p, k));
-                let hit = pick::pick_from_back(scene, &self.state, &ray, k);
-                out.clicked = Some(Click {
-                    id: hit.map(|h| h.id),
-                    modifiers,
-                    deepest: true,
-                });
+            if let Some(h) = self.cube_at(cube_rect, p) {
+                self.cube_go(h, scene, now, reduced);
             } else {
-                self.alt_cycle = None;
-                out.clicked = Some(Click {
-                    id: self.pick_at(rect, scene, p).map(|h| h.id),
-                    modifiers,
-                    deepest: false,
-                });
+                let ray = self.camera.ray(Self::ndc(rect, p), aspect);
+                if alt {
+                    let k = match self.alt_cycle {
+                        Some((at, k)) if (at - p).length() < 4.0 => k + 1,
+                        _ => 0,
+                    };
+                    self.alt_cycle = Some((p, k));
+                    let hit = pick::pick_from_back(scene, &self.state, &ray, k);
+                    out.clicked = Some(Click {
+                        id: hit.map(|h| h.id),
+                        modifiers,
+                        deepest: true,
+                    });
+                } else {
+                    self.alt_cycle = None;
+                    out.clicked = Some(Click {
+                        id: self.pick_at(rect, scene, p).map(|h| h.id),
+                        modifiers,
+                        deepest: false,
+                    });
+                }
             }
         }
         if response.double_clicked_by(PointerButton::Primary)
+            && !pointer_on_cube
             && let Some(p) = response.interact_pointer_pos()
             && let Some(hit) = self.pick_at(rect, scene, p)
         {
@@ -468,10 +580,11 @@ impl View3d {
             if let Some(item) = scene.get(hit.id) {
                 let mut to = self.camera;
                 to.fit(&scene.world_bounds(item), aspect);
-                self.animate_to(to, now, options.reduced_motion);
+                self.animate_to(to, now, reduced);
             }
         }
         if response.secondary_clicked()
+            && !pointer_on_cube
             && let Some(p) = response.interact_pointer_pos()
         {
             out.context = Some((p, self.pick_at(rect, scene, p).map(|h| h.id)));
@@ -486,7 +599,7 @@ impl View3d {
                 )
             });
             if fit {
-                self.fit(scene, now, options.reduced_motion);
+                self.fit(scene, now, reduced);
             }
             if esc {
                 // The ladder: a gesture in progress, then the selection. The
@@ -535,51 +648,74 @@ impl View3d {
             },
         ));
 
-        self.paint_overlay(ui, rect, scene, look);
+        self.paint_overlay(ui, rect, scene, look, dt, reduced);
+        if let Some(cr) = cube_rect {
+            self.paint_cube(&ui.painter_at(rect), cr, cube_hover, look);
+        }
         out
     }
 
-    /// Tag labels and mark glyphs over the image.
-    fn paint_overlay(&self, ui: &egui::Ui, rect: Rect, scene: &Scene, look: &Look) {
+    /// Tag label chips and mark glyphs over the image.
+    fn paint_overlay(
+        &mut self,
+        ui: &egui::Ui,
+        rect: Rect,
+        scene: &Scene,
+        look: &Look,
+        dt: f32,
+        reduced: bool,
+    ) {
         let painter = ui.painter_at(rect);
+        let ppp = ui.ctx().pixels_per_point();
         let aspect = rect.width() / rect.height().max(1.0);
         let bounds = scene.bounds();
         let vp = self.camera.view_proj(aspect, &bounds);
         let eye = self.camera.eye();
         let mut frustum_ok = Vec::new();
         crate::cull::visible(scene, &self.state, &vp, &mut frustum_ok);
+
+        struct Chip {
+            id: ItemId,
+            text: Arc<str>,
+            centre: Pos2,
+            size: Vec2,
+        }
+        let mut chips: Vec<Chip> = Vec::new();
+        let mut candidates: Vec<LabelCandidate> = Vec::new();
+        let font = FontId::proportional(11.0);
         for i in frustum_ok {
             let item = &scene.items[i];
             let world = scene.world_matrix(item);
             let front = world.transform_point3(Vec3::new(0.0, 0.0, item.size.z));
             let dist = (front - eye).length();
             // Size of the item's narrower face edge on screen, in points.
-            let size_px = crate::cull::screen_size_px(
+            let size_pt = crate::cull::screen_size_px(
                 &self.camera,
                 item.size.x.min(item.size.y) * 0.5,
                 dist,
-                rect.height() * ui.ctx().pixels_per_point(),
-            ) / ui.ctx().pixels_per_point();
-            if let (true, Some(label), true) =
-                (self.state.display.labels, &item.label, size_px >= 24.0)
+                rect.height() * ppp,
+            ) / ppp;
+            if let (true, Some(label)) = (self.state.display.labels, &item.label)
                 && let Some(p) = self.project(rect, scene, front)
             {
-                painter.text(
-                    p + Vec2::new(0.0, 1.0),
-                    Align2::CENTER_CENTER,
-                    label.as_ref(),
-                    FontId::proportional(11.0),
-                    Color32::from_black_alpha(200),
-                );
-                painter.text(
-                    p,
-                    Align2::CENTER_CENTER,
-                    label.as_ref(),
-                    FontId::proportional(11.0),
-                    Color32::WHITE,
-                );
+                let galley =
+                    painter.layout_no_wrap(label.to_string(), font.clone(), Color32::PLACEHOLDER);
+                let size = galley.size() + Vec2::new(8.0, 4.0);
+                candidates.push(LabelCandidate {
+                    id: chips.len() as u64,
+                    rect: [p.x - size.x * 0.5, p.y - size.y * 0.5, size.x, size.y],
+                    device_px: size_pt,
+                    selected: self.state.selection.contains(&item.id),
+                    hovered: self.state.hover == Some(item.id),
+                });
+                chips.push(Chip {
+                    id: item.id,
+                    text: label.clone(),
+                    centre: p,
+                    size,
+                });
             }
-            if item.mark != Mark::None && size_px >= 12.0 {
+            if item.mark != Mark::None && size_pt >= 12.0 {
                 let style = look.mark(item.mark);
                 let text = match style.glyph {
                     Glyph::Cross => "\u{00d7}",
@@ -589,14 +725,11 @@ impl View3d {
                 };
                 let top = world.transform_point3(Vec3::new(0.0, item.size.y * 0.5, item.size.z));
                 if let Some(p) = self.project(rect, scene, top) {
-                    let c = style.edge.unwrap_or([255, 255, 255]);
-                    let col = Color32::from_rgb(c[0], c[1], c[2]);
-                    painter.circle(
-                        p,
-                        7.0,
-                        Color32::from_black_alpha(200),
-                        Stroke::new(1.5, col),
-                    );
+                    let c = style
+                        .edge
+                        .unwrap_or(look.overlay.chip_text[..3].try_into().unwrap());
+                    let col = color3(c, 255);
+                    painter.circle(p, 7.0, color(look.overlay.chip, 1.0), Stroke::new(1.5, col));
                     painter.text(
                         p,
                         Align2::CENTER_CENTER,
@@ -605,6 +738,106 @@ impl View3d {
                         col,
                     );
                 }
+            }
+        }
+
+        // Label chips: which ones show, then fade them in and out.
+        let shown = labels::visible_labels(&candidates);
+        let mut touched: HashMap<ItemId, Fade> = HashMap::new();
+        for (n, chip) in chips.iter().enumerate() {
+            let on = shown.contains(&(n as u64));
+            let mut fade = self
+                .label_fades
+                .get(&chip.id)
+                .copied()
+                .unwrap_or_else(Fade::label);
+            fade.step(on, dt, reduced);
+            if fade.value > 0.0 {
+                let a = fade.value;
+                let r = Rect::from_center_size(chip.centre, chip.size);
+                painter.rect(
+                    r,
+                    3.0,
+                    color(look.overlay.chip, a),
+                    Stroke::new(1.0, color(look.overlay.chip_border, a)),
+                    egui::StrokeKind::Inside,
+                );
+                painter.text(
+                    chip.centre,
+                    Align2::CENTER_CENTER,
+                    chip.text.as_ref(),
+                    font.clone(),
+                    color(look.overlay.chip_text, a),
+                );
+                if (fade.value < 1.0 && on) || (fade.value > 0.0 && !on) {
+                    ui.ctx().request_repaint();
+                }
+                touched.insert(chip.id, fade);
+            } else if on {
+                ui.ctx().request_repaint();
+                touched.insert(chip.id, fade);
+            }
+        }
+        self.label_fades = touched;
+    }
+
+    /// The view cube (3d-look.md section 6): nine regions per visible face,
+    /// the one under the pointer in steel blue.
+    fn paint_cube(
+        &self,
+        painter: &egui::Painter,
+        cube_rect: Rect,
+        hover: Option<CubeHit>,
+        look: &Look,
+    ) {
+        let half = CUBE_SIZE * 0.5;
+        let c = cube_rect.center();
+        let to_screen = |q: [f32; 2]| Pos2::new(c.x + q[0] * half, c.y - q[1] * half);
+        let chip: [u8; 3] = [
+            look.overlay.chip[0],
+            look.overlay.chip[1],
+            look.overlay.chip[2],
+        ];
+        let text: [u8; 3] = [
+            look.overlay.chip_text[0],
+            look.overlay.chip_text[1],
+            look.overlay.chip_text[2],
+        ];
+        let border = Stroke::new(1.0, color(look.overlay.chip_border, 1.0));
+        for cell in cube::visible_cells(&self.camera) {
+            let mut pts: Vec<Pos2> = cell.quad.iter().map(|q| to_screen(*q)).collect();
+            // Screen y points down, so a counter clockwise quad can come out
+            // clockwise; the tessellator wants one winding.
+            let area: f32 = (0..4)
+                .map(|i| {
+                    let (a, b) = (pts[i], pts[(i + 1) % 4]);
+                    a.x * b.y - b.x * a.y
+                })
+                .sum();
+            if area < 0.0 {
+                pts.reverse();
+            }
+            let base = look::mix(chip, text, 0.06 + 0.14 * cell.facing);
+            let fill = if hover.is_some_and(|h| h.dir == cell.dir) {
+                look::mix(base, look.hover.edge, 0.65)
+            } else {
+                base
+            };
+            painter.add(egui::Shape::convex_polygon(pts, color3(fill, 235), border));
+            if let Some(name) = cube::face_name(cell.dir)
+                && cell.facing > 0.4
+            {
+                let mid = Pos2::new(
+                    cell.quad.iter().map(|q| q[0]).sum::<f32>() / 4.0,
+                    cell.quad.iter().map(|q| q[1]).sum::<f32>() / 4.0,
+                );
+                painter.text(
+                    to_screen([mid.x, mid.y]),
+                    Align2::CENTER_CENTER,
+                    name,
+                    FontId::proportional(9.0),
+                    color(look.overlay.chip_text, 1.0),
+                );
             }
         }
     }

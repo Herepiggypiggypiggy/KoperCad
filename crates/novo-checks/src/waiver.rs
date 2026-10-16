@@ -28,12 +28,12 @@ fn subjects(problem: &Problem) -> Vec<AnyId> {
 
 /// The waiver of a problem, if it has one.
 pub fn waiver_of<'a>(project: &'a Project, problem: &Problem) -> Option<&'a Dismissal> {
-    project.dismissal(problem.kind.key(), &subjects(problem))
+    project.dismissal(&problem.waiver_key(), &subjects(problem))
 }
 
 /// Waives a problem with a reason. Waiving it again replaces the reason.
 pub fn waive(tx: &mut Tx<'_>, problem: &Problem, reason: &str) -> Result<DismissalId> {
-    let id = tx.dismiss(problem.kind.key(), subjects(problem))?;
+    let id = tx.dismiss(problem.waiver_key(), subjects(problem))?;
     tx.set_property(id, REASON, Some(Value::Text(reason.trim().to_owned())))?;
     Ok(id)
 }

@@ -1,0 +1,120 @@
+{
+  "notes": [],
+  "parts": [
+    {
+      "class": {
+        "eclass": "27-14-11-01",
+        "etim": "EC000897"
+      },
+      "data": {
+        "anschlussart": "Schraubanschluss",
+        "anschlussquerschnitt": "0,5 ... 4 mm²",
+        "anzahl_der_anschlüsse": 2,
+        "bemessungsspannung": "800 V",
+        "bemessungsstrom": "24 A",
+        "breite": "5.1 mm",
+        "connection_count": 2,
+        "produktstatus": "aktiv",
+        "rated_current_a": 24.0,
+        "rated_voltage_v": 800.0,
+        "width_mm": 5.1,
+        "wire_max_mm2": 4.0,
+        "wire_min_mm2": 0.5
+      },
+      "description": "Durchgangsreihenklemme, Schraubanschluss, 2,5 mm²",
+      "function": "terminal",
+      "letter_codes": [
+        "X"
+      ],
+      "lifecycle": "active",
+      "manufacturer": "Weidmüller",
+      "order_number": "1020000000",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Weidmüller; not redistributable",
+        "source": "import:bmecat"
+      },
+      "sources": {
+        "connection_count": "maker_datasheet",
+        "rated_current_a": "maker_datasheet",
+        "rated_voltage_v": "maker_datasheet",
+        "wire_max_mm2": "maker_datasheet",
+        "wire_min_mm2": "maker_datasheet"
+      },
+      "terminals": [
+        {
+          "kind": "screw",
+          "name": "1",
+          "wire_mm2": [
+            0.5,
+            4.0
+          ]
+        },
+        {
+          "kind": "screw",
+          "name": "2",
+          "wire_mm2": [
+            0.5,
+            4.0
+          ]
+        }
+      ],
+      "type_number": "WDU 2.5"
+    },
+    {
+      "data": {
+        "bemessungsstrom": "24 A",
+        "nachfolger": 1020000000,
+        "produktstatus": "Auslauf",
+        "rated_current_a": 24.0
+      },
+      "description": "Reihenklemme, Auslaufprodukt",
+      "function": "terminal",
+      "letter_codes": [
+        "X"
+      ],
+      "lifecycle": "phasing_out",
+      "manufacturer": "Weidmüller",
+      "order_number": "1020001000",
+      "provenance": {
+        "file": "sample.xml",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Weidmüller; not redistributable",
+        "source": "import:bmecat"
+      },
+      "replaced_by": {
+        "manufacturer": "Weidmüller",
+        "order_number": "1020000000"
+      },
+      "sources": {
+        "rated_current_a": "maker_datasheet"
+      },
+      "type_number": "WDU 2.5/ZZ"
+    }
+  ],
+  "report": {
+    "mapped": [
+      "1020000000: anschlussart -> connection Screw",
+      "1020000000: anschlussquerschnitt -> conductor range",
+      "1020000000: anzahl_der_anschlüsse -> connection_count = 2",
+      "1020000000: bemessungsspannung -> rated_voltage_v = 800",
+      "1020000000: bemessungsstrom -> rated_current_a = 24",
+      "1020000000: breite -> size width = 5.1 mm",
+      "1020000000: produktstatus -> lifecycle Active",
+      "1020001000: bemessungsstrom -> rated_current_a = 24",
+      "1020001000: nachfolger -> replaced by 1020000000",
+      "1020001000: produktstatus -> lifecycle PhasingOut"
+    ],
+    "parts": 2,
+    "skipped": [],
+    "summary": [
+      "Read 10 value(s) into structured part data for 2 part(s), marked as from the maker's data.",
+      "Terminal names are numbered 1 to N where the file gives only the count; check them against the part."
+    ],
+    "unmapped": {},
+    "warnings": [
+      "Terminal names are numbered 1 to N where the file gives only the count; check them against the part."
+    ]
+  }
+}

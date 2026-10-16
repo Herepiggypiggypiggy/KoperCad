@@ -79,6 +79,16 @@ impl NovoApp {
             .map(|d| d.project().info().rules.standard.clone())
             .unwrap_or_default();
         let mut apply = false;
+        let mut group_prefix = self.settings.group_prefix.clone();
+        let mut cabinet_prefix = self.settings.cabinet_prefix.clone();
+        // The preview uses what is typed now, over this project's names.
+        let preview = self.backend.document().map(|d| {
+            let n = super::outline_tree::Naming::from_prefixes(&group_prefix, &cabinet_prefix);
+            (
+                format!("={}", n.next_group(d.project())),
+                format!("+{}", n.next_cabinet(d.project())),
+            )
+        });
         let modal = egui::Modal::new(egui::Id::new("project_settings")).show(ctx, |ui| {
             ui.set_width(360.0);
             ui.heading("Project settings");
@@ -100,6 +110,34 @@ impl NovoApp {
             if let Some(plan) = &plan {
                 apply = switch_section(ui, plan);
             }
+            ui.add_space(10.0);
+            ui.strong("Names for new groups and cabinets");
+            ui.weak(
+                "Nothing to set up: a new group or cabinet continues the names this project \
+already has. These letters only start a project that has none yet. Yours, for every project.",
+            );
+            egui::Grid::new("naming_prefixes")
+                .num_columns(2)
+                .spacing([10.0, 6.0])
+                .show(ui, |ui| {
+                    ui.label("Page group starts with");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut group_prefix)
+                            .hint_text("G")
+                            .desired_width(80.0),
+                    );
+                    ui.end_row();
+                    ui.label("Cabinet starts with");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut cabinet_prefix)
+                            .hint_text("A")
+                            .desired_width(80.0),
+                    );
+                    ui.end_row();
+                });
+            if let Some((group, cabinet)) = &preview {
+                ui.weak(format!("Next page group {group}, next cabinet {cabinet}"));
+            }
             ui.add_space(8.0);
             ui.button("Close (Esc)").clicked()
         });
@@ -107,6 +145,8 @@ impl NovoApp {
         if apply {
             self.switch_placed_symbols();
         }
+        self.settings.group_prefix = group_prefix.trim().to_owned();
+        self.settings.cabinet_prefix = cabinet_prefix.trim().to_owned();
         if modal.inner || modal.should_close() {
             self.wb.project_settings = false;
         }

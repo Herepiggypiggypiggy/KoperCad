@@ -63,6 +63,89 @@ pub fn view_cube_hit(camera: &Camera, local: [f32; 2]) -> Option<CubeHit> {
     Some(CubeHit { dir })
 }
 
+/// One ninth of a visible cube face, for drawing: the region a click on it
+/// would pick, with its corners in the same local space as [`view_cube_hit`]
+/// (-1 to 1, x right, y up).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct CubeCell {
+    pub dir: [i8; 3],
+    pub quad: [[f32; 2]; 4],
+    /// How squarely the face looks at the eye, 0 to 1 (for shading).
+    pub facing: f32,
+}
+
+/// The cells of the faces turned towards the camera. Visible faces of a cube
+/// do not overlap on screen, so draw order does not matter.
+pub fn visible_cells(camera: &Camera) -> Vec<CubeCell> {
+    let (right, up, fwd) = camera.basis();
+    let reach = 3f32.sqrt();
+    let mut out = Vec::new();
+    for axis in 0..3 {
+        for sign in [-1i8, 1] {
+            let mut normal = Vec3::ZERO;
+            normal[axis] = sign as f32;
+            let facing = normal.dot(-fwd);
+            if facing <= 1e-4 {
+                continue;
+            }
+            let (b, c) = ((axis + 1) % 3, (axis + 2) % 3);
+            for i in -1i8..=1 {
+                for j in -1i8..=1 {
+                    let corner = |u: f32, v: f32| {
+                        let mut p = Vec3::ZERO;
+                        p[axis] = sign as f32;
+                        p[b] = (2.0 * i as f32 + u) / 3.0;
+                        p[c] = (2.0 * j as f32 + v) / 3.0;
+                        [p.dot(right) / reach, p.dot(up) / reach]
+                    };
+                    let mut dir = [0i8; 3];
+                    dir[axis] = sign;
+                    dir[b] = i;
+                    dir[c] = j;
+                    out.push(CubeCell {
+                        dir,
+                        quad: [
+                            corner(-1.0, -1.0),
+                            corner(1.0, -1.0),
+                            corner(1.0, 1.0),
+                            corner(-1.0, 1.0),
+                        ],
+                        facing,
+                    });
+                }
+            }
+        }
+    }
+    out
+}
+
+/// The standard view a face click goes to; edges and corners have none.
+pub fn preset_of(hit: &CubeHit) -> Option<crate::camera::ViewPreset> {
+    use crate::camera::ViewPreset::*;
+    match hit.dir {
+        [0, 0, 1] => Some(Front),
+        [0, 0, -1] => Some(Back),
+        [-1, 0, 0] => Some(Left),
+        [1, 0, 0] => Some(Right),
+        [0, 1, 0] => Some(Top),
+        [0, -1, 0] => Some(Bottom),
+        _ => None,
+    }
+}
+
+/// Short name written on a face.
+pub fn face_name(dir: [i8; 3]) -> Option<&'static str> {
+    match dir {
+        [0, 0, 1] => Some("Front"),
+        [0, 0, -1] => Some("Back"),
+        [-1, 0, 0] => Some("Left"),
+        [1, 0, 0] => Some("Right"),
+        [0, 1, 0] => Some("Top"),
+        [0, -1, 0] => Some("Bottom"),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -109,5 +192,36 @@ mod tests {
         let h = view_cube_hit(&c, [0.35, -0.2]).unwrap();
         look_from(&mut c, h.eye_dir());
         assert!(c.eye().x > c.target.x);
+    }
+
+    #[test]
+    fn front_view_shows_nine_cells_of_one_face() {
+        let cells = visible_cells(&front());
+        assert_eq!(cells.len(), 9);
+        assert!(cells.iter().all(|c| c.dir[2] == 1));
+    }
+
+    #[test]
+    fn iso_shows_three_faces_and_cells_agree_with_hit_test() {
+        let mut c = front();
+        enter_standard(&mut c, ViewPreset::Iso);
+        let cells = visible_cells(&c);
+        assert_eq!(cells.len(), 27);
+        for cell in cells {
+            let mx = cell.quad.iter().map(|q| q[0]).sum::<f32>() / 4.0;
+            let my = cell.quad.iter().map(|q| q[1]).sum::<f32>() / 4.0;
+            let hit = view_cube_hit(&c, [mx, my]).unwrap();
+            assert_eq!(hit.dir, cell.dir);
+        }
+    }
+
+    #[test]
+    fn faces_map_to_presets() {
+        assert_eq!(
+            preset_of(&CubeHit { dir: [0, 1, 0] }),
+            Some(ViewPreset::Top)
+        );
+        assert_eq!(preset_of(&CubeHit { dir: [1, 0, 1] }), None);
+        assert_eq!(face_name([0, 0, 1]), Some("Front"));
     }
 }

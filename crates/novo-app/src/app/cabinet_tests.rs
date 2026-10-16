@@ -203,6 +203,41 @@ fn the_table_face_toggles_and_problems_are_in_words() {
 }
 
 #[test]
+fn a_device_too_deep_for_the_door_gets_its_own_mark_and_sentence() {
+    use novo_canvas::cabinet::BoxState;
+    use novo_layout::enclosure::Enclosure;
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::{Plate, Size};
+    let mut l = CabinetLayout::new(Plate {
+        width: 300.0,
+        height: 300.0,
+        margin: 10.0,
+    });
+    let size = Size::from_part(Some(45.0), Some(90.0));
+    l.drop_device(1, size, 20.0, 20.0);
+    l.drop_device(2, size, 120.0, 20.0);
+    l.enclosure = Some(Enclosure {
+        width: 400.0,
+        height: 400.0,
+        depth: 200.0,
+        plate_setback: 20.0,
+        door: None,
+        front_clearance: None,
+        hinge_side_clearance: None,
+    });
+    l.depths.insert(1, 220.0);
+    l.depths.insert(2, 80.0);
+    let name = |id: u64| format!("-K{id}");
+    let view = super::cabinet::cabinet_view(&l, &name);
+    let state = |id| view.boxes.iter().find(|b| b.id == id).unwrap().state;
+    assert_eq!(state(1), BoxState::TooDeep);
+    assert_eq!(state(2), BoxState::Ok);
+    let lines = super::cabinet::problem_lines(&l, 1, &name);
+    assert!(lines.iter().any(|t| t.contains("40 mm too deep")));
+    assert!(super::cabinet::problem_lines(&l, 2, &name).is_empty());
+}
+
+#[test]
 fn keys_pressed_in_the_table_do_not_wait_for_the_plate() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
@@ -229,6 +264,38 @@ fn keys_pressed_in_the_table_do_not_wait_for_the_plate() {
 }
 
 #[test]
+fn the_table_lists_every_device_and_reports_no_click_when_none_is_made() {
+    use eframe::egui;
+    use novo_layout::plan::Candidate;
+    use novo_layout::state::CabinetLayout;
+    use novo_layout::{Plate, Size};
+
+    let mut l = CabinetLayout::new(Plate {
+        width: 200.0,
+        height: 200.0,
+        margin: 10.0,
+    });
+    let size = Size::from_part(Some(45.0), Some(90.0));
+    l.drop_device(1, size, 50.0, 50.0);
+    let cands: Vec<Candidate> = (1..=2)
+        .map(|id| Candidate {
+            id,
+            size,
+            sort_key: String::new(),
+        })
+        .collect();
+    let name = |id: u64| format!("-K{id}");
+    let ctx = egui::Context::default();
+    let mut clicked = Some(0);
+    let mut out = ctx.run_ui(egui::RawInput::default(), |ui| {
+        clicked = super::cabinet::cabinet_table(ui, &l, &cands, &name, &[1]);
+    });
+    out.textures_delta.clear();
+    assert_eq!(clicked, None);
+}
+
+#[test]
+
 fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
     use super::cabinet_inspector::{Facts, gather};
 
@@ -289,6 +356,13 @@ fn inspector_sets_the_plate_size_and_lists_a_device_s_problems() {
 }
 
 #[test]
+fn table_rows_sort_numbers_by_value() {
+    let mut tags = ["-K10", "-K2", "-Q1", "-K1"];
+    tags.sort_by_key(|t| super::cabinet::natural_key(t));
+    assert_eq!(tags, ["-K1", "-K2", "-K10", "-Q1"]);
+}
+
+#[test]
 fn a_problem_row_selects_its_device_on_the_plate() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
@@ -330,4 +404,163 @@ fn heat_commands_open_the_cabinet_and_toggle_the_layers() {
     d.frame();
     d.app.run_command(&ctx, "heat.toggle", None);
     assert!(!d.app.cabinet.heat.on);
+}
+
+#[test]
+fn plate_export_says_why_when_the_enclosure_has_no_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    assert!(d.app.export_plate_pdf().is_none());
+    let last = d.app.messages().last().unwrap();
+    assert!(last.text.contains("no mounting plate"), "{}", last.text);
+    assert!(crate::app::app_runs("export.plate"));
+}
+
+#[test]
+fn panel_data_edits_are_one_undo_step_and_bad_input_changes_nothing() {
+    use super::cabinet_panel::PanelEdit;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let device = novo_layout::model::candidates(project(&d), cab)[0].id;
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, 100.0, 120.0), Some(cab), l, &[]);
+
+    let set = |d: &mut Drive, key: &'static str, text: &str| {
+        let l = layout_of(d, cab);
+        d.app.cabinet_ask(
+            Ask::SetPanelValue(PanelEdit {
+                device,
+                key,
+                text: text.into(),
+            }),
+            Some(cab),
+            l,
+            &[],
+        );
+    };
+    let margins = |d: &Drive| {
+        let l = layout_of(d, cab).unwrap();
+        l.placements.first().map(|p| p.margins)
+    };
+    set(&mut d, "clearance_above_mm", "40");
+    assert_eq!(margins(&d).unwrap().above, Some(40.0));
+    // A negative number or an unknown mounting type is refused.
+    set(&mut d, "clearance_below_mm", "-3");
+    assert_eq!(margins(&d).unwrap().below, None);
+    set(&mut d, "mounting", "glue");
+    let device_id = novo_core::DeviceId::from(device);
+    assert!(
+        !project(&d)
+            .device(device_id)
+            .unwrap()
+            .properties
+            .contains_key("mounting")
+    );
+    set(&mut d, "mounting", "din_rail");
+    set(&mut d, "power_loss_w", "4,5");
+    let panel =
+        super::cabinet_panel::panel_data(project(&d), project(&d).device(device_id).unwrap());
+    assert_eq!(panel.power_loss_w, Some(4.5));
+    assert_eq!(panel.mounting, Some(novo_parts::Mounting::DinRail));
+    d.app.run(&ctx, Action::Undo);
+    let panel =
+        super::cabinet_panel::panel_data(project(&d), project(&d).device(device_id).unwrap());
+    assert_eq!(panel.power_loss_w, None);
+    assert_eq!(panel.mounting, Some(novo_parts::Mounting::DinRail));
+}
+
+#[test]
+fn the_panel_data_section_draws_and_reads_the_devices_values() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    let device = project(&d).all::<novo_core::Device>().next().unwrap().id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("loss", |tx| {
+            tx.set_property(device, "power_loss_w", Some(Value::Float(7.5)))
+        })
+        .unwrap();
+    let mut fields = super::cabinet_panel::PanelFields::default();
+    let egui_ctx = d.ctx.clone();
+    let mut edit = None;
+    for _ in 0..2 {
+        let mut out = egui_ctx.run_ui(Default::default(), |ui| {
+            edit = super::cabinet_panel::show(ui, &mut fields, project(&d), device.raw());
+        });
+        out.textures_delta.clear();
+    }
+    assert!(edit.is_none(), "drawing alone changes nothing");
+}
+
+#[test]
+fn the_enclosure_is_set_in_one_undo_step_and_drawn_with_its_checks() {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    assert!(layout_of(&d, cab).unwrap().enclosure.is_none());
+
+    let e = Enclosure {
+        width: 650.0,
+        height: 850.0,
+        depth: 250.0,
+        plate_setback: 20.0,
+        door: Some(Door {
+            hinge: Hinge::Right,
+            max_angle: 110.0,
+            inner_depth: 0.0,
+        }),
+        front_clearance: Some(400.0),
+        hinge_side_clearance: None,
+    };
+    d.app
+        .cabinet_ask(Ask::SetEnclosure(e), Some(cab), None, &[]);
+    // Drawing the card with the form, the checks and the top view works.
+    d.app.cabinet.plate_card = true;
+    d.frame();
+    d.frame();
+    let layout = layout_of(&d, cab).unwrap();
+    assert_eq!(layout.enclosure, Some(e));
+    // 650 mm door at 110 degrees: 650 in front, 400 free is 250 short.
+    let report = layout.door_report().unwrap();
+    assert!((report.front_short.unwrap() - 250.0).abs() < 1e-6);
+    let lines = super::cabinet_door::sentences(&e, &report, &|id| format!("D{id}"));
+    assert!(
+        lines
+            .iter()
+            .any(|(bad, t)| *bad && t.contains("250 mm short"))
+    );
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert!(layout_of(&d, cab).unwrap().enclosure.is_none());
 }

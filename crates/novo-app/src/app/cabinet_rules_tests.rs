@@ -1,0 +1,232 @@
+//! Place rules in the Cabinet: Place all follows them, the inspector names the
+//! rule, the cut list trims rails as one undo step.
+
+use novo_core::{CabinetPlacement, DeviceTag, Project, Rail, RailKind, Value};
+
+use super::cabinet::Ask;
+use super::cabinet_inspector::{DeviceFacts, Facts};
+use super::cabinet_rules::{self, RULES_FILE};
+use super::gate1_tests::Drive;
+use crate::actions::Action;
+
+fn project(d: &Drive) -> &Project {
+    d.app.backend.document().unwrap().project()
+}
+
+/// A cabinet with a relay K1, a breaker Q1 and a drive T1 (with its own room).
+fn cabinet(d: &mut Drive) -> novo_core::StructureId {
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Cabinet", |tx| {
+            tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            for (tag, w, h) in [
+                ("=A1+CAB1-K1", 45.0, 90.0),
+                ("=A1+CAB1-Q1", 18.0, 90.0),
+                ("=A1+CAB1-T1", 80.0, 150.0),
+            ] {
+                let part = tx.add_part("ACME", tag)?;
+                tx.set_property(part, "width_mm", Some(Value::Float(w)))?;
+                tx.set_property(part, "height_mm", Some(Value::Float(h)))?;
+                let device = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+                tx.assign_part(device, part)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    cab
+}
+
+fn place_all(d: &mut Drive, cab: novo_core::StructureId) {
+    let layout = novo_layout::model::load(project(d), cab);
+    let cands = novo_layout::model::candidates(project(d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.frame();
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+}
+
+#[test]
+fn place_all_follows_the_rules_with_ducts_and_says_why_in_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let cab = cabinet(&mut d);
+    let layout = novo_layout::model::load(project(&d), cab);
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.frame();
+    // The explanation exists as soon as the plan does.
+    let why = d.app.cabinet.rules.explain.clone().expect("an explanation");
+    assert_eq!(why.decisions.len(), 3);
+    assert!(
+        why.describe(why.decisions[0].id, &d.app.cabinet.rules.rules)
+            .starts_with("Rule `")
+    );
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+
+    // Q1 (power) is above K1 (signal); the drive T1 is at the bottom.
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    assert_eq!(layout.placements.len(), 3);
+    let y_of = |tag: &str| {
+        let id = project(&d)
+            .all::<novo_core::Device>()
+            .find(|dev| dev.tag.to_string().ends_with(tag))
+            .unwrap()
+            .id
+            .raw();
+        layout.placements.iter().find(|p| p.id == id).unwrap().y
+    };
+    assert!(y_of("-Q1") < y_of("-K1") && y_of("-K1") < y_of("-T1"));
+
+    // A power duct and a signal duct came along.
+    let ducts: Vec<&Rail> = project(&d)
+        .all::<Rail>()
+        .filter(|r| r.kind == RailKind::Duct)
+        .collect();
+    assert!(ducts.len() >= 2);
+    let classes: Vec<_> = novo_layout::model::ducts(project(&d), cab)
+        .iter()
+        .map(|duct| duct.class.as_str())
+        .collect();
+    assert!(classes.contains(&"power") && classes.contains(&"signal"));
+
+    // And none of the rules is broken.
+    let judged = cabinet_rules::judge(project(&d), cab, &d.app.cabinet.rules.rules);
+    assert!(judged.violations.is_empty(), "{:?}", judged.violations);
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
+    assert_eq!(project(&d).all::<Rail>().count(), 0);
+}
+
+#[test]
+fn the_inspector_names_the_rule_and_the_rule_a_hand_edit_breaks() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let cab = cabinet(&mut d);
+    // Put the breaker below the relay by hand.
+    let id_of = |d: &Drive, tag: &str| {
+        d.app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .all::<novo_core::Device>()
+            .find(|dev| dev.tag.to_string().ends_with(tag))
+            .unwrap()
+            .id
+            .raw()
+    };
+    let (k, q) = (id_of(&d, "-K1"), id_of(&d, "-Q1"));
+    for (id, x, y) in [(k, 100.0, 100.0), (q, 100.0, 500.0)] {
+        let l = novo_layout::model::load(project(&d), cab);
+        d.app.cabinet_ask(Ask::Drop(id, x, y), Some(cab), l, &[]);
+    }
+    d.app.cabinet.rules.ensure_loaded();
+    let judged = cabinet_rules::judge(project(&d), cab, &d.app.cabinet.rules.rules);
+    assert_eq!(judged.violations.len(), 1);
+
+    let mut facts = Facts::Devices(vec![DeviceFacts {
+        id: q,
+        tag: "-Q1".into(),
+        description: String::new(),
+        part: None,
+        size: String::new(),
+        guessed: false,
+        position: String::new(),
+        rotated: false,
+        rail: None,
+        problems: Vec::new(),
+        rule: None,
+        why: None,
+    }]);
+    cabinet_rules::annotate(&mut facts, &d.app.cabinet.rules, &judged, &|id| {
+        format!("-D{id}")
+    });
+    let Facts::Devices(devices) = facts else {
+        unreachable!()
+    };
+    assert!(
+        devices[0]
+            .rule
+            .as_deref()
+            .unwrap()
+            .starts_with("rule Q F G zone=top")
+    );
+    assert_eq!(devices[0].problems.len(), 1);
+    assert!(
+        devices[0].problems[0].contains("zone"),
+        "{:?}",
+        devices[0].problems
+    );
+}
+
+#[test]
+fn cutting_rails_to_length_is_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let cab = cabinet(&mut d);
+    place_all(&mut d, cab);
+    let rails: Vec<(u64, f64)> = project(&d)
+        .all::<Rail>()
+        .filter(|r| r.kind == RailKind::DinRail)
+        .map(|r| (r.id.raw(), r.length))
+        .collect();
+    assert!(!rails.is_empty());
+    let (id, before) = rails[0];
+
+    let lists = cabinet_rules::cut_lists(project(&d), cab).unwrap();
+    assert!(lists.rails.is_some());
+    assert!(!lists.ducts.is_empty());
+
+    d.app
+        .cabinet_ask(Ask::SetRailLengths(vec![(id, 300.0)]), Some(cab), None, &[]);
+    d.frame();
+    let length = |d: &Drive| {
+        project(d)
+            .get::<Rail>(novo_core::RailId::from(id))
+            .unwrap()
+            .length
+    };
+    assert_eq!(length(&d), 300.0);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(length(&d), before);
+}
+
+#[test]
+fn the_rules_file_is_read_saved_and_a_bad_one_falls_back_with_the_reason() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join(RULES_FILE);
+    // No file: the standard rules, nothing to say.
+    let (rules, problem) = cabinet_rules::load_rules(&path);
+    assert_eq!(rules, novo_layout::rules::RuleSet::standard());
+    assert!(problem.is_none());
+
+    let mut mine = novo_layout::rules::RuleSet::standard();
+    mine.separation = 80.0;
+    cabinet_rules::save_rules(&mine.to_text(), &path).unwrap();
+    assert_eq!(cabinet_rules::load_rules(&path).0, mine);
+
+    std::fs::write(&path, "gap 10\nrule K zone=sideways\n").unwrap();
+    let (rules, problem) = cabinet_rules::load_rules(&path);
+    assert_eq!(rules, novo_layout::rules::RuleSet::standard());
+    let problem = problem.unwrap();
+    assert!(
+        problem.contains("line 2") && problem.contains("sideways"),
+        "{problem}"
+    );
+}

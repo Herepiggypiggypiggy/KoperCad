@@ -220,6 +220,59 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.import_step",
+            "Import 3D model (STEP)",
+            "Project",
+            &["step", "stp", "3d model", "mesh", "cad model"],
+            Needs::Nothing,
+        ),
+        &["import 3d", "import step"],
+    ),
+    verb(
+        cmd(
+            "project.options",
+            "Project options and variants",
+            "Project",
+            &[
+                "options",
+                "variants",
+                "configuration",
+                "conveyor",
+                "with without",
+                "machine options",
+            ],
+            Needs::Project,
+        ),
+        &["options", "variants"],
+    ),
+    verb(
+        cmd(
+            "project.variant",
+            "Switch variant",
+            "Project",
+            &["variant", "configuration", "machine"],
+            Needs::Project,
+        ),
+        &["variant"],
+    ),
+    verb(
+        cmd(
+            "project.generate",
+            "Generate pages from a spec sheet",
+            "Project",
+            &[
+                "spec sheet",
+                "generate project",
+                "from excel",
+                "from csv",
+                "macros",
+            ],
+            Needs::Project,
+        ),
+        &["generate"],
+    ),
+    verb(
+        cmd(
             "revision.issue",
             "Issue revision",
             "Project",
@@ -256,6 +309,40 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["import dxf"],
     ),
+    verb(
+        cmd(
+            "file.import_dwg",
+            "Import DWG as background",
+            "Project",
+            &["autocad", "converter", "libredwg", "oda"],
+            Needs::Page,
+        ),
+        &["import dwg"],
+    ),
+    cmd(
+        "file.choose_dwg_converter",
+        "Choose the DWG converter",
+        "Project",
+        &["dwg2dxf", "libredwg", "oda file converter"],
+        Needs::Nothing,
+    ),
+    verb(
+        cmd(
+            "file.import_aml",
+            "Import AutomationML",
+            "Project",
+            &[
+                "aml",
+                "caex",
+                "plant",
+                "migrate",
+                "other tool",
+                "engineering",
+            ],
+            Needs::Project,
+        ),
+        &["import aml", "import automationml"],
+    ),
     cmd(
         "file.remove_background",
         "Remove the DXF background",
@@ -264,6 +351,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     // Draw
+    verb(
+        cmd(
+            "import.spreadsheet",
+            "Import spreadsheet",
+            "Project",
+            &["excel", "csv", "xlsx", "device list"],
+            Needs::Project,
+        ),
+        &["import spreadsheet", "import sheet", "import excel"],
+    ),
     cmd(
         "tool.repeat",
         "Repeat last tool",
@@ -550,6 +647,59 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["jump", "renumber", "continuation", "off page"],
         Needs::Project,
     ),
+    // Wire numbering (novo-numbering). `wires.number` fills what has no
+    // number; the window shows the scheme, a preview and the conflicts.
+    cmd(
+        "wires.number",
+        "Number wires",
+        "Edit",
+        &["wire number", "numbering", "potential", "automatic", "fill"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "wires.numbering",
+            "Wire numbering",
+            "Edit",
+            &["scheme", "wire number", "numbering", "preview"],
+            Needs::Project,
+        ),
+        &["wire numbering"],
+    ),
+    verb(
+        cmd(
+            "wires.renumber",
+            "Renumber wires",
+            "Edit",
+            &["wire number", "numbering", "start over"],
+            Needs::Project,
+        ),
+        &["renumber wires"],
+    ),
+    cmd(
+        "wires.check_numbers",
+        "Check wire numbers",
+        "Edit",
+        &["duplicate", "conflict", "wire number", "numbering"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "wires.set_number",
+            "Set wire number",
+            "Edit",
+            &["type", "manual", "lock", "wire number"],
+            Needs::Selection,
+        ),
+        &["number wire"],
+    ),
+    cmd(
+        "wires.unlock_number",
+        "Unlock wire number",
+        "Edit",
+        &["manual", "lock", "wire number"],
+        Needs::Selection,
+    ),
     // Navigate
     cmd(
         "nav.partner",
@@ -690,6 +840,35 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.protection",
+        "Protection: curves, selectivity, rating",
+        "View",
+        &[
+            "protection",
+            "trip",
+            "curve",
+            "selectivity",
+            "sccr",
+            "breaker",
+            "fuse",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "simulate.motor-start",
+        "Simulate motor start",
+        "View",
+        &[
+            "simulate",
+            "motor",
+            "start",
+            "star-delta",
+            "soft starter",
+            "inrush",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "view.cabinet_table",
         "Cabinet as table",
         "View",
@@ -758,6 +937,36 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "sim.plc_program",
+        "PLC program",
+        "View",
+        &[
+            "plc",
+            "ladder",
+            "structured text",
+            "run program",
+            "simulate plc",
+        ],
+        Needs::Page,
+    ),
+    cmd(
+        "sim.faults",
+        "Fault scenarios",
+        "View",
+        &[
+            "short circuit",
+            "fault",
+            "trip",
+            "breaker",
+            "selectivity",
+            "protection",
+            "waveform",
+            "timing",
+            "overload",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "view.override_marks",
         "Show override marks",
         "View",
@@ -769,6 +978,44 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Fast keys walk-through",
         "View",
         &["tour", "tutorial", "walkthrough", "help"],
+        Needs::Nothing,
+    ),
+    verb(
+        cmd(
+            "help.learn",
+            "Learn…",
+            "View",
+            &["lesson", "tutorial", "training", "learn", "teach", "course"],
+            Needs::Nothing,
+        ),
+        &["learn", "lesson"],
+    ),
+    cmd(
+        "learn.next",
+        "Lesson: next step",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "learn.back",
+        "Lesson: previous step",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "learn.restart",
+        "Lesson: start over",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "learn.close",
+        "Lesson: close",
+        "View",
+        &["lesson", "tutorial", "training", "learn", "teach"],
         Needs::Nothing,
     ),
     cmd(
@@ -785,7 +1032,92 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["underlay", "dxf", "reference drawing"],
         Needs::Page,
     ),
+    verb(
+        cmd(
+            "cabinet.routes",
+            "Route all wires (Cabinet)",
+            "View",
+            &["route", "wire length", "duct fill", "cut length"],
+            Needs::Project,
+        ),
+        &["route all", "route wires"],
+    ),
+    cmd(
+        "view.background_place",
+        "Move and scale the DXF background",
+        "View",
+        &["underlay", "dxf", "reference drawing", "offset", "position"],
+        Needs::Page,
+    ),
     // Check
+    // Reports workspace (docs/design/workspaces.md section 3.4).
+    cmd(
+        "view.reports",
+        "Reports",
+        "View",
+        &["tables", "lists", "workspace"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "report.toc",
+            "Contents",
+            "View",
+            &["table of contents", "index", "page list"],
+            Needs::Project,
+        ),
+        &["contents"],
+    ),
+    verb(
+        cmd(
+            "report.bom",
+            "Bill of materials",
+            "View",
+            &["parts list", "bom", "quantities"],
+            Needs::Project,
+        ),
+        &["bom", "bill of materials"],
+    ),
+    verb(
+        cmd(
+            "report.devices",
+            "Device list",
+            "View",
+            &["devices", "tags", "locations"],
+            Needs::Project,
+        ),
+        &["device list"],
+    ),
+    verb(
+        cmd(
+            "report.wires",
+            "Wire list",
+            "View",
+            &["wires", "cores", "connections"],
+            Needs::Project,
+        ),
+        &["wire list"],
+    ),
+    verb(
+        cmd(
+            "report.terminals",
+            "Terminal diagram",
+            "View",
+            &["terminal list", "strips", "klemmen"],
+            Needs::Project,
+        ),
+        &["terminal diagram"],
+    ),
+    verb(
+        cmd(
+            "report.cables",
+            "Cable diagram",
+            "View",
+            &["cable list", "cable schedule", "cores"],
+            Needs::Project,
+        ),
+        &["cable diagram"],
+    ),
     verb(
         cmd(
             "check.problems",
@@ -795,6 +1127,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["problems"],
+    ),
+    cmd(
+        "check.standards",
+        "Standards check",
+        "Check",
+        &[
+            "standards",
+            "iec",
+            "60204",
+            "nfpa",
+            "79",
+            "ul",
+            "508a",
+            "sccr",
+            "compliance",
+        ],
+        Needs::Project,
     ),
     cmd(
         "check.next_problem",
@@ -830,6 +1179,34 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.step",
+            "Export the cabinet as STEP",
+            "Export",
+            &[
+                "3d",
+                "mechanical",
+                "solidworks",
+                "inventor",
+                "freecad",
+                "stp",
+                "step",
+            ],
+            Needs::Project,
+        ),
+        &["export step"],
+    ),
+    verb(
+        cmd(
+            "export.aml",
+            "Export the plant as AutomationML",
+            "Export",
+            &["aml", "caex", "iec 62714", "exchange", "engineering"],
+            Needs::Project,
+        ),
+        &["export aml", "export automationml"],
+    ),
+    verb(
+        cmd(
             "export.pdf",
             "Export PDF",
             "Export",
@@ -837,6 +1214,33 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export pdf", "pdf"],
+    ),
+    cmd(
+        "export.change_report",
+        "Export change report",
+        "Export",
+        &["what changed", "revision report", "diff pdf"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "export.commissioning",
+            "Export commissioning report",
+            "Export",
+            &["punch list", "sign-off", "handover", "inbedrijfstelling"],
+            Needs::Project,
+        ),
+        &["export commissioning", "commissioning report"],
+    ),
+    verb(
+        cmd(
+            "export.plate",
+            "Export plate drawing",
+            "Export",
+            &["mounting plate", "drill table", "drilling"],
+            Needs::Project,
+        ),
+        &["export plate"],
     ),
     verb(
         cmd(
@@ -846,7 +1250,14 @@ pub const COMMANDS: &[CommandInfo] = &[
             &["parts list"],
             Needs::Project,
         ),
-        &["export bom", "bom"],
+        &["export bom"],
+    ),
+    cmd(
+        "export.reports",
+        "Export all reports to Excel",
+        "Export",
+        &["excel", "xlsx", "spreadsheet", "all reports"],
+        Needs::Project,
     ),
     verb(
         cmd(
@@ -860,6 +1271,52 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.wirecut",
+            "Export wire cut list (CSV)",
+            "Export",
+            &[
+                "wire cut",
+                "wire machine",
+                "ferrule",
+                "labels",
+                "production",
+            ],
+            Needs::Project,
+        ),
+        &["export wire cut", "wire cut"],
+    ),
+    verb(
+        cmd(
+            "export.wirecut_xlsx",
+            "Export wire production (.xlsx)",
+            "Export",
+            &["wire cut", "stock", "ferrules", "duct fill"],
+            Needs::Project,
+        ),
+        &["export wire production"],
+    ),
+    verb(
+        cmd(
+            "export.wiring_dxf",
+            "Export wiring plan as DXF",
+            "Export",
+            &["routes", "ducts", "cabinet drawing"],
+            Needs::Project,
+        ),
+        &["export wiring plan"],
+    ),
+    verb(
+        cmd(
+            "export.wirecut_page",
+            "Add wire production page (PDF)",
+            "Export",
+            &["wire cut", "print", "pdf", "ferrule", "labels"],
+            Needs::Project,
+        ),
+        &["add wire production page"],
+    ),
+    verb(
+        cmd(
             "export.assembly",
             "Export assembly checklist (PDF)",
             "Export",
@@ -867,6 +1324,26 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export assembly", "assembly checklist"],
+    ),
+    verb(
+        cmd(
+            "export.variant_pdf",
+            "Export PDF of a variant",
+            "Export",
+            &["variant", "configuration", "pdf", "with conveyor"],
+            Needs::Project,
+        ),
+        &["export variant"],
+    ),
+    verb(
+        cmd(
+            "export.spec",
+            "Export the spec sheet (.xlsx)",
+            "Export",
+            &["spec sheet", "generated pages", "round trip", "excel"],
+            Needs::Project,
+        ),
+        &["export spec"],
     ),
     verb(
         cmd(
