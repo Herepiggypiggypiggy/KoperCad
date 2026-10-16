@@ -80,6 +80,7 @@ mod standards;
 mod status_bar;
 mod symbol_preview;
 mod terminals;
+mod tips;
 mod title_revisions;
 mod userkeymap;
 mod variants;
@@ -128,6 +129,8 @@ mod protection_tests;
 mod route_all_tests;
 #[cfg(test)]
 mod shortcuts_sheet_tests;
+#[cfg(test)]
+mod tips_tests;
 #[cfg(test)]
 mod variants_tests;
 

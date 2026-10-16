@@ -43,6 +43,11 @@ pub const DUTCH: &[Aliases] = &[
         &["rondleiding", "snelle toetsen uitleg"],
     ),
     nl(
+        "help.show_hints",
+        &[],
+        &["hints opnieuw tonen", "tips opnieuw", "hints"],
+    ),
+    nl(
         "help.learn",
         &["leren", "les"],
         &["leren", "training", "cursus", "uitleg"],

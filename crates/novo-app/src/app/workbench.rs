@@ -364,6 +364,7 @@ const APP_COMMANDS: &[&str] = &[
     "xref.link",
     "app.preferences",
     "view.shortcuts",
+    "help.show_hints",
     "parts.browser",
     "parts.import_step",
     "project.standard",
@@ -583,6 +584,7 @@ impl NovoApp {
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
         if id == "tool.place" {
             self.learn_command(id);
+            self.hint_command_run(id);
             self.tour_tick("place");
             self.arm_place_hold(ctx);
         } else if id == "view.command_field_here" {
@@ -849,6 +851,7 @@ impl NovoApp {
             "xref.link" => self.xref_link(argument),
             "app.preferences" => self.wb.preferences = true,
             "view.shortcuts" => self.toggle_shortcuts(),
+            "help.show_hints" => self.show_hints_again(),
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "project.standard" => self.wb.project_settings = true,
