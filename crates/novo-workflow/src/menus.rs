@@ -98,6 +98,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.wires", at("Reports")),
     ("report.terminals", at("Reports")),
     ("report.cables", at("Reports")),
+    ("report.cutlist", at("Reports")),
+    ("report.labels", at("Reports")),
 ];
 
 /// Commands that are a key or a pointer gesture and have no menu row.

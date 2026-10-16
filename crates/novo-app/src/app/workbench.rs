@@ -305,6 +305,8 @@ const APP_COMMANDS: &[&str] = &[
     "report.wires",
     "report.terminals",
     "report.cables",
+    "report.cutlist",
+    "report.labels",
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
