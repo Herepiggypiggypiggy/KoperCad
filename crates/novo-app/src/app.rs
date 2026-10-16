@@ -48,6 +48,7 @@ mod heat_compare_tests;
 mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
+mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
 mod heat_progress_tests;

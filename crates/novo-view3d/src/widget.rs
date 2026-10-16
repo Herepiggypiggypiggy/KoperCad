@@ -11,6 +11,7 @@ use crate::door::DoorAnim;
 use crate::feel::{self, Inertia, Transition};
 use crate::labels::{self, Fade, LabelCandidate};
 use crate::look::{self, Glyph, Look};
+use crate::math::Ray;
 use crate::mesh::MeshLibrary;
 use crate::overlay::Overlay;
 use crate::pick::{self, Hit};
@@ -269,6 +270,8 @@ pub struct Click {
     pub modifiers: Modifiers,
     /// Alt + click: the deepest item (repeated clicks step back up).
     pub deepest: bool,
+    /// The pointer ray through the click, in the world.
+    pub ray: Ray,
 }
 
 impl View3dOutput {
@@ -281,6 +284,7 @@ impl View3dOutput {
             context: None,
             double_clicked: None,
             plate_point: None,
+            hover_ray: None,
             item_drag: None,
             camera_changed: false,
         }
@@ -301,6 +305,8 @@ pub struct View3dOutput {
     pub double_clicked: Option<ItemId>,
     /// The 2D plate point (x, y down, mm) under the pointer.
     pub plate_point: Option<(f64, f64)>,
+    /// The ray through the pointer while it is over the view, in the world.
+    pub hover_ray: Option<Ray>,
     /// A drag that started on a device, rail or duct while
     /// [`View3d::drag_items`] is on: how far the pointer has moved on the
     /// plate since the press, and whether the button is still down.
@@ -802,6 +808,7 @@ impl View3d {
         out.hover = new_hover;
         if let Some(p) = hover_pos.filter(|p| rect.contains(*p)) {
             let ray = self.camera.ray(Self::ndc(rect, p), aspect);
+            out.hover_ray = Some(ray);
             out.plate_point = ray
                 .plane_hit(Vec3::ZERO, Vec3::Z)
                 .map(|t| scene.frame.plate(ray.at(t)));
@@ -827,6 +834,7 @@ impl View3d {
                         id: hit.map(|h| h.id),
                         modifiers,
                         deepest: true,
+                        ray,
                     });
                 } else {
                     self.alt_cycle = None;
@@ -834,6 +842,7 @@ impl View3d {
                         id: self.pick_at(rect, scene, p).map(|h| h.id),
                         modifiers,
                         deepest: false,
+                        ray,
                     });
                 }
             }
