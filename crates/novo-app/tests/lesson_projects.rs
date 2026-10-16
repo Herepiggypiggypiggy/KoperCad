@@ -1065,3 +1065,74 @@ fn the_names_the_lessons_type_find_the_symbols_they_name() {
     assert_eq!(favourites[3], "iec/contactors/main_3p");
     assert_eq!(favourites[4], "iec/protection/motor_protection_breaker");
 }
+
+// ----- the placing-parts steps that turn and copy -----------------------------
+//
+// "Press R, it turns a quarter" was refused on a part that already had wires
+// ("it would run along another wire"). The lesson turns the part in hand
+// instead, where no wire exists yet, and copies a part that has none.
+
+#[test]
+fn r_turns_the_part_in_hand_and_a_spare_goes_in_empty_space() {
+    let mut r = Replay::open(&placing_parts(true));
+    let old: BTreeSet<_> = r.project().symbols().map(|s| s.id).collect();
+    let before = old.len();
+    assert!(r.editor.begin_place("iec/operators/pushbutton_no", None));
+    assert!(
+        r.editor
+            .key(&mut r.doc, novo_editor::EditorKey::Rotate, &[])
+    );
+    assert_eq!(
+        r.click(130.0, 72.0),
+        Clicked::Edited,
+        "the turned part lands"
+    );
+    r.editor.leave_tool();
+    assert_eq!(r.project().symbols().count(), before + 1);
+    let spare = r
+        .project()
+        .symbols()
+        .find(|s| !old.contains(&s.id))
+        .expect("the spare");
+    assert_eq!(spare.placement.rotation, novo_core::Rotation::R90);
+    // Ctrl+Z takes it away again.
+    r.doc.undo().unwrap();
+    assert_eq!(r.project().symbols().count(), before);
+}
+
+#[test]
+fn r_on_a_wired_part_is_refused_so_the_lesson_never_asks_for_it() {
+    let mut r = Replay::open(&placing_parts(true));
+    let s1 = symbol_of(r.project(), "-S1", "iec/operators/pushbutton_no");
+    let ok = r.editor.rotate_selection(&mut r.doc, &[AnyId::from(s1)]);
+    let turned = r.project().symbol(s1).unwrap().placement.rotation;
+    assert!(
+        !ok || turned == novo_core::Rotation::R0,
+        "a part with wires on both sides must not be turned in the lesson"
+    );
+}
+
+#[test]
+fn duplicating_a_lone_push_button_makes_the_next_number_and_undo_removes_it() {
+    let mut r = Replay::open(&placing_parts(true));
+    let s1 = symbol_of(r.project(), "-S1", "iec/operators/pushbutton_no");
+    let page = r.page;
+    let (copy, _) = r
+        .doc
+        .transact("Duplicate", |tx| {
+            novo_workflow::duplicate::duplicate(
+                tx,
+                &[AnyId::from(s1)],
+                page,
+                Point::new(20.0, 0.0),
+                novo_workflow::duplicate::TagMode::NextFree,
+            )
+        })
+        .unwrap();
+    assert_eq!(copy.symbols.len(), 1);
+    let tags: BTreeSet<String> = r.project().devices().map(|d| d.tag.to_string()).collect();
+    assert!(tags.contains("-S2"), "{tags:?}");
+    r.doc.undo().unwrap();
+    let tags: BTreeSet<String> = r.project().devices().map(|d| d.tag.to_string()).collect();
+    assert!(!tags.contains("-S2"));
+}

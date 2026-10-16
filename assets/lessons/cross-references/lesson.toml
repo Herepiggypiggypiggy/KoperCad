@@ -3,7 +3,9 @@ id = "cross-references"
 version = 1
 status = "draft"
 title = "Cross references"
+title_nl = "Kruisverwijzingen"
 summary = "Jump between the coil and its contacts, and add a contact on another page."
+summary_nl = "Spring tussen de spoel en zijn contacten en voeg een contact toe op een andere pagina."
 track = "basics"
 order = 50
 level = "intermediate"
@@ -18,9 +20,21 @@ page = "Control circuit"
 [[step]]
 id = "select-coil"
 title = "Select the coil"
+title_nl = "Selecteer de spoel"
 text = """
-Click the coil **-K1**. The dock tells you where its other parts are: the main contacts on page 1 and a contact on page 2.
+A cross reference tells you where the other parts of a device are. The coil of the contactor **-K1** is on this page, its main contacts are on page 1 and its auxiliary contacts are here and there, and the dock lists all of them.
 """
+text_nl = """
+Een kruisverwijzing vertelt waar de andere delen van een apparaat staan. De spoel van de contactor **-K1** staat op deze pagina, zijn hoofdcontacten op pagina 1 en zijn hulpcontacten hier en daar, en het dock somt ze allemaal op.
+"""
+how = [
+  "Click the relay coil **-K1** at the bottom of the control circuit to select it.",
+  "Read the line in the dock that starts with **-K1 elsewhere**. It lists the other parts of -K1 with their page and column.",
+]
+how_nl = [
+  "Klik op de relaisspoel **-K1** onderaan het stuurcircuit om hem te selecteren.",
+  "Lees de regel in het dock die begint met **-K1 elsewhere**. Die toont de andere delen van -K1 met hun pagina en kolom.",
+]
 point = { at = { device = "-K1" } }
 expect = { selected = "-K1" }
 solve = [ { select = "-K1" } ]
@@ -28,35 +42,87 @@ solve = [ { select = "-K1" } ]
 [[step]]
 id = "go-partner"
 title = "Jump to a partner"
+title_nl = "Spring naar een partner"
 text = """
-Press {key:nav.partner} to jump to the next part of -K1.
+Instead of searching for the contacts of a coil, jump straight to them. The view moves to the partner and selects it.
 """
+text_nl = """
+In plaats van de contacten van een spoel te zoeken, spring je er direct naartoe. Het beeld verplaatst naar de partner en selecteert hem.
+"""
+how = [
+  "With -K1 still selected, press {key:nav.partner}.",
+  "The view jumps to another part of -K1 and selects it.",
+]
+how_nl = [
+  "Druk met -K1 nog geselecteerd op {key:nav.partner}.",
+  "Het beeld springt naar een ander deel van -K1 en selecteert het.",
+]
 point = { ui = "dock.xref" }
 expect = { command = "nav.partner" }
+solve = [ { command = "nav.partner" } ]
 
 [[step]]
 id = "back"
 title = "Come back"
+title_nl = "Kom terug"
 text = """
-Press {key:nav.back} to return where you were.
+Every jump is remembered, so you can look at a contact and come straight back to where you were.
 """
+text_nl = """
+Elke sprong wordt onthouden, dus je kunt naar een contact kijken en direct terugkeren naar waar je was.
+"""
+how = [
+  "Press {key:nav.back}. The view returns to the coil you came from.",
+]
+how_nl = [
+  "Druk op {key:nav.back}. Het beeld keert terug naar de spoel waar je vandaan kwam.",
+]
 expect = { command = "nav.back" }
+solve = [ { command = "nav.back" } ]
 
 [[step]]
 id = "all"
 title = "See every occurrence"
+title_nl = "Bekijk elk voorkomen"
 text = """
-Press {key:nav.all_references} to list every place -K1 appears.
+When a device has many parts, a list of all of them is quicker than jumping one by one.
 """
+text_nl = """
+Als een apparaat veel delen heeft, is een lijst van alle delen sneller dan een voor een springen.
+"""
+how = [
+  "Select the coil **-K1** again.",
+  "Press {key:nav.all_references}. A list of every place -K1 appears opens.",
+  "Click a line in the list to jump there.",
+]
+how_nl = [
+  "Selecteer de spoel **-K1** opnieuw.",
+  "Druk op {key:nav.all_references}. Er opent een lijst met elke plek waar -K1 voorkomt.",
+  "Klik op een regel in de lijst om erheen te springen.",
+]
 expect = { command = "nav.all_references" }
+solve = [ { select = "-K1" }, { command = "nav.all_references" } ]
 
 [[step]]
 id = "lamp-contact"
 title = "Add a contact for the lamp"
+title_nl = "Voeg een contact toe voor de lamp"
 text = """
-The lamp **-P1** should light when -K1 is on. Type {key:tool.place} and **no K1**, and drop the contact between the feed and the lamp.
-It is numbered 23-24 and the wires draw themselves.
+The lamp **-P1** at the right of the page should light when the contactor is on. It needs a contact of -K1 between its supply and the lamp. A contact placed with the device's name becomes the next contact of -K1 automatically, so nothing needs renaming.
 """
+text_nl = """
+De lamp **-P1** rechts op de pagina moet branden als de contactor aan is. Hij heeft een contact van -K1 nodig tussen zijn voeding en de lamp. Een contact dat je met de naam van het apparaat plaatst, wordt automatisch het volgende contact van -K1, dus er hoeft niets hernoemd te worden.
+"""
+how = [
+  "Tap {key:tool.place}, type **no K1** and press Enter.",
+  "Click between the L1 feed and the lamp on the right of the page. The contact gets the numbers 23-24 and is wired to the feed and to the lamp.",
+  "Press {key:edit.escape} to put the part down.",
+]
+how_nl = [
+  "Tik op {key:tool.place}, typ **no K1** en druk op Enter.",
+  "Klik tussen de L1-feed en de lamp rechts op de pagina. Het contact krijgt de nummers 23-24 en wordt met de feed en met de lamp verbonden.",
+  "Druk op {key:edit.escape} om het onderdeel los te laten.",
+]
 point = { at = { page = "Control circuit", x = 120, y = 104 } }
 expect = { count = { kind = "symbol", page = "Control circuit", at_least = 8 } }
 solve = [ { place = { symbol = "iec/contacts/no", parent = "-K1", page = "Control circuit", x = 120, y = 104 } } ]
@@ -64,9 +130,18 @@ solve = [ { place = { symbol = "iec/contacts/no", parent = "-K1", page = "Contro
 [[step]]
 id = "read-image"
 title = "Read the contact image"
+title_nl = "Lees het contactbeeld"
 text = """
-Under the coil, the {tip:contact-image} now shows the main contacts, 13-14 and 23-24, each with its page and column.
-This is how a reader of the printed drawing finds each contact.
+Under the coil, the {tip:contact-image} lists the contacts of -K1 for anyone reading the printed drawing. It now reads: **1-2 3-4 5-6 1.2** (the main contacts, page 1, column 2), **13-14 2.3** (the holding contact, page 2, column 3) and **23-24 2.3** (the new lamp contact, page 2, column 3).
 """
+text_nl = """
+Onder de spoel somt het {tip:contact-image} de contacten van -K1 op voor wie de afgedrukte tekening leest. Het leest nu: **1-2 3-4 5-6 1.2** (de hoofdcontacten, pagina 1, kolom 2), **13-14 2.3** (het houdcontact, pagina 2, kolom 3) en **23-24 2.3** (het nieuwe lampcontact, pagina 2, kolom 3).
+"""
+how = [
+  "Look under the coil -K1. The three groups of numbers are the contacts, each followed by the page and the column where it sits.",
+]
+how_nl = [
+  "Kijk onder de spoel -K1. De drie groepen nummers zijn de contacten, elk gevolgd door de pagina en kolom waar het staat.",
+]
 point = { at = { device = "-K1" } }
 pause = true
