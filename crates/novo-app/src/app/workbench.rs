@@ -83,6 +83,8 @@ pub(crate) struct Workbench {
     pub(super) macro_save: Option<super::macro_actions::SaveDraft>,
     /// The Place macro window.
     pub(super) macro_place: super::macro_actions::PlaceWindow,
+    /// The Edit macro parameters window.
+    pub(super) macro_editor: super::macro_editor::MacroEditor,
     /// The Project settings window (drawing standard) is open.
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
@@ -244,6 +246,7 @@ impl Default for Workbench {
             parts: None,
             macro_save: None,
             macro_place: Default::default(),
+            macro_editor: Default::default(),
             project_settings: false,
             issue: None,
             compare: None,
@@ -350,6 +353,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.override_marks",
     "macro.save",
     "macro.place",
+    "macro.edit",
     "edit.rename",
     "edit.escape",
     "nav.next_page",
@@ -479,6 +483,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "draw.tidy",
     "macro.browser",
     "macro.import",
+    "macro.export_pack",
     "project.options",
     "project.variant",
     "project.generate",
@@ -825,6 +830,7 @@ impl NovoApp {
             "view.override_marks" => self.wb.override_marks ^= true,
             "macro.save" => self.open_macro_save(argument),
             "macro.place" => self.open_macro_place(argument),
+            "macro.edit" => self.open_macro_editor(argument),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
             "edit.delete" => self.editor_key(EditorKey::Delete),
             "nav.next_page" | "nav.previous_page" => {
@@ -1133,6 +1139,7 @@ impl NovoApp {
             "draw.tidy" => self.tidy_selection(),
             "macro.browser" => self.wb.macros.show(),
             "macro.import" => self.macro_import(),
+            "macro.export_pack" => self.macro_export_pack(),
             "project.options" => self.open_options(),
             "project.variant" => self.switch_variant(argument),
             "project.generate" => self.open_generate(),

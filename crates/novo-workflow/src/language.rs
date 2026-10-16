@@ -111,6 +111,11 @@ pub const DUTCH: &[Aliases] = &[
     nl("macro.browser", &["bibliotheek"], &["macro's", "macros"]),
     nl("macro.import", &["macro importeren"], &["importeer macro"]),
     nl(
+        "macro.export_pack",
+        &["macropakket exporteren"],
+        &["exporteer macro's", "macropakket", "macro pakket"],
+    ),
+    nl(
         "parts.browser",
         &["onderdelen"],
         &["artikelen", "onderdeel"],
@@ -236,6 +241,11 @@ pub const DUTCH: &[Aliases] = &[
     nl("edit.paste_in_place", &[], &["plakken op dezelfde plek"]),
     nl("edit.duplicate", &[], &["dupliceren", "kopie"]),
     nl("macro.save", &["macro opslaan"], &["opslaan als macro"]),
+    nl(
+        "macro.edit",
+        &["macro bewerken"],
+        &["bewerk macro", "macroparameters", "parameters bewerken"],
+    ),
     nl(
         "macro.place",
         &["macro plaatsen"],

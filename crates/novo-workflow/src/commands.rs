@@ -263,6 +263,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "macro.export_pack",
+            "Export macro pack",
+            "Project",
+            &["macro", "pack", "export", "kcmacropack", "share", "team"],
+            Needs::Nothing,
+        ),
+        &["export macros", "macro pack"],
+    ),
+    verb(
+        cmd(
             "app.preferences",
             "Preferences",
             "Project",
@@ -724,6 +734,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Page,
         ),
         &["place macro", "macro"],
+    ),
+    verb(
+        cmd(
+            "macro.edit",
+            "Edit macro parameters",
+            "Edit",
+            &[
+                "macro",
+                "block",
+                "parameter",
+                "default",
+                "author",
+                "library",
+            ],
+            Needs::Nothing,
+        ),
+        &["edit macro"],
     ),
     cmd(
         "edit.select_all",

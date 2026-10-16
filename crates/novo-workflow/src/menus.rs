@@ -127,6 +127,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("plc.overview", under("Draw", "PLC")),
     ("macro.save", under("Draw", "Macros")),
     ("macro.place", under("Draw", "Macros")),
+    ("macro.edit", under("Draw", "Macros")),
+    ("macro.export_pack", at("File")),
     ("terminal.connect", under("Draw", "Terminals")),
     ("terminal.disconnect", under("Draw", "Terminals")),
     ("terminal.toggle_pe", under("Draw", "Terminals")),
