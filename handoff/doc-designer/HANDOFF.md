@@ -11,3 +11,6 @@ Decisions: templates never store rows (live data only); unknown fields print as 
 Not done: the editor UI and the menu/command registration (only `designer::ENTRY` exists), writing templates into a project from the app, barcodes and images, label printer sheets.
 
 Contacts: reviewer R2 and integration lead A (cse_01FiLvRBKEcNNHbQEGhYyL1S); roster in coordination/threads.md.
+
+## DOC-2 (languages)
+Branch `claude/doc-2-languages` from main 2f8ad05. Engine in `crates/novo-reports/src/i18n/`; keys are the English texts, `{name}` keys are patterns (`Line {n}`), project entries win over `nl.json`, unknown text prints in English. Tests: `cargo test -p novo-reports --test i18n`, `cargo test -p novo-pdf --test language`, `cargo test -p novo-app languages`. App: `app/languages.rs`, command `project.languages` (File menu, palette "Report languages"). Every PDF call site in novo-app sets `language: self.report_translator()`. Not done: see ROADMAP DOC-2 Next.

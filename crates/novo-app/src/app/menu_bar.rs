@@ -139,6 +139,13 @@ impl NovoApp {
                         }
                     }
                     MenuItem::Submenu { name, items } => {
+                        // The lesson steps only exist while a lesson runs;
+                        // outside one they would be permanently greyed.
+                        if *name == "Lesson"
+                            && items.iter().all(|i| self.command_unavailable(i).is_some())
+                        {
+                            continue;
+                        }
                         ui.menu_button(*name, |ui| {
                             for info in items {
                                 self.command_row(ui, info);

@@ -216,11 +216,28 @@ fn big_button(ui: &mut egui::Ui, large: bool, text: &str) -> egui::Response {
 
 fn progress_bar(ui: &mut egui::Ui, title: &str, p: Progress) {
     let fraction = (p.percent() / 100.0) as f32;
-    let mut text = format!("{title}: {}/{} done", p.done(), p.total);
+    let mut right = format!("{}/{}", p.done(), p.total);
     if p.failed > 0 {
-        text.push_str(&format!(" · {} failed", p.failed));
+        right.push_str(&format!(" · {} failed", p.failed));
     }
-    ui.add(egui::ProgressBar::new(fraction).text(text));
+    let palette = novo_theme::Palette::of(ui);
+    ui.horizontal(|ui| {
+        ui.label(egui::RichText::new(title).color(palette.text_secondary));
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(
+                egui::RichText::new(right)
+                    .monospace()
+                    .color(palette.text_primary),
+            );
+        });
+    });
+    let (rect, _) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), 6.0), egui::Sense::hover());
+    ui.painter().rect_filled(rect, 3, palette.sunken);
+    let mut done = rect;
+    done.set_width(rect.width() * fraction.clamp(0.0, 1.0));
+    ui.painter().rect_filled(done, 3, palette.success);
+    ui.add_space(4.0);
 }
 
 /// Where a click on `info` takes the drawing: its page and, for a device or
@@ -344,15 +361,9 @@ impl NovoApp {
             };
             let project = doc.project();
             mode.large = self.settings.large_buttons;
-            ui.horizontal_wrapped(|ui| {
-                ui.weak("By");
-                let who = ui.add(egui::TextEdit::singleline(&mut mode.who).desired_width(80.0));
-                note_ctx(ui.ctx(), "commissioning.who", "By field", &who);
-                if ui.checkbox(&mut mode.large, "Large buttons").changed() {
-                    self.settings.large_buttons = mode.large;
-                }
+            ui.horizontal(|ui| {
                 for (tab, label) in [(Tab::Checks, "Checks"), (Tab::Punch, "Punch list")] {
-                    let chip = ui.selectable_label(mode.tab == tab, label);
+                    let chip = novo_theme::widgets::chip(ui, label, mode.tab == tab);
                     if tab == Tab::Punch {
                         note_ctx(ui.ctx(), "commissioning.punch", "Punch tab", &chip);
                     }
@@ -361,6 +372,20 @@ impl NovoApp {
                     }
                 }
             });
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.add_sized(
+                    [64.0, 22.0],
+                    egui::Label::new(egui::RichText::new("Signed by").weak()),
+                );
+                let who = ui.add(
+                    egui::TextEdit::singleline(&mut mode.who)
+                        .hint_text("Name for the sign-off")
+                        .desired_width(f32::INFINITY),
+                );
+                note_ctx(ui.ctx(), "commissioning.who", "By field", &who);
+            });
+            ui.add_space(6.0);
             progress_bar(
                 ui,
                 "Project",
@@ -373,13 +398,18 @@ impl NovoApp {
                     progress(project, &mode.store, Scope::Page(page)),
                 );
             }
-            ui.horizontal_wrapped(|ui| {
-                ui.weak("Report");
+            ui.add_space(2.0);
+            ui.horizontal(|ui| {
+                ui.add_sized(
+                    [64.0, 22.0],
+                    egui::Label::new(egui::RichText::new("Report").weak()),
+                );
                 for (label, format) in [
                     ("PDF", ReportFileFormat::Pdf),
                     ("CSV", ReportFileFormat::Csv(CsvOptions::default())),
                 ] {
-                    let button = big_button(ui, mode.large, label)
+                    let button = ui
+                        .add(egui::Button::new(label).min_size(egui::vec2(52.0, 24.0)))
                         .on_hover_text("Write the commissioning report next to the project file");
                     if label == "PDF" {
                         note_ctx(
@@ -394,6 +424,9 @@ impl NovoApp {
                     }
                 }
             });
+            if ui.checkbox(&mut mode.large, "Large buttons").changed() {
+                self.settings.large_buttons = mode.large;
+            }
             ui.add_space(4.0);
             match mode.tab {
                 Tab::Checks => checks_tab(ui, mode, project, current, &mut go),
@@ -464,6 +497,7 @@ impl NovoApp {
         let options = ReportPdfOptions {
             title: format!("{name}, commissioning"),
             footer_right: now().chars().take(10).collect(),
+            language: self.report_translator(),
             ..ReportPdfOptions::default()
         };
         let result = novo_pdf::report_bytes(&report, format, &options)
@@ -655,9 +689,24 @@ fn checks_tab(
         .auto_shrink([false, true])
         .show(ui, |ui| {
             for info in &on_page {
-                let text = sized(
-                    mode.large,
-                    format!("{} {}", target_glyph(&mode.store, info.target), info.label),
+                let glyph = target_glyph(&mode.store, info.target);
+                let tint = match glyph {
+                    "✖" => novo_theme::tokens::ERROR,
+                    "✔" => novo_theme::tokens::SUCCESS,
+                    _ => novo_theme::tokens::TEXT_MUTED,
+                };
+                let size = if mode.large { TEXT_LARGE } else { 13.0 };
+                let font = egui::FontId::proportional(size);
+                let mut text = egui::text::LayoutJob::default();
+                text.append(
+                    &format!("{glyph}  "),
+                    0.0,
+                    egui::TextFormat::simple(font.clone(), tint),
+                );
+                text.append(
+                    &info.label,
+                    0.0,
+                    egui::TextFormat::simple(font, ui.visuals().text_color()),
                 );
                 let row = egui::Button::selectable(mode.selected == Some(info.target), text)
                     .min_size(egui::vec2(ui.available_width(), touch(mode.large) * 0.7));

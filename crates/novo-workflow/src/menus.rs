@@ -44,7 +44,8 @@ fn group_default(group: &str) -> Option<MenuPlace> {
         "Navigate" => under("View", "Go to"),
         "View" => at("View"),
         "Check" => at("Check"),
-        "Export" => under("File", "Export"),
+        // Anything of the Export group not listed in PLACEMENTS lands here.
+        "Export" => under("File", "Export other"),
         _ => return None,
     })
 }
@@ -63,6 +64,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.remove_background", under("File", "Import")),
     ("file.import_aml", under("File", "Import")),
     ("file.import_eplan", under("File", "Import")),
+    ("parts.import_eplan", under("File", "Import")),
     ("file.import_dwg", under("File", "Import")),
     ("file.choose_dwg_converter", under("File", "Import")),
     ("file.eplan_export_script", under("File", "Import")),
@@ -70,8 +72,44 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("plc.import_tags", under("File", "Import")),
     ("help.walkthrough", at("Help")),
     ("help.show_hints", at("Help")),
+    ("help.whats_new", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
+    // File > Export, split by what the file is for.
+    ("export.pdf", under("File", "Export drawings")),
+    ("export.pdf_page", under("File", "Export drawings")),
+    ("export.variant_pdf", under("File", "Export drawings")),
+    ("export.dxf_page", under("File", "Export drawings")),
+    ("export.dxf_all", under("File", "Export drawings")),
+    ("export.step", under("File", "Export drawings")),
+    ("export.plate", under("File", "Export drawings")),
+    ("export.plate_dxf", under("File", "Export drawings")),
+    ("export.wiring_dxf", under("File", "Export drawings")),
+    ("export.bom", under("File", "Export reports")),
+    ("export.change_report", under("File", "Export reports")),
+    ("export.commissioning", under("File", "Export reports")),
+    ("export.standards_report", under("File", "Export reports")),
+    ("export.standards_xlsx", under("File", "Export reports")),
+    ("export.wirecut", under("File", "Export production")),
+    ("export.wirecut_xlsx", under("File", "Export production")),
+    ("export.wirecut_page", under("File", "Export production")),
+    ("export.plc_csv", under("File", "Export PLC")),
+    ("export.plc_plcopen", under("File", "Export PLC")),
+    ("export.plc_tia", under("File", "Export PLC")),
+    ("export.plc_studio5000", under("File", "Export PLC")),
+    ("export.plc_address_plan", under("File", "Export PLC")),
+    ("export.aml", under("File", "Export interchange")),
+    ("export.eplan", under("File", "Export interchange")),
+    ("export.sheets", under("File", "Export interchange")),
+    ("export.sheets_csv", under("File", "Export interchange")),
+    ("export.spec", under("File", "Export interchange")),
+    // Reports
+    ("report.wirecut", at("Reports")),
+    ("report.io", at("Reports")),
+    ("report.cable_schedule", at("Reports")),
+    ("report.plugs", at("Reports")),
+    ("report.add_page", at("Reports")),
+    ("export.report_pdf", under("Reports", "Export")),
     // Edit
     ("edit.rotate", at("Edit")),
     ("edit.mirror", at("Edit")),
@@ -82,6 +120,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("xref.link", at("Draw")),
     ("plc.add_card", under("Draw", "PLC")),
     ("plc.to_plc", under("Draw", "PLC")),
+    ("plc.overview", under("Draw", "PLC")),
     ("macro.save", under("Draw", "Macros")),
     ("macro.place", under("Draw", "Macros")),
     ("terminal.connect", under("Draw", "Terminals")),
@@ -91,6 +130,18 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("terminal.strip_up", under("Draw", "Terminals")),
     ("terminal.strip_down", under("Draw", "Terminals")),
     ("terminal.strip_lowest", under("Draw", "Terminals")),
+    ("terminal.add_spares", under("Draw", "Terminal strips")),
+    ("terminal.rename", under("Draw", "Terminal strips")),
+    ("terminal.renumber", under("Draw", "Terminal strips")),
+    ("terminal.join_duplicates", under("Draw", "Terminal strips")),
+    ("terminal.set_kind", under("Draw", "Terminal strips")),
+    ("terminal.order_up", under("Draw", "Terminal strips")),
+    ("terminal.order_down", under("Draw", "Terminal strips")),
+    ("terminal.style", under("Draw", "Terminal strips")),
+    (
+        "terminal.restore_declined",
+        under("Draw", "Terminal strips"),
+    ),
     // View
     ("view.schematic", under("View", "Workspace")),
     ("view.cabinet", under("View", "Workspace")),
@@ -103,30 +154,51 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.iso", under("View", "3D")),
     ("view.front", under("View", "3D")),
     ("view.top", under("View", "3D")),
-    ("view.cabinet_table", under("View", "Workspace")),
-    ("cabinet.rails", under("View", "Workspace")),
-    ("cabinet.rules", under("View", "Workspace")),
-    ("cabinet.plate", under("View", "Workspace")),
-    ("cabinet.cutlist", under("View", "Workspace")),
-    ("cabinet.door", under("View", "Workspace")),
+    ("view.cabinet_table", under("View", "Cabinet")),
+    ("cabinet.rails", under("View", "Cabinet")),
+    ("cabinet.rules", under("View", "Cabinet")),
+    ("cabinet.plate", under("View", "Cabinet")),
+    ("cabinet.cutlist", under("View", "Cabinet")),
+    ("cabinet.door", under("View", "Cabinet")),
     ("view.terminals_drawer", under("View", "Panels")),
     ("view.cables_drawer", under("View", "Panels")),
     ("view.devices_drawer", under("View", "Panels")),
     ("view.pin_outline", under("View", "Panels")),
     ("view.reports", under("View", "Workspace")),
+    ("view.commissioning", under("View", "Workspace")),
+    ("cabinet.place-all", under("View", "Cabinet")),
+    ("cabinet.size-enclosure", under("View", "Cabinet")),
+    ("cabinet.enclosures", under("View", "Cabinet")),
+    ("cabinet.routes", under("View", "Cabinet")),
+    // Layers: what is drawn on top of the page
+    ("view.toggle_marks", under("View", "Layers")),
+    ("view.override_marks", under("View", "Layers")),
+    ("view.changes", under("View", "Layers")),
+    ("view.background", under("View", "Layers")),
+    ("view.background_place", under("View", "Layers")),
+    ("heat.toggle", under("View", "Layers")),
+    ("heat.airflow", under("View", "Layers")),
+    ("heat.contours", under("View", "Layers")),
+    // Lessons live with Help
+    ("help.learn", at("Help")),
+    ("learn.next", under("Help", "Lesson")),
+    ("learn.back", under("Help", "Lesson")),
+    ("learn.restart", under("Help", "Lesson")),
+    ("learn.close", under("Help", "Lesson")),
     // Simulate
     ("sim.live", at("Simulate")),
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
     ("view.protection", at("Simulate")),
+    ("heat.simulate", under("Simulate", "Heat")),
     // Reports
-    ("export.reports", at("Reports")),
-    ("export.assembly", at("Reports")),
+    ("export.reports", under("Reports", "Export")),
+    ("export.assembly", under("Reports", "Export")),
     ("view.bench", at("Reports")),
-    ("export.bench_cut", at("Reports")),
-    ("export.ferrules", at("Reports")),
-    ("export.labels", at("Reports")),
+    ("export.bench_cut", under("Reports", "Export")),
+    ("export.ferrules", under("Reports", "Export")),
+    ("export.labels", under("Reports", "Export")),
     ("report.toc", at("Reports")),
     ("report.bom", at("Reports")),
     ("report.devices", at("Reports")),
@@ -225,6 +297,18 @@ pub fn entries(menu: &str) -> Vec<(&'static CommandInfo, MenuPlace)> {
 /// Commands drawn at the bottom of their menu.
 const LAST: &[&str] = &["file.quit"];
 
+/// Submenus drawn first, in this order; others follow in registry order.
+const SUBMENU_ORDER: &[&str] = &[
+    "Workspace",
+    "Layers",
+    "Cabinet",
+    "3D",
+    "Panels",
+    "Go to",
+    "Heat",
+    "Lesson",
+];
+
 /// One row of a drawn menu.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MenuItem {
@@ -256,6 +340,13 @@ pub fn layout(menu: &str) -> Vec<MenuItem> {
             plain.push(MenuItem::Command(info));
         }
     }
+    let rank = |name: &str| {
+        SUBMENU_ORDER
+            .iter()
+            .position(|n| *n == name)
+            .unwrap_or(SUBMENU_ORDER.len())
+    };
+    subs.sort_by_key(|(name, _)| rank(name));
     let mut out = plain;
     let blocks = [
         subs.into_iter()
@@ -327,15 +418,12 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
                 "report.cables",
                 "report.cutlist",
                 "report.labels",
+                "report.wirecut",
+                "report.io",
+                "report.cable_schedule",
+                "report.plugs",
             ],
-            &["export.reports"],
-            &[
-                "view.bench",
-                "export.bench_cut",
-                "export.ferrules",
-                "export.labels",
-                "export.assembly",
-            ],
+            &["report.add_page", "view.bench"],
         ],
     ),
     (
@@ -374,14 +462,21 @@ const SUB_FIRST: &[(&str, &[&str])] = &[
             "Pages",
             "Import",
             "Revisions",
-            "Export",
+            "Export drawings",
+            "Export reports",
+            "Export production",
+            "Export PLC",
+            "Export interchange",
         ],
     ),
     (
         "Edit",
         &["Paste special", "Parts", "Wire numbers", "Renumber"],
     ),
-    ("Draw", &["Terminals", "Cables", "PLC", "Macros"]),
+    (
+        "Draw",
+        &["Terminals", "Terminal strips", "Cables", "PLC", "Macros"],
+    ),
 ];
 
 /// What the menu bar draws: [`layout`] with the plain rows in their
@@ -523,8 +618,16 @@ mod tests {
         );
         let export = file
             .iter()
-            .position(|i| matches!(i, MenuItem::Submenu { name: "Export", .. }))
-            .expect("an Export submenu");
+            .position(|i| {
+                matches!(
+                    i,
+                    MenuItem::Submenu {
+                        name: "Export drawings",
+                        ..
+                    }
+                )
+            })
+            .expect("an Export drawings submenu");
         let new = file
             .iter()
             .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
@@ -619,7 +722,7 @@ mod tests {
 
     /// A menu stays short enough for a 768 px window: the schematic-side
     /// menus show at most 14 plain rows and a submenu at most 12. View and
-    /// the Export submenu are regrouped in their own changes.
+    /// the Export submenus (capped at 10 by their own test) are left out.
     #[test]
     fn schematic_menus_are_not_long_lists() {
         for menu in MENUS {
@@ -634,10 +737,31 @@ mod tests {
             assert!(plain <= 14, "{menu} has {plain} plain rows");
             for item in &items {
                 if let MenuItem::Submenu { name, items } = item
-                    && *name != "Export"
+                    && !name.starts_with("Export")
                 {
                     assert!(items.len() <= 12, "{menu} > {name}: {}", items.len());
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn the_export_menu_is_split_and_every_export_has_a_submenu_of_its_own() {
+        for (info, p) in entries("File") {
+            if info.group == "Export" && info.id.starts_with("export.") {
+                let sub = p.submenu.unwrap();
+                assert!(
+                    sub.starts_with("Export ") && sub != "Export other",
+                    "{} lands in {sub:?}: give it a place in PLACEMENTS",
+                    info.id
+                );
+            }
+        }
+        for item in layout("File") {
+            if let MenuItem::Submenu { name, items } = item
+                && name.starts_with("Export")
+            {
+                assert!(items.len() <= 10, "{name} has {} entries", items.len());
             }
         }
     }
@@ -652,5 +776,22 @@ mod tests {
         assert_eq!(first("File"), "file.new");
         assert_eq!(first("Edit"), "edit.undo");
         assert_eq!(first("Draw"), "tool.place");
+    }
+
+    #[test]
+    fn the_new_report_and_export_commands_have_their_homes() {
+        let home = |id: &str| place(crate::commands::get(id).unwrap()).unwrap();
+        for id in [
+            "report.wirecut",
+            "report.io",
+            "report.cable_schedule",
+            "report.plugs",
+            "report.add_page",
+        ] {
+            assert_eq!(home(id), at("Reports"), "{id}");
+        }
+        assert_eq!(home("export.report_pdf"), under("Reports", "Export"));
+        assert_eq!(home("export.pdf_page"), under("File", "Export drawings"));
+        assert_eq!(home("export.plate_dxf"), under("File", "Export drawings"));
     }
 }
