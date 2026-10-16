@@ -81,6 +81,23 @@ are written against a project or device property and stay quiet without it.
 | `DisplayedTag` (F04) | A typed text on a device symbol that starts with `-`, `=` or `+` and is neither the full tag nor the short tag. | texts |
 | `StructureCode` (H01) | With project property `structure.list` = `complete`, a function or location code (on devices or pages) that no structure node names, parents included. | structure list |
 
+### 2.2 The last four (`more_rules.rs`, tests in `tests/more_rules.rs`)
+
+Findings C08, C12, C16, C18, from the one-sentence rules only. Each reads a property and
+stays quiet without it, except C18 (information).
+
+| Kind | Rule | Reads |
+| --- | --- | --- |
+| `RelaySize` (C08) | A relay that declares its family's sizes (`relay.sizes`, text such as `2,4,8`) and its contacts (`contacts.no`, `.nc`, `.co`) while a smaller size would hold the auxiliary contacts drawn. | device properties, contact symbols |
+| `CableText` (C12) | A cable whose description (or part description) holds a text such as `4G1.5` or `3x2.5`: the cores (shields excluded) must match the count and the cross-section, `G` needs a green-yellow core, `x` must have none. | cable description, cores |
+| `NeutralUse` (C16) | With project property `neutral.rule` = `supply-and-external`: a device on a neutral net that is not a terminal or plug and does not carry `supply` or `external` = true. | netlist potentials, device properties |
+| `PlugPins` (C18) | Information: one line per plug with the pins wired and free. | connector devices |
+
+Where the user sets what a rule needs: C16 is the checkbox "Neutral only to supply and external
+devices" in File > Project settings, next to the other extra design checks; `relay.sizes`,
+`supply` and `external` are device properties (Inspector > Properties). C12 reads the cable
+description the user already types in the cable editor.
+
 Where the user sets what a rule needs:
 
 - **F01 and H01:** File > Project settings (command `project.standard`), section

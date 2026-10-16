@@ -55,6 +55,10 @@
 //! | [`MotorPhases`](ProblemKind::MotorPhases) | warning | A motor whose windings cannot get three different phases |
 //! | [`CoilSupply`](ProblemKind::CoilSupply) | warning | A coil not fed between a control voltage and its return |
 //! | [`PlugPinOneSided`](ProblemKind::PlugPinOneSided) | warning | A plug pin wired on one half only |
+//! | [`RelaySize`](ProblemKind::RelaySize) | warning | A relay larger than the contacts drawn need, when its sizes are declared |
+//! | [`CableText`](ProblemKind::CableText) | warning | A cable whose cores, cross-section or protective core disagree with its `4G1.5` text |
+//! | [`NeutralUse`](ProblemKind::NeutralUse) | warning | A device on a neutral net that is neither supply nor external (opt-in) |
+//! | [`PlugPins`](ProblemKind::PlugPins) | info | Overview of the pins of a plug, wired and free |
 //! | [`TagRule`](ProblemKind::TagRule) | warning | A device name that breaks the page and column rule (opt-in) |
 //! | [`DisplayedTag`](ProblemKind::DisplayedTag) | warning | A tag text on a symbol that is not the device's tag |
 //! | [`StructureCode`](ProblemKind::StructureCode) | warning | A function or location code not in a structure list declared complete |
@@ -96,6 +100,7 @@ mod connection_rules;
 mod contacts;
 mod door;
 mod house_rules;
+mod more_rules;
 mod physical;
 pub mod protection;
 pub mod standards;
@@ -242,6 +247,14 @@ pub enum ProblemKind {
     CoilSupply,
     /// A plug pin wired on one half only (C17).
     PlugPinOneSided,
+    /// A relay larger than the auxiliary contacts drawn need (C08).
+    RelaySize,
+    /// A cable whose cores disagree with its text such as `4G1.5` (C12).
+    CableText,
+    /// A device on a neutral net that is neither supply nor external, when selected (C16).
+    NeutralUse,
+    /// An overview of the pins of a plug (C18).
+    PlugPins,
     /// A device name that breaks the project's page-and-column rule, when selected (F01).
     TagRule,
     /// A tag text on a symbol that differs from the device's tag (F04).
@@ -291,7 +304,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 57] = [
+    pub const ALL: [ProblemKind; 61] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -346,6 +359,10 @@ impl ProblemKind {
         ProblemKind::MotorPhases,
         ProblemKind::CoilSupply,
         ProblemKind::PlugPinOneSided,
+        ProblemKind::RelaySize,
+        ProblemKind::CableText,
+        ProblemKind::NeutralUse,
+        ProblemKind::PlugPins,
         ProblemKind::TagRule,
         ProblemKind::DisplayedTag,
         ProblemKind::StructureCode,
@@ -402,6 +419,9 @@ impl ProblemKind {
             | ProblemKind::MotorPhases
             | ProblemKind::CoilSupply
             | ProblemKind::PlugPinOneSided
+            | ProblemKind::RelaySize
+            | ProblemKind::CableText
+            | ProblemKind::NeutralUse
             | ProblemKind::TagRule
             | ProblemKind::DisplayedTag
             | ProblemKind::StructureCode
@@ -409,6 +429,7 @@ impl ProblemKind {
             ProblemKind::MissingPart
             | ProblemKind::UnplacedDevice
             | ProblemKind::DepthUnknown
+            | ProblemKind::PlugPins
             | ProblemKind::SameShortTag => Severity::Info,
         }
     }
@@ -470,6 +491,10 @@ impl ProblemKind {
             ProblemKind::MotorPhases => "Motor phases",
             ProblemKind::CoilSupply => "Coil supply",
             ProblemKind::PlugPinOneSided => "Plug pin on one half",
+            ProblemKind::RelaySize => "Relay too large",
+            ProblemKind::CableText => "Cable text",
+            ProblemKind::NeutralUse => "Neutral use",
+            ProblemKind::PlugPins => "Plug pins",
             ProblemKind::TagRule => "Tag rule",
             ProblemKind::DisplayedTag => "Displayed tag",
             ProblemKind::StructureCode => "Unknown structure code",
@@ -533,6 +558,10 @@ impl ProblemKind {
             ProblemKind::MotorPhases => "check.motor_phases",
             ProblemKind::CoilSupply => "check.coil_supply",
             ProblemKind::PlugPinOneSided => "check.plug_pin_one_sided",
+            ProblemKind::RelaySize => "check.relay_size",
+            ProblemKind::CableText => "check.cable_text",
+            ProblemKind::NeutralUse => "check.neutral_use",
+            ProblemKind::PlugPins => "check.plug_pins",
             ProblemKind::TagRule => "check.tag_rule",
             ProblemKind::DisplayedTag => "check.displayed_tag",
             ProblemKind::StructureCode => "check.structure_code",
@@ -675,6 +704,10 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     house_rules::conductor_continuity(&cx, netlist, &mut problems);
     house_rules::motor_phases(&cx, netlist, &mut problems);
     house_rules::coil_supply(&cx, netlist, &mut problems);
+    more_rules::relay_size(&cx, &mut problems);
+    more_rules::cable_text(&cx, &mut problems);
+    more_rules::neutral_use(&cx, netlist, &mut problems);
+    more_rules::plug_overview(&cx, &mut problems);
     house_rules::tag_rule(&cx, &mut problems);
     house_rules::displayed_tags(&cx, &mut problems);
     house_rules::structure_codes(&cx, &mut problems);
