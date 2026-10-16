@@ -264,7 +264,7 @@ pub(super) fn together(project: &Project, symbol: SymbolId) -> Vec<SymbolId> {
 }
 
 /// A pushbutton or foot switch: it springs back when let go.
-fn is_momentary(project: &Project, symbol: SymbolId) -> bool {
+pub(super) fn is_momentary(project: &Project, symbol: SymbolId) -> bool {
     project.symbol(symbol).is_some_and(|s| {
         let name = s.symbol.0.rsplit('/').next().unwrap_or("");
         s.symbol.0.contains("/operators/")
@@ -694,6 +694,10 @@ impl NovoApp {
 
         // Pole badges: a click closes or opens the pole.
         let mut clicked: Option<(SymbolId, usize, bool)> = None;
+        // The first badge of each kind, for lessons to point at.
+        let mut pole_rect: Option<egui::Rect> = None;
+        let mut coil_rect: Option<egui::Rect> = None;
+        let mut output_rect: Option<egui::Rect> = None;
         let mut pressed: Option<(SymbolId, usize)> = None;
         for badge in &badges {
             let at = to_screen(badge.at);
@@ -726,6 +730,7 @@ impl NovoApp {
                             egui::Stroke::new(1.5, tokens::TEXT_MUTED),
                         );
                     }
+                    pole_rect.get_or_insert(rect);
                     let name = names.get(&badge.symbol).map_or("", String::as_str);
                     let state = match (badge.closed, badge.mixed) {
                         (true, true) => "closed, driven apart from its other poles",
@@ -753,7 +758,7 @@ impl NovoApp {
         }
 
         // Coil badges: a click switches the coil on or off by hand.
-        let mut coil_clicked: Option<SymbolId> = None;
+        let mut coil_clicked: Option<(SymbolId, bool)> = None;
         for badge in &coils {
             let at = to_screen(badge.at);
             if !canvas.expand(BADGE).contains(at) {
@@ -781,6 +786,11 @@ impl NovoApp {
                             egui::StrokeKind::Inside,
                         );
                     }
+                    if badge.output {
+                        output_rect.get_or_insert(rect);
+                    } else {
+                        coil_rect.get_or_insert(rect);
+                    }
                     let name = symbol_name(project, badge.symbol);
                     let tip = format!(
                         "{name} · {} {} · click to switch it {}",
@@ -789,7 +799,7 @@ impl NovoApp {
                         if badge.on { "off" } else { "on" },
                     );
                     if response.on_hover_text(tip).clicked() {
-                        coil_clicked = Some(badge.symbol);
+                        coil_clicked = Some((badge.symbol, badge.output));
                     }
                 });
         }
@@ -855,7 +865,7 @@ impl NovoApp {
         let mut open_plc = false;
         let plc_running = self.wb.live.plc.is_running();
         let mut open_motor: Option<SymbolId> = None;
-        egui::Area::new(egui::Id::new("live_card"))
+        let card = egui::Area::new(egui::Id::new("live_card"))
             .order(egui::Order::Middle)
             .fixed_pos(canvas.left_top() + egui::vec2(12.0, 10.0))
             .show(ctx, |ui| {
@@ -934,6 +944,16 @@ impl NovoApp {
                 });
             });
 
+        for (id, rect, label) in [
+            ("live.card", Some(card.response.rect), "Live potentials"),
+            ("live.pole", pole_rect, "Pole badge"),
+            ("live.coil", coil_rect, "Coil badge"),
+            ("live.output", output_rect, "Output badge"),
+        ] {
+            if let Some(rect) = rect {
+                self.anchor(id, rect, label);
+            }
+        }
         // Draws again only when something changed; egui repaints on input.
         if open_plc {
             self.wb.live.plc.window = true;
@@ -954,16 +974,12 @@ impl NovoApp {
             self.wb.live.forced.clear();
             self.wb.live.clock.reset();
         }
-        if let Some(coil) = coil_clicked
-            && !self.wb.live.forced.remove(&coil)
-        {
-            self.wb.live.forced.insert(coil);
+        if let Some((coil, output)) = coil_clicked {
+            self.live_coil_clicked(coil, output);
         }
         match pressed {
             Some((symbol, group)) if !driven.contains(&symbol) => {
-                if let Some(doc) = self.backend.document() {
-                    self.wb.live.press(doc.project(), symbol, group);
-                }
+                self.live_pole_pressed(symbol, group);
                 ctx.request_repaint();
             }
             None if self.wb.live.held.is_some() => {
@@ -977,13 +993,40 @@ impl NovoApp {
         if let Some((symbol, group, together)) = clicked
             && !driven.contains(&symbol)
         {
-            if together {
-                if let Some(doc) = self.backend.document() {
-                    self.wb.live.flip_together(doc.project(), symbol, group);
-                }
-            } else {
-                self.wb.live.flip(symbol, group);
+            self.live_pole_clicked(symbol, group, together);
+        }
+    }
+
+    /// A click on a coil or output badge: the coil is switched by hand.
+    pub(super) fn live_coil_clicked(&mut self, coil: SymbolId, output: bool) {
+        self.learn_event(novo_learn::Event::Clicked(
+            if output { "live.output" } else { "live.coil" }.to_owned(),
+        ));
+        if !self.wb.live.forced.remove(&coil) {
+            self.wb.live.forced.insert(coil);
+        }
+    }
+
+    /// A pushbutton's badge goes down: its poles switch until it is let go.
+    pub(super) fn live_pole_pressed(&mut self, symbol: SymbolId, group: usize) {
+        if self.wb.live.held.is_none() {
+            self.learn_event(novo_learn::Event::Clicked("live.pole".to_owned()));
+        }
+        if let Some(doc) = self.backend.document() {
+            self.wb.live.press(doc.project(), symbol, group);
+        }
+    }
+
+    /// A click on a pole badge: `together` flips every pole of the symbol
+    /// (a plain click), else this pole only (Shift+click).
+    pub(super) fn live_pole_clicked(&mut self, symbol: SymbolId, group: usize, together: bool) {
+        self.learn_event(novo_learn::Event::Clicked("live.pole".to_owned()));
+        if together {
+            if let Some(doc) = self.backend.document() {
+                self.wb.live.flip_together(doc.project(), symbol, group);
             }
+        } else {
+            self.wb.live.flip(symbol, group);
         }
     }
 }

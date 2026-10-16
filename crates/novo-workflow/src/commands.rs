@@ -1380,6 +1380,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.standards_report",
+            "Export standards compliance report",
+            "Export",
+            &[
+                "iec 60204",
+                "ul 508a",
+                "nfpa 79",
+                "compliance",
+                "customer",
+                "checklist",
+            ],
+            Needs::Project,
+        ),
+        &["export standards", "standards report"],
+    ),
+    verb(
+        cmd(
             "export.plate",
             "Export plate drawing",
             "Export",

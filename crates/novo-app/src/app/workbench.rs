@@ -25,6 +25,7 @@ use novo_xref::{LiveXref, Navigator, Place, Reference};
 
 use novo_view3d::camera::ViewPreset;
 
+use super::standards_report::StandardsFormat;
 use super::view3d::Pending;
 use super::workspace::Workspace;
 use super::{Level, NovoApp};
@@ -322,6 +323,7 @@ const APP_COMMANDS: &[&str] = &[
     "export.pdf",
     "export.change_report",
     "export.commissioning",
+    "export.standards_report",
     "export.plate",
     "export.assembly",
     "export.sheets",
@@ -819,6 +821,9 @@ impl NovoApp {
                 self.export_change_report();
             }
             "export.commissioning" => self.export_commissioning_pdf(),
+            "export.standards_report" => {
+                self.export_standards_report(StandardsFormat::Pdf);
+            }
             "export.plate" => {
                 self.export_plate_pdf();
             }
@@ -1043,6 +1048,9 @@ impl NovoApp {
             return;
         }
         let picked = self.with_field(|field, sources| field.show(ctx, canvas, sources));
+        if let Some(rect) = self.wb.field.rect() {
+            self.anchor("palette.field", rect, "Command field");
+        }
         if let Some(target) = picked {
             self.run_target(ctx, target);
         }
