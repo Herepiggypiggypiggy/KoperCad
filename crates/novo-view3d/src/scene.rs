@@ -226,6 +226,9 @@ pub struct Wire {
     /// Tube radius, mm.
     pub radius: f32,
     pub tint: Option<[u8; 3]>,
+    /// A second colour in bands along the tube (the green-yellow of a
+    /// protective conductor); `None` for a plain wire.
+    pub stripe: Option<[u8; 3]>,
     pub mark: Mark,
     pub label: Option<Arc<str>>,
 }
@@ -359,6 +362,7 @@ mod tests {
             points: vec![Vec3::new(0.0, 0.0, 0.0), Vec3::new(100.0, 50.0, 20.0)],
             radius: 1.0,
             tint: None,
+            stripe: None,
             mark: Mark::None,
             label: None,
         });

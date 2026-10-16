@@ -58,6 +58,7 @@ die verlaat het component, loopt langs de kanalen en gaat het andere component i
 """
 point = { ui = "cabinet.routes" }
 expect = { clicked = "cabinet.routes" }
+manual = "a click on the Routes toggle; no script clicks panel buttons yet"
 
 [[step]]
 id = "summary-line"
@@ -121,6 +122,7 @@ Er is niets met de hand aangepast; routes worden na elke wijziging opnieuw uit d
 """
 point = { ui = "cabinet.canvas" }
 expect = { signal = "cabinet_dropped" }
+solve = [ { cabinet_place = { device = "-F2", x = 115, y = 10 } } ]
 
 [[step]]
 id = "wire-rules"

@@ -2293,6 +2293,7 @@ dependencies = [
  "flate2",
  "glam",
  "naga",
+ "novo-checks",
  "novo-core",
  "novo-layout",
  "novo-routing",

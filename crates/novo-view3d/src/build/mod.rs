@@ -17,6 +17,7 @@ use std::sync::Arc;
 use glam::{Quat, Vec3};
 use novo_layout::state::CabinetLayout;
 
+use crate::appearance::DeviceClass;
 use crate::scene::{
     Group, GroupId, Item, ItemId, ItemKind, Mark, PlateFrame, Pose, Profile, Scene, Shape, Wire,
 };
@@ -105,6 +106,14 @@ pub enum WireKind {
     FreeAir,
 }
 
+/// The insulation colour of a wire: a body colour and, for a bi-colour wire,
+/// a stripe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WireColour {
+    pub body: [u8; 3],
+    pub stripe: Option<[u8; 3]>,
+}
+
 /// A routed wire: the plate path of a route and the ids of the ducts it lies
 /// in. A route of `novo-routing` converts 1:1. Paths are horizontal or
 /// vertical runs, as the routing engine makes them.
@@ -115,6 +124,9 @@ pub struct WireInput {
     pub points: Vec<(f64, f64)>,
     pub ducts: Vec<u64>,
     pub diameter_mm: Option<f64>,
+    /// The wire's own colour; `None` draws it in the neutral grey of a wire
+    /// whose colour is not known.
+    pub colour: Option<WireColour>,
 }
 
 /// A duct on the plate. `(x, y)` is the start, as on the model's `Rail`.
@@ -137,6 +149,8 @@ pub struct Inputs {
     pub ducts: Vec<DuctShape>,
     /// Device labels, for example `-K1`.
     pub labels: BTreeMap<u64, Arc<str>>,
+    /// Device family by id; drives the body colour.
+    pub classes: BTreeMap<u64, DeviceClass>,
 }
 
 /// Builder options.
@@ -285,6 +299,7 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
             Mark::None
         };
         item.label = inputs.labels.get(&p.id).cloned();
+        item.tint = inputs.classes.get(&p.id).map(|c| c.tint());
         scene.push(item);
     }
 
@@ -361,7 +376,8 @@ fn push_wire(scene: &mut Scene, w: &WireInput, ducts: &[DuctShape]) {
             .map(|&(x, y)| frame.world(x, y, z))
             .collect(),
         radius: (dia / 2.0) as f32,
-        tint: None,
+        tint: w.colour.map(|c| c.body),
+        stripe: w.colour.and_then(|c| c.stripe),
         // A wire in free air found no duct: flag it like the routing engine does.
         mark: if w.kind == WireKind::FreeAir {
             Mark::Outside

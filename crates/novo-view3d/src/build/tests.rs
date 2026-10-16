@@ -198,6 +198,7 @@ fn wires_are_runs_mid_duct_or_in_free_air() {
                 points: vec![(20.0, 250.0), (120.0, 250.0), (120.0, 200.0)],
                 ducts: vec![9],
                 diameter_mm: Some(4.0),
+                colour: None,
             },
             WireInput {
                 id: 2,
@@ -205,6 +206,7 @@ fn wires_are_runs_mid_duct_or_in_free_air() {
                 points: vec![(0.0, 0.0), (0.0, 10.0)],
                 ducts: vec![],
                 diameter_mm: None,
+                colour: None,
             },
         ],
         ..Options::default()
@@ -284,4 +286,15 @@ fn a_vertical_rail_runs_down_the_plate() {
     assert_eq!(rail.pose.rotation, Quat::from_rotation_z(FRAC_PI_2));
     let b = s.world_bounds(rail);
     assert!((b.size().y - 300.0).abs() < 1e-3);
+}
+
+#[test]
+fn a_device_takes_its_body_colour_from_its_family() {
+    let mut inp = inputs();
+    inp.classes.insert(5, DeviceClass::Switching);
+    let s = from_layout(&layout(), &inp, &Options::default());
+    let dev = s.get(id(ItemKind::Device, 5)).unwrap();
+    assert_eq!(dev.tint, Some(DeviceClass::Switching.tint()));
+    // No class known: the kind's own colour applies.
+    assert_eq!(build().get(id(ItemKind::Device, 5)).unwrap().tint, None);
 }

@@ -1021,6 +1021,7 @@ pub fn check_draw(
         approach_direction(project, page, end, start.position()),
         &wires(start),
         &wires(end),
+        &[],
     )
     .map(|_| ())
 }
@@ -1061,6 +1062,7 @@ pub fn draw_wire(
         end_dir,
         &pin_wires(project, from, &[]),
         &pin_wires(project, to, &[]),
+        &[],
     )
     .map_err(|r| refusal_error(Some(project), r))?;
     let wire = tx.connect(from, to)?;
@@ -1578,6 +1580,7 @@ fn reroute_with(tx: &mut Tx<'_>, wire: WireId, refuse: bool) -> Result<()> {
         to_dir,
         &from_wires,
         &to_wires,
+        &[wire],
     );
     let bends = match planned {
         Ok(bends) => bends,

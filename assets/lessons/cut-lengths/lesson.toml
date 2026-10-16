@@ -134,6 +134,7 @@ Sleep **-K1** ongeveer 100 mm naar rechts en laat los. Een rood kader betekent d
 """
 point = { ui = "cabinet.canvas" }
 expect = { signal = "cabinet_dropped" }
+solve = [ { cabinet_place = { device = "-K1", x = 155, y = 210 } } ]
 
 [[step]]
 id = "check-again"
@@ -171,6 +172,7 @@ Een melding toont de bestandsnaam. **Workbook** in hetzelfde paneel schrijft een
 """
 point = { ui = "cabinet.routes_panel" }
 expect = { signal = "wire_cut_exported" }
+manual = "writes a CSV file next to the project; covered by the cabinet_tests export test"
 
 [[step]]
 id = "done"
