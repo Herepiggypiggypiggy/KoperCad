@@ -259,3 +259,18 @@ fn the_3d_view_registers_the_anchor_lessons_point_at() {
         .expect("`workspace.view3d` is not on screen");
     assert!(rect.width() > 0.0 && rect.height() > 0.0, "{rect:?}");
 }
+
+#[test]
+fn the_shadows_command_toggles_the_views_shadows() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert!(d.app.view3d.view.state.display.shadows, "on by default");
+    d.app.run_command(&ctx, "view.3d_shadows", None);
+    d.frame();
+    assert!(!d.app.view3d.view.state.display.shadows);
+    d.app.run_command(&ctx, "view.3d_shadows", None);
+    d.frame();
+    assert!(d.app.view3d.view.state.display.shadows);
+}

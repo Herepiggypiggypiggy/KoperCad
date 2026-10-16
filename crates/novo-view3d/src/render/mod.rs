@@ -24,6 +24,8 @@ use wgpu::util::DeviceExt;
 pub const COLOR_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
 pub const DEPTH_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Depth32Float;
 pub const SCENE_SHADER: &str = include_str!("scene.wgsl");
+/// Side of the key light's shadow map, pixels.
+pub const SHADOW_MAP_SIZE: u32 = 1024;
 pub const BLIT_SHADER: &str = include_str!("blit.wgsl");
 
 mod blit;
@@ -61,31 +63,25 @@ pub struct Quality {
     pub msaa: u32,
     /// Share of the widget size the image is rendered at.
     pub scale: f32,
+    /// Soft shadows from the key light (a cached depth map).
+    pub shadows: bool,
 }
 
 impl Quality {
     pub fn new(mode: Mode, tier: Tier) -> Self {
-        match (mode, tier) {
-            (Mode::Settled, Tier::Software) => Quality {
-                msaa: 1,
-                scale: 1.0,
-            },
-            (Mode::Settled, _) => Quality {
-                msaa: 4,
-                scale: 1.0,
-            },
-            (Mode::Interactive, Tier::Discrete) => Quality {
-                msaa: 1,
-                scale: 1.0,
-            },
-            (Mode::Interactive, Tier::Integrated) => Quality {
-                msaa: 1,
-                scale: 0.75,
-            },
-            (Mode::Interactive, Tier::Software) => Quality {
-                msaa: 1,
-                scale: 0.5,
-            },
+        let (msaa, scale) = match (mode, tier) {
+            (Mode::Settled, Tier::Software) => (1, 1.0),
+            (Mode::Settled, _) => (4, 1.0),
+            (Mode::Interactive, Tier::Discrete) => (1, 1.0),
+            (Mode::Interactive, Tier::Integrated) => (1, 0.75),
+            (Mode::Interactive, Tier::Software) => (1, 0.5),
+        };
+        Quality {
+            msaa,
+            scale,
+            // The map is drawn once per scene change, so even integrated
+            // GPUs afford the lookup; software renderers do not.
+            shadows: tier != Tier::Software,
         }
     }
 }
@@ -147,6 +143,8 @@ struct Globals {
     nudge: [f32; 4],
     view_dir: [f32; 4],
     viewport: [f32; 4],
+    light_vp: [[f32; 4]; 4],
+    shadow: [f32; 4],
 }
 
 /// A vertex of an overlay mesh.
@@ -346,6 +344,9 @@ impl GpuOverlay {
 
 /// Shared by every view: pipelines and the mesh cache.
 pub struct Renderer {
+    shadow_layout: wgpu::BindGroupLayout,
+    shadow_pipeline: wgpu::RenderPipeline,
+    shadow_sampler: wgpu::Sampler,
     module: wgpu::ShaderModule,
     globals_layout: wgpu::BindGroupLayout,
     pipelines: HashMap<u32, Pipelines>,
@@ -364,12 +365,62 @@ pub struct ViewTarget {
     depth_view: Option<wgpu::TextureView>,
     globals: wgpu::Buffer,
     globals_bind: wgpu::BindGroup,
+    shadow_bind: wgpu::BindGroup,
+    shadow_view: wgpu::TextureView,
+    shadow_size: u32,
+    /// What the map was last drawn for; `None` while it holds nothing.
+    shadow_key: Option<u64>,
     instances: wgpu::Buffer,
     instance_capacity: u64,
     overlays: Vec<GpuOverlay>,
     overlay_revision: Option<u64>,
     /// Bumped each time the colour texture is recreated; the blitter rebinds.
     pub(crate) generation: u64,
+}
+
+fn shadow_texture(device: &wgpu::Device, size: u32) -> wgpu::TextureView {
+    device
+        .create_texture(&wgpu::TextureDescriptor {
+            label: Some("novo_view3d_shadow_map"),
+            size: wgpu::Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: DEPTH_FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            view_formats: &[],
+        })
+        .create_view(&Default::default())
+}
+
+fn globals_bind(
+    device: &wgpu::Device,
+    renderer: &Renderer,
+    globals: &wgpu::Buffer,
+    shadow: &wgpu::TextureView,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("novo_view3d_globals"),
+        layout: &renderer.globals_layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: globals.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::TextureView(shadow),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: wgpu::BindingResource::Sampler(&renderer.shadow_sampler),
+            },
+        ],
+    })
 }
 
 impl ViewTarget {
@@ -380,9 +431,11 @@ impl ViewTarget {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let globals_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("novo_view3d_globals"),
-            layout: &renderer.globals_layout,
+        let shadow_view = shadow_texture(device, 1);
+        let globals_bind = globals_bind(device, renderer, &globals, &shadow_view);
+        let shadow_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("novo_view3d_shadow_globals"),
+            layout: &renderer.shadow_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: globals.as_entire_binding(),
@@ -398,6 +451,10 @@ impl ViewTarget {
             depth_view: None,
             globals,
             globals_bind,
+            shadow_bind,
+            shadow_view,
+            shadow_size: 1,
+            shadow_key: None,
             instances: instance_buffer(device, instance_capacity),
             instance_capacity,
             overlays: Vec::new(),
@@ -479,6 +536,53 @@ fn instance_buffer(device: &wgpu::Device, size: u64) -> wgpu::Buffer {
         size,
         usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         mapped_at_creation: false,
+    })
+}
+
+/// Depth-only pipeline for the key light's shadow map.
+fn shadow_pipeline(
+    device: &wgpu::Device,
+    module: &wgpu::ShaderModule,
+    globals: &wgpu::BindGroupLayout,
+) -> wgpu::RenderPipeline {
+    let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        label: Some("novo_view3d_shadow_layout"),
+        bind_group_layouts: &[Some(globals)],
+        immediate_size: 0,
+    });
+    let buffers = [
+        Some(wgpu::VertexBufferLayout {
+            array_stride: size_of::<Vertex>() as u64,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &VERTEX_ATTRS,
+        }),
+        Some(wgpu::VertexBufferLayout {
+            array_stride: size_of::<Instance>() as u64,
+            step_mode: wgpu::VertexStepMode::Instance,
+            attributes: &INSTANCE_ATTRS,
+        }),
+    ];
+    device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+        label: Some("novo_view3d_shadow"),
+        layout: Some(&layout),
+        vertex: wgpu::VertexState {
+            module,
+            entry_point: Some("vs_shadow"),
+            compilation_options: Default::default(),
+            buffers: &buffers,
+        },
+        primitive: wgpu::PrimitiveState::default(),
+        depth_stencil: Some(wgpu::DepthStencilState {
+            format: DEPTH_FORMAT,
+            depth_write_enabled: Some(true),
+            depth_compare: Some(wgpu::CompareFunction::Less),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        }),
+        multisample: wgpu::MultisampleState::default(),
+        fragment: None,
+        multiview_mask: None,
+        cache: None,
     })
 }
 
@@ -642,18 +746,50 @@ impl Renderer {
             label: Some("novo_view3d_scene"),
             source: wgpu::ShaderSource::Wgsl(SCENE_SHADER.into()),
         });
+        let uniform_entry = wgpu::BindGroupLayoutEntry {
+            binding: 0,
+            visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Buffer {
+                ty: wgpu::BufferBindingType::Uniform,
+                has_dynamic_offset: false,
+                min_binding_size: wgpu::BufferSize::new(size_of::<Globals>() as u64),
+            },
+            count: None,
+        };
         let globals_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("novo_view3d_globals"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: wgpu::BufferSize::new(size_of::<Globals>() as u64),
+            entries: &[
+                uniform_entry,
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Depth,
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
+                    count: None,
+                },
+            ],
+        });
+        // The shadow pass renders into the map, so it must not bind it.
+        let shadow_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("novo_view3d_shadow_globals"),
+            entries: &[uniform_entry],
+        });
+        let shadow_pipeline = shadow_pipeline(device, &module, &shadow_layout);
+        let shadow_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("novo_view3d_shadow_sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            compare: Some(wgpu::CompareFunction::LessEqual),
+            ..Default::default()
         });
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("novo_view3d_layout"),
@@ -665,6 +801,9 @@ impl Renderer {
             .map(|n| (n, pipelines(device, &module, &layout, n)))
             .collect();
         Self {
+            shadow_layout,
+            shadow_pipeline,
+            shadow_sampler,
             module,
             globals_layout,
             pipelines,
@@ -871,6 +1010,14 @@ impl Renderer {
             ]
         };
         let l = Vec3::from(look.light).normalize_or_zero();
+        // Soft shadows: an orthographic depth map from the key light over the
+        // whole scene, redrawn only when what casts shadows changes.
+        let shadow_on = frame.quality.shadows && frame.state.display.shadows && l != Vec3::ZERO;
+        let light_vp = if shadow_on {
+            shadow_matrix(&bounds, l)
+        } else {
+            Mat4::IDENTITY
+        };
         let globals = Globals {
             view_proj: view_proj.to_cols_array_2d(),
             eye: eye.extend(1.0).to_array(),
@@ -893,8 +1040,52 @@ impl Renderer {
             },
             view_dir: fwd.extend(0.0).to_array(),
             viewport: [size.0 as f32, size.1 as f32, 0.0, 0.0],
+            light_vp: light_vp.to_cols_array_2d(),
+            shadow: [
+                if shadow_on { SHADOW_STRENGTH } else { 0.0 },
+                SHADOW_BIAS,
+                1.0 / SHADOW_MAP_SIZE as f32,
+                0.0,
+            ],
         };
         queue.write_buffer(&target.globals, 0, bytemuck::bytes_of(&globals));
+
+        if shadow_on {
+            if target.shadow_size != SHADOW_MAP_SIZE {
+                target.shadow_view = shadow_texture(device, SHADOW_MAP_SIZE);
+                target.shadow_size = SHADOW_MAP_SIZE;
+                target.shadow_key = None;
+                target.globals_bind =
+                    globals_bind(device, self, &target.globals, &target.shadow_view);
+            }
+            let key = shadow_key(scene, frame.state, visible.len(), &light_vp);
+            if target.shadow_key != Some(key) {
+                target.shadow_key = Some(key);
+                let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    label: Some("novo_view3d_shadow"),
+                    color_attachments: &[],
+                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                        view: &target.shadow_view,
+                        depth_ops: Some(wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(1.0),
+                            store: wgpu::StoreOp::Store,
+                        }),
+                        stencil_ops: None,
+                    }),
+                    ..Default::default()
+                });
+                pass.set_pipeline(&self.shadow_pipeline);
+                pass.set_bind_group(0, &target.shadow_bind, &[]);
+                for (key, range) in &draws[..opaque_draws] {
+                    let mesh = &self.meshes[key];
+                    pass.set_vertex_buffer(0, mesh.vertices.slice(..));
+                    pass.set_vertex_buffer(1, target.instances.slice(..));
+                    pass.set_index_buffer(mesh.indices.slice(..), wgpu::IndexFormat::Uint32);
+                    pass.draw_indexed(0..mesh.index_count, 0, range.clone());
+                    stats.draw_calls += 1;
+                }
+            }
+        }
 
         let pipes = &self.pipelines[&samples];
         let color_view = target.color_view.as_ref().expect("ensured");
@@ -1072,6 +1263,43 @@ impl Renderer {
             },
         }
     }
+}
+
+/// Strength of the key light's shadow on the surfaces it falls on, 0 to 1.
+const SHADOW_STRENGTH: f32 = 0.85;
+/// Depth bias of the shadow test, in the map's 0..1 depth.
+const SHADOW_BIAS: f32 = 0.0015;
+
+/// World to the key light's clip space: an orthographic box over the scene,
+/// looking along the light.
+fn shadow_matrix(bounds: &crate::math::Aabb, toward_light: Vec3) -> Mat4 {
+    let c = bounds.center();
+    let r = (bounds.size().length() * 0.5).max(1.0);
+    let up = if toward_light.y.abs() > 0.95 {
+        Vec3::Z
+    } else {
+        Vec3::Y
+    };
+    let view = Mat4::look_at_rh(c + toward_light * r * 2.0, c, up);
+    Mat4::orthographic_rh(-r, r, -r, r, r * 0.5, r * 3.5) * view
+}
+
+/// What the shadow map depends on: the scene, which layers are on, how many
+/// items are in view and the light.
+fn shadow_key(scene: &Scene, state: &ViewState, visible: usize, light_vp: &Mat4) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut h = std::collections::hash_map::DefaultHasher::new();
+    (scene.revision, scene.pose_revision, visible).hash(&mut h);
+    for g in &scene.groups {
+        g.angle.to_bits().hash(&mut h);
+    }
+    for k in &state.hidden {
+        k.hash(&mut h);
+    }
+    for v in light_vp.to_cols_array() {
+        v.to_bits().hash(&mut h);
+    }
+    h.finish()
 }
 
 /// The highlight strength as a byte; translucent shells have none.
