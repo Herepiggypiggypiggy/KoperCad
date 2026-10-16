@@ -82,6 +82,7 @@ impl Stats {
             super::panel::Side::BottomLeft,
             400.0,
         )
+        .fit()
         .show(ctx, |ui| {
             ui.label(egui::RichText::new(&text).monospace().small());
             ui.horizontal(|ui| {
@@ -112,6 +113,9 @@ impl Stats {
         });
     }
 }
+
+/// How much of the view bottom the panel takes, for a panel above it.
+pub(super) const ROOM: f32 = 200.0;
 
 /// The lines of the panel, also what Copy puts on the clipboard.
 pub(super) fn report(stats: Option<&RenderStats>, intervals: &[f32], build: Build) -> String {

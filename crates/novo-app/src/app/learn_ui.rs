@@ -82,9 +82,11 @@ impl NovoApp {
             self.learn.say("learn"),
             canvas,
             super::panel::Side::BottomRight,
-            340.0,
+            316.0,
         )
         .fixed_open()
+        .fit()
+        .bare()
         .show(ctx, |ui| {
             action = self.draw_card(ui, &card, confirm);
         })

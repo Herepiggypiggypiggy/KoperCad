@@ -21,7 +21,7 @@ use eframe::egui;
 pub(super) const MARGIN: f32 = 12.0;
 /// Space kept above a panel for the top bar, and below it for the status bar.
 const TOP: f32 = 48.0;
-const BOTTOM: f32 = 28.0;
+const BOTTOM: f32 = 60.0;
 /// The narrowest a panel can be dragged to.
 const MIN_WIDTH: f32 = 260.0;
 /// The shortest a panel can be dragged to.
@@ -55,6 +55,10 @@ pub(super) struct Panel {
     collapsible: bool,
     scroll_bar: bool,
     top: f32,
+    bottom: f32,
+    height: Option<f32>,
+    fit: bool,
+    title_bar: bool,
 }
 
 impl Panel {
@@ -74,12 +78,43 @@ impl Panel {
             collapsible: true,
             scroll_bar: false,
             top: TOP,
+            bottom: 0.0,
+            height: None,
+            fit: false,
+            title_bar: true,
         }
     }
 
     /// Starts this far below the canvas top instead of under the top bar.
     pub(super) fn top(mut self, offset: f32) -> Self {
         self.top = offset;
+        self
+    }
+
+    /// Keeps this much of the canvas bottom free (another panel lives there),
+    /// so the panel starts no taller than the rest.
+    pub(super) fn bottom_room(mut self, room: f32) -> Self {
+        self.bottom = room;
+        self
+    }
+
+    /// Starts this tall (capped to the canvas). egui's own default is 420 for
+    /// any window, however little it holds.
+    pub(super) fn height(mut self, height: f32) -> Self {
+        self.height = Some(height);
+        self
+    }
+
+    /// As tall and wide as its content (up to the canvas) instead of
+    /// resizable: for toolbars and cards. It can still be dragged.
+    pub(super) fn fit(mut self) -> Self {
+        self.fit = true;
+        self
+    }
+
+    /// No title bar: the panel has its own header and is dragged by its body.
+    pub(super) fn bare(mut self) -> Self {
+        self.title_bar = false;
         self
     }
 
@@ -96,22 +131,18 @@ impl Panel {
         self
     }
 
-    /// Where the panel's top left corner starts: against its side, with the
-    /// width it had last frame (a right-hand panel is as wide as its
-    /// content, so the corner depends on it).
-    fn start(&self, ctx: &egui::Context, id: egui::Id) -> egui::Pos2 {
-        let last = ctx.memory(|m| m.area_rect(id));
-        let width = last.map_or(self.width, |r| r.width());
-        let height = last.map_or(160.0, |r| r.height());
+    /// The corner the panel hangs from and where that corner starts: against
+    /// its side of the canvas, so the panel's own size never matters.
+    fn start(&self) -> (egui::Align2, egui::Pos2) {
         let top = self.canvas.top() + self.top;
-        let bottom = self.canvas.bottom() - BOTTOM - MARGIN - height;
+        let bottom = self.canvas.bottom() - BOTTOM - MARGIN;
         let left = self.canvas.left() + MARGIN;
-        let right = self.canvas.right() - MARGIN - width;
+        let right = self.canvas.right() - MARGIN;
         match self.side {
-            Side::Left => egui::pos2(left, top),
-            Side::Right => egui::pos2(right, top),
-            Side::BottomLeft => egui::pos2(left, bottom.max(top)),
-            Side::BottomRight => egui::pos2(right, bottom.max(top)),
+            Side::Left => (egui::Align2::LEFT_TOP, egui::pos2(left, top)),
+            Side::Right => (egui::Align2::RIGHT_TOP, egui::pos2(right, top)),
+            Side::BottomLeft => (egui::Align2::LEFT_BOTTOM, egui::pos2(left, bottom)),
+            Side::BottomRight => (egui::Align2::RIGHT_BOTTOM, egui::pos2(right, bottom)),
         }
     }
 
@@ -124,23 +155,32 @@ impl Panel {
     ) -> Option<egui::InnerResponse<Option<R>>> {
         let id = id(self.id);
         let moved = is_moved(ctx, id);
-        let start = self.start(ctx, id);
-        let max_height = (self.canvas.height() - self.top - BOTTOM).max(MIN_HEIGHT);
+        let (pivot, start) = self.start();
+        let max_height = (self.canvas.height() - self.top - BOTTOM - self.bottom).max(MIN_HEIGHT);
         let mut window = egui::Window::new(&self.title)
             .id(id)
             .order(egui::Order::Middle)
-            .resizable(true)
+            .resizable(!self.fit)
             .collapsible(self.collapsible)
+            .title_bar(self.title_bar)
             .default_width(self.width)
             .min_width(MIN_WIDTH.min(self.width))
             .min_height(MIN_HEIGHT.min(max_height))
             .max_height(max_height)
-            .constrain_to(self.canvas)
-            .scroll([false, true]);
+            .scroll([false, !self.fit]);
+        if self.fit {
+            // Without resizing the width is the content's; wrapped rows wrap here.
+            window = window.max_width(self.width);
+        }
+        if let Some(h) = self.height {
+            window = window.default_height(h.min(max_height));
+        }
+        // Placed by us until the first drag (egui would shift a tall window
+        // up while it is still sizing); kept on the canvas once it is dragged.
         window = if moved {
-            window
+            window.constrain_to(self.canvas)
         } else {
-            window.current_pos(start)
+            window.constrain(false).pivot(pivot).current_pos(start)
         };
         // The window's own scroll area has no bar setting, so a solid
         // (non-floating) bar is asked for through the style while it is built.

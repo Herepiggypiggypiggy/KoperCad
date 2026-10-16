@@ -440,6 +440,7 @@ impl NovoApp {
         super::panel::Panel::new("inspector", "Inspector", canvas, side, INSPECTOR_WIDTH)
             .fixed_open()
             .scroll_bar_always()
+            .height(560.0)
             .show(ctx, |ui| {
                 inspector_body(ui, info, candidates, state, tag_id, description_id, actions);
             });

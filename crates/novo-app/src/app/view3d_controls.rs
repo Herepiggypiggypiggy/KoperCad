@@ -66,7 +66,10 @@ impl Controls {
 }
 
 /// Wide enough for every toggle and the door slider on one row.
-const TOOLBAR_WIDTH: f32 = 760.0;
+const TOOLBAR_WIDTH: f32 = 900.0;
+
+/// Where a panel under the toolbar starts, from the top of the view.
+pub(super) const BELOW: f32 = 140.0;
 
 /// The toolbar, top left of the view. `limit` is how far the enclosure's door
 /// opens, `None` when it has none.
@@ -77,14 +80,19 @@ pub(super) fn toolbar(
     limit: Option<f64>,
 ) -> Changed {
     let mut changed = Changed::default();
+    // Leave the view cube (top right) uncovered.
+    let width = TOOLBAR_WIDTH
+        .min(view.width() - super::view3d_heat::CUBE_SIZE - 3.0 * MARGIN)
+        .max(300.0);
     super::panel::Panel::new(
         "view3d_toolbar",
         "3D view",
         view,
         super::panel::Side::Left,
-        TOOLBAR_WIDTH,
+        width,
     )
     .top(MARGIN)
+    .fit()
     .show(ctx, |ui| {
         ui.horizontal_wrapped(|ui| {
             let layers = &mut controls.layers;

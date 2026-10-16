@@ -38,11 +38,13 @@ impl Drive {
     }
 
     pub(super) fn frame_with(&mut self, events: Vec<egui::Event>) {
+        self.frame_sized(egui::vec2(1600.0, 900.0), events);
+    }
+
+    /// A frame in a window of this size.
+    pub(super) fn frame_sized(&mut self, size: egui::Vec2, events: Vec<egui::Event>) {
         let input = egui::RawInput {
-            screen_rect: Some(egui::Rect::from_min_size(
-                egui::Pos2::ZERO,
-                egui::vec2(1600.0, 900.0),
-            )),
+            screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
             events,
             ..Default::default()
         };
