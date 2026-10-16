@@ -74,7 +74,7 @@ pub(super) struct Input {
 pub(super) struct Meta {
     /// The scenario the run solves; a result is out of date once the
     /// cabinet's scenario differs from it.
-    pub scenario: Arc<novo_thermal::Scenario>,
+    pub scenario_key: u64,
     pub layout_key: u64,
     pub ambient: f64,
     pub plate: [f64; 4],
@@ -319,7 +319,7 @@ impl HeatState {
                         self.solution = Some(Arc::new(Solution {
                             snapshot,
                             id: self.snap_seq,
-                            scenario_key: super::heat_live::scenario_key(&m.scenario),
+                            scenario_key: m.scenario_key,
                             layout_key: m.layout_key,
                             ambient: m.ambient,
                             plate: m.plate,
@@ -752,7 +752,7 @@ pub(super) fn start_run(
         Ok(bridge) => {
             let plate = bridge.scenario.enclosure.plate;
             let meta = Meta {
-                scenario: Arc::new(bridge.scenario.clone()),
+                scenario_key: super::heat_live::scenario_key(&bridge.scenario),
                 layout_key: layout_key(input),
                 ambient: input.ambient,
                 plate: [plate.x, plate.y, plate.w, plate.h],
@@ -1579,7 +1579,7 @@ mod tests {
 
     fn meta(i: &Input) -> Meta {
         Meta {
-            scenario: Arc::new(scenario()),
+            scenario_key: crate::app::heat_live::scenario_key(&scenario()),
             layout_key: layout_key(i),
             ambient: i.ambient,
             plate: [50.0, 50.0, 600.0, 800.0],

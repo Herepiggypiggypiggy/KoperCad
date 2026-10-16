@@ -158,7 +158,7 @@ impl HeatState {
         let run_old = self
             .pending
             .as_ref()
-            .is_some_and(|m| scenario_key(&m.scenario) != now_key);
+            .is_some_and(|m| m.scenario_key != now_key);
         self.live.stale = stale;
         if !self.live.auto_on() || !(stale || run_old || self.live.rerun) {
             return;
@@ -195,7 +195,7 @@ impl HeatState {
         };
         self.live.started_for = Some(cur.scenario_key);
         let meta = Meta {
-            scenario: scenario.clone(),
+            scenario_key: cur.scenario_key,
             layout_key: 0,
             ambient: cur.ambient,
             plate: cur.plate,
