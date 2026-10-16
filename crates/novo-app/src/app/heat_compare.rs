@@ -16,6 +16,8 @@ use super::heat_run::Solution;
 #[derive(Debug, Clone)]
 pub(super) struct Diff {
     pub field: Scalar,
+    /// A's temperature on the plate, for the wipe.
+    pub a_plate: Scalar,
     /// Symmetric range of the map, K.
     pub extent: f32,
     /// Devices in both results, biggest change first.
@@ -66,6 +68,7 @@ pub(super) fn diff(a: &Solution, b: &Solution, b_plate: &Scalar, cell_mm: f64) -
     };
     Some(Diff {
         field,
+        a_plate,
         extent,
         rows,
         verdict,
