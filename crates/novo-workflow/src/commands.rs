@@ -1229,6 +1229,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "help.whats_new",
+        "What's new",
+        "View",
+        &["new", "changes", "release", "news", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
         "view.reset_panels",
         "Reset panel layout",
         "View",
