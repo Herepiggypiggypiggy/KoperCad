@@ -46,7 +46,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::Path;
 
 pub use draw::PT_PER_MM;
-pub use novo_canvas::model::{NoteAnchor, SymbolNote};
+pub use novo_canvas::model::{NoteAnchor, NoteDensity, NoteGlyph, NoteRow, SymbolNote};
 pub use report::{
     ReportFileFormat, ReportPdfOptions, export_layouts_pdf, export_report_pdf, report_bytes,
 };

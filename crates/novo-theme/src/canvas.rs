@@ -76,6 +76,9 @@ pub struct PotentialPalette {
     pub neutral: [u8; 4],
     pub dc_positive: [u8; 4],
     pub dc_negative: [u8; 4],
+    /// A wire that carries no potential: a neutral grey, readable on the
+    /// sheet but quieter than any lit wire, and not the selection copper.
+    pub dead: [u8; 4],
     /// Line conductors and signals, by the last digit of their name, so
     /// L1, L2 and L3 stay apart.
     pub line: [[u8; 4]; 4],
@@ -88,6 +91,7 @@ pub const POTENTIALS_DARK: PotentialPalette = PotentialPalette {
     neutral: [0x5C, 0x8D, 0xE0, 0xFF],
     dc_positive: [0xE0, 0x76, 0x6C, 0xFF],
     dc_negative: [0x6C, 0x7C, 0xE0, 0xFF],
+    dead: [0x78, 0x76, 0x72, 0xFF],
     line: [
         [0xE0, 0xA2, 0x4A, 0xFF],
         [0xC0, 0x70, 0xD0, 0xFF],
@@ -167,6 +171,7 @@ pub const POTENTIALS_LIGHT: PotentialPalette = PotentialPalette {
     neutral: [0x2E, 0x5F, 0xB5, 0xFF],
     dc_positive: [0xB3, 0x36, 0x2B, 0xFF],
     dc_negative: [0x4A, 0x4F, 0xB0, 0xFF],
+    dead: [0x85, 0x83, 0x7E, 0xFF],
     line: [
         [0xA8, 0x5F, 0x00, 0xFF],
         [0x8E, 0x3F, 0xA0, 0xFF],
@@ -325,6 +330,38 @@ mod tests {
                     assert!(spread(*a, *b) >= 120, "{a:?} {b:?}");
                 }
             }
+        }
+    }
+
+    #[test]
+    fn a_wire_without_potential_stays_visible_and_is_told_apart() {
+        for (p, canvas) in [
+            (POTENTIALS_DARK, CANVAS_DARK),
+            (POTENTIALS_LIGHT, CANVAS_LIGHT),
+        ] {
+            let contrast = |a: [u8; 4], b: [u8; 4]| {
+                crate::tokens::tests::contrast(to_color32(a), to_color32(b))
+            };
+            // At least 3:1 against the sheet it is drawn on.
+            let ratio = contrast(p.dead, canvas.sheet);
+            assert!(ratio >= 3.0, "dead wire on the sheet: {ratio}");
+            // Not the selection, the symbols, or any energised potential.
+            let rgb = |c: [u8; 4]| [c[0], c[1], c[2]];
+            for other in [
+                p.protective_earth,
+                p.pen,
+                p.neutral,
+                p.dc_positive,
+                p.dc_negative,
+            ]
+            .into_iter()
+            .chain(p.line)
+            .chain([canvas.selection, canvas.symbol, canvas.wire])
+            {
+                assert_ne!(rgb(p.dead), rgb(other), "{other:?}");
+            }
+            // Quieter than the symbols, so the drawing still reads first.
+            assert!(contrast(p.dead, canvas.sheet) < contrast(canvas.symbol, canvas.sheet));
         }
     }
 }

@@ -88,6 +88,7 @@ pub fn run() -> eframe::Result {
             let canvas: Box<dyn CanvasView> = match cc.wgpu_render_state.as_ref() {
                 Some(rs) => {
                     EditorCanvas::install(rs);
+                    novo_view3d::widget::install(rs, 1);
                     Box::new(EditorCanvas::default())
                 }
                 None => Box::new(PlaceholderCanvas::default()),

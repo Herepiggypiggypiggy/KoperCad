@@ -18,12 +18,12 @@ To check a lesson before #479 merges: `git fetch origin pull/479/head:pr479`, me
 | File | State | Used by |
 | --- | --- | --- |
 | `cabinet-layout/project.json` | Motor starter, cabinet `+CAB` with a 600 x 800 mm plate, nothing placed | cabinet-layout |
-| `cabinet-layout/finished.json` | Place all done: everything on one rail, no ducts | start of rails-and-ducts |
-| `rails-and-ducts/finished.json` | `-X1` on a second rail, three 40 x 40 ducts | start of the other six lessons |
+| `cabinet-layout/finished.json` | Place all with the standard rules: 8 devices on 5 rails, 5 ducts (3 power, 2 signal) | start of rails-and-ducts |
+| `wire-routing/project.json` | Same plus one 25 x 60 duct down the right-hand end that joins the five ducts | start of wire-routing and the lessons after it |
 
 Parts carry width, height, depth and power loss; `-T1` (transformer, not on the schematic) has a 4-hole pattern and
 20 W; `-S0` and `-S1` have a 22 mm door cut-out; wires are numbered. Wire list lengths: unplaced = estimate,
-one rail = free air, two rails and ducts = routed (checked with `SHOW_WIRES=1` on the generator).
+Place all alone = all 11 wires between rows in free air (its ducts are not joined: reported to the lesson-plan thread); with the joining duct = routed, fullest duct 10 %, longest wire 1924 mm.
 Layout facts: 8 rail holes of 5.5 mm + 4 of 6 mm on the plate, 2 door cut-outs.
 
 ## What is not on main (a lesson stays `draft` until its row is clear)
@@ -53,6 +53,6 @@ Layout facts: 8 rail holes of 5.5 mm + 4 of 6 mm on the plate, 2 door cut-outs.
   a canvas target for plate coordinates (`at` and `area` name schematic pages only).
 
 ## Traps
-- A lesson's `project` may name a sibling lesson's file (`../rails-and-ducts/finished.json`); keep those files in place.
+- A lesson's `project` may name a sibling lesson's file (`../wire-routing/project.json`); keep those files in place.
 - Step text stays under 500 characters (lint). `pause = true` is only for steps that also have an `expect`.
 - Depth numbers in enclosure-door-and-depth come from #409's defaults (usable depth 230 mm, 80 mm at depth 100).

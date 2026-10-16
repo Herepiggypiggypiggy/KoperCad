@@ -30,6 +30,7 @@
 //! Model edits go through [`novo_core::Tx`], so each gesture is one undo
 //! step.
 
+pub mod clipboard;
 pub mod commands;
 pub mod duplicate;
 pub mod expr;

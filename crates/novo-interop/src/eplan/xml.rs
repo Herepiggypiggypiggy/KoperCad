@@ -47,7 +47,7 @@ fn local(name: &str) -> &str {
     name.rsplit(':').next().unwrap_or(name)
 }
 
-fn entity(s: &str) -> String {
+pub(crate) fn entity(s: &str) -> String {
     if !s.contains('&') {
         return s.to_string();
     }

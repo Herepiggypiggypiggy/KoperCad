@@ -347,6 +347,7 @@ wire number lesson. Parts are illustrative, not a verified parts list."
             tx,
             &[feed],
             &PotentialSpec::new("L+", PotentialKind::DcPositive, None),
+            &Default::default(),
         )?;
         for (end, number) in [("-M1:U1", "1"), ("-M1:V1", "2"), ("-M1:W1", "2")] {
             let wire = wire_between(tx.project(), end, "-X1:");
@@ -371,6 +372,7 @@ pub fn wire_numbers_finished() -> Project {
             tx,
             &[feed],
             &PotentialSpec::new("+24 V", PotentialKind::DcPositive, Some(24.0)),
+            &Default::default(),
         )
         .map(|_| ())
     })

@@ -1,6 +1,7 @@
 //! The Preferences window: per-user settings that are not the project's.
 
 use eframe::egui;
+use novo_canvas::model::NoteDensity;
 use novo_editor::tool::ConnectMode;
 
 use super::NovoApp;
@@ -14,6 +15,7 @@ impl NovoApp {
         let mut carries = self.settings.move_carries;
         let mut calm = self.settings.reduce_motion;
         let mut company = self.settings.company_macros.clone();
+        let mut density = self.settings.xref_density();
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
             ui.set_width(340.0);
             ui.heading("Preferences");
@@ -34,6 +36,13 @@ impl NovoApp {
             ui.weak("Shift always does the other one.");
             ui.radio_value(&mut carries, false, "Leaves its wires (default)");
             ui.radio_value(&mut carries, true, "Takes its wires along");
+            ui.add_space(8.0);
+            ui.strong("Cross references");
+            ui.add_space(2.0);
+            ui.label("Contact table under a coil");
+            ui.weak("One row per contact with its symbol, pins and page.column. Compact fits more on a busy sheet.");
+            ui.radio_value(&mut density, NoteDensity::Full, "Full (default)");
+            ui.radio_value(&mut density, NoteDensity::Compact, "Compact");
             ui.add_space(8.0);
             ui.strong("Macros");
             ui.add_space(2.0);
@@ -67,6 +76,9 @@ impl NovoApp {
         });
         if mode != self.settings.connect_mode() {
             self.settings.set_connect_mode(mode);
+        }
+        if density != self.settings.xref_density() {
+            self.settings.xref_density = density.id().into();
         }
         self.settings.company_macros = company;
         self.settings.move_carries = carries;

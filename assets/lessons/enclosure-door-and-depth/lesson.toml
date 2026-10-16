@@ -8,7 +8,7 @@
 format = 1
 id = "enclosure-door-and-depth"
 version = 1
-status = "draft"
+status = "early"
 title = "Will the door close?"
 title_nl = "Sluit de deur nog?"
 summary = "Enter the inside size and door of the cabinet and let KoperCAD check device depth and the room the open door needs."
@@ -20,7 +20,7 @@ minutes = 7
 topics = ["cabinet", "enclosure", "door"]
 needs = ["cabinet-layout"]
 next = ["heat-and-sizing"]
-project = "../rails-and-ducts/finished.json"
+project = "../wire-routing/project.json"
 
 [[step]]
 id = "open-cabinet"

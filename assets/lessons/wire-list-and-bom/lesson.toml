@@ -15,13 +15,13 @@
 format = 1
 id = "wire-list-and-bom"
 version = 1
-status = "draft"
+status = "early"
 title = "Wire List and Bill of Materials"
 title_nl = "Draadlijst en stuklijst"
 summary = "Find a wire and a cable in the lists, give a lamp a part, watch the bill of materials follow and export it."
 summary_nl = "Zoek een draad en een kabel in de lijsten, geef een lamp een onderdeel, zie de stuklijst meebewegen en exporteer hem."
-track = "terminals"
-order = 90
+track = "outputs"
+order = 30
 level = "beginner"
 minutes = 9
 topics = ["reports", "parts", "export"]

@@ -1,24 +1,24 @@
 //! Writes the sample projects of the cabinet lessons (`assets/lessons/cabinet-layout`
-//! and `rails-and-ducts`) as the diffable JSON form:
+//! and `wire-routing`) as the diffable JSON form:
 //!
 //! ```text
 //! cargo run -p novo-app --example panel_lessons -- assets/lessons
 //! ```
 //!
-//! All three states are the Gate 1 motor starter with a cabinet `+CAB`:
+//! Three states are the Gate 1 motor starter with a cabinet `+CAB`:
 //! `cabinet-layout/project.json` has a 600 x 800 mm plate and nothing placed,
 //! `cabinet-layout/finished.json` has everything placed on rails by `Place all`,
-//! and `rails-and-ducts/finished.json` moves the terminal strip to a second rail and adds wiring ducts. The parts are
-//! illustrative catalogue entries, not a verified parts list.
+//! and `wire-routing/project.json` adds one duct down the right-hand end that joins the five ducts Place all lays. The parts
+//! are illustrative catalogue entries, not a verified parts list.
 
 use std::path::PathBuf;
 
 use novo_core::{
-    AnyId, Command, Device, DeviceId, DeviceTag, Document, MountingPlate, Project, RailKind,
-    Result, Structure, Tx, Value,
+    Command, Device, DeviceId, DeviceTag, Document, MountingPlate, Project, RailKind, Result,
+    Structure, Tx, Value,
 };
-use novo_layout::model::{apply_plan, candidates, load};
-use novo_layout::plan::place_all;
+use novo_layout::model::{apply_plan, load};
+use novo_layout::rules::{RuleSet, place_all_explained};
 
 /// `(device tag, width, height, depth, power loss W, extra part keys)`.
 type PartSpec = (
@@ -161,64 +161,60 @@ fn cab(project: &Project) -> novo_core::StructureId {
         .id
 }
 
+/// What the app's Place all does: the standard rules, below what is placed.
 fn place(doc: &mut Document) -> Result<()> {
     let id = cab(doc.project());
     let layout = load(doc.project(), id).expect("plate");
-    let cands = candidates(doc.project(), id);
-    let plan = place_all(&layout.plate, &cands, 1);
+    let specs = novo_layout::rules::model::specs(doc.project(), id);
+    let (plan, why) = place_all_explained(&layout.plate, &specs, &RuleSet::standard(), 1, 0.0);
+    if std::env::var_os("SHOW_WIRES").is_some() {
+        println!(
+            "plan: {} rails, {} ducts, {} placed, {} unplaced, separation relaxed: {}",
+            plan.rails.len(),
+            plan.ducts.len(),
+            plan.placements.len(),
+            plan.unplaced.len(),
+            why.separation_relaxed
+        );
+        for r in &plan.rails {
+            println!("rail {} at ({}, {}) len {}", r.id, r.x, r.y, r.length);
+        }
+        for d in &plan.ducts {
+            println!(
+                "duct ({}, {}) len {} vertical {} {:?}",
+                d.x, d.y, d.length, d.vertical, d.class
+            );
+        }
+        for p in &plan.placements {
+            println!("device {} at ({}, {}) rail {}", p.id, p.x, p.y, p.rail);
+        }
+    }
     doc.transact("Place all", |tx| apply_plan(tx, id, &plan))?;
     Ok(())
 }
 
-fn ducts(doc: &mut Document) -> Result<()> {
+/// Place all lays ducts between the rows but none that joins them, so no wire
+/// can run from one row to another. The routing lesson starts from the same
+/// plate with one duct down the right-hand end that touches every row's duct.
+fn trunk(doc: &mut Document) -> Result<()> {
     let id = cab(doc.project());
-    let strip = device_named_in(doc.project(), "-X1");
-    doc.transact("Second rail and ducts", |tx| {
-        // The terminal strip moves to a rail of its own near the bottom.
-        let rail = tx.execute(Command::AddRail {
+    doc.transact("Joining duct", |tx| {
+        tx.execute(Command::AddRail {
             structure: id,
-            x: 10.0,
-            y: 640.0,
+            x: 580.0,
+            y: 122.5,
             length: 580.0,
-            kind: RailKind::DinRail,
-            vertical: false,
-            width: 0.0,
-            height: 0.0,
-        })?;
-        let Some(AnyId::Rail(rail)) = rail.first().copied() else {
-            panic!("rail not created");
-        };
-        tx.execute(Command::PlaceDevice {
-            device: strip,
-            structure: id,
-            x: 10.0,
-            y: 640.0,
-            rotated: false,
-            rail: Some((rail, 0.0)),
-        })?;
-        // 40 x 40 ducts under the first row and above the strip, joined by a
-        // vertical one at the right.
-        for (x, y, length, vertical) in [
-            (10.0, 125.0, 580.0, false),
-            (10.0, 585.0, 580.0, false),
-            (555.0, 125.0, 500.0, true),
-        ] {
-            tx.execute(Command::AddRail {
-                structure: id,
-                x,
-                y,
-                length,
-                kind: RailKind::Duct,
-                vertical,
-                width: 40.0,
-                height: 40.0,
-            })?;
-        }
-        Ok(())
+            kind: RailKind::Duct,
+            vertical: true,
+            width: 25.0,
+            height: 60.0,
+        })
+        .map(|_| ())
     })?;
     Ok(())
 }
 
+#[allow(dead_code)]
 fn device_named_in(project: &Project, product: &str) -> DeviceId {
     project
         .devices()
@@ -275,10 +271,10 @@ fn main() -> Result<()> {
     show_wires(doc.project(), "nothing placed");
     write(doc.project(), &root, "cabinet-layout/project.json");
     place(&mut doc)?;
-    show_wires(doc.project(), "placed on one rail, no ducts");
+    show_wires(doc.project(), "after Place all");
     write(doc.project(), &root, "cabinet-layout/finished.json");
-    ducts(&mut doc)?;
-    show_wires(doc.project(), "two rails and ducts");
-    write(doc.project(), &root, "rails-and-ducts/finished.json");
+    trunk(&mut doc)?;
+    show_wires(doc.project(), "with a joining duct");
+    write(doc.project(), &root, "wire-routing/project.json");
     Ok(())
 }
