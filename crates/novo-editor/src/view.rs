@@ -116,6 +116,12 @@ struct ContextMenu {
     interruptions: usize,
     /// The first of them, for Rename.
     interruption: Option<novo_core::SymbolId>,
+    /// Selected wires (Re-route, Make cable apply to these).
+    wires: Vec<novo_core::WireId>,
+    /// Selected symbols (Duplicate, Copy, Save as macro apply to these).
+    symbols: usize,
+    /// Cross reference rows the one selected symbol offers.
+    xref: Vec<novo_xref::XrefAction>,
     page: PageId,
     opened: bool,
 }
@@ -1070,6 +1076,14 @@ impl SchematicView {
                 self.wire_part = None;
             }
             let selection = self.selection();
+            // The project rule decides whether a terminal named PE or N
+            // offers its potential.
+            self.editor.supply_names = document
+                .project()
+                .info()
+                .rules
+                .potentials
+                .from_terminal_names;
             let potentials = self.editor.potential_menu(document, &selection);
             let device = selection
                 .iter()
@@ -1105,6 +1119,31 @@ impl SchematicView {
                 }
                 _ => None,
             });
+            let wires: Vec<novo_core::WireId> = selection
+                .iter()
+                .filter_map(|&id| match id {
+                    AnyId::Wire(w) => Some(w),
+                    _ => None,
+                })
+                .collect();
+            let selected_symbols: Vec<novo_core::SymbolId> = selection
+                .iter()
+                .filter_map(|&id| match id {
+                    AnyId::Symbol(s) => Some(s),
+                    _ => None,
+                })
+                .collect();
+            let symbols = selected_symbols.len();
+            let xref = match selected_symbols.as_slice() {
+                [only] => {
+                    let index = novo_xref::XrefIndex::build(
+                        document.project(),
+                        self.editor.catalog.library(),
+                    );
+                    novo_xref::XrefAction::for_symbol(document.project(), &index, *only)
+                }
+                _ => Vec::new(),
+            };
             let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
             self.menu = Some(ContextMenu {
                 anchor,
@@ -1118,6 +1157,9 @@ impl SchematicView {
                 terminals,
                 interruptions,
                 interruption,
+                wires,
+                symbols,
+                xref,
                 page,
                 opened: true,
             });
@@ -1676,6 +1718,9 @@ impl SchematicView {
                                 chosen = Some(MenuChoice::Command(id));
                             }
                         }
+                        if ui.button("Paste   Ctrl+V").clicked() {
+                            chosen = Some(MenuChoice::Command("edit.paste"));
+                        }
                         if ui.button("New page after this").clicked() {
                             chosen = Some(MenuChoice::NewPage);
                         }
@@ -1818,6 +1863,50 @@ impl SchematicView {
                         }
                         ui.separator();
                     }
+                    for action in &menu.xref {
+                        // Go to partner is the row above.
+                        let id = match action {
+                            novo_xref::XrefAction::GoToPartner => continue,
+                            novo_xref::XrefAction::AllReferences => "nav.all_references",
+                            novo_xref::XrefAction::Link => "xref.link",
+                        };
+                        let text = match action.shortcut() {
+                            Some(key) => format!("{}   {key}", action.label()),
+                            None => action.label().to_owned(),
+                        };
+                        if ui.button(text).clicked() {
+                            chosen = Some(MenuChoice::Command(id));
+                        }
+                    }
+                    if !menu.wires.is_empty() {
+                        if ui
+                            .button("Re-route")
+                            .on_hover_text("A fresh orthogonal route for the selected wires")
+                            .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("draw.tidy"));
+                        }
+                        if ui
+                            .button("Make cable")
+                            .on_hover_text("The selected wires become the cores of one cable")
+                            .clicked()
+                        {
+                            chosen = Some(MenuChoice::MakeCable);
+                        }
+                    }
+                    ui.separator();
+                    for (label, id) in [
+                        ("Duplicate   Ctrl+D", "edit.duplicate"),
+                        ("Copy   Ctrl+C", "edit.copy"),
+                    ] {
+                        if ui.button(label).clicked() {
+                            chosen = Some(MenuChoice::Command(id));
+                        }
+                    }
+                    if menu.symbols > 0 && ui.button("Save as macro").clicked() {
+                        chosen = Some(MenuChoice::Command("macro.save"));
+                    }
+                    ui.separator();
                     for (label, choice) in [
                         ("Move   M", MenuChoice::Key(EditorKey::Move)),
                         ("Rotate   R", MenuChoice::Key(EditorKey::Rotate)),
@@ -1838,6 +1927,7 @@ impl SchematicView {
         let wires = menu.potentials.wires.clone();
         let device = menu.device;
         let interruption = menu.interruption;
+        let menu_wires = menu.wires.clone();
         let page = menu.page;
         let suggestion = |i: usize| menu.potentials.declare.get(i).cloned();
         let feed_pick: Option<(Vec<novo_core::SymbolId>, PotentialSpec)> =
@@ -1928,6 +2018,7 @@ impl SchematicView {
                 self.editor.key(document, k, &selection);
             }
             Some(MenuChoice::Command(id)) => self.commands.push(id),
+            Some(MenuChoice::MakeCable) => self.editor.request_cable(menu_wires),
             Some(MenuChoice::NewPage) => {
                 if let Some(p) = self.editor.new_page(document, page) {
                     self.goto = Some(p);
@@ -1958,6 +2049,7 @@ enum MenuChoice {
     RenameLabel,
     Key(EditorKey),
     NewPage,
+    MakeCable,
     Command(&'static str),
 }
 
