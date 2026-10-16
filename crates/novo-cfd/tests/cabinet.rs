@@ -264,3 +264,25 @@ fn the_steady_path_agrees_with_the_march_and_labels_its_preview() {
         );
     }
 }
+
+#[test]
+fn a_device_the_grid_cannot_resolve_says_so() {
+    let mut t = Tuning::default().with_cells(450);
+    t.coarse.steady_tol = 1e-2;
+    let s = CabinetSolver::new(t)
+        .solve(
+            &scenario(false),
+            Fidelity::Coarse,
+            &Control::new(),
+            &mut |_| {},
+        )
+        .unwrap();
+    assert!(
+        s.notes.iter().any(|n| n.contains("not resolved")),
+        "{:?}",
+        s.notes
+    );
+    let d = &s.devices[0];
+    // the band spans the whole range from the air to twice the rise
+    assert!(d.surface_band_c.1 - d.surface_band_c.0 >= 1.9 * (d.surface_c - 25.0).max(0.0));
+}
