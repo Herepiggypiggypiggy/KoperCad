@@ -11,5 +11,12 @@ novo-thermal.workspace = true
 rayon.workspace = true
 thiserror.workspace = true
 
+[features]
+# The synthetic multi-level stand-in solver, for tests and UI development.
+demo = []
+
+[dev-dependencies]
+novo-cfd = { path = ".", features = ["demo"] }
+
 [lints]
 workspace = true

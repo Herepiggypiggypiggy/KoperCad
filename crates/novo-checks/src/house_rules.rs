@@ -18,7 +18,7 @@ use crate::{Context, Problem, ProblemKind};
 const TOUCH_MM: f64 = 0.2;
 
 /// Every (symbol, pin) a wire ends on.
-fn wired_pins(cx: &Context<'_>) -> HashSet<(SymbolId, u16)> {
+pub(crate) fn wired_pins(cx: &Context<'_>) -> HashSet<(SymbolId, u16)> {
     cx.project
         .wires()
         .flat_map(|w| w.ends())

@@ -167,6 +167,33 @@ impl NovoApp {
         Some(path)
     }
 
+    /// The project as an EPLAN PXF file (`.epj`) for EPLAN to import. The
+    /// report says what was left out and that no real EPLAN has opened a
+    /// KoperCAD file yet.
+    pub(super) fn export_eplan(&mut self) -> Option<PathBuf> {
+        let (dir, stem) = self.export_base()?;
+        let doc = self.backend.document()?;
+        let export = novo_interop::eplan::pxf::write_pxf(
+            doc.project(),
+            &novo_interop::eplan::pxf::PxfWriteOptions::default(),
+        );
+        let path = replaceable(
+            &dir,
+            &stem,
+            "epj",
+            novo_interop::eplan::pxf::is_kopercad_pxf,
+        );
+        if let Err(e) = write_replacing(&path, export.text.as_bytes()) {
+            self.message(
+                Level::Error,
+                format!("Could not write {}: {e}", path.display()),
+            );
+            return None;
+        }
+        self.finish_export(std::slice::from_ref(&path), "EPLAN project", &export.report);
+        Some(path)
+    }
+
     /// Says where the file went and, when the format left something out,
     /// what (a warning stays on screen until dismissed).
     fn finish_export(&mut self, written: &[PathBuf], what: &str, report: &Report) {
