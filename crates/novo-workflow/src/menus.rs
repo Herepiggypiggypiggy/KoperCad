@@ -51,6 +51,12 @@ fn group_default(group: &str) -> Option<MenuPlace> {
 
 /// Commands whose menu differs from their group's.
 const PLACEMENTS: &[(&str, MenuPlace)] = &[
+    ("page.new", under("File", "Pages")),
+    ("page.rename", under("File", "Pages")),
+    ("page.duplicate", under("File", "Pages")),
+    ("page.delete", under("File", "Pages")),
+    ("page.move_up", under("File", "Pages")),
+    ("page.move_down", under("File", "Pages")),
     ("revision.issue", under("File", "Revisions")),
     ("revision.compare", under("File", "Revisions")),
     ("file.import_dxf_background", under("File", "Import")),
