@@ -1,5 +1,6 @@
 //! The 3D workspace's toolbar and commands: layers, wires and the door.
 
+use eframe::egui;
 use novo_core::{DeviceTag, MountingPlate, Point, RailKind};
 use novo_layout::enclosure::{Door, Enclosure, Hinge};
 use novo_layout::model::set_enclosure;
@@ -125,8 +126,47 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
     assert_eq!(d.app.view3d.controls.door_deg, 100.0);
 }
 
+/// One frame with `key` pressed, as the app sees a keystroke.
+fn press(d: &mut Drive, key: egui::Key, modifiers: egui::Modifiers) {
+    d.frame_with(vec![egui::Event::Key {
+        key,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers,
+    }]);
+}
+
 #[test]
-fn the_3d_key_and_the_door_key_run_their_commands() {
+fn shift_d_swings_the_door_in_the_3d_workspace_and_only_there() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    press(&mut d, egui::Key::D, egui::Modifiers::SHIFT);
+    assert_eq!(d.app.view3d.controls.door_deg, 100.0, "Shift+D opened it");
+    press(&mut d, egui::Key::D, egui::Modifiers::SHIFT);
+    assert_eq!(d.app.view3d.controls.door_deg, 0.0, "and closed it");
+
+    // On the Schematic the key does nothing: no door, no workspace switch.
+    d.app.switch_workspace(Workspace::Schematic);
+    d.frame();
+    press(&mut d, egui::Key::D, egui::Modifiers::SHIFT);
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
+    assert_eq!(d.app.view3d.controls.door_deg, 0.0);
+}
+
+#[test]
+fn ctrl_6_opens_the_3d_workspace_from_the_cabinet_and_from_3d_itself() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.app.switch_workspace(Workspace::Cabinet);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
+    press(&mut d, egui::Key::Num6, egui::Modifiers::COMMAND);
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+}
+
+#[test]
+fn the_keymap_has_the_3d_keys() {
     use novo_workflow::keymap::{Chord, Focus, Key, Keymap};
     let map = Keymap::workflow();
     assert_eq!(

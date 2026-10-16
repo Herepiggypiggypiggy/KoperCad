@@ -7,7 +7,7 @@ use std::sync::Arc;
 use eframe::egui;
 use novo_core::{Project, StructureId};
 use novo_layout::model::load;
-use novo_view3d::build::{DOOR_HINGE, model};
+use novo_view3d::build::{DOOR_HINGE, Options, WireInput, model};
 use novo_view3d::door::open_angle;
 use novo_view3d::palette::View3dTheme;
 use novo_view3d::widget::{View3d, ViewOptions};
@@ -32,6 +32,8 @@ pub(crate) struct View3dMode {
     heat_shown: Option<(u64, Heat3d)>,
     /// The layers the scene was built with.
     built_layers: Layers,
+    /// The routed wires of an enclosure at a project revision.
+    wires: Option<(StructureId, u64, Vec<WireInput>)>,
     /// The toolbar's layers and door.
     pub(super) controls: Controls,
 }
@@ -45,6 +47,7 @@ impl Default for View3dMode {
             heat: Heat3d::default(),
             heat_shown: None,
             built_layers: Layers::default(),
+            wires: None,
             controls: Controls::default(),
         }
     }
@@ -95,12 +98,24 @@ impl NovoApp {
         let layers = mode.controls.layers;
         let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
             || mode.built_layers != layers;
-        if stale
-            && let Some(built) =
-                model::scene(project, id, &model::options(project, id, layers.wires))
-        {
-            mode.built = Some((id, revision, Arc::new(layers.apply(built))));
-            mode.built_layers = layers;
+        if stale {
+            // Routing is the slow part: it is redone only for a new revision.
+            let wires = if layers.wires {
+                if !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision) {
+                    mode.wires = Some((id, revision, model::wires(project, id)));
+                }
+                mode.wires.as_ref().map(|w| w.2.clone()).unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            let options = Options {
+                shell: model::shell(project, id),
+                wires,
+            };
+            if let Some(built) = model::scene(project, id, &options) {
+                mode.built = Some((id, revision, Arc::new(layers.apply(built))));
+                mode.built_layers = layers;
+            }
         }
         let Some((_, _, scene)) = &mode.built else {
             return;
