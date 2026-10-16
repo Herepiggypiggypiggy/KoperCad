@@ -187,14 +187,13 @@ impl NovoApp {
             None => "Place symbol".to_owned(),
         };
         let select_tip = super::tips::tip_text(&self.wb.keymap, "Select", "edit.escape");
-        let connect_tip = format!(
-            "{} · {} switches",
-            super::tips::tip_text(&self.wb.keymap, "Connect", "tool.connect"),
-            self.wb
-                .keymap
-                .shortcut_text("wire.mode")
-                .unwrap_or_default()
-        );
+        let connect_tip = match self.wb.keymap.shortcut_text("wire.mode") {
+            Some(key) => format!(
+                "{} · {key} switches",
+                super::tips::tip_text(&self.wb.keymap, "Connect", "tool.connect")
+            ),
+            None => super::tips::tip_text(&self.wb.keymap, "Connect", "tool.connect"),
+        };
         let chosen = self.settings.wiring_mode();
         let mut chip = None;
         let mut picked = None;

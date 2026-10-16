@@ -25,7 +25,7 @@ pub(super) struct Hint {
 pub(super) const HINTS: &[Hint] = &[Hint {
     id: "empty_page",
     command: "tool.place",
-    text: "Press {key} to place a symbol · ? for keys",
+    text: "Press {key} to place a symbol · {keys} for keys",
 }];
 
 /// `Label · Key`, or just the label when the command has no key.
@@ -41,7 +41,10 @@ pub(super) fn hint_text(keymap: &Keymap, hint: &Hint) -> String {
     let key = keymap
         .shortcut_text(hint.command)
         .unwrap_or_else(|| "Ctrl+K".to_owned());
-    hint.text.replace("{key}", &key)
+    let sheet = keymap
+        .shortcut_text("view.shortcuts")
+        .unwrap_or_else(|| "Ctrl+K".to_owned());
+    hint.text.replace("{key}", &key).replace("{keys}", &sheet)
 }
 
 /// Whether a hint still shows.
