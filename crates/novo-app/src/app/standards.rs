@@ -37,7 +37,12 @@ impl NovoApp {
             Some(Value::Int(i)) => *i as f64,
             _ => 40.0,
         };
-        let mut new_ambient = ambient;
+        // A drag is kept here until it ends: one drag, one undo step.
+        let ambient_id = egui::Id::new("standards_ambient_pending");
+        let mut new_ambient = ctx
+            .data(|d| d.get_temp::<f64>(ambient_id))
+            .unwrap_or(ambient);
+        let mut ambient_done = false;
         let mut save: Option<StandardsFormat> = None;
         let mut open = true;
         egui::Window::new("Standards check")
@@ -74,7 +79,12 @@ impl NovoApp {
                             }
                         });
                     ui.label("Ambient °C:");
-                    ui.add(egui::DragValue::new(&mut new_ambient).range(10.0..=60.0).speed(0.5));
+                    let r = ui.add(
+                        egui::DragValue::new(&mut new_ambient)
+                            .range(10.0..=60.0)
+                            .speed(0.5),
+                    );
+                    ambient_done = r.drag_stopped() || r.lost_focus();
                 });
                 if report.sets.is_empty() {
                     ui.label("Choose at least one standard to see the report.");
@@ -115,7 +125,12 @@ impl NovoApp {
                 )
             });
         }
-        if (new_ambient - ambient).abs() > 1e-9 {
+        if ambient_done {
+            ctx.data_mut(|d| d.remove::<f64>(ambient_id));
+        } else if (new_ambient - ambient).abs() > 1e-9 {
+            ctx.data_mut(|d| d.insert_temp(ambient_id, new_ambient));
+        }
+        if ambient_done && (new_ambient - ambient).abs() > 1e-9 {
             self.edit_project("Ambient temperature", |tx| {
                 standards::set_info_property(tx, keys::AMBIENT_C, Some(Value::Float(new_ambient)))
             });

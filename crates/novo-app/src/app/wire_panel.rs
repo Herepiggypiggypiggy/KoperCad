@@ -131,12 +131,14 @@ const METHODS: [(&str, &str); 4] = [
 ];
 
 /// A labelled text field whose edit is committed when it loses focus.
+#[allow(clippy::too_many_arguments)]
 fn text_row(
     ui: &mut egui::Ui,
     edits: &mut Vec<WireEdit>,
     label: &str,
     id: &str,
     value: &mut String,
+    shown: &str,
     hint: &str,
     edit: fn(String) -> WireEdit,
 ) {
@@ -148,7 +150,7 @@ fn text_row(
                 .hint_text(hint)
                 .desired_width(130.0),
         );
-        if r.lost_focus() {
+        if r.lost_focus() && value.trim() != shown.trim() {
             edits.push(edit(value.clone()));
         }
     });
@@ -209,8 +211,8 @@ impl NovoApp {
                         format!("Wire {}", shown.number)
                     });
                     widgets::section_label(ui, "Conductor");
-                    text_row(ui, &mut edits, "Colour", "wire_colour", &mut colour, "BK, BU, GNYE", WireEdit::Colour);
-                    text_row(ui, &mut edits, "Section mm²", "wire_section", &mut section, "2.5", WireEdit::Section);
+                    text_row(ui, &mut edits, "Colour", "wire_colour", &mut colour, &shown.colour, "BK, BU, GNYE", WireEdit::Colour);
+                    text_row(ui, &mut edits, "Section mm²", "wire_section", &mut section, &shown.section, "2.5", WireEdit::Section);
                     widgets::section_label(ui, "Current-carrying capacity");
                     ui.horizontal(|ui| {
                         ui.label("Installation");
@@ -243,7 +245,7 @@ impl NovoApp {
                                 }
                             });
                     });
-                    text_row(ui, &mut edits, "Grouped circuits", "wire_grouped", &mut grouped, "1", WireEdit::Grouped);
+                    text_row(ui, &mut edits, "Grouped circuits", "wire_grouped", &mut grouped, &shown.grouped, "1", WireEdit::Grouped);
                     ui.weak("The standards check reads these. A wire with no installation method is not rated, never guessed; set a default for the project in Standards check.");
                 });
             });
