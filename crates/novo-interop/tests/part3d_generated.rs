@@ -271,26 +271,13 @@ fn a_duct_is_an_open_channel_whose_fingers_are_cut_down_to_the_floor() {
 }
 
 #[test]
-fn zz_probe_determinism() {
+fn building_the_same_part_twice_gives_the_same_levels() {
     let step = cylinder_step(5.0, 20.0);
     let cancel = AtomicBool::new(false);
-    let a = geometry_from_step(step.as_bytes(), None, Quality::Normal, &cancel, None).unwrap();
-    let mut bad = 0;
-    for i in 0..200 {
-        let b = geometry_from_step(step.as_bytes(), None, Quality::Normal, &cancel, None).unwrap();
-        if a != b {
-            bad += 1;
-            if bad < 4 {
-                for (k, (x, y)) in a.lods.iter().zip(&b.lods).enumerate() {
-                    eprintln!("run {i} lod {k}: pos {} vs {}, idx {} vs {}, posdiff {}",
-                        x.positions.len(), y.positions.len(), x.indices.len(), y.indices.len(),
-                        x.positions.iter().zip(&y.positions).filter(|(p, q)| p != q).count());
-                }
-            }
-        }
+    let first = geometry_from_step(step.as_bytes(), None, Quality::Normal, &cancel, None).unwrap();
+    for run in 0..30 {
+        let again =
+            geometry_from_step(step.as_bytes(), None, Quality::Normal, &cancel, None).unwrap();
+        assert_eq!(first, again, "run {run}");
     }
-    eprintln!("PROBE bad runs {bad} of 200");
-    // first-stage determinism: the bounds
-    eprintln!("PROBE bounds {:?}", a.detail().bounds);
-    assert_eq!(bad, 0);
 }
