@@ -296,3 +296,12 @@ fn devices_are_coloured_by_the_air_in_front_of_them() {
     // The original is untouched.
     assert!(scene.items.iter().all(|i| i.tint.is_none()));
 }
+
+#[test]
+fn the_slice_span_is_the_result_along_its_axis() {
+    use super::heat_3d::slice_span;
+    let snap = snapshot();
+    assert_eq!(slice_span(&snap, Axis::X), (0.0, 100.0, 20));
+    assert_eq!(slice_span(&snap, Axis::Y), (0.0, 80.0, 16));
+    assert_eq!(slice_span(&snap, Axis::Z), (0.0, 60.0, 12));
+}

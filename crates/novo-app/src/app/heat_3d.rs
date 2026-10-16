@@ -144,6 +144,18 @@ pub(crate) fn overlays(
     out
 }
 
+/// The span of the result along `axis` in mm (low, high) and the number of
+/// cells across it.
+pub(crate) fn slice_span(snap: &CfdSnapshot, axis: Axis) -> (f64, f64, usize) {
+    let (lo, hi) = extent(snap, axis);
+    let cells = match axis {
+        Axis::X => snap.grid.nx,
+        Axis::Y => snap.grid.ny,
+        Axis::Z => snap.grid.nz,
+    };
+    (lo, hi, cells.max(1))
+}
+
 fn extent(snap: &CfdSnapshot, axis: Axis) -> (f64, f64) {
     let e = match axis {
         Axis::X => &snap.grid.x_edges_mm,
