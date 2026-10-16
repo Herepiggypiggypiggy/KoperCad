@@ -7,7 +7,8 @@
 # button "Plate drawing" and the command export.plate write "<project> <+CAB> plate.pdf" next to the
 # project and show "Exported <path>"; sheets are Plate, then Door when something goes through it;
 # each sheet has the tables "Holes by diameter", "Drill holes" and "Cut-outs".
-# Needs from the Cabinet owner: the anchors named below and a signal plate_exported.
+# Needs from the Cabinet owner: the anchors named below. The header button does not raise the
+# command export.plate (so the steps use the palette); Ask::ExportPlate should call it.
 format = 1
 id = "panel-plate-drawing"
 version = 2
@@ -44,12 +45,10 @@ id = "select-t1"
 title = "A device that is screwed on"
 title_nl = "Een component dat wordt vastgeschroefd"
 text = """
-Click **-T1**, the control transformer. Its part says it mounts on the plate with four 6 mm holes, in a pattern measured from the device's top left corner.
-Those four holes will be in the drill table.
+Click **-T1**, the control transformer. Its part mounts on the plate with four 6 mm holes, in a pattern measured from the device's top left corner. The inspector does not list them; they appear in the drawing and the drill table you export below.
 """
 text_nl = """
-Klik op **-T1**, de stuurtransformator. Zijn artikel zegt dat het met vier gaten van 6 mm op de plaat wordt gemonteerd, in een patroon gemeten vanaf de linkerbovenhoek van het component.
-Die vier gaten komen in de boortabel.
+Klik op **-T1**, de stuurtransformator. Zijn artikel wordt met vier gaten van 6 mm op de plaat gemonteerd, in een patroon gemeten vanaf de linkerbovenhoek van het component. De inspector toont ze niet; ze staan in de tekening en de boortabel die je hieronder exporteert.
 """
 point = { ui = "cabinet.inspector" }
 expect = { selected = "-T1" }
@@ -60,12 +59,10 @@ id = "select-s0"
 title = "A device that goes through the door"
 title_nl = "Een component dat door de deur gaat"
 text = """
-Click **-S0**, a push button. Its part says it needs a round 22 mm {tip:cutout} in the **door**, not holes in the plate.
-So the plate drawing gets a second sheet for the door.
+Click **-S0**, a push button. It needs a round 22 mm {tip:cutout} in the **door**, not holes in the plate, so the plate drawing gets a second sheet for the door.
 """
 text_nl = """
-Klik op **-S0**, een drukknop. Zijn artikel zegt dat hij een ronde {tip:cutout} van 22 mm in de **deur** nodig heeft, geen gaten in de plaat.
-Daarom krijgt de plaattekening een tweede blad voor de deur.
+Klik op **-S0**, een drukknop. Hij heeft een ronde {tip:cutout} van 22 mm in de **deur** nodig, geen gaten in de plaat, dus de plaattekening krijgt een tweede blad voor de deur.
 """
 point = { ui = "cabinet.inspector" }
 expect = { selected = "-S0" }
@@ -89,11 +86,11 @@ id = "export"
 title = "Export the plate drawing"
 title_nl = "Exporteer de plaattekening"
 text = """
-Click **Plate drawing** in the Cabinet header (or press {key:view.command_palette}, type **plate** and run **Export plate drawing**).
+Press {key:view.command_palette}, type **plate** and run **Export plate drawing** (the **Plate drawing** button in the Cabinet header does the same).
 A PDF named like "Motor starter cabinet (lesson) +CAB plate.pdf" is written next to the project, and the message says "Exported" with the full path.
 """
 text_nl = """
-Klik op **Plate drawing** in de kopregel van de Cabinet-weergave (of druk op {key:view.command_palette}, typ **plate** en voer **Export plate drawing** uit).
+Druk op {key:view.command_palette}, typ **plate** en voer **Export plate drawing** uit (de knop **Plate drawing** in de kopregel van de Cabinet-weergave doet hetzelfde).
 Een PDF met een naam als "Motor starter cabinet (lesson) +CAB plate.pdf" wordt naast het project geschreven en de melding zegt "Exported" met het volledige pad.
 """
 point = { ui = "cabinet.plate_drawing" }
@@ -133,11 +130,11 @@ id = "turn-t1"
 title = "Turn the transformer and export again"
 title_nl = "Draai de transformator en exporteer opnieuw"
 text = """
-Select **-T1** and press {key:edit.rotate}; its box turns a quarter. Click **Plate drawing** again: the message says "Replaced", because the file from before is overwritten.
+Select **-T1** and press {key:edit.rotate}; its box turns a quarter. Run **Export plate drawing** again from the palette: the message says "Replaced", because the file from before is overwritten.
 The four holes of **-T1** turned with the device, so their X and Y in **Drill holes** are different now.
 """
 text_nl = """
-Selecteer **-T1** en druk op {key:edit.rotate}; het kader draait een kwartslag. Klik opnieuw op **Plate drawing**: de melding zegt "Replaced", want het eerdere bestand wordt overschreven.
+Selecteer **-T1** en druk op {key:edit.rotate}; het kader draait een kwartslag. Voer **Export plate drawing** opnieuw uit via het palet: de melding zegt "Replaced", want het eerdere bestand wordt overschreven.
 De vier gaten van **-T1** zijn met het component meegedraaid, dus hun X en Y in **Drill holes** zijn nu anders.
 """
 point = { ui = "cabinet.canvas" }

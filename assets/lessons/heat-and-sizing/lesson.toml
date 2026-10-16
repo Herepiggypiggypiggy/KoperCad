@@ -93,15 +93,15 @@ point = { ui = "cabinet.heat" }
 
 [[step]]
 id = "unknown"
-title = "Unknown is not zero"
-title_nl = "Onbekend is niet nul"
+title = "Check the sources are there"
+title_nl = "Controleer of de bronnen er zijn"
 text = """
-A device whose part has no power loss is simply left out of the map, and the problem is in the data, not the picture: open the part and fill in **power_loss_w**.
-A cabinet with no loss data at all would show a cold map, which is wrong, so always check that the sources you expect are there.
+A device whose part has no **power_loss_w** counts as 0 W: the map shows it as cold and gives no warning. So check that every device you expect to be warm has a loss in its part.
+A cabinet with no loss data at all would show a cool map, which is wrong.
 """
 text_nl = """
-Een component waarvan het artikel geen verliesvermogen heeft, wordt gewoon weggelaten uit de kaart en het probleem zit in de gegevens, niet in het beeld: open het artikel en vul **power_loss_w** in.
-Een kast zonder enige verliesgegevens zou een koude kaart tonen, wat onjuist is; controleer dus altijd of de bronnen die je verwacht erbij staan.
+Een component waarvan het artikel geen **power_loss_w** heeft telt als 0 W: de kaart toont het als koud en geeft geen waarschuwing. Controleer dus dat elk component dat warm hoort te zijn een verlies in zijn artikel heeft.
+Een kast zonder enige verliesgegevens zou een koele kaart tonen, wat onjuist is.
 """
 
 [[step]]
@@ -155,11 +155,11 @@ id = "balance"
 title = "What the heat means for the box"
 title_nl = "Wat de warmte voor de kast betekent"
 text = """
-Click **Size enclosure** (or run {key:cabinet.size-enclosure}). The window **Size the enclosure** opens with the inputs **Free space** (spare room on the plate, 20 %), **Ducts** (room for ducts, 20 %),
+Click **Size enclosure** in the header (or press {key:view.command_palette} and search for it). The window **Size the enclosure** opens with the inputs **Free space** (spare room on the plate, 20 %), **Ducts** (room for ducts, 20 %),
 **Ambient max** (35 C) and **Inside max** (40 C), and a choice of how the cabinet stands, at first "Floor standing, free".
 """
 text_nl = """
-Klik op **Size enclosure** (of voer {key:cabinet.size-enclosure} uit). Het venster **Size the enclosure** opent met de invoeren **Free space** (reserveruimte op de plaat, 20 %), **Ducts** (ruimte voor kanalen, 20 %),
+Klik op **Size enclosure** in de kopregel (of druk op {key:view.command_palette} en zoek het). Het venster **Size the enclosure** opent met de invoeren **Free space** (reserveruimte op de plaat, 20 %), **Ducts** (ruimte voor kanalen, 20 %),
 **Ambient max** (35 C) en **Inside max** (40 C) en een keuze hoe de kast staat, eerst "Floor standing, free".
 """
 point = { ui = "cabinet.sizing" }
