@@ -328,3 +328,32 @@ fn a_captured_value_that_looks_like_a_placeholder_is_kept() {
     let tr = Translator::new("nl", &table);
     assert_eq!(tr.tr("Line {b} x"), "x {b}");
 }
+
+#[test]
+fn a_language_file_round_trips() {
+    let mut table = ProjectTable::default();
+    table.set("nl", "Wire", "Ader").unwrap();
+    let mine = Translator::new("nl", &table);
+    // What the user exports is the effective language: shipped plus own.
+    let mut file = i18n::builtin().remove(0);
+    file.set("Wire", "Ader");
+    let json = file.to_json();
+    let back = Catalog::from_json(&json).unwrap();
+    assert_eq!(back, file);
+    let mut other = ProjectTable::default();
+    assert!(other.put_language(back).is_empty());
+    assert_eq!(Translator::new("nl", &other).tr("Wire"), "Ader");
+    assert_eq!(mine.tr("Wire"), "Ader");
+}
+
+#[test]
+fn a_bad_language_file_is_refused_with_a_reason() {
+    assert!(Catalog::from_json("not json").is_err());
+    assert!(matches!(
+        Catalog::from_json(r#"{"code":"  ","entries":{}}"#),
+        Err(i18n::LanguageFileError::NoCode)
+    ));
+    let c =
+        Catalog::from_json(r#"{"code":"DE","name":"Deutsch","entries":{"Wire":"Draht"}}"#).unwrap();
+    assert_eq!(c.code, "de");
+}

@@ -119,6 +119,84 @@ impl NovoApp {
             .map_or_else(Translator::english, |d| i18n::translator_of(d.project()))
     }
 
+    /// Writes the current language as a language file; returns the number
+    /// of entries.
+    pub(super) fn export_language_file(&mut self, path: &std::path::Path) -> Option<usize> {
+        let translator = self.report_translator();
+        if translator.is_english() {
+            self.message(
+                Level::Info,
+                "English is the source text; pick another language first",
+            );
+            return None;
+        }
+        let catalog = translator.catalog();
+        match super::pdf::write_replacing(path, catalog.to_json().as_bytes()) {
+            Ok(()) => {
+                self.message(
+                    Level::Info,
+                    format!("Wrote {} ({} texts)", path.display(), catalog.entries.len()),
+                );
+                Some(catalog.entries.len())
+            }
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not write {}: {e}", path.display()),
+                );
+                None
+            }
+        }
+    }
+
+    /// Reads a language file into the project (one undo step) and makes it
+    /// the report language. Entries that would break placeholders are left
+    /// out and counted in the message.
+    pub(super) fn import_language_file(&mut self, path: &std::path::Path) -> bool {
+        let text = match std::fs::read_to_string(path) {
+            Ok(t) => t,
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not read {}: {e}", path.display()),
+                );
+                return false;
+            }
+        };
+        let catalog = match i18n::Catalog::from_json(&text) {
+            Ok(c) => c,
+            Err(e) => {
+                self.message(Level::Error, format!("{}: {e}", path.display()));
+                return false;
+            }
+        };
+        let Some(project) = self.backend.document().map(|d| d.project().clone()) else {
+            return false;
+        };
+        let mut table = ProjectTable::of_project(&project);
+        let code = catalog.code.clone();
+        let total = catalog.entries.len();
+        let dropped = table.put_language(catalog);
+        self.set_translation_table("Import language file", &table);
+        self.set_report_language(&code);
+        let note = if dropped.is_empty() {
+            format!("Loaded {total} texts for {code}")
+        } else {
+            format!(
+                "Loaded {} texts for {code}; {} left out because they change a {{placeholder}}: {}",
+                total - dropped.len(),
+                dropped.len(),
+                dropped
+                    .iter()
+                    .map(|p| p.key.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        };
+        self.message(Level::Info, note);
+        true
+    }
+
     pub(super) fn set_report_language(&mut self, code: &str) {
         let value = (code != ENGLISH).then(|| Value::Text(code.to_owned()));
         self.edit_project("Set report language", |tx| {
@@ -154,6 +232,8 @@ impl NovoApp {
         let mut edit: Option<(String, String)> = None;
         let mut add_language: Option<(String, String)> = None;
         let mut copy: Option<String> = None;
+        let mut save_file = false;
+        let mut load_file = false;
         let mut open = true;
         super::panel::dialog(ctx, "Languages", [620.0, 560.0])
             .open(&mut open)
@@ -263,6 +343,16 @@ impl NovoApp {
                         ));
                     }
                 });
+                ui.horizontal(|ui| {
+                    if !translator.is_english()
+                        && widgets::ghost_button(ui, "Save language file...").clicked()
+                    {
+                        save_file = true;
+                    }
+                    if widgets::ghost_button(ui, "Load language file...").clicked() {
+                        load_file = true;
+                    }
+                });
                 ui.weak("Texts with no translation print in English, so nothing is left blank.");
                 ui.weak(
                     "CSV and Excel exports of a report use the same language for their headers.",
@@ -295,6 +385,24 @@ impl NovoApp {
             self.set_report_language(&code);
             win.new_code.clear();
             win.new_name.clear();
+        }
+        if save_file {
+            let name = format!("{}{}", code, i18n::EXTENSION);
+            if let Some(path) = rfd::FileDialog::new()
+                .set_title("Save language file")
+                .set_file_name(name)
+                .save_file()
+            {
+                self.export_language_file(&path);
+            }
+        }
+        if load_file
+            && let Some(path) = rfd::FileDialog::new()
+                .set_title("Load language file")
+                .add_filter("Language file", &["json"])
+                .pick_file()
+        {
+            self.import_language_file(&path);
         }
         if let Some(text) = copy {
             ctx.copy_text(text);
