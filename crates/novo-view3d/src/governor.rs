@@ -119,7 +119,7 @@ mod tests {
 
     #[cfg(feature = "gpu")]
     #[test]
-    fn the_adapter_tiers_step_down_to_software_and_stop() {
+    fn a_hardware_adapter_steps_down_to_integrated_and_never_to_software() {
         use crate::render::Tier;
         let mut g = FrameGovernor::new(Tier::Discrete, false);
         let mut seen = Vec::new();
@@ -130,7 +130,10 @@ mod tests {
                 }
             }
         }
-        assert_eq!(seen, vec![Tier::Integrated, Tier::Software]);
-        assert_eq!(g.tier, Tier::Software);
+        assert_eq!(seen, vec![Tier::Integrated]);
+        assert_eq!(g.tier, Tier::Integrated);
+        // A software adapter has nothing below it either.
+        let mut s = FrameGovernor::new(Tier::Software, false);
+        assert!((0..1200).all(|_| s.frame(40.0).is_none()));
     }
 }

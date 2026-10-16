@@ -364,9 +364,11 @@ amber tint are never the only difference.
 - **Frame governor connected** (`governor.rs` is now generic over the tier
   type). While the view moves, the widget feeds each frame interval to a
   governor on the adapter's `render::Tier`; when the 95th percentile stays over
-  20 ms for two seconds it steps Discrete to Integrated to Software (less
-  resolution while moving, no MSAA on software, no shadow map there) and never
-  steps up by itself. Idle intervals are not counted (an idle view repaints
+  20 ms for two seconds it steps Discrete to Integrated (less resolution while
+  moving) and never steps up by itself. Integrated is the floor: the interval is
+  the whole app's, not the GPU's, so a slow solver or a busy panel must not
+  silently take a hardware adapter to no shadows and no MSAA. Software is only
+  the tier of a CPU adapter. Idle intervals are not counted (an idle view repaints
   rarely). The statistics panel says "quality stepped down to ..." when it did
   and the way back is in the UI: command `view.3d_quality` ("Restore 3D quality",
   View > 3D, palette, right-click menu, Dutch "kwaliteit herstellen"), a

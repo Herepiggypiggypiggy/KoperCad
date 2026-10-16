@@ -436,10 +436,7 @@ fn restore_quality_returns_a_stepped_down_view_to_the_adapters_tier() {
         out.textures_delta.clear();
     }
     let down = d.app.view3d.view.stepped_down();
-    assert!(
-        matches!(down, Some(Tier::Integrated | Tier::Software)),
-        "{down:?}"
-    );
+    assert_eq!(down, Some(Tier::Integrated), "the floor for hardware");
     frame_at(&mut d, 30.0);
     assert!(
         d.app.view3d.controls.reduced,

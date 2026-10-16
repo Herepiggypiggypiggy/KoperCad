@@ -1430,7 +1430,8 @@ mod stats_tests {
         let still = drive(&mut view, &ctx, 200, 0.2, false);
         assert!(still.iter().all(Option::is_none), "{still:?}");
         // 40 ms frames while moving: down to Integrated after two seconds,
-        // down to Software after two more, then it stays.
+        // and that is the floor: the interval is the whole app's, so a
+        // hardware adapter never steps itself down to Software.
         let slow = drive(&mut view, &ctx, 400, 0.04, true);
         assert_eq!(slow.first(), Some(&None), "starts on the adapter's tier");
         let seen: Vec<Tier> = slow.iter().flatten().copied().fold(Vec::new(), |mut v, t| {
@@ -1439,11 +1440,11 @@ mod stats_tests {
             }
             v
         });
-        assert_eq!(seen, vec![Tier::Integrated, Tier::Software]);
-        assert_eq!(slow.last(), Some(&Some(Tier::Software)));
+        assert_eq!(seen, vec![Tier::Integrated]);
+        assert_eq!(slow.last(), Some(&Some(Tier::Integrated)));
         // It never steps up by itself, however fast the frames get.
         let fast = drive(&mut view, &ctx, 400, 0.008, true);
-        assert_eq!(fast.last(), Some(&Some(Tier::Software)));
+        assert_eq!(fast.last(), Some(&Some(Tier::Integrated)));
         // Resetting starts again from the adapter's tier.
         view.reset_quality();
         let again = drive(&mut view, &ctx, 3, 0.008, true);
