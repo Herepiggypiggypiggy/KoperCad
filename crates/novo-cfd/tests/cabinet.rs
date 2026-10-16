@@ -292,12 +292,6 @@ fn turbulence_is_an_option_that_shows_in_the_snapshot_and_the_statement() {
             "the statement must not claim the model is laminar"
         );
         assert!(snap.accuracy.headline.contains("Turbulence"));
-        // a turbulence model takes the march, not the steady path
-        assert!(
-            !snap.notes.iter().any(|n| n.contains("window")),
-            "{:?}",
-            snap.notes
-        );
     }
 }
 
@@ -321,4 +315,76 @@ fn a_device_the_grid_cannot_resolve_says_so() {
     let d = &s.devices[0];
     // the band spans the whole range from the air to twice the rise
     assert!(d.surface_band_c.1 - d.surface_band_c.0 >= 1.9 * (d.surface_c - 25.0).max(0.0));
+}
+
+#[test]
+fn the_steady_path_drives_k_omega_sst_and_agrees_with_the_marched_one() {
+    use novo_cfd::turb::TurbModel;
+    for model in [TurbModel::KOmegaSst] {
+        for vent in [false, true] {
+            let scn = scenario(vent);
+            let mut tu = Tuning::default().with_cells(800);
+            for l in [&mut tu.coarse, &mut tu.medium, &mut tu.fine] {
+                l.report_every = 20;
+                l.steady_tol = 1e-2;
+            }
+            let run = |t: Tuning| {
+                CabinetSolver::new(t)
+                    .with_turbulence(model)
+                    .solve(&scn, Fidelity::Coarse, &Control::new(), &mut |_| {})
+                    .unwrap()
+            };
+            let steady = run(tu.clone());
+            let march = run(tu.marched());
+            let (a, b) = (&steady.devices[0], &march.devices[0]);
+            println!(
+                "CABINET | {model:?} vent {vent} | surface steady {:.2} vs march {:.2} | max nu_t/nu {:.1} vs {:.1} | iterations {} vs steps {}",
+                a.surface_c,
+                b.surface_c,
+                steady
+                    .turb_visc_ratio
+                    .iter()
+                    .cloned()
+                    .fold(0.0_f32, f32::max),
+                march
+                    .turb_visc_ratio
+                    .iter()
+                    .cloned()
+                    .fold(0.0_f32, f32::max),
+                steady.progress.iteration,
+                march.progress.iteration
+            );
+            assert!(steady.progress.converged);
+            assert!(steady.notes.iter().any(|n| n.contains("window")));
+            assert!(
+                steady
+                    .turb_visc_ratio
+                    .iter()
+                    .cloned()
+                    .fold(0.0_f32, f32::max)
+                    > 0.0
+            );
+            let rise = b.surface_c - 25.0;
+            assert!((a.surface_c - b.surface_c).abs() < 0.06 * rise);
+        }
+    }
+}
+
+#[test]
+fn k_epsilon_still_marches() {
+    use novo_cfd::turb::TurbModel;
+    let snap = small()
+        .with_turbulence(TurbModel::KEpsilon)
+        .solve(
+            &scenario(true),
+            Fidelity::Coarse,
+            &Control::new(),
+            &mut |_| {},
+        )
+        .unwrap();
+    assert!(
+        !snap.notes.iter().any(|n| n.contains("window")),
+        "{:?}",
+        snap.notes
+    );
 }
