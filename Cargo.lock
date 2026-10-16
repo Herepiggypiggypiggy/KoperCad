@@ -2253,7 +2253,9 @@ dependencies = [
 name = "novo-thermal"
 version = "0.1.0"
 dependencies = [
+ "novo-core",
  "novo-layout",
+ "novo-parts",
  "thiserror 2.0.21",
 ]
 

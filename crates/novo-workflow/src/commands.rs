@@ -903,6 +903,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "heat.simulate",
+        "Simulate heat of the cabinet",
+        "View",
+        &[
+            "heat",
+            "simulate",
+            "thermal",
+            "temperature",
+            "cabinet",
+            "loss",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "heat.airflow",
         "Show or hide airflow",
         "View",

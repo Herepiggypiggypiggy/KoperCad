@@ -274,6 +274,11 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["warmte tonen", "temperatuur", "warmtebeeld"],
     ),
+    nl(
+        "heat.simulate",
+        &[],
+        &["warmte simuleren", "kast doorrekenen"],
+    ),
     nl("heat.airflow", &[], &["luchtstroom", "luchtstroming"]),
     nl("heat.contours", &[], &["isothermen", "warmtelijnen"]),
     nl(
