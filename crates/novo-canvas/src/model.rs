@@ -603,10 +603,31 @@ enum NoteWhat {
     Table { note: SymbolNote, size: Vec2 },
 }
 
-/// How far from its symbol's ink a note can end up, in mm: the search's
-/// last ring plus room for the note itself. A change farther away than this
-/// cannot move the note.
+/// The least distance from its symbol's ink, in mm, that a change can still
+/// move a note from (see [`NoteSlot::reach`] for the real, per-note value).
 const NOTE_REACH: f32 = 60.0;
+
+impl NoteSlot {
+    /// How far from the symbol's ink a change can reach the note: the last
+    /// search ring, the slide along a side, and the note's own size, but not
+    /// less than [`NOTE_REACH`]. A tall contact table reaches farther than a
+    /// line of text.
+    fn reach(&self, height: f32) -> f32 {
+        let size = match &self.what {
+            NoteWhat::Table { size, .. } => *size,
+            NoteWhat::Text(base) => {
+                let b = base.bounds();
+                b.max - b.min
+            }
+        };
+        (crate::note_place::MAX_RING
+            + 1.0
+            + 4.0 * height
+            + size.x.max(size.y)
+            + crate::note_place::PAD)
+            .max(NOTE_REACH)
+    }
+}
 
 /// Symbol properties (in mm) a user-moved note's offset is kept in, from
 /// the place its anchor asks for.
@@ -975,10 +996,6 @@ impl PageScene {
                 (b.min, b.max - b.min)
             }
             NoteWhat::Table { size, .. } => (slot.at.0 - slot.at.1.fractions() * *size, *size),
-        };
-        let size = match &slot.what {
-            NoteWhat::Table { size, .. } => *size,
-            NoteWhat::Text(_) => size,
         };
         let default = slot.preferred.0 - slot.offset;
         Some(min + delta + slot.preferred.1.fractions() * size - default)
@@ -1778,6 +1795,9 @@ impl PageScene {
             Some(AnyId::Symbol(s)) if *s > id => self
                 .note_slots
                 .get(s)
+                // A note the user put somewhere is fixed: it is there
+                // whatever its id, so everything keeps clear of it.
+                .filter(|slot| !slot.moved)
                 .map(|slot| (slot.primitives, slot.labels)),
             _ => None,
         };
@@ -1817,7 +1837,7 @@ impl PageScene {
                 continue;
             }
             if let Some(boxes) = &changed {
-                let reach = slot.ink.expand(NOTE_REACH);
+                let reach = slot.ink.expand(slot.reach(self.style.tag_height));
                 if !boxes.iter().any(|b| b.intersects(&reach)) {
                     continue;
                 }
@@ -2516,6 +2536,17 @@ mod tests {
 
     /// A vertical wire at `x` between two new symbols, from y 80 to y 120.
     fn wire_at(doc: &mut Document, page: PageId, x: f32) -> (WireId, novo_core::ChangeSet) {
+        wire_span(doc, page, x, 75.0, 125.0)
+    }
+
+    /// A vertical wire at `x` between two new symbols at `top` and `bottom`.
+    fn wire_span(
+        doc: &mut Document,
+        page: PageId,
+        x: f32,
+        top: f32,
+        bottom: f32,
+    ) -> (WireId, novo_core::ChangeSet) {
         doc.transact("wire", |tx| {
             let d = tx.add_device(DeviceTag::parse("-X9")?, "Terminal")?;
             let mut place = |y: f32| {
@@ -2530,8 +2561,8 @@ mod tests {
                     },
                 )
             };
-            let top = place(75.0)?;
-            let bottom = place(125.0)?;
+            let top = place(top)?;
+            let bottom = place(bottom)?;
             tx.connect(Endpoint::pin(top, 1), Endpoint::pin(bottom, 0))
         })
         .unwrap()
@@ -2716,6 +2747,103 @@ mod tests {
             .unwrap();
         ps.apply(doc.project(), &changes, &PlaceholderArt);
         assert_eq!(both(&ps), (a, b));
+    }
+
+    #[test]
+    fn a_note_the_user_placed_is_an_obstacle_whatever_its_id() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        let (x, _) = doc
+            .transact("beside", |tx| {
+                let d = tx.add_device(DeviceTag::parse("-K2")?, "Relay")?;
+                tx.place_symbol(
+                    page,
+                    "iec/coil",
+                    MPlacement::at(Point::new(112.0, 160.0)),
+                    vec![Pin::new("A1", 0.0, -5.0), Pin::new("A2", 0.0, 5.0)],
+                    SymbolRole::Device {
+                        device: d,
+                        main: true,
+                    },
+                )
+            })
+            .unwrap();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_notes(
+            doc.project(),
+            [right_note(k1), right_note(x)],
+            &PlaceholderArt,
+        );
+        let home = note_label_of(&ps, k1).bounds();
+        let default_x = note_label_of(&ps, x).bounds();
+        // The later symbol's note is put by hand exactly on the first one's
+        // place.
+        let by = home.min - default_x.min;
+        doc.transact("put", |tx| {
+            tx.update::<SymbolInstance>(x, |s| {
+                s.properties
+                    .insert(NOTE_DX.into(), Value::Float(f64::from(by.x)));
+                s.properties
+                    .insert(NOTE_DY.into(), Value::Float(f64::from(by.y)));
+            })
+        })
+        .unwrap();
+        ps.rebuild(doc.project(), &PlaceholderArt);
+        let (a, b) = (note_label_of(&ps, k1), note_label_of(&ps, x));
+        assert!(
+            (b.bounds().min - home.min).abs().max_element() < 1e-3,
+            "the placed note stays"
+        );
+        assert!(
+            !a.bounds().intersects(&b.bounds()),
+            "the automatic note moved off it: {:?} {:?}",
+            a.bounds(),
+            b.bounds()
+        );
+    }
+
+    #[test]
+    fn a_wire_far_below_a_tall_table_still_moves_it() {
+        let (mut doc, page, k1, _s1, _w) = doc();
+        let rows: Vec<NoteRow> = (0..20)
+            .map(|i| NoteRow {
+                glyph: NoteGlyph::NormallyOpen,
+                pins: "13-14".into(),
+                location: format!("2.{i}"),
+            })
+            .collect();
+        let table = SymbolNote {
+            symbol: k1,
+            lines: Vec::new(),
+            warning: false,
+            anchor: NoteAnchor::Below,
+            rows,
+            density: NoteDensity::default(),
+        };
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        ps.set_notes(doc.project(), [table], &PlaceholderArt);
+        let labels_of = |ps: &PageScene| {
+            ps.scene()
+                .get(item_id(k1))
+                .unwrap()
+                .labels
+                .iter()
+                .filter(|l| l.text == "13-14")
+                .cloned()
+                .collect::<Vec<_>>()
+        };
+        let home = labels_of(&ps);
+        assert_eq!(home.len(), 20);
+        let ink = ps.scene().get(item_id(k1)).unwrap().primitives[0]
+            .shape
+            .bounds();
+        let x = home[0].bounds().center().x;
+        // More than 60 mm below the ink, inside the table's lower rows.
+        let top = ink.max.y + 70.0;
+        assert!(home[19].bounds().max.y > top + 10.0, "the table is tall");
+        let (_, changes) = wire_span(&mut doc, page, x, top - 5.0, top + 15.0);
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        let moved = labels_of(&ps);
+        assert_ne!(moved[0].pos, home[0].pos, "the table moved off the wire");
     }
 
     #[test]

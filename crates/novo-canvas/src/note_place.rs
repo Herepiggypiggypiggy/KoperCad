@@ -13,10 +13,13 @@ use crate::text::{Anchor, Label};
 use crate::{Aabb, Vec2, geom};
 
 /// Clear space kept around a note, in mm.
-const PAD: f32 = 0.4;
+pub const PAD: f32 = 0.4;
 
 /// Extra distance from the symbol, in mm, tried in this order.
 const RINGS: [f32; 6] = [0.0, 1.5, 3.0, 5.0, 8.0, 12.0];
+
+/// The farthest ring, in mm.
+pub const MAX_RING: f32 = 12.0;
 
 /// Slides along a side, in text heights, tried in this order.
 const SLIDES: [f32; 5] = [0.0, 1.0, -1.0, 2.0, -2.0];
