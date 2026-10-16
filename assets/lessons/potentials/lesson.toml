@@ -42,15 +42,9 @@ Feeds live in the **Points** group of the wheel, next to earth and other connect
 text_nl = """
 Feeds staan in de groep **Points** van het wiel, naast aarde en andere aansluitpunten.
 """
-how = [
-  "Hold {key:tool.place} to open the wheel.",
-  "Move toward **Points**, then toward **Feed**. (Or tap {key:tool.place}, type **feed** and press Enter.)",
-  "Release the key. A feed hangs on your pointer.",
-]
-how_nl = [
-  "Houd {key:tool.place} ingedrukt om het wiel te openen.",
-  "Beweeg naar **Points** en dan naar **Feed**. (Of tik op {key:tool.place}, typ **feed** en druk op Enter.)",
-  "Laat de toets los. Een feed hangt aan je aanwijzer.",
+demo = [
+  { hold = "tool.place", secs = 1.5 },
+  { say = "Move onto Points, then onto Feed, and let go of the key over it.", say_nl = "Beweeg naar Points en dan naar Feed, en laat de toets los erboven." },
 ]
 point = { ui = "dock.place" }
 expect = { tool = "place" }
@@ -66,17 +60,10 @@ A three-phase motor needs three supplies side by side, one per pole. Dragging pl
 text_nl = """
 Een driefasenmotor heeft drie voedingen naast elkaar nodig, één per pool. Slepen plaatst een hele rij in één keer, op de poolafstand, en noemt ze in volgorde **L1**, **L2** en **L3**.
 """
-how = [
-  "With the feed on your pointer, press and hold the mouse button just above the left top pin of **-Q1**.",
-  "Drag to the right, to just above its right top pin. The dock shows **Row ×3 · pitch 8 mm**.",
-  "Release above the right pole. Three feeds land above the three poles, each wired down to its pole.",
-  "Press {key:edit.escape} to put the feed down.",
-]
-how_nl = [
-  "Houd met de feed aan je aanwijzer de muisknop ingedrukt, net boven de linker bovenste pen van **-Q1**.",
-  "Sleep naar rechts, tot net boven de rechter bovenste pen. Het dock toont **Row ×3 · pitch 8 mm**.",
-  "Laat los boven de rechter pool. Drie feeds landen boven de drie polen, elk met een draad omlaag naar zijn pool.",
-  "Druk op {key:edit.escape} om de feed los te laten.",
+demo = [
+  { drag = { from = { at = { page = "Motor feeder", x = 80, y = 30 } }, to = { at = { page = "Motor feeder", x = 96, y = 30 } } } },
+  { say = "The dock shows Row ×3 · pitch 8 mm. Three feeds land, named L1, L2 and L3.", say_nl = "Het dock toont Row ×3 · pitch 8 mm. Drie feeds landen, met de namen L1, L2 en L3." },
+  { press = "edit.escape" },
 ]
 point = { at = { device = "-Q1", pin = "1" } }
 note = [ { at = { device = "-Q1", pin = "5" }, text = "Release above this pole" } ]
@@ -93,15 +80,13 @@ The motor casing has to be earthed, and that is a fourth supply. You place it li
 text_nl = """
 De motorbehuizing moet geaard worden, en dat is een vierde voeding. Je plaatst hem zoals de andere en geeft hem in de volgende stap zijn naam.
 """
-how = [
-  "Hold {key:tool.place}, choose **Points**, then **Feed**, and release the key.",
-  "Click just to the right of the motor, above the **PE** pin of **-M1**. The feed is named **L4** because the next free line number is 4.",
-  "Press {key:edit.escape} to put the feed down.",
-]
-how_nl = [
-  "Houd {key:tool.place} ingedrukt, kies **Points** en dan **Feed**, en laat de toets los.",
-  "Klik net rechts van de motor, boven de **PE**-pen van **-M1**. De feed heet **L4** omdat het eerstvolgende vrije lijnnummer 4 is.",
-  "Druk op {key:edit.escape} om de feed los te laten.",
+demo = [
+  { hold = "tool.place", secs = 1.5 },
+  { say = "Choose Points, then Feed.", say_nl = "Kies Points en dan Feed." },
+  { move = { at = { page = "Motor feeder", x = 104, y = 92 } } },
+  { click = true },
+  { say = "The feed is named L4 for now.", say_nl = "De feed heet voorlopig L4." },
+  { press = "edit.escape" },
 ]
 point = { at = { device = "-M1", pin = "PE" } }
 expect = { count = { kind = "feed", page = "Motor feeder", at_least = 4 } }
@@ -117,13 +102,10 @@ A feed takes the name and kind of the potential you give it. The **PE** chip tur
 text_nl = """
 Een feed neemt de naam en soort over van de potentiaal die je hem geeft. De **PE**-chip maakt er de beschermende aarde van, met het aardsymbool.
 """
-how = [
-  "Right-click the new feed (the one named L4). A menu opens with the potentials as chips.",
-  "Click the **PE** chip. The feed changes to the earth symbol and the name PE.",
-]
-how_nl = [
-  "Klik met de rechtermuisknop op de nieuwe feed (die met de naam L4). Er opent een menu met de potentialen als chips.",
-  "Klik op de chip **PE**. De feed verandert in het aardsymbool met de naam PE.",
+demo = [
+  { move = { at = { feed = "L4" } } },
+  { right_click = true },
+  { say = "Click the PE chip in the menu.", say_nl = "Klik op de chip PE in het menu." },
 ]
 point = { at = { page = "Motor feeder", x = 104, y = 92 } }
 expect = { potential_kind = { kind = "protective_earth", page = "Motor feeder" } }
@@ -138,13 +120,10 @@ On a busy page you want to know what a supply reaches. This lights up every wire
 text_nl = """
 Op een drukke pagina wil je weten wat een voeding bereikt. Dit verlicht elke draad en pen die hem voert, zodat je de tekening in één oogopslag controleert.
 """
-how = [
-  "Right-click the top-left feed (**L1**).",
-  "Choose **Show where it goes** in the menu. Every wire and pin on the L1 potential lights up.",
-]
-how_nl = [
-  "Klik met de rechtermuisknop op de linker bovenste feed (**L1**).",
-  "Kies **Show where it goes** in het menu. Elke draad en pen op de potentiaal L1 licht op.",
+demo = [
+  { move = { at = { feed = "L1" } } },
+  { right_click = true },
+  { say = "Choose Show where it goes.", say_nl = "Kies Show where it goes." },
 ]
 point = { at = { page = "Motor feeder", x = 80, y = 20 } }
 pause = true
