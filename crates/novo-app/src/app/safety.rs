@@ -194,6 +194,7 @@ impl NovoApp {
         win.bound.sync(&project);
         let mut open = true;
         let mut copy = None;
+        let mut export = false;
         super::panel::dialog(ctx, "Safety functions", [700.0, 640.0])
             .open(&mut open)
             .show(ctx, |ui| {
@@ -202,11 +203,18 @@ impl NovoApp {
                     "ISO 13849-1. Project safety functions are kept in the project; the free calculator below is kept for this session only.",
                 );
                 ui.separator();
-                super::safety_functions::section(ui, &project, &mut win.bound, &mut copy);
+                super::safety_functions::section(ui, &project, &mut win.bound, &mut copy, &mut export);
                 ui.separator();
                 widgets::section_label(ui, "Calculator (not bound to devices)");
                 body(ui, &mut win, &mut copy);
             });
+        if export {
+            // The report shows what is stored, so write any pending edit first.
+            if win.bound.dirty && self.store_safety_functions(&win.bound.list) {
+                win.bound.dirty = false;
+            }
+            self.export_safety_report();
+        }
         if let Some(text) = copy {
             ctx.copy_text(text);
             self.message(Level::Info, "Safety function copied as text");

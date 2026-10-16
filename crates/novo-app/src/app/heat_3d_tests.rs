@@ -67,7 +67,7 @@ pub(super) fn snapshot() -> CfdSnapshot {
 }
 
 /// The plate corner sits 10 mm in from the solver origin on both axes.
-fn place() -> Place {
+pub(super) fn place() -> Place {
     Place {
         plate_x: 10.0,
         plate_y: 10.0,

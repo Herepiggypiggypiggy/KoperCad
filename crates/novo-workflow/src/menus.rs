@@ -78,6 +78,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.keymap_file", at("Help")),
     // File > Export, split by what the file is for.
     ("export.pdf", under("File", "Export drawings")),
+    ("export.pdf_options", under("File", "Export drawings")),
     ("export.pdf_page", under("File", "Export drawings")),
     ("export.variant_pdf", under("File", "Export drawings")),
     ("export.dxf_page", under("File", "Export drawings")),
@@ -151,6 +152,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.3d_shell", under("View", "3D")),
     ("view.3d_wires", under("View", "3D")),
     ("view.3d_shadows", under("View", "3D")),
+    ("view.3d_dimensions", under("View", "3D")),
+    ("view.3d_quality", under("View", "3D")),
     ("view.3d_stats", under("View", "3D")),
     ("view.iso", under("View", "3D")),
     ("view.front", under("View", "3D")),
