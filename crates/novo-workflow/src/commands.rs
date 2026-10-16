@@ -131,6 +131,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.open_read_only",
+        "Open read-only",
+        "Project",
+        &["view only", "look", "locked", "share"],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.example",
         "Open example",
         "Project",
@@ -1165,6 +1172,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show or hide shadows in 3D",
         "View",
         &["shadows", "light", "soft shadows"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_position",
+        "Show or hide the Position box in 3D",
+        "View",
+        &["position", "coordinates", "offset", "nudge", "x y"],
         Needs::Project,
     ),
     cmd(
