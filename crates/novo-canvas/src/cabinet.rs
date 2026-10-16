@@ -32,6 +32,37 @@ pub struct RailView {
     pub length: f32,
 }
 
+/// A wiring duct: a filled strip, `width` across, running from `(x, y)` for
+/// `length` to the right, or down when `vertical`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct DuctView {
+    pub id: u64,
+    pub x: f32,
+    pub y: f32,
+    pub length: f32,
+    pub width: f32,
+    pub vertical: bool,
+}
+
+impl DuctView {
+    /// Corners of the strip. `(x, y)` is the start of the centre line, as
+    /// for a rail; the strip is centred across the run.
+    fn corners(&self) -> (Vec2, Vec2) {
+        let half = self.width / 2.0;
+        if self.vertical {
+            (
+                Vec2::new(self.x - half, self.y),
+                Vec2::new(self.x + half, self.y + self.length),
+            )
+        } else {
+            (
+                Vec2::new(self.x, self.y - half),
+                Vec2::new(self.x + self.length, self.y + half),
+            )
+        }
+    }
+}
+
 /// What is wrong with a device's place, worst first.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum BoxState {
@@ -69,6 +100,7 @@ pub struct BoxView {
 pub struct CabinetView {
     pub plate: Option<PlateView>,
     pub rails: Vec<RailView>,
+    pub ducts: Vec<DuctView>,
     pub boxes: Vec<BoxView>,
 }
 
@@ -220,6 +252,16 @@ impl CabinetScene {
                 .unselectable();
             out.push((rail_item(r.id), item));
         }
+        for d in &view.ducts {
+            let (min, max) = d.corners();
+            let item = Item::new(l.rails)
+                .with(Primitive::stroked(
+                    Shape::rect(min, max),
+                    Stroke::world(0.4, s.rail),
+                ))
+                .unselectable();
+            out.push((rail_item(d.id), item));
+        }
         for b in &view.boxes {
             out.push((box_item(b.id), self.device(b)));
             if b.clearance > 0.0 {
@@ -363,6 +405,10 @@ pub fn view_bounds(view: &CabinetView) -> Aabb {
             Vec2::new(r.x + r.length, r.y + 17.5),
         ));
     }
+    for d in &view.ducts {
+        let (min, max) = d.corners();
+        b = b.union(&Aabb::new(min, max));
+    }
     for d in &view.boxes {
         b = b.union(&Aabb::new(
             Vec2::new(d.x, d.y),
@@ -403,6 +449,14 @@ mod tests {
                 y: 150.0,
                 length: 500.0,
             }],
+            ducts: vec![DuctView {
+                id: 9,
+                x: 40.0,
+                y: 300.0,
+                length: 500.0,
+                width: 30.0,
+                vertical: false,
+            }],
             boxes: vec![
                 device(1, 60.0, BoxState::Ok),
                 device(2, 120.0, BoxState::Ok),
@@ -421,7 +475,7 @@ mod tests {
             assert!(s.get(box_item(id)).is_some());
             assert!(s.get(clearance_item(id)).is_some());
         }
-        assert_eq!(s.iter().count(), 1 + 1 + 2 + 2);
+        assert_eq!(s.iter().count(), 1 + 1 + 1 + 2 + 2);
         // The plate, rails and clearances never take a click.
         assert!(!s.get(PLATE_ITEM).unwrap().selectable);
         assert!(!s.get(rail_item(1)).unwrap().selectable);
@@ -514,5 +568,25 @@ mod tests {
         let b = view_bounds(&view());
         assert_eq!((b.min, b.max), (Vec2::ZERO, Vec2::new(600.0, 800.0)));
         assert!(view_bounds(&CabinetView::default()).is_empty());
+    }
+
+    #[test]
+    fn a_duct_is_an_unselectable_strip_and_widens_the_bounds() {
+        let mut c = CabinetScene::new(CabinetStyle::default());
+        let mut v = view();
+        c.set(&v);
+        let duct = c.scene().get(rail_item(9)).unwrap();
+        assert!(!duct.selectable);
+        // Centred on its line: the horizontal one at y 300 spans 285..315.
+        assert_eq!(v.ducts[0].corners().0.y, 285.0);
+        // A vertical duct swaps its sides and may stick out of the plate.
+        v.ducts[0].vertical = true;
+        v.ducts[0].length = 900.0;
+        let b = view_bounds(&v);
+        assert_eq!(b.max.y, 1200.0);
+        assert_eq!(
+            v.ducts[0].corners(),
+            (Vec2::new(25.0, 300.0), Vec2::new(55.0, 1200.0))
+        );
     }
 }
