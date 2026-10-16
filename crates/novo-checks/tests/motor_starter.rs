@@ -205,10 +205,13 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        // Only reported once a standard is selected; see tests/standards.
+        ProblemKind::Standard,
         ProblemKind::DisconnectionTime,
         ProblemKind::ThermalWithstand,
         ProblemKind::MotorStarter,
         ProblemKind::ProtectiveConductor,
+        ProblemKind::CableRating,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()

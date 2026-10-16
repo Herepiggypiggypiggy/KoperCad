@@ -4,6 +4,8 @@
 //! novo-routing; this file only turns them into lines and rectangles.
 
 use eframe::egui;
+
+use super::cabinet::Ask;
 use novo_canvas::Viewport;
 use novo_core::{Project, Rail, RailKind, StructureId};
 use novo_routing::Kind;
@@ -33,11 +35,30 @@ pub(super) struct DuctFill {
     pub(super) wires: usize,
 }
 
+/// One row of the route table: a wire, where it goes and how long it is.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct RouteRow {
+    pub(super) wire: u64,
+    /// The wire number, or `#id` while it has none.
+    pub(super) label: String,
+    /// `-K1:2 > -K2:1`.
+    pub(super) ends: String,
+    /// The cut length, rounded up to a whole millimetre.
+    pub(super) length_mm: f64,
+    /// `routed`, `routed, no depth` or `free air`.
+    pub(super) basis: &'static str,
+    pub(super) ducts: usize,
+}
+
 /// Everything drawn over the plate for the routes.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(super) struct Overlay {
     pub(super) routes: Vec<RouteLine>,
     pub(super) ducts: Vec<DuctFill>,
+    /// The routes as a table, longest first.
+    pub(super) rows: Vec<RouteRow>,
+    /// What the designer has to look at, in words.
+    pub(super) notes: Vec<String>,
 }
 
 impl Overlay {
@@ -76,6 +97,8 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
     let Some((_, plan)) = routed.plans.iter().find(|(s, _)| *s == structure) else {
         return Overlay::default();
     };
+    let rows = rows(project, &routed, plan);
+    let notes = notes(plan, &routed, &rows);
     let routes = plan
         .routes
         .iter()
@@ -111,7 +134,113 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
             }
         })
         .collect();
-    Overlay { routes, ducts }
+    Overlay {
+        routes,
+        ducts,
+        rows,
+        notes,
+    }
+}
+
+/// The route table: longest wire first, then by wire id.
+fn rows(
+    project: &Project,
+    routed: &novo_routing::model::Routed,
+    plan: &novo_routing::Plan,
+) -> Vec<RouteRow> {
+    let by_id: std::collections::HashMap<u64, &novo_core::Wire> =
+        project.wires().map(|w| (w.id.raw(), w)).collect();
+    let mut rows: Vec<RouteRow> = plan
+        .routes
+        .iter()
+        .map(|r| {
+            let wire = by_id.get(&r.job);
+            let label = wire
+                .and_then(|w| w.number.clone())
+                .unwrap_or_else(|| format!("#{}", r.job));
+            let ends = wire
+                .and_then(|w| Some((w.from.as_pin()?, w.to.as_pin()?)))
+                .map(|(a, b)| {
+                    format!(
+                        "{} > {}",
+                        project.pin_designation(a).unwrap_or_default(),
+                        project.pin_designation(b).unwrap_or_default()
+                    )
+                })
+                .unwrap_or_default();
+            let basis = match r.kind {
+                Kind::FreeAir => "free air",
+                Kind::Ducted if routed.unknown_height.contains(&r.job) => "routed, no depth",
+                Kind::Ducted => "routed",
+            };
+            RouteRow {
+                wire: r.job,
+                label,
+                ends,
+                length_mm: r.length_mm.ceil().max(1.0),
+                basis,
+                ducts: r.ducts.len(),
+            }
+        })
+        .collect();
+    rows.sort_by(|a, b| {
+        b.length_mm
+            .total_cmp(&a.length_mm)
+            .then(a.wire.cmp(&b.wire))
+    });
+    rows
+}
+
+/// The plan's problems and the unknown depths, as sentences.
+fn notes(
+    plan: &novo_routing::Plan,
+    routed: &novo_routing::model::Routed,
+    rows: &[RouteRow],
+) -> Vec<String> {
+    use novo_routing::Problem;
+    let plural =
+        |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    let count = |f: &dyn Fn(&Problem) -> bool| plan.problems.iter().filter(|p| f(p)).count();
+    let mut notes = Vec::new();
+    let free = count(&|p| matches!(p, Problem::FreeAir { .. }));
+    if free > 0 {
+        notes.push(format!(
+            "{} no duct reaches: they run in free air",
+            plural(free, "wire", "wires")
+        ));
+    }
+    let overfull = count(&|p| matches!(p, Problem::OverfullDuct { .. }));
+    if overfull > 0 {
+        notes.push(format!(
+            "{} over the fill limit",
+            plural(overfull, "duct is", "ducts are")
+        ));
+    }
+    let no_size = count(&|p| matches!(p, Problem::UnsizedDuct { .. }));
+    if no_size > 0 {
+        notes.push(format!(
+            "{} no size, so its fill is not checked",
+            plural(no_size, "duct has", "ducts have")
+        ));
+    }
+    let guessed = count(&|p| matches!(p, Problem::GuessedWire { .. }));
+    if guessed > 0 {
+        notes.push(format!(
+            "{} no size: duct fill assumes 3 mm",
+            plural(guessed, "wire has", "wires have")
+        ));
+    }
+    let flat = rows
+        .iter()
+        .filter(|r| routed.unknown_height.contains(&r.wire))
+        .count();
+    if flat > 0 {
+        notes.push(format!(
+            "{} measured from the plate: a part has no depth",
+            plural(flat, "wire is", "wires are")
+        ));
+    }
+    notes
 }
 
 /// Green up to 80% of the allowed fill, amber to 100%, red above.
@@ -151,6 +280,83 @@ const LABEL_MIN: egui::Vec2 = egui::vec2(30.0, 14.0);
 
 fn fits(area: egui::Rect) -> bool {
     area.width() >= LABEL_MIN.x && area.height() >= LABEL_MIN.y
+}
+
+/// The route table beside the plate: the summary, what to look at, the
+/// export buttons and every wire with its length. Returns what was clicked.
+pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Option<Ask> {
+    let mut ask = None;
+    egui::Panel::right("cabinet_routes")
+        .exact_size(340.0)
+        .resizable(false)
+        .show(ui, |ui| {
+            ui.add_space(6.0);
+            ui.strong("Routes");
+            if overlay.rows.is_empty() {
+                ui.weak("No wire has both ends placed on this plate");
+                return;
+            }
+            ui.weak(overlay.summary());
+            for note in &overlay.notes {
+                ui.colored_label(tokens::WARNING, note);
+            }
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .button("Export wire cut")
+                    .on_hover_text("Cut list for a wire machine: CSV next to the project")
+                    .clicked()
+                {
+                    ask = Some(Ask::ExportWireCut);
+                }
+                if ui
+                    .button("Workbook")
+                    .on_hover_text("Cut list, wire stock, ferrules and duct fill as .xlsx")
+                    .clicked()
+                {
+                    ask = Some(Ask::ExportWireProduction);
+                }
+                if ui
+                    .button("DXF plan")
+                    .on_hover_text("The plate with ducts, fill and routes as a DXF drawing")
+                    .clicked()
+                {
+                    ask = Some(Ask::ExportWiringDxf(plate));
+                }
+            });
+            ui.add_space(4.0);
+            let row_height = ui.text_style_height(&egui::TextStyle::Body) * 2.0 + 8.0;
+            egui::ScrollArea::vertical().auto_shrink(false).show_rows(
+                ui,
+                row_height,
+                overlay.rows.len(),
+                |ui, range| {
+                    for row in &overlay.rows[range] {
+                        ui.horizontal(|ui| {
+                            ui.label(&row.label);
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(format!("{:.0} mm", row.length_mm));
+                                },
+                            );
+                        });
+                        ui.weak(format!(
+                            "{} · {}{}",
+                            row.ends,
+                            row.basis,
+                            if row.ducts > 0 {
+                                format!(" · {} duct(s)", row.ducts)
+                            } else {
+                                String::new()
+                            }
+                        ));
+                        ui.add_space(2.0);
+                    }
+                },
+            );
+        });
+    ask
 }
 
 /// Paints the overlay. `rect` is the canvas widget's screen rectangle.

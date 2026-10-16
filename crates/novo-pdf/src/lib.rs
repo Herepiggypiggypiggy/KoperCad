@@ -47,7 +47,7 @@ use std::path::Path;
 
 pub use draw::PT_PER_MM;
 pub use novo_canvas::model::{NoteAnchor, SymbolNote};
-pub use report::{ReportPdfOptions, export_report_pdf};
+pub use report::{ReportFileFormat, ReportPdfOptions, export_report_pdf, report_bytes};
 
 /// Which pages to export.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]

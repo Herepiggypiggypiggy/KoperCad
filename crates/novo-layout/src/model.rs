@@ -14,11 +14,12 @@ use novo_core::{
 use crate::drill::{
     CUTOUT_KEY, DeviceFeatures, DrillTable, HOLE_PATTERN_KEY, MOUNTING_KEY, features_from_text,
 };
+use crate::enclosure::{DEFAULT_DOOR_ANGLE_DEG, Door, Enclosure, Hinge};
 use crate::plan::{Candidate, Plan, PlannedDuct};
 use crate::plate_drawing::{PlateDocument, documents};
 use crate::rules::Class;
 use crate::state::CabinetLayout;
-use crate::{Placement, Plate, Rail, Size};
+use crate::{Margins, Placement, Plate, Rail, Size};
 
 /// Property of a duct: what its wiring carries (`power`, `signal`, `mixed`).
 pub const DUCT_CLASS_KEY: &str = "duct_class";
@@ -26,6 +27,10 @@ pub const DUCT_CLASS_KEY: &str = "duct_class";
 /// Part property keys, the same as `novo_parts::keys`.
 const WIDTH_KEY: &str = "width_mm";
 const HEIGHT_KEY: &str = "height_mm";
+const ABOVE_KEY: &str = "clearance_above_mm";
+const BELOW_KEY: &str = "clearance_below_mm";
+const LEFT_KEY: &str = "clearance_left_mm";
+const RIGHT_KEY: &str = "clearance_right_mm";
 
 fn number(value: &Value) -> Option<f64> {
     match value {
@@ -48,6 +53,32 @@ pub fn device_size(project: &Project, device: &Device) -> Size {
         }
     }
     Size::from_part(None, None)
+}
+
+/// The free space a device asks for on each side, from its own properties
+/// first, then from its first part that gives one (so a device can override
+/// its part). Negative or non-numeric values count as missing.
+pub fn device_margins(project: &Project, device: &Device) -> Margins {
+    let read = |key: &str| {
+        let usable = |v: &Value| number(v).filter(|v| v.is_finite() && *v >= 0.0);
+        let own = device.properties.get(key).and_then(usable);
+        let from_part = || {
+            device.parts.iter().find_map(|part| {
+                project
+                    .get::<novo_core::Part>(*part)?
+                    .properties
+                    .get(key)
+                    .and_then(usable)
+            })
+        };
+        own.or_else(from_part)
+    };
+    Margins {
+        above: read(ABOVE_KEY),
+        below: read(BELOW_KEY),
+        left: read(LEFT_KEY),
+        right: read(RIGHT_KEY),
+    }
 }
 
 fn structure(project: &Project, id: StructureId) -> Option<&Structure> {
@@ -74,6 +105,7 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
             vertical: r.vertical,
         })
         .collect();
+    layout.enclosure = enclosure_of(project, id);
     layout.placements = project
         .all::<CabinetPlacement>()
         .filter(|p| p.structure == id)
@@ -86,8 +118,17 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
                 rotated: p.rotated,
                 size: device_size(project, device),
                 clearance: None,
+                margins: device_margins(project, device),
                 rail: p.rail.map(RailId::raw),
             })
+        })
+        .collect();
+    layout.depths = layout
+        .placements
+        .iter()
+        .filter_map(|p| {
+            let device = project.get::<Device>(DeviceId::from(p.id))?;
+            Some((p.id, device_depth(project, device)?))
         })
         .collect();
     Some(layout)
@@ -286,6 +327,87 @@ pub fn rotate_device(tx: &mut Tx<'_>, device: u64) -> Result<()> {
 pub fn unplace_device(tx: &mut Tx<'_>, device: u64) -> Result<()> {
     if let Some((placement, _)) = placement_of(tx, device) {
         tx.execute(Command::RemovePlacement { placement })?;
+    }
+    Ok(())
+}
+
+/// Structure property keys of the enclosure interior and door. They are
+/// free-form properties, so no model change is needed.
+pub mod keys {
+    pub const INTERIOR_WIDTH: &str = "interior_width_mm";
+    pub const INTERIOR_HEIGHT: &str = "interior_height_mm";
+    pub const INTERIOR_DEPTH: &str = "interior_depth_mm";
+    pub const PLATE_SETBACK: &str = "plate_setback_mm";
+    pub const DOOR_HINGE: &str = "door_hinge";
+    pub const DOOR_ANGLE: &str = "door_angle_deg";
+    pub const DOOR_INNER: &str = "door_inner_mm";
+    pub const FRONT_CLEARANCE: &str = "front_clearance_mm";
+    pub const HINGE_SIDE_CLEARANCE: &str = "hinge_side_clearance_mm";
+}
+
+/// Part property key of a device's depth, the same as `novo_parts::keys`.
+const DEPTH_KEY: &str = "depth_mm";
+
+/// The depth of a device from the first of its parts that has one.
+pub fn device_depth(project: &Project, device: &Device) -> Option<f64> {
+    device
+        .parts
+        .iter()
+        .filter_map(|part| project.get::<novo_core::Part>(*part))
+        .filter_map(|part| part.properties.get(DEPTH_KEY).and_then(number))
+        .find(|d| *d > 0.0)
+}
+
+/// The interior and door stored on an enclosure. `None` until width, height
+/// and depth of the interior are all set. A door exists once a hinge side is
+/// set.
+pub fn enclosure_of(project: &Project, id: StructureId) -> Option<Enclosure> {
+    let s = structure(project, id)?;
+    let get = |key: &str| s.properties.get(key).and_then(number);
+    let positive = |key: &str| get(key).filter(|v| *v > 0.0);
+    let door = match s.properties.get(keys::DOOR_HINGE) {
+        Some(Value::Text(text)) => Hinge::parse(text).map(|hinge| Door {
+            hinge,
+            max_angle: get(keys::DOOR_ANGLE).unwrap_or(DEFAULT_DOOR_ANGLE_DEG),
+            inner_depth: get(keys::DOOR_INNER).unwrap_or(0.0).max(0.0),
+        }),
+        _ => None,
+    };
+    Some(Enclosure {
+        width: positive(keys::INTERIOR_WIDTH)?,
+        height: positive(keys::INTERIOR_HEIGHT)?,
+        depth: positive(keys::INTERIOR_DEPTH)?,
+        plate_setback: get(keys::PLATE_SETBACK).unwrap_or(0.0).max(0.0),
+        door,
+        front_clearance: get(keys::FRONT_CLEARANCE).filter(|v| *v >= 0.0),
+        hinge_side_clearance: get(keys::HINGE_SIDE_CLEARANCE).filter(|v| *v >= 0.0),
+    })
+}
+
+/// Stores the interior and door on an enclosure; a value that is `None`
+/// removes its property.
+pub fn set_enclosure(tx: &mut Tx<'_>, id: StructureId, e: &Enclosure) -> Result<()> {
+    let float = |v: f64| Some(Value::Float(v));
+    let door = e.door;
+    let entries: [(&str, Option<Value>); 9] = [
+        (keys::INTERIOR_WIDTH, float(e.width)),
+        (keys::INTERIOR_HEIGHT, float(e.height)),
+        (keys::INTERIOR_DEPTH, float(e.depth)),
+        (keys::PLATE_SETBACK, float(e.plate_setback)),
+        (
+            keys::DOOR_HINGE,
+            door.map(|d| Value::Text(d.hinge.as_str().to_owned())),
+        ),
+        (keys::DOOR_ANGLE, door.and_then(|d| float(d.max_angle))),
+        (keys::DOOR_INNER, door.and_then(|d| float(d.inner_depth))),
+        (keys::FRONT_CLEARANCE, e.front_clearance.and_then(float)),
+        (
+            keys::HINGE_SIDE_CLEARANCE,
+            e.hinge_side_clearance.and_then(float),
+        ),
+    ];
+    for (key, value) in entries {
+        tx.set_property(id, key, value)?;
     }
     Ok(())
 }
