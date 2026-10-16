@@ -38,7 +38,13 @@ pub(crate) const LESSONS_ENV: &str = "KOPERCAD_LESSONS";
 const TICK_SHOWN: Duration = Duration::from_millis(500);
 
 /// Signals the shell raises for things that do not pass through a command.
-pub(crate) const SIGNALS: &[&str] = &["wheel_opened", "proposal_next", "proposal_accept"];
+pub(crate) const SIGNALS: &[&str] = &[
+    "wheel_opened",
+    "proposal_next",
+    "proposal_accept",
+    "problem_waived",
+    "waiver_restored",
+];
 
 /// Every control a lesson may point at. A control joins this list when its
 /// owner calls `NovoApp::anchor` for it; `docs/design/lesson-anchors.md` is

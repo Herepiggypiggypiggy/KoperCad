@@ -171,21 +171,50 @@ pub fn ducts(project: &Project, id: StructureId) -> Vec<PlannedDuct> {
         .collect()
 }
 
+/// Whether `id` is the only enclosure of the project.
+fn only_enclosure(project: &Project, id: StructureId) -> bool {
+    let mut enclosures = project.all::<Structure>().filter(|s| s.enclosure);
+    enclosures.next().is_some_and(|s| s.id == id) && enclosures.next().is_none()
+}
+
 /// The devices that belong in an enclosure: those whose tag has the same
-/// location as the enclosure, whatever their function (page group). Sorted
-/// by letter code, then device number.
+/// location as the enclosure, whatever their function (page group), and,
+/// when it is the only enclosure of the project, those whose tag has no
+/// location at all (a terminal strip made as `-X1` on the terminal screen).
+/// Sorted by letter code, then device number.
 pub fn candidates(project: &Project, id: StructureId) -> Vec<Candidate> {
     let Some(s) = structure(project, id) else {
         return Vec::new();
     };
+    let takes_homeless = only_enclosure(project, id);
     project
         .all::<Device>()
-        .filter(|d| !s.tag.location.is_empty() && d.tag.location == s.tag.location)
+        .filter(|d| {
+            if d.tag.location.is_empty() {
+                takes_homeless
+            } else {
+                d.tag.location == s.tag.location
+            }
+        })
         .map(|d| Candidate {
             id: d.id.raw(),
             size: device_size(project, d),
             sort_key: format!("{}{:06}", d.tag.letter_code(), d.tag.number().unwrap_or(0)),
         })
+        .collect()
+}
+
+/// Devices whose tag has no location while the project has several
+/// enclosures: no enclosure takes them, so `Place all` cannot place them and
+/// says so by name.
+pub fn without_enclosure(project: &Project, id: StructureId) -> Vec<u64> {
+    if structure(project, id).is_none() || only_enclosure(project, id) {
+        return Vec::new();
+    }
+    project
+        .all::<Device>()
+        .filter(|d| d.tag.location.is_empty())
+        .map(|d| d.id.raw())
         .collect()
 }
 

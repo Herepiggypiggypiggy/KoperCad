@@ -258,3 +258,28 @@ fn placed_devices_carry_the_depth_of_their_part() {
     let r = check(&e, &layout.plate, &[(id, layout.depths.get(&id).copied())]);
     assert_eq!(r.too_deep, vec![(id, 20.0)]);
 }
+
+/// A terminal strip made as `-X1` has no location. The only enclosure takes
+/// it; with two enclosures nobody does, and `without_enclosure` names it.
+#[test]
+fn a_device_without_a_location_goes_to_the_only_enclosure() {
+    let (mut p, cab) = project();
+    let (strip, _) = p
+        .transact("strip", |tx| {
+            tx.add_terminal_strip(DeviceTag::parse("-X1").unwrap())
+        })
+        .unwrap();
+    let id = strip.raw();
+    assert!(candidates(&p, cab).iter().any(|c| c.id == id));
+    assert!(novo_layout::model::without_enclosure(&p, cab).is_empty());
+
+    let (second, _) = p
+        .transact("second", |tx| {
+            tx.add_structure(DeviceTag::parse("+CAB2").unwrap(), "Second", true)
+        })
+        .unwrap();
+    assert!(!candidates(&p, cab).iter().any(|c| c.id == id));
+    assert!(!candidates(&p, second).iter().any(|c| c.id == id));
+    assert_eq!(novo_layout::model::without_enclosure(&p, cab), vec![id]);
+    assert_eq!(novo_layout::model::without_enclosure(&p, second), vec![id]);
+}
