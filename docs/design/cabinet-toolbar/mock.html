@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Cabinet toolbar mock</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+/* Tokens copied from crates/novo-theme/src/tokens.rs (dark) and palette.rs (light). */
+:root{--sunken:#0E0E10;--panel:#151517;--raised:#1B1B1E;--control:#232327;--hover:#2D2D32;--border:#252529;--border-strong:#3B3B41;
+--text:#E3E1DC;--muted:#989691;--faint:#858380;--accent:#C88A5E;--accent-hover:#DBA27C;--wash:#3A2E26;--on-accent:#14100D;
+--ok:#7FB086;--warn:#D6A55C;--err:#E0766C;--info:#8FA8C8}
+:root[data-theme=light]{--sunken:#ECE9E3;--panel:#F3F1EC;--raised:#FFFFFF;--control:#E8E5DE;--hover:#DEDAD1;--border:#D8D4CB;--border-strong:#B9B4A8;
+--text:#26231F;--muted:#5E5A53;--faint:#6B675F;--accent:#9A5A2E;--accent-hover:#84491F;--wash:#EFDCCB;--on-accent:#FFFFFF;
+--ok:#3F7A4A;--warn:#8F6420;--err:#B3402F;--info:#3D5F8F}
+*{box-sizing:border-box}body{margin:0;background:var(--sunken);color:var(--text);font:14px/1.3 "Segoe UI",system-ui,sans-serif}
+.wrap{padding:16px;max-width:1500px}h2{font-size:12px;color:var(--muted);font-weight:600;margin:22px 0 6px;letter-spacing:.04em}
+.frame{background:var(--panel);border:1px solid var(--border);border-radius:8px;overflow:hidden}
+.bar{display:flex;align-items:stretch;gap:0;padding:6px 10px;border-bottom:1px solid var(--border);background:var(--panel);min-height:56px}
+.grp{display:flex;flex-direction:column;justify-content:space-between;padding:0 12px;border-left:1px solid var(--border)}
+.grp:first-child{border-left:0;padding-left:0}
+.cap{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-bottom:3px}
+.row{display:flex;gap:4px;align-items:center}
+.btn{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:5px;border:1px solid transparent;background:transparent;color:var(--text);font:inherit;cursor:pointer;white-space:nowrap}
+.btn:hover{background:var(--hover)}.btn.on{background:var(--wash);border-color:var(--accent);color:var(--text)}
+.btn.sec{background:var(--control)}.btn .i{width:16px;height:16px;display:inline-block;color:var(--muted)}
+.btn.on .i{color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--on-accent);font-weight:600;height:32px;padding:0 12px}
+.btn.primary:hover{background:var(--accent-hover)}.btn.primary .i{color:var(--on-accent)}
+.btn:disabled,.btn.dis{opacity:.45;cursor:default}
+kbd{font:11px ui-monospace,Consolas,monospace;background:rgba(0,0,0,.18);border-radius:3px;padding:1px 5px;color:inherit;opacity:.85}
+.btn:not(.primary) kbd{background:var(--control);color:var(--muted)}
+.seg{display:inline-flex;background:var(--control);border-radius:5px;padding:2px}.seg .btn{height:24px;border-radius:4px}
+.seg .btn.on{background:var(--raised);border-color:var(--border-strong)}
+.sel{height:28px;display:inline-flex;align-items:center;gap:8px;padding:0 10px;background:var(--control);border:1px solid var(--border-strong);border-radius:5px}
+.pill{display:inline-flex;gap:6px;align-items:center;height:22px;padding:0 9px;border-radius:11px;font-size:12px;background:var(--control);color:var(--muted)}
+.pill.warn{background:color-mix(in srgb,var(--warn) 16%,var(--panel));color:var(--warn)}
+.pill.err{background:color-mix(in srgb,var(--err) 16%,var(--panel));color:var(--err)}
+.sp{flex:1}.sub{display:flex;gap:8px;align-items:center;padding:6px 10px;background:var(--raised);border-bottom:1px solid var(--border);color:var(--muted);font-size:13px}
+.plate{height:150px;background:var(--sunken);display:flex;align-items:center;justify-content:center;color:var(--faint);font-size:13px}
+.note{color:var(--muted);font-size:13px;margin:4px 0 0;max-width:900px}
+.ctl{position:fixed;top:10px;right:14px}
+.menu{position:relative}.pop{position:absolute;left:0;top:34px;min-width:240px;background:var(--raised);border:1px solid var(--border-strong);border-radius:8px;padding:6px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:3}
+.pop .btn{width:100%;justify-content:space-between}
+svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+</style></head><body>
+<div class="ctl"><button class="btn sec" onclick="var r=document.documentElement;r.dataset.theme=r.dataset.theme==='light'?'dark':'light'">Dark / light</button></div>
+<div class="wrap">
+<h1 style="font-size:18px;margin:0">Cabinet toolbar: proposal</h1>
+<p class="note">Same tokens as novo-theme. Controls 28 px, text 14 px, icons 16 px. One copper primary at a time. Group names are small caps above their buttons.</p>
+
+<h2>1. Plate face, devices still unplaced (the state in the lesson)</h2>
+<div class="frame"><div class="bar">
+ <div class="grp"><div class="cap">Panel</div><div class="row"><span class="sel">=A1 +CAB1 <svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></span></div></div>
+ <div class="grp"><div class="cap">Place</div><div class="row">
+  <button class="btn primary"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 3h5v4H2zM9 3h5v4H9zM2 9h5v4H2z"/><path d="M11.5 9v4M9.5 11h4"/></svg></span>Place all <kbd>Shift+P</kbd></button>
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg></span>Rules</button></div></div>
+ <div class="grp"><div class="cap">Arrange</div><div class="row">
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1"/></svg></span>Plate</button>
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 14V2h12M5 14V5h9"/></svg></span>Size enclosure</button></div></div>
+ <div class="grp"><div class="cap">Route</div><div class="row">
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 12h4V4h8"/></svg></span>Route all</button>
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M2 5h12M2 11h12"/></svg></span>Rails and ducts</button></div></div>
+ <div class="grp"><div class="cap">View</div><div class="row">
+  <span class="seg"><button class="btn on">Plate</button><button class="btn">Table <kbd>Ctrl+T</kbd></button></span>
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M8 2c2 3 4 4 4 7a4 4 0 0 1-8 0c0-3 2-4 4-7z"/></svg></span>Heat <kbd>Shift+H</kbd></button></div></div>
+ <div class="sp"></div>
+ <div class="grp"><div class="cap">Output</div><div class="row">
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M4 2h6l3 3v9H4zM10 2v3h3"/></svg></span>Export <svg viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button></div></div>
+</div>
+<div class="sub"><span class="pill">0 placed</span><span class="pill warn">5 unplaced</span><span class="pill">0 problems</span><span class="sp"></span>Place all fills a DIN rail left to right by letter code. You review it before anything is stored.</div>
+<div class="plate">plate canvas</div></div>
+
+<h2>2. After Place all: the preview (Accept is the primary, Place all steps aside)</h2>
+<div class="frame"><div class="bar">
+ <div class="grp"><div class="cap">Panel</div><div class="row"><span class="sel">=A1 +CAB1 ▾</span></div></div>
+ <div class="grp"><div class="cap">Preview, nothing stored yet</div><div class="row">
+  <button class="btn primary">✓ Accept <kbd>Enter</kbd></button><button class="btn sec">Cancel <kbd>Esc</kbd></button>
+  <button class="btn"><span class="i"><svg viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg></span>Why here?</button></div></div>
+ <div class="sp"></div><div class="grp"><div class="cap">&nbsp;</div><div class="row"><span class="pill">5 devices in the preview</span></div></div>
+</div><div class="plate">plate canvas, preview in copper outline</div></div>
+
+<h2>3. Placed, with Heat on: a second strip carries the Heat controls (the main bar does not grow)</h2>
+<div class="frame"><div class="bar">
+ <div class="grp"><div class="cap">Panel</div><div class="row"><span class="sel">=A1 +CAB1 ▾</span></div></div>
+ <div class="grp"><div class="cap">Place</div><div class="row"><button class="btn sec dis">Place all <kbd>Shift+P</kbd></button><button class="btn">Rules</button></div></div>
+ <div class="grp"><div class="cap">Arrange</div><div class="row"><button class="btn">Plate</button><button class="btn">Size enclosure</button></div></div>
+ <div class="grp"><div class="cap">Route</div><div class="row"><button class="btn on">Route all</button><button class="btn">Rails and ducts</button></div></div>
+ <div class="grp"><div class="cap">View</div><div class="row"><span class="seg"><button class="btn on">Plate</button><button class="btn">Table</button></span><button class="btn on">Heat</button></div></div>
+ <div class="sp"></div><div class="grp"><div class="cap">Output</div><div class="row"><button class="btn">Export ▾</button></div></div>
+</div>
+<div class="sub"><b style="color:var(--text)">Heat</b> <button class="btn on">Map</button><button class="btn">Contours</button><button class="btn">Airflow</button><button class="btn">Badges</button><span style="width:12px"></span><button class="btn sec">▶ Simulate</button><span class="pill">not validated</span><span class="sp"></span><span class="pill">5 placed</span><span class="pill err">2 problems ▾</span></div>
+<div class="plate">plate canvas</div></div>
+
+<h2>4. Narrow window (under 1100 px): labels shrink to icons with tooltips, secondary groups fold into More</h2>
+<div class="frame" style="max-width:760px"><div class="bar">
+ <div class="grp"><div class="cap">Panel</div><div class="row"><span class="sel">=A1 +CAB1 ▾</span></div></div>
+ <div class="grp"><div class="cap">Place</div><div class="row"><button class="btn primary">Place all <kbd>Shift+P</kbd></button></div></div>
+ <div class="grp"><div class="cap">Tools</div><div class="row"><button class="btn">Route all</button><button class="btn">Plate</button><span class="menu"><button class="btn sec">More ▾</button></span></div></div>
+ <div class="sp"></div><div class="grp"><div class="cap">View</div><div class="row"><span class="seg"><button class="btn on">Plate</button><button class="btn">Table</button></span></div></div>
+</div><div class="plate" style="height:60px">More holds Arrange, Rails and ducts, Cut list, Rules, Export, Door</div></div>
+</div></body></html>
