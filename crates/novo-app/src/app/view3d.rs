@@ -43,6 +43,9 @@ pub(crate) struct View3dMode {
     /// A standard view or a fit asked for by a command, run on the next frame
     /// (when the scene is at hand).
     pub(super) pending: Option<Pending>,
+    /// A select-by-type asked for before the scene was built, applied right
+    /// after it is.
+    pub(super) pending_select: Option<ItemKind>,
     /// The Cabinet selection revision and the 3D selection as last synced, to
     /// tell which side changed.
     synced: (u64, BTreeSet<ItemId>),
@@ -86,6 +89,7 @@ impl Default for View3dMode {
             library: Arc::new(MeshLibrary::new()),
             built: None,
             pending: None,
+            pending_select: None,
             synced: (0, BTreeSet::new()),
             menu: None,
             heat: Heat3d::default(),
@@ -127,6 +131,8 @@ impl NovoApp {
     pub(super) fn view3d_select_kind(&mut self, kind: ItemKind) {
         let mode = &mut self.view3d;
         let Some((_, _, scene)) = &mode.built else {
+            // The scene is built on the next frame; select then.
+            mode.pending_select = Some(kind);
             return;
         };
         mode.view.state.selection = novo_view3d::hide::of_kind(scene, kind);
@@ -223,6 +229,8 @@ impl NovoApp {
                 wires,
             };
             if let Some(built) = model::scene(project, id, &options) {
+                // Items deleted from the project are no longer hidden.
+                mode.controls.hidden.retain(|i| built.get(*i).is_some());
                 let shown = novo_view3d::hide::without(layers.apply(built), &mode.controls.hidden);
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
@@ -246,6 +254,9 @@ impl NovoApp {
             reduced_motion: self.settings.reduce_motion,
         };
         let now = ui.input(|i| i.time);
+        if let Some(kind) = mode.pending_select.take() {
+            mode.view.state.selection = novo_view3d::hide::of_kind(scene, kind);
+        }
         match mode.pending.take() {
             Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
             Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),

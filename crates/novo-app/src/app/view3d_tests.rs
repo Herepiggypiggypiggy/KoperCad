@@ -196,6 +196,30 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
 }
 
 #[test]
+fn select_by_type_asked_before_the_scene_exists_applies_after_the_first_build() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.view3d.built = None;
+    d.app.view3d.view.state.selection.clear();
+    d.app.run_command(&ctx, "view.3d_select_devices", None);
+    assert!(d.app.view3d.view.state.selection.is_empty());
+    d.frame();
+    assert!(!d.app.view3d.view.state.selection.is_empty());
+}
+
+#[test]
+fn hidden_ids_of_items_that_no_longer_exist_are_dropped_on_the_next_build() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ghost = novo_view3d::ItemId::new(ItemKind::Device, u64::MAX);
+    d.app.view3d.controls.hidden.insert(ghost);
+    d.app.view3d.built = None;
+    d.frame();
+    assert!(d.app.view3d.controls.hidden.is_empty());
+}
+
+#[test]
 fn select_by_type_hide_isolate_and_show_all_work_on_the_picture_only() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
