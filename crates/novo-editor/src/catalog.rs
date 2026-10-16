@@ -238,13 +238,21 @@ impl Catalog {
         let query = query.trim().to_lowercase();
         let mut words: Vec<&str> = query.split_whitespace().collect();
         let mut parent = None;
-        if words.len() >= 2 && looks_like_device(words[0]) && !self.is_symbol_word(words[0]) {
+        // A trailing device code (`km3 K1`) makes the first word the symbol,
+        // even when that word also reads as a device code (`k3` is both the
+        // contactor's name and -K3: `k3 no` is still a contact of -K3).
+        let tag_last = words.len() >= 2
+            && words
+                .last()
+                .is_some_and(|l| looks_like_device(l) && !self.is_symbol_word(l));
+        if words.len() >= 2
+            && looks_like_device(words[0])
+            && !(tag_last && self.is_symbol_word(words[0]))
+        {
             let code = words.remove(0);
             parent = Some(normalize_parent(code));
         } else if let [.., last] = words[..]
-            && words.len() >= 2
-            && looks_like_device(last)
-            && !self.is_symbol_word(last)
+            && tag_last
         {
             // Verb before noun (DESIGN.md §4): `no K1`, `coil K1`.
             words.pop();
@@ -468,6 +476,22 @@ mod tests {
         assert!(!hits.is_empty(), "the palette advertises this string");
         assert_eq!(hits[0].parent.as_deref(), Some("-K1"));
         assert_eq!(catalog.search("km3")[0].symbol, hits[0].symbol);
+    }
+
+    #[test]
+    fn a_mnemonic_that_is_also_a_device_code_still_names_the_parent_first() {
+        // `k3` and `m1` are symbol names, and also the codes -K3 and -M1.
+        let catalog = Catalog::builtin();
+        let hit = &catalog.search("k3 no")[0];
+        assert_eq!(hit.symbol, "iec/contacts/no");
+        assert_eq!(hit.parent.as_deref(), Some("-K3"));
+        let hit = &catalog.search("m1 coil")[0];
+        assert_eq!(hit.symbol, "iec/coils/relay");
+        assert_eq!(hit.parent.as_deref(), Some("-M1"));
+        // With a tag after it, the same word is the symbol again.
+        let hit = &catalog.search("k3 K1")[0];
+        assert_eq!(hit.symbol, "iec/contactors/main_3p");
+        assert_eq!(hit.parent.as_deref(), Some("-K1"));
     }
 
     #[test]
