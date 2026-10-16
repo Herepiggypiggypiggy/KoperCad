@@ -1,6 +1,6 @@
 use super::mesh::Mesh;
 use super::par::{for_planes, max_over_planes};
-use super::pressure::PressureSolver;
+use super::pressure::{PressureSolver, Smoother};
 use super::scheme::{Sample, Scheme, face_value};
 use crate::openings::{OpenPatch, OpenSet};
 use crate::solids::Medium;
@@ -248,6 +248,12 @@ impl FlowSolver {
             mesh,
             cfg,
         }
+    }
+
+    /// Chooses the ordering of the pressure smoother (see [`Smoother`]);
+    /// red-black runs on all threads of the current rayon pool.
+    pub fn set_pressure_smoother(&mut self, smoother: Smoother) {
+        self.pressure.set_smoother(smoother);
     }
 
     pub fn pressure_levels(&self) -> usize {
