@@ -16,10 +16,34 @@ impl NovoApp {
         let mut calm = self.settings.reduce_motion;
         let mut company = self.settings.company_macros.clone();
         let mut density = self.settings.xref_density();
+        let mut theme = self.settings.theme_choice();
+        let mut ui_density = self.settings.density_choice();
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
             ui.set_width(340.0);
             ui.heading("Preferences");
             ui.add_space(6.0);
+            ui.strong("Appearance");
+            ui.add_space(2.0);
+            ui.label("Theme");
+            for (value, label) in [
+                (novo_theme::ThemeChoice::Dark, "Dark (default)"),
+                (novo_theme::ThemeChoice::Light, "Light (preview: some panels are not themed yet)"),
+                (novo_theme::ThemeChoice::System, "Follow the system (preview)"),
+            ] {
+                ui.radio_value(&mut theme, value, label);
+            }
+            ui.add_space(4.0);
+            ui.label("Density");
+            ui.weak("Compact fits more on a small screen; Touch has large controls for a tablet.");
+            for d in novo_theme::Density::ALL {
+                let label = if d == novo_theme::Density::Standard {
+                    "Standard (default)".to_owned()
+                } else {
+                    d.label().to_owned()
+                };
+                ui.radio_value(&mut ui_density, d, label);
+            }
+            ui.add_space(8.0);
             ui.strong("Connections");
             ui.add_space(2.0);
             ui.label("Auto connections");
@@ -77,6 +101,8 @@ impl NovoApp {
         if mode != self.settings.connect_mode() {
             self.settings.set_connect_mode(mode);
         }
+        self.settings.appearance_theme = theme.id().into();
+        self.settings.appearance_density = ui_density.id().into();
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
         }
