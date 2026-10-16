@@ -36,7 +36,7 @@ const DEFAULT_PLATE: MountingPlate = MountingPlate {
 
 pub(super) struct CabinetState {
     pub(super) view: CanvasView,
-    scene: CabinetScene,
+    pub(super) scene: CabinetScene,
     /// The panel shown, by its location (`+K1B1G1`).
     pub(super) location: Option<DeviceTag>,
     /// A `Place all` plan waiting for Enter.
@@ -162,6 +162,8 @@ pub(super) enum Ask {
     SetEnclosure(novo_layout::enclosure::Enclosure),
     /// Set a panel-building value (power loss, mounting, clearance) of a device.
     SetPanelValue(super::cabinet_panel::PanelEdit),
+    /// Put a placed device on another surface of the cabinet (plate, door, ...).
+    SetSurface(u64, String),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
 }
@@ -492,6 +494,16 @@ impl NovoApp {
                 }
                 found.or(layout)
             }
+            // The plate view draws what is mounted on the plate; devices put
+            // on the door or a wall show on that surface instead.
+            (None, Some(sum), Some(_)) => layout.map(|mut l| {
+                l.placements.retain(|p| {
+                    sum.assigned
+                        .get(&p.id)
+                        .is_none_or(|name| name.as_str() == MAIN_PLATE)
+                });
+                l
+            }),
             _ => layout,
         };
         self.cabinet.rules.ensure_loaded();
@@ -1225,6 +1237,7 @@ impl NovoApp {
                         if let Some(j) = &judged {
                             cabinet_rules::annotate(&mut facts, &self.cabinet.rules, j, &tag_of);
                         }
+                        super::cabinet_surface_move::annotate(&mut facts, surfaces.as_ref());
                         // On the side away from the selection.
                         let centre = shown
                             .placements
@@ -2057,6 +2070,14 @@ impl NovoApp {
                     Ok(None) => {}
                     Err(e) => self.message(Level::Warning, e.to_string()),
                 }
+            }
+            Ask::SetSurface(device, surface) => {
+                let Some(structure) = structure else {
+                    return;
+                };
+                self.cabinet_edit("Set surface", move |tx| {
+                    super::cabinet_surface_move::set(tx, structure, device, &surface)
+                });
             }
             Ask::SetPlateSize(s, plate) => {
                 self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));

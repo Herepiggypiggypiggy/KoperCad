@@ -17,6 +17,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_surface_move;
 mod cabinet_surfaces;
 mod cable_controls;
 mod cable_cores;
@@ -182,6 +183,8 @@ mod cabinet_rails_tests;
 mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
+#[cfg(test)]
+mod cabinet_surface_move_tests;
 #[cfg(test)]
 mod cabinet_surfaces_tests;
 #[cfg(test)]
