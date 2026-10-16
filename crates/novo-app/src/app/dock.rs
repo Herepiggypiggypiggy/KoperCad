@@ -194,6 +194,10 @@ impl NovoApp {
             ),
             None => super::tips::tip_text(&self.wb.keymap, "Connect", "tool.connect"),
         };
+        let wire_mode_tip = match self.wb.keymap.shortcut_text("wire.mode") {
+            Some(key) => format!("Wiring mode · {key} switches"),
+            None => "Wiring mode".to_owned(),
+        };
         let chosen = self.settings.wiring_mode();
         let mut chip = None;
         let mut picked = None;
@@ -248,7 +252,7 @@ impl NovoApp {
                             let selected = active == DockTool::Connect && mode == chosen;
                             let response = ui
                                 .selectable_label(selected, text)
-                                .on_hover_text("Wiring mode · Shift+W switches");
+                                .on_hover_text(wire_mode_tip.as_str());
                             spots.push((id, response.rect, response.clicked()));
                             if response.clicked() {
                                 chip = Some(mode);
