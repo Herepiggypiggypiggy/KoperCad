@@ -586,7 +586,11 @@ pub(super) fn toggle(ui: &mut egui::Ui, state: &mut HeatState) -> egui::Response
     state.poll(ui.ctx());
     let r = ui
         .add(egui::Button::new(format!("{}  Heat", icons::FLAME)).selected(state.on))
-        .on_hover_text("Show how heat spreads over the plate (Shift+H)");
+        .on_hover_text(super::tips::hover(
+            ui.ctx(),
+            "Show how heat spreads over the plate",
+            "heat.toggle",
+        ));
     if r.clicked() {
         state.on = !state.on;
     }
@@ -754,9 +758,11 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
             }
         }
     } else {
-        let simulate = ui
-            .button("Simulate")
-            .on_hover_text("Simulate the heat and airflow of this cabinet (Ctrl+K, heat)");
+        let simulate = ui.button("Simulate").on_hover_text(super::tips::hover(
+            ui.ctx(),
+            "Simulate the heat and airflow of this cabinet (search: heat)",
+            "view.command_palette",
+        ));
         super::cabinet_bar::note_ctx(ui.ctx(), "heat.simulate", "Simulate button", &simulate);
         if simulate.clicked() {
             state.request_run();

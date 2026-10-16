@@ -151,7 +151,11 @@ pub(super) fn toolbar(
                         };
                         if ui
                             .button(label)
-                            .on_hover_text("Open or close the door (Shift+D)")
+                            .on_hover_text(super::tips::hover(
+                                ui.ctx(),
+                                "Open or close the door",
+                                "view.3d_door",
+                            ))
                             .clicked()
                         {
                             controls.toggle_door(Some(limit));

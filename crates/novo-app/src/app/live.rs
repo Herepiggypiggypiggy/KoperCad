@@ -875,7 +875,7 @@ impl NovoApp {
                         widgets::section_label(ui, "Live potentials");
                         if ui
                             .small_button("✕")
-                            .on_hover_text("Close · Shift+L")
+                            .on_hover_text(super::tips::hover(ui.ctx(), "Close", "sim.live"))
                             .clicked()
                         {
                             leave = true;

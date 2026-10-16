@@ -652,9 +652,11 @@ impl NovoApp {
                             "Rails and ducts",
                             self.cabinet.rails.open,
                         )
-                        .on_hover_text(
-                            "Add, move, resize and delete rails and ducts (Ctrl+Shift+R)",
-                        );
+                        .on_hover_text(super::tips::hover(
+                            ui.ctx(),
+                            "Add, move, resize and delete rails and ducts",
+                            "cabinet.rails",
+                        ));
                         if cabinet_bar::note(
                             &mut anchors,
                             "cabinet.rails",
@@ -689,8 +691,9 @@ impl NovoApp {
                     if cabinet_bar::segment(ui, "Plate", plate_face).clicked() && !plate_face {
                         ask = Some(Ask::ToggleTable);
                     }
-                    let table = cabinet_bar::segment(ui, "Table", !plate_face)
-                        .on_hover_text("Devices as a table (Ctrl+T)");
+                    let table = cabinet_bar::segment(ui, "Table", !plate_face).on_hover_text(
+                        super::tips::hover(ui.ctx(), "Devices as a table", "view.cabinet_table"),
+                    );
                     if cabinet_bar::note(&mut anchors, "cabinet.table", "Table", &table).clicked()
                         && plate_face
                     {
@@ -764,9 +767,11 @@ impl NovoApp {
                                 "Rails and ducts",
                                 self.cabinet.rails.open,
                             )
-                            .on_hover_text(
-                                "Add, move, resize and delete rails and ducts (Ctrl+Shift+R)",
-                            );
+                            .on_hover_text(super::tips::hover(
+                                ui.ctx(),
+                                "Add, move, resize and delete rails and ducts",
+                                "cabinet.rails",
+                            ));
                             if cabinet_bar::note(
                                 &mut anchors,
                                 "cabinet.rails",

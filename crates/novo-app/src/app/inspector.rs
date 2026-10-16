@@ -797,9 +797,10 @@ fn inspector_body(
         };
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             if widgets::ghost_button(ui, label)
-                .on_hover_text(
-                    "Pick this device's part from the catalog (Parts window: Ctrl+K, Parts)",
-                )
+                .on_hover_text(format!(
+                    "Pick this device's part from the catalog (Parts window: {}, Parts)",
+                    super::tips::key_or(ui.ctx(), "view.command_palette", "search")
+                ))
                 .clicked()
             {
                 state.picker.toggle();
