@@ -320,6 +320,28 @@ mod width_tests {
     }
 
     #[test]
+    fn the_top_bar_fits_with_the_longest_outline_button_label() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.app.outline_mode = super::super::OutlineMode::Commissioning;
+        for width in [1280.0, 1100.0, 1000.0] {
+            frame_at(&mut d, width);
+            frame_at(&mut d, width);
+            assert!(
+                d.app.outline_toggle.is_some(),
+                "the button is shown at {width}"
+            );
+            assert!(
+                d.app.top_bar_gap >= 0.0,
+                "the top bar overlaps by {} at {width}",
+                -d.app.top_bar_gap
+            );
+        }
+    }
+
+    #[test]
     fn below_1100_the_menus_fold_into_the_mark() {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
