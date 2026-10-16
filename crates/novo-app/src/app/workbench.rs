@@ -91,6 +91,10 @@ pub(crate) struct Workbench {
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
     pub(super) faults: Option<super::faults::FaultsWindow>,
+    /// The Renumber devices window, while it is open.
+    pub(super) device_renumber: Option<super::device_renumber::DeviceRenumber>,
+    /// The Project rules window is open.
+    pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
     /// The new pages, group and panel form, while open.
@@ -218,6 +222,8 @@ impl Default for Workbench {
             compare: None,
             faults: None,
             numbering: None,
+            device_renumber: None,
+            project_rules: false,
             page_form: None,
             sheet_import: None,
             sheet: 0,
@@ -392,6 +398,9 @@ const APP_COMMANDS: &[&str] = &[
     "parts.browser",
     "parts.import_step",
     "project.standard",
+    "project.rules",
+    "edit.renumber",
+    "draw.tidy",
     "macro.browser",
     "macro.import",
     "project.options",
@@ -937,6 +946,9 @@ impl NovoApp {
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "project.standard" => self.wb.project_settings = true,
+            "project.rules" => self.wb.project_rules = true,
+            "edit.renumber" => self.open_device_renumber(argument),
+            "draw.tidy" => self.tidy_selection(),
             "macro.browser" => self.wb.macros.show(),
             "macro.import" => self.macro_import(),
             "project.options" => self.open_options(),

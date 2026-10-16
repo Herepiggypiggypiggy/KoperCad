@@ -1070,6 +1070,14 @@ impl SchematicView {
                 self.wire_part = None;
             }
             let selection = self.selection();
+            // The project rule decides whether a terminal named PE or N
+            // offers its potential.
+            self.editor.supply_names = document
+                .project()
+                .info()
+                .rules
+                .potentials
+                .from_terminal_names;
             let potentials = self.editor.potential_menu(document, &selection);
             let device = selection
                 .iter()

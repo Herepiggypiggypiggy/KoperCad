@@ -794,16 +794,6 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd("nav.next_page", "Next page", "Navigate", &[], Needs::Page),
-    verb(
-        cmd(
-            "nav.changes",
-            "Changes since export",
-            "Navigate",
-            &["changed"],
-            Needs::Project,
-        ),
-        &["changes"],
-    ),
     // View
     cmd(
         "view.command_palette",
