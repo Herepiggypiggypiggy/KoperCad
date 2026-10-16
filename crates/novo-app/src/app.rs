@@ -108,6 +108,7 @@ mod reports;
 mod reports_view;
 mod revisions;
 mod safety;
+mod safety_functions;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
