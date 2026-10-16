@@ -1,0 +1,1 @@
+//! Headless runs of the steps of the lessons cables-and-shields, wire-numbers, plc-io: each instruction a step gives is carried out through the app (keys, commands, clicks) from the lesson's own start project, and what the step expects must then hold. Stub; the lesson thread fills it.
