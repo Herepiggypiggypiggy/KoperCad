@@ -154,17 +154,29 @@ impl PartsWindow {
         }
     }
 
+    #[cfg(test)]
+    pub(super) fn set_catalog_path_for_test(&mut self, path: PathBuf) {
+        self.catalog_path = Some(path);
+    }
+
     /// Saves a hand-made part into the user's catalog and the open list.
     pub(super) fn add_user_part(&mut self, part: CatalogPart) -> Result<(), String> {
         let path = self
             .catalog_path
             .clone()
             .ok_or("No profile folder is known, so there is nowhere to save the part")?;
+        const TAKEN: &str = "This maker and order number is already in the catalog (select it in the list to edit it)";
+        if self.catalog.get(&part.key()).is_some() {
+            return Err(TAKEN.into());
+        }
         let mut user = if path.exists() {
             Catalog::load(&path).map_err(|e| e.to_string())?
         } else {
             Catalog::new()
         };
+        if user.get(&part.key()).is_some() {
+            return Err(TAKEN.into());
+        }
         user.upsert(part.clone());
         user.save(&path).map_err(|e| e.to_string())?;
         let key = part.key();

@@ -55,6 +55,24 @@ pub(crate) fn open_folder(path: &Path) -> Result<(), String> {
         .map_err(|e| format!("could not open {}: {e}", path.display()))
 }
 
+/// `dir/name`, or `dir/stem (2).ext`, `(3)`... when that file exists.
+pub(super) fn free_name(dir: &Path, name: &std::ffi::OsStr) -> PathBuf {
+    let first = dir.join(name);
+    if !first.exists() {
+        return first;
+    }
+    let as_path = Path::new(name);
+    let stem = as_path.file_stem().unwrap_or(name).to_string_lossy();
+    let ext = as_path
+        .extension()
+        .map(|e| format!(".{}", e.to_string_lossy()))
+        .unwrap_or_default();
+    (2..)
+        .map(|n| dir.join(format!("{stem} ({n}){ext}")))
+        .find(|p| !p.exists())
+        .expect("an unused number exists")
+}
+
 /// Creates the inbox when missing and imports it.
 pub(super) fn prepare_and_import_inbox(app: &mut NovoApp, inbox: &Path) -> Result<(), String> {
     prepare_inbox(inbox).map_err(|e| format!("Parts inbox: {e}"))?;
@@ -146,7 +164,9 @@ impl NovoApp {
             }
             // The file name picks the maker (recipes match the name), so the
             // file goes in the inbox root.
-            let target = inbox.join(name);
+            // A file already there with that name is kept: the copy gets a
+            // number (`parts (2).csv`).
+            let target = free_name(&inbox, name);
             if let Err(e) = std::fs::copy(file, &target) {
                 self.message(
                     Level::Error,
@@ -240,6 +260,8 @@ impl NovoApp {
                 _ => several += 1,
             }
         }
+        // `propose_parts` never returns a proposal with no candidates, so a
+        // device without a proposal is one with no fitting catalog part.
         let none = project
             .devices()
             .filter(|d| {
@@ -412,6 +434,49 @@ mod tests {
         d.app.backend.document_mut().unwrap().undo().unwrap();
         let project = d.app.backend.document().unwrap().project();
         assert!(project.devices().all(|dev| dev.parts.is_empty()));
+    }
+
+    #[test]
+    fn proposals_always_have_candidates() {
+        let (_dir, d) = drive_with_devices();
+        let project = d.app.backend.document().unwrap().project();
+        for p in propose_parts(&contactor_catalog(), project, None) {
+            assert!(!p.candidates.is_empty());
+        }
+        assert!(propose_parts(&Catalog::new(), project, None).is_empty());
+    }
+
+    #[test]
+    fn a_copied_catalog_file_never_overwrites_one_in_the_inbox() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("a.csv"), "x").unwrap();
+        let next = free_name(dir.path(), std::ffi::OsStr::new("a.csv"));
+        assert_eq!(next, dir.path().join("a (2).csv"));
+        std::fs::write(&next, "y").unwrap();
+        assert_eq!(
+            free_name(dir.path(), std::ffi::OsStr::new("a.csv")),
+            dir.path().join("a (3).csv")
+        );
+    }
+
+    #[test]
+    fn a_second_new_part_with_the_same_key_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut win = crate::app::parts::PartsWindow::new(
+            Catalog::new(),
+            None,
+            novo_parts::SourceTable::builtin(),
+        );
+        win.set_catalog_path_for_test(dir.path().join("parts.json"));
+        let mut first = CatalogPart::new("Acme", "X-1");
+        first.description = "first".into();
+        win.add_user_part(first).unwrap();
+        let mut second = CatalogPart::new("ACME", "x-1");
+        second.description = "second".into();
+        assert!(win.add_user_part(second).is_err());
+        let saved = Catalog::load(&dir.path().join("parts.json")).unwrap();
+        assert_eq!(saved.parts().len(), 1);
+        assert_eq!(saved.parts()[0].description, "first");
     }
 
     #[test]
