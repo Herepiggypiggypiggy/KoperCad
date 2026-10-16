@@ -1,0 +1,4 @@
+Artikelnummer;Bezeichnung;Bemessungsstrom (A);Bemessungsspannung (V);Anschlussart;Anzahl der Anschlüsse;Anschlussquerschnitt (mm²);Breite (mm);Listenpreis;Währung;Produktstatus
+2002-1201;Durchgangsklemme 2-Leiter, 2,5 mm²;24;800;Push-in CAGE CLAMP;2;0,08 ... 4;5,2;0,42;EUR;aktiv
+2002-1202;Durchgangsklemme 2-Leiter, 2,5 mm², grau;24;800;Push-in CAGE CLAMP;2;0,08 ... 4;5,2;0,45;;aktiv
+2002-12;Zu kurze Nummer;24;800;;;;;;;

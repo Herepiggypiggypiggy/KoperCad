@@ -1132,6 +1132,16 @@ pub struct Revision {
     pub properties: Properties,
 }
 
+impl Revision {
+    /// The longer note on why it was issued, or an empty string.
+    pub fn note(&self) -> &str {
+        match self.properties.get("note") {
+            Some(Value::Text(note)) => note,
+            _ => "",
+        }
+    }
+}
+
 impl BlockInstance {
     /// The value of a parameter for this placement, if set here.
     pub fn value(&self, name: &str) -> Option<&Value> {

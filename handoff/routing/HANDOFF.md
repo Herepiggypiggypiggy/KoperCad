@@ -2,7 +2,8 @@
 
 ## State
 - Repo herepiggypiggypiggy/kopercad, my branch `claude/project-thread-euksez` (restart from main after each merge).
-- Connection PR on this branch (route_connections); earlier PRs merged. Next: WireList Length column, then checks.
+- Merged: engine, connections (`wire_connections`, `route_project`), fill/plan, Cabinet overlay `novo-app/src/app/cabinet_routes.rs` (#460, not hooked into `cabinet_show` yet).
+- Next: (1) after #413 merges, add ProblemKind UnsizedDuct and GuessedWire (one aggregated Info) in `novo-checks/src/physical.rs` routing(), the `_ => {}` arm; panel thread agreed. (2) The hook PR (Routes toggle, `cabinet.routes`, DESIGN line, UI review) belongs to the UI integration (cabinet) thread; it must reset `OverlayCache` on project open.
 
 ## Resume
 ```
@@ -24,6 +25,6 @@ Sent to "UI integration: cabinet, 3D, enclosure" (2026-10-15):
 1. Cabinet: "Route wires" per enclosure via `route_connections(project, &connections, &Rules::default())`.
 2. Cabinet drawing: route polylines over the plate, ducts tinted by fill ratio, selecting a duct lists its wires.
 3. Wire list: Length column from `Route.length_mm` (wire list thread); unrouted shows no length.
-4. Issues: free air and overfull duct come from `check()` (#413); unsized duct and guessed wire infos follow after #413.
+4. Issues: free air and overfull duct will come from `check()` once #413 merges; unsized duct and guessed wire infos follow after #413.
 5. Add and size a duct on the Cabinet (rail of kind Duct, `set_rail_size`).
-Open: whether a `route_project(project)` that builds the connections itself is wanted.
+Answered: `route_project(project)` exists (#460).

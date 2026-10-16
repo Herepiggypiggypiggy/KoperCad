@@ -81,6 +81,36 @@ pub fn default_generated_pages_with(
     specs
 }
 
+/// The generated page for one report, added by hand: the report kinds that
+/// are not proposed by default (the cut list, wire production). The number
+/// is the next free section above every page in use. `Err` says why there
+/// is no page: unknown report, one already there, or nothing to list yet.
+pub fn generated_page_spec(project: &Project, id: &str) -> Result<GeneratedPageSpec, String> {
+    let report = crate::standard_reports()
+        .into_iter()
+        .find(|r| r.id() == id)
+        .ok_or_else(|| format!("There is no report `{id}`"))?;
+    if project
+        .pages()
+        .any(|p| matches!(&p.kind, PageKind::Generated { generator } if generator == id))
+    {
+        return Err(format!("The project already has a {} page", report.title()));
+    }
+    if report.generate(project).row_count() == 0 {
+        return Err(format!("{} has nothing to list yet", report.title()));
+    }
+    let highest = project
+        .pages()
+        .filter_map(|p| leading_number(&p.name))
+        .max()
+        .unwrap_or(0);
+    Ok(GeneratedPageSpec {
+        generator: id.to_owned(),
+        name: ((highest / 10 + 1) * 10).to_string(),
+        title: report.title(),
+    })
+}
+
 /// Adds the pages `specs` describe (one transaction, so one undo step).
 pub fn add_generated_pages(tx: &mut Tx<'_>, specs: &[GeneratedPageSpec]) -> Result<()> {
     for spec in specs {
