@@ -1403,7 +1403,7 @@ impl NovoApp {
         // name is in the tooltip), so four tabs and the pin fit the 248 pt
         // column at every density.
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing.x = novo_theme::space::XS;
+            ui.spacing_mut().item_spacing.x = 0.0;
             for mode in [
                 OutlineMode::Pages,
                 OutlineMode::Issues,
@@ -1420,11 +1420,38 @@ impl NovoApp {
                 } else {
                     mode.icon().to_owned()
                 };
-                if ui
-                    .selectable_label(current, text)
-                    .on_hover_text(mode.label())
-                    .clicked()
-                {
+                let font = egui::FontId::proportional(13.0);
+                let color = if current {
+                    novo_theme::tokens::TEXT
+                } else {
+                    novo_theme::tokens::TEXT_MUTED
+                };
+                let galley = ui.painter().layout_no_wrap(text, font, color);
+                let size = egui::vec2((galley.size().x + 10.0).max(26.0), 26.0);
+                let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
+                let response = response.on_hover_text(mode.label());
+                let color = if response.hovered() {
+                    novo_theme::tokens::TEXT
+                } else {
+                    color
+                };
+                ui.painter().galley(
+                    rect.center() - galley.size() / 2.0 - egui::vec2(0.0, 1.0),
+                    galley,
+                    color,
+                );
+                if current {
+                    // Copper underline: the one mark of the open tab.
+                    ui.painter().rect_filled(
+                        egui::Rect::from_min_max(
+                            egui::pos2(rect.left() + 4.0, rect.bottom() - 2.0),
+                            egui::pos2(rect.right() - 4.0, rect.bottom()),
+                        ),
+                        1,
+                        novo_theme::tokens::ACCENT,
+                    );
+                }
+                if response.clicked() {
                     self.outline_mode = mode;
                 }
             }
@@ -1442,6 +1469,7 @@ impl NovoApp {
                 }
             });
         });
+        ui.add_space(novo_theme::space::S);
         if self.outline_mode == OutlineMode::Issues {
             if self.issues_list(ui) {
                 self.outline_open = false;
