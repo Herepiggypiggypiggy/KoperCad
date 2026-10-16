@@ -462,6 +462,8 @@ fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
         open_3d_with_selection(&mut d, a);
         let ctx = d.ctx.clone();
         d.app.run_command(&ctx, "view.3d_stats", None);
+        // The Heat panel is off by default; the worst case has it open.
+        d.app.view3d.controls.heat_panel = true;
         for _ in 0..12 {
             d.frame_sized(egui::vec2(w, h), Vec::new());
         }
