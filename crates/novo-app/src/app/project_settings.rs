@@ -147,6 +147,9 @@ already has. These letters only start a project that has none yet. Yours, for ev
         }
         self.settings.group_prefix = group_prefix.trim().to_owned();
         self.settings.cabinet_prefix = cabinet_prefix.trim().to_owned();
+        if apply {
+            self.switch_placed_symbols();
+        }
         if modal.inner || modal.should_close() {
             self.wb.project_settings = false;
         }
