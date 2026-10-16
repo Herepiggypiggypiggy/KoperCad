@@ -445,6 +445,9 @@ impl NovoApp {
             _ => (0, cands.len(), 0),
         };
         let has_plan = self.cabinet.preview.is_some();
+        let homeless = structure.map_or(0, |s| {
+            novo_layout::model::without_enclosure(project, s).len()
+        });
 
         let mut ask: Option<Ask> = None;
         let mut delete_rail: Option<u64> = None;
@@ -488,7 +491,7 @@ impl NovoApp {
                         ask = Some(Ask::Cancel);
                     }
                 } else {
-                    let enabled = unplaced > 0;
+                    let enabled = unplaced > 0 || homeless > 0;
                     if ui
                         .add_enabled(enabled, egui::Button::new("Place all"))
                         .on_disabled_hover_text("Every device of this panel is placed")
@@ -1137,6 +1140,47 @@ impl NovoApp {
         }
     }
 
+    /// What Place all leaves off the plate, by name with the reason: devices
+    /// that do not fit, and devices no cabinet takes because their tag has
+    /// no location while the project has several. `None` when all is placed.
+    fn left_out_text(
+        &self,
+        structure: Option<StructureId>,
+        plan: &novo_layout::plan::Plan,
+    ) -> Option<String> {
+        let project = self.backend.document()?.project();
+        let tag = |id: u64| {
+            project
+                .get::<novo_core::Device>(novo_core::DeviceId::from(id))
+                .map_or_else(|| format!("device {id}"), |d| d.tag.to_string())
+        };
+        let mut parts: Vec<String> = plan
+            .unplaced
+            .iter()
+            .map(|&id| {
+                let why = self
+                    .cabinet
+                    .rules
+                    .explain
+                    .as_ref()
+                    .and_then(|e| e.unplaced.iter().find(|(u, _)| *u == id))
+                    .map_or("no room left on the plate", |(_, why)| why.text());
+                format!("{} ({why})", tag(id))
+            })
+            .collect();
+        if let Some(s) = structure {
+            parts.extend(novo_layout::model::without_enclosure(project, s).into_iter().map(
+                |id| {
+                    format!(
+                        "{} (its tag has no location, and the project has several cabinets: add the cabinet's, for example +CAB1)",
+                        tag(id)
+                    )
+                },
+            ));
+        }
+        (!parts.is_empty()).then(|| format!("Not placed: {}", parts.join("; ")))
+    }
+
     pub(super) fn cabinet_ask(
         &mut self,
         ask: Ask,
@@ -1192,14 +1236,15 @@ impl NovoApp {
                         }
                         _ => layout.preview(cands),
                     };
+                    let left_out = self.left_out_text(structure, &plan);
                     if plan.placements.is_empty() {
-                        self.message(Level::Info, "Nothing fits on the plate");
+                        match left_out {
+                            Some(text) => self.message(Level::Warning, text),
+                            None => self.message(Level::Info, "Nothing fits on the plate"),
+                        }
                     } else {
-                        if !plan.unplaced.is_empty() {
-                            self.message(
-                                Level::Warning,
-                                format!("{} devices do not fit on the plate", plan.unplaced.len()),
-                            );
+                        if let Some(text) = left_out {
+                            self.message(Level::Warning, text);
                         }
                         if self
                             .cabinet
