@@ -174,8 +174,13 @@ fn pl_text(pl: PerformanceLevel) -> String {
 
 impl NovoApp {
     pub(super) fn toggle_safety(&mut self) {
-        if self.wb.safety.take().is_none() && self.is_open() {
-            self.wb.safety = Some(SafetyWindow::default());
+        match self.wb.safety.take() {
+            Some(win) if win.bound.dirty => {
+                self.store_safety_functions(&win.bound.list);
+            }
+            Some(_) => {}
+            None if self.is_open() => self.wb.safety = Some(SafetyWindow::default()),
+            None => {}
         }
     }
 
@@ -209,6 +214,8 @@ impl NovoApp {
         if open {
             self.wb.safety = Some(win);
             self.commit_safety_functions(ctx);
+        } else if win.bound.dirty {
+            self.store_safety_functions(&win.bound.list);
         }
     }
 }

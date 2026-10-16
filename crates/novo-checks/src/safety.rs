@@ -68,7 +68,8 @@ pub struct PartRef {
     #[serde(default)]
     pub device: Option<String>,
     pub basis: Basis,
-    /// Reliability value; `None` takes it from the bound device.
+    /// Reliability value; `None` takes it from the bound device. Zero or
+    /// less means an own value was chosen and is not typed yet.
     #[serde(default)]
     pub value: Option<f64>,
 }
@@ -194,15 +195,20 @@ pub fn encode(list: &[SafetyFunction]) -> Option<Value> {
     (!list.is_empty()).then(|| Value::Text(serde_json::to_string(list).unwrap_or_default()))
 }
 
-/// Finds the device a bound tag names: an exact tag match, else a product
-/// level match when only one device has it.
+/// The devices carrying exactly the tag a part is bound to.
+pub fn devices_with_tag(project: &Project, tag: &str) -> Vec<DeviceId> {
+    DeviceTag::parse(tag)
+        .map(|t| project.devices_by_tag(&t))
+        .unwrap_or_default()
+}
+
+/// Finds the device a bound tag names: an exact tag match, and only when
+/// exactly one device has it.
 pub fn find_device(project: &Project, tag: &str) -> Option<DeviceId> {
-    let parsed = DeviceTag::parse(tag).ok()?;
-    let exact = project.devices_by_tag(&parsed);
-    if let [one] = exact.as_slice() {
-        return Some(*one);
+    match devices_with_tag(project, tag).as_slice() {
+        [one] => Some(*one),
+        _ => None,
     }
-    None
 }
 
 /// B10d or MTTFd from a device or, failing that, its parts.
@@ -234,10 +240,12 @@ fn device_data(project: &Project, device: DeviceId, basis: Basis) -> Option<f64>
 #[derive(Debug, Clone, PartialEq)]
 pub enum Resolved {
     Component(Component),
-    /// Bound tag matches no device.
-    NoDevice(String),
+    /// Bound tag matches no device (0) or several (n).
+    NoDevice(String, usize),
     /// No value given and none on the device.
     NoData,
+    /// "Own value" was chosen but no positive number has been typed yet.
+    NotEntered,
 }
 
 /// Resolves one part to a component for the engine.
@@ -245,14 +253,20 @@ pub fn resolve(project: &Project, part: &PartRef, nop: f64) -> Resolved {
     let device = match part.device.as_deref().filter(|t| !t.trim().is_empty()) {
         Some(tag) => match find_device(project, tag) {
             Some(id) => Some(id),
-            None => return Resolved::NoDevice(tag.to_owned()),
+            None => {
+                return Resolved::NoDevice(tag.to_owned(), devices_with_tag(project, tag).len());
+            }
         },
         None => None,
     };
-    let value = part
-        .value
-        .filter(|v| *v > 0.0)
-        .or_else(|| device.and_then(|d| device_data(project, d, part.basis)));
+    // `Some(v)` is the part's own value; zero or less means "own value"
+    // was chosen and nothing is typed yet, which never falls back to the
+    // device or to a placeholder.
+    let value = match part.value {
+        Some(v) if v > 0.0 => Some(v),
+        Some(_) => return Resolved::NotEntered,
+        None => device.and_then(|d| device_data(project, d, part.basis)),
+    };
     match value {
         None => Resolved::NoData,
         Some(v) => Resolved::Component(match part.basis {
@@ -303,8 +317,18 @@ fn rate_block(project: &Project, block: &Block, nop: f64) -> BlockRating {
             }
             match resolve(project, p, nop) {
                 Resolved::Component(c) => out.push(c),
-                Resolved::NoDevice(tag) => binding.push(format!(
+                Resolved::NoDevice(tag, 0) => binding.push(format!(
                     "{} part \"{}\" is bound to {tag}, which is not a device in the project",
+                    block.role.label(),
+                    p.name
+                )),
+                Resolved::NoDevice(tag, n) => binding.push(format!(
+                    "{} part \"{}\" is bound to {tag}, which matches {n} devices",
+                    block.role.label(),
+                    p.name
+                )),
+                Resolved::NotEntered => binding.push(format!(
+                    "{} part \"{}\" has an own value that is not entered yet",
                     block.role.label(),
                     p.name
                 )),

@@ -305,12 +305,24 @@ fn parts_ui(
             }
             let mut own = p.value.is_some();
             if ui.checkbox(&mut own, "own value").changed() {
-                p.value = own.then_some(1.0e6);
+                p.value = own.then_some(0.0);
                 changed = true;
             }
             if let Some(v) = p.value.as_mut() {
                 changed |= ui
-                    .add(egui::DragValue::new(v).range(0.001..=1.0e9).speed(1.0))
+                    .add(
+                        egui::DragValue::new(v)
+                            .range(0.0..=1.0e9)
+                            .speed(1.0)
+                            .custom_formatter(|n, _| {
+                                if n > 0.0 {
+                                    format!("{n}")
+                                } else {
+                                    "enter a value".to_owned()
+                                }
+                            })
+                            .custom_parser(|t| t.trim().replace(',', ".").parse().ok()),
+                    )
                     .changed();
             } else {
                 ui.weak("from device");
@@ -345,12 +357,19 @@ impl NovoApp {
         {
             return;
         }
-        let value = encode(&win.bound.list);
-        let ok = self.edit_project("Safety functions", |tx| {
-            novo_checks::standards::set_info_property(tx, FUNCTIONS_KEY, value)
-        });
+        let list = win.bound.list.clone();
+        let ok = self.store_safety_functions(&list);
         if let Some(win) = self.wb.safety.as_mut() {
-            win.bound.dirty = !ok && win.bound.dirty;
+            win.bound.dirty = !ok;
         }
+    }
+
+    /// Writes `list` into the project now. Used when the window closes with
+    /// an edit not yet written, so a close never loses it.
+    pub(super) fn store_safety_functions(&mut self, list: &[SafetyFunction]) -> bool {
+        let value = encode(list);
+        self.edit_project("Safety functions", |tx| {
+            novo_checks::standards::set_info_property(tx, FUNCTIONS_KEY, value)
+        })
     }
 }

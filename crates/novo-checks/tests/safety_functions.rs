@@ -142,3 +142,53 @@ fn a_strong_function_meets_a_modest_requirement() {
     assert_eq!(rate(doc.project(), &f).met(), Some(true));
     assert!(!kinds(&doc).contains(&ProblemKind::SafetyLevelNotMet));
 }
+
+#[test]
+fn an_own_value_not_typed_yet_is_unrated_not_the_best_class() {
+    let mut doc = project_with_devices();
+    let mut f = SafetyFunction::new("Guard");
+    bound(&mut f, Role::Sensor, "-S1");
+    bound(&mut f, Role::Actuator, "-K1");
+    // Chosen "own value" on a part whose device does have data: still unrated.
+    f.blocks[0].channel1[0].value = Some(0.0);
+    f.blocks[1].channel1 = vec![PartRef {
+        name: "Relay".into(),
+        device: None,
+        basis: Basis::Mttfd,
+        value: Some(100.0),
+    }];
+    store(&mut doc, &[f.clone()]);
+    let rating = rate(doc.project(), &f);
+    assert!(rating.total.is_none());
+    let messages: Vec<String> = check(doc.project())
+        .into_iter()
+        .filter(|p| p.kind == ProblemKind::SafetyBinding)
+        .map(|p| p.message)
+        .collect();
+    assert!(
+        messages.iter().any(|m| m.contains("not entered yet")),
+        "{messages:?}"
+    );
+}
+
+#[test]
+fn a_tag_on_two_devices_says_so() {
+    let mut doc = project_with_devices();
+    doc.transact("Duplicate", |tx| {
+        tx.add_device(DeviceTag::parse("-S1").unwrap(), "Second S1")?;
+        Ok(())
+    })
+    .unwrap();
+    let mut f = SafetyFunction::new("Guard");
+    bound(&mut f, Role::Sensor, "-S1");
+    store(&mut doc, &[f]);
+    let messages: Vec<String> = check(doc.project())
+        .into_iter()
+        .filter(|p| p.kind == ProblemKind::SafetyBinding)
+        .map(|p| p.message)
+        .collect();
+    assert!(
+        messages.iter().any(|m| m.contains("matches 2 devices")),
+        "{messages:?}"
+    );
+}

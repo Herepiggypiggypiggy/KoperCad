@@ -218,3 +218,23 @@ fn safety_functions_edited_in_the_window_are_stored_and_raise_problems() {
     assert_eq!(novo_checks::safety::functions(project).len(), 1);
     assert_eq!(count(&d, ProblemKind::SafetyLevelNotMet), 1);
 }
+
+#[test]
+fn closing_the_safety_window_with_an_unwritten_edit_stores_it() {
+    use novo_checks::safety::{SafetyFunction, functions};
+    let (_dir, mut d, _) = open();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    {
+        let win = d.app.wb.safety.as_mut().unwrap();
+        win.bound.list = vec![SafetyFunction::new("Typed just before closing")];
+        win.bound.dirty = true;
+    }
+    // Close before any frame had the chance to write it.
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    assert!(d.app.wb.safety.is_none());
+    let stored = functions(d.app.backend.document().unwrap().project());
+    assert_eq!(stored.len(), 1);
+    assert_eq!(stored[0].name, "Typed just before closing");
+}
