@@ -153,6 +153,24 @@ pub(crate) fn overlays(
     out
 }
 
+/// The cell edges of the result along `axis`, mm.
+pub(crate) fn slice_edges(snap: &CfdSnapshot, axis: Axis) -> &[f64] {
+    match axis {
+        Axis::X => &snap.grid.x_edges_mm,
+        Axis::Y => &snap.grid.y_edges_mm,
+        Axis::Z => &snap.grid.z_edges_mm,
+    }
+}
+
+/// The centre of the cell next to the one holding `mm` (`dir` is 1 or -1),
+/// on a grid that may be graded; at either end it stays on the last cell.
+pub(crate) fn step_cell(edges: &[f64], mm: f64, dir: i32) -> f64 {
+    let n = edges.len().saturating_sub(1).max(1);
+    let here = edges.windows(2).position(|w| mm < w[1]).unwrap_or(n - 1);
+    let to = (here as i64 + i64::from(dir.signum())).clamp(0, n as i64 - 1) as usize;
+    0.5 * (edges[to] + edges[to + 1])
+}
+
 fn extent(snap: &CfdSnapshot, axis: Axis) -> (f64, f64) {
     let e = match axis {
         Axis::X => &snap.grid.x_edges_mm,

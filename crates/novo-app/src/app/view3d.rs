@@ -808,6 +808,7 @@ fn heat_controls(
                 ui.selectable_value(&mut h.axis, axis, name);
             }
             ui.add(egui::Slider::new(&mut h.slice_at, 0.0..=1.0).show_value(false));
+            slice_position(ui, h, &sol.snapshot);
         }
         ui.checkbox(&mut h.iso, "Shell")
             .on_hover_text("The surface where the air reaches one temperature");
@@ -839,4 +840,37 @@ fn heat_controls(
         jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
     });
     jump
+}
+
+/// The slice plane's position in millimetres along its axis, with a step to
+/// each side (one cell of the result grid).
+fn slice_position(ui: &mut egui::Ui, h: &mut Heat3d, snap: &novo_cfd::CfdSnapshot) {
+    let edges = heat_3d::slice_edges(snap, h.axis);
+    let (lo, hi) = (edges[0], edges[edges.len() - 1]);
+    let mut mm = lo + f64::from(h.slice_at) * (hi - lo);
+    let back = ui
+        .small_button("-")
+        .on_hover_text("To the centre of the previous cell")
+        .clicked();
+    if back {
+        mm = heat_3d::step_cell(edges, mm, -1);
+    }
+    let drag = ui
+        .add(
+            egui::DragValue::new(&mut mm)
+                .range(lo..=hi)
+                .speed(1.0)
+                .suffix(" mm"),
+        )
+        .on_hover_text("Where the plane cuts the enclosure; drag or type");
+    let forward = ui
+        .small_button("+")
+        .on_hover_text("To the centre of the next cell")
+        .clicked();
+    if forward {
+        mm = heat_3d::step_cell(edges, mm, 1);
+    }
+    if back || forward || drag.changed() {
+        h.slice_at = (((mm - lo) / (hi - lo).max(1e-9)) as f32).clamp(0.0, 1.0);
+    }
 }
