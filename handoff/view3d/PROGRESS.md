@@ -10,3 +10,4 @@
 - 2026-10-16 #673 merged. Follow-up PR: wire colours from the schematic (own colour, else cable core name; bi-colour stripe in bands), GPU tests that wires show through the closed door.
 - 2026-10-16 #690 and #692 merged. PR: dimensions in the 3D view (View > 3D > Dimensions: enclosure size, one part's size and distances to neighbours and plate edge), frame governor connected to the widget (steps adapter tier down after 2 s over 20 ms), shown in the statistics panel.
 - 2026-10-16 #755 review (R7): the governor reads the whole-app frame interval, so Tier::step_down now floors at Integrated; a hardware adapter never steps itself down to Software.
+- 2026-10-16 PR: performance pass. Found the label pass costing 51 ms per frame at 1000 devices (View3d::project walked the scene bounds per label); now 0.45 ms. Examples: `uicost` (widget CPU headless), `orbit --tier --shadows --no-edges --heat N`. Numbers in the design doc.

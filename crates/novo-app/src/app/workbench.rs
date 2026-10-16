@@ -104,6 +104,8 @@ pub(crate) struct Workbench {
     pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
+    /// The net trace window (`net.trace`), while it is open.
+    pub(super) net_trace: Option<super::net_trace::NetTrace>,
     /// The new pages, group and panel form, while open.
     pub(super) page_form: Option<super::pages::PageForm>,
     /// The spreadsheet import preview, while it is open.
@@ -182,6 +184,8 @@ pub(crate) struct Workbench {
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
+    /// The Report designer window, while open.
+    pub(super) designer: Option<super::designer::DesignerState>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
     /// An AutomationML import waiting for the person to confirm.
     pub(super) aml_import: Option<super::interop::AmlImport>,
@@ -249,6 +253,7 @@ impl Default for Workbench {
             safety: None,
             languages: None,
             numbering: None,
+            net_trace: None,
             device_renumber: None,
             project_rules: false,
             page_form: None,
@@ -288,6 +293,7 @@ impl Default for Workbench {
             changes: None,
             background_panel: None,
             bench: None,
+            designer: None,
             commissioning: None,
             underlay_seen: None,
             aml_import: None,
@@ -325,6 +331,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "tool.repeat",
     "tool.connect",
     "tool.cable",
+    "draw.text",
+    "net.select",
+    "net.trace",
+    "help.keymap_file",
     "wire.end_on_part",
     "wire.next_pin",
     "view.command_field_here",
@@ -391,6 +401,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.wiring_dxf",
     "export.wirecut_page",
     "view.bench",
+    "report.designer",
     "export.bench_cut",
     "export.ferrules",
     "export.labels",
@@ -788,6 +799,14 @@ impl NovoApp {
                     view.editor.begin_cable();
                 }
             }
+            "draw.text" => {
+                if let Some(view) = self.canvas.schematic() {
+                    view.editor.begin_text();
+                }
+            }
+            "net.select" => self.select_net(),
+            "net.trace" => self.trace_net(),
+            "help.keymap_file" => self.open_keymap_file(),
             "wire.end_on_part" => self.editor_key(EditorKey::EndOnPart),
             "wire.next_pin" => {
                 // Tab must not leave the drawing: egui's own focus move to
@@ -1049,6 +1068,7 @@ impl NovoApp {
             "export.wiring_dxf" => self.export_wiring_dxf_of_panel(),
             "export.wirecut_page" => self.add_wire_production_page(),
             "view.bench" => self.open_bench(),
+            "report.designer" => self.open_designer(),
             "export.bench_cut" => {
                 self.export_bench_cut();
             }

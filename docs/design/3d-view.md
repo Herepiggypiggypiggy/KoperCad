@@ -600,6 +600,45 @@ third between runs, so it is given as the range of three runs.
 - Scene rebuild (`model::scene`) and routing are measured by the app itself,
   see the panel below; the renderer's benchmark does not include them.
 
+### Performance pass at 1366x768 (2026-10-16)
+
+Two tools, because the cost is in two places. `orbit` (renderer, offscreen) got
+`--tier`, `--shadows`, `--no-edges` and `--heat N` (a translucent slice plane of
+N x N quads and N tracer lines of 40 points, a stand-in for the Heat layer);
+`uicost` (new example) runs the widget itself headless over the turning demo
+cabinet and prints milliseconds per frame, so the CPU cost outside the GPU shows.
+
+**The top cost was not in the renderer.** Renderer CPU is 0.13 to 0.2 ms at 400
+devices and 120 wires. The widget's label pass was 51 ms per frame at 1000
+devices and 300 wires (release build, median of 300 frames), every frame the
+view moved: `View3d::project` took the bounds of the whole scene (a walk over
+every item and wire point) for each label and mark, so a frame cost items
+squared. The label pass now takes the bounds once (`project_in`):
+
+| Widget CPU per frame, 1366x768 | before | after |
+| --- | --- | --- |
+| 1000 devices, 300 wires, labels on | 51.0 ms | 0.45 ms |
+| 3000 devices, 1000 wires, labels on | (not measured, about 9 times worse) | 1.54 ms |
+| 200 devices, 60 wires | | 0.10 ms |
+
+A test counts the scene-bounds walks per frame and requires the same number
+with 20 and with 600 devices (it fails with 22 against 602 on the old code).
+The remaining label cost at 3000 devices is about 1 ms, in the overlap check of
+`labels::visible_labels` (candidates times shown labels); the next lever, not
+needed at today's sizes.
+
+**Renderer on llvmpipe at 1366x768** (4 cores, software rasteriser, forced to the
+discrete tier so shadows and MSAA settings match a real GPU; wall ms per frame
+median, 400 devices and 120 wires, 120 frames): 11.0 base, 14.8 with shadows,
+9.6 with shadows and no edges, 17.6 with shadows and a 60 x 60 heat slice (7 200
+translucent triangles plus 60 tracers), 38.6 with a 200 x 200 slice (80 000
+triangles), 76.2 with that and 4x MSAA. A software rasteriser is slow at what a
+GPU does for free (1 px lines, large translucent fills), so these rank the
+passes but do not predict a GPU: edges are 5 ms here and shadows 4 ms, the
+translucent slice scales with its covered pixels, MSAA doubles everything. Real
+numbers come from the owner's laptop (steps below). Ambient occlusion is not on
+main yet (#762).
+
 ### Measuring on your own machine
 
 View > 3D > Show or hide the 3D frame statistics (palette: "frame rate" or

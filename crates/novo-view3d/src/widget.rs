@@ -172,6 +172,13 @@ pub fn register_adapter(name: &str, backend: &str, tier: Tier) {
     }
 }
 
+/// Marks the widget as installed without a window, so [`View3d::show`] runs
+/// all its CPU work (input, culling, picking, labels). Nothing is drawn by the
+/// GPU: for benchmarks and tests of the widget's own cost.
+pub fn install_headless() {
+    INSTALLED.store(true, Ordering::Relaxed);
+}
+
 /// Whether [`install`] ran. Without it (no wgpu adapter) [`View3d::show`] paints a notice.
 pub fn is_installed() -> bool {
     INSTALLED.load(Ordering::Relaxed)
@@ -619,8 +626,14 @@ impl View3d {
 
     /// Screen position of a world point inside `rect`.
     pub fn project(&self, rect: Rect, scene: &Scene, p: Vec3) -> Option<Pos2> {
+        self.project_in(rect, &scene.bounds(), p)
+    }
+
+    /// [`project`](Self::project) with the scene bounds at hand: the bounds
+    /// walk every item, so code that projects many points takes them once.
+    fn project_in(&self, rect: Rect, bounds: &crate::math::Aabb, p: Vec3) -> Option<Pos2> {
         let aspect = rect.width() / rect.height().max(1.0);
-        let (ndc, _) = self.camera.project(p, aspect, &scene.bounds())?;
+        let (ndc, _) = self.camera.project(p, aspect, bounds)?;
         Some(Pos2::new(
             rect.min.x + (ndc.x * 0.5 + 0.5) * rect.width(),
             rect.min.y + (0.5 - ndc.y * 0.5) * rect.height(),
@@ -1048,7 +1061,7 @@ impl View3d {
                 rect.height() * ppp,
             ) / ppp;
             if let (true, Some(label)) = (self.state.display.labels, &item.label)
-                && let Some(p) = self.project(rect, scene, front)
+                && let Some(p) = self.project_in(rect, &bounds, front)
             {
                 let galley =
                     painter.layout_no_wrap(label.to_string(), font.clone(), Color32::PLACEHOLDER);
@@ -1083,7 +1096,7 @@ impl View3d {
                     Glyph::None => continue,
                 };
                 let top = world.transform_point3(Vec3::new(0.0, item.size.y * 0.5, item.size.z));
-                if let Some(p) = self.project(rect, scene, top) {
+                if let Some(p) = self.project_in(rect, &bounds, top) {
                     let c = style
                         .edge
                         .unwrap_or(look.overlay.chip_text[..3].try_into().unwrap());
@@ -1474,5 +1487,50 @@ mod stats_tests {
         let again = drive(&mut view, &ctx, 3, 0.008, true);
         assert!(again.iter().all(Option::is_none), "{again:?}");
         *STATS.lock().unwrap() = None;
+    }
+}
+
+#[cfg(test)]
+mod cost_tests {
+    use super::*;
+    use crate::demo::{self, DemoOptions};
+    use crate::scene::BOUNDS_CALLS;
+
+    /// One headless frame of the widget over `scene`.
+    fn frame(view: &mut View3d, ctx: &egui::Context, scene: &Arc<Scene>, t: f64) {
+        let lib = Arc::new(MeshLibrary::new());
+        let input = egui::RawInput {
+            time: Some(t),
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1366.0, 768.0))),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            view.show(ui, scene, &lib, &Look::dark(), ViewOptions::default());
+        });
+        out.textures_delta.clear();
+    }
+
+    /// The scene bounds walk every item, so a frame takes them a few times,
+    /// not once per label: the label pass once cost 50 ms at 1000 devices.
+    #[test]
+    fn a_frame_walks_the_scene_bounds_a_fixed_number_of_times_however_many_labels_show() {
+        install_headless();
+        let calls = |devices: usize| {
+            let (scene, _) = demo::cabinet(&DemoOptions {
+                devices,
+                ..DemoOptions::default()
+            });
+            let scene = Arc::new(scene);
+            let ctx = egui::Context::default();
+            let mut view = View3d::new(9);
+            // Two frames: the first fits the camera.
+            frame(&mut view, &ctx, &scene, 0.0);
+            let before = BOUNDS_CALLS.with(|c| c.get());
+            frame(&mut view, &ctx, &scene, 0.02);
+            BOUNDS_CALLS.with(|c| c.get()) - before
+        };
+        let (small, large) = (calls(20), calls(600));
+        assert_eq!(small, large, "independent of the item count");
+        assert!(large <= 8, "{large} walks of the scene per frame");
     }
 }
