@@ -437,7 +437,7 @@ impl NovoApp {
                 Tool::Place(_) => "place",
                 Tool::Wire(_) => "wire",
                 Tool::Cable(_) => "cable",
-                Tool::Select | Tool::Move(_) => "select",
+                Tool::Select | Tool::Move(_) | Tool::Paste(_) => "select",
             }
             .to_owned();
             facts.selection = view

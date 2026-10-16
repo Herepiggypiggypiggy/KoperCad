@@ -15,6 +15,7 @@ mod cabinet_rules;
 mod change_report;
 mod changes;
 mod checks;
+mod clipboard;
 mod commissioning;
 mod compare;
 mod dock;
@@ -93,6 +94,8 @@ mod cabinet_rules_tests;
 mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
+#[cfg(test)]
+mod clipboard_tests;
 #[cfg(test)]
 mod commissioning_tests;
 #[cfg(test)]
@@ -805,6 +808,9 @@ impl NovoApp {
         if !self.modal_open() {
             self.outline_keys(&ctx);
         }
+        if !self.modal_open() {
+            self.clipboard_events(&ctx);
+        }
         let mut commands = if self.modal_open() {
             Vec::new()
         } else {
@@ -960,6 +966,7 @@ impl NovoApp {
         if let Some(page) = self.canvas.take_page_request() {
             self.show_page(page);
         }
+        self.after_paste_click();
         let asked = self.canvas.take_commands();
         self.wb.queued.extend(asked);
         let cable = self
