@@ -624,15 +624,23 @@ impl NovoApp {
         path: &Path,
         format: ReportFormat,
     ) -> Option<PathBuf> {
+        // The project's report language applies to every format: PDF
+        // translates while it lays out, Excel and CSV get translated headers.
+        let language = self.report_translator();
+        let translated: Vec<ReportOutput> = outputs
+            .iter()
+            .map(|o| novo_reports::i18n::translate_output(o, &language))
+            .collect();
+        let translated: Vec<&ReportOutput> = translated.iter().collect();
         let bytes = match format {
-            ReportFormat::Excel => match novo_reports::xlsx_bytes(outputs) {
+            ReportFormat::Excel => match novo_reports::xlsx_bytes(&translated) {
                 Ok(bytes) => bytes,
                 Err(e) => {
                     self.message(Level::Error, format!("Could not export to Excel: {e}"));
                     return None;
                 }
             },
-            ReportFormat::Csv => outputs
+            ReportFormat::Csv => translated
                 .iter()
                 .map(|o| novo_reports::to_csv(o, &CsvOptions::default()))
                 .collect::<Vec<_>>()
@@ -644,6 +652,7 @@ impl NovoApp {
                         [one] => one.title.clone(),
                         _ => "Reports".to_owned(),
                     },
+                    language,
                     ..Default::default()
                 };
                 novo_pdf::export_report_pdf(outputs, &options)

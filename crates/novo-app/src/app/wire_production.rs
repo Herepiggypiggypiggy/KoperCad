@@ -73,6 +73,7 @@ impl NovoApp {
             self.message(Level::Info, "No wires to cut yet: connect two device pins");
             return None;
         }
+        let report = novo_reports::i18n::translate_output(&report, &self.report_translator());
         match novo_reports::xlsx_bytes(&[&report]) {
             Ok(bytes) => self.write_production(path, &bytes, "wire production"),
             Err(e) => {
