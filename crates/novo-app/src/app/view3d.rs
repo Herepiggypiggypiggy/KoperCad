@@ -25,6 +25,7 @@ use super::heat_3d::{self, Heat3d, Place};
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_move::{self, MoveState};
+use super::view3d_rail;
 use super::view3d_stats::{Build, Stats};
 
 /// The one view of the app.
@@ -163,7 +164,16 @@ impl NovoApp {
                 wires,
             };
             if let Some(built) = model::scene(project, id, &options) {
-                mode.built = Some((id, revision, Arc::new(layers.apply(built))));
+                // The renderer redraws on a new scene revision only: `refresh`
+                // bumps it when the items differ (an edit that changes no
+                // selection or camera would otherwise stay unseen).
+                let mut shown = layers.apply(built);
+                if let Some((_, _, old)) = &mode.built {
+                    let mut current = Scene::clone(old);
+                    novo_view3d::build::refresh(&mut current, shown);
+                    shown = current;
+                }
+                mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
                 let total = started.elapsed().as_secs_f32() * 1000.0;
                 mode.stats.build = Build {
@@ -409,6 +419,12 @@ impl NovoApp {
             .filter(|i| i.kind == ItemKind::Device)
             .map(|i| i.raw)
             .collect();
+        let selected_rails: Vec<u64> = state
+            .selection
+            .iter()
+            .filter(|i| matches!(i.kind, ItemKind::Rail | ItemKind::Duct))
+            .map(|i| i.raw)
+            .collect();
         let mut ask = None;
         if let Some(stored) = load(project, id) {
             if state.selection != mode.synced.1 {
@@ -445,10 +461,37 @@ impl NovoApp {
                 );
             }
         }
+        // One rail or duct selected: its values to type, in millimetres.
+        let mut rail_ask = None;
+        if devices.is_empty()
+            && let [rail] = selected_rails.as_slice()
+            && let Some(stored) = load(project, id)
+        {
+            let tag_of = |d: u64| {
+                project
+                    .get::<Device>(DeviceId::from(d))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_default()
+            };
+            rail_ask = view3d_rail::card(
+                ui.ctx(),
+                &mut self.cabinet.rails,
+                project,
+                &stored,
+                *rail,
+                &tag_of,
+            );
+        }
         if let Some(ask) = ask {
             let layout = load(project, id);
             let cands = candidates(project, id);
             self.cabinet_ask(ask, Some(id), layout, &cands);
+        }
+
+        if let Some(rail_ask) = rail_ask {
+            self.cabinet_rail_ask(Some(id), rail_ask);
+            // The scene is rebuilt on the next frame; nothing else asks for it.
+            ui.ctx().request_repaint();
         }
         for edit in edits {
             if let view3d_move::Edit::Group { devices, rails } = edit {

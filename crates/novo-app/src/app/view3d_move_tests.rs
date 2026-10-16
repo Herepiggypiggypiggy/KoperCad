@@ -450,3 +450,39 @@ fn a_group_without_devices_raises_no_drop_signal() {
     d.app.view3d_move_group(cab, vec![], vec![]);
     assert!(!step_done(&mut d, "drag-first"));
 }
+
+#[test]
+fn a_typed_rail_length_reaches_the_3d_scene() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, a, _b) = cabinet_with_two_devices(&mut d);
+    d.app.cabinet_rail_ask(
+        Some(cab),
+        super::cabinet_rails::RailAsk::Add {
+            kind: novo_core::RailKind::Duct,
+            vertical: false,
+        },
+    );
+    open_3d_with_selection(&mut d, a);
+    let before = d.app.view3d.built.as_ref().map(|b| b.2.revision).unwrap();
+    let duct = project(&d)
+        .all::<novo_core::Rail>()
+        .find(|r| r.kind == novo_core::RailKind::Duct)
+        .map(|r| (r.id.raw(), r.x, r.y, r.width, r.height))
+        .unwrap();
+    d.app.cabinet_rail_ask(
+        Some(cab),
+        super::cabinet_rails::RailAsk::Set(super::cabinet_rails::RailEdit {
+            id: duct.0,
+            x: duct.1,
+            y: duct.2,
+            length: 123.0,
+            width: duct.3,
+            height: duct.4,
+        }),
+    );
+    d.frame();
+    d.frame();
+    let after = d.app.view3d.built.as_ref().map(|b| b.2.revision).unwrap();
+    assert!(after > before, "{before} -> {after}");
+}
