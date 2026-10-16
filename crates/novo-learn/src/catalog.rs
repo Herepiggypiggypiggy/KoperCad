@@ -9,6 +9,7 @@ use std::sync::Arc;
 use serde::Deserialize;
 
 use crate::lesson::{Lang, Lesson, LessonError, Status};
+use crate::progress::{Progress, Standing};
 
 /// Text files by path relative to the lessons folder, `/` separated:
 /// `tracks.toml`, `glossary.toml`, `<id>/lesson.toml`, `<id>/project.json`.
@@ -167,6 +168,14 @@ struct GlossaryFile {
     term: BTreeMap<String, Term>,
 }
 
+/// How far a person is through one track.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TrackSummary {
+    pub done: usize,
+    pub total: usize,
+    pub minutes: u32,
+}
+
 /// Every lesson that parsed, in Learn-window order, and what did not.
 #[derive(Debug, Clone, Default)]
 pub struct Catalog {
@@ -259,6 +268,56 @@ impl Catalog {
         self.entries
             .iter()
             .filter(move |e| show_drafts || e.lesson.status != Status::Draft)
+    }
+
+    /// The lesson to offer next: one under way, else the first lesson not
+    /// done whose `needs` are all done, else the first not done at all.
+    /// `None` when everything visible is done.
+    pub fn next_lesson(&self, progress: &Progress, show_drafts: bool) -> Option<&Entry> {
+        let todo: Vec<&Entry> = self
+            .visible(show_drafts)
+            .filter(|e| progress.standing(&e.lesson) != Standing::Completed)
+            .collect();
+        todo.iter()
+            .find(|e| matches!(progress.standing(&e.lesson), Standing::InProgress { .. }))
+            .or_else(|| {
+                todo.iter()
+                    .find(|e| self.unmet_needs(progress, &e.lesson).is_empty())
+            })
+            .or(todo.first())
+            .copied()
+    }
+
+    /// The lessons `lesson` needs that are not done yet (ones the catalog
+    /// does not hold are ignored).
+    pub fn unmet_needs(&self, progress: &Progress, lesson: &Lesson) -> Vec<&Entry> {
+        lesson
+            .needs
+            .iter()
+            .filter_map(|id| self.get(id))
+            .filter(|e| progress.standing(&e.lesson) != Standing::Completed)
+            .collect()
+    }
+
+    /// Lessons done, lessons in all and their minutes, for one track.
+    pub fn track_summary(
+        &self,
+        progress: &Progress,
+        track: &str,
+        show_drafts: bool,
+    ) -> TrackSummary {
+        let mut sum = TrackSummary::default();
+        for e in self
+            .visible(show_drafts)
+            .filter(|e| e.lesson.track == track)
+        {
+            sum.total += 1;
+            sum.minutes += e.lesson.minutes;
+            if progress.standing(&e.lesson) == Standing::Completed {
+                sum.done += 1;
+            }
+        }
+        sum
     }
 
     /// Lessons that carry a topic, for the "Lesson: ..." links in panels.
@@ -440,5 +499,45 @@ mod tests {
         );
         assert!(notes.is_empty());
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn next_lesson_follows_progress_and_prerequisites() {
+        use crate::progress::LessonProgress;
+        let mut f = files();
+        let wiring = f["wiring/lesson.toml"].replace("topics", "needs = [\"tour\"]\ntopics");
+        f.insert("wiring/lesson.toml".into(), wiring);
+        f.remove("lost/lesson.toml");
+        let catalog = Catalog::from_files(&f);
+        let done = |p: &mut Progress, id: &str| {
+            p.lessons.insert(
+                id.to_owned(),
+                LessonProgress {
+                    version: 1,
+                    done: vec!["a".into()],
+                    completed: Some("2026-10-16".into()),
+                    ..Default::default()
+                },
+            );
+        };
+        let mut p = Progress::default();
+        let next = |p: &Progress| catalog.next_lesson(p, false).map(|e| e.lesson.id.clone());
+        assert_eq!(next(&p).as_deref(), Some("tour"));
+        let wiring = &catalog.get("wiring").unwrap().lesson;
+        assert_eq!(catalog.unmet_needs(&p, wiring).len(), 1);
+        assert_eq!(
+            catalog.track_summary(&p, "draw", false),
+            TrackSummary {
+                done: 0,
+                total: 1,
+                minutes: 0
+            }
+        );
+        done(&mut p, "tour");
+        assert_eq!(next(&p).as_deref(), Some("wiring"));
+        assert!(catalog.unmet_needs(&p, wiring).is_empty());
+        done(&mut p, "wiring");
+        assert_eq!(next(&p), None);
+        assert_eq!(catalog.track_summary(&p, "draw", false).done, 1);
     }
 }
