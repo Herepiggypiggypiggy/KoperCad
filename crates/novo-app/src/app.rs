@@ -66,6 +66,7 @@ mod onboarding;
 mod outline;
 mod outline_tree;
 mod pages;
+mod panel;
 mod part_picker;
 mod parts;
 mod parts_import;

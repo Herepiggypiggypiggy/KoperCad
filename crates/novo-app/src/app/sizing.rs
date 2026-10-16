@@ -260,10 +260,8 @@ pub(super) fn show_window(ctx: &egui::Context, state: &mut SizingState, devices:
         return;
     }
     let mut open = true;
-    let window = egui::Window::new("Size the enclosure")
+    let window = super::panel::dialog(ctx, "Size the enclosure", [380.0, 0.0])
         .open(&mut open)
-        .default_width(280.0)
-        .resizable(false)
         .show(ctx, |ui| show_panel(ui, state, devices));
     if let Some(w) = window {
         super::cabinet_bar::note_rect(
@@ -356,9 +354,8 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
     let mut remove: Option<usize> = None;
     let mut import = false;
     let mut export = false;
-    egui::Window::new("Enclosures")
+    super::panel::dialog(ctx, "Enclosures", [620.0, 0.0])
         .open(&mut open)
-        .default_width(620.0)
         .show(ctx, |ui| {
             ui.weak("Your own list of enclosure sizes, in mm. Outside size sets the cooling surface; the plate is the mounting plate inside.");
             ui.add_space(4.0);

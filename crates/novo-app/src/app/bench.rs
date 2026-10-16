@@ -374,10 +374,8 @@ impl NovoApp {
 
         let mut open = true;
         let mut action: Option<Act> = None;
-        egui::Window::new("Bench output")
+        super::panel::dialog(ctx, "Bench output", [560.0, 0.0])
             .open(&mut open)
-            .default_width(560.0)
-            .resizable(true)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.selectable_value(&mut state.tab, Tab::CutList, "Cut list");

@@ -13,8 +13,6 @@ use super::cabinet::{Ask, problem_lines};
 use super::cabinet_door::DoorState;
 /// The inspector's width, the same as the schematic's.
 const WIDTH: f32 = super::inspector::INSPECTOR_WIDTH;
-const MARGIN: f32 = 12.0;
-const TOP: f32 = 40.0;
 
 /// The widest a plate dimension can be set to, in mm.
 const MAX_MM: f64 = 5000.0;
@@ -141,41 +139,24 @@ pub(super) fn overlay(
     fields: &mut super::cabinet_panel::PanelFields,
     door: DoorView<'_, impl Fn(u64) -> String>,
 ) -> Option<Ask> {
-    let (pivot, at) = if left {
-        (
-            egui::Align2::LEFT_TOP,
-            canvas.left_top() + egui::vec2(MARGIN, TOP),
-        )
+    let side = if left {
+        super::panel::Side::Left
     } else {
-        (
-            egui::Align2::RIGHT_TOP,
-            canvas.right_top() + egui::vec2(-MARGIN, TOP),
-        )
+        super::panel::Side::Right
     };
-    let max_height = (canvas.height() - TOP - 72.0).max(120.0);
-    let area = egui::Area::new(egui::Id::new("cabinet_inspector"))
-        .order(egui::Order::Middle)
-        .pivot(pivot)
-        .fixed_pos(at)
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style())
-                .show(ui, |ui| {
-                    ui.set_width(WIDTH);
-                    egui::ScrollArea::vertical()
-                        .max_height(max_height)
-                        .show(ui, |ui| show(ui, facts, project, fields, door))
-                        .inner
-                })
-                .inner
-        });
+    let shown = super::panel::Panel::new("cabinet_inspector", "Inspector", canvas, side, WIDTH)
+        .fixed_open()
+        .show(ctx, |ui| show(ui, facts, project, fields, door));
     super::cabinet_bar::note_rect(
         ctx,
         "cabinet.inspector",
         "Inspector",
-        area.response.rect,
+        shown
+            .as_ref()
+            .map_or(egui::Rect::NOTHING, |r| r.response.rect),
         false,
     );
-    area.inner
+    shown.and_then(|r| r.inner).flatten()
 }
 
 fn show(

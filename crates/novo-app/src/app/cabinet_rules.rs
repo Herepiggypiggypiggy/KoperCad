@@ -189,9 +189,8 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
     }
     state.ensure_loaded();
     let mut open = true;
-    egui::Window::new("Place rules")
+    super::panel::dialog(ctx, "Place rules", [520.0, 0.0])
         .open(&mut open)
-        .default_width(520.0)
         .show(ctx, |ui| {
             ui.weak(
                 "Where Place all puts each kind of device. One rule per line: \
@@ -301,9 +300,8 @@ pub(super) fn show_cut_window(
     }
     let mut open = true;
     let mut ask = None;
-    egui::Window::new("Cut list: rails and ducts")
+    super::panel::dialog(ctx, "Cut list: rails and ducts", [460.0, 0.0])
         .open(&mut open)
-        .default_width(460.0)
         .show(ctx, |ui| {
             let Some(lists) = lists else {
                 ui.weak("This panel has no mounting plate yet.");

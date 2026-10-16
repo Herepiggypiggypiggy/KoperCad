@@ -518,9 +518,8 @@ impl NovoApp {
             )
         });
         let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
-        let shown = egui::Window::new("Parts")
+        let shown = super::panel::dialog(ctx, "Parts", [820.0, 520.0])
             .open(&mut open)
-            .default_size([820.0, 520.0])
             .show(ctx, |ui| parts_ui(ui, win, dragging, &mut actions));
         // A file dropped on the window, or one the watch found.
         let over = shown

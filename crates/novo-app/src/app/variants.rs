@@ -202,9 +202,8 @@ impl NovoApp {
         let mut export_variant = false;
         let mut open = true;
 
-        egui::Window::new("Project options and variants")
+        super::panel::dialog(ctx, "Project options and variants", [560.0, 640.0])
             .open(&mut open)
-            .default_size([560.0, 640.0])
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     ui.strong("Options");
@@ -565,9 +564,8 @@ opt.conveyor, or opt.supply == '480V' && !opt.compact. Empty means always.",
         let mut open = true;
         let has_problems = matches!(win.result, Some(Err(_)));
 
-        egui::Window::new("Generate pages from a spec sheet")
+        super::panel::dialog(ctx, "Generate pages from a spec sheet", [560.0, 560.0])
             .open(&mut open)
-            .default_size([560.0, 560.0])
             .show(ctx, |ui| {
                 ui.weak(
                     "One row per macro: Macro, Page, Structure, When, then a column for each macro \

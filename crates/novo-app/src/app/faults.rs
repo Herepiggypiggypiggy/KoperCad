@@ -97,9 +97,8 @@ impl NovoApp {
         }
         let mut open = true;
         let mut note: Option<(Level, String)> = None;
-        egui::Window::new("Fault scenarios")
+        super::panel::dialog(ctx, "Fault scenarios", [760.0, 640.0])
             .open(&mut open)
-            .default_size([760.0, 640.0])
             .show(ctx, |ui| {
                 header(ui, &mut win, &mut note);
                 ui.separator();

@@ -281,9 +281,8 @@ pub(super) fn show_window(
     }
     let mut open = true;
     let mut ask = None;
-    let window = egui::Window::new("Rails and ducts")
+    let window = super::panel::dialog(ctx, "Rails and ducts", [560.0, 0.0])
         .open(&mut open)
-        .default_width(560.0)
         .show(ctx, |ui| {
             let Some(structure) = structure else {
                 ui.weak("This panel has no cabinet yet.");
