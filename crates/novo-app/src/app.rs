@@ -95,6 +95,7 @@ mod parts_bulk;
 mod parts_import;
 mod parts_quality;
 mod pdf;
+mod pdf_options;
 mod plate_export;
 mod plc;
 mod plc_card;
@@ -110,6 +111,7 @@ mod reports_view;
 mod revisions;
 mod safety;
 mod safety_functions;
+mod safety_report;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -199,6 +201,8 @@ mod outline_tests;
 #[cfg(test)]
 mod page_commands_tests;
 #[cfg(test)]
+mod pdf_options_tests;
+#[cfg(test)]
 mod protection_tests;
 #[cfg(test)]
 mod route_all_tests;
@@ -278,12 +282,35 @@ pub struct Message {
     pub text: String,
     /// When it was raised; info toasts fade after [`TOAST_INFO`].
     pub at: Instant,
-    /// Clicked away; warnings and errors stay until then.
+    /// Clicked away, or expired.
     pub dismissed: bool,
+    /// How often the same text was raised while it was still up.
+    pub count: u32,
+    /// A file this message is about (an export): its toast offers to open
+    /// the folder and stays up longer than a plain info message.
+    pub file: Option<PathBuf>,
+}
+
+impl Message {
+    /// How long its toast stays up.
+    fn expiry(&self) -> Option<Duration> {
+        Some(match (self.level, &self.file) {
+            (Level::Info, None) => TOAST_INFO,
+            (Level::Info, Some(_)) => TOAST_FILE,
+            (Level::Warning, _) => TOAST_WARNING,
+            (Level::Error, _) => TOAST_ERROR,
+        })
+    }
 }
 
 /// How long an info toast stays up.
 const TOAST_INFO: Duration = Duration::from_secs(5);
+/// How long the toast for a written file stays up.
+const TOAST_FILE: Duration = Duration::from_secs(12);
+/// How long a warning stays up; it is still in the log afterwards.
+const TOAST_WARNING: Duration = Duration::from_secs(15);
+/// How long an error stays up unless clicked away.
+const TOAST_ERROR: Duration = Duration::from_secs(30);
 /// Most toasts shown at once; older ones wait in [`NovoApp::messages`].
 const MAX_TOASTS: usize = 3;
 /// Height of the top bar.
@@ -635,17 +662,41 @@ impl NovoApp {
     }
 
     fn message(&mut self, level: Level, text: impl Into<String>) {
-        let text = text.into();
+        self.raise(level, text.into(), None);
+    }
+
+    /// Reports a file that was written: the toast names it and offers to
+    /// open its folder.
+    pub(super) fn message_file(&mut self, text: impl Into<String>, file: &Path) {
+        self.raise(Level::Info, text.into(), Some(file.to_owned()));
+    }
+
+    fn raise(&mut self, level: Level, text: String, file: Option<PathBuf>) {
         match level {
             Level::Info => log::info!("{text}"),
             Level::Warning => log::warn!("{text}"),
             Level::Error => log::error!("{text}"),
+        }
+        // The same message again (a failing export tried twice) renews the
+        // one on screen instead of stacking a copy.
+        if let Some(same) = self
+            .messages
+            .iter_mut()
+            .rev()
+            .find(|m| !m.dismissed && m.level == level && m.text == text && m.file == file)
+            .filter(|m| m.expiry().is_none_or(|e| m.at.elapsed() < e))
+        {
+            same.count += 1;
+            same.at = Instant::now();
+            return;
         }
         self.messages.push(Message {
             level,
             text,
             at: Instant::now(),
             dismissed: false,
+            count: 1,
+            file,
         });
         if self.messages.len() > MESSAGE_HISTORY {
             let excess = self.messages.len() - MESSAGE_HISTORY;
@@ -1023,7 +1074,7 @@ impl NovoApp {
                 .show(ui, |ui| self.reports_list(ui));
         } else if pinned && self.is_open() {
             egui::Panel::left("outline")
-                .exact_size(OUTLINE_WIDTH)
+                .exact_size(self.outline_width())
                 .resizable(false)
                 .show(ui, |ui| self.outline(ui, &mut picked));
         }
@@ -1097,6 +1148,7 @@ impl NovoApp {
         self.whats_new_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
+        self.pdf_options_window(&ctx);
         self.designer_window(&ctx);
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
@@ -1230,9 +1282,22 @@ impl NovoApp {
     /// Whether the outline takes space beside the canvas: the user's
     /// choice, otherwise only on wide windows.
     fn outline_pinned(&self) -> bool {
+        if self.commissioning_pins_panel() {
+            return true;
+        }
         self.settings
             .outline_pinned
             .unwrap_or(self.window_width >= PIN_OUTLINE_FROM)
+    }
+
+    /// The outline's width: wider in the Commissioning workspace at a tablet
+    /// window, where the touch targets need the room.
+    fn outline_width(&self) -> f32 {
+        if self.commissioning_tablet() {
+            commissioning::TABLET_PANEL_WIDTH
+        } else {
+            OUTLINE_WIDTH
+        }
     }
 
     /// Shows `page` on the canvas.
@@ -1314,10 +1379,13 @@ impl NovoApp {
                 if !fit.search.is_empty() && fit.search_width > 0.0 {
                     search = search.shortcut_text(shortcut.clone());
                 }
-                let search = ui
-                    .add(search)
-                    .on_hover_text(format!("Search or run ({shortcut})"));
-                self.anchor_response("palette.button", &search, "Search or run");
+                let search = ui.add(search);
+                let search = self.tip(
+                    search,
+                    "palette.button",
+                    "Search or run",
+                    "view.command_palette",
+                );
                 if search.clicked() {
                     picked.push(Action::CommandPalette);
                 }
@@ -1592,7 +1660,7 @@ impl NovoApp {
                 // The frame's margins and stroke come on top of the content.
                 let chrome = frame.total_margin().sum();
                 frame.show(ui, |ui| {
-                    ui.set_width(OUTLINE_WIDTH - chrome.x);
+                    ui.set_width(self.outline_width() - chrome.x);
                     ui.set_height(height - chrome.y);
                     self.outline(ui, picked);
                 });
@@ -1718,14 +1786,13 @@ impl NovoApp {
                 if m.dismissed {
                     return false;
                 }
-                if m.level != Level::Info {
-                    return true;
-                }
-                // The status bar shows info messages when it is on.
-                if self.status_bar_shown() {
+                // The status bar shows plain info messages when it is on; a
+                // written file always gets its toast, with the folder action.
+                if m.level == Level::Info && m.file.is_none() && self.status_bar_shown() {
                     return false;
                 }
-                let left = TOAST_INFO.saturating_sub(now - m.at);
+                let life = m.expiry().unwrap_or(TOAST_INFO);
+                let left = life.saturating_sub(now - m.at);
                 if !left.is_zero() {
                     fade_in = Some(fade_in.map_or(left, |f| f.min(left)));
                 }
@@ -1741,6 +1808,7 @@ impl NovoApp {
             return;
         }
         let mut dismiss = Vec::new();
+        let mut open = None;
         egui::Area::new(egui::Id::new("toasts"))
             .pivot(egui::Align2::LEFT_BOTTOM)
             .fixed_pos(canvas.left_bottom() + egui::vec2(12.0, -12.0))
@@ -1754,7 +1822,17 @@ impl NovoApp {
                         Level::Error => ui.visuals().error_fg_color,
                     };
                     let frame = egui::Frame::popup(ui.style()).show(ui, |ui| {
-                        ui.add(egui::Label::new(egui::RichText::new(&m.text).color(color)).wrap());
+                        let text = if m.count > 1 {
+                            format!("{} (x{})", m.text, m.count)
+                        } else {
+                            m.text.clone()
+                        };
+                        ui.add(egui::Label::new(egui::RichText::new(text).color(color)).wrap());
+                        if let Some(file) = &m.file
+                            && ui.button("Open folder").clicked()
+                        {
+                            open = file.parent().map(Path::to_owned);
+                        }
                     });
                     let response = frame.response.interact(egui::Sense::click());
                     if response.on_hover_text("Click to dismiss").clicked() {
@@ -1764,6 +1842,11 @@ impl NovoApp {
             });
         for i in dismiss {
             self.messages[i].dismissed = true;
+        }
+        if let Some(dir) = open
+            && let Err(e) = parts_bulk::open_folder(&dir)
+        {
+            self.message(Level::Error, format!("Could not open the folder: {e}"));
         }
     }
 
@@ -2554,6 +2637,39 @@ mod tests {
         let open = ctx.memory(|m| m.areas().visible_layer_ids());
         assert!(open.iter().any(|l| l.id == egui::Id::new("toasts")));
         app.messages[1].dismissed = true;
+        frame(&ctx, &mut app, Default::default());
+        frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(!open.iter().any(|l| l.id == egui::Id::new("toasts")));
+    }
+
+    #[test]
+    fn the_same_error_renews_one_toast_and_errors_expire() {
+        let mut app = app_with(MemoryBackend::default());
+        for _ in 0..4 {
+            app.message(Level::Error, "Could not find the Documents folder");
+        }
+        assert_eq!(app.messages.len(), 1);
+        assert_eq!(app.messages[0].count, 4);
+        app.messages[0].at -= TOAST_ERROR;
+        app.message(Level::Error, "Could not find the Documents folder");
+        assert_eq!(app.messages.len(), 2, "an expired one is not renewed");
+    }
+
+    #[test]
+    fn an_exported_file_gets_a_toast_with_the_folder_even_with_the_status_bar() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        assert!(app.status_bar_shown());
+        app.message(Level::Info, "Plain info");
+        frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(!open.iter().any(|l| l.id == egui::Id::new("toasts")));
+        app.message_file("Exported /tmp/x/plan.pdf", Path::new("/tmp/x/plan.pdf"));
+        frame(&ctx, &mut app, Default::default());
+        let open = ctx.memory(|m| m.areas().visible_layer_ids());
+        assert!(open.iter().any(|l| l.id == egui::Id::new("toasts")));
+        app.messages.last_mut().unwrap().at -= TOAST_FILE;
         frame(&ctx, &mut app, Default::default());
         frame(&ctx, &mut app, Default::default());
         let open = ctx.memory(|m| m.areas().visible_layer_ids());
