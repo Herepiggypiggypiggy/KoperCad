@@ -296,6 +296,29 @@ amber tint are never the only difference.
   touched and the angle survives scene rebuilds. `door::open_angle` gives the
   signed angle for "open by N degrees" for either hinge side.
 
+### Layers, wires and the door control (2026-10-16)
+
+- **The enclosure's own shell.** `build::model::shell` takes the depth (from
+  the plate surface to the inside of the door: interior depth minus plate
+  setback), the hinge side and the door from the enclosure the Cabinet stores;
+  an enclosure without an interior keeps the default shell, one with an
+  interior and no door is drawn without a door. `model::door_limit_deg` is how
+  far its door opens (0 to 180).
+- **Wires.** `model::wires` turns the Cabinet's routes (`novo-routing`, the
+  same call as the wire list and the Cabinet's route overlay) into
+  `WireInput`s with the wire's drawn diameter; `model::options` bundles shell
+  and wires. Wires in free air carry the Outside mark.
+- **Layers** (`layers.rs`): enclosure, door and wires, all on by default.
+  `Layers::apply` filters a built scene (item order and ids of what stays are
+  unchanged); the host rebuilds the scene when the layers change, and skips
+  routing while the wires layer is off.
+- **Host controls** (`novo-app`, `view3d_controls.rs`): a toolbar in the top
+  left of the 3D face with the three layer toggles (ticked, never colour only),
+  an Open/Close door button and a door angle slider up to the enclosure's
+  limit. Commands `view.3d_door`, `view.3d_shell`, `view.3d_wires` (View > 3D,
+  palette, Dutch names), keys Ctrl+6 for the 3D workspace and Shift+D for the
+  door. The door angle is view state and eases through `View3d::set_door`.
+
 ## 6. Camera and input
 
 Turntable orbit around a target point, +Y up, so the cabinet never rolls.
