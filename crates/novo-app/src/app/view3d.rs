@@ -237,6 +237,17 @@ impl NovoApp {
         let ghost_changed = mode.ghost_shown != ghost_key;
         mode.ghost_shown = ghost_key;
         let stored = load(project, id);
+        if let Some(lay) = &stored {
+            let tag_of = |d: u64| {
+                project
+                    .get::<Device>(DeviceId::from(d))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_default()
+            };
+            if let Some(text) = view3d_move::warning(lay, &landings, &tag_of) {
+                view3d_move::show_warning(ui.ctx(), &text);
+            }
+        }
         let ghost: Vec<_> = landings
             .iter()
             .flat_map(|l| {
