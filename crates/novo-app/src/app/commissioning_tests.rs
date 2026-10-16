@@ -1,6 +1,7 @@
 //! Commissioning mode in the app: the command opens the tab, decisions mark
 //! the drawing and are kept in the project's commissioning document.
 
+use eframe::egui;
 use novo_canvas::marks::MarkKind;
 use novo_commissioning::{CheckKind, CheckState, CommissioningStore, Target, targets};
 
@@ -233,4 +234,56 @@ fn the_switcher_the_pages_list_and_the_commissioning_controls_are_anchors() {
     ] {
         on_screen(&d, id);
     }
+}
+
+/// One frame of a window `w` by `h` points.
+fn frame_sized(d: &mut Drive, w: f32, h: f32) {
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(w, h),
+        )),
+        ..Default::default()
+    };
+    let app = &mut d.app;
+    let mut output = d.ctx.run_ui(input, |ui| app.show(ui));
+    output.textures_delta.clear();
+}
+
+#[test]
+fn a_tablet_window_pins_a_wider_panel_with_large_buttons() {
+    let (_dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.commissioning", None);
+    // walk-through at a tablet-sized window (landscape and portrait)
+    for (w, h) in [(1024.0, 768.0), (768.0, 1024.0)] {
+        frame_sized(&mut d, w, h);
+        frame_sized(&mut d, w, h);
+        assert!(d.app.commissioning_tablet());
+        assert!(d.app.outline_pinned(), "the panel stays beside the drawing");
+        assert_eq!(
+            d.app.outline_width(),
+            super::commissioning::TABLET_PANEL_WIDTH
+        );
+        assert!(d.app.wb.commissioning.as_ref().unwrap().large);
+        assert!(
+            ctx.globally_used_rect().right() <= w + 0.5,
+            "nothing is laid out past the window edge at {w}x{h}"
+        );
+        // a decision is one touch: pass the first open check of the first wire
+        let target = targets(d.doc().project())
+            .into_iter()
+            .map(|t| t.target)
+            .find(|t| matches!(t, Target::Wire(_)))
+            .unwrap();
+        let mode = d.app.wb.commissioning.as_mut().unwrap();
+        mode.decide(target, CheckKind::Continuity, CheckState::Passed);
+        frame_sized(&mut d, w, h);
+    }
+    // a desktop window keeps the narrow panel, still pinned
+    frame_sized(&mut d, 1600.0, 900.0);
+    frame_sized(&mut d, 1600.0, 900.0);
+    assert!(!d.app.commissioning_tablet());
+    assert!(d.app.outline_pinned());
+    assert_eq!(d.app.outline_width(), crate::app::OUTLINE_WIDTH);
 }
