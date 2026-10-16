@@ -100,6 +100,30 @@ fn coil_shows_contact_image_and_contacts_show_the_coil() {
 }
 
 #[test]
+fn coil_label_has_one_table_row_per_contact_group() {
+    use novo_xref::ContactKind;
+    let f = fixture();
+    let x = XrefIndex::build(f.doc.project(), &FromKey);
+    let label = x.label(f.k1_coil).unwrap();
+    let rows: Vec<(ContactKind, &str, &str)> = label
+        .rows
+        .iter()
+        .map(|r| (r.kind, r.pins.as_str(), r.location.as_str()))
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            (ContactKind::NormallyOpen, "13-14", "2.2"),
+            (ContactKind::NormallyClosed, "21-22", "2.8"),
+            (ContactKind::NormallyOpen, "33-34", "3.4"),
+        ]
+    );
+    assert!(label.extra_lines().is_empty());
+    // A contact's label has no table.
+    assert!(x.label(f.k1_contacts[0]).unwrap().rows.is_empty());
+}
+
+#[test]
 fn moving_a_contact_updates_the_coil_at_once() {
     let mut f = fixture();
     let mut live = LiveXref::default();
