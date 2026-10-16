@@ -4,3 +4,4 @@ Window section: crates/novo-app/src/app/safety_functions.rs, shown in Check > Sa
 Binding: tag text -> exact device tag; reliability from the part or from device/part properties `b10d_cycles`, `mttfd_years`.
 Honest limits: a calculation aid; PFHd of categories 2-4 is a closed-form model (see novo-safety docs).
 Next: report page (novo-reports), see ROADMAP.
+Report: crates/novo-reports/src/safety.rs (plain input), mapping app/safety_report.rs, button in the Safety window. Table K.1 could not be sourced reliably (Reer page is an image; Omron PDF text lost the grid); do not fill it from memory.
