@@ -1,0 +1,134 @@
+# The words the lesson screens use. Every entry may have a `_nl` twin; the
+# program falls back to English. `{name}` marks a value the program fills in.
+
+[learn]
+text = "Learn"
+text_nl = "Leren"
+
+[learn_menu]
+text = "Learn…"
+text_nl = "Leren…"
+
+[learn_hint]
+text = "Short lessons on a small drawing, with a pointer on the control."
+text_nl = "Korte lessen op een kleine tekening, met een aanwijzer op het bedieningselement."
+
+[search]
+text = "Search lessons"
+text_nl = "Lessen zoeken"
+
+[step_of]
+text = "{n} of {total}"
+text_nl = "{n} van {total}"
+
+[back]
+text = "Back"
+text_nl = "Terug"
+
+[show_me]
+text = "Show me how"
+text_nl = "Laat zien"
+
+[skip_step]
+text = "Skip step"
+text_nl = "Stap overslaan"
+
+[next]
+text = "Next"
+text_nl = "Volgende"
+
+[restart_lesson]
+text = "Restart lesson"
+text_nl = "Les opnieuw"
+
+[restart_confirm]
+text = "Open a fresh copy and clear this lesson's progress?"
+text_nl = "Een nieuwe kopie openen en de voortgang van deze les wissen?"
+
+[yes_restart]
+text = "Restart"
+text_nl = "Opnieuw beginnen"
+
+[cancel]
+text = "Cancel"
+text_nl = "Annuleren"
+
+[close]
+text = "Close"
+text_nl = "Sluiten"
+
+[done]
+text = "Done"
+text_nl = "Klaar"
+
+[done_text]
+text = "That is the whole lesson."
+text_nl = "Dat was de hele les."
+
+[next_lessons]
+text = "Next"
+text_nl = "Hierna"
+
+[start]
+text = "Start"
+text_nl = "Starten"
+
+[continue]
+text = "Continue"
+text_nl = "Doorgaan"
+
+[continue_step]
+text = "Continue · step {n} of {total}"
+text_nl = "Doorgaan · stap {n} van {total}"
+
+[do_again]
+text = "Do again"
+text_nl = "Opnieuw doen"
+
+[updated]
+text = "Updated"
+text_nl = "Bijgewerkt"
+
+[coming_soon]
+text = "Coming soon"
+text_nl = "Binnenkort"
+
+[needs_newer]
+text = "Needs a newer KoperCAD"
+text_nl = "Vraagt een nieuwere KoperCAD"
+
+[cannot_open]
+text = "Cannot be opened"
+text_nl = "Kan niet worden geopend"
+
+[minutes]
+text = "{n} min"
+text_nl = "{n} min"
+
+[reload]
+text = "Reload"
+text_nl = "Opnieuw laden"
+
+[reset_progress]
+text = "Reset progress"
+text_nl = "Voortgang wissen"
+
+[no_lessons]
+text = "No lessons yet."
+text_nl = "Nog geen lessen."
+
+[open_finished]
+text = "Open finished version"
+text_nl = "Afgeronde versie openen"
+
+[continue_line]
+text = "Continue: {lesson} (step {n} of {total})"
+text_nl = "Doorgaan: {lesson} (stap {n} van {total})"
+
+[lesson_project]
+text = "Lesson: {title}"
+text_nl = "Les: {title}"
+
+[no_match]
+text = "No lesson matches. Try fewer words."
+text_nl = "Geen les gevonden. Probeer minder woorden."

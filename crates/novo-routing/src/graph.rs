@@ -3,7 +3,7 @@
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, BinaryHeap};
 
-use crate::{Anchor, Duct, Facing, Job, Kind, Point, Route, Rules, polyline_length};
+use crate::{Anchor, Duct, Facing, Job, Kind, Point, Point3, Route, Rules, polyline_length};
 
 const EPS: f64 = 1e-6;
 /// How many nearest ducts per anchor are tried as the entry.
@@ -26,6 +26,9 @@ struct Run {
     hi: f64,
     /// Cross-section, mm squared.
     area: f64,
+    /// Height above the plate the wires lie at: half the duct height, 0
+    /// while the duct has no cross-section.
+    mid_z: f64,
 }
 
 impl Run {
@@ -93,6 +96,7 @@ impl Network {
                     lo: d.a.x.min(d.b.x),
                     hi: d.a.x.max(d.b.x),
                     area: d.width * d.height,
+                    mid_z: mid_z(d),
                 });
             } else if dx < EPS {
                 runs.push(Run {
@@ -102,6 +106,7 @@ impl Network {
                     lo: d.a.y.min(d.b.y),
                     hi: d.a.y.max(d.b.y),
                     area: d.width * d.height,
+                    mid_z: mid_z(d),
                 });
             } else {
                 ignored.push(d.id);
@@ -280,7 +285,23 @@ impl Network {
         merge_collinear(&mut points);
 
         let detour = ea.detour + eb.detour;
-        finish(job, Kind::Ducted, points, ducts, detour, rules)
+        let z_of = |p: Point| self.z_at(p, self.runs[ea.run].mid_z);
+        finish(job, Kind::Ducted, points, ducts, detour, rules, &z_of)
+    }
+
+    /// Height a wire lies at at a point of the network: that of the first
+    /// duct (lowest id) the point is on, `fallback` when none contains it.
+    fn z_at(&self, p: Point, fallback: f64) -> f64 {
+        self.runs
+            .iter()
+            .find(|r| {
+                let (along, across) = match r.orient {
+                    Orient::H => (p.x, p.y),
+                    Orient::V => (p.y, p.x),
+                };
+                (across - r.fixed).abs() < EPS && along > r.lo - EPS && along < r.hi + EPS
+            })
+            .map_or(fallback, |r| r.mid_z)
     }
 
     /// Cost multiplier of a run: 1 until it would pass 80% of its allowed
@@ -460,9 +481,22 @@ fn free_air(job: &Job, rules: &Rules) -> Route {
     };
     let mut points = vec![a, corner, b];
     points.dedup_by(|x, y| x.manhattan(y) < EPS);
-    finish(job, Kind::FreeAir, points, Vec::new(), 0.0, rules)
+    let z = job.from.z_mm.unwrap_or(0.0).max(job.to.z_mm.unwrap_or(0.0));
+    finish(job, Kind::FreeAir, points, Vec::new(), 0.0, rules, &|_| z)
 }
 
+fn mid_z(d: &Duct) -> f64 {
+    if d.height.is_finite() && d.height > 0.0 {
+        d.height / 2.0
+    } else {
+        0.0
+    }
+}
+
+/// Builds the route with its third dimension. `z_of` gives the height the
+/// wire lies at for a point inside the network (the duct's, or the
+/// anchors' own height in free air); the ends use their terminals' height,
+/// so the wire rises or falls between a terminal and its duct.
 fn finish(
     job: &Job,
     kind: Kind,
@@ -470,14 +504,49 @@ fn finish(
     ducts: Vec<u64>,
     detour: f64,
     rules: &Rules,
+    z_of: &dyn Fn(Point) -> f64,
 ) -> Route {
-    let length = polyline_length(&points) + detour + 2.0 * rules.slack_mm;
+    let n = points.len();
+    let z: Vec<f64> = points
+        .iter()
+        .enumerate()
+        .map(|(i, p)| {
+            if i == 0 {
+                job.from.z_mm.unwrap_or(0.0)
+            } else if i + 1 == n {
+                job.to.z_mm.unwrap_or(0.0)
+            } else {
+                z_of(*p)
+            }
+        })
+        .collect();
+    let points3: Vec<Point3> = points
+        .iter()
+        .zip(&z)
+        .map(|(p, z)| Point3::new(p.x, p.y, *z))
+        .collect();
+    let rise: f64 = z.windows(2).map(|w| (w[0] - w[1]).abs()).sum();
+    let bends = points
+        .windows(3)
+        .filter(|w| {
+            let (a, b, c) = (w[0], w[1], w[2]);
+            ((b.x - a.x).abs() > EPS) != ((c.x - b.x).abs() > EPS)
+        })
+        .count();
+    let length = polyline_length(&points)
+        + detour
+        + rise
+        + bends as f64 * rules.bend_mm
+        + 2.0 * rules.slack_mm;
     Route {
         job: job.id,
         kind,
         points,
+        points3,
         ducts,
         detour_mm: detour,
+        rise_mm: rise,
+        bends,
         length_mm: length,
     }
 }

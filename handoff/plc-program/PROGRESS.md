@@ -1,0 +1,3 @@
+# PLC program interpreter: handoff (2026-10-15)
+Branch claude/project-thread-y0xgvw (no PR yet). Engine in crates/novo-sim/src/program (ST + ladder, tests/program.rs and tests/program_loop.rs pass). App window in crates/novo-app/src/app/plc_run.rs plus live.rs, command sim.plc_program: WIP, final test module not yet compiled, clippy and workspace tests not run. Next: cargo fmt, clippy -D warnings, cargo test --workspace, fix, open PR, un-draft at READY. Program is not stored in the project file (needs WS-02).
+2026-10-15 22:30 UTC review fixes (recursion limits, nits), merged main again

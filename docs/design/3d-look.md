@@ -60,7 +60,7 @@ Wires are tubes, 6 sides near, flat ribbons beyond 400 mm eye distance, lines be
 the cross section (1.5 mm2 radius 1.0 mm, 2.5 mm2 radius 1.3 mm, 6 mm2 radius 2.0 mm, at least 1 px on
 screen). Colour follows the wire's own colour in the model, else IEC 60757 by potential: line `#B33A3A`
 (AC control red, power black `#101012` when the potential says power), neutral and 0 V `#2F6FD0`, 24 V DC
-`#C64A4A`, PE green with a yellow stripe (`#7FB020` over `#E3D34A`), unknown `#8C8F94`. Colour is never the only carrier:
+`#C64A4A`, PE green with a yellow stripe (`#7FB020` over `#E3D34A`), unknown `#8C8F94`. Control AC red and 24 V DC red are close on purpose (they are both red in IEC); nobody should tell them apart by colour, the label does. Colour is never the only carrier:
 the wire label (tag or number) shows on hover and in the inspector.
 
 Colour of selection, hover and problems is **not** a material: it is drawn by the overlay pass (section 5).
