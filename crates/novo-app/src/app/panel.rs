@@ -230,4 +230,76 @@ mod tests {
         reset_layout(&ctx);
         assert!(!is_moved(&ctx, id));
     }
+
+    /// One frame with the given pointer events; returns the panel's rect.
+    fn step(ctx: &egui::Context, events: Vec<egui::Event>) -> egui::Rect {
+        let mut rect = egui::Rect::NOTHING;
+        let mut out = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(canvas()),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                let panel = Panel::new("drag", "Drag", canvas(), Side::Right, 300.0);
+                if let Some(r) = panel.show(ctx, |ui| {
+                    ui.label("content");
+                }) {
+                    rect = r.response.rect;
+                }
+            },
+        );
+        out.textures_delta.clear();
+        rect
+    }
+
+    fn button(pos: egui::Pos2, pressed: bool) -> egui::Event {
+        egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        }
+    }
+
+    #[test]
+    fn a_dragged_panel_stays_until_the_layout_is_reset() {
+        let ctx = egui::Context::default();
+        let _ = step(&ctx, vec![]);
+        let start = step(&ctx, vec![]);
+        let grab = start.center_top() + egui::vec2(0.0, 10.0);
+        let _ = step(
+            &ctx,
+            vec![egui::Event::PointerMoved(grab), button(grab, true)],
+        );
+        let to = grab + egui::vec2(-300.0, 150.0);
+        let _ = step(&ctx, vec![egui::Event::PointerMoved(to)]);
+        let _ = step(
+            &ctx,
+            vec![egui::Event::PointerMoved(to + egui::vec2(-2.0, 2.0))],
+        );
+        let _ = step(&ctx, vec![button(to, false)]);
+        let moved = step(&ctx, vec![]);
+        assert!(
+            (moved.min - start.min).length() > 100.0,
+            "dragged: {start:?} -> {moved:?}"
+        );
+        assert_eq!(step(&ctx, vec![]).min, moved.min, "it stays after the drag");
+        reset_layout(&ctx);
+        let _ = step(&ctx, vec![]);
+        let back = step(&ctx, vec![]);
+        assert!((back.min - start.min).length() < 1.0, "{start:?} {back:?}");
+    }
+
+    #[test]
+    fn the_command_resets_the_layout() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = super::super::gate1_tests::Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        let id = egui::Id::new(("panel", "x"));
+        mark_moved(&ctx, id);
+        assert!(is_moved(&ctx, id));
+        d.app.run_command(&ctx, "view.reset_panels", None);
+        assert!(!is_moved(&ctx, id));
+    }
 }

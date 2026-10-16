@@ -17,7 +17,7 @@ use super::xref::xref_of;
 use super::{Level, NovoApp};
 
 /// The inspector's width.
-pub(super) const INSPECTOR_WIDTH: f32 = 320.0;
+pub(super) const INSPECTOR_WIDTH: f32 = 276.0;
 /// Its distance from the canvas edges; the top clears the outline toggle
 /// and the HUD.
 const MARGIN: f32 = 12.0;

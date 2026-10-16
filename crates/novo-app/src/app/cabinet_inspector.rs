@@ -12,7 +12,8 @@ use novo_theme::widgets;
 use super::cabinet::{Ask, problem_lines};
 use super::cabinet_door::DoorState;
 /// The inspector's width, the same as the schematic's.
-const WIDTH: f32 = super::inspector::INSPECTOR_WIDTH;
+/// Roomier than the schematic inspector: it holds the plate and door forms.
+const WIDTH: f32 = 320.0;
 
 /// The widest a plate dimension can be set to, in mm.
 const MAX_MM: f64 = 5000.0;
