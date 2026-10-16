@@ -15,7 +15,6 @@ use std::sync::Arc;
 
 use eframe::egui::{self, Align2, Color32, FontId, Pos2, Rect, Shape, Stroke, Vec2};
 use novo_canvas::Viewport;
-use novo_cfd::Fidelity;
 use novo_heatview::cfd::{self, Window};
 use novo_heatview::contour::{self, Contour};
 use novo_heatview::hotspot::{self, Peak};
@@ -30,7 +29,8 @@ use novo_thermal::Status;
 
 use super::heat_compare::{self, Diff};
 use super::heat_progress;
-use super::heat_run::{self, Event, Runner, Solution};
+use super::heat_run::{Event, Runner, Solution};
+use super::heat_settings::HeatSettings;
 use novo_cfd::Progress;
 use novo_cfd::sched::Outcome;
 
@@ -111,6 +111,8 @@ pub(super) struct HeatState {
     /// The last run's outcome in words: failed, cancelled or the bridge's
     /// complaint.
     notice: Option<String>,
+    /// Quality level, turbulence model and vents of the next run.
+    pub settings: HeatSettings,
 }
 
 /// Where a cached picture came from.
@@ -160,6 +162,7 @@ impl HeatState {
             pending: None,
             runs: 0,
             notice: None,
+            settings: HeatSettings::default(),
         }
     }
 
@@ -257,9 +260,9 @@ impl HeatState {
         self.runs += 1;
         self.pending = Some(meta);
         self.run = Some(Runner::start(
-            heat_run::default_solver(),
+            self.settings.solver(),
             scenario,
-            Fidelity::Fine,
+            self.settings.top,
         ));
         self.progress = None;
         self.history.clear();
@@ -645,7 +648,7 @@ fn totals(input: &Input) -> (f64, usize) {
 }
 
 /// Simulate / Cancel, the fidelity badge and the last notice.
-fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
+pub(super) fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
     if state.running() {
         if ui
             .button("Cancel")
@@ -702,6 +705,41 @@ fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
     }
 }
 
+/// The devices of a layout as the Heat view reads them (shared by the
+/// Cabinet and the 3D view, so a result is judged stale by one key).
+pub(super) fn items_of(
+    project: &novo_core::Project,
+    layout: &novo_layout::state::CabinetLayout,
+    tag_of: &dyn Fn(u64) -> String,
+) -> Vec<Item> {
+    use novo_core::{Device, DeviceId};
+    layout
+        .placements
+        .iter()
+        .map(|p| {
+            let f = p.footprint();
+            let loss = project
+                .get::<Device>(DeviceId::from(p.id))
+                .map_or(0.0, |d| {
+                    let s = novo_layout::sizing_model::sizing_device(project, d);
+                    s.power_loss * s.load_factor
+                });
+            Item {
+                id: p.id,
+                tag: tag_of(p.id),
+                x: f.x,
+                y: f.y,
+                w: f.w,
+                h: f.h,
+                loss_w: loss,
+                loss_known: project
+                    .get::<Device>(DeviceId::from(p.id))
+                    .is_some_and(|d| novo_thermal::bridge::device_loss_w(project, d).is_some()),
+            }
+        })
+        .collect()
+}
+
 /// Builds the scenario of the enclosure from the project and starts a run.
 /// Says plainly when it cannot.
 pub(super) fn start_run(
@@ -715,7 +753,11 @@ pub(super) fn start_run(
         ..Default::default()
     };
     match novo_thermal::bridge::scenario_from_project(project, enclosure, &options) {
-        Ok(bridge) => {
+        Ok(mut bridge) => {
+            bridge
+                .scenario
+                .vents
+                .extend(state.settings.vents_for(&bridge.scenario.enclosure));
             let plate = bridge.scenario.enclosure.plate;
             let meta = Meta {
                 layout_key: layout_key(input),

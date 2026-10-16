@@ -43,6 +43,15 @@ pub const DUTCH: &[Aliases] = &[
         &["rondleiding", "snelle toetsen uitleg"],
     ),
     nl(
+        "view.reset_panels",
+        &[],
+        &[
+            "vensters herstellen",
+            "indeling herstellen",
+            "panelen resetten",
+        ],
+    ),
+    nl(
         "help.show_hints",
         &[],
         &["hints opnieuw tonen", "tips opnieuw", "hints"],
@@ -350,7 +359,12 @@ pub const DUTCH: &[Aliases] = &[
     nl(
         "sim.live",
         &[],
-        &["live potentialen tonen", "contacten sluiten", "spanning"],
+        &[
+            "simuleer live potentialen",
+            "live potentialen tonen",
+            "contacten sluiten",
+            "spanning",
+        ],
     ),
     nl(
         "sim.plc_program",
@@ -476,6 +490,11 @@ pub const DUTCH: &[Aliases] = &[
         &["conformiteitsrapport", "normen pdf"],
     ),
     nl(
+        "export.standards_xlsx",
+        &["exporteer normenrapport excel", "normenrapport excel"],
+        &["conformiteitsrapport excel", "normen spreadsheet"],
+    ),
+    nl(
         "export.plate",
         &["exporteer montageplaat", "montageplaat exporteren"],
         &["boortabel", "boren"],
@@ -551,6 +570,11 @@ pub const DUTCH: &[Aliases] = &[
         "cabinet.rails",
         &["rails en kanalen", "voeg kanaal toe"],
         &["din-rail", "kabelgoot", "kanaal", "rail"],
+    ),
+    nl(
+        "cabinet.door",
+        &["binnenmaat en deur", "deurdraaiing", "scharnierkant"],
+        &["deur", "scharnier", "binnenmaat", "diepte"],
     ),
     nl(
         "cabinet.routes",

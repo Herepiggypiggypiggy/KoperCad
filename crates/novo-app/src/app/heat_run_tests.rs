@@ -106,7 +106,7 @@ fn a_panicking_solver_is_reported_as_a_failed_run() {
 #[test]
 fn the_stub_solver_publishes_then_finishes() {
     let mut r = Runner::start(
-        super::heat_run::default_solver(),
+        super::heat_run::default_solver(novo_cfd::turb::TurbModel::Laminar),
         scenario(),
         Fidelity::Coarse,
     );
@@ -125,7 +125,7 @@ fn the_stub_solver_publishes_then_finishes() {
 #[test]
 fn the_demo_ladder_reports_progress_for_every_level() {
     let mut r = Runner::start(
-        super::heat_run::default_solver(),
+        super::heat_run::default_solver(novo_cfd::turb::TurbModel::Laminar),
         scenario(),
         Fidelity::Fine,
     );

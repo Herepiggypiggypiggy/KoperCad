@@ -1117,14 +1117,14 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "sim.live",
-        "Show live potentials",
+        "Simulate live potentials",
         "View",
         &["simulate", "contacts", "close", "energized", "try"],
         Needs::Page,
     ),
     cmd(
         "sim.plc_program",
-        "PLC program",
+        "Simulate PLC program",
         "View",
         &[
             "plc",
@@ -1137,7 +1137,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "sim.faults",
-        "Fault scenarios",
+        "Simulate fault scenarios",
         "View",
         &[
             "short circuit",
@@ -1164,6 +1164,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show hints again",
         "View",
         &["hints", "tips", "reset", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "view.reset_panels",
+        "Reset panel layout",
+        "View",
+        &["panels", "windows", "layout", "reset", "position", "size"],
         Needs::Nothing,
     ),
     cmd(
@@ -1244,6 +1251,24 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["add rail", "add duct"],
+    ),
+    verb(
+        cmd(
+            "cabinet.door",
+            "Inside size and door (Cabinet)",
+            "View",
+            &[
+                "door",
+                "door swing",
+                "hinge",
+                "inside size",
+                "enclosure depth",
+                "opens to",
+                "setback",
+            ],
+            Needs::Project,
+        ),
+        &["door swing", "set door", "hinge side"],
     ),
     cmd(
         "view.background_place",
@@ -1488,6 +1513,23 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export standards", "standards report"],
+    ),
+    verb(
+        cmd(
+            "export.standards_xlsx",
+            "Export standards compliance report (Excel)",
+            "Export",
+            &[
+                "compliance",
+                "spreadsheet",
+                "xlsx",
+                "csv",
+                "iec 60204",
+                "ul 508a",
+            ],
+            Needs::Project,
+        ),
+        &["export standards excel"],
     ),
     verb(
         cmd(

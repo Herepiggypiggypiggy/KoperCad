@@ -43,6 +43,11 @@ fn a_selected_standard_gives_a_pdf_and_a_web_page() {
     assert!(text.contains("IEC 60204-1"));
     assert!(text.contains("UL 508A"));
     assert!(text.contains("does not certify"));
+    let xlsx = dir.path().join("Plant standards.xlsx");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Excel, &xlsx)
+        .expect("xlsx written");
+    assert!(std::fs::read(&xlsx).unwrap().starts_with(b"PK"));
 }
 
 #[test]
@@ -70,4 +75,33 @@ fn the_notice_has_its_own_section_and_no_cell_is_cut() {
                 .flat_map(|s| &s.rows)
                 .all(|r| r.cells[0].to_string() != "planning")
     );
+}
+
+#[test]
+fn simulate_commands_live_in_the_simulate_menu_and_leave_cabinet_for_the_schematic() {
+    use novo_workflow::menus;
+    let ids: Vec<_> = menus::entries("Simulate")
+        .iter()
+        .map(|(c, _)| c.id)
+        .collect();
+    for id in [
+        "sim.live",
+        "sim.plc_program",
+        "simulate.motor-start",
+        "sim.faults",
+        "view.protection",
+    ] {
+        assert!(ids.contains(&id), "{id} is not in Simulate");
+    }
+    let (_dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    d.app
+        .switch_workspace(crate::app::workspace::Workspace::Cabinet);
+    d.app.run_command(&ctx, "sim.live", None);
+    d.frame();
+    assert_eq!(
+        d.app.workspace(),
+        crate::app::workspace::Workspace::Schematic
+    );
+    assert!(d.app.wb.live.on);
 }
