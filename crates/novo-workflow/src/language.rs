@@ -408,6 +408,11 @@ pub const DUTCH: &[Aliases] = &[
         &["autocad", "converter", "achtergrond"],
     ),
     nl(
+        "file.eplan_export_script",
+        &["eplan script ophalen"],
+        &["eplan", "exporteren", "migreren", "overstappen", "pxf"],
+    ),
+    nl(
         "file.choose_dwg_converter",
         &[],
         &["dwg converter", "dwg2dxf", "omzetter"],

@@ -339,6 +339,18 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["import dwg"],
     ),
+    verb(
+        cmd(
+            "file.eplan_export_script",
+            "Get the EPLAN export script",
+            "Project",
+            &[
+                "eplan", "export", "pxf", "epj", "migrate", "bridge", "script",
+            ],
+            Needs::Nothing,
+        ),
+        &["get eplan script"],
+    ),
     cmd(
         "file.choose_dwg_converter",
         "Choose the DWG converter",

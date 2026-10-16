@@ -23,6 +23,7 @@ use novo_revisions::{Comparison, FieldChange, Side, group_of};
 use novo_storage::ProjectFile;
 use serde_json::{Value, json};
 
+mod eplan;
 mod macros;
 
 /// Process exit codes.
@@ -64,6 +65,10 @@ enum Cmd {
     /// The macro library: list, export, import, install the starter set.
     #[command(subcommand)]
     Macros(macros::Macros),
+    /// The user-run "Export from EPLAN" helper: write the script, check an
+    /// export.
+    #[command(subcommand)]
+    Eplan(eplan::Eplan),
     /// Show a summary of a project file.
     Info {
         file: PathBuf,
@@ -415,6 +420,7 @@ where
 fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
         Cmd::Macros(cmd) => macros::run(cmd, out),
+        Cmd::Eplan(cmd) => eplan::run(cmd, out),
         Cmd::Info { file, json } => {
             let project = read(&file)?;
             let info = novo_py::info_json(&project, Some(&file));

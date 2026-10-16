@@ -158,6 +158,9 @@ pub(crate) struct Workbench {
     pub(super) aml_import: Option<super::interop::AmlImport>,
     /// An EPLAN (PXF) import waiting for the person to confirm.
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
+    /// The "Get the EPLAN export script" guide, open after the files are
+    /// written.
+    pub(super) eplan_guide: Option<super::interop::EplanGuide>,
     /// A DWG being converted in the background.
     pub(super) dwg_job: Option<super::interop::DwgJob>,
 }
@@ -233,6 +236,7 @@ impl Default for Workbench {
             underlay_seen: None,
             aml_import: None,
             eplan_import: None,
+            eplan_guide: None,
             dwg_job: None,
         }
     }
@@ -327,6 +331,7 @@ const APP_COMMANDS: &[&str] = &[
     "file.import_eplan",
     "file.import_dwg",
     "file.choose_dwg_converter",
+    "file.eplan_export_script",
     "plc.add_card",
     "plc.to_plc",
     "plc.renumber_io",
@@ -795,6 +800,7 @@ impl NovoApp {
             "file.import_eplan" => self.import_eplan(),
             "file.import_dwg" => self.import_dwg(),
             "file.choose_dwg_converter" => self.choose_dwg_converter(),
+            "file.eplan_export_script" => self.eplan_export_script(),
             "plc.add_card" => self.plc_add_card(argument),
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),

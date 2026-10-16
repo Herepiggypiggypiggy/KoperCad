@@ -951,3 +951,60 @@ fn import_eplan_refuses_a_file_that_is_not_pxf() {
     assert_eq!(r.code, exit::READ);
     assert!(r.err.contains("not a PXF file"), "{}", r.err);
 }
+
+#[test]
+fn eplan_script_is_written_and_an_export_is_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("script");
+    let r = novo(&[
+        "eplan",
+        "script",
+        "-o",
+        target.to_str().unwrap(),
+        "--show",
+        "nl",
+    ]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("Stappen"));
+    for name in [
+        "KoperCAD_ExportFromEPLAN.cs",
+        "README-EN.txt",
+        "README-NL.txt",
+        "kopercad-selftest.epj",
+    ] {
+        assert!(target.join(name).is_file(), "{name}");
+    }
+    // The self-test file passes the check; no manifest means unknown version.
+    let r = novo(&[
+        "eplan",
+        "check",
+        target.join("kopercad-selftest.epj").to_str().unwrap(),
+    ]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("self-test"));
+    // An export folder from an older script is flagged.
+    let export = dir.path().join("export");
+    std::fs::create_dir(&export).unwrap();
+    std::fs::copy(
+        target.join("kopercad-selftest.epj"),
+        export.join("project.epj"),
+    )
+    .unwrap();
+    std::fs::write(
+        export.join("kopercad-export.xml"),
+        "<KoperCadEplanExport scriptVersion=\"0\"/>",
+    )
+    .unwrap();
+    let r = novo(&["eplan", "check", export.to_str().unwrap()]);
+    assert_eq!(r.code, exit::PROBLEMS);
+    assert!(r.out.contains("Get the script again"));
+    let r = novo(&[
+        "eplan",
+        "script",
+        "-o",
+        target.to_str().unwrap(),
+        "--show",
+        "fr",
+    ]);
+    assert_eq!(r.code, exit::USAGE);
+}
