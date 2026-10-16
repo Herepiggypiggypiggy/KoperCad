@@ -104,12 +104,16 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
         // Where wires meet and end (DESIGN.md §4): the junction dot is
         // copper, a wire landing on a pin uses the wire's own colour.
         joint_color: color(p.junction),
+        // The wire run under the pointer or being edited: the selection
+        // copper from the palette, not a literal orange.
+        focus_color: color(p.selection),
         pin_joint_color: color(p.wire),
         wire_end_color: color(p.wire_end),
         unconnected_color: color(p.unconnected_flag),
         tag_color: color(p.text),
         sheet_fill: Some(color(p.sheet)),
         frame_color: color(p.sheet_frame),
+        sheet_text_color: color(p.sheet_text),
         note_color: color(p.cross_reference),
         note_warning_color: color(p.warning),
         ..defaults
@@ -127,6 +131,13 @@ mod tests {
         assert_eq!(style.background, Color(CANVAS_DARK.background));
         assert_eq!(model_style().symbol.color, Color(CANVAS_DARK.symbol));
         assert_eq!(model_style().sheet_fill, Some(Color(CANVAS_DARK.sheet)));
+    }
+
+    #[test]
+    fn the_wire_focus_is_the_palettes_selection_colour() {
+        for p in [&CANVAS_DARK, &novo_theme::CANVAS_LIGHT] {
+            assert_eq!(model_style_from(p).focus_color, Color(p.selection));
+        }
     }
 
     #[test]
