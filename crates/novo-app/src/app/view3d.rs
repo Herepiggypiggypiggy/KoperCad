@@ -65,6 +65,9 @@ pub(crate) struct View3dMode {
     built_layers: Layers,
     /// The hidden items the scene was built with.
     built_hidden: BTreeSet<ItemId>,
+    /// Counts the scene builds, so the renderer sees every rebuild (hiding A
+    /// then B leaves the same item count).
+    builds: u64,
     /// The routed wires of an enclosure at a project revision.
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
     /// The toolbar's layers and door.
@@ -99,6 +102,7 @@ impl Default for View3dMode {
             heat_scene: None,
             built_layers: Layers::default(),
             built_hidden: BTreeSet::new(),
+            builds: 0,
             wires: None,
             controls: Controls::default(),
             stats: Stats::default(),
@@ -231,7 +235,10 @@ impl NovoApp {
             if let Some(built) = model::scene(project, id, &options) {
                 // Items deleted from the project are no longer hidden.
                 mode.controls.hidden.retain(|i| built.get(*i).is_some());
-                let shown = novo_view3d::hide::without(layers.apply(built), &mode.controls.hidden);
+                let mut shown =
+                    novo_view3d::hide::without(layers.apply(built), &mode.controls.hidden);
+                mode.builds += 1;
+                shown.revision = shown.revision.wrapping_add(mode.builds);
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
                 mode.built_hidden = mode.controls.hidden.clone();

@@ -209,6 +209,18 @@ fn select_by_type_asked_before_the_scene_exists_applies_after_the_first_build() 
 }
 
 #[test]
+fn every_rebuild_of_the_scene_has_a_new_revision_so_the_renderer_redraws() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let before = scene(&d).revision;
+    d.app.run_command(&ctx, "view.3d_select_devices", None);
+    d.app.run_command(&ctx, "view.3d_hide", None);
+    d.frame();
+    assert_ne!(scene(&d).revision, before);
+}
+
+#[test]
 fn hidden_ids_of_items_that_no_longer_exist_are_dropped_on_the_next_build() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
