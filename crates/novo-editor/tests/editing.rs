@@ -2901,6 +2901,63 @@ fn a_cable_line_collects_the_wires_it_touches() {
     assert!(editor.notice().is_some());
 }
 
+/// The lesson "Placing parts fast" tells the user to select the push button
+/// and press R. The wires on its pins re-route; the wire being re-routed must
+/// not count its own old straight line as another wire.
+#[test]
+fn rotating_a_wired_part_is_not_refused_by_its_own_wire() {
+    let json = include_str!("../../../assets/lessons/placing-parts/finished.json");
+    let mut doc = Document::new(novo_core::Project::from_json(json).unwrap());
+    let mut editor = Editor::default();
+    let s1 = doc
+        .project()
+        .symbols()
+        .find(|s| s.symbol == novo_core::SymbolKey::from("iec/operators/pushbutton_no"))
+        .map(|s| s.id)
+        .expect("the lesson has its push button");
+    let page = doc.project().symbol(s1).unwrap().page;
+    let before = doc.project().symbol(s1).unwrap().placement;
+    let wires_before: Vec<_> = doc
+        .project()
+        .wires()
+        .map(|w| (w.id, w.route.clone()))
+        .collect();
+    assert!(editor.rotate_selection(&mut doc, &[AnyId::Symbol(s1)]));
+    assert_ne!(doc.project().symbol(s1).unwrap().placement, before);
+    assert!(
+        novo_editor::overlap::page_overlaps(doc.project(), page).is_empty(),
+        "rotating must leave no wire along another"
+    );
+    doc.undo().unwrap();
+    assert_eq!(doc.project().symbol(s1).unwrap().placement, before);
+    let wires_after: Vec<_> = doc
+        .project()
+        .wires()
+        .map(|w| (w.id, w.route.clone()))
+        .collect();
+    assert_eq!(wires_before, wires_after);
+}
+
+/// Where no clear route exists for a turned part's wires, R still turns it
+/// (one undo step) and says so, instead of refusing.
+#[test]
+fn rotating_a_part_whose_wires_cannot_keep_clear_still_turns_it() {
+    let json = include_str!("../../../assets/lessons/design-checks/project.json");
+    let mut doc = Document::new(novo_core::Project::from_json(json).unwrap());
+    let mut editor = Editor::default();
+    let fuse = doc
+        .project()
+        .symbols()
+        .find(|s| s.symbol == novo_core::SymbolKey::from("iec/protection/fuse_3p"))
+        .map(|s| s.id)
+        .expect("a three pole fuse");
+    let before = doc.project().symbol(fuse).unwrap().placement;
+    assert!(editor.rotate_selection(&mut doc, &[AnyId::Symbol(fuse)]));
+    assert_ne!(doc.project().symbol(fuse).unwrap().placement, before);
+    doc.undo().unwrap();
+    assert_eq!(doc.project().symbol(fuse).unwrap().placement, before);
+}
+
 #[test]
 fn joining_a_wire_never_glides_along_it_off_the_grid() {
     use novo_editor::geometry::{snap_along_wire, wire_points};

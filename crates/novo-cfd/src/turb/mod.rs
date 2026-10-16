@@ -47,9 +47,10 @@ const BETA_STAR: f64 = 0.09;
 const C_MU: f64 = 0.09;
 const NU_T_RATIO_MAX: f64 = 1e5;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum TurbModel {
     /// No turbulence model (the laminar benchmarks).
+    #[default]
     Laminar,
     /// Menter k-omega SST (2003), automatic wall treatment.
     KOmegaSst,
@@ -122,6 +123,9 @@ pub struct TurbState {
     /// Per cell: friction velocity and wall distance of the nearest wall
     /// face (`u_tau` zero away from walls).
     wall_cell: Vec<Option<(f64, f64)>>,
+    /// Cells that hold part solid, part air; the flow core keeps its own
+    /// conductance there (empty: none).
+    cut: Vec<bool>,
 }
 
 impl TurbState {
@@ -146,6 +150,7 @@ impl TurbState {
             nu_t: vec![0.0; n],
             walls: Vec::new(),
             wall_cell: vec![None; n],
+            cut: Vec::new(),
             mesh,
             cfg,
         };
@@ -175,6 +180,12 @@ impl TurbState {
             };
             self.w[c] = self.w[c].max(guess);
         }
+    }
+
+    /// Boundary faces `(cell, axis, high)` that are open (vents, fans): they
+    /// get no wall treatment.
+    pub fn mark_open(&mut self, faces: &[(usize, usize, bool)]) {
+        self.mesh.mark_open(faces);
     }
 
     /// Wall data from the last `advance`.
@@ -330,7 +341,7 @@ impl TurbState {
                                     Some((hw, 0.0))
                                 }
                             }
-                            None => match m.face_kind[2 * b + usize::from(high)] {
+                            None => match m.boundary_kind(c, b, high) {
                                 FaceKind::Wall => Some((hw, 0.0)),
                                 FaceKind::Symmetry => {
                                     if a == b {

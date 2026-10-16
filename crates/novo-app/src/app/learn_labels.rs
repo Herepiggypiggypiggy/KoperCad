@@ -37,6 +37,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("cabinet.table", "Table"),
     ("cabinet.heat", "Heat"),
     ("cabinet.canvas", "Cabinet canvas"),
+    ("workspace.view3d", "3D canvas"),
     ("cabinet.unplaced", "Unplaced list"),
     ("cabinet.problems", "Problems"),
     ("cabinet.inspector", "Cabinet inspector"),

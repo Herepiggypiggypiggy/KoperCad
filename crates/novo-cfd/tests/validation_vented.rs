@@ -70,7 +70,10 @@ fn scenario(loss_w: f64) -> Scenario {
 /// and the flow through the low and the high vent, averaged over a window
 /// because a plume wobbles.
 struct Vented {
+    /// Volume-weighted mean air rise, K.
     rise: f64,
+    /// Wall heat over the total wall conductance: the air rise the walls see, K.
+    wall_rise: f64,
     open_w: f64,
     wall_w: f64,
     q_in: f64,
@@ -99,6 +102,21 @@ fn run(scn: &Scenario, target_cells: usize) -> Vented {
     assert!(rep.converged, "{rep:?}");
     let amb = scn.ambient_c;
     let med = setup.cfg.medium.as_ref().unwrap();
+    // total conductance of the walls, W/K: IEC k times effective area
+    let g_total: f64 = (0..6)
+        .map(|f| match setup.cfg.faces[f].thermal {
+            novo_cfd::flow::ThermalBc::Overall { u, .. } => {
+                let (b, c) = match f / 2 {
+                    0 => (1, 2),
+                    1 => (0, 2),
+                    _ => (0, 1),
+                };
+                let len = |ax: usize| -> f64 { s.mesh.dx[ax].iter().sum() };
+                u * len(b) * len(c)
+            }
+            _ => 0.0,
+        })
+        .sum();
     let (mut t_sum, mut open, mut wall, mut qi, mut qo, mut n) = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
     let mut t = 0.0;
     while t < 30.0 {
@@ -128,6 +146,7 @@ fn run(scn: &Scenario, target_cells: usize) -> Vented {
     }
     Vented {
         rise: t_sum / n,
+        wall_rise: wall / n / g_total,
         open_w: open / n,
         wall_w: wall / n,
         q_in: qi / n,
@@ -137,7 +156,7 @@ fn run(scn: &Scenario, target_cells: usize) -> Vented {
 }
 
 /// The two engines must agree on the heat that leaves through the vents, the
-/// air rise and the flow through the louvres within the stated bands. The 2D engine
+/// air rise the walls see and the flow through the louvres within the stated bands. The 2D engine
 /// carries the stack law (and the 3D chimney case in `openings.rs` checks it
 /// directly), so this is the second, independent route to the same flow.
 #[test]
@@ -164,7 +183,29 @@ fn vented_enclosure_matches_the_2d_engine() {
             "{case}: open {:.1} W wall {:.1} W Q in {:.5} out {:.5} (2D: open {:.1} W, Q {:.5})",
             v.open_w, v.wall_w, v.q_in, v.q_out, b.openings_w, q_2d
         );
-        let e_rise = report(&case, "mean air rise K vs 2D engine", v.rise, b.mean_rise_k);
+        // The walls see the same air in both engines. The volume mean is lower in 3D
+        // (cool inlet air fills the lower box) and the exhaust over the device is
+        // hotter than the mixed air the 2D engine carries out: a known difference.
+        let e_wall = report(
+            &case,
+            "air rise seen by the walls K vs 2D mean",
+            v.wall_rise,
+            b.mean_rise_k,
+        );
+        let e_rise = report(
+            &case,
+            "volume-mean air rise K vs 2D engine (stratification)",
+            v.rise,
+            b.mean_rise_k,
+        );
+        let exhaust_3d = v.open_w / (1.18 * 1005.0 * v.q_out);
+        let exhaust_2d = b.openings_w / (1.18 * 1005.0 * q_2d);
+        let e_exh = report(
+            &case,
+            "exhaust air rise K vs 2D engine (plume over the device)",
+            exhaust_3d,
+            exhaust_2d,
+        );
         let e_flow = report(
             &case,
             "vent flow m3/s vs 2D engine",
@@ -186,7 +227,9 @@ fn vented_enclosure_matches_the_2d_engine() {
             v.q_in,
             v.q_out
         );
+        assert!(e_wall.abs() < 0.1, "wall-seen rise {e_wall}");
         assert!(e_rise.abs() < 0.3, "rise {e_rise}");
+        assert!(e_exh > 0.1 && e_exh < 0.7, "exhaust {e_exh}");
         assert!(e_flow.abs() < 0.2, "flow {e_flow}");
         assert!(e_open.abs() < 0.25, "open {e_open}");
     }

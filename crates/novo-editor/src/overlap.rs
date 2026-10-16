@@ -240,6 +240,8 @@ pub fn route_refusal(
 /// corners, the router tries moving a Z route's cross-over up to
 /// [`MAX_NUDGE_STEPS`] steps either way, nearest first. Corners the user
 /// clicked are never moved, so a route through them that overlaps is refused.
+/// `ignore` lists wires that do not count as obstacles: the wire being
+/// re-routed itself, whose old geometry is about to be replaced.
 #[allow(clippy::too_many_arguments)]
 pub fn plan_route(
     project: &Project,
@@ -251,13 +253,14 @@ pub fn plan_route(
     to: Option<Direction>,
     start_wires: &[WireId],
     end_wires: &[WireId],
+    ignore: &[WireId],
 ) -> Result<Vec<Point>, Refusal> {
     let index = SegmentIndex::new(project, page);
     let check = |bends: &[Point]| -> Vec<Overlap> {
         let mut pts = vec![a];
         pts.extend_from_slice(bends);
         pts.push(b);
-        blocking(index.overlaps(&pts, &[]), a, start_wires, b, end_wires)
+        blocking(index.overlaps(&pts, ignore), a, start_wires, b, end_wires)
     };
     let default = route_through(a, from, corners, b, to);
     let first = check(&default);

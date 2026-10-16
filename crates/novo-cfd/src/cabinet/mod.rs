@@ -33,12 +33,13 @@ use std::time::Instant;
 use novo_thermal::Scenario;
 
 use crate::mesh::MeshSettings;
-use crate::result::{CfdSnapshot, Fidelity};
+use crate::result::{CfdSnapshot, CfdSnapshot as Snap, Fidelity};
 use crate::solids::{FlowSetup, SolidsSettings};
 use crate::solver::{CfdError, Control, Solver};
+use crate::turb::{TurbModel, TurbState};
 
 pub use march::{MarchLimits, MarchState, MarchStatus};
-pub use statement::{ENCLOSURE_VALIDATED, accuracy_for};
+pub use statement::{ENCLOSURE_VALIDATED, accuracy_for, accuracy_with_turbulence};
 pub use steady::{CabinetSteady, PREVIEW_NOTE};
 pub use tuning::{LevelTuning, Method, Tuning};
 
@@ -46,11 +47,23 @@ pub use tuning::{LevelTuning, Method, Tuning};
 #[derive(Debug, Clone, Default)]
 pub struct CabinetSolver {
     pub tuning: Tuning,
+    /// Turbulence model; `Laminar` (the default) leaves the flow untouched.
+    pub turbulence: TurbModel,
 }
 
 impl CabinetSolver {
     pub fn new(tuning: Tuning) -> CabinetSolver {
-        CabinetSolver { tuning }
+        CabinetSolver {
+            tuning,
+            turbulence: TurbModel::Laminar,
+        }
+    }
+
+    /// The same solver with a turbulence model (k-omega SST is the
+    /// recommended one; k-epsilon is the cross check).
+    pub fn with_turbulence(mut self, model: TurbModel) -> CabinetSolver {
+        self.turbulence = model;
+        self
     }
 }
 
@@ -86,19 +99,39 @@ impl Solver for CabinetSolver {
         flow.cfg.pressure_tol = lvl.pressure_tol;
         let warm = lvl.warm_start && warm::warm_start(&setup, scenario, &mut flow);
         let view = snapshot::View::new(&setup, scenario, fidelity);
-        // The steady path assembles laminar diffusion only: a run with an
-        // eddy viscosity (turbulence model, `flow.nu_t`) takes the march until
-        // the steady assembly follows `nu_t` (it reads it already, but the model
-        // is updated per march step).
-        if lvl.method == Method::Steady && flow.nu_t.is_none() && !lvl.turbulent {
+        // The steady path assembles laminar diffusion only and does not drive
+        // a turbulence model: a run with a turbulence model (or an eddy
+        // viscosity in the flow) takes the march until the model is coupled
+        // into the steady iteration.
+        if lvl.method == Method::Steady
+            && self.turbulence == TurbModel::Laminar
+            && flow.nu_t.is_none()
+            && !lvl.turbulent
+        {
             return solve_steady(
                 &setup, scenario, fidelity, lvl, control, publish, flow, view, warm, t0,
             );
         }
         let limits = MarchLimits::from(lvl);
         let mut march = MarchState::new(&setup, &flow);
+        if self.turbulence != TurbModel::Laminar {
+            let h = flow.mesh.edges[1].last().copied().unwrap_or(1.0);
+            // natural convection in a cabinet moves at about 0.1 m/s
+            march.turb = Some(TurbState::for_flow(&flow, self.turbulence, 0.1, 0.02 * h));
+        }
+        let model = self.turbulence;
+        let finish = |mut s: Snap, march: &MarchState| -> Snap {
+            if let Some(t) = &march.turb {
+                s.turb_visc_ratio = t.viscosity_ratio();
+                s.accuracy = accuracy_with_turbulence(s.progress.fidelity, model);
+            }
+            s
+        };
         let mut last_full = Instant::now() - lvl.full_snapshot_every;
-        let mut snap = view.build(&flow, &march.progress(fidelity, 0.0, &flow, &setup));
+        let mut snap = finish(
+            view.build(&flow, &march.progress(fidelity, 0.0, &flow, &setup)),
+            &march,
+        );
         loop {
             let mut status = march.advance(&setup, &mut flow, &limits, control, lvl.report_every);
             if !status.finished() && lvl.max_wall.is_some_and(|w| t0.elapsed() >= w) {
@@ -112,7 +145,7 @@ impl Solver for CabinetSolver {
             }
             let progress = march.progress(fidelity, t0.elapsed().as_secs_f64(), &flow, &setup);
             if status.finished() {
-                let mut done = view.build(&flow, &progress);
+                let mut done = finish(view.build(&flow, &progress), &march);
                 done.progress.converged = march.converged;
                 done.notes.push(
                     if march.converged {
@@ -132,7 +165,7 @@ impl Solver for CabinetSolver {
                 return Ok(done);
             }
             if last_full.elapsed() >= lvl.full_snapshot_every {
-                snap = view.build(&flow, &progress);
+                snap = finish(view.build(&flow, &progress), &march);
                 last_full = Instant::now();
             } else {
                 snap.progress = progress;
