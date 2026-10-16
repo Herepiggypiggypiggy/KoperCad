@@ -233,6 +233,16 @@ impl PressureSolver {
         self.levels.len()
     }
 
+    /// Replaces the face couplings (open share times any drag factor) and
+    /// rebuilds the hierarchy. Open-boundary conductances are cleared: set
+    /// them again afterwards.
+    pub fn set_coupling(&mut self, mesh: &Mesh, coupling: &[Vec<f64>; 3]) {
+        let fresh = PressureSolver::with_openness(mesh, Some(coupling));
+        self.levels = fresh.levels;
+        self.active = fresh.active;
+        self.singular = true;
+    }
+
     /// Adds a conductance `g[cell]` to the diagonal: the cell is tied to a
     /// fixed pressure (zero) through an open boundary face. With any
     /// positive entry the operator is no longer singular and the mean is not

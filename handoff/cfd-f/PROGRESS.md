@@ -5,3 +5,4 @@
 - 2026-10-16: PR 3: compare (Keep as A, Δ B−A map, device table, verdict) in heat_compare.rs. Wipe and Side modes still to do.
 - 2026-10-16: PR 4: Wipe A|B compare mode with draggable split, tests for heat_compare::diff (R3 note on #625). Side mode, time slider, progress bar, 3D face still to do.
 - 2026-10-16: PR 5: Side compare (B on the plate, A on a copy to the right, shared viewport, auto fit). Asked the 3D view thread for an overlay-mesh entry point (set_overlays); waiting for their signature.
+- 2026-10-16: PR 6: Simulate runs through the novo-cfd scheduler (Coarse, Medium, Fine), progress bar and residual sparkline in the Heat toolbar (heat_progress.rs). Default solver is the demo ladder (synthetic iterations, says so in its notes) until the flow core lands; swap point heat_run::default_solver. #633 and #641 merged. Renderer thread builds View3d::set_overlays (Mesh/Lines); 3D face waits for it.

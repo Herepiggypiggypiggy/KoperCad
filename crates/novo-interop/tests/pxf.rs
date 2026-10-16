@@ -63,4 +63,40 @@ fn a_second_import_adds_nothing_and_a_stale_plan_is_refused() {
     assert!(again.is_empty());
     assert!(again.existing.contains(&"=A1+CAB1-Q1".to_string()));
     assert_eq!(again.apply(&mut doc).unwrap(), 0);
+    let text = again.report().text();
+    assert!(!text.contains("cable cores without a cable"), "{text}");
+    assert!(
+        text.contains("belong to cables that already exist"),
+        "{text}"
+    );
+}
+
+/// Opt-in check against real exports that must never enter the repository:
+/// set `KOPERCAD_PRIVATE_SAMPLES` to a folder of `.epj` / `.emp` files.
+/// Only counts are printed, never content.
+#[test]
+fn private_samples_read_when_a_folder_is_given() {
+    let Some(dir) = std::env::var_os("KOPERCAD_PRIVATE_SAMPLES") else {
+        return;
+    };
+    let mut read = 0;
+    for entry in std::fs::read_dir(dir).unwrap().flatten() {
+        let path = entry.path();
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !ext.eq_ignore_ascii_case("epj") && !ext.eq_ignore_ascii_case("emp") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        let file = read_pxf_str(&text).unwrap_or_else(|e| panic!("{}: {e}", path.display()));
+        let plan = plan_pxf(Document::default().project(), &file, &PxfOptions::default());
+        eprintln!(
+            "{}: {} devices, {} pages",
+            path.file_name().unwrap().to_string_lossy(),
+            file.devices.len(),
+            file.pages.len()
+        );
+        assert!(!plan.is_empty() || file.devices.is_empty());
+        read += 1;
+    }
+    eprintln!("{read} private samples read");
 }

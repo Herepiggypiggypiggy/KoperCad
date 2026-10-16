@@ -14,8 +14,8 @@
 use std::path::PathBuf;
 
 use novo_core::{
-    Command, Device, DeviceId, DeviceTag, Document, MountingPlate, Project, RailKind, Result,
-    Structure, Tx, Value,
+    Command, Device, DeviceId, DeviceTag, Document, MountingPlate, Project, Result, Structure, Tx,
+    Value,
 };
 use novo_layout::model::{apply_plan, load};
 use novo_layout::rules::{RuleSet, place_all_explained};
@@ -193,27 +193,6 @@ fn place(doc: &mut Document) -> Result<()> {
     Ok(())
 }
 
-/// Place all lays ducts between the rows but none that joins them, so no wire
-/// can run from one row to another. The routing lesson starts from the same
-/// plate with one duct down the right-hand end that touches every row's duct.
-fn trunk(doc: &mut Document) -> Result<()> {
-    let id = cab(doc.project());
-    doc.transact("Joining duct", |tx| {
-        tx.execute(Command::AddRail {
-            structure: id,
-            x: 580.0,
-            y: 122.5,
-            length: 580.0,
-            kind: RailKind::Duct,
-            vertical: true,
-            width: 25.0,
-            height: 60.0,
-        })
-        .map(|_| ())
-    })?;
-    Ok(())
-}
-
 #[allow(dead_code)]
 fn device_named_in(project: &Project, product: &str) -> DeviceId {
     project
@@ -273,8 +252,7 @@ fn main() -> Result<()> {
     place(&mut doc)?;
     show_wires(doc.project(), "after Place all");
     write(doc.project(), &root, "cabinet-layout/finished.json");
-    trunk(&mut doc)?;
-    show_wires(doc.project(), "with a joining duct");
+    // Place all now adds the joining duct itself (#612), so no extra step is needed.
     write(doc.project(), &root, "wire-routing/project.json");
     Ok(())
 }

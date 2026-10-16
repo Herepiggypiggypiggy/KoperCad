@@ -276,6 +276,26 @@ amber tint are never the only difference.
   `Scene::revision` and `pose_revision`. A GPU id buffer or depth read-back is
   not built unless a CPU pick proves too slow.
 
+### Overlays and the door (2026-10-16)
+
+- **Overlays** (`overlay.rs`, `View3d::set_overlays`) are coloured geometry the
+  host draws over the cabinet: `OverlayMesh` (triangles with a colour per
+  vertex, shaded flat from the triangle itself, `translucent` flag, `order`
+  key) and `OverlayLines` (polylines of constant pixel width, drawn as
+  screen-space ribbons). Positions are in the scene frame, millimetres. They
+  are not scene items: picking, marquee, labels and the camera fit ignore
+  them. Opaque meshes are drawn after the opaque scene and write depth;
+  translucent meshes and lines are drawn last, low `order` first, depth test
+  on, depth write off. The list is replaced as a whole and uploaded only when
+  it changes; an empty list clears. The heat layer (novo-heatview, CFD-F
+  thread) is the first user. Limits: 4 million vertices per overlay; invalid
+  overlays are skipped, never drawn half.
+- **Door animation** (`door.rs`, `View3d::set_door`) eases a hinge group's
+  angle in 0.5 s (jump with reduced motion). The angle is view state: the
+  widget draws a copy of the scene with the animated angle, the project is not
+  touched and the angle survives scene rebuilds. `door::open_angle` gives the
+  signed angle for "open by N degrees" for either hinge side.
+
 ## 6. Camera and input
 
 Turntable orbit around a target point, +Y up, so the cabinet never rolls.

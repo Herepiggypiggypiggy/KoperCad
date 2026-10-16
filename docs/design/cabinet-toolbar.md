@@ -47,7 +47,7 @@ the toolbar, so the bar holds only things you press.
   (primary) and **Cancel (Esc)**. Place all steps aside; the reason a device
   went where it did stays in the inspector ("why"), not in the bar; nothing else changes
   position.
-- Lesson anchor id `cabinet.place-all`, so a step can point at it.
+- Lesson anchors, named as the lessons already name them: `cabinet.place_all`, `cabinet.accept`, `cabinet.rules`, `cabinet.plate` (Plate setup), `cabinet.routes`, `cabinet.cutlist`, `cabinet.table`, `cabinet.heat`. The command id stays `cabinet.place-all`.
 
 ### Progressive disclosure
 
