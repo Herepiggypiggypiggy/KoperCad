@@ -1,5 +1,6 @@
 use novo_core::{DeviceTag, MountingPlate, Project, RailKind, StructureId, Value};
-use novo_layout::model::{apply_plan, candidates, load, set_plate};
+use novo_layout::enclosure::{Door, Enclosure, Hinge};
+use novo_layout::model::{apply_plan, candidates, load, set_enclosure, set_plate};
 use novo_view3d::build::{Options, model, refresh};
 use novo_view3d::{ItemKind, Mark};
 
@@ -111,4 +112,58 @@ fn no_plate_no_scene() {
         })
         .unwrap();
     assert!(model::scene(&p, s, &Options::default()).is_none());
+}
+
+#[test]
+fn the_shell_and_the_door_follow_the_enclosure() {
+    use novo_view3d::build::HingeSide;
+
+    let (mut p, cab, _) = project();
+    // Without an interior the default shell is used.
+    assert_eq!(model::shell(&p, cab), Options::default().shell);
+    assert_eq!(model::door_limit_deg(&p, cab), None);
+
+    let enclosure = Enclosure {
+        width: 400.0,
+        height: 400.0,
+        depth: 300.0,
+        plate_setback: 40.0,
+        door: Some(Door {
+            hinge: Hinge::Right,
+            max_angle: 120.0,
+            inner_depth: 0.0,
+        }),
+        front_clearance: None,
+        hinge_side_clearance: None,
+    };
+    p.transact("Enclosure", |tx| set_enclosure(tx, cab, &enclosure))
+        .unwrap();
+    let shell = model::shell(&p, cab);
+    assert_eq!(shell.depth, 260.0, "from the plate surface to the door");
+    let door = shell.door.expect("a door");
+    assert_eq!(door.hinge, HingeSide::Right);
+    assert_eq!(door.open_deg, 0.0, "closed until the view opens it");
+    assert_eq!(model::door_limit_deg(&p, cab), Some(120.0));
+
+    let scene = model::scene(&p, cab, &model::options(&p, cab, true)).unwrap();
+    let door_group = scene.group(novo_view3d::build::DOOR_HINGE).unwrap();
+    assert_eq!(door_group.pivot.x, 400.0, "hinged on the right edge");
+    assert_eq!(door_group.pivot.z, 260.0);
+
+    // A door-less enclosure has no door in the scene.
+    let no_door = Enclosure {
+        door: None,
+        ..enclosure
+    };
+    p.transact("No door", |tx| set_enclosure(tx, cab, &no_door))
+        .unwrap();
+    assert_eq!(model::door_limit_deg(&p, cab), None);
+    let scene = model::scene(&p, cab, &model::options(&p, cab, false)).unwrap();
+    assert!(scene.items.iter().all(|i| i.id.kind != ItemKind::Door));
+}
+
+#[test]
+fn a_plate_without_wires_has_none_in_the_scene() {
+    let (p, cab, _) = project();
+    assert!(model::wires(&p, cab).is_empty());
 }
