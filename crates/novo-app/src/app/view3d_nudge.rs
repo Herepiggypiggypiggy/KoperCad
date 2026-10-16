@@ -128,11 +128,17 @@ pub(super) fn set_position(
     })
 }
 
+/// The largest offset a typed value may have, mm: far beyond any plate, so
+/// a slipped digit cannot throw a device out of reach.
+pub(super) const MAX_TYPED_MM: f64 = 100_000.0;
+
 /// A number typed in mm: a comma works as the decimal point; nothing else
-/// than a finite number is accepted.
+/// than a finite number within +-`MAX_TYPED_MM` is accepted.
 pub(super) fn parse_mm(text: &str) -> Option<f64> {
     let t = text.trim().trim_end_matches("mm").trim().replace(',', ".");
-    t.parse::<f64>().ok().filter(|v| v.is_finite())
+    t.parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite() && v.abs() <= MAX_TYPED_MM)
 }
 
 /// The text fields of the Position box.
@@ -321,6 +327,9 @@ mod tests {
         assert_eq!(parse_mm("abc"), None);
         assert_eq!(parse_mm("NaN"), None);
         assert_eq!(parse_mm("inf"), None);
+        assert_eq!(parse_mm("100000"), Some(100_000.0));
+        assert_eq!(parse_mm("100001"), None);
+        assert_eq!(parse_mm("-1e9"), None);
     }
 
     #[test]
