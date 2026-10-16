@@ -420,3 +420,33 @@ fn a_group_move_is_one_undo_step() {
     d.app.run(&ctx, Action::Undo);
     assert_eq!((placed(&d, cab, a), placed(&d, cab, b)), (pa, pb));
 }
+
+#[test]
+fn a_group_drop_in_3d_ticks_the_lesson_step_a_single_drop_ticks() {
+    use super::cabinet_tests::{lesson_at, step_done};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    lesson_at(&mut d, dir.path(), "cabinet-layout", "drag-first");
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    let (a, b) = (cands[0].id, cands[1].id);
+    assert!(!step_done(&mut d, "drag-first"), "nothing dropped yet");
+    // Moving two devices together in 3D is a drop, like a single one.
+    d.app
+        .view3d_move_group(cab, vec![(a, 100.0, 100.0), (b, 300.0, 100.0)], vec![]);
+    assert!(step_done(&mut d, "drag-first"));
+    assert_eq!(placed(&d, cab, a).1, 100.0);
+}
+
+#[test]
+fn a_group_without_devices_raises_no_drop_signal() {
+    use super::cabinet_tests::{lesson_at, step_done};
+
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    lesson_at(&mut d, dir.path(), "cabinet-layout", "drag-first");
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.view3d_move_group(cab, vec![], vec![]);
+    assert!(!step_done(&mut d, "drag-first"));
+}
