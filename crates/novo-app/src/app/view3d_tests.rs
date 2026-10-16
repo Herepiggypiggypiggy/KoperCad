@@ -375,6 +375,23 @@ fn the_position_command_hides_and_shows_the_box() {
 }
 
 #[test]
+fn the_place_command_opens_the_list_in_3d_and_toggling_lets_go_of_the_device() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(!d.app.view3d.place.open);
+    d.app.run_command(&ctx, "view.3d_place", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.place.open);
+    d.app.view3d.place.armed = Some(1);
+    d.frame();
+    d.app.run_command(&ctx, "view.3d_place", None);
+    d.frame();
+    assert!(!d.app.view3d.place.open && d.app.view3d.place.armed.is_none());
+}
+
+#[test]
 fn dimensions_toggle_by_command_and_measure_the_selected_part_from_the_cabinet() {
     use novo_view3d::ItemKind;
     use novo_view3d::dimension::{Role, dimensions, format_mm};

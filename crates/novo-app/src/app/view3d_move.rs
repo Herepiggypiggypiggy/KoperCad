@@ -172,7 +172,11 @@ pub(super) fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Opti
 /// A device's top left pulled onto a rail or duct line it is next to: a
 /// horizontal one sets the top, a vertical one the left. The snap only
 /// applies along the rail's run, so a device never jumps to a far rail.
-fn rail_snap(layout: &CabinetLayout, device: u64, at: (f64, f64)) -> ((f64, f64), Option<u64>) {
+pub(super) fn rail_snap(
+    layout: &CabinetLayout,
+    device: u64,
+    at: (f64, f64),
+) -> ((f64, f64), Option<u64>) {
     let Some(p) = layout.placements.iter().find(|p| p.id == device) else {
         return (at, None);
     };

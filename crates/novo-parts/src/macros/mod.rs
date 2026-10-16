@@ -30,10 +30,12 @@ use thiserror::Error;
 use crate::search::Matcher;
 
 mod extras;
+mod params;
 mod starter;
 pub use extras::{
     MacroPart, MacroUpdate, SYMBOL_PAD, ThumbSymbol, Thumbnail, macro_updates, thumbnail,
 };
+pub use params::{ParamDraft, ParamKind, param_drafts, validate_parameters};
 pub use starter::{STARTER_FOLDER, starter_macros};
 
 /// The `format` value of a macro file.

@@ -62,6 +62,8 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
                 Some(("Rails and ducts…   Ctrl+Shift+R", "cabinet.rails")),
             ],
             Target::Plate => vec![
+                Some(("Place a device…", "view.3d_place")),
+                None,
                 Some(("Zoom to fit   F", "view.fit")),
                 Some(("Isometric", "view.iso")),
                 Some(("Front", "view.front")),

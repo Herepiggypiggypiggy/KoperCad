@@ -6,6 +6,7 @@
 //! buffers (instance data is not read from storage buffers), no compute and no
 //! optional features.
 
+use crate::ao;
 use crate::camera::{Camera, Projection};
 use crate::cull;
 use crate::look::{Highlight, Look, Rgb, mix};
@@ -159,6 +160,7 @@ struct Globals {
     viewport: [f32; 4],
     light_vp: [[f32; 4]; 4],
     shadow: [f32; 4],
+    ao: [f32; 4],
 }
 
 /// A vertex of an overlay mesh.
@@ -361,6 +363,7 @@ pub struct Renderer {
     shadow_layout: wgpu::BindGroupLayout,
     shadow_pipeline: wgpu::RenderPipeline,
     shadow_sampler: wgpu::Sampler,
+    ao_sampler: wgpu::Sampler,
     module: wgpu::ShaderModule,
     globals_layout: wgpu::BindGroupLayout,
     pipelines: HashMap<u32, Pipelines>,
@@ -384,6 +387,11 @@ pub struct ViewTarget {
     shadow_size: u32,
     /// What the map was last drawn for; `None` while it holds nothing.
     shadow_key: Option<u64>,
+    /// Plate occlusion texture and what it was baked for.
+    ao_view: wgpu::TextureView,
+    ao_texture: wgpu::Texture,
+    ao_size: (u32, u32),
+    ao_key: Option<u64>,
     instances: wgpu::Buffer,
     instance_capacity: u64,
     overlays: Vec<GpuOverlay>,
@@ -411,11 +419,31 @@ fn shadow_texture(device: &wgpu::Device, size: u32) -> wgpu::TextureView {
         .create_view(&Default::default())
 }
 
+fn ao_texture(device: &wgpu::Device, w: u32, h: u32) -> (wgpu::Texture, wgpu::TextureView) {
+    let texture = device.create_texture(&wgpu::TextureDescriptor {
+        label: Some("novo_view3d_plate_ao"),
+        size: wgpu::Extent3d {
+            width: w,
+            height: h,
+            depth_or_array_layers: 1,
+        },
+        mip_level_count: 1,
+        sample_count: 1,
+        dimension: wgpu::TextureDimension::D2,
+        format: wgpu::TextureFormat::R8Unorm,
+        usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+        view_formats: &[],
+    });
+    let view = texture.create_view(&Default::default());
+    (texture, view)
+}
+
 fn globals_bind(
     device: &wgpu::Device,
     renderer: &Renderer,
     globals: &wgpu::Buffer,
     shadow: &wgpu::TextureView,
+    ao: &wgpu::TextureView,
 ) -> wgpu::BindGroup {
     device.create_bind_group(&wgpu::BindGroupDescriptor {
         label: Some("novo_view3d_globals"),
@@ -433,6 +461,14 @@ fn globals_bind(
                 binding: 2,
                 resource: wgpu::BindingResource::Sampler(&renderer.shadow_sampler),
             },
+            wgpu::BindGroupEntry {
+                binding: 3,
+                resource: wgpu::BindingResource::TextureView(ao),
+            },
+            wgpu::BindGroupEntry {
+                binding: 4,
+                resource: wgpu::BindingResource::Sampler(&renderer.ao_sampler),
+            },
         ],
     })
 }
@@ -446,7 +482,8 @@ impl ViewTarget {
             mapped_at_creation: false,
         });
         let shadow_view = shadow_texture(device, 1);
-        let globals_bind = globals_bind(device, renderer, &globals, &shadow_view);
+        let (ao_texture, ao_view) = ao_texture(device, 1, 1);
+        let globals_bind = globals_bind(device, renderer, &globals, &shadow_view, &ao_view);
         let shadow_bind = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("novo_view3d_shadow_globals"),
             layout: &renderer.shadow_layout,
@@ -469,6 +506,10 @@ impl ViewTarget {
             shadow_view,
             shadow_size: 1,
             shadow_key: None,
+            ao_view,
+            ao_texture,
+            ao_size: (1, 1),
+            ao_key: None,
             instances: instance_buffer(device, instance_capacity),
             instance_capacity,
             overlays: Vec::new(),
@@ -790,6 +831,22 @@ impl Renderer {
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Comparison),
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Texture {
+                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        view_dimension: wgpu::TextureViewDimension::D2,
+                        multisampled: false,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
             ],
         });
         // The shadow pass renders into the map, so it must not bind it.
@@ -805,6 +862,12 @@ impl Renderer {
             compare: Some(wgpu::CompareFunction::LessEqual),
             ..Default::default()
         });
+        let ao_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("novo_view3d_ao_sampler"),
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("novo_view3d_layout"),
             bind_group_layouts: &[Some(&globals_layout)],
@@ -818,6 +881,7 @@ impl Renderer {
             shadow_layout,
             shadow_pipeline,
             shadow_sampler,
+            ao_sampler,
             module,
             globals_layout,
             pipelines,
@@ -1088,6 +1152,47 @@ impl Renderer {
                 1.0,
             ]
         };
+        // Plate occlusion: baked when the scene or the layers change.
+        let ao_on = look.contact_shade > 0.0;
+        if ao_on {
+            let akey = ao::key(scene, frame.state, look.contact_shade);
+            if target.ao_key != Some(akey) {
+                let map = ao::bake(scene, frame.state, look.contact_shade);
+                if target.ao_size != (map.width, map.height) {
+                    let (texture, view) = ao_texture(device, map.width, map.height);
+                    target.ao_texture = texture;
+                    target.ao_view = view;
+                    target.ao_size = (map.width, map.height);
+                    target.globals_bind = globals_bind(
+                        device,
+                        self,
+                        &target.globals,
+                        &target.shadow_view,
+                        &target.ao_view,
+                    );
+                }
+                queue.write_texture(
+                    wgpu::TexelCopyTextureInfo {
+                        texture: &target.ao_texture,
+                        mip_level: 0,
+                        origin: wgpu::Origin3d::ZERO,
+                        aspect: wgpu::TextureAspect::All,
+                    },
+                    &map.data,
+                    wgpu::TexelCopyBufferLayout {
+                        offset: 0,
+                        bytes_per_row: Some(map.width),
+                        rows_per_image: Some(map.height),
+                    },
+                    wgpu::Extent3d {
+                        width: map.width,
+                        height: map.height,
+                        depth_or_array_layers: 1,
+                    },
+                );
+                target.ao_key = Some(akey);
+            }
+        }
         let globals = Globals {
             view_proj: view_proj.to_cols_array_2d(),
             eye: eye.extend(1.0).to_array(),
@@ -1117,6 +1222,12 @@ impl Renderer {
                 1.0 / SHADOW_MAP_SIZE as f32,
                 0.0,
             ],
+            ao: [
+                if ao_on { 1.0 } else { 0.0 },
+                1.0 / scene.frame.width.max(1.0),
+                1.0 / scene.frame.height.max(1.0),
+                0.0,
+            ],
         };
         queue.write_buffer(&target.globals, 0, bytemuck::bytes_of(&globals));
 
@@ -1125,8 +1236,13 @@ impl Renderer {
                 target.shadow_view = shadow_texture(device, SHADOW_MAP_SIZE);
                 target.shadow_size = SHADOW_MAP_SIZE;
                 target.shadow_key = None;
-                target.globals_bind =
-                    globals_bind(device, self, &target.globals, &target.shadow_view);
+                target.globals_bind = globals_bind(
+                    device,
+                    self,
+                    &target.globals,
+                    &target.shadow_view,
+                    &target.ao_view,
+                );
             }
             if build_shadow {
                 target.shadow_key = Some(skey);
