@@ -16,7 +16,7 @@ pub(super) fn run(e: &Env<'_>, s: &mut Sink) {
     sccr_rules(e, s);
     shared::motor_branch_size(e, s, UL_MOTOR_BRANCH_SIZE);
     shared::overload_setting(e, s, UL_OVERLOAD_SETTING);
-    shared::ampacity_rule(e, s, set, UL_CONDUCTOR_AMPACITY);
+    shared::ampacity_rule(e, s, set, UL_CONDUCTOR_AMPACITY, shared::Tables::Awg);
     shared::ground_size_awg(e, s, UL_GROUND_SIZE);
     shared::nameplate(e, s, UL_NAMEPLATE, true);
 }

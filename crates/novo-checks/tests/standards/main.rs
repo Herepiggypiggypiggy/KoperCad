@@ -4,6 +4,7 @@
 mod document;
 mod golden;
 mod iec;
+mod iec_ampacity;
 mod nfpa;
 mod report;
 mod sccr;

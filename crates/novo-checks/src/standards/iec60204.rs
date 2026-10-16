@@ -13,6 +13,7 @@ pub(super) fn run(e: &Env<'_>, s: &mut Sink) {
     shared::supply_disconnect(e, s, set, IEC_SUPPLY_DISCONNECT, IEC_DISCONNECT_LOCKABLE);
     shared::earth_connection(e, s, IEC_PE_CONNECTION);
     shared::pe_size_metric(e, s, IEC_PE_SIZE);
+    shared::ampacity_rule(e, s, set, IEC_CONDUCTOR_AMPACITY, shared::Tables::Iec);
     let scheme = Scheme::iec60204(e);
     shared::colours(
         e,

@@ -240,6 +240,9 @@ impl NovoApp {
             device.is_some() || self.wb.inspector.pinned,
             0.15,
         );
+        if device.is_none() && self.wire_panel(ctx, canvas) {
+            return;
+        }
         let Some(device) = device else {
             let pinned = self.wb.inspector.pinned;
             let leaving = self.wb.inspector.leaving.take();

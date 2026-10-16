@@ -154,6 +154,16 @@ pub mod keys {
     pub const LET_THROUGH_KA: &str = "let_through_ka";
     /// Motor: full-load current, A.
     pub const FLC_A: &str = "flc_a";
+    /// Wire or cable: installation method, `B1`, `B2` or `C` (IEC 60364-5-52).
+    pub const INSTALLATION_METHOD: &str = "installation_method";
+    /// Project: the installation method of wires that state none.
+    pub const DEFAULT_INSTALLATION_METHOD: &str = "machine.installation_method";
+    /// Wire, cable or project: conductor insulation, `PVC` (default) or `XLPE`.
+    pub const INSULATION: &str = "insulation";
+    /// Wire or cable: loaded circuits bunched with it (default 1).
+    pub const GROUPED_CIRCUITS: &str = "grouped_circuits";
+    /// Project: ambient air temperature in the enclosure, degrees C (default 40).
+    pub const AMBIENT_C: &str = "machine.ambient_c";
 }
 
 /// The name a waiver of a standards rule is stored under.
@@ -470,6 +480,14 @@ impl Sink {
     /// One more thing evaluated and found fine.
     pub(crate) fn pass(&mut self, id: &'static str) {
         self.acc.entry(id).or_default().checked += 1;
+    }
+
+    /// Evidence for a rule without counting a thing: a summary line.
+    pub(crate) fn note(&mut self, id: &'static str, note: String) {
+        let acc = self.acc.entry(id).or_default();
+        if !acc.evidence.contains(&note) {
+            acc.evidence.push(note);
+        }
     }
 
     /// One more thing evaluated and found fine, with what it was.

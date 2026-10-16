@@ -99,6 +99,9 @@ mod userkeymap;
 mod variants;
 mod view3d;
 mod wheel;
+mod wire_panel;
+#[cfg(test)]
+mod wire_panel_tests;
 mod wire_production;
 mod workbench;
 mod workspace;

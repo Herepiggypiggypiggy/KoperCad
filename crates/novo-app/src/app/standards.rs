@@ -5,7 +5,8 @@
 //! licensed copy.
 
 use eframe::egui;
-use novo_checks::standards::{self, ComplianceReport, StandardSet};
+use novo_checks::standards::{self, ComplianceReport, StandardSet, keys};
+use novo_core::Value;
 
 use super::NovoApp;
 use super::standards_report::StandardsFormat;
@@ -25,6 +26,18 @@ impl NovoApp {
         let markdown = standards::to_markdown(project, &report);
         let lines = standards::lines(project, &report);
         let mut chosen = selected.clone();
+        let text_of = |key: &str| match project.info().properties.get(key) {
+            Some(Value::Text(t)) => t.clone(),
+            _ => String::new(),
+        };
+        let method = text_of(keys::DEFAULT_INSTALLATION_METHOD);
+        let mut new_method = method.clone();
+        let ambient = match project.info().properties.get(keys::AMBIENT_C) {
+            Some(Value::Float(f)) => *f,
+            Some(Value::Int(i)) => *i as f64,
+            _ => 40.0,
+        };
+        let mut new_ambient = ambient;
         let mut save: Option<StandardsFormat> = None;
         let mut open = true;
         egui::Window::new("Standards check")
@@ -43,6 +56,25 @@ impl NovoApp {
                             }
                         }
                     }
+                });
+                ui.horizontal(|ui| {
+                    ui.label("Wires with no installation method:");
+                    egui::ComboBox::from_id_salt("standards_default_method")
+                        .selected_text(if method.is_empty() { "not stated" } else { method.as_str() })
+                        .show_ui(ui, |ui| {
+                            for (key, label) in [
+                                ("", "not stated"),
+                                ("B1", "B1: single cores in conduit"),
+                                ("B2", "B2: multicore in conduit"),
+                                ("C", "C: clipped or on a tray"),
+                            ] {
+                                if ui.selectable_label(method == key, label).clicked() {
+                                    new_method = key.to_owned();
+                                }
+                            }
+                        });
+                    ui.label("Ambient °C:");
+                    ui.add(egui::DragValue::new(&mut new_ambient).range(10.0..=60.0).speed(0.5));
                 });
                 if report.sets.is_empty() {
                     ui.label("Choose at least one standard to see the report.");
@@ -73,6 +105,20 @@ impl NovoApp {
             });
         if chosen != selected {
             self.edit_project("Select standards", |tx| standards::select(tx, &chosen));
+        }
+        if new_method != method {
+            self.edit_project("Default installation method", |tx| {
+                standards::set_info_property(
+                    tx,
+                    keys::DEFAULT_INSTALLATION_METHOD,
+                    (!new_method.is_empty()).then(|| Value::Text(new_method.clone())),
+                )
+            });
+        }
+        if (new_ambient - ambient).abs() > 1e-9 {
+            self.edit_project("Ambient temperature", |tx| {
+                standards::set_info_property(tx, keys::AMBIENT_C, Some(Value::Float(new_ambient)))
+            });
         }
         if let Some(format) = save {
             self.export_standards_report(format);
