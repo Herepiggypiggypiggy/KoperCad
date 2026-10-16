@@ -49,6 +49,9 @@ pub mod tool {
     pub const SELECT: &str = p::CURSOR;
     pub const PLACE: &str = p::CIRCUITRY;
     pub const CONNECT: &str = p::LINE_SEGMENT;
+    pub const CABLE: &str = p::PLUGS;
+    pub const UNDO: &str = p::ARROW_COUNTER_CLOCKWISE;
+    pub const REDO: &str = p::ARROW_CLOCKWISE;
     pub const TEXT: &str = p::TEXT_T;
 }
 
