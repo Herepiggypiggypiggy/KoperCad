@@ -567,6 +567,21 @@ pub const DUTCH: &[Aliases] = &[
         &["plaat", "indeling", "din-rail"],
     ),
     nl(
+        "cabinet.rules",
+        &["plaatsingsregels", "regels voor plaatsing"],
+        &["regels", "afstand", "plaatsing"],
+    ),
+    nl(
+        "cabinet.plate",
+        &["plaat instellen", "montageplaat"],
+        &["plaat", "montageplaat", "afmetingen"],
+    ),
+    nl(
+        "cabinet.cutlist",
+        &["zaaglijst", "knippenlijst"],
+        &["zaaglijst", "lengtes", "knippen"],
+    ),
+    nl(
         "cabinet.rails",
         &["rails en kanalen", "voeg kanaal toe"],
         &["din-rail", "kabelgoot", "kanaal", "rail"],

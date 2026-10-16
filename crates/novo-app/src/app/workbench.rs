@@ -348,6 +348,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.labels",
     "cabinet.routes",
     "cabinet.rails",
+    "cabinet.rules",
+    "cabinet.plate",
+    "cabinet.cutlist",
     "cabinet.door",
     "export.bom",
     "export.reports",
@@ -908,6 +911,21 @@ impl NovoApp {
             }
             "cabinet.routes" => self.toggle_cabinet_routes(),
             "cabinet.rails" => self.toggle_cabinet_rails(),
+            "cabinet.rules" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.rules.editor_open ^= true;
+            }
+            "cabinet.cutlist" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.rules.cut_open ^= true;
+            }
+            "cabinet.plate" if self.is_open() => {
+                self.switch_workspace(Workspace::Cabinet);
+                self.cabinet.table = false;
+                self.cabinet.keys.push(id.to_owned());
+            }
             "cabinet.door" => self.open_cabinet_door(),
             "export.wirecut" => {
                 self.export_wire_cut();

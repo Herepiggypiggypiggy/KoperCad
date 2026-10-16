@@ -46,6 +46,8 @@ pub(crate) struct View3dMode {
     /// The Cabinet selection revision and the 3D selection as last synced, to
     /// tell which side changed.
     synced: (u64, BTreeSet<ItemId>),
+    /// The right-click menu, while open.
+    pub(super) menu: Option<super::cabinet_menu::PlateMenu>,
     /// What of the heat result the view shows, and the result and settings
     /// the overlays were built for.
     heat: Heat3d,
@@ -83,6 +85,7 @@ impl Default for View3dMode {
             built: None,
             pending: None,
             synced: (0, BTreeSet::new()),
+            menu: None,
             heat: Heat3d::default(),
             heat_shown: None,
             heat_base: Vec::new(),
@@ -334,6 +337,27 @@ impl NovoApp {
                 None if !extend => state.selection.clear(),
                 None => {}
             }
+        }
+        // Right-click: select what is under the pointer and offer the same
+        // actions as the Cabinet's plate menu, plus the view's own.
+        if let Some((pos, item)) = out.context {
+            use super::cabinet_menu::{Face, PlateMenu, Target};
+            let target = match item {
+                Some(i) if i.kind == ItemKind::Device => {
+                    state.selection = BTreeSet::from([i]);
+                    Target::Device(i.raw)
+                }
+                Some(i) if matches!(i.kind, ItemKind::Rail | ItemKind::Duct) => {
+                    state.selection = BTreeSet::from([i]);
+                    self.cabinet.rails.selected = Some(i.raw);
+                    Target::Rail(i.raw)
+                }
+                _ => Target::Plate,
+            };
+            mode.menu = Some(PlateMenu::new(Face::View3d, target, pos));
+        }
+        if let Some(command) = super::cabinet_menu::show(ui.ctx(), &mut mode.menu) {
+            self.wb.queued.push(command);
         }
         if let Some(items) = &out.marquee {
             if !ui.input(|i| i.modifiers.shift) {
