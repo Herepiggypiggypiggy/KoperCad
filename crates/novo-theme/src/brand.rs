@@ -114,7 +114,11 @@ pub fn lockup(ui: &mut Ui, mark: f32) {
         ui.label(job);
         ui.label(
             egui::RichText::new(format!("BY {}", MAKER.to_uppercase()))
-                .size(ui.style().text_styles[&egui::TextStyle::Small].size - 0.5)
+                .size(
+                    ui.style().text_styles[&egui::TextStyle::Small]
+                        .size
+                        .max(12.0),
+                )
                 .family(fonts::strong_family())
                 .extra_letter_spacing(1.2)
                 .color(p.text_secondary),
