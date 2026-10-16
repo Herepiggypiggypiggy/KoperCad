@@ -336,6 +336,18 @@ impl NovoApp {
         );
         super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
         mode.view.state.hover = out.hover;
+        if let Some(hover) = out.hover.filter(|h| h.kind == ItemKind::Device)
+            && !mode.mv.dragging()
+        {
+            let solution = self.cabinet.heat.solution();
+            let row = solution.as_ref().and_then(|sol| {
+                let row = sol.snapshot.devices.iter().find(|d| d.id == hover.raw)?;
+                Some((row, sol.ambient))
+            });
+            if let Some(tip) = super::view3d_tip::tip(project, DeviceId::from(hover.raw), row) {
+                super::view3d_tip::show(ui.ctx(), &tip);
+            }
+        }
         let state = &mut mode.view.state;
         if let Some(click) = &out.clicked {
             let extend = click.modifiers.shift || click.modifiers.command;

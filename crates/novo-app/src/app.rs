@@ -133,6 +133,7 @@ mod view3d_move_tests;
 mod view3d_stats;
 #[cfg(test)]
 mod view3d_tests;
+mod view3d_tip;
 mod whats_new;
 mod wheel;
 mod wire_panel;
