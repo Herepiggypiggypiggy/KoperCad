@@ -9,10 +9,12 @@
 use eframe::egui;
 use novo_core::{AnyId, PageId, Point, SymbolId};
 use novo_editor::tool::{EditorKey, WiringMode};
-use novo_learn::lesson::{SolveOp, WireOp};
+use novo_learn::lesson::{CabinetStep, SolveOp, WireOp};
 use novo_learn::{Phase, Step};
 
+use super::cabinet::Ask;
 use super::gate1_tests::Drive;
+use super::workspace::Workspace;
 
 /// Pick tolerance for clicks, in millimetres.
 const TOL: f64 = 1.0;
@@ -196,7 +198,67 @@ impl Drive {
             }
             SolveOp::AssignPart(a) => self.replay_assign_part(&a.assign_part),
             SolveOp::Rename(r) => self.replay_rename(&r.rename.target, &r.rename.to),
+            SolveOp::CabinetPlace(c) => {
+                let a = &c.cabinet_place;
+                self.replay_cabinet(&a.device, |id| Ask::Drop(id, a.x, a.y))
+            }
+            SolveOp::CabinetRotate(c) => {
+                self.replay_cabinet(&c.cabinet_rotate, |id| Ask::Rotate(vec![id]))
+            }
+            SolveOp::CabinetRemove(c) => {
+                self.replay_cabinet(&c.cabinet_remove, |id| Ask::Remove(vec![id]))
+            }
+            SolveOp::Cabinet(c) => self.replay_cabinet_preview(c.cabinet),
         }
+    }
+
+    /// An action on one device of the Cabinet plate, as the canvas raises it.
+    fn replay_cabinet(&mut self, tag: &str, ask: impl FnOnce(u64) -> Ask) -> Result<(), String> {
+        let (structure, layout, cands) = self
+            .app
+            .cabinet_plate()
+            .ok_or("the Cabinet shows no plate (open it first)")?;
+        let id = self
+            .doc()
+            .project()
+            .devices()
+            .find(|d| novo_learn::check::tag_matches(&d.tag, tag))
+            .map(|d| d.id.raw())
+            .ok_or_else(|| format!("nothing named `{tag}`"))?;
+        self.app
+            .cabinet_ask(ask(id), Some(structure), layout, &cands);
+        self.frame();
+        Ok(())
+    }
+
+    /// Place all (the preview) or accepting it.
+    fn replay_cabinet_preview(&mut self, step: CabinetStep) -> Result<(), String> {
+        let (structure, layout, cands) = self
+            .app
+            .cabinet_plate()
+            .ok_or("the Cabinet shows no plate (open it first)")?;
+        match step {
+            CabinetStep::PlaceAll => {
+                self.app
+                    .cabinet_ask(Ask::PlaceAll, Some(structure), layout, &cands);
+                self.frame();
+                if self.app.cabinet.preview.is_none() {
+                    return Err("Place all found nothing to place".into());
+                }
+                // The button click that raises the preview.
+                self.app
+                    .learn_event(novo_learn::Event::Clicked("cabinet.place_all".into()));
+            }
+            CabinetStep::Accept => {
+                if self.app.cabinet.preview.is_none() {
+                    return Err("there is no Place all preview to accept".into());
+                }
+                self.app
+                    .cabinet_ask(Ask::Accept, Some(structure), None, &[]);
+                self.frame();
+            }
+        }
+        Ok(())
     }
 
     /// A wire from a pin that ends on another wire at a point, as dragging
@@ -391,6 +453,13 @@ impl Drive {
     /// Selects a device (all its symbols) or one pin's symbol, as a click
     /// (or Shift+click) on it does.
     fn replay_select(&mut self, text: &str, add: bool) -> Result<(), String> {
+        // In the Cabinet a click lands on the plate.
+        if !text.contains(':')
+            && matches!(self.app.workspace(), Workspace::Cabinet | Workspace::View3d)
+            && self.replay_select_on_plate(text, add).is_ok()
+        {
+            return Ok(());
+        }
         let project = self.doc().project();
         let mut found: Vec<SymbolId> = Vec::new();
         if text.contains(':') {

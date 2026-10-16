@@ -149,6 +149,7 @@ De vier gaten van **-T1** zijn met het component meegedraaid, dus hun X en Y in 
 """
 point = { ui = "cabinet.canvas" }
 expect = { all = [ { signal = "cabinet_rotated" }, { command = "export.plate" } ] }
+solve = [ { cabinet_rotate = "-T1" }, { command = "export.plate" } ]
 
 [[step]]
 id = "done"

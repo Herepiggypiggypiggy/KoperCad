@@ -134,6 +134,7 @@ Sleep **-K1** ongeveer 100 mm naar rechts en laat los. Een rood kader betekent d
 """
 point = { ui = "cabinet.canvas" }
 expect = { signal = "cabinet_dropped" }
+solve = [ { cabinet_place = { device = "-K1", x = 155, y = 210 } } ]
 
 [[step]]
 id = "check-again"
