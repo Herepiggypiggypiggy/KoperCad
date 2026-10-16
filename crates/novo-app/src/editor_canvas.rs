@@ -56,6 +56,11 @@ impl CanvasView for EditorCanvas {
         self.view.document_changed(document, changes);
     }
 
+    fn restyle(&mut self) {
+        self.view.canvas.style = theme::canvas_style();
+        self.view.set_style(theme::model_style());
+    }
+
     fn document_replaced(&mut self) {
         self.view.document_replaced();
         // Nothing the editor did to the old project may reach the new one.
