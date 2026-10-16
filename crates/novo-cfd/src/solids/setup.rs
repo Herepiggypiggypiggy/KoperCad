@@ -21,6 +21,34 @@ pub enum SetupError {
     Opening(#[from] OpeningError),
 }
 
+/// The slotted wire duct as a porous medium.
+///
+/// A duct is a hollow channel with slots in both side walls. Air crosses it
+/// through the slots (an orifice loss at each wall, `K = 1 / (cd slot_free)^2`
+/// on the speed in the duct) and runs along it almost freely (the clutter drag
+/// of the scenario per metre). The lid and the plate close the third
+/// direction, ten times the cross drag. Planning values, not a measurement of
+/// a maker's duct.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DuctModel {
+    /// Air share of the duct volume (the rest is the PVC walls and fingers).
+    pub porosity: f64,
+    /// Free share of a slotted side wall.
+    pub slot_free: f64,
+    /// Discharge coefficient of a slot.
+    pub cd: f64,
+}
+
+impl Default for DuctModel {
+    fn default() -> Self {
+        DuctModel {
+            porosity: 0.85,
+            slot_free: 0.45,
+            cd: 0.6,
+        }
+    }
+}
+
 /// What to build.
 #[derive(Debug, Clone, PartialEq)]
 pub struct SolidsSettings {
@@ -30,6 +58,7 @@ pub struct SolidsSettings {
     /// the time to get there does). 1 = real capacities, for transients.
     pub solid_speedup: f64,
     pub scheme: Scheme,
+    pub duct: DuctModel,
 }
 
 impl Default for SolidsSettings {
@@ -38,6 +67,7 @@ impl Default for SolidsSettings {
             mesh: MeshSettings::default(),
             solid_speedup: 100.0,
             scheme: Scheme::VanLeer,
+            duct: DuctModel::default(),
         }
     }
 }
@@ -118,7 +148,12 @@ impl Medium {
     /// Materials, shares and heat sources of a classified grid. Heat that
     /// belongs to a device the mesh did not find (outside the enclosure) is
     /// not placed; the second value is its sum, W.
-    pub fn from_mesh(cm: &mesh::Mesh, scn: &Scenario, solid_speedup: f64) -> (Medium, f64) {
+    pub fn from_mesh(
+        cm: &mesh::Mesh,
+        scn: &Scenario,
+        solid_speedup: f64,
+        duct: &DuctModel,
+    ) -> (Medium, f64) {
         let n = cm.grid.cells();
         let mut md = Medium::air(n);
         let speed = solid_speedup.max(1.0);
@@ -147,8 +182,31 @@ impl Medium {
             })
             .collect();
         let find = |id: u16| table.iter().find(|t| t.0 == id);
+        // Ducts are porous: id = 2 + devices + index among the obstacles.
+        let duct_of = |id: u16| -> Option<(usize, &novo_thermal::Obstacle)> {
+            let idx = (id as usize).checked_sub(2 + scn.devices.len())?;
+            let o = scn.obstacles.get(idx)?;
+            (o.kind == novo_thermal::ObstacleKind::Duct).then_some((idx, o))
+        };
+        let mut extra_air = vec![0.0f64; n];
         let mut add = |cell: usize, id: u16, share: f64| {
             if let Some((_, p, q)) = find(id) {
+                if let Some((_, o)) = duct_of(id) {
+                    let solid = 1.0 - duct.porosity;
+                    md.c_solid[cell] += share * solid * p.rho_cp / speed;
+                    md.k_solid[cell] += share * solid * p.k;
+                    extra_air[cell] += share * duct.porosity;
+                    let w = (o.rect.w.min(o.rect.h) / 1000.0).max(1e-3);
+                    let slot = (duct.cd * duct.slot_free).max(1e-3);
+                    let cross = 1.0 / (slot * slot) / w;
+                    let along = scn.params.clutter_drag_per_m;
+                    let (long_axis, cross_axis) =
+                        if o.rect.w >= o.rect.h { (0, 1) } else { (1, 0) };
+                    md.drag[long_axis][cell] += share * along;
+                    md.drag[cross_axis][cell] += share * cross;
+                    md.drag[2][cell] += share * 10.0 * cross;
+                    return;
+                }
                 md.c_solid[cell] += share * p.rho_cp / speed;
                 md.k_solid[cell] += share * p.k;
                 md.heat_w_m3[cell] += share * q;
@@ -169,7 +227,7 @@ impl Medium {
             }
         }
         for (cell, ff) in cm.fluid_fraction.iter().enumerate() {
-            md.fluid_frac[cell] = *ff;
+            md.fluid_frac[cell] = (*ff + extra_air[cell]).min(1.0);
         }
         let lost: f64 = scn
             .devices
@@ -232,7 +290,7 @@ impl FlowSetup {
     pub fn new(scn: &Scenario, st: &SolidsSettings) -> Result<FlowSetup, SetupError> {
         let classified = mesh::Mesh::build(scn, &st.mesh)?;
         let mesh = FlowMesh::from_grid(&classified.grid);
-        let (medium, lost_heat_w) = Medium::from_mesh(&classified, scn, st.solid_speedup);
+        let (medium, lost_heat_w) = Medium::from_mesh(&classified, scn, st.solid_speedup, &st.duct);
         let heat_w = medium.total_heat_w(&mesh);
         let walls = wall_conductances(scn);
         let mut cfg = FlowConfig::air();
