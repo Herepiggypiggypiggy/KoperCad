@@ -83,6 +83,8 @@ pub(crate) struct Workbench {
     pub(super) macro_save: Option<super::macro_actions::SaveDraft>,
     /// The Place macro window.
     pub(super) macro_place: super::macro_actions::PlaceWindow,
+    /// The Edit macro parameters window.
+    pub(super) macro_editor: super::macro_editor::MacroEditor,
     /// The Project settings window (drawing standard) is open.
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
@@ -91,6 +93,8 @@ pub(crate) struct Workbench {
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
     pub(super) faults: Option<super::faults::FaultsWindow>,
+    /// The Add fault window (`sim.add_fault`), while it is open.
+    pub(super) add_fault: Option<super::faults::AddFault>,
     /// The Calculations window, while it is open.
     pub(super) calculations: Option<super::calculations::CalcWindow>,
     /// The Electrical inputs window, while it is open.
@@ -184,6 +188,8 @@ pub(crate) struct Workbench {
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
+    /// The PDF options dialog (File > Export drawings > Export PDF...), while open.
+    pub(super) pdf_options: Option<super::pdf_options::PdfOptionsState>,
     /// The Report designer window, while open.
     pub(super) designer: Option<super::designer::DesignerState>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
@@ -244,10 +250,12 @@ impl Default for Workbench {
             parts: None,
             macro_save: None,
             macro_place: Default::default(),
+            macro_editor: Default::default(),
             project_settings: false,
             issue: None,
             compare: None,
             faults: None,
+            add_fault: None,
             calculations: None,
             electrical: None,
             safety: None,
@@ -293,6 +301,7 @@ impl Default for Workbench {
             changes: None,
             background_panel: None,
             bench: None,
+            pdf_options: None,
             designer: None,
             commissioning: None,
             underlay_seen: None,
@@ -350,6 +359,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.override_marks",
     "macro.save",
     "macro.place",
+    "macro.edit",
     "edit.rename",
     "edit.escape",
     "nav.next_page",
@@ -374,6 +384,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "sim.live",
     "sim.plc_program",
     "sim.faults",
+    "sim.add_fault",
     "view.changes",
     "view.commissioning",
     "check.problems",
@@ -384,6 +395,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.pdf_options",
     "export.change_report",
     "export.commissioning",
     "export.standards_report",
@@ -420,6 +432,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_shell",
     "view.3d_wires",
     "view.3d_shadows",
+    "view.3d_dimensions",
+    "view.3d_quality",
     "view.3d_stats",
     "view.iso",
     "view.front",
@@ -480,6 +494,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "draw.tidy",
     "macro.browser",
     "macro.import",
+    "macro.export_pack",
     "project.options",
     "project.variant",
     "project.generate",
@@ -490,6 +505,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "terminal.toggle_pe",
     "terminal.reset_pe",
     "wire.mode",
+    "edit.reset_note",
     "interruption.renumber",
     "wires.number",
     "wires.numbering",
@@ -819,6 +835,10 @@ impl NovoApp {
             }
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
+            "edit.reset_note" => {
+                let selection = self.selection();
+                self.with_editor(|editor, doc| editor.reset_notes(doc, &selection));
+            }
             "edit.duplicate" => self.duplicate_selection(),
             "edit.copy" => self.copy_selection(ctx, false),
             "edit.cut" => self.copy_selection(ctx, true),
@@ -826,6 +846,7 @@ impl NovoApp {
             "view.override_marks" => self.wb.override_marks ^= true,
             "macro.save" => self.open_macro_save(argument),
             "macro.place" => self.open_macro_place(argument),
+            "macro.edit" => self.open_macro_editor(argument),
             "edit.delete" if self.declines_proposal() => self.dismiss_proposal(),
             "edit.delete" => self.editor_key(EditorKey::Delete),
             "nav.next_page" | "nav.previous_page" => {
@@ -899,6 +920,14 @@ impl NovoApp {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.shadows ^= true;
             }
+            "view.3d_quality" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.view.reset_quality();
+            }
+            "view.3d_dimensions" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.controls.dimensions ^= true;
+            }
             "view.3d_door" | "view.3d_shell" | "view.3d_wires" => {
                 self.switch_workspace(Workspace::View3d);
                 let limit = self.view3d_door_limit();
@@ -958,6 +987,7 @@ impl NovoApp {
                 }
             }
             "sim.faults" => self.toggle_faults(),
+            "sim.add_fault" => self.begin_add_fault(),
             "view.changes" => self.toggle_changes(argument),
             "view.commissioning" if self.workspace() == Workspace::Commissioning => {
                 self.switch_workspace(Workspace::Schematic);
@@ -1003,6 +1033,7 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.pdf_options" => self.open_pdf_options(),
             "export.change_report" => {
                 self.export_change_report();
             }
@@ -1139,6 +1170,7 @@ impl NovoApp {
             "draw.tidy" => self.tidy_selection(),
             "macro.browser" => self.wb.macros.show(),
             "macro.import" => self.macro_import(),
+            "macro.export_pack" => self.macro_export_pack(),
             "project.options" => self.open_options(),
             "project.variant" => self.switch_variant(argument),
             "project.generate" => self.open_generate(),
