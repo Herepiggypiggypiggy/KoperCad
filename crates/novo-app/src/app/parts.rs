@@ -45,6 +45,8 @@ pub(crate) struct PartsWindow {
     /// Builds the 3D models of imported STEP files in the background;
     /// created on the first frame, when the repaint handle is known.
     geometry: Option<GeometryService>,
+    /// The Quality tab (completeness of the catalog).
+    quality: super::parts_quality::QualityTab,
 }
 
 impl PartsWindow {
@@ -66,6 +68,7 @@ impl PartsWindow {
             confirm_remove: None,
             focus_search: true,
             geometry: None,
+            quality: Default::default(),
         }
     }
 
@@ -618,6 +621,12 @@ fn parts_ui(
     dragging: bool,
     actions: &mut Vec<PartsAction>,
 ) {
+    if let Some(jump) = super::parts_quality::tab(ui, &mut win.quality, &win.catalog) {
+        if let Some(key) = jump {
+            (win.selected, win.query, win.maker) = (Some(key), String::new(), None);
+        }
+        return;
+    }
     let mut search_focused = false;
     ui.horizontal(|ui| {
         let search = ui.add(
