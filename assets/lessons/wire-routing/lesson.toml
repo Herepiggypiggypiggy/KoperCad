@@ -1,0 +1,106 @@
+# Cabinet track, lesson 3. Sample: the finished cabinet of rails-and-ducts (two rails, ducts).
+# Routes are derived from placements and ducts, nothing is stored, so there is no finished.json.
+#
+# NOT ON MAIN yet (keep status = "draft" until all are):
+#   - the routes and duct fill overlay and its toggle: #460 (not hooked into the Cabinet yet)
+#   - ducts drawn on the plate: #461
+format = 1
+id = "wire-routing"
+version = 1
+status = "draft"
+title = "Route the wires and watch the ducts"
+title_nl = "Draden routeren en de kanalen in de gaten houden"
+summary = "Turn on the routes, read the fill of each duct, and see a wire go off the road when a duct is removed."
+summary_nl = "Zet de routes aan, lees de vulling van elk kanaal en zie een draad van de route afwijken als een kanaal wordt verwijderd."
+track = "cabinet"
+order = 30
+level = "intermediate"
+minutes = 8
+topics = ["cabinet", "routing", "ducts"]
+needs = ["rails-and-ducts"]
+next = ["cut-lengths"]
+project = "../rails-and-ducts/finished.json"
+
+[[step]]
+id = "open-cabinet"
+title = "Open the cabinet"
+text = "Press {key:view.cabinet}. The devices sit on two rails with ducts between them. Nobody has drawn a single wire here."
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "routes-on"
+title = "Show the routes"
+text = """
+Click **Routes**. Every wire of the schematic that has both ends on this plate appears as a line that follows the ducts.
+"""
+# NOT ON MAIN: the Routes toggle (#460 builds the overlay).
+point = { ui = "cabinet.routes" }
+expect = { clicked = "cabinet.routes" }
+
+[[step]]
+id = "summary-line"
+title = "Read the summary"
+text = """
+The line next to the toggle says how many wires were routed and how full the fullest duct is.
+Each duct also carries its own fill in percent.
+"""
+point = { ui = "cabinet.routes" }
+note = [
+  { ui = "cabinet.routes", text = "Wires routed, fullest duct" },
+]
+
+[[step]]
+id = "fill"
+title = "What the percentage means"
+text = """
+100 % is the {tip:duct-fill} limit, half of the cross-section by default. Under 100 % the duct is fine; above it the wires will not pull easily.
+"""
+point = { ui = "cabinet.canvas" }
+
+[[step]]
+id = "move-device"
+title = "Move a device, the wires follow"
+text = """
+Drag **-F2** a little to the right along its rail. The routes and the percentages update at once.
+Nothing was edited by hand; routes are worked out from the plate every time.
+"""
+point = { ui = "cabinet.canvas" }
+expect = { signal = "cabinet_dropped" }
+
+[[step]]
+id = "remove-duct"
+title = "Take a duct away"
+text = """
+Select the vertical duct on the right and press {key:edit.delete}.
+The wires to **-X1** lose their road and turn red and dashed: {tip:free-air}.
+"""
+# NOT ON MAIN: selecting a duct (#461 draws ducts but they are not selectable yet).
+point = { ui = "cabinet.canvas" }
+expect = { command = "edit.delete" }
+solve = [ { command = "edit.delete" } ]
+
+[[step]]
+id = "read-free-air"
+title = "Why free air is a warning"
+text = """
+A dashed wire has no duct path, so its length is a straight guess. The problem list names it.
+Nothing is hidden or set to zero.
+"""
+point = { ui = "cabinet.problems" }
+
+[[step]]
+id = "undo"
+title = "Put the duct back"
+text = "{key:edit.undo} brings the duct back and the wires return to their road."
+point = { ui = "cabinet.canvas" }
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "done"
+title = "Routes you can trust"
+text = """
+Routes come from the plate, so they are never stale. Next: the wire list shows the cut length of each wire.
+"""

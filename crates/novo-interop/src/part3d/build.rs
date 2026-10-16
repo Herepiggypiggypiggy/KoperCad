@@ -9,6 +9,7 @@ use std::time::Instant;
 use super::brep::Reader;
 use super::math::*;
 use super::parse::{Entity, Param, ParseError, StepFile};
+use super::pins::face_features;
 use super::tess::{Outcome, Soup, tessellate};
 
 /// What went into a soup, for the cache and for tests.
@@ -371,6 +372,7 @@ fn solid_soup(
             stats.skipped_faces += 1;
             continue;
         };
+        soup.features.extend(face_features(&face));
         let (s, outcome) = tessellate(&face, opts.chord_tol_mm);
         match outcome {
             Outcome::Exact => {}
@@ -421,7 +423,11 @@ fn triangulated_face(file: &StepFile, scale: f64, id: u32) -> Option<Soup> {
             tris.push([x, y, z]);
         }
     }
-    Some(Soup { pos, tris })
+    Some(Soup {
+        pos,
+        tris,
+        features: Vec::new(),
+    })
 }
 
 #[cfg(test)]
