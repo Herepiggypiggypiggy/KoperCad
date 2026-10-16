@@ -1,19 +1,21 @@
-# Cabinet track, lesson 1. Sample project: a motor starter whose devices belong to the
-# cabinet +CAB, with a 600 x 800 mm plate and nothing placed (project.json). finished.json is
-# the same cabinet after Place all. Both come from
+# Cabinet track, lesson 1. Sample project: a motor starter whose devices belong to the cabinet
+# +CAB, with a 600 x 800 mm plate and nothing placed (project.json). finished.json is the same
+# cabinet after Place all with the standard rules. Both come from
 # `cargo run -p novo-app --example panel_lessons -- assets/lessons`.
 #
-# Everything this lesson teaches is on main (Cabinet canvas #374/#376/#378, table face #403,
-# plate card and inspector #443). It stays a draft until the Cabinet controls register the
-# anchors and signals listed in handoff/cabinet-lessons/HANDOFF.md.
+# Verified against main (e2fa0013): the Cabinet header, Unplaced list, drag and drop, R and
+# Delete on the selection, the problems menu, Place all with Accept, and the Table face.
+# Needs from the Cabinet owner (handoff/cabinet-lessons/HANDOFF.md): the anchors and signals the
+# steps name, and a `command` check that sees edit.rotate and edit.delete (the shell hands them
+# to the Cabinet and drops them from the command list, so those steps use signals).
 format = 1
 id = "cabinet-layout"
-version = 1
+version = 2
 status = "draft"
 title = "Lay out the mounting plate"
 title_nl = "De montageplaat indelen"
-summary = "Drag devices onto the plate, turn one, fix an overlap and let Place all fill the rails."
-summary_nl = "Sleep componenten op de plaat, draai er een, los een overlap op en laat Place all de rails vullen."
+summary = "Drag devices onto the plate, turn one, read an overlap, undo it and let Place all fill the plate by the rules."
+summary_nl = "Sleep componenten op de plaat, draai er een, lees een overlap, maak die ongedaan en laat Place all de plaat volgens de regels vullen."
 track = "cabinet"
 order = 10
 level = "beginner"
@@ -26,9 +28,16 @@ finished = "finished.json"
 [[step]]
 id = "open-cabinet"
 title = "Open the cabinet"
+title_nl = "Open de kast"
 text = """
-Press {key:view.cabinet} to leave the schematic and look at the inside of **+CAB**.
-The big rectangle is the {tip:mounting-plate}, 600 x 800 mm.
+The schematic says what is connected; the Cabinet says where each device sits inside the enclosure.
+Press {key:view.cabinet}. The window changes from the schematic to the inside of **+CAB**:
+a large rectangle, the {tip:mounting-plate} of 600 x 800 mm, with a header of buttons above it.
+"""
+text_nl = """
+Het schema zegt wat er verbonden is; de Cabinet-weergave zegt waar elk component in de kast zit.
+Druk op {key:view.cabinet}. Het venster verandert van schema naar de binnenkant van **+CAB**:
+een grote rechthoek, de {tip:mounting-plate} van 600 x 800 mm, met bovenaan een rij knoppen.
 """
 point = { ui = "switcher.cabinet" }
 expect = { command = "view.cabinet" }
@@ -37,23 +46,37 @@ solve = [ { command = "view.cabinet" } ]
 [[step]]
 id = "read-the-screen"
 title = "What is where"
+title_nl = "Wat staat waar"
 text = """
-Every device of **+CAB** that has no place yet waits in the Unplaced list, with its size.
-The header counts what is placed and what is wrong.
+Every device of **+CAB** that has no place yet waits in the **Unplaced** list on the left, with its size taken from its part.
+The header ends with "0 placed, 8 unplaced" and, once something is wrong, a problem count you can click.
+**Place all** fills the plate for you; the other buttons come in later lessons.
+"""
+text_nl = """
+Elk component van **+CAB** zonder plek wacht links in de lijst **Unplaced**, met de afmeting uit het artikel.
+Rechts in de kopregel staat "0 placed, 8 unplaced" en, zodra er iets mis is, een aantal problemen waarop je kunt klikken.
+**Place all** vult de plaat voor je; de andere knoppen komen in latere lessen.
 """
 point = { ui = "cabinet.unplaced" }
 note = [
-  { ui = "cabinet.unplaced", text = "Devices without a place, with their size from the part" },
-  { ui = "cabinet.place_all", text = "Fills the plate for you; you get a preview first" },
-  { ui = "cabinet.problems", text = "Overlaps, devices off the plate, rails too full" },
+  { ui = "cabinet.unplaced", text = "Devices without a place, with their size", text_nl = "Componenten zonder plek, met afmeting" },
+  { ui = "cabinet.place_all", text = "Fills the plate by the rules; you see a preview first", text_nl = "Vult de plaat volgens de regels; eerst zie je een voorbeeld" },
+  { ui = "cabinet.problems", text = "Overlaps, devices off the plate, rails too short", text_nl = "Overlappingen, componenten buiten de plaat, te korte rails" },
 ]
 
 [[step]]
 id = "drag-first"
 title = "Drag a device onto the plate"
+title_nl = "Sleep een component op de plaat"
 text = """
-Drag **-F1** from the list to the upper left of the plate.
-A box shows where it will land; positions snap to a 5 mm grid.
+Drag **-F1** from the list to the upper left of the plate and let go.
+While you drag, a box shows where it will land; positions snap to a 5 mm grid.
+Afterwards **-F1** is a 54 x 90 mm box on the plate, gone from the list, and the header says "1 placed, 7 unplaced".
+"""
+text_nl = """
+Sleep **-F1** uit de lijst naar linksboven op de plaat en laat los.
+Tijdens het slepen toont een kader waar het component landt; posities springen naar een raster van 5 mm.
+Daarna staat **-F1** als kader van 54 x 90 mm op de plaat, is het uit de lijst verdwenen en staat in de kopregel "1 placed, 7 unplaced".
 """
 point = { ui = "cabinet.unplaced" }
 expect = { signal = "cabinet_dropped" }
@@ -61,19 +84,31 @@ expect = { signal = "cabinet_dropped" }
 [[step]]
 id = "rotate"
 title = "Turn it"
+title_nl = "Draai het"
 text = """
 Click **-F1** on the plate to select it, then press {key:edit.rotate}.
-Width and height swap; the inspector shows the new size.
+The box turns a quarter: it is now 90 wide and 54 high, and the inspector shows the new size.
+Pressing the key again turns it back. Nothing happens when no device is selected.
+"""
+text_nl = """
+Klik op **-F1** op de plaat om het te selecteren en druk op {key:edit.rotate}.
+Het kader draait een kwartslag: het is nu 90 breed en 54 hoog en de inspector toont de nieuwe maat.
+Nog een keer drukken draait terug. Zonder selectie gebeurt er niets.
 """
 point = { ui = "cabinet.canvas" }
-expect = { command = "edit.rotate" }
+expect = { signal = "cabinet_rotated" }
 
 [[step]]
 id = "overlap"
 title = "Make a mistake on purpose"
+title_nl = "Maak met opzet een fout"
 text = """
-Drag **-K1** from the list so that it lands on top of **-F1**.
-The two boxes turn red.
+Drag **-K1** from the list so that its box lands on top of **-F1**.
+KoperCAD lets you do it, and marks both boxes red: two devices cannot occupy the same place.
+"""
+text_nl = """
+Sleep **-K1** uit de lijst zo dat het kader op **-F1** landt.
+KoperCAD laat het toe en kleurt beide kaders rood: twee componenten kunnen niet op dezelfde plek zitten.
 """
 point = { ui = "cabinet.canvas" }
 expect = { signal = "cabinet_dropped" }
@@ -81,17 +116,28 @@ expect = { signal = "cabinet_dropped" }
 [[step]]
 id = "read-problem"
 title = "Read what is wrong"
+title_nl = "Lees wat er mis is"
 text = """
-Hover the red box. The tooltip says what is wrong, in words: **-K1 overlaps -F1**.
-The problem count in the header went up too.
+Hold the pointer over a red box: the tooltip says what is wrong in words, for example "Overlaps -F1".
+The header now ends with a problem count; click it for a list of "device: problem" rows, and click a row to select that device.
+"""
+text_nl = """
+Houd de aanwijzer boven een rood kader: de tooltip zegt in woorden wat er mis is, bijvoorbeeld "Overlaps -F1".
+De kopregel eindigt nu met een aantal problemen; klik erop voor een lijst met regels "component: probleem" en klik een regel om dat component te selecteren.
 """
 point = { ui = "cabinet.problems" }
 
 [[step]]
 id = "undo"
 title = "Take it back"
+title_nl = "Maak het ongedaan"
 text = """
-{key:edit.undo} undoes the drop. Every drop, move, turn and remove is one undo step.
+Press {key:edit.undo}. The drop of **-K1** is undone: it returns to the Unplaced list and the red is gone.
+Every drop, move, turn, removal and Place all is one undo step.
+"""
+text_nl = """
+Druk op {key:edit.undo}. Het neerzetten van **-K1** wordt ongedaan gemaakt: het staat weer in de lijst Unplaced en het rood is weg.
+Elke drop, verplaatsing, draaiing, verwijdering en Place all is één stap om ongedaan te maken.
 """
 point = { ui = "cabinet.canvas" }
 expect = { command = "edit.undo" }
@@ -100,19 +146,33 @@ solve = [ { command = "edit.undo" } ]
 [[step]]
 id = "take-off"
 title = "Take -F1 off the plate"
+title_nl = "Haal -F1 van de plaat"
 text = """
-With **-F1** selected, press {key:edit.delete}.
-The device leaves the plate and returns to the Unplaced list. It stays in the project.
+Click **-F1** to select it and press {key:edit.delete}.
+The device leaves the plate and goes back to the Unplaced list. It is not deleted from the project: only its place is.
+"""
+text_nl = """
+Klik op **-F1** om het te selecteren en druk op {key:edit.delete}.
+Het component verlaat de plaat en staat weer in de lijst Unplaced. Het wordt niet uit het project verwijderd: alleen de plek.
 """
 point = { ui = "cabinet.unplaced" }
-expect = { command = "edit.delete" }
+expect = { signal = "cabinet_removed" }
 
 [[step]]
 id = "place-all"
 title = "Let Place all do the rest"
+title_nl = "Laat Place all de rest doen"
 text = """
-Click **Place all**. A preview fills a DIN rail from left to right, sorted by letter code.
-Nothing is stored yet.
+Click **Place all**. A preview appears; nothing is stored yet.
+It follows the standard place rules: breakers and fuses (**F**, **Q**) in a top row, contactors and relays (**K**) on a rail of their own below,
+the buttons next, then the transformer, and the terminal strip (**X**) at the bottom, each row on its own DIN rail with a wiring duct beside it.
+Power devices and signal devices are kept apart by a gap. Eight devices end up on five rails.
+"""
+text_nl = """
+Klik op **Place all**. Er verschijnt een voorbeeld; er is nog niets opgeslagen.
+Het volgt de standaard plaatsingsregels: automaten en zekeringen (**F**, **Q**) in een bovenste rij, contactoren en relais (**K**) op een eigen rail daaronder,
+dan de drukknoppen, daarna de transformator en de klemmenstrook (**X**) onderaan, elke rij op een eigen DIN-rail met een bedradingskanaal ernaast.
+Vermogens- en signaalcomponenten worden door een tussenruimte gescheiden. Acht componenten komen op vijf rails.
 """
 point = { ui = "cabinet.place_all" }
 expect = { clicked = "cabinet.place_all" }
@@ -120,9 +180,16 @@ expect = { clicked = "cabinet.place_all" }
 [[step]]
 id = "accept"
 title = "Keep it"
+title_nl = "Bewaar het"
 text = """
-Press **Enter** (or click **Accept**) to keep the preview. **Esc** drops it.
+Press **Enter** or click **Accept** to keep the preview; **Esc** or **Cancel** throws it away.
+The header now reads "8 placed, 0 unplaced" and **Place all** is greyed out. Click one device: the inspector says which rule put it there.
 The whole plan is one undo step.
+"""
+text_nl = """
+Druk op **Enter** of klik op **Accept** om het voorbeeld te bewaren; **Esc** of **Cancel** gooit het weg.
+De kopregel zegt nu "8 placed, 0 unplaced" en **Place all** is grijs. Klik een component aan: de inspector zegt welke regel het daar heeft gezet.
+Het hele plan is één stap om ongedaan te maken.
 """
 point = { ui = "cabinet.accept" }
 expect = { signal = "cabinet_plan_accepted" }
@@ -130,9 +197,14 @@ expect = { signal = "cabinet_plan_accepted" }
 [[step]]
 id = "table"
 title = "The same data as a table"
+title_nl = "Dezelfde gegevens als tabel"
 text = """
-{key:view.cabinet_table} flips the plate to a table: one row per device with size, place and problems.
-Press it again to return to the plate.
+Press {key:view.cabinet_table} (or click **Table**). The plate becomes a table with one row per device: its size, where it sits, its rail and its problems.
+Press it again to return to the plate. A table is quicker than the drawing when you look for one device in a large panel.
+"""
+text_nl = """
+Druk op {key:view.cabinet_table} (of klik op **Table**). De plaat wordt een tabel met één rij per component: afmeting, plek, rail en problemen.
+Druk nogmaals om terug te gaan naar de plaat. In een grote kast zoek je een component sneller in de tabel dan in de tekening.
 """
 point = { ui = "cabinet.table" }
 expect = { command = "view.cabinet_table" }
@@ -141,7 +213,12 @@ solve = [ { command = "view.cabinet_table" } ]
 [[step]]
 id = "done"
 title = "That is the layout"
+title_nl = "Dat is de indeling"
 text = """
-You placed by hand, read a problem, undid it and let Place all fill the plate.
-Next: rails and ducts, the lines the wiring will follow.
+You placed a device by hand, turned it, made an overlap and read it in words, undid it, and let Place all lay out the whole plate by the rules.
+Next lesson: the five rails and five ducts Place all added, and what they are for.
+"""
+text_nl = """
+Je zette een component met de hand neer, draaide het, maakte een overlap en las die in woorden, maakte het ongedaan en liet Place all de hele plaat volgens de regels indelen.
+Volgende les: de vijf rails en vijf kanalen die Place all toevoegde en waar ze voor dienen.
 """

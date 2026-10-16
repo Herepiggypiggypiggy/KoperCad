@@ -12,7 +12,7 @@ fn lesson(path: &str) -> Project {
 
 #[test]
 fn the_pack_opens_each_cabinet_with_its_build_order_and_ends_with_the_cut_list() {
-    let project = lesson("rails-and-ducts/finished.json");
+    let project = lesson("wire-routing/project.json");
     let pack = print_pack(&project, AssemblyChecklist.generate(&project));
     let keys: Vec<&str> = pack.sections.iter().map(|s| s.key.as_str()).collect();
     let order = keys
