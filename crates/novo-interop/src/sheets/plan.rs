@@ -607,6 +607,9 @@ fn plan_table(
         .iter()
         .position(|f| f.as_ref().is_some_and(|f| f.slot == Slot::CoreNo));
     let mut first_line: BTreeMap<(AnyId, Option<usize>), usize> = BTreeMap::new();
+    // Wires asked for by rows already accepted, and the cable they would sit on:
+    // the project alone cannot tell that two rows want one free wire.
+    let mut claims: BTreeMap<novo_core::WireId, (CableId, usize)> = BTreeMap::new();
     let mut matched_by_key = 0usize;
     for row in &table.rows {
         if row.cells.iter().all(Cell::is_blank) {
@@ -744,6 +747,7 @@ fn plan_table(
         };
         let mut errors = Vec::new();
         let mut changes = Vec::new();
+        let mut row_claims = Vec::new();
         for (c, field) in columns.iter().enumerate() {
             let Some(field) = field else { continue };
             if !field.editable() {
@@ -816,6 +820,21 @@ fn plan_table(
                     }
                     _ => {}
                 }
+                if let AnyId::Cable(this) = id {
+                    match claims.get(&wire) {
+                        Some(&(other, line)) if other != this => {
+                            let tag = project.cable(other).map(|c| c.tag.to_string());
+                            errors.push(format!(
+                                "{}: wire {n} is already given to cable {} on row {line}; \
+                                 a wire sits on one cable",
+                                field.header,
+                                tag.unwrap_or_default()
+                            ));
+                            continue;
+                        }
+                        _ => row_claims.push((wire, this)),
+                    }
+                }
             }
             changes.push(Change {
                 id,
@@ -842,6 +861,9 @@ fn plan_table(
         } else if changes.is_empty() {
             plan.rows_unchanged += 1;
         } else {
+            for (wire, cable) in row_claims {
+                claims.entry(wire).or_insert((cable, row.line));
+            }
             plan.changes.extend(changes);
         }
     }

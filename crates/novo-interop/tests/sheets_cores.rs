@@ -327,3 +327,37 @@ fn a_project_edit_after_the_export_is_a_conflict_not_an_overwrite() {
     assert_eq!(plan.conflicts().count(), 1);
     assert_eq!(plan.selected(), 0);
 }
+
+#[test]
+fn two_cables_cannot_both_claim_one_free_wire() {
+    let (mut doc, h) = starter();
+    let ((w2, w3), _) = doc
+        .transact("cables", |tx| {
+            let a = tx.add_cable(
+                DeviceTag::parse("=A1-W2").unwrap(),
+                vec![CableCore::new("1")],
+            )?;
+            let b = tx.add_cable(
+                DeviceTag::parse("=A1-W3").unwrap(),
+                vec![CableCore::new("1")],
+            )?;
+            // Free a wire: take it off its core on -W1.
+            tx.assign_core(h.w1, 0, None)?;
+            Ok((a, b))
+        })
+        .unwrap();
+    let free = h.motor_wires[0];
+    let mut book = via_xlsx(&export_project(doc.project()));
+    set(&mut book, w2, 1, "Wire Id", Cell::Number(free.raw() as f64));
+    set(&mut book, w3, 1, "Wire Id", Cell::Number(free.raw() as f64));
+    let plan = plan_import(doc.project(), &book);
+    assert_eq!(plan.selected(), 1, "{:?}", plan.changes);
+    assert_eq!(plan.rejected.len(), 1);
+    assert!(
+        plan.rejected[0].reasons[0].contains("a wire sits on one cable"),
+        "{:?}",
+        plan.rejected
+    );
+    plan.apply(&mut doc).unwrap();
+    assert_eq!(doc.project().core_of_wire(free).map(|(c, _)| c), Some(w2));
+}
