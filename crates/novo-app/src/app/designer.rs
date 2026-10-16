@@ -375,7 +375,7 @@ impl NovoApp {
                 };
                 match store::save_to_dir(&dir, &st.draft) {
                     Ok(path) => {
-                        self.message(Level::Info, format!("Saved template {}", path.display()));
+                        self.message_file(format!("Saved template {}", path.display()), &path);
                         st.base = st.draft.clone();
                         st.origin = Some(Origin::User);
                         if let Some(doc) = self.backend.document() {
@@ -471,7 +471,7 @@ impl NovoApp {
                 } else {
                     format!(" ({n} design problems)")
                 };
-                self.message(Level::Info, format!("{verb} {}{tail}", path.display()));
+                self.message_file(format!("{verb} {}{tail}", path.display()), &path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }

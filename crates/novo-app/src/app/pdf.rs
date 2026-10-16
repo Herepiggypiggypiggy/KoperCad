@@ -107,7 +107,7 @@ impl NovoApp {
                 };
                 // Overwriting is never silent.
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {}{remaining}", path.display()));
+                self.message_file(format!("{verb} {}{remaining}", path.display()), &path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
