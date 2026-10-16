@@ -9,6 +9,7 @@
 //! Where the user finds it: Cabinet view, Heat layer, "Simulate"
 //! (`cabinet.thermal.simulate`). The app side is lane CFD-F.
 
+pub mod flow;
 pub mod result;
 pub mod solver;
 mod stub;
