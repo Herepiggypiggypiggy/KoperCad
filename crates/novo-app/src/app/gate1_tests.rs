@@ -1082,9 +1082,10 @@ fn plc_commands_add_a_card_send_a_signal_and_renumber() {
     assert!(last(&d).contains("free DI channel"), "{}", last(&d));
     let depth = d.doc().undo_depth();
 
-    // A bare `add card` says what it needs; a layout adds one card.
+    // A bare `add card` opens the layout dialog; a layout adds one card.
     d.app.run_command(&ctx, "plc.add_card", None);
-    assert!(last(&d).contains("add card DI16"));
+    assert!(d.app.wb.plc_card.is_some());
+    d.app.wb.plc_card = None;
     d.app.run_command(&ctx, "plc.add_card", Some("DI16 DQ8"));
     assert!(last(&d).starts_with("Added card"), "{}", last(&d));
     assert_eq!(d.doc().undo_depth(), depth + 1);
@@ -1407,6 +1408,12 @@ fn the_inspector_edits_the_selected_device_in_one_undo_step() {
     d.select(k);
     d.frame();
     assert!(shown(&ctx), "{:?}", inspector());
+    // A row wider than the panel would make the window grow every frame.
+    for _ in 0..20 {
+        d.frame();
+    }
+    let width = inspector().expect("the inspector").width();
+    assert!(width < 400.0, "the inspector stays its width: {width}");
     let device = novo_editor::edit::device_of(d.doc().project(), AnyId::Symbol(k)).unwrap();
     let before = d
         .doc()

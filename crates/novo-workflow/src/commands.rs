@@ -295,6 +295,25 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.import_eplan",
+            "Import parts from a CAD parts export",
+            "Project",
+            &[
+                "eplan parts",
+                "parts",
+                "artikel",
+                "xml",
+                "csv",
+                "catalog",
+                "migrate",
+                "other tool",
+            ],
+            Needs::Nothing,
+        ),
+        &["import cad parts"],
+    ),
+    verb(
+        cmd(
             "parts.import_step",
             "Import 3D model (STEP)",
             "Project",
@@ -576,6 +595,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["add card"],
     ),
+    cmd(
+        "plc.overview",
+        "PLC overview (cards, channels, addresses)",
+        "Draw",
+        &[
+            "plc",
+            "cards",
+            "channels",
+            "addresses",
+            "i/o",
+            "address plan",
+        ],
+        Needs::Project,
+    ),
     verb(
         cmd(
             "plc.to_plc",
@@ -810,6 +843,82 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Edit",
         &["rename strip", "x number", "free strip"],
         Needs::Selection,
+    ),
+    verb(
+        cmd(
+            "terminal.add_spares",
+            "Add spare terminals",
+            "Edit",
+            &["spare", "strip", "extra terminals"],
+            Needs::Project,
+        ),
+        &["spares"],
+    ),
+    cmd(
+        "terminal.rename",
+        "Rename terminals (find and replace)",
+        "Edit",
+        &["strip", "find", "replace", "terminal name"],
+        Needs::Project,
+    ),
+    cmd(
+        "terminal.renumber",
+        "Renumber terminals",
+        "Edit",
+        &["strip", "1 2 3", "close gaps", "terminal number"],
+        Needs::Project,
+    ),
+    cmd(
+        "terminal.join_duplicates",
+        "Join duplicate terminals",
+        "Edit",
+        &["strip", "merge", "same name", "duplicate"],
+        Needs::Project,
+    ),
+    with_arguments(
+        cmd(
+            "terminal.set_kind",
+            "Set terminal kind",
+            "Edit",
+            &[
+                "strip",
+                "pe",
+                "neutral",
+                "fuse",
+                "disconnect",
+                "feed-through",
+            ],
+            Needs::Project,
+        ),
+        &["feed-through", "PE", "N", "fuse", "disconnect"],
+    ),
+    cmd(
+        "terminal.order_up",
+        "Move terminal up in strip",
+        "Edit",
+        &["strip", "reorder", "sort"],
+        Needs::Project,
+    ),
+    cmd(
+        "terminal.order_down",
+        "Move terminal down in strip",
+        "Edit",
+        &["strip", "reorder", "sort"],
+        Needs::Project,
+    ),
+    cmd(
+        "terminal.style",
+        "Terminal strip style",
+        "Edit",
+        &["strip", "symbol", "terminal look", "override"],
+        Needs::Project,
+    ),
+    cmd(
+        "terminal.restore_declined",
+        "Restore declined terminal proposals",
+        "Edit",
+        &["undo decline", "proposal", "terminals", "declined"],
+        Needs::Project,
     ),
     cmd(
         "interruption.renumber",
@@ -1226,6 +1335,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Show hints again",
         "View",
         &["hints", "tips", "reset", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "help.whats_new",
+        "What's new",
+        "View",
+        &["new", "changes", "release", "news", "help"],
         Needs::Nothing,
     ),
     cmd(
