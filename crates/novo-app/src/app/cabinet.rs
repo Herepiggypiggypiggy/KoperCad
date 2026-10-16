@@ -1489,7 +1489,9 @@ impl NovoApp {
                 let (Some(plan), Some(structure)) = (self.cabinet.preview.take(), structure) else {
                     return;
                 };
-                self.cabinet_edit("Place all", move |tx| apply_plan(tx, structure, &plan));
+                if self.cabinet_edit("Place all", move |tx| apply_plan(tx, structure, &plan)) {
+                    self.learn_signal("cabinet_plan_accepted");
+                }
             }
             Ask::Drop(device, x, y) => {
                 let Some(structure) = structure else {
@@ -1499,9 +1501,11 @@ impl NovoApp {
                     .as_ref()
                     .and_then(|l| l.placements.iter().find(|p| p.id == device))
                     .is_some_and(|p| p.rotated);
-                self.cabinet_edit("Place device", move |tx| {
+                if self.cabinet_edit("Place device", move |tx| {
                     place_device(tx, structure, device, x, y, rotated)
-                });
+                }) {
+                    self.learn_signal("cabinet_dropped");
+                }
             }
             Ask::SetRailLengths(lengths) => {
                 self.cabinet_edit("Cut rails to length", move |tx| {
@@ -1522,14 +1526,18 @@ impl NovoApp {
                 });
             }
             Ask::Rotate(devices) => {
-                self.cabinet_edit("Rotate device", move |tx| {
+                if self.cabinet_edit("Rotate device", move |tx| {
                     devices.iter().try_for_each(|d| rotate_device(tx, *d))
-                });
+                }) {
+                    self.learn_signal("cabinet_rotated");
+                }
             }
             Ask::Remove(devices) => {
-                self.cabinet_edit("Remove from plate", move |tx| {
+                if self.cabinet_edit("Remove from plate", move |tx| {
                     devices.iter().try_for_each(|d| unplace_device(tx, *d))
-                });
+                }) {
+                    self.learn_signal("cabinet_removed");
+                }
             }
             Ask::SetEnclosure(enclosure) => {
                 let Some(structure) = structure else {
@@ -1585,17 +1593,24 @@ impl NovoApp {
     }
 
     /// Runs an edit of the model from the Cabinet canvas as one undo step.
+    /// True when the edit was made.
     pub(super) fn cabinet_edit(
         &mut self,
         label: &str,
         edit: impl FnOnce(&mut novo_core::Tx<'_>) -> novo_core::Result<()>,
-    ) {
+    ) -> bool {
         let Some(doc) = self.backend.document_mut() else {
-            return;
+            return false;
         };
         match doc.transact(label, edit) {
-            Ok(((), changes)) => self.changed_outside_canvas(&changes),
-            Err(e) => self.message(Level::Error, format!("{label} failed: {e}")),
+            Ok(((), changes)) => {
+                self.changed_outside_canvas(&changes);
+                true
+            }
+            Err(e) => {
+                self.message(Level::Error, format!("{label} failed: {e}"));
+                false
+            }
         }
     }
 }
