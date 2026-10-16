@@ -58,6 +58,25 @@ pub(crate) struct ProbeState {
     pub text: String,
 }
 
+impl ProbeState {
+    /// A point belongs to the result it was read from: a new result drops it.
+    pub(crate) fn bind(&mut self, result: u64) {
+        if self.result != Some(result) {
+            self.at = None;
+            self.result = Some(result);
+        }
+    }
+
+    /// Store the strip line; true only when it changed (so only then repaint).
+    pub(crate) fn set_text(&mut self, text: String) -> bool {
+        if text == self.text {
+            return false;
+        }
+        self.text = text;
+        true
+    }
+}
+
 /// The probe's line in the Heat strip. A reading is a model result; the line
 /// says so, since no enclosure run has been checked against measurements.
 pub(crate) fn strip_text(reading: Option<Reading>, pointed: bool) -> String {
@@ -245,6 +264,26 @@ mod tests {
         assert!(strip_text(Some(r), true).starts_with("Pointer: "));
         assert!(strip_text(Some(r), false).contains("model, not validated"));
         assert!(strip_text(None, true).contains("Esc clears"));
+    }
+
+    #[test]
+    fn a_new_simulation_drops_the_probed_point() {
+        let mut p = ProbeState::default();
+        p.bind(1);
+        p.at = Some([1.0, 2.0, 3.0]);
+        p.bind(1);
+        assert!(p.at.is_some(), "same result keeps the point");
+        p.bind(2);
+        assert!(p.at.is_none(), "a new result drops it");
+        assert_eq!(p.result, Some(2));
+    }
+
+    #[test]
+    fn the_strip_line_asks_for_a_repaint_only_when_it_changes() {
+        let mut p = ProbeState::default();
+        assert!(p.set_text("Probe: 26.0 °C".into()));
+        assert!(!p.set_text("Probe: 26.0 °C".into()));
+        assert!(p.set_text("Probe: 27.0 °C".into()));
     }
 
     #[test]

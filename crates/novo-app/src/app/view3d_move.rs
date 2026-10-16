@@ -105,7 +105,7 @@ struct Active {
 }
 
 /// The top left of a device, or the start of a rail or duct.
-fn origin(layout: &CabinetLayout, item: ItemId) -> Option<(f64, f64)> {
+pub(super) fn origin(layout: &CabinetLayout, item: ItemId) -> Option<(f64, f64)> {
     match item.kind {
         ItemKind::Device => layout
             .placements
@@ -127,7 +127,7 @@ fn origin(layout: &CabinetLayout, item: ItemId) -> Option<(f64, f64)> {
 }
 
 /// The plate area an item covers when its origin is at `at`.
-fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Option<Rect> {
+pub(super) fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Option<Rect> {
     Some(match item.kind {
         ItemKind::Device => {
             let f = layout

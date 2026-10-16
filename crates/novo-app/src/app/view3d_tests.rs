@@ -361,6 +361,20 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
 }
 
 #[test]
+fn the_position_command_hides_and_shows_the_box() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(!d.app.view3d.position.hidden, "shown by default");
+    d.app.run_command(&ctx, "view.3d_position", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.position.hidden);
+    d.app.run_command(&ctx, "view.3d_position", None);
+    assert!(!d.app.view3d.position.hidden);
+}
+
+#[test]
 fn the_place_command_opens_the_list_in_3d_and_toggling_lets_go_of_the_device() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
