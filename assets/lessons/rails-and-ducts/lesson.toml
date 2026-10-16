@@ -1,11 +1,12 @@
 # Cabinet track, lesson 2. Starts from the end of cabinet-layout (Place all with the standard rules:
 # five DIN rails and five wiring ducts). There is no finished state: the lesson only reads and moves.
 #
-# Verified against main (e2fa0013): the inspector fields (Mounted on, Place rule, Position), the
-# Plate card, the Rules window and the Cut list window. There is no tool to add a rail or duct, so
-# this lesson does not ask for one: Place all makes them. A device dragged by hand leaves its rail
+# Since #612 Place all adds the joining trunk duct and the Rails and ducts list (cabinet.rails,
+# Ctrl+Shift+R) selects, moves, turns and deletes rails and ducts. Verified against main (e2fa0013): the inspector fields (Mounted on, Place rule, Position), the
+# Plate card, the Rules window and the Cut list window. Place all makes the rails and ducts; the
+# lesson only opens the editing list and does not ask for new ones. A device dragged by hand leaves its rail
 # (novo_layout::model::place_device passes rail: None).
-# Needs from the Cabinet owner: the anchors named below. Ducts are not selectable yet.
+# Needs from the Cabinet owner: the anchors named below.
 format = 1
 id = "rails-and-ducts"
 version = 2
@@ -133,6 +134,24 @@ expect = { command = "edit.undo" }
 solve = [ { command = "edit.undo" } ]
 
 [[step]]
+id = "rails-list"
+title = "Open the list of rails and ducts"
+title_nl = "Open de lijst met rails en kanalen"
+how = ["Press {key:cabinet.rails}, or run Rails and ducts from the command field.", "Click a row to select that rail or duct on the plate."]
+how_nl = ["Druk op {key:cabinet.rails} of voer Rails and ducts uit in het opdrachtveld.", "Klik op een rij om die rail of dat kanaal op de plaat te selecteren."]
+text = """
+Press {key:cabinet.rails}. The window **Rails and ducts** lists every rail and duct with its position and length, and its buttons **Add DIN rail**, **Add duct** and **Add vertical duct**.
+The vertical duct on the left-hand edge is the trunk that joins the ducts of all rows: Place all adds it. Click a row to select that piece on the plate, then drag it by its grip tab or nudge it with the arrow keys; **Turn** swaps along and down, **Delete** removes it.
+"""
+text_nl = """
+Druk op {key:cabinet.rails}. Het venster **Rails and ducts** toont elke rail en elk kanaal met positie en lengte, en de knoppen **Add DIN rail**, **Add duct** en **Add vertical duct**.
+Het verticale kanaal langs de linkerrand is de stam die de kanalen van alle rijen verbindt: Place all legt het neer. Klik op een rij om dat stuk op de plaat te selecteren, sleep het dan aan zijn greep of verschuif het met de pijltjestoetsen; **Turn** wisselt langs en omlaag, **Delete** verwijdert het.
+"""
+point = { ui = "cabinet.rails" }
+expect = { command = "cabinet.rails" }
+solve = [ { command = "cabinet.rails" } ]
+
+[[step]]
 id = "cut-list"
 how = ["Click Cut list in the header.", "Read which pieces come out of which 2000 mm bar."]
 how_nl = ["Klik op Cut list in de kop.", "Lees welke stukken uit welke staaf van 2000 mm komen."]
@@ -141,12 +160,12 @@ title_nl = "Hoeveel staven je moet kopen"
 text = """
 Click **Cut list**. The window lists the DIN rail and each duct size as bars of 2000 mm stock with a 2 mm saw cut:
 which pieces come out of which bar, and how much is left over to keep or scrap.
-The five rails of 580 mm and the five ducts do not each need a bar of their own; the list packs them.
+The five rails of 535 mm and the six ducts (five of 557.5 mm and the trunk of 780 mm) do not each need a bar of their own; the list packs them.
 """
 text_nl = """
 Klik op **Cut list**. Het venster toont de DIN-rail en elke kanaalmaat als staven van 2000 mm met 2 mm zaagsnede:
 welke stukken uit welke staaf komen en hoeveel er overblijft om te bewaren of af te voeren.
-De vijf rails van 580 mm en de vijf kanalen hebben niet elk een eigen staaf nodig; de lijst pakt ze samen.
+De vijf rails van 535 mm en de zes kanalen (vijf van 557,5 mm en de stam van 780 mm) hebben niet elk een eigen staaf nodig; de lijst pakt ze samen.
 """
 point = { ui = "cabinet.cutlist" }
 expect = { clicked = "cabinet.cutlist" }
@@ -157,11 +176,11 @@ title = "The wiring has a road"
 title_nl = "De bedrading heeft een weg"
 text = """
 Devices sit on rails, the ducts run beside the rows, and you know how much stock that takes.
-One thing is still missing: the five ducts do not touch each other, so no wire can pass from one row to another yet.
-The next lesson shows what that does to the wire lengths, in a plate where the ducts are joined.
+One tall duct down the left-hand edge touches all five row ducts, so a wire can pass from one row to another.
+The next lesson shows what that does to the wire lengths.
 """
 text_nl = """
 Componenten zitten op rails, de kanalen lopen naast de rijen en je weet hoeveel materiaal dat kost.
-Eén ding ontbreekt nog: de vijf kanalen raken elkaar niet, dus er kan nog geen draad van de ene rij naar de andere.
-De volgende les laat zien wat dat met de draadlengtes doet, op een plaat waar de kanalen verbonden zijn.
+Eén hoog kanaal langs de linkerrand raakt alle vijf de rijkanalen, dus een draad kan van de ene rij naar de andere.
+De volgende les laat zien wat dat met de draadlengtes doet.
 """

@@ -1,7 +1,7 @@
 # Cabinet track, lesson 4. Sample: wire-routing/project.json (placed plate, ducts joined).
 #
-# Verified on main (59a37de0) with the wire list on this sample: 20 rows, 17 "routed" (1924 mm
-# for -F2 to -X1, 1486 for -F1 to -K1, 1456 for -K1 to -F2, 250 and 310 between the buttons) and
+# Verified on main (59a37de0) with the wire list on this sample: 19 rows, 15 "routed" (1047 mm
+# for -F2 to -X1, 490 for -F1 to -K1, 579 for -K1 to -F2, 250 and 310 between the buttons) and
 # 4 "estimate" at 200 mm for the motor wires, whose device is in the field. The wire cut export
 # is Cabinet > Route all > Export wire cut (wire_production.rs): a semicolon CSV next to the
 # project. There is no Cut list page or report in the app yet, so the lesson does not use one.
@@ -49,12 +49,12 @@ title_nl = "Twee kolommen achteraan"
 text = """
 The last two columns are **Cut length mm** and **Length basis**.
 The first is how long to cut the wire. The second says how that length was found: "routed" or "estimate", and in free air when no duct reaches.
-Of the 20 rows here, 16 say **routed** and 4 say **estimate**.
+Of the 19 rows here, 15 say **routed** and 4 say **estimate**.
 """
 text_nl = """
 De laatste twee kolommen zijn **Cut length mm** en **Length basis**.
 De eerste is hoe lang de draad moet worden afgekort. De tweede zegt hoe die lengte is bepaald: "routed" of "estimate", en free air als geen kanaal de draad bereikt.
-Van de 20 rijen hier staat er bij 16 **routed** en bij 4 **estimate**.
+Van de 19 rijen hier staat er bij 15 **routed** en bij 4 **estimate**.
 """
 
 [[step]]
@@ -63,12 +63,12 @@ title = "Routed"
 title_nl = "Gerouteerd"
 text = """
 Both devices are on the plate and a duct path joins them. The length is stub, duct run and stub, plus a {tip:service-loop} at each end.
-For example wire 4, from **-F2** to **-X1**, is 1924 mm, and the two wires between the push buttons on the same rail are only 250 mm and 310 mm.
+For example wire 4, from **-F2** to **-X1**, is 1047 mm, and the two wires between the push buttons on the same rail are only 250 mm and 310 mm.
 That is the number the workshop cuts to.
 """
 text_nl = """
 Beide componenten staan op de plaat en een kanaalpad verbindt ze. De lengte is stub, kanaaldeel en stub, plus een {tip:service-loop} aan elk uiteinde.
-Draad 4 van **-F2** naar **-X1** is bijvoorbeeld 1924 mm en de twee draden tussen de drukknoppen op dezelfde rail zijn maar 250 mm en 310 mm.
+Draad 4 van **-F2** naar **-X1** is bijvoorbeeld 1047 mm en de twee draden tussen de drukknoppen op dezelfde rail zijn maar 250 mm en 310 mm.
 Dat is het getal waarop de werkplaats afkort.
 """
 
