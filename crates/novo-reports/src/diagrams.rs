@@ -5,14 +5,14 @@
 
 use novo_core::{DeviceKind, EntityKind, Project};
 
-use crate::order::tag_cmp;
+use crate::order::{join_distinct, location_text, tag_cmp};
 use crate::report::{Dependencies, Report};
 use crate::table::{Cell, Column, ReportOutput, Section};
 
 /// Everything but free texts: the connectivity, structure, part and cable
 /// records the WS-11 and WS-12 screens are built from, plus the project
 /// rules (terminal joins, potentials from terminal names).
-fn model_dependencies() -> Dependencies {
+pub(crate) fn model_dependencies() -> Dependencies {
     use EntityKind::*;
     Dependencies::on(&[
         Page, Device, Symbol, Junction, Wire, Potential, Terminal, Cable, Part,
@@ -54,32 +54,47 @@ impl Report for TerminalDiagram {
             .into_iter()
             .map(|strip| {
                 let screen = novo_terminals::screen(project, strip.id);
+                let views = novo_terminals::strip_view(project, strip.id);
                 let tag = strip.tag.to_string();
                 let mut section = Section::new(
                     &tag,
                     &tag,
                     vec![
                         Column::new("internal", "Internal", 40.0),
+                        Column::new("wire_in", "Wire in", 14.0),
                         Column::new("terminal", "Terminal", 14.0),
                         Column::new("kind", "Kind", 18.0),
+                        Column::new("bridged", "Bridged to", 16.0),
+                        Column::new("wire_out", "Wire out", 14.0),
                         Column::new("external", "External", 40.0),
                         Column::new("cable", "Cable", 25.0),
                         Column::new("jumper", "Jumper", 10.0).right(),
                         Column::new("pages", "Pages", 15.0),
+                        Column::new("location", "Location", 15.0),
                         Column::new("build", "Build", 30.0),
                         Column::new("spare", "Spare", 10.0),
                     ],
                 );
-                for row in screen.rows {
+                for (row, view) in screen.rows.into_iter().zip(&views.rows) {
+                    let location = join_distinct(
+                        view.occurrences
+                            .iter()
+                            .filter_map(|o| project.location_of(o.symbol))
+                            .map(|l| location_text(&l)),
+                    );
                     section.push(
                         vec![
                             Cell::text(row.internal.join(", ")),
+                            Cell::text(row.wires_internal.join(", ")),
                             Cell::text(row.terminal),
                             Cell::text(row.kind),
+                            Cell::text(row.bridged_with.join(", ")),
+                            Cell::text(row.wires_external.join(", ")),
                             Cell::text(row.external.join(", ")),
                             Cell::text(row.cables.join(", ")),
                             row.jumper.map(i64::from).into(),
                             Cell::text(row.pages.join(", ")),
+                            Cell::text(location),
                             Cell::text(row.build),
                             Cell::text(if row.spare { "spare" } else { "" }),
                         ],

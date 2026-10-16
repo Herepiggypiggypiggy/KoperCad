@@ -72,6 +72,9 @@ pub enum BoxState {
     Collision,
     /// Reaches past the usable area of the plate.
     Outside,
+    /// Deeper than the room between the plate and the door: the door cannot
+    /// close.
+    TooDeep,
     /// Closer to a neighbour than its clearance allows.
     TooClose,
 }
@@ -271,7 +274,7 @@ impl CabinetScene {
     fn state_color(&self, state: BoxState) -> Color {
         match state {
             BoxState::Ok => self.style.device,
-            BoxState::Collision | BoxState::Outside => self.style.error,
+            BoxState::Collision | BoxState::Outside | BoxState::TooDeep => self.style.error,
             BoxState::TooClose => self.style.warning,
         }
     }
@@ -318,6 +321,18 @@ impl CabinetScene {
                     Shape::line(corner + Vec2::new(-d.x, d.y), corner + Vec2::new(d.x, -d.y)),
                     mark,
                 ));
+            }
+            BoxState::TooDeep => {
+                // A triangle pointing at the viewer: it sticks out toward the door.
+                let (l, r, t) = (
+                    corner + Vec2::new(-m * 0.5, -m * 0.45),
+                    corner + Vec2::new(m * 0.5, -m * 0.45),
+                    corner + Vec2::new(0.0, m * 0.55),
+                );
+                for (a, b) in [(l, r), (r, t), (t, l)] {
+                    item.primitives
+                        .push(Primitive::stroked(Shape::line(a, b), mark));
+                }
             }
             BoxState::TooClose => {
                 item.primitives.push(Primitive::stroked(
@@ -485,6 +500,11 @@ mod tests {
         let mut v = view();
         v.boxes[0].state = BoxState::Collision;
         v.boxes[1].state = BoxState::TooClose;
+        let mut deep = v.boxes[0].clone();
+        deep.id = 3;
+        deep.x = 200.0;
+        deep.state = BoxState::TooDeep;
+        v.boxes.push(deep);
         c.set(&v);
         let ok = {
             let mut c = CabinetScene::new(CabinetStyle::default());
@@ -495,10 +515,13 @@ mod tests {
         // A cross is two lines, a bang a line and a dot, over fill + outline.
         assert_eq!(s.get(box_item(1)).unwrap().primitives.len(), ok + 2);
         assert_eq!(s.get(box_item(2)).unwrap().primitives.len(), ok + 2);
+        // Too deep is a triangle: three lines.
+        assert_eq!(s.get(box_item(3)).unwrap().primitives.len(), ok + 3);
         let colour = |id| s.get(box_item(id)).unwrap().labels[0].color;
         assert_ne!(colour(1), colour(2));
         assert_eq!(colour(1), CabinetStyle::default().error);
         assert_eq!(colour(2), CabinetStyle::default().warning);
+        assert_eq!(colour(3), CabinetStyle::default().error);
     }
 
     #[test]

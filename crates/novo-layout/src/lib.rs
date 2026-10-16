@@ -4,13 +4,17 @@
 //! Millimetres, origin top left, x right, y down. Nothing here mutates a
 //! project; the model storage and commands come later.
 
+pub mod check;
 pub mod drill;
+pub mod enclosure;
 pub mod model;
 pub mod plan;
 pub mod plate_drawing;
+pub mod rules;
 pub mod sizing;
 pub mod sizing_model;
 pub mod state;
+pub mod stock;
 
 /// Footprint used for a device whose part has no dimensions (marked guessed).
 pub const DEFAULT_FOOTPRINT_MM: (f64, f64) = (45.0, 90.0);
@@ -78,6 +82,31 @@ impl Size {
     }
 }
 
+/// A side of a device in the plate's frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Side {
+    Above,
+    Below,
+    Left,
+    Right,
+}
+
+/// Free space a part asks for on each side, in mm, as in its data sheet
+/// (upright). `None` means the part says nothing for that side.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct Margins {
+    pub above: Option<f64>,
+    pub below: Option<f64>,
+    pub left: Option<f64>,
+    pub right: Option<f64>,
+}
+
+impl Margins {
+    pub fn is_empty(&self) -> bool {
+        *self == Margins::default()
+    }
+}
+
 /// A device placed on the plate. `rotated` is 90 degrees.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Placement {
@@ -88,11 +117,41 @@ pub struct Placement {
     pub size: Size,
     /// Extra gap this device needs on every side, if more than the default.
     pub clearance: Option<f64>,
+    /// Per-side gaps from the part's data; a side set here replaces
+    /// `clearance` for that side.
+    pub margins: Margins,
     /// The rail the device is mounted on, if any.
     pub rail: Option<u64>,
 }
 
 impl Placement {
+    /// The gap this device needs on `side` (a side of the plate): its part's
+    /// figure for that side, else `clearance`, else the default. A rotated
+    /// device turns its sides with it, 90 degrees clockwise: what the data
+    /// sheet calls above is then on the right.
+    pub fn need(&self, side: Side) -> f64 {
+        let m = &self.margins;
+        let own = match (self.rotated, side) {
+            (false, Side::Above) => m.above,
+            (false, Side::Below) => m.below,
+            (false, Side::Left) => m.left,
+            (false, Side::Right) => m.right,
+            (true, Side::Above) => m.left,
+            (true, Side::Below) => m.right,
+            (true, Side::Left) => m.below,
+            (true, Side::Right) => m.above,
+        };
+        own.or(self.clearance).unwrap_or(DEFAULT_CLEARANCE_MM)
+    }
+
+    /// The largest gap this device asks for on any side.
+    pub fn max_need(&self) -> f64 {
+        [Side::Above, Side::Below, Side::Left, Side::Right]
+            .into_iter()
+            .map(|s| self.need(s))
+            .fold(0.0, f64::max)
+    }
+
     pub fn footprint(&self) -> Rect {
         let (w, h) = if self.rotated {
             (self.size.height, self.size.width)
@@ -151,8 +210,11 @@ pub fn outside(plate: &Plate, placements: &[Placement]) -> Vec<u64> {
         .collect()
 }
 
-/// Pairs that do not overlap but are closer than the larger of their
-/// required gaps (default [`DEFAULT_CLEARANCE_MM`]), with the actual gap.
+/// Pairs that do not overlap but are closer than the gap they require, with
+/// the actual gap. Side by side or one above the other, the requirement is
+/// the larger of the two facing sides' needs ([`Placement::need`]); on a
+/// diagonal it is the larger of the horizontal and vertical needs, against
+/// the straight distance.
 pub fn clearance_violations(placements: &[Placement]) -> Vec<(u64, u64, f64)> {
     let mut out = Vec::new();
     for (i, a) in placements.iter().enumerate() {
@@ -161,11 +223,26 @@ pub fn clearance_violations(placements: &[Placement]) -> Vec<(u64, u64, f64)> {
             if fa.overlaps(&fb) {
                 continue;
             }
-            let need = a
-                .clearance
-                .unwrap_or(DEFAULT_CLEARANCE_MM)
-                .max(b.clearance.unwrap_or(DEFAULT_CLEARANCE_MM));
-            let gap = fa.gap(&fb);
+            let dx = (fb.x - fa.right()).max(fa.x - fb.right());
+            let dy = (fb.y - fa.bottom()).max(fa.y - fb.bottom());
+            // Needs on the facing sides, horizontal then vertical.
+            let (a_h, b_h) = if fb.x >= fa.right() {
+                (a.need(Side::Right), b.need(Side::Left))
+            } else {
+                (a.need(Side::Left), b.need(Side::Right))
+            };
+            let (a_v, b_v) = if fb.y >= fa.bottom() {
+                (a.need(Side::Below), b.need(Side::Above))
+            } else {
+                (a.need(Side::Above), b.need(Side::Below))
+            };
+            let (need, gap) = if dx > 0.0 && dy > 0.0 {
+                (a_h.max(b_h).max(a_v.max(b_v)), fa.gap(&fb))
+            } else if dx > 0.0 {
+                (a_h.max(b_h), dx)
+            } else {
+                (a_v.max(b_v), dy.max(0.0))
+            };
             if gap < need {
                 out.push((a.id.min(b.id), a.id.max(b.id), gap));
             }
@@ -230,13 +307,17 @@ impl Duct {
     }
 }
 
-/// Length used on a rail: the footprint widths of its devices plus the
+/// Length used on a rail: the footprint extents of its devices along the
+/// rail (widths on a horizontal rail, heights on a vertical one) plus the
 /// default gap between neighbours.
 pub fn rail_used(rail: &Rail, placements: &[Placement]) -> f64 {
     let on: Vec<f64> = placements
         .iter()
         .filter(|p| p.rail == Some(rail.id))
-        .map(|p| p.footprint().w)
+        .map(|p| {
+            let f = p.footprint();
+            if rail.vertical { f.h } else { f.w }
+        })
         .collect();
     let gaps = on.len().saturating_sub(1) as f64 * DEFAULT_CLEARANCE_MM;
     on.iter().sum::<f64>() + gaps
@@ -265,6 +346,7 @@ mod tests {
             rotated: false,
             size: Size::from_part(Some(w), Some(h)),
             clearance: None,
+            margins: Margins::default(),
             rail: None,
         }
     }
@@ -301,6 +383,42 @@ mod tests {
         a.clearance = Some(30.0);
         let v = clearance_violations(&[a, b]);
         assert_eq!(v, vec![(1, 2, 20.0)]);
+    }
+
+    #[test]
+    fn part_margins_apply_to_the_facing_sides_only() {
+        let mut drive = p(1, 0.0, 0.0, 50.0, 50.0);
+        drive.margins.above = Some(100.0);
+        drive.margins.below = Some(100.0);
+        // 20 mm to the right: the drive asks nothing sideways.
+        let right = p(2, 70.0, 0.0, 50.0, 50.0);
+        assert!(clearance_violations(&[drive.clone(), right]).is_empty());
+        // 20 mm below: its 100 mm below clears nothing.
+        let below = p(3, 0.0, 70.0, 50.0, 50.0);
+        assert_eq!(
+            clearance_violations(&[drive.clone(), below.clone()]),
+            vec![(1, 3, 20.0)]
+        );
+        // The neighbour's own figure for the facing side counts too.
+        let mut above = p(4, 0.0, -70.0, 50.0, 50.0);
+        above.margins.below = Some(40.0);
+        let plain = p(5, 0.0, 70.0, 50.0, 50.0);
+        assert_eq!(clearance_violations(&[above, plain.clone()]).len(), 0);
+        let mut tall = p(6, 0.0, 0.0, 50.0, 50.0);
+        tall.margins.below = Some(40.0);
+        assert_eq!(clearance_violations(&[tall, plain]), vec![(5, 6, 20.0)]);
+    }
+
+    #[test]
+    fn a_rotated_device_turns_its_margins() {
+        let mut a = p(1, 0.0, 0.0, 20.0, 80.0);
+        a.margins.above = Some(30.0);
+        assert_eq!(a.need(Side::Above), 30.0);
+        assert_eq!(a.need(Side::Right), DEFAULT_CLEARANCE_MM);
+        a.rotated = true;
+        assert_eq!(a.need(Side::Right), 30.0);
+        assert_eq!(a.need(Side::Above), DEFAULT_CLEARANCE_MM);
+        assert_eq!(a.max_need(), 30.0);
     }
 
     #[test]
@@ -362,6 +480,25 @@ mod tests {
         assert_eq!(rail_used(&rail, &[a.clone(), b.clone()]), 100.0);
         assert!(rail_overflows(std::slice::from_ref(&rail), &[a.clone(), b.clone()]).is_empty());
         let mut c = p(3, 110.0, 0.0, 20.0, 90.0);
+        c.rail = Some(7);
+        assert_eq!(rail_overflows(&[rail], &[a, b, c]), vec![(7, 30.0)]);
+    }
+
+    #[test]
+    fn vertical_rail_counts_heights() {
+        let rail = Rail {
+            id: 7,
+            x: 0.0,
+            y: 0.0,
+            length: 100.0,
+            vertical: true,
+        };
+        let mut a = p(1, 0.0, 0.0, 20.0, 40.0);
+        let mut b = p(2, 0.0, 50.0, 60.0, 40.0);
+        a.rail = Some(7);
+        b.rail = Some(7);
+        assert_eq!(rail_used(&rail, &[a.clone(), b.clone()]), 90.0);
+        let mut c = p(3, 0.0, 90.0, 10.0, 30.0);
         c.rail = Some(7);
         assert_eq!(rail_overflows(&[rail], &[a, b, c]), vec![(7, 30.0)]);
     }

@@ -28,6 +28,13 @@ pub struct ScreenRow {
     pub cables: Vec<String>,
     /// Jumper group, if bridged.
     pub jumper: Option<u32>,
+    /// The other terminals of the strip in the same jumper group: what this
+    /// one is bridged to.
+    pub bridged_with: Vec<String>,
+    /// Numbers of the wires landing on the internal side.
+    pub wires_internal: Vec<String>,
+    /// Numbers of the wires landing on the external side.
+    pub wires_external: Vec<String>,
     /// Pages the terminal is drawn on.
     pub pages: Vec<String>,
     /// How the terminal is built, e.g. `2 clamps + 1 connector`.
@@ -59,6 +66,13 @@ fn designations(targets: &[&Target]) -> Vec<String> {
 /// Builds the connection screen of a strip from the model.
 pub fn screen(project: &Project, strip: DeviceId) -> Screen {
     let view = strip_view(project, strip);
+    let wire_numbers = |wires: Vec<&novo_core::WireId>| {
+        distinct(
+            wires
+                .into_iter()
+                .filter_map(|&w| project.wire(w)?.number.clone()),
+        )
+    };
     let rows = view
         .rows
         .iter()
@@ -87,6 +101,25 @@ pub fn screen(project: &Project, strip: DeviceId) -> Screen {
                 external: designations(&external),
                 cables,
                 jumper: row.jumper,
+                bridged_with: row.jumper.map_or_else(Vec::new, |group| {
+                    view.rows
+                        .iter()
+                        .filter(|other| other.jumper == Some(group) && other.name != row.name)
+                        .map(|other| other.name.clone())
+                        .collect()
+                }),
+                wires_internal: wire_numbers(
+                    row.occurrences
+                        .iter()
+                        .flat_map(|o| &o.internal.wires)
+                        .collect(),
+                ),
+                wires_external: wire_numbers(
+                    row.occurrences
+                        .iter()
+                        .flat_map(|o| &o.external.wires)
+                        .collect(),
+                ),
                 pages,
                 build,
                 spare: row.is_spare(),

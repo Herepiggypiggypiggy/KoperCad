@@ -28,6 +28,20 @@ impl Point {
     }
 }
 
+/// Point in space: x, y on the plate, z the height above it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Point3 {
+    pub x: f64,
+    pub y: f64,
+    pub z: f64,
+}
+
+impl Point3 {
+    pub fn new(x: f64, y: f64, z: f64) -> Point3 {
+        Point3 { x, y, z }
+    }
+}
+
 /// A straight wiring duct. It must be horizontal or vertical; a diagonal
 /// or zero-length duct is ignored by [`Network::new`] and reported there.
 #[derive(Debug, Clone, PartialEq)]
@@ -54,6 +68,9 @@ pub enum Facing {
 pub struct Anchor {
     pub pos: Point,
     pub facing: Facing,
+    /// Height of the terminal above the plate. `None` is unknown and counts
+    /// as 0 (a flat length), which the caller should report.
+    pub z_mm: Option<f64>,
 }
 
 /// One connection that needs a physical wire.
@@ -81,6 +98,9 @@ pub struct Rules {
     pub max_stub_mm: f64,
     /// Share of a duct's cross-section that wires may fill (0..1).
     pub fill_limit: f64,
+    /// Extra length per bend of 90 degrees (laying a wire round a corner
+    /// takes more than the centre line). 0 leaves lengths on the centre line.
+    pub bend_mm: f64,
 }
 
 impl Default for Rules {
@@ -89,6 +109,7 @@ impl Default for Rules {
             slack_mm: 50.0,
             max_stub_mm: 150.0,
             fill_limit: 0.5,
+            bend_mm: 0.0,
         }
     }
 }
@@ -109,12 +130,21 @@ pub struct Route {
     pub kind: Kind,
     /// Path from the first anchor to the second, without the slack loops.
     pub points: Vec<Point>,
+    /// The same path in space: each point at the height the wire lies at
+    /// (the terminal's, then the duct's, then the far terminal's).
+    pub points3: Vec<Point3>,
     /// Ducts the wire lies in, in order, consecutive repeats removed.
     pub ducts: Vec<u64>,
     /// Extra length where a terminal faces away from its duct and the
     /// wire has to leave and come back, counted twice the backwards distance.
     pub detour_mm: f64,
-    /// Cut length: path + detour + slack at both ends. Never zero.
+    /// Length gained by the wire rising or falling between terminal height
+    /// and duct height, in total over the whole route.
+    pub rise_mm: f64,
+    /// Number of 90 degree bends along the path.
+    pub bends: usize,
+    /// Cut length: path + detour + rise + bends + slack at both ends. Never
+    /// zero.
     pub length_mm: f64,
 }
 

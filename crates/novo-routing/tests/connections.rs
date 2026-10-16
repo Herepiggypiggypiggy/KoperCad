@@ -79,7 +79,9 @@ fn a_connection_is_routed_from_edge_to_edge_through_the_duct() {
     // K1's bottom edge midpoint (72.5, 140), K2's top (72.5, 250), the
     // duct at x=150: 77.5 across, 110 down the duct, 77.5 across, plus
     // 50 mm slack at each end.
-    assert_eq!(route.length_mm, 77.5 + 110.0 + 77.5 + 100.0);
+    // The parts have no depth, so the terminals count as on the plate and the
+    // wire drops 30 mm to the middle of the 60 mm duct at each end.
+    assert_eq!(route.length_mm, 77.5 + 110.0 + 77.5 + 100.0 + 60.0);
     assert_eq!(r.plans.len(), 1);
     assert_eq!(r.plans[0].0, cab);
 }
@@ -96,4 +98,41 @@ fn a_device_off_the_plate_leaves_its_connection_unrouted() {
     let r = route_connections(&p, &conns, &Rules::default());
     assert_eq!(r.unrouted, vec![9]);
     assert!(r.routes.is_empty() && r.plans.is_empty());
+}
+
+#[test]
+fn wires_between_pins_are_connections_with_a_diameter_from_their_size() {
+    let (mut p, _, pins) = project();
+    let (ids, _) = p
+        .transact("wires", |tx| {
+            let a = tx.connect(pins[0], pins[1])?;
+            let b = tx.connect(pins[0], pins[2])?;
+            tx.update::<novo_core::Wire>(a, |w| w.cross_section_mm2 = Some(1.5))?;
+            Ok((a, b))
+        })
+        .unwrap();
+    let list = novo_routing::model::wire_connections(&p);
+    assert_eq!(list.len(), 2);
+    let a = list.iter().find(|c| c.id == ids.0.raw()).unwrap();
+    assert_eq!((a.from, a.to), (pins[0], pins[1]));
+    // 1.5 mm2 is 2 * sqrt(1.5 / pi) + 1.6 = 2.98 mm.
+    assert!((a.diameter_mm.unwrap() - 3.0).abs() < 0.05);
+    assert_eq!(
+        list.iter()
+            .find(|c| c.id == ids.1.raw())
+            .unwrap()
+            .diameter_mm,
+        None
+    );
+}
+
+#[test]
+fn route_project_routes_every_wire_between_placed_pins() {
+    let (mut p, cab, pins) = project();
+    p.transact("wire", |tx| tx.connect(pins[0], pins[1]))
+        .unwrap();
+    let r = novo_routing::model::route_project(&p);
+    assert_eq!(r.routes.len(), 1);
+    assert!(r.unrouted.is_empty());
+    assert_eq!(r.plans[0].0, cab);
 }

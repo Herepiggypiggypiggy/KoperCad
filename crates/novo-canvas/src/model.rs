@@ -329,6 +329,10 @@ pub const FRAME_MARGIN: f32 = 10.0;
 const TITLE_BLOCK_WIDTH: f32 = 140.0;
 const TITLE_ROW: f32 = 6.0;
 const TITLE_ROWS: usize = 6;
+/// The revision table above the title block: a header and at most this many
+/// revisions, newest nearest the title block.
+const TABLE_ROW: f32 = 5.0;
+const TABLE_ROWS: usize = 5;
 
 /// Length of the orientation stubs on oriented junctions, in mm.
 pub const JUNCTION_STUB: f32 = 1.5;
@@ -406,6 +410,9 @@ pub fn wire_end_glyph(end: Vec2, away: Vec2, style: &ModelStyle) -> Vec<Primitiv
 /// Layers a page scene uses.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ModelLayers {
+    /// An imported drawing (DXF) under everything else; see
+    /// [`PageScene::set_underlay`].
+    pub underlay: LayerId,
     pub frame: LayerId,
     pub wires: LayerId,
     pub symbols: LayerId,
@@ -437,6 +444,18 @@ pub struct TitleRevisions {
     pub page: Option<(String, String)>,
     /// The project's revision, the latest index; `None` before the first.
     pub project: Option<String>,
+    /// Every issued revision, newest first, for the revision table above
+    /// the title block (DESIGN §7). Empty draws no table.
+    pub table: Vec<RevisionRow>,
+}
+
+/// One line of the revision table.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RevisionRow {
+    pub index: String,
+    pub date: String,
+    pub author: String,
+    pub description: String,
 }
 
 impl TitleRevisions {
@@ -560,7 +579,21 @@ pub struct PageScene {
     /// Wires drawn in another colour and width than the style's; see
     /// [`Self::set_wire_looks`].
     wire_looks: HashMap<WireId, WireLook>,
+    /// The cable each drawn wire is a core of, so a cable edit or removal
+    /// redraws the wires it covered.
+    wire_cables: HashMap<WireId, novo_core::CableId>,
+    /// A background drawing; see [`Self::set_underlay`].
+    underlay: Option<Underlay>,
     pub style: ModelStyle,
+}
+
+/// A drawing shown under a page, already in page millimetres (y down). It
+/// is reference only: never selected, snapped to or printed by the page
+/// exporters, which do not set one.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Underlay {
+    pub primitives: Vec<Primitive>,
+    pub labels: Vec<Label>,
 }
 
 /// A wire's own stroke, in place of [`ModelStyle::wire`]: the live view
@@ -649,6 +682,7 @@ impl PageScene {
     pub fn new(project: &Project, page: PageId, art: &dyn SymbolArt) -> Self {
         let mut scene = Scene::new();
         let layers = ModelLayers {
+            underlay: scene.add_layer(Layer::new("Underlay", -20)),
             frame: scene.add_layer(Layer::new("Frame", -10)),
             wires: scene.add_layer(Layer::new("Wires", 0)),
             symbols: scene.add_layer(Layer::new("Symbols", 10)),
@@ -668,6 +702,8 @@ impl PageScene {
             strip_heads: HashMap::new(),
             focus: None,
             wire_looks: HashMap::new(),
+            wire_cables: HashMap::new(),
+            underlay: None,
             style: ModelStyle::default(),
         };
         s.rebuild(project, art);
@@ -920,6 +956,28 @@ impl PageScene {
         true
     }
 
+    /// Shows `underlay` under the page, or nothing for `None`. Kept across
+    /// rebuilds. Returns whether anything changed.
+    pub fn set_underlay(&mut self, underlay: Option<Underlay>) -> bool {
+        if underlay == self.underlay {
+            return false;
+        }
+        self.underlay = underlay;
+        self.draw_underlay();
+        true
+    }
+
+    fn draw_underlay(&mut self) {
+        self.scene.remove(UNDERLAY_ITEM);
+        let Some(u) = &self.underlay else {
+            return;
+        };
+        let mut item = Item::new(self.layers.underlay).unselectable();
+        item.primitives = u.primitives.clone();
+        item.labels = u.labels.clone();
+        self.scene.insert(UNDERLAY_ITEM, item);
+    }
+
     /// The sheet shown, if any.
     pub fn sheet(&self) -> Option<&SheetContent> {
         self.sheet.as_ref()
@@ -934,6 +992,7 @@ impl PageScene {
         self.wire_junctions.clear();
         self.text_hosts.clear();
         self.frame(project);
+        self.draw_underlay();
         self.strip_heads = strip_heads(project, self.page);
         let contents = project.page_contents(self.page);
         for id in contents.symbols {
@@ -1031,6 +1090,19 @@ impl PageScene {
                         .into_iter()
                         .map(|s| AnyId::Symbol(s.id)),
                 ),
+                // A cable is drawn as a sheath over its core wires: those
+                // wires, as they were and as they are now, redraw.
+                AnyId::Cable(c) => {
+                    dirty.extend(
+                        self.wire_cables
+                            .iter()
+                            .filter(|&(_, &cable)| cable == c)
+                            .map(|(&w, _)| AnyId::Wire(w)),
+                    );
+                    if let Some(cable) = project.cable(c) {
+                        dirty.extend(cable.cores.iter().filter_map(|k| k.wire).map(AnyId::Wire));
+                    }
+                }
                 // Any page coming, going or changing can change "n of m".
                 AnyId::Page(_) => frame_dirty = true,
                 _ => {}
@@ -1294,6 +1366,9 @@ impl PageScene {
                 );
             }
         }
+        if let Some(revisions) = self.revisions.as_ref().filter(|r| !r.table.is_empty()) {
+            self.revision_table(&revisions.table, min, size.x, item);
+        }
     }
 
     /// Redraws the bridge bars of the page's jumper groups.
@@ -1309,6 +1384,48 @@ impl PageScene {
             item = item.with(Primitive::stroked(Shape::line(a, b), stroke));
         }
         self.scene.insert(BARS_ITEM, item);
+    }
+
+    /// The revision table: Rev, Date, By and what changed, in the width of
+    /// the title block and directly above it (`block_min` is the title
+    /// block's top left). Shows the latest revisions that fit; the oldest
+    /// are left off.
+    fn revision_table(&self, rows: &[RevisionRow], block_min: Vec2, width: f32, item: &mut Item) {
+        let color = self.style.frame_color;
+        let thin = Stroke::world(0.25, color);
+        let shown = rows.len().min(TABLE_ROWS);
+        let height = TABLE_ROW * (shown + 1) as f32;
+        let min = Vec2::new(block_min.x, block_min.y - height);
+        item.primitives.push(Primitive::stroked(
+            Shape::rect(min, Vec2::new(min.x + width, block_min.y)),
+            thin,
+        ));
+        for r in 1..=shown {
+            let y = min.y + TABLE_ROW * r as f32;
+            item.primitives.push(Primitive::stroked(
+                Shape::line(Vec2::new(min.x, y), Vec2::new(min.x + width, y)),
+                thin,
+            ));
+        }
+        // Columns: Rev, Date, By, Description.
+        let columns = [2.0, 12.0, 36.0, 48.0];
+        let mut put = |row: usize, cells: [&str; 4]| {
+            let y = min.y + TABLE_ROW * (row as f32 + 0.5);
+            for (x, text) in columns.into_iter().zip(cells) {
+                if !text.is_empty() {
+                    item.labels.push(
+                        Label::new(Vec2::new(min.x + x, y), text, 2.5)
+                            .anchored(Anchor::CenterLeft)
+                            .colored(color),
+                    );
+                }
+            }
+        };
+        put(0, ["Rev", "Date", "By", "Changed"]);
+        // Newest at the bottom, nearest the title block.
+        for (i, r) in rows.iter().take(shown).enumerate() {
+            put(shown - i, [&r.index, &r.date, &r.author, &r.description]);
+        }
     }
 
     fn sync_symbol(&mut self, project: &Project, id: SymbolId, art: &dyn SymbolArt) {
@@ -1523,6 +1640,7 @@ impl PageScene {
     fn sync_wire(&mut self, project: &Project, id: WireId) {
         let Some(w) = project.wire(id).filter(|w| w.page == self.page) else {
             self.wire_junctions.remove(&id);
+            self.wire_cables.remove(&id);
             self.remove(id.into());
             return;
         };
@@ -1535,7 +1653,26 @@ impl PageScene {
             .wire_looks
             .get(&id)
             .map_or(self.style.wire, |l| Stroke::screen(l.width, l.color));
-        let mut item = Item::new(self.layers.wires)
+        // A wire that is a core of a cable lies in a wide sheath in the
+        // accent colour, with the cable's tag along it, so the cable shows
+        // on the drawing and not only in the Cables drawer.
+        let cable = project.cable_of_wire(id).and_then(|c| project.cable(c));
+        match cable {
+            Some(c) => self.wire_cables.insert(id, c.id),
+            None => self.wire_cables.remove(&id),
+        };
+        let mut item = Item::new(self.layers.wires);
+        if cable.is_some() {
+            let sheath = Stroke::world(
+                (self.style.wire.width * 5.0).max(1.2),
+                self.style.joint_color,
+            );
+            item = item.with(Primitive::stroked(
+                Shape::polyline(pts.clone(), false),
+                sheath,
+            ));
+        }
+        let mut item = item
             .with(Primitive::stroked(
                 Shape::polyline(pts.clone(), false),
                 stroke,
@@ -1620,6 +1757,33 @@ impl PageScene {
             };
             item.labels.push(label.colored(self.style.wire.color));
         }
+        if let Some(c) = cable {
+            // Under the wire number, along the longest segment.
+            let (s0, s1) = pts
+                .windows(2)
+                .map(|s| (s[0], s[1]))
+                .max_by(|x, y| x.0.distance(x.1).total_cmp(&y.0.distance(y.1)))
+                .unwrap_or((pts[0], pts[0]));
+            let mid = (s0 + s1) * 0.5;
+            let tag = c.tag.to_string();
+            let label = if (s1 - s0).y.abs() > (s1 - s0).x.abs() {
+                Label::new(
+                    mid + Vec2::new(1.2, 0.0),
+                    tag,
+                    self.style.wire_number_height,
+                )
+                .anchored(Anchor::TopCenter)
+                .rotated(-FRAC_PI_2)
+            } else {
+                Label::new(
+                    mid + Vec2::new(0.0, 1.2),
+                    tag,
+                    self.style.wire_number_height,
+                )
+                .anchored(Anchor::TopCenter)
+            };
+            item.labels.push(label.colored(self.style.joint_color));
+        }
         self.put(id.into(), item);
     }
 }
@@ -1683,6 +1847,7 @@ const STRIP_RUN_GAP: f64 = 20.0;
 /// Item id of the bridge bars of a page's jumper groups (no model object
 /// has this id).
 const BARS_ITEM: ItemId = ItemId(u64::MAX - 1);
+const UNDERLAY_ITEM: ItemId = ItemId(u64::MAX - 2);
 
 /// Height of a connected terminal's bridge bar in its symbol, in mm
 /// (`terminal_bridged.toml`: the dot sits on the upper lead at this height).
@@ -3079,6 +3244,39 @@ mod tests {
     }
 
     #[test]
+    fn a_cable_is_drawn_over_its_core_wires_and_goes_with_it() {
+        let (mut doc, page, wire) = bent_wire();
+        let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
+        let prims = |ps: &PageScene| ps.scene().get(item_id(wire)).unwrap().primitives.len();
+        let labels = |ps: &PageScene| ps.scene().get(item_id(wire)).unwrap().labels.len();
+        let (before_prims, before_labels) = (prims(&ps), labels(&ps));
+        let (cable, changes) = doc
+            .transact("cable", |tx| {
+                tx.add_cable(
+                    DeviceTag::parse("-W1").unwrap(),
+                    vec![{
+                        let mut core = novo_core::CableCore::new("1");
+                        core.wire = Some(wire);
+                        core
+                    }],
+                )
+            })
+            .unwrap();
+        assert!(ps.apply(doc.project(), &changes, &PlaceholderArt));
+        // A sheath under the wire and the cable's tag on it.
+        assert_eq!(prims(&ps), before_prims + 1);
+        assert_eq!(labels(&ps), before_labels + 1);
+        let sheath = ps.scene().get(item_id(wire)).unwrap().primitives[0]
+            .stroke
+            .unwrap();
+        assert!(sheath.width > ps.style.wire.width);
+        let (_, changes) = doc.transact("remove", |tx| tx.remove(cable)).unwrap();
+        ps.apply(doc.project(), &changes, &PlaceholderArt);
+        assert_eq!(prims(&ps), before_prims);
+        assert_eq!(labels(&ps), before_labels);
+    }
+
+    #[test]
     fn a_wire_look_replaces_the_stroke_and_clears() {
         let (doc, page, wire) = bent_wire();
         let mut ps = PageScene::new(doc.project(), page, &PlaceholderArt);
@@ -3259,6 +3457,7 @@ mod tests {
         let revisions = |page: Option<(&str, &str)>, project: &str| TitleRevisions {
             page: page.map(|(i, d)| (i.to_owned(), d.to_owned())),
             project: Some(project.to_owned()),
+            ..TitleRevisions::default()
         };
         // An untouched page keeps its own index while the set moves on.
         let old = revisions(Some(("A", "2026-09-01")), "D");

@@ -75,6 +75,7 @@
 //! title block, clipping text to its box. Set [`PageSetup::margins`] and
 //! [`PageSetup::title_block_mm`] to match that frame.
 
+mod assembly;
 mod bom;
 pub mod commissioning;
 mod cutlist;
@@ -83,30 +84,47 @@ mod devices;
 mod diagrams;
 mod export;
 mod io;
+mod labels;
 mod lengths;
 mod order;
 mod page;
+mod plugs;
 mod report;
+mod schedule;
 mod sheets;
+mod strip_diagram;
 mod table;
 mod toc;
+mod wirecut;
 mod wires;
 
+pub use assembly::{AssemblyChecklist, BOX as ASSEMBLY_BOX};
 pub use bom::BillOfMaterials;
 pub use cutlist::CutList;
 pub use defaults::{
     GeneratedPageSpec, add_generated_pages, default_generated_pages, default_generated_pages_with,
+    generated_page_spec,
 };
 pub use devices::DeviceList;
 pub use diagrams::{CableDiagram, TerminalDiagram};
 pub use export::{CsvOptions, ExportError, save_xlsx, to_csv, xlsx_bytes};
 pub use io::IoList;
+pub use labels::{LABEL_LINES, LabelLayout, Labels, labels_csv};
 pub use order::{function_of, location_of, location_text, tag_cmp};
 pub use page::{Line, Margins, PageLayout, PageSetup, ReportPage, TextBox, layout_page, paginate};
+pub use plugs::PlugList;
 pub use report::{Dependencies, LiveReports, Report, Reports};
+pub use schedule::CableSchedule;
 pub use sheets::{GeneratedSheet, SheetFingerprint, fingerprint, sheet_name, sheet_names};
+pub use strip_diagram::{
+    sheet_count as strip_sheet_count, strip_diagram, strip_sheet, terminals_per_sheet,
+};
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::{PanelContents, TableOfContents};
+pub use wirecut::{
+    FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut, WireCutJob, WireEnd,
+    typical_strip_mm, wire_cut_csv, wire_cut_jobs,
+};
 pub use wires::WireList;
 
 use novo_core::Project;
@@ -119,9 +137,13 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(DeviceList),
         Box::new(WireList),
         Box::new(CutList::default()),
+        Box::new(WireCut),
         Box::new(TerminalDiagram),
         Box::new(CableDiagram),
         Box::new(IoList),
+        Box::new(CableSchedule),
+        Box::new(PlugList),
+        Box::new(Labels),
     ]
 }
 

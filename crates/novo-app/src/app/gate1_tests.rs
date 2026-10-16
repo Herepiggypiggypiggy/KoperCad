@@ -37,7 +37,7 @@ impl Drive {
         drive
     }
 
-    fn frame_with(&mut self, events: Vec<egui::Event>) {
+    pub(super) fn frame_with(&mut self, events: Vec<egui::Event>) {
         let input = egui::RawInput {
             screen_rect: Some(egui::Rect::from_min_size(
                 egui::Pos2::ZERO,
@@ -104,7 +104,7 @@ impl Drive {
         placed
     }
 
-    fn click(&mut self, at: Point) {
+    pub(super) fn click(&mut self, at: Point) {
         let page = self.page();
         let app = &mut self.app;
         let view = app.canvas.schematic().expect("the editor canvas");
@@ -415,13 +415,73 @@ fn gate1_motor_starter_through_the_window() {
     let file = dir.path().join("Starter.novo");
     assert!(d.app.save_to(&file));
     d.frame();
-    // PDF export: two pages, written where asked.
+    // PDF export: two pages, written where asked, then the design checks
+    // report while problems remain.
     let pdf = dir.path().join("Starter.pdf");
     assert_eq!(d.app.export_pdf_to(&pdf), Some(pdf.clone()));
     let bytes = std::fs::read(&pdf).unwrap();
     assert!(bytes.starts_with(b"%PDF"));
     let pages = lopdf::Document::load_mem(&bytes).unwrap().get_pages().len();
-    assert_eq!(pages, 2, "one PDF page per project page");
+    let report = usize::from(novo_checks::report_lines(d.doc().project()).len() > 2);
+    assert_eq!(pages, 2 + report, "one PDF page per project page");
+    // DXF export: every page into a folder beside the project, drawn with
+    // geometry (the symbols are in it), reproducible on a second export.
+    let files = d
+        .app
+        .export_dxf_to(super::dxf::DxfScope::AllPages, dir.path(), "Starter");
+    assert_eq!(files.len(), 2, "one DXF per project page");
+    for f in &files {
+        assert_eq!(f.parent(), Some(dir.path().join("Starter DXF").as_path()));
+        let dxf = std::fs::read(f).unwrap();
+        assert!(novo_interop::dxf::is_written_by_us(&dxf));
+        let drawing = novo_interop::dxf::read_dxf(&dxf).unwrap();
+        assert!(!drawing.drawing.entities.is_empty(), "{}", f.display());
+    }
+    assert_eq!(
+        d.app
+            .export_dxf_to(super::dxf::DxfScope::AllPages, dir.path(), "Starter"),
+        files,
+        "a second export replaces the first"
+    );
+    // A DXF as background: shown under the page, one undo step, never
+    // exported by the page exporters.
+    let background = d.app.import_dxf_background_from(&files[0]);
+    assert!(background, "{:?}", d.app.messages().last());
+    d.frame();
+    let underlay_items = |d: &Drive| {
+        let view = d.app.canvas.schematic_ref().unwrap();
+        let page = view.scene().unwrap();
+        let layer = page.layers().underlay;
+        Some(
+            page.scene()
+                .iter()
+                .filter(|(_, it)| it.layer == layer)
+                .count(),
+        )
+    };
+    assert_eq!(underlay_items(&d), Some(1), "the background is one item");
+    d.app.toggle_background();
+    d.frame();
+    assert_eq!(underlay_items(&d), Some(0), "hidden");
+    d.app.toggle_background();
+    // Move and scale: one undo step for the whole edit.
+    {
+        use super::background_panel::Placement;
+        let from = Placement::of(d.app.page_properties().unwrap());
+        let to = Placement {
+            dx: 40.0,
+            dy: 25.0,
+            percent: 50.0,
+        };
+        d.app.apply_placement(from, to);
+        assert_eq!(Placement::of(d.app.page_properties().unwrap()), to);
+        d.app.run(&d.ctx.clone(), Action::Undo);
+        assert_eq!(Placement::of(d.app.page_properties().unwrap()), from);
+    }
+    d.app.remove_background();
+    d.frame();
+    assert_eq!(underlay_items(&d), Some(0));
+    assert!(!d.app.has_background());
     // NOVO_GATE1_OUT=<dir> keeps the project and the PDF, for screenshots.
     if let Some(out) = std::env::var_os("NOVO_GATE1_OUT") {
         let out = std::path::PathBuf::from(out);
@@ -858,7 +918,7 @@ fn a_generated_page_shows_its_report_and_follows_each_edit() {
     d.app.changed_outside_canvas(&changes);
     d.frame();
     let after = texts(&d);
-    assert!(after.iter().any(|t| t == "77"), "{after:?}");
+    assert!(after.iter().any(|t| t.starts_with("77")), "{after:?}");
 
     // Undo takes it back.
     d.app.run(&ctx, Action::Undo);
@@ -1920,6 +1980,7 @@ fn the_title_block_prints_the_set_revision_after_an_issue() {
             date: "2026-10-15".into(),
             author: "TV".into(),
             description: String::new(),
+            note: String::new(),
         })
         .unwrap();
     d.app.changed_outside_canvas(&outcome.changes);
@@ -2552,4 +2613,180 @@ fn the_parts_command_opens_and_closes_the_parts_window() {
     d.app.wb.parts = None;
     d.frame();
     assert!(d.app.wb.parts.is_none());
+}
+
+#[test]
+fn the_editor_catalog_follows_the_project_standard_and_the_wheel_hides_missing_twins() {
+    use novo_symbols::Pack;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let pack = |d: &mut Drive| {
+        d.app
+            .canvas
+            .schematic()
+            .unwrap()
+            .editor
+            .catalog
+            .library()
+            .pack()
+    };
+    assert_eq!(pack(&mut d), Some(Pack::Iec));
+    // A wheel item with no twin in the NFPA pack, if the packs still have one.
+    let nfpa = novo_symbols::Library::builtin_pack(Pack::Nfpa).unwrap();
+    let no_twin = (0..5).find_map(|sector| {
+        d.app
+            .wheel_items(sector)
+            .into_iter()
+            .map(|(k, _)| (sector, k))
+            .find(|(_, k)| Pack::counterpart(k, Pack::Nfpa).is_none_or(|t| nfpa.get(&t).is_none()))
+    });
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .used("iec/contacts/no");
+
+    // A reordered favourites row survives the switch and the undo.
+    let mut order: Vec<String> = d
+        .app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .favourites()
+        .to_vec();
+    order.reverse();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .set_favourites(order.clone());
+
+    d.app.set_standard(Pack::Nfpa);
+    d.frame();
+    assert_eq!(pack(&mut d), Some(Pack::Nfpa));
+    // The favourites keep their order in the new pack, and still place.
+    let favs = d
+        .app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .favourites()
+        .to_vec();
+    assert!(
+        !favs.is_empty() && favs.iter().all(|f| f.starts_with("nfpa/")),
+        "{favs:?}"
+    );
+    let expected: Vec<String> = order
+        .iter()
+        .map(|f| Pack::counterpart(f, Pack::Nfpa).unwrap())
+        .filter(|f| nfpa.get(f).is_some())
+        .collect();
+    assert_eq!(favs, expected);
+    let view = d.app.canvas.schematic().unwrap();
+    assert!(
+        view.editor.begin_place(&favs[0], None),
+        "a favourite places"
+    );
+    view.editor.leave_tool();
+    // A recently used symbol follows to the new pack.
+    let catalog = &d.app.canvas.schematic().unwrap().editor.catalog;
+    assert_eq!(
+        catalog.recent().first().map(String::as_str),
+        Some("nfpa/contacts/no")
+    );
+    // Items without a twin in the pack are hidden; the rest stay.
+    if let Some((sector, key)) = no_twin {
+        let items = d.app.wheel_items(sector);
+        assert!(!items.is_empty());
+        assert!(items.iter().all(|(k, _)| *k != key), "{items:?}");
+    }
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(pack(&mut d), Some(Pack::Iec));
+    let back = d
+        .app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .catalog
+        .favourites()
+        .to_vec();
+    assert_eq!(back, order, "the reordered row comes back");
+}
+
+#[test]
+fn plc_tags_leave_as_files_and_the_programmers_edits_come_back() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let last = |d: &Drive| d.app.messages().last().map(|m| m.text.clone()).unwrap();
+
+    // A project with no card says what to do instead of writing an empty file.
+    d.app
+        .export_plc_to(novo_plc::link::LinkFormat::Csv, dir.path(), "Plant");
+    assert!(last(&d).contains("no PLC cards"), "{}", last(&d));
+
+    d.app.run_command(&ctx, "plc.add_card", Some("DI4 DQ4"));
+    let sensor = d.place("pbnc", 40.0, 40.0);
+    d.select(sensor);
+    d.app.run_command(&ctx, "plc.to_plc", None);
+    let written = d
+        .app
+        .export_plc_to(novo_plc::link::LinkFormat::PlcOpen, dir.path(), "Plant");
+    assert_eq!(written.len(), 1);
+    assert_eq!(written[0].file_name().unwrap(), "Plant PLC.xml");
+    let xml = std::fs::read_to_string(&written[0]).unwrap();
+    assert!(xml.contains("address=\"%IX0.0\""), "{xml}");
+
+    // The programmer rewords the comment and renames the tag; the preview
+    // lists it, Esc leaves the project alone, Enter applies one undo step.
+    let csv = d
+        .app
+        .export_plc_to(novo_plc::link::LinkFormat::Csv, dir.path(), "Plant");
+    let text = std::fs::read_to_string(&csv[0]).unwrap();
+    let row = text.lines().nth(1).unwrap().to_owned();
+    let mut fields: Vec<String> = row.split(';').map(str::to_owned).collect();
+    fields[6] = "ESTOP_OK".into();
+    fields[8] = "Emergency stop healthy".into();
+    let edited = dir.path().join("edited.csv");
+    std::fs::write(&edited, text.replace(&row, &fields.join(";"))).unwrap();
+    assert!(d.app.plc_import_tags_from(&edited));
+    let plan = &d.app.wb.plc_import.as_ref().unwrap().1;
+    assert_eq!(plan.updates.len(), 1, "{plan:?}");
+    d.frame();
+    d.key(egui::Key::Escape, egui::Modifiers::NONE);
+    assert!(d.app.wb.plc_import.is_none());
+    let depth = d.doc().undo_depth();
+    assert!(d.app.plc_import_tags_from(&edited));
+    d.frame();
+    d.key(egui::Key::Enter, egui::Modifiers::NONE);
+    assert!(
+        last(&d).starts_with("Imported PLC tags: 1 channel"),
+        "{}",
+        last(&d)
+    );
+    assert_eq!(d.doc().undo_depth(), depth + 1);
+    let again = d
+        .app
+        .export_plc_to(novo_plc::link::LinkFormat::Csv, dir.path(), "Plant");
+    assert!(
+        std::fs::read_to_string(&again[0])
+            .unwrap()
+            .contains("ESTOP_OK;BOOL;Emergency stop healthy")
+    );
 }

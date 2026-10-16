@@ -36,6 +36,21 @@ pub const DUTCH: &[Aliases] = &[
     nl("file.new", &[], &["nieuw project", "nieuw"]),
     nl("file.open", &[], &["project openen", "openen"]),
     nl("file.example", &[], &["voorbeeld openen", "voorbeeld"]),
+    nl("file.practice", &[], &["snelle toetsen", "oefenen"]),
+    nl(
+        "help.walkthrough",
+        &[],
+        &["rondleiding", "snelle toetsen uitleg"],
+    ),
+    nl(
+        "help.learn",
+        &["leren", "les"],
+        &["leren", "training", "cursus", "uitleg"],
+    ),
+    nl("learn.next", &[], &["les volgende stap", "les verder"]),
+    nl("learn.back", &[], &["les vorige stap", "les terug"]),
+    nl("learn.restart", &[], &["les opnieuw", "les herstarten"]),
+    nl("learn.close", &[], &["les sluiten"]),
     nl("file.save", &[], &["opslaan", "bewaren"]),
     nl("file.save_as", &[], &["opslaan als"]),
     nl("file.close", &[], &["project sluiten", "sluiten"]),
@@ -56,14 +71,40 @@ pub const DUTCH: &[Aliases] = &[
         &["onderdelen"],
         &["artikelen", "onderdeel"],
     ),
+    nl(
+        "parts.import_step",
+        &["importeer 3d-model"],
+        &["3d-model", "step", "stp"],
+    ),
     nl("project.standard", &["tekennorm"], &["norm", "standaard"]),
+    nl(
+        "project.options",
+        &["projectopties", "varianten"],
+        &["opties van het project", "uitvoeringen", "machineopties"],
+    ),
+    nl(
+        "project.variant",
+        &["variant"],
+        &["uitvoering", "configuratie"],
+    ),
+    nl(
+        "project.generate",
+        &["genereer"],
+        &["genereren", "specificatielijst", "uit excel"],
+    ),
     nl("terminal.toggle_pe", &["pe-klem"], &["aardklem", "aarde"]),
     nl(
         "revision.issue",
         &["revisie"],
         &["uitgeven", "versie", "vrijgeven"],
     ),
+    nl(
+        "revision.compare",
+        &["vergelijk"],
+        &["verschil", "revisies vergelijken"],
+    ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
+    nl("help.about", &[], &["over", "versie"]),
     // Draw
     nl(
         "tool.repeat",
@@ -113,6 +154,12 @@ pub const DUTCH: &[Aliases] = &[
     nl("edit.paste", &[], &["plakken"]),
     nl("edit.paste_keep_tags", &[], &["plakken met originele tags"]),
     nl("edit.duplicate", &[], &["dupliceren", "kopie"]),
+    nl("macro.save", &["macro opslaan"], &["opslaan als macro"]),
+    nl(
+        "macro.place",
+        &["macro plaatsen"],
+        &["plaats macro", "macro"],
+    ),
     nl("edit.select_all", &[], &["alles selecteren"]),
     nl("edit.delete", &[], &["verwijderen", "wissen"]),
     nl("edit.rename", &[], &["hernoemen", "tag wijzigen"]),
@@ -169,6 +216,28 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["onderbrekingspunten nummeren"],
     ),
+    nl("wires.number", &[], &["draden nummeren", "draadnummers"]),
+    nl(
+        "wires.numbering",
+        &["draadnummering"],
+        &["draadnummers instellen", "nummerschema"],
+    ),
+    nl(
+        "wires.renumber",
+        &["hernummer draden"],
+        &["draden opnieuw nummeren"],
+    ),
+    nl(
+        "wires.check_numbers",
+        &[],
+        &["draadnummers controleren", "dubbele draadnummers"],
+    ),
+    nl(
+        "wires.set_number",
+        &["nummer draad"],
+        &["draadnummer typen", "draadnummer vastzetten"],
+    ),
+    nl("wires.unlock_number", &[], &["draadnummer ontgrendelen"]),
     nl("terminal.reset_pe", &["herstel"], &["aarde", "klemmen"]),
     nl("terminal.connect", &["verbind"], &["klemmen", "brug"]),
     nl("terminal.disconnect", &["ontkoppel"], &["klemmen", "brug"]),
@@ -198,11 +267,72 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("view.full_screen", &[], &["volledig scherm"]),
     nl("view.cabinet_table", &[], &["kast als tabel", "tabel"]),
+    nl(
+        "heat.toggle",
+        &[],
+        &["warmte tonen", "temperatuur", "warmtebeeld"],
+    ),
+    nl("heat.airflow", &[], &["luchtstroom", "luchtstroming"]),
+    nl("heat.contours", &[], &["isothermen", "warmtelijnen"]),
+    nl(
+        "cabinet.size-enclosure",
+        &[],
+        &["kast dimensioneren", "kastmaat", "koeling", "warmte"],
+    ),
+    nl(
+        "cabinet.enclosures",
+        &[],
+        &["kasten", "kastenlijst", "behuizingen"],
+    ),
+    nl(
+        "check.standards",
+        &[],
+        &["normen", "normencontrole", "conformiteit", "nen"],
+    ),
+    nl(
+        "view.protection",
+        &["beveiliging"],
+        &[
+            "selectiviteit",
+            "uitschakelkarakteristiek",
+            "kortsluitvastheid",
+        ],
+    ),
+    nl(
+        "simulate.motor-start",
+        &[],
+        &[
+            "motor starten",
+            "ster-driehoek",
+            "aanloopstroom",
+            "zachtstarter",
+        ],
+    ),
     nl("view.changes", &["wijzigingen"], &["vergelijk", "verschil"]),
+    nl(
+        "view.commissioning",
+        &["inbedrijfstelling"],
+        &["uitvoeren", "afvinken", "restpunten"],
+    ),
     nl(
         "sim.live",
         &[],
         &["live potentialen tonen", "contacten sluiten", "spanning"],
+    ),
+    nl(
+        "sim.plc_program",
+        &["plc programma"],
+        &["ladder", "programma draaien", "plc simuleren"],
+    ),
+    nl(
+        "sim.faults",
+        &["storingen"],
+        &[
+            "kortsluiting",
+            "beveiliging",
+            "selectiviteit",
+            "uitschakeltijd",
+        ],
     ),
     nl(
         "view.toggle_marks",
@@ -219,16 +349,182 @@ pub const DUTCH: &[Aliases] = &[
     nl("check.problems", &["problemen", "fouten"], &["controles"]),
     nl("check.next_problem", &[], &["volgend probleem"]),
     nl("check.previous_problem", &[], &["vorig probleem"]),
+    nl(
+        "file.import_dxf_background",
+        &["importeer dxf"],
+        &["achtergrond", "onderlegger", "tekening"],
+    ),
+    nl(
+        "view.background",
+        &[],
+        &["achtergrond tonen", "achtergrond verbergen", "dxf"],
+    ),
+    nl(
+        "view.background_place",
+        &[],
+        &["achtergrond verplaatsen", "achtergrond schalen", "dxf"],
+    ),
+    nl(
+        "file.remove_background",
+        &[],
+        &["achtergrond verwijderen", "dxf"],
+    ),
+    nl(
+        "export.dxf_page",
+        &["exporteer dxf"],
+        &["cad", "autocad", "pagina"],
+    ),
+    nl("export.dxf_all", &[], &["alle paginas", "cad", "autocad"]),
+    nl(
+        "export.step",
+        &["exporteer step"],
+        &["kast", "mechanisch", "3d", "stp"],
+    ),
+    nl(
+        "export.aml",
+        &["exporteer aml"],
+        &["installatie", "automationml", "uitwisselen"],
+    ),
+    nl(
+        "file.import_aml",
+        &["importeer aml"],
+        &["automationml", "installatie", "overnemen", "migreren"],
+    ),
+    nl(
+        "file.import_dwg",
+        &["importeer dwg"],
+        &["autocad", "converter", "achtergrond"],
+    ),
+    nl(
+        "file.choose_dwg_converter",
+        &[],
+        &["dwg converter", "dwg2dxf", "omzetter"],
+    ),
     // Export
     nl(
         "export.pdf",
         &["exporteer pdf", "pdf exporteren"],
         &["afdrukken"],
     ),
+    nl("export.bom", &["exporteer stuklijst"], &["onderdelenlijst"]),
     nl(
-        "export.bom",
-        &["exporteer stuklijst", "stuklijst"],
+        "import.spreadsheet",
+        &["importeer spreadsheet", "importeer excel"],
+        &["spreadsheet", "excel", "csv"],
+    ),
+    nl(
+        "export.change_report",
+        &["wijzigingenrapport exporteren", "wijzigingsrapport"],
+        &["wijzigingen pdf", "revisierapport"],
+    ),
+    nl(
+        "export.commissioning",
+        &["exporteer inbedrijfstelling", "inbedrijfstellingsrapport"],
+        &["restpuntenlijst", "oplevering"],
+    ),
+    nl(
+        "export.plate",
+        &["exporteer montageplaat", "montageplaat exporteren"],
+        &["boortabel", "boren"],
+    ),
+    nl(
+        "export.reports",
+        &[],
+        &["alle rapporten", "excel exporteren"],
+    ),
+    nl("view.reports", &[], &["rapporten", "lijsten"]),
+    nl("report.toc", &["inhoud", "inhoudsopgave"], &["paginalijst"]),
+    nl(
+        "report.bom",
+        &["stuklijst", "materiaallijst"],
         &["onderdelenlijst"],
+    ),
+    nl("report.devices", &["apparatenlijst"], &["apparaten"]),
+    nl("report.wires", &["draadlijst"], &["draden", "aders"]),
+    nl("report.terminals", &["klemmenlijst"], &["klemmenstrook"]),
+    nl("report.cables", &["kabellijst"], &["kabels"]),
+    nl(
+        "export.sheets",
+        &[
+            "exporteer spreadsheet",
+            "exporteer excel",
+            "excel exporteren",
+        ],
+        &["excel"],
+    ),
+    nl(
+        "export.assembly",
+        &["exporteer montagelijst", "montagelijst"],
+        &["werkplaats", "boren"],
+    ),
+    nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
+    nl(
+        "cabinet.routes",
+        &["bedraad alles", "routeer alle draden"],
+        &["draadlengte", "bedrading", "kanaalvulling"],
+    ),
+    nl(
+        "export.wirecut",
+        &[
+            "exporteer draadlijst voor machine",
+            "exporteer draadsnijlijst",
+        ],
+        &["draadsnijmachine", "adereindhulzen", "labels"],
+    ),
+    nl(
+        "export.wiring_dxf",
+        &["exporteer bedradingsplan"],
+        &["kanalen", "routes", "dxf"],
+    ),
+    nl(
+        "export.wirecut_page",
+        &["voeg draadproductiepagina toe"],
+        &["pdf", "afdrukken", "draadsnijden"],
+    ),
+    nl(
+        "export.wirecut_xlsx",
+        &["exporteer draadproductie"],
+        &["draadsnijden", "adereindhulzen", "kanaalvulling"],
+    ),
+    nl(
+        "export.variant_pdf",
+        &["exporteer variant"],
+        &["pdf van een variant", "uitvoering exporteren"],
+    ),
+    nl(
+        "export.spec",
+        &["exporteer specificatie"],
+        &["specificatielijst exporteren"],
+    ),
+    nl(
+        "plc.import_tags",
+        &["importeer plc", "importeer tags"],
+        &["plc", "tags", "inlezen"],
+    ),
+    nl(
+        "export.plc_csv",
+        &["exporteer plc", "exporteer io"],
+        &["plc", "io lijst"],
+    ),
+    nl(
+        "export.plc_plcopen",
+        &["exporteer plcopen", "exporteer codesys"],
+        &["plcopen", "codesys"],
+    ),
+    nl(
+        "export.plc_tia",
+        &["exporteer tia", "exporteer siemens"],
+        &["tia", "siemens"],
+    ),
+    nl(
+        "export.plc_studio5000",
+        &["exporteer studio 5000", "exporteer rockwell"],
+        &["rockwell", "studio 5000"],
+    ),
+    nl(
+        "export.plc_address_plan",
+        &["exporteer adresplan"],
+        &["adresplan"],
     ),
 ];
 

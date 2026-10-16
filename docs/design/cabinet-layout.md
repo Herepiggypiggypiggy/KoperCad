@@ -67,6 +67,123 @@ Ctrl+2 opens the canvas, Ctrl+T switches to its Table face, `place all`
 shows a preview and Enter accepts it as one undo step, and selection syncs
 both ways with the drawer rows.
 
+## 5b. Place rules (R7)
+
+`place all` can follow a rule set instead of first fit (`novo_layout::rules`,
+Pro Panel gap analysis R7). The rule set is a small text file the user edits,
+like `keymap.txt`; the app decides where it lives. Standard rules, which a
+user file replaces completely:
+
+```text
+gap 10
+row_gap 40
+rule Q F G zone=top rail=shared
+rule A K zone=middle rail=own
+rule T U zone=bottom rail=own
+rule X zone=bottom rail=own
+rule * zone=middle rail=shared
+```
+
+- A rule names letter codes (the longest code a device's code starts with
+  wins; `*` is the fallback), a **zone** (`top`, `middle`, `bottom`; `high` and
+  `low` are accepted), whether the kind has rails of its own or shares them
+  with the other shared kinds of its zone (left to right in the order the rule
+  lists the codes), and optional `gap`, `above`, `below` in mm.
+- `hot <watts> <zone>` sends any device whose effective power loss is at or
+  above the limit to that zone, whatever its kind. A device with no loss data
+  is never hot.
+- Spacing along a rail is the larger of the left device's right need and the
+  right device's left need; a side's need is the part's own clearance
+  (`clearance_*_mm`, R1), else the rule's `gap`, else the rule set's `gap`.
+  Between two rails the space is the larger of `row_gap` and the biggest
+  below-need above and above-need below.
+- Top rows flow from the top of the plate (or below devices already placed),
+  bottom rows sit against the bottom edge, middle rows fill between. On a
+  plate that is too small the bottom rows are kept before the middle rows;
+  what does not fit is returned as unplaced.
+- The result is the same `Plan` as the first-fit planner, so the preview,
+  `apply_plan` and the single undo step are unchanged.
+  `rules::model::specs` reads kind, part clearances and loss from a project.
+
+### 5b.1 Power and signal, ducts, explanations (panel layout intelligence)
+
+New in the rule file (all optional; an old file still reads, with the new
+settings off):
+
+```text
+separate 40          # mm between a power duct and a signal duct; 0 = off
+duct 25 60           # width across the plate, height off the plate
+hot_gap 20           # extra room on each side of a hot device
+rule T zone=bottom rail=own class=power gap=20 above=80 below=80
+```
+
+- `class=power|signal|mixed` says what a kind carries. Shared rails never mix
+  power and signal. Between a power row and a signal row the planner leaves room for two
+  ducts and `separate` mm between them; rows of one class share one duct.
+  Drives (`T`) get 80 mm above and below and 20 mm beside them by default.
+  The numbers are practice values, not from a standard: edit them.
+- The plan carries the ducts (`Plan::ducts`, with their class); accepting it
+  adds them as duct rails with a `duct_class` property, in the same undo step.
+- When the plate is too small to keep power and signal apart, the separation
+  is given up before a device is left off; `Explanation::separation_relaxed`
+  says so and the check reports the separation as broken.
+- `place_all_explained` returns an `Explanation`: for every device the rule
+  (index and text), the zone, whether the hot rule moved it, its class, its
+  rail, and the gap to its neighbour with what set it; for every rail the
+  space above it and why; for every unplaced device the reason.
+- `check` judges a layout the user edited by hand: zone order, clearances per
+  side (part, rule or hot gap) and duct separation. Every violation names the
+  rule (index into the rule set) and by how much; the planner's own output
+  always passes (property-tested over 400 random plates).
+- `stock` is the rail and duct cut list: the fewest bars of stock (2000 mm,
+  2 mm kerf) by an exact search, rails trimmed to what their devices need only
+  when that saves a bar, spliced pieces longer than a bar, offcuts kept or
+  scrapped by length.
+
+Where the user finds it (Cabinet view, Ctrl+2):
+
+- **Place all** follows the rules. The rule file is
+  `%APPDATA%\KoperCAD\place-rules.txt`; without it the standard rules apply.
+- **Rules** (header strip) opens the file as text, checked while typing, with
+  Save and Standard rules.
+- The **inspector** of a selected device shows the rule that applies, why
+  Place all put it there (until the next edit), and the rules a hand edit
+  broke; the header counts rule problems and lists them on hover.
+- **Cut list** (header strip) shows the bars of rail and duct to buy and cut,
+  and *Cut N rails to these lengths* trims the rails in one undo step.
+- Ducts planned by Place all are drawn once the duct drawing (#461) is in.
+
+Not done here: rotating devices to fit, stacking small devices, vertical side
+ducts, and a rail and duct cut list report/CLI command.
+
+## 5c. Inside and door (R2)
+
+The Cabinet inspector's plate card (the Plate chip) has a collapsible section, "Inside and door". Its form stores the
+interior width, height and depth, the plate setback (back wall to plate
+surface), whether there is a door, its hinge side (seen from the front), how
+far it opens, how far things on its inside stand out, and the free room in
+front of and beside the hinge side of the cabinet when known. Apply is one
+undo step. The values are free-form properties of the enclosure `Structure`
+(`novo_layout::model::keys`), so there is no `novo-core` change.
+
+Checks (`novo_layout::enclosure::check`, planning values):
+
+- Usable depth is interior depth minus plate setback minus the door's inside
+  depth. A device whose part depth is larger is "too deep" (the door cannot
+  close); one that leaves less than 10 mm is "tight". Devices whose part has
+  no `depth_mm` are listed, not guessed.
+- The plate must fit inside the interior.
+- The open door, taken as wide as the interior, needs its width in front for
+  an opening of 90 degrees or more (width times sin of the angle below 90),
+  and width times -cos of the angle beside the hinge for more than 90. When
+  the free room is known and smaller, the shortfall is a problem.
+
+The top view in the section draws the plate, each device as deep as its part,
+the closed door, the arc of the open door and the free-room line. Not done:
+the door is not checked against devices mounted on it (hole and cut-out work,
+R5), hinge play and frame thickness are ignored, and the plate is assumed
+centred across the interior.
+
 ## 6. Out of scope here
 
 Wire ducts routing and lengths (`novo-routing`), 3D, door cut-outs, thermal
