@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic test fixture written for KoperCAD. Not exported from EPLAN; the
+     layout follows docs/design/eplan-pxf.md. Every name and number is made up. -->
+<EplanPxfRoot Type="Project" Version="2024.0" PxfVersion="1.23" SchemaVersion="1.0" NumMainObjects="2">
+  <EplPxfDir/>
+  <ESymLib Id="1" Name="DEMO_SYMBOLS"/>
+  <O4 A1="4/1" A1101="1">
+    <P49 P1100="A1" P1200="CAB1" P11012="1" P11013=""/>
+    <P11 P11011="en_US@Main supply;de_DE@Hauptversorgung;"/>
+    <O17 A1="17/10" A1381="5" A1382="0" A1383="1">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="Q" P20014="1" P20015=""/>
+      <P144 P144="=A1+CAB1-Q1"/>
+      <P11 P20027="en_US@Breaker 3P;" P20100_1="DEMO.BRK3P16"/>
+      <S40x1201 A762="42.5/200"/>
+    </O17>
+    <O17 A1="17/11" A1381="9" A1382="1" A1383="1">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="X" P20014="1" P20015=""/>
+      <P11 P20030="1" P20100_1="DEMO.TERM2.5"/>
+      <S40x1201 A762="84/150"/>
+    </O17>
+    <O17 A1="17/12">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="W" P20014="1" P20015=""/>
+      <P11 P20011="en_US@Motor cable;" P20100_1="DEMO.CAB4G15"/>
+    </O17>
+    <O59 A1="59/20">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="W" P20014="1"/>
+      <P11 P31004="1"/>
+    </O59>
+    <O70 A1="70/30">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="IP" P20014="1"/>
+      <P11 P24810="en_US@to page 2;"/>
+    </O70>
+    <O30 A1="30/31">
+      <P11 P11011="en_US@Sheet note;"/>
+      <S40x1201 A762="10/10"/>
+    </O30>
+    <O31 A1="31/32"/>
+    <O31 A1="31/33"/>
+    <O42 A1="42/34" A1262="70" A1263="0"/>
+  </O4>
+  <O4 A1="4/2" A1101="2">
+    <P49 P1100="A1" P1200="CAB1" P11012="2" P11013=""/>
+    <P11 P11011="??_??@Motor feeder;"/>
+    <O70 A1="70/40">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="IP" P20014="1"/>
+      <P11 P24810="en_US@from page 1;"/>
+    </O70>
+    <O70 A1="70/41">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="IP" P20014="2"/>
+    </O70>
+    <O17 A1="17/42">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="M" P20014="1" P20015="2"/>
+      <P11 P20027="en_US@Motor;" P20100_1="DEMO.MOT075"/>
+    </O17>
+    <O99 A1="99/43"/>
+  </O4>
+</EplanPxfRoot>
