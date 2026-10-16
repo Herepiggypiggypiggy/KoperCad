@@ -59,6 +59,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.import_dwg", under("File", "Import")),
     ("file.choose_dwg_converter", under("File", "Import")),
     ("help.walkthrough", at("Help")),
+    ("help.show_hints", at("Help")),
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
     // Edit

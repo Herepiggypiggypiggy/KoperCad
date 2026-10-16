@@ -1008,6 +1008,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "help.show_hints",
+        "Show hints again",
+        "View",
+        &["hints", "tips", "reset", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.walkthrough",
         "Fast keys walk-through",
         "View",
