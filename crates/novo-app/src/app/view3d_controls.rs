@@ -180,16 +180,22 @@ pub(super) fn toolbar(
                  size and its distances to neighbours and the plate edge (View > 3D > \
                  Dimensions)",
             );
-            if controls.reduced
-                && ui
+            if controls.reduced {
+                ui.label(
+                    egui::RichText::new("Reduced quality")
+                        .color(ui.visuals().warn_fg_color)
+                        .small(),
+                )
+                .on_hover_text(
+                    "The view stayed slow, so it draws at lower resolution while it moves.",
+                );
+                if ui
                     .button("Restore quality")
-                    .on_hover_text(
-                        "The view slowed down, so it draws at lower quality. Draw at \
-                         full quality again (View > 3D > Restore 3D quality).",
-                    )
+                    .on_hover_text("Draw at full quality again (View > 3D > Restore 3D quality).")
                     .clicked()
-            {
-                controls.restore = true;
+                {
+                    controls.restore = true;
+                }
             }
             if let Some(limit) = limit
                 && controls.layers.door
