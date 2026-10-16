@@ -1,0 +1,3 @@
+# Every feature PR appends command rows here; keep both sides when two PRs do.
+# CI still builds the result, so a bad union fails there.
+commands.rs merge=union
