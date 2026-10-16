@@ -373,6 +373,13 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
                     ask = Some(Ask::ExportWireProduction);
                 }
                 if ui
+                    .button("Bench output")
+                    .on_hover_text("Bench cut list, ferrule table and label sheets to print")
+                    .clicked()
+                {
+                    ask = Some(Ask::OpenBench);
+                }
+                if ui
                     .button("DXF plan")
                     .on_hover_text("The plate with ducts, fill and routes as a DXF drawing")
                     .clicked()

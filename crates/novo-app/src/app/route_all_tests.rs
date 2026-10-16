@@ -8,7 +8,7 @@ use super::gate1_tests::Drive;
 use crate::actions::Action;
 
 /// Two placed devices joined by a wire, with a duct between them.
-fn wired_cabinet(d: &mut Drive) {
+pub(super) fn wired_cabinet(d: &mut Drive) {
     d.app
         .backend
         .document_mut()

@@ -5,6 +5,7 @@
 
 mod assembly;
 mod background_panel;
+mod bench;
 mod cabinet;
 mod cabinet_bar;
 mod cabinet_door;
@@ -98,6 +99,8 @@ mod xref;
 mod assembly_pack_tests;
 #[cfg(test)]
 mod assembly_tests;
+#[cfg(test)]
+mod bench_tests;
 #[cfg(test)]
 mod cabinet_rails_tests;
 #[cfg(test)]
@@ -948,6 +951,7 @@ impl NovoApp {
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
         self.background_panel(&ctx);
+        self.bench_window(&ctx);
         self.parts_window(&ctx);
         self.project_settings_dialog(&ctx);
         self.macro_browser_window(&ctx);
