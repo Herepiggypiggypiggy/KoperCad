@@ -587,8 +587,8 @@ impl NovoApp {
                             ask = Some(Ask::ToggleRoutes);
                         }
                     }
-                    if !narrow
-                        && cabinet_bar::button(
+                    if !narrow {
+                        let rails = cabinet_bar::button(
                             ui,
                             icons::ROWS,
                             "Rails and ducts",
@@ -596,10 +596,17 @@ impl NovoApp {
                         )
                         .on_hover_text(
                             "Add, move, resize and delete rails and ducts (Ctrl+Shift+R)",
+                        );
+                        if cabinet_bar::note(
+                            &mut anchors,
+                            "cabinet.rails",
+                            "Rails and ducts",
+                            &rails,
                         )
                         .clicked()
-                    {
-                        self.cabinet.rails.open ^= true;
+                        {
+                            self.cabinet.rails.open ^= true;
+                        }
                     }
                     if !narrow {
                         let cut = cabinet_bar::button(
