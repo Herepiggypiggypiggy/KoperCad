@@ -179,6 +179,7 @@ impl NovoApp {
                 .filter(|s| s.key.contains(':'))
                 .map(|s| (s.key.clone(), ROW_MM))
                 .collect::<BTreeMap<_, _>>(),
+            language: self.report_translator(),
             ..ReportPdfOptions::default()
         };
         let bytes = export_report_pdf(&[&pack], &options);

@@ -15,7 +15,7 @@ Verified path per step
   has the fields **What changed**, **Index**, **Date**, **By** (revisions.rs); both routes driven.
 - issue-submit: typed text + click **Issue A** driven; asserted: revision A "First issue", message "Issued revision A", drawn pages frozen, generated not.
 - title-block: novo-canvas model.rs (140 x 36 mm, bottom right).
-- export: palette "export pdf" or File > Export > Export PDF (both driven); the file `Pump.pdf` is written, begins %PDF, has Outlines.
+- export: palette "export pdf" or File > Export drawings > Export PDF (both driven); the file `Pump.pdf` is written, begins %PDF, has Outlines.
 - where-is-it: pdf.rs (a lesson project is not saved: Documents\KoperCAD\<name>.pdf; the test saves first).
 - check-bookmarks / check-links: novo-pdf lib.rs; the Design checks appendix when problems remain (pdf.rs checks_appendix).
 - freeze: tx.rs issue_revision; reports.rs add_generated_pages adds nothing to a project with frozen pages (and says so).

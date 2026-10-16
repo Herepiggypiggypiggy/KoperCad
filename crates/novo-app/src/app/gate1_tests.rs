@@ -1080,9 +1080,10 @@ fn plc_commands_add_a_card_send_a_signal_and_renumber() {
     assert!(last(&d).contains("free DI channel"), "{}", last(&d));
     let depth = d.doc().undo_depth();
 
-    // A bare `add card` says what it needs; a layout adds one card.
+    // A bare `add card` opens the layout dialog; a layout adds one card.
     d.app.run_command(&ctx, "plc.add_card", None);
-    assert!(last(&d).contains("add card DI16"));
+    assert!(d.app.wb.plc_card.is_some());
+    d.app.wb.plc_card = None;
     d.app.run_command(&ctx, "plc.add_card", Some("DI16 DQ8"));
     assert!(last(&d).starts_with("Added card"), "{}", last(&d));
     assert_eq!(d.doc().undo_depth(), depth + 1);

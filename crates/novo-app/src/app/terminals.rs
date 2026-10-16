@@ -3,6 +3,7 @@
 //! a location boundary are proposed on the drawing (Enter accepts, Tab
 //! moves to the next, Delete declines one, `accept all` takes every one).
 
+use super::terminal_edit::{ToolbarAction, row_menu};
 use eframe::egui;
 use novo_canvas::{Aabb, Mark, MarkKind, MarkTarget, Vec2};
 use novo_core::{AnyId, DeviceId, SymbolRole};
@@ -154,25 +155,15 @@ impl NovoApp {
         };
     }
 
-    /// The strip the Terminals drawer shows: the selection's strip, else
-    /// the one the editor is using, else the first.
+    /// The strip the Terminals drawer shows: the one picked (the selection
+    /// moves the pick), else the one the editor is using, else the first.
     pub(super) fn drawer_strip(&self) -> Option<DeviceId> {
         let project = self.backend.document()?.project();
-        let from_selection = self.selection().into_iter().find_map(|id| match id {
-            AnyId::Symbol(s) => match &project.symbol(s)?.role {
-                SymbolRole::Terminal { terminals } => {
-                    project.terminal(*terminals.first()?).map(|t| t.strip)
-                }
-                SymbolRole::Device { device, .. } => project
-                    .device(*device)
-                    .filter(|d| d.kind == novo_core::DeviceKind::TerminalStrip)
-                    .map(|d| d.id),
-                _ => None,
-            },
-            AnyId::Device(d) => Some(d),
-            _ => None,
-        });
-        from_selection
+        self.wb
+            .terminal_edit
+            .picked
+            .filter(|s| project.device(*s).is_some())
+            .or_else(|| self.selection_strip())
             .or_else(|| self.canvas.schematic_ref().and_then(|v| v.editor.strip))
             .filter(|s| project.device(*s).is_some())
             .or_else(|| novo_terminals::strips(project).first().copied())
@@ -203,6 +194,8 @@ pub(super) fn strip_table(
     view: &novo_terminals::StripView,
     screen: &novo_terminals::Screen,
     selected: &[AnyId],
+    ticked: &mut Vec<novo_core::TerminalId>,
+    out: &mut Vec<ToolbarAction>,
 ) -> Option<Occurrence> {
     let mut go = None;
     ui.horizontal(|ui| {
@@ -212,9 +205,10 @@ pub(super) fn strip_table(
     egui::ScrollArea::both().auto_shrink(false).show(ui, |ui| {
         egui::Grid::new("strip")
             .striped(true)
-            .num_columns(STRIP_HEADS.len())
+            .num_columns(STRIP_HEADS.len() + 1)
             .spacing([24.0, 4.0])
             .show(ui, |ui| {
+                ui.small("");
                 for head in STRIP_HEADS {
                     ui.small(head);
                 }
@@ -227,6 +221,18 @@ pub(super) fn strip_table(
                             .collect::<Vec<_>>()
                             .join(", ")
                     };
+                    let mut on = !row.terminals.is_empty()
+                        && row.terminals.iter().all(|t| ticked.contains(t));
+                    if ui
+                        .checkbox(&mut on, "")
+                        .on_hover_text("Tick rows to edit them (kind, move up or down)")
+                        .changed()
+                    {
+                        ticked.retain(|t| !row.terminals.contains(t));
+                        if on {
+                            ticked.extend(row.terminals.iter().copied());
+                        }
+                    }
                     match row.occurrences.first() {
                         Some(first) => {
                             let on = row
@@ -239,9 +245,12 @@ pub(super) fn strip_table(
                             if name.clicked() {
                                 go = Some(first.clone());
                             }
+                            name.context_menu(|ui| row_menu(ui, out));
                         }
                         None => {
-                            ui.label(&row.name).on_hover_text("Spare: not drawn");
+                            ui.add(egui::Label::new(&row.name).sense(egui::Sense::click()))
+                                .on_hover_text("Spare: not drawn")
+                                .context_menu(|ui| row_menu(ui, out));
                         }
                     }
                     ui.label(novo_terminals::kind_label(row.kind));
