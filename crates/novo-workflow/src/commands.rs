@@ -1175,6 +1175,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_ssao",
+        "Show or hide ambient occlusion in 3D",
+        "View",
+        &["occlusion", "ao", "ssao", "contact shadows", "corners"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_duplicate",
+        "Duplicate the selected devices in 3D",
+        "View",
+        &["duplicate", "copy", "clone", "same part"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_position",
         "Show or hide the Position box in 3D",
         "View",

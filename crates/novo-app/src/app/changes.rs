@@ -292,6 +292,8 @@ impl NovoApp {
             // Under the live potentials card, whatever height it has.
             ctx.memory(|m| m.area_rect(super::panel::id("live_card")))
                 .map_or(150.0, |r| r.bottom() - canvas.top() + 16.0)
+                // Never off the canvas, even when the live card was dragged low.
+                .min((canvas.height() - 220.0).max(10.0))
         } else {
             10.0
         })

@@ -26,6 +26,11 @@ struct Globals {
     shadow: vec4<f32>,
     // x: 1 when the plate occlusion map is valid, yz: 1 / plate size (mm).
     ao: vec4<f32>,
+    // Screen to world, for the ambient occlusion passes.
+    inv_view_proj: mat4x4<f32>,
+    // x: 1 when the screen-space occlusion map is valid, y: radius (mm),
+    // z: bias, w: strength.
+    ssao: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> g: Globals;
@@ -33,6 +38,13 @@ struct Globals {
 @group(0) @binding(2) var shadow_sampler: sampler_comparison;
 @group(0) @binding(3) var ao_map: texture_2d<f32>;
 @group(0) @binding(4) var ao_sampler: sampler;
+// Blurred screen-space occlusion, half resolution (main pass only).
+@group(0) @binding(5) var ssao_map: texture_2d<f32>;
+@group(0) @binding(6) var ssao_sampler: sampler;
+// The occlusion passes read the depth of the opaque scene; their group 0 is
+// the uniform buffer alone, so they never bind what they write.
+@group(1) @binding(0) var scene_depth: texture_depth_2d;
+@group(1) @binding(1) var ssao_raw: texture_2d<f32>;
 
 struct Vertex {
     @location(0) pos: vec3<f32>,
@@ -64,6 +76,12 @@ struct FaceOut {
     @location(1) normal: vec3<f32>,
     @location(2) color: vec4<f32>,
     @location(3) spec: f32,
+}
+
+// Depth only, from the camera: the occlusion passes read it.
+@vertex
+fn vs_depth(v: Vertex, i: Instance) -> @builtin(position) vec4<f32> {
+    return g.view_proj * vec4<f32>(world_of(v, i), 1.0);
 }
 
 // Depth only, from the key light.
@@ -132,7 +150,13 @@ fn fs_face(f: FaceOut, @builtin(front_facing) front: bool) -> @location(0) vec4<
     let diffuse = max(dot(n, l), 0.0);
     let head = max(dot(n, to_eye), 0.0);
     let vis = key_visibility(f.world, n);
-    var shade = ambient * hemi + (1.0 - ambient) * (0.7 * diffuse * vis + 0.3 * head);
+    // Screen-space occlusion dims what the key light does not reach.
+    var openness = 1.0;
+    if (g.ssao.x > 0.5) {
+        openness = textureSampleLevel(ssao_map, ssao_sampler, f.clip.xy / g.viewport.xy, 0.0).r;
+    }
+    var shade = (ambient * hemi + (1.0 - ambient) * 0.3 * head) * openness
+        + (1.0 - ambient) * 0.7 * diffuse * vis;
     // Contact shade: the lower part of things standing on the plate is darker.
     if (f.world.z > 0.5) {
         let k = smoothstep(0.0, g.params.y, f.world.z);
@@ -295,4 +319,117 @@ fn vs_ribbon(@builtin(vertex_index) idx: u32, s: RibbonIn) -> RibbonOut {
 @fragment
 fn fs_ribbon(f: RibbonOut) -> @location(0) vec4<f32> {
     return f.color;
+}
+
+// Screen-space ambient occlusion (3d-look.md section 4, High tier). Half
+// resolution: one fullscreen pass estimates how much of the hemisphere over a
+// pixel is blocked by nearby geometry, a second blurs it without crossing
+// depth edges.
+
+@vertex
+fn vs_full(@builtin(vertex_index) idx: u32) -> @builtin(position) vec4<f32> {
+    let p = vec2<f32>(f32((idx << 1u) & 2u), f32(idx & 2u));
+    return vec4<f32>(p * 2.0 - 1.0, 0.0, 1.0);
+}
+
+fn world_at(px: vec2<i32>, d: f32) -> vec3<f32> {
+    let dims = vec2<f32>(textureDimensions(scene_depth));
+    let uv = (vec2<f32>(px) + 0.5) / dims;
+    let ndc = vec4<f32>(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, d, 1.0);
+    let w = g.inv_view_proj * ndc;
+    return w.xyz / w.w;
+}
+
+fn depth_at(px: vec2<i32>) -> f32 {
+    let dims = vec2<i32>(textureDimensions(scene_depth));
+    return textureLoad(scene_depth, clamp(px, vec2<i32>(0), dims - 1), 0);
+}
+
+@fragment
+fn fs_ssao(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+    let fp = vec2<i32>(pos.xy) * 2;
+    let d = depth_at(fp);
+    if (d <= 0.0) {
+        return vec4<f32>(1.0);
+    }
+    let p = world_at(fp, d);
+    // Normal from the smaller depth step on each axis, so edges do not smear.
+    let dr = depth_at(fp + vec2<i32>(1, 0));
+    let dl = depth_at(fp - vec2<i32>(1, 0));
+    let du = depth_at(fp - vec2<i32>(0, 1));
+    let dd = depth_at(fp + vec2<i32>(0, 1));
+    var ex = world_at(fp + vec2<i32>(1, 0), dr) - p;
+    if (abs(dl - d) < abs(dr - d)) {
+        ex = p - world_at(fp - vec2<i32>(1, 0), dl);
+    }
+    var ey = world_at(fp + vec2<i32>(0, 1), dd) - p;
+    if (abs(du - d) < abs(dd - d)) {
+        ey = p - world_at(fp - vec2<i32>(0, 1), du);
+    }
+    var n = normalize(cross(ex, ey));
+    var to_eye = normalize(g.eye.xyz - p);
+    if (g.params.w > 0.5) {
+        to_eye = -g.view_dir.xyz;
+    }
+    if (dot(n, to_eye) < 0.0) {
+        n = -n;
+    }
+    // Radius on screen: millimetres to pixels at this depth.
+    let clip = g.view_proj * vec4<f32>(p, 1.0);
+    // The y scale of the projection: the length of the clip-y row of the 3x3,
+    // which does not depend on the camera orientation.
+    let scale_y = length(vec3<f32>(g.view_proj[0][1], g.view_proj[1][1], g.view_proj[2][1]));
+    let radius_px = g.ssao.y * scale_y * 0.5 * g.viewport.y / max(clip.w, 1e-4);
+    if (radius_px < 2.0) {
+        return vec4<f32>(1.0);
+    }
+    let r_px = min(radius_px, 160.0);
+    let turn = 6.2831853 * fract(52.9829189 * fract(dot(pos.xy, vec2<f32>(0.06711056, 0.00583715))));
+    var occ = 0.0;
+    for (var k = 0; k < 12; k = k + 1) {
+        let a = f32(k) * 2.3999632 + turn;
+        let t = (f32(k) + 0.5) / 12.0;
+        let off = vec2<f32>(cos(a), sin(a)) * (t * t * 0.7 + 0.3 * t) * r_px;
+        let sp = fp + vec2<i32>(round(off));
+        let sd = depth_at(sp);
+        if (sd <= 0.0) {
+            continue;
+        }
+        let v = world_at(sp, sd) - p;
+        let dist = length(v);
+        if (dist < 1e-3) {
+            continue;
+        }
+        let lift = max(dot(n, v) / dist - g.ssao.z, 0.0);
+        occ = occ + lift * (1.0 - clamp(dist / g.ssao.y, 0.0, 1.0));
+    }
+    let openness = 1.0 - clamp(occ / 12.0 * 4.0 * g.ssao.w, 0.0, 1.0);
+    return vec4<f32>(openness, 0.0, 0.0, 1.0);
+}
+
+// 4x4 blur of the raw map, taps weighted down by their distance in space.
+@fragment
+fn fs_blur(@builtin(position) pos: vec4<f32>) -> @location(0) vec4<f32> {
+    let c = vec2<i32>(pos.xy);
+    let d = depth_at(c * 2);
+    if (d <= 0.0) {
+        return vec4<f32>(1.0);
+    }
+    let p = world_at(c * 2, d);
+    let raw_dims = vec2<i32>(textureDimensions(ssao_raw));
+    var sum = 0.0;
+    var weight = 0.0;
+    for (var y = -2; y < 2; y = y + 1) {
+        for (var x = -2; x < 2; x = x + 1) {
+            let s = clamp(c + vec2<i32>(x, y), vec2<i32>(0), raw_dims - 1);
+            let sd = depth_at(s * 2);
+            if (sd <= 0.0) {
+                continue;
+            }
+            let near = 1.0 - clamp(length(world_at(s * 2, sd) - p) / (0.25 * g.ssao.y), 0.0, 1.0);
+            sum = sum + textureLoad(ssao_raw, s, 0).r * near;
+            weight = weight + near;
+        }
+    }
+    return vec4<f32>(sum / max(weight, 1e-4), 0.0, 0.0, 1.0);
 }

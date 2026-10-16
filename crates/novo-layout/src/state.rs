@@ -9,8 +9,8 @@ use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
 use crate::surfaces::Surfaces;
 use crate::swing::{DoorDevice, PlateDevice, SweepSettings, SwingReport, sweep};
 use crate::{
-    Duct, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions, outside,
-    rail_overflows,
+    Duct, DuctOverlap, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions,
+    duct_overlaps, outside, rail_overflows,
 };
 
 /// Default snap grid for free placement (the Cabinet canvas grid).
@@ -23,6 +23,8 @@ pub struct Report {
     pub outside: Vec<u64>,
     pub too_close: Vec<(u64, u64, f64)>,
     pub rail_overflows: Vec<(u64, f64)>,
+    /// Ducts lying over a rail or a device.
+    pub duct_overlaps: Vec<DuctOverlap>,
     /// Placed devices whose size is the default guess.
     pub guessed: Vec<u64>,
 }
@@ -33,6 +35,7 @@ impl Report {
             && self.outside.is_empty()
             && self.too_close.is_empty()
             && self.rail_overflows.is_empty()
+            && self.duct_overlaps.is_empty()
     }
 }
 
@@ -221,6 +224,7 @@ impl CabinetLayout {
             outside: outside(&self.plate, &self.placements),
             too_close: clearance_violations(&self.placements),
             rail_overflows: rail_overflows(&self.rails, &self.placements),
+            duct_overlaps: duct_overlaps(&self.ducts, &self.rails, &self.placements),
             guessed: self
                 .placements
                 .iter()
