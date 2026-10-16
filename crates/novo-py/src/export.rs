@@ -83,6 +83,29 @@ pub fn report_bytes(project: &Project, ids: &[&str], format: ReportFormat) -> Re
     report_bytes_in(project, ids, format, None)
 }
 
+/// The translator for `language` (`en`, `nl`, a language of the project), or
+/// the project's own report language when `None`. An unknown code is an
+/// error, so a typo never silently prints English.
+pub fn report_translator(
+    project: &Project,
+    language: Option<&str>,
+) -> Result<novo_reports::i18n::Translator> {
+    let Some(code) = language else {
+        return Ok(novo_reports::i18n::translator_of(project));
+    };
+    let table = novo_reports::i18n::ProjectTable::of_project(project);
+    if !novo_reports::i18n::languages(&table)
+        .iter()
+        .any(|l| l.code == code)
+    {
+        return Err(ScriptError::UnknownValue {
+            what: "report language (en, nl, or a language of the project)",
+            value: code.to_owned(),
+        });
+    }
+    Ok(novo_reports::i18n::Translator::new(code, &table))
+}
+
 /// Like [`report_bytes`], printing in `language` (`en`, `nl`, a code the
 /// project's own table defines) instead of the project's when given.
 /// Titles and column headers change; ids, keys and cell values never do.
@@ -92,22 +115,7 @@ pub fn report_bytes_in(
     format: ReportFormat,
     language: Option<&str>,
 ) -> Result<Vec<u8>> {
-    let translator = match language {
-        Some(code) => {
-            let table = novo_reports::i18n::ProjectTable::of_project(project);
-            if !novo_reports::i18n::languages(&table)
-                .iter()
-                .any(|l| l.code == code)
-            {
-                return Err(ScriptError::UnknownValue {
-                    what: "report language (en, nl, or a language of the project)",
-                    value: code.to_owned(),
-                });
-            }
-            novo_reports::i18n::Translator::new(code, &table)
-        }
-        None => novo_reports::i18n::translator_of(project),
-    };
+    let translator = report_translator(project, language)?;
     let reports: Vec<ReportOutput> = if ids.is_empty() {
         novo_reports::generate_all(project)
     } else {

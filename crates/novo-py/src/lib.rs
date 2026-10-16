@@ -49,7 +49,7 @@ mod revisions;
 
 pub use export::{
     ReportFormat, generate, is_project_path, report_bytes, report_bytes_in, report_ids,
-    report_json, write_export,
+    report_json, report_translator, write_export,
 };
 pub use revisions::{comparison_json, group_name, kind_name, page_label, revisions_json};
 

@@ -1353,13 +1353,8 @@ fn commissioning_report(
         novo_reports::commissioning::default_sign_offs(""),
     );
     let report = novo_reports::commissioning::commissioning_report(&input);
-    let translator = match language {
-        Some(code) => novo_reports::i18n::Translator::new(
-            code,
-            &novo_reports::i18n::ProjectTable::of_project(&project),
-        ),
-        None => novo_reports::i18n::translator_of(&project),
-    };
+    let translator = novo_py::report_translator(&project, language)
+        .map_err(|e| Failure::new(exit::USAGE, e.to_string()))?;
     let csv = CsvOptions {
         delimiter,
         ..CsvOptions::default()

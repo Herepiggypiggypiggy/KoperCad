@@ -425,6 +425,12 @@ fn reports_print_in_the_chosen_language() {
 
     let commissioning = novo(&["commissioning-report", s(&path), "--language", "nl"]);
     assert_eq!(commissioning.code, exit::OK, "{}", commissioning.err);
+    let bad = novo(&["commissioning-report", s(&path), "--language", "xx"]);
+    assert_eq!(
+        bad.code,
+        exit::USAGE,
+        "unknown code is a usage error here too"
+    );
 }
 
 #[test]
