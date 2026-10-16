@@ -16,10 +16,12 @@ pub mod openings;
 pub mod rad;
 pub mod result;
 pub mod sched;
+pub mod solids;
 pub mod solver;
 mod stub;
 pub mod turb;
 
 pub use result::*;
+pub use solids::SolidProps;
 pub use solver::{CfdError, Control, Solver};
 pub use stub::StubSolver;
