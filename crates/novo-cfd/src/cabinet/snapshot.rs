@@ -5,6 +5,7 @@ use novo_thermal::{DeviceResult, HotSpot, HotSpotKind, Scenario, Status};
 
 use super::statement::accuracy_for;
 use crate::flow::{FlowSolver, Mesh as FlowMesh};
+use crate::mesh::CellClass;
 use crate::result::{CfdSnapshot, Fidelity, MaterialKind, Progress};
 use crate::solids::{FlowSetup, Medium};
 
@@ -27,8 +28,9 @@ pub struct View<'a> {
     setup: &'a FlowSetup,
     scn: &'a Scenario,
     fidelity: Fidelity,
-    /// Per device (scenario order): its cells.
-    device_cells: Vec<Vec<usize>>,
+    /// Per device (scenario order): its cells with the share of the cell the
+    /// device fills (1 for a pure cell), ascending by cell.
+    device_cells: Vec<Vec<(usize, f64)>>,
     base: CfdSnapshot,
 }
 
@@ -40,14 +42,27 @@ impl<'a> View<'a> {
             .devices
             .iter()
             .map(|d| {
-                let id = cm
+                let Some(id) = cm
                     .materials
                     .iter()
                     .find(|m| m.kind == MaterialKind::Device(d.id))
-                    .map(|m| m.id);
-                (0..n)
-                    .filter(|&c| id.is_some() && Some(cm.material[c]) == id)
-                    .collect()
+                    .map(|m| m.id)
+                else {
+                    return Vec::new();
+                };
+                let mut v: Vec<(usize, f64)> = Vec::new();
+                for c in 0..n {
+                    if cm.class[c] == CellClass::Solid && cm.material[c] == id {
+                        v.push((c, 1.0));
+                    }
+                }
+                for mc in &cm.mixed {
+                    if let Some(&(_, share)) = mc.parts.iter().find(|p| p.0 == id) {
+                        v.push((mc.cell, share));
+                    }
+                }
+                v.sort_by_key(|x| x.0);
+                v
             })
             .collect();
         let mut notes = vec![format!(
@@ -99,7 +114,14 @@ impl<'a> View<'a> {
         let medium = self.setup.cfg.medium.as_ref();
         s.wall_flux_w_m2 =
             medium.map_or_else(|| vec![0.0; flow.t.len()], |m| self.surface_flux(flow, m));
-        s.devices = self.devices(flow);
+        let (devices, unresolved) = self.devices(flow);
+        s.devices = devices;
+        for id in unresolved {
+            s.notes.push(format!(
+                "Device {id} is smaller than two cells across at this level: its surface temperature is \
+                 not resolved (wide uncertainty band). Run a finer level."
+            ));
+        }
         s.hot_spots = self.hot_spots(flow, &s.devices);
         s.progress = progress.clone();
         s
@@ -137,14 +159,17 @@ impl<'a> View<'a> {
         out
     }
 
-    fn devices(&self, flow: &FlowSolver) -> Vec<DeviceResult> {
+    /// Results per device, and the ids of those the grid does not resolve.
+    fn devices(&self, flow: &FlowSolver) -> (Vec<DeviceResult>, Vec<u64>) {
         let Some(md) = self.setup.cfg.medium.as_ref() else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
+        let mut unresolved = Vec::new();
         let m = &flow.mesh;
         let amb = self.scn.ambient_c;
         let share = band_share(self.fidelity);
-        self.scn
+        let out: Vec<DeviceResult> = self
+            .scn
             .devices
             .iter()
             .zip(&self.device_cells)
@@ -152,16 +177,16 @@ impl<'a> View<'a> {
                 // area-weighted temperature of the housing and of the air
                 // touching it; heat that leaves into other solids
                 let (mut a_exp, mut t_surf, mut t_air, mut q_cond) = (0.0, 0.0, 0.0, 0.0);
-                for &c in cells {
+                for &(c, w) in cells {
                     let ix = cell_ijk(m, c);
                     for_neighbours(m, ix, |n, a, dist_c, dist_n| {
                         if md.fluid_frac[n] > 0.5 {
-                            a_exp += a;
-                            t_surf += a * flow.t[c];
-                            t_air += a * flow.t[n];
-                        } else if !cells.binary_search(&n).is_ok() {
+                            a_exp += w * a;
+                            t_surf += w * a * flow.t[c];
+                            t_air += w * a * flow.t[n];
+                        } else if cells.binary_search_by_key(&n, |x| x.0).is_err() {
                             let r = dist_c / md.cell_k(c, AIR_K) + dist_n / md.cell_k(n, AIR_K);
-                            q_cond += a * (flow.t[c] - flow.t[n]) / r;
+                            q_cond += w * a * (flow.t[c] - flow.t[n]) / r;
                         }
                     });
                 }
@@ -170,8 +195,10 @@ impl<'a> View<'a> {
                 } else if cells.is_empty() {
                     (amb, amb)
                 } else {
-                    let t = cells.iter().map(|&c| flow.t[c]).sum::<f64>() / cells.len() as f64;
-                    (t, t)
+                    let (sum, wsum) = cells
+                        .iter()
+                        .fold((0.0, 0.0), |(s, ws), &(c, w)| (s + w * flow.t[c], ws + w));
+                    (sum / wsum, sum / wsum)
                 };
                 let loss = d.loss_w;
                 let to_air = (loss - q_cond).max(0.0);
@@ -181,11 +208,22 @@ impl<'a> View<'a> {
                 } else {
                     0.0
                 };
+                // A device the grid cuts into fewer than 2 x 2 x 2 cells, or whose
+                // exposed faces do not add up to its geometry, has no reliable
+                // housing temperature: the estimate is a cell value, not a
+                // surface. Its band is the whole range from the air to twice
+                // the estimated rise, and the snapshot says so.
+                let (f, hgt) = (&d.footprint, d.height());
+                let a_geom = (f.w * f.h + 2.0 * (f.w + f.h) * hgt) * 1e-6;
+                let pure = cells.iter().filter(|c| c.1 >= 1.0).count();
+                let resolved = pure >= 8 && (0.7..=1.3).contains(&(a_exp / a_geom.max(1e-12)));
+                if !resolved {
+                    unresolved.push(d.id);
+                }
+                let spread = if resolved { share } else { 1.0 };
                 let band = |v: f64| {
-                    (
-                        v - share * (v - amb).max(0.0),
-                        v + share * (v - amb).max(0.0),
-                    )
+                    let rise = (v - amb).max(0.0);
+                    (v - spread * rise, v + spread * rise)
                 };
                 let mut r = DeviceResult {
                     id: d.id,
@@ -210,7 +248,8 @@ impl<'a> View<'a> {
                 apply_margins(&mut r);
                 r
             })
-            .collect()
+            .collect();
+        (out, unresolved)
     }
 
     fn hot_spots(&self, flow: &FlowSolver, devices: &[DeviceResult]) -> Vec<HotSpot> {
