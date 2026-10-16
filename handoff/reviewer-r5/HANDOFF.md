@@ -1,0 +1,4 @@
+# Reviewer R5 handoff (2026-10-16)
+Spawned by the coordinator, taking over from R3. Method: handoff/reviewer-r3/HANDOFF.md and handoff/reviewer/HANDOFF.md.
+Per PR: fetch `+pull/N/head:refs/review/prN`, read `git diff origin/main...refs/review/prN`, check base=main, the DESIGN.md rules, tests, and that the PR says where the user finds the feature. When ubuntu CI is green on the head, trust it and run only targeted tests. Verdict as a comment review "**Verdict: READY on <full sha>**" or "**Verdict: CHANGES NEEDED on <full sha>**", then message lead A (cse_01FiLvRBKEcNNHbQEGhYyL1S), merger B (cse_011NKUp2tgBn8uVWK6WHsc7k) and the author.
+Trap: non-Schematic workspaces filter key commands in app.rs (`commands.retain`); a new shortcut for a Cabinet/Reports/3D command must be added there (found in #612).
