@@ -64,6 +64,8 @@ pub(super) struct CabinetState {
     pub(super) rules: cabinet_rules::RulesState,
     /// The Heat view over the plate.
     pub(super) heat: super::heat::HeatState,
+    /// The list for adding, moving, resizing and deleting rails and ducts.
+    pub(super) rails: super::cabinet_rails::RailsState,
 }
 
 /// A placed device being dragged across the plate.
@@ -99,6 +101,7 @@ impl CabinetState {
             routes_cache: Default::default(),
             rules: cabinet_rules::RulesState::new(),
             heat: super::heat::HeatState::new(),
+            rails: Default::default(),
         }
     }
 }
@@ -444,6 +447,8 @@ impl NovoApp {
         let has_plan = self.cabinet.preview.is_some();
 
         let mut ask: Option<Ask> = None;
+        let mut delete_rail: Option<u64> = None;
+        let mut move_rail: Option<super::cabinet_rails::RailDrag> = None;
         ui.horizontal(|ui| {
             ui.add_space(8.0);
             let current = location
@@ -543,6 +548,13 @@ impl NovoApp {
                     .clicked()
                 {
                     self.cabinet.rules.cut_open ^= true;
+                }
+                if ui
+                    .selectable_label(self.cabinet.rails.open, "Rails and ducts")
+                    .on_hover_text("Add, move, resize and delete rails and ducts (Ctrl+Shift+R)")
+                    .clicked()
+                {
+                    self.cabinet.rails.open ^= true;
                 }
                 ui.weak(format!("{placed} placed, {unplaced} unplaced"));
                 let label = format!(
@@ -764,6 +776,23 @@ impl NovoApp {
                         overlay,
                     );
                 }
+                if let Some(rail) = self.cabinet.rails.selected {
+                    let rect = out.response.rect;
+                    let moved = self
+                        .cabinet
+                        .rails
+                        .drag
+                        .filter(|d| d.id == rail)
+                        .map(|d| d.at);
+                    super::cabinet_rails::draw_selected(
+                        &ui.painter_at(rect),
+                        rect,
+                        &self.cabinet.view.viewport,
+                        project,
+                        rail,
+                        moved,
+                    );
+                }
                 if let Some(input) = &heat_input {
                     super::heat::paint_over(
                         ui,
@@ -869,6 +898,66 @@ impl NovoApp {
                             });
                         }
                     }
+                    // A rail or duct is picked by a click on it, away from the
+                    // devices, and dragged to move it.
+                    if let Some(s) = structure {
+                        let rect = out.response.rect;
+                        let to_world = |p: egui::Pos2| {
+                            let w = self
+                                .cabinet
+                                .view
+                                .viewport
+                                .screen_to_world(vec2(p.x - rect.min.x, p.y - rect.min.y));
+                            (f64::from(w.x), f64::from(w.y))
+                        };
+                        let on_device = |(wx, wy): (f64, f64)| {
+                            layout.placements.iter().any(|p| {
+                                let f = p.footprint();
+                                wx >= f.x && wx <= f.right() && wy >= f.y && wy <= f.bottom()
+                            })
+                        };
+                        let slack = f64::from(3.0 / self.cabinet.view.viewport.zoom.max(0.01));
+                        if out.response.clicked_by(egui::PointerButton::Primary)
+                            && let Some(p) = out.response.interact_pointer_pos()
+                        {
+                            let w = to_world(p);
+                            self.cabinet.rails.selected = if on_device(w) {
+                                None
+                            } else {
+                                super::cabinet_rails::pick(project, s, w.0, w.1, slack)
+                            };
+                        }
+                        if self.cabinet.drag.is_none()
+                            && out.response.drag_started_by(egui::PointerButton::Primary)
+                            && let Some(press) = press
+                        {
+                            let w = to_world(press);
+                            if !on_device(w)
+                                && let Some(id) =
+                                    super::cabinet_rails::pick(project, s, w.0, w.1, slack)
+                                && let Some(r) =
+                                    project.get::<novo_core::Rail>(novo_core::RailId::from(id))
+                            {
+                                self.cabinet.rails.selected = Some(id);
+                                self.cabinet.rails.drag = Some(super::cabinet_rails::RailDrag {
+                                    id,
+                                    grab: (w.0 - r.x, w.1 - r.y),
+                                    at: (r.x, r.y),
+                                });
+                            }
+                        }
+                        if let (Some(d), Some(at)) =
+                            (self.cabinet.rails.drag.as_mut(), out.cursor_raw)
+                        {
+                            d.at = layout
+                                .snapped(f64::from(at.x) - d.grab.0, f64::from(at.y) - d.grab.1);
+                        }
+                        if out.response.drag_stopped()
+                            && let Some(d) = self.cabinet.rails.drag.take()
+                        {
+                            move_rail = Some(d);
+                        }
+                    }
                     if let (Some(d), Some(at)) = (self.cabinet.drag.as_mut(), out.cursor_raw) {
                         let (x, y) =
                             layout.snapped(f64::from(at.x - d.grab.x), f64::from(at.y - d.grab.y));
@@ -879,7 +968,8 @@ impl NovoApp {
                     {
                         ask = Some(Ask::Drop(d.id, d.at.0, d.at.1));
                     }
-                    // Rotate and delete act on the selected devices.
+                    // Rotate and delete act on the selected devices, and
+                    // Delete on the selected rail when no device is.
                     let selected = self.cabinet_selected();
                     for key in std::mem::take(&mut self.cabinet.keys) {
                         match key.as_str() {
@@ -888,6 +978,9 @@ impl NovoApp {
                             }
                             "edit.delete" if !selected.is_empty() => {
                                 ask = Some(Ask::Remove(selected.clone()));
+                            }
+                            "edit.delete" => {
+                                delete_rail = self.cabinet.rails.deletable(project);
                             }
                             _ => {}
                         }
@@ -924,8 +1017,24 @@ impl NovoApp {
             ask = Some(a);
         }
 
+        let mut rail_ask = super::cabinet_rails::show_window(
+            ui.ctx(),
+            &mut self.cabinet.rails,
+            project,
+            structure,
+        );
+
+        if let Some(id) = delete_rail {
+            rail_ask = Some(super::cabinet_rails::RailAsk::Delete(id));
+        }
+        if let Some(d) = move_rail {
+            rail_ask = Some(super::cabinet_rails::RailAsk::MoveTo(d.id, d.at.0, d.at.1));
+        }
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
+        }
+        if let Some(rail_ask) = rail_ask {
+            self.cabinet_rail_ask(structure, rail_ask);
         }
     }
 
@@ -1109,7 +1218,7 @@ impl NovoApp {
     }
 
     /// Runs an edit of the model from the Cabinet canvas as one undo step.
-    fn cabinet_edit(
+    pub(super) fn cabinet_edit(
         &mut self,
         label: &str,
         edit: impl FnOnce(&mut novo_core::Tx<'_>) -> novo_core::Result<()>,

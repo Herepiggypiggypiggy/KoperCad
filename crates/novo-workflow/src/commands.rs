@@ -1076,6 +1076,16 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["route all", "route wires"],
     ),
+    verb(
+        cmd(
+            "cabinet.rails",
+            "Rails and ducts (Cabinet)",
+            "View",
+            &["rail", "duct", "trunk", "din rail", "add duct", "move duct"],
+            Needs::Project,
+        ),
+        &["add rail", "add duct"],
+    ),
     cmd(
         "view.background_place",
         "Move and scale the DXF background",
