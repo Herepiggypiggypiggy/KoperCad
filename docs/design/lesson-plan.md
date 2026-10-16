@@ -138,8 +138,7 @@ Tadjiro's test of "Placing parts fast": the card said "Hold Q for the wheel" but
 2. **How** (`demo = [...]`, PR #601; the card lists these as the "How" lines): the concrete keys and clicks (`press`, `type`, `hold`,
    `move`, `drag`, `ghost`, `say`), keys written as `{key:command.id}` so a rebound key reads right.
 3. **Show me** (a demo, not a highlight): the pointer moves along the real path, keycaps appear as the
-   demo presses them, and the result shows as a ghost on the canvas. Driven by the step's `demo` list (PR #601), or derived from `expect`, `solve` and `point`; the `solve` actions
-   (already written for CI) or an explicit `demo` list. It never changes the drawing.
+   demo presses them, and the result shows as a ghost on the canvas. Driven by the step's `demo` list (PR #601), or derived from `expect`, `solve` and `point`; it never changes the drawing.
 4. **Try it**: after the demo the step waits for the person's own action and ticks on `expect`.
    The demo can be replayed; "Do it for me" (applies `solve`) is offered after two tries.
 5. **A reason to care** on reading steps: say what the feature saves, in the person's own work words.
