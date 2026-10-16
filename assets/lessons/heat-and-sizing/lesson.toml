@@ -17,7 +17,7 @@
 format = 1
 id = "heat-and-sizing"
 version = 2
-status = "draft"
+status = "early"
 title = "Where it gets hot, and how big the cabinet must be"
 title_nl = "Waar het warm wordt en hoe groot de kast moet zijn"
 summary = "Turn on the heat view, find the hot spot, move the transformer, and see what the heat means for the enclosure."

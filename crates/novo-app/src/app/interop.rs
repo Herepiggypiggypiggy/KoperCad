@@ -16,6 +16,7 @@ use std::time::Duration;
 use eframe::egui;
 use novo_interop::aml::{self, AmlOptions, AmlPlan};
 use novo_interop::dwg;
+use novo_interop::eplan::export_script as eplan_export;
 use novo_interop::report::Report;
 use novo_interop::step::{self, StepOptions};
 
@@ -30,6 +31,11 @@ pub(super) struct AmlImport {
 }
 
 /// A DWG being converted in the background.
+pub(super) struct EplanGuide {
+    folder: PathBuf,
+    dutch: bool,
+}
+
 pub(super) struct DwgJob {
     name: String,
     rx: Receiver<Result<PathBuf, String>>,
@@ -308,6 +314,80 @@ impl NovoApp {
             self.confirm_aml_import();
         } else if cancel || modal.should_close() {
             self.wb.aml_import = None;
+        }
+    }
+
+    /// Asks for a folder and writes the EPLAN export script, the instructions
+    /// (English and Dutch) and a self-test file there, then shows the steps.
+    pub(super) fn eplan_export_script(&mut self) {
+        let mut dialog = rfd::FileDialog::new().set_title("Folder for the EPLAN export script");
+        if let Some(dir) = dirs::document_dir().filter(|d| d.is_dir()) {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(folder) = dialog.pick_folder() {
+            self.write_eplan_export_script(&folder);
+        }
+    }
+
+    /// Writes the bundle into `folder` (created when missing) and opens the
+    /// guide. A file of ours is replaced; the person's other files are not
+    /// touched because the bundle names are fixed and ours alone.
+    pub fn write_eplan_export_script(&mut self, folder: &Path) -> bool {
+        let written = std::fs::create_dir_all(folder).and_then(|()| {
+            for file in eplan_export::bundle() {
+                std::fs::write(folder.join(file.name), file.text)?;
+            }
+            Ok(())
+        });
+        match written {
+            Ok(()) => {
+                self.wb.eplan_guide = Some(EplanGuide {
+                    folder: folder.to_path_buf(),
+                    dutch: false,
+                });
+                true
+            }
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!(
+                        "Could not write the EPLAN script to {}: {e}",
+                        folder.display()
+                    ),
+                );
+                false
+            }
+        }
+    }
+
+    pub(super) fn eplan_guide_dialog(&mut self, ctx: &egui::Context) {
+        let Some(guide) = &mut self.wb.eplan_guide else {
+            return;
+        };
+        let mut close = false;
+        let modal = egui::Modal::new(egui::Id::new("eplan_guide")).show(ctx, |ui| {
+            ui.set_width(560.0);
+            ui.heading("Export from EPLAN");
+            ui.weak(format!("Files written to {}", guide.folder.display()));
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut guide.dutch, false, "English");
+                ui.selectable_value(&mut guide.dutch, true, "Nederlands");
+            });
+            let lang = if guide.dutch {
+                eplan_export::Lang::Dutch
+            } else {
+                eplan_export::Lang::English
+            };
+            egui::ScrollArea::vertical()
+                .max_height(360.0)
+                .show(ui, |ui| {
+                    ui.label(egui::RichText::new(eplan_export::instructions(lang)).monospace());
+                });
+            ui.add_space(8.0);
+            close = ui.button("Close").clicked();
+        });
+        if close || modal.should_close() {
+            self.wb.eplan_guide = None;
         }
     }
 

@@ -11,7 +11,7 @@
 format = 1
 id = "panel-labels"
 version = 2
-status = "draft"
+status = "early"
 title = "Labels for wires, terminals and devices"
 title_nl = "Labels voor draden, klemmen en componenten"
 summary = "Export the four kinds of labels to a CSV for your label printer, with the command line tool."

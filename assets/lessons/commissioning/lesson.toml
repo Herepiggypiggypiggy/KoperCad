@@ -4,15 +4,15 @@ version = 1
 # The Commissioning tab is on main (verified against aa5977ab: outline tab Checks and Punch list,
 # buttons Next open, Pass, Fail, N/A, Reset, Pass all N open, Fixed, Verified, Reopen, Won't fix, report
 # PDF and CSV). Since #604 the workspace opens from the switcher at the top and keeps the schematic
-# on screen read-only; since #600 Fail raises a punch item itself. Stays a draft until the commissioning anchors and signals below are registered.
-status = "draft"
+# on screen read-only; since #600 Fail raises a punch item itself. Stays early until the commissioning anchors and signals below are registered.
+status = "early"
 title = "Commission a panel with a tick list"
 title_nl = "Een kast in bedrijf stellen met een afvinklijst"
 summary = "Walk the commissioning checks, pass and fail them with a value, and keep a punch list until it is clear."
 summary_nl = "Loop de inbedrijfstellingscontroles af, keur ze goed of af met een waarde en houd een puntenlijst bij tot hij leeg is."
 # Listed under `cabinet` in design section 10; owned by the productivity thread.
 track = "cabinet"
-order = 60
+order = 100
 level = "intermediate"
 minutes = 8
 topics = ["commissioning", "punch list", "test"]

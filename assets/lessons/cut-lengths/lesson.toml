@@ -8,7 +8,7 @@
 format = 1
 id = "cut-lengths"
 version = 2
-status = "draft"
+status = "early"
 title = "Wire list and cut lengths"
 title_nl = "Draadlijst en afkortlengtes"
 summary = "Read the cut length of every wire in the wire list, see where it comes from, watch it change when a device moves, and export the wire cut file."

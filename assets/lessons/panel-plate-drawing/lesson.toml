@@ -12,7 +12,7 @@
 format = 1
 id = "panel-plate-drawing"
 version = 2
-status = "draft"
+status = "early"
 title = "The plate drawing and drill table"
 title_nl = "De plaattekening en boortabel"
 summary = "Export a dimensioned plate drawing with a numbered drill table for the workshop, and see it follow a turned device."
