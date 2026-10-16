@@ -703,6 +703,11 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_duplicate",
+        &["apparaat dupliceren in 3d"],
+        &["dupliceren", "kopie", "kopieren"],
+    ),
+    nl(
         "view.3d_position",
         &["positie tonen in 3d"],
         &["positie", "coordinaten", "afstand"],

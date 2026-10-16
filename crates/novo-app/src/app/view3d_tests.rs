@@ -505,3 +505,53 @@ fn the_ambient_occlusion_command_toggles_the_views_occlusion() {
     d.frame();
     assert!(d.app.view3d.view.state.display.ssao);
 }
+
+#[test]
+fn duplicate_in_3d_adds_a_device_with_the_next_tag_on_the_plate_and_undo_takes_it_back() {
+    use novo_view3d::scene::{ItemId, ItemKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    let (devices, placed, src) = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        let lay = novo_layout::model::load(project, cab).unwrap();
+        (
+            project.all::<novo_core::Device>().count(),
+            lay.placements.len(),
+            lay.placements[0].id,
+        )
+    };
+    d.app.view3d.view.state.selection = [ItemId::new(ItemKind::Device, src)].into();
+    d.app.run_command(&ctx, "view.3d_duplicate", None);
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+    let lay = novo_layout::model::load(project, cab).unwrap();
+    assert_eq!(project.all::<novo_core::Device>().count(), devices + 1);
+    assert_eq!(lay.placements.len(), placed + 1);
+    assert!(lay.report().collisions.is_empty() && lay.report().outside.is_empty());
+    assert_eq!(d.app.view3d.view.state.selection.len(), 1);
+    assert!(
+        !d.app
+            .view3d
+            .view
+            .state
+            .selection
+            .iter()
+            .any(|i| i.raw == src),
+        "the copy is selected, not the original"
+    );
+    let tags: Vec<_> = project
+        .all::<novo_core::Device>()
+        .map(|x| x.tag.clone())
+        .collect();
+    let unique: std::collections::BTreeSet<_> = tags.iter().collect();
+    assert_eq!(unique.len(), tags.len(), "every tag is still unique");
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    assert_eq!(project.all::<novo_core::Device>().count(), devices);
+}
