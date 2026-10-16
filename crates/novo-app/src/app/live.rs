@@ -15,8 +15,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use eframe::egui;
 use novo_canvas::model::WireLook;
 use novo_core::{
-    NetId, Netlist, PageId, Potential, PotentialId, PotentialKind, Project, SymbolId, SymbolRole,
-    WireId,
+    Endpoint, NetId, Netlist, PageId, PinRef, Potential, PotentialId, PotentialKind, Project,
+    SymbolId, SymbolRole, WireId,
 };
 use novo_sim::{
     Clock, Live, PoleState, Settled, Solution, inputs_seen, is_coil, is_lamp, is_load, is_motor,
@@ -48,6 +48,8 @@ pub(crate) struct LiveView {
     /// Easing state of the device animation (lamps, motors, coils).
     anim: Anim,
     solved: Option<Solved>,
+    /// The PLC program window and the program running in it.
+    pub(super) plc: super::plc_run::PlcRun,
 }
 
 /// A solution for one project revision and one pole state.
@@ -57,12 +59,38 @@ struct Solved {
     forced: BTreeSet<SymbolId>,
     netlist: Netlist,
     settled: Settled,
+    /// Output channels a running PLC program has on.
+    plc_on: BTreeSet<SymbolId>,
 }
 
 impl LiveView {
     /// The solution for `project` under the current poles, solved again only
     /// when the drawing or the poles changed.
     fn solved(&mut self, project: &Project, dt: f64) -> &Solved {
+        if self.plc.is_running() {
+            // A program is scanning: every frame is a scan, and the circuit
+            // is solved again with the outputs it just set.
+            let netlist = match self.solved.take() {
+                Some(s) if s.revision == project.revision() && s.netlist.is_current(project) => {
+                    s.netlist
+                }
+                _ => project.netlist(),
+            };
+            if let Some(settled) =
+                self.plc
+                    .step(project, &netlist, &self.poles, &self.forced, dt.min(0.1))
+            {
+                self.solved = Some(Solved {
+                    revision: project.revision(),
+                    poles: self.poles.clone(),
+                    forced: self.forced.clone(),
+                    netlist,
+                    settled,
+                    plc_on: self.plc.outputs_on(),
+                });
+                return self.solved.as_ref().expect("set above");
+            }
+        }
         let changed = self.solved.as_ref().is_none_or(|s| {
             s.revision != project.revision()
                 || s.poles != self.poles
@@ -106,9 +134,67 @@ impl LiveView {
                 forced: self.forced.clone(),
                 netlist,
                 settled,
+                plc_on: BTreeSet::new(),
             });
         }
         self.solved.as_ref().expect("solved above")
+    }
+
+    /// Forgets the last solution: the next frame solves again.
+    pub(super) fn invalidate(&mut self) {
+        self.solved = None;
+    }
+
+    /// The clock timer contacts count on: the program's while it runs.
+    pub(super) fn timer_clock(&self) -> &Clock {
+        self.plc.clock().unwrap_or(&self.clock)
+    }
+
+    /// What a lesson step can read off the live view: the devices whose coil
+    /// is energized, the pins that carry a potential and the devices with a
+    /// pole closed, all by tag and designation.
+    pub(super) fn learn_facts(
+        &mut self,
+        project: &Project,
+    ) -> (BTreeSet<String>, BTreeSet<String>, BTreeSet<String>) {
+        let tag_of = |symbol: SymbolId| {
+            project
+                .pin_designation(PinRef::new(symbol, 0))
+                .and_then(|d| d.rsplit_once(':').map(|(tag, _)| tag.to_owned()))
+        };
+        let solved = self.solved(project, 0.0);
+        let coils = solved
+            .settled
+            .energized
+            .iter()
+            .filter_map(|s| tag_of(*s))
+            .collect();
+        let closed = project
+            .symbols()
+            .filter(|s| (0..s.pass_through.len()).any(|g| solved.settled.poles.is_closed(s.id, g)))
+            .filter_map(|s| tag_of(s.id))
+            .collect();
+        let mut pins = BTreeSet::new();
+        for symbol in project.symbols() {
+            for index in 0..symbol.pins.len() {
+                let Ok(pin) = u16::try_from(index) else {
+                    continue;
+                };
+                let live = solved.settled.solution.of(
+                    &solved.netlist,
+                    Endpoint::Pin {
+                        symbol: symbol.id,
+                        pin,
+                    },
+                );
+                if !matches!(live, Live::Dead)
+                    && let Some(d) = project.pin_designation(PinRef::new(symbol.id, pin))
+                {
+                    pins.insert(d);
+                }
+            }
+        }
+        (coils, pins, closed)
     }
 
     /// Closes the pole if open and opens it if closed.
@@ -127,6 +213,7 @@ impl LiveView {
 /// One wire of the page and what it carries.
 pub(super) struct LitWire {
     pub id: WireId,
+    pub net: Option<NetId>,
     pub points: Vec<egui::Vec2>,
     pub live: Live,
 }
@@ -147,11 +234,11 @@ pub(super) fn lit_wires(
             let mut points = vec![egui::vec2(a.x as f32, a.y as f32)];
             points.extend(w.route.iter().map(|p| egui::vec2(p.x as f32, p.y as f32)));
             points.push(egui::vec2(b.x as f32, b.y as f32));
-            let live = netlist
-                .net_of_wire(w)
-                .map_or(Live::Dead, |n| solution.net(n).clone());
+            let net = netlist.net_of_wire(w);
+            let live = net.map_or(Live::Dead, |n| solution.net(n).clone());
             Some(LitWire {
                 id: w.id,
+                net,
                 points,
                 live,
             })
@@ -399,6 +486,7 @@ impl NovoApp {
         };
         let project = doc.project();
         let live = &mut self.wb.live;
+        live.plc.sync(project, view.editor.catalog.library());
         let dt = f64::from(ctx.input(|i| i.stable_dt));
         let solved = live.solved(project, dt);
         let timing = solved.settled.timing.then_some(solved.settled.remaining);
@@ -413,7 +501,8 @@ impl NovoApp {
         let badges = pole_badges(project, page, &solved.settled.poles);
         let driven = solved.settled.driven.clone();
         let energized = solved.settled.energized.clone();
-        let coils = coil_badges(project, page, &energized, &solved.forced);
+        let shown: BTreeSet<SymbolId> = solved.forced.union(&solved.plc_on).copied().collect();
+        let coils = coil_badges(project, page, &energized, &shown);
         let seen = inputs_seen(project, &solved.netlist, &solved.settled.solution);
         let inputs = input_marks(project, page, &seen);
         let colors: BTreeMap<PotentialId, (String, egui::Color32)> = project
@@ -422,8 +511,13 @@ impl NovoApp {
             .collect();
         let states = novo_sim::device_states(project, &solved.netlist, &solved.settled);
         let poles = solved.settled.poles.clone();
+        let analysis = self
+            .wb
+            .sim
+            .analysis(project, &solved.netlist, &solved.settled.poles)
+            .clone();
         let glows = load_glows(project, page, &solved.netlist, &solved.settled.solution);
-        let timers = novo_sim::timer_progress(project, &live.clock);
+        let timers = novo_sim::timer_progress(project, live.timer_clock());
         let names: BTreeMap<SymbolId, String> = badges
             .iter()
             .map(|b| (b.symbol, symbol_name(project, b.symbol)))
@@ -502,6 +596,15 @@ impl NovoApp {
                             .collect::<Vec<_>>()
                             .join(" meets ")
                     ),
+                };
+                let text = match wire.net {
+                    Some(net) if !matches!(wire.live, Live::Shorted(_)) => {
+                        format!(
+                            "{text} · {}",
+                            super::simulate::reading_text(analysis.net(net))
+                        )
+                    }
+                    _ => text,
                 };
                 egui::Area::new(egui::Id::new("live_wire_tip"))
                     .order(egui::Order::Tooltip)
@@ -656,6 +759,9 @@ impl NovoApp {
         let closed = badges.iter().filter(|b| b.closed).count();
         let mut open_all = false;
         let mut leave = false;
+        let mut open_plc = false;
+        let plc_running = self.wb.live.plc.is_running();
+        let mut open_motor: Option<SymbolId> = None;
         egui::Area::new(egui::Id::new("live_card"))
             .order(egui::Order::Middle)
             .fixed_pos(canvas.left_top() + egui::vec2(12.0, 10.0))
@@ -685,6 +791,20 @@ impl NovoApp {
                             }
                         });
                     }
+                    ui.horizontal(|ui| {
+                        if ui
+                            .small_button("PLC program…")
+                            .on_hover_text(
+                                "Run a ladder or Structured Text program on the drawn I/O",
+                            )
+                            .clicked()
+                        {
+                            open_plc = true;
+                        }
+                        if plc_running {
+                            ui.colored_label(tokens::SUCCESS, "running");
+                        }
+                    });
                     ui.add_space(2.0);
                     for (potential, nets) in &legend.carried {
                         let Some((name, color)) = colors.get(potential) else {
@@ -711,6 +831,9 @@ impl NovoApp {
                     if let Some(left) = timing {
                         ui.weak(format!("A timer is running, {left:.1} s left"));
                     }
+                    open_motor = super::simulate::values_block(ui, project, &analysis, &|s| {
+                        symbol_name(project, s)
+                    });
                     if legend.carried.is_empty() && legend.shorted == 0 {
                         ui.weak("Nothing is energized");
                     }
@@ -718,8 +841,14 @@ impl NovoApp {
             });
 
         // Draws again only when something changed; egui repaints on input.
-        if leave || open_all || clicked.is_some() || timing.is_some() || animating {
+        if open_plc {
+            self.wb.live.plc.window = true;
+        }
+        if leave || open_all || clicked.is_some() || timing.is_some() || animating || plc_running {
             ctx.request_repaint();
+        }
+        if let Some(motor) = open_motor {
+            self.open_motor_start_for(motor);
         }
         if leave {
             self.wb.live.on = false;

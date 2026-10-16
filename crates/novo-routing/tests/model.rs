@@ -52,6 +52,7 @@ fn the_ducts_from_the_model_route_a_wire() {
     let anchor = |x, y| Anchor {
         pos: Point::new(x, y),
         facing: Facing::Any,
+        z_mm: None,
     };
     let job = Job {
         id: 1,

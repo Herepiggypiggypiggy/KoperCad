@@ -30,6 +30,9 @@ mod csv;
 mod import;
 mod library;
 mod macros;
+mod panel;
+mod recipes;
+mod schema;
 mod search;
 mod sheet;
 mod step;
@@ -53,8 +56,8 @@ pub use csv::{
 };
 pub use import::{
     Arrival, DownloadsWatcher, FallbackReason, FetchError, Fetcher, ImportJob, ImportOutcome,
-    ImportState, MakerSource, RemoteFile, ScriptedAnswer, ScriptedFetcher, SourceTable,
-    default_downloads_dir,
+    ImportState, MTIME_SLACK, MakerSource, RemoteFile, ScriptedAnswer, ScriptedFetcher,
+    SourceTable, default_downloads_dir,
 };
 pub use library::{
     FileKind, ImportFlow, LIBRARY_FORMAT_VERSION, LibraryError, LocalLibrary, NewSource,
@@ -64,6 +67,16 @@ pub use macros::{
     Imported, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION, MACRO_PACK_EXTENSION,
     MACRO_PACK_FORMAT, MacroEntry, MacroError, MacroFile, MacroLibrary, MacroPack, OnConflict,
     PackEntry, STARTER_FOLDER, starter_macros, user_macros_dir,
+};
+pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_properties};
+pub use recipes::{
+    ApplyContext, Dim, GENERIC, Login, MakerRecipe, Mapped, Quantity, RECIPES, RecipeReport, Route,
+    Skipped, Verified, local_keys, parse_quantity, recipe_for,
+};
+pub use schema::eng;
+pub use schema::{
+    Asset, AssetKind, Classification, ConnectionKind, DataSource, LetThroughPoint, Lifecycle,
+    PartRef, PartTerminal, Price, Provenance, Side,
 };
 pub use search::{Matcher, normalize_code};
 pub use sheet::{

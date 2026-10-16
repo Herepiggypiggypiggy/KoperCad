@@ -275,7 +275,7 @@ fn wire_lists_the_connections_with_an_end_in_the_cabinet() {
         .iter()
         .find(|r| r[2] == "=A1+CAB-F1:2" && r[3] == "=A1+CAB-K1:1")
         .expect("F1 to K1");
-    assert_eq!(routed[7], "routed");
+    assert_eq!(routed[7], "routed, no depth");
     assert!(routed[6].parse::<f64>().unwrap() > 0.0);
 }
 

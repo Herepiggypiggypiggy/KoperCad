@@ -191,6 +191,9 @@ const HEADERS: &[(&[&str], Column)] = &[
             "articlenumber",
             "articleno",
             "article",
+            "item",
+            "itemno",
+            "itemnumber",
             "artikelnummer",
             "artikelnr",
             "artikel",
@@ -374,9 +377,9 @@ pub fn import_catalog(text: &str, default_manufacturer: &str) -> Result<ImportRe
                         .collect();
                 }
                 Column::Keywords => part.keywords = split_list(&value.replace(';', ",")),
-                Column::Width => dims[0] = parse_number(value),
-                Column::Height => dims[1] = parse_number(value),
-                Column::Depth => dims[2] = parse_number(value),
+                Column::Width => dims[0] = dimension_mm(value),
+                Column::Height => dims[1] = dimension_mm(value),
+                Column::Depth => dims[2] = dimension_mm(value),
                 Column::Data(key) => {
                     part.data.insert(key.clone(), cell_value(value));
                 }
@@ -411,9 +414,25 @@ pub fn import_catalog(text: &str, default_manufacturer: &str) -> Result<ImportRe
                 }
             }
         }
+        crate::panel::migrate_properties(&mut part.data);
         report.parts.push(part);
     }
     Ok(report)
+}
+
+/// A size cell in mm: a plain number, or a number with a length unit
+/// (`60 mm`, `6 cm`).
+fn dimension_mm(text: &str) -> Option<f64> {
+    parse_number(text).or_else(|| {
+        let q = crate::recipes::parse_quantity(text)?;
+        (!q.range)
+            .then(|| {
+                crate::recipes::Dim::Length
+                    .factor(&q.unit)
+                    .map(|f| q.low * f)
+            })
+            .flatten()
+    })
 }
 
 /// A spreadsheet cell as a property value: whole numbers, decimal numbers

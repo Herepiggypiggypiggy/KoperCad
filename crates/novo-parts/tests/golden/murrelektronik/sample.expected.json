@@ -1,0 +1,67 @@
+{
+  "notes": [],
+  "parts": [
+    {
+      "data": {
+        "output_current_a": 10.0,
+        "output_voltage": "24 V DC",
+        "output_voltage_v": 24.0,
+        "power_loss": "15 W",
+        "power_loss_w": 15.0,
+        "rated_output_current": "10 A"
+      },
+      "description": "Power supply 1-phase 24 V DC 10 A",
+      "dimensions": {
+        "depth_mm": 117.0,
+        "height_mm": 124.0,
+        "width_mm": 60.0
+      },
+      "function": "power_supply",
+      "letter_codes": [
+        "G",
+        "T"
+      ],
+      "manufacturer": "Murrelektronik",
+      "order_number": "85064",
+      "provenance": {
+        "file": "sample.csv",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Murrelektronik; not redistributable",
+        "source": "import:csv"
+      },
+      "sources": {
+        "output_current_a": "maker_datasheet",
+        "output_voltage_v": "maker_datasheet",
+        "power_loss_w": "maker_datasheet"
+      }
+    },
+    {
+      "description": "Not an item number",
+      "manufacturer": "Murrelektronik",
+      "order_number": "MICO",
+      "provenance": {
+        "file": "sample.csv",
+        "imported": "2026-10-15",
+        "licence_note": "user-supplied from Murrelektronik; not redistributable",
+        "source": "import:csv"
+      }
+    }
+  ],
+  "report": {
+    "mapped": [
+      "85064: output_voltage -> output_voltage_v = 24",
+      "85064: power_loss -> power_loss_w = 15",
+      "85064: rated_output_current -> output_current_a = 10"
+    ],
+    "parts": 2,
+    "skipped": [],
+    "summary": [
+      "Read 3 value(s) into structured part data for 2 part(s), marked as from the maker's data.",
+      "MICO: “MICO” does not look like a Murrelektronik order number (digit groups joined by dashes, such as 7000-12341-6140500, or five digits). Check that it is the order number and not a type name."
+    ],
+    "unmapped": {},
+    "warnings": [
+      "MICO: “MICO” does not look like a Murrelektronik order number (digit groups joined by dashes, such as 7000-12341-6140500, or five digits). Check that it is the order number and not a type name."
+    ]
+  }
+}

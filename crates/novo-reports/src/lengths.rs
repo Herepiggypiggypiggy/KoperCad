@@ -2,7 +2,7 @@
 //! `novo-routing` where both ends are placed on one mounting plate,
 //! estimated otherwise.
 
-use novo_core::{PinRef, Project};
+use novo_core::{PinRef, Project, StructureId};
 use novo_routing::model::route_connections;
 use novo_routing::{Kind, Rules};
 
@@ -11,6 +11,9 @@ use novo_routing::{Kind, Rules};
 pub(crate) enum Basis {
     /// Through the ducts of the mounting plate both devices are placed on.
     Routed,
+    /// Routed, but a device has no depth: the wire is measured from the plate,
+    /// so it is too short by the rise to the terminals.
+    RoutedFlat,
     /// Both devices are placed on one plate but no duct reaches both: a
     /// straight Manhattan line, which the routing engine flags as a problem.
     FreeAir,
@@ -22,6 +25,7 @@ impl Basis {
     pub(crate) fn text(self) -> &'static str {
         match self {
             Basis::Routed => "routed",
+            Basis::RoutedFlat => "routed, no depth",
             Basis::FreeAir => "free air",
             Basis::Estimate => "estimate",
         }
@@ -78,10 +82,19 @@ pub(crate) struct Connection {
 }
 
 /// A measured connection.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) struct CutLength {
     pub mm: f64,
     pub basis: Basis,
+    /// The ducts the wire lies in, in order (empty when not ducted).
+    pub ducts: Vec<u64>,
+}
+
+/// The lengths of a set of connections and the plans they were routed in.
+pub(crate) struct Measurement {
+    pub lengths: Vec<CutLength>,
+    /// Per enclosure the duct fill after routing all of its wires.
+    pub plans: Vec<(StructureId, novo_routing::Plan)>,
 }
 
 /// The cut length of every connection, in the given order. Connections
@@ -90,6 +103,11 @@ pub(crate) struct CutLength {
 /// [`estimate`]. A length is rounded up to a whole millimetre and is never
 /// zero.
 pub(crate) fn cut_lengths(project: &Project, connections: &[Connection]) -> Vec<CutLength> {
+    measure(project, connections).lengths
+}
+
+/// [`cut_lengths`] with the duct fill of each plate the wires were routed on.
+pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurement {
     let jobs: Vec<novo_routing::model::Connection> = connections
         .iter()
         .enumerate()
@@ -101,7 +119,7 @@ pub(crate) fn cut_lengths(project: &Project, connections: &[Connection]) -> Vec<
         })
         .collect();
     let routed = route_connections(project, &jobs, &Rules::default());
-    connections
+    let lengths = connections
         .iter()
         .enumerate()
         .map(|(i, c)| {
@@ -109,13 +127,18 @@ pub(crate) fn cut_lengths(project: &Project, connections: &[Connection]) -> Vec<
                 Some(route) => CutLength {
                     mm: route.length_mm,
                     basis: match route.kind {
+                        Kind::Ducted if routed.unknown_height.contains(&(i as u64)) => {
+                            Basis::RoutedFlat
+                        }
                         Kind::Ducted => Basis::Routed,
                         Kind::FreeAir => Basis::FreeAir,
                     },
+                    ducts: route.ducts.clone(),
                 },
                 None => CutLength {
                     mm: estimate(project, c.from, c.to),
                     basis: Basis::Estimate,
+                    ducts: Vec::new(),
                 },
             };
             CutLength {
@@ -123,5 +146,9 @@ pub(crate) fn cut_lengths(project: &Project, connections: &[Connection]) -> Vec<
                 ..found
             }
         })
-        .collect()
+        .collect();
+    Measurement {
+        lengths,
+        plans: routed.plans,
+    }
 }
