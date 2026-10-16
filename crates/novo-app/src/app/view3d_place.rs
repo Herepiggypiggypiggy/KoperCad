@@ -1,5 +1,5 @@
 //! Placing an unplaced device from a list into the 3D view (View > 3D >
-//! PlaceList a device, right-click on empty plate > PlaceList a device, or Ctrl+K
+//! Place a device, right-click on empty plate > Place a device, or Ctrl+K
 //! "place"): the list shows the devices of this enclosure that are not on the
 //! plate yet; pick one and a landing box follows the pointer over the plate,
 //! snapped to the grid and onto a rail or duct line, red where the Cabinet
@@ -100,9 +100,9 @@ pub(super) fn panel(
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_max_width(190.0);
                 ui.horizontal(|ui| {
-                    ui.strong("PlaceList a device");
+                    ui.strong("Place a device");
                     if ui
-                        .small_button("✕")
+                        .small_button("Close")
                         .on_hover_text("Close the list")
                         .clicked()
                     {
