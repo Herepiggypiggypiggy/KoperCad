@@ -8,12 +8,14 @@
 
 use std::collections::BTreeSet;
 
+use novo_core::StructureId;
 use novo_layout::Rect;
 use novo_layout::state::CabinetLayout;
 use novo_view3d::scene::{ItemId, ItemKind, PlateFrame};
 use novo_view3d::widget::ItemDrag;
 use novo_view3d::{Overlay, OverlayLines, OverlayMesh};
 
+use super::NovoApp;
 use super::cabinet::Ask;
 use super::cabinet_rails::RailAsk;
 
@@ -25,6 +27,11 @@ const RAIL_WIDTH_MM: f64 = 35.0;
 pub(super) enum Edit {
     Device(DeviceEdit),
     Rail(RailEdit),
+    /// Several devices, rails and ducts moved together: one undo step.
+    Group {
+        devices: Vec<(u64, f64, f64)>,
+        rails: Vec<(u64, f64, f64)>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -44,6 +51,7 @@ pub(super) enum RailEdit {
 impl Edit {
     pub(super) fn ask(self) -> (Option<Ask>, Option<RailAsk>) {
         match self {
+            Edit::Group { .. } => (None, None),
             Edit::Device(DeviceEdit::Drop(d, x, y)) => (Some(Ask::Drop(d, x, y)), None),
             Edit::Device(DeviceEdit::Rotate(d)) => (Some(Ask::Rotate(d)), None),
             Edit::Device(DeviceEdit::Remove(d)) => (Some(Ask::Remove(d)), None),
@@ -65,7 +73,14 @@ pub(super) struct Landing {
     /// The move breaks a rule the Cabinet also flags: it overlaps another
     /// device, leaves the plate or crowds a neighbour.
     pub clash: bool,
+    /// The rail or duct the grabbed device lines up with (its edge snapped
+    /// onto the rail's line).
+    pub rail: Option<u64>,
 }
+
+/// How close a device's top left gets to a rail's line before it snaps onto
+/// it, mm.
+pub(super) const RAIL_SNAP_MM: f64 = 8.0;
 
 /// The drag in progress, kept from one frame to the next.
 #[derive(Debug, Default)]
@@ -73,12 +88,13 @@ pub(super) struct MoveState {
     active: Option<Active>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 struct Active {
-    item: ItemId,
-    /// Top left or start when the drag began.
-    from: (f64, f64),
-    landing: Landing,
+    /// The item under the press.
+    grabbed: ItemId,
+    /// Everything that moves with it, with where each started.
+    members: Vec<(ItemId, (f64, f64))>,
+    landings: Vec<Landing>,
 }
 
 /// The top left of a device, or the start of a rail or duct.
@@ -146,99 +162,201 @@ fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Option<Rect> {
     })
 }
 
+/// A device's top left pulled onto a rail or duct line it is next to: a
+/// horizontal one sets the top, a vertical one the left. The snap only
+/// applies along the rail's run, so a device never jumps to a far rail.
+fn rail_snap(layout: &CabinetLayout, device: u64, at: (f64, f64)) -> ((f64, f64), Option<u64>) {
+    let Some(p) = layout.placements.iter().find(|p| p.id == device) else {
+        return (at, None);
+    };
+    let f = p.footprint();
+    let lines = layout
+        .rails
+        .iter()
+        .map(|r| (r.id, r.x, r.y, r.length, r.vertical))
+        .chain(
+            layout
+                .ducts
+                .iter()
+                .map(|d| (d.id, d.x, d.y, d.length, d.vertical)),
+        );
+    let mut best: Option<(f64, u64, (f64, f64))> = None;
+    for (id, x, y, length, vertical) in lines {
+        let (gap, snapped) = if vertical {
+            let along = at.1 + f.h > y && at.1 < y + length;
+            ((at.0 - x).abs(), along.then_some((x, at.1)))
+        } else {
+            let along = at.0 + f.w > x && at.0 < x + length;
+            ((at.1 - y).abs(), along.then_some((at.0, y)))
+        };
+        if gap <= RAIL_SNAP_MM
+            && let Some(to) = snapped
+            && best.is_none_or(|(g, ..)| gap < g)
+        {
+            best = Some((gap, id, to));
+        }
+    }
+    best.map_or((at, None), |(_, id, to)| (to, Some(id)))
+}
+
+/// Where `members` land when the pointer has moved `delta` mm on the plate
+/// since the press. The grabbed item is snapped (to the grid, and a device
+/// onto a nearby rail); the others keep their distance from it, so a
+/// selection moves as one piece. `None` when the grabbed item is not on the
+/// plate.
+fn landings(
+    layout: &CabinetLayout,
+    grabbed: ItemId,
+    members: &[(ItemId, (f64, f64))],
+    delta: (f64, f64),
+) -> Option<Vec<Landing>> {
+    let from = members.iter().find(|(i, _)| *i == grabbed)?.1;
+    let raw = layout.snapped(from.0 + delta.0, from.1 + delta.1);
+    let (target, rail) = match grabbed.kind {
+        ItemKind::Device => rail_snap(layout, grabbed.raw, raw),
+        _ => (raw, None),
+    };
+    let shift = (target.0 - from.0, target.1 - from.1);
+    let mut moved = layout.clone();
+    let mut out = Vec::new();
+    for (item, start) in members {
+        let at = (start.0 + shift.0, start.1 + shift.1);
+        if item.kind == ItemKind::Device {
+            moved.move_to(item.raw, at.0, at.1);
+            // `move_to` snaps to the grid; keep the exact (rail) position.
+            if let Some(p) = moved.placements.iter_mut().find(|p| p.id == item.raw) {
+                (p.x, p.y) = at;
+            }
+        }
+        out.push((*item, at));
+    }
+    let report = moved.report();
+    let involved = |id: u64| {
+        report.collisions.iter().any(|(a, b)| *a == id || *b == id)
+            || report.outside.contains(&id)
+            || report
+                .too_close
+                .iter()
+                .any(|(a, b, _)| *a == id || *b == id)
+    };
+    out.into_iter()
+        .map(|(item, at)| {
+            let rect = area(layout, item, at)?;
+            let clash = match item.kind {
+                ItemKind::Device => involved(item.raw),
+                _ => {
+                    rect.x < 0.0
+                        || rect.y < 0.0
+                        || rect.right() > layout.plate.width
+                        || rect.bottom() > layout.plate.height
+                }
+            };
+            Some(Landing {
+                item,
+                at,
+                rect,
+                clash,
+                rail: (item == grabbed).then_some(rail).flatten(),
+            })
+        })
+        .collect()
+}
+
 /// Where `item` lands when the pointer has moved `delta` mm on the plate
-/// since the press, snapped like the Cabinet's drag. `None` for something
-/// that is not on the plate.
+/// since the press. `None` for something that is not on the plate.
 #[cfg(test)]
 pub(super) fn landing(layout: &CabinetLayout, item: ItemId, delta: (f64, f64)) -> Option<Landing> {
     let from = origin(layout, item)?;
-    landing_from(layout, item, from, delta)
-}
-
-fn landing_from(
-    layout: &CabinetLayout,
-    item: ItemId,
-    from: (f64, f64),
-    delta: (f64, f64),
-) -> Option<Landing> {
-    let at = layout.snapped(from.0 + delta.0, from.1 + delta.1);
-    let rect = area(layout, item, at)?;
-    let clash = match item.kind {
-        ItemKind::Device => {
-            let mut moved = layout.clone();
-            moved.move_to(item.raw, at.0, at.1);
-            let r = moved.report();
-            let id = item.raw;
-            r.collisions.iter().any(|(a, b)| *a == id || *b == id)
-                || r.outside.contains(&id)
-                || r.too_close.iter().any(|(a, b, _)| *a == id || *b == id)
-        }
-        _ => {
-            rect.x < 0.0
-                || rect.y < 0.0
-                || rect.right() > layout.plate.width
-                || rect.bottom() > layout.plate.height
-        }
-    };
-    Some(Landing {
-        item,
-        at,
-        rect,
-        clash,
-    })
+    landings(layout, item, &[(item, from)], delta)?.pop()
 }
 
 impl MoveState {
-    /// One frame of the drag the view reported. Returns the landing to draw
-    /// and, when the button went up on a new place, the edit to run.
+    /// One frame of the drag the view reported. `selection` is what is
+    /// selected: pressing on a selected item moves the whole selection. Returns
+    /// the landings to draw and, when the button went up on a new place, the
+    /// edit to run.
     pub(super) fn step(
         &mut self,
         layout: &CabinetLayout,
+        selection: &BTreeSet<ItemId>,
         drag: Option<ItemDrag>,
-    ) -> (Option<Landing>, Option<Edit>) {
+    ) -> (Vec<Landing>, Option<Edit>) {
         let Some(drag) = drag else {
             self.active = None;
-            return (None, None);
+            return (Vec::new(), None);
         };
-        let held = match self.active {
-            Some(a) if a.item == drag.id => a.from,
-            _ => match origin(layout, drag.id) {
-                Some(from) => from,
-                None => {
-                    self.active = None;
-                    return (None, None);
+        let members = match &self.active {
+            Some(a) if a.grabbed == drag.id => a.members.clone(),
+            _ => {
+                let mut picked: Vec<ItemId> = if selection.contains(&drag.id) {
+                    selection.iter().copied().collect()
+                } else {
+                    vec![drag.id]
+                };
+                if !picked.contains(&drag.id) {
+                    picked.push(drag.id);
                 }
-            },
+                picked
+                    .into_iter()
+                    .filter_map(|i| origin(layout, i).map(|o| (i, o)))
+                    .collect()
+            }
         };
-        let Some(land) = landing_from(layout, drag.id, held, drag.delta) else {
+        let Some(land) = landings(layout, drag.id, &members, drag.delta) else {
             self.active = None;
-            return (None, None);
+            return (Vec::new(), None);
         };
         if !drag.done {
             self.active = Some(Active {
-                item: drag.id,
-                from: held,
-                landing: land,
+                grabbed: drag.id,
+                members,
+                landings: land.clone(),
             });
-            return (Some(land), None);
+            return (land, None);
         }
         self.active = None;
-        let moved = land.at != held;
-        let edit = moved.then_some(match drag.id.kind {
-            ItemKind::Device => Edit::Device(DeviceEdit::Drop(drag.id.raw, land.at.0, land.at.1)),
-            _ => Edit::Rail(RailEdit::MoveTo(drag.id.raw, land.at.0, land.at.1)),
-        });
-        (None, edit)
+        let moved: Vec<&Landing> = land
+            .iter()
+            .filter(|l| members.iter().any(|(i, o)| *i == l.item && *o != l.at))
+            .collect();
+        let edit = match moved.as_slice() {
+            [] => None,
+            [one] if one.item.kind == ItemKind::Device => Some(Edit::Device(DeviceEdit::Drop(
+                one.item.raw,
+                one.at.0,
+                one.at.1,
+            ))),
+            [one] => Some(Edit::Rail(RailEdit::MoveTo(
+                one.item.raw,
+                one.at.0,
+                one.at.1,
+            ))),
+            many => Some(Edit::Group {
+                devices: many
+                    .iter()
+                    .filter(|l| l.item.kind == ItemKind::Device)
+                    .map(|l| (l.item.raw, l.at.0, l.at.1))
+                    .collect(),
+                rails: many
+                    .iter()
+                    .filter(|l| l.item.kind != ItemKind::Device)
+                    .map(|l| (l.item.raw, l.at.0, l.at.1))
+                    .collect(),
+            }),
+        };
+        (Vec::new(), edit)
     }
 
-    /// Whether the item is being dragged now.
+    /// Whether something is being dragged now.
     pub(super) fn dragging(&self) -> bool {
         self.active.is_some()
     }
 
-    /// The landing of the drag in progress.
-    pub(super) fn landing(&self) -> Option<Landing> {
-        self.active.map(|a| a.landing)
+    /// The landings of the drag in progress.
+    pub(super) fn landings(&self) -> Vec<Landing> {
+        self.active
+            .as_ref()
+            .map_or_else(Vec::new, |a| a.landings.clone())
     }
 }
 
@@ -281,11 +399,60 @@ pub(super) fn key_edits(
     out
 }
 
+impl NovoApp {
+    /// Runs a group move as one undo step: devices keep their turn, rails and
+    /// ducts move by the Cabinet's own command. A pending Place all preview
+    /// is accepted first, like any plate edit.
+    pub(super) fn view3d_move_group(
+        &mut self,
+        structure: StructureId,
+        devices: Vec<(u64, f64, f64)>,
+        rails: Vec<(u64, f64, f64)>,
+    ) {
+        if self.cabinet.preview.is_some() {
+            self.cabinet_ask(Ask::Accept, Some(structure), None, &[]);
+        }
+        let layout = self
+            .backend
+            .document()
+            .and_then(|d| novo_layout::model::load(d.project(), structure));
+        let Some(layout) = layout else {
+            return;
+        };
+        let moves_devices = !devices.is_empty();
+        let done = self.cabinet_edit("Move selection", move |tx| {
+            for (id, x, y) in devices {
+                let rotated = layout
+                    .placements
+                    .iter()
+                    .find(|p| p.id == id)
+                    .is_some_and(|p| p.rotated);
+                novo_layout::model::place_device(tx, structure, id, x, y, rotated)?;
+            }
+            for (id, x, y) in rails {
+                tx.execute(novo_core::Command::MoveRail {
+                    rail: novo_core::RailId::from(id),
+                    x,
+                    y,
+                })?;
+            }
+            Ok(())
+        });
+        // A dragged group counts as a drop for the lessons, like a single one.
+        if done && moves_devices {
+            self.learn_signal("cabinet_dropped");
+        }
+    }
+}
+
 /// The landing box as overlays: a translucent slab with an outline, blue
 /// where the move is fine and red where the Cabinet would flag it.
 pub(super) fn ghost(land: &Landing, frame: &PlateFrame, top_mm: f64) -> Vec<Overlay> {
     let (fill, edge): ([u8; 4], [u8; 4]) = if land.clash {
         ([230, 70, 70, 90], [240, 90, 90, 255])
+    } else if land.rail.is_some() {
+        // Lined up with a rail or duct.
+        ([80, 200, 130, 80], [110, 225, 155, 255])
     } else {
         ([90, 160, 255, 80], [120, 180, 255, 255])
     };

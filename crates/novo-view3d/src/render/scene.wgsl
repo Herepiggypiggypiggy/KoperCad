@@ -36,6 +36,7 @@ struct Instance {
     @location(5) scale: vec3<f32>,
     @location(6) color: vec4<f32>,
     @location(7) edge: vec4<f32>,
+    @location(8) spec: vec4<f32>,
 }
 
 fn world_of(v: Vertex, i: Instance) -> vec3<f32> {
@@ -52,6 +53,7 @@ struct FaceOut {
     @location(0) world: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) color: vec4<f32>,
+    @location(3) spec: f32,
 }
 
 @vertex
@@ -64,6 +66,7 @@ fn vs_face(v: Vertex, i: Instance) -> FaceOut {
     o.world = w;
     o.clip = g.view_proj * vec4<f32>(w, 1.0);
     o.color = i.color;
+    o.spec = i.spec.x;
     return o;
 }
 
@@ -96,7 +99,10 @@ fn fs_face(f: FaceOut, @builtin(front_facing) front: bool) -> @location(0) vec4<
         let k = smoothstep(0.0, g.params.y, f.world.z);
         shade = shade * (1.0 - g.params.x * (1.0 - k));
     }
-    let rgb = to_srgb(to_linear(f.color.rgb) * shade);
+    // Weak Blinn highlight (power 24) from the key light only.
+    let half_vec = normalize(l + to_eye);
+    let highlight = f.spec * pow(max(dot(n, half_vec), 0.0), 24.0) * (1.0 - ambient * 0.5);
+    let rgb = to_srgb(to_linear(f.color.rgb) * shade + vec3<f32>(highlight));
     return vec4<f32>(rgb, f.color.a);
 }
 

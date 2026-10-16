@@ -34,6 +34,37 @@ impl Segment {
     }
 }
 
+/// Most bands one segment is cut into; a very long run gets wider bands
+/// instead of more instances.
+const MAX_BANDS: usize = 48;
+
+impl Segment {
+    /// The piece of the segment between `from` and `to` millimetres along it.
+    fn slice(&self, from: f32, to: f32) -> Segment {
+        let len = self.length();
+        let dir = (self.b - self.a) / len;
+        Segment {
+            a: self.a + dir * from,
+            b: self.a + dir * to.min(len),
+        }
+    }
+
+    /// The segment cut into bands of about `band` millimetres, each with
+    /// whether it carries the stripe colour (every second one), so a
+    /// bi-colour wire reads as a barber pole.
+    pub fn bands(&self, band: f32) -> impl Iterator<Item = (Segment, bool)> + '_ {
+        let len = self.length();
+        let band = band.max(len / MAX_BANDS as f32).max(0.5);
+        let count = (len / band).ceil().max(1.0) as usize;
+        (0..count).map(move |i| {
+            (
+                self.slice(i as f32 * band, (i + 1) as f32 * band),
+                i % 2 == 1,
+            )
+        })
+    }
+}
+
 /// The non-degenerate segments of a wire.
 pub fn segments(wire: &Wire) -> impl Iterator<Item = Segment> + '_ {
     wire.points
@@ -66,9 +97,34 @@ mod tests {
             points: points.to_vec(),
             radius: 1.0,
             tint: None,
+            stripe: None,
             mark: Mark::None,
             label: None,
         }
+    }
+
+    #[test]
+    fn a_segment_is_cut_into_alternating_bands_that_cover_it() {
+        let seg = Segment {
+            a: Vec3::ZERO,
+            b: Vec3::new(100.0, 0.0, 0.0),
+        };
+        let bands: Vec<_> = seg.bands(10.0).collect();
+        assert_eq!(bands.len(), 10);
+        assert!(!bands[0].1 && bands[1].1 && !bands[2].1);
+        assert_eq!(bands[0].0.a, Vec3::ZERO);
+        assert!((bands[9].0.b - seg.b).length() < 1e-4);
+        let total: f32 = bands.iter().map(|(b, _)| b.length()).sum();
+        assert!((total - 100.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn a_long_run_gets_wider_bands_not_more_of_them() {
+        let seg = Segment {
+            a: Vec3::ZERO,
+            b: Vec3::new(10_000.0, 0.0, 0.0),
+        };
+        assert!(seg.bands(5.0).count() <= 48);
     }
 
     #[test]

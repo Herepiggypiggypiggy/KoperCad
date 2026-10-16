@@ -956,7 +956,7 @@ fn escape_and_the_cabinet_tab_also_leave_the_table() {
 }
 
 /// Starts the lesson `id` and skips to the step `step`.
-fn lesson_at(d: &mut Drive, dir: &std::path::Path, id: &str, step: &str) {
+pub(super) fn lesson_at(d: &mut Drive, dir: &std::path::Path, id: &str, step: &str) {
     d.app.learn.reload();
     d.app.learn.use_progress_file(dir.join("learn.json"));
     d.app.start_lesson(id);
@@ -973,7 +973,7 @@ fn lesson_at(d: &mut Drive, dir: &std::path::Path, id: &str, step: &str) {
     }
 }
 
-fn step_done(d: &mut Drive, step: &str) -> bool {
+pub(super) fn step_done(d: &mut Drive, step: &str) -> bool {
     d.frame();
     d.app.learn.run.as_ref().unwrap().is_done(step)
 }

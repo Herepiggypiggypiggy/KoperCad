@@ -283,6 +283,7 @@ fn a_wire_is_drawn_as_a_tube_in_front_of_the_device_it_crosses() {
         points: vec![Vec3::new(0.0, 50.0, 60.0), Vec3::new(100.0, 50.0, 60.0)],
         radius: 6.0,
         tint: Some([40, 220, 60]),
+        stripe: None,
         mark: novo_view3d::Mark::None,
         label: None,
     });
@@ -417,4 +418,105 @@ fn overlay_lines_have_the_requested_pixel_width() {
     assert!(near[2] > near[0] + 80, "still inside five pixels: {near:?}");
     let off = px(&img, cx, cy + 12);
     assert!(off[0] > off[2], "red box again beyond the ribbon: {off:?}");
+}
+
+/// A plate with one duct and a wire in it, behind the ghost shell and the
+/// closed door.
+fn cabinet_with_wire(colour: Option<novo_view3d::build::WireColour>) -> Scene {
+    use novo_layout::Plate;
+    use novo_layout::state::CabinetLayout;
+    use novo_view3d::build::{DuctShape, Inputs, Options, WireInput, WireKind, from_layout};
+    let layout = CabinetLayout::new(Plate {
+        width: 400.0,
+        height: 300.0,
+        margin: 10.0,
+    });
+    let mut inputs = Inputs::default();
+    inputs.ducts.push(DuctShape {
+        id: 1,
+        x: 20.0,
+        y: 150.0,
+        length: 360.0,
+        vertical: false,
+        width: 40.0,
+        height: 60.0,
+    });
+    let wires = vec![WireInput {
+        id: 5,
+        kind: WireKind::Ducted,
+        points: vec![(30.0, 150.0), (370.0, 150.0)],
+        ducts: vec![1],
+        diameter_mm: Some(6.0),
+        colour,
+    }];
+    from_layout(
+        &layout,
+        &inputs,
+        &Options {
+            wires,
+            ..Options::default()
+        },
+    )
+}
+
+/// How many pixels of an RGBA image satisfy `test`.
+fn count(img: &[u8], test: impl Fn(i32, i32, i32) -> bool) -> usize {
+    img.chunks(4)
+        .filter(|p| test(p[0] as i32, p[1] as i32, p[2] as i32))
+        .count()
+}
+
+/// The blue of the wire in the test: clearly more blue than red or green.
+fn bluish(r: i32, g: i32, b: i32) -> bool {
+    b > r + 50 && b > g + 20
+}
+
+#[test]
+fn a_coloured_wire_shows_through_the_closed_door() {
+    use novo_view3d::build::WireColour;
+    let Some(gpu) = gpu() else {
+        println!("no adapter, skipped");
+        return;
+    };
+    let blue = [0x2F, 0x6F, 0xD0];
+    let with = cabinet_with_wire(Some(WireColour {
+        body: blue,
+        stripe: None,
+    }));
+    assert_eq!(
+        with.group(novo_view3d::build::DOOR_HINGE).unwrap().angle,
+        0.0
+    );
+    let camera = front_camera(&with);
+    let img = render(&gpu, &with, &ViewState::default(), &camera, Mode::Settled);
+    assert!(
+        count(&img, bluish) > 40,
+        "a blue wire is visible through the closed door"
+    );
+    let mut none = with.clone();
+    none.wires.clear();
+    let img = render(&gpu, &none, &ViewState::default(), &camera, Mode::Settled);
+    assert_eq!(count(&img, bluish), 0, "no blue without the wire");
+}
+
+#[test]
+fn a_bi_colour_wire_shows_both_its_colours() {
+    use novo_view3d::build::WireColour;
+    let Some(gpu) = gpu() else {
+        println!("no adapter, skipped");
+        return;
+    };
+    let (body, stripe) = ([0x7F, 0xB0, 0x20], [0xE3, 0xD3, 0x4A]);
+    let scene = cabinet_with_wire(Some(WireColour {
+        body,
+        stripe: Some(stripe),
+    }));
+    let camera = front_camera(&scene);
+    let img = render(&gpu, &scene, &ViewState::default(), &camera, Mode::Settled);
+    // Green: green clearly above blue and not yellow; yellow: red as high as
+    // green and both well above blue.
+    let greenish = |r: i32, g: i32, b: i32| g > r + 15 && g > b + 40;
+    let yellowish = |r: i32, g: i32, b: i32| r > 140 && g > 140 && b + 50 < r.min(g);
+    assert!(count(&img, greenish) > 10, "the green body shows");
+    assert!(count(&img, yellowish) > 10, "and so does the yellow stripe");
 }

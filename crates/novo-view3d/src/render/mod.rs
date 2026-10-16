@@ -131,6 +131,8 @@ struct Instance {
     scale: [f32; 3],
     color: [u8; 4],
     edge: [u8; 4],
+    /// Highlight strength in `x` (the rest is padding).
+    spec: [u8; 4],
 }
 
 #[repr(C)]
@@ -178,13 +180,14 @@ const RIBBON_ATTRS: [wgpu::VertexAttribute; 5] = wgpu::vertex_attr_array![
 
 const VERTEX_ATTRS: [wgpu::VertexAttribute; 2] =
     wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3];
-const INSTANCE_ATTRS: [wgpu::VertexAttribute; 6] = wgpu::vertex_attr_array![
+const INSTANCE_ATTRS: [wgpu::VertexAttribute; 7] = wgpu::vertex_attr_array![
     2 => Float32x4,
     3 => Float32x4,
     4 => Float32x4,
     5 => Float32x3,
     6 => Unorm8x4,
     7 => Unorm8x4,
+    8 => Unorm8x4,
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -766,6 +769,7 @@ impl Renderer {
                 scale: scale.to_array(),
                 color,
                 edge,
+                spec: spec_byte(look.surface(item.id.kind).specular, item.translucent),
             };
             if item.translucent {
                 blended.push((dist, key, inst));
@@ -780,6 +784,9 @@ impl Renderer {
                     continue;
                 }
                 let (color, edge) = colors(wire.id, wire.tint, wire.mark, false, look, frame.state);
+                let striped = wire
+                    .stripe
+                    .map(|s| colors(wire.id, Some(s), wire.mark, false, look, frame.state));
                 let r = wire.radius.max(0.25);
                 for seg in wire::segments(wire) {
                     let dist = (seg.centre() - eye).length();
@@ -788,17 +795,30 @@ impl Renderer {
                     if size_px < 3.0 {
                         continue;
                     }
-                    let m = seg.frame();
-                    opaque.entry(MeshKey::Cube).or_default().push(Instance {
-                        rows: [
-                            m.row(0).to_array(),
-                            m.row(1).to_array(),
-                            m.row(2).to_array(),
-                        ],
-                        scale: [2.0 * r, 2.0 * r, seg.length()],
-                        color,
-                        edge,
-                    });
+                    let mut push = |piece: &wire::Segment, (color, edge): ([u8; 4], [u8; 4])| {
+                        let m = piece.frame();
+                        opaque.entry(MeshKey::Cube).or_default().push(Instance {
+                            rows: [
+                                m.row(0).to_array(),
+                                m.row(1).to_array(),
+                                m.row(2).to_array(),
+                            ],
+                            scale: [2.0 * r, 2.0 * r, piece.length()],
+                            color,
+                            edge,
+                            spec: spec_byte(look.surface(ItemKind::Wire).specular, false),
+                        });
+                    };
+                    match striped {
+                        // Bands only where the wire is big enough on screen
+                        // to show them; far away it is one body colour.
+                        Some(stripe) if size_px >= 12.0 => {
+                            for (piece, odd) in seg.bands(r * 6.0) {
+                                push(&piece, if odd { stripe } else { (color, edge) });
+                            }
+                        }
+                        _ => push(&seg, (color, edge)),
+                    }
                 }
             }
         }
@@ -1052,6 +1072,16 @@ impl Renderer {
             },
         }
     }
+}
+
+/// The highlight strength as a byte; translucent shells have none.
+fn spec_byte(strength: f32, translucent: bool) -> [u8; 4] {
+    let v = if translucent {
+        0.0
+    } else {
+        strength.clamp(0.0, 1.0)
+    };
+    [(v * 255.0).round() as u8, 0, 0, 0]
 }
 
 fn apply(base: Rgb, h: &Highlight) -> (Rgb, Rgb) {

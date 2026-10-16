@@ -57,6 +57,7 @@ Zolang de binnenmaat niet bekend is, kan er niets over diepte worden gecontrolee
 """
 point = { ui = "cabinet.plate" }
 expect = { clicked = "cabinet.plate" }
+manual = "a click on the Plate setup button; no script clicks panel buttons yet"
 
 [[step]]
 id = "read-form"
@@ -102,6 +103,7 @@ Eronder tekent een bovenaanzicht de plaat, de componenten zo diep als hun artike
 """
 point = { ui = "cabinet.door.apply" }
 expect = { clicked = "cabinet.door.apply" }
+manual = "a click on Apply in the Door and depth card; no script clicks panel buttons yet"
 
 [[step]]
 id = "shallow"
@@ -119,6 +121,7 @@ De contactor **-K1**, de zekering **-F2** (beide 90 mm diep) en de transformator
 """
 point = { ui = "cabinet.door.apply" }
 expect = { clicked = "cabinet.door.apply" }
+manual = "a click on Apply in the Door and depth card; no script clicks panel buttons yet"
 
 [[step]]
 id = "read-depth"
