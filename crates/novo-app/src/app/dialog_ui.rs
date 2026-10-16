@@ -27,7 +27,14 @@ pub(super) fn section(ui: &mut egui::Ui, text: &str, first: bool) {
 
 /// A small, quiet, wrapping line of help.
 pub(super) fn hint(ui: &mut egui::Ui, text: &str) {
-    ui.add(egui::Label::new(egui::RichText::new(text).small().weak()).wrap());
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(text)
+                .size(egui::TextStyle::Small.resolve(ui.style()).size.max(12.0))
+                .weak(),
+        )
+        .wrap(),
+    );
 }
 
 /// A setting's name and its help line.
