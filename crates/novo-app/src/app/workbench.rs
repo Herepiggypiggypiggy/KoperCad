@@ -316,6 +316,11 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "nav.next_page",
     "nav.previous_page",
     "page.new",
+    "page.rename",
+    "page.duplicate",
+    "page.delete",
+    "page.move_up",
+    "page.move_down",
     "nav.partner",
     "nav.all_references",
     "nav.back",
@@ -752,6 +757,8 @@ impl NovoApp {
                 }
             }
             "page.new" => self.new_page(),
+            "page.rename" | "page.duplicate" | "page.delete" | "page.move_up"
+            | "page.move_down" => self.page_command(id),
             "nav.partner" => self.go_partner(),
             "nav.all_references" => self.list_occurrences(),
             "nav.back" | "nav.forward" => self.go_history(id == "nav.back"),

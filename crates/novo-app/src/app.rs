@@ -168,6 +168,8 @@ mod onboarding_tests;
 #[cfg(test)]
 mod outline_tests;
 #[cfg(test)]
+mod page_commands_tests;
+#[cfg(test)]
 mod protection_tests;
 #[cfg(test)]
 mod route_all_tests;

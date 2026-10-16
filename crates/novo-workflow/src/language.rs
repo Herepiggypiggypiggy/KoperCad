@@ -74,6 +74,15 @@ pub const DUTCH: &[Aliases] = &[
         &["nieuwe pagina", "pagina toevoegen"],
         &["pagina", "blad"],
     ),
+    nl("page.rename", &[], &["pagina hernoemen", "paginatitel"]),
+    nl(
+        "page.duplicate",
+        &[],
+        &["pagina kopieren", "pagina dupliceren"],
+    ),
+    nl("page.delete", &[], &["pagina verwijderen"]),
+    nl("page.move_up", &[], &["pagina omhoog"]),
+    nl("page.move_down", &[], &["pagina omlaag"]),
     nl("project.rules", &["regels"], &["nummering", "instellingen"]),
     nl(
         "app.preferences",

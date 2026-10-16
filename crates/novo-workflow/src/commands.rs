@@ -170,6 +170,43 @@ pub const COMMANDS: &[CommandInfo] = &[
         // Not a bare "page": `page 2` goes to page 2.
         &["new page", "add page"],
     ),
+    // The page-tree actions of the outline, for the palette and the menus.
+    // They act on the page that is open.
+    cmd(
+        "page.rename",
+        "Rename page",
+        "Project",
+        &["title", "page title"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.duplicate",
+        "Duplicate page",
+        "Project",
+        &["copy page", "clone page"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.delete",
+        "Delete page",
+        "Project",
+        &["remove page"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.move_up",
+        "Move page up",
+        "Project",
+        &["reorder", "earlier"],
+        Needs::Page,
+    ),
+    cmd(
+        "page.move_down",
+        "Move page down",
+        "Project",
+        &["reorder", "later"],
+        Needs::Page,
+    ),
     verb(
         cmd(
             "project.rules",
