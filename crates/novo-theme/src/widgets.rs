@@ -474,6 +474,59 @@ fn pill_parts(p: &Palette, errors: usize, warnings: usize) -> Vec<(String, egui:
 // ---------------------------------------------------------------------------
 // Rows, menus and messages
 
+/// A progress bar with a caption line above it: `caption` on the left,
+/// `detail` (counts, in the number font) on the right. `done` and `failed`
+/// are fractions of the whole, 0 to 1; the done part is green and the
+/// failed part follows it in the error colour. The bar is 6 pt high at every
+/// density.
+pub fn progress_bar(ui: &mut Ui, caption: &str, detail: &str, done: f32, failed: f32) -> Response {
+    let p = Palette::of(ui);
+    let mut small = egui::TextStyle::Small.resolve(ui.style());
+    // Never below 12 pt, so the caption and counts read at every density.
+    small.size = small.size.max(12.0);
+    let width = ui.available_width();
+    ui.horizontal(|ui| {
+        ui.set_width(width);
+        ui.label(
+            RichText::new(caption)
+                .font(small.clone())
+                .color(p.text_secondary),
+        );
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.label(
+                RichText::new(detail)
+                    .font(FontId::new(small.size, egui::FontFamily::Monospace))
+                    .color(p.text_primary),
+            );
+        });
+    });
+    let (rect, response) = ui.allocate_exact_size(Vec2::new(width, 6.0), Sense::hover());
+    let round = CornerRadius::same(3);
+    ui.painter().rect_filled(rect, round, p.sunken);
+    let done = done.clamp(0.0, 1.0);
+    let failed = failed.clamp(0.0, 1.0 - done);
+    let part = |from: f32, to: f32| {
+        Rect::from_min_max(
+            egui::pos2(rect.left() + rect.width() * from, rect.top()),
+            egui::pos2(rect.left() + rect.width() * to, rect.bottom()),
+        )
+    };
+    if done > 0.0 {
+        ui.painter().rect_filled(part(0.0, done), round, p.success);
+    }
+    if failed > 0.0 {
+        ui.painter()
+            .rect_filled(part(done, done + failed), round, p.error);
+    }
+    ui.painter().rect_stroke(
+        rect,
+        round,
+        Stroke::new(1.0, p.border_subtle),
+        egui::StrokeKind::Inside,
+    );
+    response
+}
+
 /// A list row: full width, one control high plus a point, with hover and
 /// selected looks (the selected row has the copper wash and a copper bar on
 /// its left). `add_contents` lays out the row's content from left to right.
