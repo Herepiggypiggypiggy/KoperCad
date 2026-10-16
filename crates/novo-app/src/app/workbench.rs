@@ -438,6 +438,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_quality",
     "view.3d_stats",
     "view.3d_wire_runs",
+    "view.3d_hints",
     "view.3d_select_devices",
     "view.3d_select_rails",
     "view.3d_select_ducts",
@@ -976,6 +977,10 @@ impl NovoApp {
                 if self.view3d.wire_runs {
                     self.view3d.controls.layers.wires = true;
                 }
+            }
+            "view.3d_hints" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.hints.toggle();
             }
             "view.3d_select_devices" | "view.3d_select_rails" | "view.3d_select_ducts" => {
                 self.switch_workspace(Workspace::View3d);
