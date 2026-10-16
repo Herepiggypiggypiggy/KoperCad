@@ -614,6 +614,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd("edit.rotate", "Rotate", "Draw", &["turn"], Needs::Selection),
+    cmd(
+        "edit.reset_note",
+        "Reset note position",
+        "Draw",
+        &["note", "cross reference", "contact image", "label"],
+        Needs::Selection,
+    ),
     cmd("edit.mirror", "Mirror", "Draw", &["flip"], Needs::Selection),
     // PLC and I/O (docs/design/plc.md section 4): the command surface only
     // names them; the app shell runs them through novo-plc.
