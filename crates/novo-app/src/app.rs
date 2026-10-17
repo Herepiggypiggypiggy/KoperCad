@@ -173,6 +173,9 @@ mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
 mod view3d_nudge;
+mod view3d_pins;
+#[cfg(test)]
+mod view3d_pins_tests;
 mod view3d_place;
 mod view3d_rail;
 #[cfg(test)]

@@ -20,6 +20,8 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Read-only token for every job: fork pull requests run this workflow too.
+# Only the release job below gets a write token, and it runs for tag pushes
+# only and executes no repository code.
 permissions:
   contents: read
 
@@ -35,7 +37,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: release
-      - run: cargo build --release -p novo-app
+      - run: cargo build --release -p novo-app -p novo-cli
       - name: Install Inno Setup if missing
         shell: pwsh
         run: |
@@ -45,7 +47,8 @@ jobs:
         shell: pwsh
         run: |
           $version = ((cargo pkgid -p novo-app) -split '[#@]')[-1]
-          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$version") {
+          # A release candidate tag (v0.1.0-rc1) builds the crate version 0.1.0.
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and ($env:GITHUB_REF_NAME -replace '-rc[0-9]+$', '') -ne "v$version") {
             throw "tag $env:GITHUB_REF_NAME does not match the crate version $version"
           }
           & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\windows\novoelectric.iss
@@ -54,7 +57,7 @@ jobs:
         shell: pwsh
         run: |
           # The installer and the app must run without elevation.
-          foreach ($exe in @((Get-ChildItem dist\KoperCAD-*-setup.exe)[0].FullName, "target\release\kopercad.exe")) {
+          foreach ($exe in @((Get-ChildItem dist\KoperCAD-*-setup.exe)[0].FullName, "target\release\kopercad.exe", "target\release\kopercad-cli.exe")) {
             $text = [Text.Encoding]::UTF8.GetString([IO.File]::ReadAllBytes($exe))
             if ($text -match 'requireAdministrator|highestAvailable') { throw "$exe asks for admin rights" }
           }
@@ -120,8 +123,87 @@ jobs:
           $setup = (Get-ChildItem dist\KoperCAD-*-setup.exe)[0]
           $size = [math]::Round($setup.Length / 1MB, 1)
           "Installer: $($setup.Name), $size MB, installed as a standard user, app launched" >> $env:GITHUB_STEP_SUMMARY
+      - name: Portable zip, build info and checksums
+        shell: pwsh
+        run: |
+          $version = ((cargo pkgid -p novo-app) -split '[#@]')[-1]
+          $label = if ($env:GITHUB_REF_TYPE -eq "tag") { $env:GITHUB_REF_NAME -replace '^v', '' } else { "$version-ci" }
+          $stage = "dist\portable"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item target\release\kopercad.exe, target\release\kopercad-cli.exe $stage
+          Copy-Item packaging\windows\portable\run.cmd, packaging\windows\portable\README.txt $stage
+          @(
+            "KoperCAD $label"
+            "Commit: $env:GITHUB_SHA"
+            "Built: $((Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'))"
+            "Run: $env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          ) | Set-Content -Encoding utf8 "$stage\BUILD_INFO.txt"
+          $zip = "dist\KoperCAD-$label-portable.zip"
+          Compress-Archive -Path "$stage\*" -DestinationPath $zip -Force
+          Copy-Item "$stage\BUILD_INFO.txt" dist\BUILD_INFO.txt
+          # sha256sum format (hash, two spaces, name) so `sha256sum -c` works too.
+          $lines = foreach ($f in @((Get-ChildItem dist\KoperCAD-*-setup.exe)[0], (Get-Item $zip))) {
+            "$((Get-FileHash $f.FullName -Algorithm SHA256).Hash.ToLower())  $($f.Name)"
+          }
+          $lines | Set-Content -Encoding ascii dist\SHA256SUMS
+          Get-Content dist\SHA256SUMS
       - uses: actions/upload-artifact@v4
         with:
           name: KoperCAD-windows-installer
           path: dist/*.exe
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: KoperCAD-release-files
+          path: |
+            dist/*.exe
+            dist/*.zip
+            dist/SHA256SUMS
+            dist/BUILD_INFO.txt
+          if-no-files-found: error
+
+  # Attaches the installer, the portable zip, the build info and the checksums
+  # to a GitHub release. Runs for tag pushes only (a pull request cannot reach
+  # it), has the only write token in this workflow and checks out no code.
+  # Tags vX.Y.Z make a pre-release (the beta is not a stable release yet);
+  # release candidate tags vX.Y.Z-rcN make a draft pre-release that only
+  # people with write access can see until it is published.
+  release:
+    needs: installer
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: KoperCAD-release-files
+          path: release
+      - name: Create or update the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cd release
+          # PowerShell wrote CRLF line ends; sha256sum would read them as part of the name.
+          sed -i 's/\r$//' SHA256SUMS
+          sha256sum -c SHA256SUMS
+          flags=(--prerelease)
+          case "$TAG" in *-rc*) flags+=(--draft) ;; esac
+          cat > notes.md <<'EOF'
+          Beta for test users. Windows 10/11 only. No admin rights are needed.
+
+          - `KoperCAD-*-setup.exe`: per-user installer (installs under your profile).
+          - `KoperCAD-*-portable.zip`: unzip anywhere and double-click `run.cmd`; includes `kopercad-cli.exe`.
+          - `SHA256SUMS`: checksums of the two files above. `BUILD_INFO.txt`: version, commit and build time.
+
+          The program is not code-signed yet, so Windows SmartScreen may warn on first start: choose "More info", then "Run anyway".
+          EOF
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber KoperCAD-*-setup.exe KoperCAD-*-portable.zip SHA256SUMS BUILD_INFO.txt
+          else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag "${flags[@]}" \
+              --title "KoperCAD ${TAG#v}" --notes-file notes.md \
+              KoperCAD-*-setup.exe KoperCAD-*-portable.zip SHA256SUMS BUILD_INFO.txt
+          fi
