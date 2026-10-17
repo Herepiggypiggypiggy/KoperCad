@@ -1663,6 +1663,26 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "help.open_log_folder",
+        "Open log folder",
+        "View",
+        &["logs", "crash report", "diagnostics", "kopercad.log"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "help.copy_problem_report",
+        "Copy problem report",
+        "View",
+        &[
+            "report a problem",
+            "bug report",
+            "crash",
+            "support",
+            "version info",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.show_hints",
         "Show hints again",
         "View",
