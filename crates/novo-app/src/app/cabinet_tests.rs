@@ -8,7 +8,7 @@ use super::gate1_tests::Drive;
 use super::workspace::Workspace;
 use crate::actions::Action;
 
-fn add_cabinet(d: &mut Drive) {
+pub(super) fn add_cabinet(d: &mut Drive) {
     d.app
         .backend
         .document_mut()

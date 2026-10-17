@@ -63,6 +63,36 @@ pub(super) fn choice<T: Copy + PartialEq>(
     ui.add_space(8.0);
 }
 
+/// A plain button that overwrites something the person typed. With
+/// `needs_confirm` the first click only asks ("`ask`", Replace / Cancel);
+/// true when the overwrite is confirmed (or needs no asking).
+pub(super) fn confirm_button(
+    ui: &mut egui::Ui,
+    id: &str,
+    label: &str,
+    ask: &str,
+    needs_confirm: bool,
+) -> bool {
+    let key = ui.id().with(id);
+    let armed = ui.data(|d| d.get_temp::<bool>(key)).unwrap_or(false) && needs_confirm;
+    if !armed {
+        if novo_theme::widgets::ghost_button(ui, label).clicked() {
+            if !needs_confirm {
+                return true;
+            }
+            ui.data_mut(|d| d.insert_temp(key, true));
+        }
+        return false;
+    }
+    ui.label(ask);
+    let yes = novo_theme::widgets::danger_button(ui, "Replace").clicked();
+    let cancel = novo_theme::widgets::ghost_button(ui, "Cancel").clicked();
+    if yes || cancel {
+        ui.data_mut(|d| d.insert_temp(key, false));
+    }
+    yes
+}
+
 /// The primary "Done" button at the right under the dialog; true when
 /// clicked.
 pub(super) fn done(ui: &mut egui::Ui) -> bool {

@@ -49,6 +49,8 @@ pub(super) enum Facts {
         used_percent: f64,
         placed: usize,
     },
+    /// The shown surface other than the plate, when nothing is selected.
+    Surface(super::cabinet_surface_size::SurfaceCard),
 }
 
 /// Collects what the inspector shows for the layout as drawn (`shown`).
@@ -291,6 +293,11 @@ fn show(
                     );
                 }
                 ui.separator();
+            }
+        }
+        Facts::Surface(card) => {
+            if let Some(a) = super::cabinet_surface_size::show(ui, card) {
+                ask = Some(a);
             }
         }
         Facts::Plate {
