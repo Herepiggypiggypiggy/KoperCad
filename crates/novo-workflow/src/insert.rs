@@ -200,6 +200,19 @@ impl InsertSearch {
                     score = Some(10_000);
                 }
                 let mut score = score?;
+                // The common size of a family leads its siblings (3-pole).
+                if symbol.favorite {
+                    score += 20;
+                }
+                // A word that names a device ranks the device above its
+                // auxiliary contact ("overload" finds the relay, not the
+                // contact that belongs to it); typed aliases still win.
+                if mnemonic.is_none()
+                    && is_child_function(symbol)
+                    && symbol.function != "contact.main"
+                {
+                    score -= 150;
+                }
                 if let Some(rank) = self
                     .recent
                     .iter()
@@ -327,6 +340,39 @@ mod tests {
                 .any(|h| h.symbol.id == "iec/contacts/no")
         );
         assert!(search.search(&lib, "zzzz").is_empty());
+    }
+
+    #[test]
+    fn overload_words_find_the_relay_before_its_contact() {
+        let lib = library();
+        let search = InsertSearch::default();
+        for query in ["overload", "thermal"] {
+            let hits = search.search(&lib, query);
+            assert_eq!(
+                hits[0].symbol.id,
+                "iec/protection/overload_relay",
+                "{query}: {:?}",
+                hits.iter()
+                    .take(4)
+                    .map(|h| &h.symbol.id)
+                    .collect::<Vec<_>>()
+            );
+        }
+        // The motor protection breaker is a device of that name too; the
+        // relay is offered right after it.
+        let hits = search.search(&lib, "motor protection");
+        assert!(
+            hits.iter()
+                .take(3)
+                .any(|h| h.symbol.id == "iec/protection/overload_relay")
+        );
+        // The contact is still listed, and its alias still finds it first.
+        assert!(
+            search
+                .search(&lib, "overload")
+                .iter()
+                .any(|h| h.symbol.id == "iec/contacts/thermal_nc")
+        );
     }
 
     #[test]

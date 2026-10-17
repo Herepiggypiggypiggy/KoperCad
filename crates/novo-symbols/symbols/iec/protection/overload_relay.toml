@@ -5,7 +5,7 @@ description = "Main circuit of a 3-pole thermal overload relay; its auxiliary co
 standard = "IEC 60617"
 category = "protection"
 function = "protection.overload"
-keywords = ["overload", "thermal relay", "bimetal", "ol"]
+keywords = ["overload", "thermal", "motor protection", "thermal relay", "bimetal", "ol"]
 aliases = ["ol"]
 favorite = true
 
