@@ -40,6 +40,7 @@ thread_local! {
     /// matters for a crash, and it cannot be overwritten by another thread.
     static THREAD_COMMAND: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
 }
+static STARTED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static GPU: OnceLock<String> = OnceLock::new();
 static OS: OnceLock<String> = OnceLock::new();
 
@@ -119,6 +120,13 @@ pub fn note_command(id: &str) {
         last.clear();
         last.push_str(id);
     }
+}
+
+/// Called once the window and the app exist. A panic before that point is a
+/// failed start, which the panic hook reports in a message box (a release
+/// build on Windows has no console, so the window would just never appear).
+pub fn startup_done() {
+    STARTED.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 /// Remembers the graphics adapter, for the reports.
@@ -219,6 +227,30 @@ fn install_panic_hook() {
         let dir = LOG_DIR.try_lock().ok().and_then(|d| d.clone());
         if let Some(dir) = dir {
             write_crash_report(&dir, info);
+        }
+        #[cfg(windows)]
+        if !STARTED.load(std::sync::atomic::Ordering::SeqCst) {
+            let place = info
+                .location()
+                .map_or_else(String::new, |l| format!("\n\nAt: {l}"));
+            let message = if let Some(s) = info.payload().downcast_ref::<&str>() {
+                (*s).to_owned()
+            } else if let Some(s) = info.payload().downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "(no message)".to_owned()
+            };
+            rfd::MessageDialog::new()
+                .set_level(rfd::MessageLevel::Error)
+                .set_title("KoperCAD stopped while starting")
+                .set_description(format!(
+                    "{message}{place}\n\nA crash report was written to {}\nPlease send that file.",
+                    LOG_DIR.try_lock().ok().and_then(|d| d.clone()).map_or_else(
+                        || "the KoperCAD logs folder".to_owned(),
+                        |d| d.display().to_string()
+                    )
+                ))
+                .show();
         }
         previous(info);
     }));
