@@ -26,8 +26,22 @@ pub const MIN_TEXT_PX: f32 = 9.0;
 /// Clear space kept around enlarged text, in points.
 const PAD: f32 = 2.0;
 
-/// The most secondary text is enlarged to reach the floor.
-pub const SECONDARY_MAX_BOOST: f32 = 2.0;
+/// The most secondary text is enlarged to reach the floor. Wire numbers are
+/// 2 mm high, so with the sheet fitted on a 1366x768 laptop (about 1.9 px per
+/// mm) they reach the floor at a boost of 2.4; a limit of 2 hid them there.
+pub const SECONDARY_MAX_BOOST: f32 = 3.0;
+
+/// Smallest on-screen height a label may have and still be considered, so
+/// that it can be lifted to `floor`: the floor over the biggest boost any
+/// text gets. Smaller than that is hidden before any layout work, and the
+/// result never exceeds `cull`, the canvas's own cull size.
+pub fn candidate_size(floor: f32, cull: f32) -> f32 {
+    if floor > 0.0 {
+        cull.min(floor / SECONDARY_MAX_BOOST)
+    } else {
+        cull
+    }
+}
 
 /// How much a label matters when the room runs out.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -156,6 +170,27 @@ mod tests {
     }
 
     #[test]
+    fn wire_numbers_stay_readable_at_the_fit_zoom_of_a_laptop() {
+        // 2 mm wire number at 1.9 px/mm is 3.8 px: below the old pre-cull of
+        // 4 px and past the old boost limit of 2.
+        let size = 2.0 * 1.9;
+        assert!(size >= candidate_size(9.0, 4.0));
+        let out = plan(
+            vec![cand(0, Priority::Secondary, size, Vec2::ZERO, 12.0)],
+            9.0,
+        );
+        assert_eq!(out.len(), 1);
+        assert!(out[0].boost * size >= 9.0 - 1e-4);
+    }
+
+    #[test]
+    fn candidate_size_never_exceeds_the_cull() {
+        assert_eq!(candidate_size(9.0, 4.0), 3.0);
+        assert_eq!(candidate_size(9.0, 2.0), 2.0);
+        assert_eq!(candidate_size(0.0, 4.0), 4.0);
+    }
+
+    #[test]
     fn small_text_is_lifted_to_the_floor() {
         let out = plan(vec![cand(0, Priority::Primary, 5.0, Vec2::ZERO, 20.0)], 9.0);
         assert_eq!(out.len(), 1);
@@ -190,7 +225,7 @@ mod tests {
     #[test]
     fn secondary_text_is_hidden_rather_than_blown_up() {
         let out = plan(
-            vec![cand(0, Priority::Secondary, 3.0, Vec2::ZERO, 10.0)],
+            vec![cand(0, Priority::Secondary, 2.0, Vec2::ZERO, 10.0)],
             9.0,
         );
         assert!(out.is_empty());
