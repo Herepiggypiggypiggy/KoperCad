@@ -2858,7 +2858,7 @@ impl Editor {
             }
             Tool::Text => "Text: click where it goes, then type · Esc cancels".into(),
             Tool::Paste(_) => {
-                "Paste: click to drop it · Esc cancels · Ctrl+Alt+V pastes in place".into()
+                "Paste: click to drop it · Esc cancels · Ctrl+Shift+I pastes in place".into()
             }
             Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
                 let wires = if m.carry {
