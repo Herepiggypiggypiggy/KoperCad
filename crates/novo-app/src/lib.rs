@@ -19,6 +19,7 @@ mod backend;
 mod canvas;
 mod command_field;
 mod control;
+pub mod diag;
 mod dialogs;
 mod editor_canvas;
 mod gpu;
@@ -103,11 +104,19 @@ pub fn run() -> eframe::Result {
             }
             let canvas: Box<dyn CanvasView> = match cc.wgpu_render_state.as_ref() {
                 Some(rs) => {
+                    let info = rs.adapter.get_info();
+                    diag::set_gpu(format!(
+                        "{} ({:?}, driver {} {})",
+                        info.name, info.backend, info.driver, info.driver_info
+                    ));
                     EditorCanvas::install(rs);
                     novo_view3d::widget::install(rs, 1);
                     Box::new(EditorCanvas::default())
                 }
-                None => Box::new(PlaceholderCanvas::default()),
+                None => {
+                    diag::set_gpu("none (no graphics adapter)".to_owned());
+                    Box::new(PlaceholderCanvas::default())
+                }
             };
             let mut backend = match data_dir() {
                 Some(dir) => StorageBackend::with_untitled_dir(dir.join("untitled")),

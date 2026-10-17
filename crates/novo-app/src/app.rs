@@ -46,6 +46,7 @@ mod commissioning_viewer_tests;
 mod compare;
 mod designer;
 mod device_renumber;
+mod diagnostics;
 mod dialog_ui;
 mod dock;
 mod drawers;
@@ -418,6 +419,8 @@ pub struct NovoApp {
     wb: Workbench,
     messages: Vec<Message>,
     show_about: bool,
+    /// The crash report the last run left behind, until answered.
+    crash_report: Option<PathBuf>,
     /// The What's new list is open (app/whats_new.rs).
     show_whats_new: bool,
     /// Help > About the numbers is open (app/model_labels.rs).
@@ -512,6 +515,11 @@ impl NovoApp {
         let mut app = Self::with_settings(backend, canvas, settings);
         app.load_user_keymap();
         app.learn_init_paths();
+        app.crash_report = crate::diag::take_pending_crash();
+        if std::env::var_os("KOPERCAD_FORCE_PANIC").is_some() {
+            // Diagnostics check: the report must appear in the log folder.
+            panic!("forced panic (KOPERCAD_FORCE_PANIC is set)");
+        }
         app
     }
 
@@ -530,6 +538,7 @@ impl NovoApp {
             wb,
             messages: Vec::new(),
             show_about: false,
+            crash_report: None,
             show_whats_new: false,
             show_numbers: false,
             standards_open: false,
@@ -1318,6 +1327,7 @@ impl NovoApp {
         self.occurrences_popup(&ctx, canvas_rect);
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
+        self.crash_dialog(&ctx);
         self.about_dialog(&ctx);
         self.standards_window(&ctx);
         self.learn_window(&ctx);
@@ -1483,6 +1493,7 @@ impl NovoApp {
             || self.wb.sheet_import.is_some()
             || self.ol.dialog_open()
             || self.backend.recovery_offer().is_some()
+            || self.crash_report.is_some()
     }
 
     fn update_title(&mut self, ctx: &egui::Context) {
@@ -2210,6 +2221,7 @@ impl NovoApp {
                 ui.add_space(novo_theme::space::L);
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                 ui.weak(format!("Model API v{}", novo_core::MODEL_VERSION));
+                ui.weak(format!("Build {}", crate::diag::BUILD_COMMIT));
                 ui.add_space(novo_theme::space::L);
                 ui.button("Close").clicked()
             })
@@ -2237,6 +2249,9 @@ impl eframe::App for NovoApp {
     }
 
     fn on_exit(&mut self) {
+        // Only a process that died leaves a crash marker; a panic the program
+        // survived (a failed solver run) is not offered as a crash.
+        crate::diag::clear_pending_crash();
         // A clean close deletes the recovery file, so the next start does
         // not offer to restore work that was deliberately not saved.
         if let Err(e) = self.backend.close() {
