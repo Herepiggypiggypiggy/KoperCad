@@ -90,6 +90,7 @@ pub fn revisions_json(project: &Project, kept: &[novo_core::RevisionId]) -> Valu
                     "date": r.date,
                     "author": r.author,
                     "description": r.description,
+                    "note": r.note(),
                     "snapshot": kept.contains(&r.id),
                 })
             })

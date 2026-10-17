@@ -40,6 +40,9 @@ pub struct PageSetup {
     pub text_mm: f64,
     /// Space between a cell's border and its text.
     pub padding_mm: f64,
+    /// Print `page n / count` on the right of the heading. A PDF that numbers
+    /// the whole document in its footer turns this off.
+    pub page_number: bool,
 }
 
 impl Default for PageSetup {
@@ -70,6 +73,7 @@ impl PageSetup {
             row_mm: 6.0,
             text_mm: 2.5,
             padding_mm: 1.5,
+            page_number: true,
         }
     }
 
@@ -233,16 +237,18 @@ pub fn layout_page(report: &ReportOutput, page: &ReportPage, setup: &PageSetup) 
         align: Align::Left,
         bold: true,
     });
-    layout.texts.push(TextBox {
-        x: x0 + table_w * 0.75,
-        y: heading_y,
-        width: table_w * 0.25,
-        height: setup.heading_mm,
-        text: format!("page {} / {}", page.number, page.count),
-        text_mm: setup.text_mm,
-        align: Align::Right,
-        bold: false,
-    });
+    if setup.page_number {
+        layout.texts.push(TextBox {
+            x: x0 + table_w * 0.75,
+            y: heading_y,
+            width: table_w * 0.25,
+            height: setup.heading_mm,
+            text: format!("page {} / {}", page.number, page.count),
+            text_mm: setup.text_mm,
+            align: Align::Right,
+            bold: false,
+        });
+    }
 
     let Some(section) = section else {
         return layout;

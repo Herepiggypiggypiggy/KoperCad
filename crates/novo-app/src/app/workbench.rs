@@ -111,6 +111,8 @@ pub(crate) struct Workbench {
     pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
+    /// Text of the open "Set wire number" prompt.
+    pub(super) number_prompt: Option<String>,
     /// The net trace window (`net.trace`), while it is open.
     pub(super) net_trace: Option<super::net_trace::NetTrace>,
     /// The new pages, group and panel form, while open.
@@ -182,6 +184,9 @@ pub(crate) struct Workbench {
     pub(super) sim: super::simulate::SimState,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
+    /// The card's close was clicked while the outline shows Changes: the tab
+    /// then waits for "Turn on" instead of switching the mode back on.
+    pub(super) changes_closed: bool,
     /// Commissioning mode's data and panel state, once opened.
     pub(super) commissioning: Option<super::commissioning::CommissioningMode>,
     /// The background drawing last handed to the canvas: page, project
@@ -264,6 +269,7 @@ impl Default for Workbench {
             safety: None,
             languages: None,
             numbering: None,
+            number_prompt: None,
             net_trace: None,
             device_renumber: None,
             selection_sheet: Default::default(),
@@ -303,6 +309,7 @@ impl Default for Workbench {
             live: Default::default(),
             sim: super::simulate::SimState::new(),
             changes: None,
+            changes_closed: false,
             background_panel: None,
             bench: None,
             pdf_options: None,
@@ -511,6 +518,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.shortcuts",
     "help.show_hints",
     "help.whats_new",
+    "help.numbers",
     "view.reset_panels",
     "layout.draw",
     "layout.cabinet",
@@ -1274,6 +1282,7 @@ impl NovoApp {
             "view.shortcuts" => self.toggle_shortcuts(),
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,
+            "help.numbers" => self.show_numbers = true,
             "view.reset_panels" => super::panel::reset_layout(ctx),
             "layout.draw" | "layout.cabinet" | "layout.3d" | "layout.review" | "layout.reports"
             | "layout.reset" | "layout.reset_all" => {

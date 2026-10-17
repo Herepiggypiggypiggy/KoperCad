@@ -452,7 +452,7 @@ pub(crate) fn run(cx: &Context<'_>, out: &mut Vec<Problem>) {
                 ProblemKind::SafetyLevelNotMet,
                 devices,
                 format!(
-                    "Safety function \"{}\" achieves {} but requires {} (PFHd {:.2e} /h)",
+                    "Safety function \"{}\" achieves {} but requires {} (PFHd {:.2e} /h, model, not exact)",
                     f.name, total.pl, rating.required, total.pfhd
                 ),
             ));

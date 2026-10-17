@@ -19,6 +19,7 @@ impl NovoApp {
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
         let mut dock_labels = self.settings.dock_labels();
+        let mut ui_scale = self.settings.ui_scale_factor().to_bits();
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
             ui.set_width(
                 novo_theme::dialog_width::MEDIUM
@@ -38,7 +39,7 @@ impl NovoApp {
                     choice(
                         ui,
                         "Theme",
-                        "Light and System are a preview: some panels are not themed yet.",
+                        "System follows the light or dark setting of your computer.",
                         &mut theme,
                         &[
                             (novo_theme::ThemeChoice::Dark, "Dark"),
@@ -63,6 +64,18 @@ impl NovoApp {
                             (crate::settings::DockLabels::Auto, "Auto"),
                             (crate::settings::DockLabels::Always, "Always"),
                             (crate::settings::DockLabels::Never, "Icons only"),
+                        ],
+                    );
+                    choice(
+                        ui,
+                        "Interface size",
+                        "On top of Windows scaling. Raise it if text is small on a high resolution screen; lower it on a small laptop screen.",
+                        &mut ui_scale,
+                        &[
+                            (1.0_f32.to_bits(), "100%"),
+                            (1.25_f32.to_bits(), "125%"),
+                            (1.5_f32.to_bits(), "150%"),
+                            (2.0_f32.to_bits(), "200%"),
                         ],
                     );
                     section(ui, "Connections", false);
@@ -141,6 +154,7 @@ impl NovoApp {
         self.settings.appearance_theme = theme.id().into();
         self.settings.appearance_density = ui_density.id().into();
         self.settings.set_dock_labels(dock_labels);
+        self.settings.ui_scale = (f32::from_bits(ui_scale) * 100.0).round() as u32;
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
         }

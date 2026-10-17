@@ -8,10 +8,8 @@ These steps still do; the test fails when a step adds one that is not listed.
 Fix a step, then regenerate to shrink the list.
 
 - blocks-and-macros/export: `Export...`
-- blocks-and-macros/export: `Macros` (write {ui:macros.window})
 - blocks-and-macros/go-page: `Motor 2`
 - blocks-and-macros/import: `Import...`
-- blocks-and-macros/import: `Macros` (write {ui:macros.window})
 - blocks-and-macros/open-browser: `Macros` (write {ui:macros.window})
 - blocks-and-macros/open-browser: `macros` (write {ui:macros.window})
 - blocks-and-macros/preview: `Draw`
@@ -43,7 +41,6 @@ Fix a step, then regenerate to shrink the list.
 - commissioning/punch: `Punch list`
 - commissioning/resolve: `Fixed`
 - commissioning/resolve: `Won't fix`
-- commissioning/who: `By`
 - connection-screens/accept-cables: `Accept 2 proposed`
 - connection-screens/open-cables: `Cables`
 - connection-screens/open-diagram: `Pages`
@@ -52,11 +49,9 @@ Fix a step, then regenerate to shrink the list.
 - cut-lengths/cut-list: `Reports`
 - cut-lengths/export-cut: `Route all` (write {ui:cabinet.routes})
 - design-checks/open-list: `Check`
-- design-checks/open-list: `Issues` (write {ui:issue.pill})
 - design-checks/open-list: `Problems` (write {ui:cabinet.problems})
 - design-checks/restore: `Restore`
 - design-checks/restore: `Waived`
-- design-checks/waive: `Issues` (write {ui:issue.pill})
 - design-checks/waive: `Waive with a reason...`
 - design-checks/waive: `Waive`
 - drawing-standard/back-to-iec: `IEC 60617 (default)`
@@ -80,7 +75,6 @@ Fix a step, then regenerate to shrink the list.
 - heat-and-sizing/balance: `Size enclosure` (write {ui:cabinet.sizing})
 - heat-and-sizing/balance: `Size the enclosure`
 - heat-and-sizing/heat-on: `Heat` (write {ui:cabinet.heat})
-- heat-and-sizing/heat-on: `Map`
 - heat-and-sizing/heat-on: `More` (write {ui:cabinet.more})
 - heat-and-sizing/simulate: `Simulate`
 - live-view/enter: `Live potentials` (write {ui:live.card})

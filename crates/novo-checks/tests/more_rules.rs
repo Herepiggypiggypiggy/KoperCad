@@ -213,3 +213,57 @@ fn c18_every_plug_gets_a_pin_overview_as_information() {
         found[0].message
     );
 }
+
+/// The release probe: a one-pole contactor coil wired into the feed of a
+/// three-phase motor is flagged with the way out; a coil on a control
+/// circuit (wired to a lamp) is not.
+#[test]
+fn a_coil_in_a_three_phase_feed_points_to_the_power_contacts() {
+    let wire_coil_to = |motor_key: &str, pins: &[&str]| {
+        build(|tx| {
+            let page = tx.add_page("1")?;
+            let k = tx.add_device(tag("-K1"), "")?;
+            let m = tx.add_device(tag("-M1"), "")?;
+            let coil = symbol(tx, page, "iec/coils/contactor", 0.0, &["A1", "A2"], k, true)?;
+            let load = symbol(tx, page, motor_key, 100.0, pins, m, true)?;
+            tx.connect(Endpoint::pin(coil, 1), Endpoint::pin(load, 0))?;
+            Ok(())
+        })
+        .0
+    };
+    let feed = wire_coil_to("iec/motors/motor_3ph", &["U1", "V1", "W1"]);
+    let found = count(&feed, ProblemKind::CoilOnPowerFeed);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert_eq!(found[0].severity, Severity::Warning);
+    assert!(found[0].message.contains("3-pole power contacts"));
+    let control = wire_coil_to("iec/signals/lamp", &["X1", "X2"]);
+    assert!(count(&control, ProblemKind::CoilOnPowerFeed).is_empty());
+}
+
+/// A 400 V coil between two poles of one breaker is a normal control
+/// circuit and must not warn.
+#[test]
+fn a_400_volt_coil_between_two_breaker_poles_is_quiet() {
+    let (project, ()) = build(|tx| {
+        let page = tx.add_page("1")?;
+        let k = tx.add_device(tag("-K1"), "")?;
+        let f = tx.add_device(tag("-F1"), "")?;
+        let coil = symbol(tx, page, "iec/coils/contactor", 0.0, &["A1", "A2"], k, true)?;
+        let breaker = symbol(
+            tx,
+            page,
+            "iec/protection/mcb_3p",
+            100.0,
+            &["1", "2", "3", "4", "5", "6"],
+            f,
+            true,
+        )?;
+        tx.update::<SymbolInstance>(breaker, |s| {
+            s.pass_through = vec![vec![0, 1], vec![2, 3], vec![4, 5]];
+        })?;
+        tx.connect(Endpoint::pin(coil, 0), Endpoint::pin(breaker, 1))?;
+        tx.connect(Endpoint::pin(coil, 1), Endpoint::pin(breaker, 2))?;
+        Ok(())
+    });
+    assert!(count(&project, ProblemKind::CoilOnPowerFeed).is_empty());
+}

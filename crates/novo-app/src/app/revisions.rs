@@ -18,6 +18,8 @@ pub(crate) struct IssueDraft {
     pub date: String,
     pub author: String,
     pub description: String,
+    /// A longer note on why; kept with the revision.
+    pub note: String,
     /// Why the last attempt failed, shown in the window.
     pub error: Option<String>,
     /// The description field takes focus on the first frame.
@@ -78,6 +80,7 @@ impl NovoApp {
             date: today(),
             author: self.settings.initials.clone(),
             description: description.unwrap_or_default().trim().to_owned(),
+            note: String::new(),
             error: None,
             focused: false,
         });
@@ -111,6 +114,14 @@ impl NovoApp {
             if text.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 issue = true;
             }
+            ui.add_space(6.0);
+            ui.label("Note (optional)");
+            ui.add(
+                egui::TextEdit::multiline(&mut draft.note)
+                    .hint_text("Why: the longer story, kept with the revision")
+                    .desired_rows(2)
+                    .desired_width(f32::INFINITY),
+            );
             ui.add_space(6.0);
             ui.horizontal(|ui| {
                 ui.label("Index");
@@ -151,11 +162,12 @@ impl NovoApp {
     pub(crate) fn submit_issue(&mut self, mut draft: IssueDraft) {
         let index = draft.index.trim().to_owned();
         let author = draft.author.trim().to_owned();
-        let result = self.backend.issue_revision(
+        let result = self.backend.issue_revision_noted(
             Some(index),
             draft.date.trim(),
             &author,
             draft.description.trim(),
+            draft.note.trim(),
         );
         match result {
             Ok(issued) => {

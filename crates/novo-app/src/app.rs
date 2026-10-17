@@ -105,6 +105,7 @@ mod macro_editor;
 mod macro_editor_tests;
 mod macro_thumb;
 mod menu_bar;
+mod model_labels;
 mod net_trace;
 mod numbering;
 mod onboarding;
@@ -172,6 +173,9 @@ mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
 mod view3d_nudge;
+mod view3d_pins;
+#[cfg(test)]
+mod view3d_pins_tests;
 mod view3d_place;
 mod view3d_rail;
 #[cfg(test)]
@@ -413,6 +417,8 @@ pub struct NovoApp {
     show_about: bool,
     /// The What's new list is open (app/whats_new.rs).
     show_whats_new: bool,
+    /// Help > About the numbers is open (app/model_labels.rs).
+    show_numbers: bool,
     standards_open: bool,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
@@ -522,6 +528,7 @@ impl NovoApp {
             messages: Vec::new(),
             show_about: false,
             show_whats_new: false,
+            show_numbers: false,
             standards_open: false,
             window_title: String::new(),
             open_on_start: None,
@@ -1308,6 +1315,7 @@ impl NovoApp {
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
         self.whats_new_window(&ctx);
+        self.numbers_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
         self.pdf_options_window(&ctx);
@@ -1339,6 +1347,7 @@ impl NovoApp {
         self.safety_window(&ctx);
         self.languages_window(&ctx);
         self.numbering_window(&ctx);
+        self.number_prompt_window(&ctx);
         self.net_trace_window(&ctx);
         self.terminal_edit_windows(&ctx);
         self.page_form_dialog(&ctx);
@@ -1452,6 +1461,7 @@ impl NovoApp {
     fn modal_open_but_wheel(&self) -> bool {
         self.show_about
             || self.show_whats_new
+            || self.show_numbers
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
             || self.wb.sheet_import.is_some()
@@ -1582,7 +1592,9 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
-                self.whats_new_pill(ui);
+                if fit.whats_new_pill {
+                    self.whats_new_pill(ui);
+                }
                 let shortcut = Action::CommandPalette
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
@@ -1629,9 +1641,12 @@ impl NovoApp {
             return;
         }
         // Commissioning is the longest name and the panel names itself in
-        // its header: the button is its icon, the name in the tooltip.
+        // its header: the button is its icon, the name in the tooltip. So it
+        // is on a window under 760 points (a 1366 screen at 200 %), where the
+        // bar has no room for the word.
         let text = match self.outline_mode {
             OutlineMode::Commissioning => self.outline_mode.icon(),
+            _ if self.window_width < menu_bar::ICON_ONLY_BELOW => self.outline_mode.icon(),
             mode => mode.label(),
         };
         let toggle = ui
@@ -1791,6 +1806,9 @@ impl NovoApp {
             }
             return;
         }
+        if self.outline_mode != OutlineMode::Changes {
+            self.wb.changes_closed = false;
+        }
         if self.outline_mode == OutlineMode::Changes {
             if self.changes_outline(ui) {
                 self.outline_open = false;
@@ -1947,6 +1965,17 @@ impl NovoApp {
                             self.leave_then(&ctx, Leaving::OpenPath(path));
                         }
                     }
+                }
+                ui.add_space(16.0);
+                ui.small("WHAT ELSE IS IN HERE");
+                for line in [
+                    "Cabinet: size the enclosure, place devices, cut lists",
+                    "3D: look inside the cabinet (needs a mounting plate)",
+                    "Heat: temperatures and airflow, under Simulate",
+                    "Commissioning: checks and punch list",
+                    "Ctrl+K finds every command",
+                ] {
+                    ui.weak(line);
                 }
                 let recent = self.settings.recent_projects.clone();
                 if !recent.is_empty() {
@@ -2232,7 +2261,11 @@ fn ago(t: SystemTime) -> String {
 /// from the known-folder lookup, because company PCs often redirect it to
 /// OneDrive; it is always inside the user's profile.
 fn projects_dir() -> Option<PathBuf> {
-    dirs::document_dir().map(|docs| crate::migrate::projects_dir_in(&docs))
+    // A profile without a Documents folder (Linux without XDG dirs, a
+    // stripped account) still gets a place for exports: the home folder.
+    dirs::document_dir()
+        .or_else(dirs::home_dir)
+        .map(|docs| crate::migrate::projects_dir_in(&docs))
 }
 
 /// `<name>.novo`, with the characters Windows forbids in file names replaced.
@@ -2365,6 +2398,24 @@ mod tests {
             ctx.global_style().spacing.interact_size.y,
             novo_theme::Density::Compact.metrics().control_height
         );
+    }
+
+    #[test]
+    fn the_interface_size_setting_scales_the_ui_once() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(ctx.zoom_factor(), 1.0);
+        app.settings.ui_scale = 150;
+        // egui takes the new zoom at the end of the pass.
+        frame(&ctx, &mut app, Default::default());
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(ctx.zoom_factor(), 1.5);
+        // Anything else is 100%.
+        app.settings.ui_scale = 137;
+        frame(&ctx, &mut app, Default::default());
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(ctx.zoom_factor(), 1.0);
     }
 
     #[test]
@@ -2972,7 +3023,7 @@ const SCREEN_MARGIN: egui::Vec2 = egui::vec2(0.0, 80.0);
 /// The size a window of `inner` gets on a screen of `monitor`, or `None`
 /// when it already fits.
 fn fitted_size(inner: egui::Vec2, monitor: egui::Vec2) -> Option<egui::Vec2> {
-    let room = (monitor - SCREEN_MARGIN).max(egui::vec2(640.0, 400.0));
+    let room = (monitor - SCREEN_MARGIN).max(egui::Vec2::from(crate::MIN_WINDOW));
     let fitted = inner.min(room);
     (fitted != inner).then_some(fitted)
 }
@@ -3042,6 +3093,16 @@ mod fit_tests {
     #[test]
     fn a_tiny_screen_never_goes_below_the_minimum() {
         let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(500.0, 400.0));
-        assert_eq!(got, Some(egui::vec2(640.0, 400.0)));
+        assert_eq!(got, Some(egui::vec2(560.0, 320.0)));
+    }
+
+    #[test]
+    fn a_1366_by_768_laptop_at_every_scale_keeps_the_window_on_the_screen() {
+        // Points offered at 100, 125, 150 and 200 %.
+        for scale in [1.0_f32, 1.25, 1.5, 2.0] {
+            let monitor = egui::vec2(1366.0, 768.0) / scale;
+            let got = fitted_size(egui::vec2(1280.0, 800.0), monitor).unwrap();
+            assert!(got.x <= monitor.x && got.y <= monitor.y, "{scale}: {got:?}");
+        }
     }
 }
