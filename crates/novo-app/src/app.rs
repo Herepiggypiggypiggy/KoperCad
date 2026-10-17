@@ -160,6 +160,7 @@ mod standards_report;
 #[cfg(test)]
 mod standards_report_tests;
 mod status_bar;
+mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;
 mod terminals;

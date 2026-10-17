@@ -110,6 +110,10 @@ pub struct Settings {
     /// (`app/pdf_options.rs`): a per-user preference, kept in the settings
     /// file under the user's profile.
     pub pdf_choice: PdfChoice,
+    /// A folder of the person's own symbols (`*.toml`, ids relative to the
+    /// folder), offered beside the built-in pack. Per user, not in the
+    /// project.
+    pub symbol_folder: Option<PathBuf>,
     /// Seconds between the writes that keep the open project and its
     /// recovery file current. 0: the default (`DEFAULT_AUTOSAVE_SECONDS`).
     pub autosave_seconds: u32,
