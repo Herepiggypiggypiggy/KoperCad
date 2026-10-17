@@ -108,3 +108,17 @@ fn typed_positions_are_clamped_to_the_part_and_marked_typed() {
         Some(false)
     );
 }
+
+#[test]
+fn a_part_with_a_bad_size_does_not_crash_typed_positions() {
+    let mut p = part();
+    p.dimensions = Some(novo_parts::Dimensions {
+        width_mm: -5.0,
+        height_mm: f64::NAN,
+        depth_mm: 70.0,
+    });
+    let edits = vec![("A1".to_owned(), [5.0, 95.0, 80.0])];
+    assert_eq!(apply_typed(&mut p, &edits), 1);
+    // The bad sizes are ignored; only the good depth limits.
+    assert_eq!(p.terminals[0].position_mm, Some([5.0, 95.0, 70.0]));
+}

@@ -138,6 +138,12 @@ pub(crate) fn apply_typed(part: &mut CatalogPart, edits: &[(String, [f64; 3])]) 
         };
         let mut p = *at;
         for (v, max) in p.iter_mut().zip(limit.unwrap_or([f64::MAX; 3])) {
+            // A size that is not a positive number is unknown, not a limit.
+            let max = if max.is_finite() && max > 0.0 {
+                max
+            } else {
+                f64::MAX
+            };
             *v = v.clamp(0.0, max);
         }
         t.position_mm = Some(p);
