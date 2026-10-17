@@ -379,6 +379,36 @@ fn the_wire_list_shows_the_numbers() {
     }
 }
 
+#[test]
+fn each_phase_strand_is_numbered_top_to_bottom_before_the_next() {
+    let mut doc = Document::default();
+    novo_tests::motor_starter(&mut doc).unwrap();
+    let scheme = Scheme::new(SchemeKind::Sequential);
+    let p = plan(doc.project(), &scheme, Mode::Renumber, &Scope::Project);
+    let order: Vec<(String, String)> = p
+        .groups
+        .iter()
+        .filter_map(|g| Some((g.potential.clone()?, g.new.clone()?)))
+        .collect();
+    // The three phases are all there, so the checks below cannot pass empty.
+    for phase in ["L1", "L2", "L3"] {
+        assert!(
+            order.iter().any(|(p, _)| p == phase),
+            "{phase} in {order:?}"
+        );
+    }
+    // Potentials in the order their groups were numbered: each phase once.
+    let mut seen: Vec<&str> = Vec::new();
+    for (potential, _) in &order {
+        if seen.last() != Some(&potential.as_str()) {
+            assert!(!seen.contains(&potential.as_str()), "{order:?}");
+            seen.push(potential);
+        }
+    }
+    let numbers: Vec<u32> = order.iter().map(|(_, n)| n.parse().unwrap()).collect();
+    assert!(numbers.windows(2).all(|w| w[0] < w[1]), "{order:?}");
+}
+
 /// A contactor, an overload relay whose heaters conduct (permanent bridges)
 /// and a motor, wired in a line: three phases, six wires.
 fn through_overload(tx: &mut Tx<'_>) -> Result<Vec<WireId>> {

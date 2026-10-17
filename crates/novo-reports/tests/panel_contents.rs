@@ -47,7 +47,7 @@ fn the_list_has_the_pages_of_its_panel_under_every_group() {
     let mut reports = LiveReports::standard();
     assert_eq!(
         pages_of(&mut reports, &doc, "toc@+K1"),
-        ["0 ", "1 Supply", "2 Motor", "1 Other group"]
+        ["0 (untitled)", "1 Supply", "2 Motor", "1 Other group"]
     );
     // The project list still has them all, and the panels table.
     let all = reports.get(doc.project(), "toc").unwrap();

@@ -50,7 +50,7 @@ assemblies, ray tracing, shadows from lights, VR.
 | Culling | CPU frustum cull of item bounds, plus a screen-size level of detail for meshes (below 24 px the box, below 3 px nothing). | Cheap, and it is the lever that keeps imported meshes from costing frames. No occlusion culling: a closed door hides the inside by drawing it. |
 | Look of edges | Box and feature edges are drawn as lines over the shaded faces. | Crisp, readable and cheap, no post-process pass. |
 | Labels, view cube, dimensions | Drawn with the egui painter over the 3D image, from `View3d::project`. | No text rendering in wgpu, and the labels follow the app theme and font for free. |
-| Quality | Two tiers, chosen from the adapter type (`Tier`: discrete, integrated, software). **Interactive** (while the camera moves): no MSAA, render scale 1.0 on discrete, 0.75 on integrated, 0.5 on software adapters. **Settled** (a moment after input stops): full scale, 4x MSAA, one extra frame. | Fill rate is what an integrated GPU lacks, not triangles. Refine-on-settle gives a sharp still image and a smooth orbit. |
+| Quality | Two tiers, chosen from the adapter type (`Tier`: discrete, integrated, software). **Interactive** (while the camera moves): no MSAA, render scale 1.0 on discrete, 0.75 on integrated, 0.5 on software adapters. **Settled** (a moment after input stops): full scale, 4x MSAA, one extra frame. | Fill rate is what an integrated GPU lacks, not triangles. Refine-on-settle gives a sharp still image and a smooth orbit. The frame governor only steps a discrete GPU down to the integrated row, never to software (see "Dimensions and the frame governor"). |
 | Redraw | On demand. The view asks egui for a repaint only while the camera animates, input arrives, or the scene changes. | Idle cabinets cost nothing, so laptops stay quiet. |
 | Motion | Camera transitions ease over 250 ms; with the app's reduced-motion setting they jump. | Same rule as the Live view animation (#377). |
 | Dependencies at runtime | Pure Rust, no native library, no installer, no network. Works on whatever wgpu backend the app already runs (DX12 or Vulkan). | Hard requirement: no admin rights. |
@@ -350,8 +350,9 @@ amber tint are never the only difference.
   default; toolbar toggle "Dimensions", command `view.3d_dimensions`
   (View > 3D, palette "dimensions" or "measure", Dutch "maatvoering", also in
   the right-click menu of the 3D view). With nothing selected the
-  enclosure's overall width, height and depth (its shell, else the plate) are
-  drawn standing off the box. With exactly one part selected (device, rail,
+  enclosure's overall width, height and depth are drawn standing off the box
+  (from its shell; with no shell only the plate's width and height, since its
+  third side is a thickness, not a depth). With exactly one part selected (device, rail,
   duct) its width, height and depth are added, and the clear distance to the
   nearest neighbour on each of the four sides, or to the plate edge when
   nothing is there. Distances are along the plate and in millimetres, written
@@ -625,9 +626,20 @@ A test counts the scene-bounds walks per frame and requires the same number
 with 20 and with 600 devices (it fails with 22 against 602 on the old code),
 and that it is one: `show` hands its bounds to the overlay and the dimension
 painter, so a frame walks the scene once.
-The remaining label cost at 3000 devices is about 1 ms, in the overlap check of
-`labels::visible_labels` (candidates times shown labels); the next lever, not
-needed at today's sizes.
+The label cost left at 3000 devices (1.5 ms, three times the rest of the
+widget) was not the overlap check: a grid for it measured the same. It was the
+text layout of a chip for every device in view, of which nearly all are too
+small to carry a label. A device now gets its chip laid out only when it could
+show one (28 px wide, selected, hovered, or still fading out), and the shown
+set is a hash set instead of a list searched per chip:
+
+| Widget CPU per frame, 1366x768 | before | after |
+| --- | --- | --- |
+| 1000 devices, 300 wires, labels on | 0.43 ms | 0.19 ms |
+| 3000 devices, 1000 wires, labels on | 1.50 ms | 0.51 ms |
+
+(Same release `uicost` run, the labels-off row is 0.48 ms at 3000 devices, so
+labels now cost 0.03 ms.) A test counts the chips laid out per frame.
 
 **Renderer on llvmpipe at 1366x768** (4 cores, software rasteriser, forced to the
 discrete tier so shadows and MSAA settings match a real GPU; wall ms per frame

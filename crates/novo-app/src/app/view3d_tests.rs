@@ -195,6 +195,144 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
     assert_eq!(d.app.view3d.controls.door_deg, 100.0);
 }
 
+#[test]
+fn the_section_command_cuts_the_picture_and_picking_follows_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(d.app.view3d.view.state.section.is_none());
+    d.app.run_command(&ctx, "view.3d_section", None);
+    assert!(d.app.view3d.view.state.section.is_some());
+    d.frame();
+    // The scene itself is whole: only the picture is cut.
+    assert!(has(scene(&d), ItemKind::Plate));
+    d.app.run_command(&ctx, "view.3d_section", None);
+    assert!(d.app.view3d.view.state.section.is_none());
+}
+
+#[test]
+fn the_save_view_command_keeps_the_camera_in_the_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    // Headless there is no first-show fit: fit once, as a shown view would.
+    let scene = scene(&d).clone();
+    d.app.view3d.view.fit(&scene, 0.0, true);
+    d.app.view3d.view.camera.yaw = 0.9;
+    d.app.run_command(&ctx, "view.3d_save_view", None);
+    d.frame();
+    let views = &d.app.settings.camera_views;
+    assert_eq!(views.len(), 1);
+    assert_eq!(views[0].name, "View 1");
+    assert!((views[0].yaw - 0.9).abs() < 1e-6);
+}
+
+#[test]
+fn a_view_saved_before_the_3d_view_was_ever_shown_is_the_fitted_camera() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    // A fresh 3D view: its camera is the unfitted default until it is shown.
+    d.app.view3d.view = novo_view3d::widget::View3d::new(1);
+    let unfitted = d.app.view3d.view.camera;
+    d.app.run_command(&ctx, "view.3d_save_view", None);
+    d.frame();
+    // Not shown and fitted yet (no graphics adapter here): nothing is saved.
+    assert!(d.app.settings.camera_views.is_empty());
+    assert!(d.app.view3d.save_view);
+    let scene = scene(&d).clone();
+    d.app.view3d.view.fit(&scene, 0.0, true);
+    d.frame();
+    let views = &d.app.settings.camera_views;
+    assert_eq!(views.len(), 1);
+    assert_ne!(
+        views[0].distance, unfitted.distance,
+        "the saved camera is the fitted one"
+    );
+}
+
+#[test]
+fn the_hints_command_folds_and_unfolds_the_legend() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(d.app.view3d.hints.open);
+    d.app.run_command(&ctx, "view.3d_hints", None);
+    d.frame();
+    assert!(!d.app.view3d.hints.open);
+    d.app.run_command(&ctx, "view.3d_hints", None);
+    assert!(d.app.view3d.hints.open);
+}
+
+#[test]
+fn select_by_type_asked_before_the_scene_exists_applies_after_the_first_build() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.view3d.built = None;
+    d.app.view3d.view.state.selection.clear();
+    d.app.run_command(&ctx, "view.3d_select_devices", None);
+    assert!(d.app.view3d.view.state.selection.is_empty());
+    d.frame();
+    assert!(!d.app.view3d.view.state.selection.is_empty());
+}
+
+#[test]
+fn every_rebuild_of_the_scene_has_a_new_revision_so_the_renderer_redraws() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let before = scene(&d).revision;
+    d.app.run_command(&ctx, "view.3d_select_devices", None);
+    d.app.run_command(&ctx, "view.3d_hide", None);
+    d.frame();
+    assert_ne!(scene(&d).revision, before);
+}
+
+#[test]
+fn hidden_ids_of_items_that_no_longer_exist_are_dropped_on_the_next_build() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ghost = novo_view3d::ItemId::new(ItemKind::Device, u64::MAX);
+    d.app.view3d.controls.hidden.insert(ghost);
+    d.app.view3d.built = None;
+    d.frame();
+    assert!(d.app.view3d.controls.hidden.is_empty());
+}
+
+#[test]
+fn select_by_type_hide_isolate_and_show_all_work_on_the_picture_only() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let count = |d: &Drive, kind| scene(d).items.iter().filter(|i| i.id.kind == kind).count();
+    let devices = count(&d, ItemKind::Device);
+    assert!(devices >= 2, "the example cabinet has devices");
+    d.app.run_command(&ctx, "view.3d_select_devices", None);
+    assert_eq!(d.app.view3d.view.state.selection.len(), devices);
+    d.app.run_command(&ctx, "view.3d_hide", None);
+    d.frame();
+    assert_eq!(count(&d, ItemKind::Device), 0);
+    assert!(d.app.view3d.view.state.selection.is_empty());
+    d.app.run_command(&ctx, "view.3d_show_all", None);
+    d.frame();
+    assert_eq!(count(&d, ItemKind::Device), devices);
+    // Isolate one device: the others go, the plate stays.
+    let one = *d.app.view3d.view.state.selection.iter().next().unwrap_or(
+        &scene(&d)
+            .items
+            .iter()
+            .find(|i| i.id.kind == ItemKind::Device)
+            .unwrap()
+            .id,
+    );
+    d.app.view3d.view.state.selection = std::collections::BTreeSet::from([one]);
+    d.app.run_command(&ctx, "view.3d_isolate", None);
+    d.frame();
+    assert_eq!(count(&d, ItemKind::Device), 1);
+    assert!(has(scene(&d), ItemKind::Plate));
+}
+
 /// One frame with `key` pressed, as the app sees a keystroke.
 fn press(d: &mut Drive, key: egui::Key, modifiers: egui::Modifiers) {
     d.frame_with(vec![egui::Event::Key {
@@ -361,6 +499,58 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
 }
 
 #[test]
+fn the_wire_runs_command_opens_the_list_turns_the_wires_on_and_reads_their_lengths() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.view3d.controls.layers.wires = false;
+    d.app.run_command(&ctx, "view.3d_wire_runs", None);
+    d.frame();
+    d.frame();
+    assert!(d.app.view3d.wire_runs);
+    assert!(d.app.view3d.controls.layers.wires, "the wires layer is on");
+    let facts = d.app.view3d.wire_facts.as_ref().map(|f| &f.2);
+    assert!(facts.is_some(), "the lengths were read with the routes");
+    for f in facts.unwrap().values() {
+        assert!(f.length_mm > 0.0, "a cut length is never zero: {f:?}");
+        assert!(!f.from.is_empty() && !f.to.is_empty());
+    }
+    d.app.run_command(&ctx, "view.3d_wire_runs", None);
+    assert!(!d.app.view3d.wire_runs);
+}
+
+#[test]
+fn the_position_command_hides_and_shows_the_box() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(!d.app.view3d.position.hidden, "shown by default");
+    d.app.run_command(&ctx, "view.3d_position", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.position.hidden);
+    d.app.run_command(&ctx, "view.3d_position", None);
+    assert!(!d.app.view3d.position.hidden);
+}
+
+#[test]
+fn the_place_command_opens_the_list_in_3d_and_toggling_lets_go_of_the_device() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(!d.app.view3d.place.open);
+    d.app.run_command(&ctx, "view.3d_place", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.place.open);
+    d.app.view3d.place.armed = Some(1);
+    d.frame();
+    d.app.run_command(&ctx, "view.3d_place", None);
+    d.frame();
+    assert!(!d.app.view3d.place.open && d.app.view3d.place.armed.is_none());
+}
+
+#[test]
 fn dimensions_toggle_by_command_and_measure_the_selected_part_from_the_cabinet() {
     use novo_view3d::ItemKind;
     use novo_view3d::dimension::{Role, dimensions, format_mm};
@@ -418,6 +608,9 @@ fn dimensions_toggle_by_command_and_measure_the_selected_part_from_the_cabinet()
 fn restore_quality_returns_a_stepped_down_view_to_the_adapters_tier() {
     use novo_view3d::render::Tier;
     use novo_view3d::widget::register_adapter;
+    let _guard = super::view3d_move_tests::STATS_GUARD
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
     let ctx = d.ctx.clone();
@@ -458,6 +651,191 @@ fn restore_quality_returns_a_stepped_down_view_to_the_adapters_tier() {
         !d.app.view3d.controls.reduced,
         "nothing to restore any more"
     );
+}
+
+#[test]
+fn the_ambient_occlusion_command_toggles_the_views_occlusion() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    assert!(d.app.view3d.view.state.display.ssao, "on by default");
+    d.app.run_command(&ctx, "view.3d_ssao", None);
+    d.frame();
+    assert!(!d.app.view3d.view.state.display.ssao);
+    d.app.run_command(&ctx, "view.3d_ssao", None);
+    d.frame();
+    assert!(d.app.view3d.view.state.display.ssao);
+}
+
+#[test]
+fn duplicate_in_3d_adds_a_device_with_the_next_tag_on_the_plate_and_undo_takes_it_back() {
+    use novo_view3d::scene::{ItemId, ItemKind};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.frame();
+    let (devices, placed, src) = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        let lay = novo_layout::model::load(project, cab).unwrap();
+        (
+            project.all::<novo_core::Device>().count(),
+            lay.placements.len(),
+            lay.placements[0].id,
+        )
+    };
+    d.app.view3d.view.state.selection = [ItemId::new(ItemKind::Device, src)].into();
+    d.app.run_command(&ctx, "view.3d_duplicate", None);
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+    let lay = novo_layout::model::load(project, cab).unwrap();
+    assert_eq!(project.all::<novo_core::Device>().count(), devices + 1);
+    assert_eq!(lay.placements.len(), placed + 1);
+    assert!(lay.report().collisions.is_empty() && lay.report().outside.is_empty());
+    assert_eq!(d.app.view3d.view.state.selection.len(), 1);
+    assert!(
+        !d.app
+            .view3d
+            .view
+            .state
+            .selection
+            .iter()
+            .any(|i| i.raw == src),
+        "the copy is selected, not the original"
+    );
+    let tags: Vec<_> = project
+        .all::<novo_core::Device>()
+        .map(|x| x.tag.clone())
+        .collect();
+    let unique: std::collections::BTreeSet<_> = tags.iter().collect();
+    assert_eq!(unique.len(), tags.len(), "every tag is still unique");
+
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    assert_eq!(project.all::<novo_core::Device>().count(), devices);
+}
+
+#[test]
+fn a_picked_surface_shows_as_panes_in_the_3d_view_and_clear_when_none_is_picked() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.frame();
+    assert!(
+        d.app.view3d.surface_panes.is_empty(),
+        "nothing picked, toggle off"
+    );
+    d.app.cabinet.surface = Some("door".to_owned());
+    d.frame();
+    let picked = d.app.view3d.surface_panes.len();
+    assert!(picked > 0, "the picked door is drawn");
+    d.app.cabinet.surface = None;
+    d.frame();
+    assert!(d.app.view3d.surface_panes.is_empty());
+}
+
+/// World-space bounding box of an item's local box.
+fn world_bounds(item: &novo_view3d::scene::Item) -> (glam::Vec3, glam::Vec3) {
+    let m = item.pose.matrix();
+    let (hx, hy, sz) = (item.size.x / 2.0, item.size.y / 2.0, item.size.z);
+    let mut lo = glam::Vec3::splat(f32::MAX);
+    let mut hi = glam::Vec3::splat(f32::MIN);
+    for x in [-hx, hx] {
+        for y in [-hy, hy] {
+            for z in [0.0, sz] {
+                let p = m.transform_point3(glam::Vec3::new(x, y, z));
+                lo = lo.min(p);
+                hi = hi.max(p);
+            }
+        }
+    }
+    (lo, hi)
+}
+
+#[test]
+fn the_surface_panes_land_on_the_real_shell_and_the_door_pane_is_the_door() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.app.cabinet.surface = Some("door".to_owned());
+    d.frame();
+    d.frame();
+    let summary = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        super::cabinet_surfaces::summarize(project, cab).unwrap()
+    };
+    let names: Vec<&str> = summary
+        .rows
+        .iter()
+        .filter(|r| r.name != "plate")
+        .map(|r| r.name.as_str())
+        .collect();
+    let novo_view3d::Overlay::Mesh(mesh) = &d.app.view3d.surface_panes[0] else {
+        panic!("the panes are the first overlay")
+    };
+    assert_eq!(mesh.positions.len(), names.len() * 4);
+    let bounds = |i: usize| {
+        let c = &mesh.positions[i * 4..i * 4 + 4];
+        (
+            c.iter()
+                .copied()
+                .fold(glam::Vec3::splat(f32::MAX), glam::Vec3::min),
+            c.iter()
+                .copied()
+                .fold(glam::Vec3::splat(f32::MIN), glam::Vec3::max),
+        )
+    };
+    let items = &scene(&d).items;
+    // The enclosure shell: every pane lies inside it, and the door pane
+    // fills the door ghost's face. The scene's box starts at the plate; the
+    // cabinet's walls reach back to the back wall, `plate_setback` behind it.
+    let setback = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        novo_layout::model::enclosure_of(project, cab)
+            .unwrap()
+            .plate_setback as f32
+    };
+    let shell = items
+        .iter()
+        .filter(|i| matches!(i.id.kind, ItemKind::Enclosure | ItemKind::Door))
+        .map(world_bounds)
+        .fold(
+            (glam::Vec3::splat(f32::MAX), glam::Vec3::splat(f32::MIN)),
+            |(a, b), (lo, hi)| (a.min(lo), b.max(hi)),
+        );
+    for (i, name) in names.iter().enumerate() {
+        let (lo, hi) = bounds(i);
+        assert!(
+            lo.cmpge(shell.0 - glam::Vec3::new(1.0, 1.0, setback + 1.0))
+                .all()
+                && hi.cmple(shell.1 + 1.0).all(),
+            "{name} pane {lo:?}..{hi:?} outside the shell {:?}..{:?}",
+            shell.0,
+            shell.1
+        );
+    }
+    let door = items
+        .iter()
+        .find(|i| i.id.kind == ItemKind::Door)
+        .expect("a door in the scene");
+    let (dlo, dhi) = world_bounds(door);
+    let i = names
+        .iter()
+        .position(|n| *n == "door")
+        .expect("a door surface");
+    let (plo, phi) = bounds(i);
+    let tol = 1.5;
+    assert!(
+        (plo.x - dlo.x).abs() < tol
+            && (phi.x - dhi.x).abs() < tol
+            && (plo.y - dlo.y).abs() < tol
+            && (phi.y - dhi.y).abs() < tol,
+        "door pane {plo:?}..{phi:?} vs door {dlo:?}..{dhi:?}"
+    );
+    assert!(plo.z >= dlo.z - tol && phi.z <= dhi.z + tol);
 }
 
 /// K1 of the starter: its device id and one of its symbols.

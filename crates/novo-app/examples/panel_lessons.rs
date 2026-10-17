@@ -233,11 +233,12 @@ fn show_wires(project: &Project, label: &str) {
     if let Some(layout) = load(project, id) {
         let r = layout.report();
         println!(
-            "layout problems: {} collisions, {} outside, {} too close, {} rail overflows",
+            "layout problems: {} collisions, {} outside, {} too close, {} rail overflows, {} duct overlaps",
             r.collisions.len(),
             r.outside.len(),
             r.too_close.len(),
-            r.rail_overflows.len()
+            r.rail_overflows.len(),
+            r.duct_overlaps.len()
         );
     }
 }
