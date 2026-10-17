@@ -205,4 +205,43 @@ fn the_plate_draws_with_an_open_redline_on_a_placed_device() {
     let project = d.app.backend.document().unwrap().project();
     assert_eq!(marks(&mode.store, project, &layout).len(), 1);
     assert!(d.app.cabinet.plate_rect.is_some(), "the plate was drawn");
+
+    // a project reopened straight into the Cabinet: the mode holds nothing
+    // yet, and drawing the plate reads the saved redline back
+    let json = d.app.wb.commissioning.as_ref().unwrap().store.to_json();
+    d.app.backend.set_commissioning_json(&json);
+    d.app.wb.commissioning = None;
+    d.frame();
+    let mode = d
+        .app
+        .wb
+        .commissioning
+        .as_ref()
+        .expect("loaded by the plate");
+    assert_eq!(mode.store.redlines().count(), 1);
+}
+
+#[test]
+fn a_device_on_the_door_has_no_outline_on_the_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let project = d.doc().project();
+    let device = targets(project)
+        .into_iter()
+        .find_map(|t| match t.target {
+            Target::Device(id) => Some(id),
+            _ => None,
+        })
+        .expect("a device");
+    let mut store = CommissioningStore::new();
+    store
+        .add_redline(redline(Target::Device(device), Change::Note, "door lamp"))
+        .unwrap();
+    let mut layout = layout_with(device.raw());
+    assert_eq!(marks(&store, project, &layout).len(), 1);
+    layout.off_plate.insert(device.raw(), "Door".into());
+    assert!(marks(&store, project, &layout).is_empty());
 }
