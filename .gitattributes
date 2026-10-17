@@ -6,3 +6,7 @@
 assets/lessons/** text eol=lf
 docs/design/*.md text eol=lf
 crates/novo-storage/tests/fixtures/*.json text eol=lf
+
+# Source files that tests read with include_str!/read_to_string and match on "\n"
+# (tips_tests, languages_tests) stay LF in a Windows checkout.
+*.rs text eol=lf
