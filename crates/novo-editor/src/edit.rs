@@ -78,6 +78,7 @@ pub fn place(
 ) -> Result<SymbolId> {
     let mut pins = model_pins(symbol);
     let (bridges, pass_through) = model_groups(symbol);
+    let mut defaulted_line_feed = false;
     let role = match classify(symbol) {
         SymbolClass::Main { letter } => {
             let device = match &options.parent {
@@ -154,6 +155,7 @@ pub fn place(
                     find_or_add_potential(tx, "PE", PotentialKind::ProtectiveEarth, None)?
                 }
                 _ => {
+                    defaulted_line_feed = true;
                     let name = next_feed_name(tx.project(), page);
                     find_or_add_potential(tx, &name, PotentialKind::Line, None)?
                 }
@@ -183,11 +185,40 @@ pub fn place(
     })?;
     if options.auto_connect {
         auto_connect(tx, id)?;
+        if defaulted_line_feed {
+            neutral_if_on_coil_low_side(tx, id)?;
+        }
     } else {
         // Whatever the preference, a pin on an open wire end is that wire's end.
         join_coincident(tx, page)?;
     }
     Ok(id)
+}
+
+/// A feed that was just named by default and landed on a coil's A2 pin is
+/// the return side of the control circuit: it becomes `N`, not the next
+/// line conductor.
+fn neutral_if_on_coil_low_side(tx: &mut Tx<'_>, feed: SymbolId) -> Result<()> {
+    let project = tx.project();
+    let netlist = project.netlist();
+    let Some(net) = netlist.net_of(Endpoint::pin(feed, 0)) else {
+        return Ok(());
+    };
+    let on_coil_low_side = netlist.net(net).endpoints.iter().any(|e| match *e {
+        Endpoint::Pin { symbol, pin } if symbol != feed => {
+            project.symbol(symbol).is_some_and(|s| {
+                matches!(s.role, SymbolRole::Device { .. })
+                    && s.symbol.0.contains("/coils/")
+                    && s.pins.get(usize::from(pin)).is_some_and(|p| p.name == "A2")
+            })
+        }
+        _ => false,
+    });
+    if on_coil_low_side {
+        let neutral = find_or_add_potential(tx, "N", PotentialKind::Neutral, None)?;
+        tx.set_role(feed, SymbolRole::PotentialFeed { potential: neutral })?;
+    }
+    Ok(())
 }
 
 /// The name a new potential feed gets: the first of `L1`, `L2`, `L3`, ...
