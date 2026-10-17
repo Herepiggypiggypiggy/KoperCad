@@ -196,6 +196,21 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
 }
 
 #[test]
+fn the_section_command_cuts_the_picture_and_picking_follows_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(d.app.view3d.view.state.section.is_none());
+    d.app.run_command(&ctx, "view.3d_section", None);
+    assert!(d.app.view3d.view.state.section.is_some());
+    d.frame();
+    // The scene itself is whole: only the picture is cut.
+    assert!(has(scene(&d), ItemKind::Plate));
+    d.app.run_command(&ctx, "view.3d_section", None);
+    assert!(d.app.view3d.view.state.section.is_none());
+}
+
+#[test]
 fn the_save_view_command_keeps_the_camera_in_the_settings() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());

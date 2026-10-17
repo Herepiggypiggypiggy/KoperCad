@@ -1535,7 +1535,51 @@ fn frame_key(
         state.display.shadows,
     )
         .hash(&mut h);
+    state
+        .section
+        .map(|s| (s.axis as u8, s.at.to_bits(), s.flip))
+        .hash(&mut h);
     h.finish()
+}
+
+#[cfg(test)]
+mod frame_key_tests {
+    use super::*;
+    use crate::view_state::Section;
+
+    fn key(state: &ViewState) -> u64 {
+        let scene = Scene::new(crate::scene::PlateFrame {
+            width: 1.0,
+            height: 1.0,
+        });
+        frame_key(
+            &scene,
+            &MeshLibrary::new(),
+            &Camera::default(),
+            state,
+            (10, 10),
+            (Mode::Interactive, None, false),
+            0,
+        )
+    }
+
+    #[test]
+    fn the_section_changes_the_frame_key() {
+        let none = ViewState::default();
+        let mut s = ViewState {
+            section: Some(Section::default()),
+            ..ViewState::default()
+        };
+        let on = key(&s);
+        assert_ne!(key(&none), on);
+        s.section.as_mut().unwrap().at = 0.6;
+        let moved = key(&s);
+        assert_ne!(on, moved);
+        s.section.as_mut().unwrap().flip = true;
+        assert_ne!(moved, key(&s));
+        s.section.as_mut().unwrap().axis = crate::view_state::SectionAxis::X;
+        assert_ne!(on, key(&s));
+    }
 }
 
 #[cfg(test)]

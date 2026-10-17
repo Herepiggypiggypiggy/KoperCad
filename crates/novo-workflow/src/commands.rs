@@ -1302,6 +1302,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_section",
+        "Cut the 3D view with a section plane",
+        "View",
+        &[
+            "section",
+            "cut",
+            "clip",
+            "slice",
+            "see inside",
+            "cross section",
+        ],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_save_view",
         "Save the current 3D camera as a view",
         "View",

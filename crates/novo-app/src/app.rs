@@ -1125,6 +1125,7 @@ impl NovoApp {
                     || *id == "view.3d_position"
                     || *id == "view.3d_place"
                     || *id == "view.3d_stats"
+                    || *id == "view.3d_section"
                     || *id == "view.3d_hints"
                     || matches!(*id, "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all")
                     || id.starts_with("heat.")

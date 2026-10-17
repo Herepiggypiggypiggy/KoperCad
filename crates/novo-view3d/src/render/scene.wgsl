@@ -31,6 +31,13 @@ struct Globals {
     // x: 1 when the screen-space occlusion map is valid, y: radius (mm),
     // z: bias, w: strength.
     ssao: vec4<f32>,
+    // Section plane: a point is cut away when dot(xyz, p) + w > 0. The
+    // normal is zero when there is no section.
+    clip: vec4<f32>,
+}
+
+fn cut_away(p: vec3<f32>) -> bool {
+    return dot(g.clip.xyz, p) + g.clip.w > 0.0;
 }
 
 @group(0) @binding(0) var<uniform> g: Globals;
@@ -78,10 +85,25 @@ struct FaceOut {
     @location(3) spec: f32,
 }
 
+struct DepthOut {
+    @builtin(position) clip: vec4<f32>,
+    @location(0) world: vec3<f32>,
+}
+
 // Depth only, from the camera: the occlusion passes read it.
 @vertex
-fn vs_depth(v: Vertex, i: Instance) -> @builtin(position) vec4<f32> {
-    return g.view_proj * vec4<f32>(world_of(v, i), 1.0);
+fn vs_depth(v: Vertex, i: Instance) -> DepthOut {
+    let world = world_of(v, i);
+    return DepthOut(g.view_proj * vec4<f32>(world, 1.0), world);
+}
+
+// The section plane cuts the depth too, or cut-away parts would shade what
+// shows.
+@fragment
+fn fs_depth(f: DepthOut) {
+    if (cut_away(f.world)) {
+        discard;
+    }
 }
 
 // Depth only, from the key light.
@@ -136,6 +158,9 @@ fn to_srgb(c: vec3<f32>) -> vec3<f32> {
 
 @fragment
 fn fs_face(f: FaceOut, @builtin(front_facing) front: bool) -> @location(0) vec4<f32> {
+    if (cut_away(f.world)) {
+        discard;
+    }
     var n = normalize(f.normal);
     if (!front) {
         n = -n;
@@ -177,12 +202,15 @@ fn fs_face(f: FaceOut, @builtin(front_facing) front: bool) -> @location(0) vec4<
 struct EdgeOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) color: vec4<f32>,
+    @location(1) world: vec3<f32>,
 }
 
 @vertex
 fn vs_edge(v: Vertex, i: Instance) -> EdgeOut {
     var o: EdgeOut;
-    var c = g.view_proj * vec4<f32>(world_of(v, i), 1.0);
+    let w = world_of(v, i);
+    var c = g.view_proj * vec4<f32>(w, 1.0);
+    o.world = w;
     // Pull lines towards the camera so they win against the faces they lie on.
     c.z = c.z * (1.0 + g.nudge.x) + g.nudge.y * c.w;
     o.clip = c;
@@ -192,6 +220,9 @@ fn vs_edge(v: Vertex, i: Instance) -> EdgeOut {
 
 @fragment
 fn fs_edge(e: EdgeOut) -> @location(0) vec4<f32> {
+    if (cut_away(e.world)) {
+        discard;
+    }
     return e.color;
 }
 
@@ -239,6 +270,9 @@ fn vs_overlay(v: OverlayVertex) -> OverlayOut {
 
 @fragment
 fn fs_overlay(f: OverlayOut) -> @location(0) vec4<f32> {
+    if (cut_away(f.world)) {
+        discard;
+    }
     // The triangle's own normal, from the screen derivatives of its position.
     var n = normalize(cross(dpdx(f.world), dpdy(f.world)));
     var to_eye = normalize(g.eye.xyz - f.world);
@@ -273,6 +307,7 @@ struct RibbonIn {
 struct RibbonOut {
     @builtin(position) clip: vec4<f32>,
     @location(0) color: vec4<f32>,
+    @location(1) world: vec3<f32>,
 }
 
 @vertex
@@ -289,6 +324,7 @@ fn vs_ribbon(@builtin(vertex_index) idx: u32, s: RibbonIn) -> RibbonOut {
         // Wholly behind the camera: a degenerate quad outside the view.
         o.clip = vec4<f32>(2.0, 2.0, 2.0, 1.0);
         o.color = vec4<f32>(0.0);
+        o.world = s.pa;
         return o;
     }
     if (a.w < eps) {
@@ -313,11 +349,15 @@ fn vs_ribbon(@builtin(vertex_index) idx: u32, s: RibbonIn) -> RibbonOut {
     let ndc = mix(na, nb, t) + offset;
     o.clip = vec4<f32>(ndc * base.w, base.z, base.w);
     o.color = mix(s.ca, s.cb, t);
+    o.world = mix(s.pa, s.pb, t);
     return o;
 }
 
 @fragment
 fn fs_ribbon(f: RibbonOut) -> @location(0) vec4<f32> {
+    if (cut_away(f.world)) {
+        discard;
+    }
     return f.color;
 }
 

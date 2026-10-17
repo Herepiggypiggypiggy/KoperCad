@@ -803,6 +803,11 @@ pub const DUTCH: &[Aliases] = &[
         &["framesnelheid", "prestaties", "snelheid"],
     ),
     nl(
+        "view.3d_section",
+        &["doorsnede maken in 3d"],
+        &["doorsnede", "snijvlak"],
+    ),
+    nl(
         "view.3d_save_view",
         &["3d zicht opslaan"],
         &["zicht opslaan", "camera opslaan"],

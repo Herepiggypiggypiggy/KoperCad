@@ -522,6 +522,7 @@ impl NovoApp {
             limit,
             &self.settings.camera_views,
             !mode.view.state.selection.is_empty(),
+            &mut mode.view.state.section,
         );
         if let Some(command) = asked {
             self.wb.queued.push(command);

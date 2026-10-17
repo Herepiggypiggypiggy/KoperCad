@@ -175,6 +175,7 @@ struct Globals {
     ao: [f32; 4],
     inv_view_proj: [[f32; 4]; 4],
     ssao: [f32; 4],
+    clip: [f32; 4],
 }
 
 /// A vertex of an overlay mesh.
@@ -829,7 +830,12 @@ fn depth_pipeline(
             bias: wgpu::DepthBiasState::default(),
         }),
         multisample: wgpu::MultisampleState::default(),
-        fragment: None,
+        fragment: Some(wgpu::FragmentState {
+            module,
+            entry_point: Some("fs_depth"),
+            compilation_options: Default::default(),
+            targets: &[],
+        }),
         multiview_mask: None,
         cache: None,
     })
@@ -1533,6 +1539,10 @@ impl Renderer {
                 SSAO_BIAS,
                 SSAO_STRENGTH,
             ],
+            clip: frame.state.section.map_or([0.0, 0.0, 0.0, -1.0], |s| {
+                let (n, w) = s.plane(&bounds);
+                [n.x, n.y, n.z, w]
+            }),
         };
         queue.write_buffer(&target.globals, 0, bytemuck::bytes_of(&globals));
 

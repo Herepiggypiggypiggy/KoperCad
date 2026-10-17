@@ -448,6 +448,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_dimensions",
     "view.3d_quality",
     "view.3d_stats",
+    "view.3d_section",
     "view.3d_save_view",
     "view.3d_wire_runs",
     "view.3d_hints",
@@ -983,6 +984,14 @@ impl NovoApp {
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
                 }
+            }
+            "view.3d_section" => {
+                self.switch_workspace(Workspace::View3d);
+                let section = &mut self.view3d.view.state.section;
+                *section = match section {
+                    Some(_) => None,
+                    None => Some(novo_view3d::Section::default()),
+                };
             }
             "view.3d_save_view" => {
                 // Saved in the view's next frame, once the camera is fitted.
