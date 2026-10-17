@@ -74,7 +74,7 @@
 //! | [`PlateTooBig`](ProblemKind::PlateTooBig) | error | A plate larger than the inside of its enclosure |
 //! | [`SafetyLevelNotMet`](ProblemKind::SafetyLevelNotMet) | error | A safety function whose achieved performance level is below the required one (ISO 13849-1 calculation aid) |
 //! | [`SafetyBinding`](ProblemKind::SafetyBinding) | warning | A safety function block bound to a device that is missing or states no reliability data |
-//! | [`DoorSwing`](ProblemKind::DoorSwing) | warning | An open door that needs more room outside than the site allows |
+//! | [`DoorSwing`](ProblemKind::DoorSwing) | warning | An open door that needs more room outside than the site allows, or a device on the door that touches a wall or a plate device as the door opens |
 //!
 //! A problem can be waived with a reason ([`waive`]); [`check_open`] leaves
 //! waived problems out and [`waived_problems`] lists them for the report.

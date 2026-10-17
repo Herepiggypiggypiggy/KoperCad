@@ -4,6 +4,7 @@
 
 use novo_core::{AnyId, DeviceId};
 use novo_layout::model::load;
+use novo_layout::swing::Obstacle;
 
 use crate::{Context, Problem, ProblemKind};
 
@@ -55,6 +56,17 @@ pub(crate) fn door(cx: &Context<'_>, out: &mut Vec<Problem>) {
                     tag(id)
                 ),
             ));
+        }
+        // Devices on the door against the walls and the plate devices as the
+        // door opens (novo-layout's door swing sweep).
+        if let Some(swing) = layout.swing_report() {
+            for hit in &swing.hits {
+                let mut at = device(hit.door_device);
+                if let Obstacle::Device(id) = hit.obstacle {
+                    at.push(AnyId::Device(DeviceId::from(id)));
+                }
+                out.push(Problem::new(ProblemKind::DoorSwing, at, hit.message(&tag)));
+            }
         }
         let at = vec![AnyId::Structure(structure.id)];
         if report.plate_too_big {
