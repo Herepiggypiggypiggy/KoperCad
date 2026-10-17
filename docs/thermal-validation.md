@@ -43,6 +43,7 @@ Errors are signed, relative to the reference unless marked abs.
 | Same vented box | 2D engine | heat leaving through vents | +8.5% then +4.8% (42.5 and 41.0 W vs 39.1 W); heat imbalance +0.2% |
 | Single device 50 W in a sealed cabinet, 700 / 1000 / 1400 cells (CFD-C2, `validation_device.rs`) | 2D engine | housing rise | +4.5% / +5.1% / +5.1% (60.2 K vs 57.3 K); plate share 0.264 to 0.266 vs 0.268 |
 | Full cabinet 50 W, 1500 / 6000 / 20000 cells | 2D engine | housing rise | +5.1% / +10.7% / +14.3%: creeps up with the mesh, not mesh independent; test limit 20% |
+| Cabinet solver as the app runs it (`tests/validation_cabinet.rs`, CFD-INT), sealed 50 W and vented 100 W | 2D engine (and IEC 60890 for the sealed case) | mean air rise; housing rise; plate share | 1500 to 6000 cells: air -11 to -19% (IEC sealed -13 to -14%), housing +5 to +11%, plate share within 0.011. 20000 cells: air -16% sealed and -31% vented, housing +13 to +14%, plate share within 0.022. Not flat with refinement, so `ENCLOSURE_VALIDATED` stays false. Bands in the test: 20% (35% at 20000) air, 15% (20%) housing, 0.03 plate share |
 | Transient slab, dt = tau/200 and tau/400 | Fourier series | centre temperature at 0.1 tau | +2.34% and +1.19% (first order in dt) |
 
 ## What this says

@@ -193,7 +193,7 @@ fn the_time_budget_ends_an_unfinished_level_honestly() {
 }
 
 #[test]
-fn preview_is_not_a_cabinet_level_and_nothing_is_called_validated_yet() {
+fn preview_is_not_a_cabinet_level_and_the_validated_flag_follows_the_statement() {
     let r = small().solve(
         &scenario(false),
         Fidelity::Preview2d,
