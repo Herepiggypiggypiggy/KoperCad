@@ -1,5 +1,5 @@
 //! Copy, cut and paste in the drawing (Edit menu, Ctrl+C, Ctrl+X, Ctrl+V,
-//! Ctrl+Shift+V, Ctrl+Alt+V). The engine is `novo_workflow::clipboard`:
+//! Ctrl+Shift+V, Ctrl+Shift+I). The engine is `novo_workflow::clipboard`:
 //! a copy is versioned JSON text on the system clipboard, so it pastes on
 //! another page, in another project and in another running KoperCAD.
 //!
@@ -78,9 +78,7 @@ impl NovoApp {
                 ClipEvent::Cut => self.copy_selection(ctx, true),
                 ClipEvent::Paste(text, modifiers) => match Clip::parse(&text) {
                     Parsed::Clip(clip) => {
-                        let id = if modifiers.alt {
-                            "edit.paste_in_place"
-                        } else if modifiers.shift {
+                        let id = if modifiers.shift {
                             "edit.paste_keep_tags"
                         } else {
                             "edit.paste"
