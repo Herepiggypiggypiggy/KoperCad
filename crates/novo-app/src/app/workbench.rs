@@ -451,6 +451,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_dimensions",
     "view.3d_quality",
     "view.3d_stats",
+    "view.3d_measure",
     "view.3d_section",
     "view.3d_save_view",
     "view.3d_wire_runs",
@@ -990,6 +991,10 @@ impl NovoApp {
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
                 }
+            }
+            "view.3d_measure" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.measure.toggle();
             }
             "view.3d_section" => {
                 self.switch_workspace(Workspace::View3d);

@@ -114,6 +114,7 @@ pub(super) fn toolbar(
     ctx: &egui::Context,
     view: egui::Rect,
     controls: &mut Controls,
+    measure: &mut bool,
     limit: Option<f64>,
     views: &[crate::settings::CameraBookmark],
     selected: bool,
@@ -167,6 +168,13 @@ pub(super) fn toolbar(
                         "Surfaces",
                         "Show the door, walls, roof, floor and extra plates as faint panes. \
                          The surface picked in the Cabinet header is highlighted.",
+                    );
+                    toggle(
+                        ui,
+                        measure,
+                        "Measure",
+                        "Click two points to read the distance, and the gap between two \
+                         devices (View > 3D > Measure)",
                     );
                     toggle(
                         ui,

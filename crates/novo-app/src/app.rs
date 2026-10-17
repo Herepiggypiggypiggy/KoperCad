@@ -166,6 +166,7 @@ mod view3d_controls;
 mod view3d_duplicate;
 mod view3d_heat;
 mod view3d_hints;
+mod view3d_measure;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
@@ -1165,6 +1166,7 @@ impl NovoApp {
                     || *id == "view.3d_position"
                     || *id == "view.3d_place"
                     || *id == "view.3d_stats"
+                    || *id == "view.3d_measure"
                     || *id == "view.3d_section"
                     || *id == "view.3d_hints"
                     || matches!(*id, "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all")

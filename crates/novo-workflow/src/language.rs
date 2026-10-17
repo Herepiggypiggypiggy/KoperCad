@@ -726,6 +726,11 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_measure",
+        &["afstand meten in 3d"],
+        &["meten", "afstand", "liniaal"],
+    ),
+    nl(
         "view.3d_align_left",
         &["links uitlijnen in 3d"],
         &["uitlijnen", "links"],

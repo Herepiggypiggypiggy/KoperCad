@@ -499,6 +499,26 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
 }
 
 #[test]
+fn the_measure_command_switches_the_tool_and_it_forgets_its_points_when_left() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(!d.app.view3d.measure.on);
+    d.app.run_command(&ctx, "view.3d_measure", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(d.app.view3d.measure.on);
+    d.app
+        .view3d
+        .measure
+        .click(glam::Vec3::new(10.0, 10.0, 0.0), None);
+    assert!(d.app.view3d.measure.has_pins());
+    d.app.run_command(&ctx, "view.3d_measure", None);
+    d.frame();
+    assert!(!d.app.view3d.measure.on && !d.app.view3d.measure.has_pins());
+}
+
+#[test]
 fn the_wire_runs_command_opens_the_list_turns_the_wires_on_and_reads_their_lengths() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());

@@ -347,6 +347,8 @@ pub struct Click {
     pub modifiers: Modifiers,
     /// Alt + click: the deepest item (repeated clicks step back up).
     pub deepest: bool,
+    /// The world point on the picked surface, mm; `None` on empty space.
+    pub point: Option<glam::Vec3>,
     /// The pointer ray through the click, in the world.
     pub ray: Ray,
 }
@@ -1041,14 +1043,17 @@ impl View3d {
                         id: hit.map(|h| h.id),
                         modifiers,
                         deepest: true,
+                        point: hit.map(|h| h.point),
                         ray,
                     });
                 } else {
                     self.alt_cycle = None;
+                    let hit = self.pick_at(rect, scene, p);
                     out.clicked = Some(Click {
-                        id: self.pick_at(rect, scene, p).map(|h| h.id),
+                        id: hit.map(|h| h.id),
                         modifiers,
                         deepest: false,
+                        point: hit.map(|h| h.point),
                         ray,
                     });
                 }
