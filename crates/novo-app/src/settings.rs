@@ -44,6 +44,9 @@ pub struct Settings {
     pub appearance_theme: String,
     /// The interface density, `"standard"` (empty), `"compact"` or `"touch"`.
     pub appearance_density: String,
+    /// The interface size in percent: 100 (empty or 0), 125, 150 or 200,
+    /// on top of the system's own scaling.
+    pub ui_scale: u32,
     /// Whether the status bar is switched off (docs/design/workspaces.md §7).
     pub hide_status_bar: bool,
     /// Commissioning's large touch buttons: a tablet user sets it once.
@@ -215,6 +218,16 @@ impl Settings {
     /// The theme the person chose; dark by default.
     pub fn theme_choice(&self) -> novo_theme::ThemeChoice {
         novo_theme::ThemeChoice::from_id(&self.appearance_theme)
+    }
+
+    /// The interface scale as a factor: 1.0, 1.25, 1.5 or 2.0.
+    pub fn ui_scale_factor(&self) -> f32 {
+        match self.ui_scale {
+            125 => 1.25,
+            150 => 1.5,
+            200 => 2.0,
+            _ => 1.0,
+        }
     }
 
     /// The density the person chose; standard by default.
