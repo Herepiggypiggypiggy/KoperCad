@@ -32,6 +32,9 @@ mod changes;
 mod checks;
 mod clipboard;
 mod commissioning;
+mod commissioning_cabinet;
+#[cfg(test)]
+mod commissioning_cabinet_tests;
 mod commissioning_photos;
 mod commissioning_redlines;
 mod commissioning_signature;
