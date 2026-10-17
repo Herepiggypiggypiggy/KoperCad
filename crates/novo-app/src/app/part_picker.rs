@@ -105,6 +105,8 @@ pub(super) struct Candidate {
     /// How well the part suits the device; `None` in lists with no device
     /// (cable parts).
     pub(super) fit: Option<Fit>,
+    /// Whether anyone vouched for the part's imported data.
+    pub(super) trust: novo_parts::Trust,
 }
 
 impl Candidate {
@@ -133,6 +135,7 @@ impl Candidate {
                 })
                 .collect(),
             fit: None,
+            trust: super::parts_quality::user_trust(part),
         }
     }
 }
@@ -255,6 +258,7 @@ pub(super) fn picker_ui(
                             .color(data_color(c.grade)),
                     )
                     .on_hover_text(data_tooltip(c));
+                    super::parts_quality::trust_badge(ui, &c.trust);
                     if !c.detail.is_empty() {
                         ui.small(&c.detail);
                     }
