@@ -1576,7 +1576,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                         if !a.headline.is_empty() {
                             ui.label(small(&a.headline, t::TEXT_MUTED));
                         }
-                        for n in sol.snapshot.notes.iter().take(2) {
+                        for n in sol.snapshot.notes.iter().take(4) {
                             ui.label(small(n, t::TEXT_MUTED));
                         }
                         for m in &sol.messages {

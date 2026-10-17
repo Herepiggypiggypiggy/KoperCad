@@ -35,7 +35,15 @@ Errors are signed, relative to the reference unless marked abs.
 | Fan into a vent (CFD-C2, `openings.rs`) | analytic operating point | flow | within 3% (test limit) |
 | Porous slab as fan load (CFD-C2, `ducts.rs`) | exact operating point | flow | -0.04% and -0.03% at two time steps |
 | IEC 60890 wall films (CFD-C2) | k A_eff | conductance sum | below 1e-9 relative |
-| Sealed enclosure 50 W, mean air rise (fixed in #675 with ThermalBc::Overall) | IEC 60890 hand calc 6.29 K, 2D engine 6.10 K | 3D mean air rise | 5.84 K on 1000 cells, 5.37 on 1800, 5.36 on 6000: -7% to -15% vs IEC, -4% to -12% vs 2D (the 3D mean is lower because the air is stratified); test band 20% |
+| Sealed enclosure 50 W, mean air rise (fixed in #675 with ThermalBc::Overall; re-measured 2026-10-17 on main) | IEC 60890 hand calc 6.29 K, 2D engine 6.10 K | 3D volume-mean air rise | 5.48 K on 1000 cells, 5.38 on 1800: -12.8% and -14.4% vs IEC, -10.1% and -11.8% vs 2D (steady path 5.478 and 5.380 K); heat imbalance at most 0.1%. The 3D mean is lower because the air is stratified; test band 20% |
+| Vented box 100 W, 1000 then 1800 cells (CFD-C2, `validation_vented.rs`) | 2D engine, mixed air at the vents | air rise seen by the walls (wall-conductance weighted) | +4.5% then +6.7% (model vs model, not a measurement) |
+| Same vented box | 2D engine | volume-mean air rise | -14.6% then -14.8%; does not flatten with the mesh (stratification, see below) |
+| Same vented box | 2D engine | exhaust air rise (plume over the device) | +22.2% then +21.2% (11.2 and 11.1 K vs 9.15 K) |
+| Same vented box | 2D engine | vent flow | -11.2% then -13.5% (3D 0.00320 and 0.00312 vs 0.00361 m3/s) |
+| Same vented box | 2D engine | heat leaving through vents | +8.5% then +4.8% (42.5 and 41.0 W vs 39.1 W); heat imbalance +0.2% |
+| Single device 50 W in a sealed cabinet, 700 / 1000 / 1400 cells (CFD-C2, `validation_device.rs`) | 2D engine | housing rise | +4.5% / +5.1% / +5.1% (60.2 K vs 57.3 K); plate share 0.264 to 0.266 vs 0.268 |
+| Full cabinet 50 W, 1500 / 6000 / 20000 cells | 2D engine | housing rise | +5.1% / +10.7% / +14.3%: creeps up with the mesh, not mesh independent; test limit 20% |
+| Cabinet solver as the app runs it (`tests/validation_cabinet.rs`, CFD-INT), sealed 50 W and vented 100 W | 2D engine (and IEC 60890 for the sealed case) | mean air rise; housing rise; plate share | 1500 to 6000 cells: air -11 to -19% (IEC sealed -13 to -14%), housing +5 to +11%, plate share within 0.011. 20000 cells: air -16% sealed and -31% vented, housing +13 to +14%, plate share within 0.022. Not flat with refinement, so `ENCLOSURE_VALIDATED` stays false. Bands in the test: 20% (35% at 20000) air, 15% (20%) housing, 0.03 plate share |
 | Transient slab, dt = tau/200 and tau/400 | Fourier series | centre temperature at 0.1 tau | +2.34% and +1.19% (first order in dt) |
 
 ## What this says
@@ -56,13 +64,23 @@ balance. Cause, confirmed by CFD-C2: the IEC k is an overall air-to-air coeffici
 of the resolved inner convection. Fixed in #675 (`ThermalBc::Overall`), which also removed the mesh dependence: the
 result now lies in a 5.4 to 5.8 K band on 1000 to 6000 cells, not exactly mesh independent. The check is in CI.
 
+## Vented box: known difference to the 2D estimate
+
+The 2D estimate assumes mixed air at the vents. Where a heat source sits below a vent the 3D plume leaves 20 to 50%
+hotter (here +21% to +22% in exhaust rise), the volume-mean air rise is about 15% lower, and the vent flow is 11 to 13%
+low, while the walls (+4% to +7% in the wall-seen rise) and the total heat balance agree. This is a model difference, not
+a proven error of either side: nobody has measured this box. The wall-seen metric is the honest comparison for
+housing temperature; the volume mean is not expected to match. The wall conductance counts the vent openings, so the
+wall-seen rise reads a few percent low by construction. The full cabinet row creeps up with the mesh (+5% to +14%),
+so the 20% test band is a guard, not an accuracy claim.
+
 ## Caveats on single rows
 
 - Turbulence (lane CFD-B, `turb_channel.rs`, `turb_plate.rs`, slow tests run with `--ignored`): channel Re_tau 590, SST resolved
   4.7% log-layer error (centreline U+ 20.69 vs DNS 21.3), SST with wall function 2.7%, k-epsilon 7.1%. Heated wall against
   Churchill-Chu: SST resolved +4.3% (Ra 1.0e9, 40x80) and +9.8% (Ra 3.4e9, 28x56); k-epsilon on the resolved grid +34.5% (not
   made for resolved buoyant layers); coarse wall cells (16x48): SST and k-epsilon agree with each other but are 52% low.
-  Hot/cold wall flux mismatch in these runs is 5%. Until CFD-B's solid mask (#679) is merged the turbulent flow must not be used with solids; update this line when it lands.
+  Hot/cold wall flux mismatch in these runs is 5%. CFD-B's solid mask (#679) is merged: turbulence now treats solid cells of the medium as walls. No validation row covers turbulent flow with solids yet, so that combination is untested here.
 - Plate: a 2D slice with the far opening one plate height away, so the result depends somewhat on that domain
   width (not quantified). Two meshes show a trend, not a measured order.
 
@@ -70,7 +88,7 @@ result now lies in a 5.4 to 5.8 K band on 1000 to 6000 cells, not exactly mesh i
 
 | Case | Blocked on |
 | --- | --- |
-| Cabinet with several devices and vents against the 2D engine | own test in a later PR (the sealed single-device case is done) |
+| Cabinet with several devices and vents against the 2D engine | own test in a later PR (single device, full cabinet and one vented box are done) |
 | Chimney against the 2D formulas (CFD-C2 reports a 40% band, laminar) | own test in a later PR |
 | Richardson study on a real cabinet scenario | C1 meshing; the cavity study stands in |
 
@@ -82,7 +100,9 @@ Each becomes a `validation_*` test when its lane lands; the sign-off PR for a la
 > (Ghia 1982, de Vahl Davis 1983) to within 1% in heat transfer and about 3% in peak velocity on
 > meshes of 50 to 60 cells per side. Mesh convergence is second order. A heated plate in open air
 > is within about 4% of the Churchill-Chu correlation (itself good to about 5%); a sealed enclosure
-> lies up to 15% below the IEC 60890 estimate. Vents and fans match analytic operating points.
+> lies up to 15% below the IEC 60890 estimate (stratified air). Vents and fans match analytic operating points;
+> in a vented box the air leaving over a heat source is about 20% hotter and the flow 11 to 13% lower than the 2D estimate,
+> while housing temperature agrees within about 7%.
 > Turbulence is validated only on a channel and a heated wall, and wall functions are not valid for
 > thin natural-convection layers. Radiation is not yet validated. Results for a cabinet are
 > estimates and carry the uncertainty of the input loss data and boundary conditions.

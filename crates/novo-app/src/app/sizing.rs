@@ -19,7 +19,7 @@ pub const CATALOG_FILE: &str = "enclosures.csv";
 /// `%APPDATA%\KoperCAD\enclosures.csv` (the platform's data folder elsewhere).
 pub fn catalog_path() -> Option<PathBuf> {
     Some(
-        dirs::data_dir()?
+        novo_storage::profile::data_dir()?
             .join(crate::DATA_DIR_NAME)
             .join(CATALOG_FILE),
     )
@@ -436,7 +436,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
         changed = true;
     }
     if import
-        && let Some(path) = rfd::FileDialog::new()
+        && let Some(path) = crate::dialogs::FileDialog::new()
             .set_title("Import enclosure list")
             .add_filter("CSV", &["csv", "txt"])
             .pick_file()
@@ -447,7 +447,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
         });
     }
     if export
-        && let Some(path) = rfd::FileDialog::new()
+        && let Some(path) = crate::dialogs::FileDialog::new()
             .set_title("Export enclosure list")
             .set_file_name(CATALOG_FILE)
             .add_filter("CSV", &["csv"])

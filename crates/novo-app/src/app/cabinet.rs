@@ -681,232 +681,131 @@ impl NovoApp {
         let mut all_placed_note = false;
         let mut delete_rail: Option<u64> = None;
         let mut move_rail: Option<super::cabinet_rails::RailDrag> = None;
-        ui.horizontal_top(|ui| {
-            ui.add_space(4.0);
-            cabinet_bar::group(ui, caption("Panel"), |ui| {
-                let current = location
-                    .as_ref()
-                    .map_or_else(|| "No panel".to_owned(), ToString::to_string);
-                egui::ComboBox::from_id_salt("cabinet_panel")
-                    .selected_text(current)
-                    .show_ui(ui, |ui| {
-                        for l in &locations {
-                            if ui
-                                .selectable_label(location.as_ref() == Some(l), l.to_string())
+        // Narrower than the fixed part of the bar (a 683 point window), the bar
+        // scrolls sideways instead of running off the pane and the window.
+        egui::ScrollArea::horizontal()
+            .id_salt("cabinet_bar_scroll")
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                ui.horizontal_top(|ui| {
+                    ui.add_space(4.0);
+                    cabinet_bar::group(ui, caption("Panel"), |ui| {
+                        let current = location
+                            .as_ref()
+                            .map_or_else(|| "No panel".to_owned(), ToString::to_string);
+                        egui::ComboBox::from_id_salt("cabinet_panel")
+                            .selected_text(current)
+                            .show_ui(ui, |ui| {
+                                for l in &locations {
+                                    if ui
+                                        .selectable_label(
+                                            location.as_ref() == Some(l),
+                                            l.to_string(),
+                                        )
+                                        .clicked()
+                                    {
+                                        ask = Some(Ask::Panel(l.clone()));
+                                    }
+                                }
+                            });
+                    });
+                    if layout.is_none() {
+                        return;
+                    }
+                    if let Some(sum) = surfaces.as_ref().filter(|s| s.rows.len() > 1) {
+                        cabinet_bar::group(ui, caption("Surface"), |ui| {
+                            let picked = self.cabinet.surface.clone();
+                            let current = picked.clone().unwrap_or_else(|| MAIN_PLATE.to_owned());
+                            let combo = egui::ComboBox::from_id_salt("cabinet_surface")
+                                .selected_text(current.clone());
+                            let popup = ui.make_persistent_id("cabinet_surface").with("popup");
+                            self.cabinet.surface_popup = Some(popup);
+                            if std::mem::take(&mut self.cabinet.surface_open) {
+                                egui::Popup::open_id(ui.ctx(), popup);
+                            }
+                            let r = combo.show_ui(ui, |ui| {
+                                for row in &sum.rows {
+                                    let on = row.name == current;
+                                    let line = ui.selectable_label(on, row.label());
+                                    if line.clicked() {
+                                        self.cabinet.pick_surface(
+                                            (row.name != MAIN_PLATE).then(|| row.name.clone()),
+                                        );
+                                    }
+                                }
+                            });
+                            let r = r.response.on_hover_text(
+                                "Surface to work on (View > Cabinet > Cabinet surfaces)",
+                            );
+                            cabinet_bar::note(&mut anchors, "cabinet.surface", "Surface", &r);
+                            if !sum.problems.is_empty() {
+                                let text = format!("{} surface problems", sum.problems.len());
+                                cabinet_bar::pill(
+                                    ui,
+                                    &text,
+                                    Some(novo_theme::widgets::Level::Warning),
+                                )
+                                .on_hover_text(sum.problems.join("\n"));
+                            }
+                        });
+                    }
+                    if has_plan {
+                        cabinet_bar::group(ui, Some("Preview, nothing stored yet"), |ui| {
+                            let accept = cabinet_bar::primary(
+                                ui,
+                                icons::CHECK,
+                                "Accept",
+                                Some("Enter"),
+                                true,
+                            );
+                            if cabinet_bar::note(&mut anchors, "cabinet.accept", "Accept", &accept)
                                 .clicked()
                             {
-                                ask = Some(Ask::Panel(l.clone()));
+                                ask = Some(Ask::Accept);
                             }
-                        }
-                    });
-            });
-            if layout.is_none() {
-                return;
-            }
-            if let Some(sum) = surfaces.as_ref().filter(|s| s.rows.len() > 1) {
-                cabinet_bar::group(ui, caption("Surface"), |ui| {
-                    let picked = self.cabinet.surface.clone();
-                    let current = picked.clone().unwrap_or_else(|| MAIN_PLATE.to_owned());
-                    let combo = egui::ComboBox::from_id_salt("cabinet_surface")
-                        .selected_text(current.clone());
-                    let popup = ui.make_persistent_id("cabinet_surface").with("popup");
-                    self.cabinet.surface_popup = Some(popup);
-                    if std::mem::take(&mut self.cabinet.surface_open) {
-                        egui::Popup::open_id(ui.ctx(), popup);
-                    }
-                    let r = combo.show_ui(ui, |ui| {
-                        for row in &sum.rows {
-                            let on = row.name == current;
-                            let line = ui.selectable_label(on, row.label());
-                            if line.clicked() {
-                                self.cabinet.pick_surface(
-                                    (row.name != MAIN_PLATE).then(|| row.name.clone()),
-                                );
+                            if ui.button(format!("{}  Cancel   Esc", icons::X)).clicked() {
+                                ask = Some(Ask::Cancel);
                             }
-                        }
-                    });
-                    let r = r
-                        .response
-                        .on_hover_text("Surface to work on (View > Cabinet > Cabinet surfaces)");
-                    cabinet_bar::note(&mut anchors, "cabinet.surface", "Surface", &r);
-                    if !sum.problems.is_empty() {
-                        let text = format!("{} surface problems", sum.problems.len());
-                        cabinet_bar::pill(ui, &text, Some(novo_theme::widgets::Level::Warning))
-                            .on_hover_text(sum.problems.join("\n"));
+                        });
+                        return;
                     }
-                });
-            }
-            if has_plan {
-                cabinet_bar::group(ui, Some("Preview, nothing stored yet"), |ui| {
-                    let accept =
-                        cabinet_bar::primary(ui, icons::CHECK, "Accept", Some("Enter"), true);
-                    if cabinet_bar::note(&mut anchors, "cabinet.accept", "Accept", &accept)
-                        .clicked()
-                    {
-                        ask = Some(Ask::Accept);
-                    }
-                    if ui.button(format!("{}  Cancel   Esc", icons::X)).clicked() {
-                        ask = Some(Ask::Cancel);
-                    }
-                });
-                return;
-            }
-            cabinet_bar::group(ui, caption("Place"), |ui| {
-                let r = cabinet_bar::primary(
-                    ui,
-                    icons::SQUARES_FOUR,
-                    "Place all",
-                    place_key.as_deref(),
-                    unplaced > 0 || homeless > 0,
-                );
-                let r = if unplaced > 0 {
-                    r.on_hover_text(format!(
+                    cabinet_bar::group(ui, caption("Place"), |ui| {
+                        let r = cabinet_bar::primary(
+                            ui,
+                            icons::SQUARES_FOUR,
+                            "Place all",
+                            place_key.as_deref(),
+                            unplaced > 0 || homeless > 0,
+                        );
+                        let r = if unplaced > 0 {
+                            r.on_hover_text(format!(
                         "Place the {unplaced} unplaced devices by the rules. You review the \
                          preview before anything is stored."
                     ))
-                } else if homeless > 0 {
-                    r.on_hover_text(format!(
+                        } else if homeless > 0 {
+                            r.on_hover_text(format!(
                         "{homeless} devices have no cabinet: Place all names them and says why."
                     ))
-                } else {
-                    r
-                };
-                cabinet_bar::note(&mut anchors, "cabinet.place_all", "Place all", &r);
-                if r.clicked() {
-                    ask = Some(Ask::PlaceAll);
-                }
-                if !fold.has(Foldable::Rules) {
-                    let rules = cabinet_bar::button(ui, icons::SLIDERS_HORIZONTAL, "Rules", false)
-                        .on_hover_text("Where Place all puts each kind of device");
-                    if cabinet_bar::note(&mut anchors, "cabinet.rules", "Rules", &rules).clicked() {
-                        self.cabinet.rules.editor_open ^= true;
-                    }
-                }
-            });
-            if plate_face && !fold.has(Foldable::Arrange) {
-                cabinet_bar::group(ui, caption("Arrange"), |ui| {
-                    let plate = cabinet_bar::button(
-                        ui,
-                        icons::RULER,
-                        "Plate setup",
-                        self.cabinet.plate_card,
-                    )
-                    .on_hover_text("Size, fill and door of the mounting plate");
-                    if cabinet_bar::note(&mut anchors, "cabinet.plate", "Plate setup", &plate)
-                        .clicked()
-                    {
-                        ask = Some(Ask::TogglePlateCard);
-                    }
-                    let size = cabinet_bar::button(
-                        ui,
-                        icons::ARROWS_OUT,
-                        "Size enclosure",
-                        self.sizing.panel_open,
-                    );
-                    if cabinet_bar::note(&mut anchors, "cabinet.sizing", "Size enclosure", &size)
-                        .clicked()
-                    {
-                        self.sizing.panel_open = !self.sizing.panel_open;
-                    }
-                });
-            }
-            if plate_face || !(fold.has(Foldable::Rails) && fold.has(Foldable::CutList)) {
-                cabinet_bar::group(ui, caption("Route"), |ui| {
-                    if plate_face {
-                        let routes = cabinet_bar::button(
-                            ui,
-                            icons::PATH,
-                            "Route all",
-                            self.cabinet.routes,
-                        )
-                        .on_hover_text(
-                            "Route every wire through the ducts: lengths, duct fill and problems",
-                        );
-                        if cabinet_bar::note(&mut anchors, "cabinet.routes", "Route all", &routes)
-                            .clicked()
-                        {
-                            ask = Some(Ask::ToggleRoutes);
+                        } else {
+                            r
+                        };
+                        cabinet_bar::note(&mut anchors, "cabinet.place_all", "Place all", &r);
+                        if r.clicked() {
+                            ask = Some(Ask::PlaceAll);
                         }
-                    }
-                    if !fold.has(Foldable::Rails) {
-                        let rails = cabinet_bar::button(
-                            ui,
-                            icons::ROWS,
-                            "Rails and ducts",
-                            self.cabinet.rails.open,
-                        )
-                        .on_hover_text(super::tips::hover(
-                            ui.ctx(),
-                            "Add, move, resize and delete rails and ducts",
-                            "cabinet.rails",
-                        ));
-                        if cabinet_bar::note(
-                            &mut anchors,
-                            "cabinet.rails",
-                            "Rails and ducts",
-                            &rails,
-                        )
-                        .clicked()
-                        {
-                            self.cabinet.rails.open ^= true;
-                        }
-                    }
-                    if !fold.has(Foldable::CutList) {
-                        let cut = cabinet_bar::button(
-                            ui,
-                            icons::SCISSORS,
-                            "Cut list",
-                            self.cabinet.rules.cut_open,
-                        )
-                        .on_hover_text("Bars of rail and duct to buy and cut");
-                        if cabinet_bar::note(&mut anchors, "cabinet.cutlist", "Cut list", &cut)
-                            .clicked()
-                        {
-                            self.cabinet.rules.cut_open ^= true;
-                        }
-                    }
-                });
-            }
-            cabinet_bar::group(ui, caption("View"), |ui| {
-                ui.scope(|ui| {
-                    // One joined control: no gap between the two halves.
-                    ui.spacing_mut().item_spacing.x = 0.0;
-                    if cabinet_bar::segment(ui, "Plate", plate_face).clicked() && !plate_face {
-                        ask = Some(Ask::ToggleTable);
-                    }
-                    let table = cabinet_bar::segment(ui, "Table", !plate_face).on_hover_text(
-                        super::tips::hover(ui.ctx(), "Devices as a table", "view.cabinet_table"),
-                    );
-                    if cabinet_bar::note(&mut anchors, "cabinet.table", "Table", &table).clicked()
-                        && plate_face
-                    {
-                        ask = Some(Ask::ToggleTable);
-                    }
-                });
-                if plate_face && !fold.has(Foldable::Heat) {
-                    let heat = super::heat::toggle(ui, &mut self.cabinet.heat);
-                    cabinet_bar::note(&mut anchors, "cabinet.heat", "Heat", &heat);
-                }
-            });
-            if fold.any() {
-                cabinet_bar::group(ui, caption("More"), |ui| {
-                    let more = ui.menu_button(format!("{}  More", icons::DOTS_THREE), |ui| {
-                        if fold.has(Foldable::Rules) {
-                            let r = cabinet_bar::button(
-                                ui,
-                                icons::SLIDERS_HORIZONTAL,
-                                "Rules",
-                                self.cabinet.rules.editor_open,
-                            )
-                            .on_hover_text("Where Place all puts each kind of device");
-                            if cabinet_bar::note(&mut anchors, "cabinet.rules", "Rules", &r)
+                        if !fold.has(Foldable::Rules) {
+                            let rules =
+                                cabinet_bar::button(ui, icons::SLIDERS_HORIZONTAL, "Rules", false)
+                                    .on_hover_text("Where Place all puts each kind of device");
+                            if cabinet_bar::note(&mut anchors, "cabinet.rules", "Rules", &rules)
                                 .clicked()
                             {
                                 self.cabinet.rules.editor_open ^= true;
-                                ui.close();
                             }
                         }
-                        if fold.has(Foldable::Arrange) {
+                    });
+                    if plate_face && !fold.has(Foldable::Arrange) {
+                        cabinet_bar::group(ui, caption("Arrange"), |ui| {
                             let plate = cabinet_bar::button(
                                 ui,
                                 icons::RULER,
@@ -923,7 +822,6 @@ impl NovoApp {
                             .clicked()
                             {
                                 ask = Some(Ask::TogglePlateCard);
-                                ui.close();
                             }
                             let size = cabinet_bar::button(
                                 ui,
@@ -940,139 +838,315 @@ impl NovoApp {
                             .clicked()
                             {
                                 self.sizing.panel_open = !self.sizing.panel_open;
-                                ui.close();
                             }
-                        }
-                        if fold.has(Foldable::Rails) {
-                            let rails = cabinet_bar::button(
-                                ui,
-                                icons::ROWS,
-                                "Rails and ducts",
-                                self.cabinet.rails.open,
-                            )
-                            .on_hover_text(super::tips::hover(
-                                ui.ctx(),
-                                "Add, move, resize and delete rails and ducts",
-                                "cabinet.rails",
-                            ));
-                            if cabinet_bar::note(
-                                &mut anchors,
-                                "cabinet.rails",
-                                "Rails and ducts",
-                                &rails,
-                            )
-                            .clicked()
-                            {
-                                self.cabinet.rails.open ^= true;
-                                ui.close();
-                            }
-                        }
-                        if fold.has(Foldable::CutList) {
-                            let cut = cabinet_bar::button(
-                                ui,
-                                icons::SCISSORS,
-                                "Cut list",
-                                self.cabinet.rules.cut_open,
-                            )
-                            .on_hover_text("Bars of rail and duct to buy and cut");
-                            if cabinet_bar::note(&mut anchors, "cabinet.cutlist", "Cut list", &cut)
+                        });
+                    }
+                    if plate_face || !(fold.has(Foldable::Rails) && fold.has(Foldable::CutList)) {
+                        cabinet_bar::group(ui, caption("Route"), |ui| {
+                            if plate_face {
+                                let routes = cabinet_bar::button(
+                            ui,
+                            icons::PATH,
+                            "Route all",
+                            self.cabinet.routes,
+                        )
+                        .on_hover_text(
+                            "Route every wire through the ducts: lengths, duct fill and problems",
+                        );
+                                if cabinet_bar::note(
+                                    &mut anchors,
+                                    "cabinet.routes",
+                                    "Route all",
+                                    &routes,
+                                )
                                 .clicked()
-                            {
-                                self.cabinet.rules.cut_open ^= true;
-                                ui.close();
+                                {
+                                    ask = Some(Ask::ToggleRoutes);
+                                }
                             }
-                        }
-                        if fold.has(Foldable::Heat) {
+                            if !fold.has(Foldable::Rails) {
+                                let rails = cabinet_bar::button(
+                                    ui,
+                                    icons::ROWS,
+                                    "Rails and ducts",
+                                    self.cabinet.rails.open,
+                                )
+                                .on_hover_text(super::tips::hover(
+                                    ui.ctx(),
+                                    "Add, move, resize and delete rails and ducts",
+                                    "cabinet.rails",
+                                ));
+                                if cabinet_bar::note(
+                                    &mut anchors,
+                                    "cabinet.rails",
+                                    "Rails and ducts",
+                                    &rails,
+                                )
+                                .clicked()
+                                {
+                                    self.cabinet.rails.open ^= true;
+                                }
+                            }
+                            if !fold.has(Foldable::CutList) {
+                                let cut = cabinet_bar::button(
+                                    ui,
+                                    icons::SCISSORS,
+                                    "Cut list",
+                                    self.cabinet.rules.cut_open,
+                                )
+                                .on_hover_text("Bars of rail and duct to buy and cut");
+                                if cabinet_bar::note(
+                                    &mut anchors,
+                                    "cabinet.cutlist",
+                                    "Cut list",
+                                    &cut,
+                                )
+                                .clicked()
+                                {
+                                    self.cabinet.rules.cut_open ^= true;
+                                }
+                            }
+                        });
+                    }
+                    cabinet_bar::group(ui, caption("View"), |ui| {
+                        ui.scope(|ui| {
+                            // One joined control: no gap between the two halves.
+                            ui.spacing_mut().item_spacing.x = 0.0;
+                            if cabinet_bar::segment(ui, "Plate", plate_face).clicked()
+                                && !plate_face
+                            {
+                                ask = Some(Ask::ToggleTable);
+                            }
+                            let table = cabinet_bar::segment(ui, "Table", !plate_face)
+                                .on_hover_text(super::tips::hover(
+                                    ui.ctx(),
+                                    "Devices as a table",
+                                    "view.cabinet_table",
+                                ));
+                            if cabinet_bar::note(&mut anchors, "cabinet.table", "Table", &table)
+                                .clicked()
+                                && plate_face
+                            {
+                                ask = Some(Ask::ToggleTable);
+                            }
+                        });
+                        if plate_face && !fold.has(Foldable::Heat) {
                             let heat = super::heat::toggle(ui, &mut self.cabinet.heat);
                             cabinet_bar::note(&mut anchors, "cabinet.heat", "Heat", &heat);
                         }
-                        if fold.has(Foldable::Export) {
-                            let item = cabinet_bar::button(
-                                ui,
-                                icons::EXPORT,
-                                "Plate drawing (PDF)",
-                                false,
-                            )
-                            .on_hover_text("Plate drawing with drill table");
-                            cabinet_bar::note(
-                                &mut anchors,
-                                "cabinet.plate_drawing",
-                                "Plate drawing",
-                                &item,
-                            );
-                            if item.clicked() {
-                                ask = Some(Ask::ExportPlate);
-                                ui.close();
+                    });
+                    if fold.any() {
+                        cabinet_bar::group(ui, caption("More"), |ui| {
+                            let more =
+                                ui.menu_button(format!("{}  More", icons::DOTS_THREE), |ui| {
+                                    if fold.has(Foldable::Rules) {
+                                        let r = cabinet_bar::button(
+                                            ui,
+                                            icons::SLIDERS_HORIZONTAL,
+                                            "Rules",
+                                            self.cabinet.rules.editor_open,
+                                        )
+                                        .on_hover_text("Where Place all puts each kind of device");
+                                        if cabinet_bar::note(
+                                            &mut anchors,
+                                            "cabinet.rules",
+                                            "Rules",
+                                            &r,
+                                        )
+                                        .clicked()
+                                        {
+                                            self.cabinet.rules.editor_open ^= true;
+                                            ui.close();
+                                        }
+                                    }
+                                    if fold.has(Foldable::Arrange) {
+                                        let plate = cabinet_bar::button(
+                                            ui,
+                                            icons::RULER,
+                                            "Plate setup",
+                                            self.cabinet.plate_card,
+                                        )
+                                        .on_hover_text("Size, fill and door of the mounting plate");
+                                        if cabinet_bar::note(
+                                            &mut anchors,
+                                            "cabinet.plate",
+                                            "Plate setup",
+                                            &plate,
+                                        )
+                                        .clicked()
+                                        {
+                                            ask = Some(Ask::TogglePlateCard);
+                                            ui.close();
+                                        }
+                                        let size = cabinet_bar::button(
+                                            ui,
+                                            icons::ARROWS_OUT,
+                                            "Size enclosure",
+                                            self.sizing.panel_open,
+                                        );
+                                        if cabinet_bar::note(
+                                            &mut anchors,
+                                            "cabinet.sizing",
+                                            "Size enclosure",
+                                            &size,
+                                        )
+                                        .clicked()
+                                        {
+                                            self.sizing.panel_open = !self.sizing.panel_open;
+                                            ui.close();
+                                        }
+                                    }
+                                    if fold.has(Foldable::Rails) {
+                                        let rails = cabinet_bar::button(
+                                            ui,
+                                            icons::ROWS,
+                                            "Rails and ducts",
+                                            self.cabinet.rails.open,
+                                        )
+                                        .on_hover_text(super::tips::hover(
+                                            ui.ctx(),
+                                            "Add, move, resize and delete rails and ducts",
+                                            "cabinet.rails",
+                                        ));
+                                        if cabinet_bar::note(
+                                            &mut anchors,
+                                            "cabinet.rails",
+                                            "Rails and ducts",
+                                            &rails,
+                                        )
+                                        .clicked()
+                                        {
+                                            self.cabinet.rails.open ^= true;
+                                            ui.close();
+                                        }
+                                    }
+                                    if fold.has(Foldable::CutList) {
+                                        let cut = cabinet_bar::button(
+                                            ui,
+                                            icons::SCISSORS,
+                                            "Cut list",
+                                            self.cabinet.rules.cut_open,
+                                        )
+                                        .on_hover_text("Bars of rail and duct to buy and cut");
+                                        if cabinet_bar::note(
+                                            &mut anchors,
+                                            "cabinet.cutlist",
+                                            "Cut list",
+                                            &cut,
+                                        )
+                                        .clicked()
+                                        {
+                                            self.cabinet.rules.cut_open ^= true;
+                                            ui.close();
+                                        }
+                                    }
+                                    if fold.has(Foldable::Heat) {
+                                        let heat = super::heat::toggle(ui, &mut self.cabinet.heat);
+                                        cabinet_bar::note(
+                                            &mut anchors,
+                                            "cabinet.heat",
+                                            "Heat",
+                                            &heat,
+                                        );
+                                    }
+                                    if fold.has(Foldable::Export) {
+                                        let item = cabinet_bar::button(
+                                            ui,
+                                            icons::EXPORT,
+                                            "Plate drawing (PDF)",
+                                            false,
+                                        )
+                                        .on_hover_text("Plate drawing with drill table");
+                                        cabinet_bar::note(
+                                            &mut anchors,
+                                            "cabinet.plate_drawing",
+                                            "Plate drawing",
+                                            &item,
+                                        );
+                                        if item.clicked() {
+                                            ask = Some(Ask::ExportPlate);
+                                            ui.close();
+                                        }
+                                    }
+                                    if cabinet_bar::button(
+                                        ui,
+                                        icons::EXPORT,
+                                        "Plate drawing (DXF)",
+                                        false,
+                                    )
+                                    .on_hover_text(
+                                        "Plate drawing for a CNC or CAD, with the drill table",
+                                    )
+                                    .clicked()
+                                    {
+                                        ask = Some(Ask::ExportPlateDxf);
+                                        ui.close();
+                                    }
+                                });
+                            cabinet_bar::note(&mut anchors, "cabinet.more", "More", &more.response);
+                            // Lessons point at folded controls: until the menu is open
+                            // the More button stands in for them.
+                            for (f, id, label) in [
+                                (Foldable::Rules, "cabinet.rules", "Rules"),
+                                (Foldable::Arrange, "cabinet.plate", "Plate setup"),
+                                (Foldable::Arrange, "cabinet.sizing", "Size enclosure"),
+                                (Foldable::Rails, "cabinet.rails", "Rails and ducts"),
+                                (Foldable::CutList, "cabinet.cutlist", "Cut list"),
+                                (Foldable::Heat, "cabinet.heat", "Heat"),
+                                (Foldable::Export, "cabinet.plate_drawing", "Plate drawing"),
+                            ] {
+                                if fold.has(f) && !anchors.iter().any(|a| a.id == id) {
+                                    anchors.push(cabinet_bar::Anchor {
+                                        id,
+                                        label,
+                                        rect: more.response.rect,
+                                        clicked: false,
+                                    });
+                                }
                             }
-                        }
-                        if cabinet_bar::button(ui, icons::EXPORT, "Plate drawing (DXF)", false)
-                            .on_hover_text("Plate drawing for a CNC or CAD, with the drill table")
-                            .clicked()
-                        {
-                            ask = Some(Ask::ExportPlateDxf);
-                            ui.close();
-                        }
-                    });
-                    cabinet_bar::note(&mut anchors, "cabinet.more", "More", &more.response);
-                    // Lessons point at folded controls: until the menu is open
-                    // the More button stands in for them.
-                    for (f, id, label) in [
-                        (Foldable::Rules, "cabinet.rules", "Rules"),
-                        (Foldable::Arrange, "cabinet.plate", "Plate setup"),
-                        (Foldable::Arrange, "cabinet.sizing", "Size enclosure"),
-                        (Foldable::Rails, "cabinet.rails", "Rails and ducts"),
-                        (Foldable::CutList, "cabinet.cutlist", "Cut list"),
-                        (Foldable::Heat, "cabinet.heat", "Heat"),
-                        (Foldable::Export, "cabinet.plate_drawing", "Plate drawing"),
-                    ] {
-                        if fold.has(f) && !anchors.iter().any(|a| a.id == id) {
-                            anchors.push(cabinet_bar::Anchor {
-                                id,
-                                label,
-                                rect: more.response.rect,
+                        });
+                    } else {
+                        cabinet_bar::group(ui, caption("Output"), |ui| {
+                            let export =
+                                ui.menu_button(format!("{}  Export", icons::EXPORT), |ui| {
+                                    let item = ui
+                                        .button("Plate drawing (PDF)")
+                                        .on_hover_text("Plate drawing with drill table");
+                                    cabinet_bar::note(
+                                        &mut anchors,
+                                        "cabinet.plate_drawing",
+                                        "Plate drawing",
+                                        &item,
+                                    );
+                                    if item.clicked() {
+                                        ask = Some(Ask::ExportPlate);
+                                        ui.close();
+                                    }
+                                    if ui
+                                        .button("Plate drawing (DXF)")
+                                        .on_hover_text(
+                                            "Plate drawing for a CNC or CAD, with the drill table",
+                                        )
+                                        .clicked()
+                                    {
+                                        ask = Some(Ask::ExportPlateDxf);
+                                        ui.close();
+                                    }
+                                });
+                            // The menu button stands in until the menu is open.
+                            let at = cabinet_bar::Anchor {
+                                id: "cabinet.plate_drawing",
+                                label: "Plate drawing",
+                                rect: export.response.rect,
                                 clicked: false,
-                            });
-                        }
+                            };
+                            if !anchors.iter().any(|a| a.id == at.id) {
+                                anchors.push(at);
+                            }
+                        });
                     }
                 });
-            } else {
-                cabinet_bar::group(ui, caption("Output"), |ui| {
-                    let export = ui.menu_button(format!("{}  Export", icons::EXPORT), |ui| {
-                        let item = ui
-                            .button("Plate drawing (PDF)")
-                            .on_hover_text("Plate drawing with drill table");
-                        cabinet_bar::note(
-                            &mut anchors,
-                            "cabinet.plate_drawing",
-                            "Plate drawing",
-                            &item,
-                        );
-                        if item.clicked() {
-                            ask = Some(Ask::ExportPlate);
-                            ui.close();
-                        }
-                        if ui
-                            .button("Plate drawing (DXF)")
-                            .on_hover_text("Plate drawing for a CNC or CAD, with the drill table")
-                            .clicked()
-                        {
-                            ask = Some(Ask::ExportPlateDxf);
-                            ui.close();
-                        }
-                    });
-                    // The menu button stands in until the menu is open.
-                    let at = cabinet_bar::Anchor {
-                        id: "cabinet.plate_drawing",
-                        label: "Plate drawing",
-                        rect: export.response.rect,
-                        clicked: false,
-                    };
-                    if !anchors.iter().any(|a| a.id == at.id) {
-                        anchors.push(at);
-                    }
-                });
-            }
-        });
+            });
         if layout.is_some() && plate_face && self.cabinet.heat.on && !has_plan {
             // The Heat strip is a second row of its own while Heat is on: the
             // bar above and the counts below keep their place, and a long

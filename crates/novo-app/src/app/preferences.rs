@@ -14,13 +14,15 @@ impl NovoApp {
             return;
         }
         let mut mode = self.settings.connect_mode();
-        let mut carries = self.settings.move_carries;
+        let mut carries = !self.settings.move_leaves_wires;
         let mut calm = self.settings.reduce_motion;
         let mut company = self.settings.company_macros.clone();
         let mut density = self.settings.xref_density();
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
         let mut autosave = self.settings.autosave_interval().as_secs() as u32;
+        let mut dock_labels = self.settings.dock_labels();
+        let mut ui_scale = self.settings.ui_scale_factor().to_bits();
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
             ui.set_width(
                 novo_theme::dialog_width::MEDIUM
@@ -40,7 +42,7 @@ impl NovoApp {
                     choice(
                         ui,
                         "Theme",
-                        "Light and System are a preview: some panels are not themed yet.",
+                        "System follows the light or dark setting of your computer.",
                         &mut theme,
                         &[
                             (novo_theme::ThemeChoice::Dark, "Dark"),
@@ -55,6 +57,29 @@ impl NovoApp {
                         "Compact fits more on a small screen; Touch has large controls for a tablet.",
                         &mut ui_density,
                         &densities,
+                    );
+                    choice(
+                        ui,
+                        "Words on the tool dock",
+                        "Auto shows a word beside each icon when the drawing has room. Hover always shows the name and key.",
+                        &mut dock_labels,
+                        &[
+                            (crate::settings::DockLabels::Auto, "Auto"),
+                            (crate::settings::DockLabels::Always, "Always"),
+                            (crate::settings::DockLabels::Never, "Icons only"),
+                        ],
+                    );
+                    choice(
+                        ui,
+                        "Interface size",
+                        "On top of Windows scaling. Raise it if text is small on a high resolution screen; lower it on a small laptop screen.",
+                        &mut ui_scale,
+                        &[
+                            (1.0_f32.to_bits(), "100%"),
+                            (1.25_f32.to_bits(), "125%"),
+                            (1.5_f32.to_bits(), "150%"),
+                            (2.0_f32.to_bits(), "200%"),
+                        ],
                     );
                     section(ui, "Saving", false);
                     choice(
@@ -105,7 +130,7 @@ impl NovoApp {
                     );
                     ui.horizontal(|ui| {
                         if ui.button("Choose...").clicked()
-                            && let Some(dir) = rfd::FileDialog::new()
+                            && let Some(dir) = crate::dialogs::FileDialog::new()
                                 .set_title("Company macro folder")
                                 .pick_folder()
                         {
@@ -145,6 +170,8 @@ impl NovoApp {
         }
         self.settings.appearance_theme = theme.id().into();
         self.settings.appearance_density = ui_density.id().into();
+        self.settings.set_dock_labels(dock_labels);
+        self.settings.ui_scale = (f32::from_bits(ui_scale) * 100.0).round() as u32;
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
         }
@@ -156,7 +183,7 @@ impl NovoApp {
             self.next_tick = Instant::now();
         }
         self.settings.company_macros = company;
-        self.settings.move_carries = carries;
+        self.settings.move_leaves_wires = !carries;
         self.settings.reduce_motion = calm;
         if modal.inner || modal.should_close() {
             self.wb.preferences = false;
@@ -204,4 +231,35 @@ fn choice<T: Copy + PartialEq>(
         *value = options[index].0;
     }
     ui.add_space(8.0);
+}
+
+#[cfg(test)]
+mod stack_tests {
+    use super::super::gate1_tests::Drive;
+    use crate::actions::Action;
+    use eframe::egui;
+
+    #[test]
+    fn opening_preferences_closes_the_floating_enclosure_panel() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::OpenExample);
+        d.app.sizing.panel_open = true;
+        d.app.wb.queued.push("app.preferences");
+        for _ in 0..2 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(683.0, 384.0),
+                )),
+                ..Default::default()
+            };
+            let app = &mut d.app;
+            let mut out = d.ctx.run_ui(input, |ui| app.show(ui));
+            out.textures_delta.clear();
+        }
+        assert!(d.app.wb.preferences);
+        assert!(!d.app.sizing.panel_open);
+    }
 }

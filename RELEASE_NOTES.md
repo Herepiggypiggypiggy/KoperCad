@@ -96,5 +96,6 @@ After a crash, add any `crash-*.txt` from `%LOCALAPPDATA%\KoperCAD\logs`. Detail
 
 ## Licences
 
-Third-party software is listed in [`THIRD_PARTY_NOTICES.txt`](THIRD_PARTY_NOTICES.txt). The licence for KoperCAD
-itself is being settled; until then please keep the beta to yourself.
+KoperCAD is open source under either the MIT licence ([`LICENSE-MIT`](LICENSE-MIT)) or the Apache-2.0 licence
+([`LICENSE-APACHE`](LICENSE-APACHE)), at your option. Copyright 2026 KoperVonk. Third-party software is listed in
+[`THIRD_PARTY_NOTICES.txt`](THIRD_PARTY_NOTICES.txt).

@@ -187,6 +187,18 @@ pub trait ProjectBackend {
         Err(BackendError::Unavailable("Issuing revisions"))
     }
 
+    /// [`Self::issue_revision`] with a longer note on why.
+    fn issue_revision_noted(
+        &mut self,
+        _index: Option<String>,
+        _date: &str,
+        _author: &str,
+        _description: &str,
+        _note: &str,
+    ) -> Result<novo_revisions::Issued, BackendError> {
+        Err(BackendError::Unavailable("Issuing revisions"))
+    }
+
     /// Restores (`true`) or throws away (`false`) the offered recovery.
     fn resolve_recovery(&mut self, _restore: bool) -> Result<(), BackendError> {
         Ok(())
@@ -529,28 +541,36 @@ impl ProjectBackend for StorageBackend {
         author: &str,
         description: &str,
     ) -> Result<novo_revisions::Issued, BackendError> {
+        self.issue_revision_noted(index, date, author, description, "")
+    }
+
+    fn issue_revision_noted(
+        &mut self,
+        index: Option<String>,
+        date: &str,
+        author: &str,
+        description: &str,
+        note: &str,
+    ) -> Result<novo_revisions::Issued, BackendError> {
         let (Some(session), Some(document)) = (self.session.as_mut(), self.document.as_mut())
         else {
             return Err(BackendError::Unavailable("Issuing revisions"));
         };
-        let issued = match index {
-            Some(index) => novo_revisions::issue_revision_as(
-                document,
-                session,
-                index,
-                date,
-                author,
-                description,
-            ),
-            None => novo_revisions::issue_revision(
-                document,
-                session,
-                crate::app::index_rule(document.project()),
-                date,
-                author,
-                description,
-            ),
-        }?;
+        let index = match index {
+            Some(index) => index,
+            None => crate::app::index_rule(document.project())
+                .next(document.project())
+                .ok_or(novo_revisions::IssueError::NoIndex)?,
+        };
+        let issued = novo_revisions::issue_revision_noted(
+            document,
+            session,
+            index,
+            date,
+            author,
+            description,
+            note,
+        )?;
         Ok(issued)
     }
 

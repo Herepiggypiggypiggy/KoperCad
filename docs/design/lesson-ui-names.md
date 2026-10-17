@@ -118,7 +118,7 @@ Fix a step, then regenerate to shrink the list.
 - terminal-strips/open-drawer: `Terminals`
 - terminal-strips/reset-pe: `Reset PE override`
 - terminal-strips/toggle-pe: `Toggle PE terminal`
-- time-savers/move-carries: `Leaves its wires (default)`
+- time-savers/move-carries: `Leaves its wires`
 - time-savers/open-prefs: `Preferences`
 - time-savers/open-standard: `Project settings`
 - time-savers/pick-standard: `IEC 60617 (default)`

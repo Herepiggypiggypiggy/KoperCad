@@ -36,9 +36,8 @@ mod wall;
 
 pub use coupling::{TurbulentFlow, grid_of};
 pub use mesh::{FaceKind, TurbMesh, WallFace};
+pub use transport::Equation;
 pub use wall::{WallCell, friction_velocity, thermal_t_plus, wall_quantities};
-
-use transport::Equation;
 
 /// Von Karman constant.
 pub const KAPPA: f64 = 0.41;
@@ -81,6 +80,9 @@ pub struct TurbConfig {
     pub intensity: f64,
     /// Initial turbulent length scale, m.
     pub length_scale: f64,
+    /// Second-order (limited) convection of k and omega/epsilon; the
+    /// default first-order upwind is more diffusive but never overshoots.
+    pub second_order: bool,
 }
 
 impl TurbConfig {
@@ -95,6 +97,7 @@ impl TurbConfig {
             buoyancy: None,
             intensity: 0.05,
             length_scale: 0.01,
+            second_order: false,
         }
     }
 }
@@ -126,6 +129,9 @@ pub struct TurbState {
     /// Cells that hold part solid, part air; the flow core keeps its own
     /// conductance there (empty: none).
     cut: Vec<bool>,
+    /// Device cells whose air faces the film model of the flow core owns
+    /// (empty: none); the wall function gives no heat transfer there.
+    film: Vec<bool>,
 }
 
 impl TurbState {
@@ -151,6 +157,7 @@ impl TurbState {
             walls: Vec::new(),
             wall_cell: vec![None; n],
             cut: Vec::new(),
+            film: Vec::new(),
             mesh,
             cfg,
         };
@@ -467,6 +474,7 @@ impl TurbState {
                 su: &su,
                 sp: &sp,
                 fixed: &none,
+                tvd: self.cfg.second_order,
             };
             eq.solve(&mut self.k, &k_old, dt, sweeps)
         };
@@ -503,6 +511,7 @@ impl TurbState {
                 su: &su,
                 sp: &sp,
                 fixed: &fixed,
+                tvd: self.cfg.second_order,
             };
             eq.solve(&mut self.w, &w_old, dt, sweeps)
         };
@@ -585,6 +594,7 @@ impl TurbState {
                 su: &su,
                 sp: &sp,
                 fixed: &none,
+                tvd: self.cfg.second_order,
             };
             eq.solve(&mut self.k, &k_old, dt, sweeps)
         };
@@ -611,6 +621,7 @@ impl TurbState {
                 su: &su,
                 sp: &sp,
                 fixed: &fixed,
+                tvd: self.cfg.second_order,
             };
             eq.solve(&mut self.w, &e_old, dt, sweeps)
         };

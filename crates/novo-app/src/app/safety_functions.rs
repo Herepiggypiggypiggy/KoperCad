@@ -87,6 +87,7 @@ pub(super) fn rating_text(rating: &Rating) -> String {
             let _ = writeln!(out, "  Not rated until every part has data and a device");
         }
     }
+    let _ = writeln!(out, "{}", novo_safety::DISCLAIMER);
     out
 }
 
@@ -203,6 +204,7 @@ pub(super) fn section(
     match &rating.total {
         Some(t) => {
             let ok = rating.met() == Some(true);
+            super::model_labels::badge(ui, super::model_labels::Model::Pfhd);
             ui.colored_label(
                 if ok {
                     crate::theme::ui_palette().success
@@ -228,6 +230,7 @@ pub(super) fn section(
             );
         }
     }
+    super::model_labels::note(ui, super::model_labels::Model::Pfhd);
     ui.horizontal(|ui| {
         if ui.button("Copy function as text").clicked() {
             *copy = Some(rating_text(&rating));

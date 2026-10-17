@@ -248,6 +248,7 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::CoilSupply,
         ProblemKind::PlugPinOneSided,
         ProblemKind::RelaySize,
+        ProblemKind::CoilOnPowerFeed,
         ProblemKind::CableText,
         ProblemKind::NeutralUse,
         ProblemKind::PlugPins,
@@ -339,7 +340,7 @@ fn every_deliberate_error_is_flagged_exactly_once() {
     );
     assert_eq!(
         thin.message,
-        "=A1+CAB-F3 is rated 16 A, but a 1 mm² wire on it carries about 9.6 A"
+        "=A1+CAB-F3 is rated 16 A, but a 1 mm² wire on it carries about 9.6 A (planning value)"
     );
 
     assert_eq!(

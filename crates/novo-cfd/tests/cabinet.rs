@@ -193,7 +193,7 @@ fn the_time_budget_ends_an_unfinished_level_honestly() {
 }
 
 #[test]
-fn preview_is_not_a_cabinet_level_and_nothing_is_called_validated_yet() {
+fn preview_is_not_a_cabinet_level_and_the_validated_flag_follows_the_statement() {
     let r = small().solve(
         &scenario(false),
         Fidelity::Preview2d,
@@ -292,6 +292,11 @@ fn turbulence_is_an_option_that_shows_in_the_snapshot_and_the_statement() {
             "the statement must not claim the model is laminar"
         );
         assert!(snap.accuracy.headline.contains("Turbulence"));
+        // the eddy viscosity must not scale the device film conductance: the
+        // device runs within 15 % of its laminar rise (it fell by 35 % when it did)
+        let rise = |s: &CfdSnapshot| s.devices[0].surface_c - 25.0;
+        let ratio = rise(&snap) / rise(&laminar);
+        assert!((0.85..1.15).contains(&ratio), "{model:?}: {ratio}");
     }
 }
 
@@ -424,4 +429,32 @@ fn a_steady_result_with_a_heat_balance_error_above_two_percent_says_so() {
     let (s, _) = solve(&scenario(false));
     let noted = s.notes.iter().any(|n| n.contains("Heat balance off by"));
     assert_eq!(noted, s.progress.energy_balance_rel > 0.02);
+}
+
+#[test]
+fn a_result_with_a_fan_states_how_good_its_heat_balance_is() {
+    let mut scn = scenario(true);
+    scn.fans = vec![Fan {
+        opening: Opening {
+            placement: Placement::Top { x_mm: 300.0 },
+            width_mm: 100.0,
+            height_mm: 100.0,
+        },
+        mode: FanMode::Exhaust,
+        free_flow_m3h: 100.0,
+        max_pressure_pa: 40.0,
+    }];
+    let (fan, _) = solve(&scn);
+    let note = fan
+        .notes
+        .iter()
+        .find(|n| n.starts_with("Fan case"))
+        .unwrap_or_else(|| panic!("no fan note in {:?}", fan.notes));
+    assert!(
+        note.contains("3 %") && note.contains("Heat balance here"),
+        "{note}"
+    );
+    // Without a fan there is no such note.
+    let (plain, _) = solve(&scenario(true));
+    assert!(!plain.notes.iter().any(|n| n.starts_with("Fan case")));
 }

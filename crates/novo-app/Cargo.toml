@@ -40,6 +40,7 @@ novo-revisions.workspace = true
 novo-sim.workspace = true
 novo-safety.workspace = true
 novo-view3d.workspace = true
+novo-py.workspace = true
 glam.workspace = true
 novo-tests.workspace = true
 log = "0.4"
@@ -47,6 +48,7 @@ env_logger = { version = "0.11", default-features = false, features = ["auto-col
 rfd = "0.17"
 image.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 dirs.workspace = true
 
 [dev-dependencies]

@@ -739,7 +739,7 @@ parameter. Pages and tags are made fresh; nothing is generated if any row has a 
     }
 
     fn pick_spec(&mut self, win: &mut GenerateWindow) {
-        let Some(path) = rfd::FileDialog::new()
+        let Some(path) = crate::dialogs::FileDialog::new()
             .add_filter("Spec sheet", &["xlsx", "csv"])
             .pick_file()
         else {

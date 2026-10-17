@@ -306,7 +306,7 @@ pub fn evaluate(
                 format!("the load draws {} A but the device is rated {} A", num(ib), num(inn))
             } else if fail_b {
                 format!(
-                    "the cable carries {} A here (Iz) but the device is rated {} A: the cable is not protected",
+                    "the cable carries {} A here (Iz, planning value) but the device is rated {} A: the cable is not protected",
                     num(iz), num(inn)
                 )
             } else if fail_c {

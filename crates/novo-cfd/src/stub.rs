@@ -228,5 +228,7 @@ fn extrude(
             benchmarks: Vec::new(),
             limits: vec!["No flow or heat transfer is solved in the depth direction.".into()],
         },
+        heat_paths: Vec::new(),
+        radiation_on: false,
     }
 }

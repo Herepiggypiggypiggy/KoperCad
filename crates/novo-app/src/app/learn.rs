@@ -157,7 +157,7 @@ pub(crate) struct LearnState {
     /// Lessons whose lint has errors, so they are not offered yet.
     coming: Option<BTreeSet<String>>,
     /// Controls registered so far this frame, and last frame.
-    anchors: BTreeMap<String, egui::Rect>,
+    pub(super) anchors: BTreeMap<String, egui::Rect>,
     seen: BTreeMap<String, egui::Rect>,
     /// The visible name of a control, for `{ui:...}` in step text.
     pub(super) labels: BTreeMap<String, String>,
@@ -419,7 +419,7 @@ fn civil_date(days: i64) -> String {
 /// `%APPDATA%\KoperCAD\learn.json`.
 pub(crate) fn progress_path() -> Option<PathBuf> {
     Some(
-        dirs::config_dir()?
+        novo_storage::profile::config_dir()?
             .join(crate::DATA_DIR_NAME)
             .join(PROGRESS_FILE),
     )
@@ -428,7 +428,7 @@ pub(crate) fn progress_path() -> Option<PathBuf> {
 /// `%APPDATA%\KoperCAD\lessons`.
 pub(crate) fn user_lessons_dir() -> Option<PathBuf> {
     Some(
-        dirs::data_dir()?
+        novo_storage::profile::data_dir()?
             .join(crate::DATA_DIR_NAME)
             .join(USER_LESSONS_DIR),
     )
