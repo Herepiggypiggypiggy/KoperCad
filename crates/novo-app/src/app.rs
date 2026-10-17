@@ -79,6 +79,9 @@ mod heat_run;
 mod heat_run_tests;
 mod heat_settings;
 mod heat_spots;
+mod heat_time;
+#[cfg(test)]
+mod heat_time_tests;
 mod inspector;
 mod interop;
 mod languages;
