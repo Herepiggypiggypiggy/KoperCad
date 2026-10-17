@@ -12,16 +12,19 @@ use crate::{CsvOptions, WireList, to_csv};
 pub const LABEL_LINES: usize = 3;
 
 /// Title of the wire labels, with the count: one label per end, two for each
-/// connection of the wire list (not the supply and PE leads).
+/// wire to cut (the supply and PE leads included).
 pub(crate) const WIRE_LABELS_COUNT_TITLE: &str =
-    "Wire labels · {n} (one per wire end: two for each wire-list connection)";
+    "Wire labels · {n} (one per wire end: two for each wire to cut)";
 
 /// The labels of a project: one table per kind, one row per label, the text
 /// in up to [`LABEL_LINES`] lines.
 ///
-/// - `wires`: one label per end of each wire-list row, for a sleeve or flag:
+/// - `wires`: one label per end of each wire to cut, for a sleeve or flag:
 ///   the wire number, then where the other end goes (`=A1+CAB-K1:13`), then
-///   this end. A wire-list row that is a daisy chain gives a label per pair.
+///   this end. The wires are the wire list's connections plus the supply and
+///   PE leads (the far end of a lead is the potential's name with `(feed)`),
+///   the same wires as wire production. A connection that is a daisy chain
+///   gives a label per pair.
 /// - `terminals`: strip tag and terminal name, strip order.
 /// - `devices`: tag and description, natural tag order.
 /// - `cables`: tag, description and core count.
@@ -75,7 +78,7 @@ impl Report for Labels {
     fn generate(&self, project: &Project) -> ReportOutput {
         // Wires: both ends of every wire-list row.
         let mut wires = section("wires", "Wire labels");
-        let list = WireList.generate(project);
+        let list = WireList::build(project, true);
         if let Some(table) = list.sections.first() {
             let at = |row: &crate::table::Row, key: &str| {
                 table
