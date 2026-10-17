@@ -396,12 +396,15 @@ impl NovoApp {
         super::panel::dialog(ctx, "Bench output", [560.0, 0.0])
             .open(&mut open)
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut state.tab, Tab::CutList, "Cut list");
-                    ui.selectable_value(&mut state.tab, Tab::Ferrules, "Ferrules");
-                    ui.selectable_value(&mut state.tab, Tab::Labels, "Labels");
-                });
-                ui.separator();
+                let mut tab = match state.tab {
+                    Tab::CutList => 0,
+                    Tab::Ferrules => 1,
+                    Tab::Labels => 2,
+                };
+                if novo_theme::widgets::tabs(ui, &mut tab, &["Cut list", "Ferrules", "Labels"]) {
+                    state.tab = [Tab::CutList, Tab::Ferrules, Tab::Labels][tab];
+                }
+                ui.add_space(8.0);
                 match state.tab {
                     Tab::CutList => cut_tab(ui, &state, &rules, &mut action),
                     Tab::Ferrules => ferrule_tab(ui, &mut state, &stored_standard, &mut action),
@@ -459,9 +462,11 @@ fn cut_tab(
     act: &mut Option<Act>,
 ) {
     let Some(cache) = state.cache.as_ref().filter(|_| state.standard.is_valid()) else {
-        ui.colored_label(
-            crate::theme::ui_palette().warning,
+        novo_theme::widgets::banner(
+            ui,
+            novo_theme::widgets::Level::Warning,
             "The ferrule standard is not valid: fix it on the Ferrules tab",
+            |_| {},
         );
         return;
     };
@@ -482,16 +487,20 @@ fn cut_tab(
         jobs.len()
     ));
     if estimates > 0 {
-        ui.colored_label(
-            crate::theme::ui_palette().warning,
-            format!(
+        novo_theme::widgets::banner(
+            ui,
+            novo_theme::widgets::Level::Warning,
+            &format!(
                 "{estimates} lengths are estimates and print with a ~: the wire is not routed through a duct, or a device has no pin position. Measure those on the plate."
             ),
+            |_| {},
         );
     } else {
-        ui.colored_label(
-            crate::theme::ui_palette().success,
+        novo_theme::widgets::banner(
+            ui,
+            novo_theme::widgets::Level::Success,
             "Every length comes from a routed wire",
+            |_| {},
         );
     }
     ui.add_space(4.0);
@@ -501,8 +510,7 @@ fn cut_tab(
     ));
     ui.add_space(6.0);
     ui.horizontal(|ui| {
-        if ui
-            .button("Export bench cut list (PDF)")
+        if novo_theme::widgets::primary_button(ui, "Export bench cut list (PDF)")
             .on_hover_text("Grouped by size and colour, longest first, with tick boxes")
             .clicked()
         {
@@ -601,7 +609,7 @@ fn ferrule_tab(
     stored: &FerruleStandard,
     act: &mut Option<Act>,
 ) {
-    ui.strong("Ferrule standard");
+    novo_theme::widgets::section_label(ui, "Ferrule standard");
     ui.weak(
         "Colour and contact length per cross-section. The default is the DIN 46228-4 colour code as commonly sold; makers differ, above 16 mm² in particular. Edit it to match your stock.",
     );
@@ -674,13 +682,15 @@ fn ferrule_tab(
     });
     let valid = state.standard.is_valid();
     if !valid {
-        ui.colored_label(
-            crate::theme::ui_palette().warning,
+        novo_theme::widgets::banner(
+            ui,
+            novo_theme::widgets::Level::Warning,
             "Each size must be listed once, above zero, with a contact length above zero",
+            |_| {},
         );
     }
-    ui.separator();
-    ui.strong("To crimp");
+    ui.add_space(8.0);
+    novo_theme::widgets::section_label(ui, "To crimp");
     match &state.cache {
         Some(cache) if valid => {
             let counts = ferrule_counts(&cache.jobs, &state.standard);
@@ -711,7 +721,10 @@ fn ferrule_tab(
             *act = Some(Act::SaveStandard(state.standard.clone()));
         }
         if ui
-            .add_enabled(valid, egui::Button::new("Export ferrule table (PDF)"))
+            .add_enabled_ui(valid, |ui| {
+                novo_theme::widgets::primary_button(ui, "Export ferrule table (PDF)")
+            })
+            .inner
             .clicked()
         {
             *act = Some(Act::ExportFerrules);
@@ -728,7 +741,7 @@ fn label_tab(
     stored: &LabelSettings,
     act: &mut Option<Act>,
 ) {
-    ui.strong("Print which labels");
+    novo_theme::widgets::section_label(ui, "Print which labels");
     ui.horizontal(|ui| {
         for (kind, title) in [
             ("wires", "Wire flags"),
@@ -751,7 +764,7 @@ fn label_tab(
         }
     });
     ui.add_space(4.0);
-    ui.strong("Label stock");
+    novo_theme::widgets::section_label(ui, "Label stock");
     let name = state.labels.stock.name();
     egui::ComboBox::from_id_salt("bench_stock")
         .selected_text(name)
@@ -803,9 +816,11 @@ fn label_tab(
     });
     let valid = state.labels.is_valid();
     if !valid {
-        ui.colored_label(
-            crate::theme::ui_palette().warning,
+        novo_theme::widgets::banner(
+            ui,
+            novo_theme::widgets::Level::Warning,
             "The label sizes do not fit the sheet: check the sheet fields",
+            |_| {},
         );
     }
     if let (Some(cache), true) = (&state.cache, valid) {
@@ -826,12 +841,14 @@ fn label_tab(
             ));
         }
         if run.too_small > 0 {
-            ui.colored_label(
-                crate::theme::ui_palette().warning,
-                format!(
+            novo_theme::widgets::banner(
+                ui,
+                novo_theme::widgets::Level::Warning,
+                &format!(
                     "{} labels have text under 2 mm: choose bigger labels or wider tape",
                     run.too_small
                 ),
+                |_| {},
             );
         }
     }
@@ -845,7 +862,10 @@ fn label_tab(
             *act = Some(Act::SaveLabels(state.labels.clone()));
         }
         if ui
-            .add_enabled(valid, egui::Button::new("Export label sheets (PDF)"))
+            .add_enabled_ui(valid, |ui| {
+                novo_theme::widgets::primary_button(ui, "Export label sheets (PDF)")
+            })
+            .inner
             .clicked()
         {
             *act = Some(Act::ExportLabels);
