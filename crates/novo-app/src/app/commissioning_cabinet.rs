@@ -33,6 +33,11 @@ pub(super) fn marks(
             },
             Target::Wire(_) => continue,
         };
+        // Devices on the door or another surface carry that surface's
+        // millimetres, so they have no place on the plate.
+        if layout.off_plate.contains_key(&device) {
+            continue;
+        }
         let Some(placement) = layout.placements.iter().find(|p| p.id == device) else {
             continue;
         };

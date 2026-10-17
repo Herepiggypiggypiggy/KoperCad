@@ -447,6 +447,9 @@ impl NovoApp {
 
     /// The Cabinet canvas, in place of the schematic canvas.
     pub(super) fn cabinet_show(&mut self, ui: &mut egui::Ui) {
+        // The open redlines are outlined on the plate, so their store has to
+        // be there even when Commissioning has not been visited.
+        self.load_commissioning();
         let Some(doc) = self.backend.document() else {
             return;
         };
