@@ -62,6 +62,9 @@ pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
 /// 1366 x 768 laptop at 200% scaling offers
 /// 683 x 384 points, so the floor has to sit below that or the bottom of the
 /// window (status bar) is pushed off the screen.
+/// The floor assumes a screen of at least 683 points; on a smaller one
+/// (1280 x 720 at 200%) the window is wider than the screen, a trade for
+/// keeping the top bar whole.
 pub(crate) const MIN_WINDOW: [f32; 2] = [680.0, 320.0];
 
 fn window_icon() -> egui::IconData {
