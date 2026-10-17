@@ -214,7 +214,11 @@ fn contents(
         section.push(
             vec![
                 Cell::text(page.name.clone()),
-                Cell::text(page.title.clone()),
+                Cell::text(if page.title.is_empty() {
+                    "(untitled)".to_owned()
+                } else {
+                    page.title.clone()
+                }),
                 Cell::text(group_of(page)),
                 Cell::text(panel_of(page)),
                 Cell::text(kind),

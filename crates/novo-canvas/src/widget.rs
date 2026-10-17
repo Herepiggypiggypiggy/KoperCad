@@ -260,6 +260,10 @@ pub struct CanvasView {
     pub wheel_zoom_step: f32,
     /// Labels smaller than this many screen points are not drawn.
     pub min_label_size: f32,
+    /// Text on screen is never smaller than this many points: smaller
+    /// labels are enlarged to it, or hidden by priority when that does not
+    /// fit (see [`crate::declutter`]). 0 turns the floor off.
+    pub min_text_px: f32,
     /// Screen points per world unit that [`Self::reveal`] zooms in to at
     /// least: 4 shows 2.5 mm text at 10 points.
     pub reveal_zoom: f32,
@@ -290,7 +294,7 @@ pub struct CanvasView {
     /// What the box being dragged would select now (see `CanvasOutput`).
     band_ids: Vec<ItemId>,
     right_drag: Option<RightDrag>,
-    fit_pending: bool,
+    fit_pending: Option<Fit>,
     /// What to bring into view; see [`Self::reveal`].
     reveal_pending: Option<PendingReveal>,
     stats: FrameStats,
@@ -364,6 +368,21 @@ const BAND_HIGHLIGHT_MAX: usize = 2000;
 /// scene before it is dropped.
 pub const REVEAL_WAIT_FRAMES: u8 = 30;
 
+/// Screen points kept around the drawing when fitting to it.
+const FIT_CONTENT_MARGIN: f32 = 64.0;
+/// The most a fit to content zooms in, in screen points per mm: 2.5 mm
+/// text is then 15 points.
+const FIT_CONTENT_MAX_ZOOM: f32 = 6.0;
+
+/// What a pending fit brings into view.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Fit {
+    /// The drawing (on a page), else the whole scene.
+    Content,
+    /// The whole sheet.
+    Sheet,
+}
+
 /// A reveal waiting for a frame whose scene holds its target.
 struct PendingReveal {
     ids: Vec<ItemId>,
@@ -391,6 +410,7 @@ impl CanvasView {
             pick_tolerance: 5.0,
             wheel_zoom_step: 1.2,
             min_label_size: 4.0,
+            min_text_px: crate::declutter::MIN_TEXT_PX,
             label_budget: 3000,
             pixel_snap: true,
             marks: Marks::default(),
@@ -406,7 +426,7 @@ impl CanvasView {
             band: None,
             band_ids: Vec::new(),
             right_drag: None,
-            fit_pending: true,
+            fit_pending: Some(Fit::Content),
             reveal_pending: None,
             reveal_zoom: 4.0,
             reveal_margin: 48.0,
@@ -443,9 +463,16 @@ impl CanvasView {
         EscapeOutcome::Nothing
     }
 
-    /// Fits the scene into view on the next frame.
+    /// Fits what was drawn into view on the next frame, with a margin (on a
+    /// page: the drawing, not the empty sheet around it; elsewhere the whole
+    /// scene).
     pub fn zoom_to_fit(&mut self) {
-        self.fit_pending = true;
+        self.fit_pending = Some(Fit::Content);
+    }
+
+    /// Fits the whole sheet into view on the next frame.
+    pub fn zoom_to_sheet(&mut self) {
+        self.fit_pending = Some(Fit::Sheet);
     }
 
     /// Brings `ids` into view for a jump, on the first frame whose scene
@@ -502,6 +529,22 @@ impl CanvasView {
         self.show_in_rect(ui, rect, response, scene)
     }
 
+    /// Brings the scene into view: the whole of it, or on a page the
+    /// drawing alone (never closer than [`FIT_CONTENT_MAX_ZOOM`], so a lone
+    /// symbol is not blown up to fill the screen).
+    fn fit_scene(&mut self, scene: &Scene, kind: Fit) {
+        let content = scene.content_bounds();
+        if kind == Fit::Content && scene.sheet().is_some() && !content.is_empty() {
+            self.viewport.fit(&content, FIT_CONTENT_MARGIN);
+            if self.viewport.zoom > FIT_CONTENT_MAX_ZOOM {
+                self.viewport.zoom = FIT_CONTENT_MAX_ZOOM;
+                self.viewport.center = content.center();
+            }
+        } else {
+            self.viewport.fit(&scene.bounds(), 24.0);
+        }
+    }
+
     fn show_in_rect(
         &mut self,
         ui: &mut egui::Ui,
@@ -510,9 +553,10 @@ impl CanvasView {
         scene: &Scene,
     ) -> CanvasOutput {
         self.viewport.size = Vec2::new(rect.width(), rect.height()).max(Vec2::ONE);
-        if self.fit_pending && rect.width() > 1.0 {
-            self.viewport.fit(&scene.bounds(), 24.0);
-            self.fit_pending = false;
+        if rect.width() > 1.0
+            && let Some(kind) = self.fit_pending.take()
+        {
+            self.fit_scene(scene, kind);
         }
         if rect.width() > 1.0
             && let Some(mut pending) = self.reveal_pending.take()
@@ -716,7 +760,7 @@ impl CanvasView {
                         .ctx()
                         .data(|d| d.get_temp::<f64>(egui::Id::new(("novo_mmb", self.id))));
                     if last.is_some_and(|t| now - t < 0.35) {
-                        self.viewport.fit(&scene.bounds(), 24.0);
+                        self.fit_scene(scene, Fit::Content);
                     }
                     ui.ctx()
                         .data_mut(|d| d.insert_temp(egui::Id::new(("novo_mmb", self.id)), now));
@@ -1099,7 +1143,41 @@ impl CanvasView {
             todo.select_nth_unstable_by(self.label_budget, |a, b| b.0.total_cmp(&a.0));
             todo.truncate(self.label_budget);
         }
-        for (size, id, i) in todo {
+        // The floor: lift small text to it, hide what cannot fit.
+        let mut boosts = vec![1.0_f32; todo.len()];
+        let mut shown: Vec<bool> = vec![true; todo.len()];
+        if self.min_text_px > 0.0 {
+            let candidates = todo
+                .iter()
+                .enumerate()
+                .filter_map(|(key, &(size, id, i))| {
+                    let l = &scene.get(id)?.labels[i];
+                    let b = l.bounds();
+                    let a = self.viewport.world_to_screen(l.pos);
+                    let (p, q) = (
+                        self.viewport.world_to_screen(b.min),
+                        self.viewport.world_to_screen(b.max),
+                    );
+                    Some(crate::declutter::Candidate {
+                        key,
+                        priority: l.priority,
+                        size,
+                        anchor: a,
+                        bounds: Aabb::from_corners(p, q),
+                    })
+                })
+                .collect();
+            shown = vec![false; todo.len()];
+            for placed in crate::declutter::plan(candidates, self.min_text_px) {
+                shown[placed.key] = true;
+                boosts[placed.key] = placed.boost;
+            }
+        }
+        for (n, (size, id, i)) in todo.into_iter().enumerate() {
+            if !shown[n] {
+                continue;
+            }
+            let size = size * boosts[n];
             let Some(item) = scene.get(id) else { continue };
             let l = &item.labels[i];
             let highlight = if self.selection.contains(id) {
@@ -1611,5 +1689,86 @@ mod tests {
         assert_eq!(view.bold_face(&fonts), None);
         view.bold_family = Some(strong.clone());
         assert_eq!(view.bold_face(&fonts), Some(strong));
+    }
+
+    /// A page: an unselectable sheet frame over 420 x 297 mm and one drawn
+    /// item in its left corner.
+    fn page_scene() -> Scene {
+        let mut s = Scene::new();
+        s.set_sheet(Some(crate::scene::Sheet {
+            rect: Aabb::new(Vec2::ZERO, Vec2::new(420.0, 297.0)),
+            fill: None,
+            lines: Vec::new(),
+        }));
+        s.insert(
+            ItemId(1),
+            Item::new(crate::LayerId(0))
+                .with(Primitive::stroked(
+                    Shape::rect(Vec2::ZERO, Vec2::new(420.0, 297.0)),
+                    Stroke::default(),
+                ))
+                .unselectable(),
+        );
+        s.insert(
+            ItemId(2),
+            Item::new(crate::LayerId(0)).with(Primitive::stroked(
+                Shape::rect(Vec2::new(20.0, 20.0), Vec2::new(80.0, 120.0)),
+                Stroke::default(),
+            )),
+        );
+        s
+    }
+
+    #[test]
+    fn fit_brings_the_drawing_into_view_and_fit_sheet_the_paper() {
+        let scene = page_scene();
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(800.0, 600.0);
+        view.fit_scene(&scene, Fit::Sheet);
+        let sheet_zoom = view.viewport.zoom;
+        assert!(
+            view.viewport
+                .visible_world()
+                .contains_point(Vec2::new(410.0, 290.0))
+        );
+        view.fit_scene(&scene, Fit::Content);
+        assert!(
+            view.viewport.zoom > sheet_zoom * 2.0,
+            "closer than the sheet"
+        );
+        let seen = view.viewport.visible_world();
+        assert!(seen.contains_point(Vec2::new(20.0, 20.0)));
+        assert!(seen.contains_point(Vec2::new(80.0, 120.0)));
+        assert!(!seen.contains_point(Vec2::new(410.0, 290.0)));
+    }
+
+    #[test]
+    fn a_lone_small_symbol_is_not_blown_up_to_fill_the_screen() {
+        let mut scene = page_scene();
+        scene.insert(
+            ItemId(2),
+            Item::new(crate::LayerId(0)).with(Primitive::stroked(
+                Shape::rect(Vec2::new(20.0, 20.0), Vec2::new(22.0, 22.0)),
+                Stroke::default(),
+            )),
+        );
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(800.0, 600.0);
+        view.fit_scene(&scene, Fit::Content);
+        assert!(view.viewport.zoom <= FIT_CONTENT_MAX_ZOOM + 1e-4);
+    }
+
+    #[test]
+    fn an_empty_page_fits_the_sheet() {
+        let mut scene = page_scene();
+        scene.remove(ItemId(2));
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(800.0, 600.0);
+        view.fit_scene(&scene, Fit::Content);
+        assert!(
+            view.viewport
+                .visible_world()
+                .contains_point(Vec2::new(410.0, 290.0))
+        );
     }
 }

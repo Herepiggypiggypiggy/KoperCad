@@ -38,8 +38,9 @@ mod project;
 mod translator;
 
 pub use apply::{
-    FIXED_SECTION_TITLES, is_translatable, missing, render_in, strings_of_output,
-    strings_of_template, translate_layout, translate_output, translate_template,
+    FIXED_SECTION_TITLE_PATTERNS, FIXED_SECTION_TITLES, is_fixed_title, is_translatable, missing,
+    render_in, strings_of_output, strings_of_template, translate_layout, translate_output,
+    translate_template,
 };
 pub use catalog::{
     Catalog, CatalogProblem, EXTENSION, LanguageFileError, builtin, check_entry, placeholders,

@@ -373,3 +373,31 @@ fn merging_a_language_file_keeps_the_projects_own_entries() {
     assert_eq!(tr.tr("Cable"), "Kabel", "the file fills in the rest");
     assert_eq!(table.language("nl").unwrap().name, "Nederlands");
 }
+
+#[test]
+fn the_bench_cut_list_summary_reads_in_dutch() {
+    use novo_reports::{BenchCut, Report};
+    let mut doc = Document::default();
+    motor_starter(&mut doc).expect("fixture");
+    // The fixture has no cabinet, so every length is an estimate.
+    let output = BenchCut.generate(doc.project());
+    let tr = nl();
+    let summary = &output.sections[0];
+    assert!(
+        summary.title.starts_with("What to pull · "),
+        "{}",
+        summary.title
+    );
+    let dutch = translate_output(&output, &tr);
+    let title = &dutch.sections[0].title;
+    assert!(title.starts_with("Te trekken · "), "{title}");
+    assert!(title.contains("lengtes zijn schattingen"), "{title}");
+    assert!(!title.contains("estimates"), "{title}");
+    // The numbers are filled in, and every header and the title are known.
+    assert!(!title.contains('{'), "{title}");
+    assert_eq!(dutch.sections[0].columns[7].header, "Geschat");
+    assert_eq!(
+        missing(&tr, &strings_of_output(&output)),
+        Vec::<String>::new()
+    );
+}

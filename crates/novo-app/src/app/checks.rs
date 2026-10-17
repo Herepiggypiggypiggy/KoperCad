@@ -128,16 +128,18 @@ impl NovoApp {
             .show(ui, |ui| {
                 for (i, p) in &problems {
                     let (mark, color) = match p.severity {
-                        Severity::Error => {
-                            (novo_theme::icons::status::ERROR, novo_theme::tokens::ERROR)
-                        }
+                        Severity::Error => (
+                            novo_theme::icons::status::ERROR,
+                            crate::theme::ui_palette().error,
+                        ),
                         Severity::Warning => (
                             novo_theme::icons::status::WARNING,
-                            novo_theme::tokens::WARNING,
+                            crate::theme::ui_palette().warning,
                         ),
-                        Severity::Info => {
-                            (novo_theme::icons::status::INFO, novo_theme::tokens::INFO)
-                        }
+                        Severity::Info => (
+                            novo_theme::icons::status::INFO,
+                            crate::theme::ui_palette().info,
+                        ),
                     };
                     let mut text = egui::text::LayoutJob::default();
                     let font = egui::TextStyle::Body.resolve(ui.style());

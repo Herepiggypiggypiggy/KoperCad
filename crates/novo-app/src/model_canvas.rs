@@ -90,6 +90,12 @@ impl CanvasView for ModelCanvas {
         }
     }
 
+    fn zoom_to_sheet(&mut self) {
+        if let Some(canvas) = self.shown.and_then(|p| self.pages.get_mut(&p)) {
+            canvas.view.zoom_to_sheet();
+        }
+    }
+
     fn status_text(&self) -> Option<String> {
         self.cursor.map(|c| {
             let Vec2 { x, y } = c.point;

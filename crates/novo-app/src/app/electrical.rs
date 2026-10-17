@@ -13,7 +13,7 @@ use eframe::egui;
 use novo_checks::calc_view::inputs as calc;
 use novo_checks::standards::{self, keys};
 use novo_core::{Project, Value};
-use novo_theme::{tokens, widgets};
+use novo_theme::widgets;
 
 use super::{Level, NovoApp};
 
@@ -187,7 +187,7 @@ impl NovoApp {
                         && project.info().properties.contains_key(calc::SUPPLY_UK_PERCENT));
                 if !supplied {
                     ui.colored_label(
-                        tokens::WARNING,
+                        crate::theme::ui_palette().warning,
                         "No supply stated: enter Ik, or a transformer with its uk. Breaking-capacity, disconnection and short-circuit results need it.",
                     );
                 }
