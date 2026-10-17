@@ -228,7 +228,7 @@ fn install_panic_hook() {
         if let Some(dir) = dir {
             write_crash_report(&dir, info);
         }
-        #[cfg(windows)]
+        #[cfg(all(windows, not(test)))]
         if !STARTED.load(std::sync::atomic::Ordering::SeqCst) {
             let place = info
                 .location()
