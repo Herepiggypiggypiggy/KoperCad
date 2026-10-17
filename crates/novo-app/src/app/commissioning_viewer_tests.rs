@@ -27,6 +27,9 @@ fn png_and_jpeg_decode_big_ones_shrink_and_other_bytes_do_not() {
     let big = decode(&picture(3200, 1600, image::ImageFormat::Png)).unwrap();
     assert_eq!(big.size, [1600, 800], "longest side scaled to 1600");
     assert!(decode(b"not a picture").is_none());
+    // a picture wider than any camera makes is refused by its header
+    assert!(decode(&picture(16_001, 1, image::ImageFormat::Png)).is_none());
+    assert!(decode(&picture(16_000, 1, image::ImageFormat::Png)).is_some());
 }
 
 #[test]

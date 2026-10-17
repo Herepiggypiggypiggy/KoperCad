@@ -11,6 +11,10 @@ use novo_theme::Palette;
 
 /// The longest side of a decoded picture; bigger ones are scaled down once.
 const MAX_SIDE: u32 = 1600;
+/// Pictures wider or taller than this (a 100 megapixel camera is 11600) are refused.
+const MAX_INPUT_SIDE: u32 = 16_000;
+/// The most memory one decode may take.
+const MAX_ALLOC: u64 = 512 * 1024 * 1024;
 /// The thumbnail's edge in points.
 const THUMB: f32 = 72.0;
 
@@ -28,7 +32,17 @@ pub(crate) struct PhotoViewer {
 /// A picture as an egui image, scaled so its longest side is at most
 /// [`MAX_SIDE`]. `None` for anything the decoder cannot read.
 pub(super) fn decode(bytes: &[u8]) -> Option<egui::ColorImage> {
-    let img = image::load_from_memory(bytes).ok()?;
+    // A file from another device could claim a huge picture: refuse it by
+    // its header before anything is allocated.
+    let mut reader = image::ImageReader::new(std::io::Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?;
+    let mut limits = image::Limits::default();
+    limits.max_image_width = Some(MAX_INPUT_SIDE);
+    limits.max_image_height = Some(MAX_INPUT_SIDE);
+    limits.max_alloc = Some(MAX_ALLOC);
+    reader.limits(limits);
+    let img = reader.decode().ok()?;
     let img = if img.width().max(img.height()) > MAX_SIDE {
         img.resize(MAX_SIDE, MAX_SIDE, image::imageops::FilterType::Triangle)
     } else {
