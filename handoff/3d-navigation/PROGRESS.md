@@ -6,3 +6,4 @@
 2026-10-17 01:50 UTC #897 READY. Trackpad choice saved in settings: PR in preparation.
 2026-10-17 01:40 UTC #895 READY. #807 nits (unplaced-device message, fit test) in a PR.
 2026-10-17 01:30 UTC #885 merged; #886 READY. #814 stale-heat tooltip nit in a PR.
+2026-10-17 02:05 UTC #885, #895, #897, #898 merged; #886 waiting on R7 re-confirm. Handoff refreshed.
