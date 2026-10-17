@@ -4,3 +4,4 @@
 2026-10-17 10:15 UTC CI lint (newer clippy: for_unbounded_range) fixed; kill test now waits for the child's first write before timing the kill (R2/owner flake note)
 2026-10-17 10:25 UTC R2: CannotOpen only maps to ReadOnly when the file or its folder exists; test for Save as into a missing folder
 2026-10-17 10:40 UTC merged main into the branch (novo-tests/Cargo.toml conflict, kept novo-cli, novo-py and novo-numbering lines); fmt, clippy, tests green
+2026-10-17 11:10 UTC follow-up PR: writable() no longer creates <file>.writetest; judged from permission bits (Unix folder, file attribute everywhere); Windows folder attribute ignored

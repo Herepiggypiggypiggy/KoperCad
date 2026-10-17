@@ -143,25 +143,40 @@ fn a_read_only_file_is_refused_for_editing_in_words_but_reads_fine() {
     assert_eq!(std::fs::read(&path).unwrap(), before);
 }
 
+#[cfg(unix)]
 #[test]
-fn a_file_in_a_read_only_folder_opens_read_only_not_as_a_crash() {
+fn a_file_in_a_read_only_folder_is_refused_for_editing_without_creating_files() {
+    // Judged from permission bits, so this holds for root too.
     let (dir, path) = golden_copy();
     let folder = dir.path();
     let mut perms = std::fs::metadata(folder).unwrap().permissions();
     perms.set_readonly(true);
     std::fs::set_permissions(folder, perms.clone()).unwrap();
-    let blocked = std::fs::File::create(folder.join("probe")).is_err();
-    if blocked {
-        // SQLite cannot make its journal here, so editing is refused clearly.
-        let err = Session::open(&path).map(|_| ()).unwrap_err();
-        assert!(matches!(err, StorageError::ReadOnly(_)), "{err:?}");
-        assert_eq!(ProjectFile::read(&path).unwrap().to_json(), expected_json());
-    }
+    let err = Session::open(&path).map(|_| ()).unwrap_err();
+    assert!(matches!(err, StorageError::ReadOnly(_)), "{err:?}");
+    assert_eq!(ProjectFile::read(&path).unwrap().to_json(), expected_json());
     #[allow(clippy::permissions_set_readonly_false)]
     {
         perms.set_readonly(false);
         std::fs::set_permissions(folder, perms).unwrap();
     }
+    let names: Vec<_> = std::fs::read_dir(folder).unwrap().collect();
+    assert_eq!(names.len(), 1, "nothing was created next to the project");
+}
+
+#[test]
+fn opening_for_editing_creates_no_probe_file_next_to_the_project() {
+    let (dir, path) = golden_copy();
+    let opened = Session::open(&path).unwrap();
+    let during: Vec<_> = std::fs::read_dir(dir.path())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    opened.session.close().unwrap();
+    assert!(
+        during.iter().all(|n| !n.contains("writetest")),
+        "{during:?}"
+    );
 }
 
 // ------------------------------------------------------ missing pieces

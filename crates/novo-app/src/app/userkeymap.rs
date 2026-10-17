@@ -66,7 +66,7 @@ pub fn ensure_file(path: &Path) -> std::io::Result<()> {
 
 /// Hands `path` to the user's own editor (Notepad on Windows). Does nothing
 /// under test.
-fn open_in_editor(path: &Path) -> std::io::Result<()> {
+pub(super) fn open_in_editor(path: &Path) -> std::io::Result<()> {
     if cfg!(test) {
         return Ok(());
     }

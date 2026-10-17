@@ -10,6 +10,15 @@ pub const HINT_LIMIT: u32 = 3;
 const MAX_RECENT: usize = 10;
 const MAX_RECENT_ACTIONS: usize = 20;
 
+/// Whether the tool dock shows a word beside each icon.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DockLabels {
+    /// When the canvas is wide enough (the default).
+    Auto,
+    Always,
+    Never,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -47,6 +56,9 @@ pub struct Settings {
     pub appearance_theme: String,
     /// The interface density, `"standard"` (empty), `"compact"` or `"touch"`.
     pub appearance_density: String,
+    /// Words beside the dock icons: `""` (auto: when the canvas has room),
+    /// `"always"` or `"never"` (icons only, names stay in the tooltips).
+    pub dock_labels: String,
     /// The interface size in percent: 100 (empty or 0), 125, 150 or 200,
     /// on top of the system's own scaling.
     pub ui_scale: u32,
@@ -241,6 +253,24 @@ impl Settings {
     /// The density of the coil contact table.
     pub fn xref_density(&self) -> novo_canvas::model::NoteDensity {
         novo_canvas::model::NoteDensity::from_id(&self.xref_density)
+    }
+
+    /// The dock-label choice; auto unless the person chose otherwise.
+    pub fn dock_labels(&self) -> DockLabels {
+        match self.dock_labels.as_str() {
+            "always" => DockLabels::Always,
+            "never" => DockLabels::Never,
+            _ => DockLabels::Auto,
+        }
+    }
+
+    pub fn set_dock_labels(&mut self, labels: DockLabels) {
+        self.dock_labels = match labels {
+            DockLabels::Auto => "",
+            DockLabels::Always => "always",
+            DockLabels::Never => "never",
+        }
+        .to_owned();
     }
 
     pub const STORAGE_KEY: &str = "novo_settings";
