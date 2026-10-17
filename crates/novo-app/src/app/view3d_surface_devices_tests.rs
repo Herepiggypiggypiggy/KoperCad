@@ -1,6 +1,8 @@
 //! Devices on walls, roof, floor and extra plates in the 3D view: scene
 //! items that can be picked and dragged on their own surface.
 
+use std::collections::BTreeSet;
+
 use glam::Vec3;
 use novo_core::{AnyId, CabinetPlacement, Value};
 use novo_layout::state::CabinetLayout;
@@ -12,7 +14,9 @@ use novo_view3d::widget::ItemDrag;
 use novo_view3d::{Overlay, Ray, ViewState};
 
 use super::cabinet_surfaces::{SurfaceRow, SurfaceSummary};
-use super::view3d_surface_devices::{ghost, landing, push};
+use super::view3d_move::Edit;
+use super::view3d_nudge::Step;
+use super::view3d_surface_devices::{ghost, landing, merge, nudge, push};
 use super::view3d_tests::drive_with_cabinet;
 
 fn row(name: &str, origin: [f64; 3], v: [f64; 3], normal: [f64; 3]) -> SurfaceRow {
@@ -324,4 +328,171 @@ fn a_device_on_every_surface_stands_into_the_enclosure_from_its_pane() {
         let toward = (b.min + b.max) / 2.0 - pane_point;
         assert!(toward.dot(n) > 0.0, "{name}: the box is on the inside");
     }
+}
+
+fn sel(ids: &[u64]) -> BTreeSet<ItemId> {
+    ids.iter()
+        .map(|i| ItemId::new(ItemKind::Device, *i))
+        .collect()
+}
+
+#[test]
+fn a_drag_snaps_to_the_layouts_grid() {
+    let (summary, mut layout) = setup();
+    layout.grid = 10.0;
+    let land = landing(
+        &summary,
+        &layout,
+        &Inputs::default(),
+        &drag(3, (23.0, 7.0), false),
+    )
+    .unwrap();
+    assert_eq!(land.at, (120.0, 60.0));
+}
+
+#[test]
+fn a_landing_on_another_device_of_the_surface_is_a_clash_and_the_ghost_turns_red() {
+    let (mut summary, mut layout) = setup();
+    layout.placements.push(placement(4, 300.0, 50.0));
+    summary.assigned.insert(4, "roof".into());
+    let inputs = Inputs::default();
+    let free = landing(&summary, &layout, &inputs, &drag(3, (0.0, 0.0), false)).unwrap();
+    assert!(!free.clash, "where it is now it is fine");
+    // Onto device 4 (40 x 30 at 300, 50).
+    let onto = landing(&summary, &layout, &inputs, &drag(3, (200.0, 0.0), false)).unwrap();
+    assert!(onto.clash);
+    // Devices on other surfaces do not count: the plate device 1 sits at
+    // (10, 10) on its own plate.
+    let over = landing(&summary, &layout, &inputs, &drag(3, (-90.0, -40.0), false)).unwrap();
+    assert!(!over.clash, "{over:?}");
+    let colour = |land| {
+        let Overlay::Mesh(m) = &ghost(&summary, land, FRAME)[0] else {
+            panic!()
+        };
+        m.colors[0]
+    };
+    assert_ne!(colour(&free), colour(&onto));
+    assert_eq!(colour(&onto)[0], 230, "red");
+}
+
+#[test]
+fn the_arrow_keys_move_surface_devices_on_their_surface_in_one_group_edit() {
+    let (summary, mut layout) = setup();
+    layout.grid = 10.0;
+    // Device 3 is at (100, 50) on the roof: one grid step right and down.
+    let Some(Edit::Group { devices, rails }) =
+        nudge(&summary, &layout, &sel(&[3]), (1, 1), Step::Grid)
+    else {
+        panic!("a group edit")
+    };
+    assert_eq!(devices, vec![(3, 110.0, 60.0)]);
+    assert!(rails.is_empty());
+    // Fine and coarse steps are 1 and 5 mm.
+    let Some(Edit::Group { devices, .. }) =
+        nudge(&summary, &layout, &sel(&[3]), (-1, 0), Step::Fine)
+    else {
+        panic!()
+    };
+    assert_eq!(devices, vec![(3, 99.0, 50.0)]);
+    let Some(Edit::Group { devices, .. }) =
+        nudge(&summary, &layout, &sel(&[3]), (0, -1), Step::Coarse)
+    else {
+        panic!()
+    };
+    assert_eq!(devices, vec![(3, 100.0, 45.0)]);
+}
+
+#[test]
+fn a_nudge_stops_at_the_edge_and_ignores_plate_and_door_devices() {
+    let (summary, mut layout) = setup();
+    layout.placements[2].x = 10.0;
+    let Some(Edit::Group { devices, .. }) =
+        nudge(&summary, &layout, &sel(&[3]), (-1, 0), Step::Coarse)
+    else {
+        panic!()
+    };
+    assert_eq!(
+        devices,
+        vec![(3, 10.0, 50.0)],
+        "kept inside the 10 mm margin"
+    );
+    assert!(nudge(&summary, &layout, &sel(&[1, 2]), (1, 0), Step::Grid).is_none());
+    assert!(nudge(&summary, &layout, &sel(&[3]), (0, 0), Step::Grid).is_none());
+}
+
+#[test]
+fn plate_and_surface_nudges_merge_into_one_group() {
+    let plate = Some(Edit::Group {
+        devices: vec![(1, 5.0, 5.0)],
+        rails: vec![(9, 1.0, 2.0)],
+    });
+    let surface = Some(Edit::Group {
+        devices: vec![(3, 110.0, 60.0)],
+        rails: Vec::new(),
+    });
+    assert_eq!(
+        merge(plate.clone(), surface.clone()),
+        Some(Edit::Group {
+            devices: vec![(1, 5.0, 5.0), (3, 110.0, 60.0)],
+            rails: vec![(9, 1.0, 2.0)],
+        })
+    );
+    assert_eq!(merge(plate.clone(), None), plate);
+    assert_eq!(merge(None, surface.clone()), surface);
+    assert_eq!(merge(None, None), None);
+}
+
+#[test]
+fn a_group_move_keeps_a_surface_device_on_its_surface() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.frame();
+    let (cab, pid, dev) = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        let p = project
+            .all::<CabinetPlacement>()
+            .find(|p| p.structure == cab)
+            .unwrap();
+        (cab, p.id, p.device.raw())
+    };
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Surface", |tx| {
+            tx.set_property(
+                AnyId::CabinetPlacement(pid),
+                SURFACE_PROPERTY,
+                Some(Value::Text("roof".into())),
+            )
+        })
+        .unwrap();
+    let before = novo_layout::model::load(d.app.backend.document().unwrap().project(), cab)
+        .unwrap()
+        .placements
+        .iter()
+        .find(|p| p.id == dev)
+        .map(|p| (p.x, p.y))
+        .unwrap();
+    d.app.view3d_move_group(
+        cab,
+        vec![(dev, before.0 + 10.0, before.1 + 5.0)],
+        Vec::new(),
+    );
+    let project = d.app.backend.document().unwrap().project();
+    let after = novo_layout::model::load(project, cab)
+        .unwrap()
+        .placements
+        .iter()
+        .find(|p| p.id == dev)
+        .map(|p| (p.x, p.y))
+        .unwrap();
+    assert_eq!(after, (before.0 + 10.0, before.1 + 5.0));
+    let on = project.get::<CabinetPlacement>(pid).unwrap();
+    assert_eq!(
+        on.properties.get(SURFACE_PROPERTY),
+        Some(&Value::Text("roof".into())),
+        "still on the roof"
+    );
 }

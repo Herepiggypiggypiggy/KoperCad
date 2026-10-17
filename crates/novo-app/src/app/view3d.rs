@@ -415,7 +415,7 @@ impl NovoApp {
                 let r = d.rect;
                 (
                     [r.x, r.y, r.w, r.h].map(|v| (v * 10.0).round() as i64),
-                    false,
+                    d.clash,
                 )
             }))
             .collect();
@@ -887,7 +887,11 @@ impl NovoApp {
                         Step::from_modifiers(i.modifiers),
                     )
                 });
-                edits.extend(view3d_nudge::nudge(&stored, &state.selection, dir, step));
+                let plate = view3d_nudge::nudge(&stored, &state.selection, dir, step);
+                let surfaces = super::cabinet_surfaces::summarize(project, id).and_then(|sum| {
+                    super::view3d_surface_devices::nudge(&sum, &stored, &state.selection, dir, step)
+                });
+                edits.extend(super::view3d_surface_devices::merge(plate, surfaces));
             }
             edits.extend(view3d_move::key_edits(&keys, &state.selection, &stored));
         } else {
