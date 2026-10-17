@@ -138,6 +138,7 @@ mod reports;
 mod reports_view;
 mod revisions;
 mod safety;
+mod safety_calc;
 mod safety_functions;
 mod safety_report;
 mod selection_sheet;

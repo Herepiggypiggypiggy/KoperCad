@@ -47,6 +47,7 @@ env_logger = { version = "0.11", default-features = false, features = ["auto-col
 rfd = "0.17"
 image.workspace = true
 serde.workspace = true
+serde_json.workspace = true
 dirs.workspace = true
 
 [dev-dependencies]
