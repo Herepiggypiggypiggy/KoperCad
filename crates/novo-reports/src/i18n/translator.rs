@@ -52,6 +52,19 @@ impl Translator {
         }
     }
 
+    /// Everything this translator knows as one catalog (the shipped file
+    /// with the project's entries on top): what File > Report languages
+    /// exports as a language file.
+    pub fn catalog(&self) -> Catalog {
+        let mut c = Catalog::new(&self.code, &self.shipped.name);
+        c.entries = self.shipped.entries.clone();
+        c.entries.extend(self.project.entries.clone());
+        if c.name.is_empty() {
+            c.name = self.project.name.clone();
+        }
+        c
+    }
+
     pub fn code(&self) -> &str {
         &self.code
     }

@@ -317,11 +317,14 @@ pub fn assign(
             continue;
         };
         let potential = find_or_add_potential(tx, &spec.name, spec.kind, spec.voltage)?;
-        // Feeds already defining this net go; the new one replaces them.
+        // Feeds already defining this net are re-pointed at the new potential
+        // in place. Deleting them would take their wires along (a wire that
+        // runs from the feed's pin to a device loses its end) and leave the
+        // device pin unconnected.
         let netlist = tx.project().netlist();
         let w = tx.project().wire(wire).expect("checked above").clone();
         if let Some(net) = netlist.net_of_wire(&w) {
-            let old: Vec<_> = netlist
+            let old: Vec<SymbolId> = netlist
                 .net(net)
                 .endpoints
                 .iter()
@@ -336,8 +339,12 @@ pub fn assign(
                 })
                 .collect();
             if !old.is_empty() {
-                let ids: Vec<_> = old.into_iter().map(Into::into).collect();
-                edit::delete(tx, &ids)?;
+                let symbols = FeedSymbols {
+                    line: feed.id.clone(),
+                    earth: earth_feed.id.clone(),
+                };
+                set_feed_potential(tx, &old, spec, &symbols)?;
+                continue;
             }
         }
         // The wire may have been joined with another by the tidy-up; find

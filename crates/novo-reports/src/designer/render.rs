@@ -303,6 +303,9 @@ fn table(layout: &mut PageLayout, t: &TableElement, section: &Section, page: usi
     }
 }
 
+/// Columns narrower than this share of the table get a number as sample text.
+const NARROW_SAMPLE: f64 = 0.12;
+
 /// Sample data for the live preview: for every table of `template`, a
 /// report of that id with `rows` rows of placeholder text in the real
 /// report's columns (the spec's own columns if the report is unknown or has
@@ -338,10 +341,19 @@ pub fn preview_data(template: &Template, rows: usize) -> Vec<ReportOutput> {
             .or(base.map(|s| s.key.as_str()))
             .unwrap_or("sample");
         let mut section = Section::new(key, "", columns.clone());
+        // A narrow column gets just the row number: the key would not fit
+        // and the preview would show its clipped end.
+        let total: f64 = columns.iter().map(|c| c.width).sum();
         for n in 1..=rows {
             let cells = columns
                 .iter()
-                .map(|c| Cell::Text(format!("{}-{n}", c.key)))
+                .map(|c| {
+                    if total > 0.0 && c.width / total < NARROW_SAMPLE {
+                        Cell::Text(n.to_string())
+                    } else {
+                        Cell::Text(format!("{}-{n}", c.key))
+                    }
+                })
                 .collect();
             section.push(cells, Vec::new());
         }

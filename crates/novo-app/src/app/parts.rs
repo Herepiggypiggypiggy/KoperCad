@@ -21,9 +21,29 @@ use novo_parts::{
     maker_guide, property_label, user_catalog_path,
 };
 
+use novo_theme::table::{
+    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths, table_header,
+    table_row,
+};
+use novo_theme::{Palette, widgets};
+
 use super::parts_import::{Import, Phase, import_path};
 use super::revisions::today;
 use super::{Level, NovoApp};
+
+/// The detail pane is a share of the window, kept between these widths.
+const DETAIL_MIN: f32 = 280.0;
+const DETAIL_MAX: f32 = 420.0;
+
+/// The window's first size: the old 820 x 520 on a small screen, more on a
+/// large one so the table is not squeezed (a person can still resize it).
+fn window_size(ctx: &egui::Context) -> [f32; 2] {
+    let screen = ctx.content_rect().size();
+    [
+        (screen.x * 0.68).clamp(820.0, 1240.0),
+        (screen.y * 0.78).clamp(520.0, 860.0),
+    ]
+}
 
 /// State of the open Parts window.
 pub(crate) struct PartsWindow {
@@ -31,6 +51,9 @@ pub(crate) struct PartsWindow {
     /// Only parts of this maker; `None` shows all.
     maker: Option<String>,
     selected: Option<PartKey>,
+    /// Scroll the selected row into view on the next frame (set when the
+    /// arrow keys move the selection).
+    reveal: bool,
     catalog: Catalog,
     library: Option<LocalLibrary>,
     sources: SourceTable,
@@ -126,6 +149,7 @@ impl PartsWindow {
             query: String::new(),
             maker: None,
             selected: None,
+            reveal: false,
             catalog,
             library,
             sources,
@@ -638,8 +662,11 @@ impl NovoApp {
             )
         });
         let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
-        let shown = super::panel::dialog(ctx, "Parts", [820.0, 520.0])
+        let shown = super::panel::dialog(ctx, "Parts", window_size(ctx))
             .open(&mut open)
+            // The list and the detail pane scroll on their own; an outer
+            // scroll area would give them no height to fill.
+            .scroll([false, false])
             .show(ctx, |ui| parts_ui(ui, win, dragging, &mut actions));
         // A file dropped on the window, or one the watch found.
         let over = shown
@@ -807,7 +834,7 @@ fn guide_ui(ui: &mut egui::Ui, win: &mut PartsWindow) {
         ui.horizontal(|ui| {
             ui.strong("Maker guide");
             ui.weak("KoperCAD never contacts a maker site: you download, it reads.");
-            if ui.small_button("Hide").clicked() {
+            if ui.button("Hide").clicked() {
                 win.guide = false;
             }
         });
@@ -858,7 +885,7 @@ fn new_part_ui(ui: &mut egui::Ui, win: &mut PartsWindow) {
             }
         });
         if let Some(e) = &form.error {
-            ui.colored_label(novo_theme::tokens::WARNING, e);
+            ui.colored_label(crate::theme::ui_palette().warning, e);
         }
         ui.horizontal(|ui| {
             create = ui.button("Save to my catalog").clicked();
@@ -915,52 +942,54 @@ fn parts_ui(
                 }
             });
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            if ui.small_button("Close").clicked() {
-                actions.push(PartsAction::Close);
+            ui.menu_button("More", |ui| {
+                for (label, hint, action) in [
+                    (
+                        "Import inbox",
+                        "Import every file in the inbox folder.",
+                        PartsAction::ImportInbox,
+                    ),
+                    (
+                        "Open inbox folder",
+                        "The folder to save downloaded catalog files in, one folder per maker.",
+                        PartsAction::OpenInbox,
+                    ),
+                    (
+                        "Open library folder",
+                        "Where the STEP files and source records of imported parts are kept.",
+                        PartsAction::OpenLibrary,
+                    ),
+                ] {
+                    if ui.button(label).on_hover_text(hint).clicked() {
+                        actions.push(action);
+                        ui.close();
+                    }
+                }
+                if ui
+                    .button("Maker guide")
+                    .on_hover_text("What to download from each maker and where to save it.")
+                    .clicked()
+                {
+                    win.guide ^= true;
+                    ui.close();
+                }
+            });
+            if ui
+                .button("Import catalog files")
+                .on_hover_text(
+                    "Read BMEcat, CSV or ZIP catalog files from a maker or wholesaler into your catalog. You can also drop them on this window.",
+                )
+                .clicked()
+            {
+                actions.push(PartsAction::ImportCatalogFiles);
+            }
+            if widgets::ghost_button(ui, "New part\u{2026}")
+                .on_hover_text("Add a part by hand to your own catalog.")
+                .clicked()
+            {
+                actions.push(PartsAction::NewPart);
             }
         });
-    });
-    ui.horizontal_wrapped(|ui| {
-        for (label, hint, action) in [
-            (
-                "Import catalog files",
-                "Read BMEcat, CSV or ZIP catalog files from a maker or wholesaler into your catalog. You can also drop them on this window.",
-                PartsAction::ImportCatalogFiles,
-            ),
-            (
-                "Import inbox",
-                "Import every file in the inbox folder.",
-                PartsAction::ImportInbox,
-            ),
-            (
-                "Open inbox folder",
-                "The folder to save downloaded catalog files in, one folder per maker.",
-                PartsAction::OpenInbox,
-            ),
-            (
-                "Open library folder",
-                "Where the STEP files and source records of imported parts are kept.",
-                PartsAction::OpenLibrary,
-            ),
-        ] {
-            if ui.small_button(label).on_hover_text(hint).clicked() {
-                actions.push(action);
-            }
-        }
-        if ui
-            .small_button("Maker guide")
-            .on_hover_text("What to download from each maker and where to save it.")
-            .clicked()
-        {
-            win.guide ^= true;
-        }
-        if ui
-            .small_button("New part...")
-            .on_hover_text("Add a part by hand to your own catalog.")
-            .clicked()
-        {
-            actions.push(PartsAction::NewPart);
-        }
     });
     if win.guide {
         guide_ui(ui, win);
@@ -968,7 +997,7 @@ fn parts_ui(
     if win.new_part.is_some() {
         new_part_ui(ui, win);
     }
-    ui.separator();
+    ui.add_space(4.0);
     let rows = win.rows();
     let (up, down, esc) = ui.input(|i| {
         (
@@ -988,6 +1017,7 @@ fn parts_ui(
             (Some(i), false) => i.saturating_sub(1),
         };
         actions.push(PartsAction::Select(rows[next].0.clone()));
+        win.reveal = true;
     }
     if esc && (search_focused || ui.memory(|m| m.focused()).is_none()) {
         actions.push(PartsAction::Close);
@@ -997,53 +1027,88 @@ fn parts_ui(
             .resizable(false)
             .show(ui, |ui| status_ui(ui, win, dragging, actions));
     }
+    let detail_width = (ui.available_width() * 0.38).clamp(DETAIL_MIN, DETAIL_MAX);
     egui::Panel::right("parts_detail")
-        .exact_size(300.0)
+        .exact_size(detail_width)
         .resizable(false)
         .show(ui, |ui| detail_ui(ui, win, actions));
-    egui::CentralPanel::default().show(ui, |ui| {
-        if rows.is_empty() {
-            ui.weak("No part matches.");
-            return;
-        }
-        egui::ScrollArea::vertical().show_rows(ui, 24.0, rows.len(), |ui, range| {
-            for (key, action) in &rows[range] {
-                let Some(part) = win.catalog.get(key) else {
-                    continue;
-                };
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    match action {
-                        RowAction::InLibrary => {
-                            ui.colored_label(novo_theme::tokens::SUCCESS, "In library");
-                        }
-                        RowAction::Import | RowAction::OpenPage(_) => {
-                            let hint = match action {
-                                RowAction::OpenPage(Some(_)) => {
-                                    "Opens the maker's page. Save the file there and KoperCAD imports it from Downloads."
-                                }
-                                _ => "Save the maker's file, then drop it on this window.",
-                            };
-                            if ui.small_button("Import").on_hover_text(hint).clicked() {
-                                actions.push(PartsAction::Import(key.clone()));
-                            }
-                        }
-                    }
-                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-                        let selected = win.selected.as_ref() == Some(key);
-                        let text = format!(
-                            "{}  {}  {}",
-                            part.manufacturer, part.order_number, part.description
-                        );
-                        if ui
-                            .add(egui::Button::selectable(selected, text).truncate())
-                            .clicked()
-                        {
-                            actions.push(PartsAction::Select(key.clone()));
-                        }
-                    });
-                });
+    egui::CentralPanel::default().show(ui, |ui| list_ui(ui, win, &rows, actions));
+}
+
+/// The part table: maker, order number, description and whether the part is
+/// in the library. A click selects the row; the detail pane shows it.
+fn list_ui(
+    ui: &mut egui::Ui,
+    win: &mut PartsWindow,
+    rows: &[(PartKey, RowAction)],
+    actions: &mut Vec<PartsAction>,
+) {
+    if rows.is_empty() {
+        ui.add_space(12.0);
+        ui.weak("No part matches. Change the search or the maker.");
+        return;
+    }
+    let columns = [
+        ("Maker", TableAlign::Left),
+        ("Order no.", TableAlign::Left),
+        ("Description", TableAlign::Left),
+        ("Library", TableAlign::Right),
+    ]
+    .map(|(header, align)| TableColumn {
+        header: header.to_owned(),
+        align,
+    });
+    let widths = column_widths(ui.available_width(), &[1.1, 1.5, 3.0, 1.5]);
+    table_header(ui, &columns, &widths, None);
+    let mut area = egui::ScrollArea::vertical()
+        .id_salt("parts_rows")
+        .auto_shrink([false, false]);
+    if std::mem::take(&mut win.reveal)
+        && let Some(at) = win
+            .selected
+            .as_ref()
+            .and_then(|k| rows.iter().position(|(r, _)| r == k))
+    {
+        let step = ROW_HEIGHT + ui.spacing().item_spacing.y;
+        area = area.vertical_scroll_offset((at as f32 - 3.0).max(0.0) * step);
+    }
+    area.show_rows(ui, ROW_HEIGHT, rows.len(), |ui, range| {
+        for (key, action) in &rows[range] {
+            let Some(part) = win.catalog.get(key) else {
+                continue;
+            };
+            let library = match action {
+                RowAction::InLibrary => "In library",
+                _ => "Not imported",
+            };
+            let cells = [
+                TableCell {
+                    text: &part.manufacturer,
+                    numeric: false,
+                },
+                TableCell {
+                    text: &part.order_number,
+                    numeric: true,
+                },
+                TableCell {
+                    text: &part.description,
+                    numeric: false,
+                },
+                TableCell {
+                    text: library,
+                    numeric: false,
+                },
+            ];
+            let state = if win.selected.as_ref() == Some(key) {
+                RowState::Selected
+            } else {
+                RowState::Normal
+            };
+            let response = table_row(ui, &columns, &widths, &cells, state, ("part_row", key));
+            if response.clicked() {
+                actions.push(PartsAction::Select(key.clone()));
             }
-        });
+        }
     });
 }
 
@@ -1088,17 +1153,17 @@ on the maker's site and drop the file here.",
             }
             ui.horizontal(|ui| {
                 if let Some(url) = &import.page_url
-                    && ui.small_button("Open page again").clicked()
+                    && ui.button("Open page again").clicked()
                 {
                     actions.push(PartsAction::OpenPage(url.clone()));
                 }
-                if ui.small_button("Choose file\u{2026}").clicked() {
+                if ui.button("Choose file\u{2026}").clicked() {
                     actions.push(PartsAction::ChooseFile);
                 }
-                if ui.small_button("Watch another folder\u{2026}").clicked() {
+                if ui.button("Watch another folder\u{2026}").clicked() {
                     actions.push(PartsAction::ChooseFolder);
                 }
-                if ui.small_button("Stop").clicked() {
+                if ui.button("Stop").clicked() {
                     actions.push(PartsAction::StopImport);
                 }
             });
@@ -1111,23 +1176,23 @@ on the maker's site and drop the file here.",
                     .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
             ));
             ui.horizontal(|ui| {
-                if ui.small_button("Import it").clicked() {
+                if ui.button("Import it").clicked() {
                     actions.push(PartsAction::ConfirmFile(path.clone()));
                 }
-                if ui.small_button("Not this one").clicked() {
+                if ui.button("Not this one").clicked() {
                     actions.push(PartsAction::DeclineFile(path.clone()));
                 }
             });
         }
         Phase::Done(summary) => {
             ui.colored_label(
-                novo_theme::tokens::SUCCESS,
+                crate::theme::ui_palette().success,
                 format!("Imported {} ({})", import.label, summary.file),
             );
             for line in &summary.lines {
                 ui.label(line);
             }
-            if ui.small_button("Done").clicked() {
+            if ui.button("Done").clicked() {
                 actions.push(PartsAction::StopImport);
             }
         }
@@ -1137,10 +1202,10 @@ on the maker's site and drop the file here.",
                 format!("Could not import {}: {e}", import.label),
             );
             ui.horizontal(|ui| {
-                if ui.small_button("Try again").clicked() {
+                if ui.button("Try again").clicked() {
                     actions.push(PartsAction::Import(import.key.clone()));
                 }
-                if ui.small_button("Dismiss").clicked() {
+                if ui.button("Dismiss").clicked() {
                     actions.push(PartsAction::StopImport);
                 }
             });
@@ -1150,84 +1215,113 @@ on the maker's site and drop the file here.",
 
 fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction>) {
     let Some(part) = win.selected.as_ref().and_then(|k| win.catalog.get(k)) else {
-        ui.weak("Pick a part to see its data.");
+        ui.add_space(8.0);
+        ui.weak("Pick a part in the list to see its data.");
         return;
     };
-    egui::ScrollArea::vertical().show(ui, |ui| {
-        ui.heading(&part.order_number);
-        ui.label(&part.manufacturer);
-        if !part.description.is_empty() {
-            ui.weak(&part.description);
-        }
-        for section in detail_sections(part) {
+    let p = Palette::of(ui);
+    let key = part.key();
+    let records = win.records(&key);
+    ui.add_space(4.0);
+    egui::ScrollArea::vertical()
+        .id_salt("parts_detail_scroll")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            ui.add(egui::Label::new(egui::RichText::new(&part.order_number).heading()).wrap());
+            ui.label(&part.manufacturer);
+            if !part.description.is_empty() {
+                ui.label(egui::RichText::new(&part.description).color(p.text_secondary));
+            }
             ui.add_space(6.0);
-            ui.strong(section.title);
-            egui::Grid::new(("parts_detail_grid", section.title))
-                .num_columns(2)
-                .show(ui, |ui| {
-                    for (label, value) in &section.rows {
-                        ui.label(label);
-                        ui.label(value);
-                        ui.end_row();
-                    }
-                });
-        }
-        let key = part.key();
-        ui.add_space(8.0);
-        if ui
-            .button("Use for selected device")
-            .on_hover_text("Gives the devices selected on the drawing this part (one undo step)")
-            .clicked()
-        {
-            actions.push(PartsAction::UseForSelection(key.clone()));
-        }
-        ui.add_space(8.0);
-        ui.strong("Source");
-        let records = win.records(&key);
-        if records.is_empty() {
-            ui.weak(if win.in_library(&key) {
-                "In the library."
-            } else {
-                "Not imported yet. Import saves the maker's file on this computer."
+            ui.horizontal_wrapped(|ui| {
+                if widgets::primary_button(ui, "Use for selected device")
+                    .on_hover_text(
+                        "Gives the devices selected on the drawing this part (one undo step)",
+                    )
+                    .clicked()
+                {
+                    actions.push(PartsAction::UseForSelection(key.clone()));
+                }
+                if !win.in_library(&key) && ui.button("Import").clicked() {
+                    actions.push(PartsAction::Import(key.clone()));
+                }
             });
-        }
-        for r in &records {
-            ui.label(format!("{} ({} bytes)", r.file_name, r.bytes));
-            ui.weak(format!(
-                "imported {} \u{b7} sha256 {}",
-                r.imported,
-                &r.sha256[..12.min(r.sha256.len())]
-            ));
-            if let Some(url) = &r.url {
-                ui.hyperlink(url);
+            for section in detail_sections(part) {
+                widgets::collapsing_section(
+                    ui,
+                    ("parts_detail", section.title),
+                    section.title,
+                    &section.rows.len().to_string(),
+                    section.title != "Technical data",
+                    |ui| {
+                        for (label, value) in &section.rows {
+                            detail_row(ui, label, value);
+                        }
+                    },
+                );
             }
-            if let Some(url) = &r.terms_url {
-                ui.hyperlink_to("Terms", url);
-            }
-        }
-        ui.add_space(8.0);
-        ui.strong("3D model");
-        ui.label(model_status(win.model_state(part, &records).as_ref()));
-        ui.horizontal(|ui| {
-            if ui.small_button("Import 3D model (STEP)...").clicked() {
-                actions.push(PartsAction::ChooseModel);
+            widgets::collapsing_section(ui, "parts_source", "Source", "", false, |ui| {
+                if records.is_empty() {
+                    ui.weak(if win.in_library(&key) {
+                        "In the library."
+                    } else {
+                        "Not imported yet. Import saves the maker's file on this computer."
+                    });
+                }
+                for r in &records {
+                    ui.label(format!("{} ({} bytes)", r.file_name, r.bytes));
+                    ui.weak(format!(
+                        "imported {} \u{b7} sha256 {}",
+                        r.imported,
+                        &r.sha256[..12.min(r.sha256.len())]
+                    ));
+                    if let Some(url) = &r.url {
+                        ui.hyperlink(url);
+                    }
+                    if let Some(url) = &r.terms_url {
+                        ui.hyperlink_to("Terms", url);
+                    }
+                }
+            });
+            widgets::collapsing_section(ui, "parts_model", "3D model", "", true, |ui| {
+                ui.label(model_status(win.model_state(part, &records).as_ref()));
+                if ui.button("Import 3D model (STEP)...").clicked() {
+                    actions.push(PartsAction::ChooseModel);
+                }
+            });
+            if !records.is_empty() {
+                ui.add_space(8.0);
+                if win.confirm_remove.as_ref() == Some(&key) {
+                    ui.label("Delete the saved files? You can download them again from the maker.");
+                    ui.horizontal(|ui| {
+                        if widgets::danger_button(ui, "Remove").clicked() {
+                            actions.push(PartsAction::Remove(key.clone()));
+                        }
+                        if ui.button("Cancel").clicked() {
+                            actions.push(PartsAction::CancelRemove);
+                        }
+                    });
+                } else if widgets::ghost_button(ui, "Remove from library").clicked() {
+                    actions.push(PartsAction::AskRemove(key));
+                }
             }
         });
-        if !records.is_empty() {
-            if win.confirm_remove.as_ref() == Some(&key) {
-                ui.label("Delete the saved files? You can download them again from the maker.");
-                ui.horizontal(|ui| {
-                    if ui.small_button("Remove").clicked() {
-                        actions.push(PartsAction::Remove(key.clone()));
-                    }
-                    if ui.small_button("Cancel").clicked() {
-                        actions.push(PartsAction::CancelRemove);
-                    }
-                });
-            } else if ui.small_button("Remove from library").clicked() {
-                actions.push(PartsAction::AskRemove(key));
-            }
-        }
+}
+
+/// One data row of the detail pane: the name on the left, the value after
+/// it, wrapping instead of running past the pane.
+fn detail_row(ui: &mut egui::Ui, label: &str, value: &str) {
+    let p = Palette::of(ui);
+    ui.horizontal_top(|ui| {
+        ui.allocate_ui_with_layout(
+            egui::vec2(112.0, 0.0),
+            egui::Layout::top_down(egui::Align::Min),
+            |ui| {
+                ui.set_width(112.0);
+                ui.add(egui::Label::new(egui::RichText::new(label).color(p.text_secondary)).wrap());
+            },
+        );
+        ui.add(egui::Label::new(egui::RichText::new(value).color(p.text_primary)).wrap());
     });
 }
 
@@ -1498,5 +1592,123 @@ mod tests {
             18.0, 90.0, 60.0,
         ])));
         assert!(model_status(Some(&boxed)).starts_with("No 3D model"));
+    }
+
+    /// Runs the window body for one frame in a window-sized panel and
+    /// returns the actions it queued, the rectangle it used and the text it
+    /// painted.
+    fn frame(
+        ctx: &egui::Context,
+        win: &mut PartsWindow,
+        size: egui::Vec2,
+        events: Vec<egui::Event>,
+    ) -> (Vec<PartsAction>, egui::Rect, String) {
+        let mut actions = Vec::new();
+        let mut used = egui::Rect::NOTHING;
+        let mut out = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(egui::Pos2::ZERO, size)),
+                events,
+                ..Default::default()
+            },
+            |ui| {
+                egui::CentralPanel::default().show(ui, |ui| {
+                    parts_ui(ui, win, false, &mut actions);
+                    used = ui.min_rect();
+                });
+            },
+        );
+        out.textures_delta.clear();
+        let mut text = String::new();
+        for clipped in &out.shapes {
+            if let egui::epaint::Shape::Text(t) = &clipped.shape {
+                text.push_str(t.galley.text());
+                text.push('\n');
+            }
+        }
+        (actions, used, text)
+    }
+
+    /// A context with the app's fonts and style, as the real window has.
+    fn themed() -> egui::Context {
+        let ctx = egui::Context::default();
+        novo_theme::apply(&ctx);
+        ctx.set_fonts(novo_theme::fonts::definitions());
+        ctx
+    }
+
+    fn click(at: egui::Pos2) -> Vec<egui::Event> {
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        vec![egui::Event::PointerMoved(at), button(true), button(false)]
+    }
+
+    /// The part rows of the list are packed one under the next: clicking
+    /// down the list selects every row in order and leaves no gap (the old
+    /// list floated its rows apart and a click often hit nothing).
+    #[test]
+    fn clicking_down_the_list_selects_each_row_in_order_without_gaps() {
+        for size in [egui::vec2(820.0, 480.0), egui::vec2(1240.0, 700.0)] {
+            let mut win = PartsWindow::new(Catalog::starter(), None, SourceTable::builtin());
+            let ctx = themed();
+            frame(&ctx, &mut win, size, Vec::new());
+            frame(&ctx, &mut win, size, Vec::new());
+            let rows = win.rows();
+            let mut seen: Vec<PartKey> = Vec::new();
+            // The list is the left part of the window: sweep a column in it.
+            let x = 60.0;
+            let mut y = 150.0;
+            while y < size.y - 30.0 {
+                frame(&ctx, &mut win, size, Vec::new());
+                let (actions, ..) = frame(&ctx, &mut win, size, click(egui::pos2(x, y)));
+                for a in actions {
+                    if let PartsAction::Select(key) = a
+                        && seen.last() != Some(&key)
+                    {
+                        seen.push(key);
+                    }
+                }
+                y += 4.0;
+            }
+            assert!(seen.len() >= 8, "{size:?}: only {} rows hit", seen.len());
+            let order: Vec<&PartKey> = rows.iter().map(|(k, _)| k).collect();
+            // Consecutive rows, starting at the first row hit.
+            let first = order.iter().position(|k| **k == seen[0]).unwrap();
+            for (n, key) in seen.iter().enumerate() {
+                assert_eq!(order.get(first + n), Some(&key), "{size:?}: row {n}");
+            }
+        }
+    }
+
+    /// Selecting a row shows its data in the detail pane, inside the window.
+    #[test]
+    fn a_selected_part_shows_its_data_inside_the_window() {
+        let size = egui::vec2(820.0, 480.0);
+        let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, size);
+        let mut win = PartsWindow::new(Catalog::starter(), None, SourceTable::builtin());
+        let ctx = themed();
+        frame(&ctx, &mut win, size, Vec::new());
+        let (_, _, before) = frame(&ctx, &mut win, size, Vec::new());
+        assert!(before.contains("Pick a part in the list"), "{before}");
+        // Pick the part on the last visible-or-not row and draw it.
+        let key = win.rows()[2].0.clone();
+        let part = win.catalog.get(&key).unwrap().clone();
+        win.selected = Some(key);
+        frame(&ctx, &mut win, size, Vec::new());
+        let (_, used, text) = frame(&ctx, &mut win, size, Vec::new());
+        assert!(screen.contains_rect(used), "{used:?} leaves {screen:?}");
+        assert!(!text.contains("Pick a part in the list"));
+        assert!(text.contains("Use for selected device"), "{text}");
+        for section in detail_sections(&part) {
+            assert!(
+                text.to_uppercase().contains(&section.title.to_uppercase()),
+                "section {} missing in {text}",
+                section.title
+            );
+        }
     }
 }
