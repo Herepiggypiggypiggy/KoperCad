@@ -16,6 +16,7 @@ use novo_layout::model::{
 };
 use novo_layout::plan::Plan;
 use novo_layout::state::CabinetLayout;
+use novo_layout::surfaces::MAIN_PLATE;
 
 use super::cabinet_bar::{self, Foldable};
 use super::cabinet_door::DoorState;
@@ -35,11 +36,14 @@ const DEFAULT_PLATE: MountingPlate = MountingPlate {
 
 pub(super) struct CabinetState {
     pub(super) view: CanvasView,
-    scene: CabinetScene,
+    pub(super) scene: CabinetScene,
     /// The panel shown, by its location (`+K1B1G1`).
     pub(super) location: Option<DeviceTag>,
     /// A `Place all` plan waiting for Enter.
     pub(super) preview: Option<Plan>,
+    /// The part of that plan for other surfaces (the door, a side wall):
+    /// devices the surface rules send there, stored together with it.
+    pub(super) surface_preview: Vec<(String, Plan)>,
     /// The panel the drawing was last fitted to.
     fitted: Option<DeviceTag>,
     /// A placed device being dragged, with where it would land.
@@ -58,6 +62,12 @@ pub(super) struct CabinetState {
     pub(super) table: bool,
     /// The plate card of the inspector is shown with nothing selected.
     pub(super) plate_card: bool,
+    /// The surface picked in the header (`None` is the mounting plate) and
+    /// the picker asked to open by `cabinet.surface`.
+    pub(super) surface: Option<String>,
+    pub(super) surface_open: bool,
+    /// The id of the picker's popup, as egui's combo box keys it.
+    pub(super) surface_popup: Option<egui::Id>,
     /// Every wire's route is drawn over the plate, with the route table
     /// beside it (Route all).
     pub(super) routes: bool,
@@ -102,6 +112,7 @@ impl CabinetState {
             scene: CabinetScene::new(theme::cabinet_style()),
             location: None,
             preview: None,
+            surface_preview: Vec::new(),
             fitted: None,
             drag: None,
             ghost: None,
@@ -110,6 +121,9 @@ impl CabinetState {
             panel_fields: Default::default(),
             table: false,
             plate_card: false,
+            surface: None,
+            surface_open: false,
+            surface_popup: None,
             routes: false,
             routes_cache: Default::default(),
             rules: cabinet_rules::RulesState::new(),
@@ -131,6 +145,7 @@ pub(super) enum Ask {
     PlaceAll,
     /// Export the plate drawing PDF of the shown enclosure.
     ExportPlate,
+    ExportPlateDxf,
     Accept,
     Cancel,
     ToggleTable,
@@ -151,6 +166,14 @@ pub(super) enum Ask {
     SetEnclosure(novo_layout::enclosure::Enclosure),
     /// Set a panel-building value (power loss, mounting, clearance) of a device.
     SetPanelValue(super::cabinet_panel::PanelEdit),
+    /// Put a placed device on another surface of the cabinet (plate, door, ...).
+    SetSurface(u64, String),
+    /// The size of a surface other than the plate (`None`: planning values).
+    SetSurfaceSize(
+        StructureId,
+        String,
+        Option<novo_layout::surfaces::SurfaceSize>,
+    ),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
 }
@@ -253,11 +276,33 @@ pub(super) fn problem_lines(
             ));
         }
     }
+    for c in &report.opening_conflicts {
+        if c.device == id {
+            lines.push(format!(
+                "Covers the wiring opening '{}' [{}]",
+                c.opening,
+                novo_layout::openings::RULE_OPENING_KEEPOUT
+            ));
+        }
+    }
     if let Some(door) = layout.door_report() {
         for &(d, over) in &door.too_deep {
             if d == id {
                 lines.push(format!("{over:.0} mm too deep: the door cannot close"));
             }
+        }
+    }
+    for o in &report.duct_overlaps {
+        if let novo_layout::DuctHit::Device {
+            id: device,
+            across,
+            along,
+        } = o.hit
+            && device == id
+        {
+            lines.push(format!(
+                "Lies under a duct ({across:.0} x {along:.0} mm): move it clear"
+            ));
         }
     }
     if let Some(p) = layout.placements.iter().find(|p| p.id == id) {
@@ -271,6 +316,30 @@ pub(super) fn problem_lines(
         }
     }
     lines
+}
+
+/// One line for every rail that runs under a duct (a rail has no tag, so
+/// it is named by where it lies).
+pub(super) fn rail_duct_lines(layout: &CabinetLayout) -> Vec<String> {
+    layout
+        .report()
+        .duct_overlaps
+        .iter()
+        .filter_map(|o| {
+            let novo_layout::DuctHit::Rail { id, by } = o.hit else {
+                return None;
+            };
+            let rail = layout.rails.iter().find(|r| r.id == id)?;
+            let (axis, at) = if rail.vertical {
+                ("x", rail.x)
+            } else {
+                ("y", rail.y)
+            };
+            Some(format!(
+                "The rail at {axis} {at:.0} mm runs under a duct for {by:.0} mm: move the rail or the duct"
+            ))
+        })
+        .collect()
 }
 
 /// The table face (Ctrl+T): every device of the panel with where it is and
@@ -378,6 +447,9 @@ impl NovoApp {
 
     /// The Cabinet canvas, in place of the schematic canvas.
     pub(super) fn cabinet_show(&mut self, ui: &mut egui::Ui) {
+        // The open redlines are outlined on the plate, so their store has to
+        // be there even when Commissioning has not been visited.
+        self.load_commissioning();
         let Some(doc) = self.backend.document() else {
             return;
         };
@@ -400,6 +472,7 @@ impl NovoApp {
         {
             self.cabinet.location = locations.first().cloned();
             self.cabinet.preview = None;
+            self.cabinet.surface_preview.clear();
         }
         let location = self.cabinet.location.clone();
         let structure: Option<StructureId> = location.as_ref().and_then(|l| {
@@ -409,14 +482,70 @@ impl NovoApp {
                 .map(|s| s.id)
         });
         let layout = structure.and_then(|s| load(project, s));
+        let surfaces = structure.and_then(|s| super::cabinet_surfaces::summarize(project, s));
+        // Said once the frame is done with the project borrow.
+        let mut notices: Vec<String> = Vec::new();
+        if let Some(sum) = &surfaces
+            && let Some(gone) = self
+                .cabinet
+                .surface
+                .clone()
+                .filter(|n| sum.row(n).is_none())
+        {
+            self.cabinet.surface = None;
+            notices.push(format!(
+                "Surface '{gone}' no longer exists; showing the mounting plate."
+            ));
+        }
+        // A picked surface other than the plate is drawn from its own
+        // layout; the stored plate layout is untouched.
+        let on_surface: Option<String> = self
+            .cabinet
+            .surface
+            .clone()
+            .filter(|n| n.as_str() != MAIN_PLATE);
+        let layout = match (&on_surface, &surfaces, &layout) {
+            (Some(n), Some(sum), Some(l)) => {
+                let found = super::cabinet_surfaces::surface_layout(l, sum, n);
+                if found.is_none() {
+                    // The surface is gone: say so, and go back to the plate
+                    // instead of drawing the plate under another name.
+                    self.cabinet.surface = None;
+                    notices.push(format!(
+                        "Surface '{n}' no longer exists; showing the mounting plate."
+                    ));
+                }
+                found.or(layout)
+            }
+            // The plate view draws what is mounted on the plate; devices put
+            // on the door or a wall show on that surface instead.
+            (None, Some(sum), Some(_)) => layout.map(|mut l| {
+                l.placements.retain(|p| {
+                    sum.assigned
+                        .get(&p.id)
+                        .is_none_or(|name| name.as_str() == MAIN_PLATE)
+                });
+                l
+            }),
+            _ => layout,
+        };
         self.cabinet.rules.ensure_loaded();
         let judged = match (structure, &layout) {
-            (Some(s), Some(_)) => Some(cabinet_rules::judge(project, s, &self.cabinet.rules.rules)),
+            (Some(s), Some(_)) if on_surface.is_none() => {
+                Some(cabinet_rules::judge(project, s, &self.cabinet.rules.rules))
+            }
             _ => None,
         };
-        let cands = structure
+        let mut cands = structure
             .map(|s| candidates(project, s))
             .unwrap_or_default();
+        if let Some(l) = on_surface.as_ref().and(layout.as_ref()) {
+            cands.retain(|c| l.placements.iter().any(|p| p.id == c.id));
+        } else if let Some(sum) = &surfaces {
+            // A device mounted on the door or a wall is placed, not waiting
+            // for a spot on the plate.
+            super::cabinet_surface_move::keep_plate_candidates(&mut cands, sum);
+        }
         let sizing_devices = structure
             .map(|s| novo_layout::sizing_model::sizing_devices(project, s))
             .unwrap_or_default();
@@ -428,14 +557,33 @@ impl NovoApp {
         };
 
         // What is drawn: the stored layout, or the layout with the plan applied.
-        let shown = layout.as_ref().map(|l| match &self.cabinet.preview {
-            Some(plan) => {
-                let mut preview = l.clone();
-                preview.accept(plan, &cands);
-                preview
-            }
-            None => l.clone(),
-        });
+        // On the door or a wall the preview is that surface's part of the
+        // plan, not the plate plan.
+        let all_cands = structure
+            .map(|s| candidates(project, s))
+            .unwrap_or_default();
+        let shown = layout
+            .as_ref()
+            .map(|l| match (&self.cabinet.preview, &on_surface) {
+                (Some(plan), None) => {
+                    let mut preview = l.clone();
+                    preview.accept(plan, &cands);
+                    preview
+                }
+                (Some(_), Some(name)) => {
+                    let mut preview = l.clone();
+                    if let Some((_, plan)) = self
+                        .cabinet
+                        .surface_preview
+                        .iter()
+                        .find(|(surface, _)| surface == name)
+                    {
+                        preview.accept(plan, &all_cands);
+                    }
+                    preview
+                }
+                _ => l.clone(),
+            });
         let shown = shown.map(|mut s| {
             if let (Some(d), None) = (self.cabinet.drag, &self.cabinet.preview) {
                 s.move_to(d.id, d.at.0, d.at.1);
@@ -455,6 +603,9 @@ impl NovoApp {
                     + r.outside.len()
                     + r.too_close.len()
                     + r.rail_overflows.len()
+                    + r.opening_conflicts.len()
+                    + s.opening_problems.len()
+                    + r.duct_overlaps.len()
                     + s.door_report().map_or(0, |d| d.problems())
                     + s.swing_report().map_or(0, |d| d.problems());
                 (l.placements.len(), l.unplaced(&cands).len(), problems)
@@ -551,6 +702,39 @@ impl NovoApp {
             });
             if layout.is_none() {
                 return;
+            }
+            if let Some(sum) = surfaces.as_ref().filter(|s| s.rows.len() > 1) {
+                cabinet_bar::group(ui, caption("Surface"), |ui| {
+                    let picked = self.cabinet.surface.clone();
+                    let current = picked.clone().unwrap_or_else(|| MAIN_PLATE.to_owned());
+                    let combo = egui::ComboBox::from_id_salt("cabinet_surface")
+                        .selected_text(current.clone());
+                    let popup = ui.make_persistent_id("cabinet_surface").with("popup");
+                    self.cabinet.surface_popup = Some(popup);
+                    if std::mem::take(&mut self.cabinet.surface_open) {
+                        egui::Popup::open_id(ui.ctx(), popup);
+                    }
+                    let r = combo.show_ui(ui, |ui| {
+                        for row in &sum.rows {
+                            let on = row.name == current;
+                            let line = ui.selectable_label(on, row.label());
+                            if line.clicked() {
+                                self.cabinet.pick_surface(
+                                    (row.name != MAIN_PLATE).then(|| row.name.clone()),
+                                );
+                            }
+                        }
+                    });
+                    let r = r
+                        .response
+                        .on_hover_text("Surface to work on (View > Cabinet > Cabinet surfaces)");
+                    cabinet_bar::note(&mut anchors, "cabinet.surface", "Surface", &r);
+                    if !sum.problems.is_empty() {
+                        let text = format!("{} surface problems", sum.problems.len());
+                        cabinet_bar::pill(ui, &text, Some(novo_theme::widgets::Level::Warning))
+                            .on_hover_text(sum.problems.join("\n"));
+                    }
+                });
             }
             if has_plan {
                 cabinet_bar::group(ui, Some("Preview, nothing stored yet"), |ui| {
@@ -816,6 +1000,13 @@ impl NovoApp {
                                 ui.close();
                             }
                         }
+                        if cabinet_bar::button(ui, icons::EXPORT, "Plate drawing (DXF)", false)
+                            .on_hover_text("Plate drawing for a CNC or CAD, with the drill table")
+                            .clicked()
+                        {
+                            ask = Some(Ask::ExportPlateDxf);
+                            ui.close();
+                        }
                     });
                     cabinet_bar::note(&mut anchors, "cabinet.more", "More", &more.response);
                     // Lessons point at folded controls: until the menu is open
@@ -853,6 +1044,14 @@ impl NovoApp {
                         );
                         if item.clicked() {
                             ask = Some(Ask::ExportPlate);
+                            ui.close();
+                        }
+                        if ui
+                            .button("Plate drawing (DXF)")
+                            .on_hover_text("Plate drawing for a CNC or CAD, with the drill table")
+                            .clicked()
+                        {
+                            ask = Some(Ask::ExportPlateDxf);
                             ui.close();
                         }
                     });
@@ -927,6 +1126,9 @@ impl NovoApp {
                                 ui.close();
                             }
                         }
+                        for line in rail_duct_lines(shown) {
+                            ui.label(line);
+                        }
                     });
                     cabinet_bar::note(&mut anchors, "cabinet.problems", "Problems", &pill);
                 }
@@ -946,6 +1148,34 @@ impl NovoApp {
                     });
                 }
             });
+        }
+        // The picked surface and what is wrong with surface names, in full
+        // and wrapped to the width (not squeezed into the status strip).
+        if let Some(sum) = &surfaces {
+            let note = self.cabinet.surface.as_deref().and_then(|n| sum.note(n));
+            if note.is_some() || !sum.problems.is_empty() {
+                ui.vertical(|ui| {
+                    ui.add_space(2.0);
+                    if let Some(note) = note {
+                        ui.add(egui::Label::new(note).wrap());
+                        ui.add(
+                            egui::Label::new(egui::RichText::new(
+                                "Drag, turn or take off its devices here. Put a device on this surface with Inspector > On surface.",
+                            ))
+                            .wrap(),
+                        );
+                    }
+                    for problem in &sum.problems {
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(problem)
+                                    .color(novo_theme::Palette::of(ui).warning),
+                            )
+                            .wrap(),
+                        );
+                    }
+                });
+            }
         }
         ui.separator();
 
@@ -1048,7 +1278,23 @@ impl NovoApp {
                     .collect();
                 // The inspector: with a selection, or the plate card when it
                 // is switched on; otherwise the plate gets the whole window.
+                let on_surface = self
+                    .cabinet
+                    .surface
+                    .as_deref()
+                    .is_some_and(|n| n != MAIN_PLATE);
                 let inspector = match (&layout, structure) {
+                    // A surface other than the plate with nothing selected:
+                    // its size card.
+                    (Some(_), Some(s)) if selected.is_empty() && on_surface => self
+                        .cabinet
+                        .surface
+                        .as_deref()
+                        .and_then(|n| {
+                            let sum = surfaces.as_ref()?;
+                            super::cabinet_surface_size::card(project, s, sum, n)
+                        })
+                        .map(|card| (cabinet_inspector::Facts::Surface(card), false)),
                     (Some(stored), Some(s)) if !selected.is_empty() || self.cabinet.plate_card => {
                         let mut facts = cabinet_inspector::gather(
                             project, s, stored, &shown, &selected, &tag_of,
@@ -1056,6 +1302,7 @@ impl NovoApp {
                         if let Some(j) = &judged {
                             cabinet_rules::annotate(&mut facts, &self.cabinet.rules, j, &tag_of);
                         }
+                        super::cabinet_surface_move::annotate(&mut facts, surfaces.as_ref());
                         // On the side away from the selection.
                         let centre = shown
                             .placements
@@ -1160,6 +1407,25 @@ impl NovoApp {
                         overlay,
                     );
                 }
+                if let Some(mode) = self.wb.commissioning.as_ref() {
+                    let marks = super::commissioning_cabinet::marks(&mode.store, project, &shown);
+                    if !marks.is_empty() {
+                        let rect = out.response.rect;
+                        let hovered = super::commissioning_cabinet::draw(
+                            &ui.painter_at(rect),
+                            rect,
+                            &self.cabinet.view.viewport,
+                            &marks,
+                            novo_theme::Palette::of(ui).warning,
+                            ui.ctx()
+                                .pointer_hover_pos()
+                                .filter(|_| out.response.hovered()),
+                        );
+                        if let Some(text) = hovered {
+                            out.response.clone().on_hover_text(text);
+                        }
+                    }
+                }
                 if let Some(s) = structure {
                     let rect = out.response.rect;
                     let zoom = f64::from(self.cabinet.view.viewport.zoom.max(0.01));
@@ -1170,8 +1436,13 @@ impl NovoApp {
                         project,
                         s,
                         (self.cabinet.rails.hover, self.cabinet.rails.selected),
-                        (14.0 / zoom).max(8.0),
+                        ((14.0 / zoom).max(8.0), novo_theme::Palette::of(ui)),
                     );
+                    if self.cabinet.rails.hover.is_some() {
+                        out.response
+                            .clone()
+                            .on_hover_text("Drag to move. Click to select, Delete removes.");
+                    }
                 }
                 if let Some(rail) = self.cabinet.rails.selected {
                     let rect = out.response.rect;
@@ -1188,6 +1459,7 @@ impl NovoApp {
                         project,
                         rail,
                         moved,
+                        novo_theme::Palette::of(ui),
                     );
                 }
                 if let Some(input) = &heat_input {
@@ -1204,7 +1476,10 @@ impl NovoApp {
                     && let Some(a) = cabinet_inspector::overlay(
                         ui.ctx(),
                         out.response.rect,
-                        *left,
+                        cabinet_inspector::Room {
+                            left: *left,
+                            ..Default::default()
+                        },
                         facts,
                         project,
                         &mut self.cabinet.panel_fields,
@@ -1601,12 +1876,84 @@ impl NovoApp {
                 self.learn_event(novo_learn::Event::Clicked(a.id.to_owned()));
             }
         }
+        for text in notices {
+            self.message(Level::Warning, text);
+        }
         if let Some(ask) = ask {
             self.cabinet_ask(ask, structure, layout, &cands);
         }
         if let Some(rail_ask) = rail_ask {
             self.cabinet_rail_ask(structure, rail_ask);
         }
+    }
+
+    /// Tells what the surface rules did to `Place all`: the devices that
+    /// belong on another surface and are not on the plate plan, and rules
+    /// that could not be used. Returns how many devices were sent to another
+    /// surface.
+    fn surface_rule_messages(
+        &mut self,
+        structure: Option<StructureId>,
+        layout: &CabinetLayout,
+    ) -> usize {
+        self.cabinet.surface_preview.clear();
+        let (Some(s), Some(project)) = (structure, self.backend.document().map(|d| d.project()))
+        else {
+            return 0;
+        };
+        let split = cabinet_rules::surface_split(project, s, layout);
+        let plans = cabinet_rules::surface_plans(project, s, layout, &split);
+        let tag = |id: u64| {
+            project
+                .get::<novo_core::Device>(novo_core::DeviceId::from(id))
+                .map_or_else(|| format!("device {id}"), |d| d.tag.to_string())
+        };
+        let sent: usize = split.others.iter().map(|(_, specs)| specs.len()).sum();
+        let mut notes: Vec<(Level, String)> = split
+            .problems
+            .iter()
+            .map(|p| (Level::Warning, p.clone()))
+            .collect();
+        for (surface, specs) in &split.others {
+            let tags: Vec<String> = specs.iter().map(|sp| tag(sp.id)).collect();
+            let rule = novo_layout::surface_rules::RULE_SURFACE;
+            let plan = plans
+                .iter()
+                .find(|(name, _)| name == surface)
+                .map(|(_, p)| p);
+            notes.push(match plan {
+                Some(plan) => {
+                    let left: Vec<String> = plan.unplaced.iter().map(|&id| tag(id)).collect();
+                    let fits = format!(
+                        "By the surface rules {} go on the {surface} [{rule}]; Enter places them there with the plate plan; pick the {surface} in the Surface picker to see them",
+                        tags.join(", ")
+                    );
+                    if left.is_empty() {
+                        (Level::Info, fits)
+                    } else {
+                        (
+                            Level::Warning,
+                            format!("{fits}. {} do not fit on the {surface}", left.join(", ")),
+                        )
+                    }
+                }
+                None => (
+                    Level::Info,
+                    format!(
+                        "By the surface rules {} belong on the {surface} [{rule}] and are not placed on the plate",
+                        tags.join(", ")
+                    ),
+                ),
+            });
+        }
+        for (level, text) in notes {
+            self.message(level, text);
+        }
+        self.cabinet.surface_preview = plans
+            .into_iter()
+            .filter(|(_, p)| !p.placements.is_empty())
+            .collect();
+        sent
     }
 
     /// What Place all leaves off the plate, by name with the reason: devices
@@ -1681,6 +2028,32 @@ impl NovoApp {
         layout: Option<CabinetLayout>,
         cands: &[novo_layout::plan::Candidate],
     ) {
+        // A surface other than the plate is drawn from its own layout. Moving,
+        // turning and taking off its devices work as on the plate (they act
+        // on the device's own placement); the plan, the rails and the
+        // enclosure belong to the plate. Accepting a Place all preview stores
+        // a plan made on the plate, so it goes through from the door view too.
+        if self
+            .cabinet
+            .surface
+            .as_deref()
+            .is_some_and(|n| n != MAIN_PLATE)
+            && (matches!(ask, Ask::Accept) && self.cabinet.preview.is_none()
+                || matches!(
+                    ask,
+                    Ask::PlaceAll
+                        | Ask::SetRailLengths(_)
+                        | Ask::SetPlate(_)
+                        | Ask::SetPlateSize(..)
+                        | Ask::SetEnclosure(_)
+                ))
+        {
+            self.message(
+                Level::Info,
+                "Place all, rails, plate size and the enclosure can only be changed on the plate. Pick the plate first.",
+            );
+            return;
+        }
         // Editing the plate while a Place all preview is up takes the
         // preview first (one undo step), so a drag, turn or take-off never
         // acts on a layout that is not stored yet.
@@ -1693,14 +2066,21 @@ impl NovoApp {
             Ask::Panel(l) => {
                 self.cabinet.location = Some(l);
                 self.cabinet.preview = None;
+                self.cabinet.surface_preview.clear();
                 self.cabinet.rules.explain = None;
             }
-            Ask::Cancel => self.cabinet.preview = None,
+            Ask::Cancel => {
+                self.cabinet.preview = None;
+                self.cabinet.surface_preview.clear();
+            }
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::ExportPlate => {
                 self.learn_command("export.plate");
                 self.export_plate_pdf();
+            }
+            Ask::ExportPlateDxf => {
+                self.export_plate_dxf();
             }
             Ask::ToggleRoutes => self.cabinet.routes ^= true,
             Ask::SetWireRule(key, value) => {
@@ -1738,8 +2118,15 @@ impl NovoApp {
                         }
                         _ => layout.preview(cands),
                     };
+                    let sent_elsewhere = self.surface_rule_messages(structure, &layout);
                     let left_out = self.left_out_text(structure, &plan);
-                    if plan.placements.is_empty() {
+                    if plan.placements.is_empty() && !self.cabinet.surface_preview.is_empty() {
+                        // Only the other surfaces have something to place.
+                        if let Some(text) = left_out {
+                            self.message(Level::Warning, text);
+                        }
+                        self.cabinet.preview = Some(plan);
+                    } else if plan.placements.is_empty() {
                         match left_out {
                             Some(text) => self.message(Level::Warning, text),
                             None if !cands.is_empty()
@@ -1749,6 +2136,9 @@ impl NovoApp {
                             {
                                 self.message(Level::Info, "Every device is already on the plate");
                             }
+                            // Everything that was left went to another surface;
+                            // the surface message above already said so.
+                            None if sent_elsewhere > 0 => {}
                             None => self.message(Level::Info, "Nothing fits on the plate"),
                         }
                     } else {
@@ -1776,7 +2166,17 @@ impl NovoApp {
                 let (Some(plan), Some(structure)) = (self.cabinet.preview.take(), structure) else {
                     return;
                 };
-                if self.cabinet_edit("Place all", move |tx| apply_plan(tx, structure, &plan)) {
+                let others = std::mem::take(&mut self.cabinet.surface_preview);
+                if self.cabinet_edit("Place all", move |tx| {
+                    apply_plan(tx, structure, &plan)?;
+                    for (surface, plan) in &others {
+                        apply_plan(tx, structure, plan)?;
+                        for p in &plan.placements {
+                            super::cabinet_surface_move::set(tx, structure, p.id, surface)?;
+                        }
+                    }
+                    Ok(())
+                }) {
                     self.learn_signal("cabinet_plan_accepted");
                 }
             }
@@ -1847,6 +2247,19 @@ impl NovoApp {
                     Ok(None) => {}
                     Err(e) => self.message(Level::Warning, e.to_string()),
                 }
+            }
+            Ask::SetSurface(device, surface) => {
+                let Some(structure) = structure else {
+                    return;
+                };
+                self.cabinet_edit("Set surface", move |tx| {
+                    super::cabinet_surface_move::set(tx, structure, device, &surface)
+                });
+            }
+            Ask::SetSurfaceSize(s, name, size) => {
+                self.cabinet_edit("Set surface size", move |tx| {
+                    super::cabinet_surface_size::set(tx, s, &name, size)
+                });
             }
             Ask::SetPlateSize(s, plate) => {
                 self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));

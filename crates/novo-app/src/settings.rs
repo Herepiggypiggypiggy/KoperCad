@@ -77,6 +77,72 @@ pub struct Settings {
     /// The id of the newest What's new entry the person has opened the
     /// list over (`assets/whats-new.md`); empty on a first run.
     pub whats_new_seen: String,
+    /// Camera positions saved in the 3D view, per user, not in the project.
+    pub camera_views: Vec<CameraBookmark>,
+    /// A swipe in wheel lines pans the 3D view instead of zooming (Windows
+    /// touchpads); the 3D toolbar's Layers > Trackpad pans.
+    pub trackpad_pans: bool,
+    /// What the person last chose in File > Export drawings > Export PDF...
+    /// (`app/pdf_options.rs`): a per-user preference, kept in the settings
+    /// file under the user's profile.
+    pub pdf_choice: PdfChoice,
+}
+
+/// A saved 3D camera: where it looks from, in the view's own units.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CameraBookmark {
+    pub name: String,
+    pub target: [f32; 3],
+    pub yaw: f32,
+    pub pitch: f32,
+    pub distance: f32,
+    pub fov_y: f32,
+    pub orthographic: bool,
+}
+
+/// The choices of the PDF options dialog. [`PdfChoice::default`] is what the
+/// one-click Export PDF commands always write, whatever was chosen here.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PdfChoice {
+    /// `"all"`, `"current"` or `"ranges"`.
+    pub scope: String,
+    /// Page numbers for `scope == "ranges"`: `1-3, 5, 7-` (1 is the first
+    /// page in the project's order).
+    pub ranges: String,
+    /// One bookmark per page.
+    pub bookmarks: bool,
+    /// Clickable links between a device's parts and interruption points.
+    pub links: bool,
+    /// Cross reference text next to symbols.
+    pub xref_notes: bool,
+    /// The title block's revision row.
+    pub title_revisions: bool,
+    /// A dot on the bookmark of pages changed since the latest revision.
+    pub changed_marks: bool,
+    /// The design checks as report pages after the drawing.
+    pub checks_appendix: bool,
+    /// `"black"` (print style) or `"colour"`.
+    pub look: String,
+    /// The document title; empty uses the project name.
+    pub title: String,
+}
+
+impl Default for PdfChoice {
+    fn default() -> Self {
+        Self {
+            scope: "all".into(),
+            ranges: String::new(),
+            bookmarks: true,
+            links: true,
+            xref_notes: true,
+            title_revisions: true,
+            changed_marks: true,
+            checks_appendix: true,
+            look: "black".into(),
+            title: String::new(),
+        }
+    }
 }
 
 /// The walk-through's progress, per user: kept so closing the app mid-way
@@ -225,6 +291,18 @@ mod tests {
         let s: Settings = ron::from_str(old).unwrap();
         assert_eq!(s.recent_actions, vec!["view.fit"]);
         assert_eq!(s.outline_pinned, None);
+    }
+
+    #[test]
+    fn the_trackpad_choice_is_off_in_old_settings_and_survives_a_round_trip() {
+        let old: Settings = ron::from_str("(recent_actions: [\"view.fit\"])").unwrap();
+        assert!(!old.trackpad_pans);
+        let on = Settings {
+            trackpad_pans: true,
+            ..Settings::default()
+        };
+        let back: Settings = ron::from_str(&ron::to_string(&on).unwrap()).unwrap();
+        assert!(back.trackpad_pans);
     }
 
     #[test]

@@ -20,3 +20,10 @@ Next, in order:
 5. DOC-2: translation keys already carried (`key` on text and title rows).
 
 Open questions: where the designer sits against the existing Reports hub (#452); whether generated pages should use a chosen template per report kind.
+
+## DOC-2 Languages (branch claude/doc-2-languages)
+Done in PR 1: `novo_reports::i18n` (Catalog, Translator, ProjectTable, translate_output/template/layout, render_in, missing lists), shipped Dutch file `i18n/nl.json`, project properties `i18n.language` and `i18n.table`, `ReportPdfOptions.language` (PDF, CSV, Excel), File > Report languages (`project.languages`, app/languages.rs).
+Done in PR 3: CLI `--language` on export commands and commissioning-report, `novo_py::report_bytes_in`; scripts use the project's language by default (JSON report data stays English). Not translated yet: fixed words used as cell values (commissioning summary labels Checks/Passed/Pending), wire cut job file (machine file). Next: (2) import/export a language file from the window; (3) language on generated schematic pages (`LiveReports::layout_sheet`); (4) locale number and date formats (decimal comma); (5) translate fixed cell words (Yes/No, role names) once they are listed; (6) a vocabulary check that fails when a new `Column::new` header has no Dutch entry.
+Decision: Dutch is the report/PDF language only. Menus, command ids and file formats stay English.
+
+PR 4: language files (File > Report languages > Save/Load language file; `Catalog::to_json/from_json`, `*.kopercad-lang.json`). Import is two undo steps (table, then language).

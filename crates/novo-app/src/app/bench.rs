@@ -25,6 +25,10 @@ use novo_reports::{
     Labels, Report, ReportOutput, SheetGrid, TapeStock, WireCutJob, ferrule_counts, is_estimate,
     label_items, layout_labels, stock_presets, wire_cut_jobs_with, with_spares,
 };
+use novo_theme::table::{
+    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths_min, header_min_widths,
+    table_header, table_row,
+};
 
 use super::pdf::write_replacing;
 use super::sheets::{hash, ours_or_free};
@@ -72,9 +76,14 @@ struct Inputs {
     labels: LabelSettings,
 }
 
-fn pdf_options(title: String, keys: impl Iterator<Item = String>) -> novo_pdf::ReportPdfOptions {
+fn pdf_options(
+    title: String,
+    keys: impl Iterator<Item = String>,
+    language: novo_reports::i18n::Translator,
+) -> novo_pdf::ReportPdfOptions {
     novo_pdf::ReportPdfOptions {
         title,
+        language,
         // Rows tall enough to tick and to pencil a note on.
         row_mm: keys.map(|k| (k, 8.0)).collect(),
         ..novo_pdf::ReportPdfOptions::default()
@@ -124,7 +133,7 @@ impl NovoApp {
             Ok(()) => {
                 self.wb.sheet_exports.insert(path.to_owned(), hash(bytes));
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {what}: {}", path.display()));
+                self.message_file(format!("{verb} {what}: {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
@@ -164,6 +173,7 @@ impl NovoApp {
         let options = pdf_options(
             format!("{name}  Bench cut list"),
             report.sections.iter().map(|s| s.key.clone()),
+            self.report_translator(),
         );
         let bytes = novo_pdf::export_report_pdf(&[&report], &options);
         let estimates = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
@@ -238,6 +248,7 @@ impl NovoApp {
         let options = pdf_options(
             format!("{name}  Ferrules"),
             std::iter::once("ferrules".to_owned()),
+            self.report_translator(),
         );
         let bytes = novo_pdf::export_report_pdf(&[&report], &options);
         self.bench_write(path, &bytes, "ferrule table")
@@ -504,6 +515,83 @@ fn cut_tab(
             *act = Some(Act::ExportMachineCsv);
         }
     });
+    ui.add_space(6.0);
+    cut_table(ui, jobs);
+}
+
+/// The wires to cut, in the order of the printed list (size and colour
+/// groups, longest first), so they can be checked before printing.
+fn cut_table(ui: &mut egui::Ui, jobs: &[WireCutJob]) {
+    let col = |header: &str, align| TableColumn {
+        header: header.into(),
+        align,
+    };
+    let columns = [
+        col("Wire", TableAlign::Left),
+        col("mm²", TableAlign::Right),
+        col("Colour", TableAlign::Left),
+        col("From", TableAlign::Left),
+        col("To", TableAlign::Left),
+        col("Cut mm", TableAlign::Right),
+        col("Basis", TableAlign::Left),
+    ];
+    let bar = ui.spacing().scroll.allocated_width() + 4.0;
+    let widths = column_widths_min(
+        ui.available_width() - bar,
+        &[1.4, 0.8, 1.2, 3.0, 3.0, 1.4, 1.6],
+        &header_min_widths(ui, &columns),
+    );
+    table_header(ui, &columns, &widths, None);
+    egui::ScrollArea::vertical()
+        .id_salt("bench_cut_rows")
+        .auto_shrink([false, false])
+        .min_scrolled_height(260.0)
+        .show_rows(ui, ROW_HEIGHT + 1.0, jobs.len(), |ui, range| {
+            for i in range {
+                let j = &jobs[i];
+                let texts = cut_row_texts(j);
+                let cells: Vec<TableCell<'_>> = texts
+                    .iter()
+                    .enumerate()
+                    .map(|(c, text)| TableCell {
+                        text,
+                        numeric: c == 1 || c == 5,
+                    })
+                    .collect();
+                let state = if is_estimate(&j.basis) {
+                    RowState::Flagged
+                } else {
+                    RowState::Normal
+                };
+                table_row(ui, &columns, &widths, &cells, state, ("bench_cut", i));
+            }
+        });
+}
+
+/// The seven cells of one cut-list row: wire, mm², colour, from, to, cut
+/// length (`~` when it is an estimate) and basis. Missing values show `-` or `?`.
+pub(super) fn cut_row_texts(j: &WireCutJob) -> [String; 7] {
+    let or_dash = |s: &str| {
+        if s.is_empty() {
+            "-".to_owned()
+        } else {
+            s.to_owned()
+        }
+    };
+    [
+        or_dash(&j.number),
+        j.cross_section_mm2
+            .map_or_else(|| "?".to_owned(), |v| format!("{v}")),
+        or_dash(&j.colour),
+        j.end_a.designation.clone(),
+        j.end_b.designation.clone(),
+        format!(
+            "{}{:.0}",
+            if is_estimate(&j.basis) { "~" } else { "" },
+            j.cut_mm
+        ),
+        j.basis.clone(),
+    ]
 }
 
 fn ferrule_tab(
