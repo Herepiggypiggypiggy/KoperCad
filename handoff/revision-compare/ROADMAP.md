@@ -4,7 +4,7 @@ Scope: compare any two project states (issued revisions or now), a readable
 change list, canvas diff, CLI and Python access, revision table. Design:
 docs/design/revision-compare.md.
 
-Done: design note, compare engine, CLI, Python, Compare window (merged); read-only revision view (#487) and sheet kind nit (#493) in review.
+Done: design note, compare engine, CLI, Python, Compare window (merged); read-only revision view and sheet kind nit (merged); note field in review.
 
 Next, in order:
 1. novo-revisions `compare`, `Entry`, `FieldChange`.
