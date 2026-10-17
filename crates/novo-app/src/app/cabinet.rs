@@ -710,8 +710,9 @@ impl NovoApp {
                             let on = row.name == current;
                             let line = ui.selectable_label(on, row.label());
                             if line.clicked() {
-                                self.cabinet.surface =
-                                    (row.name != MAIN_PLATE).then(|| row.name.clone());
+                                self.cabinet.pick_surface(
+                                    (row.name != MAIN_PLATE).then(|| row.name.clone()),
+                                );
                             }
                         }
                     });
@@ -1150,7 +1151,7 @@ impl NovoApp {
                         ui.add(egui::Label::new(note).wrap());
                         ui.add(
                             egui::Label::new(egui::RichText::new(
-                                "Drawing of this surface only; placing devices on it comes next.",
+                                "Drag, turn or take off its devices here. Put a device on this surface with Inspector > On surface.",
                             ))
                             .wrap(),
                         );
