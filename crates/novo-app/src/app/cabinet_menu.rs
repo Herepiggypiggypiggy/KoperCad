@@ -59,7 +59,8 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
                 Some(("Isolate   Ctrl+I", "view.3d_isolate")),
                 Some(("Zoom to selection   F", "view.fit")),
                 None,
-                Some(("Show in Cabinet", "view.cabinet")),
+                Some(("Show in Cabinet", "nav.show_cabinet")),
+                Some(("Show in schematic", "nav.show_schematic")),
             ],
             Target::Rail(_) => vec![
                 Some(("Delete   Del", "edit.delete")),
@@ -101,7 +102,8 @@ pub(super) fn rows(face: Face, target: Target) -> Vec<Option<(&'static str, &'st
             Some(("Rotate   R", "edit.rotate")),
             Some(("Take off the plate   Del", "edit.delete")),
             None,
-            Some(("Show in 3D", "view.3d")),
+            Some(("Show in 3D", "nav.show_3d")),
+            Some(("Show in schematic", "nav.show_schematic")),
         ],
         Target::Rail(_) => vec![
             Some(("Delete   Del", "edit.delete")),

@@ -837,3 +837,104 @@ fn the_surface_panes_land_on_the_real_shell_and_the_door_pane_is_the_door() {
     );
     assert!(plo.z >= dlo.z - tol && phi.z <= dhi.z + tol);
 }
+
+/// K1 of the starter: its device id and one of its symbols.
+fn k1(d: &Drive) -> (novo_core::DeviceId, novo_core::SymbolId) {
+    let project = d.app.backend.document().unwrap().project();
+    let device = project.devices_by_tag(&DeviceTag::parse("=A1+CAB-K1").unwrap())[0];
+    let symbol = project
+        .symbols()
+        .find(|s| s.device() == Some(device))
+        .expect("K1 is drawn")
+        .id;
+    (device, symbol)
+}
+
+/// Opens the drawing on the device's main symbol, selected.
+fn draw_selected(d: &mut Drive, device: novo_core::DeviceId) {
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.schematic", None);
+    let place = d.app.device_main(device).expect("K1 is drawn");
+    d.app.jump(place, false);
+    for _ in 0..4 {
+        d.frame();
+    }
+}
+
+#[test]
+fn show_in_3d_from_the_schematic_selects_and_frames_the_device() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let (device, _) = k1(&d);
+    draw_selected(&mut d, device);
+    assert_eq!(d.app.probe_devices(), vec![device]);
+    d.app.run_command(&ctx, "nav.show_3d", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(
+        d.app
+            .view3d
+            .view
+            .state
+            .selection
+            .contains(&novo_view3d::ItemId::new(ItemKind::Device, device.raw())),
+        "the device is selected in 3D"
+    );
+}
+
+#[test]
+fn show_in_cabinet_selects_the_device_on_the_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let (device, _) = k1(&d);
+    draw_selected(&mut d, device);
+    d.app.run_command(&ctx, "nav.show_cabinet", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
+    assert_eq!(
+        d.app.cabinet.view.selection.ids(),
+        vec![novo_canvas::cabinet::box_item(device.raw())]
+    );
+}
+
+#[test]
+fn show_in_schematic_from_the_plate_opens_the_devices_symbol() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let (device, symbol) = k1(&d);
+    d.app.run_command(&ctx, "view.cabinet", None);
+    d.frame();
+    d.app.cabinet.view.selection.apply(
+        [novo_canvas::cabinet::box_item(device.raw())],
+        novo_canvas::selection::SelectOp::Replace,
+    );
+    d.app.run_command(&ctx, "nav.show_schematic", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
+    let shown = d.app.selected_symbol();
+    let project = d.app.backend.document().unwrap().project();
+    let owner = shown
+        .and_then(|s| project.symbol(s))
+        .and_then(|s| s.device());
+    assert_eq!(
+        owner,
+        Some(device),
+        "a symbol of K1 is selected ({symbol:?} is one)"
+    );
+}
+
+#[test]
+fn show_in_with_nothing_selected_says_so_and_stays() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.cabinet.view.selection.clear();
+    d.app.run_command(&ctx, "nav.show_schematic", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+}

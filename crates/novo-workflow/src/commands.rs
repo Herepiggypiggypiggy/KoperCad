@@ -1083,6 +1083,27 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Device,
     ),
     cmd(
+        "nav.show_schematic",
+        "Show in schematic",
+        "Navigate",
+        &["cross probe", "find in drawing", "main symbol"],
+        Needs::Project,
+    ),
+    cmd(
+        "nav.show_cabinet",
+        "Show in Cabinet",
+        "Navigate",
+        &["cross probe", "find on plate", "layout"],
+        Needs::Project,
+    ),
+    cmd(
+        "nav.show_3d",
+        "Show in 3D",
+        "Navigate",
+        &["cross probe", "find in cabinet", "zoom to device"],
+        Needs::Project,
+    ),
+    cmd(
         "nav.all_references",
         "Every occurrence",
         "Navigate",
