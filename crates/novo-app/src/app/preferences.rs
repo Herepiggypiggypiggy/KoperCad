@@ -19,7 +19,11 @@ impl NovoApp {
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
-            ui.set_width(novo_theme::dialog_width::MEDIUM.min(ctx.content_rect().width() - 48.0));
+            ui.set_width(
+                novo_theme::dialog_width::MEDIUM
+                    .min(ctx.content_rect().width() - 48.0)
+                    .max(240.0),
+            );
             ui.label(
                 egui::RichText::new("Preferences")
                     .size(15.0)
@@ -136,7 +140,7 @@ impl NovoApp {
     }
 }
 
-/// A section: a hairline above (except the first) and a caption-caps label.
+/// A section: a caption-caps label, with extra space above (except the first).
 fn section(ui: &mut egui::Ui, title: &str, first: bool) {
     ui.add_space(if first { 4.0 } else { 14.0 });
     novo_theme::widgets::section_label(ui, title);
@@ -144,7 +148,14 @@ fn section(ui: &mut egui::Ui, title: &str, first: bool) {
 }
 
 fn hint(ui: &mut egui::Ui, text: &str) {
-    ui.add(egui::Label::new(egui::RichText::new(text).small().weak()).wrap());
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(text)
+                .size(egui::TextStyle::Small.resolve(ui.style()).size.max(12.0))
+                .weak(),
+        )
+        .wrap(),
+    );
 }
 
 fn row_title(ui: &mut egui::Ui, label: &str, text: &str) {
