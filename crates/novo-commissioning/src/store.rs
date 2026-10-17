@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::check::{CheckKind, CheckRecord, CheckState, Target};
-use crate::punch::{Photo, PunchItem, PunchState, Severity};
+use crate::punch::{Photo, PunchItem, PunchState, Severity, Signature};
 use crate::redline::{Redline, RedlineState};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
@@ -14,6 +14,8 @@ pub enum CommissioningError {
     Unreadable(String),
     #[error("no punch item {0}")]
     NoPunchItem(u64),
+    #[error("a signature needs a name")]
+    UnsignedSignature,
     #[error("no redline {0}")]
     NoRedline(u64),
     #[error("that change does not fit this kind of object")]
@@ -239,6 +241,21 @@ impl CommissioningStore {
         self.punch.values().filter(|p| !p.state.is_closed()).count()
     }
 
+    /// Verifies an item with a signature: the same as setting it `Verified`
+    /// by the signer, and the signature stays with the item. A signature
+    /// needs a name.
+    pub fn sign_off(&mut self, id: u64, signature: Signature) -> Result<(), CommissioningError> {
+        if signature.name.trim().is_empty() {
+            return Err(CommissioningError::UnsignedSignature);
+        }
+        let (by, at) = (signature.name.clone(), signature.at.clone());
+        self.set_punch_state(id, PunchState::Verified, &by, &at)?;
+        if let Some(item) = self.punch.get_mut(&id) {
+            item.signature = Some(signature);
+        }
+        Ok(())
+    }
+
     /// Moves an item along. Deciding a check as passed does not close its
     /// linked item: the person verifies it. Reopening a `Fixed` item does
     /// not bring the failure back; the check stays `Pending` until decided
@@ -257,6 +274,10 @@ impl CommissioningStore {
             .get_mut(&id)
             .ok_or(CommissioningError::NoPunchItem(id))?;
         item.state = state;
+        if state != PunchState::Verified {
+            // A signature vouches for a verification, not for a reopened item.
+            item.signature = None;
+        }
         if state.is_closed() {
             item.closed_by = Some(by.to_owned());
             item.closed_at = Some(at.to_owned());
