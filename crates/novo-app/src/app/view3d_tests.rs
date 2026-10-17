@@ -14,7 +14,7 @@ use crate::actions::Action;
 
 /// A project with the motor starter, two of its devices on a plate with a
 /// duct, and a door that opens to 100 degrees.
-fn drive_with_cabinet(dir: &std::path::Path) -> Drive {
+pub(super) fn drive_with_cabinet(dir: &std::path::Path) -> Drive {
     let mut d = Drive::new(&dir.join("untitled"));
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);
@@ -937,6 +937,23 @@ fn show_in_with_nothing_selected_says_so_and_stays() {
     d.app.run_command(&ctx, "nav.show_schematic", None);
     d.frame();
     assert_eq!(d.app.workspace(), Workspace::View3d);
+}
+
+#[test]
+fn the_trackpad_choice_in_the_settings_reaches_the_3d_view() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.3d", None);
+    d.frame();
+    assert!(
+        !d.app.view3d.view.state.display.trackpad_pans,
+        "off at first"
+    );
+    d.app.settings.trackpad_pans = true;
+    d.frame();
+    assert!(d.app.view3d.view.state.display.trackpad_pans);
+    assert!(d.app.settings.trackpad_pans, "the frame keeps the choice");
 }
 
 #[test]

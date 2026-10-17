@@ -114,9 +114,20 @@ impl NovoApp {
                         }
                     });
                 ui.add_space(6.0);
-                if novo_theme::widgets::ghost_button(ui, "Reset").clicked() {
-                    reset = true;
-                }
+                let default = Placement {
+                    dx: DEFAULT_OFFSET_MM,
+                    dy: DEFAULT_OFFSET_MM,
+                    percent: 100.0,
+                };
+                ui.horizontal(|ui| {
+                    reset = super::dialog_ui::confirm_button(
+                        ui,
+                        "reset_background",
+                        "Reset",
+                        "Move the background back to 10 mm, 10 mm, 100 %?",
+                        shown != default,
+                    );
+                });
             });
         if reset {
             shown = Placement {

@@ -79,6 +79,9 @@ pub struct Settings {
     pub whats_new_seen: String,
     /// Camera positions saved in the 3D view, per user, not in the project.
     pub camera_views: Vec<CameraBookmark>,
+    /// A swipe in wheel lines pans the 3D view instead of zooming (Windows
+    /// touchpads); the 3D toolbar's Layers > Trackpad pans.
+    pub trackpad_pans: bool,
     /// What the person last chose in File > Export drawings > Export PDF...
     /// (`app/pdf_options.rs`): a per-user preference, kept in the settings
     /// file under the user's profile.
@@ -288,6 +291,18 @@ mod tests {
         let s: Settings = ron::from_str(old).unwrap();
         assert_eq!(s.recent_actions, vec!["view.fit"]);
         assert_eq!(s.outline_pinned, None);
+    }
+
+    #[test]
+    fn the_trackpad_choice_is_off_in_old_settings_and_survives_a_round_trip() {
+        let old: Settings = ron::from_str("(recent_actions: [\"view.fit\"])").unwrap();
+        assert!(!old.trackpad_pans);
+        let on = Settings {
+            trackpad_pans: true,
+            ..Settings::default()
+        };
+        let back: Settings = ron::from_str(&ron::to_string(&on).unwrap()).unwrap();
+        assert!(back.trackpad_pans);
     }
 
     #[test]

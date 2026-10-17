@@ -297,8 +297,15 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
                     });
                     state.rules = rules;
                 }
-                if novo_theme::widgets::ghost_button(ui, "Standard rules").clicked() {
-                    state.text = RuleSet::standard().to_text();
+                let standard = RuleSet::standard().to_text();
+                if super::dialog_ui::confirm_button(
+                    ui,
+                    "standard_rules",
+                    "Standard rules",
+                    "Replace the text above with the standard rules?",
+                    state.text != standard,
+                ) {
+                    state.text = standard;
                     state.notice = None;
                 }
             });

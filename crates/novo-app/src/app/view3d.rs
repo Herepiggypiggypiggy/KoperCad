@@ -55,6 +55,8 @@ pub(crate) struct View3dMode {
     /// project revision, picked surface, shown).
     surfaces_shown: Option<(StructureId, u64, Option<String>, bool)>,
     pub(super) surface_panes: Vec<novo_view3d::Overlay>,
+    /// A device on a wall, roof, floor or extra plate being dragged.
+    pub(super) surface_drag: Option<super::view3d_surface_devices::SurfaceDrag>,
     library: Arc<MeshLibrary>,
     /// The enclosure and project revision the scene was built for.
     pub(super) built: Option<(StructureId, u64, Arc<Scene>)>,
@@ -121,6 +123,7 @@ impl Default for View3dMode {
             ghost_shown: Vec::new(),
             surfaces_shown: None,
             surface_panes: Vec::new(),
+            surface_drag: None,
             library: Arc::new(MeshLibrary::new()),
             built: None,
             pending: None,
@@ -284,7 +287,19 @@ impl NovoApp {
                 shell: model::shell(project, id),
                 wires,
             };
-            if let Some(built) = model::scene(project, id, &options) {
+            if let Some(mut built) = model::scene(project, id, &options) {
+                // Devices on walls, roof, floor and extra plates.
+                if let (Some(sum), Some(lay)) = (
+                    super::cabinet_surfaces::summarize(project, id),
+                    load(project, id),
+                ) {
+                    super::view3d_surface_devices::push(
+                        &mut built,
+                        &sum,
+                        &lay,
+                        &model::inputs(project, id),
+                    );
+                }
                 // Items deleted from the project are no longer hidden.
                 mode.controls.hidden.retain(|i| built.get(*i).is_some());
                 // The renderer redraws on a new scene revision only: `refresh`
@@ -396,6 +411,13 @@ impl NovoApp {
                     l.clash,
                 )
             })
+            .chain(mode.surface_drag.iter().map(|d| {
+                let r = d.rect;
+                (
+                    [r.x, r.y, r.w, r.h].map(|v| (v * 10.0).round() as i64),
+                    false,
+                )
+            }))
             .collect();
         let mut ghost_changed = mode.ghost_shown != ghost_key;
         mode.ghost_shown = ghost_key;
@@ -436,6 +458,14 @@ impl NovoApp {
                     .unwrap_or(10.0);
                 view3d_move::ghost(l, &scene.frame, top)
             })
+            .chain(
+                mode.surface_drag
+                    .iter()
+                    .zip(super::cabinet_surfaces::summarize(project, id))
+                    .flat_map(|(d, sum)| {
+                        super::view3d_surface_devices::ghost(&sum, d, scene.frame)
+                    }),
+            )
             .collect();
         let mut heat_changed = false;
         if !mode.probe.on {
@@ -509,6 +539,8 @@ impl NovoApp {
         }
         mode.view.state.display.ssao = mode.controls.ssao;
         mode.view.state.display.dimensions = mode.controls.dimensions;
+        // The choice lives in the settings, so it survives a restart.
+        mode.controls.trackpad_pans = self.settings.trackpad_pans;
         mode.view.state.display.trackpad_pans = mode.controls.trackpad_pans;
         mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
@@ -526,6 +558,7 @@ impl NovoApp {
             &mut mode.view.state.section,
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
         );
+        self.settings.trackpad_pans = mode.controls.trackpad_pans;
         if let Some(command) = asked {
             self.wb.queued.push(command);
         }
@@ -808,7 +841,27 @@ impl NovoApp {
                     state.selection.insert(d.id);
                 }
             }
-            let (_, edit) = mode.mv.step(&stored, &state.selection, out.item_drag);
+            // A device on a wall, roof, floor or extra plate moves on its own
+            // surface; the plate's rules do not apply to it.
+            let surface_drag = out.item_drag.as_ref().and_then(|d| {
+                let sum = super::cabinet_surfaces::summarize(project, id)?;
+                super::view3d_surface_devices::landing(
+                    &sum,
+                    &stored,
+                    &model::inputs(project, id),
+                    d,
+                )
+            });
+            match &surface_drag {
+                Some(land) if land.done => edits.push(view3d_move::Edit::Device(
+                    view3d_move::DeviceEdit::Drop(land.device, land.at.0, land.at.1),
+                )),
+                Some(_) => ui.ctx().request_repaint(),
+                None => {}
+            }
+            let plate_drag = out.item_drag.filter(|_| surface_drag.is_none());
+            mode.surface_drag = surface_drag.filter(|l| !l.done);
+            let (_, edit) = mode.mv.step(&stored, &state.selection, plate_drag);
             edits.extend(edit);
             if mode.mv.dragging() {
                 ui.ctx().request_repaint();

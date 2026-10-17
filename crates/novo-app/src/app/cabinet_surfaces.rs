@@ -31,6 +31,8 @@ pub(super) struct SurfaceRow {
     pub origin: [f64; 3],
     pub u: [f64; 3],
     pub v: [f64; 3],
+    /// Points into the enclosure, away from the surface.
+    pub normal: [f64; 3],
 }
 
 impl SurfaceRow {
@@ -194,6 +196,7 @@ pub(super) fn summarize(project: &Project, structure: StructureId) -> Option<Sur
             origin: s.origin,
             u: s.u,
             v: s.v,
+            normal: s.normal,
         })
         .collect();
     Some(SurfaceSummary {
@@ -201,6 +204,17 @@ pub(super) fn summarize(project: &Project, structure: StructureId) -> Option<Sur
         problems,
         assigned,
     })
+}
+
+impl super::cabinet::CabinetState {
+    /// Shows `surface` (`None` is the mounting plate). What was selected
+    /// belongs to the surface that was shown, so the selection is cleared.
+    pub(super) fn pick_surface(&mut self, surface: Option<String>) {
+        if surface != self.surface {
+            self.view.selection.clear();
+        }
+        self.surface = surface;
+    }
 }
 
 impl super::NovoApp {
