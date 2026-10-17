@@ -26,3 +26,5 @@ Slice 9: devices on walls, roof, floor and extra plates are drawn in 3D as overl
 
 Slice 11: surface devices are pickable and draggable in 3D on their own surface. Not yet: arrow-key nudge, rail-like snapping and clash checks on non-plate surfaces; multi-select moves of mixed plate and surface devices move only the plate ones.
 Slice 10: size card in the Inspector for the shown surface (door, walls, roof, floor, extra plates, profiles). Next: route other direct writers of cabinet.surface through pick_surface (R5 note); pick and drag surface devices in 3D.
+
+Slice 12: grid snap, clash ghost and arrow-key nudge for surface devices in 3D. No rail snapping on other surfaces (rails are plate-only in the model). Next: Position box for surface devices; route other cabinet.surface writers through pick_surface.

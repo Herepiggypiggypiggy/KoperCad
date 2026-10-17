@@ -95,6 +95,7 @@ pub(super) fn surface_layout(
 ) -> Option<CabinetLayout> {
     let row = summary.row(name)?;
     let mut layout = CabinetLayout::new(row.plate.clone());
+    layout.grid = stored.grid;
     let on_it = |id: &u64| summary.assigned.get(id).is_some_and(|n| n == name);
     layout.placements = stored
         .placements

@@ -7,6 +7,8 @@
 //! novo-view3d and are not repeated here. Reach it: put a device on a surface
 //! (Cabinet, Inspector, On surface), open the 3D view, drag it with the mouse.
 
+use std::collections::BTreeSet;
+
 use glam::{Mat3, Quat, Vec3};
 use novo_layout::Rect;
 use novo_layout::state::CabinetLayout;
@@ -17,11 +19,16 @@ use novo_view3d::scene::{Item, ItemId, ItemKind, Mark, Pose, Scene, Shape};
 use novo_view3d::widget::ItemDrag;
 use novo_view3d::{Overlay, OverlayLines, OverlayMesh, PlateFrame};
 
-use super::cabinet_surfaces::{SurfaceRow, SurfaceSummary};
+use super::cabinet_surfaces::{SurfaceRow, SurfaceSummary, surface_layout};
+use super::view3d_move::Edit;
+use super::view3d_nudge::{Step, step_along};
 
-/// Ghost colours (sRGB) for the place a dragged device would land.
-const GHOST: [u8; 4] = [232, 160, 96, 110];
-const GHOST_EDGE: [u8; 4] = [232, 160, 96, 255];
+/// Ghost colours (sRGB) for the place a dragged device would land: blue like
+/// the plate's, red where the Cabinet would flag the landing.
+const GHOST: [u8; 4] = [90, 160, 255, 80];
+const GHOST_EDGE: [u8; 4] = [120, 180, 255, 255];
+const GHOST_CLASH: [u8; 4] = [230, 70, 70, 90];
+const GHOST_CLASH_EDGE: [u8; 4] = [240, 90, 90, 255];
 
 /// The surface a placement is on, when it is not the plate or the door
 /// (those are built by novo-view3d).
@@ -127,6 +134,9 @@ pub(super) struct SurfaceDrag {
     pub rect: Rect,
     pub surface: String,
     pub depth: f64,
+    /// The landing overlaps another device on the surface, leaves it or crowds
+    /// a neighbour: the same rules the Cabinet flags on the plate.
+    pub clash: bool,
     /// The button was released this frame.
     pub done: bool,
 }
@@ -146,17 +156,10 @@ pub(super) fn landing(
     let row = surface_of(summary, drag.id.raw)?;
     let p = stored.placements.iter().find(|p| p.id == drag.id.raw)?;
     let fp = p.footprint();
-    let usable = row.plate.usable();
-    let clamp = |v: f64, lo: f64, hi: f64| v.min(hi.max(lo)).max(lo);
-    let x = clamp(
-        (fp.x + drag.delta.0).round(),
-        usable.x,
-        usable.right() - fp.w,
-    );
-    let y = clamp(
-        (fp.y + drag.delta.1).round(),
-        usable.y,
-        usable.bottom() - fp.h,
+    let (x, y) = keep_inside(
+        row,
+        stored.snapped(fp.x + drag.delta.0, fp.y + drag.delta.1),
+        fp,
     );
     let depth = inputs
         .depths
@@ -175,7 +178,83 @@ pub(super) fn landing(
         },
         surface: row.name.clone(),
         depth,
+        clash: clashes(summary, stored, row, p.id, (x, y)),
         done: drag.done,
+    })
+}
+
+/// The corner `at` kept inside the usable area of `row` for a footprint of
+/// the size of `fp`, so a drag or a nudge cannot throw a device off it.
+fn keep_inside(row: &SurfaceRow, at: (f64, f64), fp: Rect) -> (f64, f64) {
+    let usable = row.plate.usable();
+    let clamp = |v: f64, lo: f64, hi: f64| v.min(hi.max(lo)).max(lo);
+    (
+        clamp(at.0, usable.x, usable.right() - fp.w),
+        clamp(at.1, usable.y, usable.bottom() - fp.h),
+    )
+}
+
+/// Whether `device` at `at` on `row` breaks a rule the Cabinet flags: it
+/// overlaps a device of the same surface, leaves the surface or crowds a
+/// neighbour. Rails belong to the mounting plate, so nothing snaps here.
+fn clashes(
+    summary: &SurfaceSummary,
+    stored: &CabinetLayout,
+    row: &SurfaceRow,
+    device: u64,
+    at: (f64, f64),
+) -> bool {
+    let Some(mut moved) = surface_layout(stored, summary, &row.name) else {
+        return false;
+    };
+    let Some(p) = moved.placements.iter_mut().find(|p| p.id == device) else {
+        return false;
+    };
+    (p.x, p.y) = at;
+    let report = moved.report();
+    report
+        .collisions
+        .iter()
+        .any(|(a, b)| *a == device || *b == device)
+        || report.outside.contains(&device)
+        || report
+            .too_close
+            .iter()
+            .any(|(a, b, _)| *a == device || *b == device)
+}
+
+/// The selected devices on surfaces other than the plate and the door moved
+/// one step in `dir` (x right, y down) on their surfaces, as one group edit
+/// with the grid step the plate uses. `None` when none is selected.
+pub(super) fn nudge(
+    summary: &SurfaceSummary,
+    stored: &CabinetLayout,
+    selection: &BTreeSet<ItemId>,
+    dir: (i32, i32),
+    step: Step,
+) -> Option<Edit> {
+    if dir == (0, 0) {
+        return None;
+    }
+    let mut devices = Vec::new();
+    for item in selection.iter().filter(|i| i.kind == ItemKind::Device) {
+        let (Some(row), Some(p)) = (
+            surface_of(summary, item.raw),
+            stored.placements.iter().find(|p| p.id == item.raw),
+        ) else {
+            continue;
+        };
+        let fp = p.footprint();
+        let to = (
+            step_along(stored.grid, fp.x, dir.0, step),
+            step_along(stored.grid, fp.y, dir.1, step),
+        );
+        let (x, y) = keep_inside(row, to, fp);
+        devices.push((item.raw, x, y));
+    }
+    (!devices.is_empty()).then_some(Edit::Group {
+        devices,
+        rails: Vec::new(),
     })
 }
 
@@ -187,6 +266,11 @@ pub(super) fn ghost(
 ) -> Vec<Overlay> {
     let (Some(plate), Some(row)) = (summary.row(MAIN_PLATE), summary.row(&land.surface)) else {
         return Vec::new();
+    };
+    let (fill, edge) = if land.clash {
+        (GHOST_CLASH, GHOST_CLASH_EDGE)
+    } else {
+        (GHOST, GHOST_EDGE)
     };
     let r = land.rect;
     let corner = |x: f64, y: f64, lift: f64| world(&frame, plate.origin, at(row, x, y, lift));
@@ -206,7 +290,7 @@ pub(super) fn ghost(
         ..OverlayMesh::default()
     };
     mesh.positions.extend(c);
-    mesh.colors.extend([GHOST; 8]);
+    mesh.colors.extend([fill; 8]);
     for [a, b, d, e] in [
         [0u32, 1, 2, 3],
         [4, 5, 6, 7],
@@ -233,8 +317,30 @@ pub(super) fn ghost(
         lines.starts.push(lines.positions.len() as u32);
         for &i in path {
             lines.positions.push(c[i]);
-            lines.colors.push(GHOST_EDGE);
+            lines.colors.push(edge);
         }
     }
     vec![Overlay::Mesh(mesh), Overlay::Lines(lines)]
+}
+
+/// Two group edits as one, so a selection of plate and surface devices moves
+/// in one undo step.
+pub(super) fn merge(a: Option<Edit>, b: Option<Edit>) -> Option<Edit> {
+    match (a, b) {
+        (
+            Some(Edit::Group {
+                mut devices,
+                mut rails,
+            }),
+            Some(Edit::Group {
+                devices: d2,
+                rails: r2,
+            }),
+        ) => {
+            devices.extend(d2);
+            rails.extend(r2);
+            Some(Edit::Group { devices, rails })
+        }
+        (a, b) => a.or(b),
+    }
 }
