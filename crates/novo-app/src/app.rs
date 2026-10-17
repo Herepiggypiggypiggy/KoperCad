@@ -36,6 +36,9 @@ mod commissioning_redlines;
 mod commissioning_signature;
 #[cfg(test)]
 mod commissioning_signature_tests;
+mod commissioning_viewer;
+#[cfg(test)]
+mod commissioning_viewer_tests;
 mod compare;
 mod designer;
 mod device_renumber;
