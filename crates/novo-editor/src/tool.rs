@@ -2970,20 +2970,27 @@ impl Editor {
                             Some(Target::Endpoint(e, _)) => endpoint_direction(project, e),
                             _ => None,
                         };
-                        let mut corners = w.corners.clone();
-                        if w.flip {
-                            let last = corners.last().copied().unwrap_or(a);
-                            corners.extend(elbow(last, cursor, true));
-                        }
+                        // The elbow R flips is built toward the point the wire
+                        // ends at: the target's position, as the commit does.
+                        let corners_toward = |to_point: Point| {
+                            let mut corners = w.corners.clone();
+                            if w.flip {
+                                let last = corners.last().copied().unwrap_or(a);
+                                corners.extend(elbow(last, to_point, true));
+                            }
+                            corners
+                        };
                         // On a pin or wire the preview is the route the click
                         // would store, nudged clear of other wires as the
                         // commit does; elsewhere (or when refused) the plain one.
                         let planned = self.target.and_then(|end| {
+                            let corners = corners_toward(end.position());
                             edit::planned_bends(project, page, start, &corners, end)
                                 .ok()
                                 .map(|bends| (bends, end.position()))
                         });
                         let (bends, end_at) = planned.unwrap_or_else(|| {
+                            let corners = corners_toward(cursor);
                             (route_through(a, from, &corners, cursor, to), cursor)
                         });
                         preview.wire.extend(bends);
