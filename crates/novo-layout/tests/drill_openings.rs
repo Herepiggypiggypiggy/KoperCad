@@ -49,8 +49,9 @@ fn an_opening_on_a_wall_or_extra_plate_gets_its_own_rows() {
     assert!(t.problems.is_empty(), "{:?}", t.problems);
     let (_, left) = t.on(&Surface::Named("left".into()));
     assert_eq!(left.len(), 2);
-    assert_eq!((left[0].no, left[0].x, left[0].y), (1, 120.0, 200.0));
-    assert_eq!(left[1].shape, CutoutShape::Round { dia: 20.0 });
+    assert_eq!((left[0].no, left[0].x, left[0].y), (1, 50.0, 60.0));
+    assert_eq!(left[0].shape, CutoutShape::Round { dia: 20.0 });
+    assert_eq!((left[1].no, left[1].x, left[1].y), (2, 120.0, 200.0));
     let (_, extra) = t.on(&Surface::Named("plate2".into()));
     assert_eq!(extra.len(), 1);
     let (docs, _) = novo_layout::plate_drawing::documents("t", &l, &[]);
