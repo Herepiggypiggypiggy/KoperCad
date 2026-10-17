@@ -33,35 +33,8 @@ pub const FIXED_SECTION_TITLES: &[&str] = &[
 pub const FIXED_SECTION_TITLE_PATTERNS: &[&str] =
     &["What to pull · {estimated} of {total} lengths are estimates (~): measure on the plate"];
 
-/// Whether `text` fills `pattern`: its literal parts appear in order, the
-/// first at the start and the last at the end, with something in between.
 fn matches_pattern(pattern: &str, text: &str) -> bool {
-    let mut literals: Vec<&str> = Vec::new();
-    let mut rest = pattern;
-    while let Some(i) = rest.find('{') {
-        literals.push(&rest[..i]);
-        match rest[i..].find('}') {
-            Some(end) => rest = &rest[i + end + 1..],
-            None => return false,
-        }
-    }
-    literals.push(rest);
-    let (first, last) = (literals[0], literals[literals.len() - 1]);
-    if literals.len() == 1 || first.len() + last.len() >= text.len() {
-        return false;
-    }
-    if !text.starts_with(first) || !text.ends_with(last) {
-        return false;
-    }
-    let mut at = first.len();
-    let end = text.len() - last.len();
-    for lit in &literals[1..literals.len() - 1] {
-        match text[at..end].find(lit) {
-            Some(i) => at += i + lit.len(),
-            None => return false,
-        }
-    }
-    true
+    super::translator::fills(pattern, text)
 }
 
 /// Whether a section title is fixed program text: one of
@@ -83,6 +56,13 @@ pub const FIXED_CELL_TEXTS: &[&str] = &[
     "Cut DIN rail",
     "Cut Wiring duct",
     "Door",
+    "Floor",
+    "Left",
+    "Plate2",
+    "Plate3",
+    "Plate4",
+    "Right",
+    "Roof",
     "No enclosure has a mounting plate yet. Create a cabinet and set its plate on the Cabinet canvas.",
     "Blocking punch items",
     "Cross-section not set: give the wire a size",
@@ -123,6 +103,7 @@ pub const FIXED_CELL_TEXTS: &[&str] = &[
 /// Fixed cell texts with project numbers or names filled in, as `{name}`
 /// patterns.
 pub const FIXED_CELL_PATTERNS: &[&str] = &[
+    "{mark} at {offset}",
     "Cut Wiring duct {w} x {h}",
     "Cut-out dia {d}",
     "Cut-out {w} x {h}",
