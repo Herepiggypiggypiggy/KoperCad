@@ -111,7 +111,7 @@ fn the_chimney_follows_the_stack_law_in_level_scaling_and_energy() {
         let case = format!("chimney {p} W, 8x16x8 cells");
         let err = report(&case, "flow vs ideal stack law m3/s", q, ideal(p));
         report(&case, "heat carried out by the air W", heat, p);
-        // measured -14.5 % on the coarse mesh; the ideal law over-predicts (plume, entry mixing)
+        // measured -14.5 % on the coarse mesh; the ideal law is an idealisation (fully mixed exhaust, no plume); grid dependence not yet bounded
         assert!(err.abs() < 0.18, "{case}: flow error {err}");
         assert!((heat - p).abs() / p < 0.04, "{case}: energy {heat}");
         flows.push(q);

@@ -76,7 +76,7 @@ so the 20% test band is a guard, not an accuracy claim.
 
 ## Chimney: model, not exact
 
-The stack law assumes fully mixed exhaust and no plume, so it is an upper estimate rather than a reference solution. The solver sits 11 to 15% below it and approaches it as the mesh is refined; the exponent and the energy balance are what the law fixes exactly, and both match. Not a measurement of a real cabinet.
+The stack law is an idealisation (fully mixed exhaust, no plume), not a reference solution. The solver sits 11 to 15% below it and the finer mesh moves toward it (+4.3%), so the grid dependence is not yet bounded; the exponent and the energy balance are what the law fixes exactly, and both match. Not a measurement of a real cabinet.
 
 ## Caveats on single rows
 
