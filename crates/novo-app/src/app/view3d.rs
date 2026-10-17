@@ -519,6 +519,8 @@ impl NovoApp {
         }
         mode.view.state.display.ssao = mode.controls.ssao;
         mode.view.state.display.dimensions = mode.controls.dimensions;
+        // The choice lives in the settings, so it survives a restart.
+        mode.controls.trackpad_pans = self.settings.trackpad_pans;
         mode.view.state.display.trackpad_pans = mode.controls.trackpad_pans;
         mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
@@ -536,6 +538,7 @@ impl NovoApp {
             &mut mode.view.state.section,
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
         );
+        self.settings.trackpad_pans = mode.controls.trackpad_pans;
         if let Some(command) = asked {
             self.wb.queued.push(command);
         }

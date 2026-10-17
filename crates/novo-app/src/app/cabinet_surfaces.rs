@@ -206,6 +206,17 @@ pub(super) fn summarize(project: &Project, structure: StructureId) -> Option<Sur
     })
 }
 
+impl super::cabinet::CabinetState {
+    /// Shows `surface` (`None` is the mounting plate). What was selected
+    /// belongs to the surface that was shown, so the selection is cleared.
+    pub(super) fn pick_surface(&mut self, surface: Option<String>) {
+        if surface != self.surface {
+            self.view.selection.clear();
+        }
+        self.surface = surface;
+    }
+}
+
 impl super::NovoApp {
     /// `cabinet.surface`: opens the header's picker, or says why there is
     /// none when the shown cabinet has only its mounting plate.

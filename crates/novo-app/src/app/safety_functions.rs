@@ -99,9 +99,12 @@ pub(super) fn section(
     export: &mut bool,
 ) {
     widgets::section_label(ui, "Project safety functions");
-    ui.weak(format!(
-        "Bound to devices by tag; stored in the project ({FUNCTIONS_KEY}) and listed in Issues when the level is not met. Set {B10D_CYCLES} or {MTTFD_YEARS} on a device or its part to take the number from there."
-    ));
+    super::dialog_ui::hint(
+        ui,
+        &format!(
+            "Bound to devices by tag; stored in the project ({FUNCTIONS_KEY}) and listed in Issues when the level is not met. Set {B10D_CYCLES} or {MTTFD_YEARS} on a device or its part to take the number from there."
+        ),
+    );
     if novo_checks::safety::unreadable(project) && !state.dirty {
         ui.colored_label(
             crate::theme::ui_palette().error,
@@ -130,7 +133,7 @@ pub(super) fn section(
         v
     };
     let Some(f) = state.list.get_mut(state.selected) else {
-        ui.weak("No safety function yet.");
+        super::dialog_ui::hint(ui, "No safety function yet.");
         return;
     };
     let rating = rate(project, f);
@@ -141,7 +144,7 @@ pub(super) fn section(
         changed |= ui
             .add(egui::TextEdit::singleline(&mut f.name).desired_width(200.0))
             .changed();
-        if ui.small_button("Delete function").clicked() {
+        if ui.button("Delete function").clicked() {
             remove = true;
         }
     });
@@ -189,7 +192,7 @@ pub(super) fn section(
     ui.horizontal(|ui| {
         for role in [Role::Sensor, Role::Logic, Role::Actuator] {
             if ui
-                .small_button(format!("Add {}", role.label().to_lowercase()))
+                .button(format!("Add {}", role.label().to_lowercase()))
                 .clicked()
             {
                 f.blocks.push(Block::new(role, role.label()));
@@ -245,16 +248,17 @@ pub(super) fn section(
     state.dirty |= changed;
 }
 
+/// A choice among a few short values, as a segmented control.
 fn choice(ui: &mut egui::Ui, label: &str, value: &mut String, options: &[&str]) -> bool {
-    let mut changed = false;
-    ui.label(label);
-    for o in options {
-        if ui.selectable_label(value == o, *o).clicked() && value != o {
-            *value = (*o).to_owned();
-            changed = true;
-        }
+    if !label.is_empty() {
+        ui.label(label);
     }
-    changed
+    let mut index = options.iter().position(|o| value == o).unwrap_or(0);
+    if widgets::segmented(ui, &mut index, options) {
+        *value = options[index].to_owned();
+        return true;
+    }
+    false
 }
 
 fn block_ui(ui: &mut egui::Ui, index: usize, block: &mut Block, devices: &[String]) -> bool {
@@ -345,9 +349,9 @@ fn parts_ui(
                     )
                     .changed();
             } else {
-                ui.weak("from device");
+                super::dialog_ui::hint(ui, "from device");
             }
-            if ui.small_button("Remove").clicked() {
+            if ui.button("Remove").clicked() {
                 remove = Some(i);
             }
         });
@@ -356,7 +360,7 @@ fn parts_ui(
         list.remove(i);
         changed = true;
     }
-    if ui.small_button("Add part").clicked() {
+    if ui.button("Add part").clicked() {
         let n = list.len() + 1;
         list.push(PartRef::new(format!("Part {n}")));
         changed = true;
