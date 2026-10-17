@@ -18,6 +18,7 @@ impl NovoApp {
         let mut density = self.settings.xref_density();
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
+        let mut dock_labels = self.settings.dock_labels();
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
             ui.set_width(
                 novo_theme::dialog_width::MEDIUM
@@ -52,6 +53,17 @@ impl NovoApp {
                         "Compact fits more on a small screen; Touch has large controls for a tablet.",
                         &mut ui_density,
                         &densities,
+                    );
+                    choice(
+                        ui,
+                        "Words on the tool dock",
+                        "Auto shows a word beside each icon when the drawing has room. Hover always shows the name and key.",
+                        &mut dock_labels,
+                        &[
+                            (crate::settings::DockLabels::Auto, "Auto"),
+                            (crate::settings::DockLabels::Always, "Always"),
+                            (crate::settings::DockLabels::Never, "Icons only"),
+                        ],
                     );
                     section(ui, "Connections", false);
                     choice(
@@ -128,6 +140,7 @@ impl NovoApp {
         }
         self.settings.appearance_theme = theme.id().into();
         self.settings.appearance_density = ui_density.id().into();
+        self.settings.set_dock_labels(dock_labels);
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
         }

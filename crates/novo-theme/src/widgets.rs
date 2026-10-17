@@ -302,6 +302,58 @@ pub fn tool_button(ui: &mut Ui, icon: &str, active: bool, tooltip: &str) -> Resp
     response
 }
 
+/// A dock button with a short text label beside its icon, for people who
+/// read words faster than pictures. Same look and active bar as
+/// [`tool_button`].
+pub fn tool_button_labeled(
+    ui: &mut Ui,
+    icon: &str,
+    label: &str,
+    active: bool,
+    tooltip: &str,
+) -> Response {
+    let p = Palette::of(ui);
+    let color = if active {
+        p.accent_hover
+    } else {
+        p.text_secondary
+    };
+    let mut job = egui::text::LayoutJob::default();
+    job.append(
+        icon,
+        0.0,
+        egui::TextFormat::simple(
+            egui::FontId::new(icon_size::BUTTON, egui::FontFamily::Proportional),
+            color,
+        ),
+    );
+    job.append(
+        label,
+        space::S,
+        egui::TextFormat::simple(
+            egui::TextStyle::Button.resolve(ui.style()),
+            if active { p.text_primary } else { color },
+        ),
+    );
+    let side = control_height(ui) + 4.0;
+    let response = ui
+        .add(
+            Button::new(job)
+                .frame(false)
+                .min_size(Vec2::new(side, side)),
+        )
+        .on_hover_text(tooltip);
+    if active {
+        let r = response.rect;
+        let bar = Rect::from_center_size(
+            egui::pos2(r.center().x, r.bottom() - 1.0),
+            Vec2::new(12.0, 2.0),
+        );
+        ui.painter().rect_filled(bar, 1, p.accent);
+    }
+    response
+}
+
 /// One option of a segmented switch: quiet text, the current one lifted
 /// onto a control fill.
 pub fn segment(ui: &mut Ui, text: &str, current: bool) -> Response {
