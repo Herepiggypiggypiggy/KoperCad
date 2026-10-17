@@ -1,0 +1,1 @@
+- 2026-10-16: built on main after #768; screenshots at both sizes.

@@ -64,7 +64,7 @@ Fix a step, then regenerate to shrink the list.
 - drawing-standard/pick-nfpa: `NFPA 79 / ANSI Y32.2`
 - drawing-standard/switch-symbols: `Switch placed symbols`
 - dxf-and-backgrounds/background: `File > Import > Import DXF as background`
-- dxf-and-backgrounds/export-all: `File > Export > Export all pages as DXF`
+- dxf-and-backgrounds/export-all: `File > Export drawings > Export all pages as DXF`
 - dxf-and-backgrounds/export-page: `File`
 - dxf-and-backgrounds/remove: `File > Import > Remove the DXF background`
 - enclosure-door-and-depth/apply-defaults: `Apply` (write {ui:cabinet.door.apply})
@@ -92,7 +92,7 @@ Fix a step, then regenerate to shrink the list.
 - parts-library/see-gap: `Check`
 - parts-library/see-gap: `Problems` (write {ui:cabinet.problems})
 - parts-library/see-gap: `problems` (write {ui:cabinet.problems})
-- pdf-export/export: `File > Export > Export PDF`
+- pdf-export/export: `File > Export drawings > Export PDF`
 - pdf-export/export: `File`
 - pdf-export/issue-open: `File`
 - pdf-export/issue-submit: `Issue A`
@@ -131,7 +131,7 @@ Fix a step, then regenerate to shrink the list.
 - view-3d/back: `Cabinet`
 - view-3d/view-cube: `Front`
 - wire-list-and-bom/bom-follows: `Reports`
-- wire-list-and-bom/export-bom: `File > Export > Export bill of materials`
+- wire-list-and-bom/export-bom: `File > Export reports > Export bill of materials`
 - wire-list-and-bom/export-bom: `File`
 - wire-list-and-bom/export-sheet: `File`
 - wire-list-and-bom/find-wire: `Filter rows (Ctrl+F)`

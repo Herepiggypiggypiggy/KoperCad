@@ -1424,3 +1424,26 @@ fn csv_import_maps_maker_headers_to_panel_keys() {
     assert_eq!(data.power_loss_w, Some(3.2));
     assert_eq!(data.mounting, Some(novo_parts::Mounting::Screw));
 }
+
+#[test]
+fn a_mixed_field_becomes_shared_after_one_edit_and_mixed_again_on_undo() {
+    let mut doc = Document::default();
+    let gate = motor_starter(&mut doc).unwrap();
+    let selection: Vec<AnyId> = vec![gate.s0.into(), gate.s1.into()];
+    let key = RowKey::Field("description".into());
+    let sheet = PropertySheet::build(doc.project(), &selection);
+    assert_eq!(sheet.row(&key).unwrap().value, RowValue::Mixed(2));
+    // A mixed field has no single value to show, only the count.
+    assert_eq!(sheet.row(&key).unwrap().value.same(), None);
+
+    let depth = doc.undo_depth();
+    let command = sheet.edit(doc.project(), &key, "Switch").unwrap();
+    run(&mut doc, command);
+    assert_eq!(doc.undo_depth(), depth + 1);
+    let sheet = PropertySheet::build(doc.project(), &selection);
+    assert_eq!(sheet.row(&key).unwrap().value.same(), Some("Switch"));
+
+    doc.undo().unwrap();
+    let sheet = PropertySheet::build(doc.project(), &selection);
+    assert_eq!(sheet.row(&key).unwrap().value, RowValue::Mixed(2));
+}

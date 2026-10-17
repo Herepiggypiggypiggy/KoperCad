@@ -8,6 +8,7 @@
 
 use std::collections::BTreeSet;
 
+use eframe::egui;
 use novo_core::StructureId;
 use novo_layout::Rect;
 use novo_layout::state::CabinetLayout;
@@ -63,7 +64,7 @@ impl Edit {
 }
 
 /// Where a dragged item would land.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(super) struct Landing {
     pub item: ItemId,
     /// The snapped top left (devices) or start (rails and ducts).
@@ -76,6 +77,12 @@ pub(super) struct Landing {
     /// The rail or duct the grabbed device lines up with (its edge snapped
     /// onto the rail's line).
     pub rail: Option<u64>,
+    /// A device riding on a moved rail or duct: shown with it, but no edit of
+    /// its own (the rail's move carries it).
+    pub follower: bool,
+    /// Devices a moved rail or duct would run into: they are not on it and
+    /// their footprint overlaps its new place.
+    pub blockers: Vec<u64>,
 }
 
 /// How close a device's top left gets to a rail's line before it snaps onto
@@ -98,12 +105,14 @@ struct Active {
 }
 
 /// The top left of a device, or the start of a rail or duct.
-fn origin(layout: &CabinetLayout, item: ItemId) -> Option<(f64, f64)> {
+pub(super) fn origin(layout: &CabinetLayout, item: ItemId) -> Option<(f64, f64)> {
     match item.kind {
+        // A device on the door or another surface is not on the plate the
+        // drag works on; move it where its surface is shown.
         ItemKind::Device => layout
             .placements
             .iter()
-            .find(|p| p.id == item.raw)
+            .find(|p| p.id == item.raw && !layout.off_plate.contains_key(&p.id))
             .map(|p| (p.x, p.y)),
         ItemKind::Rail => layout
             .rails
@@ -120,7 +129,7 @@ fn origin(layout: &CabinetLayout, item: ItemId) -> Option<(f64, f64)> {
 }
 
 /// The plate area an item covers when its origin is at `at`.
-fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Option<Rect> {
+pub(super) fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Option<Rect> {
     Some(match item.kind {
         ItemKind::Device => {
             let f = layout
@@ -165,7 +174,11 @@ fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Option<Rect> {
 /// A device's top left pulled onto a rail or duct line it is next to: a
 /// horizontal one sets the top, a vertical one the left. The snap only
 /// applies along the rail's run, so a device never jumps to a far rail.
-fn rail_snap(layout: &CabinetLayout, device: u64, at: (f64, f64)) -> ((f64, f64), Option<u64>) {
+pub(super) fn rail_snap(
+    layout: &CabinetLayout,
+    device: u64,
+    at: (f64, f64),
+) -> ((f64, f64), Option<u64>) {
     let Some(p) = layout.placements.iter().find(|p| p.id == device) else {
         return (at, None);
     };
@@ -218,17 +231,61 @@ fn landings(
     };
     let shift = (target.0 - from.0, target.1 - from.1);
     let mut moved = layout.clone();
-    let mut out = Vec::new();
+    let mut out: Vec<(ItemId, (f64, f64), bool)> = Vec::new();
     for (item, start) in members {
         let at = (start.0 + shift.0, start.1 + shift.1);
-        if item.kind == ItemKind::Device {
-            moved.move_to(item.raw, at.0, at.1);
-            // `move_to` snaps to the grid; keep the exact (rail) position.
-            if let Some(p) = moved.placements.iter_mut().find(|p| p.id == item.raw) {
-                (p.x, p.y) = at;
+        match item.kind {
+            ItemKind::Device => {
+                moved.move_to(item.raw, at.0, at.1);
+                // `move_to` snaps to the grid; keep the exact (rail) position.
+                if let Some(p) = moved.placements.iter_mut().find(|p| p.id == item.raw) {
+                    (p.x, p.y) = at;
+                }
             }
+            ItemKind::Rail => {
+                if let Some(r) = moved.rails.iter_mut().find(|r| r.id == item.raw) {
+                    (r.x, r.y) = at;
+                }
+            }
+            ItemKind::Duct => {
+                if let Some(d) = moved.ducts.iter_mut().find(|d| d.id == item.raw) {
+                    (d.x, d.y) = at;
+                }
+            }
+            _ => {}
         }
-        out.push((*item, at));
+        out.push((*item, at, false));
+    }
+    // Devices mounted on a moved rail or duct ride along (the model's
+    // `MoveRail` carries them), unless they are moved on their own.
+    let carried: Vec<(u64, (f64, f64))> = members
+        .iter()
+        .filter(|(i, _)| matches!(i.kind, ItemKind::Rail | ItemKind::Duct))
+        .map(|(i, o)| (i.raw, shift_of(&out, *i, *o)))
+        .collect();
+    for p in &layout.placements {
+        let Some(rail) = p.rail else { continue };
+        let Some((_, d)) = carried.iter().find(|(r, _)| *r == rail) else {
+            continue;
+        };
+        if members
+            .iter()
+            .any(|(i, _)| i.kind == ItemKind::Device && i.raw == p.id)
+        {
+            continue;
+        }
+        let at = (p.x + d.0, p.y + d.1);
+        if let Some(m) = moved.placements.iter_mut().find(|m| m.id == p.id) {
+            (m.x, m.y) = at;
+        }
+        out.push((
+            ItemId {
+                kind: ItemKind::Device,
+                raw: p.id,
+            },
+            at,
+            true,
+        ));
     }
     let report = moved.report();
     let involved = |id: u64| {
@@ -239,27 +296,53 @@ fn landings(
                 .iter()
                 .any(|(a, b, _)| *a == id || *b == id)
     };
-    out.into_iter()
-        .map(|(item, at)| {
-            let rect = area(layout, item, at)?;
+    let riding = |id: u64| {
+        out.iter()
+            .any(|(i, _, _)| i.kind == ItemKind::Device && i.raw == id)
+    };
+    let shaky_follower = out.iter().any(|(i, _, f)| *f && involved(i.raw));
+    out.iter()
+        .map(|(item, at, follower)| {
+            let rect = area(layout, *item, *at)?;
+            let mut blockers = Vec::new();
             let clash = match item.kind {
                 ItemKind::Device => involved(item.raw),
                 _ => {
+                    // Things not moving with it that sit where it lands.
+                    let on_it = |p: &novo_layout::Placement| p.rail == Some(item.raw);
+                    blockers = moved
+                        .placements
+                        .iter()
+                        .filter(|p| !on_it(p) && !riding(p.id))
+                        .filter(|p| p.footprint().overlaps(&rect))
+                        .map(|p| p.id)
+                        .collect();
                     rect.x < 0.0
                         || rect.y < 0.0
                         || rect.right() > layout.plate.width
                         || rect.bottom() > layout.plate.height
+                        || !blockers.is_empty()
+                        || shaky_follower
                 }
             };
             Some(Landing {
-                item,
-                at,
+                item: *item,
+                at: *at,
                 rect,
                 clash,
-                rail: (item == grabbed).then_some(rail).flatten(),
+                rail: (*item == grabbed).then_some(rail).flatten(),
+                follower: *follower,
+                blockers,
             })
         })
         .collect()
+}
+
+/// How far `item` has moved from `start` in a finished landing list.
+fn shift_of(out: &[(ItemId, (f64, f64), bool)], item: ItemId, start: (f64, f64)) -> (f64, f64) {
+    out.iter()
+        .find(|(i, _, _)| *i == item)
+        .map_or((0.0, 0.0), |(_, at, _)| (at.0 - start.0, at.1 - start.1))
 }
 
 /// Where `item` lands when the pointer has moved `delta` mm on the plate
@@ -317,6 +400,7 @@ impl MoveState {
         self.active = None;
         let moved: Vec<&Landing> = land
             .iter()
+            .filter(|l| !l.follower)
             .filter(|l| members.iter().any(|(i, o)| *i == l.item && *o != l.at))
             .collect();
         let edit = match moved.as_slice() {
@@ -421,6 +505,15 @@ impl NovoApp {
         };
         let moves_devices = !devices.is_empty();
         let done = self.cabinet_edit("Move selection", move |tx| {
+            // Rails first: the move carries what is mounted on them, then
+            // the devices of the group are set to their exact places.
+            for (id, x, y) in rails {
+                tx.execute(novo_core::Command::MoveRail {
+                    rail: novo_core::RailId::from(id),
+                    x,
+                    y,
+                })?;
+            }
             for (id, x, y) in devices {
                 let rotated = layout
                     .placements
@@ -429,13 +522,6 @@ impl NovoApp {
                     .is_some_and(|p| p.rotated);
                 novo_layout::model::place_device(tx, structure, id, x, y, rotated)?;
             }
-            for (id, x, y) in rails {
-                tx.execute(novo_core::Command::MoveRail {
-                    rail: novo_core::RailId::from(id),
-                    x,
-                    y,
-                })?;
-            }
             Ok(())
         });
         // A dragged group counts as a drop for the lessons, like a single one.
@@ -443,6 +529,64 @@ impl NovoApp {
             self.learn_signal("cabinet_dropped");
         }
     }
+}
+
+/// What a dragged rail or duct would run into, in words: the devices in its
+/// way by tag, or that it leaves the plate, or that a device riding on it
+/// would collide. `None` when nothing is wrong with it. Devices dragged on
+/// their own are only coloured red.
+pub(super) fn warning(
+    layout: &CabinetLayout,
+    landings: &[Landing],
+    tag_of: &dyn Fn(u64) -> String,
+) -> Option<String> {
+    let l = landings
+        .iter()
+        .find(|l| l.clash && matches!(l.item.kind, ItemKind::Rail | ItemKind::Duct))?;
+    let name = if l.item.kind == ItemKind::Rail {
+        "This rail"
+    } else {
+        "This duct"
+    };
+    if !l.blockers.is_empty() {
+        let mut tags: Vec<String> = l.blockers.iter().map(|d| tag_of(*d)).collect();
+        tags.sort();
+        tags.dedup();
+        let shown = tags
+            .iter()
+            .take(4)
+            .map(|t| if t.is_empty() { "a device" } else { t.as_str() })
+            .collect::<Vec<_>>()
+            .join(", ");
+        let more = tags.len().saturating_sub(4);
+        return Some(if more > 0 {
+            format!("{name} would run into {shown} and {more} more")
+        } else {
+            format!("{name} would run into {shown}")
+        });
+    }
+    let r = l.rect;
+    if r.x < 0.0 || r.y < 0.0 || r.right() > layout.plate.width || r.bottom() > layout.plate.height
+    {
+        return Some(format!("{name} would leave the plate"));
+    }
+    Some("A device on it would collide, leave the plate or crowd a neighbour".to_owned())
+}
+
+/// The warning as a small card by the pointer, red like the ghost.
+pub(super) fn show_warning(ctx: &egui::Context, text: &str) {
+    let Some(at) = ctx.input(|i| i.pointer.hover_pos()) else {
+        return;
+    };
+    egui::Area::new(egui::Id::new("view3d.move_warning"))
+        .order(egui::Order::Tooltip)
+        .fixed_pos(at + egui::vec2(16.0, 16.0))
+        .interactable(false)
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.label(egui::RichText::new(text).color(crate::theme::ui_palette().error));
+            });
+        });
 }
 
 /// The landing box as overlays: a translucent slab with an outline, blue

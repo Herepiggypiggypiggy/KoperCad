@@ -604,6 +604,10 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
             count_or(report.rail_overflows.len(), "yes", "rails overflow"),
         ));
         rows.push((
+            "Ducts are clear of rails and devices".into(),
+            count_or(report.duct_overlaps.len(), "yes", "overlaps"),
+        ));
+        rows.push((
             "Part sizes are known".into(),
             if report.guessed.is_empty() {
                 "yes".into()

@@ -12,7 +12,6 @@ use novo_learn::demo::{Frame, KeyCap};
 use novo_learn::lesson::PlaceArgs;
 use novo_learn::{Demo, Target};
 use novo_symbols::{Graphic, Library, Pack};
-use novo_theme::tokens;
 
 use super::NovoApp;
 
@@ -238,7 +237,7 @@ impl NovoApp {
             // The wire to draw, as a dashed ghost with a dark edge so it
             // shows on any page colour.
             let shadow = Stroke::new(5.0, Color32::from_black_alpha(140));
-            let stroke = Stroke::new(2.5, tokens::ACCENT_HOVER);
+            let stroke = Stroke::new(2.5, crate::theme::ui_palette().accent_hover);
             painter.extend(egui::Shape::dashed_line(&[a, b], shadow, 9.0, 6.0));
             painter.extend(egui::Shape::dashed_line(&[a, b], stroke, 9.0, 6.0));
         }
@@ -249,7 +248,9 @@ impl NovoApp {
             paint_marker(&painter, canvas, *at, *number, label, *is_end);
         }
         if let Some((at, k)) = scene.ripple {
-            let color = tokens::ACCENT_HOVER.gamma_multiply((1.0 - k).clamp(0.0, 1.0));
+            let color = crate::theme::ui_palette()
+                .accent_hover
+                .gamma_multiply((1.0 - k).clamp(0.0, 1.0));
             for ring in 0..scene.rings.max(1) {
                 let lag = (k - 0.35 * f32::from(ring)).clamp(0.0, 1.0);
                 if lag > 0.0 {
@@ -283,7 +284,7 @@ impl NovoApp {
                                     egui::RichText::new(format!("{typed}{caret}"))
                                         .monospace()
                                         .size(20.0)
-                                        .color(tokens::ACCENT_HOVER),
+                                        .color(crate::theme::ui_palette().accent_hover),
                                 );
                             }
                         });
@@ -308,7 +309,9 @@ impl NovoApp {
             .map(|v| v.canvas.viewport.zoom)
             .unwrap_or(1.0)
             .max(0.01);
-        let ink = tokens::ACCENT_HOVER.gamma_multiply(0.75 * alpha);
+        let ink = crate::theme::ui_palette()
+            .accent_hover
+            .gamma_multiply(0.75 * alpha);
         let stroke = Stroke::new(1.5, ink);
         let turn = |p: [f64; 2]| -> [f64; 2] {
             let (mut x, mut y) = (p[0], p[1]);
@@ -382,14 +385,14 @@ impl NovoApp {
 /// A key on a keyboard, pushed in while it is down.
 fn key_cap(ui: &mut egui::Ui, text: &str, down: bool) {
     let fill = if down {
-        tokens::ACCENT_SELECTION
+        crate::theme::ui_palette().accent_wash
     } else {
         ui.visuals().widgets.inactive.bg_fill
     };
     let lift = if down { 2.0 } else { 0.0 };
     egui::Frame::new()
         .fill(fill)
-        .stroke(Stroke::new(1.5, tokens::ACCENT_HOVER))
+        .stroke(Stroke::new(1.5, crate::theme::ui_palette().accent_hover))
         .corner_radius(6.0)
         .inner_margin(egui::Margin::symmetric(10, 6))
         .outer_margin(egui::Margin {
@@ -443,9 +446,9 @@ fn paint_marker(
     end: bool,
 ) {
     let colour = if end {
-        tokens::SUCCESS
+        crate::theme::ui_palette().success
     } else {
-        tokens::ACCENT_HOVER
+        crate::theme::ui_palette().accent_hover
     };
     painter.circle_stroke(at, 11.0, Stroke::new(4.5, Color32::from_black_alpha(140)));
     painter.circle_stroke(at, 11.0, Stroke::new(2.5, colour));
