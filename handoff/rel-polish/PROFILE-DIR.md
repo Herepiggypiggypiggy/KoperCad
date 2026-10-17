@@ -21,3 +21,6 @@ first use, per user, no admin rights. The flag may come before or after a projec
 where it reads these folders. The Downloads folder (parts import watch) is not moved.
 
 Replaces the rename-the-folders workaround in TESTER-NOTES.md once that note is updated.
+
+Also under the profile: the user's macros folder (`roaming\KoperCAD\Macros`, `novo_parts::user_macros_dir`)
+and the log and crash files (`local\KoperCAD\logs`, `diag.rs`; the flag is applied before logging starts).

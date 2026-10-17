@@ -90,6 +90,15 @@ fn command_line(
     (profile.filter(|p| !p.as_os_str().is_empty()), file)
 }
 
+/// Applies the `--profile-dir` flag. `main` calls it before [`diag::init`], so the
+/// log and crash files go to the profile folder too; [`run`] repeats it (the
+/// first call wins).
+pub fn apply_profile_flag() {
+    if let (Some(dir), _) = command_line(std::env::args_os().skip(1)) {
+        novo_storage::profile::set_root(dir);
+    }
+}
+
 /// Opens the main window and runs until it is closed.
 ///
 /// A project file passed as the first argument (as Windows does when a
