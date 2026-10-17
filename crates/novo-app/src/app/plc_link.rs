@@ -133,6 +133,14 @@ impl NovoApp {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
+        const MAX_BYTES: u64 = 32 * 1024 * 1024;
+        if std::fs::metadata(path).is_ok_and(|m| m.len() > MAX_BYTES) {
+            self.message(
+                Level::Error,
+                format!("{name} is larger than 32 MB, which is too big for a tag file"),
+            );
+            return false;
+        }
         let bytes = match std::fs::read(path) {
             Ok(b) => b,
             Err(e) => {
