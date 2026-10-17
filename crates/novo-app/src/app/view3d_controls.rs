@@ -106,6 +106,7 @@ pub(super) const BELOW: f32 = 140.0;
 
 /// The toolbar, top left of the view. `limit` is how far the enclosure's door
 /// opens, `None` when it has none.
+#[allow(clippy::too_many_arguments)] // one call site; a struct would only rename them
 pub(super) fn toolbar(
     ctx: &egui::Context,
     view: egui::Rect,
@@ -114,6 +115,7 @@ pub(super) fn toolbar(
     views: &[crate::settings::CameraBookmark],
     selected: bool,
     section: &mut Option<Section>,
+    bounds: &dyn Fn() -> Option<novo_view3d::Aabb>,
 ) -> (Changed, Option<&'static str>) {
     let mut changed = Changed::default();
     let mut command = None;
@@ -222,7 +224,7 @@ pub(super) fn toolbar(
             );
             changed.views = super::view3d_views::menu(ui, views);
             command = selection_menu(ui, selected, controls.hidden.len());
-            section_menu(ui, section);
+            section_menu(ui, section, bounds);
             toggle(
                 ui,
                 &mut controls.dimensions,
@@ -321,7 +323,11 @@ fn selection_menu(ui: &mut egui::Ui, selected: bool, hidden: usize) -> Option<&'
 
 /// The Section menu: a plane through the enclosure that cuts the front of
 /// the picture away so the inside shows. Only the picture is cut.
-fn section_menu(ui: &mut egui::Ui, section: &mut Option<Section>) {
+fn section_menu(
+    ui: &mut egui::Ui,
+    section: &mut Option<Section>,
+    bounds: &dyn Fn() -> Option<novo_view3d::Aabb>,
+) {
     let title = if section.is_some() {
         "✔ Section"
     } else {
@@ -355,8 +361,28 @@ fn section_menu(ui: &mut egui::Ui, section: &mut Option<Section>) {
             ui.checkbox(&mut s.flip, "Flip")
                 .on_hover_text("Hide the other side of the plane");
         });
-        ui.add(egui::Slider::new(&mut s.at, 0.0..=1.0).show_value(false))
-            .on_hover_text("Where the plane stands");
+        // In mm along the axis when the scene is at hand.
+        match bounds().filter(|b| !b.is_empty()) {
+            Some(b) => {
+                let (lo, hi) = s.range(&b);
+                let mut mm = s.position_mm(&b);
+                if ui
+                    .add(
+                        egui::Slider::new(&mut mm, lo..=hi)
+                            .suffix(" mm")
+                            .max_decimals(1),
+                    )
+                    .on_hover_text("Where the plane stands, in mm along the axis; type a value")
+                    .changed()
+                {
+                    s.set_position_mm(&b, mm);
+                }
+            }
+            None => {
+                ui.add(egui::Slider::new(&mut s.at, 0.0..=1.0).show_value(false))
+                    .on_hover_text("Where the plane stands");
+            }
+        }
     });
 }
 

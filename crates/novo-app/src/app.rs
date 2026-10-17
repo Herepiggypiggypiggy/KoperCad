@@ -31,6 +31,7 @@ mod changes;
 mod checks;
 mod clipboard;
 mod commissioning;
+mod commissioning_photos;
 mod commissioning_redlines;
 mod compare;
 mod designer;
@@ -197,6 +198,8 @@ mod cabinet_tests;
 mod changes_tests;
 #[cfg(test)]
 mod clipboard_tests;
+#[cfg(test)]
+mod commissioning_photos_tests;
 #[cfg(test)]
 mod commissioning_tests;
 #[cfg(test)]

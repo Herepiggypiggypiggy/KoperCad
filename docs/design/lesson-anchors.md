@@ -61,6 +61,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `commissioning.redlines`: {ui:commissioning.redlines} shows **Redlines tab**
 - `commissioning.redline_apply`: {ui:commissioning.redline_apply} shows **Apply button**
 - `commissioning.report`: {ui:commissioning.report} shows **Write PDF report item**
+- `commissioning.photo`: {ui:commissioning.photo} shows **Add photo button**
 - `commissioning.field_export`: {ui:commissioning.field_export} shows **Export field results item**
 - `commissioning.field_import`: {ui:commissioning.field_import} shows **Import field results item**
 - `commissioning.next_open`: {ui:commissioning.next_open} shows **Next open button**

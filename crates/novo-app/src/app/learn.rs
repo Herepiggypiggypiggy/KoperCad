@@ -108,6 +108,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "commissioning.redlines",
     "commissioning.redline_apply",
     "commissioning.report",
+    "commissioning.photo",
     "commissioning.field_export",
     "commissioning.field_import",
     "commissioning.next_open",

@@ -12,6 +12,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::check::{CheckKind, Target};
+use crate::photo::{self, is_photo_name};
 use crate::progress::targets;
 use crate::punch::{PunchItem, PunchState};
 use crate::redline::{Change, Redline, RedlineState};
@@ -46,6 +47,16 @@ pub struct FieldPackage {
     /// only numbers, so a file from another project is told apart by these:
     /// a decision is merged only where the label still matches.
     labels: Vec<TargetLabel>,
+    /// The pictures the punch items name, so photos taken on a tablet travel
+    /// in the same file. Text-encoded (base64).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    photos: Vec<PhotoFile>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct PhotoFile {
+    name: String,
+    data: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -70,6 +81,8 @@ pub struct MergeReport {
     pub punch_updated: usize,
     pub redlines_added: usize,
     pub redlines_updated: usize,
+    /// Photos attached to items that were already here.
+    pub photos_added: usize,
 }
 
 impl MergeReport {
@@ -80,6 +93,7 @@ impl MergeReport {
             + self.punch_updated
             + self.redlines_added
             + self.redlines_updated
+            + self.photos_added
             > 0
     }
 
@@ -93,6 +107,9 @@ impl MergeReport {
                 ", {} new and {} changed redlines",
                 self.redlines_added, self.redlines_updated
             ));
+        }
+        if self.photos_added > 0 {
+            text.push_str(&format!(", {} new photos", self.photos_added));
         }
         if self.checks_kept > 0 {
             text.push_str(&format!(
@@ -139,7 +156,41 @@ impl FieldPackage {
             exported_by: by.to_owned(),
             exported_at: at.to_owned(),
             store: store.clone(),
+            photos: Vec::new(),
         }
+    }
+
+    /// Packs the picture files the punch items name. `read` returns the
+    /// bytes of a photo by name (None when the file is missing); pictures
+    /// nobody names are left out.
+    pub fn attach_photos(&mut self, mut read: impl FnMut(&str) -> Option<Vec<u8>>) {
+        let mut names: Vec<&str> = self
+            .store
+            .punch_items()
+            .flat_map(|p| p.photos.iter().map(|ph| ph.name.as_str()))
+            .collect();
+        names.sort_unstable();
+        names.dedup();
+        self.photos = names
+            .into_iter()
+            .filter(|n| is_photo_name(n))
+            .filter_map(|n| {
+                read(n).map(|bytes| PhotoFile {
+                    name: n.to_owned(),
+                    data: photo::encode(&bytes),
+                })
+            })
+            .collect();
+    }
+
+    /// The picture files in the package as (name, bytes). Names that could
+    /// not have come from [`photo_name`] and unreadable data are dropped.
+    pub fn photo_files(&self) -> Vec<(String, Vec<u8>)> {
+        self.photos
+            .iter()
+            .filter(|p| is_photo_name(&p.name))
+            .filter_map(|p| photo::decode(&p.data).map(|b| (p.name.clone(), b)))
+            .collect()
     }
 
     pub fn to_json(&self) -> String {
@@ -229,11 +280,26 @@ impl FieldPackage {
                     report.punch_added += 1;
                 }
                 Some((id, have)) => {
-                    if rank(incoming) > rank(&have) {
-                        let mut item = incoming.clone();
-                        item.id = id;
-                        store.put_punch(item);
+                    let mut item = if rank(incoming) > rank(&have) {
                         report.punch_updated += 1;
+                        incoming.clone()
+                    } else {
+                        have.clone()
+                    };
+                    item.id = id;
+                    // Photos from both sides are kept.
+                    for photo in have.photos.iter().chain(&incoming.photos) {
+                        if !item.photos.iter().any(|p| p.name == photo.name) {
+                            item.photos.push(photo.clone());
+                        }
+                    }
+                    report.photos_added += incoming
+                        .photos
+                        .iter()
+                        .filter(|ph| !have.photos.iter().any(|p| p.name == ph.name))
+                        .count();
+                    if item != have {
+                        store.put_punch(item);
                     }
                 }
             }
