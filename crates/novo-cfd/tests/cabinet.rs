@@ -292,6 +292,11 @@ fn turbulence_is_an_option_that_shows_in_the_snapshot_and_the_statement() {
             "the statement must not claim the model is laminar"
         );
         assert!(snap.accuracy.headline.contains("Turbulence"));
+        // the eddy viscosity must not scale the device film conductance: the
+        // device runs within 15 % of its laminar rise (it fell by 35 % when it did)
+        let rise = |s: &CfdSnapshot| s.devices[0].surface_c - 25.0;
+        let ratio = rise(&snap) / rise(&laminar);
+        assert!((0.85..1.15).contains(&ratio), "{model:?}: {ratio}");
     }
 }
 

@@ -52,6 +52,8 @@ pub struct CabinetSolver {
     pub tuning: Tuning,
     /// Turbulence model; `Laminar` (the default) leaves the flow untouched.
     pub turbulence: TurbModel,
+    /// Second-order (limited) convection of the turbulence scalars.
+    pub second_order_turbulence: bool,
     /// Surface-to-surface radiation between devices, plate and walls.
     pub radiation: RadMode,
 }
@@ -82,6 +84,7 @@ impl CabinetSolver {
         CabinetSolver {
             tuning,
             turbulence: TurbModel::Laminar,
+            second_order_turbulence: false,
             radiation: RadMode::Auto,
         }
     }
@@ -97,6 +100,13 @@ impl CabinetSolver {
     /// recommended one; k-epsilon is the cross check).
     pub fn with_turbulence(mut self, model: TurbModel) -> CabinetSolver {
         self.turbulence = model;
+        self
+    }
+
+    /// Limited second-order convection for k and omega/epsilon instead of
+    /// first-order upwind.
+    pub fn with_second_order_turbulence(mut self, on: bool) -> CabinetSolver {
+        self.second_order_turbulence = on;
         self
     }
 }
@@ -145,7 +155,9 @@ impl Solver for CabinetSolver {
         if lvl.method == Method::Steady && steady_model && flow.nu_t.is_none() && !lvl.turbulent {
             let turb = (self.turbulence != TurbModel::Laminar).then(|| {
                 let h = flow.mesh.edges[1].last().copied().unwrap_or(1.0);
-                TurbState::for_flow(&flow, self.turbulence, 0.1, 0.02 * h)
+                let mut t = TurbState::for_flow(&flow, self.turbulence, 0.1, 0.02 * h);
+                t.cfg.second_order = self.second_order_turbulence;
+                t
             });
             return solve_steady(
                 &setup,
@@ -169,7 +181,9 @@ impl Solver for CabinetSolver {
         if self.turbulence != TurbModel::Laminar {
             let h = flow.mesh.edges[1].last().copied().unwrap_or(1.0);
             // natural convection in a cabinet moves at about 0.1 m/s
-            march.turb = Some(TurbState::for_flow(&flow, self.turbulence, 0.1, 0.02 * h));
+            let mut t = TurbState::for_flow(&flow, self.turbulence, 0.1, 0.02 * h);
+            t.cfg.second_order = self.second_order_turbulence;
+            march.turb = Some(t);
         }
         let model = self.turbulence;
         let finish = |mut s: Snap, march: &MarchState| -> Snap {

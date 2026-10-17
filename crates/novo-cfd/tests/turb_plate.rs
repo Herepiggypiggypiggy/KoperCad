@@ -52,6 +52,7 @@ fn run(model: TurbModel, height: f64, d_t: f64, nx: usize, ny: usize, sx: f64, s
     let flow = FlowSolver::new(mesh, cfg, 0.0);
     let u_scale = (9.81 * flow.cfg.beta * d_t * height).sqrt();
     let mut tf = TurbulentFlow::new(flow, model, 0.05 * u_scale, 0.02 * height);
+    tf.turb.cfg.second_order = std::env::var("TURB_2ND").is_ok();
     let mut steps = 0;
     let mut settled = 0;
     while steps < 120_000 && settled < 50 {

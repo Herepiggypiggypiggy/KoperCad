@@ -229,6 +229,9 @@ pub struct FlowSolver {
     sheet: Option<Sheet>,
     /// Faces between a device cell and an air cell that carry a film.
     film_faces: Vec<FilmFace>,
+    /// Faces (keyed like `k_face`) whose conductance is the device film: the
+    /// eddy conductivity must not scale them, the film is the whole wall layer.
+    film_mask: [Vec<bool>; 3],
     /// Factor on each device's film coefficient (true area over grid area).
     film_scale: Vec<f64>,
     film_clock: usize,
@@ -402,6 +405,10 @@ impl FlowSolver {
                 k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / (g * film_scale[f.slot]));
             }
         }
+        let mut film_mask: [Vec<bool>; 3] = std::array::from_fn(|_| vec![false; cells]);
+        for f in &film_faces {
+            film_mask[f.axis][f.hi] = true;
+        }
         let sheet = cfg.plate.as_ref().map(|pl| {
             let geo = SheetGeometry::new(
                 pl,
@@ -472,6 +479,7 @@ impl FlowSolver {
             drag_rate,
             sheet,
             film_faces,
+            film_mask,
             film_scale,
             film_clock: 0,
             film_rad: vec![0.0; cfg_film_len],
@@ -1472,7 +1480,7 @@ impl FlowSolver {
                                         kf = dist
                                             / (0.5 * w_hi / (aw * c_hi)
                                                 + 0.5 * w_lo / self.k_cell[lo]);
-                                    } else if nu_t.is_some() {
+                                    } else if nu_t.is_some() && !self.film_mask[a][hi] {
                                         let eff = harmonic(k_eff(lo), k_eff(hi));
                                         let mol = harmonic(self.k_cell[lo], self.k_cell[hi]);
                                         kf *= eff / mol;

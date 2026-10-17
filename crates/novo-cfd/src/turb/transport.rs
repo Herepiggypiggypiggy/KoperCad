@@ -1,5 +1,6 @@
 //! Implicit scalar transport on the cell grid: first-order upwind
-//! convection with the face fluxes of the flow core, diffusion, sources.
+//! convection with the face fluxes of the flow core (optionally second
+//! order by a limited deferred correction), diffusion, sources.
 
 use super::mesh::TurbMesh;
 
@@ -14,6 +15,9 @@ pub struct Equation<'a> {
     pub sp: &'a [f64],
     /// Cells held at their current value (wall-function cells, solids).
     pub fixed: &'a [bool],
+    /// Second-order convection: van Leer limited linear-upwind face values
+    /// as a deferred correction on top of the implicit upwind step.
+    pub tvd: bool,
 }
 
 impl Equation<'_> {
@@ -65,6 +69,21 @@ impl Equation<'_> {
                         let a_nb = d + (-f_out).max(0.0);
                         a_p += d + f_out.max(0.0);
                         b += a_nb * phi[cn];
+                        if self.tvd && f_out != 0.0 {
+                            // upwind (u), downwind (d) and far upwind (uu) cell
+                            let (cu, cd, uu) = if f_out > 0.0 {
+                                (c, cn, m.neighbour(ix, axis, !high))
+                            } else {
+                                (cn, c, m.neighbour(nb, axis, high))
+                            };
+                            if let Some(uu) = uu {
+                                let cuu = m.cell(uu);
+                                if m.fluid[cuu] {
+                                    let face_value = limited_face(phi[cuu], phi[cu], phi[cd]);
+                                    b -= f_out * (face_value - phi[cu]);
+                                }
+                            }
+                        }
                     }
                 }
                 let new = (b / a_p).max(0.0);
@@ -76,4 +95,18 @@ impl Equation<'_> {
         }
         change
     }
+}
+
+/// Face value between the upwind cell `u` and the downwind cell `d` with
+/// far-upwind value `uu`: linear upwind with the van Leer limiter, so the
+/// result stays between `u` and `d` (bounded) and falls back to upwind at
+/// extrema.
+fn limited_face(uu: f64, u: f64, d: f64) -> f64 {
+    let dd = d - u;
+    if dd.abs() < 1e-300 {
+        return u;
+    }
+    let r = (u - uu) / dd;
+    let psi = (r + r.abs()) / (1.0 + r.abs());
+    u + 0.5 * psi * dd
 }
