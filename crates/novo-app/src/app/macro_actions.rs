@@ -206,7 +206,11 @@ impl NovoApp {
         let mut replace = false;
         let modal = egui::Modal::new(egui::Id::new("macro_save")).show(ctx, |ui| {
             ui.set_width(380.0);
-            ui.heading("Save as macro");
+            ui.label(
+                egui::RichText::new("Save as macro")
+                    .size(15.0)
+                    .family(novo_theme::fonts::strong_family()),
+            );
             ui.weak("Keeps the selected circuit in your library, to place on any page.");
             ui.add_space(8.0);
             ui.label("Name");
@@ -227,12 +231,15 @@ impl NovoApp {
             ui.add(egui::TextEdit::singleline(&mut draft.description).desired_width(f32::INFINITY));
             if let Some(error) = &draft.error {
                 ui.add_space(4.0);
-                ui.colored_label(ui.visuals().error_fg_color, error);
+                novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Error, error, |_| {});
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if ui
-                    .add_enabled(!draft.name.trim().is_empty(), egui::Button::new("Save"))
+                    .add_enabled_ui(!draft.name.trim().is_empty(), |ui| {
+                        novo_theme::widgets::primary_button(ui, "Save")
+                    })
+                    .inner
                     .clicked()
                 {
                     save = true;
@@ -437,12 +444,22 @@ impl NovoApp {
                         }
                         for entry in &entries {
                             let selected = win.selected.as_deref() == Some(entry.path.as_str());
-                            let label = if entry.description.is_empty() {
-                                entry.name.clone()
-                            } else {
-                                format!("{} · {}", entry.name, entry.description)
-                            };
-                            if ui.selectable_label(selected, label).clicked() {
+                            let clicked = novo_theme::widgets::row(ui, selected, |ui| {
+                                ui.label(
+                                    egui::RichText::new(&entry.name)
+                                        .family(novo_theme::fonts::strong_family()),
+                                );
+                                if !entry.description.is_empty() {
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(&entry.description).weak(),
+                                        )
+                                        .truncate(),
+                                    );
+                                }
+                            })
+                            .clicked();
+                            if clicked {
                                 pick = Some(entry.path.clone());
                             }
                         }
@@ -494,7 +511,12 @@ impl NovoApp {
                                 ui.label(describe(report));
                             }
                             Err(reason) => {
-                                ui.colored_label(ui.visuals().error_fg_color, reason);
+                                novo_theme::widgets::banner(
+                                    ui,
+                                    novo_theme::widgets::Level::Error,
+                                    reason,
+                                    |_| {},
+                                );
                             }
                         }
                     }
@@ -505,7 +527,8 @@ impl NovoApp {
                 ui.add_space(6.0);
                 let ready = can_place && win.shown.as_ref().is_some_and(|s| s.report.is_ok());
                 if ui
-                    .add_enabled(ready, egui::Button::new("Place"))
+                    .add_enabled_ui(ready, |ui| novo_theme::widgets::primary_button(ui, "Place"))
+                    .inner
                     .on_disabled_hover_text("Open a page and pick a macro")
                     .clicked()
                 {

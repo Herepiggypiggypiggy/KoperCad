@@ -2,7 +2,7 @@
 
 use crate::designer::{Element, Fields, Rendered, Template, render};
 use crate::page::PageLayout;
-use crate::table::{ReportOutput, Section};
+use crate::table::{Cell, ReportOutput, Section};
 
 use super::translator::Translator;
 
@@ -33,19 +33,125 @@ pub const FIXED_SECTION_TITLES: &[&str] = &[
 pub const FIXED_SECTION_TITLE_PATTERNS: &[&str] =
     &["What to pull · {estimated} of {total} lengths are estimates (~): measure on the plate"];
 
+/// Whether `text` fills `pattern`: its literal parts appear in order, the
+/// first at the start and the last at the end, with something in between.
+fn matches_pattern(pattern: &str, text: &str) -> bool {
+    let mut literals: Vec<&str> = Vec::new();
+    let mut rest = pattern;
+    while let Some(i) = rest.find('{') {
+        literals.push(&rest[..i]);
+        match rest[i..].find('}') {
+            Some(end) => rest = &rest[i + end + 1..],
+            None => return false,
+        }
+    }
+    literals.push(rest);
+    let (first, last) = (literals[0], literals[literals.len() - 1]);
+    if literals.len() == 1 || first.len() + last.len() >= text.len() {
+        return false;
+    }
+    if !text.starts_with(first) || !text.ends_with(last) {
+        return false;
+    }
+    let mut at = first.len();
+    let end = text.len() - last.len();
+    for lit in &literals[1..literals.len() - 1] {
+        match text[at..end].find(lit) {
+            Some(i) => at += i + lit.len(),
+            None => return false,
+        }
+    }
+    true
+}
+
 /// Whether a section title is fixed program text: one of
 /// [`FIXED_SECTION_TITLES`] or a filled-in [`FIXED_SECTION_TITLE_PATTERNS`].
 pub fn is_fixed_title(title: &str) -> bool {
     FIXED_SECTION_TITLES.contains(&title)
-        || FIXED_SECTION_TITLE_PATTERNS.iter().any(|pattern| {
-            let (head, tail) = (
-                &pattern[..pattern.find('{').unwrap_or(pattern.len())],
-                &pattern[pattern.rfind('}').map_or(0, |i| i + 1)..],
-            );
-            title.len() > head.len() + tail.len()
-                && title.starts_with(head)
-                && title.ends_with(tail)
-        })
+        || FIXED_SECTION_TITLE_PATTERNS
+            .iter()
+            .any(|pattern| matches_pattern(pattern, title))
+}
+
+/// Cell texts that are fixed words of the program, not project data: the
+/// status words, check names and notes the reports write themselves. A cell
+/// is translated only when all of it is one of these (or fills a
+/// [`FIXED_CELL_PATTERNS`] entry), so a tag or a part name is never touched.
+pub const FIXED_CELL_TEXTS: &[&str] = &[
+    "(no part)",
+    "Built by (name)",
+    "Cut DIN rail",
+    "Cut Wiring duct",
+    "Door",
+    "No enclosure has a mounting plate yet. Create a cabinet and set its plate on the Cabinet canvas.",
+    "Blocking punch items",
+    "Cross-section not set: give the wire a size",
+    "Devices are inside the plate margin",
+    "Devices keep their clearances",
+    "Done %",
+    "Ducts are clear of rails and devices",
+    "Every device of the cabinet is on the plate",
+    "Every drill pattern could be read",
+    "Every terminal is tightened",
+    "Ferrule switched off on the wire (none)",
+    "Labels are fixed and readable",
+    "Mounting plate",
+    "No device overlaps another",
+    "No holes or cut-outs to make",
+    "Not applicable",
+    "Open punch items",
+    "Part sizes are known",
+    "Rails are long enough",
+    "Ready for sign-off",
+    "Reviewed by",
+    "Total",
+    "Wire lengths are measured, not estimated",
+    "Wiring compared with the schematic",
+    "Yes",
+    "free",
+    "horizontal",
+    "no",
+    "no wires in this cabinet",
+    "ok",
+    "overfull",
+    "plate",
+    "unsized",
+    "vertical",
+    "yes",
+];
+
+/// Fixed cell texts with project numbers or names filled in, as `{name}`
+/// patterns.
+pub const FIXED_CELL_PATTERNS: &[&str] = &[
+    "Cut Wiring duct {w} x {h}",
+    "Cut-out dia {d}",
+    "Cut-out {w} x {h}",
+    "Fit drill dia {d}: {count} holes",
+    "Hole dia {d}",
+    "Mounting plate {w} x {h} mm, margin {m} mm",
+    "guessed size: {list}",
+    "not placed: {list}",
+    "unreadable: {list}",
+    "{length} mm horizontal",
+    "{length} mm vertical",
+    "{mark} DIN rail",
+    "{mark} Wiring duct",
+    "{mark} Wiring duct {w} x {h}",
+    "{n} outside",
+    "{n} overlapping pairs",
+    "{n} overlaps",
+    "{n} pairs too close",
+    "{n} rails overflow",
+    "{n} wires use an estimated length",
+];
+
+/// Whether a cell text is fixed program text: one of [`FIXED_CELL_TEXTS`]
+/// or a filled-in [`FIXED_CELL_PATTERNS`] entry.
+pub fn is_fixed_cell(text: &str) -> bool {
+    FIXED_CELL_TEXTS.contains(&text)
+        || FIXED_CELL_PATTERNS
+            .iter()
+            .any(|pattern| matches_pattern(pattern, text))
 }
 
 /// A text that is worth translating: it has a letter outside `{fields}`.
@@ -70,12 +176,27 @@ fn section(tr: &Translator, s: &Section) -> Section {
     for c in &mut out.columns {
         c.header = tr.tr(&c.header).into_owned();
     }
+    for row in &mut out.rows {
+        for cell in &mut row.cells {
+            if let Cell::Text(text) = cell {
+                if text == "No" {
+                    // The answer, not the column header `No` (a number).
+                    *text = tr.translate("No (answer)").unwrap_or_else(|| text.clone());
+                } else if is_fixed_cell(text) {
+                    *text = tr.tr(text).into_owned();
+                }
+            }
+        }
+    }
+    out.decimal = tr.decimal();
     out
 }
 
 /// A report with its title, fixed section titles and column headers in the
-/// language. Cell values are project data and stay as they are; keys,
-/// ids and row sources are untouched.
+/// language, fixed words in cells ([`FIXED_CELL_TEXTS`]) translated and
+/// measured values set to the language's decimal separator. Other cell
+/// values are project data and stay as they are; keys, ids and row
+/// sources are untouched.
 pub fn translate_output(output: &ReportOutput, tr: &Translator) -> ReportOutput {
     if tr.is_english() {
         return output.clone();
@@ -176,7 +297,7 @@ fn push(out: &mut Vec<String>, text: &str) {
 }
 
 /// The texts of a report that need a translation: title, fixed section
-/// titles, column headers.
+/// titles, column headers and fixed words in cells.
 pub fn strings_of_output(output: &ReportOutput) -> Vec<String> {
     let mut out = Vec::new();
     push(&mut out, &output.title);
@@ -186,6 +307,15 @@ pub fn strings_of_output(output: &ReportOutput) -> Vec<String> {
         }
         for c in &s.columns {
             push(&mut out, &c.header);
+        }
+        for cell in s.rows.iter().flat_map(|r| &r.cells) {
+            if let Cell::Text(text) = cell {
+                if text == "No" {
+                    push(&mut out, "No (answer)");
+                } else if is_fixed_cell(text) {
+                    push(&mut out, text);
+                }
+            }
         }
     }
     out

@@ -206,7 +206,7 @@ impl NovoApp {
             .open(&mut open)
             .show(ctx, |ui| {
                 egui::ScrollArea::vertical().show(ui, |ui| {
-                    ui.strong("Options");
+                    novo_theme::widgets::section_label(ui, "Options");
                     ui.weak(
                         "What this machine can have. Pages and devices tied to an option appear in \
 the documents only when it is on; the working project always keeps everything.",
@@ -238,11 +238,16 @@ the documents only when it is on; the working project always keeps everything.",
                         add_option_form(ui, &mut win.new, &mut define, &mut win.error);
                     });
                     if let Some(error) = &win.error {
-                        ui.colored_label(ui.visuals().error_fg_color, error);
+                        novo_theme::widgets::banner(
+                            ui,
+                            novo_theme::widgets::Level::Error,
+                            error,
+                            |_| {},
+                        );
                     }
 
                     ui.separator();
-                    ui.strong("Variants");
+                    novo_theme::widgets::section_label(ui, "Variants");
                     ui.weak("A saved set of choices: Standard, With conveyor, Export 480 V.");
                     for v in &variants {
                         ui.horizontal(|ui| {
@@ -290,7 +295,7 @@ the documents only when it is on; the working project always keeps everything.",
                     });
 
                     ui.separator();
-                    ui.strong("Conditions");
+                    novo_theme::widgets::section_label(ui, "Conditions");
                     ui.weak(
                         "Appears when ... an expression over the options, for example \
 opt.conveyor, or opt.supply == '480V' && !opt.compact. Empty means always.",
@@ -341,19 +346,20 @@ opt.conveyor, or opt.supply == '480V' && !opt.compact. Empty means always.",
                         configuration_section(ui, shown, &win.compare);
                         if !shown.findings.is_empty() {
                             ui.separator();
-                            ui.strong("Check");
+                            novo_theme::widgets::section_label(ui, "Check");
                             for f in &shown.findings {
-                                ui.colored_label(
-                                    ui.visuals().warn_fg_color,
-                                    finding_text(&project, f),
+                                novo_theme::widgets::banner(
+                                    ui,
+                                    novo_theme::widgets::Level::Warning,
+                                    &finding_text(&project, f),
+                                    |_| {},
                                 );
                             }
                         }
                     }
 
                     ui.separator();
-                    if ui
-                        .button("Export PDF of the current choice")
+                    if novo_theme::widgets::primary_button(ui, "Export PDF of the current choice")
                         .on_hover_text("The documents of this variant; the project is not changed")
                         .clicked()
                     {
@@ -581,7 +587,12 @@ parameter. Pages and tags are made fresh; nothing is generated if any row has a 
                     };
                 });
                 if let Some(error) = &win.error {
-                    ui.colored_label(ui.visuals().error_fg_color, error);
+                    novo_theme::widgets::banner(
+                        ui,
+                        novo_theme::widgets::Level::Error,
+                        error,
+                        |_| {},
+                    );
                 }
                 if win.sheet.is_some() {
                     ui.horizontal(|ui| {
@@ -597,9 +608,11 @@ parameter. Pages and tags are made fresh; nothing is generated if any row has a 
                     });
                 }
                 for name in &win.missing {
-                    ui.colored_label(
-                        ui.visuals().warn_fg_color,
-                        format!("Macro '{name}' is not in your library"),
+                    novo_theme::widgets::banner(
+                        ui,
+                        novo_theme::widgets::Level::Warning,
+                        &format!("Macro '{name}' is not in your library"),
+                        |_| {},
                     );
                 }
                 ui.separator();
@@ -608,9 +621,11 @@ parameter. Pages and tags are made fresh; nothing is generated if any row has a 
                         ui.weak("Choose a spec sheet to see what it would make.");
                     }
                     Some(Err(problems)) => {
-                        ui.colored_label(
-                            ui.visuals().error_fg_color,
-                            format!("{} problem(s); nothing would be generated", problems.len()),
+                        novo_theme::widgets::banner(
+                            ui,
+                            novo_theme::widgets::Level::Error,
+                            &format!("{} problem(s); nothing would be generated", problems.len()),
+                            |_| {},
                         );
                         for p in problems {
                             ui.label(p.to_string());
@@ -635,7 +650,12 @@ parameter. Pages and tags are made fresh; nothing is generated if any row has a 
                             ));
                         }
                         for w in &g.warnings {
-                            ui.colored_label(ui.visuals().warn_fg_color, w);
+                            novo_theme::widgets::banner(
+                                ui,
+                                novo_theme::widgets::Level::Warning,
+                                w,
+                                |_| {},
+                            );
                         }
                         ui.add_space(4.0);
                         for p in &g.placements {
@@ -655,7 +675,10 @@ parameter. Pages and tags are made fresh; nothing is generated if any row has a 
                 ui.separator();
                 let ready = matches!(&win.result, Some(Ok(g)) if !g.placements.is_empty());
                 if ui
-                    .add_enabled(ready && !has_problems, egui::Button::new("Generate"))
+                    .add_enabled_ui(ready && !has_problems, |ui| {
+                        novo_theme::widgets::primary_button(ui, "Generate")
+                    })
+                    .inner
                     .clicked()
                 {
                     run = true;
@@ -958,7 +981,7 @@ fn slug(label: &str) -> String {
 fn configuration_section(ui: &mut egui::Ui, shown: &Shown, compare: &str) {
     let c = &shown.configuration;
     let pages_on = c.pages.iter().filter(|p| p.active).count();
-    ui.strong("What the current choice includes");
+    novo_theme::widgets::section_label(ui, "What the current choice includes");
     ui.label(format!(
         "{} of {} pages · {} devices ({} left out) · {} order numbers, {} parts",
         pages_on,
@@ -969,17 +992,24 @@ fn configuration_section(ui: &mut egui::Ui, shown: &Shown, compare: &str) {
         c.bom.iter().map(|l| l.quantity).sum::<u32>(),
     ));
     if !c.unassigned.is_empty() {
-        ui.colored_label(
-            ui.visuals().warn_fg_color,
-            format!(
+        novo_theme::widgets::banner(
+            ui,
+            novo_theme::widgets::Level::Warning,
+            &format!(
                 "{} without a part: {}",
                 c.unassigned.len(),
                 c.unassigned.join(", ")
             ),
+            |_| {},
         );
     }
     for (_, error) in &c.errors {
-        ui.colored_label(ui.visuals().warn_fg_color, format!("Condition: {error}"));
+        novo_theme::widgets::banner(
+            ui,
+            novo_theme::widgets::Level::Warning,
+            &format!("Condition: {error}"),
+            |_| {},
+        );
     }
     ui.collapsing("Pages", |ui| {
         for p in &c.pages {

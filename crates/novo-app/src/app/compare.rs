@@ -261,7 +261,13 @@ impl NovoApp {
                 ui.horizontal(|ui| {
                     ui.label("From");
                     side_picker(ui, "compare_from", project, &options, &mut win.from);
-                    if ui.button("⇄").on_hover_text("Swap the two sides").clicked() {
+                    if novo_theme::widgets::icon_button(
+                        ui,
+                        novo_theme::icons::action::CROSS_REFERENCE,
+                        "Swap the two sides",
+                    )
+                    .clicked()
+                    {
                         std::mem::swap(&mut win.from, &mut win.to);
                     }
                     ui.label("To");
@@ -291,7 +297,12 @@ impl NovoApp {
                 }
                 match result {
                     Err(why) => {
-                        ui.colored_label(ui.visuals().warn_fg_color, why);
+                        novo_theme::widgets::banner(
+                            ui,
+                            novo_theme::widgets::Level::Warning,
+                            why,
+                            |_| {},
+                        );
                     }
                     Ok(c) if c.is_empty() => {
                         ui.weak("No differences between these two states");
@@ -336,8 +347,10 @@ fn drawing_ui(
 ) {
     ui.horizontal(|ui| {
         ui.label("Draw");
-        ui.selectable_value(&mut d.show_to, false, "From");
-        ui.selectable_value(&mut d.show_to, true, "To");
+        let mut side = usize::from(d.show_to);
+        if novo_theme::widgets::segmented(ui, &mut side, &["From", "To"]) {
+            d.show_to = side == 1;
+        }
     });
     let Some((_, _, state)) = &d.state else {
         ui.weak("This revision has no stored drawing");
@@ -440,14 +453,14 @@ fn rows_ui(
     }
     if !c.info.is_empty() {
         ui.add_space(4.0);
-        ui.strong("Project information");
+        novo_theme::widgets::section_label(ui, "Project information");
         for f in &c.info {
             ui.weak(format!("      {}", field_line(f)));
         }
     }
     if !c.sheets.is_empty() {
         ui.add_space(4.0);
-        ui.strong("Generated sheets");
+        novo_theme::widgets::section_label(ui, "Generated sheets");
         for s in &c.sheets {
             ui.weak(format!("      {} ({})", s.name, s.report));
         }

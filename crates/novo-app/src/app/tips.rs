@@ -30,6 +30,11 @@ pub(super) const HINTS: &[Hint] = &[
         text: "Press {key} to place a symbol · {keys} for keys",
     },
     Hint {
+        id: "first_wire",
+        command: "tool.connect",
+        text: "Press {key} to connect pins · click one pin, then another",
+    },
+    Hint {
         id: "empty_3d",
         command: "cabinet.place-all",
         text: "Nothing is on the plate yet · {key} places all devices",
@@ -39,6 +44,62 @@ pub(super) const HINTS: &[Hint] = &[
 /// `Label · Key`, or just the label when the command has no key.
 pub(crate) fn tip_text(keymap: &Keymap, label: &str, command: &str) -> String {
     match keymap.shortcut_text(command) {
+        Some(key) => format!("{label} · {key}"),
+        None => label.to_owned(),
+    }
+}
+
+/// Commands whose tooltips are drawn where the keymap is out of reach (a
+/// free function with only the `Ui`); [`publish_keys`] puts their keys in
+/// the egui context each frame and [`hover`] reads them back.
+pub(super) const TIP_COMMANDS: &[&str] = &[
+    "view.3d_door",
+    "heat.toggle",
+    "view.cabinet_table",
+    "sim.live",
+    "cabinet.rails",
+    "view.command_palette",
+    "edit.undo",
+];
+
+type TipKeys = std::sync::Arc<std::collections::BTreeMap<&'static str, String>>;
+
+fn tip_keys_id() -> egui::Id {
+    egui::Id::new("tip_keys")
+}
+
+/// The live keys of [`TIP_COMMANDS`], for [`hover`].
+pub(super) fn publish_keys(ctx: &egui::Context, keymap: &Keymap) {
+    let keys: std::collections::BTreeMap<_, _> = TIP_COMMANDS
+        .iter()
+        .filter_map(|c| keymap.shortcut_text(c).map(|k| (*c, k)))
+        .collect();
+    ctx.data_mut(|d| d.insert_temp(tip_keys_id(), TipKeys::new(keys)));
+}
+
+/// The live key of a [`TIP_COMMANDS`] command, or `fallback` when it has none.
+pub(super) fn key_or(ctx: &egui::Context, command: &str, fallback: &str) -> String {
+    debug_assert!(
+        TIP_COMMANDS.contains(&command),
+        "add `{command}` to TIP_COMMANDS"
+    );
+    ctx.data(|d| d.get_temp::<TipKeys>(tip_keys_id()))
+        .and_then(|keys| keys.get(command).cloned())
+        .unwrap_or_else(|| fallback.to_owned())
+}
+
+/// `Label · Key` for a [`TIP_COMMANDS`] command, from any drawing code
+/// that has the context. Never type a key into a tooltip: add the command
+/// to the list and call this.
+pub(super) fn hover(ctx: &egui::Context, label: &str, command: &str) -> String {
+    debug_assert!(
+        TIP_COMMANDS.contains(&command),
+        "add `{command}` to TIP_COMMANDS"
+    );
+    let key = ctx
+        .data(|d| d.get_temp::<TipKeys>(tip_keys_id()))
+        .and_then(|keys| keys.get(command).cloned());
+    match key {
         Some(key) => format!("{label} · {key}"),
         None => label.to_owned(),
     }
@@ -58,6 +119,24 @@ pub(super) fn hint_text(keymap: &Keymap, hint: &Hint) -> String {
 /// Whether a hint still shows.
 pub(super) fn hint_due(settings: &Settings, id: &str) -> bool {
     settings.hints_seen.get(id).copied().unwrap_or(0) < HINT_LIMIT
+}
+
+/// What a page still needs said (see [`NovoApp::empty_page_hint`]).
+pub(super) fn page_hint(
+    settings: &Settings,
+    keymap: &Keymap,
+    project: &novo_core::Project,
+    page: novo_core::PageId,
+) -> Option<String> {
+    let symbols = project.symbols().filter(|s| s.page == page).count();
+    let id = match symbols {
+        0 => "empty_page",
+        1 => return None,
+        _ if project.wires().any(|w| w.page == page) => return None,
+        _ => "first_wire",
+    };
+    let hint = HINTS.iter().find(|h| h.id == id)?;
+    hint_due(settings, id).then(|| hint_text(keymap, hint))
 }
 
 /// The hint for a 3D view whose plate holds no devices, while it is due.
@@ -108,16 +187,12 @@ impl NovoApp {
         }
     }
 
-    /// The hint for an empty page, while it is still due.
+    /// The hint for the page being drawn, while it is still due: the first
+    /// move on an empty page, the first wire once two symbols sit there.
     pub(super) fn empty_page_hint(&self) -> Option<String> {
-        let hint = HINTS.iter().find(|h| h.id == "empty_page")?;
-        if !hint_due(&self.settings, hint.id) {
-            return None;
-        }
         let page = self.current_page()?;
-        let doc = self.backend.document()?;
-        let empty = !doc.project().symbols().any(|s| s.page == page);
-        empty.then(|| hint_text(&self.wb.keymap, hint))
+        let project = self.backend.document()?.project();
+        page_hint(&self.settings, &self.wb.keymap, project, page)
     }
 
     /// `help.show_hints`: every hint shows again.

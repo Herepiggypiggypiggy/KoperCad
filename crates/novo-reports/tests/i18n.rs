@@ -401,3 +401,108 @@ fn the_bench_cut_list_summary_reads_in_dutch() {
         Vec::<String>::new()
     );
 }
+
+#[test]
+fn every_fixed_cell_word_has_a_dutch_entry() {
+    let tr = nl();
+    for text in i18n::FIXED_CELL_TEXTS
+        .iter()
+        .chain(i18n::FIXED_CELL_PATTERNS)
+        .filter(|t| **t != "No")
+    {
+        assert!(tr.lookup(text).is_some(), "no Dutch entry for {text:?}");
+    }
+    assert!(tr.lookup("No (answer)").is_some());
+}
+
+fn measured_report() -> ReportOutput {
+    let mut section = Section::new(
+        "s",
+        "",
+        vec![
+            Column::new("what", "Description", 20.0),
+            Column::new("len", "Length", 8.0).right(),
+            Column::new("ok", "Check", 8.0),
+            Column::new("no", "No", 4.0),
+        ],
+    );
+    section.push(
+        vec![
+            Cell::text("Wire 1"),
+            Cell::Number(1.5),
+            Cell::text("overfull"),
+            Cell::Int(3),
+        ],
+        vec![],
+    );
+    section.push(
+        vec![
+            Cell::text("overfull"),
+            Cell::Number(12.0),
+            Cell::text("3 overlaps"),
+            Cell::text("No"),
+        ],
+        vec![],
+    );
+    ReportOutput {
+        report: "t".into(),
+        title: "Total".into(),
+        revision: 0,
+        sections: vec![section],
+    }
+}
+
+#[test]
+fn dutch_prints_measured_values_with_a_comma() {
+    use novo_reports::{CsvOptions, to_csv};
+    let dutch = translate_output(&measured_report(), &nl());
+    let s = &dutch.sections[0];
+    assert_eq!(s.decimal, ',');
+    assert_eq!(s.cell_text(&s.rows[0].cells[1]), "1,5");
+    assert_eq!(s.cell_text(&s.rows[1].cells[1]), "12");
+    // Spreadsheets keep real numbers.
+    assert_eq!(s.rows[0].cells[1], Cell::Number(1.5));
+    // CSV with a comma delimiter quotes the value.
+    let csv = to_csv(&dutch, &CsvOptions::default());
+    assert!(csv.contains("\"1,5\""), "{csv}");
+    // English and a language without a `decimal` keep the point.
+    let english = translate_output(&measured_report(), &Translator::english());
+    assert_eq!(english.sections[0].decimal, '.');
+    let mut table = ProjectTable::default();
+    table.put_language(Catalog::new("de", "Deutsch"));
+    let de = Translator::new("de", &table);
+    assert_eq!(de.decimal(), '.');
+}
+
+#[test]
+fn fixed_cell_words_follow_the_language_and_data_does_not() {
+    let dutch = translate_output(&measured_report(), &nl());
+    let rows = dutch.sections[0].text_rows();
+    // A fixed word in a status column is translated, the same word as a
+    // description (project data position) too only when it is the whole cell.
+    assert_eq!(rows[0][2], "overvol");
+    assert_eq!(rows[1][2], "3 overlappingen");
+    // The answer `No` is `Nee`; the column header `No` stays the number.
+    assert_eq!(rows[1][3], "Nee");
+    assert_eq!(dutch.sections[0].columns[3].header, "Nr");
+    // Names that merely contain a fixed word are untouched.
+    assert_eq!(rows[0][0], "Wire 1");
+}
+
+#[test]
+fn a_language_file_can_set_the_decimal_separator() {
+    let file = r#"{"code":"de","name":"Deutsch","decimal":",","entries":{}}"#;
+    let c = Catalog::from_json(file).unwrap();
+    assert_eq!(c.decimal_char(), Some(','));
+    let mut table = ProjectTable::default();
+    table.put_language(c);
+    let de = Translator::new("de", &table);
+    assert_eq!(de.decimal(), ',');
+    assert_eq!(de.catalog().decimal.as_deref(), Some(","));
+    // The exported file keeps it and reads back the same.
+    let back = Catalog::from_json(&de.catalog().to_json()).unwrap();
+    assert_eq!(back.decimal_char(), Some(','));
+    // Anything but `,` or `.` is ignored.
+    let odd = Catalog::from_json(r#"{"code":"x","decimal":"'"}"#).unwrap();
+    assert_eq!(odd.decimal_char(), None);
+}

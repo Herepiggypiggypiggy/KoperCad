@@ -420,3 +420,47 @@ fn it_exports_to_csv_with_the_boxes() {
     assert!(csv.contains("[ ]"));
     assert!(csv.contains("Mounting plate 800 x 600 mm"));
 }
+
+#[test]
+fn the_checklist_reads_in_dutch_with_a_decimal_comma() {
+    use novo_reports::ASSEMBLY_BOX;
+    use novo_reports::i18n::{ProjectTable, Translator, translate_output};
+    let (mut doc, h) = starter();
+    cabinet(&mut doc, &h);
+    machined(&mut doc, &h);
+    let dutch = translate_output(
+        &generate(&doc),
+        &Translator::new("nl", &ProjectTable::default()),
+    );
+    let all: Vec<String> = dutch
+        .sections
+        .iter()
+        .flat_map(|s| s.text_rows())
+        .flatten()
+        .collect();
+    for english in [
+        "Mounting plate ",
+        "Cut ",
+        "Hole dia",
+        "Fit drill",
+        "Cut-out",
+        "DIN rail",
+        "Wiring duct",
+        "Built by",
+        "Every ",
+        "horizontal",
+        "vertical",
+    ] {
+        assert!(
+            !all.iter().any(|c| c.contains(english)),
+            "{english:?} is still English in {all:?}"
+        );
+    }
+    assert!(all.iter().any(|c| c == "Boor dia 4,2: 2 gaten"), "{all:?}");
+    assert!(all.iter().any(|c| c == "Gat dia 4,2"));
+    assert!(all.iter().any(|c| c == "Uitsparing dia 22,5"));
+    assert!(all.iter().any(|c| c.starts_with("Montageplaat ")));
+    // Project data and the done box are untouched.
+    assert!(all.iter().any(|c| c == ASSEMBLY_BOX));
+    assert!(all.iter().any(|c| c == "=A1+CAB-F1"));
+}

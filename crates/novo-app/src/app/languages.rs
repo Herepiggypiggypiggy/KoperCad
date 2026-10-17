@@ -243,6 +243,7 @@ impl NovoApp {
         let mut pick: Option<String> = None;
         let mut edit: Option<(String, String)> = None;
         let mut add_language: Option<(String, String)> = None;
+        let mut decimal: Option<char> = None;
         let mut copy: Option<String> = None;
         let mut save_file = false;
         let mut load_file = false;
@@ -288,6 +289,16 @@ impl NovoApp {
                             ),
                         );
                     }
+                    ui.horizontal(|ui| {
+                        ui.label("Decimal sign");
+                        for (sign, example) in [('.', "1.5"), (',', "1,5")] {
+                            if widgets::chip(ui, example, translator.decimal() == sign).clicked()
+                                && translator.decimal() != sign
+                            {
+                                decimal = Some(sign);
+                            }
+                        }
+                    });
                     ui.horizontal(|ui| {
                         ui.checkbox(&mut win.only_missing, "Only missing");
                         if missing > 0
@@ -402,6 +413,11 @@ impl NovoApp {
             });
         if let Some(code) = pick {
             self.set_report_language(&code);
+        }
+        if let Some(sign) = decimal {
+            let mut table = table.clone();
+            table.set_decimal(translator.code(), sign);
+            self.set_translation_table("Set decimal sign", &table);
         }
         if let Some((english, text)) = edit {
             let mut table = table.clone();

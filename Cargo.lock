@@ -2198,6 +2198,7 @@ version = "0.1.0"
 dependencies = [
  "novo-core",
  "novo-layout",
+ "novo-parts",
 ]
 
 [[package]]
