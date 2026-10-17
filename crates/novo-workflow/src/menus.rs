@@ -228,6 +228,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("heat.contours", under("View", "Layers")),
     // Lessons live with Help
     ("help.learn", at("Help")),
+    ("help.next_lesson", at("Help")),
     ("learn.next", under("Help", "Lesson")),
     ("learn.back", under("Help", "Lesson")),
     ("learn.restart", under("Help", "Lesson")),
@@ -506,6 +507,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
         "Help",
         &[
             &[
+                "help.next_lesson",
                 "help.learn",
                 "view.shortcuts",
                 "help.walkthrough",

@@ -201,6 +201,26 @@ text_nl = "{arg}"
 text = "command palette: {label}"
 text_nl = "opdrachtenlijst: {label}"
 
+[help_continue]
+text = "Continue lesson: {lesson}"
+text_nl = "Les doorgaan: {lesson}"
+
+[help_next]
+text = "Next lesson: {lesson}"
+text_nl = "Volgende les: {lesson}"
+
+[help_all_done]
+text = "Next lesson (all done)"
+text_nl = "Volgende les (alles klaar)"
+
+[help_paths]
+text = "Learning paths"
+text_nl = "Leerpaden"
+
+[all_tracks]
+text = "Show all tracks"
+text_nl = "Alle sporen tonen"
+
 [continue_where]
 text = "Continue where you left off"
 text_nl = "Ga verder waar je was"

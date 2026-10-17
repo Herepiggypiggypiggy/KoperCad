@@ -493,6 +493,7 @@ impl NovoApp {
             });
         if !open {
             self.learn.window = false;
+            self.learn.only_track = None;
         }
         if reload {
             self.learn.reload();
@@ -526,6 +527,11 @@ impl NovoApp {
                 .hint_text(search)
                 .desired_width(f32::INFINITY),
         );
+        if self.learn.only_track.is_some()
+            && ui.small_button(self.learn.say("all_tracks")).clicked()
+        {
+            self.learn.only_track = None;
+        }
         ui.add_space(6.0);
         let lang = self.learn.lang;
         let filter = self.learn.filter.to_lowercase();
@@ -538,6 +544,14 @@ impl NovoApp {
             .max_height(ui.available_height() - 40.0)
             .show(ui, |ui| {
                 for track in &tracks {
+                    if self
+                        .learn
+                        .only_track
+                        .as_ref()
+                        .is_some_and(|only| *only != track.id)
+                    {
+                        continue;
+                    }
                     let rows: Vec<&Entry> = entries
                         .iter()
                         .filter(|e| e.lesson.track == track.id)
@@ -670,11 +684,7 @@ impl NovoApp {
     /// one the person can do, else a line saying everything is done.
     fn continue_card(&mut self, ui: &mut egui::Ui, start: &mut Option<(String, bool)>) {
         let lang = self.learn.lang;
-        let next = self
-            .learn
-            .catalog
-            .next_lesson(self.learn.progress(), self.learn.show_drafts)
-            .cloned();
+        let next = self.learn.offered();
         egui::Frame::group(ui.style()).show(ui, |ui| {
             ui.set_width(ui.available_width());
             let Some(entry) = next else {
