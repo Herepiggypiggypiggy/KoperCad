@@ -17,6 +17,11 @@
 //! - `move` `{x,y}`, `click` `{x,y,button?,count?,modifiers?}`,
 //!   `drag` `{from:[x,y],to:[x,y],button?,steps?}`, `scroll` `{x,y,dx?,dy?}`.
 //! - `key` `{keys}`, for example `"Enter"` or `"ctrl+shift+k"`; `text` `{text}`.
+//! - `scene`: the open project as data: page symbols, selection, devices,
+//!   wires, nets, cabinet layouts.
+//! - `dialog_answer` `{path|paths}`: the next native file dialog (open, save
+//!   as, folder) gets this answer; `dialogs`: the requests so far. Without an
+//!   answer a dialog is cancelled.
 //! - `wait` `{frames?}`, `resize` `{w,h}`, `quit`.
 //!
 //! Every input command ends with a few settle frames before it replies, so a
@@ -27,6 +32,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 use eframe::egui::{
@@ -37,6 +43,21 @@ use serde_json::{Value, json};
 
 /// Frames run after an input before the reply, for animations and layout to settle.
 const SETTLE_FRAMES: u32 = 4;
+
+static SCENE_WANTED: AtomicBool = AtomicBool::new(false);
+static SCENE: Mutex<Option<Value>> = Mutex::new(None);
+
+/// True while a `scene` request waits; the app answers with [`publish_scene`].
+pub fn scene_wanted() -> bool {
+    SCENE_WANTED.load(Ordering::Relaxed)
+}
+
+pub fn publish_scene(scene: Value) {
+    if let Ok(mut s) = SCENE.lock() {
+        *s = Some(scene);
+    }
+    SCENE_WANTED.store(false, Ordering::Relaxed);
+}
 
 /// Whether `--control` was given, and on which port (0 picks a free one).
 pub fn requested_port() -> Option<u16> {
@@ -76,6 +97,7 @@ pub fn install(ctx: &Context, port: u16) {
             serve(stream, &tx, &wake);
         }
     });
+    crate::dialogs::enable_harness();
     ctx.enable_accesskit();
     ctx.add_plugin(Control::with_rx(rx));
 }
@@ -130,6 +152,7 @@ enum Step {
     Idle(u32),
     Shot(PathBuf, bool),
     Tree(bool),
+    Scene(bool),
     Resize(f32, f32),
     Quit,
     Done(Value),
@@ -261,6 +284,20 @@ impl egui::Plugin for Control {
                     ctx.request_repaint();
                     return;
                 }
+                Step::Scene(asked) => {
+                    if !asked {
+                        if let Ok(mut s) = SCENE.lock() {
+                            *s = None;
+                        }
+                        SCENE_WANTED.store(true, Ordering::Relaxed);
+                    } else if let Some(scene) = SCENE.lock().ok().and_then(|mut s| s.take()) {
+                        active.result["scene"] = scene;
+                        continue;
+                    }
+                    active.steps.push_front(Step::Scene(true));
+                    ctx.request_repaint();
+                    return;
+                }
                 Step::Resize(w, h) => {
                     ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(w, h)));
                     ctx.request_repaint();
@@ -348,6 +385,33 @@ impl Control {
             }
             "ui_tree" => {
                 steps.push_back(Step::Tree(false));
+            }
+            "scene" => {
+                steps.push_back(Step::Scene(false));
+            }
+            "dialog_answer" => {
+                // The next native file dialog takes this path (or these paths).
+                let mut paths: Vec<PathBuf> = Vec::new();
+                if let Some(p) = req.get("path").and_then(Value::as_str) {
+                    paths.push(p.into());
+                }
+                for p in req
+                    .get("paths")
+                    .and_then(Value::as_array)
+                    .into_iter()
+                    .flatten()
+                {
+                    if let Some(p) = p.as_str() {
+                        paths.push(p.into());
+                    }
+                }
+                crate::dialogs::queue_answer(paths);
+            }
+            "dialogs" => {
+                let (log, waiting) = crate::dialogs::take_log();
+                steps.push_back(Step::Done(
+                    json!({"requests": log, "answers_waiting": waiting}),
+                ));
             }
             "move" => {
                 let p = at(self);

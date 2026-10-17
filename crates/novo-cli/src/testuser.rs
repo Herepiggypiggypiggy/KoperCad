@@ -200,6 +200,28 @@ impl Server {
                     r["size"][0], r["size"][1], r["frame"]
                 ))
             }
+            "scene" => {
+                let r = self.send(json!({"cmd": "scene"}))?;
+                let mut scene = r["scene"].clone();
+                if let (Some(keys), Some(obj)) = (a["parts"].as_array(), scene.as_object_mut()) {
+                    let keys: Vec<&str> = keys.iter().filter_map(Value::as_str).collect();
+                    obj.retain(|k, _| {
+                        keys.contains(&k.as_str())
+                            || matches!(k.as_str(), "workspace" | "project" | "page")
+                    });
+                }
+                text(serde_json::to_string_pretty(&scene).map_err(|e| e.to_string())?)
+            }
+            "answer_dialog" => {
+                let mut req = json!({"cmd": "dialog_answer"});
+                copy(&mut req, a, &["path", "paths"]);
+                self.send(req)?;
+                text("queued: the next native file dialog gets this answer (none = cancel)".into())
+            }
+            "dialogs" => {
+                let r = self.send(json!({"cmd": "dialogs"}))?;
+                text(r.to_string())
+            }
             "info" => {
                 let r = self.send(json!({"cmd": "info"}))?;
                 text(r.to_string())

@@ -19,6 +19,7 @@ mod backend;
 mod canvas;
 mod command_field;
 mod control;
+mod dialogs;
 mod editor_canvas;
 mod keys;
 mod migrate;

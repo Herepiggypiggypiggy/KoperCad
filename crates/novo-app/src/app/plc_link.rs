@@ -115,7 +115,7 @@ impl NovoApp {
 
     /// Asks for a tag file and opens the import preview.
     pub(super) fn plc_import_tags(&mut self) {
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Import PLC tags")
             .add_filter("PLC tag file", &["csv", "xml", "xlsx"]);
         if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {

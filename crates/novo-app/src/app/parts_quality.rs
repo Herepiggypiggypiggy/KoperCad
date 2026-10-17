@@ -238,7 +238,7 @@ fn detail_ui(ui: &mut egui::Ui, row: &PartQuality) -> Option<PartKey> {
 
 /// Asks where to save and writes the report; returns the line to show.
 fn export_csv(csv: &str) -> String {
-    let Some(path) = rfd::FileDialog::new()
+    let Some(path) = crate::dialogs::FileDialog::new()
         .set_title("Save the missing-data report")
         .set_file_name("parts-missing-data.csv")
         .add_filter("CSV", &["csv"])

@@ -272,7 +272,7 @@ impl PartsWindow {
 
     /// Asks for a STEP file and stores it for the selected part.
     fn choose_model(&mut self) {
-        if let Some(path) = rfd::FileDialog::new()
+        if let Some(path) = crate::dialogs::FileDialog::new()
             .set_title("Choose the 3D model (STEP)")
             .add_filter("STEP model", &["stp", "step"])
             .pick_file()
@@ -780,7 +780,7 @@ impl NovoApp {
         for action in actions {
             match action {
                 PartsAction::ImportCatalogFiles => {
-                    if let Some(files) = rfd::FileDialog::new()
+                    if let Some(files) = crate::dialogs::FileDialog::new()
                         .set_title("Catalog files (BMEcat, CSV, ZIP)")
                         .add_filter("Catalog files", &["xml", "bmecat", "csv", "zip"])
                         .pick_files()
@@ -807,7 +807,7 @@ impl NovoApp {
                 }
                 PartsAction::OpenPage(url) => ctx.open_url(egui::OpenUrl::new_tab(url)),
                 PartsAction::ChooseFile => {
-                    if let Some(path) = rfd::FileDialog::new()
+                    if let Some(path) = crate::dialogs::FileDialog::new()
                         .set_title("Choose the downloaded file")
                         .pick_file()
                     {
@@ -830,7 +830,7 @@ impl NovoApp {
                 PartsAction::SavePins(key) => win.save_pins(&key),
                 PartsAction::SaveTypedPins(key, edits) => win.save_typed_pins(&key, &edits),
                 PartsAction::ChooseFolder => {
-                    if let Some(dir) = rfd::FileDialog::new()
+                    if let Some(dir) = crate::dialogs::FileDialog::new()
                         .set_title("Folder to watch for downloads")
                         .pick_folder()
                     {
