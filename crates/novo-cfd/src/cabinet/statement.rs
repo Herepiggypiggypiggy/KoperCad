@@ -84,11 +84,13 @@ pub fn mark_radiation(a: &mut AccuracyStatement) {
         if l.starts_with("Turbulence and radiation are not modelled") {
             *l = "Turbulence is not modelled: flow in a strongly forced cabinet is laminar.".into();
         }
-        if let Some(i) = l.find(
+        for note in [
             " radiation is not modelled, so surface temperatures of hot devices are slightly high.",
-        ) {
-            let end = i + " radiation is not modelled, so surface temperatures of hot devices are slightly high.".len();
-            l.replace_range(i..end, "");
+            " Radiation is not modelled, so surface temperatures of hot devices are slightly high.",
+        ] {
+            if let Some(i) = l.find(note) {
+                l.replace_range(i..i + note.len(), "");
+            }
         }
     }
     a.limits.push(
@@ -120,12 +122,14 @@ pub fn accuracy_with_turbulence(fidelity: Fidelity, model: TurbModel) -> Accurac
         .find(|l| l.starts_with("Turbulence and radiation"))
     {
         *first = format!(
-            "Turbulence: {name} with wall functions; radiation is not modelled, so surface \
-             temperatures of hot devices are slightly high. The wall functions assume attached \
-             flow, and the heat flux of natural-convection walls is under-predicted when the \
-             first cell is thicker than the boundary layer (coarse grids). Device surfaces use \
-             the device film model, not the wall function. In a vented 100 W box the result \
-             differed from laminar by under 3 %; fan-driven flow is not checked yet."
+            "Turbulence: {name} with wall functions. The wall functions assume attached flow, \
+             and the heat flux of natural-convection walls is under-predicted when the first \
+             cell is thicker than the boundary layer (coarse grids). Device surfaces use the \
+             device film model, not the wall function. In a vented 100 W box the mean air rise \
+             and the device surface rise changed by about 3 % or less against laminar, the \
+             exhaust temperature at the top louvre by up to 11 %; fan-driven flow is not \
+             checked yet. Radiation is not modelled, so surface temperatures of hot devices are \
+             slightly high."
         );
     }
     a.headline.push_str(&format!(" Turbulence: {name}."));
