@@ -3,5 +3,6 @@ State: PR 1 adds crates/novo-commissioning/src/field.rs (FieldPackage, MergeRepo
 Entry: Commissioning workspace (Ctrl+5) > Field results Export / Import.
 Redlines (PR from claude/work-2-redlines): Commissioning panel > Redlines tab. Pick a target on Checks, add a note, new wire number or new device tag. "Apply to drawing" runs one Batch command (undo in the schematic; undo is off while the mode shows); "Apply and issue revision" then opens the revision dialog with one "As built:" line per change. Redlines travel in .kcfield (key at+by+target+change, applied/rejected beat open). Commissioning never edits the drawing itself.
 Done: field results file (engine novo-commissioning/src/field.rs, header menu items By > Field results), tablet layout (commissioning_tablet, TABLET_MAX_WIDTH 1200 pt, panel 380 pt), punch photos (photo.rs, app/commissioning_photos.rs; files in `<project> field photos/` named by content hash; Add photo button per punch item; pictures packed into .kcfield as base64).
-Next: photo viewer in the punch list; marks for redlines on the drawing.
+Next: marks for redlines on the drawing.
 Rules kept: no push after READY; merge main when asked; new PR per slice.
+Photo viewer: Commissioning > Punch list > thumbnails under an item (PNG/JPEG); touch one for the large window. Other formats keep their name only.

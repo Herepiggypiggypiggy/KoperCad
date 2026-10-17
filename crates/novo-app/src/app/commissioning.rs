@@ -26,6 +26,7 @@ use novo_theme::{Density, Palette, icons, space, widgets};
 use novo_xref::Place;
 
 use super::cabinet_bar::{note_ctx, note_rect};
+use super::commissioning_viewer::{self as viewer, PhotoViewer};
 
 use super::changes::shown_on;
 use super::commissioning_redlines::{RedlineAction, redlines_tab};
@@ -85,6 +86,8 @@ pub(crate) struct CommissioningMode {
     pub(super) photo_for: Option<u64>,
     /// The signature pad, open under the item being verified.
     pub(super) signing: Option<SignDraft>,
+    /// The pictures of the punch items, shown small and large.
+    pub(super) viewer: PhotoViewer,
 }
 
 impl CommissioningMode {
@@ -111,6 +114,7 @@ impl CommissioningMode {
             dirty: false,
             photo_for: None,
             signing: None,
+            viewer: Default::default(),
         }
     }
 
@@ -385,6 +389,7 @@ impl NovoApp {
         let mut field: Option<FieldAction> = None;
         let mut redline_action: Option<RedlineAction> = None;
         let tablet = self.commissioning_tablet();
+        let photos_dir = self.field_photos_dir();
         {
             let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
             else {
@@ -393,6 +398,7 @@ impl NovoApp {
             };
             let project = doc.project();
             mode.large = self.settings.large_buttons || tablet;
+            mode.viewer.dir = photos_dir;
             touch_density(ui, mode.large);
             let mut tab = match mode.tab {
                 Tab::Checks => 0,
@@ -472,6 +478,9 @@ impl NovoApp {
             if a.clicked {
                 self.learn_event(novo_learn::Event::Clicked(a.id.to_owned()));
             }
+        }
+        if let Some(mode) = self.wb.commissioning.as_mut() {
+            viewer::window(ui.ctx(), &mut mode.viewer);
         }
         if let Some(place) = go {
             self.jump(place, true);
@@ -1174,8 +1183,7 @@ fn punch_tab(
                     signature::preview(ui, sig);
                 }
                 if !item.photos.is_empty() {
-                    let names: Vec<&str> = item.photos.iter().map(|p| p.name.as_str()).collect();
-                    ui.weak(format!("Photos: {}", names.join(", ")));
+                    viewer::strip(ui, &mut mode.viewer, &item.photos);
                 }
                 ui.add_space(space::S);
             }
