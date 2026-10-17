@@ -10,6 +10,7 @@ pub mod collide;
 pub mod drill;
 pub mod enclosure;
 pub mod model;
+pub mod openings;
 pub mod plan;
 pub mod plate_drawing;
 pub mod rules;
@@ -17,7 +18,9 @@ pub mod sizing;
 pub mod sizing_model;
 pub mod state;
 pub mod stock;
+pub mod surface_rules;
 pub mod surfaces;
+pub mod swing;
 
 /// Footprint used for a device whose part has no dimensions (marked guessed).
 pub const DEFAULT_FOOTPRINT_MM: (f64, f64) = (45.0, 90.0);
@@ -335,6 +338,74 @@ pub fn rail_overflows(rails: &[Rail], placements: &[Placement]) -> Vec<(u64, f64
             (over > 0.0).then_some((r.id, over))
         })
         .collect()
+}
+
+/// What a duct lies over.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum DuctHit {
+    /// A DIN rail runs under the duct for `by` mm of its length.
+    Rail { id: u64, by: f64 },
+    /// A device footprint overlaps the duct by `across` x `along` mm
+    /// (across the duct, then along it).
+    Device { id: u64, across: f64, along: f64 },
+}
+
+/// A duct that covers part of a rail or of a device: nothing can be mounted
+/// there, and the wires of the duct would run through the device.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DuctOverlap {
+    pub duct: u64,
+    pub hit: DuctHit,
+}
+
+/// Ducts that lie over a rail or a device. A rail is its centre line, so a
+/// duct that ends next to a rail, or a rail beside a duct, is clear; touching
+/// edges do not count.
+pub fn duct_overlaps(ducts: &[Duct], rails: &[Rail], placements: &[Placement]) -> Vec<DuctOverlap> {
+    const EPS: f64 = 1e-6;
+    let mut out = Vec::new();
+    for d in ducts {
+        let f = d.footprint();
+        for r in rails {
+            // The rail's line against the duct's rectangle.
+            let (across, from, to, lo, hi) = if r.vertical {
+                (r.x, r.y, r.y + r.length, f.y, f.bottom())
+            } else {
+                (r.y, r.x, r.x + r.length, f.x, f.right())
+            };
+            let (side_lo, side_hi) = if r.vertical {
+                (f.x, f.right())
+            } else {
+                (f.y, f.bottom())
+            };
+            if across > side_lo + EPS && across < side_hi - EPS {
+                let by = to.min(hi) - from.max(lo);
+                if by > EPS {
+                    out.push(DuctOverlap {
+                        duct: d.id,
+                        hit: DuctHit::Rail { id: r.id, by },
+                    });
+                }
+            }
+        }
+        for p in placements {
+            let o = p.footprint();
+            let w = o.right().min(f.right()) - o.x.max(f.x);
+            let h = o.bottom().min(f.bottom()) - o.y.max(f.y);
+            if w > EPS && h > EPS {
+                let (across, along) = if d.vertical { (w, h) } else { (h, w) };
+                out.push(DuctOverlap {
+                    duct: d.id,
+                    hit: DuctHit::Device {
+                        id: p.id,
+                        across,
+                        along,
+                    },
+                });
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]

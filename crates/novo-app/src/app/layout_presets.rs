@@ -304,6 +304,12 @@ impl NovoApp {
         self.size_class = Some(class);
         let layout = self.layout_of(self.slot);
         self.apply_layout(&layout);
+        // The Commissioning workspace always shows its own panel; a stored
+        // layout must not turn it back to another outline tab (that would
+        // leave the workspace).
+        if self.workspace == Workspace::Commissioning {
+            self.outline_mode = OutlineMode::Commissioning;
+        }
     }
 
     /// Opens a preset: its workspace, with the panels it was left with at

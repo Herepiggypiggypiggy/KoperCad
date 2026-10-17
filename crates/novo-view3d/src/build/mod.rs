@@ -8,6 +8,9 @@
 //! missing device depth is 60 mm and a missing duct section 40 x 60 mm; both
 //! are marked `GuessedSize` instead of being drawn as zero.
 
+mod door_devices;
+#[cfg(test)]
+mod door_devices_tests;
 pub mod model;
 
 use std::collections::BTreeMap;
@@ -259,7 +262,12 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
     }
 
     let report = layout.report();
-    let mut devices: Vec<_> = layout.placements.iter().collect();
+    let swung = door_devices::swing_marked(layout);
+    let mut devices: Vec<_> = layout
+        .placements
+        .iter()
+        .filter(|p| !layout.off_plate.contains_key(&p.id))
+        .collect();
     devices.sort_by_key(|p| p.id);
     for p in devices {
         let d = inputs
@@ -298,6 +306,9 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
         } else {
             Mark::None
         };
+        if swung.contains(&p.id) {
+            item.mark = Mark::Collision;
+        }
         item.label = inputs.labels.get(&p.id).cloned();
         item.tint = inputs.classes.get(&p.id).map(|c| c.tint());
         scene.push(item);
@@ -326,6 +337,8 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
             angle: angle as f32,
         });
     }
+
+    door_devices::push(&mut scene, layout, inputs, depth, &swung);
 
     for w in &options.wires {
         push_wire(&mut scene, w, &ducts);
@@ -398,7 +411,8 @@ pub fn reaching_door(scene: &Scene) -> Vec<(u64, f64)> {
     let mut out: Vec<(u64, f64)> = scene
         .items
         .iter()
-        .filter(|i| i.id.kind == ItemKind::Device)
+        // Devices on the door stand on it, they do not reach it.
+        .filter(|i| i.id.kind == ItemKind::Device && i.group != Some(DOOR_HINGE))
         .filter_map(|i| {
             let over = (i.pose.translation.z + i.size.z) as f64 - inner;
             (over >= 0.0).then_some((i.id.raw, over))

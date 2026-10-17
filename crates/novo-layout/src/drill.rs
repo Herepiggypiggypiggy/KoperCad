@@ -11,7 +11,9 @@
 
 use std::collections::HashMap;
 
+use crate::openings::OpeningShape;
 use crate::state::CabinetLayout;
+use crate::surfaces::MAIN_PLATE;
 use crate::{Placement, Rail};
 
 /// Part key: how the device is held. `door_cutout` puts its holes and
@@ -34,17 +36,26 @@ pub const RAIL_HOLE_INSET_MM: f64 = 10.0;
 pub const RAIL_HOLE_PITCH_MM: f64 = 200.0;
 
 /// The face a feature is machined into.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Surface {
     Plate,
     Door,
+    /// Another surface of the enclosure by its name (`left`, `roof`,
+    /// `plate2`, ...), which only wiring openings put features on.
+    Named(String),
 }
 
 impl Surface {
-    pub fn name(self) -> &'static str {
+    pub fn name(&self) -> String {
         match self {
-            Surface::Plate => "Mounting plate",
-            Surface::Door => "Door",
+            Surface::Plate => "Mounting plate".to_owned(),
+            Surface::Door => "Door".to_owned(),
+            Surface::Named(n) => {
+                let mut c = n.chars();
+                c.next()
+                    .map(|f| f.to_uppercase().chain(c).collect())
+                    .unwrap_or_default()
+            }
         }
     }
 }
@@ -242,19 +253,22 @@ impl DrillTable {
                 .find(|(s, d, _)| *s == h.surface && *d == h.dia)
             {
                 Some(e) => e.2 += 1,
-                None => out.push((h.surface, h.dia, 1)),
+                None => out.push((h.surface.clone(), h.dia, 1)),
             }
         }
         out.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.total_cmp(&b.1)));
         out
     }
 
-    pub fn on(&self, surface: Surface) -> (Vec<&HoleRow>, Vec<&CutoutRow>) {
+    pub fn on(&self, surface: &Surface) -> (Vec<&HoleRow>, Vec<&CutoutRow>) {
         (
-            self.holes.iter().filter(|h| h.surface == surface).collect(),
+            self.holes
+                .iter()
+                .filter(|h| h.surface == *surface)
+                .collect(),
             self.cutouts
                 .iter()
-                .filter(|c| c.surface == surface)
+                .filter(|c| c.surface == *surface)
                 .collect(),
         )
     }
@@ -315,7 +329,7 @@ pub fn drill_table(layout: &CabinetLayout, features: &[DeviceFeatures]) -> Drill
             let (x, y) = place(h.dx, h.dy, p);
             holes.push(HoleRow {
                 no: 0,
-                surface: f.surface,
+                surface: f.surface.clone(),
                 dia: h.dia,
                 x: round2(x),
                 y: round2(y),
@@ -333,13 +347,39 @@ pub fn drill_table(layout: &CabinetLayout, features: &[DeviceFeatures]) -> Drill
             };
             cutouts.push(CutoutRow {
                 no: 0,
-                surface: f.surface,
+                surface: f.surface.clone(),
                 shape,
                 x: round2(x),
                 y: round2(y),
                 source: f.label.clone(),
             });
         }
+    }
+
+    for o in &layout.openings {
+        let surface = match o.surface.as_str() {
+            "door" => Surface::Door,
+            MAIN_PLATE => Surface::Plate,
+            other if layout.surface_sizes.contains_key(other) => Surface::Named(other.to_owned()),
+            other => {
+                problems.push(format!(
+                    "Opening '{}' is on '{other}', which this enclosure does not have, so it is not in the drill table.",
+                    o.name
+                ));
+                continue;
+            }
+        };
+        cutouts.push(CutoutRow {
+            no: 0,
+            surface,
+            shape: match o.shape {
+                OpeningShape::Round { dia } => CutoutShape::Round { dia },
+                OpeningShape::Rect { w, h } => CutoutShape::Rect { w, h },
+            },
+            x: round2(o.x),
+            y: round2(o.y),
+            source: format!("Opening {}", o.name),
+        });
     }
 
     holes.sort_by(|a, b| {
@@ -357,7 +397,15 @@ pub fn drill_table(layout: &CabinetLayout, features: &[DeviceFeatures]) -> Drill
             .then(a.x.total_cmp(&b.x))
             .then(a.source.cmp(&b.source))
     });
-    for surface in [Surface::Plate, Surface::Door] {
+    let mut surfaces: Vec<Surface> = holes
+        .iter()
+        .map(|h| &h.surface)
+        .chain(cutouts.iter().map(|c| &c.surface))
+        .cloned()
+        .collect();
+    surfaces.sort();
+    surfaces.dedup();
+    for surface in surfaces {
         for (n, h) in holes
             .iter_mut()
             .filter(|h| h.surface == surface)

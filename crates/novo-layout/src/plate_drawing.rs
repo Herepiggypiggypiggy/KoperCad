@@ -316,14 +316,14 @@ pub struct PlateDocument {
 
 /// The tables of a surface: hole counts per diameter, the numbered holes,
 /// and the numbered cut-outs. Empty tables are left out.
-pub fn tables(table: &DrillTable, surface: Surface) -> Vec<TableBlock> {
+pub fn tables(table: &DrillTable, surface: &Surface) -> Vec<TableBlock> {
     let s = |v: &str| v.to_string();
     let (holes, cutouts) = table.on(surface);
     let mut out = Vec::new();
     let summary: Vec<_> = table
         .summary()
         .into_iter()
-        .filter(|(sf, _, _)| *sf == surface)
+        .filter(|(sf, _, _)| sf == surface)
         .collect();
     if !summary.is_empty() {
         out.push(TableBlock {
@@ -386,9 +386,14 @@ fn distinct(mut values: Vec<f64>) -> Vec<f64> {
 
 /// Width and height of a sheet: the plate, or the door, which takes the
 /// inside size of the enclosure when that is set.
-fn sheet_size(layout: &CabinetLayout, surface: Surface) -> (f64, f64) {
+fn sheet_size(layout: &CabinetLayout, surface: &Surface) -> (f64, f64) {
     match (surface, layout.enclosure) {
         (Surface::Door, Some(e)) if e.width > 0.0 && e.height > 0.0 => (e.width, e.height),
+        (Surface::Named(n), _) => layout
+            .surface_sizes
+            .get(n)
+            .copied()
+            .unwrap_or((layout.plate.width, layout.plate.height)),
         _ => (layout.plate.width, layout.plate.height),
     }
 }
@@ -408,7 +413,7 @@ pub fn plate_drawing(
     layout: &CabinetLayout,
     features: &[DeviceFeatures],
     table: &DrillTable,
-    surface: Surface,
+    surface: &Surface,
     scale: f64,
 ) -> PlateDrawing {
     let u = scale;
@@ -417,7 +422,7 @@ pub fn plate_drawing(
     let mut m = Marks::default();
     m.rect(Layer::Plate, (0.0, 0.0), (w, h));
 
-    if surface == Surface::Plate {
+    if *surface == Surface::Plate {
         let usable = layout.plate.usable();
         if layout.plate.margin > 0.0 {
             m.rect(
@@ -576,7 +581,7 @@ pub fn plate_drawing(
     );
 
     PlateDrawing {
-        surface,
+        surface: surface.clone(),
         width: w,
         height: h,
         scale,
@@ -584,29 +589,41 @@ pub fn plate_drawing(
     }
 }
 
-/// The documents to export for a layout: always the mounting plate, and a
-/// door sheet when any device has door holes or cut-outs. All sheets of one
-/// export share the scale picked for the plate.
+/// The documents to export for a layout: always the mounting plate, then a
+/// sheet for the door and for every other surface (wall, roof, extra plate)
+/// that has holes or cut-outs, in that order. All sheets of one export
+/// share the scale picked for the largest of them.
 pub fn documents(
     title: &str,
     layout: &CabinetLayout,
     features: &[DeviceFeatures],
 ) -> (Vec<PlateDocument>, DrillTable) {
     let table = crate::drill::drill_table(layout, features);
-    let (pw, ph) = sheet_size(layout, Surface::Plate);
-    let (dw, dh) = sheet_size(layout, Surface::Door);
-    let scale = choose_scale(pw.max(dw), ph.max(dh), DRAWING_AREA_MM);
-    let mut docs = Vec::new();
-    for surface in [Surface::Plate, Surface::Door] {
-        let (holes, cutouts) = table.on(surface);
-        if surface == Surface::Door && holes.is_empty() && cutouts.is_empty() {
-            continue;
-        }
-        docs.push(PlateDocument {
+    let mut surfaces = vec![Surface::Plate];
+    let mut used: Vec<Surface> = table
+        .holes
+        .iter()
+        .map(|h| h.surface.clone())
+        .chain(table.cutouts.iter().map(|c| c.surface.clone()))
+        .filter(|s| *s != Surface::Plate)
+        .collect();
+    used.sort();
+    used.dedup();
+    surfaces.extend(used);
+    let (mut sw, mut sh) = (0.0_f64, 0.0_f64);
+    for s in &surfaces {
+        let (w, h) = sheet_size(layout, s);
+        sw = sw.max(w);
+        sh = sh.max(h);
+    }
+    let scale = choose_scale(sw, sh, DRAWING_AREA_MM);
+    let docs = surfaces
+        .iter()
+        .map(|surface| PlateDocument {
             title: title.to_string(),
             drawing: plate_drawing(layout, features, &table, surface, scale),
             tables: tables(&table, surface),
-        });
-    }
+        })
+        .collect();
     (docs, table)
 }

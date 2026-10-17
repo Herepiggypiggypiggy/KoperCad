@@ -97,6 +97,9 @@ pub trait CanvasView {
     /// Fits the open page into the view.
     fn zoom_to_fit(&mut self) {}
 
+    /// Fits the whole sheet into the view, empty paper included.
+    fn zoom_to_sheet(&mut self) {}
+
     /// Short text for the status bar, such as cursor coordinates.
     fn status_text(&self) -> Option<String> {
         None
