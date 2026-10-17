@@ -2975,9 +2975,19 @@ impl Editor {
                             let last = corners.last().copied().unwrap_or(a);
                             corners.extend(elbow(last, cursor, true));
                         }
-                        let bends = route_through(a, from, &corners, cursor, to);
+                        // On a pin or wire the preview is the route the click
+                        // would store, nudged clear of other wires as the
+                        // commit does; elsewhere (or when refused) the plain one.
+                        let planned = self.target.and_then(|end| {
+                            edit::planned_bends(project, page, start, &corners, end)
+                                .ok()
+                                .map(|bends| (bends, end.position()))
+                        });
+                        let (bends, end_at) = planned.unwrap_or_else(|| {
+                            (route_through(a, from, &corners, cursor, to), cursor)
+                        });
                         preview.wire.extend(bends);
-                        preview.wire.push(cursor);
+                        preview.wire.push(end_at);
                         // A drag from a pin is the quick connection: the router
                         // picks the route, so there is no piece to place.
                         if !w.drag {
