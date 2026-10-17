@@ -38,7 +38,7 @@ impl NovoApp {
                     choice(
                         ui,
                         "Theme",
-                        "Light and System are a preview: some panels are not themed yet.",
+                        "System follows the light or dark setting of your computer.",
                         &mut theme,
                         &[
                             (novo_theme::ThemeChoice::Dark, "Dark"),
