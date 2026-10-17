@@ -22,12 +22,13 @@
 use novo_core::{AnyId, CableId, DeviceId, Match, PageId, Project, SymbolId, WireId};
 use novo_symbols::Library;
 
-use crate::commands::{self, COMMANDS, CommandInfo, Context, GROUPS};
+use crate::commands::{self, COMMANDS, CommandInfo, Context};
 use crate::fuzzy;
 use crate::insert::{self, InsertSearch};
 use crate::keymap::Keymap;
 use crate::language;
 use crate::locate;
+use crate::menus::{self, MENUS, MenuItem};
 
 /// What picking a row does.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -329,11 +330,25 @@ impl Palette {
                 rows.push(command_row(info, sources, RECENT_GROUP, 0));
             }
         }
-        for group in GROUPS {
-            for info in COMMANDS.iter().filter(|c| c.group == group) {
-                if info.id != "tool.repeat" {
-                    rows.push(command_row(info, sources, group, 0));
+        // Every command under the menu it lives in, in the menu's own
+        // order, so the list reads like the menu bar; the submenu is the
+        // grey detail. Commands with no menu row (keys, gestures) follow.
+        for menu in MENUS {
+            for item in menus::layout(menu) {
+                match item {
+                    MenuItem::Command(info) => menu_row(&mut rows, info, menu, "", sources),
+                    MenuItem::Submenu { name, items } => {
+                        for info in items {
+                            menu_row(&mut rows, info, menu, name, sources);
+                        }
+                    }
+                    MenuItem::Separator => {}
                 }
+            }
+        }
+        for info in COMMANDS {
+            if menus::place(info).is_none() && info.id != "tool.repeat" {
+                menu_row(&mut rows, info, KEYS_GROUP, "", sources);
             }
         }
         rows
@@ -699,6 +714,39 @@ fn location_rows(project: &Project, device: DeviceId, tag: &str, base: i32, rows
     }
 }
 
+/// Heading of the commands that have no menu row.
+const KEYS_GROUP: &str = "Keys";
+
+/// One row of the empty field, under the heading of its menu.
+fn menu_row(
+    rows: &mut Vec<Row>,
+    info: &'static CommandInfo,
+    menu: &'static str,
+    submenu: &str,
+    sources: &Sources<'_>,
+) {
+    if info.id == "tool.repeat" {
+        return;
+    }
+    let mut row = command_row(info, sources, menu, 0);
+    row.detail = submenu.to_owned();
+    rows.push(row);
+}
+
+/// Where the command lives, as the menu path (`File › Library`), or the
+/// key-only note for a command with no menu row. The command field shows it
+/// beside the label and matches it, so typing `library` lists what is in
+/// that submenu.
+pub fn where_it_lives(info: &CommandInfo) -> String {
+    match menus::place(info) {
+        Some(place) => match place.submenu {
+            Some(sub) => format!("{} › {sub}", place.menu),
+            None => place.menu.to_owned(),
+        },
+        None => "Keys".to_owned(),
+    }
+}
+
 fn command_row(
     info: &'static CommandInfo,
     sources: &Sources<'_>,
@@ -709,7 +757,7 @@ fn command_row(
         target: Target::Command(info.id),
         kind: Kind::Command,
         label: info.label.to_owned(),
-        detail: info.group.to_owned(),
+        detail: where_it_lives(info),
         group,
         completion: None,
         shortcut: sources.keymap.shortcut_text(info.id),
@@ -778,7 +826,7 @@ fn command_rows(
             }
             continue;
         }
-        let full = format!("{} {}", info.group, info.label);
+        let full = format!("{} {}", where_it_lives(info), info.label);
         let dutch = language::dutch(info.id).map_or(&[][..], |a| a.words);
         // The label and the verbs rank at full strength; a keyword or a Dutch
         // word is a hint that finds the command but must not outrank a

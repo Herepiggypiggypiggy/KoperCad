@@ -209,6 +209,23 @@
     "{n} overlaps": "{n} overlappingen",
     "{n} pairs too close": "{n} paren te dicht op elkaar",
     "{n} rails overflow": "{n} rails te kort",
-    "{n} wires use an estimated length": "{n} draden gebruiken een geschatte lengte"
+    "{n} wires use an estimated length": "{n} draden gebruiken een geschatte lengte",
+    "Built by (name)": "Gebouwd door (naam)",
+    "Cut DIN rail": "Zaag DIN-rail",
+    "Cut Wiring duct": "Zaag bedrakingskanaal",
+    "Cut Wiring duct {w} x {h}": "Zaag bedrakingskanaal {w} x {h}",
+    "No enclosure has a mounting plate yet. Create a cabinet and set its plate on the Cabinet canvas.": "Nog geen kast heeft een montageplaat. Maak een kast en stel de plaat in op het kastcanvas.",
+    "Cut-out dia {d}": "Uitsparing dia {d}",
+    "Cut-out {w} x {h}": "Uitsparing {w} x {h}",
+    "Fit drill dia {d}: {count} holes": "Boor dia {d}: {count} gaten",
+    "Hole dia {d}": "Gat dia {d}",
+    "Mounting plate {w} x {h} mm, margin {m} mm": "Montageplaat {w} x {h} mm, marge {m} mm",
+    "{length} mm horizontal": "{length} mm horizontaal",
+    "{length} mm vertical": "{length} mm verticaal",
+    "{mark} DIN rail": "{mark} DIN-rail",
+    "{mark} Wiring duct": "{mark} Bedrakingskanaal",
+    "{mark} Wiring duct {w} x {h}": "{mark} Bedrakingskanaal {w} x {h}",
+    "Door": "Deur",
+    "Mounting plate": "Montageplaat"
   }
 }

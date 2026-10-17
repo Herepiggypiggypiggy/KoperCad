@@ -152,6 +152,50 @@ fn the_handler_match_and_the_list_of_working_commands_agree() {
 }
 
 #[test]
+fn the_first_wire_hint_shows_once_two_symbols_sit_on_a_page_with_no_wire() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let doc = d.app.backend.document_mut().unwrap();
+    let h = novo_tests::motor_starter(doc).expect("fixture builds");
+    let page = h.main_page;
+    let hint = |d: &Drive| {
+        let project = d.app.backend.document().unwrap().project();
+        super::tips::page_hint(&d.app.settings, &d.app.wb.keymap, project, page)
+    };
+    assert!(hint(&d).is_none(), "a wired page needs no hint");
+    let wires: Vec<_> = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .wires()
+        .filter(|w| w.page == page)
+        .map(|w| w.id)
+        .collect();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Unwire", |tx| {
+            for w in wires {
+                tx.remove(w)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let text = hint(&d).expect("symbols with no wire get the hint");
+    assert!(text.contains("connect"), "{text}");
+    for _ in 0..HINT_LIMIT {
+        d.app.hint_command_run("tool.connect");
+    }
+    assert!(hint(&d).is_none(), "used enough times, it fades");
+}
+
+#[test]
 fn the_search_button_gets_its_tip_and_its_lesson_anchor_from_one_call() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));

@@ -29,6 +29,7 @@ use super::view3d_align;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_hints::Hints;
+use super::view3d_measure::{self, Measure};
 use super::view3d_move::{self, MoveState};
 use super::view3d_nudge::{self, Fields, Step};
 use super::view3d_place::{self, PlaceList};
@@ -45,6 +46,9 @@ pub(crate) struct View3dMode {
     pub(super) view: View3d,
     /// Dragging, turning and deleting devices, rails and ducts in the view.
     pub(super) mv: MoveState,
+    /// The Measure tool and the points it holds.
+    pub(super) measure: Measure,
+    measure_shown: Vec<[i64; 3]>,
     /// The Position box.
     pub(super) position: Fields,
     /// The list of unplaced devices and the one picked from it.
@@ -118,6 +122,8 @@ impl Default for View3dMode {
         View3dMode {
             view: View3d::new(VIEW_ID),
             mv: MoveState::default(),
+            measure: Measure::default(),
+            measure_shown: Vec::new(),
             position: Fields::default(),
             place: PlaceList::default(),
             ghost_shown: Vec::new(),
@@ -419,7 +425,9 @@ impl NovoApp {
                 )
             }))
             .collect();
-        let mut ghost_changed = mode.ghost_shown != ghost_key;
+        let measure_key = mode.measure.key();
+        let mut ghost_changed = mode.ghost_shown != ghost_key || mode.measure_shown != measure_key;
+        mode.measure_shown = measure_key;
         mode.ghost_shown = ghost_key;
         // The surfaces as faint panes: rebuilt when the model, the picked
         // surface or the toggle changed.
@@ -448,7 +456,7 @@ impl NovoApp {
                 view3d_move::show_warning(ui.ctx(), &text);
             }
         }
-        let ghost: Vec<_> = landings
+        let mut ghost: Vec<_> = landings
             .iter()
             .flat_map(|l| {
                 let top = stored
@@ -465,6 +473,7 @@ impl NovoApp {
                     .unwrap_or_default()
             }))
             .collect();
+        ghost.extend(mode.measure.overlays());
         let mut heat_changed = false;
         if !mode.probe.on {
             mode.probe.at = None;
@@ -528,7 +537,8 @@ impl NovoApp {
             mode.view.set_overlays(all);
             ui.ctx().request_repaint();
         }
-        mode.view.drag_items = mode.controls.move_items && mode.place.armed.is_none();
+        mode.view.drag_items =
+            mode.controls.move_items && !mode.measure.on && mode.place.armed.is_none();
         mode.view.state.display.shadows = mode.controls.shadows;
         // Switching occlusion off and on asks for full quality back, the same
         // as "Restore quality" (one governor, one restore path).
@@ -546,10 +556,12 @@ impl NovoApp {
         let view_rect = ui.available_rect_before_wrap();
         mode.controls.ssao_available = mode.view.occlusion_available();
         mode.controls.reduced = mode.view.stepped_down().is_some() || mode.view.occlusion_paused();
+        let was_measuring = mode.measure.on;
         let (changed, asked) = view3d_controls::toolbar(
             ui.ctx(),
             view_rect,
             &mut mode.controls,
+            &mut mode.measure.on,
             limit,
             &self.settings.camera_views,
             !mode.view.state.selection.is_empty(),
@@ -578,6 +590,9 @@ impl NovoApp {
                 self.settings.camera_views.remove(i);
             }
             _ => {}
+        }
+        if was_measuring && !mode.measure.on {
+            mode.measure.clear();
         }
         if std::mem::take(&mut mode.controls.restore) {
             mode.view.reset_quality();
@@ -647,6 +662,42 @@ impl NovoApp {
             );
         }
         mode.view.state.hover = out.hover;
+        // Measure: a click picks a point; selection stays as it is.
+        if mode.measure.on {
+            if let Some(click) = &out.clicked {
+                let point = click
+                    .point
+                    .or_else(|| out.plate_point.map(|(x, y)| scene.frame.world(x, y, 0.0)));
+                if let Some(point) = point {
+                    mode.measure.click(point, click.id);
+                }
+            }
+            let reading = mode
+                .measure
+                .reading(&scene.frame, load(project, id).as_ref());
+            if let (Some(r), Some(mid)) = (reading, mode.measure.midpoint())
+                && let Some(at) = mode.view.project(out.rect, scene, mid)
+            {
+                let pal = crate::theme::ui_palette();
+                let font = egui::FontId::proportional(13.0);
+                let text = view3d_measure::mm(r.distance);
+                let galley = ui.painter().layout_no_wrap(text, font, pal.sunken);
+                let chip = egui::Rect::from_center_size(at, galley.size() + egui::vec2(12.0, 6.0));
+                ui.painter().rect_filled(chip, 4.0, pal.warning);
+                ui.painter()
+                    .galley(chip.min + egui::vec2(6.0, 3.0), galley, pal.sunken);
+            }
+            if view3d_measure::readout(ui.ctx(), out.rect, &mode.measure, reading) {
+                mode.measure.clear();
+            }
+            if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+                if mode.measure.has_pins() {
+                    mode.measure.clear();
+                } else {
+                    mode.measure.on = false;
+                }
+            }
+        }
         if let Some(hover) = out.hover.filter(|h| h.kind == ItemKind::Device)
             && !mode.mv.dragging()
         {
@@ -781,7 +832,11 @@ impl NovoApp {
             mode.probe.text.clear();
         }
         let probing = mode.probe.on && solution.is_some();
-        if let Some(click) = out.clicked.as_ref().filter(|_| !placing && !probing) {
+        if let Some(click) = out
+            .clicked
+            .as_ref()
+            .filter(|_| !placing && !probing && !mode.measure.on)
+        {
             let extend = click.modifiers.shift || click.modifiers.command;
             match click.id {
                 Some(id) if extend => {
