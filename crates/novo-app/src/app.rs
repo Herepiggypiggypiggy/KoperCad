@@ -1789,6 +1789,9 @@ impl NovoApp {
             }
             return;
         }
+        if self.outline_mode != OutlineMode::Changes {
+            self.wb.changes_closed = false;
+        }
         if self.outline_mode == OutlineMode::Changes {
             if self.changes_outline(ui) {
                 self.outline_open = false;
