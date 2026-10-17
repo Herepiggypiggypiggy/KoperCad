@@ -7,7 +7,9 @@
 //! issue list beside the drawing). A *size class* is the window width in
 //! points, which already includes the display scaling: a 1920 px screen at
 //! 150% is 1280 points and gets the compact layouts, at 125% it is 1536
-//! points and gets the regular ones.
+//! points and gets the regular ones. A window under 800 points high is
+//! also short, and keeps its layouts apart (`"<slot>/<class>/short"`; until
+//! one is stored it starts from the layout of the same width).
 //!
 //! The panels a slot keeps are the outline (pinned or flyout, and what it
 //! lists), the drawer tab, whether the inspector stays docked, and where the
@@ -32,6 +34,9 @@ use crate::settings::WorkspaceLayout;
 pub(super) const COMPACT_BELOW: f32 = 1400.0;
 /// From this width the outline pins itself and the drawer may dock.
 pub(super) const WIDE_FROM: f32 = 1700.0;
+/// A window shorter than this many points is short (a 1366 x 768 laptop, or
+/// 1920 x 1080 at 150%): a layout is kept for it apart from the taller ones.
+pub(super) const SHORT_BELOW: f32 = 800.0;
 /// A window must pass a boundary by this much before the class changes, so
 /// dragging the window edge across it does not flip the panels back and
 /// forth.
@@ -78,6 +83,16 @@ impl SizeClass {
         } else {
             raw
         }
+    }
+}
+
+/// Whether the window is short, staying as it was within the hysteresis
+/// band around [`SHORT_BELOW`]. A height of 0 (not measured yet) is tall.
+pub(crate) fn next_short(current: Option<bool>, height: f32) -> bool {
+    let raw = height > 0.0 && height < SHORT_BELOW;
+    match current {
+        Some(current) if (height - SHORT_BELOW).abs() < HYSTERESIS => current,
+        _ => raw,
     }
 }
 
@@ -173,8 +188,15 @@ impl Slot {
         }
     }
 
-    pub(crate) fn key(self, class: SizeClass) -> String {
-        format!("{}/{}", self.id(), class.id())
+    /// The key a layout is stored under: `"<slot>/<width class>"`, and
+    /// `"<slot>/<width class>/short"` for a short window.
+    pub(crate) fn key(self, class: SizeClass, short: bool) -> String {
+        let plain = format!("{}/{}", self.id(), class.id());
+        if short {
+            format!("{plain}/short")
+        } else {
+            plain
+        }
     }
 
     /// The panels the slot starts with at a window size, before the person
@@ -237,13 +259,15 @@ impl NovoApp {
         }
     }
 
-    /// The layout stored for `slot` at the current size: its own, else the
-    /// one written before sizes existed, else the default.
+    /// The layout stored for `slot` at the current size: its own, else (in a
+    /// short window) the one for the same width, else the one written before
+    /// sizes existed, else the default.
     pub(super) fn layout_of(&self, slot: Slot) -> WorkspaceLayout {
         let class = self.size_class();
         let stored = &self.settings.workspaces;
         stored
-            .get(&slot.key(class))
+            .get(&slot.key(class, self.window_short))
+            .or_else(|| stored.get(&slot.key(class, false)))
             .or_else(|| slot.legacy_key().and_then(|k| stored.get(k)))
             .cloned()
             .unwrap_or_else(|| slot.default_layout(class))
@@ -275,9 +299,10 @@ impl NovoApp {
     /// Keeps the panels of the current slot at the current size.
     pub(super) fn store_layout(&mut self) {
         let snapshot = self.layout_snapshot();
-        self.settings
-            .workspaces
-            .insert(self.slot.key(self.size_class()), snapshot);
+        self.settings.workspaces.insert(
+            self.slot.key(self.size_class(), self.window_short),
+            snapshot,
+        );
     }
 
     pub(super) fn apply_layout(&mut self, layout: &WorkspaceLayout) {
@@ -305,22 +330,31 @@ impl NovoApp {
         self.apply_layout(&layout);
     }
 
-    /// Called every frame with the window width in points. The first call
+    /// The window height as last measured, with the width given.
+    #[cfg(test)]
+    pub(super) fn follow_window_size(&mut self, width: f32) {
+        self.follow_window(width, self.window_height);
+    }
+
+    /// Called every frame with the window size in points. The first call
     /// puts the panels of the current slot for the size; a later change of
     /// class (a resized window, another screen, a new display scale) stores
     /// the panels for the old size and puts back those of the new one.
-    pub(super) fn follow_window_size(&mut self, width: f32) {
+    /// A window under [`SHORT_BELOW`] points high keeps its own layouts too.
+    pub(super) fn follow_window(&mut self, width: f32, height: f32) {
         if width <= 0.0 {
             return;
         }
         let class = SizeClass::next(self.size_class, width);
-        if self.size_class == Some(class) {
+        let short = next_short(self.size_class.map(|_| self.window_short), height);
+        if self.size_class == Some(class) && self.window_short == short {
             return;
         }
         if self.size_class.is_some() {
             self.store_layout();
         }
         self.size_class = Some(class);
+        self.window_short = short;
         let layout = self.layout_of(self.slot);
         self.apply_layout(&layout);
         // The Commissioning workspace always shows its own panel; a stored
@@ -357,7 +391,9 @@ impl NovoApp {
     /// Puts the current slot back to its default at this size.
     pub(super) fn reset_slot_layout(&mut self) {
         let class = self.size_class();
-        self.settings.workspaces.remove(&self.slot.key(class));
+        self.settings
+            .workspaces
+            .remove(&self.slot.key(class, self.window_short));
         if let Some(legacy) = self.slot.legacy_key() {
             self.settings.workspaces.remove(legacy);
         }
