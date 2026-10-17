@@ -230,3 +230,65 @@ fn the_rules_file_is_read_saved_and_a_bad_one_falls_back_with_the_reason() {
         "{problem}"
     );
 }
+
+#[test]
+fn place_all_keeps_clear_of_a_duct_already_on_the_plate_and_a_hand_edit_onto_it_is_a_problem() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let cab = cabinet(&mut d);
+    let plate = novo_layout::model::load(project(&d), cab).unwrap().plate;
+    // A vertical duct down the middle of the plate.
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Duct", |tx| {
+            let duct = novo_layout::plan::PlannedDuct {
+                x: plate.width / 2.0,
+                y: plate.margin,
+                length: plate.height - 2.0 * plate.margin,
+                vertical: true,
+                width: 30.0,
+                height: 60.0,
+                class: novo_layout::rules::Class::Mixed,
+            };
+            novo_layout::model::apply_plan(
+                tx,
+                cab,
+                &novo_layout::plan::Plan {
+                    ducts: vec![duct],
+                    ..Default::default()
+                },
+            )?;
+            Ok(())
+        })
+        .unwrap();
+    place_all(&mut d, cab);
+
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    assert_eq!(layout.placements.len(), 3);
+    assert!(!layout.ducts.is_empty());
+    // The status counts nothing and the check finds nothing.
+    assert!(layout.report().duct_overlaps.is_empty());
+    assert!(layout.report().is_clean(), "{:?}", layout.report());
+
+    // Dragging a device onto the duct is a problem with a clear line.
+    let k1 = project(&d)
+        .all::<novo_core::Device>()
+        .find(|dev| dev.tag.to_string().ends_with("-K1"))
+        .unwrap()
+        .id
+        .raw();
+    let duct = layout.ducts.iter().find(|x| x.vertical).unwrap();
+    let l = Some(layout.clone());
+    d.app
+        .cabinet_ask(Ask::Drop(k1, duct.x - 10.0, 300.0), Some(cab), l, &[]);
+    d.frame();
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    assert!(!layout.report().duct_overlaps.is_empty());
+    let lines = super::cabinet::problem_lines(&layout, k1, &|_| "-K1".into());
+    assert!(
+        lines.iter().any(|l| l.contains("under a duct")),
+        "{lines:?}"
+    );
+}

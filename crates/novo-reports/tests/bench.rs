@@ -185,7 +185,9 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
     let doc = cabinet();
     let out = BenchCut.generate(doc.project());
     assert_eq!(out.sections[0].key, "summary");
-    assert_eq!(out.sections[1].key, "estimates");
+    // The estimates note shares the summary page instead of taking one.
+    assert!(out.sections.iter().all(|s| s.key != "estimates"));
+    assert_eq!(out.sections[1].key, BenchCut::group_key(Some(1.5), "BK"));
     let group = out
         .section(&BenchCut::group_key(Some(1.5), "BK"))
         // Nineteen device-to-device wires and six that end at a supply feed.
@@ -214,7 +216,16 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
         .map(|r| text(&r.cells[2]).trim_start_matches('~').parse().unwrap())
         .collect();
     assert!(cuts.windows(2).all(|w| w[0] >= w[1]));
-    assert!(text(&out.sections[1].rows[0].cells[0]).contains("22 of 25"));
+    assert!(out.sections[0].title.contains("22 of 25"));
+    let estimated: i64 = out.sections[0]
+        .rows
+        .iter()
+        .map(|r| match &r.cells[7] {
+            Cell::Int(n) => *n,
+            other => panic!("{other:?}"),
+        })
+        .sum();
+    assert_eq!(estimated, 22);
 }
 
 #[test]

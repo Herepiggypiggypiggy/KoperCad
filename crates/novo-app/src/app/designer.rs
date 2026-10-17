@@ -29,7 +29,6 @@ use novo_reports::designer::{
     store::{self, Origin},
 };
 use novo_reports::{Align, ReportOutput, standard_reports};
-use novo_theme::tokens;
 
 use super::pdf::write_replacing;
 use super::sheets::{hash, ours_or_free};
@@ -333,8 +332,11 @@ impl NovoApp {
             .open(&mut open)
             .show(ctx, |ui| {
                 ui.horizontal_top(|ui| {
+                    // The form takes 430 points at least and grows with the
+                    // window; the preview keeps the rest.
+                    let editor_width = (ui.available_width() * 0.42).clamp(430.0, 640.0);
                     ui.vertical(|ui| {
-                        ui.set_width(430.0);
+                        ui.set_width(editor_width);
                         egui::ScrollArea::vertical()
                             .id_salt("designer_editor")
                             .auto_shrink([false, false])
@@ -537,7 +539,7 @@ fn editor(ui: &mut egui::Ui, st: &mut DesignerState, rendered: &Rendered, act: &
     if st.pending.is_some() {
         ui.horizontal(|ui| {
             ui.colored_label(
-                tokens::WARNING,
+                crate::theme::ui_palette().warning,
                 format!("Discard changes to {}?", st.draft.name),
             );
             if ui.button("Discard").clicked() {
@@ -556,7 +558,10 @@ fn editor(ui: &mut egui::Ui, st: &mut DesignerState, rendered: &Rendered, act: &
         });
     }
     for line in &st.unreadable {
-        ui.colored_label(tokens::WARNING, format!("Unreadable: {line}"));
+        ui.colored_label(
+            crate::theme::ui_palette().warning,
+            format!("Unreadable: {line}"),
+        );
     }
     ui.horizontal(|ui| {
         if ui
@@ -604,7 +609,7 @@ fn editor(ui: &mut egui::Ui, st: &mut DesignerState, rendered: &Rendered, act: &
         ui.weak("None");
     }
     for p in &rendered.problems {
-        ui.colored_label(tokens::WARNING, describe(p));
+        ui.colored_label(crate::theme::ui_palette().warning, describe(p));
     }
     ui.collapsing("Fields you can use in text", |ui| {
         let mut names: Vec<String> = Fields::sample().names().map(str::to_owned).collect();
@@ -660,6 +665,9 @@ fn frame_fields(ui: &mut egui::Ui, t: &mut Template) {
 }
 
 fn title_block_fields(ui: &mut egui::Ui, t: &mut Template) {
+    // Caption and value share what is left after the remove button.
+    let room = (ui.available_width() - 70.0).max(160.0);
+    let (caption_w, value_w) = (room * 0.32, room * 0.68);
     let mut on = t.title_block.is_some();
     let mut changed = false;
     if ui.checkbox(&mut on, "Title block").changed() {
@@ -668,22 +676,26 @@ fn title_block_fields(ui: &mut egui::Ui, t: &mut Template) {
     }
     if let Some(block) = &mut t.title_block {
         let mut remove = None;
-        egui::Grid::new("designer_title_block")
-            .num_columns(3)
-            .show(ui, |ui| {
-                for (i, row) in block.rows.iter_mut().enumerate() {
-                    ui.add(egui::TextEdit::singleline(&mut row.caption).desired_width(90.0));
-                    ui.add(egui::TextEdit::singleline(&mut row.value).desired_width(230.0));
-                    if ui
-                        .small_button("x")
-                        .on_hover_text("Remove this row")
-                        .clicked()
-                    {
-                        remove = Some(i);
-                    }
-                    ui.end_row();
+        for (i, row) in block.rows.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                let height = ui.spacing().interact_size.y;
+                ui.add_sized(
+                    [caption_w, height],
+                    egui::TextEdit::singleline(&mut row.caption),
+                );
+                ui.add_sized(
+                    [value_w, height],
+                    egui::TextEdit::singleline(&mut row.value),
+                );
+                if ui
+                    .small_button("x")
+                    .on_hover_text("Remove this row")
+                    .clicked()
+                {
+                    remove = Some(i);
                 }
             });
+        }
         if let Some(i) = remove {
             block.rows.remove(i);
             changed = true;

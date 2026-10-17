@@ -15,3 +15,5 @@ Next, in order
 
 Open questions
 - Second-order cabinet plumes are unsteady in the laminar model: only window means are meaningful.
+
+Done 2026-10-16: 3D heat result tools (probe, key, slice position, arrows, hot spots). Next if asked: slice plane dragged in the view, probe on streamlines, key with the arrow scale.

@@ -9,3 +9,7 @@ Resume: `cargo test -p novo-layout -p novo-app && cargo clippy --workspace --all
 
 - Plate devices without a depth cannot be obstacles: `SwingReport.unchecked_plate` lists them and the panel says so instead of claiming a clear sweep.
 - Slice 1 has no UI path that puts a device on the door; the slice that fills `door_devices` from the `surface` property (roadmap item 4) adds it.
+
+Slice 2 (#773): `openings::Opening` parses `opening.<name>` = `"<surface> round D X Y"` / `"<surface> rect W H X Y"` plus optional `keep K` and `to <surface> X Y`. `conflicts()` gives `OpeningConflict` (rule `opening.keepout`, main plate only), part of `CabinetLayout::report()` and the device problem rows. `best_passage()` ranks pass-through openings by in-surface path length; novo-routing does not call it yet. Unreadable properties and unknown surface names are `CabinetLayout.opening_problems`, shown in the Door and depth panel and counted in the Cabinet header.
+
+Slice 3 (#782): `surface_rules::SurfaceRules` ("door: H S P", longest code wins), `split`, `plan_surface` (not called by the app yet). Devices sent to another surface are listed in the Place all message but not stored anywhere.

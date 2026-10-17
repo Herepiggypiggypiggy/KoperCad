@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use novo_core::{CabinetPlacement, Device, DeviceId, Project, StructureId, Value};
 use novo_layout::Plate;
 use novo_layout::model::enclosure_of;
+use novo_layout::state::CabinetLayout;
 use novo_layout::surfaces::{MAIN_PLATE, SURFACE_PROPERTY, SURFACE_SIZE_PREFIX, Surfaces};
 
 /// One line of the picker.
@@ -23,6 +24,13 @@ pub(super) struct SurfaceRow {
     pub devices: usize,
     /// Position and size are planning values, not stored.
     pub assumed: bool,
+    /// The surface as a plate, in mm.
+    pub plate: Plate,
+    /// Where the surface is in the enclosure frame (mm): its corner and the
+    /// directions of its width and height.
+    pub origin: [f64; 3],
+    pub u: [f64; 3],
+    pub v: [f64; 3],
 }
 
 impl SurfaceRow {
@@ -44,6 +52,8 @@ pub(super) struct SurfaceSummary {
     /// Sentences about bad surface properties and placements that name a
     /// surface that does not exist.
     pub problems: Vec<String>,
+    /// The surface each placed device sits on, by device id.
+    pub assigned: BTreeMap<u64, String>,
 }
 
 impl SurfaceSummary {
@@ -71,6 +81,32 @@ impl SurfaceSummary {
             }
         ))
     }
+}
+
+/// The stored layout seen as one surface: that surface's own plate with the
+/// devices placed on it at their stored positions. Rails, ducts and the
+/// enclosure belong to the mounting plate and are left out. View only.
+pub(super) fn surface_layout(
+    stored: &CabinetLayout,
+    summary: &SurfaceSummary,
+    name: &str,
+) -> Option<CabinetLayout> {
+    let row = summary.row(name)?;
+    let mut layout = CabinetLayout::new(row.plate.clone());
+    let on_it = |id: &u64| summary.assigned.get(id).is_some_and(|n| n == name);
+    layout.placements = stored
+        .placements
+        .iter()
+        .filter(|p| on_it(&p.id))
+        .cloned()
+        .collect();
+    layout.depths = stored
+        .depths
+        .iter()
+        .filter(|(id, _)| on_it(id))
+        .map(|(id, d)| (*id, *d))
+        .collect();
+    Some(layout)
 }
 
 /// The surfaces of `structure`; `None` until it has a mounting plate.
@@ -119,6 +155,7 @@ pub(super) fn summarize(project: &Project, structure: StructureId) -> Option<Sur
     };
 
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
+    let mut assigned: BTreeMap<u64, String> = BTreeMap::new();
     for p in project
         .all::<CabinetPlacement>()
         .filter(|p| p.structure == structure)
@@ -128,7 +165,10 @@ pub(super) fn summarize(project: &Project, structure: StructureId) -> Option<Sur
             _ => None,
         };
         match list.find(named) {
-            Some(found) => *counts.entry(found.name.clone()).or_default() += 1,
+            Some(found) => {
+                *counts.entry(found.name.clone()).or_default() += 1;
+                assigned.insert(p.device.raw(), found.name.clone());
+            }
             None => {
                 let tag = project
                     .get::<Device>(DeviceId::from(p.device.raw()))
@@ -150,9 +190,17 @@ pub(super) fn summarize(project: &Project, structure: StructureId) -> Option<Sur
             size: format!("{:.0} x {:.0} mm", s.width, s.height),
             devices: counts.get(&s.name).copied().unwrap_or(0),
             assumed: s.assumed,
+            plate: s.plate(),
+            origin: s.origin,
+            u: s.u,
+            v: s.v,
         })
         .collect();
-    Some(SurfaceSummary { rows, problems })
+    Some(SurfaceSummary {
+        rows,
+        problems,
+        assigned,
+    })
 }
 
 impl super::NovoApp {
