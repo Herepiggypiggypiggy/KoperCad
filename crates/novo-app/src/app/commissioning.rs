@@ -478,8 +478,14 @@ impl NovoApp {
         let Some(path) = dialog.save_file() else {
             return;
         };
-        match write_replacing(&path, package.to_json().as_bytes()) {
-            Ok(()) => self.message(Level::Info, format!("Exported {}", path.display())),
+        let json = package.to_json();
+        let size = if json.len() >= 5_000_000 {
+            format!(" ({} MB with photos)", json.len() / 1_000_000)
+        } else {
+            String::new()
+        };
+        match write_replacing(&path, json.as_bytes()) {
+            Ok(()) => self.message(Level::Info, format!("Exported {}{size}", path.display())),
             Err(e) => self.message(Level::Error, format!("Could not export field results: {e}")),
         }
     }

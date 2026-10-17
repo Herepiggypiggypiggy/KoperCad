@@ -302,3 +302,21 @@ fn a_photo_name_that_could_escape_the_folder_is_not_read_from_a_file() {
     let package = FieldPackage::from_json(&json).unwrap();
     assert!(package.photo_files().is_empty());
 }
+
+#[test]
+fn a_picture_that_does_not_hash_to_its_name_is_dropped() {
+    let (doc, _) = starter();
+    let real = vec![1u8, 2, 3, 4, 5];
+    let name = photo_name(&real, "jpg");
+    let mut package = FieldPackage::new("A", "tv", "t", &CommissioningStore::new(), doc.project());
+    package.attach_photos(|_| None);
+    let json = package.to_json().replace(
+        "\"photos\": []",
+        &format!("\"photos\": [{{\"name\": \"{name}\", \"data\": \"AAAA\"}}]"),
+    );
+    let back = FieldPackage::from_json(&json).unwrap();
+    assert!(
+        back.photo_files().is_empty(),
+        "wrong bytes under a real name"
+    );
+}

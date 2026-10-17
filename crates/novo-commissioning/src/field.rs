@@ -173,12 +173,15 @@ impl FieldPackage {
     }
 
     /// The picture files in the package as (name, bytes). Names that could
-    /// not have come from [`photo_name`] and unreadable data are dropped.
+    /// not have come from [`photo_name`], unreadable data and pictures whose
+    /// bytes do not hash to their name are dropped.
     pub fn photo_files(&self) -> Vec<(String, Vec<u8>)> {
         self.photos
             .iter()
             .filter(|p| is_photo_name(&p.name))
             .filter_map(|p| photo::decode(&p.data).map(|b| (p.name.clone(), b)))
+            // A hand-edited file cannot plant another picture under a real name.
+            .filter(|(name, bytes)| photo::name_matches(name, bytes))
             .collect()
     }
 
