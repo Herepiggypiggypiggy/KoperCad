@@ -12,3 +12,6 @@
 
 ## Parts polish (branch claude/parts-polish)
 - #798 was superseded by #841. Left from it: only one primary button in view (New part is plain, "Use for selected device" is the primary) and no 11 px buttons in the Parts guide strips.
+
+## Safety functions window (branch claude/panels-safety)
+- Segmented controls for S/F/P, category and part basis; 12 px hints; body-size buttons. Picture: design/side-panels/after-1366-safety-functions.png.
