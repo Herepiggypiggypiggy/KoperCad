@@ -31,6 +31,7 @@ mod changes;
 mod checks;
 mod clipboard;
 mod commissioning;
+mod commissioning_photos;
 mod compare;
 mod designer;
 mod device_renumber;
@@ -196,6 +197,8 @@ mod cabinet_tests;
 mod changes_tests;
 #[cfg(test)]
 mod clipboard_tests;
+#[cfg(test)]
+mod commissioning_photos_tests;
 #[cfg(test)]
 mod commissioning_tests;
 #[cfg(test)]
