@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 use novo_interop::part3d::pins::{Fix, PinMapping, apply_to_part, map_terminals, scan_step};
-use novo_parts::{Catalog, CatalogPart, PartKey};
+use novo_parts::{Catalog, CatalogPart, DataSource, POSITIONS_SOURCE_KEY, PartKey};
 
 /// Longest a scan may take before it is given up.
 const SCAN_LIMIT: Duration = Duration::from_secs(20);
@@ -121,6 +121,44 @@ pub(crate) fn save_to_user_catalog(path: &Path, part: &CatalogPart) -> Result<()
     user.save(path).map_err(|e| e.to_string())
 }
 
+/// Writes hand-typed positions into `part`, kept inside the part's outline
+/// when its size is known, and marks them as typed. Returns how many
+/// terminals were written; names the part does not have are skipped.
+pub(crate) fn apply_typed(part: &mut CatalogPart, edits: &[(String, [f64; 3])]) -> usize {
+    let limit = part
+        .dimensions
+        .map(|d| [d.width_mm, d.height_mm, d.depth_mm]);
+    let mut written = 0;
+    for (name, at) in edits {
+        if at.iter().any(|v| !v.is_finite()) {
+            continue;
+        }
+        let Some(t) = part.terminals.iter_mut().find(|t| &t.name == name) else {
+            continue;
+        };
+        let mut p = *at;
+        for (v, max) in p.iter_mut().zip(limit.unwrap_or([f64::MAX; 3])) {
+            *v = v.clamp(0.0, max);
+        }
+        t.position_mm = Some(p);
+        written += 1;
+    }
+    if written > 0 {
+        part.sources
+            .insert(POSITIONS_SOURCE_KEY.into(), DataSource::Typed);
+    }
+    written
+}
+
+/// One terminal in the by-hand editor.
+#[derive(Debug, Clone, PartialEq)]
+struct EditRow {
+    name: String,
+    at: [f64; 3],
+    /// Changed by the user; only these are saved.
+    touched: bool,
+}
+
 enum Entry {
     Running(Receiver<Result<Detection, String>>),
     Done(Result<Detection, String>),
@@ -134,6 +172,8 @@ pub(crate) struct PinsState {
     pub with_estimates: bool,
     /// Result of the last save, shown under the list.
     pub note: Option<String>,
+    /// The by-hand editor's rows for one part.
+    edit: Option<(PartKey, Vec<EditRow>)>,
 }
 
 impl PinsState {
@@ -179,10 +219,66 @@ impl PinsState {
 }
 
 /// What the block asks the window to do.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub(crate) enum PinsAction {
     Detect,
     Save,
+    /// Save the positions the user typed (name, x/y/z in mm).
+    SaveTyped(Vec<(String, [f64; 3])>),
+}
+
+/// The editor: x, y and z in mm from the back-left-bottom corner of the
+/// part (x right, y up, z out from the mounting plate).
+fn editor(ui: &mut egui::Ui, state: &mut PinsState, part: &CatalogPart) -> Option<PinsAction> {
+    let key = part.key();
+    if state.edit.as_ref().is_none_or(|(k, _)| *k != key) {
+        let centre = part.dimensions.map_or([0.0; 3], |d| {
+            [d.width_mm / 2.0, d.height_mm / 2.0, d.depth_mm]
+        });
+        state.edit = Some((
+            key,
+            part.terminals
+                .iter()
+                .map(|t| EditRow {
+                    name: t.name.clone(),
+                    at: t.position_mm.unwrap_or(centre),
+                    touched: false,
+                })
+                .collect(),
+        ));
+    }
+    let rows = &mut state.edit.as_mut()?.1;
+    let mut action = None;
+    egui::CollapsingHeader::new("Edit positions by hand")
+        .id_salt("parts_pins_edit")
+        .show(ui, |ui| {
+            ui.weak("x right, y up, z out from the mounting plate, in mm from the back-left-bottom corner.");
+            egui::Grid::new("parts_pins_edit_grid")
+                .num_columns(4)
+                .show(ui, |ui| {
+                    for r in rows.iter_mut() {
+                        ui.label(&r.name);
+                        for v in &mut r.at {
+                            let changed = ui
+                                .add(egui::DragValue::new(v).speed(0.1).suffix(" mm"))
+                                .changed();
+                            r.touched |= changed;
+                        }
+                        ui.end_row();
+                    }
+                });
+            let touched: Vec<_> = rows
+                .iter()
+                .filter(|r| r.touched)
+                .map(|r| (r.name.clone(), r.at))
+                .collect();
+            ui.add_enabled_ui(!touched.is_empty(), |ui| {
+                if ui.small_button("Save typed positions").clicked() {
+                    action = Some(PinsAction::SaveTyped(touched));
+                }
+            });
+        });
+    action
 }
 
 /// The block under "3D model" in the part detail. `has_step` is whether the
@@ -253,6 +349,9 @@ pub(crate) fn block(
             }
         }
         _ => {}
+    }
+    if !part.terminals.is_empty() {
+        action = editor(ui, state, part).or(action);
     }
     if let Some(note) = &state.note {
         ui.weak(note);
