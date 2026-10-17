@@ -16,8 +16,8 @@ use eframe::egui;
 use novo_canvas::marks::{Mark, MarkKind};
 use novo_canvas::model::item_id;
 use novo_commissioning::{
-    CheckKind, CheckRecord, CheckState, CommissioningStore, Progress, PunchItem, PunchState, Scope,
-    Severity, Target, TargetInfo, progress, targets,
+    CheckKind, CheckRecord, CheckState, CommissioningStore, FieldPackage, Progress, PunchItem,
+    PunchState, RedlineState, Scope, Severity, Signature, Target, TargetInfo, progress, targets,
 };
 use novo_core::{PageId, Project};
 use novo_pdf::{ReportFileFormat, ReportPdfOptions};
@@ -26,8 +26,11 @@ use novo_theme::{Density, Palette, icons, space, widgets};
 use novo_xref::Place;
 
 use super::cabinet_bar::{note_ctx, note_rect};
+use super::commissioning_viewer::{self as viewer, PhotoViewer};
 
 use super::changes::shown_on;
+use super::commissioning_redlines::{RedlineAction, redlines_tab};
+use super::commissioning_signature::{self as signature, SignDraft};
 use super::pdf::{replaceable_path, write_replacing};
 use super::revisions::iso_date;
 use super::workspace::Workspace;
@@ -35,10 +38,23 @@ use super::{Level, NovoApp, OutlineMode, projects_dir};
 
 /// How long the first touch of "Pass all open" waits for the second.
 const ARM_SECONDS: f64 = 5.0;
+/// Windows narrower than this (logical points) get the tablet layout in the
+/// Commissioning workspace: the panel pinned and wider, large buttons on.
+pub(super) const TABLET_MAX_WIDTH: f32 = 1200.0;
+/// The panel's width in the tablet layout.
+pub(super) const TABLET_PANEL_WIDTH: f32 = 380.0;
+
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Tab {
+enum FieldAction {
+    Export,
+    Import,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Tab {
     Checks,
     Punch,
+    Redlines,
 }
 
 /// Commissioning mode's data and panel state.
@@ -46,7 +62,7 @@ pub(crate) struct CommissioningMode {
     pub(super) store: CommissioningStore,
     /// Who the decisions are recorded for.
     pub(super) who: String,
-    tab: Tab,
+    pub(super) tab: Tab,
     pub(super) selected: Option<Target>,
     /// The measured value and note for the next decision.
     value: String,
@@ -54,17 +70,24 @@ pub(crate) struct CommissioningMode {
     punch_title: String,
     punch_severity: Severity,
     show_closed: bool,
+    pub(super) redline: super::commissioning_redlines::RedlineDraft,
     /// The pages of the checks list that are unfolded.
     open_pages: HashSet<PageId>,
     /// The page the list last unfolded for, so a page change unfolds it once.
     unfolded_for: Option<PageId>,
     /// Bigger buttons and text for a tablet.
-    large: bool,
+    pub(super) large: bool,
     /// "Pass all open" was touched once for this target at this time (egui
     /// seconds); a second touch within `ARM_SECONDS` does it.
     armed: Option<(Target, f64)>,
     /// The store changed and is not yet kept in the project file.
-    dirty: bool,
+    pub(super) dirty: bool,
+    /// A punch item whose "Add photo" was touched; the picker opens after the panel.
+    pub(super) photo_for: Option<u64>,
+    /// The signature pad, open under the item being verified.
+    pub(super) signing: Option<SignDraft>,
+    /// The pictures of the punch items, shown small and large.
+    pub(super) viewer: PhotoViewer,
 }
 
 impl CommissioningMode {
@@ -83,11 +106,15 @@ impl CommissioningMode {
             punch_title: String::new(),
             punch_severity: Severity::Minor,
             show_closed: false,
+            redline: Default::default(),
             open_pages: HashSet::new(),
             unfolded_for: None,
             large: false,
             armed: None,
             dirty: false,
+            photo_for: None,
+            signing: None,
+            viewer: Default::default(),
         }
     }
 
@@ -110,7 +137,7 @@ impl CommissioningMode {
 }
 
 /// Now as ISO 8601 text, UTC.
-fn now() -> String {
+pub(super) fn now() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
@@ -231,7 +258,11 @@ fn progress_bar(ui: &mut egui::Ui, title: &str, p: Progress) {
 
 /// Where a click on `info` takes the drawing: its page and, for a device or
 /// terminal, a symbol that draws it there.
-fn place_of(project: &Project, info: &TargetInfo, current: Option<PageId>) -> Option<Place> {
+pub(super) fn place_of(
+    project: &Project,
+    info: &TargetInfo,
+    current: Option<PageId>,
+) -> Option<Place> {
     let page = current
         .filter(|p| info.pages.contains(p))
         .or_else(|| info.pages.first().copied())?;
@@ -245,6 +276,19 @@ fn place_of(project: &Project, info: &TargetInfo, current: Option<PageId>) -> Op
 }
 
 impl NovoApp {
+    /// The Commissioning workspace is showing, so its panel stays beside the
+    /// drawing at any window width: the walk-through needs it all the time.
+    pub(super) fn commissioning_pins_panel(&self) -> bool {
+        self.is_open() && self.workspace() == Workspace::Commissioning
+    }
+
+    /// Commissioning on a window the size of a tablet.
+    pub(super) fn commissioning_tablet(&self) -> bool {
+        self.commissioning_pins_panel()
+            && self.window_width > 0.0
+            && self.window_width < TABLET_MAX_WIDTH
+    }
+
     /// The `view.commissioning` command opens the Commissioning workspace:
     /// the mode is on, its panel in the outline's place. Leaving it drops the
     /// in-memory store, which is safe because every change is flushed to the
@@ -290,7 +334,7 @@ impl NovoApp {
     }
 
     /// Reads the project's commissioning data when the mode has none yet.
-    fn load_commissioning(&mut self) {
+    pub(super) fn load_commissioning(&mut self) {
         if self.wb.commissioning.is_some() || self.backend.document().is_none() {
             return;
         }
@@ -322,7 +366,8 @@ impl NovoApp {
         };
         let project = doc.project();
         let mut marks = Vec::new();
-        for info in targets(project).iter().filter(|i| i.pages.contains(&page)) {
+        let infos = targets(project);
+        for info in infos.iter().filter(|i| i.pages.contains(&page)) {
             let (kind, what) = match target_state(&mode.store, info.target) {
                 CheckState::Failed => (MarkKind::Error, "✖ Failed"),
                 CheckState::Passed => (MarkKind::Added, "✔ Passed"),
@@ -331,6 +376,25 @@ impl NovoApp {
             for id in shown_on(project, info.target.any_id(), page) {
                 marks
                     .push(Mark::on(kind, item_id(id)).with_text(format!("{}: {what}", info.label)));
+            }
+        }
+        // Open redlines show where the machine differs from the drawing.
+        for redline in mode
+            .store
+            .redlines()
+            .filter(|r| r.state == RedlineState::Open)
+        {
+            let Some(info) = infos
+                .iter()
+                .find(|i| i.target == redline.target && i.pages.contains(&page))
+            else {
+                continue;
+            };
+            for id in shown_on(project, info.target.any_id(), page) {
+                marks.push(
+                    Mark::on(MarkKind::Modified, item_id(id))
+                        .with_text(format!("Redline: {}", redline.summary())),
+                );
             }
         }
         marks
@@ -342,6 +406,10 @@ impl NovoApp {
         let current = self.current_page;
         let mut go: Option<Place> = None;
         let mut export: Option<ReportFileFormat> = None;
+        let mut field: Option<FieldAction> = None;
+        let mut redline_action: Option<RedlineAction> = None;
+        let tablet = self.commissioning_tablet();
+        let photos_dir = self.field_photos_dir();
         {
             let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
             else {
@@ -349,21 +417,48 @@ impl NovoApp {
                 return false;
             };
             let project = doc.project();
-            mode.large = self.settings.large_buttons;
+            mode.large = self.settings.large_buttons || tablet;
+            mode.viewer.dir = photos_dir;
             touch_density(ui, mode.large);
-            let mut tab = usize::from(mode.tab == Tab::Punch);
+            let mut tab = match mode.tab {
+                Tab::Checks => 0,
+                Tab::Punch => 1,
+                Tab::Redlines => 2,
+            };
             let mut large = mode.large;
             ui.horizontal(|ui| {
-                let row = ui.scope(|ui| widgets::tabs(ui, &mut tab, &["Checks", "Punch list"]));
+                let row = ui
+                    .scope(|ui| widgets::tabs(ui, &mut tab, &["Checks", "Punch list", "Redlines"]));
                 if row.inner {
-                    mode.tab = [Tab::Checks, Tab::Punch][tab];
+                    mode.tab = [Tab::Checks, Tab::Punch, Tab::Redlines][tab];
                 }
-                // The tabs are one widget; the Punch tab is the right half.
+                // The tabs are one widget of equal thirds.
                 let r = row.response.rect;
-                let punch = egui::Rect::from_min_max(egui::pos2(r.center().x, r.top()), r.max);
-                note_rect(ui.ctx(), "commissioning.punch", "Punch tab", punch, false);
+                let third = r.width() / 3.0;
+                let part = |i: f32| {
+                    egui::Rect::from_min_max(
+                        egui::pos2(r.left() + third * i, r.top()),
+                        egui::pos2(r.left() + third * (i + 1.0), r.bottom()),
+                    )
+                };
+                note_rect(
+                    ui.ctx(),
+                    "commissioning.punch",
+                    "Punch tab",
+                    part(1.0),
+                    false,
+                );
+                note_rect(
+                    ui.ctx(),
+                    "commissioning.redlines",
+                    "Redlines tab",
+                    part(2.0),
+                    false,
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    export = header_menu(ui, mode, &mut large);
+                    let (report, action) = header_menu(ui, mode, &mut large, tablet);
+                    export = report;
+                    field = action;
                 });
             });
             if large != mode.large {
@@ -388,6 +483,9 @@ impl NovoApp {
             match mode.tab {
                 Tab::Checks => checks_tab(ui, mode, project, current, &mut go),
                 Tab::Punch => punch_tab(ui, mode, project, current, &mut go),
+                Tab::Redlines => {
+                    redline_action = redlines_tab(ui, mode, project, current, &mut go);
+                }
             }
             if mode.dirty {
                 mode.dirty = false;
@@ -401,13 +499,118 @@ impl NovoApp {
                 self.learn_event(novo_learn::Event::Clicked(a.id.to_owned()));
             }
         }
+        if let Some(mode) = self.wb.commissioning.as_mut() {
+            viewer::window(ui.ctx(), &mut mode.viewer);
+        }
         if let Some(place) = go {
             self.jump(place, true);
+        }
+        if let Some(id) = self
+            .wb
+            .commissioning
+            .as_mut()
+            .and_then(|m| m.photo_for.take())
+        {
+            self.add_punch_photos(id);
         }
         if let Some(format) = export {
             self.export_commissioning_report(format);
         }
+        match redline_action {
+            Some(RedlineAction::Apply) => self.apply_redlines(false),
+            Some(RedlineAction::ApplyAndIssue) => self.apply_redlines(true),
+            None => {}
+        }
+        match field {
+            Some(FieldAction::Export) => self.export_field_results(),
+            Some(FieldAction::Import) => self.import_field_results(),
+            None => {}
+        }
         false
+    }
+
+    /// Writes the field results (checks and punch items) to a `.kcfield`
+    /// file the person picks, to carry to another machine.
+    pub(super) fn export_field_results(&mut self) {
+        let Some(name) = self.project_name() else {
+            return;
+        };
+        self.load_commissioning();
+        let (Some(mode), Some(doc)) = (self.wb.commissioning.as_ref(), self.backend.document())
+        else {
+            return;
+        };
+        let mut package = FieldPackage::new(&name, &mode.who, &now(), &mode.store, doc.project());
+        self.pack_field_photos(&mut package);
+        let mut dialog = rfd::FileDialog::new()
+            .set_title("Export field results")
+            .set_file_name(format!("{name} field results.kcfield"))
+            .add_filter("KoperCAD field results", &["kcfield"]);
+        if let Some(dir) = projects_dir() {
+            dialog = dialog.set_directory(dir);
+        }
+        let Some(path) = dialog.save_file() else {
+            return;
+        };
+        let json = package.to_json();
+        let size = if json.len() >= 5_000_000 {
+            format!(" ({} MB with photos)", json.len() / 1_000_000)
+        } else {
+            String::new()
+        };
+        match write_replacing(&path, json.as_bytes()) {
+            Ok(()) => self.message(Level::Info, format!("Exported {}{size}", path.display())),
+            Err(e) => self.message(Level::Error, format!("Could not export field results: {e}")),
+        }
+    }
+
+    /// Merges a `.kcfield` file into this project's commissioning data.
+    pub(super) fn import_field_results(&mut self) {
+        let mut dialog = rfd::FileDialog::new()
+            .set_title("Import field results")
+            .add_filter("KoperCAD field results", &["kcfield"]);
+        if let Some(dir) = projects_dir() {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(path) = dialog.pick_file() {
+            self.import_field_results_from(&path);
+        }
+    }
+
+    pub(super) fn import_field_results_from(&mut self, path: &Path) {
+        self.load_commissioning();
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not read {}: {e}", path.display()),
+                );
+                return;
+            }
+        };
+        let package = match FieldPackage::from_json(&text) {
+            Ok(package) => package,
+            Err(e) => {
+                self.message(Level::Error, e.to_string());
+                return;
+            }
+        };
+        let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
+        else {
+            return;
+        };
+        let report = package.merge_into(&mut mode.store, doc.project());
+        if report.changed() {
+            mode.dirty = true;
+        }
+        self.unpack_field_photos(&package);
+        let text = format!(
+            "Imported field results from {}: {}",
+            package.exported_by,
+            report.summary()
+        );
+        self.message(Level::Info, text);
     }
 
     /// The `export.commissioning` command: the report as a PDF.
@@ -462,7 +665,7 @@ impl NovoApp {
             .and_then(|bytes| write_replacing(path, &bytes).map_err(|e| e.to_string()));
         match result {
             Ok(()) => {
-                self.message(Level::Info, format!("Exported {}", path.display()));
+                self.message_file(format!("Exported {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
@@ -484,17 +687,28 @@ pub(super) fn report_path(
     name: &str,
     ext: &str,
 ) -> Option<PathBuf> {
+    report_path_for("commissioning", file, dir, name, ext)
+}
+
+/// [`report_path`] for a report called `kind` (`<project> <kind>.<ext>`).
+pub(super) fn report_path_for(
+    kind: &str,
+    file: Option<&Path>,
+    dir: Option<&Path>,
+    name: &str,
+    ext: &str,
+) -> Option<PathBuf> {
     let base = match file {
         Some(file) => {
             let stem = file.file_stem()?.to_string_lossy().into_owned();
-            file.with_file_name(format!("{stem} commissioning.{ext}"))
+            file.with_file_name(format!("{stem} {kind}.{ext}"))
         }
         None => {
             let stem = Path::new(&super::project_file_name(name))
                 .with_extension("")
                 .to_string_lossy()
                 .into_owned();
-            dir?.join(format!("{stem} commissioning.{ext}"))
+            dir?.join(format!("{stem} {kind}.{ext}"))
         }
     };
     if ext == "pdf" {
@@ -522,8 +736,10 @@ fn header_menu(
     ui: &mut egui::Ui,
     mode: &mut CommissioningMode,
     large: &mut bool,
-) -> Option<ReportFileFormat> {
+    tablet: bool,
+) -> (Option<ReportFileFormat>, Option<FieldAction>) {
     let mut export = None;
+    let mut field = None;
     let name = if mode.who.trim().is_empty() {
         "By".to_owned()
     } else {
@@ -559,7 +775,34 @@ fn header_menu(
             }
         }
         ui.add_space(space::S);
-        ui.checkbox(large, "Large buttons");
+        widgets::section_label(ui, "Field results");
+        for (label, action, hint, id, name) in [
+            (
+                "Export field results",
+                FieldAction::Export,
+                "Save your ticks and punch items as a file to carry to the desk (no cloud)",
+                "commissioning.field_export",
+                "Export field results item",
+            ),
+            (
+                "Import field results",
+                FieldAction::Import,
+                "Merge a field results file into this project; newer decisions win",
+                "commissioning.field_import",
+                "Import field results item",
+            ),
+        ] {
+            let item = widgets::menu_item(ui, Some(icons::FILE_TEXT), label, None, true)
+                .on_hover_text(hint);
+            note_ctx(ui.ctx(), id, name, &item);
+            if item.clicked() {
+                field = Some(action);
+                ui.close();
+            }
+        }
+        ui.add_space(space::S);
+        // The tablet layout always has them on.
+        ui.add_enabled(!tablet, egui::Checkbox::new(large, "Large buttons"));
     });
     // The button stands in for the field and the PDF item until it is open.
     if menu.inner.is_none() {
@@ -570,8 +813,20 @@ fn header_menu(
             "Write PDF report item",
             &menu.response,
         );
+        note_ctx(
+            ui.ctx(),
+            "commissioning.field_export",
+            "Export field results item",
+            &menu.response,
+        );
+        note_ctx(
+            ui.ctx(),
+            "commissioning.field_import",
+            "Import field results item",
+            &menu.response,
+        );
     }
-    export
+    (export, field)
 }
 
 fn checks_tab(
@@ -838,6 +1093,8 @@ fn punch_tab(
                 raised_at: now(),
                 closed_by: None,
                 closed_at: None,
+                photos: Vec::new(),
+                signature: None,
             });
             mode.dirty = true;
         }
@@ -908,7 +1165,10 @@ fn punch_tab(
                         if label == "Fixed" || label == "Verified" {
                             note_ctx(ui.ctx(), "commissioning.resolve", "Resolve button", &button);
                         }
-                        if button.clicked()
+                        if button.clicked() && state == PunchState::Verified {
+                            // Verifying is signed: the pad opens under the item.
+                            mode.signing = Some(SignDraft::new(item.id, &mode.who));
+                        } else if button.clicked()
                             && mode
                                 .store
                                 .set_punch_state(item.id, state, &mode.who, &now())
@@ -927,8 +1187,66 @@ fn punch_tab(
                     {
                         mode.dirty = true;
                     }
+                    let photo = ui.button("Add photo").on_hover_text(
+                        "Attach pictures of the issue; they travel in the field results file",
+                    );
+                    note_ctx(ui.ctx(), "commissioning.photo", "Add photo button", &photo);
+                    if photo.clicked() {
+                        mode.photo_for = Some(item.id);
+                    }
                 });
+                if mode.signing.as_ref().is_some_and(|d| d.item == item.id) {
+                    signing_area(ui, mode, item.id);
+                }
+                if let Some(sig) = &item.signature {
+                    ui.weak(format!("Signed by {} · {}", sig.name, sig.at));
+                    signature::preview(ui, sig);
+                }
+                if !item.photos.is_empty() {
+                    viewer::strip(ui, &mut mode.viewer, &item.photos);
+                }
                 ui.add_space(space::S);
             }
         });
+}
+
+/// The pad, the name and the buttons that finish or drop a sign-off.
+fn signing_area(ui: &mut egui::Ui, mode: &mut CommissioningMode, id: u64) {
+    let Some(draft) = mode.signing.as_mut() else {
+        return;
+    };
+    ui.add(
+        egui::TextEdit::singleline(&mut draft.name)
+            .hint_text("Name of the person verifying")
+            .desired_width(f32::INFINITY),
+    );
+    signature::pad(ui, draft);
+    let (mut sign, mut cancel) = (false, false);
+    ui.horizontal(|ui| {
+        let can = !draft.name.trim().is_empty();
+        let button = ui.add_enabled(can, egui::Button::new("Sign and verify"));
+        note_ctx(
+            ui.ctx(),
+            "commissioning.sign",
+            "Sign and verify button",
+            &button,
+        );
+        sign = button.clicked();
+        if ui
+            .add_enabled(!draft.is_blank(), egui::Button::new("Clear"))
+            .clicked()
+        {
+            draft.clear();
+        }
+        cancel = ui.button("Cancel").clicked();
+    });
+    if sign {
+        let signed = Signature::from_strokes(&draft.name, &now(), draft.strokes());
+        if mode.store.sign_off(id, signed).is_ok() {
+            mode.dirty = true;
+        }
+        mode.signing = None;
+    } else if cancel {
+        mode.signing = None;
+    }
 }

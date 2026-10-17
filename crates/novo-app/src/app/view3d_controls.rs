@@ -3,7 +3,9 @@
 //! build and the door swing are applied in `view3d.rs`.
 
 use eframe::egui;
-use novo_view3d::Layers;
+use std::collections::BTreeSet;
+
+use novo_view3d::{ItemId, Layers, Section, SectionAxis};
 
 /// Margin from the view's corner, in points.
 const MARGIN: f32 = 12.0;
@@ -20,10 +22,28 @@ pub(crate) struct Controls {
     pub(super) move_items: bool,
     /// Soft shadows from the key light.
     pub(super) shadows: bool,
+    /// Devices, rails and ducts the user hid; the project is untouched.
+    pub(super) hidden: BTreeSet<ItemId>,
+    /// Screen-space ambient occlusion (the frame governor may pause it).
+    pub(super) ssao: bool,
+    /// This GPU draws occlusion at all. Set by the host each frame.
+    pub(super) ssao_available: bool,
+    /// A swipe in wheel lines pans instead of zooming (Windows trackpads).
+    pub(super) trackpad_pans: bool,
+    /// Measuring lines: the enclosure's size and the selected part's.
+    pub(super) dimensions: bool,
+    /// The frame governor has stepped the quality down: the toolbar offers
+    /// to restore it. Set by the host each frame.
+    pub(super) reduced: bool,
+    /// The user pressed "Restore quality"; the host acts on it and clears it.
+    pub(super) restore: bool,
     /// The "?" badge (no part data) on every device, not only on hover.
     pub(super) missing_data: bool,
     /// The Heat panel in the right-hand slot, under the view cube.
     pub(super) heat_panel: bool,
+    /// The door, walls, roof, floor and extra plates as faint panes (View
+    /// > Cabinet > Cabinet surfaces picks one to highlight).
+    pub(super) surfaces: bool,
 }
 
 impl Default for Controls {
@@ -33,8 +53,16 @@ impl Default for Controls {
             door_deg: 0.0,
             move_items: true,
             shadows: true,
+            hidden: BTreeSet::new(),
+            ssao: true,
+            ssao_available: true,
+            trackpad_pans: false,
+            dimensions: false,
+            reduced: false,
+            restore: false,
             missing_data: false,
             heat_panel: false,
+            surfaces: false,
         }
     }
 }
@@ -44,6 +72,8 @@ impl Default for Controls {
 pub(super) struct Changed {
     pub(super) layers: bool,
     pub(super) door: bool,
+    /// What the Views menu asked for.
+    pub(super) views: Option<super::view3d_views::ViewsAction>,
 }
 
 impl Controls {
@@ -79,13 +109,19 @@ pub(super) const BELOW: f32 = 140.0;
 
 /// The toolbar, top left of the view. `limit` is how far the enclosure's door
 /// opens, `None` when it has none.
+#[allow(clippy::too_many_arguments)] // one call site; a struct would only rename them
 pub(super) fn toolbar(
     ctx: &egui::Context,
     view: egui::Rect,
     controls: &mut Controls,
     limit: Option<f64>,
-) -> Changed {
+    views: &[crate::settings::CameraBookmark],
+    selected: bool,
+    section: &mut Option<Section>,
+    bounds: &dyn Fn() -> Option<novo_view3d::Aabb>,
+) -> (Changed, Option<&'static str>) {
     let mut changed = Changed::default();
+    let mut command = None;
     // Leave the view cube (top right) uncovered.
     let width = TOOLBAR_WIDTH
         .min(view.width() - super::view3d_heat::CUBE_SIZE - 3.0 * MARGIN)
@@ -107,7 +143,9 @@ pub(super) fn toolbar(
                 controls.layers.door,
                 controls.layers.wires,
                 controls.shadows,
+                controls.ssao && controls.ssao_available,
                 controls.missing_data,
+                controls.surfaces,
             ]
             .iter()
             .filter(|b| **b)
@@ -118,42 +156,111 @@ pub(super) fn toolbar(
                 .config(config)
                 .ui(ui, |ui| {
                     let layers = &mut controls.layers;
-                    changed.layers |= ui
-                        .checkbox(&mut layers.shell, "Enclosure")
-                        .on_hover_text("Show the enclosure box")
-                        .changed();
-                    changed.layers |= ui
-                        .checkbox(&mut layers.door, "Door")
-                        .on_hover_text("Show the door")
-                        .changed();
-                    changed.layers |= ui
-                        .checkbox(&mut layers.wires, "Wires")
-                        .on_hover_text("Show the routed wires")
-                        .changed();
-                    ui.checkbox(&mut controls.shadows, "Shadows")
-                        .on_hover_text("Soft shadows from the key light (View > 3D > Shadows)");
-                    ui.checkbox(&mut controls.missing_data, "Missing data")
-                        .on_hover_text(
-                            "Mark every device that has no part data with a \"?\". Off: \
-                             the \"?\" shows on the device under the pointer.",
+                    changed.layers |=
+                        toggle(ui, &mut layers.shell, "Enclosure", "Show the enclosure box");
+                    changed.layers |= toggle(ui, &mut layers.door, "Door", "Show the door");
+                    changed.layers |=
+                        toggle(ui, &mut layers.wires, "Wires", "Show the routed wires");
+                    toggle(
+                        ui,
+                        &mut controls.surfaces,
+                        "Surfaces",
+                        "Show the door, walls, roof, floor and extra plates as faint panes. \
+                         The surface picked in the Cabinet header is highlighted.",
+                    );
+                    toggle(
+                        ui,
+                        &mut controls.shadows,
+                        "Shadows",
+                        "Soft shadows from the key light (View > 3D > Shadows)",
+                    );
+                    if controls.ssao_available {
+                        toggle(
+                            ui,
+                            &mut controls.ssao,
+                            "Occlusion",
+                            "Ambient occlusion: corners and contacts darken (View > 3D > \
+                             Ambient occlusion). The 3D view turns it off by itself when it \
+                             runs slowly; \"Restore quality\" or switching it off and on asks \
+                             for it back.",
                         );
+                    } else {
+                        ui.add_enabled_ui(false, |ui| {
+                            novo_theme::widgets::filter_toggle(ui, "Occlusion", false)
+                                .on_disabled_hover_text(
+                                    "Needs a discrete GPU; this one cannot draw ambient occlusion",
+                                );
+                        });
+                    }
+                    toggle(
+                        ui,
+                        &mut controls.trackpad_pans,
+                        "Trackpad pans",
+                        "Two-finger swipes pan instead of zoom. For Windows touchpads, which \
+                         send swipes as mouse-wheel steps; a real mouse wheel then pans too. \
+                         Zoom with Ctrl + swipe or a pinch.",
+                    );
+                    toggle(
+                        ui,
+                        &mut controls.missing_data,
+                        "Missing data",
+                        "Mark every device that has no part data with a \"?\". Off: \
+                         the \"?\" shows on the device under the pointer.",
+                    );
                 });
             ui.separator();
             // Modes and panels: what the pointer does, what sits at the side.
-            toggle(
-                ui,
-                &mut controls.move_items,
-                "Move",
-                "Move mode. Drag a device, rail or duct to move it on the plate (grid \
-                 and checks as in the Cabinet). R turns the selection, Delete takes it \
-                 off. Off: a drag draws a selection box.",
-            );
+            // A mode, not a layer: keeps the copper wash of a tool.
+            let mode = if controls.move_items {
+                "✔ Move"
+            } else {
+                "Move"
+            };
+            if ui
+                .selectable_label(controls.move_items, mode)
+                .on_hover_text(
+                    "Move mode. Drag a device, rail or duct to move it on the plate (grid \
+                     and checks as in the Cabinet). R turns the selection, Delete takes it \
+                     off. Off: a drag draws a selection box.",
+                )
+                .clicked()
+            {
+                controls.move_items ^= true;
+            }
             toggle(
                 ui,
                 &mut controls.heat_panel,
                 "Heat",
                 "The Heat panel: simulate how heat and air move in this cabinet",
             );
+            changed.views = super::view3d_views::menu(ui, views);
+            command = selection_menu(ui, selected, controls.hidden.len());
+            section_menu(ui, section, bounds);
+            toggle(
+                ui,
+                &mut controls.dimensions,
+                "Dimensions",
+                "Measuring lines in mm: the enclosure, and for one selected part its \
+                 size and its distances to neighbours and the plate edge (View > 3D > \
+                 Dimensions)",
+            );
+            if controls.reduced {
+                ui.label(
+                    egui::RichText::new("Reduced quality")
+                        .color(ui.visuals().warn_fg_color)
+                        .small(),
+                )
+                .on_hover_text(
+                    "The view stayed slow, so it draws at lower resolution while it moves.",
+                );
+                if ui
+                    .button("Restore quality")
+                    .on_hover_text("Draw at full quality again (View > 3D > Restore 3D quality).")
+                    .clicked()
+                {
+                    controls.restore = true;
+                }
+            }
             if let Some(limit) = limit
                 && controls.layers.door
             {
@@ -185,18 +292,118 @@ pub(super) fn toolbar(
             }
         });
     });
-    changed
+    (changed, command)
 }
 
-/// A toggle button whose state is also in its look (a tick), so it never
-/// relies on colour alone.
-fn toggle(ui: &mut egui::Ui, on: &mut bool, name: &str, hint: &str) -> bool {
-    let text = if *on {
-        format!("✔ {name}")
+/// The Select and Hide menu: pick every device, rail or duct, hide or isolate
+/// the selection, bring everything back. Returns the command asked for.
+fn selection_menu(ui: &mut egui::Ui, selected: bool, hidden: usize) -> Option<&'static str> {
+    let mut command = None;
+    let title = if hidden > 0 {
+        format!("Select and hide ({hidden} hidden)")
     } else {
-        name.to_owned()
+        "Select and hide".to_owned()
     };
-    if ui.selectable_label(*on, text).on_hover_text(hint).clicked() {
+    ui.menu_button(title, |ui| {
+        let mut row = |ui: &mut egui::Ui, label: &str, id: &'static str, enabled: bool| {
+            if ui.add_enabled(enabled, egui::Button::new(label)).clicked() {
+                command = Some(id);
+                ui.close();
+            }
+        };
+        row(ui, "Select all devices", "view.3d_select_devices", true);
+        row(ui, "Select all rails", "view.3d_select_rails", true);
+        row(ui, "Select all ducts", "view.3d_select_ducts", true);
+        ui.separator();
+        row(ui, "Hide selection   Ctrl+H", "view.3d_hide", selected);
+        row(
+            ui,
+            "Isolate selection   Ctrl+I",
+            "view.3d_isolate",
+            selected,
+        );
+        row(
+            ui,
+            "Show all   Ctrl+Shift+H",
+            "view.3d_show_all",
+            hidden > 0,
+        );
+    });
+    command
+}
+
+/// The Section menu: a plane through the enclosure that cuts the front of
+/// the picture away so the inside shows. Only the picture is cut.
+fn section_menu(
+    ui: &mut egui::Ui,
+    section: &mut Option<Section>,
+    bounds: &dyn Fn() -> Option<novo_view3d::Aabb>,
+) {
+    let title = if section.is_some() {
+        "✔ Section"
+    } else {
+        "Section"
+    };
+    ui.menu_button(title, |ui| {
+        let mut on = section.is_some();
+        if ui
+            .checkbox(&mut on, "Cut the picture with a plane")
+            .on_hover_text("Hide everything on one side of a plane to see inside")
+            .changed()
+        {
+            *section = on.then(Section::default);
+        }
+        let Some(s) = section.as_mut() else {
+            return;
+        };
+        ui.horizontal(|ui| {
+            for (axis, name, hint) in [
+                (SectionAxis::X, "X", "Across the plate"),
+                (SectionAxis::Y, "Y", "Up the plate"),
+                (
+                    SectionAxis::Z,
+                    "Z",
+                    "Out of the plate: slices the depth of the enclosure",
+                ),
+            ] {
+                ui.selectable_value(&mut s.axis, axis, name)
+                    .on_hover_text(hint);
+            }
+            ui.checkbox(&mut s.flip, "Flip")
+                .on_hover_text("Hide the other side of the plane");
+        });
+        // In mm along the axis when the scene is at hand.
+        match bounds().filter(|b| !b.is_empty()) {
+            Some(b) => {
+                let (lo, hi) = s.range(&b);
+                let mut mm = s.position_mm(&b);
+                if ui
+                    .add(
+                        egui::Slider::new(&mut mm, lo..=hi)
+                            .suffix(" mm")
+                            .max_decimals(1),
+                    )
+                    .on_hover_text("Where the plane stands, in mm along the axis; type a value")
+                    .changed()
+                {
+                    s.set_position_mm(&b, mm);
+                }
+            }
+            None => {
+                ui.add(egui::Slider::new(&mut s.at, 0.0..=1.0).show_value(false))
+                    .on_hover_text("Where the plane stands");
+            }
+        }
+    });
+}
+
+/// A layer toggle: neutral, with a tick when on, so it never relies on
+/// colour alone and never reads as copper.
+fn toggle(ui: &mut egui::Ui, on: &mut bool, name: &str, hint: &str) -> bool {
+    if novo_theme::widgets::filter_toggle(ui, name, *on)
+        .on_hover_text(hint)
+        .clicked()
+    {
         *on = !*on;
         return true;
     }

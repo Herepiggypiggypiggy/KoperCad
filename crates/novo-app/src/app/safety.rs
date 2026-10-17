@@ -15,7 +15,7 @@ use novo_safety::{
     Category, Combined, Component, DISCLAIMER, Frequency, PerformanceLevel, Probability, Severity,
     Subsystem, SubsystemResult, combine_series, mttfd_from_b10d, operations_per_year, required_pl,
 };
-use novo_theme::{tokens, widgets};
+use novo_theme::widgets;
 
 use super::{Level, NovoApp};
 
@@ -194,19 +194,28 @@ impl NovoApp {
         win.bound.sync(&project);
         let mut open = true;
         let mut copy = None;
+        let mut export = false;
         super::panel::dialog(ctx, "Safety functions", [700.0, 640.0])
             .open(&mut open)
             .show(ctx, |ui| {
-                ui.colored_label(tokens::WARNING, DISCLAIMER);
-                ui.weak(
+                ui.colored_label(crate::theme::ui_palette().warning, DISCLAIMER);
+                super::dialog_ui::hint(
+                    ui,
                     "ISO 13849-1. Project safety functions are kept in the project; the free calculator below is kept for this session only.",
                 );
                 ui.separator();
-                super::safety_functions::section(ui, &project, &mut win.bound, &mut copy);
+                super::safety_functions::section(ui, &project, &mut win.bound, &mut copy, &mut export);
                 ui.separator();
                 widgets::section_label(ui, "Calculator (not bound to devices)");
                 body(ui, &mut win, &mut copy);
             });
+        if export {
+            // The report shows what is stored, so write any pending edit first.
+            if win.bound.dirty && self.store_safety_functions(&win.bound.list) {
+                win.bound.dirty = false;
+            }
+            self.export_safety_report();
+        }
         if let Some(text) = copy {
             ctx.copy_text(text);
             self.message(Level::Info, "Safety function copied as text");
@@ -220,19 +229,40 @@ impl NovoApp {
     }
 }
 
+/// A few exclusive choices as one segmented control.
+fn segment<T: Copy + PartialEq>(ui: &mut egui::Ui, value: &mut T, options: &[(T, &str)]) {
+    let mut index = options.iter().position(|(v, _)| v == value).unwrap_or(0);
+    let labels: Vec<&str> = options.iter().map(|(_, l)| *l).collect();
+    if widgets::segmented(ui, &mut index, &labels) {
+        *value = options[index].0;
+    }
+}
+
 fn body(ui: &mut egui::Ui, win: &mut SafetyWindow, copy: &mut Option<String>) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         widgets::section_label(ui, "Required performance level (risk graph, annex A)");
         ui.horizontal(|ui| {
             ui.label("Severity");
-            ui.selectable_value(&mut win.severity, Severity::S1, "S1 slight");
-            ui.selectable_value(&mut win.severity, Severity::S2, "S2 serious");
+            segment(
+                ui,
+                &mut win.severity,
+                &[(Severity::S1, "S1 slight"), (Severity::S2, "S2 serious")],
+            );
             ui.label("Exposure");
-            ui.selectable_value(&mut win.frequency, Frequency::F1, "F1 seldom");
-            ui.selectable_value(&mut win.frequency, Frequency::F2, "F2 frequent");
+            segment(
+                ui,
+                &mut win.frequency,
+                &[(Frequency::F1, "F1 seldom"), (Frequency::F2, "F2 frequent")],
+            );
             ui.label("Avoidance");
-            ui.selectable_value(&mut win.avoidance, Probability::P1, "P1 possible");
-            ui.selectable_value(&mut win.avoidance, Probability::P2, "P2 scarcely");
+            segment(
+                ui,
+                &mut win.avoidance,
+                &[
+                    (Probability::P1, "P1 possible"),
+                    (Probability::P2, "P2 scarcely"),
+                ],
+            );
         });
         ui.strong(format!("Required: {}", pl_text(win.required())));
         widgets::section_label(ui, "Duty (for parts given by B10d)");
@@ -262,7 +292,11 @@ fn body(ui: &mut egui::Ui, win: &mut SafetyWindow, copy: &mut Option<String>) {
         let (_, total) = win.results();
         if let Some(t) = total {
             let ok = win.meets().unwrap_or(false);
-            let color = if ok { tokens::SUCCESS } else { tokens::ERROR };
+            let color = if ok {
+                crate::theme::ui_palette().success
+            } else {
+                crate::theme::ui_palette().error
+            };
             ui.colored_label(
                 color,
                 format!(
@@ -285,14 +319,20 @@ fn parts(ui: &mut egui::Ui, id: (&str, usize), list: &mut Vec<PartInput>) {
     for (i, p) in list.iter_mut().enumerate() {
         ui.horizontal(|ui| {
             ui.add(egui::TextEdit::singleline(&mut p.name).desired_width(140.0));
-            ui.selectable_value(&mut p.basis, PartBasis::Mttfd, "MTTFd (years)");
-            ui.selectable_value(&mut p.basis, PartBasis::B10d, "B10d (cycles)");
+            segment(
+                ui,
+                &mut p.basis,
+                &[
+                    (PartBasis::Mttfd, "MTTFd (years)"),
+                    (PartBasis::B10d, "B10d (cycles)"),
+                ],
+            );
             ui.add(
                 egui::DragValue::new(&mut p.value)
                     .range(0.001..=1.0e9)
                     .speed(1.0),
             );
-            if ui.small_button("Remove").clicked() {
+            if ui.button("Remove").clicked() {
                 remove = Some(i);
             }
         });
@@ -301,7 +341,7 @@ fn parts(ui: &mut egui::Ui, id: (&str, usize), list: &mut Vec<PartInput>) {
     if let Some(i) = remove {
         list.remove(i);
     }
-    if ui.small_button("Add part").clicked() {
+    if ui.button("Add part").clicked() {
         let n = list.len() + 1;
         list.push(PartInput::new(&format!("Part {n}")));
     }
@@ -329,16 +369,18 @@ fn subsystem(
                 ui.label("Name");
                 ui.add(egui::TextEdit::singleline(&mut s.name).desired_width(200.0));
                 ui.label("Category");
-                for c in [
-                    Category::B,
-                    Category::C1,
-                    Category::C2,
-                    Category::C3,
-                    Category::C4,
-                ] {
-                    ui.selectable_value(&mut s.category, c, c.label());
-                }
-                if ui.small_button("Remove subsystem").clicked() {
+                segment(
+                    ui,
+                    &mut s.category,
+                    &[
+                        (Category::B, Category::B.label()),
+                        (Category::C1, Category::C1.label()),
+                        (Category::C2, Category::C2.label()),
+                        (Category::C3, Category::C3.label()),
+                        (Category::C4, Category::C4.label()),
+                    ],
+                );
+                if ui.button("Remove subsystem").clicked() {
                     *remove = Some(index);
                 }
             });
@@ -360,7 +402,7 @@ fn subsystem(
                 pl_text(result.pl)
             ));
             for p in &result.problems {
-                ui.colored_label(tokens::ERROR, &p.message);
+                ui.colored_label(crate::theme::ui_palette().error, &p.message);
             }
         });
 }
