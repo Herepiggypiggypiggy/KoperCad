@@ -72,6 +72,58 @@ pub(crate) fn relay_size(cx: &Context<'_>, out: &mut Vec<Problem>) {
     }
 }
 
+/// A contactor coil has one pole. Wired to a pole of a three-phase breaker,
+/// fuse, contacts or motor it takes one phase and L2 and L3 run past it:
+/// the power contacts belong in the main circuit, the coil in the control
+/// circuit.
+pub(crate) fn coil_on_power_feed(cx: &Context<'_>, out: &mut Vec<Problem>) {
+    let project = cx.project;
+    let three_phase = |key: &str, pass_through: usize| {
+        pass_through >= 3
+            || key
+                .rsplit('/')
+                .next()
+                .is_some_and(|n| n.starts_with("motor_3ph"))
+    };
+    let mut seen: BTreeSet<DeviceId> = BTreeSet::new();
+    for coil in project
+        .symbols()
+        .filter(|s| s.symbol.0.ends_with("coils/contactor"))
+    {
+        let feeds = (0..coil.pins.len()).any(|pin| {
+            let Ok(pin) = u16::try_from(pin) else {
+                return false;
+            };
+            project.wires_at(Endpoint::pin(coil.id, pin)).any(|w| {
+                project.wire(w).is_some_and(|w| {
+                    w.ends().iter().any(|e| match e {
+                        Endpoint::Pin { symbol, .. } if *symbol != coil.id => project
+                            .symbol(*symbol)
+                            .is_some_and(|o| three_phase(&o.symbol.0, o.pass_through.len())),
+                        _ => false,
+                    })
+                })
+            })
+        });
+        let device = coil.device();
+        if feeds && device.is_none_or(|d| seen.insert(d)) {
+            let tag = device
+                .and_then(|d| project.device(d))
+                .map_or_else(|| "A coil".to_owned(), |d| d.tag.to_string());
+            let mut at: Vec<AnyId> = vec![coil.id.into()];
+            at.extend(device.map(AnyId::from));
+            out.push(Problem::new(
+                ProblemKind::CoilOnPowerFeed,
+                at,
+                format!(
+                    "{tag} is a coil with one pole in a three-phase feed, so L2 and L3 run past it; \
+                     use the 3-pole power contacts here (search `contactor`) and put the coil in the control circuit"
+                ),
+            ));
+        }
+    }
+}
+
 /// What a cable text such as `4G1.5` or `3x2.5` says.
 #[derive(Debug, PartialEq)]
 struct CableSpec {
