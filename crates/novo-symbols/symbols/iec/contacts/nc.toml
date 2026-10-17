@@ -5,7 +5,7 @@ description = "Normally closed contact, used for auxiliary contacts of relays an
 standard = "IEC 60617"
 category = "contacts"
 function = "contact.nc"
-keywords = ["nc", "break", "normally closed", "auxiliary"]
+keywords = ["nc", "break", "normally closed", "auxiliary", "contactor auxiliary", "aux contact"]
 aliases = ["nc"]
 favorite = true
 

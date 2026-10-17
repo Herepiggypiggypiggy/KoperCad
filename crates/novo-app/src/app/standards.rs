@@ -120,7 +120,7 @@ impl NovoApp {
                     }
                 });
 ui.weak(
-                    "The report assists the engineer and is not a certificate. Verdicts marked planning value rest on numbers not yet checked against your licensed standard.",
+                    "The report assists the engineer: the rules are a subset of the standard, not a certification. Verdicts marked planning value rest on numbers not yet checked against your licensed standard.",
                 );
                 ui.add_space(6.0);
                 egui::ScrollArea::vertical().show(ui, |ui| {

@@ -171,6 +171,29 @@ pub struct AccuracyStatement {
     pub limits: Vec<String>,
 }
 
+/// Where the heat of one device goes (convection is what conduction and
+/// radiation leave of the total).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DeviceHeatPaths {
+    pub id: u64,
+    pub total_w: f64,
+    /// Into the mounting plate and the solids it touches.
+    pub conduction_w: f64,
+    /// Net radiation to the other surfaces; zero when radiation is off.
+    pub radiation_w: f64,
+}
+
+impl DeviceHeatPaths {
+    pub fn paths(&self) -> crate::rad::HeatPaths {
+        crate::rad::HeatPaths::new(self.total_w, self.conduction_w, self.radiation_w)
+    }
+
+    /// Into the air by convection, W.
+    pub fn convection_w(&self) -> f64 {
+        self.paths().convection_w()
+    }
+}
+
 /// One published state of the solution.
 #[derive(Debug, Clone, PartialEq)]
 pub struct CfdSnapshot {
@@ -191,6 +214,12 @@ pub struct CfdSnapshot {
     pub progress: Progress,
     pub notes: Vec<String>,
     pub accuracy: AccuracyStatement,
+    /// Convection, conduction and radiation per device (empty when the
+    /// solver does not split them).
+    pub heat_paths: Vec<DeviceHeatPaths>,
+    /// Surface-to-surface radiation is part of this result (the Simulate
+    /// dialog's Radiation toggle was on and the level supports it).
+    pub radiation_on: bool,
 }
 
 impl CfdSnapshot {

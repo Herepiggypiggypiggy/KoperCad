@@ -13,10 +13,12 @@
 //! - Laminar buoyant flow, conduction in devices, plate, rails and walls,
 //!   outside films from IEC 60890, vents and fans, slotted ducts as porous
 //!   media. All levels.
-//! - Turbulence and radiation are not coupled yet: the hooks exist in
-//!   `turb` and `rad`, the coupling is the next step. The result's accuracy
-//!   statement says so; radiation is missing from the heat paths and the
-//!   surface temperatures of hot devices are slightly high because of it.
+//! - Radiation: grey surface-to-surface exchange between devices, plate and
+//!   walls (`rad`), on at the Fine level by default ([`RadMode`]); the cheaper
+//!   levels keep the 2D engine's film. Result: `CfdSnapshot::heat_paths` and
+//!   `radiation_on`.
+//! - Turbulence is coupled with [`CabinetSolver::with_turbulence`]; the
+//!   default is laminar.
 //!
 //! Where the user finds it: Cabinet view, Heat layer, Simulate
 //! (`cabinet.thermal.simulate`).
@@ -25,6 +27,7 @@ mod march;
 mod snapshot;
 mod statement;
 mod steady;
+mod transient;
 mod tuning;
 mod warm;
 
@@ -39,7 +42,7 @@ use crate::solver::{CfdError, Control, Solver};
 use crate::turb::{TurbModel, TurbState};
 
 pub use march::{MarchLimits, MarchState, MarchStatus};
-pub use statement::{ENCLOSURE_VALIDATED, accuracy_for, accuracy_with_turbulence};
+pub use statement::{ENCLOSURE_VALIDATED, accuracy_for, accuracy_with_turbulence, mark_radiation};
 pub use steady::{CabinetSteady, PREVIEW_NOTE};
 pub use tuning::{LevelTuning, Method, Tuning};
 
@@ -51,6 +54,29 @@ pub struct CabinetSolver {
     pub turbulence: TurbModel,
     /// Second-order (limited) convection of the turbulence scalars.
     pub second_order_turbulence: bool,
+    /// Surface-to-surface radiation between devices, plate and walls.
+    pub radiation: RadMode,
+}
+
+/// Whether the cabinet solver couples radiation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RadMode {
+    /// On at the Fine level only (the design: "Fine: turbulence and
+    /// radiation on"); the cheaper levels keep the 2D engine's film.
+    #[default]
+    Auto,
+    On,
+    Off,
+}
+
+impl RadMode {
+    fn at(self, f: Fidelity) -> bool {
+        match self {
+            RadMode::Auto => f == Fidelity::Fine,
+            RadMode::On => true,
+            RadMode::Off => false,
+        }
+    }
 }
 
 impl CabinetSolver {
@@ -59,7 +85,15 @@ impl CabinetSolver {
             tuning,
             turbulence: TurbModel::Laminar,
             second_order_turbulence: false,
+            radiation: RadMode::Auto,
         }
+    }
+
+    /// The same solver with radiation forced on or off (the Simulate
+    /// dialog's Radiation toggle).
+    pub fn with_radiation(mut self, mode: RadMode) -> CabinetSolver {
+        self.radiation = mode;
+        self
     }
 
     /// The same solver with a turbulence model (k-omega SST is the
@@ -101,7 +135,11 @@ impl Solver for CabinetSolver {
             solid_speedup: lvl.solid_speedup,
             ..SolidsSettings::default()
         };
-        let setup = FlowSetup::new(scenario, &st).map_err(|e| CfdError::Setup(e.to_string()))?;
+        let mut setup =
+            FlowSetup::new(scenario, &st).map_err(|e| CfdError::Setup(e.to_string()))?;
+        if self.radiation.at(fidelity) {
+            setup.enable_radiation(scenario, &crate::rad::RadSettings::default());
+        }
         if control.is_cancelled() {
             return Err(CfdError::Cancelled);
         }
@@ -129,6 +167,7 @@ impl Solver for CabinetSolver {
                     model: self.turbulence,
                     turb,
                     warm,
+                    fan: !scenario.fans.is_empty(),
                     t0,
                 },
                 control,
@@ -151,6 +190,9 @@ impl Solver for CabinetSolver {
             if let Some(t) = &march.turb {
                 s.turb_visc_ratio = t.viscosity_ratio();
                 s.accuracy = accuracy_with_turbulence(s.progress.fidelity, model);
+                if s.radiation_on {
+                    statement::mark_radiation(&mut s.accuracy);
+                }
             }
             s
         };
@@ -174,6 +216,11 @@ impl Solver for CabinetSolver {
             if status.finished() {
                 let mut done = finish(view.build(&flow, &progress), &march);
                 done.progress.converged = march.converged;
+                if !scenario.fans.is_empty() {
+                    done.notes.push(
+                        "Fan case on the transient march: this path can create energy with a fan (3 to 14 % in tests), so read temperatures as an estimate.".into(),
+                    );
+                }
                 done.notes.push(
                     if march.converged {
                         "Steady: the stored heat changes by less than the tolerance."
@@ -202,6 +249,12 @@ impl Solver for CabinetSolver {
     }
 }
 
+/// What a result with a fan may claim about its heat balance. The jets of a
+/// second-order fan model fluctuate, so heat in and out agree to about 3 % on
+/// one window of means (a longer window gives better), and the transient
+/// march can create energy with a fan (open defect, see the validation notes).
+pub const FAN_BALANCE_NOTE: &str = "Fan case: the heat balance is good to about 3 % on one window of means (the fan jets fluctuate), so temperatures are an estimate to that extent.";
+
 /// What `solve_steady` needs besides the setup and the flow.
 struct SteadyJob<'a> {
     fidelity: Fidelity,
@@ -209,6 +262,8 @@ struct SteadyJob<'a> {
     model: TurbModel,
     turb: Option<TurbState>,
     warm: bool,
+    /// The scenario has a fan: see [`FAN_BALANCE_NOTE`].
+    fan: bool,
     t0: Instant,
 }
 
@@ -228,6 +283,7 @@ fn solve_steady(
         model,
         turb,
         warm,
+        fan,
         t0,
     } = job;
     let mut run = CabinetSteady::new(setup, &flow, lvl).with_turbulence(turb);
@@ -235,6 +291,9 @@ fn solve_steady(
         if let Some(t) = &run.turb {
             s.turb_visc_ratio = t.viscosity_ratio();
             s.accuracy = accuracy_with_turbulence(s.progress.fidelity, model);
+            if s.radiation_on {
+                statement::mark_radiation(&mut s.accuracy);
+            }
         }
         s
     };
@@ -269,6 +328,12 @@ fn solve_steady(
                     "Heat balance off by {:.1} %: the result is an estimate to that extent \
                      (heat in and out of the means over the last window).",
                     100.0 * imbalance
+                ));
+            }
+            if fan {
+                done.notes.push(format!(
+                    "{FAN_BALANCE_NOTE} Heat balance here: {:+.1} %.",
+                    100.0 * run.run.report().imbalance
                 ));
             }
             if status != RunStatus::Converged && run.run.report().stage == 0 {

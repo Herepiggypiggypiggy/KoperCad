@@ -10,6 +10,15 @@ pub const HINT_LIMIT: u32 = 3;
 const MAX_RECENT: usize = 10;
 const MAX_RECENT_ACTIONS: usize = 20;
 
+/// Whether the tool dock shows a word beside each icon.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DockLabels {
+    /// When the canvas is wide enough (the default).
+    Auto,
+    Always,
+    Never,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
@@ -31,9 +40,12 @@ pub struct Settings {
     /// The initials a revision is issued under (docs/DESIGN.md §7),
     /// asked once and remembered.
     pub initials: String,
-    /// Whether moving a symbol takes its wires along by default (Shift
-    /// does the other one): a per-user preference.
-    pub move_carries: bool,
+    /// Whether moving a symbol leaves its wires behind as open ends by
+    /// default (Shift does the other one): a per-user preference. Off, the
+    /// default, a moved symbol takes its wires along. (An earlier build
+    /// stored the opposite choice as `move_carries`, defaulting to leaving
+    /// them; that key is ignored so nobody keeps a default they never chose.)
+    pub move_leaves_wires: bool,
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,
@@ -44,6 +56,12 @@ pub struct Settings {
     pub appearance_theme: String,
     /// The interface density, `"standard"` (empty), `"compact"` or `"touch"`.
     pub appearance_density: String,
+    /// Words beside the dock icons: `""` (auto: when the canvas has room),
+    /// `"always"` or `"never"` (icons only, names stay in the tooltips).
+    pub dock_labels: String,
+    /// The interface size in percent: 100 (empty or 0), 125, 150 or 200,
+    /// on top of the system's own scaling.
+    pub ui_scale: u32,
     /// Whether the status bar is switched off (docs/design/workspaces.md §7).
     pub hide_status_bar: bool,
     /// Commissioning's large touch buttons: a tablet user sets it once.
@@ -217,6 +235,16 @@ impl Settings {
         novo_theme::ThemeChoice::from_id(&self.appearance_theme)
     }
 
+    /// The interface scale as a factor: 1.0, 1.25, 1.5 or 2.0.
+    pub fn ui_scale_factor(&self) -> f32 {
+        match self.ui_scale {
+            125 => 1.25,
+            150 => 1.5,
+            200 => 2.0,
+            _ => 1.0,
+        }
+    }
+
     /// The density the person chose; standard by default.
     pub fn density_choice(&self) -> novo_theme::Density {
         novo_theme::Density::from_id(&self.appearance_density)
@@ -225,6 +253,24 @@ impl Settings {
     /// The density of the coil contact table.
     pub fn xref_density(&self) -> novo_canvas::model::NoteDensity {
         novo_canvas::model::NoteDensity::from_id(&self.xref_density)
+    }
+
+    /// The dock-label choice; auto unless the person chose otherwise.
+    pub fn dock_labels(&self) -> DockLabels {
+        match self.dock_labels.as_str() {
+            "always" => DockLabels::Always,
+            "never" => DockLabels::Never,
+            _ => DockLabels::Auto,
+        }
+    }
+
+    pub fn set_dock_labels(&mut self, labels: DockLabels) {
+        self.dock_labels = match labels {
+            DockLabels::Auto => "",
+            DockLabels::Always => "always",
+            DockLabels::Never => "never",
+        }
+        .to_owned();
     }
 
     pub const STORAGE_KEY: &str = "novo_settings";

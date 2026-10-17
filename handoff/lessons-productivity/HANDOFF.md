@@ -34,3 +34,6 @@ All eight lessons now have how/how_nl, Dutch text and the audit fixes (PRs #628,
 - No part-assign UI on main: parts-library and design-checks have an honest "not yet" reading step. Add `assign_part` solve and a check when the picker exists.
 - No solve (unverified, cannot reach `ready`): spreadsheet apply, DXF import/remove, parts import, macro place/export/import, commissioning steps after "open". Needs anchors or a file-dialog-free path.
 - revisions-and-compare issues revision A itself because lesson projects carry no kept snapshot (app bug, audit item 3). If the app is fixed, the start project can carry A again (generator `revisions_start`).
+
+## Still unscripted (2026-10-17)
+Waive, restore, macro place and tags steps wait for the `list_row` op (click or right-click a list row). The inspector description edit in revisions-and-compare (`change-motor`) has no solve. Add them when the ops land.

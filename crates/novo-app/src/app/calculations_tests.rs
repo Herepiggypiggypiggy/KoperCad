@@ -190,6 +190,72 @@ fn the_calculations_window_draws_with_and_without_inputs() {
 }
 
 #[test]
+fn rows_that_read_the_ampacity_tables_say_planning_value_in_the_copy_text() {
+    let (_dir, mut d, ms) = open();
+    d.app.apply_electrical_input(&SUPPLY[1], "10");
+    d.app.set_device_input(ms.f1, "rated_current_a", "16");
+    d.app.set_device_input(ms.f1, "trip_curve", "c");
+    d.app.set_device_input(ms.f1, "breaking_capacity_ka", "10");
+    {
+        let doc = d.app.backend.document_mut().unwrap();
+        let wires: Vec<_> = doc
+            .project()
+            .all::<novo_core::Wire>()
+            .map(|w| w.id)
+            .collect();
+        doc.transact("inputs", |tx| {
+            for wire in &wires {
+                for edit in [
+                    WireEdit::Section("1.5".into()),
+                    WireEdit::Length("100".into()),
+                    WireEdit::Load("16".into()),
+                ] {
+                    apply(tx, &[*wire], &edit).map_err(novo_core::ModelError::Format)?;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+    let project = d.app.backend.document().unwrap().project();
+    let sheet = calc_sheet(
+        project,
+        &project.netlist(),
+        StarterChoice::default(),
+        &TableSet::builtin(),
+    );
+    let rows: Vec<_> = sheet
+        .circuits
+        .iter()
+        .filter_map(|c| c.report.as_ref())
+        .flat_map(|r| r.rows.iter())
+        .collect();
+    assert!(
+        rows.iter().any(|r| r.title == "Overload"),
+        "the motor starter has a judged circuit: {:?} {:?}",
+        sheet.missing,
+        sheet
+            .circuits
+            .iter()
+            .map(|c| &c.missing)
+            .collect::<Vec<_>>()
+    );
+    let text = super::calculations::sheet_text(&sheet);
+    assert!(
+        text.contains("Overload: IEC 60364-4-43 §433.1 (planning value)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Voltage drop: IEC 60364-5-52 Annex G (planning value)"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("Breaking capacity: IEC 60364-4-43 §434.5.1 (planning"),
+        "only the table-based rows carry the label: {text}"
+    );
+}
+
+#[test]
 fn safety_functions_edited_in_the_window_are_stored_and_raise_problems() {
     use novo_checks::safety::{FUNCTIONS_KEY, SafetyFunction};
     let (_dir, mut d, _) = open();
@@ -265,4 +331,7 @@ fn the_safety_report_is_written_and_says_not_met() {
         Some(path.as_path())
     );
     assert!(std::fs::metadata(&path).unwrap().len() > 500);
+    // The success toast says where the file went and offers the folder.
+    let toast = d.app.messages().last().unwrap();
+    assert_eq!(toast.file.as_deref(), Some(path.as_path()), "{toast:?}");
 }

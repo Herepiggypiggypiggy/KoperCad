@@ -129,7 +129,7 @@ impl NovoApp {
     /// The command `parts.import_eplan`: asks for the person's own EPLAN
     /// parts export and previews it.
     pub(super) fn import_eplan_parts(&mut self) {
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Import parts from an EPLAN export")
             .add_filter(
                 "EPLAN parts export (XML or text)",

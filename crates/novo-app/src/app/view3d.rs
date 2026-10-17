@@ -59,6 +59,10 @@ pub(crate) struct View3dMode {
     /// project revision, picked surface, shown).
     surfaces_shown: Option<(StructureId, u64, Option<String>, bool)>,
     pub(super) surface_panes: Vec<novo_view3d::Overlay>,
+    /// The terminal markers drawn, and what they were built for (enclosure,
+    /// project revision, pose revision, shown).
+    pins_shown: Option<(StructureId, u64, u64, bool)>,
+    pin_marks: Vec<novo_view3d::Overlay>,
     /// A device on a wall, roof, floor or extra plate being dragged.
     pub(super) surface_drag: Option<super::view3d_surface_devices::SurfaceDrag>,
     library: Arc<MeshLibrary>,
@@ -129,6 +133,8 @@ impl Default for View3dMode {
             ghost_shown: Vec::new(),
             surfaces_shown: None,
             surface_panes: Vec::new(),
+            pins_shown: None,
+            pin_marks: Vec::new(),
             surface_drag: None,
             library: Arc::new(MeshLibrary::new()),
             built: None,
@@ -444,6 +450,16 @@ impl NovoApp {
             mode.surfaces_shown = Some(panes_key);
             ghost_changed = true;
         }
+        let pins_key = (id, revision, scene.pose_revision, mode.controls.pins);
+        if mode.pins_shown != Some(pins_key) {
+            mode.pin_marks = if mode.controls.pins {
+                super::view3d_pins::overlays(project, scene)
+            } else {
+                Vec::new()
+            };
+            mode.pins_shown = Some(pins_key);
+            ghost_changed = true;
+        }
         let stored = load(project, id);
         if let Some(lay) = &stored {
             let tag_of = |d: u64| {
@@ -521,6 +537,7 @@ impl NovoApp {
         if !tracing && (heat_changed || ghost_changed || probe_changed) {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
+            all.extend(mode.pin_marks.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker.clone());
             mode.view.set_overlays(all);
@@ -528,6 +545,7 @@ impl NovoApp {
         if tracing {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
+            all.extend(mode.pin_marks.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
             let t = heat_3d::tracers(&mode.heat_flow, ui.input(|i| i.time));
@@ -871,7 +889,7 @@ impl NovoApp {
             self.wb.queued.push(command);
         }
         if let Some(items) = &out.marquee {
-            if !ui.input(|i| i.modifiers.shift) {
+            if !ui.input(|i| i.modifiers.shift || i.modifiers.command) {
                 state.selection.clear();
             }
             state.selection.extend(items.iter().copied());

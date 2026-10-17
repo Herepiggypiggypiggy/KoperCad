@@ -339,7 +339,7 @@ impl Keymap {
         bind(Chord::ctrl(l('x')), Canvas, "edit.cut");
         bind(Chord::ctrl(l('v')), Canvas, "edit.paste");
         bind(Chord::ctrl_shift(l('v')), Canvas, "edit.paste_keep_tags");
-        bind(Chord::ctrl_alt(l('v')), Canvas, "edit.paste_in_place");
+        bind(Chord::ctrl_shift(l('i')), Canvas, "edit.paste_in_place");
         bind(Chord::ctrl(l('d')), Canvas, "edit.duplicate");
         bind(Chord::ctrl(l('a')), Canvas, "edit.select_all");
         bind(Chord::plain(Delete), Canvas, "edit.delete");

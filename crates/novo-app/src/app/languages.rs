@@ -446,7 +446,7 @@ impl NovoApp {
         }
         if save_file {
             let name = format!("{}{}", code, i18n::EXTENSION);
-            if let Some(path) = rfd::FileDialog::new()
+            if let Some(path) = crate::dialogs::FileDialog::new()
                 .set_title("Save language file")
                 .set_file_name(name)
                 .save_file()
@@ -455,7 +455,7 @@ impl NovoApp {
             }
         }
         if load_file
-            && let Some(path) = rfd::FileDialog::new()
+            && let Some(path) = crate::dialogs::FileDialog::new()
                 .set_title("Load language file")
                 .add_filter("Language file", &["json"])
                 .pick_file()

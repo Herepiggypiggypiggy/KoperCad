@@ -281,6 +281,14 @@ impl NovoApp {
                 {
                     win.drawing = drawing_on.then(|| DrawView::new(true));
                 }
+                for (label, side) in [("From", win.from), ("To", win.to)] {
+                    if let Side::Revision(id) = side
+                        && let Some(r) = project.issued_revision(id)
+                        && !r.note().is_empty()
+                    {
+                        ui.weak(format!("{label} {}: {}", r.index, r.note()));
+                    }
+                }
                 ui.add_space(4.0);
                 let Some((_, _, _, result)) = &win.shown else {
                     return;

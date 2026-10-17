@@ -392,6 +392,11 @@ impl FlowSolver {
                         diag += cw;
                         rhs += cw * tp;
                     }
+                    if let Some(r) = &self.rad_load {
+                        let cv = 1.0 / (cc * m.volume(ix));
+                        diag += r.cell_g[id] * cv;
+                        rhs += r.cell_s[id] * cv;
+                    }
                     cf.diag = diag + conv_diag.max(conv_nb);
                     cf.rhs = rhs;
                     cf.defer = defer_sum;
