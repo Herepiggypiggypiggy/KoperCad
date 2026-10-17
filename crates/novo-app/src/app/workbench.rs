@@ -199,8 +199,11 @@ pub(crate) struct Workbench {
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
-    /// The PDF options dialog (File > Export drawings > Export PDF...), while open.
+    /// The PDF options dialog (File > Export drawings > Export PDF with options...), while open.
     pub(super) pdf_options: Option<super::pdf_options::PdfOptionsState>,
+    /// Test hook: the folder PDFs go to instead of `<Documents>\KoperCAD`.
+    #[cfg(test)]
+    pub(super) pdf_dir: Option<std::path::PathBuf>,
     /// The Report designer window, while open.
     pub(super) designer: Option<super::designer::DesignerState>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
@@ -317,6 +320,8 @@ impl Default for Workbench {
             background_panel: None,
             bench: None,
             pdf_options: None,
+            #[cfg(test)]
+            pdf_dir: None,
             designer: None,
             commissioning: None,
             underlay_seen: None,

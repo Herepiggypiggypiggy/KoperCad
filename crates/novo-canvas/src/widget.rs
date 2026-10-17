@@ -378,6 +378,10 @@ const FIT_CONTENT_MARGIN: f32 = 64.0;
 /// text is then 15 points.
 const FIT_CONTENT_MAX_ZOOM: f32 = 6.0;
 
+/// A fit on the drawing shows the whole sheet instead when the drawing
+/// would be zoomed in less than this many times closer than the sheet is.
+const FIT_SHEET_RATIO: f32 = 1.5;
+
 /// How many frames after a fit the view follows the canvas size.
 const FIT_SETTLE_FRAMES: u32 = 120;
 
@@ -567,6 +571,16 @@ impl CanvasView {
         let content = scene.content_bounds();
         if kind == Fit::Content && scene.sheet().is_some() && !content.is_empty() {
             self.viewport.fit(&content, FIT_CONTENT_MARGIN);
+            let content_zoom = self.viewport.zoom;
+            self.viewport.fit(&scene.bounds(), 24.0);
+            if content_zoom > self.viewport.zoom * FIT_SHEET_RATIO {
+                self.viewport.fit(&content, FIT_CONTENT_MARGIN);
+            } else {
+                // The drawing already fills most of the sheet: show the
+                // whole sheet, centred, rather than a drawing in one corner
+                // of a sheet that is cut off at the other edges.
+                return;
+            }
             if self.viewport.zoom > FIT_CONTENT_MAX_ZOOM {
                 self.viewport.zoom = FIT_CONTENT_MAX_ZOOM;
                 self.viewport.center = content.center();
@@ -1801,6 +1815,25 @@ mod tests {
         assert!(seen.contains_point(Vec2::new(20.0, 20.0)));
         assert!(seen.contains_point(Vec2::new(80.0, 120.0)));
         assert!(!seen.contains_point(Vec2::new(410.0, 290.0)));
+    }
+
+    #[test]
+    fn a_drawing_that_nearly_fills_the_sheet_fits_the_whole_sheet() {
+        let mut scene = page_scene();
+        scene.insert(
+            ItemId(3),
+            Item::new(crate::LayerId(0)).with(Primitive::stroked(
+                Shape::rect(Vec2::new(20.0, 20.0), Vec2::new(400.0, 280.0)),
+                Stroke::default(),
+            )),
+        );
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(1600.0, 900.0);
+        view.fit_scene(&scene, Fit::Content);
+        let sheet = scene.bounds();
+        let seen = view.viewport.visible_world();
+        assert!(seen.contains_point(sheet.min) && seen.contains_point(sheet.max));
+        assert!((view.viewport.center - sheet.center()).length() < 1e-3);
     }
 
     #[test]
