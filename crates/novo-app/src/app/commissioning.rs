@@ -17,7 +17,7 @@ use novo_canvas::marks::{Mark, MarkKind};
 use novo_canvas::model::item_id;
 use novo_commissioning::{
     CheckKind, CheckRecord, CheckState, CommissioningStore, FieldPackage, Progress, PunchItem,
-    PunchState, Scope, Severity, Target, TargetInfo, progress, targets,
+    PunchState, Scope, Severity, Signature, Target, TargetInfo, progress, targets,
 };
 use novo_core::{PageId, Project};
 use novo_pdf::{ReportFileFormat, ReportPdfOptions};
@@ -29,6 +29,7 @@ use super::cabinet_bar::{note_ctx, note_rect};
 
 use super::changes::shown_on;
 use super::commissioning_redlines::{RedlineAction, redlines_tab};
+use super::commissioning_signature::{self as signature, SignDraft};
 use super::pdf::{replaceable_path, write_replacing};
 use super::revisions::iso_date;
 use super::workspace::Workspace;
@@ -82,6 +83,8 @@ pub(crate) struct CommissioningMode {
     pub(super) dirty: bool,
     /// A punch item whose "Add photo" was touched; the picker opens after the panel.
     pub(super) photo_for: Option<u64>,
+    /// The signature pad, open under the item being verified.
+    pub(super) signing: Option<SignDraft>,
 }
 
 impl CommissioningMode {
@@ -107,6 +110,7 @@ impl CommissioningMode {
             armed: None,
             dirty: false,
             photo_for: None,
+            signing: None,
         }
     }
 
@@ -1126,7 +1130,10 @@ fn punch_tab(
                         if label == "Fixed" || label == "Verified" {
                             note_ctx(ui.ctx(), "commissioning.resolve", "Resolve button", &button);
                         }
-                        if button.clicked()
+                        if button.clicked() && state == PunchState::Verified {
+                            // Verifying is signed: the pad opens under the item.
+                            mode.signing = Some(SignDraft::new(item.id, &mode.who));
+                        } else if button.clicked()
                             && mode
                                 .store
                                 .set_punch_state(item.id, state, &mode.who, &now())
@@ -1153,6 +1160,13 @@ fn punch_tab(
                         mode.photo_for = Some(item.id);
                     }
                 });
+                if mode.signing.as_ref().is_some_and(|d| d.item == item.id) {
+                    signing_area(ui, mode, item.id);
+                }
+                if let Some(sig) = &item.signature {
+                    ui.weak(format!("Signed by {} · {}", sig.name, sig.at));
+                    signature::preview(ui, sig);
+                }
                 if !item.photos.is_empty() {
                     let names: Vec<&str> = item.photos.iter().map(|p| p.name.as_str()).collect();
                     ui.weak(format!("Photos: {}", names.join(", ")));
@@ -1160,4 +1174,45 @@ fn punch_tab(
                 ui.add_space(space::S);
             }
         });
+}
+
+/// The pad, the name and the buttons that finish or drop a sign-off.
+fn signing_area(ui: &mut egui::Ui, mode: &mut CommissioningMode, id: u64) {
+    let Some(draft) = mode.signing.as_mut() else {
+        return;
+    };
+    ui.add(
+        egui::TextEdit::singleline(&mut draft.name)
+            .hint_text("Name of the person verifying")
+            .desired_width(f32::INFINITY),
+    );
+    signature::pad(ui, draft);
+    let (mut sign, mut cancel) = (false, false);
+    ui.horizontal(|ui| {
+        let can = !draft.name.trim().is_empty();
+        let button = ui.add_enabled(can, egui::Button::new("Sign and verify"));
+        note_ctx(
+            ui.ctx(),
+            "commissioning.sign",
+            "Sign and verify button",
+            &button,
+        );
+        sign = button.clicked();
+        if ui
+            .add_enabled(!draft.is_blank(), egui::Button::new("Clear"))
+            .clicked()
+        {
+            draft.clear();
+        }
+        cancel = ui.button("Cancel").clicked();
+    });
+    if sign {
+        let signed = Signature::from_strokes(&draft.name, &now(), draft.strokes());
+        if mode.store.sign_off(id, signed).is_ok() {
+            mode.dirty = true;
+        }
+        mode.signing = None;
+    } else if cancel {
+        mode.signing = None;
+    }
 }
