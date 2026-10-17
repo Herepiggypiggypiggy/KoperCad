@@ -116,6 +116,10 @@ pub enum LabelSource {
         at: Point,
         anchor: TextAnchor,
     },
+    /// The cross-reference note next to a symbol: kept as an offset in the
+    /// symbol's properties (see [`Editor::set_note_offset`]), so it is
+    /// not moved by [`Editor::move_label`].
+    Note(SymbolId),
 }
 
 /// The active tool.
@@ -2270,6 +2274,9 @@ impl Editor {
                     placement.offset = placement.offset + delta;
                     tx.move_text(*id, placement)
                 }
+                // A note's offset is worked out from the scene it is drawn
+                // in: see `set_note_offset`.
+                LabelSource::Note(_) => Ok(()),
                 LabelSource::Drawn {
                     owner,
                     content,
@@ -2301,6 +2308,64 @@ impl Editor {
                     )
                 }
             }
+        })
+    }
+
+    /// Puts a symbol's note `offset` mm from its default place, or back
+    /// there for `None`, one undo step. The note then stays where it was put
+    /// whatever is drawn around it.
+    #[cfg(feature = "art")]
+    pub fn set_note_offset(
+        &mut self,
+        doc: &mut Document,
+        symbol: SymbolId,
+        offset: Option<Point>,
+    ) -> bool {
+        use novo_canvas::model::{NOTE_DX, NOTE_DY};
+        use novo_core::{SymbolInstance, Value};
+        self.run(doc, "Move note", |tx| {
+            tx.update::<SymbolInstance>(symbol, |s| match offset {
+                Some(o) => {
+                    s.properties.insert(NOTE_DX.into(), Value::Float(o.x));
+                    s.properties.insert(NOTE_DY.into(), Value::Float(o.y));
+                }
+                None => {
+                    s.properties.remove(NOTE_DX);
+                    s.properties.remove(NOTE_DY);
+                }
+            })
+        })
+    }
+
+    /// Puts the notes of the selected symbols back to their default
+    /// places, one undo step. False when none of them was moved.
+    #[cfg(feature = "art")]
+    pub fn reset_notes(&mut self, doc: &mut Document, selection: &[AnyId]) -> bool {
+        use novo_canvas::model::{NOTE_DX, NOTE_DY};
+        let moved: Vec<SymbolId> = selection
+            .iter()
+            .filter_map(|id| match id {
+                AnyId::Symbol(s) => Some(*s),
+                _ => None,
+            })
+            .filter(|s| {
+                doc.project().symbol(*s).is_some_and(|s| {
+                    s.properties.contains_key(NOTE_DX) || s.properties.contains_key(NOTE_DY)
+                })
+            })
+            .collect();
+        if moved.is_empty() {
+            self.notice = Some("No moved note on the selection".into());
+            return false;
+        }
+        self.run(doc, "Reset note position", |tx| {
+            for s in &moved {
+                tx.update::<novo_core::SymbolInstance>(*s, |s| {
+                    s.properties.remove(NOTE_DX);
+                    s.properties.remove(NOTE_DY);
+                })?;
+            }
+            Ok(())
         })
     }
 

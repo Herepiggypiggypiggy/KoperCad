@@ -29,6 +29,7 @@ pub mod grid;
 pub mod marks;
 #[cfg(feature = "model")]
 pub mod model;
+pub mod note_place;
 pub mod note_table;
 #[cfg(feature = "gpu")]
 pub mod render;

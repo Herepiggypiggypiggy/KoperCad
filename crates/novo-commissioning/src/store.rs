@@ -3,7 +3,8 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::check::{CheckKind, CheckRecord, CheckState, Target};
-use crate::punch::{PunchItem, PunchState, Severity};
+use crate::punch::{Photo, PunchItem, PunchState, Severity, Signature};
+use crate::redline::{Redline, RedlineState};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CommissioningError {
@@ -13,6 +14,12 @@ pub enum CommissioningError {
     Unreadable(String),
     #[error("no punch item {0}")]
     NoPunchItem(u64),
+    #[error("a signature needs a name")]
+    UnsignedSignature,
+    #[error("no redline {0}")]
+    NoRedline(u64),
+    #[error("that change does not fit this kind of object")]
+    RedlineDoesNotFit,
 }
 
 /// All commissioning state of one project.
@@ -22,6 +29,7 @@ pub struct CommissioningStore {
     checks: BTreeMap<(Target, CheckKind), CheckRecord>,
     punch: BTreeMap<u64, PunchItem>,
     next_punch: u64,
+    redlines: BTreeMap<u64, Redline>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -30,6 +38,8 @@ struct StoreData {
     checks: Vec<CheckRecord>,
     #[serde(default)]
     punch: Vec<PunchItem>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    redlines: Vec<Redline>,
 }
 
 impl From<StoreData> for CommissioningStore {
@@ -43,6 +53,7 @@ impl From<StoreData> for CommissioningStore {
                 .collect(),
             punch: data.punch.into_iter().map(|p| (p.id, p)).collect(),
             next_punch,
+            redlines: data.redlines.into_iter().map(|r| (r.id, r)).collect(),
         }
     }
 }
@@ -52,6 +63,7 @@ impl From<CommissioningStore> for StoreData {
         StoreData {
             checks: store.checks.into_values().collect(),
             punch: store.punch.into_values().collect(),
+            redlines: store.redlines.into_values().collect(),
         }
     }
 }
@@ -75,7 +87,7 @@ impl CommissioningStore {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.checks.is_empty() && self.punch.is_empty()
+        self.checks.is_empty() && self.punch.is_empty() && self.redlines.is_empty()
     }
 
     /// The state of one check; `Pending` when nothing was decided.
@@ -117,6 +129,8 @@ impl CommissioningStore {
             raised_at: at,
             closed_by: None,
             closed_at: None,
+            photos: Vec::new(),
+            signature: None,
         });
         Ok(Some(id))
     }
@@ -129,6 +143,29 @@ impl CommissioningStore {
             Target::Terminal(id) => project.terminal(*id).is_some(),
             Target::Device(id) => project.device(*id).is_some(),
         });
+    }
+
+    /// Stores a record as it is, with no punch item opened (merging field results).
+    pub(crate) fn put_record(&mut self, record: CheckRecord) {
+        self.checks.insert((record.target, record.check), record);
+    }
+
+    /// Attaches a photo to an item; a photo with the same name is not added twice.
+    pub fn add_photo(&mut self, id: u64, photo: Photo) -> Result<bool, CommissioningError> {
+        let item = self
+            .punch
+            .get_mut(&id)
+            .ok_or(CommissioningError::NoPunchItem(id))?;
+        if item.photos.iter().any(|p| p.name == photo.name) {
+            return Ok(false);
+        }
+        item.photos.push(photo);
+        Ok(true)
+    }
+
+    /// Replaces the item with the same id.
+    pub(crate) fn put_punch(&mut self, item: PunchItem) {
+        self.punch.insert(item.id, item);
     }
 
     /// Forgets a decision, back to `Pending`.
@@ -146,6 +183,50 @@ impl CommissioningStore {
         id
     }
 
+    /// Adds a redline and returns its id (the id in `redline` is ignored).
+    pub fn add_redline(&mut self, mut redline: Redline) -> Result<u64, CommissioningError> {
+        if !redline.change.fits(redline.target) {
+            return Err(CommissioningError::RedlineDoesNotFit);
+        }
+        let id = self.redlines.keys().next_back().map_or(1, |m| m + 1);
+        redline.id = id;
+        self.redlines.insert(id, redline);
+        Ok(id)
+    }
+
+    pub fn redline(&self, id: u64) -> Option<&Redline> {
+        self.redlines.get(&id)
+    }
+
+    /// Every redline, oldest first.
+    pub fn redlines(&self) -> impl Iterator<Item = &Redline> {
+        self.redlines.values()
+    }
+
+    pub fn open_redline_count(&self) -> usize {
+        self.redlines
+            .values()
+            .filter(|r| r.state == RedlineState::Open)
+            .count()
+    }
+
+    pub fn set_redline_state(
+        &mut self,
+        id: u64,
+        state: RedlineState,
+    ) -> Result<(), CommissioningError> {
+        self.redlines
+            .get_mut(&id)
+            .ok_or(CommissioningError::NoRedline(id))?
+            .state = state;
+        Ok(())
+    }
+
+    /// Replaces the redline with the same id (merging field results).
+    pub(crate) fn put_redline(&mut self, redline: Redline) {
+        self.redlines.insert(redline.id, redline);
+    }
+
     pub fn punch(&self, id: u64) -> Option<&PunchItem> {
         self.punch.get(&id)
     }
@@ -158,6 +239,21 @@ impl CommissioningStore {
     /// Items not yet verified or waived.
     pub fn open_punch_count(&self) -> usize {
         self.punch.values().filter(|p| !p.state.is_closed()).count()
+    }
+
+    /// Verifies an item with a signature: the same as setting it `Verified`
+    /// by the signer, and the signature stays with the item. A signature
+    /// needs a name.
+    pub fn sign_off(&mut self, id: u64, signature: Signature) -> Result<(), CommissioningError> {
+        if signature.name.trim().is_empty() {
+            return Err(CommissioningError::UnsignedSignature);
+        }
+        let (by, at) = (signature.name.clone(), signature.at.clone());
+        self.set_punch_state(id, PunchState::Verified, &by, &at)?;
+        if let Some(item) = self.punch.get_mut(&id) {
+            item.signature = Some(signature);
+        }
+        Ok(())
     }
 
     /// Moves an item along. Deciding a check as passed does not close its
@@ -178,6 +274,10 @@ impl CommissioningStore {
             .get_mut(&id)
             .ok_or(CommissioningError::NoPunchItem(id))?;
         item.state = state;
+        if state != PunchState::Verified {
+            // A signature vouches for a verification, not for a reopened item.
+            item.signature = None;
+        }
         if state.is_closed() {
             item.closed_by = Some(by.to_owned());
             item.closed_at = Some(at.to_owned());

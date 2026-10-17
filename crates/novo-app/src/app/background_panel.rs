@@ -85,7 +85,7 @@ impl NovoApp {
         super::panel::dialog(ctx, "DXF background", [420.0, 0.0])
             .open(&mut open)
             .show(ctx, |ui| {
-                ui.weak(&name);
+                super::dialog_ui::hint(ui, &name);
                 egui::Grid::new("background_grid")
                     .num_columns(2)
                     .show(ui, |ui| {
@@ -113,10 +113,21 @@ impl NovoApp {
                             commit |= r.drag_stopped() || r.lost_focus();
                         }
                     });
-                ui.add_space(4.0);
-                if ui.small_button("Reset").clicked() {
-                    reset = true;
-                }
+                ui.add_space(6.0);
+                let default = Placement {
+                    dx: DEFAULT_OFFSET_MM,
+                    dy: DEFAULT_OFFSET_MM,
+                    percent: 100.0,
+                };
+                ui.horizontal(|ui| {
+                    reset = super::dialog_ui::confirm_button(
+                        ui,
+                        "reset_background",
+                        "Reset",
+                        "Move the background back to 10 mm, 10 mm, 100 %?",
+                        shown != default,
+                    );
+                });
             });
         if reset {
             shown = Placement {

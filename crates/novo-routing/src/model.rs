@@ -8,7 +8,9 @@ use novo_core::{
     CabinetPlacement, DeviceId, Direction, PinRef, Project, Rail, RailKind, StructureId, SymbolRole,
 };
 
-use crate::{Anchor, Duct, Facing, Job, Network, Plan, Point, Route, Rules, WireRules, plan};
+use crate::{
+    Anchor, Duct, Facing, Job, Kind, Network, Plan, Point, Point3, Route, Rules, WireRules, plan,
+};
 
 /// The ducts on the plate of an enclosure, in model id order. DIN rails are
 /// not ducts and are left out. A duct without a cross-section keeps
@@ -192,27 +194,80 @@ pub struct Routed {
     /// Connections that could not be routed: a device is not placed on a
     /// plate, the two ends are on different plates, or the id is used by
     /// more than one connection (ids must be unique; every use is listed).
+    /// A connection from a device on the door (or another surface) to the
+    /// plate with no opening between them is listed here too.
     pub unrouted: Vec<u64>,
     /// Routed connections with an end whose device depth is unknown: their
     /// length is flat (as if the terminals sat on the plate) and too short
     /// by the rise to the duct. The parts need a `depth_mm`.
     pub unknown_height: Vec<u64>,
+    /// Connections with an end on a surface other than the plate (the door,
+    /// a side wall), by connection id: how they get there.
+    pub surface_legs: BTreeMap<u64, SurfaceLeg>,
+}
+
+/// The part of a wire that runs on a surface other than the mounting plate.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SurfaceLeg {
+    /// The surface the device sits on.
+    pub surface: String,
+    /// The wiring opening the wire passes through; `None` when both ends
+    /// are on that surface.
+    pub opening: Option<String>,
+    /// Wire length on the surface (from the opening to the terminal, or
+    /// between the two terminals), including the service loop at the
+    /// terminal. This is a model: the distance between plate and door and
+    /// the hinge loop are not in it.
+    pub length_mm: f64,
+}
+
+/// The surface of a device's placement and what the structure offers
+/// between surfaces, read once per enclosure.
+struct Surfaces {
+    off_plate: HashMap<u64, String>,
+    openings: Vec<novo_layout::openings::Opening>,
+}
+
+fn surfaces_of(project: &Project, structure: StructureId) -> Surfaces {
+    match novo_layout::model::load(project, structure) {
+        Some(layout) => Surfaces {
+            off_plate: layout.off_plate.into_iter().collect(),
+            openings: layout.openings,
+        },
+        None => Surfaces {
+            off_plate: HashMap::new(),
+            openings: Vec::new(),
+        },
+    }
 }
 
 /// Routes connections through the ducts of the enclosures their devices are
 /// placed in, one `plan` per enclosure.
+///
+/// A device on the door or another surface is not on the plate, so its
+/// coordinates are not plate coordinates. A wire between two devices on the
+/// same such surface is a straight run (`Kind::FreeAir`, no duct there). A
+/// wire between the plate and such a surface leaves the plate through the
+/// wiring opening that adds the least wire
+/// ([`novo_layout::openings::best_passage`], an approximate choice: it ranks
+/// by straight-line distance, while the plate leg runs through the ducts): the plate leg is routed through
+/// the ducts to the opening and the rest is added to its length (see
+/// [`SurfaceLeg`]).
 pub fn route_connections(project: &Project, connections: &[Connection], rules: &Rules) -> Routed {
     let placements: HashMap<DeviceId, &CabinetPlacement> = project
         .all::<CabinetPlacement>()
         .map(|p| (p.device, p))
         .collect();
     let mut jobs: BTreeMap<StructureId, Vec<Job>> = BTreeMap::new();
+    let mut surfaces: HashMap<StructureId, Surfaces> = HashMap::new();
     let mut out = Routed::default();
     // A repeated id could not be told apart in the result: none of them is routed.
     let mut count: HashMap<u64, usize> = HashMap::new();
     for c in connections {
         *count.entry(c.id).or_default() += 1;
     }
+    // Extra length added to a route after the plan: (connection id, mm).
+    let mut extra: Vec<(u64, f64)> = Vec::new();
     for c in connections {
         if count[&c.id] > 1 {
             out.unrouted.push(c.id);
@@ -220,8 +275,25 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         }
         let ends =
             anchor_of(project, &placements, c.from).zip(anchor_of(project, &placements, c.to));
-        match ends {
-            Some(((s1, from), (s2, to))) if s1 == s2 => {
+        let Some(((s1, from), (s2, to))) = ends else {
+            out.unrouted.push(c.id);
+            continue;
+        };
+        if s1 != s2 {
+            out.unrouted.push(c.id);
+            continue;
+        }
+        let known = surfaces
+            .entry(s1)
+            .or_insert_with(|| surfaces_of(project, s1));
+        let surface_of = |pin: PinRef| {
+            device_of_pin(project, pin)
+                .and_then(|d| known.off_plate.get(&d.raw()))
+                .cloned()
+        };
+        let (sa, sb) = (surface_of(c.from), surface_of(c.to));
+        match (sa, sb) {
+            (None, None) => {
                 if from.z_mm.is_none() || to.z_mm.is_none() {
                     out.unknown_height.push(c.id);
                 }
@@ -232,7 +304,85 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
                     diameter_mm: c.diameter_mm,
                 });
             }
-            _ => out.unrouted.push(c.id),
+            (Some(a), Some(b)) if a == b => {
+                let length = from.pos.manhattan(&to.pos) + 2.0 * rules.slack_mm;
+                out.routes.insert(
+                    c.id,
+                    Route {
+                        job: c.id,
+                        kind: Kind::FreeAir,
+                        points: vec![from.pos, to.pos],
+                        points3: vec![
+                            Point3::new(from.pos.x, from.pos.y, 0.0),
+                            Point3::new(to.pos.x, to.pos.y, 0.0),
+                        ],
+                        ducts: Vec::new(),
+                        detour_mm: 0.0,
+                        rise_mm: 0.0,
+                        bends: 0,
+                        length_mm: length.max(1.0),
+                    },
+                );
+                out.surface_legs.insert(
+                    c.id,
+                    SurfaceLeg {
+                        surface: a,
+                        opening: None,
+                        length_mm: length,
+                    },
+                );
+            }
+            (Some(_), Some(_)) => out.unrouted.push(c.id),
+            (on_a, on_b) => {
+                // One end on the plate, the other on a surface.
+                let from_is_plate = on_a.is_none();
+                let surface = on_a.or(on_b).unwrap_or_default();
+                let (plate_end, off_end) = if from_is_plate {
+                    (from, to)
+                } else {
+                    (to, from)
+                };
+                let Some(passage) = novo_layout::openings::best_passage(
+                    &known.openings,
+                    novo_layout::surfaces::MAIN_PLATE,
+                    &surface,
+                    (plate_end.pos.x, plate_end.pos.y),
+                    (off_end.pos.x, off_end.pos.y),
+                ) else {
+                    out.unrouted.push(c.id);
+                    continue;
+                };
+                let at_opening = Anchor {
+                    pos: Point::new(passage.enter.0, passage.enter.1),
+                    facing: Facing::Any,
+                    z_mm: Some(0.0),
+                };
+                if plate_end.z_mm.is_none() {
+                    out.unknown_height.push(c.id);
+                }
+                let (job_from, job_to) = if from_is_plate {
+                    (plate_end, at_opening)
+                } else {
+                    (at_opening, plate_end)
+                };
+                jobs.entry(s1).or_default().push(Job {
+                    id: c.id,
+                    from: job_from,
+                    to: job_to,
+                    diameter_mm: c.diameter_mm,
+                });
+                let leg = Point::new(passage.leave.0, passage.leave.1).manhattan(&off_end.pos)
+                    + rules.slack_mm;
+                extra.push((c.id, leg));
+                out.surface_legs.insert(
+                    c.id,
+                    SurfaceLeg {
+                        surface,
+                        opening: Some(passage.opening.name.clone()),
+                        length_mm: leg,
+                    },
+                );
+            }
         }
     }
     for (structure, jobs) in jobs {
@@ -241,6 +391,17 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
             out.routes.insert(r.job, r.clone());
         }
         out.plans.push((structure, p));
+    }
+    for (id, mm) in extra {
+        match out.routes.get_mut(&id) {
+            Some(route) => route.length_mm += mm,
+            // The plate leg gave no route: the wire is not routed, and no
+            // opening or length is claimed for it.
+            None => {
+                out.surface_legs.remove(&id);
+                out.unrouted.push(id);
+            }
+        }
     }
     out
 }

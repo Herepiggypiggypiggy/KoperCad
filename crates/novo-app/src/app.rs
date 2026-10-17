@@ -17,6 +17,8 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_surface_move;
+mod cabinet_surface_size;
 mod cabinet_surfaces;
 mod cable_controls;
 mod cable_cores;
@@ -30,9 +32,21 @@ mod changes;
 mod checks;
 mod clipboard;
 mod commissioning;
+mod commissioning_cabinet;
+#[cfg(test)]
+mod commissioning_cabinet_tests;
+mod commissioning_photos;
+mod commissioning_redlines;
+mod commissioning_signature;
+#[cfg(test)]
+mod commissioning_signature_tests;
+mod commissioning_viewer;
+#[cfg(test)]
+mod commissioning_viewer_tests;
 mod compare;
 mod designer;
 mod device_renumber;
+mod dialog_ui;
 mod dock;
 mod drawers;
 mod duplicate;
@@ -47,12 +61,15 @@ mod heat;
 mod heat_3d;
 #[cfg(test)]
 mod heat_3d_tests;
+mod heat_arrows;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
+mod heat_legend;
 mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
+mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
 mod heat_progress_tests;
@@ -60,6 +77,7 @@ mod heat_run;
 #[cfg(test)]
 mod heat_run_tests;
 mod heat_settings;
+mod heat_spots;
 mod inspector;
 mod interop;
 mod languages;
@@ -80,12 +98,16 @@ mod macro_browser;
 mod macro_browser_tests;
 #[cfg(test)]
 mod macro_company_tests;
+mod macro_editor;
+#[cfg(test)]
+mod macro_editor_tests;
 mod macro_thumb;
 mod menu_bar;
 mod net_trace;
 mod numbering;
 mod onboarding;
 mod outline;
+mod outline_items;
 mod outline_tree;
 mod pages;
 mod panel;
@@ -103,6 +125,7 @@ mod plc_link;
 mod plc_run;
 mod potentials;
 mod preferences;
+mod probe;
 mod project_rules;
 mod project_settings;
 mod protection;
@@ -112,6 +135,9 @@ mod revisions;
 mod safety;
 mod safety_functions;
 mod safety_report;
+mod selection_sheet;
+#[cfg(test)]
+mod selection_sheet_tests;
 mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
@@ -131,14 +157,29 @@ mod title_revisions;
 mod userkeymap;
 mod variants;
 mod view3d;
+mod view3d_align;
 mod view3d_controls;
+mod view3d_duplicate;
 mod view3d_heat;
+mod view3d_hints;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
+mod view3d_nudge;
+mod view3d_place;
+mod view3d_rail;
+#[cfg(test)]
+mod view3d_rail_tests;
 mod view3d_stats;
+mod view3d_surface_devices;
+#[cfg(test)]
+mod view3d_surface_devices_tests;
+mod view3d_surfaces;
 #[cfg(test)]
 mod view3d_tests;
+mod view3d_tip;
+mod view3d_views;
+mod view3d_wires;
 mod whats_new;
 mod wheel;
 mod wire_panel;
@@ -162,6 +203,14 @@ mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
 #[cfg(test)]
+mod cabinet_surface_edit_tests;
+#[cfg(test)]
+mod cabinet_surface_move_tests;
+#[cfg(test)]
+mod cabinet_surface_plan_tests;
+#[cfg(test)]
+mod cabinet_surface_size_tests;
+#[cfg(test)]
 mod cabinet_surfaces_tests;
 #[cfg(test)]
 mod cabinet_tests;
@@ -170,6 +219,8 @@ mod changes_tests;
 #[cfg(test)]
 mod clipboard_tests;
 #[cfg(test)]
+mod commissioning_photos_tests;
+#[cfg(test)]
 mod commissioning_tests;
 #[cfg(test)]
 mod compare_tests;
@@ -177,6 +228,8 @@ mod compare_tests;
 mod eplan_ui_tests;
 #[cfg(test)]
 mod example_tests;
+#[cfg(test)]
+mod faults_tests;
 #[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
@@ -203,6 +256,8 @@ mod page_commands_tests;
 mod pdf_options_tests;
 #[cfg(test)]
 mod protection_tests;
+#[cfg(test)]
+mod read_only_tests;
 #[cfg(test)]
 mod route_all_tests;
 #[cfg(test)]
@@ -325,6 +380,7 @@ const PIN_OUTLINE_FROM: f32 = 1700.0;
 enum Leaving {
     New,
     Open,
+    OpenReadOnly,
     OpenPath(PathBuf),
     Example,
     Practice,
@@ -389,6 +445,8 @@ pub struct NovoApp {
     /// Free room between the top bar's left and right groups last frame;
     /// below zero they overlap. Read by the width test.
     top_bar_gap: f32,
+    /// Width the right side of the top bar took last frame.
+    top_bar_right: f32,
     /// Width the menu names took last frame (`menu_bar`).
     menu_bar_width: f32,
     /// Lessons: the catalog, the running lesson and the person's progress.
@@ -462,6 +520,7 @@ impl NovoApp {
             ol: outline::OutlineState::new(),
             window_width: 0.0,
             top_bar_gap: 0.0,
+            top_bar_right: 0.0,
             menu_bar_width: 380.0,
             learn: learn::LearnState::new(),
         };
@@ -572,8 +631,8 @@ impl NovoApp {
         let open = self.is_open();
         let doc = self.backend.document();
         match action {
-            Action::SaveProject
-            | Action::SaveProjectAs
+            Action::SaveProject => open && !self.backend.is_read_only(),
+            Action::SaveProjectAs
             | Action::CloseProject
             | Action::ZoomToFit
             | Action::SizeEnclosure
@@ -584,8 +643,16 @@ impl NovoApp {
             Action::ShowCabinet => self
                 .workspace_unavailable(workspace::Workspace::Cabinet)
                 .is_none(),
-            Action::Undo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_undo()),
-            Action::Redo => !self.commissioning_locks_edits() && doc.is_some_and(|d| d.can_redo()),
+            Action::Undo => {
+                !self.commissioning_locks_edits()
+                    && !self.backend.is_read_only()
+                    && doc.is_some_and(|d| d.can_undo())
+            }
+            Action::Redo => {
+                !self.commissioning_locks_edits()
+                    && !self.backend.is_read_only()
+                    && doc.is_some_and(|d| d.can_redo())
+            }
             _ => true,
         }
     }
@@ -604,6 +671,7 @@ impl NovoApp {
         match action {
             Action::NewProject => self.leave_then(ctx, Leaving::New),
             Action::OpenProject => self.leave_then(ctx, Leaving::Open),
+            Action::OpenReadOnly => self.leave_then(ctx, Leaving::OpenReadOnly),
             Action::OpenExample => self.leave_then(ctx, Leaving::Example),
             Action::TryFastKeys => self.leave_then(ctx, Leaving::Practice),
             Action::ShowWalkthrough => self.show_walkthrough(),
@@ -720,6 +788,17 @@ impl NovoApp {
                     self.open_path(&path);
                 }
             }
+            Leaving::OpenReadOnly => {
+                let mut dialog = rfd::FileDialog::new()
+                    .set_title("Open project read-only")
+                    .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
+                if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
+                    dialog = dialog.set_directory(dir);
+                }
+                if let Some(path) = dialog.pick_file() {
+                    self.open_path_as(&path, true);
+                }
+            }
             Leaving::OpenPath(path) => self.open_path(&path),
             Leaving::Example => self.open_example(),
             Leaving::Practice => self.start_practice(),
@@ -743,7 +822,18 @@ impl NovoApp {
     }
 
     fn open_path(&mut self, path: &Path) {
-        match self.backend.open(path) {
+        self.open_path_as(path, false);
+    }
+
+    /// Opens `path`; with `read_only` the project can be looked at but not
+    /// changed or written (File > Open read-only).
+    fn open_path_as(&mut self, path: &Path, read_only: bool) {
+        let opened = if read_only {
+            self.backend.open_read_only(path)
+        } else {
+            self.backend.open(path)
+        };
+        match opened {
             Ok(report) => {
                 self.current_page = None;
                 self.document_replaced();
@@ -752,8 +842,11 @@ impl NovoApp {
                     self.project_path = None;
                 } else {
                     self.project_path = Some(path.to_owned());
-                    self.settings.remember_recent(path);
-                    self.message(Level::Info, format!("Opened {}", path.display()));
+                    if !read_only {
+                        self.settings.remember_recent(path);
+                    }
+                    let how = if read_only { " read-only" } else { "" };
+                    self.message(Level::Info, format!("Opened {}{how}", path.display()));
                 }
                 if let Some(aside) = report.set_aside {
                     self.message(
@@ -1013,7 +1106,13 @@ impl NovoApp {
         };
         // Shift+D swings the 3D door; elsewhere it is not a command.
         let in_3d = self.workspace() == workspace::Workspace::View3d;
-        commands.retain(|id| in_3d || *id != "view.3d_door");
+        commands.retain(|id| {
+            in_3d
+                || !matches!(
+                    *id,
+                    "view.3d_door" | "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all"
+                )
+        });
         if self.workspace() != workspace::Workspace::Schematic {
             // The schematic's keys must not edit the hidden page: rotate
             // and delete go to the Cabinet, the rest keep only the view,
@@ -1047,7 +1146,17 @@ impl NovoApp {
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
+                    || id.starts_with("view.3d_align")
+                    || id.starts_with("view.3d_spread")
+                    || *id == "view.3d_wire_runs"
+                    || *id == "view.3d_duplicate"
+                    || (*id == "edit.duplicate" && in_3d)
+                    || *id == "view.3d_position"
+                    || *id == "view.3d_place"
                     || *id == "view.3d_stats"
+                    || *id == "view.3d_section"
+                    || *id == "view.3d_hints"
+                    || matches!(*id, "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all")
                     || id.starts_with("heat.")
             });
         }
@@ -1078,7 +1187,21 @@ impl NovoApp {
         }
         self.sync_commissioning_workspace();
         self.drawer(ui);
-        let canvas_rect = egui::CentralPanel::no_frame()
+        // The canvases paint their own ground; the Reports tables and the
+        // Cabinet toolbar sit on the theme's surfaces, not on the bare window.
+        let pal = novo_theme::Palette::of_ctx(&ctx);
+        let ground = if reports {
+            Some(pal.sunken)
+        } else if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
+            Some(pal.panel)
+        } else {
+            None
+        };
+        let central = match ground {
+            Some(fill) => egui::CentralPanel::no_frame().frame(egui::Frame::new().fill(fill)),
+            None => egui::CentralPanel::no_frame(),
+        };
+        let canvas_rect = central
             .show(ui, |ui| {
                 if self.is_open() && self.workspace() == workspace::Workspace::Cabinet {
                     self.cabinet_show(ui);
@@ -1154,9 +1277,11 @@ impl NovoApp {
         self.project_settings_dialog(&ctx);
         self.project_rules_dialog(&ctx);
         self.device_renumber_dialog(&ctx);
+        self.selection_sheet_window(&ctx);
         self.macro_browser_window(&ctx);
         self.macro_save_dialog(&ctx);
         self.macro_place_window(&ctx);
+        self.macro_editor_window(&ctx);
         self.options_window(&ctx);
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
@@ -1167,6 +1292,7 @@ impl NovoApp {
         self.poll_dwg(&ctx);
         self.protection_window(&ctx);
         self.faults_window(&ctx);
+        self.add_fault_window(&ctx);
         self.calculations_window(&ctx);
         self.electrical_window(&ctx);
         self.safety_window(&ctx);
@@ -1189,14 +1315,43 @@ impl NovoApp {
         for command in commands {
             self.run_key_command(&ctx, command);
         }
+        self.enforce_read_only();
         self.learn_end_frame();
+    }
+
+    /// A project opened read-only is never changed. Every edit path goes
+    /// through the document, so whatever got through this frame (a canvas
+    /// gesture, an outline rename, a menu command) is undone at once, and
+    /// the user is told once how to get an editable copy. Nothing is
+    /// recorded, so nothing reaches the file.
+    fn enforce_read_only(&mut self) {
+        if !self.backend.is_read_only() {
+            return;
+        }
+        let mut undone = false;
+        for _ in 0..10_000 {
+            if !self.backend.document().is_some_and(|d| d.can_undo()) {
+                break;
+            }
+            self.undo_redo(false);
+            undone = true;
+        }
+        if undone {
+            self.message(
+                Level::Info,
+                "This project is open read-only, so the change was taken back. Use File > Save as to keep an editable copy.",
+            );
+        }
     }
 
     /// Follows up on what the canvas did this frame: its edits reach the
     /// other views, and a page it asked for is opened.
     fn after_canvas(&mut self) {
         let changes = self.canvas.take_changes();
-        if !changes.is_empty() && self.commissioning_locks_edits() {
+
+        if self.backend.is_read_only() {
+            self.enforce_read_only();
+        } else if !changes.is_empty() && self.commissioning_locks_edits() {
             // Commissioning mode checks the drawing against the machine; a
             // stray touch must not move a wire. One undo takes it back.
             self.undo_redo(false);
@@ -1265,7 +1420,14 @@ impl NovoApp {
 
     fn update_title(&mut self, ctx: &egui::Context) {
         let title = match self.project_name() {
-            Some(name) => format!("{name}{} - {APP_NAME}", self.standard_suffix()),
+            Some(name) => {
+                let ro = if self.backend.is_read_only() {
+                    " (read-only)"
+                } else {
+                    ""
+                };
+                format!("{name}{ro}{} - {APP_NAME}", self.standard_suffix())
+            }
             None => APP_NAME.to_owned(),
         };
         if title != self.window_title {
@@ -1325,6 +1487,8 @@ impl NovoApp {
     fn saved_state(&self) -> &'static str {
         if !self.is_open() {
             ""
+        } else if self.backend.is_read_only() {
+            "Read-only"
         } else if self.project_path.is_none() {
             "Not saved yet"
         } else if self.autosave_failing {
@@ -1354,7 +1518,22 @@ impl NovoApp {
             }
             ui.separator();
             self.outline_toggle_button(ui);
-            self.breadcrumb(ui, fit.name_chars);
+            // The breadcrumb gets what the right side left free last frame
+            // and cuts its text to it, so a long page name or a row of
+            // badges never pushes it under the Search button.
+            let room =
+                (ui.available_width() - self.top_bar_right - ui.spacing().item_spacing.x).max(0.0);
+            let breadcrumb =
+                egui::Rect::from_min_size(ui.cursor().min, egui::vec2(room, ui.available_height()));
+            ui.scope_builder(
+                egui::UiBuilder::new()
+                    .max_rect(breadcrumb)
+                    .layout(egui::Layout::left_to_right(egui::Align::Center)),
+                |ui| {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    self.breadcrumb(ui, fit.name_chars);
+                },
+            );
             let left_end = ui.min_rect().right();
 
             let right = ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -1389,6 +1568,7 @@ impl NovoApp {
                 }
             });
             self.top_bar_gap = right.response.rect.left() - left_end;
+            self.top_bar_right = right.response.rect.width();
         });
     }
 
@@ -1407,10 +1587,15 @@ impl NovoApp {
         if !self.outline_flyout_available() {
             return;
         }
-        let toggle = ui.add(egui::Button::selectable(
-            self.outline_open,
-            self.outline_mode.label(),
-        ));
+        // Commissioning is the longest name and the panel names itself in
+        // its header: the button is its icon, the name in the tooltip.
+        let text = match self.outline_mode {
+            OutlineMode::Commissioning => self.outline_mode.icon(),
+            mode => mode.label(),
+        };
+        let toggle = ui
+            .add(egui::Button::selectable(self.outline_open, text))
+            .on_hover_text(self.outline_mode.label());
         if toggle.clicked() {
             self.outline_open ^= true;
             // The keys stay with the drawing after the click.
@@ -1505,16 +1690,16 @@ impl NovoApp {
                 };
                 let font = egui::FontId::proportional(13.0);
                 let color = if current {
-                    novo_theme::tokens::TEXT
+                    crate::theme::ui_palette().text_primary
                 } else {
-                    novo_theme::tokens::TEXT_MUTED
+                    crate::theme::ui_palette().text_secondary
                 };
                 let galley = ui.painter().layout_no_wrap(text, font, color);
                 let size = egui::vec2((galley.size().x + 10.0).max(26.0), 26.0);
                 let (rect, response) = ui.allocate_exact_size(size, egui::Sense::click());
                 let response = response.on_hover_text(mode.label());
                 let color = if response.hovered() {
-                    novo_theme::tokens::TEXT
+                    crate::theme::ui_palette().text_primary
                 } else {
                     color
                 };
@@ -1531,7 +1716,7 @@ impl NovoApp {
                             egui::pos2(rect.right() - 4.0, rect.bottom()),
                         ),
                         1,
-                        novo_theme::tokens::ACCENT,
+                        crate::theme::ui_palette().accent,
                     );
                 }
                 if response.clicked() {

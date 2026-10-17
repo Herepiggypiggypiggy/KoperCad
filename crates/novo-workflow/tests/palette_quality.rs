@@ -83,3 +83,40 @@ fn recent_picks_lead_a_short_query_but_only_when_they_match() {
     let rotate = position(&rows, "edit.rotate").unwrap();
     assert!(position(&rows, "edit.mirror").is_none_or(|m| rotate < m));
 }
+
+#[test]
+fn a_part_word_finds_the_part_before_a_command_that_only_has_it_as_a_keyword() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for word in [
+        "overload",
+        "contactor",
+        "relay",
+        "breaker",
+        "terminal",
+        "motor",
+        "fuse",
+        "transformer",
+        "coil",
+    ] {
+        let rows = search(&palette, &keymap, word);
+        assert_eq!(
+            rows[0].kind,
+            novo_workflow::palette::Kind::Symbol,
+            "`{word}` starts with a part, not {:?}",
+            rows[0].label
+        );
+    }
+}
+
+#[test]
+fn overload_is_the_overload_relay_and_fault_scenarios_stay_reachable() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    let rows = search(&palette, &keymap, "overload");
+    assert!(rows[0].label.contains("overload"), "{:?}", rows[0].label);
+    assert!(position(&rows, "sim.faults").is_some(), "still listed");
+    // The command's own words still lead to it.
+    let rows = search(&palette, &keymap, "fault");
+    assert_eq!(rows[0].target, Target::Command("sim.faults"));
+    let rows = search(&palette, &keymap, "short circuit");
+    assert_eq!(rows[0].target, Target::Command("sim.faults"));
+}
