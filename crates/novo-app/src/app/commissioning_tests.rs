@@ -384,7 +384,23 @@ fn redlines_apply_to_the_drawing_in_one_undo_step_and_offer_a_revision() {
     mode.tab = super::commissioning::Tab::Redlines;
     d.frame();
     d.frame();
+    // an open redline marks its wire on the page, with what it says
+    let page = wire.pages[0];
+    let modified = |d: &mut Drive| {
+        d.app
+            .commissioning_marks(page)
+            .into_iter()
+            .filter(|m| m.kind == novo_canvas::MarkKind::Modified)
+            .collect::<Vec<_>>()
+    };
+    let marked = modified(&mut d);
+    assert!(!marked.is_empty(), "the open redline is marked");
+    assert!(marked[0].text.contains("RL77"), "{}", marked[0].text);
     d.app.apply_redlines(true);
+    assert!(
+        modified(&mut d).is_empty(),
+        "an applied redline is no longer marked"
+    );
     d.frame();
     let number = |d: &Drive| d.doc().project().wire(id).unwrap().number.clone();
     assert_eq!(number(&d).as_deref(), Some("RL77"));
@@ -402,4 +418,52 @@ fn redlines_apply_to_the_drawing_in_one_undo_step_and_offer_a_revision() {
         Some("RL77"),
         "one undo takes it back"
     );
+}
+
+#[test]
+fn a_rejected_redline_is_not_marked_and_a_note_is() {
+    use novo_commissioning::{Change, Redline, RedlineState};
+    let (_dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let wire = targets(d.doc().project())
+        .into_iter()
+        .find(|t| matches!(t.target, Target::Wire(_)))
+        .expect("a wire");
+    let page = wire.pages[0];
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    let mut add = |change, note: &str| {
+        mode.store
+            .add_redline(Redline {
+                id: 0,
+                target: wire.target,
+                label: wire.label.clone(),
+                change,
+                note: note.into(),
+                by: "tv".into(),
+                at: "2026-10-17T08:00:00Z".into(),
+                state: RedlineState::Open,
+            })
+            .unwrap()
+    };
+    let note = add(Change::Note, "cable is shorter than drawn");
+    let renumber = add(Change::WireNumber("RL78".into()), "");
+    let count = |d: &mut Drive| {
+        d.app
+            .commissioning_marks(page)
+            .into_iter()
+            .filter(|m| m.kind == novo_canvas::MarkKind::Modified)
+            .count()
+    };
+    let both = count(&mut d);
+    assert!(both >= 2, "a note marks too ({both})");
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    mode.store
+        .set_redline_state(renumber, RedlineState::Rejected)
+        .unwrap();
+    mode.store
+        .set_redline_state(note, RedlineState::Rejected)
+        .unwrap();
+    assert_eq!(count(&mut d), 0);
 }
