@@ -30,6 +30,11 @@ pub(super) const HINTS: &[Hint] = &[
         text: "Press {key} to place a symbol · {keys} for keys",
     },
     Hint {
+        id: "first_wire",
+        command: "tool.connect",
+        text: "Press {key} to connect pins · click one pin, then another",
+    },
+    Hint {
         id: "empty_3d",
         command: "cabinet.place-all",
         text: "Nothing is on the plate yet · {key} places all devices",
@@ -116,6 +121,24 @@ pub(super) fn hint_due(settings: &Settings, id: &str) -> bool {
     settings.hints_seen.get(id).copied().unwrap_or(0) < HINT_LIMIT
 }
 
+/// What a page still needs said (see [`NovoApp::empty_page_hint`]).
+pub(super) fn page_hint(
+    settings: &Settings,
+    keymap: &Keymap,
+    project: &novo_core::Project,
+    page: novo_core::PageId,
+) -> Option<String> {
+    let symbols = project.symbols().filter(|s| s.page == page).count();
+    let id = match symbols {
+        0 => "empty_page",
+        1 => return None,
+        _ if project.wires().any(|w| w.page == page) => return None,
+        _ => "first_wire",
+    };
+    let hint = HINTS.iter().find(|h| h.id == id)?;
+    hint_due(settings, id).then(|| hint_text(keymap, hint))
+}
+
 /// The hint for a 3D view whose plate holds no devices, while it is due.
 pub(super) fn empty_3d_hint(
     settings: &Settings,
@@ -164,16 +187,12 @@ impl NovoApp {
         }
     }
 
-    /// The hint for an empty page, while it is still due.
+    /// The hint for the page being drawn, while it is still due: the first
+    /// move on an empty page, the first wire once two symbols sit there.
     pub(super) fn empty_page_hint(&self) -> Option<String> {
-        let hint = HINTS.iter().find(|h| h.id == "empty_page")?;
-        if !hint_due(&self.settings, hint.id) {
-            return None;
-        }
         let page = self.current_page()?;
-        let doc = self.backend.document()?;
-        let empty = !doc.project().symbols().any(|s| s.page == page);
-        empty.then(|| hint_text(&self.wb.keymap, hint))
+        let project = self.backend.document()?.project();
+        page_hint(&self.settings, &self.wb.keymap, project, page)
     }
 
     /// `help.show_hints`: every hint shows again.
