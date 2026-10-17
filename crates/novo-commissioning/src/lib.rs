@@ -17,6 +17,7 @@ mod check;
 mod field;
 mod progress;
 mod punch;
+mod redline;
 mod report;
 mod store;
 
@@ -26,5 +27,6 @@ pub use progress::{
     Progress, Scope, TargetInfo, progress, progress_by_cabinet, progress_by_page, targets,
 };
 pub use punch::{PunchItem, PunchState, Severity, Signature};
+pub use redline::{Change, Redline, RedlineState, apply_commands, revision_description};
 pub use report::to_report_input;
 pub use store::{CommissioningError, CommissioningStore};

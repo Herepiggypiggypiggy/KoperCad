@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::check::{CheckKind, Target};
 use crate::progress::targets;
 use crate::punch::{PunchItem, PunchState};
+use crate::redline::{Change, Redline, RedlineState};
 use crate::store::CommissioningStore;
 
 /// Marker in the file so other JSON is not taken for a field package.
@@ -67,11 +68,19 @@ pub struct MergeReport {
     pub mismatched_targets: usize,
     pub punch_added: usize,
     pub punch_updated: usize,
+    pub redlines_added: usize,
+    pub redlines_updated: usize,
 }
 
 impl MergeReport {
     pub fn changed(&self) -> bool {
-        self.checks_added + self.checks_updated + self.punch_added + self.punch_updated > 0
+        self.checks_added
+            + self.checks_updated
+            + self.punch_added
+            + self.punch_updated
+            + self.redlines_added
+            + self.redlines_updated
+            > 0
     }
 
     pub fn summary(&self) -> String {
@@ -79,6 +88,12 @@ impl MergeReport {
             "{} new and {} changed checks, {} new and {} changed punch items",
             self.checks_added, self.checks_updated, self.punch_added, self.punch_updated
         );
+        if self.redlines_added + self.redlines_updated > 0 {
+            text.push_str(&format!(
+                ", {} new and {} changed redlines",
+                self.redlines_added, self.redlines_updated
+            ));
+        }
         if self.checks_kept > 0 {
             text.push_str(&format!(
                 ", {} older decisions kept as they were",
@@ -223,8 +238,44 @@ impl FieldPackage {
                 }
             }
         }
+        for incoming in self.store.redlines() {
+            match verdict(incoming.target) {
+                Verdict::Same => {}
+                Verdict::Unknown => {
+                    report.unknown_targets += 1;
+                    continue;
+                }
+                Verdict::Other => {
+                    report.mismatched_targets += 1;
+                    continue;
+                }
+            }
+            let found = store
+                .redlines()
+                .find(|r| redline_key(r) == redline_key(incoming))
+                .cloned();
+            match found {
+                None => {
+                    if store.add_redline(incoming.clone()).is_ok() {
+                        report.redlines_added += 1;
+                    }
+                }
+                Some(have) => {
+                    if have.state == RedlineState::Open && incoming.state != RedlineState::Open {
+                        let mut redline = incoming.clone();
+                        redline.id = have.id;
+                        store.put_redline(redline);
+                        report.redlines_updated += 1;
+                    }
+                }
+            }
+        }
         report
     }
+}
+
+fn redline_key(r: &Redline) -> (String, String, Target, Change) {
+    (r.at.clone(), r.by.clone(), r.target, r.change.clone())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

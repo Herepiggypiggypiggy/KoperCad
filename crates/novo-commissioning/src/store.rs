@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::check::{CheckKind, CheckRecord, CheckState, Target};
 use crate::punch::{PunchItem, PunchState, Severity};
+use crate::redline::{Redline, RedlineState};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CommissioningError {
@@ -13,6 +14,10 @@ pub enum CommissioningError {
     Unreadable(String),
     #[error("no punch item {0}")]
     NoPunchItem(u64),
+    #[error("no redline {0}")]
+    NoRedline(u64),
+    #[error("that change does not fit this kind of object")]
+    RedlineDoesNotFit,
 }
 
 /// All commissioning state of one project.
@@ -22,6 +27,7 @@ pub struct CommissioningStore {
     checks: BTreeMap<(Target, CheckKind), CheckRecord>,
     punch: BTreeMap<u64, PunchItem>,
     next_punch: u64,
+    redlines: BTreeMap<u64, Redline>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -30,6 +36,8 @@ struct StoreData {
     checks: Vec<CheckRecord>,
     #[serde(default)]
     punch: Vec<PunchItem>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    redlines: Vec<Redline>,
 }
 
 impl From<StoreData> for CommissioningStore {
@@ -43,6 +51,7 @@ impl From<StoreData> for CommissioningStore {
                 .collect(),
             punch: data.punch.into_iter().map(|p| (p.id, p)).collect(),
             next_punch,
+            redlines: data.redlines.into_iter().map(|r| (r.id, r)).collect(),
         }
     }
 }
@@ -52,6 +61,7 @@ impl From<CommissioningStore> for StoreData {
         StoreData {
             checks: store.checks.into_values().collect(),
             punch: store.punch.into_values().collect(),
+            redlines: store.redlines.into_values().collect(),
         }
     }
 }
@@ -75,7 +85,7 @@ impl CommissioningStore {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.checks.is_empty() && self.punch.is_empty()
+        self.checks.is_empty() && self.punch.is_empty() && self.redlines.is_empty()
     }
 
     /// The state of one check; `Pending` when nothing was decided.
@@ -155,6 +165,50 @@ impl CommissioningStore {
         self.next_punch += 1;
         self.punch.insert(id, item);
         id
+    }
+
+    /// Adds a redline and returns its id (the id in `redline` is ignored).
+    pub fn add_redline(&mut self, mut redline: Redline) -> Result<u64, CommissioningError> {
+        if !redline.change.fits(redline.target) {
+            return Err(CommissioningError::RedlineDoesNotFit);
+        }
+        let id = self.redlines.keys().next_back().map_or(1, |m| m + 1);
+        redline.id = id;
+        self.redlines.insert(id, redline);
+        Ok(id)
+    }
+
+    pub fn redline(&self, id: u64) -> Option<&Redline> {
+        self.redlines.get(&id)
+    }
+
+    /// Every redline, oldest first.
+    pub fn redlines(&self) -> impl Iterator<Item = &Redline> {
+        self.redlines.values()
+    }
+
+    pub fn open_redline_count(&self) -> usize {
+        self.redlines
+            .values()
+            .filter(|r| r.state == RedlineState::Open)
+            .count()
+    }
+
+    pub fn set_redline_state(
+        &mut self,
+        id: u64,
+        state: RedlineState,
+    ) -> Result<(), CommissioningError> {
+        self.redlines
+            .get_mut(&id)
+            .ok_or(CommissioningError::NoRedline(id))?
+            .state = state;
+        Ok(())
+    }
+
+    /// Replaces the redline with the same id (merging field results).
+    pub(crate) fn put_redline(&mut self, redline: Redline) {
+        self.redlines.insert(redline.id, redline);
     }
 
     pub fn punch(&self, id: u64) -> Option<&PunchItem> {

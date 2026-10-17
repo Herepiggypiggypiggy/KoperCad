@@ -31,6 +31,7 @@ mod changes;
 mod checks;
 mod clipboard;
 mod commissioning;
+mod commissioning_redlines;
 mod compare;
 mod designer;
 mod device_renumber;
