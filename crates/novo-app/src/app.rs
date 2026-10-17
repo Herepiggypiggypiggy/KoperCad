@@ -238,6 +238,8 @@ mod compare_tests;
 #[cfg(test)]
 mod context_menu_tests;
 #[cfg(test)]
+mod dock_labels_tests;
+#[cfg(test)]
 mod eplan_ui_tests;
 #[cfg(test)]
 mod error_words_tests;
