@@ -94,8 +94,18 @@ impl Report for WireList {
     }
 
     fn generate(&self, project: &Project) -> ReportOutput {
+        WireList::build(project, false)
+    }
+}
+
+impl WireList {
+    /// The wire list's table. With `with_feeds` it also holds the supply and
+    /// PE leads that end on a potential feed, as the workshop reports (cut
+    /// list, labels, wire production) list them; the wire list itself does
+    /// not.
+    pub(crate) fn build(project: &Project, with_feeds: bool) -> ReportOutput {
         let netlist = project.netlist();
-        let connections = items(project, false);
+        let connections = items(project, with_feeds);
         let mut section = Section::new(
             "wires",
             "",
@@ -181,7 +191,7 @@ impl Report for WireList {
                 location.column = page.format.column_at(x);
                 Some(location_text(&location))
             });
-            let designation = |pin| project.pin_designation(pin).unwrap_or_default();
+            let designation = |pin| crate::wirecut::end_designation(project, pin);
             section.push(
                 vec![
                     Cell::text(join_distinct(numbers)),
@@ -202,10 +212,12 @@ impl Report for WireList {
         }
         // Says what the rows are, so the count can be compared with the
         // other workshop reports (see [`WIRE_LIST_COUNT_TITLE`]).
-        section.title = WIRE_LIST_COUNT_TITLE.replace("{n}", &section.rows.len().to_string());
+        if !with_feeds {
+            section.title = WIRE_LIST_COUNT_TITLE.replace("{n}", &section.rows.len().to_string());
+        }
         ReportOutput {
             report: Self::ID.into(),
-            title: self.title(),
+            title: Report::title(&WireList),
             revision: project.revision(),
             sections: vec![section],
         }
