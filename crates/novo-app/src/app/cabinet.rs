@@ -548,14 +548,33 @@ impl NovoApp {
         };
 
         // What is drawn: the stored layout, or the layout with the plan applied.
-        let shown = layout.as_ref().map(|l| match &self.cabinet.preview {
-            Some(plan) => {
-                let mut preview = l.clone();
-                preview.accept(plan, &cands);
-                preview
-            }
-            None => l.clone(),
-        });
+        // On the door or a wall the preview is that surface's part of the
+        // plan, not the plate plan.
+        let all_cands = structure
+            .map(|s| candidates(project, s))
+            .unwrap_or_default();
+        let shown = layout
+            .as_ref()
+            .map(|l| match (&self.cabinet.preview, &on_surface) {
+                (Some(plan), None) => {
+                    let mut preview = l.clone();
+                    preview.accept(plan, &cands);
+                    preview
+                }
+                (Some(_), Some(name)) => {
+                    let mut preview = l.clone();
+                    if let Some((_, plan)) = self
+                        .cabinet
+                        .surface_preview
+                        .iter()
+                        .find(|(surface, _)| surface == name)
+                    {
+                        preview.accept(plan, &all_cands);
+                    }
+                    preview
+                }
+                _ => l.clone(),
+            });
         let shown = shown.map(|mut s| {
             if let (Some(d), None) = (self.cabinet.drag, &self.cabinet.preview) {
                 s.move_to(d.id, d.at.0, d.at.1);
@@ -1861,7 +1880,7 @@ impl NovoApp {
                 Some(plan) => {
                     let left: Vec<String> = plan.unplaced.iter().map(|&id| tag(id)).collect();
                     let fits = format!(
-                        "By the surface rules {} go on the {surface} [{rule}]; Enter places them there with the plate plan",
+                        "By the surface rules {} go on the {surface} [{rule}]; Enter places them there with the plate plan; pick the {surface} in the Surface picker to see them",
                         tags.join(", ")
                     );
                     if left.is_empty() {
@@ -1965,24 +1984,26 @@ impl NovoApp {
         cands: &[novo_layout::plan::Candidate],
     ) {
         // A surface other than the plate is drawn from its own layout and
-        // cannot be edited yet: an edit would land on the plate.
+        // cannot be edited yet: an edit would land on the plate. Accepting a
+        // Place all preview stores a plan made on the plate, so it goes
+        // through from the door view too.
         if self
             .cabinet
             .surface
             .as_deref()
             .is_some_and(|n| n != MAIN_PLATE)
-            && matches!(
-                ask,
-                Ask::PlaceAll
-                    | Ask::Accept
-                    | Ask::Drop(..)
-                    | Ask::Rotate(_)
-                    | Ask::Remove(_)
-                    | Ask::SetRailLengths(_)
-                    | Ask::SetPlate(_)
-                    | Ask::SetPlateSize(..)
-                    | Ask::SetEnclosure(_)
-            )
+            && (matches!(ask, Ask::Accept) && self.cabinet.preview.is_none()
+                || matches!(
+                    ask,
+                    Ask::PlaceAll
+                        | Ask::Drop(..)
+                        | Ask::Rotate(_)
+                        | Ask::Remove(_)
+                        | Ask::SetRailLengths(_)
+                        | Ask::SetPlate(_)
+                        | Ask::SetPlateSize(..)
+                        | Ask::SetEnclosure(_)
+                ))
         {
             self.message(
                 Level::Info,
