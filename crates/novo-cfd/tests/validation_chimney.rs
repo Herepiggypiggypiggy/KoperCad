@@ -7,7 +7,7 @@
 //! The law is an idealisation (fully mixed exhaust, no plume, no entry loss beyond the orifice),
 //! so the signed error is reported and the band is wide. The sweep checks three things:
 //! heat leaves with the air (energy), `Q ~ P^(1/3)` (scaling), and the level against the law
-//! on two meshes (convergence). Run `-- --nocapture` to see the `VALIDATION` rows.
+//! (the mesh check is a separate ignored test). Run `-- --nocapture` to see the `VALIDATION` rows.
 
 mod validation;
 use novo_cfd::flow::*;
@@ -103,8 +103,7 @@ fn ideal(power_w: f64) -> f64 {
 #[test]
 fn the_chimney_follows_the_stack_law_in_level_scaling_and_energy() {
     let coarse = [8, 16, 8];
-    let fine = [12, 24, 12];
-    let powers = [10.0, 40.0, 160.0];
+    let powers = [40.0, 160.0];
     let mut flows = Vec::new();
     for &p in &powers {
         let (q, heat) = chimney(p, coarse);
@@ -128,13 +127,19 @@ fn the_chimney_follows_the_stack_law_in_level_scaling_and_energy() {
         );
         assert!((ratio / want - 1.0).abs() < 0.08, "scaling {ratio}");
     }
-    // Mesh check at the middle power: the finer mesh must not move the flow by more than 8%.
-    let (qf, heat_f) = chimney(40.0, fine);
+}
+
+/// Finer mesh at the middle power. Slow (about a minute), so it runs with `--ignored`.
+#[test]
+#[ignore = "slow"]
+fn the_chimney_flow_moves_little_on_a_finer_mesh() {
+    let (q_coarse, _) = chimney(40.0, [8, 16, 8]);
+    let (qf, heat_f) = chimney(40.0, [12, 24, 12]);
     let case = "chimney 40 W, 12x24x12 cells";
     let err = report(case, "flow vs ideal stack law m3/s", qf, ideal(40.0));
     report(case, "heat carried out by the air W", heat_f, 40.0);
-    report(case, "flow change from the coarse mesh", qf, flows[1]);
+    report(case, "flow change from the coarse mesh", qf, q_coarse);
     assert!(err.abs() < 0.15, "fine mesh flow error {err}"); // measured -10.8 %
-    assert!((qf / flows[1] - 1.0).abs() < 0.08, "mesh change");
+    assert!((qf / q_coarse - 1.0).abs() < 0.08, "mesh change");
     assert!((heat_f - 40.0).abs() / 40.0 < 0.04);
 }

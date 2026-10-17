@@ -35,8 +35,8 @@ Errors are signed, relative to the reference unless marked abs.
 | Fan into a vent (CFD-C2, `openings.rs`) | analytic operating point | flow | within 3% (test limit) |
 | Porous slab as fan load (CFD-C2, `ducts.rs`) | exact operating point | flow | -0.04% and -0.03% at two time steps |
 | IEC 60890 wall films (CFD-C2) | k A_eff | conductance sum | below 1e-9 relative |
-| Chimney, 10 / 40 / 160 W, 8x16x8 cells (`validation_chimney.rs`) | ideal fully mixed stack law | flow | -14.5% / -14.4% / -14.5%; heat carried out within 0.1% of the source |
-| Chimney 40 W, 12x24x12 cells | ideal stack law | flow | -10.8% (the finer mesh moves the flow +4.3% toward the law); scaling Q ~ P^(1/3) holds to 0.1% |
+| Chimney, 10 / 40 / 160 W, 8x16x8 cells (`validation_chimney.rs`; default test runs 40 and 160 W, 10 W measured once by hand) | ideal fully mixed stack law | flow | -14.5% / -14.4% / -14.5%; heat carried out within 0.1% of the source |
+| Chimney 40 W, 12x24x12 cells (ignored test, run with `--ignored`) | ideal stack law | flow | -10.8% (the finer mesh moves the flow +4.3% toward the law); scaling Q ~ P^(1/3) holds to 0.1% |
 | Sealed enclosure 50 W, mean air rise (fixed in #675 with ThermalBc::Overall; re-measured 2026-10-17 on main) | IEC 60890 hand calc 6.29 K, 2D engine 6.10 K | 3D volume-mean air rise | 5.48 K on 1000 cells, 5.38 on 1800: -12.8% and -14.4% vs IEC, -10.1% and -11.8% vs 2D (steady path 5.478 and 5.380 K); heat imbalance at most 0.1%. The 3D mean is lower because the air is stratified; test band 20% |
 | Vented box 100 W, 1000 then 1800 cells (CFD-C2, `validation_vented.rs`) | 2D engine, mixed air at the vents | air rise seen by the walls (wall-conductance weighted) | +4.5% then +6.7% (model vs model, not a measurement) |
 | Same vented box | 2D engine | volume-mean air rise | -14.6% then -14.8%; does not flatten with the mesh (stratification, see below) |
