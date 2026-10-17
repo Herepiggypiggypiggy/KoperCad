@@ -11,6 +11,7 @@ Done (PR 1, this branch `claude/project-thread-bdmgix`):
 - Storage: user folder, project property `designer.templates`, project > user > built-in resolution.
 - `novo_pdf::export_layouts_pdf`, golden content stream test, frame pixel-diff tests.
 - `designer::ENTRY` (Reports workspace > Designer, command `reports.designer`).
+- `report.designer`: opens the report designer, with its language choice (the preview follows the project's report language and refreshes when it changes).
 
 Next, in order:
 1. UI lane (R3): Reports workspace > Designer tab: template list, canvas with live preview, table builder panel, title block editor; registers `reports.designer`.
