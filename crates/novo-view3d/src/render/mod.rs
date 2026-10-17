@@ -382,8 +382,9 @@ pub struct Renderer {
     ssao_depth_layout: wgpu::BindGroupLayout,
     ssao_blur_layout: wgpu::BindGroupLayout,
     depth_pipeline: wgpu::RenderPipeline,
-    ssao_pipeline: wgpu::RenderPipeline,
-    blur_pipeline: wgpu::RenderPipeline,
+    /// The occlusion and blur pipelines; `None` where the graphics driver
+    /// cannot build them (OpenGL has no `textureLoad` from a depth texture).
+    ssao_pipelines: Option<(wgpu::RenderPipeline, wgpu::RenderPipeline)>,
     ao_sampler: wgpu::Sampler,
     module: wgpu::ShaderModule,
     globals_layout: wgpu::BindGroupLayout,
@@ -842,6 +843,18 @@ fn depth_pipeline(
 }
 
 /// A fullscreen triangle into a one-channel texture (the occlusion passes).
+/// Polls a future that wgpu resolves at once on native (an error scope's end).
+fn block_on_ready<T>(future: impl std::future::Future<Output = T>) -> T {
+    let mut future = std::pin::pin!(future);
+    let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
+    loop {
+        if let std::task::Poll::Ready(v) = future.as_mut().poll(&mut cx) {
+            return v;
+        }
+        std::thread::yield_now();
+    }
+}
+
 fn fullscreen_pipeline(
     device: &wgpu::Device,
     module: &wgpu::ShaderModule,
@@ -1133,6 +1146,9 @@ impl Renderer {
             ],
         });
         let depth_pipeline = depth_pipeline(device, &module, &shadow_layout);
+        // Built inside an error scope: a driver that cannot compile the shader
+        // (an OpenGL-only laptop GPU) must lose the effect, not the program.
+        let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
         let ssao_pipeline = fullscreen_pipeline(
             device,
             &module,
@@ -1147,6 +1163,15 @@ impl Renderer {
             "fs_blur",
             &[Some(&shadow_layout), Some(&ssao_blur_layout)],
         );
+        let ssao_pipelines = match block_on_ready(scope.pop()) {
+            Some(error) => {
+                log::warn!(
+                    "3D view: ambient occlusion is off, the graphics driver cannot build it: {error}"
+                );
+                None
+            }
+            None => Some((ssao_pipeline, blur_pipeline)),
+        };
         let ssao_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("novo_view3d_ssao_sampler"),
             mag_filter: wgpu::FilterMode::Linear,
@@ -1183,8 +1208,7 @@ impl Renderer {
             ssao_depth_layout,
             ssao_blur_layout,
             depth_pipeline,
-            ssao_pipeline,
-            blur_pipeline,
+            ssao_pipelines,
             ao_sampler,
             module,
             globals_layout,
@@ -1457,7 +1481,8 @@ impl Renderer {
             ]
         };
         // Screen-space occlusion needs textures for this image size.
-        let ssao_on = frame.quality.ssao && frame.state.display.ssao;
+        let ssao_on =
+            frame.quality.ssao && frame.state.display.ssao && self.ssao_pipelines.is_some();
         if ssao_on && target.ssao.as_ref().is_none_or(|t| t.size != size) {
             target.ssao = Some(ssao_targets(device, self, size));
             target.rebind(device, self);
@@ -1633,13 +1658,13 @@ impl Renderer {
             fullscreen(
                 "novo_view3d_ssao",
                 &ssao.raw,
-                &self.ssao_pipeline,
+                &self.ssao_pipelines.as_ref().expect("checked by ssao_on").0,
                 &ssao.depth_bind,
             );
             fullscreen(
                 "novo_view3d_ssao_blur",
                 &ssao.blur,
-                &self.blur_pipeline,
+                &self.ssao_pipelines.as_ref().expect("checked by ssao_on").1,
                 &ssao.blur_bind,
             );
         }
