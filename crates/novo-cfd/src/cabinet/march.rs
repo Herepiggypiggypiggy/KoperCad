@@ -7,6 +7,7 @@
 
 use novo_thermal::Scenario;
 
+use super::radiation::RadiationCoupling;
 use super::tuning::LevelTuning;
 use crate::flow::FlowSolver;
 use crate::result::{Fidelity, Progress, Residuals};
@@ -77,6 +78,8 @@ pub struct MarchState {
     ambient_c: f64,
     /// The turbulence model, stepped together with the flow (none = laminar).
     pub turb: Option<TurbState>,
+    /// Surface radiation coupled into the march (none = off).
+    pub rad: Option<RadiationCoupling>,
 }
 
 impl MarchState {
@@ -101,6 +104,7 @@ impl MarchState {
             heat_w: setup.heat_w,
             ambient_c: setup.ambient_c,
             turb: None,
+            rad: None,
         };
         s.sample(flow);
         s
@@ -151,6 +155,9 @@ impl MarchState {
                 return MarchStatus::OutOfTime;
             }
             let dt = flow.max_dt(lim.cfl).clamp(1e-4, 5.0);
+            if let Some(r) = &mut self.rad {
+                r.tick(flow);
+            }
             if let Some(t) = &self.turb {
                 t.push_to_flow(flow);
             }

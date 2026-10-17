@@ -63,10 +63,50 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
 /// "turbulence is not modelled" limit is replaced by what the model does and
 /// where it stops being valid.
 pub fn accuracy_with_turbulence(fidelity: Fidelity, model: TurbModel) -> AccuracyStatement {
+    accuracy_with(fidelity, model, false)
+}
+
+/// As [`accuracy_with_turbulence`], and with `radiation` the statement says
+/// radiation is coupled (grey diffuse surfaces) instead of not modelled.
+pub fn accuracy_with(fidelity: Fidelity, model: TurbModel, radiation: bool) -> AccuracyStatement {
     let mut a = accuracy_for(fidelity);
-    if model == TurbModel::Laminar {
-        return a;
+    if model != TurbModel::Laminar {
+        turbulence_limit(&mut a, model);
     }
+    if radiation {
+        radiation_limit(&mut a, model != TurbModel::Laminar);
+    }
+    a
+}
+
+const RADIATION_LIMIT: &str = "Radiation: grey diffuse surface-to-surface exchange between devices, \
+     rails, plate and walls with view factors by ray sampling (checked against analytic cube and \
+     parallel-plate values); emissivities are planning values, not measured. Air is transparent. \
+     Enclosure walls are boundary conditions that release what they absorb into the adjacent \
+     air, so the wall's own heat capacity is not resolved. Not yet checked against a measurement.";
+
+fn radiation_limit(a: &mut AccuracyStatement, turbulence: bool) {
+    let key = if turbulence {
+        "Turbulence:"
+    } else {
+        "Turbulence and radiation"
+    };
+    if let Some(l) = a.limits.iter_mut().find(|l| l.starts_with(key)) {
+        if turbulence {
+            *l = l.replace(
+                "radiation is not modelled, so surface temperatures of hot devices are slightly high. ",
+                "",
+            );
+            a.limits.push(RADIATION_LIMIT.into());
+        } else {
+            *l = "Turbulence is not modelled: flow in a strongly forced cabinet is laminar.".into();
+            a.limits.insert(1, RADIATION_LIMIT.into());
+        }
+    }
+    a.headline.push_str(" Radiation: surface to surface.");
+}
+
+fn turbulence_limit(a: &mut AccuracyStatement, model: TurbModel) {
     let name = match model {
         TurbModel::KOmegaSst => "k-omega SST",
         _ => "k-epsilon (cross check)",
@@ -84,5 +124,17 @@ pub fn accuracy_with_turbulence(fidelity: Fidelity, model: TurbModel) -> Accurac
         );
     }
     a.headline.push_str(&format!(" Turbulence: {name}."));
-    a
+}
+
+/// Fixes the first note of a result ("Turbulence and radiation are not
+/// modelled yet.") for a run with coupled radiation.
+pub fn radiation_notes(notes: &mut [String], model: TurbModel) {
+    let to = if model == TurbModel::Laminar {
+        "Turbulence is not modelled yet. Radiation is coupled (surface to surface)."
+    } else {
+        "Radiation is coupled (surface to surface)."
+    };
+    for n in notes {
+        *n = n.replace("Turbulence and radiation are not modelled yet.", to);
+    }
 }

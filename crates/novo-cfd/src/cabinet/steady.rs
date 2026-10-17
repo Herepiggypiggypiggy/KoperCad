@@ -6,6 +6,7 @@
 //! so, about 1 K low on the hottest device) and then the configured second
 //! order scheme, each converged on window means.
 
+use super::radiation::RadiationCoupling;
 use super::tuning::LevelTuning;
 use crate::flow::{FlowSolver, RunStatus, SteadyConfig, SteadyLimits, SteadyReport, SteadyRun};
 use crate::result::{Fidelity, Progress, Residuals};
@@ -22,6 +23,8 @@ pub struct CabinetSteady {
     pub status: RunStatus,
     /// Turbulence model driven with the iteration (none = laminar).
     pub turb: Option<TurbState>,
+    /// Surface radiation coupled into the iteration (none = off).
+    pub rad: Option<RadiationCoupling>,
 }
 
 /// Gauss-Seidel sweeps of the turbulence equations per iteration.
@@ -56,6 +59,7 @@ impl CabinetSteady {
             run,
             status: RunStatus::Running,
             turb: None,
+            rad: None,
         }
     }
 
@@ -66,13 +70,23 @@ impl CabinetSteady {
         self
     }
 
+    /// Couples surface radiation into the iteration.
+    pub fn with_radiation(mut self, rad: Option<RadiationCoupling>) -> CabinetSteady {
+        self.rad = rad;
+        self
+    }
+
     /// Runs `iterations` more iterations.
     pub fn advance(&mut self, flow: &mut FlowSolver, iterations: usize) -> RunStatus {
         let cell = std::cell::RefCell::new(self.turb.take());
+        let rad = std::cell::RefCell::new(self.rad.take());
         self.status = self.run.advance_with(
             flow,
             iterations,
             &mut |f| {
+                if let Some(r) = rad.borrow_mut().as_mut() {
+                    r.tick(f);
+                }
                 if let Some(t) = cell.borrow().as_ref() {
                     t.push_to_flow(f);
                 }
@@ -84,6 +98,7 @@ impl CabinetSteady {
             },
         );
         self.turb = cell.into_inner();
+        self.rad = rad.into_inner();
         self.status
     }
 

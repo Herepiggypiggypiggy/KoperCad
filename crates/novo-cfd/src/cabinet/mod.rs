@@ -22,6 +22,7 @@
 //! (`cabinet.thermal.simulate`).
 
 mod march;
+mod radiation;
 mod snapshot;
 mod statement;
 mod steady;
@@ -34,13 +35,16 @@ use std::time::Instant;
 use novo_thermal::Scenario;
 
 use crate::mesh::MeshSettings;
+use crate::rad::RadSettings;
 use crate::result::{CfdSnapshot, CfdSnapshot as Snap, Fidelity};
 use crate::solids::{FlowSetup, SolidsSettings};
 use crate::solver::{CfdError, Control, Solver};
 use crate::turb::{TurbModel, TurbState};
+use statement::radiation_notes;
 
 pub use march::{MarchLimits, MarchState, MarchStatus};
-pub use statement::{ENCLOSURE_VALIDATED, accuracy_for, accuracy_with_turbulence};
+pub use statement::{ENCLOSURE_VALIDATED, accuracy_for, accuracy_with, accuracy_with_turbulence};
+
 pub use steady::{CabinetSteady, PREVIEW_NOTE};
 pub use tuning::{LevelTuning, Method, Tuning};
 
@@ -50,13 +54,18 @@ pub struct CabinetSolver {
     pub tuning: Tuning,
     /// Turbulence model; `Laminar` (the default) leaves the flow untouched.
     pub turbulence: TurbModel,
+    /// Radiation model for the levels that couple it (`LevelTuning::radiation`).
+    pub radiation: RadSettings,
 }
+
+pub use radiation::{RadiationCoupling, RadiationReport};
 
 impl CabinetSolver {
     pub fn new(tuning: Tuning) -> CabinetSolver {
         CabinetSolver {
             tuning,
             turbulence: TurbModel::Laminar,
+            radiation: RadSettings::default(),
         }
     }
 
@@ -98,6 +107,10 @@ impl Solver for CabinetSolver {
         }
         let mut flow = setup.solver();
         flow.cfg.pressure_tol = lvl.pressure_tol;
+        let rad = lvl
+            .radiation
+            .then(|| RadiationCoupling::new(&setup.classified, &mut flow, &self.radiation))
+            .flatten();
         let warm = lvl.warm_start && warm::warm_start(&setup, scenario, &mut flow);
         let view = snapshot::View::new(&setup, scenario, fidelity);
         // A level flagged `turbulent` marches; otherwise the steady iteration
@@ -117,6 +130,7 @@ impl Solver for CabinetSolver {
                     lvl,
                     model: self.turbulence,
                     turb,
+                    rad,
                     warm,
                     t0,
                 },
@@ -133,11 +147,17 @@ impl Solver for CabinetSolver {
             // natural convection in a cabinet moves at about 0.1 m/s
             march.turb = Some(TurbState::for_flow(&flow, self.turbulence, 0.1, 0.02 * h));
         }
+        march.rad = rad;
         let model = self.turbulence;
         let finish = |mut s: Snap, march: &MarchState| -> Snap {
             if let Some(t) = &march.turb {
                 s.turb_visc_ratio = t.viscosity_ratio();
-                s.accuracy = accuracy_with_turbulence(s.progress.fidelity, model);
+            }
+            if march.turb.is_some() || march.rad.is_some() {
+                s.accuracy = accuracy_with(s.progress.fidelity, model, march.rad.is_some());
+            }
+            if march.rad.is_some() {
+                radiation_notes(&mut s.notes, model);
             }
             s
         };
@@ -176,6 +196,9 @@ impl Solver for CabinetSolver {
                             .into(),
                     );
                 }
+                if let Some(note) = radiation_note(march.rad.as_ref()) {
+                    done.notes.push(note);
+                }
                 return Ok(done);
             }
             if last_full.elapsed() >= lvl.full_snapshot_every {
@@ -195,6 +218,7 @@ struct SteadyJob<'a> {
     lvl: &'a LevelTuning,
     model: TurbModel,
     turb: Option<TurbState>,
+    rad: Option<RadiationCoupling>,
     warm: bool,
     t0: Instant,
 }
@@ -214,14 +238,22 @@ fn solve_steady(
         lvl,
         model,
         turb,
+        rad,
         warm,
         t0,
     } = job;
-    let mut run = CabinetSteady::new(setup, &flow, lvl).with_turbulence(turb);
+    let mut run = CabinetSteady::new(setup, &flow, lvl)
+        .with_turbulence(turb)
+        .with_radiation(rad);
     let finish = |mut s: Snap, run: &CabinetSteady| -> Snap {
         if let Some(t) = &run.turb {
             s.turb_visc_ratio = t.viscosity_ratio();
-            s.accuracy = accuracy_with_turbulence(s.progress.fidelity, model);
+        }
+        if run.turb.is_some() || run.rad.is_some() {
+            s.accuracy = accuracy_with(s.progress.fidelity, model, run.rad.is_some());
+        }
+        if run.rad.is_some() {
+            radiation_notes(&mut s.notes, model);
         }
         s
     };
@@ -267,6 +299,9 @@ fn solve_steady(
                     "Started from the 2D estimate (the end state does not depend on it).".into(),
                 );
             }
+            if let Some(note) = radiation_note(run.rad.as_ref()) {
+                done.notes.push(note);
+            }
             return Ok(done);
         }
         if last_full.elapsed() >= lvl.full_snapshot_every {
@@ -280,4 +315,16 @@ fn solve_steady(
         }
         publish(&snap);
     }
+}
+
+/// What the radiation coupling did, for the notes of a finished run.
+fn radiation_note(rad: Option<&RadiationCoupling>) -> Option<String> {
+    let r = rad?.report();
+    Some(format!(
+        "Radiation: grey diffuse surface-to-surface exchange between {} surface patches (view \
+         factors by ray sampling, devices shadow each other); {:.0} W of the heat leaves the \
+         hot surfaces by radiation. Enclosure walls are boundary conditions: what they absorb is \
+         released into the air next to them. Emissivities are planning values.",
+        r.patches, r.exchanged_w
+    ))
 }

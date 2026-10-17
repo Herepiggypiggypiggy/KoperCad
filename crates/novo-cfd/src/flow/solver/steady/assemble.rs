@@ -262,7 +262,9 @@ impl FlowSolver {
                     let (kc, cc) = (self.k_cell[id], self.c_cell[id]);
                     let scale = self.conv_scale[id];
                     let mut diag = 1.0 / dt;
-                    let mut rhs = self.t[id] / dt + self.heat_scale * self.q_cell[id];
+                    let mut rhs = self.t[id] / dt
+                        + self.heat_scale * self.q_cell[id]
+                        + self.extra_heat_k_s(id);
                     let (mut conv_diag, mut conv_nb) = (0.0, 0.0);
                     let mut defer_sum = 0.0;
                     for a in 0..3 {

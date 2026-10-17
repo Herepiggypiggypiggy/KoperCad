@@ -181,6 +181,11 @@ pub struct FlowSolver {
     /// Multiplies every heat source (config and medium): the load share of a
     /// transient run. 1 = rated.
     pub heat_scale: f64,
+    /// Heat added to each cell by something outside the flow core (the
+    /// radiation coupling), W per m3 of the whole cell; positive heats it.
+    /// Not scaled by `heat_scale`: it follows the temperatures, not the load.
+    /// `None` adds nothing and gives bit-identical results.
+    pub extra_heat_w_m3: Option<Vec<f64>>,
     /// Eddy viscosity per cell, m2/s, set by a turbulence model each step.
     /// Momentum diffuses with `nu + nu_t`, heat with `k + rho cp nu_t / prandtl_t`,
     /// both as the harmonic mean over a face. The cross terms of the stress
@@ -468,6 +473,7 @@ impl FlowSolver {
             t: vec![t_init; cells],
             time: 0.0,
             heat_scale: 1.0,
+            extra_heat_w_m3: None,
             nu_t: None,
             wall_nu: None,
             wall_alpha: None,
@@ -541,6 +547,14 @@ impl FlowSolver {
                 * self.film_scale[slot];
             self.k_face[f.axis][f.hi] = f.dist / (f.r_dev + 1.0 / g);
         }
+    }
+
+    /// The extra heat of cell `id` (see [`FlowSolver::extra_heat_w_m3`]) as a
+    /// rate of temperature change, K/s.
+    pub(crate) fn extra_heat_k_s(&self, id: usize) -> f64 {
+        self.extra_heat_w_m3
+            .as_ref()
+            .map_or(0.0, |v| v[id] / self.c_cell[id])
     }
 
     /// One Gauss-Seidel sweep of the plate sheet against the present cell
@@ -1338,7 +1352,9 @@ impl FlowSolver {
                         conv += (face(ix[a] + 1) - face(ix[a])) / m.dx[a][ix[a]];
                     }
                     let id = m.cell(ix);
-                    rhs[id] = -conv * self.conv_scale[id] + self.heat_scale * self.q_cell[id];
+                    rhs[id] = -conv * self.conv_scale[id]
+                        + self.heat_scale * self.q_cell[id]
+                        + self.extra_heat_k_s(id);
                 }
             }
         }

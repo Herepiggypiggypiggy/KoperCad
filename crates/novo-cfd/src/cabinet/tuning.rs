@@ -28,6 +28,10 @@ pub struct LevelTuning {
     /// A turbulence model is coupled in this level: the steady path does not
     /// follow the model's per-step update yet, so the level marches.
     pub turbulent: bool,
+    /// Surface-to-surface radiation is coupled in this level (see
+    /// `super::radiation`); the lumped radiation term of the device films is
+    /// off then. The Fine level has it on by default.
+    pub radiation: bool,
     /// Overrides the cell count of the level (tests use small grids).
     pub target_cells: Option<usize>,
     /// Mesh rules for the level (`None` = the defaults of the level's
@@ -104,6 +108,7 @@ fn level(
     LevelTuning {
         method: Method::Steady,
         turbulent: false,
+        radiation: false,
         target_cells: Some(cells),
         mesh: None,
         steady_tol,
@@ -129,7 +134,10 @@ impl Default for Tuning {
         Tuning {
             coarse: level(3.0e-3, 4000.0, 40_000, 6_000, 180),
             medium: level(2.0e-3, 4000.0, 60_000, 20_000, 420),
-            fine: level(1.0e-3, 4000.0, 80_000, 50_000, 900),
+            fine: LevelTuning {
+                radiation: true,
+                ..level(1.0e-3, 4000.0, 80_000, 50_000, 900)
+            },
         }
     }
 }
