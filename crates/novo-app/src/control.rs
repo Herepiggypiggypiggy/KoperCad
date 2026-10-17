@@ -11,7 +11,8 @@
 //! points, the same units `ui_tree` and `info` report):
 //!
 //! - `info`: window size, scale, frame count.
-//! - `screenshot` `{path}`: the window as a PNG; replies with the path and size.
+//! - `screenshot` `{name?}`: the window as a PNG in the screenshots folder
+//!   (`KOPERCAD_CONTROL_SHOTS`); `name` is a bare file name. Replies with the path and size.
 //! - `ui_tree`: every labelled widget with role, label, value, state and rect
 //!   (egui's AccessKit tree).
 //! - `move` `{x,y}`, `click` `{x,y,button?,count?,modifiers?}`,
@@ -86,16 +87,22 @@ pub fn install(ctx: &Context, port: u16) {
         }
     };
     let bound = listener.local_addr().map(|a| a.port()).unwrap_or(port);
+    let token = new_token();
     println!("KOPERCAD_CONTROL_PORT={bound}");
+    println!("KOPERCAD_CONTROL_TOKEN={token}");
     log::info!("control mode: listening on 127.0.0.1:{bound}");
     if let Some(file) = std::env::var_os("KOPERCAD_CONTROL_PORT_FILE") {
-        let _ = std::fs::write(file, bound.to_string());
+        // Port on the first line, token on the second; the file is the client's way in.
+        let _ = std::fs::write(file, format!("{bound}\n{token}\n"));
     }
     let (tx, rx) = channel::<Request>();
     let wake = ctx.clone();
     std::thread::spawn(move || {
         for stream in listener.incoming().flatten() {
-            serve(stream, &tx, &wake);
+            // One thread per connection, so a silent client cannot block the next one.
+            // Commands still run one at a time: the UI thread takes them in turn.
+            let (tx, wake, token) = (tx.clone(), wake.clone(), token.clone());
+            std::thread::spawn(move || serve(stream, &token, &tx, &wake));
         }
     });
     crate::dialogs::enable_harness();
@@ -103,12 +110,74 @@ pub fn install(ctx: &Context, port: u16) {
     ctx.add_plugin(Control::with_rx(rx));
 }
 
-/// One client at a time: read lines, hand each to the UI thread, write the reply.
-fn serve(stream: TcpStream, tx: &Sender<Request>, wake: &Context) {
+/// 128 random bits from the operating system's entropy (every `RandomState`
+/// is keyed by it), as hex.
+fn new_token() -> String {
+    use std::collections::hash_map::RandomState;
+    use std::hash::{BuildHasher, Hasher};
+    (0..2)
+        .map(|_| format!("{:016x}", RandomState::new().build_hasher().finish()))
+        .collect()
+}
+
+/// The first line of a connection must be `{"cmd":"hello","token":...}` with the
+/// right token. Anything else (an HTTP request line, other JSON, silence) closes
+/// the connection, so a web page cannot talk to the port.
+fn handshake(reader: &mut impl BufRead, token: &str) -> bool {
+    use std::io::Read;
+    let mut line = String::new();
+    if reader.take(4096).read_line(&mut line).is_err() {
+        return false;
+    }
+    let Ok(v) = serde_json::from_str::<Value>(line.trim()) else {
+        return false;
+    };
+    v.get("cmd").and_then(Value::as_str) == Some("hello")
+        && v.get("token")
+            .and_then(Value::as_str)
+            .is_some_and(|t| t.len() == token.len() && t == token)
+}
+
+/// Where screenshots may be written: the folder the test user set up, else a
+/// folder of our own in the temp folder.
+fn shots_dir() -> PathBuf {
+    std::env::var_os("KOPERCAD_CONTROL_SHOTS").map_or_else(
+        || std::env::temp_dir().join("kopercad-control-shots"),
+        PathBuf::from,
+    )
+}
+
+/// A screenshot file name from the client: a bare name, no folders.
+fn shot_file_name(name: &str) -> Result<String, String> {
+    let ok = !name.is_empty()
+        && name.len() <= 100
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        && !name.starts_with('.');
+    if ok {
+        Ok(name.to_owned())
+    } else {
+        Err("screenshot name must be a bare file name (letters, digits, - _ .)".into())
+    }
+}
+
+/// Reads lines from one client, hands each to the UI thread, writes the reply.
+fn serve(stream: TcpStream, token: &str, tx: &Sender<Request>, wake: &Context) {
     let Ok(mut out) = stream.try_clone() else {
         return;
     };
-    for line in BufReader::new(stream).lines() {
+    let _ = stream.set_read_timeout(Some(std::time::Duration::from_secs(5)));
+    let mut reader = BufReader::new(stream);
+    if !handshake(&mut reader, token) {
+        return;
+    }
+    // Authenticated: a quiet client is fine from here on.
+    let _ = reader.get_ref().set_read_timeout(None);
+    if writeln!(out, "{}", json!({"ok": true})).is_err() {
+        return;
+    }
+    for line in reader.lines() {
         let Ok(line) = line else { break };
         if line.trim().is_empty() {
             continue;
@@ -374,13 +443,14 @@ impl Control {
                 steps.push_back(Step::Idle(frames));
             }
             "screenshot" => {
-                let path = req
-                    .get("path")
+                let name = req
+                    .get("name")
                     .and_then(Value::as_str)
-                    .map(PathBuf::from)
-                    .unwrap_or_else(|| {
-                        std::env::temp_dir().join(format!("kopercad-shot-{}.png", self.frame))
-                    });
+                    .map_or_else(|| Ok(format!("shot-{}.png", self.frame)), shot_file_name);
+                let path = match name {
+                    Ok(n) => shots_dir().join(n),
+                    Err(e) => return fail(e),
+                };
                 steps.push_back(Step::Idle(1));
                 steps.push_back(Step::Shot(path, false));
             }
@@ -530,7 +600,8 @@ impl Control {
                 let (Some(w), Some(h)) = (num("w"), num("h")) else {
                     return fail("resize needs w and h".into());
                 };
-                steps.push_back(Step::Resize(w, h));
+                // A window can neither be nothing nor bigger than any screen.
+                steps.push_back(Step::Resize(w.clamp(320.0, 8192.0), h.clamp(240.0, 8192.0)));
                 steps.push_back(Step::Idle(SETTLE_FRAMES + 2));
             }
             "quit" => steps.push_back(Step::Quit),
@@ -591,8 +662,9 @@ fn parse_chord(chord: &str) -> Option<(egui::Key, Modifiers)> {
         }
     }
     let key = egui::Key::from_name(key).or_else(|| {
-        let mut cap = key.to_owned();
-        cap[..1].make_ascii_uppercase();
+        let mut chars = key.chars();
+        let first = chars.next()?;
+        let cap: String = first.to_uppercase().chain(chars).collect();
         egui::Key::from_name(&cap)
     })?;
     Some((key, m))
@@ -660,5 +732,57 @@ mod tests {
         assert!(is_control_arg("--control".as_ref()));
         assert!(is_control_arg("--control=4000".as_ref()));
         assert!(!is_control_arg("plant.novo".as_ref()));
+    }
+
+    #[test]
+    fn a_non_ascii_key_name_is_not_a_chord_and_does_not_panic() {
+        assert!(parse_chord("é").is_none());
+        assert!(parse_chord("ctrl+ß").is_none());
+        assert!(parse_chord("").is_none());
+    }
+
+    #[test]
+    fn the_handshake_needs_the_token_and_drops_http() {
+        let ok = br#"{"cmd":"hello","token":"abc"}"#.to_vec();
+        assert!(handshake(
+            &mut std::io::Cursor::new([ok.clone(), b"\n".to_vec()].concat()),
+            "abc"
+        ));
+        let wrong = br#"{"cmd":"hello","token":"abd"}"#.to_vec();
+        assert!(!handshake(
+            &mut std::io::Cursor::new([wrong, b"\n".to_vec()].concat()),
+            "abc"
+        ));
+        let no_hello = br#"{"cmd":"info","token":"abc"}"#.to_vec();
+        assert!(!handshake(
+            &mut std::io::Cursor::new([no_hello, b"\n".to_vec()].concat()),
+            "abc"
+        ));
+        let http = b"POST / HTTP/1.1\r\n{\"cmd\":\"hello\",\"token\":\"abc\"}\n".to_vec();
+        assert!(!handshake(&mut std::io::Cursor::new(http), "abc"));
+        assert!(!handshake(&mut std::io::Cursor::new(Vec::new()), "abc"));
+    }
+
+    #[test]
+    fn tokens_are_long_and_differ() {
+        let (a, b) = (new_token(), new_token());
+        assert_eq!(a.len(), 32);
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn screenshot_names_are_bare_file_names() {
+        assert!(shot_file_name("shot-00001-002.png").is_ok());
+        for bad in [
+            "../x.png",
+            "/tmp/x.png",
+            "a/b.png",
+            "C:\\x.png",
+            "",
+            ".hidden",
+            "a b.png",
+        ] {
+            assert!(shot_file_name(bad).is_err(), "{bad}");
+        }
     }
 }

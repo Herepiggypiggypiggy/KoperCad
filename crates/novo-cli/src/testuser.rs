@@ -27,6 +27,10 @@ pub(crate) struct TestUser {
     /// instead of starting one (for example on a Windows PC).
     #[arg(long)]
     connect: Option<u16>,
+    /// The control token of that app (the second line of its port file).
+    /// Without it, `--connect` reads `KOPERCAD_CONTROL_TOKEN`.
+    #[arg(long)]
+    token: Option<String>,
     /// Window size in points at start, `WIDTHxHEIGHT`.
     #[arg(long, default_value = "1366x768")]
     size: String,
@@ -294,10 +298,12 @@ impl Server {
         let stamp = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| d.as_secs() % 100_000);
-        let path = self
-            .shots
-            .join(format!("shot-{stamp:05}-{:03}.png", self.shot_no));
-        let r = self.send(json!({"cmd": "screenshot", "path": path.display().to_string()}))?;
+        let name = format!("shot-{stamp:05}-{:03}.png", self.shot_no);
+        let r = self.send(json!({"cmd": "screenshot", "name": name}))?;
+        // With --connect the app may keep its shots elsewhere: it says where.
+        let path = r["path"]
+            .as_str()
+            .map_or_else(|| self.shots.join(&name), PathBuf::from);
         let bytes = std::fs::read(&path).map_err(|e| format!("cannot read screenshot: {e}"))?;
         Ok(vec![
             json!({"type": "image", "data": base64(&bytes), "mimeType": "image/png"}),
@@ -337,8 +343,16 @@ impl Server {
         if self.session.is_some() {
             return Ok(());
         }
-        let port = match self.opts.connect {
-            Some(p) => p,
+        let (port, token) = match self.opts.connect {
+            Some(p) => {
+                let token = self
+                    .opts
+                    .token
+                    .clone()
+                    .or_else(|| std::env::var("KOPERCAD_CONTROL_TOKEN").ok())
+                    .ok_or("--connect needs --token (or KOPERCAD_CONTROL_TOKEN)")?;
+                (p, token)
+            }
             None => self.launch()?,
         };
         let stream = TcpStream::connect(("127.0.0.1", port))
@@ -346,7 +360,17 @@ impl Server {
         stream
             .set_read_timeout(Some(Duration::from_secs(60)))
             .map_err(|e| e.to_string())?;
-        let reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
+        let mut reader = BufReader::new(stream.try_clone().map_err(|e| e.to_string())?);
+        let mut hello = stream.try_clone().map_err(|e| e.to_string())?;
+        writeln!(hello, "{}", json!({"cmd": "hello", "token": token}))
+            .map_err(|e| format!("app gone: {e}"))?;
+        let mut ack = String::new();
+        reader
+            .read_line(&mut ack)
+            .map_err(|e| format!("no answer to hello: {e}"))?;
+        if !ack.contains("true") {
+            return Err("the app refused the control token".into());
+        }
         self.session = Some(Session {
             stream,
             reader,
@@ -362,7 +386,7 @@ impl Server {
         Ok(())
     }
 
-    fn launch(&mut self) -> Result<u16, String> {
+    fn launch(&mut self) -> Result<(u16, String), String> {
         let app = self.opts.app.clone().unwrap_or_else(default_app);
         let work = std::env::temp_dir().join(format!("kopercad-test-user-{}", std::process::id()));
         if !self.keep_profile {
@@ -381,6 +405,7 @@ impl Server {
         let log = std::fs::File::create(self.shots.join("app.log")).map_err(|e| e.to_string())?;
         let log_err = log.try_clone().map_err(|e| e.to_string())?;
         cmd.env("KOPERCAD_CONTROL_PORT_FILE", &port_file)
+            .env("KOPERCAD_CONTROL_SHOTS", &self.shots)
             .env("RUST_BACKTRACE", "1")
             .stdout(log)
             .stderr(log_err);
@@ -414,10 +439,13 @@ impl Server {
         self.children.push(child);
         let start = Instant::now();
         loop {
-            if let Ok(s) = std::fs::read_to_string(&port_file)
-                && let Ok(p) = s.trim().parse()
-            {
-                return Ok(p);
+            if let Ok(s) = std::fs::read_to_string(&port_file) {
+                let mut lines = s.lines();
+                if let (Some(Ok(p)), Some(t)) = (lines.next().map(str::parse), lines.next())
+                    && !t.is_empty()
+                {
+                    return Ok((p, t.to_owned()));
+                }
             }
             if start.elapsed() > Duration::from_secs(90) {
                 return Err("the app did not open its control port in 90 s".into());

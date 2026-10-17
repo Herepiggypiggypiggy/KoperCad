@@ -38,6 +38,20 @@ use screenshots and coordinates there. Icon-only buttons have an empty label
 in the tree (a finding in itself); hover them and take a screenshot to see the
 tooltip.
 
+## Security of the control port
+
+`--control` is a development tool and stays out of tester-facing docs. It binds
+127.0.0.1 only. At start the app makes a random 128-bit token and writes
+`port` and `token` (two lines) to `KOPERCAD_CONTROL_PORT_FILE`. The first line
+of every connection must be `{"cmd":"hello","token":...}`; anything else
+(an HTTP request from a web page, wrong JSON, silence for 5 s) closes the
+connection. Screenshots go only to the folder in `KOPERCAD_CONTROL_SHOTS`
+(the test user sets it; else a folder in the temp dir) and the client sends a
+bare file name. With `--connect PORT` pass `--token` or set
+`KOPERCAD_CONTROL_TOKEN`. The MCP script builds with cargo if the binaries are
+missing. The empty profile moves settings and Documents; on Windows the
+sandbox env is best effort, so projects can still land in the real Documents.
+
 ## Running it
 
 Linux (needs `apt install xvfb openbox xdotool mesa-vulkan-drivers
