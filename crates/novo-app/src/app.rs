@@ -434,6 +434,10 @@ pub struct NovoApp {
     slot: layout_presets::Slot,
     schematic_slot: layout_presets::Slot,
     size_class: Option<layout_presets::SizeClass>,
+    /// Where the floating panels are now, by panel id (`panel::places`).
+    panel_places: std::collections::BTreeMap<String, [i32; 2]>,
+    /// Panel positions of a layout just put back, handed over next frame.
+    panel_pending: Option<std::collections::BTreeMap<String, [i32; 2]>>,
     cabinet: cabinet::CabinetState,
     reports_view: reports_view::ReportsView,
     view3d: view3d::View3dMode,
@@ -525,6 +529,8 @@ impl NovoApp {
             slot: layout_presets::Slot::Draw,
             schematic_slot: layout_presets::Slot::Draw,
             size_class: None,
+            panel_places: Default::default(),
+            panel_pending: None,
             cabinet: cabinet::CabinetState::new(),
             reports_view: Default::default(),
             view3d: Default::default(),
@@ -1186,6 +1192,7 @@ impl NovoApp {
         }
 
         self.window_width = ctx.content_rect().width();
+        self.sync_panels(&ctx);
         self.follow_window_size(self.window_width);
         let pinned = self.outline_pinned() && !self.focus_mode;
         if pinned {
