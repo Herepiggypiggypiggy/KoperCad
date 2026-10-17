@@ -59,7 +59,18 @@ fn switching_language_changes_every_report_string() {
                 );
                 assert_eq!(ca.key, cb.key, "column keys never change");
             }
-            assert_eq!(a.rows, b.rows, "project data is not translated");
+            // Only the fixed program words in cells change (the length
+            // basis, check names); tags, names and numbers are project data.
+            assert_eq!(a.rows.len(), b.rows.len());
+            for (ra, rb) in a.rows.iter().zip(&b.rows) {
+                assert_eq!(ra.sources, rb.sources);
+                for (xa, xb) in ra.cells.iter().zip(&rb.cells) {
+                    match xa {
+                        Cell::Text(t) if i18n::is_fixed_cell(t) => {}
+                        _ => assert_eq!(xa, xb, "project data is not translated"),
+                    }
+                }
+            }
             assert_eq!(a.key, b.key);
         }
     }
@@ -560,4 +571,47 @@ fn only_measure_placeholders_follow_the_decimal_sign() {
     assert_eq!(tr.tr("Hole dia 4.2"), "Gat dia 4,2");
     // A measure placeholder only captures a number.
     assert_eq!(tr.tr("Hole dia big"), "Hole dia big");
+}
+
+#[test]
+fn the_length_basis_words_are_dutch_and_a_tag_that_looks_like_one_is_not_a_fixed_word() {
+    let basis = [
+        "routed",
+        "routed, no depth",
+        "free air",
+        "door, no gap",
+        "estimate",
+    ];
+    let mut section = Section::new("s", "Basis", vec![Column::new("basis", "Basis", 12.0)]);
+    for word in basis {
+        section.push(vec![Cell::text(word)], vec![]);
+    }
+    let output = ReportOutput {
+        report: "t".into(),
+        title: "Basis".into(),
+        revision: 0,
+        sections: vec![section],
+    };
+    let dutch = translate_output(&output, &nl());
+    let got: Vec<_> = dutch.sections[0]
+        .rows
+        .iter()
+        .map(|r| dutch.sections[0].cell_text(&r.cells[0]))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            "gerouteerd",
+            "gerouteerd, zonder diepte",
+            "vrije lucht",
+            "deur, zonder tussenruimte",
+            "schatting"
+        ]
+    );
+    // English keeps the words.
+    let english = translate_output(&output, &Translator::english());
+    assert_eq!(
+        english.sections[0].cell_text(&english.sections[0].rows[3].cells[0]),
+        "door, no gap"
+    );
 }
