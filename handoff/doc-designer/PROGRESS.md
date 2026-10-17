@@ -6,3 +6,4 @@
 2026-10-16 20:10 UTC DOC-2 PR 3: CLI --language and novo_py::report_bytes_in; scripts follow the project language.
 2026-10-17 02:20 UTC DOC-2 slice 5: decimal separator in language files (Dutch comma on pages and CSV), fixed cell words translated.
 2026-10-17 09:00 UTC DOC-2 slice 6: decimal sign chips in the Languages window, assembly checklist texts translated, pattern numbers follow the decimal sign.
+2026-10-17 09:40 UTC DOC-2 slice 7: surface names and rail mount text translated, pattern captures checked (one-word mark, numeric measures); lane closed.

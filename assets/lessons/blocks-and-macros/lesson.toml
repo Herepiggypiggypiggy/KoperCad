@@ -66,11 +66,11 @@ text = "Your macros live in a folder in your own profile, one file each, so no a
 text_nl = "Je macro's staan in een map in je eigen profiel, een bestand per macro, dus je hebt geen beheerdersrechten nodig en er gaat niets naar de cloud. Het bibliotheekvenster toont ze."
 how = [
   "Press {key:view.command_palette} and type **macros**.",
-  "Pick **Macros** and press Enter. The **Macros** window opens with **dol-starter** in the list.",
+  "Pick **Macros** and press Enter. The {ui:macros.window} window opens with **dol-starter** in the list.",
 ]
 how_nl = [
   "Druk op {key:view.command_palette} en typ **macros**.",
-  "Kies **Macros** en druk op Enter. Het venster **Macros** opent met **dol-starter** in de lijst.",
+  "Kies **Macros** en druk op Enter. Het venster {ui:macros.window} opent met **dol-starter** in de lijst.",
 ]
 point = { ui = "palette.button" }
 expect = { command = "macro.browser" }
@@ -100,12 +100,12 @@ title_nl = "Plaats hem en lees het voorbeeld"
 text = "The Place window shows what will happen before anything changes. One line says which tags the new devices take, for example -Q2, -K2 and -F2 because -Q1, -K1 and -F1 are already used."
 text_nl = "Het venster Place toont wat er gaat gebeuren voordat er iets verandert. Een regel zegt welke tags de nieuwe apparaten krijgen, bijvoorbeeld -Q2, -K2 en -F2 omdat -Q1, -K1 en -F1 al bestaan."
 how = [
-  "Open **Draw**, then **Macros**, then **Place macro**. The **Place macro** window opens.",
+  "Open **Draw**, then **Macros**, then **Place macro**. The {ui:macro.place} window opens.",
   "Click **dol-starter** in its list. The line under the list reads **Takes** followed by the new tags.",
   "Press **Place**. The three devices land in a free spot on the page and stay selected.",
 ]
 how_nl = [
-  "Open **Draw**, dan **Macros** en kies **Place macro**. Het venster **Place macro** opent.",
+  "Open **Draw**, dan **Macros** en kies **Place macro**. Het venster {ui:macro.place} opent.",
   "Klik op **dol-starter** in de lijst. De regel onder de lijst begint met **Takes** gevolgd door de nieuwe tags.",
   "Druk op **Place**. De drie apparaten komen op een vrije plek op de pagina en blijven geselecteerd.",
 ]
@@ -134,12 +134,12 @@ title_nl = "Deel het bestand"
 text = "A macro is one **.kcmacro** file, so a colleague can get your circuit by mail or from a shared folder."
 text_nl = "Een macro is een **.kcmacro**-bestand, zodat een collega je schakeling per mail of uit een gedeelde map kan krijgen."
 how = [
-  "In the **Macros** window click **dol-starter**.",
+  "In the {ui:macros.window} window click **dol-starter**.",
   "Press **Export...** and choose where to save the file.",
   "The status line in the window says **Exported to** and the path.",
 ]
 how_nl = [
-  "Klik in het venster **Macros** op **dol-starter**.",
+  "Klik in het venster {ui:macros.window} op **dol-starter**.",
   "Druk op **Export...** en kies waar het bestand komt.",
   "De statusregel in het venster zegt **Exported to** en het pad.",
 ]
@@ -151,16 +151,17 @@ title_nl = "Neem de macro van een collega over"
 text = "Import reads a **.kcmacro** file into your library. A file that fails its checks is refused whole, with the reason, so a broken file never half-lands."
 text_nl = "Importeren leest een **.kcmacro**-bestand in je bibliotheek. Een bestand dat de controles niet haalt wordt helemaal geweigerd, met de reden, zodat een kapot bestand nooit half binnenkomt."
 how = [
-  "In the **Macros** window press **Import...**.",
+  "In the {ui:macros.window} window press **Import...**.",
   "Pick a **.kcmacro** file, for example the one you just exported.",
   "The status line says **Imported 1 macro(s)**. A name that already exists is kept, not overwritten.",
 ]
 how_nl = [
-  "Druk in het venster **Macros** op **Import...**.",
+  "Druk in het venster {ui:macros.window} op **Import...**.",
   "Kies een **.kcmacro**-bestand, bijvoorbeeld het bestand dat je net exporteerde.",
   "De statusregel zegt **Imported 1 macro(s)**. Een bestaande naam blijft staan en wordt niet overschreven.",
 ]
 expect = { command = "macro.import" }
+manual = "Opens a file dialog to pick a .kcmacro file."
 
 [[step]]
 id = "done"

@@ -9,6 +9,8 @@ Owner of the issue interface in novo-checks (ProblemKind, Problem), waivers, the
 
 - Stacked PR on #413: layout checks from novo-layout's report (DeviceCollision, DeviceOutsidePlate, DevicesTooClose, RailOverflow); they appear in the Issues list and the PDF pages like any other kind.
 
+- Merged: layout problems (overlap, off the plate, too close, full rail) and the report perf fixes.
+
 ## Next
 1. Calc thread adapter (voltage drop, breaking capacity, disconnection, thermal withstand, motor starter, protective conductor) on top of #413 + #412.
 2. Routing thread: UnsizedDuct and GuessedWire infos in physical.rs.

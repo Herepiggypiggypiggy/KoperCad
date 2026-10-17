@@ -110,10 +110,13 @@ impl Translator {
             .filter(|(k, _)| k.contains('{'))
             .find_map(|(key, translation)| {
                 let mut captures = match_pattern(key, text)?;
+                if !captures.iter().all(|(n, v)| capture_ok(n, v)) {
+                    return None;
+                }
                 let decimal = self.decimal();
                 if decimal != '.' {
-                    for (_, value) in &mut captures {
-                        if is_decimal_number(value) {
+                    for (name, value) in &mut captures {
+                        if MEASURES.contains(&name.as_str()) && is_decimal_number(value) {
                             *value = value.replace('.', &decimal.to_string());
                         }
                     }
@@ -141,6 +144,37 @@ impl Translator {
         }
         self.tr(text).into_owned()
     }
+}
+
+/// Placeholder names that stand for a measured value: they only capture a
+/// number, and the number follows the language's decimal sign.
+const MEASURES: &[&str] = &["d", "h", "length", "m", "offset", "w"];
+
+/// Whether `value` can fill the placeholder `name`: never empty, a `mark`
+/// is one word, a measure is a number. A text that only looks like the
+/// pattern (a part description ending in ` DIN rail`) does not match.
+fn capture_ok(name: &str, value: &str) -> bool {
+    if value.is_empty() {
+        return false;
+    }
+    if name == "mark" {
+        return !value.contains(char::is_whitespace);
+    }
+    if MEASURES.contains(&name) {
+        let digits = value.strip_prefix('-').unwrap_or(value);
+        let (whole, part) = digits.split_once('.').unwrap_or((digits, "0"));
+        return !whole.is_empty()
+            && !part.is_empty()
+            && whole.bytes().all(|c| c.is_ascii_digit())
+            && part.bytes().all(|c| c.is_ascii_digit());
+    }
+    true
+}
+
+/// Whether `text` fills the `{name}` pattern: used to tell fixed program
+/// text from project data.
+pub(super) fn fills(pattern: &str, text: &str) -> bool {
+    match_pattern(pattern, text).is_some_and(|c| c.iter().all(|(n, v)| capture_ok(n, v)))
 }
 
 /// A measured value written with a point (`1.5`, `-0.25`): the only kind of

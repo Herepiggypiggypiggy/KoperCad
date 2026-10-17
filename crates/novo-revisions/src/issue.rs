@@ -62,13 +62,27 @@ pub fn issue_revision_as(
     author: &str,
     description: &str,
 ) -> Result<Issued, IssueError> {
+    issue_revision_noted(doc, session, index, date, author, description, "")
+}
+
+/// Like [`issue_revision_as`] with a longer note on why (kept as the
+/// revision's `note`, see `Revision::note`; blank keeps none).
+pub fn issue_revision_noted(
+    doc: &mut Document,
+    session: &mut Session,
+    index: String,
+    date: &str,
+    author: &str,
+    description: &str,
+    note: &str,
+) -> Result<Issued, IssueError> {
     let unchanged_since = unchanged_since(doc.project(), session);
     let outcome = doc.execute(Command::IssueRevision {
         index: index.clone(),
         date: date.into(),
         author: author.into(),
         description: description.into(),
-        note: String::new(),
+        note: note.into(),
     })?;
     session.record(&outcome.changes);
     let changes = outcome.changes.clone();

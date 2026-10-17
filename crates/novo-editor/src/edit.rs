@@ -1041,6 +1041,19 @@ pub fn check_draw(
     corners: &[Point],
     end: Target,
 ) -> std::result::Result<(), Refusal> {
+    planned_bends(project, page, start, corners, end).map(|_| ())
+}
+
+/// The bends [`draw_wire`] would give the wire, nudged clear of other wires
+/// when the user placed no corners, as data. Read-only: the live preview
+/// draws this instead of the unnudged default route.
+pub fn planned_bends(
+    project: &Project,
+    page: PageId,
+    start: Target,
+    corners: &[Point],
+    end: Target,
+) -> std::result::Result<Vec<Point>, Refusal> {
     let endpoint = |t: Target| match t {
         Target::Endpoint(e, _) => Some(e),
         Target::Wire(..) => None,
@@ -1058,7 +1071,6 @@ pub fn check_draw(
         &wires(end),
         &[],
     )
-    .map(|_| ())
 }
 
 /// Draws a wire from `start` through the user's `corners` to `end`, routed

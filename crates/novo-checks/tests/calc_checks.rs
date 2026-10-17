@@ -149,6 +149,43 @@ fn thin_protective_core_in_the_motor_cable() {
 }
 
 #[test]
+fn long_protective_core_is_too_resistive() {
+    let (mut doc, ms) = starter();
+    doc.transact("Numbers", |tx| {
+        tx.update::<Cable>(ms.w1, |c| {
+            c.length_m = Some(200.0);
+            for core in &mut c.cores {
+                core.cross_section_mm2 = Some(2.5);
+            }
+        })
+    })
+    .unwrap();
+    // No limit stated, nothing to judge.
+    assert!(of_kind(&doc, ProblemKind::ProtectiveConductor).is_empty());
+    let set_limit = |doc: &mut _, ohm: f64| {
+        let doc: &mut novo_core::Document = doc;
+        doc.transact("Limit", |tx| {
+            tx.set_info(|info| {
+                info.properties
+                    .insert("check.pe_resistance_ohm".into(), ohm.into());
+            })
+        })
+        .unwrap();
+    };
+    // 200 m of 2.5 mm² copper is about 1.4 Ω at 20 °C.
+    set_limit(&mut doc, 0.5);
+    let found = of_kind(&doc, ProblemKind::ProtectiveConductor);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert!(
+        found[0].message.contains("planning value"),
+        "{}",
+        found[0].message
+    );
+    set_limit(&mut doc, 2.0);
+    assert!(of_kind(&doc, ProblemKind::ProtectiveConductor).is_empty());
+}
+
+#[test]
 fn let_through_energy_above_what_the_wire_withstands() {
     let (mut doc, ms) = starter();
     let wire = doc
