@@ -2,7 +2,12 @@
 //! sheet and lumped devices) against the 2D engine and IEC 60890, for the
 //! sealed and the vented reference cabinet. Run with `--release -- --nocapture`
 //! to see the `VALIDATION` rows. The result of this test is what
-//! `ENCLOSURE_VALIDATED` rests on; if it fails, set that flag to false.
+//! `ENCLOSURE_VALIDATED` rests on. It is a reference study, not a pass: from
+//! 6000 cells up the air rise falls and the housing rise grows with
+//! refinement (vented, 20000 cells: -31 % and +13 %), so the app's levels
+//! (6k, 20k, 50k cells) do not sit on a flat plateau and the flag stays false
+//! until they do. The bands below are what the solver does today, so a change
+//! that moves these numbers has to say so.
 
 mod validation;
 
@@ -101,14 +106,13 @@ fn mean_air_rise(s: &CfdSnapshot, amb: f64) -> f64 {
     sum / vol
 }
 
-#[test]
-fn the_cabinet_solver_follows_the_2d_engine_and_iec_60890() {
-    for (vented, cells_list) in [(false, [1500usize, 3000]), (true, [1500, 3000])] {
+fn study(cells_list: &[usize]) {
+    for vented in [false, true] {
         let scn = scenario(vented);
         let two_d = simulate_steady(&scn).unwrap();
         let d2 = &two_d.devices[0];
         let amb = scn.ambient_c;
-        for cells in cells_list {
+        for &cells in cells_list {
             let case = format!(
                 "cabinet {} {} W, {cells} cells",
                 if vented { "vented" } else { "sealed" },
@@ -116,20 +120,21 @@ fn the_cabinet_solver_follows_the_2d_engine_and_iec_60890() {
             );
             let s = solve(&scn, cells);
             let d = &s.devices[0];
+            let fine = cells >= 20000;
             let e_air = report(
                 &case,
                 "mean air rise K vs 2D engine",
                 mean_air_rise(&s, amb),
                 two_d.balance.mean_rise_k,
             );
-            if !vented {
+            let e_iec = (!vented).then(|| {
                 report(
                     &case,
                     "mean air rise K vs IEC 60890",
                     mean_air_rise(&s, amb),
                     two_d.balance.iec_rise_k,
-                );
-            }
+                )
+            });
             let e_hous = report(
                 &case,
                 "housing rise K vs 2D engine",
@@ -145,9 +150,32 @@ fn the_cabinet_solver_follows_the_2d_engine_and_iec_60890() {
                 "{case}: converged {} balance {:.4}",
                 s.progress.converged, s.progress.energy_balance_rel
             );
-            assert!(e_air.abs() < 0.20, "{case}: air rise {e_air}");
-            assert!(e_hous.abs() < 0.12, "{case}: housing {e_hous}");
+            assert!(
+                e_air.abs() < if fine { 0.35 } else { 0.20 },
+                "{case}: air rise {e_air}"
+            );
+            if let Some(e) = e_iec {
+                assert!(e.abs() < if fine { 0.25 } else { 0.20 }, "{case}: IEC {e}");
+            }
+            assert!(
+                e_hous.abs() < if fine { 0.20 } else { 0.15 },
+                "{case}: housing {e_hous}"
+            );
             assert!(e_plate.abs() < 0.03, "{case}: plate share {e_plate}");
         }
     }
+}
+
+/// The grids up to the app's Coarse level: quick enough for every run.
+#[test]
+fn the_cabinet_solver_follows_the_2d_engine_and_iec_60890() {
+    study(&[1500, 3000, 6000]);
+}
+
+/// The app's Medium level (about 20000 cells): minutes in a debug build,
+/// run with `--release --ignored`.
+#[test]
+#[ignore = "slow in debug builds"]
+fn the_cabinet_solver_at_the_medium_level_stays_within_the_stated_bands() {
+    study(&[20000]);
 }

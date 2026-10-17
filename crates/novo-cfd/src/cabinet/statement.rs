@@ -14,7 +14,7 @@ use crate::turb::TurbModel;
 /// Set when the cabinet against IEC 60890 and the 2D engine is within the
 /// tolerance of `tests/validation_cabinet.rs` for the sealed and the vented
 /// reference cabinet. Flip it in the PR that makes that test pass.
-pub const ENCLOSURE_VALIDATED: bool = true;
+pub const ENCLOSURE_VALIDATED: bool = false;
 
 /// The accuracy statement of a result at `fidelity`.
 pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
@@ -47,17 +47,19 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
     if ENCLOSURE_VALIDATED {
         limits.insert(
             0,
-            "Checked against IEC 60890 and the 2D engine on a sealed 50 W and a vented 100 W \
-             reference cabinet (1500 to 3000 cells): the mean air rise is 11 to 16 % below the \
-             2D engine (the 3D mean is lower because the air stratifies), the housing rise \
-             5 to 7 % above it, the plate share within 0.01. Not checked against a \
-             measurement; other layouts, fans and ducts are covered by their own cases only."
+            "Checked against IEC 60890 and the 2D engine on a sealed and a vented reference \
+             cabinet (tests/validation_cabinet.rs); not checked against a measurement."
                 .into(),
         );
     } else {
         limits.insert(
             0,
-            "Enclosure temperatures are not yet validated against IEC 60890 and the 2D engine."
+            "Enclosure temperatures are not yet validated. Reference study against the 2D engine \
+             (sealed 50 W, vented 100 W): from 1500 to 6000 cells the mean air rise is 11 to 19 % \
+             below it (the 3D mean is lower because the air stratifies; IEC 60890 sealed: 13 to \
+             14 %) and the housing rise 5 to 11 % above it; at 20000 cells the air rise is 16 % \
+             (sealed) and 31 % (vented) below and the housing 13 to 14 % above, and both are still \
+             moving with refinement, so the result is not yet independent of the grid."
                 .into(),
         );
     }
