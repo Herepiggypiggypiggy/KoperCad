@@ -770,8 +770,8 @@ impl NovoApp {
     /// it opens on the release, unless the pointer moved more than 4 px in
     /// between (a held Space pans); every other key runs its command.
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
+        crate::diag::note_command(id);
         if id == "tool.place" {
-            crate::diag::note_command(id);
             self.learn_command(id);
             self.hint_command_run(id);
             self.tour_tick("place");
@@ -786,6 +786,7 @@ impl NovoApp {
     /// Runs a command by its novo-workflow id, from a key or the command
     /// field. `argument` is what was typed after its verb.
     pub(super) fn run_command(&mut self, ctx: &egui::Context, id: &str, argument: Option<&str>) {
+        crate::diag::note_command(id);
         self.learn_command(id);
         if id == "help.learn" || id.starts_with("learn.") {
             self.learn_run_command(id, argument);

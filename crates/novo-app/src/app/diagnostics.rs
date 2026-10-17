@@ -112,6 +112,20 @@ mod tests {
     }
 
     #[test]
+    fn a_command_run_through_the_app_is_named_in_the_report() {
+        let (_dir, mut d) = drive();
+        let ctx = d.ctx.clone();
+        d.app.run_command(&ctx, "view.fit", None);
+        assert!(
+            crate::diag::problem_report().contains("Last command: view.fit"),
+            "{}",
+            crate::diag::problem_report()
+        );
+        d.app.run_key_command(&ctx, "view.zoom_in");
+        assert!(crate::diag::problem_report().contains("Last command: view.zoom_in"));
+    }
+
+    #[test]
     fn copy_problem_report_puts_the_report_on_the_clipboard_and_says_so() {
         let (_dir, mut d) = drive();
         d.app.wb.queued.push("help.copy_problem_report");

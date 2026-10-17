@@ -34,6 +34,12 @@ pub const BUILD_COMMIT: &str = env!("KOPERCAD_BUILD_COMMIT");
 
 static LOG_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 static LAST_COMMAND: Mutex<String> = Mutex::new(String::new());
+
+thread_local! {
+    /// The command this thread ran last; the window thread's is the one that
+    /// matters for a crash, and it cannot be overwritten by another thread.
+    static THREAD_COMMAND: std::cell::RefCell<String> = const { std::cell::RefCell::new(String::new()) };
+}
 static GPU: OnceLock<String> = OnceLock::new();
 static OS: OnceLock<String> = OnceLock::new();
 
@@ -101,6 +107,11 @@ pub fn init() {
 
 /// Remembers the command that is running, for the crash report.
 pub fn note_command(id: &str) {
+    THREAD_COMMAND.with(|c| {
+        let mut c = c.borrow_mut();
+        c.clear();
+        c.push_str(id);
+    });
     if let Ok(mut last) = LAST_COMMAND.try_lock() {
         last.clear();
         last.push_str(id);
@@ -127,7 +138,7 @@ pub fn problem_report() -> String {
     } else {
         out.push_str("\nNo log folder on this computer.\n");
     }
-    out
+    mask_user(&out)
 }
 
 /// The crash report the last run left behind, if it left one. Asking removes
@@ -136,15 +147,31 @@ pub fn take_pending_crash() -> Option<PathBuf> {
     take_pending_in(&log_dir()?)
 }
 
+/// Removes the crash marker on a clean exit: a panic the program survived
+/// (a solver that failed and was reported) must not read as a crash next time.
+/// The report file itself stays in the log folder.
+pub fn clear_pending_crash() {
+    if let Some(dir) = log_dir() {
+        let _ = std::fs::remove_file(dir.join(PENDING_FILE));
+    }
+}
+
 fn take_pending_in(dir: &Path) -> Option<PathBuf> {
     let marker = dir.join(PENDING_FILE);
     let name = std::fs::read_to_string(&marker).ok()?;
     let _ = std::fs::remove_file(&marker);
-    let report = dir.join(name.trim());
+    // Only a file name: the marker must not point outside the log folder.
+    let name = Path::new(name.trim()).file_name()?.to_owned();
+    let report = dir.join(name);
     report.is_file().then_some(report)
 }
 
 fn write_header(out: &mut String) {
+    let _ = writeln!(
+        out,
+        "Local only: this stays on this computer unless you share it. Read it first; \
+         your user name is masked in paths."
+    );
     let _ = writeln!(
         out,
         "KoperCAD {} (build {BUILD_COMMIT}, {})",
@@ -171,6 +198,10 @@ fn write_header(out: &mut String) {
 }
 
 fn last_command() -> String {
+    let own = THREAD_COMMAND.with(|c| c.borrow().clone());
+    if !own.is_empty() {
+        return own;
+    }
     match LAST_COMMAND.try_lock() {
         Ok(last) if !last.is_empty() => last.clone(),
         Ok(_) => "none yet".to_owned(),
@@ -226,7 +257,7 @@ fn write_crash_report(dir: &Path, info: &std::panic::PanicHookInfo<'_>) {
         name = format!("crash-{stamp}-{n}.txt");
         n += 1;
     }
-    if std::fs::write(dir.join(&name), out).is_ok() {
+    if std::fs::write(dir.join(&name), mask_user(&out)).is_ok() {
         let _ = std::fs::write(dir.join(PENDING_FILE), &name);
     }
     log::error!("Panic at {place}: {message} (report: {name})");
@@ -235,14 +266,28 @@ fn write_crash_report(dir: &Path, info: &std::panic::PanicHookInfo<'_>) {
 
 /// The last `lines` lines of the current log file.
 fn log_tail(dir: &Path, lines: usize) -> String {
-    let Ok(mut file) = std::fs::File::open(dir.join(LOG_FILE)) else {
-        return "(no log file)\n".to_owned();
-    };
+    let current = tail_of(&dir.join(LOG_FILE), lines);
+    // Just after a rotation the current file is short: the older one fills in.
+    let have = current.as_ref().map_or(0, |t| t.lines().count());
+    if have < lines
+        && let Some(older) = tail_of(&dir.join("kopercad.1.log"), lines - have)
+    {
+        let mut out = older;
+        if let Some(cur) = current {
+            out.push_str(&cur);
+        }
+        return out;
+    }
+    current.unwrap_or_else(|| "(no log file)\n".to_owned())
+}
+
+fn tail_of(path: &Path, lines: usize) -> Option<String> {
+    let mut file = std::fs::File::open(path).ok()?;
     let len = file.metadata().map_or(0, |m| m.len());
     let start = len.saturating_sub(TAIL_BYTES);
     let mut bytes = Vec::new();
     if file.seek(SeekFrom::Start(start)).is_err() || file.read_to_end(&mut bytes).is_err() {
-        return "(log file unreadable)\n".to_owned();
+        return None;
     }
     let text = String::from_utf8_lossy(&bytes);
     let mut all: Vec<&str> = text.lines().collect();
@@ -252,6 +297,51 @@ fn log_tail(dir: &Path, lines: usize) -> String {
     let from = all.len().saturating_sub(lines);
     let mut out = all[from..].join("\n");
     out.push('\n');
+    Some(out)
+}
+
+/// Replaces the user's name in `\Users\name\` style paths, for the reports.
+fn mask_user(text: &str) -> String {
+    let mut out = text.to_owned();
+    for var in ["USERNAME", "USER"] {
+        if let Some(name) = std::env::var_os(var).and_then(|v| v.into_string().ok()) {
+            out = mask_name(&out, &name);
+        }
+    }
+    out
+}
+
+/// `name` between path separators (or ending a path) becomes `<user>`,
+/// whatever its case. Names under three characters are left alone: they
+/// would also hit ordinary words.
+fn mask_name(text: &str, name: &str) -> String {
+    let name = name.trim();
+    if name.chars().count() < 3 {
+        return text.to_owned();
+    }
+    let (lower, needle) = (text.to_lowercase(), name.to_lowercase());
+    if lower.len() != text.len() {
+        return text.to_owned(); // case folding moved the offsets
+    }
+    let is_end = |c: Option<char>| {
+        c.is_none_or(|c| matches!(c, '\\' | '/' | '"' | '\'' | ')') || c.is_whitespace())
+    };
+    let mut out = String::new();
+    let mut at = 0;
+    while let Some(found) = lower[at..].find(&needle) {
+        let start = at + found;
+        let end = start + needle.len();
+        let before = text[..start].chars().next_back();
+        let after = text[end..].chars().next();
+        out.push_str(&text[at..start]);
+        if matches!(before, Some('\\' | '/')) && is_end(after) {
+            out.push_str("<user>");
+        } else {
+            out.push_str(&text[start..end]);
+        }
+        at = end;
+    }
+    out.push_str(&text[at..]);
     out
 }
 
@@ -450,6 +540,11 @@ mod tests {
         assert_eq!(tail, "entry 97\nentry 98\nentry 99\n");
         let empty = tempfile::tempdir().unwrap();
         assert!(log_tail(empty.path(), 3).contains("no log file"));
+        // Right after a rotation the older file fills the tail.
+        let fresh = tempfile::tempdir().unwrap();
+        std::fs::write(fresh.path().join(LOG_FILE), "new 1\n").unwrap();
+        std::fs::write(fresh.path().join("kopercad.1.log"), "old 1\nold 2\nold 3\n").unwrap();
+        assert_eq!(log_tail(fresh.path(), 3), "old 2\nold 3\nnew 1\n");
     }
 
     #[test]
@@ -491,6 +586,44 @@ mod tests {
             "the offer is made once"
         );
         *lock(&LOG_DIR) = None;
+    }
+
+    #[test]
+    fn a_marker_cannot_point_outside_the_log_folder_and_a_clean_exit_removes_it() {
+        let _g = lock(&GLOBALS);
+        let dir = tempfile::tempdir().unwrap();
+        let outside = tempfile::NamedTempFile::new().unwrap();
+        std::fs::write(
+            dir.path().join(PENDING_FILE),
+            outside.path().to_string_lossy().as_bytes(),
+        )
+        .unwrap();
+        assert!(take_pending_in(dir.path()).is_none());
+
+        std::fs::write(dir.path().join("crash-x.txt"), "report").unwrap();
+        std::fs::write(dir.path().join(PENDING_FILE), "crash-x.txt").unwrap();
+        *lock(&LOG_DIR) = Some(dir.path().to_owned());
+        clear_pending_crash();
+        *lock(&LOG_DIR) = None;
+        assert!(
+            take_pending_in(dir.path()).is_none(),
+            "a survived panic is no crash"
+        );
+        assert!(dir.path().join("crash-x.txt").is_file(), "the report stays");
+    }
+
+    #[test]
+    fn user_names_are_masked_in_paths_only() {
+        let text = "C:\\Users\\Tvelzel\\Documents\\a.novo and /home/tvelzel/x, tvelzel wrote";
+        assert_eq!(
+            mask_name(text, "tvelzel"),
+            "C:\\Users\\<user>\\Documents\\a.novo and /home/<user>/x, tvelzel wrote"
+        );
+        assert_eq!(
+            mask_name("/a/ab/b", "ab"),
+            "/a/ab/b",
+            "short names are left"
+        );
     }
 
     #[test]

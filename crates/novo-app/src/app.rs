@@ -2192,6 +2192,9 @@ impl eframe::App for NovoApp {
     }
 
     fn on_exit(&mut self) {
+        // Only a process that died leaves a crash marker; a panic the program
+        // survived (a failed solver run) is not offered as a crash.
+        crate::diag::clear_pending_crash();
         // A clean close deletes the recovery file, so the next start does
         // not offer to restore work that was deliberately not saved.
         if let Err(e) = self.backend.close() {
