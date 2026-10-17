@@ -274,14 +274,12 @@ impl Lx {
             let p = novo_canvas::Vec2::new(x as f32, y as f32);
             let at = view.canvas.viewport.world_to_screen(p);
             let pos = rect.min + egui::vec2(at.x, at.y);
-            if rect.shrink(40.0).contains(pos) {
+            if rect.shrink(120.0).contains(pos) {
                 return pos;
             }
-            let near = novo_canvas::Aabb::new(
-                p - novo_canvas::Vec2::splat(8.0),
-                p + novo_canvas::Vec2::splat(8.0),
-            );
-            view.canvas.reveal_area(near);
+            // The page opens fitted to its content, so a point beyond the
+            // drawing can sit at the edge, under the docks: centre it.
+            view.canvas.viewport.center = p;
             self.frame();
         }
         panic!("({x}, {y}) cannot be brought on screen");

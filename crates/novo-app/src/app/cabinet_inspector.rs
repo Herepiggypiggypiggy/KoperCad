@@ -14,6 +14,8 @@ use super::cabinet_door::DoorState;
 /// The inspector's width, the same as the schematic's.
 /// Roomier than the schematic inspector: it holds the plate and door forms.
 const WIDTH: f32 = 320.0;
+/// Tall enough for the plate form and the door form without scrolling much.
+const HEIGHT: f32 = 620.0;
 
 /// The widest a plate dimension can be set to, in mm.
 const MAX_MM: f64 = 5000.0;
@@ -34,6 +36,8 @@ pub(super) struct DeviceFacts {
     pub rule: Option<String>,
     /// Why the last `Place all` put the device where it is.
     pub why: Option<String>,
+    /// The surfaces the device can be put on; `None` for a plate-only cabinet.
+    pub surface: Option<super::cabinet_surface_move::SurfaceChoice>,
 }
 
 /// What the inspector shows: the selected devices, or the plate.
@@ -96,6 +100,7 @@ pub(super) fn gather(
                 problems,
                 rule: None,
                 why: None,
+                surface: None,
             }
         })
         .collect();
@@ -128,27 +133,43 @@ pub(super) struct DoorView<'a, F> {
     pub tag_of: &'a F,
 }
 
+/// Where the inspector starts when other panels share the canvas edge: how far
+/// below the top (None: under the top bar) and how much of the bottom stays
+/// free.
+#[derive(Clone, Copy, Default)]
+pub(super) struct Room {
+    /// The side away from the selection: the left edge.
+    pub left: bool,
+    pub top: Option<f32>,
+    pub bottom: f32,
+}
+
 /// Draws the inspector; returns what the user asked for.
 /// The inspector as an overlay on the canvas (DESIGN.md section 3), on the
 /// side away from the selection so it never hides it.
 pub(super) fn overlay(
     ctx: &egui::Context,
     canvas: egui::Rect,
-    left: bool,
+    room: Room,
     facts: &Facts,
     project: &Project,
     fields: &mut super::cabinet_panel::PanelFields,
     door: DoorView<'_, impl Fn(u64) -> String>,
 ) -> Option<Ask> {
-    let side = if left {
+    let side = if room.left {
         super::panel::Side::Left
     } else {
         super::panel::Side::Right
     };
-    let shown = super::panel::Panel::new("cabinet_inspector", "Inspector", canvas, side, WIDTH)
+    let mut panel = super::panel::Panel::new("cabinet_inspector", "Inspector", canvas, side, WIDTH)
         .fixed_open()
         .scroll_bar_always()
-        .show(ctx, |ui| show(ui, facts, project, fields, door));
+        .height(HEIGHT)
+        .bottom_room(room.bottom);
+    if let Some(top) = room.top {
+        panel = panel.top(top);
+    }
+    let shown = panel.show(ctx, |ui| show(ui, facts, project, fields, door));
     super::cabinet_bar::note_rect(
         ctx,
         "cabinet.inspector",
@@ -176,6 +197,14 @@ fn show(
                 if !d.description.is_empty() {
                     ui.weak(&d.description);
                 }
+                ui.horizontal(|ui| {
+                    if ui.button("Rotate").clicked() {
+                        ask = Some(Ask::Rotate(vec![d.id]));
+                    }
+                    if ui.button("Remove from plate").clicked() {
+                        ask = Some(Ask::Remove(vec![d.id]));
+                    }
+                });
                 ui.add_space(4.0);
                 widgets::field(ui, "Part", d.part.as_deref().unwrap_or("none assigned"));
                 widgets::field(
@@ -188,18 +217,57 @@ fn show(
                     },
                 );
                 widgets::field(ui, "Position", &d.position);
-                if d.rotated {
-                    widgets::field(ui, "Rotated", "90 degrees");
+                if let Some(name) = super::cabinet_surface_move::show(ui, d) {
+                    ask = Some(Ask::SetSurface(d.id, name));
                 }
-                if let Some(rail) = &d.rail {
-                    widgets::field(ui, "Mounted on", rail);
-                }
-                if let Some(rule) = &d.rule {
-                    widgets::field(ui, "Place rule", rule);
-                }
-                if let Some(why) = &d.why {
-                    ui.add_space(2.0);
-                    ui.weak(why);
+                // How it is held on the plate: closed until asked for, since
+                // the position and size above are what is usually wanted.
+                let held = u32::from(d.rotated)
+                    + u32::from(d.rail.is_some())
+                    + u32::from(d.rule.is_some());
+                if held > 0 || d.why.is_some() {
+                    widgets::collapsing_section(
+                        ui,
+                        ("cabinet_inspector_placement", d.id),
+                        "Placement",
+                        &if held > 0 {
+                            held.to_string()
+                        } else {
+                            String::new()
+                        },
+                        d.why.is_some(),
+                        |ui| {
+                            if d.rotated {
+                                widgets::field(ui, "Rotated", "90 degrees");
+                            }
+                            if let Some(rail) = &d.rail {
+                                widgets::field(ui, "Mounted on", rail);
+                            }
+                            if let Some(rule) = &d.rule {
+                                // The rule text can be long: wrap it inside the panel.
+                                ui.horizontal_top(|ui| {
+                                    ui.add_sized(
+                                        [84.0, 0.0],
+                                        egui::Label::new(
+                                            egui::RichText::new("Place rule")
+                                                .color(crate::theme::ui_palette().text_secondary),
+                                        ),
+                                    );
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(rule)
+                                                .monospace()
+                                                .color(crate::theme::ui_palette().text_primary),
+                                        )
+                                        .wrap(),
+                                    );
+                                });
+                            }
+                            if let Some(why) = &d.why {
+                                ui.weak(why);
+                            }
+                        },
+                    );
                 }
                 // One device only: the text buffers are shared, and bulk edits
                 // belong to the property sheet.
@@ -209,21 +277,19 @@ fn show(
                     ask = Some(Ask::SetPanelValue(edit));
                 }
                 if !d.problems.is_empty() {
-                    ui.add_space(4.0);
-                    widgets::section_label(ui, "Problems");
-                    for p in &d.problems {
-                        ui.label(format!("\u{2022} {p}"));
-                    }
+                    widgets::collapsing_section(
+                        ui,
+                        ("cabinet_inspector_problems", d.id),
+                        "Problems",
+                        &d.problems.len().to_string(),
+                        true,
+                        |ui| {
+                            for p in &d.problems {
+                                ui.label(format!("\u{2022} {p}"));
+                            }
+                        },
+                    );
                 }
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    if ui.button("Rotate").clicked() {
-                        ask = Some(Ask::Rotate(vec![d.id]));
-                    }
-                    if ui.button("Remove from plate").clicked() {
-                        ask = Some(Ask::Remove(vec![d.id]));
-                    }
-                });
                 ui.separator();
             }
         }
@@ -262,13 +328,18 @@ fn show(
             ui.add_space(6.0);
             // Inside size, door and depth checks (open by default: this is
             // where they are edited).
-            egui::CollapsingHeader::new("Inside and door")
-                .default_open(true)
-                .show(ui, |ui| {
+            widgets::collapsing_section(
+                ui,
+                "cabinet_inside_and_door",
+                "Inside and door",
+                "",
+                true,
+                |ui| {
                     if let Some(a) = door.state.show(ui, door.layout, door.tag_of) {
                         ask = Some(a);
                     }
-                });
+                },
+            );
         }
     }
     ask

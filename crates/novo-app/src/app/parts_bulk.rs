@@ -199,7 +199,7 @@ impl NovoApp {
             ui.weak(format!("Folder: {}", report.folder.display()));
             if report.rejected > 0 {
                 ui.colored_label(
-                    novo_theme::tokens::WARNING,
+                    crate::theme::ui_palette().warning,
                     format!(
                         "{} file(s) held no parts, see the list below",
                         report.rejected

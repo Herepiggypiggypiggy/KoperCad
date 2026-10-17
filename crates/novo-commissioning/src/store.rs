@@ -117,6 +117,7 @@ impl CommissioningStore {
             raised_at: at,
             closed_by: None,
             closed_at: None,
+            signature: None,
         });
         Ok(Some(id))
     }
@@ -129,6 +130,16 @@ impl CommissioningStore {
             Target::Terminal(id) => project.terminal(*id).is_some(),
             Target::Device(id) => project.device(*id).is_some(),
         });
+    }
+
+    /// Stores a record as it is, with no punch item opened (merging field results).
+    pub(crate) fn put_record(&mut self, record: CheckRecord) {
+        self.checks.insert((record.target, record.check), record);
+    }
+
+    /// Replaces the item with the same id.
+    pub(crate) fn put_punch(&mut self, item: PunchItem) {
+        self.punch.insert(item.id, item);
     }
 
     /// Forgets a decision, back to `Pending`.

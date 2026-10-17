@@ -140,6 +140,7 @@ fn the_store_round_trips_through_json() {
         raised_at: "t".into(),
         closed_by: None,
         closed_at: None,
+        signature: None,
     });
     assert_eq!(next, 2, "ids continue after a reload");
 }

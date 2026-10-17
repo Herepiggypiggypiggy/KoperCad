@@ -15,10 +15,13 @@ use crate::drill::{
     CUTOUT_KEY, DeviceFeatures, DrillTable, HOLE_PATTERN_KEY, MOUNTING_KEY, features_from_text,
 };
 use crate::enclosure::{DEFAULT_DOOR_ANGLE_DEG, DEPTH_KEY, Door, Enclosure, Hinge};
+use crate::openings::{OPENING_PREFIX, Opening};
 use crate::plan::{Candidate, Plan, PlannedDuct};
 use crate::plate_drawing::{PlateDocument, documents};
 use crate::rules::Class;
 use crate::state::CabinetLayout;
+use crate::surfaces::{MAIN_PLATE, SURFACE_PROPERTY, SurfaceKind};
+use crate::swing::DoorDevice;
 use crate::{DEFAULT_DUCT_MM, Duct, Margins, Placement, Plate, Rail, Size};
 
 /// Property of a duct: what its wiring carries (`power`, `signal`, `mixed`).
@@ -130,6 +133,11 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
         })
         .collect();
     layout.enclosure = enclosure_of(project, id);
+    (layout.openings, layout.opening_problems) = openings_of(project, id);
+    let known = surface_names(project, id, layout.enclosure.as_ref(), &layout.plate);
+    layout
+        .opening_problems
+        .extend(crate::openings::unknown_surfaces(&layout.openings, &known));
     layout.placements = project
         .all::<CabinetPlacement>()
         .filter(|p| p.structure == id)
@@ -155,7 +163,51 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
             Some((p.id, device_depth(project, device)?))
         })
         .collect();
+    let door_ids = place_off_plate(project, id, &mut layout);
+    layout.door_devices = layout
+        .placements
+        .iter()
+        .filter(|p| door_ids.contains(&p.id))
+        .map(|p| DoorDevice {
+            id: p.id,
+            rect: p.footprint(),
+            depth: layout.depths.get(&p.id).copied().unwrap_or(0.0),
+            mesh: None,
+        })
+        .collect();
     Some(layout)
+}
+
+/// Fills `layout.off_plate` from the `surface` property of the stored
+/// placements and returns the ids of those on the door. A name that is not a
+/// surface name, or a door where the enclosure has none, is left on the
+/// plate: the Cabinet's Surface picker reports those names.
+fn place_off_plate(project: &Project, id: StructureId, layout: &mut CabinetLayout) -> Vec<u64> {
+    let mut door_ids = Vec::new();
+    for p in project
+        .all::<CabinetPlacement>()
+        .filter(|p| p.structure == id)
+    {
+        let Some(Value::Text(name)) = p.properties.get(SURFACE_PROPERTY) else {
+            continue;
+        };
+        let name = name.trim().to_ascii_lowercase();
+        let Some(kind) = SurfaceKind::from_name(&name) else {
+            continue;
+        };
+        if kind == SurfaceKind::Plate && name == MAIN_PLATE {
+            continue;
+        }
+        if kind == SurfaceKind::Door {
+            if layout.enclosure.is_some_and(|e| e.door.is_some()) {
+                door_ids.push(p.device.raw());
+                layout.off_plate.insert(p.device.raw(), name);
+            }
+            continue;
+        }
+        layout.off_plate.insert(p.device.raw(), name);
+    }
+    door_ids
 }
 
 /// The wiring ducts of an enclosure's plate with the wiring they serve (the
@@ -410,9 +462,82 @@ pub fn device_depth(project: &Project, device: &Device) -> Option<f64> {
     crate::enclosure::device_depth(own, parts)
 }
 
+/// The `surface.<name>` structure properties (extra plates and profiles, or
+/// resized standard surfaces) as `(name, text)` pairs for
+/// [`crate::surfaces::Surfaces::from_enclosure`].
+pub fn extra_surfaces(project: &Project, id: StructureId) -> Vec<(String, String)> {
+    let Some(s) = structure(project, id) else {
+        return Vec::new();
+    };
+    s.properties
+        .iter()
+        .filter_map(|(k, v)| {
+            let name = k.strip_prefix(crate::surfaces::SURFACE_SIZE_PREFIX)?;
+            match v {
+                Value::Text(t) => Some((name.to_string(), t.clone())),
+                _ => None,
+            }
+        })
+        .collect()
+}
+
 /// The interior and door stored on an enclosure. `None` until width, height
 /// and depth of the interior are all set. A door exists once a hinge side is
 /// set.
+/// The wiring openings stored as `opening.<name>` structure properties, and
+/// the sentences for those that could not be read.
+pub fn openings_of(project: &Project, id: StructureId) -> (Vec<Opening>, Vec<String>) {
+    let Some(s) = structure(project, id) else {
+        return Default::default();
+    };
+    let props: Vec<(String, String)> = s
+        .properties
+        .iter()
+        .filter_map(|(k, v)| {
+            let name = k.strip_prefix(OPENING_PREFIX)?;
+            match v {
+                Value::Text(t) => Some((name.to_string(), t.clone())),
+                _ => Some((name.to_string(), String::new())),
+            }
+        })
+        .collect();
+    crate::openings::parse_all(&props)
+}
+
+/// Names of the surfaces of a structure: the main plate, the standard
+/// surfaces of its enclosure, and the extra plates and profiles named by
+/// `surface.<name>` properties.
+pub fn surface_names(
+    project: &Project,
+    id: StructureId,
+    enclosure: Option<&Enclosure>,
+    plate: &Plate,
+) -> Vec<String> {
+    let extra: Vec<(String, String)> = structure(project, id)
+        .map(|s| {
+            s.properties
+                .iter()
+                .filter_map(|(k, v)| {
+                    let name = k.strip_prefix(crate::surfaces::SURFACE_SIZE_PREFIX)?;
+                    match v {
+                        Value::Text(t) => Some((name.to_string(), t.clone())),
+                        _ => None,
+                    }
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    match enclosure {
+        Some(e) => crate::surfaces::Surfaces::from_enclosure(e, plate, &extra)
+            .0
+            .list
+            .into_iter()
+            .map(|s| s.name)
+            .collect(),
+        None => vec![crate::surfaces::MAIN_PLATE.to_string()],
+    }
+}
+
 pub fn enclosure_of(project: &Project, id: StructureId) -> Option<Enclosure> {
     let s = structure(project, id)?;
     let get = |key: &str| s.properties.get(key).and_then(number);
