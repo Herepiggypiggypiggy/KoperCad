@@ -2998,7 +2998,6 @@ fn joining_a_wire_never_glides_along_it_off_the_grid() {
     );
 }
 
-#[cfg(feature = "art")]
 #[test]
 fn a_placed_earth_feed_is_pe_not_the_next_line() {
     let (mut doc, page, _) = setup();
@@ -3029,6 +3028,7 @@ fn a_placed_earth_feed_is_pe_not_the_next_line() {
     assert_eq!(edit::next_feed_name(doc.project(), page), "L2");
 }
 
+#[cfg(feature = "art")]
 #[test]
 fn a_note_offset_is_one_undo_step_and_reset_clears_it() {
     use novo_canvas::model::{NOTE_DX, NOTE_DY};
