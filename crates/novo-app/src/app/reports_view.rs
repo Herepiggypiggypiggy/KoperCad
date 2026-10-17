@@ -25,6 +25,13 @@ use novo_theme::table::{
 use novo_theme::widgets::section_label;
 use novo_xref::Place;
 
+/// Sections with more columns than this scroll sideways instead of cutting
+/// their cells.
+const WIDE_TABLE_COLUMNS: usize = 8;
+/// Pixels per unit of column weight, and the widest a column's minimum gets.
+const WIDE_PX_PER_WEIGHT: f32 = 5.5;
+const WIDE_MAX_COLUMN: f32 = 230.0;
+
 use super::workspace::Workspace;
 use super::{Level, NovoApp};
 
@@ -417,16 +424,47 @@ impl NovoApp {
             .collect();
         // The vertical scroll bar of the rows takes room from the right edge.
         let bar = ui.spacing().scroll.allocated_width() + 4.0;
-        let widths = column_widths_min(
-            ui.available_width() - bar,
-            &section.columns.iter().map(|c| c.width).collect::<Vec<_>>(),
-            &header_min_widths(ui, &columns),
-        );
+        let weights: Vec<f64> = section.columns.iter().map(|c| c.width).collect();
+        let mut mins = header_min_widths(ui, &columns);
+        let wide = columns.len() > WIDE_TABLE_COLUMNS;
+        if wide {
+            // Many columns would be squeezed until the cells are cut: give
+            // each a readable width and scroll sideways when they do not fit.
+            for (min, weight) in mins.iter_mut().zip(&weights) {
+                *min = min.max((*weight as f32 * WIDE_PX_PER_WEIGHT).min(WIDE_MAX_COLUMN));
+            }
+        }
+        let available = ui.available_width() - bar;
+        let widths = column_widths_min(available, &weights, &mins);
+        let total: f32 = widths.iter().sum::<f32>() + (widths.len() as f32) * 8.0;
+        if wide && total > available {
+            let mut jump = None;
+            egui::ScrollArea::horizontal()
+                .id_salt(("report_cols", &section.key))
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    jump = self.section_rows(ui, section, order, lit, &columns, &widths);
+                });
+            return jump;
+        }
+        self.section_rows(ui, section, order, lit, &columns, &widths)
+    }
+
+    /// The header and rows of a section laid out at fixed column widths.
+    fn section_rows(
+        &mut self,
+        ui: &mut egui::Ui,
+        section: &Section,
+        order: &[usize],
+        lit: &[AnyId],
+        columns: &[TableColumn],
+        widths: &[f32],
+    ) -> Option<AnyId> {
         let sorted = match &self.reports_view.sort {
             Some((key, col, asc)) if *key == section.key => Some((*col, *asc)),
             _ => None,
         };
-        if let Some(i) = table_header(ui, &columns, &widths, sorted) {
+        if let Some(i) = table_header(ui, columns, widths, sorted) {
             self.reports_view.sort = match self.reports_view.sort.take() {
                 Some((key, col, asc)) if key == section.key && col == i => {
                     asc.then_some((key, col, false))
@@ -473,8 +511,8 @@ impl NovoApp {
                 };
                 let response = table_row(
                     ui,
-                    &columns,
-                    &widths,
+                    columns,
+                    widths,
                     &cells,
                     state,
                     ("report_row", &section.key, index),
