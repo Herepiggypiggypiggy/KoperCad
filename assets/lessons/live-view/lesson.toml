@@ -170,27 +170,23 @@ id = "seal-in"
 title = "Let go of start"
 title_nl = "Laat start los"
 text = """
-A real start button springs back when you let go. Here you open it with a second click. The coil stays on because the holding contact, in parallel with the start button, now feeds it. That is the {tip:self-hold}.
+A real start button springs back when you let go, and so does this one: a click presses it for a moment. The coil stays on because the holding contact, in parallel with the start button, now feeds it. That is the {tip:self-hold}.
 """
 text_nl = """
-Een echte startknop veert terug als je loslaat. Hier open je hem met een tweede klik. De spoel blijft aan omdat het houdcontact, parallel aan de startknop, hem nu voedt. Dat is de {tip:self-hold}.
+Een echte startknop veert terug als je loslaat, en deze ook: een klik houdt hem even ingedrukt. De spoel blijft aan omdat het houdcontact, parallel aan de startknop, hem nu voedt. Dat is de {tip:self-hold}.
 """
 how = [
-  "Click the badge on the start button **-S2** again. It turns empty (open).",
+  "Look at the badge on the start button **-S2**. It is empty (open) again: it sprang back.",
   "The coil **-K1**, the motor and the lamp stay on.",
 ]
 how_nl = [
-  "Klik nogmaals op de knop van de startknop **-S2**. Hij wordt leeg (open).",
+  "Kijk naar de knop van de startknop **-S2**. Hij is weer leeg (open): hij is teruggeveerd.",
   "De spoel **-K1**, de motor en de lamp blijven aan.",
 ]
 demo = [
-  { move = { at = { device = "-S2" } } },
-  { click = true },
   { say = "The coil, the motor and the lamp stay on.", say_nl = "De spoel, de motor en de lamp blijven aan." },
 ]
 point = { at = { device = "-K1", pin = "13" } }
-expect = { all = [ { coil_on = "-K1" }, { not = { pole_closed = "-S2" } } ] }
-solve = [ { live_pole = { device = "-S2" } } ]
 
 [[step]]
 id = "stop"
@@ -203,18 +199,17 @@ text_nl = """
 Stoppen onderbreekt het circuit naar de spoel. Omdat de spoel weg is, opent ook het houdcontact, dus het loslaten van stop start de motor niet opnieuw.
 """
 how = [
-  "Click the badge on the stop button **-S1** to open it. The coil, the motor and the lamp drop out.",
-  "Click the badge on **-S1** again to close it. Nothing starts: you have to press start again.",
+  "Click the badge on the stop button **-S1**. For a moment it opens: the coil, the motor and the lamp drop out.",
+  "The button springs back and closes. Nothing starts: you have to press start again.",
 ]
 how_nl = [
-  "Klik op de knop van de stopknop **-S1** om hem te openen. De spoel, de motor en de lamp vallen af.",
-  "Klik nogmaals op de knop van **-S1** om hem te sluiten. Er start niets: je moet opnieuw op start drukken.",
+  "Klik op de knop van de stopknop **-S1**. Even gaat hij open: de spoel, de motor en de lamp vallen af.",
+  "De knop veert terug en sluit. Er start niets: je moet opnieuw op start drukken.",
 ]
 demo = [
   { move = { at = { device = "-S1" } } },
   { click = true },
   { say = "Everything drops out.", say_nl = "Alles valt af." },
-  { click = true },
   { say = "Nothing starts: you have to press start again.", say_nl = "Er start niets: je moet opnieuw op start drukken." },
 ]
 point = { at = { device = "-S1" } }
