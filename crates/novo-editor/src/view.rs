@@ -301,7 +301,7 @@ impl SchematicView {
             commands: Vec::new(),
             shortcuts: HashMap::new(),
             band_count: None,
-            move_carries: false,
+            move_carries: true,
             swallow: false,
             drag_move: false,
             wire_part: None,

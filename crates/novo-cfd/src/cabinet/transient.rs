@@ -27,7 +27,7 @@ use novo_thermal::Scenario;
 
 use super::CabinetSolver;
 use super::snapshot::View;
-use super::statement::accuracy_with_turbulence;
+use super::statement::{accuracy_with_turbulence, mark_radiation};
 use crate::flow::FlowSolver;
 use crate::mesh::MeshSettings;
 use crate::result::{Fidelity, Progress, Residuals};
@@ -74,7 +74,13 @@ impl TransientSolver for CabinetSolver {
             solid_speedup: 1.0,
             ..SolidsSettings::default()
         };
-        let setup = FlowSetup::new(scenario, &st).map_err(|e| CfdError::Setup(e.to_string()))?;
+        let mut setup =
+            FlowSetup::new(scenario, &st).map_err(|e| CfdError::Setup(e.to_string()))?;
+        // surface radiation as in the steady levels (the solver ticks it in
+        // `step`; the film radiation is off while it is on)
+        if self.radiation.at(fidelity) {
+            setup.enable_radiation(scenario, &crate::rad::RadSettings::default());
+        }
         if control.is_cancelled() {
             return Err(CfdError::Cancelled);
         }
@@ -195,6 +201,9 @@ impl TransientSolver for CabinetSolver {
             if let Some(t) = turb {
                 snap.turb_visc_ratio = t.viscosity_ratio();
                 snap.accuracy = accuracy_with_turbulence(fidelity, model);
+            }
+            if snap.radiation_on {
+                mark_radiation(&mut snap.accuracy);
             }
             snap.notes.extend(notes.iter().cloned());
             snap.notes.push(format!(

@@ -61,11 +61,11 @@ title_nl = "Een symbool verplaatsen"
 text = "Choose whether a moved symbol leaves its wires or takes them along. Holding Shift always does the other one, so either default is one key away."
 text_nl = "Kies of een verplaatst symbool zijn draden achterlaat of meeneemt. Met Shift ingedrukt gebeurt altijd het andere, dus elke standaard is één toets verwijderd."
 how = [
-  "Under **Moving a symbol**, pick **Leaves its wires (default)** or **Takes its wires along**.",
+  "Under **Moving a symbol**, pick **Leaves its wires** or **Takes its wires along (default)**.",
   "Close the window with **Close (Esc)**. Settings are saved as you click; there is no Save button.",
 ]
 how_nl = [
-  "Kies onder **Moving a symbol** voor **Leaves its wires (default)** of **Takes its wires along**.",
+  "Kies onder **Moving a symbol** voor **Leaves its wires** of **Takes its wires along (default)**.",
   "Sluit het venster met **Close (Esc)**. Instellingen worden bewaard terwijl je klikt; er is geen knop Opslaan.",
 ]
 

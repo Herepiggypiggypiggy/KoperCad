@@ -77,9 +77,13 @@ fn main() {
         l.max_steps = 400_000;
         l.max_time_s = 6000.0;
     }
+    if std::env::args().any(|a| a == "march") {
+        tuning = tuning.marched();
+    }
     let t0 = std::time::Instant::now();
     let s = CabinetSolver::new(tuning)
         .with_turbulence(model)
+        .with_second_order_turbulence(std::env::args().any(|a| a == "2nd"))
         .solve(&scn, Fidelity::Coarse, &Control::new(), &mut |_| {})
         .unwrap();
     // volume weighted mean air temperature

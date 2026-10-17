@@ -302,6 +302,40 @@ pub struct DeviceNeed {
     pub letter_code: String,
     pub role: Option<Role>,
     pub coil: Option<Supply>,
+    /// How many poles the device draws (switched paths of its symbol), for
+    /// the kinds where a part's pole count must agree: breakers and fuse
+    /// holders. `None` when the device is another kind or has no symbol.
+    pub poles: Option<u32>,
+}
+
+/// The pole count of a breaker or fuse holder: the most poles any of its
+/// symbols draws, from the library symbol's behaviour (the instance's
+/// switched paths when the library does not know the symbol).
+fn device_poles(project: &Project, device: DeviceId, role: Option<Role>) -> Option<u32> {
+    if !matches!(role, Some(Role::Mcb | Role::Mpcb | Role::FuseHolder)) {
+        return None;
+    }
+    project
+        .symbols_of_device(device)
+        .into_iter()
+        .map(|s| {
+            [Pack::Iec, Pack::Nfpa]
+                .into_iter()
+                .find_map(|pack| Library::shared(pack).get(&s.symbol.0))
+                .map_or(s.pass_through.len(), |lib| lib.behavior.poles().len()) as u32
+        })
+        .filter(|&n| n > 0)
+        .max()
+}
+
+/// The pole count a part states in its data (`poles`), as a number or text.
+fn part_poles(part: &CatalogPart) -> Option<u32> {
+    match part.data.get("poles")? {
+        Value::Int(n) => u32::try_from(*n).ok(),
+        Value::Float(f) if *f >= 0.0 && f.fract() == 0.0 => Some(*f as u32),
+        Value::Text(t) => t.trim().parse().ok(),
+        _ => None,
+    }
 }
 
 impl DeviceNeed {
@@ -314,13 +348,15 @@ impl DeviceNeed {
             letter_code: device.tag.letter_code().to_owned(),
             role,
             coil,
+            poles: device_poles(project, device.id, role),
         }
     }
 }
 
 /// The match of `part` for a device, as the share of points earned over
 /// the checks that could be made: kind (60), letter code (10), coil voltage
-/// (20, only for a device with a coil whose circuit voltage is known) and
+/// (20, only for a device with a coil whose circuit voltage is known), poles
+/// (20, only for a breaker or fuse holder whose symbol draws them) and
 /// rating (10, only when the device states a sizing value). A check with
 /// nothing to compare is not counted, and the tooltip says which. A part
 /// whose data does not say what it is earns nothing for kind, and half for
@@ -406,6 +442,26 @@ pub fn fit(part: &CatalogPart, need: &DeviceNeed, device: &Device) -> Fit {
         }
     } else {
         reasons.push("coil: not checked, no coil voltage known".to_owned());
+    }
+
+    if let Some(want) = need.poles {
+        possible += 20;
+        checks += 1;
+        match part_poles(part) {
+            Some(have) if have == want => {
+                earned += 20;
+                reasons.push(format!("poles: {want} match the device"));
+            }
+            Some(have) => reasons.push(format!(
+                "poles: the part has {have}, the device draws {want}"
+            )),
+            None => {
+                earned += 10;
+                reasons.push("poles: not stated".to_owned());
+            }
+        }
+    } else {
+        reasons.push("poles: not checked, the device's pole count is not known".to_owned());
     }
 
     let sized = device

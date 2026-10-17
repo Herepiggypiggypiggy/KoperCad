@@ -289,13 +289,15 @@ moves, selected or not: the press selects it (as a click would) and the
 drag moves the whole selection if the device was already part of it. Pins
 still win within their grab zone, so a drag from a pin connects (§4, pin
 or body). The move snaps to the grid and Esc during the drag puts everything
-back. A plain drag moves the symbol alone: its wires stay where they are,
-and every wire end that was on one of its pins stays behind as an open
-end (ring and Unconnected flag, `wire.open`, §4 open ends). Where the
+back. A plain drag takes the symbol's wires along, stretching them under
+the no-overlap rules, so nothing is left open (an open end is never what
+a person wanted from moving a device). Shift+drag moves the symbol alone:
+its wires stay where they are, and every wire end that was on one of its
+pins stays behind as an open end (ring and Unconnected flag, `wire.open`,
+§4 open ends). Where the
 moved pins land on a wire or face another pin, the Auto connections
-setting decides whether they connect. Shift+drag takes the wires along,
-stretching them under the no-overlap rules. Preferences, Moving, has the
-choice "Moving a symbol: leaves its wires / takes its wires along"; the
+setting decides whether they connect. Preferences, Moving, has the
+choice "Moving a symbol: takes its wires along (default) / leaves its wires"; the
 choice only sets the default, and Shift always does the other one (the
 dock hint says "Shift: take the wires along" or "Shift: leave the wires"
 and follows the key while it is down, and the status line after the drop
@@ -687,8 +689,8 @@ the screen:
 
 A hand-drawn route (Lines, or Corners with clicked corners) is kept by
 `tidy`; selecting it and choosing `tidy` re-routes it on purpose. Dragging a
-symbol moves the symbol alone (below). Shift+drag takes its wires along:
-routed wires stretch as before and hand-drawn ones stretch by moving only
+symbol takes its wires along (below); Shift+drag moves the symbol alone.
+When wires go along, routed wires stretch as before and hand-drawn ones stretch by moving only
 their end segments, so every corner the user placed stays where it was
 put. If the pin leaves the axis of its end segment, a bend is added at
 the corner next to the moved pin; the stretch is never diagonal.
@@ -870,8 +872,8 @@ Acceptance:
     opens its properties with the cursor in the tag; on a wire edits its
     number; on a page tab renames the page. The same gestures in the Connect
     tool do the wire meanings in the table and nothing else.
-18. Click a device, then drag it: it moves alone without M, its wires stay
-    and show open ends; Shift+drag stretches them live, a refused position
+18. Click a device, then drag it: it moves without M and its wires stretch
+    live and stay connected; Shift+drag leaves them as open ends, a refused position
     shown as in check 9; Esc mid-drag restores
     it; undo takes back one move. Dragging an unselected device selects and
     moves it in one gesture. M still picks up and drops.
@@ -909,8 +911,8 @@ Acceptance:
     symbol; two non-neighbours are refused with the reason.
 28. Corners mode: a click places an oriented corner piece shown in the
     preview, R flips it, clicking a wire drops a T. The stored route is
-    unchanged. A plain drag of a device leaves its wires as open ends;
-    Shift+drag stretches them; Shift can be pressed or released mid-drag and
+    unchanged. A plain drag of a device stretches its wires;
+    Shift+drag leaves them as open ends; Shift can be pressed or released mid-drag and
     the preview follows.
 29. Outline, Location view: right-click, New panel, then add pages to it
     from two different groups; both groups' pages show under the panel and
@@ -1169,7 +1171,7 @@ Changes mode, WS-09 the PDF.
 | --- | --- | --- |
 | Pages | Hand-made; flowing; pinned flow | **Pinned flow:** automatic pagination, user page breaks never move, and pages freeze when a revision is issued so `page.column` references never move under a printed set |
 | Generated pages under pinned flow | Freeze them too; append new sheets at the end; reflow | **Reflow.** Generated pages (BOM, terminal and cable diagrams, lists) sit in their own numbered sections after the schematic pages, so their growth never renumbers a schematic page. In page order the contents list opens the set and every other generated page comes after every drawn (schematic or overview) page, whatever its structure; generated pages sort among themselves by structure, then name. A project wants every kind of generated page until the user deletes one: deleting a generated page turns its whole kind off in the project rules, so it does not come back on open. Deleting one terminal diagram (strip -X3) therefore drops the diagrams for every strip, so the status line says what happened ("Terminal diagrams turned off · Rules to turn back on"); the delete is one undo step, and undo turns the kind back on; and Rules lists the turned-off kinds, each with a rule sentence that turns it back on. No reference points into them, so they reflow freely inside their section; the PDF bookmarks and the contents list name each sheet by what it shows (strip -X1, cable -W3), and a revision marks the generated sheets whose content changed; anything that ever links into a generated sheet points at it by name, never by `page.column`. A generated sheet's "n of m" counts within its own section, and a schematic title block's "n of m" counts schematic pages only, so a growing section never changes a frozen title block. A generated sheet is named by its section number plus a letter (`20a`, `20b`, ... `20z`, `20aa`, skipping `i`, `l` and `o` so `20l` never reads as `201`), never with a dot, so a sheet name can never be read as a `page.column` reference. Inserted schematic pages use the same letters (§3); generated sections are numbered after the schematic pages (the contents list alone opens the set as section `0`; it reflows like any other section and is not counted among schematic pages), and if a name ever clashes the schematic page keeps it and the sheet takes a `'` mark (`20b'`) |
-| Routing | Manual; always automatic; route once and keep | **Route once and keep:** a plain drag moves the symbol alone and leaves its wire ends open where its pins were; Shift+drag stretches the connections; `tidy` re-routes on request |
+| Routing | Manual; always automatic; route once and keep | **Route once and keep:** a plain drag takes the symbol's wires along and leaves nothing open; Shift+drag moves the symbol alone and leaves its wire ends open where its pins were; `tidy` re-routes on request |
 | Where a project starts | Page-first; structure-first; intent-first | **Structure-first**, with the empty page offering "type what you are building" |
 | Window | A Workbench; B Focus; C Split | **A**, with B as Focus mode and C as the drawer docked right |
 | Top-level places | Five lenses; two canvases plus drawers; workspaces | **Five workspaces (Schematic, Cabinet, 3D, Reports, Commissioning)** with a drawer whose tabs depend on the workspace (`docs/design/workspaces.md`); reports are also commands |

@@ -131,7 +131,11 @@ jobs:
           $stage = "dist\portable"
           New-Item -ItemType Directory -Force $stage | Out-Null
           Copy-Item target\release\kopercad.exe, target\release\kopercad-cli.exe $stage
-          Copy-Item packaging\windows\portable\run.cmd, packaging\windows\portable\README.txt $stage
+          Copy-Item packaging\windows\portable\run.cmd $stage
+          Copy-Item docs\TESTER-README.md "$stage\README.md"
+          Copy-Item RELEASE_NOTES.md, THIRD_PARTY_NOTICES.txt $stage
+          # LICENSE files appear once the licence is decided (B13); copy whatever exists.
+          Get-ChildItem -Path . -Filter "LICENSE*" -File | Copy-Item -Destination $stage
           @(
             "KoperCAD $label"
             "Commit: $env:GITHUB_SHA"
@@ -200,7 +204,8 @@ jobs:
 
           The program is not code-signed yet, so Windows SmartScreen may warn on first start: choose "More info", then "Run anyway".
           EOF
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+          # `gh release view` does not find draft releases by tag, so look in the list.
+          if gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' | grep -qx "$TAG"; then
             gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber KoperCAD-*-setup.exe KoperCAD-*-portable.zip SHA256SUMS BUILD_INFO.txt
           else
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag "${flags[@]}" \

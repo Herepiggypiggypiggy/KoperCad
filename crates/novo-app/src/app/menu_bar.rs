@@ -27,7 +27,14 @@ pub(super) struct TopBarFit {
     pub(super) name_chars: usize,
     /// Workspace chips use their short names.
     pub(super) short_switcher: bool,
+    /// The "What's new" pill is in the bar; below [`ICON_ONLY_BELOW`] it
+    /// makes way, the Help menu still opens it.
+    pub(super) whats_new_pill: bool,
 }
+
+/// Window width in points under which the top bar spends icons instead of
+/// words (a 1366 x 768 screen at 200 % scaling is 683 points wide).
+pub(super) const ICON_ONLY_BELOW: f32 = 760.0;
 
 impl TopBarFit {
     pub(super) fn at(width: f32) -> TopBarFit {
@@ -43,6 +50,7 @@ impl TopBarFit {
             search_width,
             name_chars: if width >= 1700.0 { 32 } else { 14 },
             short_switcher: width < 1250.0,
+            whats_new_pill: width >= ICON_ONLY_BELOW,
         }
     }
 }
@@ -392,6 +400,70 @@ mod width_tests {
                 assert!(
                     d.app.top_bar_gap >= 0.0,
                     "{workspace:?} at {width}: the top bar overlaps by {}",
+                    -d.app.top_bar_gap
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_top_bar_never_overlaps_at_the_widths_of_a_1366_laptop_at_125_150_and_200_percent() {
+        use super::super::workspace::Workspace;
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::OpenExample);
+        for workspace in [
+            Workspace::Schematic,
+            Workspace::Cabinet,
+            Workspace::View3d,
+            Workspace::Commissioning,
+        ] {
+            d.app.switch_workspace(workspace);
+            for width in [1093.0, 911.0, 683.0] {
+                frame_at(&mut d, width);
+                frame_at(&mut d, width);
+                assert!(
+                    d.app.top_bar_gap >= 0.0,
+                    "{workspace:?} at {width}: the top bar overlaps by {}",
+                    -d.app.top_bar_gap
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_smallest_windows_draw_every_workspace_without_a_panic() {
+        use super::super::workspace::Workspace;
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::OpenExample);
+        // The window floor, and 1366 x 768 at 200 %.
+        for (w, h) in [(680.0, 320.0), (683.0, 384.0)] {
+            for workspace in [
+                Workspace::Schematic,
+                Workspace::Cabinet,
+                Workspace::View3d,
+                Workspace::Reports,
+                Workspace::Commissioning,
+            ] {
+                d.app.switch_workspace(workspace);
+                for _ in 0..3 {
+                    let input = egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(w, h),
+                        )),
+                        ..Default::default()
+                    };
+                    let app = &mut d.app;
+                    let mut out = d.ctx.run_ui(input, |ui| app.show(ui));
+                    out.textures_delta.clear();
+                }
+                assert!(
+                    d.app.top_bar_gap >= 0.0,
+                    "{workspace:?} at {w}x{h}: the top bar overlaps by {}",
                     -d.app.top_bar_gap
                 );
             }

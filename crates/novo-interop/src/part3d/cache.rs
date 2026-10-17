@@ -46,7 +46,8 @@ impl MeshCache {
     /// The per-user folder, or `None` when the platform has no user data
     /// folder.
     pub fn default_root() -> Option<PathBuf> {
-        dirs::data_local_dir().map(|d| d.join("KoperCAD").join("cache").join("meshes"))
+        novo_storage::profile::data_local_dir()
+            .map(|d| d.join("KoperCAD").join("cache").join("meshes"))
     }
 
     pub fn open_default() -> Option<MeshCache> {

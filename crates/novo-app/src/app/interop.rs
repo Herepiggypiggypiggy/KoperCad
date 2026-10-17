@@ -209,22 +209,25 @@ impl NovoApp {
             ),
         };
         self.wb.last_export = Some(last.clone());
+        // The toast carries an "Open folder" button.
         if report.is_lossless() {
-            self.message(
+            self.raise(
                 Level::Info,
                 format!("Exported {what} to {place}. {}", report.summary()),
+                Some(last.clone()),
             );
         } else {
-            self.message(
+            self.raise(
                 Level::Warning,
                 format!("Exported {what} to {place}.\n{}", report.text()),
+                Some(last.clone()),
             );
         }
     }
 
     /// Asks for an AutomationML file and previews it.
     pub(super) fn import_aml(&mut self) {
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Import AutomationML")
             .add_filter("AutomationML", &["aml", "xml"]);
         if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
@@ -347,8 +350,9 @@ impl NovoApp {
     /// Asks for a folder and writes the EPLAN export script, the instructions
     /// (English and Dutch) and a self-test file there, then shows the steps.
     pub(super) fn eplan_export_script(&mut self) {
-        let mut dialog = rfd::FileDialog::new().set_title("Folder for the EPLAN export script");
-        if let Some(dir) = dirs::document_dir().filter(|d| d.is_dir()) {
+        let mut dialog =
+            crate::dialogs::FileDialog::new().set_title("Folder for the EPLAN export script");
+        if let Some(dir) = novo_storage::profile::document_dir().filter(|d| d.is_dir()) {
             dialog = dialog.set_directory(dir);
         }
         if let Some(folder) = dialog.pick_folder() {
@@ -425,7 +429,7 @@ impl NovoApp {
             self.message(Level::Info, "Open a page first");
             return;
         }
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Import DWG as background")
             .add_filter("DWG drawing", &["dwg"]);
         if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
@@ -453,7 +457,7 @@ impl NovoApp {
             );
             return false;
         };
-        let out = dirs::cache_dir()
+        let out = novo_storage::profile::cache_dir()
             .unwrap_or_else(std::env::temp_dir)
             .join("KoperCAD")
             .join("dwg");
@@ -500,8 +504,9 @@ impl NovoApp {
 
     /// Lets the person point KoperCAD at a converter program of their own.
     pub(super) fn choose_dwg_converter(&mut self) {
-        let mut dialog = rfd::FileDialog::new().set_title("Choose dwg2dxf or ODAFileConverter");
-        if let Some(dir) = dirs::data_local_dir().filter(|d| d.is_dir()) {
+        let mut dialog =
+            crate::dialogs::FileDialog::new().set_title("Choose dwg2dxf or ODAFileConverter");
+        if let Some(dir) = novo_storage::profile::data_local_dir().filter(|d| d.is_dir()) {
             dialog = dialog.set_directory(dir);
         }
         if let Some(program) = dialog.pick_file() {

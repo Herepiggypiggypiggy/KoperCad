@@ -138,5 +138,5 @@ for electrical values. See `CLAUDE.md`.
 
 ## Licence
 
-Not yet decided. Until a licence file is added, all rights are reserved by the author. Third-party licences are
-in `THIRD_PARTY_NOTICES.txt`.
+KoperCAD is open source, licensed under either of [MIT](LICENSE-MIT) or [Apache-2.0](LICENSE-APACHE) at your
+option. Copyright 2026 KoperVonk. Third-party licences are in `THIRD_PARTY_NOTICES.txt`.

@@ -370,7 +370,7 @@ impl FlowSolver {
                                 } else if let Some(aw) = wall_hi {
                                     kf = dist
                                         / (0.5 * w_hi / (aw * c_hi) + 0.5 * w_lo / self.k_cell[lo]);
-                                } else if nu_t.is_some() {
+                                } else if nu_t.is_some() && !self.film_mask[a][hi] {
                                     let eff = harmonic(k_eff(lo), k_eff(hi));
                                     let mol = harmonic(self.k_cell[lo], self.k_cell[hi]);
                                     kf *= eff / mol;
@@ -391,6 +391,11 @@ impl FlowSolver {
                         let cw = g / (cc * m.volume(ix));
                         diag += cw;
                         rhs += cw * tp;
+                    }
+                    if let Some(r) = &self.rad_load {
+                        let cv = 1.0 / (cc * m.volume(ix));
+                        diag += r.cell_g[id] * cv;
+                        rhs += r.cell_s[id] * cv;
                     }
                     cf.diag = diag + conv_diag.max(conv_nb);
                     cf.rhs = rhs;

@@ -29,7 +29,7 @@ impl NovoApp {
 
     /// Asks for picture files and attaches them to punch item `id`.
     pub(super) fn add_punch_photos(&mut self, id: u64) {
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Add photos to the punch item")
             .add_filter("Pictures", IMAGE_EXTENSIONS);
         if let Some(dir) = projects_dir() {

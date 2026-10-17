@@ -35,6 +35,25 @@ pub(super) struct ToolHint {
 const NEAR: f32 = 32.0;
 /// The dock's distance from the canvas edge.
 const MARGIN: f32 = 12.0;
+/// The canvas width from which Auto puts a word beside each dock icon: the
+/// labelled dock is about 630 wide, plus room to either side.
+pub(super) const LABELS_MIN_CANVAS: f32 = 720.0;
+
+/// One dock button: an icon, plus its word when `labels` is on.
+fn dock_button(
+    ui: &mut egui::Ui,
+    labels: bool,
+    icon: &str,
+    label: &str,
+    active: bool,
+    tip: &str,
+) -> egui::Response {
+    if labels {
+        widgets::tool_button_labeled(ui, icon, label, active, tip)
+    } else {
+        widgets::tool_button(ui, icon, active, tip)
+    }
+}
 
 impl NovoApp {
     /// Chooses the wiring mode: remembered for this person, applied to the
@@ -70,7 +89,7 @@ impl NovoApp {
     /// Keeps the editor on the person's auto-connection mode.
     pub(super) fn sync_connect_mode(&mut self) {
         let mode = self.settings.connect_mode();
-        let carries = self.settings.move_carries;
+        let carries = !self.settings.move_leaves_wires;
         if let Some(view) = self.canvas.schematic() {
             if view.editor.connect_mode() != mode {
                 view.editor.set_connect_mode(mode);
@@ -233,6 +252,11 @@ impl NovoApp {
             )
         };
 
+        let labels = match self.settings.dock_labels() {
+            crate::settings::DockLabels::Always => true,
+            crate::settings::DockLabels::Never => false,
+            crate::settings::DockLabels::Auto => canvas.width() >= LABELS_MIN_CANVAS,
+        };
         let place_tip = match self.wb.keymap.shortcut_text("tool.place") {
             Some(key) => format!("Place symbol · {key} (hold for the wheel)"),
             None => "Place symbol".to_owned(),
@@ -264,27 +288,30 @@ impl NovoApp {
             .show(ctx, |ui| {
                 egui::Frame::popup(ui.style()).show(ui, |ui| {
                     ui.horizontal(|ui| {
-                        for (tool, icon, tip, id) in [
+                        for (tool, icon, word, tip, id) in [
                             (
                                 DockTool::Select,
                                 icons::tool::SELECT,
+                                "Select",
                                 select_tip.as_str(),
                                 "dock.select",
                             ),
                             (
                                 DockTool::Place,
                                 icons::tool::PLACE,
+                                "Place",
                                 place_tip.as_str(),
                                 "dock.place",
                             ),
                             (
                                 DockTool::Connect,
                                 icons::tool::CONNECT,
+                                "Connect",
                                 connect_tip.as_str(),
                                 "dock.connect",
                             ),
                         ] {
-                            let response = widgets::tool_button(ui, icon, active == tool, tip);
+                            let response = dock_button(ui, labels, icon, word, active == tool, tip);
                             spots.push((id, response.rect, response.clicked()));
                             if response.clicked() {
                                 picked = Some(tool);
@@ -297,16 +324,18 @@ impl NovoApp {
                         // there, faint while another tool is active; a click
                         // connects in that mode.
                         ui.separator();
-                        for (mode, icon, tip, id) in [
+                        for (mode, icon, word, tip, id) in [
                             (
                                 WiringMode::Corners,
                                 icons::tool::WIRE_CORNERS,
+                                "Corners",
                                 "Wire with corners (right angles) · Shift+W switches",
                                 "dock.corners",
                             ),
                             (
                                 WiringMode::Lines,
                                 icons::tool::WIRE_LINES,
+                                "Lines",
                                 "Wire with lines (any angle) · Shift+W switches",
                                 "dock.lines",
                             ),
@@ -324,9 +353,11 @@ impl NovoApp {
                                             0.45
                                         });
                                     }
-                                    widgets::tool_button(
+                                    dock_button(
                                         ui,
+                                        labels,
                                         icon,
+                                        word,
                                         connecting && mode == chosen,
                                         tip,
                                     )
@@ -341,9 +372,11 @@ impl NovoApp {
                         ui.separator();
                         // The cable tool and the history sit after the wiring
                         // mode: a tool of its own, then two plain actions.
-                        let response = widgets::tool_button(
+                        let response = dock_button(
                             ui,
+                            labels,
                             icons::tool::CABLE,
+                            "Cable",
                             active == DockTool::Cable,
                             cable_tip.as_str(),
                         );
@@ -353,9 +386,10 @@ impl NovoApp {
                         }
                         response.surrender_focus();
                         ui.separator();
-                        for (icon, tip, id, enabled, command) in [
+                        for (icon, word, tip, id, enabled, command) in [
                             (
                                 icons::tool::UNDO,
+                                "Undo",
                                 undo_tip.as_str(),
                                 "dock.undo",
                                 can_undo,
@@ -363,6 +397,7 @@ impl NovoApp {
                             ),
                             (
                                 icons::tool::REDO,
+                                "Redo",
                                 redo_tip.as_str(),
                                 "dock.redo",
                                 can_redo,
@@ -371,7 +406,7 @@ impl NovoApp {
                         ] {
                             let response = ui
                                 .add_enabled_ui(enabled, |ui| {
-                                    widgets::tool_button(ui, icon, false, tip)
+                                    dock_button(ui, labels, icon, word, false, tip)
                                 })
                                 .inner;
                             spots.push((id, response.rect, response.clicked()));
@@ -380,9 +415,11 @@ impl NovoApp {
                             }
                             response.surrender_focus();
                         }
-                        let response = widgets::tool_button(
+                        let response = dock_button(
                             ui,
+                            labels,
                             icons::tool::TEXT,
+                            "Text",
                             active == DockTool::Text,
                             &text_tip,
                         );

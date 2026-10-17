@@ -12,6 +12,7 @@
 use std::fmt::Write as _;
 
 use eframe::egui;
+use novo_checks::calc::Rule;
 use novo_checks::calc::circuit::{Row, Status};
 use novo_checks::calc::starter::{Coordination, Scheme};
 use novo_checks::calc::tables::TableSet;
@@ -19,6 +20,7 @@ use novo_checks::calc_view::{self, CalcSheet, CircuitEntry, StarterChoice, Start
 use novo_core::AnyId;
 use novo_xref::Place;
 
+use super::model_labels::{Model, badge};
 use super::{Level, NovoApp};
 
 /// What the window remembers between frames.
@@ -59,6 +61,12 @@ fn amount(value: f64) -> String {
     } else {
         format!("{value:.2}")
     }
+}
+
+/// The kind of model number a row rests on: the cable rating and the voltage
+/// drop both read the ampacity and resistance tables, which are planning values.
+fn row_model(row: &Row) -> Option<Model> {
+    matches!(row.rule, Rule::CableRating | Rule::VoltageDrop).then_some(Model::Ampacity)
 }
 
 fn row_numbers(row: &Row) -> String {
@@ -117,8 +125,10 @@ pub(super) fn sheet_text(sheet: &CalcSheet) -> String {
                 let _ = write!(out, "{}", r.to_text());
                 for row in &r.rows {
                     let clause = calc_view::clause(row.title);
+                    let model =
+                        row_model(row).map_or(String::new(), |m| format!(" ({})", m.label()));
                     if !clause.is_empty() {
-                        let _ = writeln!(out, "    {}: {clause}", row.title);
+                        let _ = writeln!(out, "    {}: {clause}{model}", row.title);
                     }
                 }
                 match c.smallest_section_mm2 {
@@ -351,7 +361,12 @@ fn circuit_body(ui: &mut egui::Ui, entry: &CircuitEntry, go: &mut Option<Vec<Any
                 for row in &report.rows {
                     let (label, color) = status_label(row.status);
                     ui.colored_label(color, label);
-                    ui.label(row.title);
+                    ui.horizontal(|ui| {
+                        ui.label(row.title);
+                        if let Some(model) = row_model(row) {
+                            badge(ui, model);
+                        }
+                    });
                     ui.label(row_numbers(row));
                     ui.weak(calc_view::clause(row.title));
                     ui.end_row();
@@ -361,7 +376,10 @@ fn circuit_body(ui: &mut egui::Ui, entry: &CircuitEntry, go: &mut Option<Vec<Any
                 }
             });
         if let Some(iz) = report.iz_a {
-            ui.label(format!("Cable rating Iz: {} A", amount(iz)));
+            ui.horizontal(|ui| {
+                ui.label(format!("Cable rating Iz: {} A", amount(iz)));
+                badge(ui, Model::Ampacity);
+            });
         }
         if let Some(f) = &report.at_device {
             ui.label(format!(

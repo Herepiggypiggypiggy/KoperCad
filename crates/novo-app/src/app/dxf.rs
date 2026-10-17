@@ -131,7 +131,7 @@ impl NovoApp {
 impl NovoApp {
     /// Asks for a DXF and shows it under the current page.
     pub(super) fn import_dxf_background(&mut self) {
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Import DXF as background")
             .add_filter("DXF drawing", &["dxf"]);
         if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {

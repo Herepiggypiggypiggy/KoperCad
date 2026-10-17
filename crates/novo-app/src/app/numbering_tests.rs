@@ -96,6 +96,10 @@ fn a_typed_number_is_locked_refused_when_used_and_released() {
     d.app.run_command(&ctx, "wires.number", None);
     d.frame();
     select_wire(&mut d, wires[0]);
+    // From the menu there is no number: it asks instead of clearing.
+    d.app.run_command(&ctx, "wires.set_number", None);
+    assert!(d.app.wb.number_prompt.is_some());
+    d.app.wb.number_prompt = None;
     d.app.run_command(&ctx, "wires.set_number", Some("105"));
     d.frame();
     assert_eq!(numbers(&d, &wires)[0].as_deref(), Some("105"));

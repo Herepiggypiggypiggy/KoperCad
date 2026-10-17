@@ -248,7 +248,16 @@ fn an_edited_csv_brings_comments_and_tag_names_home() {
         &index(&doc),
         &read(edited.as_bytes()).unwrap(),
     );
-    assert!(plan.updates.is_empty(), "{:?}", plan.updates);
+    // The file still has the old tag on the reworded channel, which now
+    // differs from the name the project would export: that is the only
+    // thing left to say, and signals are not touched again.
+    assert!(
+        plan.updates
+            .iter()
+            .all(|u| u.new_signal.is_none() && u.channel == "-K2 AI 0"),
+        "{:?}",
+        plan.updates
+    );
     let sym = doc
         .project()
         .symbols()
@@ -465,4 +474,47 @@ fn the_address_plan_lists_every_card() {
 fn not_a_tag_file() {
     assert!(read(b"hello world").is_err());
     assert!(read(b"<html></html>").is_err());
+}
+
+#[test]
+fn a_real_rename_that_starts_the_same_is_not_swallowed() {
+    let doc = project();
+    let csv = text(
+        &export(
+            doc.project(),
+            &index(&doc),
+            LinkFormat::Csv,
+            &ExportOptions::default(),
+        )
+        .files[0],
+    );
+    let renamed = csv.replace("Level_tank_1;INT", "Level;INT");
+    let plan = plan_import(
+        doc.project(),
+        &index(&doc),
+        &read(renamed.as_bytes()).unwrap(),
+    );
+    assert_eq!(plan.updates.len(), 1, "{plan:?}");
+    assert_eq!(plan.updates[0].new_tag.as_deref(), Some("Level"));
+}
+
+#[test]
+fn line_numbers_in_plcopen_follow_the_file() {
+    let doc = project();
+    let out = export(
+        doc.project(),
+        &index(&doc),
+        LinkFormat::PlcOpen,
+        &ExportOptions::default(),
+    );
+    let xml = text(&out.files[0]);
+    let file = read(xml.as_bytes()).unwrap();
+    for tag in &file.tags {
+        let line = xml.lines().nth(tag.line - 1).unwrap();
+        assert!(
+            line.contains(&format!("name=\"{}\"", tag.name)),
+            "{} -> {line}",
+            tag.name
+        );
+    }
 }

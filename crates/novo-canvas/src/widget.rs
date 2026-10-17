@@ -295,6 +295,10 @@ pub struct CanvasView {
     band_ids: Vec<ItemId>,
     right_drag: Option<RightDrag>,
     fit_pending: Option<Fit>,
+    /// The last fit, until the person moves the view or a few frames pass:
+    /// panels that open or resize after the first frame change the canvas
+    /// size, and the fit is redone for the new size.
+    fit_settle: Option<FitSettle>,
     /// What to bring into view; see [`Self::reveal`].
     reveal_pending: Option<PendingReveal>,
     stats: FrameStats,
@@ -374,6 +378,32 @@ const FIT_CONTENT_MARGIN: f32 = 64.0;
 /// text is then 15 points.
 const FIT_CONTENT_MAX_ZOOM: f32 = 6.0;
 
+/// How many frames after a fit the view follows the canvas size.
+const FIT_SETTLE_FRAMES: u32 = 120;
+
+#[derive(Clone, Copy, Debug)]
+struct FitSettle {
+    kind: Fit,
+    size: Vec2,
+    /// The view the fit left; a different one means something else (a
+    /// reveal, a jump) moved it and the fit must not be redone over it.
+    center: Vec2,
+    zoom: f32,
+    frames: u32,
+}
+
+impl FitSettle {
+    fn of(kind: Fit, viewport: &Viewport) -> FitSettle {
+        FitSettle {
+            kind,
+            size: viewport.size,
+            center: viewport.center,
+            zoom: viewport.zoom,
+            frames: FIT_SETTLE_FRAMES,
+        }
+    }
+}
+
 /// What a pending fit brings into view.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Fit {
@@ -427,6 +457,7 @@ impl CanvasView {
             band_ids: Vec::new(),
             right_drag: None,
             fit_pending: Some(Fit::Content),
+            fit_settle: None,
             reveal_pending: None,
             reveal_zoom: 4.0,
             reveal_margin: 48.0,
@@ -545,6 +576,27 @@ impl CanvasView {
         }
     }
 
+    /// Redoes the last fit when the canvas changed size since, as long as
+    /// the person has not moved the view (`moved`) and only for a while.
+    fn settle_fit(&mut self, scene: &Scene, moved: bool) {
+        let Some(mut settle) = self.fit_settle.take() else {
+            return;
+        };
+        let displaced = self.viewport.center != settle.center || self.viewport.zoom != settle.zoom;
+        if moved || displaced || settle.frames == 0 || self.viewport.size.x <= 1.0 {
+            return;
+        }
+        settle.frames -= 1;
+        if (self.viewport.size - settle.size).abs().max_element() > 0.5 {
+            self.fit_scene(scene, settle.kind);
+            settle = FitSettle {
+                frames: settle.frames,
+                ..FitSettle::of(settle.kind, &self.viewport)
+            };
+        }
+        self.fit_settle = Some(settle);
+    }
+
     fn show_in_rect(
         &mut self,
         ui: &mut egui::Ui,
@@ -557,6 +609,12 @@ impl CanvasView {
             && let Some(kind) = self.fit_pending.take()
         {
             self.fit_scene(scene, kind);
+            self.fit_settle = Some(FitSettle::of(kind, &self.viewport));
+        } else {
+            let moved = response.dragged()
+                || response.clicked()
+                || ui.input(|i| i.smooth_scroll_delta != egui::Vec2::ZERO || i.zoom_delta() != 1.0);
+            self.settle_fit(scene, moved);
         }
         if rect.width() > 1.0
             && let Some(mut pending) = self.reveal_pending.take()
@@ -1119,7 +1177,10 @@ impl CanvasView {
         const MAX_SIZE: f32 = 512.0;
         let zoom = self.viewport.zoom;
         // Zoomed out past reading even the tallest text: nothing to visit.
-        if scene.max_label_height() * zoom < self.min_label_size {
+        // With the text floor on, small text is lifted instead of dropped, so
+        // the cull is lower than `min_label_size`.
+        let cull = crate::declutter::candidate_size(self.min_text_px, self.min_label_size);
+        if scene.max_label_height() * zoom < cull {
             return;
         }
         let painter = ui.painter_at(rect);
@@ -1134,7 +1195,7 @@ impl CanvasView {
             }
             for (i, l) in item.labels.iter().enumerate() {
                 let size = l.height * zoom;
-                if size >= self.min_label_size && size <= MAX_SIZE && !l.text.is_empty() {
+                if size >= cull && size <= MAX_SIZE && !l.text.is_empty() {
                     todo.push((size, id, i));
                 }
             }
@@ -1740,6 +1801,55 @@ mod tests {
         assert!(seen.contains_point(Vec2::new(20.0, 20.0)));
         assert!(seen.contains_point(Vec2::new(80.0, 120.0)));
         assert!(!seen.contains_point(Vec2::new(410.0, 290.0)));
+    }
+
+    #[test]
+    fn a_fit_follows_the_canvas_when_a_panel_takes_width_after_it() {
+        let scene = page_scene();
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(1280.0, 700.0);
+        view.fit_scene(&scene, Fit::Content);
+        view.fit_settle = Some(FitSettle::of(Fit::Content, &view.viewport));
+        // The outline opens and takes 300 points.
+        view.viewport.size = Vec2::new(980.0, 700.0);
+        view.settle_fit(&scene, false);
+        let seen = view.viewport.visible_world();
+        assert!(seen.contains_point(Vec2::new(20.0, 20.0)));
+        assert!(seen.contains_point(Vec2::new(80.0, 120.0)));
+    }
+
+    #[test]
+    fn a_view_the_person_moved_is_left_alone_when_the_canvas_changes() {
+        let scene = page_scene();
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(1280.0, 700.0);
+        view.fit_scene(&scene, Fit::Content);
+        view.fit_settle = Some(FitSettle::of(Fit::Content, &view.viewport));
+        let before = view.viewport.center;
+        view.viewport.size = Vec2::new(980.0, 700.0);
+        view.settle_fit(&scene, true);
+        assert_eq!(view.viewport.center, before);
+        assert!(view.fit_settle.is_none());
+    }
+
+    #[test]
+    fn a_reveal_after_the_fit_is_not_undone_by_a_later_resize() {
+        let scene = page_scene();
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(1280.0, 700.0);
+        view.fit_scene(&scene, Fit::Content);
+        view.fit_settle = Some(FitSettle::of(Fit::Content, &view.viewport));
+        // Something outside the fit moves the view (a reveal or a jump).
+        view.viewport.reveal(
+            &Aabb::new(Vec2::new(300.0, 250.0), Vec2::new(320.0, 270.0)),
+            48.0,
+            4.0,
+        );
+        let revealed = view.viewport.center;
+        view.viewport.size = Vec2::new(980.0, 700.0);
+        view.settle_fit(&scene, false);
+        assert_eq!(view.viewport.center, revealed);
+        assert!(view.fit_settle.is_none());
     }
 
     #[test]
