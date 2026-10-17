@@ -162,3 +162,90 @@ fn redlines_travel_in_a_field_file_and_the_further_state_wins() {
     assert_eq!(report.redlines_updated, 1);
     assert_eq!(fresh.redline(1).unwrap().state, RedlineState::Rejected);
 }
+
+/// A document with a strip -X1 holding terminals "1" and "2".
+fn strip_with_two_terminals() -> (
+    Document,
+    novo_core::DeviceId,
+    novo_core::TerminalId,
+    novo_core::TerminalId,
+) {
+    let mut doc = Document::default();
+    let strip = doc
+        .execute(Command::AddDevice {
+            tag: "-X1".parse().unwrap(),
+            description: String::new(),
+            kind: novo_core::DeviceKind::TerminalStrip,
+        })
+        .unwrap()
+        .created[0];
+    let strip = match strip {
+        novo_core::AnyId::Device(d) => d,
+        other => panic!("{other:?}"),
+    };
+    let mut ids = Vec::new();
+    for name in ["1", "2"] {
+        let out = doc
+            .execute(Command::AddTerminal {
+                strip,
+                name: name.into(),
+            })
+            .unwrap();
+        match out.created[0] {
+            novo_core::AnyId::Terminal(t) => ids.push(t),
+            other => panic!("{other:?}"),
+        }
+    }
+    (doc, strip, ids[0], ids[1])
+}
+
+#[test]
+fn a_terminal_rename_changes_its_designation_in_one_command() {
+    let (mut doc, strip, one, _) = strip_with_two_terminals();
+    let mut store = CommissioningStore::new();
+    store
+        .add_redline(redline(
+            Target::Terminal(one),
+            Change::TerminalName("11".into()),
+            "t",
+        ))
+        .unwrap();
+    // only a terminal can be renamed to a designation
+    assert!(
+        store
+            .add_redline(redline(
+                Target::Device(strip),
+                Change::TerminalName("9".into()),
+                "t"
+            ))
+            .is_err()
+    );
+    let commands = apply_commands(store.redlines(), doc.project());
+    assert_eq!(commands.len(), 1);
+    doc.execute(commands.into_iter().next().unwrap().1.unwrap())
+        .unwrap();
+    assert_eq!(doc.project().terminal(one).unwrap().name, "11");
+    let text = revision_description(store.redlines());
+    assert!(text.contains("renamed 11"), "{text}");
+}
+
+#[test]
+fn a_rename_to_a_name_the_strip_has_or_to_nothing_is_reported() {
+    let (doc, _, one, _) = strip_with_two_terminals();
+    let mut store = CommissioningStore::new();
+    for name in ["2", "  "] {
+        store
+            .add_redline(redline(
+                Target::Terminal(one),
+                Change::TerminalName(name.into()),
+                name,
+            ))
+            .unwrap();
+    }
+    let commands = apply_commands(store.redlines(), doc.project());
+    assert_eq!(commands.len(), 2);
+    assert!(commands.iter().all(|(_, c)| c.is_err()));
+    let reasons: Vec<String> = commands.into_iter().map(|(_, c)| c.unwrap_err()).collect();
+    assert!(reasons[0].contains("already has"), "{reasons:?}");
+    assert!(reasons[1].contains("designation"), "{reasons:?}");
+}
