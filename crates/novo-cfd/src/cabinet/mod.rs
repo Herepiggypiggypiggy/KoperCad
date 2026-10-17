@@ -13,10 +13,12 @@
 //! - Laminar buoyant flow, conduction in devices, plate, rails and walls,
 //!   outside films from IEC 60890, vents and fans, slotted ducts as porous
 //!   media. All levels.
-//! - Turbulence and radiation are not coupled yet: the hooks exist in
-//!   `turb` and `rad`, the coupling is the next step. The result's accuracy
-//!   statement says so; radiation is missing from the heat paths and the
-//!   surface temperatures of hot devices are slightly high because of it.
+//! - Radiation: grey surface-to-surface exchange between devices, plate and
+//!   walls (`rad`), on at the Fine level by default ([`RadMode`]); the cheaper
+//!   levels keep the 2D engine's film. Result: `CfdSnapshot::heat_paths` and
+//!   `radiation_on`.
+//! - Turbulence is coupled with [`CabinetSolver::with_turbulence`]; the
+//!   default is laminar.
 //!
 //! Where the user finds it: Cabinet view, Heat layer, Simulate
 //! (`cabinet.thermal.simulate`).
@@ -39,7 +41,7 @@ use crate::solver::{CfdError, Control, Solver};
 use crate::turb::{TurbModel, TurbState};
 
 pub use march::{MarchLimits, MarchState, MarchStatus};
-pub use statement::{ENCLOSURE_VALIDATED, accuracy_for, accuracy_with_turbulence};
+pub use statement::{ENCLOSURE_VALIDATED, accuracy_for, accuracy_with_turbulence, mark_radiation};
 pub use steady::{CabinetSteady, PREVIEW_NOTE};
 pub use tuning::{LevelTuning, Method, Tuning};
 
@@ -49,6 +51,29 @@ pub struct CabinetSolver {
     pub tuning: Tuning,
     /// Turbulence model; `Laminar` (the default) leaves the flow untouched.
     pub turbulence: TurbModel,
+    /// Surface-to-surface radiation between devices, plate and walls.
+    pub radiation: RadMode,
+}
+
+/// Whether the cabinet solver couples radiation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum RadMode {
+    /// On at the Fine level only (the design: "Fine: turbulence and
+    /// radiation on"); the cheaper levels keep the 2D engine's film.
+    #[default]
+    Auto,
+    On,
+    Off,
+}
+
+impl RadMode {
+    fn at(self, f: Fidelity) -> bool {
+        match self {
+            RadMode::Auto => f == Fidelity::Fine,
+            RadMode::On => true,
+            RadMode::Off => false,
+        }
+    }
 }
 
 impl CabinetSolver {
@@ -56,7 +81,15 @@ impl CabinetSolver {
         CabinetSolver {
             tuning,
             turbulence: TurbModel::Laminar,
+            radiation: RadMode::Auto,
         }
+    }
+
+    /// The same solver with radiation forced on or off (the Simulate
+    /// dialog's Radiation toggle).
+    pub fn with_radiation(mut self, mode: RadMode) -> CabinetSolver {
+        self.radiation = mode;
+        self
     }
 
     /// The same solver with a turbulence model (k-omega SST is the
@@ -91,7 +124,11 @@ impl Solver for CabinetSolver {
             solid_speedup: lvl.solid_speedup,
             ..SolidsSettings::default()
         };
-        let setup = FlowSetup::new(scenario, &st).map_err(|e| CfdError::Setup(e.to_string()))?;
+        let mut setup =
+            FlowSetup::new(scenario, &st).map_err(|e| CfdError::Setup(e.to_string()))?;
+        if self.radiation.at(fidelity) {
+            setup.enable_radiation(scenario, &crate::rad::RadSettings::default());
+        }
         if control.is_cancelled() {
             return Err(CfdError::Cancelled);
         }
@@ -137,6 +174,9 @@ impl Solver for CabinetSolver {
             if let Some(t) = &march.turb {
                 s.turb_visc_ratio = t.viscosity_ratio();
                 s.accuracy = accuracy_with_turbulence(s.progress.fidelity, model);
+                if s.radiation_on {
+                    statement::mark_radiation(&mut s.accuracy);
+                }
             }
             s
         };
@@ -221,6 +261,9 @@ fn solve_steady(
         if let Some(t) = &run.turb {
             s.turb_visc_ratio = t.viscosity_ratio();
             s.accuracy = accuracy_with_turbulence(s.progress.fidelity, model);
+            if s.radiation_on {
+                statement::mark_radiation(&mut s.accuracy);
+            }
         }
         s
     };

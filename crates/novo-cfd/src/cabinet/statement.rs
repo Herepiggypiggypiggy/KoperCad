@@ -59,6 +59,37 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
     }
 }
 
+const RADIATION_MARK: &str = " Radiation: surface to surface.";
+
+/// Marks a statement as one of a run with coupled radiation: the "radiation
+/// is not modelled" remarks go, what the radiation model assumes comes in.
+/// Safe to call twice.
+pub fn mark_radiation(a: &mut AccuracyStatement) {
+    if a.headline.ends_with(RADIATION_MARK) {
+        return;
+    }
+    for l in &mut a.limits {
+        if l.starts_with("Turbulence and radiation are not modelled") {
+            *l = "Turbulence is not modelled: flow in a strongly forced cabinet is laminar.".into();
+        }
+        if let Some(i) = l.find(
+            " radiation is not modelled, so surface temperatures of hot devices are slightly high.",
+        ) {
+            let end = i + " radiation is not modelled, so surface temperatures of hot devices are slightly high.".len();
+            l.replace_range(i..end, "");
+        }
+    }
+    a.limits.push(
+        "Radiation is grey and diffuse, surface to surface between devices, plate and walls \
+         (air is transparent). Emissivities are planning values (devices from the scenario, \
+         painted wall 0.9, bare plate 0.3); faces of cut cells count whole; a wall's surface \
+         temperature uses a fixed film ratio. Checked against analytic view factors, not \
+         against a measurement."
+            .into(),
+    );
+    a.headline.push_str(RADIATION_MARK);
+}
+
 /// The accuracy statement of a result with a turbulence model: the generic
 /// "turbulence is not modelled" limit is replaced by what the model does and
 /// where it stops being valid.
