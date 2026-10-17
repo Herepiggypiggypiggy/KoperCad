@@ -15,6 +15,8 @@
 //! settings. "Reset panel layout" (`view.reset_panels`) clears it and the
 //! moved marks below.
 
+use std::collections::BTreeMap;
+
 use eframe::egui;
 
 /// Gap between a panel and the canvas edge.
@@ -154,6 +156,21 @@ impl Panel {
         add: impl FnOnce(&mut egui::Ui) -> R,
     ) -> Option<egui::InnerResponse<Option<R>>> {
         let id = id(self.id);
+        note_seen(ctx, self.id);
+        // A layout preset that was just opened puts the panel where that
+        // layout left it, or back at its side when the layout never moved it.
+        let taken = take_place(ctx, id);
+        let placed = match taken {
+            Some(Some(at)) => {
+                mark_moved(ctx, id);
+                Some(egui::pos2(at[0] as f32, at[1] as f32))
+            }
+            Some(None) => {
+                clear_moved(ctx, id);
+                None
+            }
+            None => None,
+        };
         let moved = is_moved(ctx, id);
         let (pivot, start) = self.start();
         let max_height = (self.canvas.height() - self.top - BOTTOM - self.bottom).max(MIN_HEIGHT);
@@ -178,10 +195,20 @@ impl Panel {
         // Placed by us until the first drag (egui would shift a tall window
         // up while it is still sizing); kept on the canvas once it is dragged.
         window = if moved {
-            window.constrain_to(self.canvas)
+            let window = window.constrain_to(self.canvas);
+            match placed {
+                Some(at) => window.current_pos(at),
+                None => window,
+            }
         } else {
             window.constrain(false).pivot(pivot).current_pos(start)
         };
+        if taken.is_some() {
+            // A window dragged by its title bar keeps the position it had
+            // before the frame and ignores the one given here; for the one
+            // frame that a layout places it, it may be dragged from anywhere.
+            window = window.drag_area(egui::containers::WindowDrag::Anywhere);
+        }
         // The window's own scroll area has no bar setting, so a solid
         // (non-floating) bar is asked for through the style while it is built.
         let before = self.scroll_bar.then(|| ctx.global_style().spacing.scroll);
@@ -258,6 +285,78 @@ pub(super) fn mark_moved(ctx: &egui::Context, id: egui::Id) {
     ctx.data_mut(|d| {
         let epoch: u32 = d.get_persisted(epoch_id()).unwrap_or(0);
         d.insert_persisted(id.with("moved"), epoch);
+    });
+}
+
+fn clear_moved(ctx: &egui::Context, id: egui::Id) {
+    ctx.data_mut(|d| d.remove::<u32>(id.with("moved")));
+}
+
+fn seen_id() -> egui::Id {
+    egui::Id::new("panel_seen")
+}
+
+/// The panels shown so far, so a layout knows which ones to put back.
+fn note_seen(ctx: &egui::Context, name: &'static str) {
+    ctx.data_mut(|d| {
+        let seen = d.get_temp_mut_or_default::<Vec<&'static str>>(seen_id());
+        if !seen.contains(&name) {
+            seen.push(name);
+        }
+    });
+}
+
+fn seen(ctx: &egui::Context) -> Vec<&'static str> {
+    ctx.data(|d| d.get_temp::<Vec<&'static str>>(seen_id()))
+        .unwrap_or_default()
+}
+
+/// Where a layout preset wants a panel: `Some(top left)` or `None` for its
+/// own side. Taken by the panel's next frame.
+type Place = Option<[i32; 2]>;
+
+fn place_id(id: egui::Id) -> egui::Id {
+    id.with("place")
+}
+
+fn take_place(ctx: &egui::Context, id: egui::Id) -> Option<Place> {
+    ctx.data_mut(|d| d.remove_temp::<Place>(place_id(id)))
+}
+
+/// The panels the person has dragged, with their top left corner in points:
+/// what a layout preset keeps of the floating panels. A panel with a
+/// placement still waiting is left out; its rectangle is not the layout's yet.
+pub(super) fn places(ctx: &egui::Context) -> BTreeMap<String, [i32; 2]> {
+    seen(ctx)
+        .into_iter()
+        .filter(|name| {
+            let id = id(name);
+            is_moved(ctx, id) && ctx.data(|d| d.get_temp::<Place>(place_id(id))).is_none()
+        })
+        .filter_map(|name| {
+            let rect = ctx.memory(|m| m.area_rect(id(name)))?;
+            Some((
+                name.to_owned(),
+                [rect.min.x.round() as i32, rect.min.y.round() as i32],
+            ))
+        })
+        .collect()
+}
+
+/// Puts every panel the app has shown where `layout` keeps it, and those it
+/// does not name back at their own side. Each panel takes its placement the
+/// next time it is shown, so a panel that is closed now picks it up when it
+/// opens.
+pub(super) fn place_all(ctx: &egui::Context, layout: &BTreeMap<String, [i32; 2]>) {
+    let mut names: Vec<String> = seen(ctx).into_iter().map(str::to_owned).collect();
+    names.extend(layout.keys().cloned());
+    names.sort();
+    names.dedup();
+    ctx.data_mut(|d| {
+        for name in names {
+            let at: Place = layout.get(&name).copied();
+            d.insert_temp(place_id(id(&name)), at);
+        }
     });
 }
 
@@ -444,5 +543,64 @@ mod tests {
         assert!(is_moved(&ctx, id));
         d.app.run_command(&ctx, "view.reset_panels", None);
         assert!(!is_moved(&ctx, id));
+    }
+
+    /// A frame of the panel named `name`; returns its rectangle.
+    fn named(ctx: &egui::Context, name: &'static str) -> egui::Rect {
+        let mut rect = egui::Rect::NOTHING;
+        let mut out = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(canvas()),
+                ..Default::default()
+            },
+            |ctx| {
+                let panel = Panel::new(name, name, canvas(), Side::Right, 300.0);
+                if let Some(r) = panel.show(ctx, |ui| {
+                    ui.label("content");
+                }) {
+                    rect = r.response.rect;
+                }
+            },
+        );
+        out.textures_delta.clear();
+        rect
+    }
+
+    #[test]
+    fn a_layout_puts_a_panel_where_it_was_left_and_back_at_its_side() {
+        let ctx = egui::Context::default();
+        let _ = named(&ctx, "card");
+        let home = named(&ctx, "card");
+        assert!(places(&ctx).is_empty(), "nothing is dragged yet");
+
+        let layout = BTreeMap::from([("card".to_owned(), [200, 300])]);
+        place_all(&ctx, &layout);
+        let _ = named(&ctx, "card");
+        let moved = named(&ctx, "card");
+        assert!(
+            (moved.min - egui::pos2(200.0, 300.0)).length() < 1.5,
+            "{moved:?}"
+        );
+        assert_eq!(named(&ctx, "card").min, moved.min, "it stays");
+        assert_eq!(
+            places(&ctx),
+            BTreeMap::from([("card".to_owned(), [200, 300])])
+        );
+
+        // A layout that never moved it: back at its own side.
+        place_all(&ctx, &BTreeMap::new());
+        let _ = named(&ctx, "card");
+        let back = named(&ctx, "card");
+        assert!((back.min - home.min).length() < 1.5, "{home:?} {back:?}");
+        assert!(places(&ctx).is_empty());
+    }
+
+    #[test]
+    fn a_placement_waits_for_a_panel_that_is_not_open_yet() {
+        let ctx = egui::Context::default();
+        place_all(&ctx, &BTreeMap::from([("later".to_owned(), [120, 140])]));
+        let _ = named(&ctx, "later");
+        let r = named(&ctx, "later");
+        assert!((r.min - egui::pos2(120.0, 140.0)).length() < 1.5, "{r:?}");
     }
 }

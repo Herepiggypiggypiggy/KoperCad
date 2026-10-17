@@ -205,6 +205,10 @@ pub struct WorkspaceLayout {
     /// Whether the inspector stays docked with nothing selected; `None`
     /// leaves it as it is.
     pub inspector_pinned: Option<bool>,
+    /// The floating panels the person moved in this layout, by panel id,
+    /// with their top left corner in points. A panel not named sits at its
+    /// own side of the canvas.
+    pub panels: BTreeMap<String, [i32; 2]>,
 }
 
 impl Settings {
@@ -327,6 +331,7 @@ mod tests {
                 outline_mode: "issues".into(),
                 drawer: Some("cables".into()),
                 inspector_pinned: Some(true),
+                panels: BTreeMap::from([("inspector".to_owned(), [900, 80])]),
             },
         );
         let text = ron::to_string(&s).unwrap();
