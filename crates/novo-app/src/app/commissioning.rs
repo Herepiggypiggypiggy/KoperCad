@@ -572,7 +572,7 @@ impl NovoApp {
             .and_then(|bytes| write_replacing(path, &bytes).map_err(|e| e.to_string()));
         match result {
             Ok(()) => {
-                self.message(Level::Info, format!("Exported {}", path.display()));
+                self.message_file(format!("Exported {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }

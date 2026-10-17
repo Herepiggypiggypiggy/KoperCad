@@ -224,7 +224,7 @@ pub(super) fn values_block(
     }
     for n in missing {
         ui.colored_label(
-            tokens::WARNING,
+            crate::theme::ui_palette().warning,
             format!("{}: {}", n.symbol.map(name).unwrap_or_default(), n.text),
         );
     }
@@ -388,7 +388,7 @@ impl super::NovoApp {
                             })
                         }
                         Err(why) => {
-                            ui.colored_label(tokens::WARNING, why);
+                            ui.colored_label(crate::theme::ui_palette().warning, why);
                             None
                         }
                     };
@@ -399,7 +399,7 @@ impl super::NovoApp {
                     None => {
                         ui.add_space(6.0);
                         ui.colored_label(
-                            tokens::WARNING,
+                            crate::theme::ui_palette().warning,
                             "This motor cannot be modelled yet. Give it a power in kW on its device.",
                         );
                     }
@@ -426,7 +426,7 @@ fn show_run(ui: &mut egui::Ui, run: &Run) {
     let rated = m.rated_current();
     if r.stalled {
         ui.colored_label(
-            tokens::ERROR,
+            crate::theme::ui_palette().error,
             "The motor does not start: the load needs more torque than it makes at standstill",
         );
     } else if let Some(t) = r.start_time {
@@ -435,7 +435,10 @@ fn show_run(ui: &mut egui::Ui, run: &Run) {
             r.final_rpm
         ));
     } else {
-        ui.colored_label(tokens::WARNING, "Not up to speed within 40 s");
+        ui.colored_label(
+            crate::theme::ui_palette().warning,
+            "Not up to speed within 40 s",
+        );
     }
     ui.weak(format!(
         "Peak line current {:.0} A ({:.1} × rated {:.1} A) · I²t {:.0} kA²s",
@@ -462,10 +465,13 @@ fn show_run(ui: &mut egui::Ui, run: &Run) {
 
 /// Speed (green) and line current (accent) against time.
 fn chart(ui: &mut egui::Ui, r: &StartResult, m: &Motor) {
-    let size = egui::vec2(ui.available_width().max(300.0), 220.0);
+    // As tall as the dialog allows (less the notes under it), so the time
+    // axis is not cut off on a small screen.
+    let height = (ui.available_height() - 70.0).clamp(130.0, 220.0);
+    let size = egui::vec2(ui.available_width().max(300.0), height);
     let (rect, response) = ui.allocate_exact_size(size, egui::Sense::hover());
     let p = ui.painter_at(rect);
-    p.rect_filled(rect, 4.0, tokens::BG_1);
+    p.rect_filled(rect, 4.0, crate::theme::ui_palette().panel);
     let plot = rect.shrink2(egui::vec2(46.0, 18.0));
     let t_end = r
         .start_time
@@ -486,21 +492,21 @@ fn chart(ui: &mut egui::Ui, r: &StartResult, m: &Motor) {
         let y = at(0.0, f).y;
         p.line_segment(
             [egui::pos2(plot.left(), y), egui::pos2(plot.right(), y)],
-            egui::Stroke::new(1.0, tokens::BORDER),
+            egui::Stroke::new(1.0, crate::theme::ui_palette().border_subtle),
         );
         p.text(
             egui::pos2(plot.left() - 4.0, y),
             egui::Align2::RIGHT_CENTER,
             format!("{:.0}", f * n_max),
             egui::FontId::proportional(tokens::FONT_SMALL),
-            tokens::SUCCESS,
+            crate::theme::ui_palette().success,
         );
         p.text(
             egui::pos2(plot.right() + 4.0, y),
             egui::Align2::LEFT_CENTER,
             format!("{:.0}", f * i_max),
             egui::FontId::proportional(tokens::FONT_SMALL),
-            tokens::ACCENT,
+            crate::theme::ui_palette().accent,
         );
     }
     p.text(
@@ -508,21 +514,21 @@ fn chart(ui: &mut egui::Ui, r: &StartResult, m: &Motor) {
         egui::Align2::LEFT_TOP,
         "rpm",
         egui::FontId::proportional(tokens::FONT_SMALL),
-        tokens::SUCCESS,
+        crate::theme::ui_palette().success,
     );
     p.text(
         egui::pos2(plot.right(), rect.top() + 2.0),
         egui::Align2::RIGHT_TOP,
         "A",
         egui::FontId::proportional(tokens::FONT_SMALL),
-        tokens::ACCENT,
+        crate::theme::ui_palette().accent,
     );
     p.text(
         egui::pos2(plot.right(), plot.bottom() + 4.0),
         egui::Align2::RIGHT_TOP,
         format!("{t_end:.1} s"),
         egui::FontId::proportional(tokens::FONT_SMALL),
-        tokens::TEXT_MUTED,
+        crate::theme::ui_palette().text_secondary,
     );
     let stride = (r.samples.len() / 600).max(1);
     let shown = r
@@ -537,25 +543,25 @@ fn chart(ui: &mut egui::Ui, r: &StartResult, m: &Motor) {
         .collect();
     p.add(egui::Shape::line(
         speed,
-        egui::Stroke::new(2.0, tokens::SUCCESS),
+        egui::Stroke::new(2.0, crate::theme::ui_palette().success),
     ));
     p.add(egui::Shape::line(
         current,
-        egui::Stroke::new(2.0, tokens::ACCENT),
+        egui::Stroke::new(2.0, crate::theme::ui_palette().accent),
     ));
     // Where a two-stage starter changes over.
     if let Some(s) = r.samples.iter().find(|s| s.stage != Stage::First) {
         let x = at(s.t, 0.0).x;
         p.line_segment(
             [egui::pos2(x, plot.top()), egui::pos2(x, plot.bottom())],
-            egui::Stroke::new(1.0, tokens::TEXT_MUTED),
+            egui::Stroke::new(1.0, crate::theme::ui_palette().text_secondary),
         );
         p.text(
             egui::pos2(x + 3.0, plot.top()),
             egui::Align2::LEFT_TOP,
             "changeover",
             egui::FontId::proportional(tokens::FONT_SMALL),
-            tokens::TEXT_MUTED,
+            crate::theme::ui_palette().text_secondary,
         );
     }
     if let Some(pos) = response.hover_pos()

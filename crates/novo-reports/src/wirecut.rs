@@ -125,6 +125,18 @@ fn number_text(v: f64) -> String {
     t.trim_end_matches('0').trim_end_matches('.').to_owned()
 }
 
+/// Where a wire end goes: `=A1+CAB-K1:13`, or the potential's name with
+/// `(feed)` for the supply side of a potential feed.
+fn end_designation(project: &Project, pin: PinRef) -> String {
+    if let Some(SymbolRole::PotentialFeed { potential }) =
+        project.symbol(pin.symbol).map(|s| &s.role)
+        && let Some(p) = project.potential(*potential)
+    {
+        return format!("{} (feed)", p.name);
+    }
+    project.pin_designation(pin).unwrap_or_default()
+}
+
 fn end(
     project: &Project,
     pin: PinRef,
@@ -134,7 +146,7 @@ fn end(
     number: &str,
     standard: &FerruleStandard,
 ) -> WireEnd {
-    let designation = project.pin_designation(pin).unwrap_or_default();
+    let designation = end_designation(project, pin);
     let from_part =
         device_of(project, pin).and_then(|d| number_property(project, d, STRIP_LENGTH_KEY));
     let (strip_mm, strip_basis) = match (from_part, section) {
@@ -152,7 +164,7 @@ fn end(
             .zip(strip_mm)
             .map(|(s, l)| format!("A{}-{}", number_text(s), number_text(l))),
     };
-    let to = project.pin_designation(other).unwrap_or_default();
+    let to = end_designation(project, other);
     let label = match (number.is_empty(), to.is_empty()) {
         (false, false) => format!("{number} > {to}"),
         (false, true) => number.to_owned(),
@@ -185,7 +197,7 @@ pub fn wire_cut_jobs_with(project: &Project, standard: &FerruleStandard) -> Vec<
 type Plans = Vec<(StructureId, novo_routing::Plan)>;
 
 fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, Plans) {
-    let items = items(project);
+    let items = items(project, true);
     let measured: Vec<Measured> = items
         .iter()
         .map(|i| Measured {

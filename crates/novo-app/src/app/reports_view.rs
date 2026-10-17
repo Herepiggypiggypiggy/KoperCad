@@ -19,8 +19,8 @@ use eframe::egui;
 use novo_core::{AnyId, natural_cmp};
 use novo_reports::{Align, Cell, CsvOptions, ReportOutput, Section};
 use novo_theme::table::{
-    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths, table_header,
-    table_row,
+    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths_min, header_min_widths,
+    table_header, table_row,
 };
 use novo_theme::widgets::section_label;
 use novo_xref::Place;
@@ -403,10 +403,6 @@ impl NovoApp {
         if !section.title.is_empty() {
             section_label(ui, &section.title);
         }
-        let widths = column_widths(
-            ui.available_width(),
-            &section.columns.iter().map(|c| c.width).collect::<Vec<_>>(),
-        );
         let columns: Vec<TableColumn> = section
             .columns
             .iter()
@@ -419,6 +415,13 @@ impl NovoApp {
                 },
             })
             .collect();
+        // The vertical scroll bar of the rows takes room from the right edge.
+        let bar = ui.spacing().scroll.allocated_width() + 4.0;
+        let widths = column_widths_min(
+            ui.available_width() - bar,
+            &section.columns.iter().map(|c| c.width).collect::<Vec<_>>(),
+            &header_min_widths(ui, &columns),
+        );
         let sorted = match &self.reports_view.sort {
             Some((key, col, asc)) if *key == section.key => Some((*col, *asc)),
             _ => None,
@@ -648,7 +651,7 @@ impl NovoApp {
         };
         match super::pdf::write_replacing(path, &bytes) {
             Ok(()) => {
-                self.message(Level::Info, format!("Exported {}", path.display()));
+                self.message_file(format!("Exported {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }

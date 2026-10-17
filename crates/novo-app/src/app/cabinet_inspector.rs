@@ -36,6 +36,8 @@ pub(super) struct DeviceFacts {
     pub rule: Option<String>,
     /// Why the last `Place all` put the device where it is.
     pub why: Option<String>,
+    /// The surfaces the device can be put on; `None` for a plate-only cabinet.
+    pub surface: Option<super::cabinet_surface_move::SurfaceChoice>,
 }
 
 /// What the inspector shows: the selected devices, or the plate.
@@ -98,6 +100,7 @@ pub(super) fn gather(
                 problems,
                 rule: None,
                 why: None,
+                surface: None,
             }
         })
         .collect();
@@ -214,6 +217,9 @@ fn show(
                     },
                 );
                 widgets::field(ui, "Position", &d.position);
+                if let Some(name) = super::cabinet_surface_move::show(ui, d) {
+                    ask = Some(Ask::SetSurface(d.id, name));
+                }
                 // How it is held on the plate: closed until asked for, since
                 // the position and size above are what is usually wanted.
                 let held = u32::from(d.rotated)

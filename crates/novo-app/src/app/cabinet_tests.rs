@@ -1332,3 +1332,86 @@ fn door_devices_are_swept_and_named_in_the_door_panel() {
     );
     assert!(!lines[0].1.contains("clear everything"));
 }
+
+#[test]
+fn surface_rules_keep_door_devices_off_the_plate_plan() {
+    use novo_core::{DeviceTag, MountingPlate, Project, Value};
+    use novo_layout::enclosure::{Door, Enclosure};
+    use novo_layout::model::{load, set_enclosure, set_plate};
+
+    let mut p = Project::new("t");
+    let (cab, _) = p
+        .transact("setup", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            set_plate(
+                tx,
+                cab,
+                MountingPlate {
+                    width: 400.0,
+                    height: 400.0,
+                    margin: 10.0,
+                },
+            )?;
+            set_enclosure(
+                tx,
+                cab,
+                &Enclosure {
+                    width: 450.0,
+                    height: 450.0,
+                    depth: 200.0,
+                    plate_setback: 20.0,
+                    door: Some(Door::default()),
+                    front_clearance: None,
+                    hinge_side_clearance: None,
+                },
+            )?;
+            tx.set_property(
+                cab,
+                "surface_rules",
+                Some(Value::Text("door: H\nplate2: Q".into())),
+            )?;
+            tx.set_property(
+                cab,
+                "surface.plate2",
+                Some(Value::Text("300 400 10".into())),
+            )?;
+            let part = tx.add_part("ACME", "C1")?;
+            tx.set_property(part, "width_mm", Some(Value::Float(22.0)))?;
+            tx.set_property(part, "height_mm", Some(Value::Float(22.0)))?;
+            for tag in ["=A1+CAB1-K1", "=A1+CAB1-H1", "=A1+CAB1-Q1"] {
+                let d = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+                tx.assign_part(d, part)?;
+            }
+            Ok(cab)
+        })
+        .unwrap();
+    let layout = load(&p, cab).unwrap();
+    let split = super::cabinet_rules::surface_split(&p, cab, &layout);
+    assert_eq!(split.plate.len(), 1);
+    assert_eq!(split.plate[0].kind, "K");
+    // Q belongs on the extra plate `plate2` from the `surface.plate2`
+    // property: known, so no sentence, and not on the main plate plan.
+    assert_eq!(split.others.len(), 2);
+    assert_eq!(split.others[0].0, "door");
+    assert_eq!(split.others[1].0, "plate2");
+    assert!(split.problems.is_empty(), "{:?}", split.problems);
+    let (plan, _) =
+        super::cabinet_rules::plan(&p, cab, &layout, &novo_layout::rules::RuleSet::standard());
+    assert_eq!(plan.placements.len(), 1);
+}
+
+#[test]
+fn a_non_text_surface_rules_property_is_a_sentence() {
+    use novo_core::{DeviceTag, Project, Value};
+    let mut p = Project::new("t");
+    let (cab, _) = p
+        .transact("setup", |tx| {
+            let cab = tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            tx.set_property(cab, "surface_rules", Some(Value::Int(3)))?;
+            Ok(cab)
+        })
+        .unwrap();
+    let (rules, problems) = novo_layout::rules::model::surface_rules(&p, cab);
+    assert!(rules.rules.is_empty());
+    assert_eq!(problems.len(), 1);
+}
