@@ -15,6 +15,7 @@
 //! - `ui_tree`: every labelled widget with role, label, value, state and rect
 //!   (egui's AccessKit tree).
 //! - `move` `{x,y}`, `click` `{x,y,button?,count?,modifiers?}`,
+//!   `down`/`up` `{x?,y?,button?}` (hold a button while looking),
 //!   `drag` `{from:[x,y],to:[x,y],button?,steps?}`, `scroll` `{x,y,dx?,dy?}`.
 //! - `key` `{keys}`, for example `"Enter"` or `"ctrl+shift+k"`; `text` `{text}`.
 //! - `scene`: the open project as data: page symbols, selection, devices,
@@ -440,6 +441,20 @@ impl Control {
                         modifiers: mods,
                     }]));
                 }
+                steps.push_back(Step::Idle(SETTLE_FRAMES));
+            }
+            "down" | "up" => {
+                // Press or release and leave it, to hold a pushbutton while looking.
+                let p = at(self);
+                self.pointer = p;
+                steps.push_back(Step::Events(vec![Event::PointerMoved(p)]));
+                steps.push_back(Step::Idle(1));
+                steps.push_back(Step::Events(vec![Event::PointerButton {
+                    pos: p,
+                    button,
+                    pressed: cmd == "down",
+                    modifiers: mods,
+                }]));
                 steps.push_back(Step::Idle(SETTLE_FRAMES));
             }
             "drag" => {

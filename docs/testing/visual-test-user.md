@@ -27,8 +27,12 @@ server), `scripts/test-user-mcp.sh` (launcher, also what `.mcp.json` runs).
 
 `screenshot`, `ui_tree [filter]`, `click_text text [role] [count]`,
 `click x y [button] [count] [modifiers]`, `move`, `drag from to`,
-`scroll x y dy`, `key "ctrl+s"`, `text`, `wait`, `resize w h`, `info`,
-`restart [project]`, `quit`. Coordinates are window points. The schematic
+`mouse_down` / `mouse_up` (hold a button between steps), `scroll x y dy`,
+`key "ctrl+s"`, `text`, `wait`, `resize w h`, `info`, `scene` (text dump of
+the page, devices, wires, nets and cabinets), `answer_dialog path|paths` and
+`dialogs` (native file dialogs are answered by the harness, queue the answer
+first), `restart [project] [fresh]` (kills the app, `fresh=false` keeps the
+profile to test crash recovery), `quit`. Coordinates are window points. The schematic
 canvas and the 3D view are painted, not widgets, so they are not in `ui_tree`:
 use screenshots and coordinates there. Icon-only buttons have an empty label
 in the tree (a finding in itself); hover them and take a screenshot to see the

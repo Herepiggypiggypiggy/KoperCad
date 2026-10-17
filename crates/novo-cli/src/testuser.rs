@@ -173,8 +173,13 @@ impl Server {
                 self.send(req)?;
                 text(format!("clicked {line} at ({x:.0},{y:.0})"))
             }
-            "click" | "move" | "scroll" | "drag" | "key" | "text" | "wait" | "resize" => {
-                let cmd = name;
+            "click" | "mouse_down" | "mouse_up" | "move" | "scroll" | "drag" | "key" | "text"
+            | "wait" | "resize" => {
+                let cmd = match name {
+                    "mouse_down" => "down",
+                    "mouse_up" => "up",
+                    other => other,
+                };
                 let mut req = json!({"cmd": cmd});
                 copy(
                     &mut req,
