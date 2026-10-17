@@ -2314,12 +2314,17 @@ fn ago(t: SystemTime) -> String {
         .duration_since(t)
         .map(|d| d.as_secs())
         .unwrap_or(0);
+    ago_text(secs)
+}
+
+fn ago_text(secs: u64) -> String {
     match secs {
         0..60 => "less than a minute ago".to_owned(),
         60..120 => "1 minute ago".to_owned(),
         120..3600 => format!("{} minutes ago", secs / 60),
         3600..7200 => "1 hour ago".to_owned(),
         7200..86400 => format!("{} hours ago", secs / 3600),
+        86400..172800 => "1 day ago".to_owned(),
         _ => format!("{} days ago", secs / 86400),
     }
 }
@@ -2364,6 +2369,16 @@ fn file_stem(path: &Path) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn relative_times_use_the_singular_for_one() {
+        use super::ago_text;
+        assert_eq!(ago_text(90), "1 minute ago");
+        assert_eq!(ago_text(3700), "1 hour ago");
+        assert_eq!(ago_text(90_000), "1 day ago");
+        assert_eq!(ago_text(7_300), "2 hours ago");
+        assert_eq!(ago_text(200_000), "2 days ago");
+    }
+
     use super::*;
     use crate::backend::{MemoryBackend, OpenReport, StorageBackend, new_document};
     use crate::canvas::PlaceholderCanvas;
