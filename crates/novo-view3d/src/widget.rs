@@ -944,8 +944,7 @@ impl View3d {
                 Some((p, hit)) => {
                     let ray = self.camera.ray(Self::ndc(rect, p), aspect);
                     let plane = scene.get(hit.id).and_then(|i| i.drag_plane);
-                    let start =
-                        crate::drag_plane::drag_point(&ray, plane.as_ref(), &scene.frame);
+                    let start = crate::drag_plane::drag_point(&ray, plane.as_ref(), &scene.frame);
                     self.item_grab = start.map(|s| (hit.id, s, plane));
                 }
                 None => self.marquee_from = press,
