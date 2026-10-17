@@ -633,7 +633,7 @@ fn classify(err: rusqlite::Error, path: &Path) -> StorageError {
         StorageError::Locked(path.to_owned())
     } else if is_not_a_database(&err) {
         StorageError::NotAProject(path.to_owned())
-    } else if is_read_only(&err) {
+    } else if is_read_only(&err, path) {
         StorageError::ReadOnly(path.to_owned())
     } else {
         err.into()

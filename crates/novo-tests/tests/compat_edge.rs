@@ -222,3 +222,20 @@ fn a_file_missing_its_core_tables_is_refused_in_words_never_a_panic() {
         assert_eq!(std::fs::read(&path).unwrap(), before, "{missing}");
     }
 }
+
+#[test]
+fn save_as_into_a_missing_folder_does_not_claim_the_file_is_read_only() {
+    let (dir, _) = golden_copy();
+    let project = ProjectFile::read(GOLDEN).unwrap();
+    let target = dir
+        .path()
+        .join("no such folder")
+        .join("deeper")
+        .join("x.novo");
+    let err = ProjectFile::create(&target, &project)
+        .map(|_| ())
+        .unwrap_err();
+    assert!(!matches!(err, StorageError::ReadOnly(_)), "{err:?}");
+    assert!(!err.to_string().contains("read-only"), "{err}");
+    assert!(!target.exists());
+}

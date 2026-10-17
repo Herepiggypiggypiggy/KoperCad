@@ -69,10 +69,16 @@ pub(crate) fn is_not_a_database(err: &rusqlite::Error) -> bool {
     )
 }
 
-/// Whether a SQLite error means the file or its folder cannot be written.
-pub(crate) fn is_read_only(err: &rusqlite::Error) -> bool {
-    matches!(
-        err.sqlite_error_code(),
-        Some(rusqlite::ErrorCode::ReadOnly | rusqlite::ErrorCode::CannotOpen)
-    )
+/// Whether a SQLite error on `path` means the file or its folder cannot be
+/// written. "Cannot open" counts only when the file or its folder exists:
+/// a missing folder, a bad name or a vanished drive is a different problem
+/// and keeps its own error.
+pub(crate) fn is_read_only(err: &rusqlite::Error, path: &std::path::Path) -> bool {
+    match err.sqlite_error_code() {
+        Some(rusqlite::ErrorCode::ReadOnly) => true,
+        Some(rusqlite::ErrorCode::CannotOpen) => {
+            path.exists() || path.parent().is_some_and(|dir| dir.is_dir())
+        }
+        _ => false,
+    }
 }
