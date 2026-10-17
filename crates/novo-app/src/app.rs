@@ -164,6 +164,9 @@ mod view3d_rail;
 #[cfg(test)]
 mod view3d_rail_tests;
 mod view3d_stats;
+mod view3d_surface_devices;
+#[cfg(test)]
+mod view3d_surface_devices_tests;
 mod view3d_surfaces;
 #[cfg(test)]
 mod view3d_tests;

@@ -14,7 +14,7 @@ use crate::actions::Action;
 
 /// A project with the motor starter, two of its devices on a plate with a
 /// duct, and a door that opens to 100 degrees.
-fn drive_with_cabinet(dir: &std::path::Path) -> Drive {
+pub(super) fn drive_with_cabinet(dir: &std::path::Path) -> Drive {
     let mut d = Drive::new(&dir.join("untitled"));
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);

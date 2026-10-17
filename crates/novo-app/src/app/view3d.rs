@@ -407,7 +407,17 @@ impl NovoApp {
         if mode.surfaces_shown.as_ref() != Some(&panes_key) {
             mode.surface_panes = match super::cabinet_surfaces::summarize(project, id) {
                 Some(sum) if panes_on => {
-                    super::view3d_surfaces::overlays(&sum, picked.as_deref(), scene.frame)
+                    let mut all =
+                        super::view3d_surfaces::overlays(&sum, picked.as_deref(), scene.frame);
+                    if let Some(lay) = load(project, id) {
+                        all.extend(super::view3d_surface_devices::overlays(
+                            &sum,
+                            &lay,
+                            picked.as_deref(),
+                            scene.frame,
+                        ));
+                    }
+                    all
                 }
                 _ => Vec::new(),
             };
