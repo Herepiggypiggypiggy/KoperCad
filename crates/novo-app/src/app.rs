@@ -1591,8 +1591,12 @@ impl NovoApp {
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
                     .unwrap_or_default();
-                let label = if fit.search.is_empty() {
+                let label = if fit.search.is_empty() && fit.whats_new_pill {
                     shortcut.clone()
+                } else if fit.search.is_empty() {
+                    // Too narrow for the key name: the magnifier, the key in
+                    // the tooltip.
+                    novo_theme::icons::action::FIND.to_owned()
                 } else {
                     fit.search.to_owned()
                 };
@@ -3085,7 +3089,7 @@ mod fit_tests {
     #[test]
     fn a_tiny_screen_never_goes_below_the_minimum() {
         let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(500.0, 400.0));
-        assert_eq!(got, Some(egui::vec2(560.0, 320.0)));
+        assert_eq!(got, Some(egui::vec2(680.0, 320.0)));
     }
 
     #[test]

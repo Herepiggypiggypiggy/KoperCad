@@ -56,10 +56,11 @@ pub const LEGACY_DATA_DIR_NAME: &str = "NovoElectric";
 /// File extension of a KoperCAD project file, without the dot.
 pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
 
-/// Smallest window, in points. A 1366 x 768 laptop at 200% scaling offers
+/// Smallest window, in points; narrower and the top bar no longer fits. A
+/// 1366 x 768 laptop at 200% scaling offers
 /// 683 x 384 points, so the floor has to sit below that or the bottom of the
 /// window (status bar) is pushed off the screen.
-pub(crate) const MIN_WINDOW: [f32; 2] = [560.0, 320.0];
+pub(crate) const MIN_WINDOW: [f32; 2] = [680.0, 320.0];
 
 fn window_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(novo_theme::brand::ICON_PNG_256).unwrap_or_default()
