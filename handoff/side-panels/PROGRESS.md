@@ -13,6 +13,8 @@
 ## Parts polish (branch claude/parts-polish)
 - #798 was superseded by #841. Left from it: only one primary button in view (New part is plain, "Use for selected device" is the primary) and no 11 px buttons in the Parts guide strips.
 
+## Safety functions window (branch claude/panels-safety)
+- Segmented controls for S/F/P, category and part basis; 12 px hints; body-size buttons. Picture: design/side-panels/after-1366-safety-functions.png.
 ## Dialog sweep 2 (branch claude/panels-dialogs-2)
 - Place rules and DXF background use dialog_ui::hint and primary/ghost buttons. Pictures of Project rules and Project settings at 1366x768 in design/side-panels (after-1366-project-rules.png, after-1366-project-settings.png). Place rules and DXF background have no picture yet (need a cabinet / imported DXF).
 

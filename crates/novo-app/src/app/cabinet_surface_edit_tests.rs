@@ -159,3 +159,30 @@ fn a_device_on_the_door_cannot_be_dragged_in_3d_as_if_it_sat_on_the_plate() {
         "the door device is moved where the door is shown"
     );
 }
+#[test]
+fn rotate_on_a_shown_surface_does_not_reach_a_device_selected_on_another() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, k1, s1) = cabinet(&mut d);
+    // K1 sits on the plate and is selected there; the door is then shown.
+    d.app.cabinet.view.selection.apply(
+        [novo_canvas::cabinet::box_item(k1)],
+        novo_canvas::selection::SelectOp::Replace,
+    );
+    d.frame();
+    assert_eq!(d.app.cabinet_selected(), [k1]);
+    d.app.cabinet.pick_surface(Some("door".into()));
+    d.frame();
+    assert!(
+        d.app.cabinet_selected().is_empty(),
+        "the selection is cleared"
+    );
+    d.app
+        .cabinet_ask(Ask::Rotate(d.app.cabinet_selected()), Some(cab), None, &[]);
+    let (_, _, rotated, _) = placement(&d, cab, k1).unwrap();
+    assert!(
+        !rotated,
+        "the plate device was not turned from the door view"
+    );
+    let _ = s1;
+}

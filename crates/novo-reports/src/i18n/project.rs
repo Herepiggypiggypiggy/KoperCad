@@ -51,6 +51,30 @@ impl ProjectTable {
         }
     }
 
+    /// Adds a language file without overwriting what the project already has
+    /// for that code: the project's own entries win, the file fills in the
+    /// rest. Entries that fail [`check_entry`] are dropped and returned.
+    pub fn merge_language(&mut self, mut catalog: Catalog) -> Vec<CatalogProblem> {
+        let bad = catalog.problems();
+        for p in &bad {
+            catalog.entries.remove(&p.key);
+        }
+        match self.languages.get_mut(&catalog.code) {
+            Some(own) => {
+                if own.name.is_empty() {
+                    own.name = catalog.name;
+                }
+                for (key, text) in catalog.entries {
+                    own.entries.entry(key).or_insert(text);
+                }
+            }
+            None => {
+                self.languages.insert(catalog.code.clone(), catalog);
+            }
+        }
+        bad
+    }
+
     /// Adds or replaces a whole language (a translation file loaded by the
     /// user). Entries that fail [`check_entry`] are dropped and returned
     /// with their reasons, so a bad file never prints wrong values.
