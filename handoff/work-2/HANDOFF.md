@@ -7,3 +7,4 @@ Next: terminal renames as redlines; redline marks in the cabinet view.
 Rules kept: no push after READY; merge main when asked; new PR per slice.
 Redline marks: in Commissioning mode, schematic pages outline the wire or device of every open redline (modified colour; hover shows what it says). Roadmap for Field mode is complete; open ideas: terminal renames, marks in the cabinet view.
 Photo viewer: Commissioning > Punch list > thumbnails under an item (PNG/JPEG); touch one for the large window. Other formats keep their name only.
+Cabinet marks: Cabinet workspace outlines each placed device (or terminal strip) that has an open redline in amber; hover lists what they say.
