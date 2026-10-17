@@ -5,7 +5,7 @@ description = "3-pole main (power) contacts of a contactor, switched by the coil
 standard = "NFPA 79 / ANSI Y32.2"
 category = "contactors"
 function = "contact.main"
-keywords = ["contactor", "main contact", "power", "3p", "nfpa", "ansi"]
+keywords = ["contactor", "main contact", "power contactor", "main contacts", "power contacts", "power", "3p", "nfpa", "ansi"]
 aliases = ["km3", "main3"]
 favorite = true
 
