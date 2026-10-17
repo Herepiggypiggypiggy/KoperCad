@@ -168,6 +168,12 @@ pub(super) enum Ask {
     SetPanelValue(super::cabinet_panel::PanelEdit),
     /// Put a placed device on another surface of the cabinet (plate, door, ...).
     SetSurface(u64, String),
+    /// The size of a surface other than the plate (`None`: planning values).
+    SetSurfaceSize(
+        StructureId,
+        String,
+        Option<novo_layout::surfaces::SurfaceSize>,
+    ),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
 }
@@ -441,6 +447,9 @@ impl NovoApp {
 
     /// The Cabinet canvas, in place of the schematic canvas.
     pub(super) fn cabinet_show(&mut self, ui: &mut egui::Ui) {
+        // The open redlines are outlined on the plate, so their store has to
+        // be there even when Commissioning has not been visited.
+        self.load_commissioning();
         let Some(doc) = self.backend.document() else {
             return;
         };
@@ -710,8 +719,9 @@ impl NovoApp {
                             let on = row.name == current;
                             let line = ui.selectable_label(on, row.label());
                             if line.clicked() {
-                                self.cabinet.surface =
-                                    (row.name != MAIN_PLATE).then(|| row.name.clone());
+                                self.cabinet.pick_surface(
+                                    (row.name != MAIN_PLATE).then(|| row.name.clone()),
+                                );
                             }
                         }
                     });
@@ -1150,7 +1160,7 @@ impl NovoApp {
                         ui.add(egui::Label::new(note).wrap());
                         ui.add(
                             egui::Label::new(egui::RichText::new(
-                                "Drawing of this surface only; placing devices on it comes next.",
+                                "Drag, turn or take off its devices here. Put a device on this surface with Inspector > On surface.",
                             ))
                             .wrap(),
                         );
@@ -1268,7 +1278,23 @@ impl NovoApp {
                     .collect();
                 // The inspector: with a selection, or the plate card when it
                 // is switched on; otherwise the plate gets the whole window.
+                let on_surface = self
+                    .cabinet
+                    .surface
+                    .as_deref()
+                    .is_some_and(|n| n != MAIN_PLATE);
                 let inspector = match (&layout, structure) {
+                    // A surface other than the plate with nothing selected:
+                    // its size card.
+                    (Some(_), Some(s)) if selected.is_empty() && on_surface => self
+                        .cabinet
+                        .surface
+                        .as_deref()
+                        .and_then(|n| {
+                            let sum = surfaces.as_ref()?;
+                            super::cabinet_surface_size::card(project, s, sum, n)
+                        })
+                        .map(|card| (cabinet_inspector::Facts::Surface(card), false)),
                     (Some(stored), Some(s)) if !selected.is_empty() || self.cabinet.plate_card => {
                         let mut facts = cabinet_inspector::gather(
                             project, s, stored, &shown, &selected, &tag_of,
@@ -1380,6 +1406,25 @@ impl NovoApp {
                         &self.cabinet.view.viewport,
                         overlay,
                     );
+                }
+                if let Some(mode) = self.wb.commissioning.as_ref() {
+                    let marks = super::commissioning_cabinet::marks(&mode.store, project, &shown);
+                    if !marks.is_empty() {
+                        let rect = out.response.rect;
+                        let hovered = super::commissioning_cabinet::draw(
+                            &ui.painter_at(rect),
+                            rect,
+                            &self.cabinet.view.viewport,
+                            &marks,
+                            novo_theme::Palette::of(ui).warning,
+                            ui.ctx()
+                                .pointer_hover_pos()
+                                .filter(|_| out.response.hovered()),
+                        );
+                        if let Some(text) = hovered {
+                            out.response.clone().on_hover_text(text);
+                        }
+                    }
                 }
                 if let Some(s) = structure {
                     let rect = out.response.rect;
@@ -2209,6 +2254,11 @@ impl NovoApp {
                 };
                 self.cabinet_edit("Set surface", move |tx| {
                     super::cabinet_surface_move::set(tx, structure, device, &surface)
+                });
+            }
+            Ask::SetSurfaceSize(s, name, size) => {
+                self.cabinet_edit("Set surface size", move |tx| {
+                    super::cabinet_surface_size::set(tx, s, &name, size)
                 });
             }
             Ask::SetPlateSize(s, plate) => {

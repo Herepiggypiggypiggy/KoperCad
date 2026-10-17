@@ -1,6 +1,8 @@
 # 3D navigation and selection: handoff
 
-State 2026-10-17: all queued PRs merged except #880 (READY at 101a6308, CI green, waiting for Lead A). Do not push to it.
+State 2026-10-17: everything is merged (#748 to #814, #880, #881, #882, #885, #895, #897, #898) except #886 (legend test, test-only; READY, waiting for R7's re-confirm on 7595c114 and Lead B). Do not push to it unless a lead asks for a merge of main.
+
+Not verified: the Trackpad pans switch on real Windows hardware, and that the setting survives an app restart (code path read, not run). The 3D navigation list is empty: ask the coordinator what is next.
 
 Resume: `git fetch origin main && git checkout -B <new-branch> FETCH_HEAD`, then take the next item in ROADMAP.md. One PR per feature, no stacked PRs.
 

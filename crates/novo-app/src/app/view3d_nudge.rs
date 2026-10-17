@@ -41,6 +41,29 @@ impl Step {
     }
 }
 
+/// `v` moved one step in direction `d` (-1, 0 or 1): a grid step lands on the
+/// next grid line, not off by whatever the item had.
+pub(super) fn step_along(grid: f64, v: f64, d: i32, step: Step) -> f64 {
+    if d == 0 {
+        return v;
+    }
+    let d = f64::from(d);
+    match step {
+        Step::Fine => v + d * FINE_MM,
+        Step::Coarse => v + d * COARSE_MM,
+        Step::Grid if grid > 0.0 => {
+            let n = v / grid;
+            // A tolerance keeps an item that is on a line one step on.
+            (if d > 0.0 {
+                (n + 1e-9).floor() + 1.0
+            } else {
+                (n - 1e-9).ceil() - 1.0
+            }) * grid
+        }
+        Step::Grid => v + d * FINE_MM,
+    }
+}
+
 /// The selection moved one step in `dir` (x right, y down; -1, 0 or 1 each)
 /// as one group edit; `None` when nothing movable is selected.
 pub(super) fn nudge(
@@ -53,27 +76,7 @@ pub(super) fn nudge(
         return None;
     }
     let grid = layout.grid;
-    let along = |v: f64, d: i32| -> f64 {
-        if d == 0 {
-            return v;
-        }
-        let d = f64::from(d);
-        match step {
-            Step::Fine => v + d * FINE_MM,
-            Step::Coarse => v + d * COARSE_MM,
-            // Onto the next grid line, not off by whatever the item had.
-            Step::Grid if grid > 0.0 => {
-                let n = v / grid;
-                // A tolerance keeps an item that is on a line one step on.
-                (if d > 0.0 {
-                    (n + 1e-9).floor() + 1.0
-                } else {
-                    (n - 1e-9).ceil() - 1.0
-                }) * grid
-            }
-            Step::Grid => v + d * FINE_MM,
-        }
-    };
+    let along = |v: f64, d: i32| step_along(grid, v, d, step);
     let mut devices = Vec::new();
     let mut rails = Vec::new();
     for item in selection {

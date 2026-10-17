@@ -13,8 +13,15 @@
 ## Parts polish (branch claude/parts-polish)
 - #798 was superseded by #841. Left from it: only one primary button in view (New part is plain, "Use for selected device" is the primary) and no 11 px buttons in the Parts guide strips.
 
+## Safety functions window (branch claude/panels-safety)
+- Segmented controls for S/F/P, category and part basis; 12 px hints; body-size buttons. Picture: design/side-panels/after-1366-safety-functions.png.
 ## Dialog sweep 2 (branch claude/panels-dialogs-2)
 - Place rules and DXF background use dialog_ui::hint and primary/ghost buttons. Pictures of Project rules and Project settings at 1366x768 in design/side-panels (after-1366-project-rules.png, after-1366-project-settings.png). Place rules and DXF background have no picture yet (need a cabinet / imported DXF).
 
+## Confirm before overwrite (branch claude/panels-confirm)
+- "Standard rules" (Place rules) and "Reset" (DXF background) ask "Replace / Cancel" first when they would overwrite something different (`dialog_ui::confirm_button`). No ask when the text or placement is already the default.
 ## Report languages (branch claude/panels-languages)
 - Languages window (File > Report languages): 12 px hints, ENGLISH/TRANSLATION header row, primary Add (disabled until a new code is typed), one merged hint at the bottom. Picture of the English view at 1366x768.
+
+## Panel nits and pictures (branch claude/panels-nits)
+- Safety block editor: the B10d / MTTFd pair is a segmented control. Languages: a worded reason beside the disabled Add, and the translation table leaves room for the add rows so nothing is clipped at 1366x768. Pictures at 1366 and 1920 in design/side-panels: after-*-languages-nederlands, after-*-place-rules-confirm, after-*-dxf-background, after-*-dxf-background-confirm.

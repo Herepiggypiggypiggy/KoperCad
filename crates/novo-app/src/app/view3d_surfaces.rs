@@ -108,6 +108,7 @@ mod tests {
             origin,
             u,
             v,
+            normal: [0.0, 0.0, 1.0],
         }
     }
 
