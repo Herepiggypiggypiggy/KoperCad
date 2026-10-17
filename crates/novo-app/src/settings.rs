@@ -54,7 +54,13 @@ pub struct Settings {
     pub last_workspace: String,
     /// Each workspace's panels as the person left them, by `Workspace::id`.
     /// A workspace with no entry has its default layout.
+    ///
+    /// Keys are `"<slot>/<size class>"` (`layout_presets`): a layout is kept
+    /// per preset and per window size. A plain workspace id is the layout
+    /// written before sizes existed and is the fallback.
     pub workspaces: BTreeMap<String, WorkspaceLayout>,
+    /// The layout preset last on screen (`layout_presets::Slot::id`).
+    pub last_slot: String,
     /// How far the fast-keys walk-through is (docs/ONBOARDING-DESIGN.md §2).
     pub onboarding: Onboarding,
     /// The DWG converter program the person chose (`dwg2dxf` or the ODA File
@@ -196,6 +202,9 @@ pub struct WorkspaceLayout {
     pub outline_mode: String,
     /// `"terminals"`, `"cables"` or `"devices"`; `None` is closed.
     pub drawer: Option<String>,
+    /// Whether the inspector stays docked with nothing selected; `None`
+    /// leaves it as it is.
+    pub inspector_pinned: Option<bool>,
 }
 
 impl Settings {
@@ -317,6 +326,7 @@ mod tests {
                 outline_pinned: Some(true),
                 outline_mode: "issues".into(),
                 drawer: Some("cables".into()),
+                inspector_pinned: Some(true),
             },
         );
         let text = ron::to_string(&s).unwrap();

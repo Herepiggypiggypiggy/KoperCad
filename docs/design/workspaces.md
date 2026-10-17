@@ -247,6 +247,14 @@ WorkspaceLayout {
 Settings { last_workspace: Workspace, workspaces: map Workspace -> WorkspaceLayout }
 ```
 
+- **Presets and window sizes (built).** A layout is kept per named preset
+  (Draw, Review, Cabinet, 3D and heat, Reports, Commissioning) and per window
+  size class (compact under 1400 points, regular under 1700, wide), under
+  `"<preset>/<class>"` in `Settings.workspaces`. Points include display
+  scaling, so 1920 px at 150% is compact and at 125% regular. The inspector
+  pin is part of the layout. View > Layouts opens a preset; Reset this
+  workspace layout (`layout.reset`) and Reset all (`layout.reset_all`) go back
+  to the defaults in `layout_presets.rs`.
 - Switching restores the target's layout; leaving saves the current one.
 - The first time a workspace opens it gets its default from §3.
 - A new project opens in the workspace it was left in, with the same page and

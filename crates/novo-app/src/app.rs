@@ -84,6 +84,7 @@ mod interop;
 mod languages;
 #[cfg(test)]
 mod languages_tests;
+mod layout_presets;
 mod learn;
 mod learn_demo;
 mod learn_labels;
@@ -427,6 +428,12 @@ pub struct NovoApp {
     /// What the canvas area shows (docs/design/workspaces.md). The Cabinet
     /// is Ctrl+2.
     workspace: workspace::Workspace,
+    /// The named layout on screen and the one the schematic opens in
+    /// (Draw or Review), and the window size class the layouts are kept
+    /// for (`layout_presets`).
+    slot: layout_presets::Slot,
+    schematic_slot: layout_presets::Slot,
+    size_class: Option<layout_presets::SizeClass>,
     cabinet: cabinet::CabinetState,
     reports_view: reports_view::ReportsView,
     view3d: view3d::View3dMode,
@@ -515,6 +522,9 @@ impl NovoApp {
             autosave_failing: false,
             focus_mode: false,
             workspace: workspace::Workspace::Schematic,
+            slot: layout_presets::Slot::Draw,
+            schematic_slot: layout_presets::Slot::Draw,
+            size_class: None,
             cabinet: cabinet::CabinetState::new(),
             reports_view: Default::default(),
             view3d: Default::default(),
@@ -1157,6 +1167,7 @@ impl NovoApp {
                     || *id == "cabinet.surface"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
+                    || id.starts_with("layout.")
                     || *id == "view.3d_door"
                     || id.starts_with("view.3d_align")
                     || id.starts_with("view.3d_spread")
@@ -1175,6 +1186,7 @@ impl NovoApp {
         }
 
         self.window_width = ctx.content_rect().width();
+        self.follow_window_size(self.window_width);
         let pinned = self.outline_pinned() && !self.focus_mode;
         if pinned {
             self.outline_open = false;
@@ -2146,6 +2158,8 @@ impl eframe::App for NovoApp {
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        // The panels of the layout on screen are kept with the rest.
+        self.store_layout();
         eframe::set_value(storage, Settings::STORAGE_KEY, &self.settings);
     }
 

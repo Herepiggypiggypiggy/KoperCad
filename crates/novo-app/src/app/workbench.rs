@@ -512,6 +512,13 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "help.show_hints",
     "help.whats_new",
     "view.reset_panels",
+    "layout.draw",
+    "layout.cabinet",
+    "layout.3d",
+    "layout.review",
+    "layout.reports",
+    "layout.reset",
+    "layout.reset_all",
     "parts.browser",
     "parts.import_step",
     "parts.import_folder",
@@ -1268,6 +1275,10 @@ impl NovoApp {
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,
             "view.reset_panels" => super::panel::reset_layout(ctx),
+            "layout.draw" | "layout.cabinet" | "layout.3d" | "layout.review" | "layout.reports"
+            | "layout.reset" | "layout.reset_all" => {
+                self.run_layout_command(id);
+            }
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "parts.import_eplan" => self.import_eplan_parts(),
