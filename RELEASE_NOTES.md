@@ -91,7 +91,7 @@ KoperCAD tells you which is which. Please read the labels.
 
 ## Report a problem
 
-Send the version and build time from Help > About, what you did, what happened, and the project file if you can.
+Send the version from Help > About (and BUILD_INFO.txt from the portable zip), what you did, what happened, and the project file if you can.
 After a crash, add any `crash-*.txt` from `%LOCALAPPDATA%\KoperCAD\logs`. Details are in the tester README.
 
 ## Licences

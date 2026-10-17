@@ -109,7 +109,9 @@ NovoElectric folder under %LOCALAPPDATA%.
 
 A short report that we can act on is worth more than a long one. Please:
 
-1. Open Help > **About KoperCAD** and copy the version and build time it shows.
+1. Open Help > **About KoperCAD** and note the version it shows, and the file name of the
+   installer or zip you used (it carries the version). The portable zip also holds
+   BUILD_INFO.txt with the commit and build time; send that file too.
 2. Send that with:
    * what you did, step by step, starting from the start screen
    * what you expected, and what happened instead
