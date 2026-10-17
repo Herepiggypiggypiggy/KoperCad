@@ -161,6 +161,7 @@ mod view3d_stats;
 mod view3d_surfaces;
 #[cfg(test)]
 mod view3d_tests;
+mod view3d_tip;
 mod view3d_views;
 mod view3d_wires;
 mod whats_new;

@@ -614,6 +614,18 @@ impl NovoApp {
             );
         }
         mode.view.state.hover = out.hover;
+        if let Some(hover) = out.hover.filter(|h| h.kind == ItemKind::Device)
+            && !mode.mv.dragging()
+        {
+            let solution = self.cabinet.heat.solution();
+            let row = solution.as_ref().and_then(|sol| {
+                let row = sol.snapshot.devices.iter().find(|d| d.id == hover.raw)?;
+                Some((row, sol.ambient))
+            });
+            if let Some(tip) = super::view3d_tip::tip(project, DeviceId::from(hover.raw), row) {
+                super::view3d_tip::show(ui.ctx(), &tip);
+            }
+        }
         // Wire runs: a card for the wire under the pointer, and the list.
         let wire_facts = mode
             .wire_facts
