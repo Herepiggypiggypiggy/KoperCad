@@ -265,4 +265,7 @@ fn the_safety_report_is_written_and_says_not_met() {
         Some(path.as_path())
     );
     assert!(std::fs::metadata(&path).unwrap().len() > 500);
+    // The success toast says where the file went and offers the folder.
+    let toast = d.app.messages().last().unwrap();
+    assert_eq!(toast.file.as_deref(), Some(path.as_path()), "{toast:?}");
 }

@@ -2230,7 +2230,11 @@ fn ago(t: SystemTime) -> String {
 /// from the known-folder lookup, because company PCs often redirect it to
 /// OneDrive; it is always inside the user's profile.
 fn projects_dir() -> Option<PathBuf> {
-    dirs::document_dir().map(|docs| crate::migrate::projects_dir_in(&docs))
+    // A profile without a Documents folder (Linux without XDG dirs, a
+    // stripped account) still gets a place for exports: the home folder.
+    dirs::document_dir()
+        .or_else(dirs::home_dir)
+        .map(|docs| crate::migrate::projects_dir_in(&docs))
 }
 
 /// `<name>.novo`, with the characters Windows forbids in file names replaced.

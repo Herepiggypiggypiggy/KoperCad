@@ -98,7 +98,7 @@ impl NovoApp {
                 LinkFormat::Studio5000 => ". Not yet tried in Studio 5000",
                 _ => "",
             };
-            self.message(Level::Info, format!("Exported {what}{count}{tool}"));
+            self.message_file(format!("Exported {what}{count}{tool}"), last);
             self.wb.last_export = Some(last.clone());
         }
         if let Some(first) = out.warnings.first() {
