@@ -9,8 +9,12 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
-use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+#[cfg(target_os = "linux")]
+use std::path::Path;
+use std::path::PathBuf;
+#[cfg(target_os = "linux")]
+use std::process::Stdio;
+use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
 use clap::Args;
