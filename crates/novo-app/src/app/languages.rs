@@ -250,7 +250,8 @@ impl NovoApp {
         super::panel::dialog(ctx, "Languages", [620.0, 560.0])
             .open(&mut open)
             .show(ctx, |ui| {
-                ui.label(
+                super::dialog_ui::hint(
+                    ui,
                     "The language of reports, generated pages and PDFs. The menus and \
                      commands stay English.",
                 );
@@ -264,7 +265,10 @@ impl NovoApp {
                     }
                 });
                 if translator.is_english() {
-                    ui.weak("English prints the texts as the program writes them.");
+                    super::dialog_ui::hint(
+                        ui,
+                        "English prints the texts as the program writes them.",
+                    );
                 } else {
                     let missing = table_rows
                         .iter()
@@ -303,6 +307,17 @@ impl NovoApp {
                                 .num_columns(2)
                                 .striped(true)
                                 .show(ui, |ui| {
+                                    ui.label(
+                                        egui::RichText::new("ENGLISH")
+                                            .size(12.0)
+                                            .color(crate::theme::ui_palette().text_secondary),
+                                    );
+                                    ui.label(
+                                        egui::RichText::new("TRANSLATION")
+                                            .size(12.0)
+                                            .color(crate::theme::ui_palette().text_secondary),
+                                    );
+                                    ui.end_row();
                                     for r in &table_rows {
                                         if win.only_missing && r.source != Source::Missing {
                                             continue;
@@ -345,7 +360,8 @@ impl NovoApp {
                     let code_ok = !win.new_code.trim().is_empty()
                         && !list.iter().any(|l| l.code == win.new_code.trim());
                     if ui
-                        .add_enabled(code_ok, egui::Button::new("Add"))
+                        .add_enabled_ui(code_ok, |ui| widgets::primary_button(ui, "Add"))
+                        .inner
                         .on_disabled_hover_text("Type a code that is not in the list yet")
                         .clicked()
                     {
@@ -365,9 +381,10 @@ impl NovoApp {
                         load_file = true;
                     }
                 });
-                ui.weak("Texts with no translation print in English, so nothing is left blank.");
-                ui.weak(
-                    "CSV and Excel exports of a report use the same language for their headers.",
+                super::dialog_ui::hint(
+                    ui,
+                    "Texts with no translation print in English, so nothing is left blank. \
+                     CSV and Excel exports of a report use the same language for their headers.",
                 );
             });
         if let Some(code) = pick {
