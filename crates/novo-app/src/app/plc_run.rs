@@ -179,7 +179,7 @@ impl NovoApp {
     }
 
     fn plc_open_file(&mut self) {
-        let Some(path) = rfd::FileDialog::new()
+        let Some(path) = crate::dialogs::FileDialog::new()
             .add_filter("PLC program", &["st", "ld", "txt"])
             .pick_file()
         else {
@@ -198,7 +198,7 @@ impl NovoApp {
 
     fn plc_save_file(&mut self) {
         let plc = &self.wb.live.plc;
-        let mut dialog = rfd::FileDialog::new().add_filter("PLC program", &["st"]);
+        let mut dialog = crate::dialogs::FileDialog::new().add_filter("PLC program", &["st"]);
         if let Some(name) = plc.path.as_ref().and_then(|p| p.file_name()) {
             dialog = dialog.set_file_name(name.to_string_lossy());
         } else {

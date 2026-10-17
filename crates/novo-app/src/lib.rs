@@ -18,6 +18,8 @@ mod app;
 mod backend;
 mod canvas;
 mod command_field;
+mod control;
+mod dialogs;
 mod editor_canvas;
 mod gpu;
 mod keys;
@@ -70,11 +72,14 @@ fn window_icon() -> egui::IconData {
 /// A project file passed as the first argument (as Windows does when a
 /// `.novo` file is double-clicked) is opened on start.
 pub fn run() -> eframe::Result {
-    let startup_file = std::env::args_os().nth(1).map(|arg| {
-        let path = std::path::PathBuf::from(arg);
-        // absolute() rather than canonicalize(): no \\?\ prefix on Windows.
-        std::path::absolute(&path).unwrap_or(path)
-    });
+    let startup_file = std::env::args_os()
+        .skip(1)
+        .find(|a| !control::is_control_arg(a))
+        .map(|arg| {
+            let path = std::path::PathBuf::from(arg);
+            // absolute() rather than canonicalize(): no \\?\ prefix on Windows.
+            std::path::absolute(&path).unwrap_or(path)
+        });
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(APP_NAME)
@@ -92,6 +97,9 @@ pub fn run() -> eframe::Result {
         DATA_DIR_NAME,
         options,
         Box::new(move |cc| {
+            if let Some(port) = control::requested_port() {
+                control::install(&cc.egui_ctx, port);
+            }
             let canvas: Box<dyn CanvasView> = match cc.wgpu_render_state.as_ref() {
                 Some(rs) => {
                     EditorCanvas::install(rs);

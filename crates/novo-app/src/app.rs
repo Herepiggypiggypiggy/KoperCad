@@ -141,6 +141,7 @@ mod revisions;
 mod safety;
 mod safety_functions;
 mod safety_report;
+mod scene_dump;
 mod selection_sheet;
 #[cfg(test)]
 mod selection_sheet_tests;
@@ -817,7 +818,7 @@ impl NovoApp {
         match next {
             Leaving::New => self.new_project(),
             Leaving::Open => {
-                let mut dialog = rfd::FileDialog::new()
+                let mut dialog = crate::dialogs::FileDialog::new()
                     .set_title("Open project")
                     .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
                 if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
@@ -828,7 +829,7 @@ impl NovoApp {
                 }
             }
             Leaving::OpenReadOnly => {
-                let mut dialog = rfd::FileDialog::new()
+                let mut dialog = crate::dialogs::FileDialog::new()
                     .set_title("Open project read-only")
                     .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
                 if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
@@ -1051,7 +1052,7 @@ impl NovoApp {
 
     fn save_as(&mut self) -> bool {
         let name = self.project_name().unwrap_or_else(|| "Untitled".into());
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Save project")
             .add_filter("KoperCAD project", &[PROJECT_EXTENSION])
             .set_file_name(project_file_name(&name));
@@ -2197,6 +2198,9 @@ impl eframe::App for NovoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         fit_window_to_screen(ui.ctx());
         self.show(ui);
+        if crate::control::scene_wanted() {
+            crate::control::publish_scene(self.scene_json());
+        }
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {

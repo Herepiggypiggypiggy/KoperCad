@@ -101,7 +101,7 @@ impl NovoApp {
                     );
                     ui.horizontal(|ui| {
                         if ui.button("Choose...").clicked()
-                            && let Some(dir) = rfd::FileDialog::new()
+                            && let Some(dir) = crate::dialogs::FileDialog::new()
                                 .set_title("Company macro folder")
                                 .pick_folder()
                         {

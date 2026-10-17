@@ -84,7 +84,7 @@ fn inspect(path: &Path) -> (Option<(bool, String)>, Option<String>) {
 impl NovoApp {
     /// Asks for a PXF file and previews it.
     pub(super) fn import_eplan(&mut self) {
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Import EPLAN project (PXF)")
             .add_filter("EPLAN project or page macro", &["epj", "emp", "xml"]);
         if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
