@@ -105,11 +105,13 @@ pub(crate) fn coil_on_power_feed(cx: &Context<'_>, out: &mut Vec<Problem>) {
             CoilEnd::Other
         }
     };
-    let mut seen: BTreeSet<DeviceId> = BTreeSet::new();
+    // One warning per device and kind (coil or contact).
+    let mut seen: BTreeSet<(DeviceId, bool)> = BTreeSet::new();
     for coil in project
         .symbols()
-        .filter(|s| s.symbol.0.ends_with("coils/contactor"))
+        .filter(|s| s.symbol.0.ends_with("coils/contactor") || s.symbol.0.contains("/contacts/"))
     {
+        let is_contact = coil.symbol.0.contains("/contacts/");
         let ends: Vec<CoilEnd> = (0..coil.pins.len())
             .filter_map(|pin| u16::try_from(pin).ok())
             .map(|pin| {
@@ -137,20 +139,24 @@ pub(crate) fn coil_on_power_feed(cx: &Context<'_>, out: &mut Vec<Problem>) {
         let feeds = ends.contains(&CoilEnd::Load)
             || (ends.contains(&CoilEnd::Pole) && ends.contains(&CoilEnd::Unwired));
         let device = coil.device();
-        if feeds && device.is_none_or(|d| seen.insert(d)) {
+        if feeds && device.is_none_or(|d| seen.insert((d, is_contact))) {
             let tag = device
                 .and_then(|d| project.device(d))
                 .map_or_else(|| "A coil".to_owned(), |d| d.tag.to_string());
-            let mut at: Vec<AnyId> = vec![coil.id.into()];
-            at.extend(device.map(AnyId::from));
-            out.push(Problem::new(
-                ProblemKind::CoilOnPowerFeed,
-                at,
+            let message = if is_contact {
+                format!(
+                    "{tag} is a one-pole contact in a three-phase feed, so L2 and L3 run past it; \
+                     place the 3-pole device here (power contacts, or the 3-pole overload relay) and keep contacts for the control circuit"
+                )
+            } else {
                 format!(
                     "{tag} is a coil with one pole in a three-phase feed, so L2 and L3 run past it; \
                      use the 3-pole power contacts here (search `contactor`) and put the coil in the control circuit"
-                ),
-            ));
+                )
+            };
+            let mut at: Vec<AnyId> = vec![coil.id.into()];
+            at.extend(device.map(AnyId::from));
+            out.push(Problem::new(ProblemKind::CoilOnPowerFeed, at, message));
         }
     }
 }

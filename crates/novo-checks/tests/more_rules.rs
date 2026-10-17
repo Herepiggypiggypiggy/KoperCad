@@ -267,3 +267,36 @@ fn a_400_volt_coil_between_two_breaker_poles_is_quiet() {
     });
     assert!(count(&project, ProblemKind::CoilOnPowerFeed).is_empty());
 }
+
+/// The release probe: the thermal overload contact auto-wired onto one pole
+/// of a three-pole feed is flagged with the way out; on a control circuit
+/// (wired to a lamp) it is not.
+#[test]
+fn a_one_pole_contact_in_a_three_phase_feed_is_flagged() {
+    let wire_contact_to = |motor_key: &str, pins: &[&str]| {
+        build(|tx| {
+            let page = tx.add_page("1")?;
+            let f = tx.add_device(tag("-F2"), "")?;
+            let m = tx.add_device(tag("-M1"), "")?;
+            let contact = symbol(
+                tx,
+                page,
+                "iec/contacts/thermal_nc",
+                0.0,
+                &["95", "96"],
+                f,
+                false,
+            )?;
+            let load = symbol(tx, page, motor_key, 100.0, pins, m, true)?;
+            tx.connect(Endpoint::pin(contact, 1), Endpoint::pin(load, 0))?;
+            Ok(())
+        })
+        .0
+    };
+    let feed = wire_contact_to("iec/motors/motor_3ph", &["U1", "V1", "W1"]);
+    let found = count(&feed, ProblemKind::CoilOnPowerFeed);
+    assert_eq!(found.len(), 1, "{found:#?}");
+    assert!(found[0].message.contains("one-pole contact"));
+    let control = wire_contact_to("iec/signals/lamp", &["X1", "X2"]);
+    assert!(count(&control, ProblemKind::CoilOnPowerFeed).is_empty());
+}
