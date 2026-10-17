@@ -122,7 +122,7 @@ impl NovoApp {
     /// One menu as a button (in the bar) or a submenu (in the mark's menu).
     /// A menu with no commands is left out.
     fn menu(&mut self, ui: &mut egui::Ui, menu: &'static str, focus: bool) -> Option<egui::Rect> {
-        let items = menus::layout(menu);
+        let items = menus::drawn(menu);
         if items.is_empty() {
             return None;
         }

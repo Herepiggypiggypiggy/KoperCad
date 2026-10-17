@@ -38,6 +38,53 @@ pub struct Signature {
     pub strokes: Vec<Vec<[u16; 2]>>,
 }
 
+/// A photo taken for a punch item. The picture itself is a file beside the
+/// project (`<project> field photos/<name>`); the store keeps only its name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Photo {
+    /// File name, content-addressed (see [`photo_name`](crate::photo_name)),
+    /// so the same picture from two devices is one file.
+    pub name: String,
+    /// When it was attached, ISO 8601 text.
+    pub at: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+}
+
+impl Signature {
+    /// The most points kept over all strokes; a hand signature needs far fewer.
+    pub const MAX_POINTS: usize = 3000;
+    /// Pad units are 0..=PAD.
+    pub const PAD: u16 = 1000;
+
+    /// A signature from pen strokes as they were drawn: points are clamped to
+    /// the pad, strokes of one point are dropped (a tap is not a stroke) and
+    /// the total is capped, so a hand-edited file cannot bloat the project.
+    pub fn from_strokes(name: &str, at: &str, strokes: Vec<Vec<[u16; 2]>>) -> Self {
+        let mut left = Self::MAX_POINTS;
+        let mut kept = Vec::new();
+        for stroke in strokes {
+            if stroke.len() < 2 || left < 2 {
+                continue;
+            }
+            let take = stroke.len().min(left);
+            left -= take;
+            kept.push(
+                stroke
+                    .into_iter()
+                    .take(take)
+                    .map(|[x, y]| [x.min(Self::PAD), y.min(Self::PAD)])
+                    .collect(),
+            );
+        }
+        Signature {
+            name: name.trim().to_owned(),
+            at: at.to_owned(),
+            strokes: kept,
+        }
+    }
+}
+
 /// An open issue found while commissioning, drawn or not.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PunchItem {
@@ -59,6 +106,9 @@ pub struct PunchItem {
     pub closed_by: Option<String>,
     #[serde(default)]
     pub closed_at: Option<String>,
+    /// Pictures of the issue, oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub photos: Vec<Photo>,
     /// Who accepted the fix at the machine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<Signature>,

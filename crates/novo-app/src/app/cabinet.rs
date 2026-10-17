@@ -41,6 +41,9 @@ pub(super) struct CabinetState {
     pub(super) location: Option<DeviceTag>,
     /// A `Place all` plan waiting for Enter.
     pub(super) preview: Option<Plan>,
+    /// The part of that plan for other surfaces (the door, a side wall):
+    /// devices the surface rules send there, stored together with it.
+    pub(super) surface_preview: Vec<(String, Plan)>,
     /// The panel the drawing was last fitted to.
     fitted: Option<DeviceTag>,
     /// A placed device being dragged, with where it would land.
@@ -109,6 +112,7 @@ impl CabinetState {
             scene: CabinetScene::new(theme::cabinet_style()),
             location: None,
             preview: None,
+            surface_preview: Vec::new(),
             fitted: None,
             drag: None,
             ghost: None,
@@ -459,6 +463,7 @@ impl NovoApp {
         {
             self.cabinet.location = locations.first().cloned();
             self.cabinet.preview = None;
+            self.cabinet.surface_preview.clear();
         }
         let location = self.cabinet.location.clone();
         let structure: Option<StructureId> = location.as_ref().and_then(|l| {
@@ -484,7 +489,7 @@ impl NovoApp {
             ));
         }
         // A picked surface other than the plate is drawn from its own
-        // layout; the stored plate layout is untouched (view only).
+        // layout; the stored plate layout is untouched.
         let on_surface: Option<String> = self
             .cabinet
             .surface
@@ -543,14 +548,33 @@ impl NovoApp {
         };
 
         // What is drawn: the stored layout, or the layout with the plan applied.
-        let shown = layout.as_ref().map(|l| match &self.cabinet.preview {
-            Some(plan) => {
-                let mut preview = l.clone();
-                preview.accept(plan, &cands);
-                preview
-            }
-            None => l.clone(),
-        });
+        // On the door or a wall the preview is that surface's part of the
+        // plan, not the plate plan.
+        let all_cands = structure
+            .map(|s| candidates(project, s))
+            .unwrap_or_default();
+        let shown = layout
+            .as_ref()
+            .map(|l| match (&self.cabinet.preview, &on_surface) {
+                (Some(plan), None) => {
+                    let mut preview = l.clone();
+                    preview.accept(plan, &cands);
+                    preview
+                }
+                (Some(_), Some(name)) => {
+                    let mut preview = l.clone();
+                    if let Some((_, plan)) = self
+                        .cabinet
+                        .surface_preview
+                        .iter()
+                        .find(|(surface, _)| surface == name)
+                    {
+                        preview.accept(plan, &all_cands);
+                    }
+                    preview
+                }
+                _ => l.clone(),
+            });
         let shown = shown.map(|mut s| {
             if let (Some(d), None) = (self.cabinet.drag, &self.cabinet.preview) {
                 s.move_to(d.id, d.at.0, d.at.1);
@@ -686,8 +710,9 @@ impl NovoApp {
                             let on = row.name == current;
                             let line = ui.selectable_label(on, row.label());
                             if line.clicked() {
-                                self.cabinet.surface =
-                                    (row.name != MAIN_PLATE).then(|| row.name.clone());
+                                self.cabinet.pick_surface(
+                                    (row.name != MAIN_PLATE).then(|| row.name.clone()),
+                                );
                             }
                         }
                     });
@@ -1126,7 +1151,7 @@ impl NovoApp {
                         ui.add(egui::Label::new(note).wrap());
                         ui.add(
                             egui::Label::new(egui::RichText::new(
-                                "Drawing of this surface only; placing devices on it comes next.",
+                                "Drag, turn or take off its devices here. Put a device on this surface with Inspector > On surface.",
                             ))
                             .wrap(),
                         );
@@ -1827,11 +1852,13 @@ impl NovoApp {
         structure: Option<StructureId>,
         layout: &CabinetLayout,
     ) -> usize {
+        self.cabinet.surface_preview.clear();
         let (Some(s), Some(project)) = (structure, self.backend.document().map(|d| d.project()))
         else {
             return 0;
         };
         let split = cabinet_rules::surface_split(project, s, layout);
+        let plans = cabinet_rules::surface_plans(project, s, layout, &split);
         let tag = |id: u64| {
             project
                 .get::<novo_core::Device>(novo_core::DeviceId::from(id))
@@ -1845,18 +1872,43 @@ impl NovoApp {
             .collect();
         for (surface, specs) in &split.others {
             let tags: Vec<String> = specs.iter().map(|sp| tag(sp.id)).collect();
-            notes.push((
-                Level::Info,
-                format!(
-                    "By the surface rules {} belong on the {surface} [{}] and are not placed on the plate",
-                    tags.join(", "),
-                    novo_layout::surface_rules::RULE_SURFACE
+            let rule = novo_layout::surface_rules::RULE_SURFACE;
+            let plan = plans
+                .iter()
+                .find(|(name, _)| name == surface)
+                .map(|(_, p)| p);
+            notes.push(match plan {
+                Some(plan) => {
+                    let left: Vec<String> = plan.unplaced.iter().map(|&id| tag(id)).collect();
+                    let fits = format!(
+                        "By the surface rules {} go on the {surface} [{rule}]; Enter places them there with the plate plan; pick the {surface} in the Surface picker to see them",
+                        tags.join(", ")
+                    );
+                    if left.is_empty() {
+                        (Level::Info, fits)
+                    } else {
+                        (
+                            Level::Warning,
+                            format!("{fits}. {} do not fit on the {surface}", left.join(", ")),
+                        )
+                    }
+                }
+                None => (
+                    Level::Info,
+                    format!(
+                        "By the surface rules {} belong on the {surface} [{rule}] and are not placed on the plate",
+                        tags.join(", ")
+                    ),
                 ),
-            ));
+            });
         }
         for (level, text) in notes {
             self.message(level, text);
         }
+        self.cabinet.surface_preview = plans
+            .into_iter()
+            .filter(|(_, p)| !p.placements.is_empty())
+            .collect();
         sent
     }
 
@@ -1932,29 +1984,29 @@ impl NovoApp {
         layout: Option<CabinetLayout>,
         cands: &[novo_layout::plan::Candidate],
     ) {
-        // A surface other than the plate is drawn from its own layout and
-        // cannot be edited yet: an edit would land on the plate.
+        // A surface other than the plate is drawn from its own layout. Moving,
+        // turning and taking off its devices work as on the plate (they act
+        // on the device's own placement); the plan, the rails and the
+        // enclosure belong to the plate. Accepting a Place all preview stores
+        // a plan made on the plate, so it goes through from the door view too.
         if self
             .cabinet
             .surface
             .as_deref()
             .is_some_and(|n| n != MAIN_PLATE)
-            && matches!(
-                ask,
-                Ask::PlaceAll
-                    | Ask::Accept
-                    | Ask::Drop(..)
-                    | Ask::Rotate(_)
-                    | Ask::Remove(_)
-                    | Ask::SetRailLengths(_)
-                    | Ask::SetPlate(_)
-                    | Ask::SetPlateSize(..)
-                    | Ask::SetEnclosure(_)
-            )
+            && (matches!(ask, Ask::Accept) && self.cabinet.preview.is_none()
+                || matches!(
+                    ask,
+                    Ask::PlaceAll
+                        | Ask::SetRailLengths(_)
+                        | Ask::SetPlate(_)
+                        | Ask::SetPlateSize(..)
+                        | Ask::SetEnclosure(_)
+                ))
         {
             self.message(
                 Level::Info,
-                "This surface is view only for now. Pick the plate to change the cabinet.",
+                "Place all, rails, plate size and the enclosure can only be changed on the plate. Pick the plate first.",
             );
             return;
         }
@@ -1970,9 +2022,13 @@ impl NovoApp {
             Ask::Panel(l) => {
                 self.cabinet.location = Some(l);
                 self.cabinet.preview = None;
+                self.cabinet.surface_preview.clear();
                 self.cabinet.rules.explain = None;
             }
-            Ask::Cancel => self.cabinet.preview = None,
+            Ask::Cancel => {
+                self.cabinet.preview = None;
+                self.cabinet.surface_preview.clear();
+            }
             Ask::ToggleTable => self.cabinet.table ^= true,
             Ask::TogglePlateCard => self.cabinet.plate_card ^= true,
             Ask::ExportPlate => {
@@ -2020,7 +2076,13 @@ impl NovoApp {
                     };
                     let sent_elsewhere = self.surface_rule_messages(structure, &layout);
                     let left_out = self.left_out_text(structure, &plan);
-                    if plan.placements.is_empty() {
+                    if plan.placements.is_empty() && !self.cabinet.surface_preview.is_empty() {
+                        // Only the other surfaces have something to place.
+                        if let Some(text) = left_out {
+                            self.message(Level::Warning, text);
+                        }
+                        self.cabinet.preview = Some(plan);
+                    } else if plan.placements.is_empty() {
                         match left_out {
                             Some(text) => self.message(Level::Warning, text),
                             None if !cands.is_empty()
@@ -2060,7 +2122,17 @@ impl NovoApp {
                 let (Some(plan), Some(structure)) = (self.cabinet.preview.take(), structure) else {
                     return;
                 };
-                if self.cabinet_edit("Place all", move |tx| apply_plan(tx, structure, &plan)) {
+                let others = std::mem::take(&mut self.cabinet.surface_preview);
+                if self.cabinet_edit("Place all", move |tx| {
+                    apply_plan(tx, structure, &plan)?;
+                    for (surface, plan) in &others {
+                        apply_plan(tx, structure, plan)?;
+                        for p in &plan.placements {
+                            super::cabinet_surface_move::set(tx, structure, p.id, surface)?;
+                        }
+                    }
+                    Ok(())
+                }) {
                     self.learn_signal("cabinet_plan_accepted");
                 }
             }
