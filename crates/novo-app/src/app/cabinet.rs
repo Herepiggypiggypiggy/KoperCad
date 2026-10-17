@@ -489,7 +489,7 @@ impl NovoApp {
             ));
         }
         // A picked surface other than the plate is drawn from its own
-        // layout; the stored plate layout is untouched (view only).
+        // layout; the stored plate layout is untouched.
         let on_surface: Option<String> = self
             .cabinet
             .surface
@@ -1983,10 +1983,11 @@ impl NovoApp {
         layout: Option<CabinetLayout>,
         cands: &[novo_layout::plan::Candidate],
     ) {
-        // A surface other than the plate is drawn from its own layout and
-        // cannot be edited yet: an edit would land on the plate. Accepting a
-        // Place all preview stores a plan made on the plate, so it goes
-        // through from the door view too.
+        // A surface other than the plate is drawn from its own layout. Moving,
+        // turning and taking off its devices work as on the plate (they act
+        // on the device's own placement); the plan, the rails and the
+        // enclosure belong to the plate. Accepting a Place all preview stores
+        // a plan made on the plate, so it goes through from the door view too.
         if self
             .cabinet
             .surface
@@ -1996,9 +1997,6 @@ impl NovoApp {
                 || matches!(
                     ask,
                     Ask::PlaceAll
-                        | Ask::Drop(..)
-                        | Ask::Rotate(_)
-                        | Ask::Remove(_)
                         | Ask::SetRailLengths(_)
                         | Ask::SetPlate(_)
                         | Ask::SetPlateSize(..)
@@ -2007,7 +2005,7 @@ impl NovoApp {
         {
             self.message(
                 Level::Info,
-                "This surface is view only for now. Pick the plate to change the cabinet.",
+                "Place all, rails, plate size and the enclosure can only be changed on the plate. Pick the plate first.",
             );
             return;
         }
