@@ -6,3 +6,4 @@
 2026-10-16 UTC #823 merged. Slice 3: surfaces as faint panes in the 3D view (View3D toolbar > Layers > Surfaces; the Cabinet-picked surface is highlighted), branch claude/panel-b3-3d-surfaces.
 2026-10-16 UTC #874 R5: added app test that the panes land on the real shell (door pane = door ghost). Finding: the scene's enclosure box starts at the plate while the walls reach plate_setback behind it. No GPU adapter in cloud: screenshot of picked door and roof needs a desktop run.
 2026-10-16 23:50 UTC slice 4: Inspector 'On surface' row (Ask::SetSurface, cabinet_surface_move.rs); plate view hides devices mounted elsewhere; 5 tests in cabinet_surface_move_tests.rs. Needs a desktop look.
+2026-10-17 UTC slice 6: devices on the door are drawn in the 3D scene on the door's inside (hinge group), swing hits mark the door device and the plate device it touches as collisions; off-plate devices no longer drawn on the plate (novo-view3d build/door_devices.rs).
