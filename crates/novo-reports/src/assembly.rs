@@ -495,7 +495,7 @@ fn cabinet(project: &Project, enclosure: &Structure, wires: &ReportOutput) -> Ve
             }
             n += 1;
             let basis = at(row, "length_basis").to_string();
-            if basis == "estimate" {
+            if crate::bench::is_estimate(&basis) {
                 estimated += 1;
             }
             wire.push(

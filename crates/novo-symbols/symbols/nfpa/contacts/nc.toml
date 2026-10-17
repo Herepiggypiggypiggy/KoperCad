@@ -5,7 +5,7 @@ description = "Normally closed contact, used for auxiliary contacts of relays an
 standard = "NFPA 79 / ANSI Y32.2"
 category = "contacts"
 function = "contact.nc"
-keywords = ["nc", "break", "normally closed", "auxiliary", "nfpa", "ansi"]
+keywords = ["nc", "break", "normally closed", "auxiliary", "nfpa", "ansi", "contactor auxiliary", "aux contact"]
 aliases = ["nc"]
 favorite = true
 

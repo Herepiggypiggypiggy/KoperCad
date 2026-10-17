@@ -20,6 +20,7 @@ mod canvas;
 mod command_field;
 pub mod diag;
 mod editor_canvas;
+mod gpu;
 mod keys;
 mod migrate;
 mod model_canvas;
@@ -56,6 +57,11 @@ pub const LEGACY_DATA_DIR_NAME: &str = "NovoElectric";
 /// File extension of a KoperCAD project file, without the dot.
 pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
 
+/// Smallest window, in points. A 1366 x 768 laptop at 200% scaling offers
+/// 683 x 384 points, so the floor has to sit below that or the bottom of the
+/// window (status bar) is pushed off the screen.
+pub(crate) const MIN_WINDOW: [f32; 2] = [560.0, 320.0];
+
 fn window_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(novo_theme::brand::ICON_PNG_256).unwrap_or_default()
 }
@@ -75,9 +81,10 @@ pub fn run() -> eframe::Result {
             .with_title(APP_NAME)
             .with_app_id("kopercad")
             .with_inner_size([1280.0, 800.0])
-            .with_min_inner_size([640.0, 400.0])
+            .with_min_inner_size(MIN_WINDOW)
             .with_icon(window_icon()),
         renderer: eframe::Renderer::Wgpu,
+        wgpu_options: gpu::configuration(),
         ..Default::default()
     };
     // The first argument names eframe's settings folder; move the old one first.

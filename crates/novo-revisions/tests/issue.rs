@@ -1,5 +1,7 @@
 use novo_core::*;
-use novo_revisions::{IndexRule, IssueError, issue_revision, issue_revision_as};
+use novo_revisions::{
+    IndexRule, IssueError, issue_revision, issue_revision_as, issue_revision_noted,
+};
 use novo_storage::Session;
 
 fn open(dir: &std::path::Path) -> (Document, Session) {
@@ -86,4 +88,36 @@ fn a_typed_index_and_a_taken_index() {
     .unwrap_err();
     assert!(matches!(err, IssueError::Model(_)), "{err}");
     assert_eq!(doc.project().revisions().count(), 1);
+}
+
+#[test]
+fn a_note_is_kept_with_the_revision_and_blank_keeps_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut doc, mut session) = open(dir.path());
+    let a = issue_revision_noted(
+        &mut doc,
+        &mut session,
+        "A".into(),
+        "2026-10-15",
+        "TV",
+        "First",
+        "Customer asked for a second motor",
+    )
+    .unwrap();
+    let b = issue_revision_noted(
+        &mut doc,
+        &mut session,
+        "B".into(),
+        "2026-10-16",
+        "TV",
+        "Second",
+        "  ",
+    )
+    .unwrap();
+    let p = doc.project();
+    assert_eq!(
+        p.issued_revision(a.revision).unwrap().note(),
+        "Customer asked for a second motor"
+    );
+    assert_eq!(p.issued_revision(b.revision).unwrap().note(), "");
 }

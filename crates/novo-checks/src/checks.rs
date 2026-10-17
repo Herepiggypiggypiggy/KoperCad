@@ -624,14 +624,14 @@ pub(crate) fn undersized_wires(cx: &Context<'_>, netlist: &Netlist, out: &mut Ve
         // than leave the reader to guess from the marks.
         let message = if count == 1 {
             format!(
-                "{} is {rated}, but a {} mm² wire on it carries about {} A",
+                "{} is {rated}, but a {} mm² wire on it carries about {} A (planning value)",
                 d.tag,
                 number(thinnest),
                 number(carries)
             )
         } else {
             format!(
-                "{} is {rated}, but {count} wires on it are too thin; the thinnest, {} mm², carries about {} A",
+                "{} is {rated}, but {count} wires on it are too thin; the thinnest, {} mm², carries about {} A (planning value)",
                 d.tag,
                 number(thinnest),
                 number(carries)

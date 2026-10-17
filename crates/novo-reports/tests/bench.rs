@@ -30,10 +30,11 @@ fn cabinet() -> Document {
     .expect("layout");
     let wires: Vec<_> = doc.project().wires().map(|w| w.id).collect();
     doc.transact("Sizes", |tx| {
-        for id in wires {
+        for (i, id) in wires.into_iter().enumerate() {
             tx.update::<Wire>(id, |w| {
                 w.cross_section_mm2 = Some(1.5);
                 w.color = Some("BK".into());
+                w.number = Some((i + 1).to_string());
             })?;
         }
         Ok(())
@@ -469,4 +470,37 @@ fn the_cut_list_says_when_sizes_and_colours_are_not_set() {
         .unwrap_or_default();
     assert!(notes.iter().all(|n| !n.contains("no cross-section")));
     assert!(notes.iter().all(|n| !n.contains("no insulation colour")));
+}
+
+#[test]
+fn the_cut_list_says_when_wires_have_no_number() {
+    let mut doc = cabinet();
+    let wires: Vec<_> = doc.project().wires().map(|w| w.id).collect();
+    let set = |doc: &mut Document, number: Option<&str>| {
+        let wires = wires.clone();
+        doc.transact("Numbers", |tx| {
+            for (i, id) in wires.into_iter().enumerate() {
+                tx.update::<Wire>(id, |w| w.number = number.map(|n| format!("{n}{i}")))?;
+            }
+            Ok(())
+        })
+        .expect("numbers");
+    };
+    let notes = |doc: &Document| -> Vec<String> {
+        BenchCut
+            .generate(doc.project())
+            .section("check")
+            .map(|s| s.rows.iter().map(|r| text(&r.cells[0])).collect())
+            .unwrap_or_default()
+    };
+    set(&mut doc, None);
+    assert!(
+        notes(&doc)
+            .iter()
+            .any(|n| n.contains("have no wire number")),
+        "{:?}",
+        notes(&doc)
+    );
+    set(&mut doc, Some("W"));
+    assert!(notes(&doc).iter().all(|n| !n.contains("no wire number")));
 }

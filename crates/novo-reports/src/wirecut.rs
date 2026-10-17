@@ -91,8 +91,8 @@ pub struct WireCutJob {
     /// What the machine cuts: the routed length plus the termination
     /// allowance at both ends, the same rule as the cut list.
     pub cut_mm: f64,
-    /// How the length was found: `routed`, `routed, no depth`, `free air`
-    /// or `estimate`.
+    /// How the length was found: `routed`, `routed, no depth`, `free air`,
+    /// `door, no gap` or `estimate`.
     pub basis: String,
     pub end_a: WireEnd,
     pub end_b: WireEnd,
@@ -258,7 +258,7 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
 
 /// The cross-sections of a connection's wires: the wire's own, else its
 /// cable core's, smallest first.
-fn sections(project: &Project, wires: &[&novo_core::Wire]) -> Vec<f64> {
+pub(crate) fn sections(project: &Project, wires: &[&novo_core::Wire]) -> Vec<f64> {
     let mut out: Vec<f64> = Vec::new();
     for wire in wires {
         let core = project.core_of_wire(wire.id).and_then(|(cable, core)| {

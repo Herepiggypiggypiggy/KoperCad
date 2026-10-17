@@ -458,9 +458,8 @@ fn show_run(ui: &mut egui::Ui, run: &Run) {
     for n in &run.notes {
         ui.weak(&n.text);
     }
-    ui.weak(
-        "A model: the first-cycle inrush peak and the spike when a star-delta starter re-closes are not shown.",
-    );
+    super::model_labels::badge(ui, super::model_labels::Model::MotorStart);
+    super::model_labels::note(ui, super::model_labels::Model::MotorStart);
 }
 
 /// Speed (green) and line current (accent) against time.

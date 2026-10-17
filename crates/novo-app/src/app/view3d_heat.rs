@@ -191,6 +191,10 @@ fn about(ui: &mut egui::Ui, state: &HeatState) {
             for l in &acc.limits {
                 ui.label(egui::RichText::new(format!("• {l}")).small());
             }
+            // The run's own notes: heat balance, a fan case, a preview.
+            for n in &sol.snapshot.notes {
+                ui.label(egui::RichText::new(format!("• {n}")).small());
+            }
             if !sol.messages.is_empty() {
                 ui.add_space(4.0);
                 ui.label("Missing or assumed:");
