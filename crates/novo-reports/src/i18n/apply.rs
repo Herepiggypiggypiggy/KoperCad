@@ -30,8 +30,13 @@ pub const FIXED_SECTION_TITLES: &[&str] = &[
 
 /// Section titles that are fixed text with project numbers filled in, as
 /// `{name}` patterns. Translated through the same pattern entries.
-pub const FIXED_SECTION_TITLE_PATTERNS: &[&str] =
-    &["What to pull · {estimated} of {total} lengths are estimates (~): measure on the plate"];
+pub const FIXED_SECTION_TITLE_PATTERNS: &[&str] = &[
+    "What to pull · {estimated} of {total} lengths are estimates (~): measure on the plate",
+    "{n} connections between device pins (supply and PE leads: see Wire production)",
+    "Summary · {n} wires between device pins (supply and PE leads: see Wire production)",
+    "Wires to cut · {n} (device pin to device pin, plus supply and PE leads)",
+    "Wire labels · {n} (one per wire end: two for each wire-list connection)",
+];
 
 fn matches_pattern(pattern: &str, text: &str) -> bool {
     super::translator::fills(pattern, text)

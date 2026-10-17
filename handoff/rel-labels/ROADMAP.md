@@ -28,3 +28,8 @@ Scope: blocker B11 of `release/v0.1-plan.md`. Every number that is a model, an e
 
 ## Open questions
 None blocking.
+
+## B11 findings from the visual test (main 39775cf)
+- Example wires numbered: PR rel-labels-5-example-numbers (#1002).
+- Counts: wire list, cut list, wire labels and wire production now carry their count and unit in the section title (`WIRE_LIST_COUNT_TITLE` etc.), Dutch patterns in nl.json. Wire list = connections between device pins (19 on the example); cut list = the same rows; wire labels = 2 per connection; wire production = those plus the supply and PE leads (25). Open: decide whether the cut list and labels should also include the supply and PE leads (a workshop cutting from the cut list misses them today); they are only named in the titles.
+- Later (coordinator note): Dutch for the "no number" phrases of the terminal diagram, after #1000 merges.
