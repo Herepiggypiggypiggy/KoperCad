@@ -300,8 +300,10 @@ impl NovoApp {
                         ui.colored_label(crate::theme::ui_palette().error, error);
                     }
                     ui.separator();
+                    // Leave room for the add-a-language rows under the table.
+                    let table_height = (ui.available_height() - 150.0).clamp(120.0, 300.0);
                     egui::ScrollArea::vertical()
-                        .max_height(300.0)
+                        .max_height(table_height)
                         .show(ui, |ui| {
                             egui::Grid::new("language_rows")
                                 .num_columns(2)
@@ -359,12 +361,23 @@ impl NovoApp {
                     );
                     let code_ok = !win.new_code.trim().is_empty()
                         && !list.iter().any(|l| l.code == win.new_code.trim());
-                    if ui
+                    let add = ui
                         .add_enabled_ui(code_ok, |ui| widgets::primary_button(ui, "Add"))
                         .inner
-                        .on_disabled_hover_text("Type a code that is not in the list yet")
-                        .clicked()
-                    {
+                        .on_disabled_hover_text("Type a code that is not in the list yet");
+                    if !code_ok {
+                        let why = if win.new_code.trim().is_empty() {
+                            "Type a new language code to add it."
+                        } else {
+                            "That code is already in the list."
+                        };
+                        ui.label(
+                            egui::RichText::new(why)
+                                .size(12.0)
+                                .color(crate::theme::ui_palette().text_secondary),
+                        );
+                    }
+                    if add.clicked() {
                         add_language = Some((
                             win.new_code.trim().to_lowercase(),
                             win.new_name.trim().to_owned(),

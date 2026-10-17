@@ -168,6 +168,12 @@ pub(super) enum Ask {
     SetPanelValue(super::cabinet_panel::PanelEdit),
     /// Put a placed device on another surface of the cabinet (plate, door, ...).
     SetSurface(u64, String),
+    /// The size of a surface other than the plate (`None`: planning values).
+    SetSurfaceSize(
+        StructureId,
+        String,
+        Option<novo_layout::surfaces::SurfaceSize>,
+    ),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
 }
@@ -1269,7 +1275,23 @@ impl NovoApp {
                     .collect();
                 // The inspector: with a selection, or the plate card when it
                 // is switched on; otherwise the plate gets the whole window.
+                let on_surface = self
+                    .cabinet
+                    .surface
+                    .as_deref()
+                    .is_some_and(|n| n != MAIN_PLATE);
                 let inspector = match (&layout, structure) {
+                    // A surface other than the plate with nothing selected:
+                    // its size card.
+                    (Some(_), Some(s)) if selected.is_empty() && on_surface => self
+                        .cabinet
+                        .surface
+                        .as_deref()
+                        .and_then(|n| {
+                            let sum = surfaces.as_ref()?;
+                            super::cabinet_surface_size::card(project, s, sum, n)
+                        })
+                        .map(|card| (cabinet_inspector::Facts::Surface(card), false)),
                     (Some(stored), Some(s)) if !selected.is_empty() || self.cabinet.plate_card => {
                         let mut facts = cabinet_inspector::gather(
                             project, s, stored, &shown, &selected, &tag_of,
@@ -2210,6 +2232,11 @@ impl NovoApp {
                 };
                 self.cabinet_edit("Set surface", move |tx| {
                     super::cabinet_surface_move::set(tx, structure, device, &surface)
+                });
+            }
+            Ask::SetSurfaceSize(s, name, size) => {
+                self.cabinet_edit("Set surface size", move |tx| {
+                    super::cabinet_surface_size::set(tx, s, &name, size)
                 });
             }
             Ask::SetPlateSize(s, plate) => {
