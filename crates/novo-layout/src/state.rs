@@ -63,6 +63,11 @@ pub struct CabinetLayout {
     /// Devices on the inside of the door (door coordinates), swept when the
     /// door opens.
     pub door_devices: Vec<DoorDevice>,
+    /// Placed devices that sit on a surface other than the mounting plate
+    /// (door, walls, extra plates), by device id with the surface name. Their
+    /// positions are in that surface's millimetres, so the plate checks and
+    /// the swing obstacles leave them out.
+    pub off_plate: BTreeMap<u64, String>,
 }
 
 impl CabinetLayout {
@@ -78,7 +83,18 @@ impl CabinetLayout {
             openings: Vec::new(),
             opening_problems: Vec::new(),
             door_devices: Vec::new(),
+            off_plate: BTreeMap::new(),
         }
+    }
+
+    /// The placements on the mounting plate itself: all of them except those
+    /// listed in [`CabinetLayout::off_plate`].
+    pub fn on_plate(&self) -> Vec<Placement> {
+        self.placements
+            .iter()
+            .filter(|p| !self.off_plate.contains_key(&p.id))
+            .cloned()
+            .collect()
     }
 
     /// The depth and door checks; `None` until the enclosure has an interior.
@@ -98,7 +114,7 @@ impl CabinetLayout {
         let enclosure = self.enclosure.as_ref()?;
         let (surfaces, _) = Surfaces::from_enclosure(enclosure, &self.plate, &[]);
         let plate_devices: Vec<PlateDevice> = self
-            .placements
+            .on_plate()
             .iter()
             .filter_map(|p| {
                 Some(PlateDevice {
@@ -118,7 +134,7 @@ impl CabinetLayout {
             &SweepSettings::default(),
         );
         report.unchecked_plate = self
-            .placements
+            .on_plate()
             .iter()
             .filter(|p| !self.depths.contains_key(&p.id))
             .map(|p| p.id)
@@ -195,7 +211,7 @@ impl CabinetLayout {
     pub fn preview(&self, all: &[Candidate]) -> Plan {
         let unplaced: Vec<Candidate> = self.unplaced(all).into_iter().cloned().collect();
         let top = self
-            .placements
+            .on_plate()
             .iter()
             .map(|p| p.footprint().bottom() + ROW_GAP_MM)
             .fold(0.0, f64::max);
@@ -230,15 +246,15 @@ impl CabinetLayout {
     }
 
     pub fn report(&self) -> Report {
+        let on_plate = self.on_plate();
         Report {
-            collisions: collisions(&self.placements),
-            outside: outside(&self.plate, &self.placements),
-            too_close: clearance_violations(&self.placements),
-            rail_overflows: rail_overflows(&self.rails, &self.placements),
-            opening_conflicts: conflicts(&self.openings, MAIN_PLATE, &self.placements),
-            duct_overlaps: duct_overlaps(&self.ducts, &self.rails, &self.placements),
-            guessed: self
-                .placements
+            collisions: collisions(&on_plate),
+            outside: outside(&self.plate, &on_plate),
+            too_close: clearance_violations(&on_plate),
+            rail_overflows: rail_overflows(&self.rails, &on_plate),
+            opening_conflicts: conflicts(&self.openings, MAIN_PLATE, &on_plate),
+            duct_overlaps: duct_overlaps(&self.ducts, &self.rails, &on_plate),
+            guessed: on_plate
                 .iter()
                 .filter(|p| p.size.guessed)
                 .map(|p| p.id)

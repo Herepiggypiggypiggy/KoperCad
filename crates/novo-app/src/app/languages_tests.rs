@@ -87,3 +87,66 @@ fn a_translation_that_drops_a_placeholder_is_not_saved() {
     assert!(table.set("nl", "Line {n}", "Regel").is_err());
     assert!(table.language("nl").is_none());
 }
+
+/// A PDF writer that keeps the default `language` prints English whatever
+/// the project says. Every `ReportPdfOptions { .. }` in the app must set it.
+#[test]
+fn every_pdf_options_construction_sets_the_language() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/app");
+    let mut checked = 0;
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+        if !name.ends_with(".rs") || name.ends_with("_tests.rs") {
+            continue;
+        }
+        let text = std::fs::read_to_string(&path).unwrap();
+        // Everything before the unit tests of the file.
+        let code = text.split("#[cfg(test)]").next().unwrap();
+        let mut rest = code;
+        while let Some(i) = rest.find("ReportPdfOptions {") {
+            let tail = &rest[i..];
+            let end = tail.find("..").map_or(tail.len(), |e| e + 2);
+            if !tail.starts_with("ReportPdfOptions {\n") && !tail.starts_with("ReportPdfOptions { ")
+            {
+                rest = &tail[1..];
+                continue;
+            }
+            let body = &tail[..end.min(tail.len())];
+            // The struct definition and `-> ReportPdfOptions {` are not constructions.
+            let before = &rest[..i];
+            if !before.trim_end().ends_with("->") && !before.trim_end().ends_with("struct") {
+                checked += 1;
+                assert!(body.contains("language"), "{name}: {body}");
+            }
+            rest = &tail[1..];
+        }
+    }
+    assert!(checked >= 5, "found {checked} constructions");
+}
+
+#[test]
+fn the_reports_window_exports_in_the_project_language() {
+    use super::reports_view::ReportFormat;
+    let (dir, mut d) = open();
+    // Saved under a name, reports are exported next to the file.
+    assert!(d.app.name_and_save(&dir.path().join("plant.novo")));
+    d.app.set_report_language("nl");
+    let csv = d
+        .app
+        .export_report("devices", ReportFormat::Csv)
+        .expect("csv");
+    let pdf = d
+        .app
+        .export_report("devices", ReportFormat::Pdf)
+        .expect("pdf");
+    let csv_text = std::fs::read_to_string(&csv).unwrap();
+    let doc = lopdf::Document::load(&pdf).unwrap();
+    let pages: Vec<u32> = doc.get_pages().keys().copied().collect();
+    let pdf_text = doc.extract_text(&pages).unwrap();
+    let _ = std::fs::remove_file(&csv);
+    let _ = std::fs::remove_file(&pdf);
+    assert!(csv_text.contains("Omschrijving"), "{csv_text}");
+    assert!(!csv_text.contains("Description"), "{csv_text}");
+    assert!(pdf_text.contains("Apparatenlijst"), "{pdf_text}");
+}
