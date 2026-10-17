@@ -106,7 +106,7 @@ id = "waive"
 title = "Waive a note on purpose"
 title_nl = "Negeer een notitie met opzet"
 text = """
-Sometimes a problem is meant. To **waive** it says: I know, this is fine, and here is why. Here the start button **-S1** has no part yet because the quote is still open.
+Sometimes a problem is meant. To waive it says: I know, this is fine, and here is why. Here the start button **-S1** has no part yet because the quote is still open.
 The waiver stays in the project with your reason, so a colleague can read it later.
 """
 text_nl = """
@@ -114,16 +114,23 @@ Soms is een probleem bedoeld. Het **negeren** (waive) zegt: ik weet het, dit is 
 Het negeren blijft met je reden in het project staan, zodat een collega het later kan lezen.
 """
 how = [
-  "In the **Issues** list click the **infos** filter.",
+  "Find the note **-S1: No part** in the **Issues** list.",
   "Right-click **-S1: No part** and choose **Waive with a reason...**.",
-  "Type **Quote still open** and press **Waive**. The note leaves the list.",
+  "Type **Quote still open** and press {ui:issues.waive}. The note leaves the list.",
 ]
 how_nl = [
-  "Klik in de lijst **Issues** op het filter **infos**.",
+  "Zoek de notitie **-S1: No part** in de lijst **Issues**.",
   "Klik met de rechtermuisknop op **-S1: No part** en kies **Waive with a reason...**.",
-  "Typ **Quote still open** en druk op **Waive**. De notitie verdwijnt uit de lijst.",
+  "Typ **Quote still open** en druk op {ui:issues.waive}. De notitie verdwijnt uit de lijst.",
 ]
 expect = { signal = "problem_waived" }
+solve = [
+  { command = "check.problems" },
+  { list_row = { list = "issues.list", row = "-S1", right = true, choose = "Waive with a reason…" } },
+  { ui_click = "issues.waive_reason" },
+  { type_text = "Quote still open" },
+  { ui_click = "issues.waive" },
+]
 
 [[step]]
 id = "restore"
@@ -133,13 +140,17 @@ text = "A waiver hides a problem, it never deletes it, so you can always undo yo
 text_nl = "Een negeerbesluit verbergt een probleem maar verwijdert het nooit, dus je kunt je besluit altijd terugdraaien."
 how = [
   "Open **Waived** at the bottom of the list. It shows the note with your reason.",
-  "Press the small **Restore** button next to it. The note is back under **infos**.",
+  "Press the small {ui:issues.restore} button next to it. The note is back under **infos**.",
 ]
 how_nl = [
   "Open **Waived** onderaan de lijst. Daar staat de notitie met je reden.",
-  "Druk op de kleine knop **Restore** ernaast. De notitie staat weer onder **infos**.",
+  "Druk op de kleine knop {ui:issues.restore} ernaast. De notitie staat weer onder **infos**.",
 ]
 expect = { signal = "waiver_restored" }
+solve = [
+  { list_row = { list = "issues.list", row = "Waived" } },
+  { ui_click = "issues.restore" },
+]
 
 [[step]]
 id = "part-note"

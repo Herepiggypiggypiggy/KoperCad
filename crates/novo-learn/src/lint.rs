@@ -342,6 +342,18 @@ fn lint_lesson(
                         format!("command `{}` is not in this build", c.command),
                     );
                 }
+                SolveOp::UiClick(u) if !registry.anchors.contains(&u.ui_click) => {
+                    sink.ahead(
+                        Some(step),
+                        format!("anchor `{}` is not in this build", u.ui_click),
+                    );
+                }
+                SolveOp::ListRow(l) if !registry.anchors.contains(&l.list_row.list) => {
+                    sink.ahead(
+                        Some(step),
+                        format!("anchor `{}` is not in this build", l.list_row.list),
+                    );
+                }
                 SolveOp::Tee(t) => {
                     for pin in [&t.tee.from, &t.tee.onto] {
                         if project.is_some_and(|p| pins_named(p, pin).is_empty()) {

@@ -83,6 +83,9 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `cabinet.plate_drawing`: {ui:cabinet.plate_drawing} shows **Plate drawing**
 - `cabinet.more`: {ui:cabinet.more} shows **More**
 - `issues.list`: {ui:issues.list} shows **Issues list**
+- `issues.waive_reason`: {ui:issues.waive_reason} shows **Reason**
+- `issues.waive`: {ui:issues.waive} shows **Waive**
+- `issues.restore`: {ui:issues.restore} shows **Restore**
 - `macro.place`: {ui:macro.place} shows **Place macro**
 - `macros.window`: {ui:macros.window} shows **Macros**
 
