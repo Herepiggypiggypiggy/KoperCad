@@ -3,7 +3,7 @@
 //! `novo_cables::cable_screens`, so the drawer, the generated pages and the
 //! spreadsheet always show the same thing.
 
-use novo_core::{DeviceKind, EntityKind, Project};
+use novo_core::{DeviceKind, EntityKind, Project, WireId};
 
 use crate::order::{join_distinct, location_text, tag_cmp};
 use crate::report::{Dependencies, Report};
@@ -18,6 +18,34 @@ pub(crate) fn model_dependencies() -> Dependencies {
         Page, Device, Symbol, Junction, Wire, Potential, Terminal, Cable, Part,
     ])
     .with_info()
+}
+
+/// The wires landing on one side of a terminal: their numbers when they
+/// have them, and a count of the ones that have none, so a wire in or out
+/// never shows as an empty cell (`101, 102`, `1 wire, no number`).
+fn wires_text<'a>(project: &Project, wires: impl Iterator<Item = &'a WireId>) -> String {
+    let mut seen = std::collections::HashSet::new();
+    let mut numbers: Vec<String> = Vec::new();
+    let mut unnumbered = 0usize;
+    for &wire in wires {
+        if !seen.insert(wire) {
+            continue;
+        }
+        match project.wire(wire).and_then(|w| w.number.clone()) {
+            Some(n) if !n.is_empty() => {
+                if !numbers.contains(&n) {
+                    numbers.push(n);
+                }
+            }
+            _ => unnumbered += 1,
+        }
+    }
+    match (numbers.is_empty(), unnumbered) {
+        (_, 0) => numbers.join(", "),
+        (true, 1) => "1 wire, no number".into(),
+        (true, n) => format!("{n} wires, no number"),
+        (false, n) => format!("{}, +{n} no number", numbers.join(", ")),
+    }
 }
 
 /// Terminal diagrams: one section per terminal strip (natural tag order),
@@ -85,11 +113,17 @@ impl Report for TerminalDiagram {
                     section.push(
                         vec![
                             Cell::text(row.internal.join(", ")),
-                            Cell::text(row.wires_internal.join(", ")),
+                            Cell::text(wires_text(
+                                project,
+                                view.occurrences.iter().flat_map(|o| &o.internal.wires),
+                            )),
                             Cell::text(row.terminal),
                             Cell::text(row.kind),
                             Cell::text(row.bridged_with.join(", ")),
-                            Cell::text(row.wires_external.join(", ")),
+                            Cell::text(wires_text(
+                                project,
+                                view.occurrences.iter().flat_map(|o| &o.external.wires),
+                            )),
                             Cell::text(row.external.join(", ")),
                             Cell::text(row.cables.join(", ")),
                             row.jumper.map(i64::from).into(),
