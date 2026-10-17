@@ -76,6 +76,7 @@ impl NovoApp {
         let options = novo_pdf::ReportPdfOptions {
             title: title.clone(),
             footer_right: format!("since revision {index}"),
+            language: self.report_translator(),
             ..Default::default()
         };
         let bytes = novo_pdf::export_report_pdf(&[&report], &options);
@@ -88,7 +89,7 @@ impl NovoApp {
                 } else {
                     ""
                 };
-                self.message(Level::Info, format!("{verb} {}{none}", path.display()));
+                self.message_file(format!("{verb} {}{none}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }

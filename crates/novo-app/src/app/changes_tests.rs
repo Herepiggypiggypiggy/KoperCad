@@ -131,3 +131,55 @@ fn the_change_report_waits_for_a_revision_then_lists_what_changed() {
     // Writing again replaces our own file.
     assert_eq!(d.app.export_change_report_to(&out), Some(out.clone()));
 }
+
+/// The Changes card and the Live potentials card are panels: they start
+/// at the top left without covering each other, and "Reset panel layout"
+/// puts a moved one back.
+#[test]
+fn the_changes_and_live_cards_start_apart_and_reset_after_a_move() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let moved = d.place("mcb3", 80.0, 48.0);
+    d.frame();
+    let issued = d
+        .app
+        .backend
+        .issue_revision(None, "2026-10-15", "TV", "First")
+        .unwrap();
+    d.app.changed_outside_canvas(&issued.changes);
+    d.app.toggle_changes(None);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Move", |tx| {
+            tx.update::<SymbolInstance>(moved, |s| s.placement.origin.x += 10.0)
+        })
+        .unwrap();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..12 {
+        d.frame_sized(eframe::egui::vec2(1366.0, 768.0), Vec::new());
+    }
+    let rect = |name: &str| ctx.memory(|m| m.area_rect(super::panel::id(name)));
+    let live = rect("live_card").expect("the live card is shown");
+    let changes = rect("changes_card").expect("the changes card is shown");
+    assert!(!live.intersects(changes), "{live:?} over {changes:?}");
+    assert!(
+        live.left() < 40.0 && changes.left() < 40.0,
+        "{live:?} {changes:?}"
+    );
+    // Dragged away, the card stays; the reset command brings it back.
+    super::panel::mark_moved(&ctx, super::panel::id("changes_card"));
+    assert!(super::panel::is_moved(
+        &ctx,
+        super::panel::id("changes_card")
+    ));
+    d.app.run_command(&ctx, "view.reset_panels", None);
+    assert!(!super::panel::is_moved(
+        &ctx,
+        super::panel::id("changes_card")
+    ));
+}

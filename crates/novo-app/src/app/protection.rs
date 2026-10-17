@@ -7,24 +7,28 @@
 //! menu. Everything is read from the project: devices with a rated current
 //! and a protection symbol, their data from properties (`trip_curve`,
 //! `breaking_capacity_ka`, `trip_class`, `sccr_ka`, ...), the prospective
-//! current from the project property `supply.short_circuit_ka`. Maker
+//! current from the project property `supply.short_circuit_ka`, which the
+//! fault-current box in the window writes back (one undo step) so it is
+//! still there when the project is reopened. Maker
 //! selectivity and back-up tables are the person's own file,
 //! `protection-tables.json` in the KoperCAD folder under `%APPDATA%`, never
 //! bundled. What the analysis had to assume is listed in the window.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::PathBuf;
 
 use eframe::egui::{self, Color32, Pos2, Rect, Stroke, Vec2};
 use novo_checks::Severity;
 use novo_checks::protection::devices::MakerTables;
-use novo_checks::protection::model::{ProjectDevice, Study, StudyReport};
+use novo_checks::protection::model::{
+    self, ProjectDevice, SUPPLY_SHORT_CIRCUIT_KA, Study, StudyReport,
+};
 use novo_checks::protection::sccr::{self, Source as SccrSource};
 use novo_checks::protection::selectivity::{Backup, BackupBasis, Basis, Settings, Verdict};
-use novo_core::DeviceId;
+use novo_core::{DeviceId, Value};
 use novo_theme::tokens;
 
-use super::NovoApp;
+use super::{Level, NovoApp};
 
 /// File name inside the KoperCAD folder under `%APPDATA%`.
 pub const TABLES_FILE: &str = "protection-tables.json";
@@ -54,13 +58,88 @@ pub(super) struct ProtectionState {
     pub(super) shown: BTreeSet<DeviceId>,
     /// The study, read again when the project changes.
     pub(super) study: Option<(u64, Study)>,
-    /// Supply current typed in the window, kA, instead of the project's.
+    /// Supply current being typed or dragged, kA, until it is saved.
     supply_override: Option<f64>,
+    /// The supply box changed and is saved when it is let go.
+    supply_dirty: bool,
+    /// Edits to write to the project after the window is drawn.
+    pending: Vec<Edit>,
+    /// Entry boxes of the limiter table while they are edited.
+    buffers: HashMap<(DeviceId, &'static str), String>,
     tables: MakerTables,
     tables_note: Option<String>,
     tables_loaded: bool,
     /// The analyses, for the study and supply current they were run on.
     pub(super) results: Option<Results>,
+}
+
+/// One change the window asks of the project.
+pub(super) enum Edit {
+    /// Supply short-circuit current, kA (`None` or zero clears it).
+    Supply(Option<f64>),
+    /// A text entry on a device: the property key and what was typed.
+    Device(DeviceId, &'static str, String),
+    /// A flag on a device.
+    Flag(DeviceId, &'static str, bool),
+}
+
+/// A device's own limiter-credit entries, as text for the boxes.
+pub(super) struct LimiterRow {
+    id: DeviceId,
+    tag: String,
+    fuse: bool,
+    limiting: bool,
+    let_through: String,
+    peak_ka: String,
+    i2t: String,
+}
+
+fn property_text(props: &novo_core::Properties, key: &str) -> String {
+    match props.get(key) {
+        Some(Value::Text(t)) => t.clone(),
+        Some(Value::Float(f)) => f.to_string(),
+        Some(Value::Int(i)) => i.to_string(),
+        _ => String::new(),
+    }
+}
+
+fn limiter_rows(project: &novo_core::Project, study: &Study) -> Vec<LimiterRow> {
+    study
+        .devices
+        .iter()
+        .filter_map(|d| {
+            let props = &project.device(d.id)?.properties;
+            Some(LimiterRow {
+                id: d.id,
+                tag: d.tag.clone(),
+                fuse: d.kind == model::DeviceType::Fuse,
+                limiting: matches!(props.get(model::CURRENT_LIMITING), Some(Value::Bool(true))),
+                let_through: property_text(props, model::LET_THROUGH),
+                peak_ka: property_text(props, model::WITHSTAND_PEAK_KA),
+                i2t: property_text(props, model::WITHSTAND_I2T),
+            })
+        })
+        .collect()
+}
+
+/// Reads a limiter-credit entry: empty clears it, a let-through table is
+/// checked the way the engine reads it, the withstand values must be
+/// positive numbers.
+pub(super) fn limiter_value(key: &str, text: &str) -> Result<Option<Value>, String> {
+    let text = text.trim();
+    if text.is_empty() {
+        return Ok(None);
+    }
+    if key == model::LET_THROUGH {
+        model::parse_let_through(text)?;
+        return Ok(Some(Value::Text(text.to_string())));
+    }
+    text.replace(',', ".")
+        .parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite() && *v > 0.0)
+        .map(|v| Some(Value::Float(v)))
+        .ok_or_else(|| format!("\"{text}\" is not a positive number"))
 }
 
 pub(super) struct Results {
@@ -78,11 +157,20 @@ impl ProtectionState {
             shown: BTreeSet::new(),
             study: None,
             supply_override: None,
+            supply_dirty: false,
+            pending: Vec::new(),
+            buffers: HashMap::new(),
             tables: MakerTables::default(),
             tables_note: None,
             tables_loaded: false,
             results: None,
         }
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_supply_for_test(&mut self, ka: Option<f64>) {
+        self.supply_override = ka;
+        self.supply_dirty = true;
     }
 
     fn load_tables(&mut self) {
@@ -166,15 +254,51 @@ impl NovoApp {
                 rating: study.sccr(&project.info().name),
             });
         }
+        let rows = limiter_rows(project, &study);
         let mut open = true;
         super::panel::dialog(ctx, "Protection", [920.0, 600.0])
             .open(&mut open)
-            .show(ctx, |ui| show(ui, state, &study));
+            .show(ctx, |ui| show(ui, state, &study, &rows));
         state.open = open;
+        let edits = std::mem::take(&mut state.pending);
+        for edit in edits {
+            self.apply_protection_edit(edit);
+        }
+    }
+
+    /// Writes one entry of the Protection window as one undo step; a
+    /// refused entry is shown.
+    pub(super) fn apply_protection_edit(&mut self, edit: Edit) -> bool {
+        match edit {
+            Edit::Supply(ka) => {
+                let value = ka.filter(|k| k.is_finite() && *k > 0.0).map(Value::Float);
+                let done = self.edit_project("Set supply short-circuit current", |tx| {
+                    novo_checks::standards::set_info_property(tx, SUPPLY_SHORT_CIRCUIT_KA, value)
+                });
+                self.protection.supply_override = None;
+                self.protection.supply_dirty = false;
+                done
+            }
+            Edit::Device(id, key, text) => match limiter_value(key, &text) {
+                Ok(value) => {
+                    self.protection.buffers.remove(&(id, key));
+                    self.edit_project("Set limiter credit data", |tx| {
+                        tx.set_property(id, key, value)
+                    })
+                }
+                Err(why) => {
+                    self.message(Level::Warning, format!("{key}: {why}"));
+                    false
+                }
+            },
+            Edit::Flag(id, key, on) => self.edit_project("Set current-limiting type", |tx| {
+                tx.set_property(id, key, on.then_some(Value::Bool(true)))
+            }),
+        }
     }
 }
 
-fn show(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study) {
+fn show(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study, rows: &[LimiterRow]) {
     ui.horizontal(|ui| {
         for (tab, label) in [
             (Tab::Curves, "Curves"),
@@ -189,24 +313,23 @@ fn show(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study) {
         ui.label("Fault current at the supply");
         let mut k = state.supply_override.or(study.supply_ka).unwrap_or(0.0);
         let before = k;
-        ui.add(
-            egui::DragValue::new(&mut k)
-                .range(0.0..=1000.0)
-                .speed(0.1)
-                .suffix(" kA"),
-        );
+        let response = ui
+            .add(
+                egui::DragValue::new(&mut k)
+                    .range(0.0..=1000.0)
+                    .speed(0.1)
+                    .suffix(" kA"),
+            )
+            .on_hover_text(
+                "Saved in the project as supply.short_circuit_ka when you let go (one undo step). Zero clears it. Also in Check > Electrical inputs.",
+            );
         if (k - before).abs() > f64::EPSILON {
             state.supply_override = (k > 0.0).then_some(k);
+            state.supply_dirty = true;
             state.results = None;
         }
-        if state.supply_override.is_some()
-            && ui
-                .small_button("Use the project's")
-                .on_hover_text("Set supply.short_circuit_ka on the project to keep a value")
-                .clicked()
-        {
-            state.supply_override = None;
-            state.results = None;
+        if state.supply_dirty && (response.drag_stopped() || response.lost_focus()) {
+            state.pending.push(Edit::Supply(state.supply_override));
         }
     });
     if let Some(note) = &state.tables_note {
@@ -224,7 +347,7 @@ fn show(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study) {
     match state.tab {
         Tab::Curves => curves_tab(ui, state, study),
         Tab::Selectivity => selectivity_tab(ui, state, study),
-        Tab::Rating => rating_tab(ui, state, study),
+        Tab::Rating => rating_tab(ui, state, study, rows),
     }
 }
 
@@ -337,7 +460,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
     );
     let (outer, response) = ui.allocate_exact_size(size, egui::Sense::hover());
     let painter = ui.painter_at(outer);
-    painter.rect_filled(outer, 4.0, tokens::BG_0);
+    painter.rect_filled(outer, 4.0, crate::theme::ui_palette().sunken);
     let area = Rect::from_min_max(
         Pos2::new(outer.left() + 58.0, outer.top() + 12.0),
         Pos2::new(outer.right() - 14.0, outer.bottom() - 26.0),
@@ -380,9 +503,9 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             }
             let x = to_x(i);
             let stroke = if m == 1 {
-                Stroke::new(1.0, tokens::BORDER_STRONG)
+                Stroke::new(1.0, crate::theme::ui_palette().border_strong)
             } else {
-                Stroke::new(1.0, tokens::BORDER)
+                Stroke::new(1.0, crate::theme::ui_palette().border_subtle)
             };
             painter.line_segment(
                 [Pos2::new(x, area.top()), Pos2::new(x, area.bottom())],
@@ -394,7 +517,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             egui::Align2::CENTER_TOP,
             decade_label_current(e),
             font.clone(),
-            tokens::TEXT_FAINT,
+            crate::theme::ui_palette().text_tertiary,
         );
     }
     for e in y0..=y1 {
@@ -405,9 +528,9 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             }
             let y = to_y(t);
             let stroke = if m == 1 {
-                Stroke::new(1.0, tokens::BORDER_STRONG)
+                Stroke::new(1.0, crate::theme::ui_palette().border_strong)
             } else {
-                Stroke::new(1.0, tokens::BORDER)
+                Stroke::new(1.0, crate::theme::ui_palette().border_subtle)
             };
             painter.line_segment(
                 [Pos2::new(area.left(), y), Pos2::new(area.right(), y)],
@@ -419,7 +542,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             egui::Align2::RIGHT_CENTER,
             decade_label_time(e),
             font.clone(),
-            tokens::TEXT_FAINT,
+            crate::theme::ui_palette().text_tertiary,
         );
     }
     let plot_painter = painter.with_clip_rect(area);
@@ -480,7 +603,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
         while y < area.bottom() {
             plot_painter.line_segment(
                 [Pos2::new(x, y), Pos2::new(x, (y + 5.0).min(area.bottom()))],
-                Stroke::new(1.2, tokens::ERROR),
+                Stroke::new(1.2, crate::theme::ui_palette().error),
             );
             y += 10.0;
         }
@@ -489,13 +612,13 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             egui::Align2::RIGHT_TOP,
             format!("Ik {}", fmt_current(ik)),
             font.clone(),
-            tokens::ERROR,
+            crate::theme::ui_palette().error,
         );
     }
     painter.rect_stroke(
         area,
         0.0,
-        Stroke::new(1.0, tokens::BORDER_STRONG),
+        Stroke::new(1.0, crate::theme::ui_palette().border_strong),
         egui::StrokeKind::Inside,
     );
     if series.is_empty() {
@@ -504,7 +627,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             egui::Align2::CENTER_CENTER,
             "Tick a device to see its curve",
             egui::FontId::proportional(tokens::FONT_BODY),
-            tokens::TEXT_MUTED,
+            crate::theme::ui_palette().text_secondary,
         );
     }
     // Crosshair and the times at the pointer's current.
@@ -514,7 +637,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
                 Pos2::new(pos.x, area.top()),
                 Pos2::new(pos.x, area.bottom()),
             ],
-            Stroke::new(1.0, tokens::TEXT_FAINT),
+            Stroke::new(1.0, crate::theme::ui_palette().text_tertiary),
         );
         let exp = x0 as f64 + (pos.x - area.left()) as f64 / area.width() as f64 * (x1 - x0) as f64;
         let i = 10f64.powf(exp);
@@ -548,7 +671,7 @@ fn selectivity_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study
         }
         None => {
             ui.colored_label(
-                tokens::WARNING,
+                crate::theme::ui_palette().warning,
                 "No fault current at the supply. Type one above or set supply.short_circuit_ka on the project; until then only the curves can be compared.",
             );
         }
@@ -570,7 +693,7 @@ fn selectivity_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study
                     .spacing([16.0, 6.0])
                     .show(ui, |ui| {
                         for h in ["Upstream", "Downstream", "Selectivity", "Back-up", ""] {
-                            ui.label(egui::RichText::new(h).color(tokens::TEXT_MUTED).size(tokens::FONT_SMALL));
+                            ui.label(egui::RichText::new(h).color(crate::theme::ui_palette().text_secondary).size(tokens::FONT_SMALL));
                         }
                         ui.end_row();
                         for p in &report.pairs {
@@ -585,27 +708,27 @@ fn selectivity_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study
                             };
                             match s.verdict {
                                 Verdict::Total => {
-                                    ui.colored_label(tokens::SUCCESS, format!("Total, {basis}"))
+                                    ui.colored_label(crate::theme::ui_palette().success, format!("Total, {basis}"))
                                 }
                                 Verdict::Partial => ui.colored_label(
-                                    tokens::WARNING,
+                                    crate::theme::ui_palette().warning,
                                     format!("Up to {}, {basis}", fmt_current(s.limit_a)),
                                 ),
                                 Verdict::None => {
-                                    ui.colored_label(tokens::ERROR, format!("None, {basis}"))
+                                    ui.colored_label(crate::theme::ui_palette().error, format!("None, {basis}"))
                                 }
                             };
                             match &p.backup {
                                 Backup::NotNeeded => ui.weak("not needed"),
                                 Backup::Covered(b) => ui.colored_label(
-                                    tokens::INFO,
+                                    crate::theme::ui_palette().info,
                                     match b {
                                         BackupBasis::MakerTable => "covered (maker's table)",
                                         BackupBasis::LetThrough => "covered (let-through)",
                                     },
                                 ),
                                 Backup::NotCovered(why) => {
-                                    ui.colored_label(tokens::ERROR, "not covered").on_hover_text(why)
+                                    ui.colored_label(crate::theme::ui_palette().error, "not covered").on_hover_text(why)
                                 }
                             };
                             if ui.small_button("Show curves").clicked() {
@@ -622,9 +745,9 @@ fn selectivity_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study
             }
             for f in &report.findings {
                 let (glyph, color) = match f.severity {
-                    Severity::Error => ("●", tokens::ERROR),
-                    Severity::Warning => ("●", tokens::WARNING),
-                    Severity::Info => ("●", tokens::INFO),
+                    Severity::Error => ("●", crate::theme::ui_palette().error),
+                    Severity::Warning => ("●", crate::theme::ui_palette().warning),
+                    Severity::Info => ("●", crate::theme::ui_palette().info),
                 };
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(color, glyph);
@@ -659,7 +782,7 @@ fn assumptions(ui: &mut egui::Ui, study: &Study) {
         });
 }
 
-fn rating_tab(ui: &mut egui::Ui, state: &mut ProtectionState, _study: &Study) {
+fn rating_tab(ui: &mut egui::Ui, state: &mut ProtectionState, _study: &Study, rows: &[LimiterRow]) {
     let Some(results) = &state.results else {
         return;
     };
@@ -670,16 +793,21 @@ fn rating_tab(ui: &mut egui::Ui, state: &mut ProtectionState, _study: &Study) {
         } else {
             "not limited".to_string()
         };
-        ui.label(egui::RichText::new(text).size(22.0).color(tokens::TEXT));
+        ui.label(
+            egui::RichText::new(text)
+                .size(22.0)
+                .color(crate::theme::ui_palette().text_primary),
+        );
         ui.add_space(10.0);
         match (r.verdict, results.supply_ka) {
             (sccr::Verdict::Sufficient, Some(k)) => ui.colored_label(
-                tokens::SUCCESS,
+                crate::theme::ui_palette().success,
                 format!("at least the {} kA available", trim(k)),
             ),
-            (sccr::Verdict::Insufficient, Some(k)) => {
-                ui.colored_label(tokens::ERROR, format!("below the {} kA available", trim(k)))
-            }
+            (sccr::Verdict::Insufficient, Some(k)) => ui.colored_label(
+                crate::theme::ui_palette().error,
+                format!("below the {} kA available", trim(k)),
+            ),
             _ => ui.weak("no fault current at the supply to compare with"),
         };
     });
@@ -688,6 +816,8 @@ fn rating_tab(ui: &mut egui::Ui, state: &mut ProtectionState, _study: &Study) {
     for note in &r.notes {
         ui.label(note);
     }
+    ui.add_space(8.0);
+    limiter_credit(ui, &mut state.buffers, &mut state.pending, rows);
     ui.add_space(8.0);
     novo_theme::widgets::section_label(ui, "COMPONENTS, WEAKEST FIRST");
     egui::ScrollArea::vertical()
@@ -699,7 +829,7 @@ fn rating_tab(ui: &mut egui::Ui, state: &mut ProtectionState, _study: &Study) {
                 .spacing([16.0, 4.0])
                 .show(ui, |ui| {
                     for h in ["Component", "Where", "Effective", "Basis"] {
-                        ui.label(egui::RichText::new(h).color(tokens::TEXT_MUTED).size(tokens::FONT_SMALL));
+                        ui.label(egui::RichText::new(h).color(crate::theme::ui_palette().text_secondary).size(tokens::FONT_SMALL));
                     }
                     ui.end_row();
                     for row in &r.rows {
@@ -734,4 +864,77 @@ fn rating_tab(ui: &mut egui::Ui, state: &mut ProtectionState, _study: &Study) {
 fn trim(x: f64) -> String {
     let t = format!("{x:.2}");
     t.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// The limiter credit: which protective devices limit the let-through
+/// current and what each device withstands. Planning values from maker
+/// data, saved on the device; with them a device behind a limiter can rate
+/// higher than its own marking.
+fn limiter_credit(
+    ui: &mut egui::Ui,
+    buffers: &mut HashMap<(DeviceId, &'static str), String>,
+    pending: &mut Vec<Edit>,
+    rows: &[LimiterRow],
+) {
+    egui::CollapsingHeader::new("Current-limiter credit")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.weak(
+                "A fuse or limiting breaker ahead can hold up a device behind it when the energy it lets through stays within what that device withstands. Enter the limiter's let-through points (rms A : peak A : A\u{b2}s, separated by ;) and, on the device behind it, what it withstands. A planning value from maker data, not a certified rating: the panel marking is the manufacturer's responsibility.",
+            );
+            egui::Grid::new("protection_limiter_rows")
+                .num_columns(5)
+                .spacing([12.0, 4.0])
+                .show(ui, |ui| {
+                    for h in [
+                        "Device",
+                        "Limits",
+                        "Let-through points",
+                        "Withstands, peak kA",
+                        "Withstands, A\u{b2}s",
+                    ] {
+                        ui.label(egui::RichText::new(h).color(crate::theme::ui_palette().text_secondary).size(tokens::FONT_SMALL));
+                    }
+                    ui.end_row();
+                    for row in rows {
+                        ui.label(&row.tag);
+                        if row.fuse {
+                            ui.weak("fuse");
+                        } else {
+                            let mut on = row.limiting;
+                            if ui
+                                .checkbox(&mut on, "")
+                                .on_hover_text("A listed current-limiting breaker (property current_limiting)")
+                                .changed()
+                            {
+                                pending.push(Edit::Flag(row.id, model::CURRENT_LIMITING, on));
+                            }
+                        }
+                        for (key, shown, width, hint) in [
+                            (model::LET_THROUGH, &row.let_through, 230.0, "10000:5000:5e4; 100000:20000:4e5"),
+                            (model::WITHSTAND_PEAK_KA, &row.peak_ka, 70.0, ""),
+                            (model::WITHSTAND_I2T, &row.i2t, 90.0, ""),
+                        ] {
+                            let id = egui::Id::new(("protection_limiter", row.id, key));
+                            let focused = ui.memory(|m| m.has_focus(id));
+                            let buffer = buffers.entry((row.id, key)).or_default();
+                            if !focused {
+                                buffer.clone_from(shown);
+                            }
+                            let response = ui
+                                .add(
+                                    egui::TextEdit::singleline(buffer)
+                                        .id(id)
+                                        .hint_text(hint)
+                                        .desired_width(width),
+                                )
+                                .on_hover_text(key);
+                            if response.lost_focus() && buffer.trim() != shown.trim() {
+                                pending.push(Edit::Device(row.id, key, buffer.clone()));
+                            }
+                        }
+                        ui.end_row();
+                    }
+                });
+        });
 }

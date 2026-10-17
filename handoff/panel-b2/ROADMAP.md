@@ -1,6 +1,7 @@
 # PANEL-B2 roadmap: door swing, openings, per-surface place-all
 
-1. Done (slice 1): `novo-layout/src/swing.rs` door swing sweep (devices on the door against plate devices and walls, first touch angle, rule names `door.swing` / `door.closed`), `CabinetLayout::door_devices` and `swing_report()`, lines in the Cabinet Door and depth panel.
-2. Next: wiring-hole Opening keep-outs and pass-through between plates (drill.rs, for routing).
-3. Next: Place all per surface with rule sections (surface door), door devices with hole and cut-out work (R5).
-4. Next: fill `door_devices` from placements whose `surface` property is `door`; hinge offset as a project setting.
+1. Done (slice 1, #752): door swing sweep, `swing.rs`.
+2. Slice 2 (#773): wiring openings, `openings.rs`: `opening.<name>` structure property, keep-out rule `opening.keepout` in the layout report and device rows, `best_passage` for routing.
+3. Slice 3 (#782): surface rules, `surface_rules.rs`, Place all keeps door devices off the plate plan.
+4. Next: routing uses `best_passage` between plates (novo-routing model.rs belongs to PINS-UI, ask first); openings in the drill table.
+5. Next: store placements on a surface (`surface` placement property), fill `door_devices` from them, door cut-outs (R5); `surface_names` should call `model::extra_surfaces`.

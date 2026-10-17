@@ -210,6 +210,10 @@ impl NovoApp {
                 ui.heading("Keyboard shortcuts");
                 ui.weak("Ctrl+K finds every command");
             });
+            ui.weak(
+                "Rebind a key: Help > Open keymap file, then add a line like \
+                 tool.cable = Ctrl+Shift+C",
+            );
             let field = ui.add(
                 egui::TextEdit::singleline(&mut self.wb.shortcuts.filter)
                     .hint_text("Type to filter (English or Dutch)")

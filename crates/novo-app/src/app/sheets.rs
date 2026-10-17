@@ -71,7 +71,7 @@ impl NovoApp {
             Ok(h) => {
                 self.wb.sheet_exports.insert(path.to_owned(), h);
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {}", path.display()));
+                self.message_file(format!("{verb} {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
@@ -122,13 +122,13 @@ impl NovoApp {
             }
         }
         if let Some(last) = written.last() {
-            self.message(
-                Level::Info,
+            self.message_file(
                 format!(
                     "Exported {} CSV files to {}",
                     written.len(),
                     last.parent().unwrap_or(&dir).display()
                 ),
+                last,
             );
             self.wb.last_export = Some(last.clone());
         }

@@ -131,6 +131,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "file.open_read_only",
+        "Open read-only",
+        "Project",
+        &["view only", "look", "locked", "share"],
+        Needs::Nothing,
+    ),
+    cmd(
         "file.example",
         "Open example",
         "Project",
@@ -143,6 +150,20 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Project",
         &["practice", "tutorial", "learn"],
         Needs::Nothing,
+    ),
+    cmd(
+        "project.languages",
+        "Report languages",
+        "Project",
+        &[
+            "language",
+            "translate",
+            "dutch",
+            "nederlands",
+            "pdf language",
+            "translation",
+        ],
+        Needs::Project,
     ),
     cmd("file.save", "Save", "Project", &[], Needs::Project),
     cmd(
@@ -246,6 +267,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Nothing,
         ),
         &["import macro"],
+    ),
+    verb(
+        cmd(
+            "macro.export_pack",
+            "Export macro pack",
+            "Project",
+            &["macro", "pack", "export", "kcmacropack", "share", "team"],
+            Needs::Nothing,
+        ),
+        &["export macros", "macro pack"],
     ),
     verb(
         cmd(
@@ -531,6 +562,14 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["cable", "cores", "bundle"],
         Needs::Page,
     ),
+    // Shift+T: a click on the page, then the words of a free note.
+    cmd(
+        "draw.text",
+        "Add text",
+        "Draw",
+        &["note", "annotation", "comment"],
+        Needs::Page,
+    ),
     // Cables that exist: the Cables drawer (Ctrl+4) shows the one they act on.
     verb(
         cmd(
@@ -582,6 +621,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd("edit.rotate", "Rotate", "Draw", &["turn"], Needs::Selection),
+    cmd(
+        "edit.reset_note",
+        "Reset note position",
+        "Draw",
+        &["note", "cross reference", "contact image", "label"],
+        Needs::Selection,
+    ),
     cmd("edit.mirror", "Mirror", "Draw", &["flip"], Needs::Selection),
     // PLC and I/O (docs/design/plc.md section 4): the command surface only
     // names them; the app shell runs them through novo-plc.
@@ -703,6 +749,23 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["place macro", "macro"],
     ),
+    verb(
+        cmd(
+            "macro.edit",
+            "Edit macro parameters",
+            "Edit",
+            &[
+                "macro",
+                "block",
+                "parameter",
+                "default",
+                "author",
+                "library",
+            ],
+            Needs::Nothing,
+        ),
+        &["edit macro"],
+    ),
     cmd(
         "edit.select_all",
         "Select all on page",
@@ -715,6 +778,21 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Delete",
         "Edit",
         &["remove"],
+        Needs::Selection,
+    ),
+    cmd(
+        "edit.shared_properties",
+        "Properties of the selection",
+        "Edit",
+        &[
+            "property sheet",
+            "bulk edit",
+            "multiple",
+            "shared",
+            "inspector",
+            "fields",
+            "edit all",
+        ],
         Needs::Selection,
     ),
     cmd(
@@ -784,6 +862,22 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Page,
         ),
         &["link"],
+    ),
+    // The whole net of the selected wire, junction or part: select it on this
+    // page, or list the devices and pages it reaches.
+    cmd(
+        "net.select",
+        "Select net",
+        "Edit",
+        &["whole net", "connected wires"],
+        Needs::Selection,
+    ),
+    cmd(
+        "net.trace",
+        "Pages and devices on this net",
+        "Edit",
+        &["where does this go", "net devices", "net pages"],
+        Needs::Selection,
     ),
     cmd("edit.escape", "Cancel", "Edit", &["escape"], Needs::Nothing),
     // Terminals
@@ -989,6 +1083,27 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Device,
     ),
     cmd(
+        "nav.show_schematic",
+        "Show in schematic",
+        "Navigate",
+        &["cross probe", "find in drawing", "main symbol"],
+        Needs::Project,
+    ),
+    cmd(
+        "nav.show_cabinet",
+        "Show in Cabinet",
+        "Navigate",
+        &["cross probe", "find on plate", "layout"],
+        Needs::Project,
+    ),
+    cmd(
+        "nav.show_3d",
+        "Show in 3D",
+        "Navigate",
+        &["cross probe", "find in cabinet", "zoom to device"],
+        Needs::Project,
+    ),
+    cmd(
         "nav.all_references",
         "Every occurrence",
         "Navigate",
@@ -1036,7 +1151,14 @@ pub const COMMANDS: &[CommandInfo] = &[
         "view.fit",
         "Zoom to fit",
         "View",
-        &["zoom", "extents"],
+        &["zoom", "extents", "drawing", "content"],
+        Needs::Page,
+    ),
+    cmd(
+        "view.fit_sheet",
+        "Fit whole sheet",
+        "View",
+        &["zoom", "paper", "page", "extents"],
         Needs::Page,
     ),
     cmd(
@@ -1089,6 +1211,111 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_align_left",
+        "Align left in 3D",
+        "View",
+        &["align", "left", "edges"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_align_hcentre",
+        "Centre devices across in 3D",
+        "View",
+        &["align", "centre", "center", "vertical line"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_align_right",
+        "Align right in 3D",
+        "View",
+        &["align", "right", "edges"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_align_top",
+        "Align top in 3D",
+        "View",
+        &["align", "top", "edges"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_align_vcentre",
+        "Centre devices up and down in 3D",
+        "View",
+        &["align", "middle", "horizontal line"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_align_bottom",
+        "Align bottom in 3D",
+        "View",
+        &["align", "bottom", "edges"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_spread_h",
+        "Spread devices across in 3D",
+        "View",
+        &["distribute", "spread", "equal space", "gaps"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_spread_v",
+        "Spread devices down in 3D",
+        "View",
+        &["distribute", "spread", "equal space", "gaps"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_wire_runs",
+        "Show the wire runs and lengths in 3D",
+        "View",
+        &["wire runs", "wire lengths", "cut length", "routes", "ducts"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_ssao",
+        "Show or hide ambient occlusion in 3D",
+        "View",
+        &["occlusion", "ao", "ssao", "contact shadows", "corners"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_duplicate",
+        "Duplicate the selected devices in 3D",
+        "View",
+        &["duplicate", "copy", "clone", "same part"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_position",
+        "Show or hide the Position box in 3D",
+        "View",
+        &["position", "coordinates", "offset", "nudge", "x y"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_place",
+        "Place a device in 3D",
+        "View",
+        &["place", "put", "add device", "unplaced", "drop"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_dimensions",
+        "Show or hide dimensions in 3D",
+        "View",
+        &["dimensions", "measure", "distance", "mm", "sizes"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_quality",
+        "Restore 3D quality",
+        "View",
+        &["quality", "slow", "full quality", "reduced"],
+        Needs::Project,
+    ),
+    cmd(
         "view.3d_stats",
         "Show or hide the 3D frame statistics",
         "View",
@@ -1096,22 +1323,99 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "view.3d_section",
+        "Cut the 3D view with a section plane",
+        "View",
+        &[
+            "section",
+            "cut",
+            "clip",
+            "slice",
+            "see inside",
+            "cross section",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_save_view",
+        "Save the current 3D camera as a view",
+        "View",
+        &["save view", "bookmark", "camera", "remember view"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_hints",
+        "Show or hide the mouse and key hints in 3D",
+        "View",
+        &[
+            "hints",
+            "help",
+            "mouse",
+            "controls",
+            "legend",
+            "how to move",
+        ],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_select_devices",
+        "Select all devices in 3D",
+        "View",
+        &["select devices", "all devices", "select all"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_select_rails",
+        "Select all rails in 3D",
+        "View",
+        &["select rails", "all rails", "din rail"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_select_ducts",
+        "Select all ducts in 3D",
+        "View",
+        &["select ducts", "all ducts", "wire duct"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_hide",
+        "Hide the selection in 3D",
+        "View",
+        &["hide", "hide selection", "conceal"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_isolate",
+        "Isolate the selection in 3D",
+        "View",
+        &["isolate", "only this", "focus selection"],
+        Needs::Project,
+    ),
+    cmd(
+        "view.3d_show_all",
+        "Show everything hidden in 3D",
+        "View",
+        &["show all", "unhide", "reveal"],
+        Needs::Project,
+    ),
+    cmd(
         "view.iso",
-        "Isometric view",
+        "Isometric view (of the selection, if any)",
         "View",
         &["3d", "corner view", "perspective"],
         Needs::Project,
     ),
     cmd(
         "view.front",
-        "Front view",
+        "Front view (of the selection, if any)",
         "View",
         &["3d", "door side", "look at the door"],
         Needs::Project,
     ),
     cmd(
         "view.top",
-        "Top view",
+        "Top view (of the selection, if any)",
         "View",
         &["3d", "from above", "plan"],
         Needs::Project,
@@ -1324,11 +1628,32 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "sim.add_fault",
+        "Add fault to selection",
+        "View",
+        &[
+            "add fault",
+            "open circuit",
+            "short to earth",
+            "stuck contact",
+            "what if",
+            "failure",
+        ],
+        Needs::Selection,
+    ),
+    cmd(
         "view.override_marks",
         "Show override marks",
         "View",
         &["overrides", "manual"],
         Needs::Page,
+    ),
+    cmd(
+        "help.keymap_file",
+        "Open keymap file",
+        "View",
+        &["rebind", "customise keys", "change shortcuts", "keymap.txt"],
+        Needs::Nothing,
     ),
     cmd(
         "help.show_hints",
@@ -1462,6 +1787,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "cabinet.surface",
+            "Cabinet surfaces",
+            "View",
+            &["surface", "door", "wall", "roof", "floor", "side plate"],
+            Needs::Project,
+        ),
+        &["pick surface", "show surfaces"],
+    ),
+    verb(
+        cmd(
             "cabinet.door",
             "Inside size and door (Cabinet)",
             "View",
@@ -1557,7 +1892,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.cutlist",
-            "Cut list",
+            "Cut list (wire by the metre)",
             "View",
             &["cut length", "wire lengths", "sleeves"],
             Needs::Project,
@@ -1573,6 +1908,79 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["labels"],
+    ),
+    verb(
+        cmd(
+            "report.wirecut",
+            "Wire cut list (machine job)",
+            "View",
+            &["wire machine", "cut and strip", "production"],
+            Needs::Project,
+        ),
+        &["wire cut report"],
+    ),
+    verb(
+        cmd(
+            "report.io",
+            "I/O list",
+            "View",
+            &["plc", "inputs", "outputs", "addresses"],
+            Needs::Project,
+        ),
+        &["io list", "i/o list"],
+    ),
+    verb(
+        cmd(
+            "report.cable_schedule",
+            "Cable schedule",
+            "View",
+            &["cable list", "from to", "lengths"],
+            Needs::Project,
+        ),
+        &["cable schedule"],
+    ),
+    verb(
+        cmd(
+            "report.plugs",
+            "Plug list",
+            "View",
+            &["connectors", "plugs", "sockets", "mating"],
+            Needs::Project,
+        ),
+        &["plug list"],
+    ),
+    verb(
+        with_arguments(
+            cmd(
+                "report.add_page",
+                "Add report as drawing page",
+                "View",
+                &[
+                    "generated page",
+                    "cut list page",
+                    "labels page",
+                    "io list page",
+                    "strip diagram page",
+                    "print report",
+                ],
+                Needs::Project,
+            ),
+            &[
+                "toc",
+                "bom",
+                "devices",
+                "wires",
+                "cutlist",
+                "wirecut",
+                "terminals",
+                "cables",
+                "io",
+                "cableschedule",
+                "plugs",
+                "labels",
+            ],
+        ),
+        &["add report page", "add page"],
     ),
     verb(
         cmd(
@@ -1738,6 +2146,43 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["export pdf", "pdf"],
     ),
+    verb(
+        cmd(
+            "export.pdf_options",
+            "Export PDF...",
+            "Export",
+            &[
+                "pdf options",
+                "pdf dialog",
+                "page range",
+                "bookmarks",
+                "links",
+                "choose pages",
+            ],
+            Needs::Project,
+        ),
+        &["export pdf options", "pdf options"],
+    ),
+    verb(
+        cmd(
+            "export.pdf_page",
+            "Export this page as PDF",
+            "Export",
+            &["current page", "one page", "print page"],
+            Needs::Project,
+        ),
+        &["export page", "export this page"],
+    ),
+    verb(
+        cmd(
+            "export.report_pdf",
+            "Export report (PDF)",
+            "Export",
+            &["report pdf", "bom pdf", "wire list pdf", "print report"],
+            Needs::Project,
+        ),
+        &["export report"],
+    ),
     cmd(
         "export.change_report",
         "Export change report",
@@ -1798,6 +2243,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export plate"],
+    ),
+    verb(
+        cmd(
+            "export.plate_dxf",
+            "Export plate drawing as DXF",
+            "Export",
+            &["mounting plate", "drill table", "cnc", "cad"],
+            Needs::Project,
+        ),
+        &["export plate dxf"],
     ),
     verb(
         cmd(
@@ -1880,6 +2335,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["bench output", "open bench output"],
+    ),
+    verb(
+        cmd(
+            "report.designer",
+            "Report designer...",
+            "Export",
+            &["report template", "template", "title block", "designer"],
+            Needs::Project,
+        ),
+        &["report designer", "design a report", "edit report template"],
     ),
     verb(
         cmd(

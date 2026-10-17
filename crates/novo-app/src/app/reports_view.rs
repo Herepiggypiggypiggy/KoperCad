@@ -19,8 +19,8 @@ use eframe::egui;
 use novo_core::{AnyId, natural_cmp};
 use novo_reports::{Align, Cell, CsvOptions, ReportOutput, Section};
 use novo_theme::table::{
-    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths, table_header,
-    table_row,
+    ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths_min, header_min_widths,
+    table_header, table_row,
 };
 use novo_theme::widgets::section_label;
 use novo_xref::Place;
@@ -45,6 +45,9 @@ pub(crate) struct ReportsView {
     reveal: bool,
     /// The object the clicked row describes, for the status bar.
     picked: Option<AnyId>,
+    /// Name of the report template the PDF button prints through; `None`
+    /// is the plain report layout.
+    pub(super) template: Option<String>,
 }
 
 /// A file format a report can be written in.
@@ -52,6 +55,9 @@ pub(crate) struct ReportsView {
 pub(crate) enum ReportFormat {
     Excel,
     Csv,
+    /// A PDF: through the template picked in the header, else the plain
+    /// report layout.
+    Pdf,
 }
 
 impl ReportFormat {
@@ -59,6 +65,7 @@ impl ReportFormat {
         match self {
             ReportFormat::Excel => "xlsx",
             ReportFormat::Csv => "csv",
+            ReportFormat::Pdf => "pdf",
         }
     }
 }
@@ -74,6 +81,10 @@ pub(crate) const REPORT_COMMANDS: &[(&str, &str)] = &[
     ("report.cables", "cables"),
     ("report.cutlist", "cutlist"),
     ("report.labels", "labels"),
+    ("report.wirecut", "wirecut"),
+    ("report.io", "io"),
+    ("report.cable_schedule", "cableschedule"),
+    ("report.plugs", "plugs"),
 ];
 
 impl NovoApp {
@@ -170,12 +181,24 @@ impl NovoApp {
         let filter_id = egui::Id::new("reports_filter");
         let mut jump = self.report_keys(ui, &output, &orders, filter_id);
         let mut export = None;
+        let mut add_page = false;
         ui.horizontal(|ui| {
             ui.heading(&output.title);
             ui.weak(format!("{} rows", output.row_count()));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
                 ui.menu_button("Export", |ui| {
+                    if ui
+                        .button("PDF")
+                        .on_hover_text(
+                            "Write the whole report as a PDF next to the project, through the \
+                             template picked next to Export (ignores the filter and sort)",
+                        )
+                        .clicked()
+                    {
+                        export = Some(ReportFormat::Pdf);
+                        ui.close();
+                    }
                     if ui
                         .button("Excel")
                         .on_hover_text(
@@ -197,7 +220,20 @@ impl NovoApp {
                         export = Some(ReportFormat::Csv);
                         ui.close();
                     }
+                    ui.separator();
+                    if ui
+                        .button("Add as page")
+                        .on_hover_text(
+                            "Add this report to the drawing as a generated page, so the project \
+                             PDF prints it (Reports > Add report as drawing page)",
+                        )
+                        .clicked()
+                    {
+                        add_page = true;
+                        ui.close();
+                    }
                 });
+                self.template_picker(ui);
                 ui.add(
                     egui::TextEdit::singleline(&mut self.reports_view.filter)
                         .id(filter_id)
@@ -228,6 +264,9 @@ impl NovoApp {
         jump = jump.or(clicked);
         if let Some(format) = export {
             self.export_report(&id, format);
+        }
+        if add_page {
+            self.add_report_page(&id);
         }
         if let Some(source) = jump {
             self.jump_to_source(source);
@@ -364,10 +403,6 @@ impl NovoApp {
         if !section.title.is_empty() {
             section_label(ui, &section.title);
         }
-        let widths = column_widths(
-            ui.available_width(),
-            &section.columns.iter().map(|c| c.width).collect::<Vec<_>>(),
-        );
         let columns: Vec<TableColumn> = section
             .columns
             .iter()
@@ -380,6 +415,13 @@ impl NovoApp {
                 },
             })
             .collect();
+        // The vertical scroll bar of the rows takes room from the right edge.
+        let bar = ui.spacing().scroll.allocated_width() + 4.0;
+        let widths = column_widths_min(
+            ui.available_width() - bar,
+            &section.columns.iter().map(|c| c.width).collect::<Vec<_>>(),
+            &header_min_widths(ui, &columns),
+        );
         let sorted = match &self.reports_view.sort {
             Some((key, col, asc)) if *key == section.key => Some((*col, *asc)),
             _ => None,
@@ -503,6 +545,71 @@ impl NovoApp {
         self.write_report(&[&output], &path, format)
     }
 
+    /// `export.report_pdf`: the report the workspace shows (the first one
+    /// when none was picked) as a PDF next to the project.
+    pub(crate) fn export_selected_report_pdf(&mut self) -> Option<PathBuf> {
+        let id = self.report_selected()?;
+        self.export_report(&id, ReportFormat::Pdf)
+    }
+
+    /// Adds report `id` to the drawing as a generated page, as one undo
+    /// step. Says why when it cannot (already there, nothing to list).
+    pub(crate) fn add_report_page(&mut self, id: &str) {
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        let spec = match novo_reports::generated_page_spec(doc.project(), id) {
+            Ok(spec) => spec,
+            Err(why) => {
+                self.message(Level::Info, why);
+                return;
+            }
+        };
+        match doc.transact("Add report page", |tx| {
+            novo_reports::add_generated_pages(tx, std::slice::from_ref(&spec))
+        }) {
+            Ok(((), changes)) => {
+                self.changed_outside_canvas(&changes);
+                self.message(
+                    Level::Info,
+                    format!("Added page {} {}", spec.name, spec.title),
+                );
+            }
+            Err(e) => self.message(Level::Error, format!("Could not add the page: {e}")),
+        }
+    }
+
+    /// `report.add_page`: the report named by `argument` (an id such as
+    /// `io`), else the one the Reports workspace shows. From another
+    /// workspace it opens the Reports workspace to pick one, rather than
+    /// adding a page nobody chose.
+    pub(crate) fn add_report_page_command(&mut self, argument: Option<&str>) {
+        let known = |app: &mut Self, id: &str| {
+            app.backend
+                .document()
+                .is_some_and(|d| app.wb.reports.live(d.project()).ids().contains(&id))
+        };
+        if let Some(id) = argument.map(str::trim).filter(|a| !a.is_empty()) {
+            if known(self, id) {
+                self.add_report_page(id);
+            } else {
+                self.message(Level::Info, format!("There is no report `{id}`"));
+            }
+            return;
+        }
+        if self.workspace() == Workspace::Reports
+            && let Some(id) = self.report_selected()
+        {
+            self.add_report_page(&id);
+            return;
+        }
+        self.switch_workspace(Workspace::Reports);
+        self.message(
+            Level::Info,
+            "Pick a report, then Add as page (or Reports > Add report as drawing page)",
+        );
+    }
+
     /// Writes every report to one Excel file, a sheet each.
     pub(crate) fn export_all_reports(&mut self) -> Option<PathBuf> {
         let doc = self.backend.document()?;
@@ -540,10 +647,11 @@ impl NovoApp {
                 .collect::<Vec<_>>()
                 .join("\r\n")
                 .into_bytes(),
+            ReportFormat::Pdf => self.report_pdf_bytes(outputs)?,
         };
         match super::pdf::write_replacing(path, &bytes) {
             Ok(()) => {
-                self.message(Level::Info, format!("Exported {}", path.display()));
+                self.message_file(format!("Exported {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
@@ -555,6 +663,76 @@ impl NovoApp {
                 None
             }
         }
+    }
+
+    /// The template picker next to the PDF button: the report templates of
+    /// the project, the user folder and the built-in ones.
+    fn template_picker(&mut self, ui: &mut egui::Ui) {
+        let shown = self
+            .reports_view
+            .template
+            .clone()
+            .unwrap_or_else(|| "Plain layout".to_owned());
+        egui::ComboBox::from_id_salt("reports_template")
+            .selected_text(shown)
+            .width(150.0)
+            .show_ui(ui, |ui| {
+                let none = self.reports_view.template.is_none();
+                if ui.selectable_label(none, "Plain layout").clicked() {
+                    self.reports_view.template = None;
+                }
+                for t in self.report_templates() {
+                    let on = self.reports_view.template.as_deref() == Some(t.name.as_str());
+                    if ui.selectable_label(on, &t.name).clicked() {
+                        self.reports_view.template = Some(t.name);
+                    }
+                }
+            })
+            .response
+            .on_hover_text("Template the PDF is printed through");
+    }
+
+    /// The PDF of the (first) report in `outputs`.
+    fn report_pdf_bytes(&mut self, outputs: &[&ReportOutput]) -> Option<Vec<u8>> {
+        let output = outputs.first()?;
+        let name = self.project_name().unwrap_or_default();
+        let Some(chosen) = self.reports_view.template.clone() else {
+            let options = novo_pdf::ReportPdfOptions {
+                title: match outputs {
+                    [one] => one.title.clone(),
+                    _ => "Reports".to_owned(),
+                },
+                language: self.report_translator(),
+                ..novo_pdf::ReportPdfOptions::default()
+            };
+            return Some(novo_pdf::export_report_pdf(outputs, &options));
+        };
+        let Some(template) = self
+            .report_templates()
+            .into_iter()
+            .find(|t| t.name == chosen)
+        else {
+            self.reports_view.template = None;
+            self.message(
+                Level::Warning,
+                format!("Template {chosen} no longer exists, using the plain layout"),
+            );
+            return None;
+        };
+        let Some(template) = super::designer::retarget(&template, &output.report, &output.title)
+        else {
+            self.message(
+                Level::Warning,
+                format!("Template {chosen} has no table to put the report in"),
+            );
+            return None;
+        };
+        let rendered = self.render_with_project(&template);
+        Some(novo_pdf::export_layouts_pdf(
+            &rendered.pages,
+            &format!("{name}  {}", output.title),
+            &[],
+        ))
     }
 
     /// `<project> - <what>.xlsx`, or `... 2.xlsx` when that exists.
@@ -753,5 +931,126 @@ mod tests {
         assert!(csv.extension().is_some_and(|e| e == "csv"));
         let all = d.app.export_all_reports().unwrap();
         assert!(all.is_file());
+    }
+
+    fn saved_example(dir: &Path) -> Drive {
+        let mut d = Drive::new(&dir.join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::OpenExample);
+        d.frame();
+        assert!(d.app.save_to(&dir.join("Plant.novo")));
+        d
+    }
+
+    #[test]
+    fn a_report_goes_to_pdf_from_the_command() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = saved_example(dir.path());
+        d.app.show_report("bom");
+        d.frame();
+        d.app.wb.queued.push("export.report_pdf");
+        d.frame();
+        let pdf = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .find(|p| p.extension().is_some_and(|e| e == "pdf"))
+            .expect("the report PDF is written next to the project");
+        let name = pdf.file_name().unwrap().to_string_lossy().into_owned();
+        assert!(name.ends_with(" - Bill of materials.pdf"), "{name}");
+        assert!(std::fs::read(&pdf).unwrap().starts_with(b"%PDF"));
+        assert_eq!(ReportFormat::Pdf.extension(), "pdf");
+    }
+
+    #[test]
+    fn the_four_more_reports_have_their_own_commands() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = saved_example(dir.path());
+        for (command, report) in [
+            ("report.wirecut", "wirecut"),
+            ("report.io", "io"),
+            ("report.cable_schedule", "cableschedule"),
+            ("report.plugs", "plugs"),
+        ] {
+            assert!(REPORT_COMMANDS.contains(&(command, report)));
+            d.app.wb.queued.push(command);
+            d.frame();
+            d.frame();
+            assert_eq!(d.app.workspace(), Workspace::Reports, "{command}");
+            assert_eq!(d.app.report_selected().as_deref(), Some(report));
+        }
+    }
+
+    fn generated_pages(d: &Drive) -> usize {
+        d.app
+            .document()
+            .unwrap()
+            .project()
+            .pages()
+            .filter(|p| matches!(p.kind, novo_core::PageKind::Generated { .. }))
+            .count()
+    }
+
+    #[test]
+    fn add_page_adds_the_shown_report_once_and_from_elsewhere_only_opens_the_list() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = saved_example(dir.path());
+        let ctx = d.ctx.clone();
+        let before = generated_pages(&d);
+        // From the drawing it opens the Reports workspace and adds nothing.
+        d.app.run_command(&ctx, "report.add_page", None);
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::Reports);
+        assert_eq!(generated_pages(&d), before);
+        // With a report shown it adds that report as one undo step.
+        d.app.show_report("cutlist");
+        d.frame();
+        let depth = d.app.document().unwrap().undo_depth();
+        d.app.wb.queued.push("report.add_page");
+        d.frame();
+        assert_eq!(generated_pages(&d), before + 1);
+        assert_eq!(d.app.document().unwrap().undo_depth(), depth + 1);
+        // A second time says it is there already.
+        d.app.wb.queued.push("report.add_page");
+        d.frame();
+        assert_eq!(generated_pages(&d), before + 1);
+        let last = d.app.messages().last().unwrap();
+        assert!(last.text.contains("already has"), "{}", last.text);
+        // An unknown report named by the argument is a message.
+        d.app.run_command(&ctx, "report.add_page", Some("nope"));
+        assert!(d.app.messages().last().unwrap().text.contains("no report"));
+        d.app.run(&ctx, Action::Undo);
+        assert_eq!(generated_pages(&d), before);
+    }
+
+    #[test]
+    fn the_page_pdf_holds_only_the_page_on_screen() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = saved_example(dir.path());
+        let all = d.app.export_pdf().expect("all pages");
+        d.app.wb.queued.push("export.pdf_page");
+        d.frame();
+        let one = std::fs::read_dir(dir.path())
+            .unwrap()
+            .filter_map(Result::ok)
+            .map(|e| e.path())
+            .find(|p| {
+                p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().contains(" page "))
+            })
+            .expect("the page PDF is written next to the project");
+        let one_bytes = std::fs::read(&one).unwrap();
+        assert!(one_bytes.starts_with(b"%PDF"));
+        let pages = |bytes: &[u8]| {
+            bytes
+                .windows(b"/Type /Page\n".len())
+                .filter(|w| *w == b"/Type /Page\n")
+                .count()
+        };
+        assert!(
+            one_bytes.len() <= std::fs::read(all).unwrap().len(),
+            "one page is not larger than all of them"
+        );
+        let _ = pages;
     }
 }

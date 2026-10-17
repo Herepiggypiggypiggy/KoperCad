@@ -8,6 +8,7 @@
 //! finger. On the drawing, passed objects get the "added" outline and failed
 //! ones the error mark.
 
+use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -21,9 +22,10 @@ use novo_commissioning::{
 use novo_core::{PageId, Project};
 use novo_pdf::{ReportFileFormat, ReportPdfOptions};
 use novo_reports::CsvOptions;
+use novo_theme::{Density, Palette, icons, space, widgets};
 use novo_xref::Place;
 
-use super::cabinet_bar::note_ctx;
+use super::cabinet_bar::{note_ctx, note_rect};
 
 use super::changes::shown_on;
 use super::pdf::{replaceable_path, write_replacing};
@@ -31,14 +33,13 @@ use super::revisions::iso_date;
 use super::workspace::Workspace;
 use super::{Level, NovoApp, OutlineMode, projects_dir};
 
-/// Minimum height of the buttons: comfortable for a finger on a tablet.
-const TOUCH: f32 = 44.0;
-/// The same with Large on: for a tablet in a cabinet, gloves or a stylus.
-const TOUCH_LARGE: f32 = 64.0;
 /// How long the first touch of "Pass all open" waits for the second.
 const ARM_SECONDS: f64 = 5.0;
-/// Row and label text size with large buttons on.
-const TEXT_LARGE: f32 = 18.0;
+/// Windows narrower than this (logical points) get the tablet layout in the
+/// Commissioning workspace: the panel pinned and wider, large buttons on.
+pub(super) const TABLET_MAX_WIDTH: f32 = 1200.0;
+/// The panel's width in the tablet layout.
+pub(super) const TABLET_PANEL_WIDTH: f32 = 380.0;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -59,8 +60,12 @@ pub(crate) struct CommissioningMode {
     punch_title: String,
     punch_severity: Severity,
     show_closed: bool,
+    /// The pages of the checks list that are unfolded.
+    open_pages: HashSet<PageId>,
+    /// The page the list last unfolded for, so a page change unfolds it once.
+    unfolded_for: Option<PageId>,
     /// Bigger buttons and text for a tablet.
-    large: bool,
+    pub(super) large: bool,
     /// "Pass all open" was touched once for this target at this time (egui
     /// seconds); a second touch within `ARM_SECONDS` does it.
     armed: Option<(Target, f64)>,
@@ -84,6 +89,8 @@ impl CommissioningMode {
             punch_title: String::new(),
             punch_severity: Severity::Minor,
             show_closed: false,
+            open_pages: HashSet::new(),
+            unfolded_for: None,
             large: false,
             armed: None,
             dirty: false,
@@ -123,40 +130,50 @@ fn now() -> String {
     )
 }
 
-fn state_glyph(state: CheckState) -> &'static str {
+/// The icon and colour of a check state: a copper-free traffic light that
+/// always carries a shape, so it reads without colour.
+fn state_icon(p: &Palette, state: CheckState) -> (&'static str, egui::Color32) {
     match state {
-        CheckState::Pending => "○",
-        CheckState::Passed => "✔",
-        CheckState::Failed => "✖",
-        CheckState::NotApplicable => "–",
+        CheckState::Pending => (icons::CIRCLE, p.text_tertiary),
+        CheckState::Passed => (icons::CHECK_CIRCLE, p.success),
+        CheckState::Failed => (icons::WARNING_OCTAGON, p.error),
+        CheckState::NotApplicable => (icons::MINUS_CIRCLE, p.text_tertiary),
     }
 }
 
-/// One glyph for all the checks of a target: failed beats pending beats passed.
-fn target_glyph(store: &CommissioningStore, target: Target) -> &'static str {
+/// One state for all the checks of a target: failed beats pending beats passed.
+fn target_state(store: &CommissioningStore, target: Target) -> CheckState {
     let states: Vec<CheckState> = target
         .checks()
         .iter()
         .map(|&c| store.state(target, c))
         .collect();
     if states.contains(&CheckState::Failed) {
-        "✖"
+        CheckState::Failed
     } else if states.contains(&CheckState::Pending) {
-        "○"
+        CheckState::Pending
     } else {
-        "✔"
+        CheckState::Passed
     }
 }
 
-/// The height of a touch target, for the Large switch.
-fn touch(large: bool) -> f32 {
-    if large { TOUCH_LARGE } else { TOUCH }
-}
-
-/// Row and label text, bigger with large buttons so a tablet reads it too.
-fn sized(large: bool, text: String) -> egui::RichText {
-    let text = egui::RichText::new(text);
-    if large { text.size(TEXT_LARGE) } else { text }
+/// Touch density (the Large switch) for this panel only: the controls are
+/// 36 pt high and the text a step larger. Without it the panel uses the
+/// controls of the app's density, so a list row is one control high.
+fn touch_density(ui: &mut egui::Ui, large: bool) {
+    if !large {
+        return;
+    }
+    let m = Density::Touch.metrics();
+    let style = ui.style_mut();
+    style.spacing.interact_size.y = m.control_height;
+    style.spacing.button_padding = egui::vec2(m.button_padding[0], m.button_padding[1]);
+    if let Some(body) = style.text_styles.get_mut(&egui::TextStyle::Body) {
+        body.size = m.font_body;
+    }
+    if let Some(button) = style.text_styles.get_mut(&egui::TextStyle::Button) {
+        button.size = m.font_body;
+    }
 }
 
 /// Passes every open check of the target in two touches: the first arms the
@@ -179,65 +196,43 @@ fn pass_all_open(ui: &mut egui::Ui, mode: &mut CommissioningMode, target: Target
     if open.is_empty() {
         return;
     }
-    ui.add_space(8.0);
+    ui.add_space(space::M);
     ui.horizontal(|ui| {
         if mode.armed.is_some() {
-            if big_button(
-                ui,
-                mode.large,
-                &format!("Pass {} open · Pass them", open.len()),
-            )
-            .clicked()
+            if ui
+                .button(format!("Pass {} open · Pass them", open.len()))
+                .clicked()
             {
                 for check in open {
                     mode.decide(target, check, CheckState::Passed);
                 }
                 mode.armed = None;
-            } else if big_button(ui, mode.large, "Cancel").clicked() {
+            } else if ui.button("Cancel").clicked() {
                 mode.armed = None;
             } else {
                 ui.ctx()
                     .request_repaint_after(std::time::Duration::from_secs_f64(ARM_SECONDS));
             }
-        } else if big_button(ui, mode.large, &format!("Pass all {} open", open.len())).clicked() {
+        } else if ui.button(format!("Pass all {} open", open.len())).clicked() {
             mode.armed = Some((target, now_s));
         }
     });
 }
 
-fn big_button(ui: &mut egui::Ui, large: bool, text: &str) -> egui::Response {
-    let text = if large {
-        egui::RichText::new(text).size(18.0)
-    } else {
-        egui::RichText::new(text)
-    };
-    ui.add(egui::Button::new(text).min_size(egui::vec2(touch(large) * 1.5, touch(large))))
-}
-
+/// A progress bar for one scope: "47 / 76 done" with the failures in red.
 fn progress_bar(ui: &mut egui::Ui, title: &str, p: Progress) {
-    let fraction = (p.percent() / 100.0) as f32;
-    let mut right = format!("{}/{}", p.done(), p.total);
+    let total = p.total.max(1) as f32;
+    let mut detail = format!("{} / {}", p.done(), p.total);
     if p.failed > 0 {
-        right.push_str(&format!(" · {} failed", p.failed));
+        detail.push_str(&format!(" · {} failed", p.failed));
     }
-    let palette = novo_theme::Palette::of(ui);
-    ui.horizontal(|ui| {
-        ui.label(egui::RichText::new(title).color(palette.text_secondary));
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            ui.label(
-                egui::RichText::new(right)
-                    .monospace()
-                    .color(palette.text_primary),
-            );
-        });
-    });
-    let (rect, _) =
-        ui.allocate_exact_size(egui::vec2(ui.available_width(), 6.0), egui::Sense::hover());
-    ui.painter().rect_filled(rect, 3, palette.sunken);
-    let mut done = rect;
-    done.set_width(rect.width() * fraction.clamp(0.0, 1.0));
-    ui.painter().rect_filled(done, 3, palette.success);
-    ui.add_space(4.0);
+    widgets::progress_bar(
+        ui,
+        title,
+        &detail,
+        p.done() as f32 / total,
+        p.failed as f32 / total,
+    );
 }
 
 /// Where a click on `info` takes the drawing: its page and, for a device or
@@ -256,6 +251,19 @@ fn place_of(project: &Project, info: &TargetInfo, current: Option<PageId>) -> Op
 }
 
 impl NovoApp {
+    /// The Commissioning workspace is showing, so its panel stays beside the
+    /// drawing at any window width: the walk-through needs it all the time.
+    pub(super) fn commissioning_pins_panel(&self) -> bool {
+        self.is_open() && self.workspace() == Workspace::Commissioning
+    }
+
+    /// Commissioning on a window the size of a tablet.
+    pub(super) fn commissioning_tablet(&self) -> bool {
+        self.commissioning_pins_panel()
+            && self.window_width > 0.0
+            && self.window_width < TABLET_MAX_WIDTH
+    }
+
     /// The `view.commissioning` command opens the Commissioning workspace:
     /// the mode is on, its panel in the outline's place. Leaving it drops the
     /// in-memory store, which is safe because every change is flushed to the
@@ -334,9 +342,9 @@ impl NovoApp {
         let project = doc.project();
         let mut marks = Vec::new();
         for info in targets(project).iter().filter(|i| i.pages.contains(&page)) {
-            let (kind, what) = match target_glyph(&mode.store, info.target) {
-                "✖" => (MarkKind::Error, "✖ Failed"),
-                "✔" => (MarkKind::Added, "✔ Passed"),
+            let (kind, what) = match target_state(&mode.store, info.target) {
+                CheckState::Failed => (MarkKind::Error, "✖ Failed"),
+                CheckState::Passed => (MarkKind::Added, "✔ Passed"),
                 _ => continue,
             };
             for id in shown_on(project, info.target.any_id(), page) {
@@ -353,6 +361,7 @@ impl NovoApp {
         let current = self.current_page;
         let mut go: Option<Place> = None;
         let mut export: Option<ReportFileFormat> = None;
+        let tablet = self.commissioning_tablet();
         {
             let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
             else {
@@ -360,74 +369,42 @@ impl NovoApp {
                 return false;
             };
             let project = doc.project();
-            mode.large = self.settings.large_buttons;
+            mode.large = self.settings.large_buttons || tablet;
+            touch_density(ui, mode.large);
+            let mut tab = usize::from(mode.tab == Tab::Punch);
+            let mut large = mode.large;
             ui.horizontal(|ui| {
-                for (tab, label) in [(Tab::Checks, "Checks"), (Tab::Punch, "Punch list")] {
-                    let chip = novo_theme::widgets::chip(ui, label, mode.tab == tab);
-                    if tab == Tab::Punch {
-                        note_ctx(ui.ctx(), "commissioning.punch", "Punch tab", &chip);
-                    }
-                    if chip.clicked() {
-                        mode.tab = tab;
-                    }
+                let row = ui.scope(|ui| widgets::tabs(ui, &mut tab, &["Checks", "Punch list"]));
+                if row.inner {
+                    mode.tab = [Tab::Checks, Tab::Punch][tab];
                 }
+                // The tabs are one widget; the Punch tab is the right half.
+                let r = row.response.rect;
+                let punch = egui::Rect::from_min_max(egui::pos2(r.center().x, r.top()), r.max);
+                note_rect(ui.ctx(), "commissioning.punch", "Punch tab", punch, false);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    export = header_menu(ui, mode, &mut large, tablet);
+                });
             });
-            ui.add_space(4.0);
-            ui.horizontal(|ui| {
-                ui.add_sized(
-                    [64.0, 22.0],
-                    egui::Label::new(egui::RichText::new("Signed by").weak()),
-                );
-                let who = ui.add(
-                    egui::TextEdit::singleline(&mut mode.who)
-                        .hint_text("Name for the sign-off")
-                        .desired_width(f32::INFINITY),
-                );
-                note_ctx(ui.ctx(), "commissioning.who", "By field", &who);
-            });
-            ui.add_space(6.0);
+            if large != mode.large {
+                mode.large = large;
+                self.settings.large_buttons = large;
+            }
+            ui.add_space(space::M);
             progress_bar(
                 ui,
                 "Project",
                 progress(project, &mode.store, Scope::Project),
             );
             if let Some(page) = current {
+                ui.add_space(space::S);
                 progress_bar(
                     ui,
                     "This page",
                     progress(project, &mode.store, Scope::Page(page)),
                 );
             }
-            ui.add_space(2.0);
-            ui.horizontal(|ui| {
-                ui.add_sized(
-                    [64.0, 22.0],
-                    egui::Label::new(egui::RichText::new("Report").weak()),
-                );
-                for (label, format) in [
-                    ("PDF", ReportFileFormat::Pdf),
-                    ("CSV", ReportFileFormat::Csv(CsvOptions::default())),
-                ] {
-                    let button = ui
-                        .add(egui::Button::new(label).min_size(egui::vec2(52.0, 24.0)))
-                        .on_hover_text("Write the commissioning report next to the project file");
-                    if label == "PDF" {
-                        note_ctx(
-                            ui.ctx(),
-                            "commissioning.report",
-                            "Report PDF button",
-                            &button,
-                        );
-                    }
-                    if button.clicked() {
-                        export = Some(format);
-                    }
-                }
-            });
-            if ui.checkbox(&mut mode.large, "Large buttons").changed() {
-                self.settings.large_buttons = mode.large;
-            }
-            ui.add_space(4.0);
+            ui.add_space(space::M);
             match mode.tab {
                 Tab::Checks => checks_tab(ui, mode, project, current, &mut go),
                 Tab::Punch => punch_tab(ui, mode, project, current, &mut go),
@@ -497,6 +474,7 @@ impl NovoApp {
         let options = ReportPdfOptions {
             title: format!("{name}, commissioning"),
             footer_right: now().chars().take(10).collect(),
+            language: self.report_translator(),
             ..ReportPdfOptions::default()
         };
         let result = novo_pdf::report_bytes(&report, format, &options)
@@ -504,7 +482,7 @@ impl NovoApp {
             .and_then(|bytes| write_replacing(path, &bytes).map_err(|e| e.to_string()));
         match result {
             Ok(()) => {
-                self.message(Level::Info, format!("Exported {}", path.display()));
+                self.message_file(format!("Exported {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
@@ -526,17 +504,28 @@ pub(super) fn report_path(
     name: &str,
     ext: &str,
 ) -> Option<PathBuf> {
+    report_path_for("commissioning", file, dir, name, ext)
+}
+
+/// [`report_path`] for a report called `kind` (`<project> <kind>.<ext>`).
+pub(super) fn report_path_for(
+    kind: &str,
+    file: Option<&Path>,
+    dir: Option<&Path>,
+    name: &str,
+    ext: &str,
+) -> Option<PathBuf> {
     let base = match file {
         Some(file) => {
             let stem = file.file_stem()?.to_string_lossy().into_owned();
-            file.with_file_name(format!("{stem} commissioning.{ext}"))
+            file.with_file_name(format!("{stem} {kind}.{ext}"))
         }
         None => {
             let stem = Path::new(&super::project_file_name(name))
                 .with_extension("")
                 .to_string_lossy()
                 .into_owned();
-            dir?.join(format!("{stem} commissioning.{ext}"))
+            dir?.join(format!("{stem} {kind}.{ext}"))
         }
     };
     if ext == "pdf" {
@@ -557,6 +546,67 @@ pub(super) fn report_path(
     }
 }
 
+/// The one menu in the panel header: who is deciding, the report, and the
+/// Large switch. The button shows the name, so the person sees who the next
+/// decision is recorded for without opening it. Returns the report to write.
+fn header_menu(
+    ui: &mut egui::Ui,
+    mode: &mut CommissioningMode,
+    large: &mut bool,
+    tablet: bool,
+) -> Option<ReportFileFormat> {
+    let mut export = None;
+    let name = if mode.who.trim().is_empty() {
+        "By".to_owned()
+    } else {
+        format!("By {}", mode.who.trim())
+    };
+    let menu = ui.menu_button(format!("{name}  {}", icons::DOTS_THREE), |ui| {
+        ui.set_width(220.0);
+        widgets::section_label(ui, "By");
+        let who = ui.add(egui::TextEdit::singleline(&mut mode.who).desired_width(f32::INFINITY));
+        note_ctx(ui.ctx(), "commissioning.who", "By menu", &who);
+        ui.add_space(space::S);
+        widgets::section_label(ui, "Report");
+        for (label, format) in [
+            ("Write PDF report", ReportFileFormat::Pdf),
+            (
+                "Write CSV report",
+                ReportFileFormat::Csv(CsvOptions::default()),
+            ),
+        ] {
+            let item = widgets::menu_item(ui, Some(icons::FILE_TEXT), label, None, true)
+                .on_hover_text("Write the commissioning report next to the project file");
+            if matches!(format, ReportFileFormat::Pdf) {
+                note_ctx(
+                    ui.ctx(),
+                    "commissioning.report",
+                    "Write PDF report item",
+                    &item,
+                );
+            }
+            if item.clicked() {
+                export = Some(format);
+                ui.close();
+            }
+        }
+        ui.add_space(space::S);
+        // The tablet layout always has them on.
+        ui.add_enabled(!tablet, egui::Checkbox::new(large, "Large buttons"));
+    });
+    // The button stands in for the field and the PDF item until it is open.
+    if menu.inner.is_none() {
+        note_ctx(ui.ctx(), "commissioning.who", "By menu", &menu.response);
+        note_ctx(
+            ui.ctx(),
+            "commissioning.report",
+            "Write PDF report item",
+            &menu.response,
+        );
+    }
+    export
+}
+
 fn checks_tab(
     ui: &mut egui::Ui,
     mode: &mut CommissioningMode,
@@ -564,25 +614,27 @@ fn checks_tab(
     current: Option<PageId>,
     go: &mut Option<Place>,
 ) {
-    let Some(page) = current else {
-        ui.weak("Open a page to check what is drawn on it");
-        return;
+    let all = targets(project);
+    let pages = project.pages_in_order();
+    // The next open target: the current page first, then the others in page order.
+    let is_open = |mode: &CommissioningMode, i: &TargetInfo| {
+        i.target
+            .checks()
+            .iter()
+            .any(|&c| mode.store.state(i.target, c) == CheckState::Pending)
     };
-    let on_page: Vec<TargetInfo> = targets(project)
-        .into_iter()
-        .filter(|i| i.pages.contains(&page))
-        .collect();
-    let next = on_page
+    let next = all
         .iter()
-        .find(|i| {
-            i.target
-                .checks()
-                .iter()
-                .any(|&c| mode.store.state(i.target, c) == CheckState::Pending)
+        .find(|i| current.is_some_and(|p| i.pages.contains(&p)) && is_open(mode, i))
+        .or_else(|| {
+            pages.iter().find_map(|page| {
+                all.iter()
+                    .find(|i| i.pages.contains(&page.id) && is_open(mode, i))
+            })
         })
         .cloned();
     ui.horizontal(|ui| {
-        let next_open = big_button(ui, mode.large, "Next open")
+        let next_open = widgets::primary_button(ui, "Next open")
             .on_hover_text("Select the next wire, terminal or device with an open check");
         note_ctx(
             ui.ctx(),
@@ -600,11 +652,12 @@ fn checks_tab(
             }
         }
         if next.is_none() {
-            ui.weak("Everything on this page is decided");
+            ui.weak("Everything is decided");
         }
     });
+    let p = Palette::of(ui);
 
-    if let Some(info) = on_page.iter().find(|i| Some(i.target) == mode.selected) {
+    if let Some(info) = all.iter().find(|i| Some(i.target) == mode.selected) {
         ui.separator();
         ui.strong(&info.label);
         ui.horizontal(|ui| {
@@ -624,12 +677,12 @@ fn checks_tab(
             let first = Some(check) == first_check;
             let state = mode.store.state(info.target, check);
             ui.horizontal_wrapped(|ui| {
-                ui.label(sized(
-                    mode.large,
-                    format!("{} {}", state_glyph(state), check.label()),
-                ));
-                let pass = big_button(ui, mode.large, "Pass");
-                let fail = big_button(ui, mode.large, "Fail");
+                ui.spacing_mut().item_spacing.x = space::S;
+                let (icon, color) = state_icon(p, state);
+                ui.label(egui::RichText::new(icon).color(color));
+                ui.label(check.label());
+                let pass = ui.button("Pass");
+                let fail = ui.button("Fail");
                 if first {
                     note_ctx(ui.ctx(), "commissioning.pass", "Pass button", &pass);
                     note_ctx(ui.ctx(), "commissioning.fail", "Fail button", &fail);
@@ -640,10 +693,10 @@ fn checks_tab(
                 if fail.clicked() {
                     mode.decide(info.target, check, CheckState::Failed);
                 }
-                if big_button(ui, mode.large, "N/A").clicked() {
+                if ui.button("N/A").clicked() {
                     mode.decide(info.target, check, CheckState::NotApplicable);
                 }
-                if state != CheckState::Pending && big_button(ui, mode.large, "Reset").clicked() {
+                if state != CheckState::Pending && ui.button("Reset").clicked() {
                     mode.store.clear_check(info.target, check);
                     mode.dirty = true;
                 }
@@ -684,34 +737,91 @@ fn checks_tab(
         ui.separator();
     }
 
+    if current != mode.unfolded_for {
+        mode.unfolded_for = current;
+        mode.open_pages.extend(current);
+    }
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
         .show(ui, |ui| {
-            for info in &on_page {
-                let glyph = target_glyph(&mode.store, info.target);
-                let tint = match glyph {
-                    "✖" => novo_theme::tokens::ERROR,
-                    "✔" => novo_theme::tokens::SUCCESS,
-                    _ => novo_theme::tokens::TEXT_MUTED,
+            ui.spacing_mut().item_spacing.y = 1.0;
+            for page in &pages {
+                let on_page: Vec<&TargetInfo> =
+                    all.iter().filter(|i| i.pages.contains(&page.id)).collect();
+                if on_page.is_empty() {
+                    continue;
+                }
+                let open = mode.open_pages.contains(&page.id);
+                let done = progress(project, &mode.store, Scope::Page(page.id));
+                let name = if page.title.is_empty() {
+                    page.name.clone()
+                } else {
+                    format!("{} · {}", page.name, page.title)
                 };
-                let size = if mode.large { TEXT_LARGE } else { 13.0 };
-                let font = egui::FontId::proportional(size);
-                let mut text = egui::text::LayoutJob::default();
-                text.append(
-                    &format!("{glyph}  "),
-                    0.0,
-                    egui::TextFormat::simple(font.clone(), tint),
-                );
-                text.append(
-                    &info.label,
-                    0.0,
-                    egui::TextFormat::simple(font, ui.visuals().text_color()),
-                );
-                let row = egui::Button::selectable(mode.selected == Some(info.target), text)
-                    .min_size(egui::vec2(ui.available_width(), touch(mode.large) * 0.7));
-                if ui.add(row).clicked() {
-                    mode.selected = Some(info.target);
-                    *go = place_of(project, info, current);
+                let head = widgets::row(ui, false, |ui| {
+                    ui.label(
+                        egui::RichText::new(if open {
+                            icons::CARET_DOWN
+                        } else {
+                            icons::CARET_RIGHT
+                        })
+                        .color(p.text_tertiary),
+                    );
+                    widgets::section_label(ui, &name);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let color = if done.failed > 0 {
+                            p.error
+                        } else {
+                            p.text_secondary
+                        };
+                        ui.label(
+                            egui::RichText::new(format!("{}/{}", done.done(), done.total))
+                                .monospace()
+                                .color(color),
+                        );
+                    });
+                });
+                if head.clicked() {
+                    if open {
+                        mode.open_pages.remove(&page.id);
+                    } else {
+                        mode.open_pages.insert(page.id);
+                    }
+                }
+                if !open {
+                    continue;
+                }
+                for info in on_page {
+                    let state = target_state(&mode.store, info.target);
+                    let decided = info
+                        .target
+                        .checks()
+                        .iter()
+                        .filter(|&&c| mode.store.state(info.target, c) != CheckState::Pending)
+                        .count();
+                    let row = widgets::row(ui, mode.selected == Some(info.target), |ui| {
+                        ui.add_space(space::XL);
+                        let (icon, color) = state_icon(p, state);
+                        ui.label(egui::RichText::new(icon).color(color));
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(
+                                egui::RichText::new(format!(
+                                    "{decided}/{}",
+                                    info.target.checks().len()
+                                ))
+                                .monospace()
+                                .color(p.text_tertiary),
+                            );
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| ui.add(egui::Label::new(&info.label).truncate()),
+                            );
+                        });
+                    });
+                    if row.clicked() {
+                        mode.selected = Some(info.target);
+                        *go = place_of(project, info, current);
+                    }
                 }
             }
         });
@@ -748,14 +858,7 @@ fn punch_tab(
                 }
             });
         let can_add = !mode.punch_title.trim().is_empty();
-        if ui
-            .add_enabled(
-                can_add,
-                egui::Button::new("Add")
-                    .min_size(egui::vec2(touch(mode.large) * 1.5, touch(mode.large))),
-            )
-            .clicked()
-        {
+        if ui.add_enabled(can_add, egui::Button::new("Add")).clicked() {
             mode.store.add_punch(PunchItem {
                 id: 0,
                 title: std::mem::take(&mut mode.punch_title).trim().to_owned(),
@@ -786,16 +889,37 @@ fn punch_tab(
     egui::ScrollArea::vertical()
         .auto_shrink([false, true])
         .show(ui, |ui| {
+            let p = Palette::of(ui);
             for item in &items {
                 let info = item.target.and_then(|t| all.iter().find(|i| i.target == t));
-                let label = info.map_or(String::new(), |i| format!(" · {}", i.label));
-                let text = format!(
-                    "{} · {:?} · {}{label}",
-                    severity_label(item.severity),
-                    item.state,
-                    item.title
-                );
-                if ui.selectable_label(false, text).clicked()
+                let (icon, color) = match item.severity {
+                    Severity::Blocking => (icons::WARNING_OCTAGON, p.error),
+                    Severity::Major => (icons::WARNING, p.warning),
+                    Severity::Minor => (icons::CIRCLE, p.text_tertiary),
+                };
+                let row = widgets::row(ui, false, |ui| {
+                    ui.label(egui::RichText::new(icon).color(color));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        ui.label(
+                            egui::RichText::new(format!("{:?}", item.state))
+                                .size(12.0)
+                                .color(p.text_secondary),
+                        );
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            let label = info.map_or(String::new(), |i| format!(" · {}", i.label));
+                            ui.add(
+                                egui::Label::new(format!(
+                                    "{} · {}{label}",
+                                    severity_label(item.severity),
+                                    item.title
+                                ))
+                                .truncate(),
+                            )
+                        });
+                    });
+                })
+                .on_hover_text(severity_label(item.severity));
+                if row.clicked()
                     && let Some(info) = info
                 {
                     mode.selected = Some(info.target);
@@ -813,7 +937,7 @@ fn punch_tab(
                         }
                     };
                     for &(label, state) in moves {
-                        let button = big_button(ui, mode.large, label);
+                        let button = ui.button(label);
                         if label == "Fixed" || label == "Verified" {
                             note_ctx(ui.ctx(), "commissioning.resolve", "Resolve button", &button);
                         }
@@ -828,7 +952,7 @@ fn punch_tab(
                     }
                     if !item.state.is_closed()
                         && item.state != PunchState::Fixed
-                        && big_button(ui, mode.large, "Won't fix").clicked()
+                        && ui.button("Won't fix").clicked()
                         && mode
                             .store
                             .set_punch_state(item.id, PunchState::WontFix, &mode.who, &now())
@@ -837,7 +961,7 @@ fn punch_tab(
                         mode.dirty = true;
                     }
                 });
-                ui.separator();
+                ui.add_space(space::S);
             }
         });
 }

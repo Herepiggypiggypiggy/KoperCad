@@ -28,8 +28,11 @@ pub struct Palette {
     pub hover: Color32,
     /// Hairlines between regions.
     pub border_subtle: Color32,
-    /// Hovered and focused outlines, inputs.
+    /// Hovered and focused outlines.
     pub border_strong: Color32,
+    /// Outlines of controls at rest (checks, radios, buttons, fields): 3:1 on
+    /// the panel, field and floating surfaces.
+    pub border_control: Color32,
     /// Body text and values.
     pub text_primary: Color32,
     /// Text on hovered and pressed controls, one step above primary.
@@ -114,6 +117,7 @@ impl Palette {
         hover: tokens::BG_4,
         border_subtle: tokens::BORDER,
         border_strong: tokens::BORDER_STRONG,
+        border_control: Color32::from_rgb(0x6A, 0x6A, 0x72),
         text_primary: tokens::TEXT,
         text_strong: Color32::from_rgb(0xF4, 0xF2, 0xEE),
         text_secondary: tokens::TEXT_MUTED,
@@ -163,6 +167,7 @@ impl Palette {
             hover: Color32::from_rgb(0xDF, 0xDC, 0xD7),
             border_subtle: Color32::from_rgb(0xDA, 0xD8, 0xD3),
             border_strong: Color32::from_rgb(0xB5, 0xB1, 0xAA),
+            border_control: Color32::from_rgb(0x8C, 0x88, 0x80),
             text_primary: Color32::from_rgb(0x1E, 0x1D, 0x1B),
             text_strong: Color32::from_rgb(0x0C, 0x0B, 0x0A),
             text_secondary: Color32::from_rgb(0x5A, 0x58, 0x53),
@@ -254,6 +259,10 @@ mod tests {
                 }
             }
             assert!(contrast(p.on_accent, p.accent) >= 4.5);
+            // The rings of checks and radios and the outline of a field.
+            for bg in [p.sunken, p.panel, p.raised] {
+                assert!(contrast(p.border_control, bg) >= 3.0, "{bg:?}");
+            }
             // Selected rows and toggles: accent icon and hover text on the wash.
             assert!(contrast(p.accent, p.accent_wash) >= 4.5);
             assert!(contrast(p.accent_hover, p.accent_wash) >= 4.5);
