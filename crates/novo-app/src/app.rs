@@ -33,6 +33,9 @@ mod clipboard;
 mod commissioning;
 mod commissioning_photos;
 mod commissioning_redlines;
+mod commissioning_signature;
+#[cfg(test)]
+mod commissioning_signature_tests;
 mod compare;
 mod designer;
 mod device_renumber;

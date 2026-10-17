@@ -85,7 +85,7 @@ impl NovoApp {
         super::panel::dialog(ctx, "DXF background", [420.0, 0.0])
             .open(&mut open)
             .show(ctx, |ui| {
-                ui.weak(&name);
+                super::dialog_ui::hint(ui, &name);
                 egui::Grid::new("background_grid")
                     .num_columns(2)
                     .show(ui, |ui| {
@@ -113,8 +113,8 @@ impl NovoApp {
                             commit |= r.drag_stopped() || r.lost_focus();
                         }
                     });
-                ui.add_space(4.0);
-                if ui.small_button("Reset").clicked() {
+                ui.add_space(6.0);
+                if novo_theme::widgets::ghost_button(ui, "Reset").clicked() {
                     reset = true;
                 }
             });

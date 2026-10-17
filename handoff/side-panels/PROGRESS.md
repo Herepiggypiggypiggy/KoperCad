@@ -15,3 +15,8 @@
 
 ## Safety functions window (branch claude/panels-safety)
 - Segmented controls for S/F/P, category and part basis; 12 px hints; body-size buttons. Picture: design/side-panels/after-1366-safety-functions.png.
+## Dialog sweep 2 (branch claude/panels-dialogs-2)
+- Place rules and DXF background use dialog_ui::hint and primary/ghost buttons. Pictures of Project rules and Project settings at 1366x768 in design/side-panels (after-1366-project-rules.png, after-1366-project-settings.png). Place rules and DXF background have no picture yet (need a cabinet / imported DXF).
+
+## Report languages (branch claude/panels-languages)
+- Languages window (File > Report languages): 12 px hints, ENGLISH/TRANSLATION header row, primary Add (disabled until a new code is typed), one merged hint at the bottom. Picture of the English view at 1366x768.
