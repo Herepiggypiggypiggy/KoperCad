@@ -1278,7 +1278,12 @@ impl NovoApp {
                 self.export_plc(LinkFormat::Hardware);
             }
             "xref.link" => self.xref_link(argument),
-            "app.preferences" => self.wb.preferences = true,
+            "app.preferences" => {
+                // Preferences is a modal: a floating panel left open behind
+                // it reads as two windows stacked on a small screen.
+                self.sizing.panel_open = false;
+                self.wb.preferences = true;
+            }
             "view.shortcuts" => self.toggle_shortcuts(),
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,

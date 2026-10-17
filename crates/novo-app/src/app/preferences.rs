@@ -195,3 +195,34 @@ fn choice<T: Copy + PartialEq>(
     }
     ui.add_space(8.0);
 }
+
+#[cfg(test)]
+mod stack_tests {
+    use super::super::gate1_tests::Drive;
+    use crate::actions::Action;
+    use eframe::egui;
+
+    #[test]
+    fn opening_preferences_closes_the_floating_enclosure_panel() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::OpenExample);
+        d.app.sizing.panel_open = true;
+        d.app.wb.queued.push("app.preferences");
+        for _ in 0..2 {
+            let input = egui::RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(683.0, 384.0),
+                )),
+                ..Default::default()
+            };
+            let app = &mut d.app;
+            let mut out = d.ctx.run_ui(input, |ui| app.show(ui));
+            out.textures_delta.clear();
+        }
+        assert!(d.app.wb.preferences);
+        assert!(!d.app.sizing.panel_open);
+    }
+}
