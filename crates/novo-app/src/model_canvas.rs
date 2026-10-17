@@ -72,6 +72,12 @@ impl CanvasView for ModelCanvas {
         }
     }
 
+    fn restyle(&mut self) {
+        // Pages are rebuilt with the new colours when they are next shown.
+        self.pages.clear();
+        self.shown = None;
+    }
+
     fn document_replaced(&mut self) {
         self.pages.clear();
         self.shown = None;
@@ -81,6 +87,12 @@ impl CanvasView for ModelCanvas {
     fn zoom_to_fit(&mut self) {
         if let Some(canvas) = self.shown.and_then(|p| self.pages.get_mut(&p)) {
             canvas.view.zoom_to_fit();
+        }
+    }
+
+    fn zoom_to_sheet(&mut self) {
+        if let Some(canvas) = self.shown.and_then(|p| self.pages.get_mut(&p)) {
+            canvas.view.zoom_to_sheet();
         }
     }
 

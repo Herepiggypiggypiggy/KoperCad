@@ -6,7 +6,7 @@
 use std::path::Path;
 
 use eframe::egui;
-use novo_interop::eplan::pxf::{PxfOptions, PxfPlan, plan_pxf, read_pxf, survey_pxf};
+use novo_interop::eplan::pxf::{PxfFile, PxfOptions, PxfPlan, plan_pxf, read_pxf, survey_pxf};
 
 use super::{Level, NovoApp, projects_dir};
 
@@ -14,12 +14,40 @@ use super::{Level, NovoApp, projects_dir};
 pub(super) struct EplanImport {
     file: String,
     plan: PxfPlan,
+    /// What was read, kept so another language can be tried without
+    /// reading the file again.
+    data: PxfFile,
+    /// Language of titles and type texts the plan uses (`en_US`).
+    lang: String,
+    /// Languages the file's multi-language texts carry.
+    langs: Vec<String>,
     /// What `kopercad-cli eplan check` says: the exchange file's header and
     /// whether the export script that made it is current.
     check: Option<(bool, String)>,
     /// What `kopercad-cli eplan survey` says: object kinds, element names
     /// and counts, never values.
     survey: Option<String>,
+}
+
+/// The languages (`en_US`, `de_DE`...) the multi-language texts in `text`
+/// carry, sorted.
+pub(crate) fn languages_in(text: &str) -> Vec<String> {
+    let b = text.as_bytes();
+    let mut found = std::collections::BTreeSet::new();
+    for (i, &c) in b.iter().enumerate() {
+        if c == b'@'
+            && i >= 5
+            && b[i - 3] == b'_'
+            && b[i - 5..i - 3].iter().all(u8::is_ascii_lowercase)
+            && b[i - 2..i].iter().all(u8::is_ascii_uppercase)
+        {
+            found.insert(String::from_utf8_lossy(&b[i - 5..i]).into_owned());
+            if found.len() >= 24 {
+                break;
+            }
+        }
+    }
+    found.into_iter().collect()
 }
 
 /// The export check and the survey of `path`, as the CLI prints them. Each is
@@ -78,16 +106,28 @@ impl NovoApp {
             self.message(Level::Info, "Open a project first");
             return false;
         };
-        let read = std::fs::File::open(path)
-            .map_err(|e| e.to_string())
-            .and_then(|f| read_pxf(std::io::BufReader::new(f)).map_err(|e| e.to_string()));
+        let bytes = std::fs::read(path).map_err(|e| e.to_string());
+        let langs = bytes
+            .as_ref()
+            .map(|b| languages_in(&String::from_utf8_lossy(b)))
+            .unwrap_or_default();
+        let read = bytes.and_then(|b| read_pxf(std::io::Cursor::new(b)).map_err(|e| e.to_string()));
         match read {
             Ok(file) => {
-                let plan = plan_pxf(doc.project(), &file, &PxfOptions::default());
+                let opts = PxfOptions::default();
+                let lang = if langs.is_empty() || langs.contains(&opts.lang) {
+                    opts.lang.clone()
+                } else {
+                    langs[0].clone()
+                };
+                let plan = plan_pxf(doc.project(), &file, &PxfOptions { lang: lang.clone() });
                 let (check, survey) = inspect(path);
                 self.wb.eplan_import = Some(EplanImport {
                     file: name,
                     plan,
+                    data: file,
+                    lang,
+                    langs,
                     check,
                     survey,
                 });
@@ -138,9 +178,10 @@ impl NovoApp {
     }
 
     pub(super) fn eplan_import_dialog(&mut self, ctx: &egui::Context) {
-        let Some(import) = &self.wb.eplan_import else {
+        let Some(import) = &mut self.wb.eplan_import else {
             return;
         };
+        let mut lang_changed = false;
         let (mut go, mut cancel) = (false, false);
         let can_import = !import.plan.is_empty();
         let report = import.plan.report();
@@ -149,12 +190,30 @@ impl NovoApp {
             ui.heading(format!("Import {}", import.file));
             ui.add_space(4.0);
             ui.label(import.plan.summary());
+            ui.horizontal(|ui| {
+                ui.label("Language of titles and texts");
+                egui::ComboBox::from_id_salt("eplan_import_lang")
+                    .selected_text(import.lang.clone())
+                    .show_ui(ui, |ui| {
+                        for l in &import.langs {
+                            lang_changed |= ui
+                                .selectable_value(&mut import.lang, l.clone(), l)
+                                .changed();
+                        }
+                    });
+                lang_changed |= ui.text_edit_singleline(&mut import.lang).lost_focus();
+                if import.langs.is_empty() {
+                    ui.weak("the file names no language");
+                } else {
+                    ui.weak(format!("in the file: {}", import.langs.join(", ")));
+                }
+            });
             if let Some((current, text)) = &import.check {
                 ui.add_space(6.0);
                 let colour = if *current {
                     ui.visuals().weak_text_color()
                 } else {
-                    novo_theme::tokens::WARNING
+                    crate::theme::ui_palette().warning
                 };
                 ui.colored_label(colour, text);
             }
@@ -196,6 +255,18 @@ impl NovoApp {
                 cancel = ui.button("Cancel").clicked();
             });
         });
+        if lang_changed
+            && let Some(doc) = self.backend.document()
+            && let Some(import) = self.wb.eplan_import.as_mut()
+        {
+            import.plan = plan_pxf(
+                doc.project(),
+                &import.data,
+                &PxfOptions {
+                    lang: import.lang.trim().to_owned(),
+                },
+            );
+        }
         if go {
             self.confirm_eplan_import();
         } else if cancel || modal.should_close() {

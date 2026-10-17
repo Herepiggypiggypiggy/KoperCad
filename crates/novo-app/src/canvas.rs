@@ -90,8 +90,15 @@ pub trait CanvasView {
     /// anything cached for the old one.
     fn document_replaced(&mut self) {}
 
+    /// The app's theme changed: draw with the colours of `crate::theme`
+    /// again (the palette it reads is already switched).
+    fn restyle(&mut self) {}
+
     /// Fits the open page into the view.
     fn zoom_to_fit(&mut self) {}
+
+    /// Fits the whole sheet into the view, empty paper included.
+    fn zoom_to_sheet(&mut self) {}
 
     /// Short text for the status bar, such as cursor coordinates.
     fn status_text(&self) -> Option<String> {

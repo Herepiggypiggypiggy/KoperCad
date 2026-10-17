@@ -86,6 +86,10 @@ enum RenameTarget {
     /// A symbol's own label that is not a device tag: a terminal's name, a
     /// feed's potential, an interruption point's name.
     Label(SymbolId),
+    /// A free text already on the page.
+    Note(novo_core::TextId),
+    /// A free text still to be added at this point (empty words add none).
+    NewNote(PageId, Point),
 }
 
 struct RenameBox {
@@ -234,6 +238,10 @@ fn label_drag_at(
     }
     let label = scene.scene().get(hit.id)?.labels.get(hit.label?)?.clone();
     let source = match found.text {
+        _ if found.kind == LabelKind::Note => match found.owner {
+            AnyId::Symbol(s) => LabelSource::Note(s),
+            _ => return None,
+        },
         Some(text) => LabelSource::Record(text),
         None => LabelSource::Drawn {
             owner: found.owner,
@@ -251,6 +259,15 @@ fn label_drag_at(
         from: at,
         to: at,
     })
+}
+
+/// The words of a free text (not a label of something else), for editing.
+fn free_text(project: &novo_core::Project, text: novo_core::TextId) -> Option<String> {
+    let t = project.text(text)?;
+    match (&t.content, t.attached_to) {
+        (TextContent::Literal { text }, None) => Some(text.clone()),
+        _ => None,
+    }
 }
 
 fn point(v: Vec2) -> Point {
@@ -469,6 +486,10 @@ impl SchematicView {
 
     pub fn zoom_to_fit(&mut self) {
         self.canvas.zoom_to_fit();
+    }
+
+    pub fn zoom_to_sheet(&mut self) {
+        self.canvas.zoom_to_sheet();
     }
 
     /// What the next click does, for the status bar.
@@ -917,7 +938,20 @@ impl SchematicView {
                 let delta = self.editor.label_delta(drag.from, drag.to);
                 let source = drag.source.clone();
                 self.label_drag = None;
-                self.editor.move_label(document, page, &source, delta);
+                if let LabelSource::Note(symbol) = source {
+                    // The note's offset comes from where it is drawn now.
+                    let by = Vec2::new(delta.x as f32, delta.y as f32);
+                    let offset = self
+                        .scene
+                        .as_ref()
+                        .and_then(|s| s.note_offset_after(symbol, by));
+                    if let Some(o) = offset.filter(|_| delta != Point::ZERO) {
+                        let o = Point::new(f64::from(o.x), f64::from(o.y));
+                        self.editor.set_note_offset(document, symbol, Some(o));
+                    }
+                } else {
+                    self.editor.move_label(document, page, &source, delta);
+                }
             }
         }
         if self.drag_move
@@ -1024,6 +1058,9 @@ impl SchematicView {
                     .symbol(s)
                     .and_then(|sym| model::symbol_text(document.project(), sym))
                     .map(|text| (RenameTarget::Label(s), text)),
+                (LabelKind::Literal, _) => label.text.and_then(|t| {
+                    free_text(document.project(), t).map(|words| (RenameTarget::Note(t), words))
+                }),
                 (LabelKind::WireNumber, AnyId::Wire(w)) => document.project().wire(w).map(|w| {
                     (
                         RenameTarget::Wire(w.id),
@@ -1041,6 +1078,18 @@ impl SchematicView {
                     focus: true,
                 });
             }
+        }
+
+        // The click of the text tool: ask for the words where it landed.
+        if let Some(at) = self.editor.take_text_request() {
+            let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
+            self.rename = Some(RenameBox {
+                target: RenameTarget::NewNote(page, at),
+                text: String::new(),
+                anchor,
+                error: None,
+                focus: true,
+            });
         }
 
         // Double click on a device with nothing in hand opens its
@@ -1383,7 +1432,22 @@ impl SchematicView {
             let device = selection
                 .iter()
                 .find_map(|&id| device_of(document.project(), id));
-            if let Some(device) = device
+            let note = selection.iter().find_map(|&id| match id {
+                AnyId::Text(t) => free_text(document.project(), t).map(|w| (t, w)),
+                _ => None,
+            });
+            if device.is_none()
+                && let Some((t, words)) = note
+            {
+                let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
+                self.rename = Some(RenameBox {
+                    target: RenameTarget::Note(t),
+                    text: words,
+                    anchor,
+                    error: None,
+                    focus: true,
+                });
+            } else if let Some(device) = device
                 && let Some(d) = document.project().device(device)
             {
                 let anchor = ctx.pointer_latest_pos().unwrap_or(rect.center());
@@ -1648,6 +1712,11 @@ impl SchematicView {
                             );
                             ui.weak(if feed {
                                 "Enter sets the feed's potential · Esc cancels"
+                            } else if matches!(
+                                rename.target,
+                                RenameTarget::Note(_) | RenameTarget::NewNote(..)
+                            ) {
+                                "Enter sets the text · Esc cancels"
                             } else if rename.text.trim().is_empty() {
                                 "Empty: Enter joins the device on its left · Esc cancels"
                             } else {
@@ -1666,6 +1735,23 @@ impl SchematicView {
                     })
                     .map_err(|e| e.to_string())
                     .and_then(|(r, _)| r),
+                RenameTarget::NewNote(page, at) => {
+                    self.editor.add_note(document, page, at, &rename.text);
+                    Ok(())
+                }
+                RenameTarget::Note(text) => {
+                    let words = rename.text.trim().to_owned();
+                    if words.is_empty() {
+                        Err("A text cannot be empty; Delete removes it".to_owned())
+                    } else {
+                        document
+                            .transact("Edit text", |tx| {
+                                tx.set_text(text, Some(TextContent::Literal { text: words }), None)
+                            })
+                            .map(|_| ())
+                            .map_err(|e| e.to_string())
+                    }
+                }
                 RenameTarget::Wire(wire) => {
                     let number = rename.text.trim();
                     let number = (!number.is_empty()).then(|| number.to_string());
@@ -1720,6 +1806,9 @@ impl SchematicView {
                         }
                         if ui.button("Paste   Ctrl+V").clicked() {
                             chosen = Some(MenuChoice::Command("edit.paste"));
+                        }
+                        if ui.button("Add text   Shift+T").clicked() {
+                            chosen = Some(MenuChoice::Command("draw.text"));
                         }
                         if ui.button("New page after this").clicked() {
                             chosen = Some(MenuChoice::NewPage);
@@ -1834,6 +1923,14 @@ impl SchematicView {
                     if menu.device.is_some() && ui.button("Go to partner   G").clicked() {
                         chosen = Some(MenuChoice::Command("nav.partner"));
                     }
+                    if menu.device.is_some() {
+                        if ui.button("Show in Cabinet").clicked() {
+                            chosen = Some(MenuChoice::Command("nav.show_cabinet"));
+                        }
+                        if ui.button("Show in 3D").clicked() {
+                            chosen = Some(MenuChoice::Command("nav.show_3d"));
+                        }
+                    }
                     if menu.interruptions > 0 {
                         if ui.button("Rename   F2").clicked() {
                             chosen = Some(MenuChoice::RenameLabel);
@@ -1894,6 +1991,24 @@ impl SchematicView {
                             chosen = Some(MenuChoice::MakeCable);
                         }
                     }
+                    // A selection of terminals already has a tall menu; its nets are
+                    // one right-click away on the wire, and in Edit > Net.
+                    if !menu.wires.is_empty() || menu.symbols > menu.terminals {
+                        if ui
+                            .button("Select net")
+                            .on_hover_text("Every wire of this net on the page")
+                            .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("net.select"));
+                        }
+                        if ui
+                            .button("Pages and devices on this net")
+                            .on_hover_text("A list with a jump to each device and page")
+                            .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("net.trace"));
+                        }
+                    }
                     ui.separator();
                     for (label, id) in [
                         ("Duplicate   Ctrl+D", "edit.duplicate"),
@@ -1903,8 +2018,30 @@ impl SchematicView {
                             chosen = Some(MenuChoice::Command(id));
                         }
                     }
-                    if menu.symbols > 0 && ui.button("Save as macro").clicked() {
-                        chosen = Some(MenuChoice::Command("macro.save"));
+                    // A selection of terminals already has a tall menu, so there the
+                    // two short rows share a line.
+                    let fault_row = !menu.wires.is_empty() || menu.symbols > 0;
+                    let mut rows = |ui: &mut egui::Ui| {
+                        if menu.symbols > 0 && ui.button("Save as macro").clicked() {
+                            chosen = Some(MenuChoice::Command("macro.save"));
+                        }
+                        if fault_row
+                            && ui
+                                .button("Add fault...")
+                                .on_hover_text(
+                                    "Open circuit, short between phases, to neutral or to earth, stuck \
+                                     contact: added to the fault list, run in Simulate > Fault \
+                                     scenarios",
+                                )
+                                .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("sim.add_fault"));
+                        }
+                    };
+                    if menu.terminals > 0 {
+                        ui.horizontal(|ui| rows(ui));
+                    } else {
+                        rows(ui);
                     }
                     ui.separator();
                     for (label, choice) in [
@@ -2913,6 +3050,51 @@ mod tests {
         assert!(h.view.label_drag.is_none());
     }
 
+    #[test]
+    fn dragging_a_note_stores_an_offset_and_leaves_the_device() {
+        use novo_canvas::model::{NOTE_DX, NOTE_DY, NoteAnchor, NoteDensity, SymbolNote};
+        let mut h = Harness::new();
+        h.view.editor.auto_connect = false;
+        h.view.editor.begin_place("iec/coils/relay", None);
+        h.click(60.0, 60.0, egui::PointerButton::Primary);
+        h.view.editor.leave_tool();
+        let sym = h.doc.project().symbols().next().unwrap().id;
+        h.view.set_notes(vec![SymbolNote {
+            symbol: sym,
+            lines: vec!["13-14 2.1".into()],
+            warning: false,
+            anchor: NoteAnchor::Right,
+            rows: Vec::new(),
+            density: NoteDensity::default(),
+        }]);
+        h.frame(vec![]);
+        let origin = h.doc.project().symbol(sym).unwrap().placement.origin;
+        let depth = h.doc.undo_depth();
+        let note_at = |h: &Harness| {
+            let scene = h.view.scene.as_ref().unwrap().scene();
+            let item = scene.get(item_id(AnyId::Symbol(sym))).unwrap();
+            item.labels.last().unwrap().bounds()
+        };
+        let before = note_at(&h);
+        let grab = before.center();
+        let grab = (f64::from(grab.x), f64::from(grab.y));
+        h.drag(grab, (grab.0 + 20.0, grab.1 + 10.0));
+        h.frame(vec![]);
+        let s = h.doc.project().symbol(sym).unwrap();
+        assert_eq!(s.placement.origin, origin, "the device stays");
+        assert_eq!(h.doc.undo_depth(), depth + 1);
+        assert!(s.properties.contains_key(NOTE_DX) && s.properties.contains_key(NOTE_DY));
+        // The note now sits where it was dragged to (within a grid step).
+        let after = note_at(&h);
+        let step = h.view.editor.grid as f32;
+        assert!(
+            (after.min.x - before.min.x - 20.0).abs() <= step
+                && (after.min.y - before.min.y - 10.0).abs() <= step,
+            "{before:?} -> {after:?}"
+        );
+        assert!(h.view.label_drag.is_none());
+    }
+
     /// A point the canvas picks as `sym` that no pin target covers.
     fn body_point(h: &Harness, sym: novo_core::SymbolId) -> (f64, f64) {
         let tol = h
@@ -2999,7 +3181,8 @@ mod tests {
         h.view.editor.begin_place("iec/coils/relay", None);
         h.click(100.0, 100.0, egui::PointerButton::Secondary);
         assert!(h.view.menu.is_some());
-        h.click(160.0, 160.0, egui::PointerButton::Primary);
+        // Outside the menu, whatever rows it has.
+        h.click(400.0, 400.0, egui::PointerButton::Primary);
         assert!(h.view.menu.is_none());
         assert_eq!(h.doc.project().symbols().count(), 0);
         // The next click places as usual.

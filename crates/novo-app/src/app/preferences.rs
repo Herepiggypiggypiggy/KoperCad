@@ -16,67 +16,118 @@ impl NovoApp {
         let mut calm = self.settings.reduce_motion;
         let mut company = self.settings.company_macros.clone();
         let mut density = self.settings.xref_density();
+        let mut theme = self.settings.theme_choice();
+        let mut ui_density = self.settings.density_choice();
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
-            ui.set_width(340.0);
-            ui.heading("Preferences");
-            ui.add_space(6.0);
-            ui.strong("Connections");
-            ui.add_space(2.0);
-            ui.label("Auto connections");
-            ui.weak("Wires between facing free pins after you place or move a symbol.");
-            for (value, label) in [
-                (ConnectMode::Draw, "Draw them (default)"),
-                (ConnectMode::Ask, "Ask me each time"),
-                (ConnectMode::Never, "Never"),
-            ] {
-                ui.radio_value(&mut mode, value, label);
-            }
+            ui.set_width(
+                novo_theme::dialog_width::MEDIUM
+                    .min(ctx.content_rect().width() - 48.0)
+                    .max(240.0),
+            );
+            ui.label(
+                egui::RichText::new("Preferences")
+                    .size(15.0)
+                    .family(novo_theme::fonts::strong_family()),
+            );
+            ui.add_space(4.0);
+            egui::ScrollArea::vertical()
+                .max_height((ctx.content_rect().height() - 180.0).max(200.0))
+                .show(ui, |ui| {
+                    section(ui, "Appearance", true);
+                    choice(
+                        ui,
+                        "Theme",
+                        "Light and System are a preview: some panels are not themed yet.",
+                        &mut theme,
+                        &[
+                            (novo_theme::ThemeChoice::Dark, "Dark"),
+                            (novo_theme::ThemeChoice::Light, "Light"),
+                            (novo_theme::ThemeChoice::System, "System"),
+                        ],
+                    );
+                    let densities = novo_theme::Density::ALL.map(|d| (d, d.label()));
+                    choice(
+                        ui,
+                        "Density",
+                        "Compact fits more on a small screen; Touch has large controls for a tablet.",
+                        &mut ui_density,
+                        &densities,
+                    );
+                    section(ui, "Connections", false);
+                    choice(
+                        ui,
+                        "Auto connections",
+                        "Wires between facing free pins after you place or move a symbol.",
+                        &mut mode,
+                        &[
+                            (ConnectMode::Draw, "Draw them"),
+                            (ConnectMode::Ask, "Ask me"),
+                            (ConnectMode::Never, "Never"),
+                        ],
+                    );
+                    choice(
+                        ui,
+                        "Moving a symbol",
+                        "Shift always does the other one.",
+                        &mut carries,
+                        &[(false, "Leaves its wires"), (true, "Takes its wires along")],
+                    );
+                    section(ui, "Cross references", false);
+                    choice(
+                        ui,
+                        "Contact table under a coil",
+                        "One row per contact with its symbol, pins and page.column. Compact fits more on a busy sheet.",
+                        &mut density,
+                        &[(NoteDensity::Full, "Full"), (NoteDensity::Compact, "Compact")],
+                    );
+                    section(ui, "Macros", false);
+                    row_title(
+                        ui,
+                        "Company macro folder",
+                        "A shared folder of macros, e.g. on a network drive. The Macros window lists it and offers newer revisions of macros a project was built from.",
+                    );
+                    ui.horizontal(|ui| {
+                        if ui.button("Choose...").clicked()
+                            && let Some(dir) = rfd::FileDialog::new()
+                                .set_title("Company macro folder")
+                                .pick_folder()
+                        {
+                            company = Some(dir);
+                        }
+                        if company.is_some() && ui.button("Clear").clicked() {
+                            company = None;
+                        }
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(
+                                    company
+                                        .as_ref()
+                                        .map(|p| p.display().to_string())
+                                        .unwrap_or_else(|| "None".into()),
+                                )
+                                .weak(),
+                            )
+                            .truncate(),
+                        );
+                    });
+                    section(ui, "Simulation", false);
+                    ui.checkbox(&mut calm, "Reduce motion");
+                    hint(
+                        ui,
+                        "The live view switches states at once and shows an arrow on running motors instead of spinning them.",
+                    );
+                });
             ui.add_space(8.0);
-            ui.label("Moving a symbol");
-            ui.weak("Shift always does the other one.");
-            ui.radio_value(&mut carries, false, "Leaves its wires (default)");
-            ui.radio_value(&mut carries, true, "Takes its wires along");
-            ui.add_space(8.0);
-            ui.strong("Cross references");
-            ui.add_space(2.0);
-            ui.label("Contact table under a coil");
-            ui.weak("One row per contact with its symbol, pins and page.column. Compact fits more on a busy sheet.");
-            ui.radio_value(&mut density, NoteDensity::Full, "Full (default)");
-            ui.radio_value(&mut density, NoteDensity::Compact, "Compact");
-            ui.add_space(8.0);
-            ui.strong("Macros");
-            ui.add_space(2.0);
-            ui.label("Company macro folder");
-            ui.weak("A shared folder of macros, e.g. on a network drive. The Macros window lists it and offers newer revisions of macros a project was built from.");
-            ui.horizontal(|ui| {
-                ui.weak(
-                    company
-                        .as_ref()
-                        .map(|p| p.display().to_string())
-                        .unwrap_or_else(|| "None".into()),
-                );
-                if ui.button("Choose...").clicked()
-                    && let Some(dir) = rfd::FileDialog::new()
-                        .set_title("Company macro folder")
-                        .pick_folder()
-                {
-                    company = Some(dir);
-                }
-                if company.is_some() && ui.button("Clear").clicked() {
-                    company = None;
-                }
-            });
-            ui.add_space(8.0);
-            ui.strong("Simulation");
-            ui.add_space(2.0);
-            ui.checkbox(&mut calm, "Reduce motion");
-            ui.weak("The live view switches states at once and shows an arrow on running motors instead of spinning them.");
-            ui.add_space(8.0);
-            ui.button("Close (Esc)").clicked()
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                novo_theme::widgets::primary_button(ui, "Done").clicked()
+            })
+            .inner
         });
         if mode != self.settings.connect_mode() {
             self.settings.set_connect_mode(mode);
         }
+        self.settings.appearance_theme = theme.id().into();
+        self.settings.appearance_density = ui_density.id().into();
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
         }
@@ -87,4 +138,46 @@ impl NovoApp {
             self.wb.preferences = false;
         }
     }
+}
+
+/// A section: a caption-caps label, with extra space above (except the first).
+fn section(ui: &mut egui::Ui, title: &str, first: bool) {
+    ui.add_space(if first { 4.0 } else { 14.0 });
+    novo_theme::widgets::section_label(ui, title);
+    ui.add_space(4.0);
+}
+
+fn hint(ui: &mut egui::Ui, text: &str) {
+    ui.add(
+        egui::Label::new(
+            egui::RichText::new(text)
+                .size(egui::TextStyle::Small.resolve(ui.style()).size.max(12.0))
+                .weak(),
+        )
+        .wrap(),
+    );
+}
+
+fn row_title(ui: &mut egui::Ui, label: &str, text: &str) {
+    ui.label(label);
+    hint(ui, text);
+    ui.add_space(4.0);
+}
+
+/// One setting: its name, a line of help and the choices as a segmented
+/// control.
+fn choice<T: Copy + PartialEq>(
+    ui: &mut egui::Ui,
+    label: &str,
+    help: &str,
+    value: &mut T,
+    options: &[(T, &str)],
+) {
+    row_title(ui, label, help);
+    let mut index = options.iter().position(|(v, _)| v == value).unwrap_or(0);
+    let labels: Vec<&str> = options.iter().map(|(_, l)| *l).collect();
+    if novo_theme::widgets::segmented(ui, &mut index, &labels) {
+        *value = options[index].0;
+    }
+    ui.add_space(8.0);
 }
