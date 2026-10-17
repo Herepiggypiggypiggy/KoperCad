@@ -163,6 +163,18 @@ pub fn load(project: &Project, id: StructureId) -> Option<CabinetLayout> {
             Some((p.id, device_depth(project, device)?))
         })
         .collect();
+    if let Some(e) = layout.enclosure {
+        let (list, _) = crate::surfaces::Surfaces::from_enclosure(
+            &e,
+            &layout.plate,
+            &extra_surfaces(project, id),
+        );
+        layout.surface_sizes = list
+            .list
+            .iter()
+            .map(|s| (s.name.clone(), (s.width, s.height)))
+            .collect();
+    }
     let door_ids = place_off_plate(project, id, &mut layout);
     layout.door_devices = layout
         .placements

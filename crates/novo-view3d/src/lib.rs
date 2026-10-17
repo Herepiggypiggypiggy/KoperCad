@@ -15,6 +15,7 @@ pub mod cull;
 pub mod demo;
 pub mod dimension;
 pub mod door;
+pub mod drag_plane;
 pub mod feel;
 pub mod governor;
 pub mod hide;

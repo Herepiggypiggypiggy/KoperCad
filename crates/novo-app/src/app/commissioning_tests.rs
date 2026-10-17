@@ -467,3 +467,48 @@ fn a_rejected_redline_is_not_marked_and_a_note_is() {
         .unwrap();
     assert_eq!(count(&mut d), 0);
 }
+
+#[test]
+fn a_terminal_rename_is_marked_applied_in_one_batch_and_named_in_the_revision() {
+    use novo_commissioning::{Change, Redline, RedlineState};
+    let (_dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let terminal = targets(d.doc().project())
+        .into_iter()
+        .find(|t| matches!(t.target, Target::Terminal(_)) && !t.pages.is_empty())
+        .expect("a terminal shown on a page");
+    let Target::Terminal(id) = terminal.target else {
+        unreachable!()
+    };
+    let page = terminal.pages[0];
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    mode.selected = Some(terminal.target);
+    mode.store
+        .add_redline(Redline {
+            id: 0,
+            target: terminal.target,
+            label: terminal.label.clone(),
+            change: Change::TerminalName("T99".into()),
+            note: String::new(),
+            by: "tv".into(),
+            at: "2026-10-17T08:00:00Z".into(),
+            state: RedlineState::Open,
+        })
+        .unwrap();
+    mode.tab = super::commissioning::Tab::Redlines;
+    d.frame();
+    d.frame();
+    let marked = d
+        .app
+        .commissioning_marks(page)
+        .into_iter()
+        .any(|m| m.kind == novo_canvas::MarkKind::Modified && m.text.contains("T99"));
+    assert!(marked, "the open rename marks its terminal");
+    d.app.apply_redlines(true);
+    d.frame();
+    assert_eq!(d.doc().project().terminal(id).unwrap().name, "T99");
+    let draft = d.app.wb.issue.as_ref().expect("the revision dialog opens");
+    assert!(draft.description.contains("T99"), "{}", draft.description);
+}
