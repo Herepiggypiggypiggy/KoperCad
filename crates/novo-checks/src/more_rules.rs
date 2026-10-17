@@ -119,7 +119,7 @@ pub(crate) fn coil_on_power_feed(cx: &Context<'_>, out: &mut Vec<Problem>) {
                     .flat_map(|w| w.ends())
                     .find_map(|e| match e {
                         Endpoint::Pin { symbol, .. } if symbol != coil.id => {
-                            project.symbol(symbol).map(&class)
+                            project.symbol(symbol).map(class)
                         }
                         _ => None,
                     });
