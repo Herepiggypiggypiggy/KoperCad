@@ -19,3 +19,4 @@ Next, after PANEL-B2 slice 4 (#876) is on main: swing marks in 3D from `swing_re
 
 ## Status 2026-10-17
 Slice 5: swing hits of devices on the door are Issues rows (novo-checks door.rs, ProblemKind::DoorSwing; the row points at the door device and the plate device it touches). Next: 3D marks (Mark::Collision on those items), then inspector forms for the shown surface.
+Slice 6: devices on the door in the 3D scene (build/door_devices.rs) and swing marks (Mark::Collision on the door device and the plate device it touches). Devices on walls, roof, floor and extra plates are still not drawn in 3D.
