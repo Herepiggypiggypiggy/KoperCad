@@ -51,7 +51,7 @@ This is the first beta for test users. Start with [`docs/TESTER-README.md`](docs
   "Early access"). An example project and a fast-keys walk-through on the start screen.
 
 **Import and scripting**
-- DXF in and out, STEP import for parts, DXF underlay.
+- DXF export of pages and plates, DXF import as a reference underlay, STEP import for parts.
 - `kopercad-cli` and a Python module for scripting and checks.
 
 ## Numbers: what is exact and what is a model
@@ -91,8 +91,8 @@ KoperCAD tells you which is which. Please read the labels.
 
 ## Report a problem
 
-Use Help > Report a problem. It opens the log folder and copies the build information. Send that with what you
-did, what you expected, and the project file if you can. Details are in the tester README.
+Send the version and build time from Help > About, what you did, what happened, and the project file if you can.
+After a crash, add any `crash-*.txt` from `%LOCALAPPDATA%\KoperCAD\logs`. Details are in the tester README.
 
 ## Licences
 

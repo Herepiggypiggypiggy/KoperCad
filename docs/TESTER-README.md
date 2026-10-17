@@ -87,7 +87,8 @@ Everything is in your own user profile. You can look at it all in File Explorer
   %APPDATA%\KoperCAD
 * Recovery files (the autosave of a project while you work on it):
   %LOCALAPPDATA%\KoperCAD\recovery
-* Problem log and crash reports: %LOCALAPPDATA%\KoperCAD\logs
+* Problem log and crash reports (when the program writes one): %LOCALAPPDATA%\KoperCAD\logs
+* Projects you have not saved yet: %LOCALAPPDATA%\NovoElectric\untitled (the old name is kept)
 * The installer puts the program in %LOCALAPPDATA%\Programs\KoperCAD.
 
 KoperCAD never writes to Program Files or to the registry outside your own user
@@ -99,8 +100,8 @@ recovered work. A clean close removes the recovery file. Your .novo file is only
 changed when you press Ctrl+S.
 
 Uninstalling (Windows Settings > Apps) removes the program and leaves your
-projects and settings alone. To start completely fresh, delete the two
-KoperCAD folders under %APPDATA% and %LOCALAPPDATA%.
+projects and settings alone. To start completely fresh, delete the KoperCAD folders under %APPDATA% and %LOCALAPPDATA%, and the
+NovoElectric folder under %LOCALAPPDATA%.
 
 
 4. If something goes wrong
@@ -108,15 +109,15 @@ KoperCAD folders under %APPDATA% and %LOCALAPPDATA%.
 
 A short report that we can act on is worth more than a long one. Please:
 
-1. Use **Help > Report a problem**. It opens the log folder and copies the build
-   information (version, commit, build time) to your clipboard.
-2. Paste that into your message and add:
+1. Open Help > **About KoperCAD** and copy the version and build time it shows.
+2. Send that with:
    * what you did, step by step, starting from the start screen
    * what you expected, and what happened instead
    * a screenshot if you can (Win+Shift+S)
    * the project file (.novo), if it is not private. It is a small file.
-3. After a crash, send the newest crash-*.txt from
-   %LOCALAPPDATA%\KoperCAD\logs together with the project file.
+3. After a crash, also send any crash-*.txt file you find in
+   %LOCALAPPDATA%\KoperCAD\logs (a later build adds a Help > Report a problem
+   entry that opens this folder for you).
 
 Say how bad it was. We use these words:
 
