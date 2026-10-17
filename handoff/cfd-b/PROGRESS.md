@@ -4,3 +4,4 @@
 2026-10-16 11:30 UTC Coupling object, plate benchmark (SST +4.3 % / +9.8 %, k-eps +34.5 %, coarse walls -52 %), PR 2 opened.
 2026-10-16 12:15 UTC #669 merged. PR 3: solid mask from the medium, zero-alpha guard.
 2026-10-16 13:00 UTC PR 4: turbulence option in CabinetSolver (`with_turbulence`), snapshot `turb_visc_ratio`, accuracy text; vented box study (see HANDOFF).
+2026-10-17 09:40 UTC #694 merged (13:30 on 10-16). Doc PR: R1 corrections, exhaust print in turb_vented. Next: second-order convection for k and omega.
