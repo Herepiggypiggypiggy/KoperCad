@@ -101,3 +101,27 @@ fn show_walkthrough_works_with_no_project_and_shows_when_one_opens() {
     d.frame();
     assert!(d.app.walkthrough_on());
 }
+
+/// The walk-through card starts bottom right, fully on the canvas, at the
+/// smallest window the app is designed for.
+#[test]
+fn the_walkthrough_starts_on_the_canvas_at_1366_by_768() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::TryFastKeys);
+    for _ in 0..12 {
+        d.frame_sized(eframe::egui::vec2(1366.0, 768.0), Vec::new());
+    }
+    let card = ctx
+        .memory(|m| m.area_rect(super::panel::id("walkthrough")))
+        .expect("the walkthrough is shown");
+    let screen = eframe::egui::Rect::from_min_size(
+        eframe::egui::Pos2::ZERO,
+        eframe::egui::vec2(1366.0, 768.0),
+    );
+    assert!(screen.contains_rect(card), "{card:?} outside {screen:?}");
+    assert!(
+        card.center().x > 683.0 && card.center().y > 384.0,
+        "{card:?}"
+    );
+}

@@ -122,7 +122,7 @@ impl NovoApp {
     /// One menu as a button (in the bar) or a submenu (in the mark's menu).
     /// A menu with no commands is left out.
     fn menu(&mut self, ui: &mut egui::Ui, menu: &'static str, focus: bool) -> Option<egui::Rect> {
-        let items = menus::layout(menu);
+        let items = menus::drawn(menu);
         if items.is_empty() {
             return None;
         }
@@ -161,9 +161,6 @@ impl NovoApp {
                 }
                 MenuItem::Command(info) => {
                     self.command_row(ui, info);
-                    if info.id == "file.example" {
-                        self.recent_menu(ui);
-                    }
                 }
                 MenuItem::Submenu { name, items } => {
                     // The lesson steps only exist while a lesson runs;
@@ -177,13 +174,17 @@ impl NovoApp {
                         for info in items {
                             self.command_row(ui, info);
                         }
+                        // File > Open > Recent is not a command of its own.
+                        if *name == "Open" {
+                            self.recent_menu(ui);
+                        }
                     });
                 }
             }
         }
     }
 
-    /// File › Recent: the projects opened lately, newest first.
+    /// File > Open > Recent: the projects opened lately, newest first.
     fn recent_menu(&mut self, ui: &mut egui::Ui) {
         ui.add_enabled_ui(!self.settings.recent_projects.is_empty(), |ui| {
             ui.menu_button("Recent", |ui| {
@@ -366,6 +367,34 @@ mod width_tests {
                 "the top bar overlaps by {} at {width}",
                 -d.app.top_bar_gap
             );
+        }
+    }
+
+    #[test]
+    fn the_breadcrumb_stays_clear_of_search_in_every_workspace_with_the_example_open() {
+        use super::super::workspace::Workspace;
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::OpenExample);
+        for workspace in [
+            Workspace::Schematic,
+            Workspace::Cabinet,
+            Workspace::View3d,
+            Workspace::Commissioning,
+        ] {
+            d.app.switch_workspace(workspace);
+            // Unpinned, so the outline's own button is in the bar too.
+            d.app.settings.outline_pinned = Some(false);
+            for width in [1366.0, 1280.0, 1100.0] {
+                frame_at(&mut d, width);
+                frame_at(&mut d, width);
+                assert!(
+                    d.app.top_bar_gap >= 0.0,
+                    "{workspace:?} at {width}: the top bar overlaps by {}",
+                    -d.app.top_bar_gap
+                );
+            }
         }
     }
 

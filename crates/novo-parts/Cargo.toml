@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 novo-core.workspace = true
 novo-terminals.workspace = true
+novo-symbols.workspace = true
 dirs.workspace = true
 quick-xml.workspace = true
 sha2.workspace = true
@@ -19,7 +20,6 @@ thiserror.workspace = true
 [dev-dependencies]
 novo-tests = { path = "../novo-tests" }
 tempfile.workspace = true
-novo-symbols.workspace = true
 
 [lints]
 workspace = true
