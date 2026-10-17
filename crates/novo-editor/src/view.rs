@@ -488,6 +488,10 @@ impl SchematicView {
         self.canvas.zoom_to_fit();
     }
 
+    pub fn zoom_to_sheet(&mut self) {
+        self.canvas.zoom_to_sheet();
+    }
+
     /// What the next click does, for the status bar.
     pub fn status_text(&self) -> Option<String> {
         self.status.clone()
@@ -1919,6 +1923,14 @@ impl SchematicView {
                     if menu.device.is_some() && ui.button("Go to partner   G").clicked() {
                         chosen = Some(MenuChoice::Command("nav.partner"));
                     }
+                    if menu.device.is_some() {
+                        if ui.button("Show in Cabinet").clicked() {
+                            chosen = Some(MenuChoice::Command("nav.show_cabinet"));
+                        }
+                        if ui.button("Show in 3D").clicked() {
+                            chosen = Some(MenuChoice::Command("nav.show_3d"));
+                        }
+                    }
                     if menu.interruptions > 0 {
                         if ui.button("Rename   F2").clicked() {
                             chosen = Some(MenuChoice::RenameLabel);
@@ -2006,8 +2018,30 @@ impl SchematicView {
                             chosen = Some(MenuChoice::Command(id));
                         }
                     }
-                    if menu.symbols > 0 && ui.button("Save as macro").clicked() {
-                        chosen = Some(MenuChoice::Command("macro.save"));
+                    // A selection of terminals already has a tall menu, so there the
+                    // two short rows share a line.
+                    let fault_row = !menu.wires.is_empty() || menu.symbols > 0;
+                    let mut rows = |ui: &mut egui::Ui| {
+                        if menu.symbols > 0 && ui.button("Save as macro").clicked() {
+                            chosen = Some(MenuChoice::Command("macro.save"));
+                        }
+                        if fault_row
+                            && ui
+                                .button("Add fault...")
+                                .on_hover_text(
+                                    "Open circuit, short between phases, to neutral or to earth, stuck \
+                                     contact: added to the fault list, run in Simulate > Fault \
+                                     scenarios",
+                                )
+                                .clicked()
+                        {
+                            chosen = Some(MenuChoice::Command("sim.add_fault"));
+                        }
+                    };
+                    if menu.terminals > 0 {
+                        ui.horizontal(|ui| rows(ui));
+                    } else {
+                        rows(ui);
                     }
                     ui.separator();
                     for (label, choice) in [

@@ -296,3 +296,27 @@ fn devices_are_coloured_by_the_air_in_front_of_them() {
     // The original is untouched.
     assert!(scene.items.iter().all(|i| i.tint.is_none()));
 }
+
+#[test]
+fn the_slice_edges_are_the_result_along_its_axis() {
+    use super::heat_3d::slice_edges;
+    let snap = snapshot();
+    assert_eq!(slice_edges(&snap, Axis::X).len(), 21);
+    assert_eq!(slice_edges(&snap, Axis::Y).len(), 17);
+    assert_eq!(slice_edges(&snap, Axis::Z).last(), Some(&60.0));
+}
+
+#[test]
+fn stepping_goes_to_the_neighbouring_cell_centre_on_a_graded_axis() {
+    use super::heat_3d::step_cell;
+    // Fine cells near 0 (the wall), coarse further in.
+    let edges = [0.0, 1.0, 3.0, 7.0, 15.0, 31.0];
+    // From inside the first cell forward: the centre of the second.
+    assert_eq!(step_cell(&edges, 0.5, 1), 2.0);
+    // From the centre of the second (2.0): the third (5.0), then back to the second.
+    assert_eq!(step_cell(&edges, 2.0, 1), 5.0);
+    assert_eq!(step_cell(&edges, 5.0, -1), 2.0);
+    // Ends hold.
+    assert_eq!(step_cell(&edges, 0.5, -1), 0.5);
+    assert_eq!(step_cell(&edges, 31.0, 1), 23.0);
+}

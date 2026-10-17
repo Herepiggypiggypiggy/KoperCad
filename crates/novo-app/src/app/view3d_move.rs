@@ -105,7 +105,7 @@ struct Active {
 }
 
 /// The top left of a device, or the start of a rail or duct.
-fn origin(layout: &CabinetLayout, item: ItemId) -> Option<(f64, f64)> {
+pub(super) fn origin(layout: &CabinetLayout, item: ItemId) -> Option<(f64, f64)> {
     match item.kind {
         ItemKind::Device => layout
             .placements
@@ -127,7 +127,7 @@ fn origin(layout: &CabinetLayout, item: ItemId) -> Option<(f64, f64)> {
 }
 
 /// The plate area an item covers when its origin is at `at`.
-fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Option<Rect> {
+pub(super) fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Option<Rect> {
     Some(match item.kind {
         ItemKind::Device => {
             let f = layout
@@ -172,7 +172,11 @@ fn area(layout: &CabinetLayout, item: ItemId, at: (f64, f64)) -> Option<Rect> {
 /// A device's top left pulled onto a rail or duct line it is next to: a
 /// horizontal one sets the top, a vertical one the left. The snap only
 /// applies along the rail's run, so a device never jumps to a far rail.
-fn rail_snap(layout: &CabinetLayout, device: u64, at: (f64, f64)) -> ((f64, f64), Option<u64>) {
+pub(super) fn rail_snap(
+    layout: &CabinetLayout,
+    device: u64,
+    at: (f64, f64),
+) -> ((f64, f64), Option<u64>) {
     let Some(p) = layout.placements.iter().find(|p| p.id == device) else {
         return (at, None);
     };
@@ -578,7 +582,7 @@ pub(super) fn show_warning(ctx: &egui::Context, text: &str) {
         .interactable(false)
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.label(egui::RichText::new(text).color(novo_theme::tokens::ERROR));
+                ui.label(egui::RichText::new(text).color(crate::theme::ui_palette().error));
             });
         });
 }

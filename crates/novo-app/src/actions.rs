@@ -8,6 +8,7 @@ use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 pub enum Action {
     NewProject,
     OpenProject,
+    OpenReadOnly,
     OpenExample,
     TryFastKeys,
     ShowWalkthrough,
@@ -37,6 +38,7 @@ impl Action {
     pub const ALL: &[Action] = &[
         Action::NewProject,
         Action::OpenProject,
+        Action::OpenReadOnly,
         Action::OpenExample,
         Action::TryFastKeys,
         Action::ShowWalkthrough,
@@ -68,6 +70,7 @@ impl Action {
         match self {
             Action::NewProject => "file.new",
             Action::OpenProject => "file.open",
+            Action::OpenReadOnly => "file.open_read_only",
             Action::OpenExample => "file.example",
             Action::TryFastKeys => "file.practice",
             Action::ShowWalkthrough => "help.walkthrough",
@@ -102,6 +105,7 @@ impl Action {
         match self {
             Action::NewProject => "New project",
             Action::OpenProject => "Open project…",
+            Action::OpenReadOnly => "Open read-only…",
             Action::OpenExample => "Open example",
             Action::TryFastKeys => "Try the fast keys",
             Action::ShowWalkthrough => "Fast keys walk-through",
@@ -134,6 +138,7 @@ impl Action {
         match self {
             Action::NewProject
             | Action::OpenProject
+            | Action::OpenReadOnly
             | Action::OpenExample
             | Action::TryFastKeys
             | Action::SaveProject
@@ -179,6 +184,7 @@ impl Action {
             Action::CommandPalette => (cmd, Key::K),
             Action::PinOutline
             | Action::About
+            | Action::OpenReadOnly
             | Action::OpenExample
             | Action::TryFastKeys
             | Action::ShowWalkthrough
