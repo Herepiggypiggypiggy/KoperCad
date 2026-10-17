@@ -871,7 +871,7 @@ impl NovoApp {
             self.wb.queued.push(command);
         }
         if let Some(items) = &out.marquee {
-            if !ui.input(|i| i.modifiers.shift) {
+            if !ui.input(|i| i.modifiers.shift || i.modifiers.command) {
                 state.selection.clear();
             }
             state.selection.extend(items.iter().copied());
