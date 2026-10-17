@@ -678,19 +678,14 @@ impl NovoApp {
             if let (Some(r), Some(mid)) = (reading, mode.measure.midpoint())
                 && let Some(at) = mode.view.project(out.rect, scene, mid)
             {
+                let pal = crate::theme::ui_palette();
                 let font = egui::FontId::proportional(13.0);
                 let text = view3d_measure::mm(r.distance);
-                let galley = ui
-                    .painter()
-                    .layout_no_wrap(text, font, egui::Color32::BLACK);
+                let galley = ui.painter().layout_no_wrap(text, font, pal.sunken);
                 let chip = egui::Rect::from_center_size(at, galley.size() + egui::vec2(12.0, 6.0));
+                ui.painter().rect_filled(chip, 4.0, pal.warning);
                 ui.painter()
-                    .rect_filled(chip, 4.0, egui::Color32::from_rgb(255, 196, 64));
-                ui.painter().galley(
-                    chip.min + egui::vec2(6.0, 3.0),
-                    galley,
-                    egui::Color32::BLACK,
-                );
+                    .galley(chip.min + egui::vec2(6.0, 3.0), galley, pal.sunken);
             }
             if view3d_measure::readout(ui.ctx(), out.rect, &mode.measure, reading) {
                 mode.measure.clear();
