@@ -1,0 +1,21 @@
+name: diag-hang
+on:
+  push:
+    branches: [claude/diag-windows-hang]
+jobs:
+  hang:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: novo-cli tests, one thread, names printed
+        shell: bash
+        run: timeout 600 cargo test -p novo-cli -- --test-threads=1 --nocapture || echo "cli rc=$?"
+      - name: novo-app lib tests, one thread, names printed
+        shell: bash
+        run: timeout 1200 cargo test -p novo-app --lib -- --test-threads=1 --nocapture || echo "app rc=$?"
+      - name: novo-app other targets
+        shell: bash
+        run: timeout 600 cargo test -p novo-app --bins --tests -- --test-threads=1 --nocapture || echo "app2 rc=$?"
