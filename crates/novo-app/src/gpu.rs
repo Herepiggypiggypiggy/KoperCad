@@ -74,6 +74,18 @@ pub(crate) fn order(kinds: &[wgpu::DeviceType], names: &[String], wish: &Wish) -
     idx
 }
 
+/// Why the chosen adapter won, for the log: a name asked for, low power
+/// asked for, or simply the best ranked that can draw to the window.
+pub(crate) fn why(name: &str, kind: wgpu::DeviceType, wish: &Wish) -> String {
+    if wish.matches(name) {
+        "named by WGPU_ADAPTER_NAME".to_owned()
+    } else if wish.low_power && kind == wgpu::DeviceType::IntegratedGpu {
+        "WGPU_POWER_PREF asks for low power".to_owned()
+    } else {
+        "best ranked adapter that can draw to the window".to_owned()
+    }
+}
+
 /// The adapter selector handed to eframe.
 pub(crate) fn select(
     adapters: &[wgpu::Adapter],
@@ -96,7 +108,11 @@ pub(crate) fn select(
         if surface.is_some_and(|s| !adapter.is_surface_supported(s)) {
             continue;
         }
-        log::info!("Using graphics adapter {}", describe(&infos[i]));
+        log::info!(
+            "Using graphics adapter {} ({})",
+            describe(&infos[i]),
+            why(&names[i], infos[i].device_type, &wish)
+        );
         return Ok(adapter.clone());
     }
     Err(if infos.is_empty() {
@@ -125,6 +141,16 @@ mod tests {
 
     fn names(n: usize) -> Vec<String> {
         (0..n).map(|i| format!("Adapter {i}")).collect()
+    }
+
+    #[test]
+    fn the_log_says_why_an_adapter_was_chosen() {
+        let named = Wish::parse(Some("intel"), None);
+        assert!(why("Intel UHD", DiscreteGpu, &named).contains("WGPU_ADAPTER_NAME"));
+        assert!(why("NVIDIA", DiscreteGpu, &named).contains("best ranked"));
+        let low = Wish::parse(None, Some("low"));
+        assert!(why("Intel UHD", IntegratedGpu, &low).contains("WGPU_POWER_PREF"));
+        assert!(why("Intel UHD", IntegratedGpu, &Wish::default()).contains("best ranked"));
     }
 
     #[test]
