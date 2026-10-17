@@ -44,6 +44,7 @@ fn shipped_projects_have_no_eplan_style_problems() {
         ProblemKind::CoilSupply,
         ProblemKind::PlugPinOneSided,
         ProblemKind::RelaySize,
+        ProblemKind::CoilOnPowerFeed,
         ProblemKind::CableText,
         ProblemKind::NeutralUse,
         ProblemKind::TagRule,

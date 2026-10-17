@@ -6,7 +6,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use novo_core::{AnyId, DeviceId, DeviceKind, Endpoint, Netlist, PotentialKind, SymbolRole, Value};
+use novo_core::{
+    AnyId, DeviceId, DeviceKind, Endpoint, Netlist, PotentialKind, SymbolInstance, SymbolRole,
+    Value,
+};
 
 use crate::contacts::{ContactKind, contact_limit_property};
 use crate::{Context, Problem, ProblemKind};
@@ -72,39 +75,67 @@ pub(crate) fn relay_size(cx: &Context<'_>, out: &mut Vec<Problem>) {
     }
 }
 
-/// A contactor coil has one pole. Wired to a pole of a three-phase breaker,
-/// fuse, contacts or motor it takes one phase and L2 and L3 run past it:
-/// the power contacts belong in the main circuit, the coil in the control
-/// circuit.
+/// What a coil pin is wired to.
+#[derive(Clone, Copy, PartialEq)]
+enum CoilEnd {
+    Unwired,
+    /// A pole of a multi-pole breaker, fuse or switch: a coil between two
+    /// such poles is a 400 V coil, which is fine.
+    Pole,
+    /// A motor or power contacts: the coil is in the main circuit.
+    Load,
+    Other,
+}
+
+/// A contactor coil has one pole. Wired into the main circuit, between a
+/// three-phase feed and a motor or power contacts, or alone on one pole of
+/// a three-pole device with nothing on its other side, it takes one phase
+/// and L2 and L3 run past it: the power contacts belong in the main circuit,
+/// the coil in the control circuit. A coil between two poles of one feed
+/// device is a 400 V coil and is left alone.
 pub(crate) fn coil_on_power_feed(cx: &Context<'_>, out: &mut Vec<Problem>) {
     let project = cx.project;
-    let three_phase = |key: &str, pass_through: usize| {
-        pass_through >= 3
-            || key
-                .rsplit('/')
-                .next()
-                .is_some_and(|n| n.starts_with("motor_3ph"))
+    let class = |o: &SymbolInstance| {
+        let name = o.symbol.0.rsplit('/').next().unwrap_or("");
+        if name.starts_with("motor_3ph") || o.symbol.0.contains("contactors/") {
+            CoilEnd::Load
+        } else if o.pass_through.len() >= 3 {
+            CoilEnd::Pole
+        } else {
+            CoilEnd::Other
+        }
     };
     let mut seen: BTreeSet<DeviceId> = BTreeSet::new();
     for coil in project
         .symbols()
         .filter(|s| s.symbol.0.ends_with("coils/contactor"))
     {
-        let feeds = (0..coil.pins.len()).any(|pin| {
-            let Ok(pin) = u16::try_from(pin) else {
-                return false;
-            };
-            project.wires_at(Endpoint::pin(coil.id, pin)).any(|w| {
-                project.wire(w).is_some_and(|w| {
-                    w.ends().iter().any(|e| match e {
-                        Endpoint::Pin { symbol, .. } if *symbol != coil.id => project
-                            .symbol(*symbol)
-                            .is_some_and(|o| three_phase(&o.symbol.0, o.pass_through.len())),
-                        _ => false,
-                    })
+        let ends: Vec<CoilEnd> = (0..coil.pins.len())
+            .filter_map(|pin| u16::try_from(pin).ok())
+            .map(|pin| {
+                let other = project
+                    .wires_at(Endpoint::pin(coil.id, pin))
+                    .filter_map(|w| project.wire(w))
+                    .flat_map(|w| w.ends())
+                    .find_map(|e| match e {
+                        Endpoint::Pin { symbol, .. } if symbol != coil.id => {
+                            project.symbol(symbol).map(&class)
+                        }
+                        _ => None,
+                    });
+                let wired = project
+                    .wires_at(Endpoint::pin(coil.id, pin))
+                    .next()
+                    .is_some();
+                other.unwrap_or(if wired {
+                    CoilEnd::Other
+                } else {
+                    CoilEnd::Unwired
                 })
             })
-        });
+            .collect();
+        let feeds = ends.contains(&CoilEnd::Load)
+            || (ends.contains(&CoilEnd::Pole) && ends.contains(&CoilEnd::Unwired));
         let device = coil.device();
         if feeds && device.is_none_or(|d| seen.insert(d)) {
             let tag = device

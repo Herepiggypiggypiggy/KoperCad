@@ -248,6 +248,7 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::CoilSupply,
         ProblemKind::PlugPinOneSided,
         ProblemKind::RelaySize,
+        ProblemKind::CoilOnPowerFeed,
         ProblemKind::CableText,
         ProblemKind::NeutralUse,
         ProblemKind::PlugPins,
