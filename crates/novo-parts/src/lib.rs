@@ -30,6 +30,7 @@ mod browser;
 mod bulk;
 mod catalog;
 mod csv;
+mod fit;
 mod import;
 mod library;
 mod macros;
@@ -44,10 +45,10 @@ mod step;
 mod table;
 
 pub use assign::{
-    AssignMode, PartProposal, assign_cable_part, assign_part, assign_terminal_part,
+    AssignMode, PartProposal, Suggestion, assign_cable_part, assign_part, assign_terminal_part,
     auto_assign_parts, catalog_entry, clear_parts, find_project_part, is_terminal_block,
     missing_parts, missing_parts_summary, propose_parts, remove_unused_parts, suggest_for_device,
-    suggest_for_terminal, terminal_kind_of, terminal_part, unused_parts,
+    suggest_for_terminal, suggestions_for_device, terminal_kind_of, terminal_part, unused_parts,
 };
 pub use bmecat::{BmecatError, ECLASS_CLASS_KEY, ETIM_CLASS_KEY, import_bmecat};
 pub use browser::{BrowserRow, RowAction, browser_rows};
@@ -63,6 +64,9 @@ pub use csv::{
     Column, DelimitedRow, ImportError, ImportReport, ParseError, column_for, import_catalog,
     parse_delimited,
 };
+pub use fit::{
+    DeviceNeed, Fit, Role, Supply, coil_supply, device_role, fit, parse_supply, part_role,
+};
 pub use import::{
     Arrival, DownloadsWatcher, FallbackReason, FetchError, Fetcher, ImportJob, ImportOutcome,
     ImportState, MTIME_SLACK, MakerSource, RemoteFile, ScriptedAnswer, ScriptedFetcher,
@@ -75,8 +79,9 @@ pub use library::{
 pub use macros::{
     Imported, MACRO_BASE_VERSION, MACRO_EXTENSION, MACRO_FORMAT, MACRO_FORMAT_VERSION,
     MACRO_PACK_EXTENSION, MACRO_PACK_FORMAT, MacroEntry, MacroError, MacroFile, MacroLibrary,
-    MacroPack, MacroPart, MacroUpdate, OnConflict, PackEntry, STARTER_FOLDER, SYMBOL_PAD,
-    ThumbSymbol, Thumbnail, macro_updates, starter_macros, thumbnail, user_macros_dir,
+    MacroPack, MacroPart, MacroUpdate, OnConflict, PackEntry, ParamDraft, ParamKind,
+    STARTER_FOLDER, SYMBOL_PAD, ThumbSymbol, Thumbnail, macro_updates, param_drafts,
+    starter_macros, thumbnail, user_macros_dir, validate_parameters,
 };
 pub use panel::{Clearances, Mounting, PanelData, is_panel_number_key, migrate_properties};
 pub use pins::{

@@ -210,11 +210,14 @@ impl Anim {
                         } else {
                             -1.0
                         };
-                        (sign * (1.0 + f32::from(speed)), tokens::SUCCESS)
+                        (
+                            sign * (1.0 + f32::from(speed)),
+                            crate::theme::ui_palette().success,
+                        )
                     }
-                    MotorRun::PhaseLoss => (0.0, tokens::WARNING),
-                    MotorRun::Fault => (0.0, tokens::ERROR),
-                    MotorRun::Stopped => (0.0, tokens::TEXT_MUTED),
+                    MotorRun::PhaseLoss => (0.0, crate::theme::ui_palette().warning),
+                    MotorRun::Fault => (0.0, crate::theme::ui_palette().error),
+                    MotorRun::Stopped => (0.0, crate::theme::ui_palette().text_secondary),
                 };
                 let (angle, spin) = self.motors.entry(symbol.id).or_insert((0.0, 0.0));
                 if f.reduced {
@@ -246,7 +249,11 @@ impl Anim {
                 if humming && !f.reduced {
                     c.x += (self.time * 60.0).sin() * r * 0.04;
                 }
-                painter.circle_filled(c, r * 0.92, tokens::BG_0.gamma_multiply(0.85));
+                painter.circle_filled(
+                    c,
+                    r * 0.92,
+                    crate::theme::ui_palette().sunken.gamma_multiply(0.85),
+                );
                 painter.circle_stroke(c, r, egui::Stroke::new(2.0, tint));
                 if turning || humming {
                     for k in 0..3 {
@@ -293,7 +300,12 @@ impl Anim {
                     painter.circle_stroke(
                         c,
                         r * (1.6 - 0.3 * pull),
-                        egui::Stroke::new(2.0, tokens::SUCCESS.gamma_multiply(0.6 * pull)),
+                        egui::Stroke::new(
+                            2.0,
+                            crate::theme::ui_palette()
+                                .success
+                                .gamma_multiply(0.6 * pull),
+                        ),
                     );
                 }
                 // A timer counting: a ring that fills (on-delay) or drains
@@ -304,7 +316,11 @@ impl Anim {
                         TimerKind::OffDelay => 1.0 - t.elapsed,
                     } as f32;
                     let ring = r * 1.9;
-                    painter.circle_stroke(c, ring, egui::Stroke::new(1.5, tokens::BORDER_STRONG));
+                    painter.circle_stroke(
+                        c,
+                        ring,
+                        egui::Stroke::new(1.5, crate::theme::ui_palette().border_strong),
+                    );
                     let steps = 48;
                     let used = ((share * steps as f32).ceil() as usize).min(steps);
                     let points: Vec<egui::Pos2> = (0..=used)
@@ -317,7 +333,7 @@ impl Anim {
                     if points.len() > 1 {
                         painter.add(egui::Shape::line(
                             points,
-                            egui::Stroke::new(3.0, tokens::WARNING),
+                            egui::Stroke::new(3.0, crate::theme::ui_palette().warning),
                         ));
                     }
                     painter.text(
@@ -325,7 +341,7 @@ impl Anim {
                         egui::Align2::CENTER_CENTER,
                         format!("{:.1} s", t.remaining),
                         egui::FontId::proportional(tokens::FONT_SMALL),
-                        tokens::WARNING,
+                        crate::theme::ui_palette().warning,
                     );
                     moving = true;
                 }

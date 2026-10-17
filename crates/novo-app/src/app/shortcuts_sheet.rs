@@ -205,11 +205,15 @@ impl NovoApp {
         let sections = sections(&self.wb.keymap, &self.wb.shortcuts.filter);
         let mut run: Option<&'static str> = None;
         let modal = egui::Modal::new(egui::Id::new("shortcut_sheet")).show(ctx, |ui| {
-            ui.set_width(460.0);
+            ui.set_width(novo_theme::dialog_width::MEDIUM);
             ui.horizontal(|ui| {
-                ui.heading("Keyboard shortcuts");
+                super::dialog_ui::title(ui, "Keyboard shortcuts", "");
                 ui.weak("Ctrl+K finds every command");
             });
+            ui.weak(
+                "Rebind a key: Help > Open keymap file, then add a line like \
+                 tool.cable = Ctrl+Shift+C",
+            );
             let field = ui.add(
                 egui::TextEdit::singleline(&mut self.wb.shortcuts.filter)
                     .hint_text("Type to filter (English or Dutch)")
@@ -225,7 +229,7 @@ impl NovoApp {
                     }
                     for section in &sections {
                         ui.add_space(6.0);
-                        ui.strong(section.heading);
+                        novo_theme::widgets::section_label(ui, section.heading);
                         for row in &section.rows {
                             if let Some(id) = row_ui(ui, row) {
                                 run = Some(id);

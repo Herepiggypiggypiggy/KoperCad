@@ -198,6 +198,26 @@ impl MacroBrowser {
         };
     }
 
+    /// Writes the macros shown (the whole library, or what the search
+    /// matches) into one `.kcmacropack`, each with its folder.
+    pub(super) fn export_pack(&mut self, dest: &Path) {
+        let Some(lib) = &self.library else { return };
+        let entries = lib.search(&self.query);
+        if entries.is_empty() {
+            self.status = "Nothing to export: no macros match.".into();
+            return;
+        }
+        let paths: Vec<&str> = entries.iter().map(|e| e.path.as_str()).collect();
+        self.status = match lib.export_pack(&paths, dest) {
+            Ok(()) => format!(
+                "Exported {} macro(s) as a pack to {}",
+                paths.len(),
+                dest.display()
+            ),
+            Err(e) => format!("Export failed: {e}"),
+        };
+    }
+
     pub(super) fn rename_selected(&mut self, name: &str) {
         let (Some(lib), Some(sel)) = (&self.library, self.selected.clone()) else {
             return;
@@ -262,6 +282,22 @@ impl NovoApp {
         }
     }
 
+    /// `macro.export_pack`: pick a file and write the library's macros (or
+    /// those the browser's search shows) into one pack, then show the browser.
+    pub(super) fn macro_export_pack(&mut self) {
+        self.wb.macros.show();
+        let picked = rfd::FileDialog::new()
+            .set_title("Export macro pack")
+            .add_filter("KoperCAD macro pack", &["kcmacropack"])
+            .set_file_name("macros.kcmacropack")
+            .save_file();
+        if let Some(path) = picked {
+            self.wb.macros.export_pack(&path);
+            let status = self.wb.macros.status.clone();
+            self.message(Level::Info, status);
+        }
+    }
+
     /// Renames the project's definition `name` to `name (rev N)`, so the
     /// library's newer macro of that name can be placed without the
     /// duplicate-name refusal. Placed circuits keep the old definition.
@@ -300,6 +336,8 @@ impl NovoApp {
         }
         let mut open = true;
         let mut import = false;
+        let mut export_pack = false;
+        let mut edit: Option<String> = None;
         let mut export: Option<PathBuf> = None;
         let mut place: Option<String> = None;
         let mut retire: Option<(String, u32)> = None;
@@ -441,6 +479,13 @@ impl NovoApp {
                                     .set_file_name(format!("{}.kcmacro", e.name))
                                     .save_file();
                             }
+                            if ui
+                                .button("Edit parameters...")
+                                .on_hover_text("Define, change and remove the macro's parameters")
+                                .clicked()
+                            {
+                                edit = Some(e.path.clone());
+                            }
                             if b.company {
                                 if ui
                                     .button("Copy to my macros")
@@ -464,6 +509,15 @@ impl NovoApp {
                 ui.horizontal(|ui| {
                     if ui.button("Import...").clicked() {
                         import = true;
+                    }
+                    if ui
+                        .button("Export pack...")
+                        .on_hover_text(
+                            "All macros shown (narrow with Search) in one .kcmacropack file",
+                        )
+                        .clicked()
+                    {
+                        export_pack = true;
                     }
                     let trashed = lib.trashed();
                     if !trashed.is_empty() {
@@ -508,6 +562,12 @@ impl NovoApp {
         }
         if import {
             self.macro_import();
+        }
+        if export_pack {
+            self.macro_export_pack();
+        }
+        if let Some(name) = edit {
+            self.open_macro_editor(Some(&name));
         }
         if let Some(name) = place {
             self.open_macro_place(Some(&name));

@@ -1,7 +1,7 @@
 //! Wire production in the app (novo-reports `wirecut`): the cut list a wire
 //! machine or a wireman works from, written next to the project.
 //!
-//! Cabinet > Routes > Export wire cut, File > Export, or Ctrl+K "export wire
+//! Cabinet > Routes > Export wire cut, File > Export production, or Ctrl+K "export wire
 //! cut". The CSV is the generic job file (one row per wire: cut length,
 //! cross-section, colour, strip lengths, ferrules, labels), semicolon
 //! separated with a byte order mark as Excel in a decimal comma locale opens
@@ -73,6 +73,7 @@ impl NovoApp {
             self.message(Level::Info, "No wires to cut yet: connect two device pins");
             return None;
         }
+        let report = novo_reports::i18n::translate_output(&report, &self.report_translator());
         match novo_reports::xlsx_bytes(&[&report]) {
             Ok(bytes) => self.write_production(path, &bytes, "wire production"),
             Err(e) => {
@@ -160,7 +161,7 @@ impl NovoApp {
             Ok(()) => {
                 self.wb.sheet_exports.insert(path.to_owned(), hash(bytes));
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {what}: {}", path.display()));
+                self.message_file(format!("{verb} {what}: {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }

@@ -356,6 +356,9 @@ impl Keymap {
         bind(Chord::plain(l('w')), Canvas, "tool.connect");
         // C draws a cable over the wires it touches (DESIGN section 4).
         bind(Chord::plain(l('c')), Canvas, "tool.cable");
+        // Shift+T puts a free text on the page: click, then type. Plain T stays
+        // free (the user does not place terminals by key).
+        bind(Chord::shift(l('t')), Canvas, "draw.text");
         // Corners / Lines (DESIGN §4): works mid-wire. The app shell ignores
         // key repeat for this chord, so a held key does not flip back and forth.
         bind(Chord::shift(l('w')), Canvas, "wire.mode");
@@ -404,6 +407,9 @@ impl Keymap {
         bind(Chord::ctrl(Digit(6)), Anywhere, "view.3d");
         bind(Chord::ctrl(Digit(7)), Anywhere, "view.commissioning");
         bind(Chord::shift(l('d')), Canvas, "view.3d_door");
+        bind(Chord::ctrl(l('h')), Canvas, "view.3d_hide");
+        bind(Chord::ctrl(l('i')), Canvas, "view.3d_isolate");
+        bind(Chord::ctrl_shift(l('h')), Canvas, "view.3d_show_all");
         bind(Chord::ctrl_shift(l('f')), Anywhere, "view.focus");
         bind(Chord::plain(F(11)), Anywhere, "view.full_screen");
         bind(Chord::ctrl(l('t')), Anywhere, "view.cabinet_table");
