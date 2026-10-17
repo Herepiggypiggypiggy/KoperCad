@@ -78,6 +78,16 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("layout.reset_all", &[], &["alle indelingen terugzetten"]),
     nl(
+        "help.open_log_folder",
+        &[],
+        &["logboek openen", "logmap openen", "foutrapport"],
+    ),
+    nl(
+        "help.copy_problem_report",
+        &[],
+        &["probleemrapport kopieren", "fout melden", "storing melden"],
+    ),
+    nl(
         "help.keymap_file",
         &[],
         &[

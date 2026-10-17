@@ -489,28 +489,25 @@ impl ProjectFile {
     }
 }
 
-/// Whether the project at `path` can be saved: the file is not marked
-/// read-only and its folder lets SQLite create the journal beside it, which
-/// every save needs.
+/// Whether the project at `path` can be saved, judged from permission
+/// bits alone so that opening never creates a file next to the project
+/// (a sync client such as OneDrive would see every probe). The file must not
+/// be marked read-only; on Unix its folder must also allow writing, because
+/// every save creates the journal beside it. On Windows the read-only
+/// attribute on a folder (set on Documents and Desktop) does not stop
+/// writes, so only the file is checked there; a save that still fails is
+/// reported by the write itself.
 fn writable(path: &Path) -> Result<bool> {
     if std::fs::metadata(path)?.permissions().readonly() {
         return Ok(false);
     }
-    let probe = sibling(path, ".writetest");
-    match std::fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&probe)
+    #[cfg(unix)]
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty())
+        && std::fs::metadata(dir)?.permissions().readonly()
     {
-        Ok(_) => {
-            let _ = std::fs::remove_file(&probe);
-            Ok(true)
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Ok(false),
-        // Anything else (such as a leftover probe) is not a permission
-        // problem; let the open itself report what is wrong.
-        Err(_) => Ok(true),
+        return Ok(false);
     }
+    Ok(true)
 }
 
 fn ensure_exists(path: &Path) -> Result<()> {
