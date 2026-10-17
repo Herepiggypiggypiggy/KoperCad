@@ -16,3 +16,5 @@ Next, in order
 ## Status 2026-10-16 23:50 UTC
 Done: slice 1 (picker), slice 2 (view a surface, #823), slice 3 (3D panes, #874), slice 4 (put a device on a surface: Inspector > On surface; this PR).
 Next, after PANEL-B2 slice 4 (#876) is on main: swing marks in 3D from `swing_report().hits` and swing rows in the Issues list (novo-checks door.rs, ProblemKind::DoorSwing with `SwingHit::message`). Device overlaps on the plate already show in 3D (Mark::Collision) and Issues (DeviceCollision). Inspector forms for the shown surface's size: later.
+
+Slice 7: a device on the shown surface can be dragged (Drop), turned and taken off in the Cabinet; plan, rails, plate size and the enclosure stay plate-only. Door devices are not dragged in 3D (their position is edited where the door is shown).
