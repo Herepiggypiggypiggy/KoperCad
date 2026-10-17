@@ -44,13 +44,16 @@ static GPU: OnceLock<String> = OnceLock::new();
 static OS: OnceLock<String> = OnceLock::new();
 
 /// `%LOCALAPPDATA%\KoperCAD\logs`, or the platform's per-user data folder.
+/// With a profile folder (`--profile-dir`) it is `<profile>/local/KoperCAD/logs`.
 pub fn default_log_dir() -> Option<PathBuf> {
     let env = |name| {
         std::env::var_os(name)
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
     };
-    let base = if cfg!(windows) {
+    let base = if let Some(root) = novo_storage::profile::root() {
+        root.join("local")
+    } else if cfg!(windows) {
         env("LOCALAPPDATA")?
     } else if cfg!(target_os = "macos") {
         env("HOME")?.join("Library/Application Support")

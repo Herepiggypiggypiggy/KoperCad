@@ -3,6 +3,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() -> eframe::Result {
+    novo_app::apply_profile_flag();
     novo_app::diag::init();
     let result = novo_app::run();
     if let Err(e) = &result {

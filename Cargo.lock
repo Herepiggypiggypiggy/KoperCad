@@ -2056,6 +2056,7 @@ dependencies = [
  "novo-layout",
  "novo-parts",
  "novo-routing",
+ "novo-storage",
  "novo-symbols",
  "novo-tests",
  "novo-view3d",
@@ -2101,6 +2102,7 @@ version = "0.1.0"
 dependencies = [
  "dirs",
  "novo-core",
+ "novo-storage",
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
@@ -2171,6 +2173,7 @@ dependencies = [
  "novo-layout",
  "novo-plc",
  "novo-routing",
+ "novo-storage",
  "novo-terminals",
  "novo-tests",
  "rust_xlsxwriter",
@@ -2222,6 +2225,7 @@ dependencies = [
 name = "novo-storage"
 version = "0.1.0"
 dependencies = [
+ "dirs",
  "flate2",
  "novo-core",
  "rusqlite",

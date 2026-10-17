@@ -419,7 +419,7 @@ fn civil_date(days: i64) -> String {
 /// `%APPDATA%\KoperCAD\learn.json`.
 pub(crate) fn progress_path() -> Option<PathBuf> {
     Some(
-        dirs::config_dir()?
+        novo_storage::profile::config_dir()?
             .join(crate::DATA_DIR_NAME)
             .join(PROGRESS_FILE),
     )
@@ -428,7 +428,7 @@ pub(crate) fn progress_path() -> Option<PathBuf> {
 /// `%APPDATA%\KoperCAD\lessons`.
 pub(crate) fn user_lessons_dir() -> Option<PathBuf> {
     Some(
-        dirs::data_dir()?
+        novo_storage::profile::data_dir()?
             .join(crate::DATA_DIR_NAME)
             .join(USER_LESSONS_DIR),
     )

@@ -69,19 +69,49 @@ fn window_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(novo_theme::brand::ICON_PNG_256).unwrap_or_default()
 }
 
+/// Reads the command line (without the program name): the `--profile-dir
+/// <folder>` (or `--profile-dir=<folder>`) flag and the project file to open.
+/// The control-mode flags are skipped here; `control` reads them.
+fn command_line(
+    args: impl Iterator<Item = std::ffi::OsString>,
+) -> (Option<std::path::PathBuf>, Option<std::path::PathBuf>) {
+    let mut profile = None;
+    let mut file = None;
+    let mut args = args;
+    while let Some(arg) = args.next() {
+        if arg == "--profile-dir" {
+            profile = args.next().map(std::path::PathBuf::from);
+        } else if let Some(dir) = arg.to_str().and_then(|a| a.strip_prefix("--profile-dir=")) {
+            profile = Some(std::path::PathBuf::from(dir));
+        } else if !control::is_control_arg(&arg) && file.is_none() {
+            file = Some(std::path::PathBuf::from(arg));
+        }
+    }
+    (profile.filter(|p| !p.as_os_str().is_empty()), file)
+}
+
+/// Applies the `--profile-dir` flag. `main` calls it before [`diag::init`], so the
+/// log and crash files go to the profile folder too; [`run`] repeats it (the
+/// first call wins).
+pub fn apply_profile_flag() {
+    if let (Some(dir), _) = command_line(std::env::args_os().skip(1)) {
+        novo_storage::profile::set_root(dir);
+    }
+}
+
 /// Opens the main window and runs until it is closed.
 ///
 /// A project file passed as the first argument (as Windows does when a
 /// `.novo` file is double-clicked) is opened on start.
 pub fn run() -> eframe::Result {
-    let startup_file = std::env::args_os()
-        .skip(1)
-        .find(|a| !control::is_control_arg(a))
-        .map(|arg| {
-            let path = std::path::PathBuf::from(arg);
-            // absolute() rather than canonicalize(): no \\?\ prefix on Windows.
-            std::path::absolute(&path).unwrap_or(path)
-        });
+    let (profile, startup_file) = command_line(std::env::args_os().skip(1));
+    if let Some(dir) = profile {
+        novo_storage::profile::set_root(dir);
+    }
+    let startup_file = startup_file.map(|path| {
+        // absolute() rather than canonicalize(): no \\?\ prefix on Windows.
+        std::path::absolute(&path).unwrap_or(path)
+    });
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(APP_NAME)
@@ -91,6 +121,10 @@ pub fn run() -> eframe::Result {
             .with_icon(window_icon()),
         renderer: eframe::Renderer::Wgpu,
         wgpu_options: gpu::configuration(),
+        // eframe keeps the window settings (`app.ron`) under the user's data
+        // folder; with a profile folder they go there too.
+        persistence_path: novo_storage::profile::root()
+            .map(|r| r.join("roaming").join(DATA_DIR_NAME).join("app.ron")),
         ..Default::default()
     };
     // The first argument names eframe's settings folder; move the old one first.
@@ -145,7 +179,9 @@ fn data_dir() -> Option<std::path::PathBuf> {
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
     };
-    let base = if cfg!(windows) {
+    let base = if let Some(root) = novo_storage::profile::root() {
+        root.join("local")
+    } else if cfg!(windows) {
         env("LOCALAPPDATA")?
     } else if cfg!(target_os = "macos") {
         env("HOME")?.join("Library/Application Support")
@@ -166,7 +202,9 @@ fn recovery_dir() -> Option<std::path::PathBuf> {
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
     };
-    let base = if cfg!(windows) {
+    let base = if let Some(root) = novo_storage::profile::root() {
+        root.join("local")
+    } else if cfg!(windows) {
         env("LOCALAPPDATA")?
     } else if cfg!(target_os = "macos") {
         env("HOME")?.join("Library/Application Support")
@@ -182,5 +220,30 @@ mod tests {
     fn window_icon_decodes() {
         let icon = super::window_icon();
         assert_eq!((icon.width, icon.height), (256, 256));
+    }
+}
+
+#[cfg(test)]
+mod command_line_tests {
+    use super::command_line;
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+
+    fn parse(args: &[&str]) -> (Option<PathBuf>, Option<PathBuf>) {
+        command_line(args.iter().map(OsString::from))
+    }
+
+    #[test]
+    fn the_profile_flag_takes_its_value_and_is_not_a_project_file() {
+        assert_eq!(
+            parse(&["--profile-dir", "C:\\clean", "plant.novo"]),
+            (Some("C:\\clean".into()), Some("plant.novo".into()))
+        );
+        assert_eq!(
+            parse(&["--profile-dir=clean", "--control"]),
+            (Some("clean".into()), None)
+        );
+        assert_eq!(parse(&["plant.novo"]), (None, Some("plant.novo".into())));
+        assert_eq!(parse(&["--profile-dir="]), (None, None));
     }
 }

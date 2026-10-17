@@ -219,8 +219,12 @@ pub struct MacroEntry {
 
 /// Where the user's own macros live: `%APPDATA%\KoperCAD\Macros` on Windows,
 /// `$XDG_DATA_HOME/novoelectric/macros` (or `~/.local/share/...`) elsewhere.
-/// Always inside the user's profile. `None` if no profile folder is known.
+/// Always inside the user's profile. With a profile folder (`--profile-dir`) it
+/// is `<profile>/roaming/KoperCAD/Macros`. `None` if no profile folder is known.
 pub fn user_macros_dir() -> Option<PathBuf> {
+    if let Some(root) = novo_storage::profile::root() {
+        return Some(root.join("roaming").join("KoperCAD").join("Macros"));
+    }
     let var = |name: &str| std::env::var_os(name).filter(|v| !v.is_empty());
     if cfg!(windows) {
         var("APPDATA").map(|d| PathBuf::from(d).join("KoperCAD").join("Macros"))
