@@ -1157,15 +1157,12 @@ fn heat_controls(
         }
         ui.checkbox(&mut h.lines, "Airflow")
             .on_hover_text("Streamlines from in front of the devices; faster air is brighter");
-        let top = if h.arrows {
-            super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at)
-        } else {
-            0.0
-        };
-        ui.checkbox(&mut h.arrows, "Arrows").on_hover_text(format!(
-            "Arrows on the slice plane point where the air goes. Length is relative to the fastest air on this plane (now {top:.2} m/s), so two planes cannot be compared by length; air under 2 % of that is not drawn"
-        ));
-        if h.arrows {
+        let top = h
+            .arrows
+            .then(|| super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at));
+        ui.checkbox(&mut h.arrows, "Arrows")
+            .on_hover_text(super::heat_arrows::hover_text(top));
+        if let Some(top) = top.filter(|_| h.arrows) {
             ui.label(egui::RichText::new(format!("longest {top:.2} m/s")).small());
         }
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
