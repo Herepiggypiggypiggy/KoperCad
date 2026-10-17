@@ -758,11 +758,9 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
             }
         }
     } else {
-        let simulate = ui.button("Simulate").on_hover_text(super::tips::hover(
-            ui.ctx(),
-            "Simulate the heat and airflow of this cabinet (search: heat)",
-            "view.command_palette",
-        ));
+        let simulate = ui
+            .button("Simulate")
+            .on_hover_text("Simulate the heat and airflow of this cabinet");
         super::cabinet_bar::note_ctx(ui.ctx(), "heat.simulate", "Simulate button", &simulate);
         if simulate.clicked() {
             state.request_run();
