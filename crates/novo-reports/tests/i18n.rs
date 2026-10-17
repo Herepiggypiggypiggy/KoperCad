@@ -506,3 +506,58 @@ fn a_language_file_can_set_the_decimal_separator() {
     let odd = Catalog::from_json(r#"{"code":"x","decimal":"'"}"#).unwrap();
     assert_eq!(odd.decimal_char(), None);
 }
+
+#[test]
+fn only_real_fixed_texts_match_the_checklist_patterns() {
+    let tr = nl();
+    let mut s = Section::new("s", "", vec![Column::new("c", "Description", 20.0)]);
+    for text in [
+        "R1 DIN rail",
+        "Heavy duty DIN rail",
+        "R2 at 20",
+        "Panel at door",
+        "R3 at 2.5",
+        "Left",
+        "Plate2",
+        "Plateau",
+    ] {
+        s.push(vec![Cell::text(text)], vec![]);
+    }
+    let out = ReportOutput {
+        report: "t".into(),
+        title: "".into(),
+        revision: 0,
+        sections: vec![s],
+    };
+    let rows: Vec<String> = translate_output(&out, &tr).sections[0]
+        .text_rows()
+        .into_iter()
+        .flatten()
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            "R1 DIN-rail",
+            // A part description that only ends like the pattern is data.
+            "Heavy duty DIN rail",
+            "R2 op 20",
+            "Panel at door",
+            "R3 op 2,5",
+            "Links",
+            "Plaat2",
+            "Plateau",
+        ]
+    );
+}
+
+#[test]
+fn only_measure_placeholders_follow_the_decimal_sign() {
+    let mut table = ProjectTable::default();
+    table.set("nl", "Sheet {n}", "Blad {n}").unwrap();
+    let tr = Translator::new("nl", &table);
+    // A sheet name that looks like a decimal keeps its point.
+    assert_eq!(tr.tr("Sheet 1.2"), "Blad 1.2");
+    assert_eq!(tr.tr("Hole dia 4.2"), "Gat dia 4,2");
+    // A measure placeholder only captures a number.
+    assert_eq!(tr.tr("Hole dia big"), "Hole dia big");
+}
