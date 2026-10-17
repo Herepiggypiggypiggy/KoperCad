@@ -8,6 +8,7 @@
 use std::path::PathBuf;
 
 use novo_layout::model::plate_documents;
+use novo_layout::plate_drawing::PlateDocument;
 
 use super::pdf::{replaceable_path, write_replacing};
 use super::{Level, NovoApp, projects_dir};
@@ -15,7 +16,7 @@ use super::{Level, NovoApp, projects_dir};
 impl NovoApp {
     /// Exports the plate drawing of the enclosure selected in the Cabinet
     /// canvas. Says why when there is nothing to export.
-    pub(super) fn export_plate_pdf(&mut self) -> Option<PathBuf> {
+    fn plate_sheets(&mut self) -> Option<(String, String, Vec<PlateDocument>)> {
         let name = self.project_name()?;
         let location = match self.cabinet.location.clone() {
             Some(location) => location,
@@ -55,6 +56,13 @@ impl NovoApp {
             );
             return None;
         };
+        Some((name, location.to_string(), docs))
+    }
+
+    /// Exports the plate drawing of the enclosure selected in the Cabinet
+    /// canvas. Says why when there is nothing to export.
+    pub(super) fn export_plate_pdf(&mut self) -> Option<PathBuf> {
+        let (name, location, docs) = self.plate_sheets()?;
         let file_name = format!("{name} {location} plate.pdf").replace(['/', '\\', ':'], "-");
         let file = self.backend.file().filter(|_| !self.backend.is_untitled());
         let dir = match file.as_ref().and_then(|f| f.parent()) {
@@ -73,7 +81,7 @@ impl NovoApp {
         match write_replacing(&path, &bytes) {
             Ok(()) => {
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {}", path.display()));
+                self.message_file(format!("{verb} {}", path.display()), &path);
                 self.wb.last_export = Some(path.clone());
                 Some(path)
             }
@@ -85,5 +93,47 @@ impl NovoApp {
                 None
             }
         }
+    }
+
+    /// The same plate drawing as DXF for a CNC or the panel builder's CAD:
+    /// `<project> <enclosure> plate.dxf`, then `... plate 2.dxf` for the
+    /// next sheet (the door). Returns the first file.
+    pub(super) fn export_plate_dxf(&mut self) -> Option<PathBuf> {
+        let (name, location, docs) = self.plate_sheets()?;
+        let file = self.backend.file().filter(|_| !self.backend.is_untitled());
+        let dir = match file.as_ref().and_then(|f| f.parent()) {
+            Some(dir) => dir.to_owned(),
+            None => {
+                let Some(dir) = projects_dir() else {
+                    self.message(Level::Error, "Could not find the Documents folder");
+                    return None;
+                };
+                dir
+            }
+        };
+        let mut first = None;
+        for (n, doc) in docs.iter().enumerate() {
+            let suffix = if n == 0 {
+                String::new()
+            } else {
+                format!(" {}", n + 1)
+            };
+            let file_name =
+                format!("{name} {location} plate{suffix}.dxf").replace(['/', '\\', ':'], "-");
+            let path = dir.join(file_name);
+            let text = novo_interop::dxf::write_dxf(&novo_interop::plate::plate_dxf(doc));
+            match write_replacing(&path, text.as_bytes()) {
+                Ok(()) => {
+                    self.message_file(format!("Exported {}", path.display()), &path);
+                    self.wb.last_export = Some(path.clone());
+                    first.get_or_insert(path);
+                }
+                Err(e) => {
+                    self.message(Level::Error, format!("Could not export the plate DXF: {e}"));
+                    return first;
+                }
+            }
+        }
+        first
     }
 }

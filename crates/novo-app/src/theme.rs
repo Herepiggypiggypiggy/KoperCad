@@ -5,20 +5,51 @@ use novo_canvas::cabinet::CabinetStyle;
 use novo_canvas::model::ModelStyle;
 use novo_canvas::widget::CanvasStyle;
 use novo_canvas::{Color, Highlight, Stroke};
-use novo_theme::{CANVAS_DARK, CanvasPalette};
+use novo_theme::{CanvasPalette, canvas_palette};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// Whether the canvases draw with the dark palette. Set once per frame from
+/// the resolved egui theme by [`set_dark`]; canvases built later pick it up.
+static DARK: AtomicBool = AtomicBool::new(true);
+
+pub fn is_dark() -> bool {
+    DARK.load(Ordering::Relaxed)
+}
+
+/// Records the resolved theme; true when it changed, so the canvases that
+/// exist must be restyled.
+pub fn set_dark(dark: bool) -> bool {
+    DARK.swap(dark, Ordering::Relaxed) != dark
+}
+
+/// The interface colour roles of the theme in use. Panels call this where
+/// no `Ui` is at hand; it follows the same flag as the canvases.
+pub fn ui_palette() -> &'static novo_theme::Palette {
+    novo_theme::Palette::for_mode(is_dark())
+}
+
+fn palette() -> &'static CanvasPalette {
+    canvas_palette(is_dark())
+}
+
+/// `a` over `b` at `amount` (0..=1), opaque.
+fn mix(a: [u8; 4], b: [u8; 4], amount: f32) -> [u8; 4] {
+    let ch = |i: usize| (f32::from(a[i]) * amount + f32::from(b[i]) * (1.0 - amount)).round() as u8;
+    [ch(0), ch(1), ch(2), 255]
+}
 
 fn color(c: [u8; 4]) -> Color {
     Color(c)
 }
 
 pub fn canvas_style() -> CanvasStyle {
-    canvas_style_from(&CANVAS_DARK)
+    canvas_style_from(palette())
 }
 
 /// The Cabinet canvas: the plate in the page-frame greys, devices in the wire
 /// blue (copper stays the selection's), problems in the mark colours.
 pub fn cabinet_style() -> CabinetStyle {
-    let p = &CANVAS_DARK;
+    let p = palette();
     CabinetStyle {
         plate_edge: color(p.text),
         usable_edge: color(p.sheet_frame),
@@ -32,7 +63,7 @@ pub fn cabinet_style() -> CabinetStyle {
 }
 
 pub fn model_style() -> ModelStyle {
-    model_style_from(&CANVAS_DARK)
+    model_style_from(palette())
 }
 
 fn canvas_style_from(p: &CanvasPalette) -> CanvasStyle {
@@ -85,12 +116,19 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
         // Where wires meet and end (DESIGN.md §4): the junction dot is
         // copper, a wire landing on a pin uses the wire's own colour.
         joint_color: color(p.junction),
+        // A cable's sheath and tag are the symbol colour at 60 percent over
+        // the sheet, never copper (design/direction.md section 3).
+        cable_color: color(mix(p.symbol, p.sheet, 0.6)),
+        // The wire run under the pointer or being edited: the selection
+        // copper from the palette, not a literal orange.
+        focus_color: color(p.selection),
         pin_joint_color: color(p.wire),
         wire_end_color: color(p.wire_end),
         unconnected_color: color(p.unconnected_flag),
         tag_color: color(p.text),
         sheet_fill: Some(color(p.sheet)),
         frame_color: color(p.sheet_frame),
+        sheet_text_color: color(p.sheet_text),
         note_color: color(p.cross_reference),
         note_warning_color: color(p.warning),
         ..defaults
@@ -100,6 +138,7 @@ fn model_style_from(p: &CanvasPalette) -> ModelStyle {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use novo_theme::{CANVAS_DARK, CANVAS_LIGHT};
 
     #[test]
     fn the_canvas_uses_the_dark_palette() {
@@ -107,6 +146,13 @@ mod tests {
         assert_eq!(style.background, Color(CANVAS_DARK.background));
         assert_eq!(model_style().symbol.color, Color(CANVAS_DARK.symbol));
         assert_eq!(model_style().sheet_fill, Some(Color(CANVAS_DARK.sheet)));
+    }
+
+    #[test]
+    fn the_wire_focus_is_the_palettes_selection_colour() {
+        for p in [&CANVAS_DARK, &novo_theme::CANVAS_LIGHT] {
+            assert_eq!(model_style_from(p).focus_color, Color(p.selection));
+        }
     }
 
     #[test]
@@ -164,6 +210,16 @@ mod tests {
     }
 
     #[test]
+    fn cables_are_neutral_not_copper() {
+        let m = model_style_from(&CANVAS_DARK);
+        assert_ne!(m.cable_color, m.joint_color);
+        // Grey: the channels stay close together.
+        let Color([r, _, b, a]) = m.cable_color;
+        assert_eq!(a, 255);
+        assert!(r.abs_diff(b) < 24, "{:?}", m.cable_color);
+    }
+
+    #[test]
     fn warning_marks_are_not_the_copper_selection() {
         let s = canvas_style();
         let copper = hue(s.selection.color);
@@ -171,5 +227,77 @@ mod tests {
             assert_ne!(mark, s.selection.color);
             assert!((hue(mark) - copper).abs() >= 8.0, "{mark:?}");
         }
+    }
+
+    #[test]
+    fn the_light_palette_gives_a_light_canvas() {
+        let dark = canvas_style_from(&CANVAS_DARK);
+        let light = canvas_style_from(&CANVAS_LIGHT);
+        assert_eq!(light.background, Color(CANVAS_LIGHT.background));
+        assert_ne!(light.background, dark.background);
+        assert_ne!(
+            model_style_from(&CANVAS_LIGHT).symbol.color,
+            model_style_from(&CANVAS_DARK).symbol.color
+        );
+    }
+}
+
+#[cfg(test)]
+mod role_tests {
+    /// Panels take colours from the palette of the theme in use. The raw
+    /// dark tokens stay for sizes and fonts; a colour token in a screen
+    /// would stay dark in the light theme.
+    #[test]
+    fn screens_use_palette_roles_not_dark_colour_tokens() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut hits = Vec::new();
+        let mut stack = vec![dir];
+        while let Some(d) = stack.pop() {
+            for e in std::fs::read_dir(d).unwrap().flatten() {
+                let p = e.path();
+                if p.is_dir() {
+                    stack.push(p);
+                } else if p.extension().is_some_and(|x| x == "rs") {
+                    let s = std::fs::read_to_string(&p).unwrap();
+                    // Whole file, except an inline `#[cfg(test)] mod x { .. }`
+                    // (an early `#[cfg(test)]` on one item must not hide the rest).
+                    let mut code = s.as_str();
+                    let lines: Vec<&str> = s.lines().collect();
+                    for w in 0..lines.len().saturating_sub(1) {
+                        if lines[w].trim() == "#[cfg(test)]"
+                            && lines[w + 1].trim_start().starts_with("mod ")
+                            && lines[w + 1].trim_end().ends_with('{')
+                        {
+                            let at: usize = lines[..w].iter().map(|l| l.len() + 1).sum();
+                            code = &s[..at.min(s.len())];
+                            break;
+                        }
+                    }
+                    for (i, l) in code.lines().enumerate() {
+                        let t = l.trim_start();
+                        if t.starts_with("//") {
+                            continue;
+                        }
+                        for c in [
+                            "tokens::WARNING",
+                            "tokens::ERROR",
+                            "tokens::SUCCESS",
+                            "tokens::INFO",
+                            "tokens::TEXT_MUTED",
+                            "tokens::TEXT_FAINT",
+                            "tokens::ACCENT",
+                            "tokens::TEXT",
+                            "tokens::BORDER",
+                            "tokens::BG_",
+                        ] {
+                            if l.contains(c) {
+                                hits.push(format!("{}:{}", p.display(), i + 1));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        assert!(hits.is_empty(), "use ui_palette() instead: {hits:#?}");
     }
 }

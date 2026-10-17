@@ -95,7 +95,7 @@ impl NovoApp {
         ui.horizontal_wrapped(|ui| {
             for (i, name) in ["errors", "warnings", "infos"].into_iter().enumerate() {
                 let chip = format!("{} {name}", counts[i]);
-                if ui.selectable_label(self.wb.issue_filter[i], chip).clicked() {
+                if novo_theme::widgets::chip(ui, &chip, self.wb.issue_filter[i]).clicked() {
                     self.wb.issue_filter[i] ^= true;
                 }
             }
@@ -120,16 +120,39 @@ impl NovoApp {
                 "None shown. Turn a filter on."
             });
         }
+        // Leave a line under the list for the key hint.
+        let list_height = (ui.available_height() - 24.0).max(60.0);
         egui::ScrollArea::vertical()
+            .max_height(list_height)
             .auto_shrink([false, true])
             .show(ui, |ui| {
                 for (i, p) in &problems {
-                    let mark = match p.severity {
-                        Severity::Error => "⛔",
-                        Severity::Warning => "⚠",
-                        Severity::Info => "ℹ",
+                    let (mark, color) = match p.severity {
+                        Severity::Error => (
+                            novo_theme::icons::status::ERROR,
+                            crate::theme::ui_palette().error,
+                        ),
+                        Severity::Warning => (
+                            novo_theme::icons::status::WARNING,
+                            crate::theme::ui_palette().warning,
+                        ),
+                        Severity::Info => (
+                            novo_theme::icons::status::INFO,
+                            crate::theme::ui_palette().info,
+                        ),
                     };
-                    let text = format!("{mark} {}", p.message);
+                    let mut text = egui::text::LayoutJob::default();
+                    let font = egui::TextStyle::Body.resolve(ui.style());
+                    text.append(
+                        &format!("{mark}  "),
+                        0.0,
+                        egui::TextFormat::simple(font.clone(), color),
+                    );
+                    text.append(
+                        &p.message,
+                        0.0,
+                        egui::TextFormat::simple(font, ui.visuals().text_color()),
+                    );
                     let row = ui.selectable_label(false, text);
                     if row.clicked() {
                         go = Some(*i);
@@ -186,7 +209,7 @@ impl NovoApp {
             self.wb.issue_filter[i] ^= true;
         }
         self.waived_list(ui);
-        ui.weak("F8 next · Shift+F8 previous · right-click for more");
+        ui.weak("F8 next · Shift+F8 previous");
         if let Some(i) = go {
             self.go_problem(i);
         }

@@ -5,10 +5,14 @@
 use std::collections::BTreeMap;
 
 use crate::enclosure::{DoorReport, Enclosure, check};
+use crate::openings::{Opening, OpeningConflict, conflicts};
 use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
+use crate::surfaces::MAIN_PLATE;
+use crate::surfaces::Surfaces;
+use crate::swing::{DoorDevice, PlateDevice, SweepSettings, SwingReport, sweep};
 use crate::{
-    Duct, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions, outside,
-    rail_overflows,
+    Duct, DuctOverlap, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions,
+    duct_overlaps, outside, rail_overflows,
 };
 
 /// Default snap grid for free placement (the Cabinet canvas grid).
@@ -21,6 +25,10 @@ pub struct Report {
     pub outside: Vec<u64>,
     pub too_close: Vec<(u64, u64, f64)>,
     pub rail_overflows: Vec<(u64, f64)>,
+    /// Devices that cover a wiring opening of the plate.
+    pub opening_conflicts: Vec<OpeningConflict>,
+    /// Ducts lying over a rail or a device.
+    pub duct_overlaps: Vec<DuctOverlap>,
     /// Placed devices whose size is the default guess.
     pub guessed: Vec<u64>,
 }
@@ -31,6 +39,8 @@ impl Report {
             && self.outside.is_empty()
             && self.too_close.is_empty()
             && self.rail_overflows.is_empty()
+            && self.opening_conflicts.is_empty()
+            && self.duct_overlaps.is_empty()
     }
 }
 
@@ -46,6 +56,13 @@ pub struct CabinetLayout {
     pub enclosure: Option<Enclosure>,
     /// Depth of the parts of placed devices, by device id, where known.
     pub depths: BTreeMap<u64, f64>,
+    /// Wiring openings (`opening.<name>` structure properties).
+    pub openings: Vec<Opening>,
+    /// Opening properties that could not be read.
+    pub opening_problems: Vec<String>,
+    /// Devices on the inside of the door (door coordinates), swept when the
+    /// door opens.
+    pub door_devices: Vec<DoorDevice>,
 }
 
 impl CabinetLayout {
@@ -58,6 +75,9 @@ impl CabinetLayout {
             grid: DEFAULT_GRID_MM,
             enclosure: None,
             depths: BTreeMap::new(),
+            openings: Vec::new(),
+            opening_problems: Vec::new(),
+            door_devices: Vec::new(),
         }
     }
 
@@ -70,6 +90,40 @@ impl CabinetLayout {
             .map(|p| (p.id, self.depths.get(&p.id).copied()))
             .collect();
         Some(check(enclosure, &self.plate, &depths))
+    }
+
+    /// Door devices swept against the plate devices and the walls; `None`
+    /// until the enclosure has an interior.
+    pub fn swing_report(&self) -> Option<SwingReport> {
+        let enclosure = self.enclosure.as_ref()?;
+        let (surfaces, _) = Surfaces::from_enclosure(enclosure, &self.plate, &[]);
+        let plate_devices: Vec<PlateDevice> = self
+            .placements
+            .iter()
+            .filter_map(|p| {
+                Some(PlateDevice {
+                    id: p.id,
+                    surface: crate::surfaces::MAIN_PLATE.into(),
+                    rect: p.footprint(),
+                    depth: *self.depths.get(&p.id)?,
+                    mesh: None,
+                })
+            })
+            .collect();
+        let mut report = sweep(
+            enclosure,
+            &surfaces,
+            &self.door_devices,
+            &plate_devices,
+            &SweepSettings::default(),
+        );
+        report.unchecked_plate = self
+            .placements
+            .iter()
+            .filter(|p| !self.depths.contains_key(&p.id))
+            .map(|p| p.id)
+            .collect();
+        Some(report)
     }
 
     /// A position snapped to the grid, for dropping and dragging.
@@ -181,6 +235,8 @@ impl CabinetLayout {
             outside: outside(&self.plate, &self.placements),
             too_close: clearance_violations(&self.placements),
             rail_overflows: rail_overflows(&self.rails, &self.placements),
+            opening_conflicts: conflicts(&self.openings, MAIN_PLATE, &self.placements),
+            duct_overlaps: duct_overlaps(&self.ducts, &self.rails, &self.placements),
             guessed: self
                 .placements
                 .iter()

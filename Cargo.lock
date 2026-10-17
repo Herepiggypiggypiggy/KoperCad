@@ -1899,6 +1899,7 @@ dependencies = [
  "novo-reports",
  "novo-revisions",
  "novo-routing",
+ "novo-safety",
  "novo-sim",
  "novo-storage",
  "novo-symbols",
@@ -1962,6 +1963,7 @@ dependencies = [
  "novo-parts",
  "novo-plc",
  "novo-routing",
+ "novo-safety",
  "novo-symbols",
  "novo-terminals",
  "novo-tests",
@@ -2084,6 +2086,7 @@ dependencies = [
  "novo-cables",
  "novo-core",
  "novo-reports",
+ "novo-tests",
 ]
 
 [[package]]

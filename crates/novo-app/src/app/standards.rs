@@ -44,12 +44,13 @@ impl NovoApp {
             .unwrap_or(ambient);
         let mut ambient_done = false;
         let mut save: Option<StandardsFormat> = None;
+        let (mut to_inputs, mut to_calc) = (false, false);
         let mut open = true;
         super::panel::dialog(ctx, "Standards check", [640.0, 520.0])
             .open(&mut open)
             .show(ctx, |ui| {
+                novo_theme::widgets::section_label(ui, "Check against");
                 ui.horizontal(|ui| {
-                    ui.label("Check against:");
                     for set in StandardSet::ALL {
                         let mut on = chosen.contains(&set);
                         if ui.checkbox(&mut on, set.short()).changed() {
@@ -61,6 +62,8 @@ impl NovoApp {
                         }
                     }
                 });
+                ui.add_space(6.0);
+                novo_theme::widgets::section_label(ui, "Assumptions");
                 ui.horizontal(|ui| {
                     ui.label("Wires with no installation method:");
                     egui::ComboBox::from_id_salt("standards_default_method")
@@ -85,12 +88,28 @@ impl NovoApp {
                     );
                     ambient_done = r.drag_stopped() || r.lost_focus();
                 });
+                ui.horizontal(|ui| {
+                    if ui
+                        .button("Electrical inputs...")
+                        .on_hover_text("Supply short-circuit current, panel SCCR, machine data and e-stop: the numbers the rules below are unknown without")
+                        .clicked()
+                    {
+                        to_inputs = true;
+                    }
+                    if ui
+                        .button("Calculations...")
+                        .on_hover_text("Cable rating, voltage drop, short circuit and starter sizing with the numbers")
+                        .clicked()
+                    {
+                        to_calc = true;
+                    }
+                });
                 if report.sets.is_empty() {
                     ui.label("Choose at least one standard to see the report.");
                     return;
                 }
                 ui.horizontal(|ui| {
-                    if ui.button("Save report as PDF").clicked() {
+                    if novo_theme::widgets::primary_button(ui, "Save report as PDF").clicked() {
                         save = Some(StandardsFormat::Pdf);
                     }
                     if ui.button("Save as web page").clicked() {
@@ -100,12 +119,15 @@ impl NovoApp {
                         ctx.copy_text(markdown.clone());
                     }
                 });
-                ui.label("The report assists the engineer and is not a certificate. Verdicts marked planning value rest on numbers not yet checked against your licensed standard.");
-                ui.separator();
+ui.weak(
+                    "The report assists the engineer and is not a certificate. Verdicts marked planning value rest on numbers not yet checked against your licensed standard.",
+                );
+                ui.add_space(6.0);
                 egui::ScrollArea::vertical().show(ui, |ui| {
                     for (bold, text) in &lines {
                         if *bold {
-                            ui.strong(text);
+                            ui.add_space(4.0);
+                            novo_theme::widgets::section_label(ui, text);
                         } else {
                             ui.label(text);
                         }
@@ -133,6 +155,12 @@ impl NovoApp {
             self.edit_project("Ambient temperature", |tx| {
                 standards::set_info_property(tx, keys::AMBIENT_C, Some(Value::Float(new_ambient)))
             });
+        }
+        if to_inputs {
+            self.toggle_electrical_open();
+        }
+        if to_calc && self.wb.calculations.is_none() {
+            self.toggle_calculations();
         }
         if let Some(format) = save {
             self.export_standards_report(format);
