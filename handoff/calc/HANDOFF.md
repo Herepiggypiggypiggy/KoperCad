@@ -4,20 +4,15 @@ Updated 2026-10-15 by thread "Design checks: electrical calculations"
 (session cse_011d2XMxLEdY3akxWeLHGAGn).
 
 ## State
-- #412 (pure library `novo_checks::calc`) is merged to main.
-- #454 (adapter) was merged into the stale #412 branch, not main. Re-landed
-  as #514 (branch `claude/project-thread-bib2al`, from main): adapter,
-  six ProblemKinds, `Source::from_transformer_min`, shared drop limit.
-  Needs reviewer READY on its current head, then merge.
-- Panel thread's #413 carries VoltageDrop/ShortCircuit as label-only kinds:
-  on conflict keep one copy of each variant and merge the CALC_KINDS skip
-  list in tests/motor_starter.rs with theirs.
-- UI integration thread builds "Project settings > Electrical" (supply.*,
-  check.voltage_drop_pct) after #514.
-- Not started: cable rating with installation method (replace the
-  single-column ampacity in checks::undersized_wires), short-circuit
-  current along cables, PE continuity over the netlist, "planning value,
-  verify" wording on table-based results, verifying the IEC tables.
+- #412 (library), #514 (adapter) and later work by other threads (network
+  fault levels, circuit report, tables, cable rating with install method)
+  are on main. Cable rating and short-circuit along cables are therefore done.
+- PE continuity: each cable's own protective core is judged against the
+  project limit `check.pe_resistance_ohm` (silent without it; ProtectiveConductor
+  problem, marked "planning value, verify"). A path across several cables over
+  the netlist is not followed yet.
+- Not done: PE path over the netlist, verifying the IEC tables against the
+  standard text.
 
 ## Resume
 ```

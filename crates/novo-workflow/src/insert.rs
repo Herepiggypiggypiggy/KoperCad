@@ -191,7 +191,16 @@ impl InsertSearch {
                 let texts = [symbol.name.as_str(), last, symbol.function.as_str()]
                     .into_iter()
                     .chain(symbol.keywords.iter().map(String::as_str));
-                let mut score = fuzzy::best_score(text, texts);
+                let texts: Vec<&str> = texts.collect();
+                let mut score = fuzzy::best_score(text, texts.iter().copied());
+                // "power contactor": every word must hit some text.
+                if score.is_none() && lower.contains(char::is_whitespace) {
+                    score = lower
+                        .split_whitespace()
+                        .map(|w| fuzzy::best_score(w, texts.iter().copied()))
+                        .try_fold(i32::MAX, |low, s| s.map(|s| low.min(s)))
+                        .map(|s| s / 2);
+                }
                 // The category alone matches weakly ("protection").
                 if score.is_none() {
                     score = fuzzy::score(text, &symbol.category).map(|s| s / 4);
@@ -207,7 +216,9 @@ impl InsertSearch {
                 // A word that names a device ranks the device above its
                 // auxiliary contact ("overload" finds the relay, not the
                 // contact that belongs to it); typed aliases still win.
+                // A contact the user placed before keeps its rank.
                 if mnemonic.is_none()
+                    && !self.recent.contains(&symbol.id)
                     && is_child_function(symbol)
                     && symbol.function != "contact.main"
                 {
@@ -373,6 +384,27 @@ mod tests {
                 .iter()
                 .any(|h| h.symbol.id == "iec/contacts/thermal_nc")
         );
+    }
+
+    #[test]
+    fn a_contactor_search_offers_coil_power_contacts_and_aux_contacts() {
+        let lib = library();
+        let search = InsertSearch::default();
+        for query in ["contactor", "power contactor", "main contacts"] {
+            let ids: Vec<&str> = search
+                .search(&lib, query)
+                .iter()
+                .take(8)
+                .map(|h| h.symbol.id.as_str())
+                .collect();
+            assert!(ids.contains(&"iec/contactors/main_3p"), "{query}: {ids:?}");
+            if query == "contactor" {
+                assert_eq!(ids[0], "iec/coils/contactor");
+                assert_eq!(ids[1], "iec/contactors/main_3p", "{ids:?}");
+                assert!(ids.contains(&"iec/contacts/no"), "{ids:?}");
+                assert!(ids.contains(&"iec/contacts/nc"), "{ids:?}");
+            }
+        }
     }
 
     #[test]
