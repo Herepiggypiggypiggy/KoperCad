@@ -253,7 +253,15 @@ pub(super) fn strip_table(
                                 .context_menu(|ui| row_menu(ui, out));
                         }
                     }
-                    ui.label(novo_terminals::kind_label(row.kind));
+                    ui.label(if row.level > 1 {
+                        format!(
+                            "{}, level {}",
+                            novo_terminals::kind_label(row.kind),
+                            row.level
+                        )
+                    } else {
+                        novo_terminals::kind_label(row.kind).to_owned()
+                    });
                     ui.label(jumper_cell(row))
                         .on_hover_text("Terminals with the same jumper are connected");
                     ui.label(screen_cell(screen, i, |r| r.bridged_with.join(", ")));

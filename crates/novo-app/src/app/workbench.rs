@@ -573,6 +573,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "terminal.renumber",
     "terminal.join_duplicates",
     "terminal.set_kind",
+    "terminal.set_level",
+    "terminal.set_jumper",
     "terminal.order_up",
     "terminal.order_down",
     "terminal.style",
@@ -942,6 +944,8 @@ impl NovoApp {
             | "terminal.renumber"
             | "terminal.join_duplicates"
             | "terminal.set_kind"
+            | "terminal.set_level"
+            | "terminal.set_jumper"
             | "terminal.order_up"
             | "terminal.order_down"
             | "terminal.style"
