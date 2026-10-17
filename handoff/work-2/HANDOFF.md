@@ -5,3 +5,4 @@ Redlines (PR from claude/work-2-redlines): Commissioning panel > Redlines tab. P
 Done: field results file (engine novo-commissioning/src/field.rs, header menu items By > Field results), tablet layout (commissioning_tablet, TABLET_MAX_WIDTH 1200 pt, panel 380 pt), punch photos (photo.rs, app/commissioning_photos.rs; files in `<project> field photos/` named by content hash; Add photo button per punch item; pictures packed into .kcfield as base64).
 Next: photo viewer in the punch list; marks for redlines on the drawing.
 Rules kept: no push after READY; merge main when asked; new PR per slice.
+Redline marks: in Commissioning mode, schematic pages outline the wire or device of every open redline (modified colour; hover shows what it says). Roadmap for Field mode is complete; open ideas: terminal renames, marks in the cabinet view.

@@ -77,6 +77,17 @@ pub struct Redline {
     pub state: RedlineState,
 }
 
+impl Redline {
+    /// What the redline says, in one phrase.
+    pub fn summary(&self) -> String {
+        match &self.change {
+            Change::Note => format!("{}: {}", self.label, self.note.trim()),
+            Change::WireNumber(n) => format!("Wire {} renumbered {}", self.label, n.trim()),
+            Change::DeviceTag(t) => format!("Device {} renamed {}", self.label, t.trim()),
+        }
+    }
+}
+
 /// The commands that make the open edits of `redlines` in the drawing, with
 /// the id of the redline each came from. A redline that cannot be applied
 /// (the object is gone, the tag does not parse) comes back as `Err` with the
@@ -122,14 +133,7 @@ fn command_of(r: &Redline, project: &Project) -> Result<Command, String> {
 pub fn revision_description<'a>(redlines: impl IntoIterator<Item = &'a Redline>) -> String {
     let lines: Vec<String> = redlines
         .into_iter()
-        .map(|r| {
-            let what = match &r.change {
-                Change::Note => format!("{}: {}", r.label, r.note.trim()),
-                Change::WireNumber(n) => format!("Wire {} renumbered {}", r.label, n.trim()),
-                Change::DeviceTag(t) => format!("Device {} renamed {}", r.label, t.trim()),
-            };
-            format!("As built: {what} ({})", r.by)
-        })
+        .map(|r| format!("As built: {} ({})", r.summary(), r.by))
         .collect();
     lines.join("\n")
 }
