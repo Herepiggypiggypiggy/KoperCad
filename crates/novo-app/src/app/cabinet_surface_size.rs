@@ -78,7 +78,13 @@ pub(super) fn card(
 /// Draws the card; returns the ask when something was changed.
 pub(super) fn show(ui: &mut egui::Ui, card: &SurfaceCard) -> Option<Ask> {
     let mut ask = None;
-    widgets::section_label(ui, &format!("{} {} (mm)", card.kind, card.name));
+    // "roof (mm)", but "plate plate2 (mm)": the name only when it adds to the kind.
+    let title = if card.kind == card.name {
+        card.name.clone()
+    } else {
+        format!("{} {}", card.kind, card.name)
+    };
+    widgets::section_label(ui, &format!("{title} (mm)"));
     ui.weak("Select a device to see its data");
     ui.add_space(6.0);
     let mut size = card.size;
