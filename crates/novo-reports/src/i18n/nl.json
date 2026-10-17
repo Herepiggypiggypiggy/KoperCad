@@ -226,6 +226,14 @@
     "{mark} Wiring duct": "{mark} Bedrakingskanaal",
     "{mark} Wiring duct {w} x {h}": "{mark} Bedrakingskanaal {w} x {h}",
     "Door": "Deur",
-    "Mounting plate": "Montageplaat"
+    "Mounting plate": "Montageplaat",
+    "Floor": "Bodem",
+    "Left": "Links",
+    "Plate2": "Plaat2",
+    "Plate3": "Plaat3",
+    "Plate4": "Plaat4",
+    "Right": "Rechts",
+    "Roof": "Dak",
+    "{mark} at {offset}": "{mark} op {offset}"
   }
 }

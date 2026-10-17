@@ -190,7 +190,8 @@ fn text_row(
         let r = ui.add(
             egui::TextEdit::singleline(value)
                 .id(egui::Id::new(id))
-                .hint_text(hint)
+                // An example, worded as one: a bare grey "20" reads as a default.
+                .hint_text(format!("e.g. {hint}"))
                 .desired_width(130.0),
         );
         if should_commit(r.lost_focus(), value, shown) {
@@ -274,7 +275,7 @@ impl NovoApp {
                             let r = ui.add(
                                 egui::TextEdit::singleline(&mut number)
                                     .id(egui::Id::new("wire_number"))
-                                    .hint_text("105")
+                                    .hint_text("e.g. 105")
                                     .desired_width(90.0),
                             );
                             if should_commit(r.lost_focus(), &number, &shown.number) {

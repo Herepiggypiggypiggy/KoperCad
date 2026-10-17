@@ -316,6 +316,27 @@ impl PartsWindow {
         });
     }
 
+    /// Writes hand-typed terminal positions of `key` into the part and the
+    /// user's catalog file.
+    fn save_typed_pins(&mut self, key: &PartKey, edits: &[(String, [f64; 3])]) {
+        let Some(mut part) = self.catalog.get(key).cloned() else {
+            return;
+        };
+        let written = super::parts_pins::apply_typed(&mut part, edits);
+        let saved = match (written, self.catalog_path.as_ref()) {
+            (0, _) => Err("Nothing to save: no valid position was typed".to_owned()),
+            (_, None) => Err("No profile folder is known, so there is nowhere to save".to_owned()),
+            (_, Some(path)) => super::parts_pins::save_to_user_catalog(path, &part),
+        };
+        self.pins.note = Some(match saved {
+            Ok(()) => {
+                self.catalog.upsert(part);
+                format!("Saved {written} typed terminal positions to your catalog.")
+            }
+            Err(e) => e,
+        });
+    }
+
     /// The makers in the catalog, sorted, each once.
     pub(crate) fn makers(&self) -> Vec<String> {
         let mut makers: Vec<String> = Vec::new();
@@ -624,6 +645,8 @@ enum PartsAction {
     DetectPins(PartKey),
     /// Save the detected positions into the user's catalog.
     SavePins(PartKey),
+    /// Save positions typed by hand into the user's catalog.
+    SaveTypedPins(PartKey, Vec<(String, [f64; 3])>),
     ChooseFolder,
     StopImport,
     ConfirmFile(PathBuf),
@@ -805,6 +828,7 @@ impl NovoApp {
                     }
                 }
                 PartsAction::SavePins(key) => win.save_pins(&key),
+                PartsAction::SaveTypedPins(key, edits) => win.save_typed_pins(&key, &edits),
                 PartsAction::ChooseFolder => {
                     if let Some(dir) = rfd::FileDialog::new()
                         .set_title("Folder to watch for downloads")
@@ -1349,6 +1373,9 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
                 }
                 Some(super::parts_pins::PinsAction::Save) => {
                     actions.push(PartsAction::SavePins(key.clone()));
+                }
+                Some(super::parts_pins::PinsAction::SaveTyped(edits)) => {
+                    actions.push(PartsAction::SaveTypedPins(key.clone(), edits));
                 }
                 None => {}
             }

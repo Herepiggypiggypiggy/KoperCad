@@ -14,3 +14,4 @@
 - 2026-10-16 PR: label pass 1.50 to 0.51 ms at 3000 devices: chips are only laid out for devices that could show one (the overlap check was not the cost; a grid for it measured the same and was dropped).
 - 2026-10-16 PR: a frame walks the scene bounds once (show passes them to paint_overlay and paint_dimensions; test now requires one walk).
 - 2026-10-16 PR (R7 follow-ups on #755): toolbar says "Reduced quality" next to Restore quality; the overall size has no depth line when there is no shell (it was the plate thickness); docs say hardware floors at Integrated.
+- 2026-10-16 PR: wires without a colour take their potential colour (PE green-yellow, neutral and 0 V blue, positive DC red); line conductors stay grey (circuit class not in the model).

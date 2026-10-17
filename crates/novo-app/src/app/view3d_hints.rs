@@ -106,15 +106,14 @@ mod tests {
             .iter()
             .find(|(what, _)| *what == "Hide and isolate")
             .expect("the hide row is listed");
-        for chord in ["Ctrl+H", "Ctrl+I", "Ctrl+Shift+H"] {
-            assert!(row.1.contains(chord), "{chord} is in the row");
-        }
+        // The text shows the chord the keymap really binds, so rebinding a
+        // command fails here until the legend is edited.
         let keymap = novo_workflow::keymap::Keymap::default();
         for id in ["view.3d_hide", "view.3d_isolate", "view.3d_show_all"] {
-            assert!(
-                keymap.bindings().iter().any(|b| b.command == id),
-                "{id} is still bound"
-            );
+            let chord = keymap
+                .shortcut_text(id)
+                .unwrap_or_else(|| panic!("{id} is bound"));
+            assert!(row.1.contains(&chord), "{chord} for {id} is in the row");
         }
     }
 

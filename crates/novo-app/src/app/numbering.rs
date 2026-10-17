@@ -198,56 +198,87 @@ impl NovoApp {
         let mut apply = false;
         let mut save_only = false;
         let mut reveal: Option<WireId> = None;
-        super::panel::dialog(ctx, "Wire numbering", [560.0, 560.0])
+        super::panel::dialog(ctx, "Wire numbering", [560.0, 620.0])
             .open(&mut open)
             .show(ctx, |ui| {
+                novo_theme::widgets::section_label(ui, "Scheme");
                 scheme_ui(ui, &mut win.scheme);
-                ui.separator();
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut win.mode, Mode::Fill, "Number new wires")
-                        .on_hover_text("Only wires without a number; existing numbers stay");
-                    ui.selectable_value(&mut win.mode, Mode::FillStrict, "Also fix off-scheme")
-                        .on_hover_text("Numbers the scheme would not give are replaced too");
-                    ui.selectable_value(&mut win.mode, Mode::Renumber, "Renumber all")
-                        .on_hover_text("Start over in reading order; typed numbers stay");
+                ui.add_space(8.0);
+                novo_theme::widgets::section_label(ui, "What to number");
+                let modes = [Mode::Fill, Mode::FillStrict, Mode::Renumber];
+                let mut mode = modes.iter().position(|m| *m == win.mode).unwrap_or(0);
+                if novo_theme::widgets::segmented(
+                    ui,
+                    &mut mode,
+                    &["Number new wires", "Also fix off-scheme", "Renumber all"],
+                ) {
+                    win.mode = modes[mode];
+                }
+                ui.weak(match win.mode {
+                    Mode::Fill => "Only wires without a number; existing numbers stay.",
+                    Mode::FillStrict => "Numbers the scheme would not give are replaced too.",
+                    Mode::Renumber => "Start over in reading order; typed numbers stay.",
                 });
+                ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     ui.label("Wires");
-                    ui.selectable_value(&mut win.scope, ScopeChoice::Project, "Project");
-                    ui.add_enabled_ui(page.is_some(), |ui| {
-                        ui.selectable_value(&mut win.scope, ScopeChoice::ThisPage, "This page")
-                    });
-                    ui.add_enabled_ui(!selected.is_empty(), |ui| {
-                        ui.selectable_value(&mut win.scope, ScopeChoice::Selection, "Selection")
-                    });
+                    let scopes = [
+                        ScopeChoice::Project,
+                        ScopeChoice::ThisPage,
+                        ScopeChoice::Selection,
+                    ];
+                    let mut scope = scopes.iter().position(|s| *s == win.scope).unwrap_or(0);
+                    if novo_theme::widgets::segmented(
+                        ui,
+                        &mut scope,
+                        &["Project", "This page", "Selection"],
+                    ) {
+                        let allowed = match scopes[scope] {
+                            ScopeChoice::Project => true,
+                            ScopeChoice::ThisPage => page.is_some(),
+                            ScopeChoice::Selection => !selected.is_empty(),
+                        };
+                        if allowed {
+                            win.scope = scopes[scope];
+                        }
+                    }
+                    if page.is_none() {
+                        ui.weak("This page: open a page first");
+                    } else if selected.is_empty() {
+                        ui.weak("Selection: select wires on the drawing first");
+                    }
                 });
                 let Some(shown) = &win.shown else { return };
-                ui.separator();
+                ui.add_space(8.0);
                 let conflicts = shown.plan.conflicts.len();
-                ui.horizontal(|ui| {
-                    ui.selectable_value(&mut win.tab, Tab::Preview, "Preview");
-                    ui.selectable_value(
-                        &mut win.tab,
-                        Tab::Conflicts,
-                        format!("Conflicts ({conflicts})"),
-                    );
-                    ui.weak(shown.plan.summary());
-                });
+                let mut tab = usize::from(win.tab == Tab::Conflicts);
+                if novo_theme::widgets::tabs(
+                    ui,
+                    &mut tab,
+                    &["Preview", &format!("Conflicts ({conflicts})")],
+                ) {
+                    win.tab = [Tab::Preview, Tab::Conflicts][tab];
+                }
+                ui.weak(shown.plan.summary());
                 egui::ScrollArea::vertical()
-                    .max_height(260.0)
+                    .max_height(200.0)
                     .auto_shrink([false, true])
                     .show(ui, |ui| match win.tab {
                         Tab::Preview => preview_ui(ui, &shown.plan, &mut reveal),
                         Tab::Conflicts => conflicts_ui(ui, &shown.plan.conflicts, &mut reveal),
                     });
-                ui.separator();
+                ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     let label = match win.mode {
                         Mode::Renumber => "Renumber",
                         _ => "Number",
                     };
                     let can = !shown.plan.is_empty();
-                    if ui.add_enabled(can, egui::Button::new(label)).clicked() {
+                    if ui
+                        .add_enabled_ui(can, |ui| novo_theme::widgets::primary_button(ui, label))
+                        .inner
+                        .clicked()
+                    {
                         apply = true;
                     }
                     if ui
