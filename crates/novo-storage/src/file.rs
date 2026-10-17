@@ -8,7 +8,7 @@ use novo_core::{
 };
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction, params};
 
-use crate::error::{Result, StorageError, is_busy, is_not_a_database};
+use crate::error::{Result, StorageError, is_busy, is_not_a_database, is_read_only};
 use crate::schema::{self, APPLICATION_ID, MIGRATIONS, Migration};
 use crate::session::AUTOSAVE_SUFFIX;
 
@@ -89,7 +89,7 @@ impl ProjectFile {
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
         let conn = Connection::open_with_flags(path, flags)?;
         let version = check_existing(&conn, path, schema::SCHEMA_VERSION)?;
-        let conn = if version < schema::SCHEMA_VERSION {
+        let conn = if version < schema::SCHEMA_VERSION || !schema::has_side_tables(&conn)? {
             let mut memory = Connection::open_in_memory()?;
             // rusqlite refuses -1 ("all pages") here; one step of any
             // realistic file size copies everything.
@@ -99,6 +99,7 @@ impl ProjectFile {
                 None,
             )?;
             schema::migrate(&mut memory, path, MIGRATIONS, false)?;
+            schema::restore_side_tables(&memory)?;
             memory
         } else {
             conn
@@ -175,7 +176,10 @@ impl ProjectFile {
         if create {
             flags |= OpenFlags::SQLITE_OPEN_CREATE;
         }
-        let mut conn = Connection::open_with_flags(path, flags)?;
+        if !create && !is_autosave(path) && !writable(path)? {
+            return Err(StorageError::ReadOnly(path.to_owned()));
+        }
+        let mut conn = Connection::open_with_flags(path, flags).map_err(|e| classify(e, path))?;
         // EXCLUSIVE locking keeps the write lock between transactions, so the
         // file stays ours until this connection closes.
         conn.execute_batch(
@@ -197,6 +201,9 @@ impl ProjectFile {
         }
         let backup = !create && !is_autosave(path);
         schema::migrate(&mut conn, path, migrations, backup)?;
+        if !create && !schema::has_side_tables(&conn)? {
+            schema::restore_side_tables(&conn).map_err(|e| classify(e, path))?;
+        }
         Ok(ProjectFile {
             conn,
             path: path.to_owned(),
@@ -482,6 +489,30 @@ impl ProjectFile {
     }
 }
 
+/// Whether the project at `path` can be saved: the file is not marked
+/// read-only and its folder lets SQLite create the journal beside it, which
+/// every save needs.
+fn writable(path: &Path) -> Result<bool> {
+    if std::fs::metadata(path)?.permissions().readonly() {
+        return Ok(false);
+    }
+    let probe = sibling(path, ".writetest");
+    match std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&probe)
+    {
+        Ok(_) => {
+            let _ = std::fs::remove_file(&probe);
+            Ok(true)
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => Ok(false),
+        // Anything else (such as a leftover probe) is not a permission
+        // problem; let the open itself report what is wrong.
+        Err(_) => Ok(true),
+    }
+}
+
 fn ensure_exists(path: &Path) -> Result<()> {
     if path.exists() {
         return Ok(());
@@ -513,6 +544,19 @@ fn check_existing(conn: &Connection, path: &Path, supported: u32) -> Result<u32>
             found: version,
             supported,
         });
+    }
+    for table in ["meta", "records"] {
+        let found: i64 = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [table],
+            |r| r.get(0),
+        )?;
+        if found == 0 {
+            return Err(StorageError::Corrupt {
+                path: path.to_owned(),
+                reason: format!("the {table} table is missing"),
+            });
+        }
     }
     let check: String = conn.query_row("PRAGMA quick_check", [], |r| r.get(0))?;
     if check != "ok" {
@@ -589,6 +633,8 @@ fn classify(err: rusqlite::Error, path: &Path) -> StorageError {
         StorageError::Locked(path.to_owned())
     } else if is_not_a_database(&err) {
         StorageError::NotAProject(path.to_owned())
+    } else if is_read_only(&err) {
+        StorageError::ReadOnly(path.to_owned())
     } else {
         err.into()
     }

@@ -30,6 +30,8 @@ toml.workspace = true
 novo-cables.workspace = true
 novo-plc.workspace = true
 novo-xref.workspace = true
+novo-cli.workspace = true
+novo-py.workspace = true
 
 [lints]
 workspace = true

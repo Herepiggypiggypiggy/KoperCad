@@ -13,6 +13,9 @@ A KoperCAD project is one `.novo` file: a SQLite database (`crates/novo-storage`
 2. **Older build refuses newer files, untouched.** A file with a higher schema version, a higher record format, or an object kind the build does not know gives a readable message ("saved by a newer version of KoperCAD ...") and is not opened for writing. Save as and New project onto such a file are refused too. No backup, recovery or temp file is left beside it.
 3. **A crash or kill never leaves half a save.** A save is one SQLite transaction with a rollback journal and `synchronous=FULL`; a process killed mid-save leaves the previous save (SQLite rolls the journal back on the next open). Save as and the first save of a project write a `<file>.saving` temp file and rename it over the target, so the target is either the old file or the new one. Unsaved work is autosaved to a recovery file (app data `recovery` folder); the next start offers it again.
 
+4. **Write-protected files open for looking.** A file marked read-only, or in a folder where SQLite cannot create its journal, gives `StorageError::ReadOnly` ("... is read-only ... Open it read-only, or ... use Save as"). In the app, File > Open, Recent and drag-and-drop then open it read-only automatically (title "(read-only)", status bar "Read-only", Save disabled) with a warning that names Save as; File > Open read-only does the same on request. The CLI and `import kopercad` read such files.
+5. **A damaged copy is still a drawing.** If the snapshot or sidecar table is missing the file opens and the missing table is created empty on the first write (revision snapshots or commissioning data in it are lost, the drawing is not). If `meta` or `records` is missing the file is refused with a message naming the table; it is never changed.
+
 ## Rules for changing the format
 
 - **Adding an optional field or a new kind of record** to the model: allowed within the current versions only when an older build can ignore it. Fields use `#[serde(default)]`; a new record kind makes an older build refuse the file (promise 2, unknown kind), which is the safe outcome. Prefer a schema bump when an older build would otherwise silently drop data on re-save.
@@ -29,6 +32,7 @@ A KoperCAD project is one `.novo` file: a SQLite database (`crates/novo-storage`
 - schema 1 and 2 files (cut from the golden file) upgrade with a backup and lose nothing; every earlier model JSON in the repository (`format_v1.json`, all lesson projects) loads, saves and reopens;
 - newer schema, and unknown record kind: readable error, bytes unchanged, no side files;
 - a real child process killed at staggered moments while saving: the file always opens as the old or the new save;
+- `compat_edge.rs`: the golden file through `kopercad-cli` and the scripting API (`import kopercad` calls the same functions; the Python module itself is not built in CI), newer files refused in words by both, write-protected file and folder, missing tables;
 - a child that autosaves and aborts: the app backend offers the work back on the next open.
 
 To rewrite the golden files after an **intended** format change (and only then): `KOPERCAD_REGEN_GOLDEN=1 cargo test -p novo-tests --test compat_v0_1 regenerate_golden`. For a released version, add a new golden file instead.

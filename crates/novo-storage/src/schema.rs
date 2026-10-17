@@ -76,13 +76,45 @@ fn v1(tx: &Transaction<'_>) -> rusqlite::Result<()> {
 /// `format` is the record format it was written with, so a later format
 /// change can migrate snapshots along with the records.
 fn v2(tx: &Transaction<'_>) -> rusqlite::Result<()> {
-    tx.execute_batch(
-        "CREATE TABLE snapshots (
+    tx.execute_batch(SNAPSHOTS_TABLE)
+}
+
+const SNAPSHOTS_TABLE: &str = "CREATE TABLE snapshots (
              revision INTEGER PRIMARY KEY,
              format   INTEGER NOT NULL,
              data     BLOB NOT NULL
-         );",
-    )
+         );";
+
+const SIDECAR_TABLE: &str = "CREATE TABLE sidecar (
+             key  TEXT PRIMARY KEY,
+             data TEXT NOT NULL
+         ) WITHOUT ROWID;";
+
+/// Whether both side tables (snapshots, sidecar) exist. A file at the
+/// current version should have them; one that lost them (a damaged copy, a
+/// tool that rewrote the database) is still a usable drawing.
+pub(crate) fn has_side_tables(conn: &Connection) -> rusqlite::Result<bool> {
+    let n: i64 = conn.query_row(
+        "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name IN ('snapshots', 'sidecar')",
+        [],
+        |r| r.get(0),
+    )?;
+    Ok(n == 2)
+}
+
+/// Creates whichever side table is missing, empty.
+pub(crate) fn restore_side_tables(conn: &Connection) -> rusqlite::Result<()> {
+    for (name, ddl) in [("snapshots", SNAPSHOTS_TABLE), ("sidecar", SIDECAR_TABLE)] {
+        let exists: i64 = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [name],
+            |r| r.get(0),
+        )?;
+        if exists == 0 {
+            conn.execute_batch(ddl)?;
+        }
+    }
+    Ok(())
 }
 
 /// Version 3: named documents kept beside the model, such as the
@@ -91,12 +123,7 @@ fn v2(tx: &Transaction<'_>) -> rusqlite::Result<()> {
 /// records, so they are not undone with design edits and a save of the
 /// project leaves them alone.
 fn v3(tx: &Transaction<'_>) -> rusqlite::Result<()> {
-    tx.execute_batch(
-        "CREATE TABLE sidecar (
-             key  TEXT PRIMARY KEY,
-             data TEXT NOT NULL
-         ) WITHOUT ROWID;",
-    )
+    tx.execute_batch(SIDECAR_TABLE)
 }
 
 pub(crate) fn user_version(conn: &Connection) -> rusqlite::Result<u32> {

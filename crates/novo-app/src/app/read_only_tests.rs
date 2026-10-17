@@ -109,3 +109,27 @@ fn open_read_only_is_not_added_to_recent() {
     d.app.open_path(&path);
     assert_eq!(d.app.settings.recent_projects.len(), 1);
 }
+
+#[test]
+fn a_write_protected_file_opens_read_only_with_a_save_as_hint() {
+    let dir = tempfile::tempdir().unwrap();
+    let (mut d, path) = saved_project(dir.path());
+    let mut perms = std::fs::metadata(&path).unwrap().permissions();
+    perms.set_readonly(true);
+    std::fs::set_permissions(&path, perms).unwrap();
+    d.app.open_path(&path);
+    d.frame();
+    assert!(d.app.backend.is_read_only(), "opened for looking");
+    assert!(d.app.is_enabled(Action::SaveProjectAs));
+    assert!(!d.app.is_enabled(Action::SaveProject));
+    assert!(
+        d.app
+            .messages()
+            .iter()
+            .any(|m| m.text.contains("write-protected") && m.text.contains("Save as"))
+    );
+    // Save as to another file keeps a writable copy.
+    let copy = dir.path().join("copy.novo");
+    assert!(d.app.save_to(&copy));
+    assert!(!d.app.backend.is_read_only());
+}

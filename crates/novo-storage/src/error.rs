@@ -24,6 +24,13 @@ pub enum StorageError {
         found: u32,
         supported: u32,
     },
+    /// The file or its folder cannot be written, so it cannot be opened for
+    /// editing; it can still be read.
+    #[error(
+        "{} is read-only (the file or its folder is write-protected). Open it read-only, or open it and use Save as to keep changes in a copy",
+        .0.display()
+    )]
+    ReadOnly(PathBuf),
     /// The file holds a kind of object this version does not know, so it was
     /// saved by a newer KoperCAD that added one without a schema change.
     #[error(
@@ -59,5 +66,13 @@ pub(crate) fn is_not_a_database(err: &rusqlite::Error) -> bool {
     matches!(
         err.sqlite_error_code(),
         Some(rusqlite::ErrorCode::NotADatabase)
+    )
+}
+
+/// Whether a SQLite error means the file or its folder cannot be written.
+pub(crate) fn is_read_only(err: &rusqlite::Error) -> bool {
+    matches!(
+        err.sqlite_error_code(),
+        Some(rusqlite::ErrorCode::ReadOnly | rusqlite::ErrorCode::CannotOpen)
     )
 }
