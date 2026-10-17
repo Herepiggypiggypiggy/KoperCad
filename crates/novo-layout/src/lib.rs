@@ -18,6 +18,7 @@ pub mod sizing;
 pub mod sizing_model;
 pub mod state;
 pub mod stock;
+pub mod surface_rules;
 pub mod surfaces;
 pub mod swing;
 
