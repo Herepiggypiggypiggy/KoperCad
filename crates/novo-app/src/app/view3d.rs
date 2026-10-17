@@ -627,7 +627,12 @@ impl NovoApp {
                 let row = sol.snapshot.devices.iter().find(|d| d.id == hover.raw)?;
                 Some((row, sol.ambient))
             });
-            if let Some(tip) = super::view3d_tip::tip(project, DeviceId::from(hover.raw), row) {
+            if let Some(tip) = super::view3d_tip::tip(
+                project,
+                DeviceId::from(hover.raw),
+                row,
+                self.cabinet.heat.live.is_stale(),
+            ) {
                 super::view3d_tip::show(ui.ctx(), &tip);
             }
         }

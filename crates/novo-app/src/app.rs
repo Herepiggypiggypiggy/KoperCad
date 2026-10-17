@@ -32,6 +32,10 @@ mod checks;
 mod clipboard;
 mod commissioning;
 mod commissioning_photos;
+mod commissioning_redlines;
+mod commissioning_signature;
+#[cfg(test)]
+mod commissioning_signature_tests;
 mod compare;
 mod designer;
 mod device_renumber;
@@ -190,6 +194,8 @@ mod cabinet_routes_tests;
 mod cabinet_rules_tests;
 #[cfg(test)]
 mod cabinet_surface_move_tests;
+#[cfg(test)]
+mod cabinet_surface_plan_tests;
 #[cfg(test)]
 mod cabinet_surfaces_tests;
 #[cfg(test)]

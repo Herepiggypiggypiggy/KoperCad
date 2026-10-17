@@ -17,7 +17,7 @@ use novo_canvas::marks::{Mark, MarkKind};
 use novo_canvas::model::item_id;
 use novo_commissioning::{
     CheckKind, CheckRecord, CheckState, CommissioningStore, FieldPackage, Progress, PunchItem,
-    PunchState, Scope, Severity, Target, TargetInfo, progress, targets,
+    PunchState, Scope, Severity, Signature, Target, TargetInfo, progress, targets,
 };
 use novo_core::{PageId, Project};
 use novo_pdf::{ReportFileFormat, ReportPdfOptions};
@@ -28,6 +28,8 @@ use novo_xref::Place;
 use super::cabinet_bar::{note_ctx, note_rect};
 
 use super::changes::shown_on;
+use super::commissioning_redlines::{RedlineAction, redlines_tab};
+use super::commissioning_signature::{self as signature, SignDraft};
 use super::pdf::{replaceable_path, write_replacing};
 use super::revisions::iso_date;
 use super::workspace::Workspace;
@@ -48,9 +50,10 @@ enum FieldAction {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Tab {
+pub(super) enum Tab {
     Checks,
     Punch,
+    Redlines,
 }
 
 /// Commissioning mode's data and panel state.
@@ -58,7 +61,7 @@ pub(crate) struct CommissioningMode {
     pub(super) store: CommissioningStore,
     /// Who the decisions are recorded for.
     pub(super) who: String,
-    tab: Tab,
+    pub(super) tab: Tab,
     pub(super) selected: Option<Target>,
     /// The measured value and note for the next decision.
     value: String,
@@ -66,6 +69,7 @@ pub(crate) struct CommissioningMode {
     punch_title: String,
     punch_severity: Severity,
     show_closed: bool,
+    pub(super) redline: super::commissioning_redlines::RedlineDraft,
     /// The pages of the checks list that are unfolded.
     open_pages: HashSet<PageId>,
     /// The page the list last unfolded for, so a page change unfolds it once.
@@ -79,6 +83,8 @@ pub(crate) struct CommissioningMode {
     pub(super) dirty: bool,
     /// A punch item whose "Add photo" was touched; the picker opens after the panel.
     pub(super) photo_for: Option<u64>,
+    /// The signature pad, open under the item being verified.
+    pub(super) signing: Option<SignDraft>,
 }
 
 impl CommissioningMode {
@@ -97,12 +103,14 @@ impl CommissioningMode {
             punch_title: String::new(),
             punch_severity: Severity::Minor,
             show_closed: false,
+            redline: Default::default(),
             open_pages: HashSet::new(),
             unfolded_for: None,
             large: false,
             armed: None,
             dirty: false,
             photo_for: None,
+            signing: None,
         }
     }
 
@@ -246,7 +254,11 @@ fn progress_bar(ui: &mut egui::Ui, title: &str, p: Progress) {
 
 /// Where a click on `info` takes the drawing: its page and, for a device or
 /// terminal, a symbol that draws it there.
-fn place_of(project: &Project, info: &TargetInfo, current: Option<PageId>) -> Option<Place> {
+pub(super) fn place_of(
+    project: &Project,
+    info: &TargetInfo,
+    current: Option<PageId>,
+) -> Option<Place> {
     let page = current
         .filter(|p| info.pages.contains(p))
         .or_else(|| info.pages.first().copied())?;
@@ -371,6 +383,7 @@ impl NovoApp {
         let mut go: Option<Place> = None;
         let mut export: Option<ReportFileFormat> = None;
         let mut field: Option<FieldAction> = None;
+        let mut redline_action: Option<RedlineAction> = None;
         let tablet = self.commissioning_tablet();
         {
             let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
@@ -381,17 +394,41 @@ impl NovoApp {
             let project = doc.project();
             mode.large = self.settings.large_buttons || tablet;
             touch_density(ui, mode.large);
-            let mut tab = usize::from(mode.tab == Tab::Punch);
+            let mut tab = match mode.tab {
+                Tab::Checks => 0,
+                Tab::Punch => 1,
+                Tab::Redlines => 2,
+            };
             let mut large = mode.large;
             ui.horizontal(|ui| {
-                let row = ui.scope(|ui| widgets::tabs(ui, &mut tab, &["Checks", "Punch list"]));
+                let row = ui
+                    .scope(|ui| widgets::tabs(ui, &mut tab, &["Checks", "Punch list", "Redlines"]));
                 if row.inner {
-                    mode.tab = [Tab::Checks, Tab::Punch][tab];
+                    mode.tab = [Tab::Checks, Tab::Punch, Tab::Redlines][tab];
                 }
-                // The tabs are one widget; the Punch tab is the right half.
+                // The tabs are one widget of equal thirds.
                 let r = row.response.rect;
-                let punch = egui::Rect::from_min_max(egui::pos2(r.center().x, r.top()), r.max);
-                note_rect(ui.ctx(), "commissioning.punch", "Punch tab", punch, false);
+                let third = r.width() / 3.0;
+                let part = |i: f32| {
+                    egui::Rect::from_min_max(
+                        egui::pos2(r.left() + third * i, r.top()),
+                        egui::pos2(r.left() + third * (i + 1.0), r.bottom()),
+                    )
+                };
+                note_rect(
+                    ui.ctx(),
+                    "commissioning.punch",
+                    "Punch tab",
+                    part(1.0),
+                    false,
+                );
+                note_rect(
+                    ui.ctx(),
+                    "commissioning.redlines",
+                    "Redlines tab",
+                    part(2.0),
+                    false,
+                );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let (report, action) = header_menu(ui, mode, &mut large, tablet);
                     export = report;
@@ -420,6 +457,9 @@ impl NovoApp {
             match mode.tab {
                 Tab::Checks => checks_tab(ui, mode, project, current, &mut go),
                 Tab::Punch => punch_tab(ui, mode, project, current, &mut go),
+                Tab::Redlines => {
+                    redline_action = redlines_tab(ui, mode, project, current, &mut go);
+                }
             }
             if mode.dirty {
                 mode.dirty = false;
@@ -446,6 +486,11 @@ impl NovoApp {
         }
         if let Some(format) = export {
             self.export_commissioning_report(format);
+        }
+        match redline_action {
+            Some(RedlineAction::Apply) => self.apply_redlines(false),
+            Some(RedlineAction::ApplyAndIssue) => self.apply_redlines(true),
+            None => {}
         }
         match field {
             Some(FieldAction::Export) => self.export_field_results(),
@@ -478,8 +523,14 @@ impl NovoApp {
         let Some(path) = dialog.save_file() else {
             return;
         };
-        match write_replacing(&path, package.to_json().as_bytes()) {
-            Ok(()) => self.message(Level::Info, format!("Exported {}", path.display())),
+        let json = package.to_json();
+        let size = if json.len() >= 5_000_000 {
+            format!(" ({} MB with photos)", json.len() / 1_000_000)
+        } else {
+            String::new()
+        };
+        match write_replacing(&path, json.as_bytes()) {
+            Ok(()) => self.message(Level::Info, format!("Exported {}{size}", path.display())),
             Err(e) => self.message(Level::Error, format!("Could not export field results: {e}")),
         }
     }
@@ -1085,7 +1136,10 @@ fn punch_tab(
                         if label == "Fixed" || label == "Verified" {
                             note_ctx(ui.ctx(), "commissioning.resolve", "Resolve button", &button);
                         }
-                        if button.clicked()
+                        if button.clicked() && state == PunchState::Verified {
+                            // Verifying is signed: the pad opens under the item.
+                            mode.signing = Some(SignDraft::new(item.id, &mode.who));
+                        } else if button.clicked()
                             && mode
                                 .store
                                 .set_punch_state(item.id, state, &mode.who, &now())
@@ -1112,6 +1166,13 @@ fn punch_tab(
                         mode.photo_for = Some(item.id);
                     }
                 });
+                if mode.signing.as_ref().is_some_and(|d| d.item == item.id) {
+                    signing_area(ui, mode, item.id);
+                }
+                if let Some(sig) = &item.signature {
+                    ui.weak(format!("Signed by {} · {}", sig.name, sig.at));
+                    signature::preview(ui, sig);
+                }
                 if !item.photos.is_empty() {
                     let names: Vec<&str> = item.photos.iter().map(|p| p.name.as_str()).collect();
                     ui.weak(format!("Photos: {}", names.join(", ")));
@@ -1119,4 +1180,45 @@ fn punch_tab(
                 ui.add_space(space::S);
             }
         });
+}
+
+/// The pad, the name and the buttons that finish or drop a sign-off.
+fn signing_area(ui: &mut egui::Ui, mode: &mut CommissioningMode, id: u64) {
+    let Some(draft) = mode.signing.as_mut() else {
+        return;
+    };
+    ui.add(
+        egui::TextEdit::singleline(&mut draft.name)
+            .hint_text("Name of the person verifying")
+            .desired_width(f32::INFINITY),
+    );
+    signature::pad(ui, draft);
+    let (mut sign, mut cancel) = (false, false);
+    ui.horizontal(|ui| {
+        let can = !draft.name.trim().is_empty();
+        let button = ui.add_enabled(can, egui::Button::new("Sign and verify"));
+        note_ctx(
+            ui.ctx(),
+            "commissioning.sign",
+            "Sign and verify button",
+            &button,
+        );
+        sign = button.clicked();
+        if ui
+            .add_enabled(!draft.is_blank(), egui::Button::new("Clear"))
+            .clicked()
+        {
+            draft.clear();
+        }
+        cancel = ui.button("Cancel").clicked();
+    });
+    if sign {
+        let signed = Signature::from_strokes(&draft.name, &now(), draft.strokes());
+        if mode.store.sign_off(id, signed).is_ok() {
+            mode.dirty = true;
+        }
+        mode.signing = None;
+    } else if cancel {
+        mode.signing = None;
+    }
 }

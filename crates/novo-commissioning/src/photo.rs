@@ -36,6 +36,12 @@ pub fn is_photo_name(name: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit())
 }
 
+/// Whether `bytes` are the picture `name` was made from.
+pub(crate) fn name_matches(name: &str, bytes: &[u8]) -> bool {
+    let ext = name.split_once('.').map_or("", |(_, e)| e);
+    photo_name(bytes, ext) == name
+}
+
 pub(crate) fn encode(bytes: &[u8]) -> String {
     let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
     for chunk in bytes.chunks(3) {

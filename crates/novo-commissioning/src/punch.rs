@@ -51,6 +51,40 @@ pub struct Photo {
     pub note: String,
 }
 
+impl Signature {
+    /// The most points kept over all strokes; a hand signature needs far fewer.
+    pub const MAX_POINTS: usize = 3000;
+    /// Pad units are 0..=PAD.
+    pub const PAD: u16 = 1000;
+
+    /// A signature from pen strokes as they were drawn: points are clamped to
+    /// the pad, strokes of one point are dropped (a tap is not a stroke) and
+    /// the total is capped, so a hand-edited file cannot bloat the project.
+    pub fn from_strokes(name: &str, at: &str, strokes: Vec<Vec<[u16; 2]>>) -> Self {
+        let mut left = Self::MAX_POINTS;
+        let mut kept = Vec::new();
+        for stroke in strokes {
+            if stroke.len() < 2 || left < 2 {
+                continue;
+            }
+            let take = stroke.len().min(left);
+            left -= take;
+            kept.push(
+                stroke
+                    .into_iter()
+                    .take(take)
+                    .map(|[x, y]| [x.min(Self::PAD), y.min(Self::PAD)])
+                    .collect(),
+            );
+        }
+        Signature {
+            name: name.trim().to_owned(),
+            at: at.to_owned(),
+            strokes: kept,
+        }
+    }
+}
+
 /// An open issue found while commissioning, drawn or not.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PunchItem {

@@ -4,3 +4,4 @@
 2026-10-17 01:10 UTC #881 merged. Section plane position in mm: code, clippy and 834 app tests green; PR next.
 2026-10-17 01:20 UTC #880 and #882 merged. #885 (trackpad pans) READY at 580185c1; merged main in after a conflict. #886 (legend test) in review.
 2026-10-17 01:50 UTC #897 READY. Trackpad choice saved in settings: PR in preparation.
+2026-10-17 01:30 UTC #885 merged; #886 READY. #814 stale-heat tooltip nit in a PR.
