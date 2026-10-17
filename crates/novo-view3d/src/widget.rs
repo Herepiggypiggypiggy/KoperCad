@@ -395,8 +395,8 @@ pub struct View3dOutput {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ItemDrag {
     pub id: ItemId,
-    /// The pointer's move on the plate plane since the press (x right, y
-    /// down, mm).
+    /// The pointer's move since the press, on the plate plane (x right, y
+    /// down, mm) or, for an item with a `drag_plane`, on that surface.
     pub delta: (f64, f64),
     /// The button was released this frame.
     pub done: bool,
@@ -475,7 +475,7 @@ pub struct View3d {
     pub drag_items: bool,
     /// The item under the press of the current left drag, and the plate point
     /// of the press.
-    item_grab: Option<(ItemId, (f64, f64))>,
+    item_grab: Option<(ItemId, (f64, f64), Option<crate::drag_plane::DragPlane>)>,
     /// Where the last Alt + click landed and how many times in a row.
     alt_cycle: Option<(Pos2, usize)>,
     last_aspect: f32,
@@ -943,10 +943,9 @@ impl View3d {
             match grabbed {
                 Some((p, hit)) => {
                     let ray = self.camera.ray(Self::ndc(rect, p), aspect);
-                    let start = ray
-                        .plane_hit(Vec3::ZERO, Vec3::Z)
-                        .map(|t| scene.frame.plate(ray.at(t)));
-                    self.item_grab = start.map(|s| (hit.id, s));
+                    let plane = scene.get(hit.id).and_then(|i| i.drag_plane);
+                    let start = crate::drag_plane::drag_point(&ray, plane.as_ref(), &scene.frame);
+                    self.item_grab = start.map(|s| (hit.id, s, plane));
                 }
                 None => self.marquee_from = press,
             }
@@ -956,14 +955,13 @@ impl View3d {
         if self.item_grab.is_some() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.item_grab = None;
         }
-        if let Some((id, start)) = self.item_grab {
+        if let Some((id, start, plane)) = self.item_grab {
             let released = response.drag_stopped_by(PointerButton::Primary);
             let now = hover_pos
                 .or_else(|| ctx.input(|i| i.pointer.latest_pos()))
                 .and_then(|p| {
                     let ray = self.camera.ray(Self::ndc(rect, p), aspect);
-                    ray.plane_hit(Vec3::ZERO, Vec3::Z)
-                        .map(|t| scene.frame.plate(ray.at(t)))
+                    crate::drag_plane::drag_point(&ray, plane.as_ref(), &scene.frame)
                 });
             if let Some(now) = now {
                 out.item_drag = Some(ItemDrag {
