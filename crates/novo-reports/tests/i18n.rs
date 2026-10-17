@@ -615,3 +615,10 @@ fn the_length_basis_words_are_dutch_and_a_tag_that_looks_like_one_is_not_a_fixed
         "door, no gap"
     );
 }
+
+#[test]
+fn a_supply_lead_names_its_feed_in_dutch() {
+    let tr = nl();
+    assert_eq!(tr.translate("L1 (feed)").as_deref(), Some("L1 (voeding)"));
+    assert!(tr.translate("=A1+CAB-K1:13").is_none());
+}

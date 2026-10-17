@@ -89,9 +89,10 @@ pub use pins::{
     terminal_position, write_properties as write_terminal_positions,
 };
 pub use quality::{
-    Completeness, Conflict, Criterion, DuplicateGroup, DuplicateReason, Fill, Finding, Grade,
-    PartQuality, QualityReport, assess, conflicts_between, duplicate_groups, incoming_conflicts,
-    report as quality_report,
+    Completeness, Conflict, Criterion, Decision, DuplicateGroup, DuplicateReason, Fill, Finding,
+    Grade, PartQuality, QualityReport, QueueItem, REVIEW_FILE_NAME, REVIEW_FORMAT_VERSION,
+    ReviewEntry, ReviewError, ReviewLedger, Trust, assess, conflicts_between, duplicate_groups,
+    fingerprint, incoming_conflicts, report as quality_report, review_path_for,
 };
 pub use recipes::{
     ApplyContext, Dim, GENERIC, Login, MakerRecipe, Mapped, Quantity, RECIPES, RecipeReport, Route,

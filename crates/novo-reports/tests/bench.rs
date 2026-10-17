@@ -410,7 +410,8 @@ fn label_items_come_from_the_labels_report_by_kind() {
     let doc = cabinet();
     let report = Labels.generate(doc.project());
     let wires = label_items(&report, &["wires".into()]);
-    assert_eq!(wires.len(), 2 * 19);
+    // Two per wire to cut: 19 connections plus 6 supply and PE leads.
+    assert_eq!(wires.len(), 2 * 25);
     assert!(
         wires
             .iter()

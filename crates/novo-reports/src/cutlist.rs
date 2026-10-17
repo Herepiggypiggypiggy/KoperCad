@@ -10,7 +10,8 @@ use crate::WireList;
 use crate::report::{Dependencies, Report};
 use crate::table::{Cell, Column, ReportOutput, Row, Section};
 
-/// The cutting list: one row per wire of the wire list, in one table per
+/// The cutting list: one row per wire to cut (the wire list's connections
+/// and the supply and PE leads, as in wire production), in one table per
 /// cross-section and colour, so the workshop cuts one kind of wire at a
 /// time. A summary table opens the report: wires and total length per
 /// group, to order the wire by the metre.
@@ -78,10 +79,10 @@ impl CutList {
     }
 }
 
-/// The summary's title with the number of wires listed: the wire list's
-/// connections, without the supply and PE leads of the wire production.
+/// The summary's title with the number of wires listed: every wire the
+/// wire production cuts, the supply and PE leads included.
 pub(crate) const CUT_LIST_COUNT_TITLE: &str =
-    "Summary · {n} wires between device pins (supply and PE leads: see Wire production)";
+    "Summary · {n} wires (device pin to device pin, plus supply and PE leads)";
 
 /// The largest cross-section named in a wire-list cell: a number, or a text
 /// of several (`0.75, 1.5`) when a daisy chain mixes wires.
@@ -161,7 +162,7 @@ impl Report for CutList {
     }
 
     fn generate(&self, project: &Project) -> ReportOutput {
-        let list = WireList.generate(project);
+        let list = WireList::build(project, true);
         let this = self.effective(project);
         let mut wires: Vec<Wire> = Vec::new();
         if let Some(section) = list.sections.first() {
@@ -260,8 +261,7 @@ impl Report for CutList {
         }
         let mut sections = Vec::new();
         if !tables.is_empty() {
-            // Same rows as the wire list, so the same count and the same
-            // words for it.
+            // The same wires as wire production, so the same count.
             summary.title = CUT_LIST_COUNT_TITLE.replace("{n}", &wires.len().to_string());
             sections.push(summary);
             sections.extend(tables);

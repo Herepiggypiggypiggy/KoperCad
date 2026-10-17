@@ -29,20 +29,16 @@ verified on a Windows PC from the cloud.
 
 ## Running with a clean profile (Windows)
 
-Setting `APPDATA` does not move the profile on Windows: KoperCAD (like most apps)
-asks Windows for the Roaming, Local and Documents folders, so a test launch with a
-changed `APPDATA` still rewrites the real `app.ron`. There is no `--profile-dir` flag
-yet (it would touch about fourteen folder lookups in four crates; a follow-up, not a
-small change). Until then:
+Start KoperCAD with `--profile-dir`, or set `KOPERCAD_PROFILE_DIR` for the run:
 
-- Use a second Windows user for tests; or
-- Back up and restore these before and after a test: `%APPDATA%\KoperCAD` (settings,
-  `app.ron`, parts catalog, templates), `%LOCALAPPDATA%\KoperCAD` (recovery files,
-  mesh cache) and `%LOCALAPPDATA%\NovoElectric` (unsaved new projects). Rename the
-  folders to start clean, rename them back afterwards.
+    kopercad.exe --profile-dir C:\Users\you\kopercad-test
 
-`LOCALAPPDATA` is the one variable the app does read for unsaved projects and recovery
-files, so changing only that isolates those two.
+Every per-user folder the app uses (settings, parts catalogue, recovery files, unsaved new
+projects, lesson progress, logs, and the folder where new projects are saved) then sits under
+that folder, and nothing is written to the real profile. A missing or empty folder is a first
+run; delete it to start over. No admin rights. Details: `handoff/rel-polish/PROFILE-DIR.md`.
+Setting `APPDATA` alone does not work on Windows, so use the flag. The Downloads folder
+(parts import watch) is not moved.
 
 ## Start screen
 
