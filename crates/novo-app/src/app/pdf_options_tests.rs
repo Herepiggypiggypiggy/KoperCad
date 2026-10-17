@@ -5,6 +5,7 @@ use super::gate1_tests::Drive;
 use super::pdf_options::{page_set, parse_ranges, style_of};
 use crate::actions::Action;
 use crate::settings::PdfChoice;
+use eframe::egui;
 use novo_pdf::PageSet;
 
 fn saved_example(dir: &std::path::Path) -> Drive {
@@ -243,4 +244,37 @@ fn the_file_name_of_a_selection_is_safe_on_windows() {
     let name = path.file_name().unwrap().to_string_lossy().into_owned();
     assert!(!name.contains(['*', '?', '"', '<', '>', '|']), "{name}");
     assert!(name.ends_with("pages 1,2.pdf"), "{name}");
+}
+
+#[test]
+fn the_export_dialog_is_tall_enough_for_its_button_row_at_1280_by_768() {
+    // The options need 398 points of content plus the title bar: egui's own
+    // default of 420 left the Export button half hidden.
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = saved_example(dir.path());
+    d.app.wb.queued.push("export.pdf_options");
+    let screen = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 768.0));
+    for _ in 0..5 {
+        let input = egui::RawInput {
+            screen_rect: Some(screen),
+            ..Default::default()
+        };
+        let app = &mut d.app;
+        let mut out = d.ctx.run_ui(input, |ui| app.show(ui));
+        out.textures_delta.clear();
+    }
+    assert!(d.app.wb.pdf_options.is_some(), "the dialog is open");
+    // Window ids are made from the title; find the layer by name.
+    let layer = d
+        .ctx
+        .memory(|m| m.areas().visible_layer_ids())
+        .into_iter()
+        .find(|l| format!("{l:?}").contains("Export PDF"))
+        .expect("the dialog is shown");
+    let rect = d
+        .ctx
+        .memory(|m| m.area_rect(layer.id))
+        .expect("the dialog has a rect");
+    assert!(rect.height() >= 440.0, "{rect:?}");
+    assert!(screen.contains_rect(rect), "{rect:?}");
 }

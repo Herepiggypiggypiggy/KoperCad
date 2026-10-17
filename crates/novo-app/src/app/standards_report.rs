@@ -336,7 +336,8 @@ impl NovoApp {
             StandardsFormat::Pdf => {
                 let options = novo_pdf::ReportPdfOptions {
                     title: format!("{name}, standards compliance"),
-                    footer_right: "Assists the engineer; not a certificate".to_owned(),
+                    footer_right: "Subset of the standard, planning values; not a certification"
+                        .to_owned(),
                     language: self.report_translator(),
                     ..Default::default()
                 };

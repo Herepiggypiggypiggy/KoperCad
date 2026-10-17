@@ -25,6 +25,7 @@ mod march;
 mod snapshot;
 mod statement;
 mod steady;
+mod transient;
 mod tuning;
 mod warm;
 
@@ -117,6 +118,7 @@ impl Solver for CabinetSolver {
                     model: self.turbulence,
                     turb,
                     warm,
+                    fan: !scenario.fans.is_empty(),
                     t0,
                 },
                 control,
@@ -160,6 +162,11 @@ impl Solver for CabinetSolver {
             if status.finished() {
                 let mut done = finish(view.build(&flow, &progress), &march);
                 done.progress.converged = march.converged;
+                if !scenario.fans.is_empty() {
+                    done.notes.push(
+                        "Fan case on the transient march: this path can create energy with a fan (3 to 14 % in tests), so read temperatures as an estimate.".into(),
+                    );
+                }
                 done.notes.push(
                     if march.converged {
                         "Steady: the stored heat changes by less than the tolerance."
@@ -188,6 +195,12 @@ impl Solver for CabinetSolver {
     }
 }
 
+/// What a result with a fan may claim about its heat balance. The jets of a
+/// second-order fan model fluctuate, so heat in and out agree to about 3 % on
+/// one window of means (a longer window gives better), and the transient
+/// march can create energy with a fan (open defect, see the validation notes).
+pub const FAN_BALANCE_NOTE: &str = "Fan case: the heat balance is good to about 3 % on one window of means (the fan jets fluctuate), so temperatures are an estimate to that extent.";
+
 /// What `solve_steady` needs besides the setup and the flow.
 struct SteadyJob<'a> {
     fidelity: Fidelity,
@@ -195,6 +208,8 @@ struct SteadyJob<'a> {
     model: TurbModel,
     turb: Option<TurbState>,
     warm: bool,
+    /// The scenario has a fan: see [`FAN_BALANCE_NOTE`].
+    fan: bool,
     t0: Instant,
 }
 
@@ -214,6 +229,7 @@ fn solve_steady(
         model,
         turb,
         warm,
+        fan,
         t0,
     } = job;
     let mut run = CabinetSteady::new(setup, &flow, lvl).with_turbulence(turb);
@@ -255,6 +271,12 @@ fn solve_steady(
                     "Heat balance off by {:.1} %: the result is an estimate to that extent \
                      (heat in and out of the means over the last window).",
                     100.0 * imbalance
+                ));
+            }
+            if fan {
+                done.notes.push(format!(
+                    "{FAN_BALANCE_NOTE} Heat balance here: {:+.1} %.",
+                    100.0 * run.run.report().imbalance
                 ));
             }
             if status != RunStatus::Converged && run.run.report().stage == 0 {

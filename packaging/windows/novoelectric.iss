@@ -47,6 +47,12 @@ Name: "associate"; Description: "Open .novo project files with {#AppName}"; Grou
 
 [Files]
 Source: "{#RepoRoot}\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoRoot}\target\release\kopercad-cli.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoRoot}\docs\TESTER-README.md"; DestDir: "{app}"; DestName: "README.md"; Flags: ignoreversion
+Source: "{#RepoRoot}\RELEASE_NOTES.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#RepoRoot}\THIRD_PARTY_NOTICES.txt"; DestDir: "{app}"; Flags: ignoreversion
+; LICENSE files (B13) are added here once the licence is decided.
+Source: "{#RepoRoot}\LICENSE*"; DestDir: "{app}"; Flags: ignoreversion skipifsourcedoesntexist
 
 [Icons]
 Name: "{userprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"

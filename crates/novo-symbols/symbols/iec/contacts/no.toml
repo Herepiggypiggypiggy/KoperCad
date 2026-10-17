@@ -5,7 +5,7 @@ description = "Normally open contact, used for auxiliary contacts of relays and 
 standard = "IEC 60617"
 category = "contacts"
 function = "contact.no"
-keywords = ["no", "make", "normally open", "auxiliary"]
+keywords = ["no", "make", "normally open", "auxiliary", "contactor auxiliary", "aux contact"]
 aliases = ["no"]
 favorite = true
 

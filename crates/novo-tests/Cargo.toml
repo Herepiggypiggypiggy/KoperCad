@@ -32,6 +32,7 @@ novo-plc.workspace = true
 novo-xref.workspace = true
 novo-cli.workspace = true
 novo-py.workspace = true
+novo-numbering.workspace = true
 
 [lints]
 workspace = true

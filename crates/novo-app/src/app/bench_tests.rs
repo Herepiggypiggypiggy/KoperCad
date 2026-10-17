@@ -205,3 +205,70 @@ fn the_cut_table_rows_carry_a_tilde_exactly_when_the_length_is_an_estimate() {
         assert!(cells.iter().all(|c| !c.is_empty()), "{cells:?}");
     }
 }
+
+#[test]
+fn the_readiness_strip_names_what_is_missing_and_clears_when_fixed() {
+    let (_dir, mut d) = app_with_wires();
+    let ctx = d.ctx.clone();
+    let jobs = |d: &Drive| {
+        let p = d.doc().project();
+        novo_reports::wire_cut_jobs_with(p, &FerruleStandard::of(p))
+    };
+    let gaps = super::bench::readiness(&jobs(&d), false);
+    assert!(gaps.iter().any(|g| g.text.starts_with("No mounting plate")));
+    assert!(
+        gaps.iter()
+            .any(|g| g.fix == Some(("Number wires", "wires.number")))
+    );
+    d.app.run_command(&ctx, "wires.number", None);
+    d.frame();
+    let gaps = super::bench::readiness(&jobs(&d), true);
+    assert!(
+        !gaps.iter().any(|g| g.text.contains("have no number")),
+        "{gaps:?}"
+    );
+    assert!(!gaps.iter().any(|g| g.text.contains("no cross-section")));
+}
+
+#[test]
+fn the_default_size_is_filled_in_for_unsized_wires_in_one_undo_step() {
+    let (_dir, mut d) = app_with_wires();
+    // `app_with_wires` sized every wire; clear them again.
+    let ids: Vec<_> = d.doc().project().wires().map(|w| w.id).collect();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Clear", |tx| {
+            for id in ids {
+                tx.update::<novo_core::Wire>(id, |w| w.cross_section_mm2 = None)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let before = novo_reports::unset_wires(d.doc().project());
+    assert!(!before.no_size.is_empty());
+    d.app.fill_wire_defaults(&novo_reports::WireDefaults {
+        size_mm2: Some(2.5),
+        ..novo_reports::WireDefaults::default()
+    });
+    let after = novo_reports::unset_wires(d.doc().project());
+    assert!(after.no_size.is_empty());
+    let msg = d.app.messages().last().expect("a message").text.clone();
+    assert!(msg.contains("Set the size of"), "{msg}");
+    // One undo gives the unsized wires back.
+    assert!(
+        d.app
+            .backend
+            .document_mut()
+            .unwrap()
+            .undo()
+            .unwrap()
+            .is_some(),
+        "one step to undo"
+    );
+    assert_eq!(
+        novo_reports::unset_wires(d.doc().project()).no_size.len(),
+        before.no_size.len()
+    );
+}
