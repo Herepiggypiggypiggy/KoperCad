@@ -2,3 +2,4 @@
 2026-10-16 08:10 UTC PR 1 engine + Quality tab written, clippy and 14 integration tests green locally.
 2026-10-17 09:40 UTC PR 1 (#568) merged. PR 2 started from main: duplicate_groups, conflicts_between, incoming_conflicts and a Duplicates tab.
 2026-10-17 10:45 UTC #979: lead B asked for order-number labels; R2 had said READY on f7e2154. Pushed the label fix plus a Refresh button on the Duplicates tab (stale cache) at the lead's request.
+2026-10-17 11:30 UTC #979 merged. PR 3 written: ReviewLedger (sidecar parts-review.json), Trust, queue, Review tab. Note for later: incoming_conflicts has no caller yet (needs the import dialog thread).
