@@ -236,6 +236,70 @@ fn the_switcher_the_pages_list_and_the_commissioning_controls_are_anchors() {
     }
 }
 
+#[test]
+fn field_results_from_a_file_merge_into_the_project() {
+    use novo_commissioning::{CheckRecord, FieldPackage};
+    let (dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let wire = targets(d.doc().project())
+        .into_iter()
+        .map(|t| t.target)
+        .find(|t| matches!(t, Target::Wire(_)))
+        .expect("a wire");
+    let mut field = CommissioningStore::new();
+    field
+        .set_check(CheckRecord {
+            target: wire,
+            check: CheckKind::Continuity,
+            state: CheckState::Passed,
+            by: "tablet".into(),
+            at: "2026-10-16T09:00:00Z".into(),
+            value: String::new(),
+            note: String::new(),
+        })
+        .unwrap();
+    let file = dir.path().join("walk.kcfield");
+    std::fs::write(
+        &file,
+        FieldPackage::new(
+            "Example",
+            "tablet",
+            "2026-10-16T10:00:00Z",
+            &field,
+            d.doc().project(),
+        )
+        .to_json(),
+    )
+    .unwrap();
+    d.app.import_field_results_from(&file);
+    d.frame();
+    let mode = d.app.wb.commissioning.as_ref().unwrap();
+    assert_eq!(
+        mode.store.state(wire, CheckKind::Continuity),
+        CheckState::Passed
+    );
+    // kept in the project file, not only in memory
+    let json = d.app.backend.commissioning_json().expect("saved");
+    assert!(json.contains("tablet"));
+    // a file that is not field results is refused and changes nothing
+    let junk = dir.path().join("junk.kcfield");
+    std::fs::write(&junk, "{}").unwrap();
+    d.app.import_field_results_from(&junk);
+    assert_eq!(
+        d.app
+            .wb
+            .commissioning
+            .as_ref()
+            .unwrap()
+            .store
+            .records()
+            .count(),
+        1
+    );
+}
+
 /// One frame of a window `w` by `h` points.
 fn frame_sized(d: &mut Drive, w: f32, h: f32) {
     let input = egui::RawInput {
@@ -286,4 +350,165 @@ fn a_tablet_window_pins_a_wider_panel_with_large_buttons() {
     assert!(!d.app.commissioning_tablet());
     assert!(d.app.outline_pinned());
     assert_eq!(d.app.outline_width(), crate::app::OUTLINE_WIDTH);
+}
+
+#[test]
+fn redlines_apply_to_the_drawing_in_one_undo_step_and_offer_a_revision() {
+    use novo_commissioning::{Change, Redline, RedlineState};
+    let (_dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let wire = targets(d.doc().project())
+        .into_iter()
+        .find(|t| matches!(t.target, Target::Wire(_)))
+        .expect("a wire");
+    let Target::Wire(id) = wire.target else {
+        unreachable!()
+    };
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    mode.selected = Some(wire.target);
+    mode.store
+        .add_redline(Redline {
+            id: 0,
+            target: wire.target,
+            label: wire.label.clone(),
+            change: Change::WireNumber("RL77".into()),
+            note: String::new(),
+            by: "tv".into(),
+            at: "2026-10-17T08:00:00Z".into(),
+            state: RedlineState::Open,
+        })
+        .unwrap();
+    // the Redlines tab draws, also at tablet size
+    mode.tab = super::commissioning::Tab::Redlines;
+    d.frame();
+    d.frame();
+    // an open redline marks its wire on the page, with what it says
+    let page = wire.pages[0];
+    let modified = |d: &mut Drive| {
+        d.app
+            .commissioning_marks(page)
+            .into_iter()
+            .filter(|m| m.kind == novo_canvas::MarkKind::Modified)
+            .collect::<Vec<_>>()
+    };
+    let marked = modified(&mut d);
+    assert!(!marked.is_empty(), "the open redline is marked");
+    assert!(marked[0].text.contains("RL77"), "{}", marked[0].text);
+    d.app.apply_redlines(true);
+    assert!(
+        modified(&mut d).is_empty(),
+        "an applied redline is no longer marked"
+    );
+    d.frame();
+    let number = |d: &Drive| d.doc().project().wire(id).unwrap().number.clone();
+    assert_eq!(number(&d).as_deref(), Some("RL77"));
+    let mode = d.app.wb.commissioning.as_ref().unwrap();
+    assert_eq!(mode.store.open_redline_count(), 0);
+    let draft = d.app.wb.issue.as_ref().expect("the revision dialog opens");
+    assert!(draft.description.contains("RL77"), "{}", draft.description);
+    // undo is off while the mode shows; back in the schematic it is one step
+    d.app.run_command(&ctx, "view.schematic", None);
+    d.frame();
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_ne!(
+        number(&d).as_deref(),
+        Some("RL77"),
+        "one undo takes it back"
+    );
+}
+
+#[test]
+fn a_rejected_redline_is_not_marked_and_a_note_is() {
+    use novo_commissioning::{Change, Redline, RedlineState};
+    let (_dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let wire = targets(d.doc().project())
+        .into_iter()
+        .find(|t| matches!(t.target, Target::Wire(_)))
+        .expect("a wire");
+    let page = wire.pages[0];
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    let mut add = |change, note: &str| {
+        mode.store
+            .add_redline(Redline {
+                id: 0,
+                target: wire.target,
+                label: wire.label.clone(),
+                change,
+                note: note.into(),
+                by: "tv".into(),
+                at: "2026-10-17T08:00:00Z".into(),
+                state: RedlineState::Open,
+            })
+            .unwrap()
+    };
+    let note = add(Change::Note, "cable is shorter than drawn");
+    let renumber = add(Change::WireNumber("RL78".into()), "");
+    let count = |d: &mut Drive| {
+        d.app
+            .commissioning_marks(page)
+            .into_iter()
+            .filter(|m| m.kind == novo_canvas::MarkKind::Modified)
+            .count()
+    };
+    let both = count(&mut d);
+    assert!(both >= 2, "a note marks too ({both})");
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    mode.store
+        .set_redline_state(renumber, RedlineState::Rejected)
+        .unwrap();
+    mode.store
+        .set_redline_state(note, RedlineState::Rejected)
+        .unwrap();
+    assert_eq!(count(&mut d), 0);
+}
+
+#[test]
+fn a_terminal_rename_is_marked_applied_in_one_batch_and_named_in_the_revision() {
+    use novo_commissioning::{Change, Redline, RedlineState};
+    let (_dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let terminal = targets(d.doc().project())
+        .into_iter()
+        .find(|t| matches!(t.target, Target::Terminal(_)) && !t.pages.is_empty())
+        .expect("a terminal shown on a page");
+    let Target::Terminal(id) = terminal.target else {
+        unreachable!()
+    };
+    let page = terminal.pages[0];
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    mode.selected = Some(terminal.target);
+    mode.store
+        .add_redline(Redline {
+            id: 0,
+            target: terminal.target,
+            label: terminal.label.clone(),
+            change: Change::TerminalName("T99".into()),
+            note: String::new(),
+            by: "tv".into(),
+            at: "2026-10-17T08:00:00Z".into(),
+            state: RedlineState::Open,
+        })
+        .unwrap();
+    mode.tab = super::commissioning::Tab::Redlines;
+    d.frame();
+    d.frame();
+    let marked = d
+        .app
+        .commissioning_marks(page)
+        .into_iter()
+        .any(|m| m.kind == novo_canvas::MarkKind::Modified && m.text.contains("T99"));
+    assert!(marked, "the open rename marks its terminal");
+    d.app.apply_redlines(true);
+    d.frame();
+    assert_eq!(d.doc().project().terminal(id).unwrap().name, "T99");
+    let draft = d.app.wb.issue.as_ref().expect("the revision dialog opens");
+    assert!(draft.description.contains("T99"), "{}", draft.description);
 }

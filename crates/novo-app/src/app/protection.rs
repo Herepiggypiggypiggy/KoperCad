@@ -460,7 +460,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
     );
     let (outer, response) = ui.allocate_exact_size(size, egui::Sense::hover());
     let painter = ui.painter_at(outer);
-    painter.rect_filled(outer, 4.0, tokens::BG_0);
+    painter.rect_filled(outer, 4.0, crate::theme::ui_palette().sunken);
     let area = Rect::from_min_max(
         Pos2::new(outer.left() + 58.0, outer.top() + 12.0),
         Pos2::new(outer.right() - 14.0, outer.bottom() - 26.0),
@@ -503,9 +503,9 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             }
             let x = to_x(i);
             let stroke = if m == 1 {
-                Stroke::new(1.0, tokens::BORDER_STRONG)
+                Stroke::new(1.0, crate::theme::ui_palette().border_strong)
             } else {
-                Stroke::new(1.0, tokens::BORDER)
+                Stroke::new(1.0, crate::theme::ui_palette().border_subtle)
             };
             painter.line_segment(
                 [Pos2::new(x, area.top()), Pos2::new(x, area.bottom())],
@@ -517,7 +517,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             egui::Align2::CENTER_TOP,
             decade_label_current(e),
             font.clone(),
-            tokens::TEXT_FAINT,
+            crate::theme::ui_palette().text_tertiary,
         );
     }
     for e in y0..=y1 {
@@ -528,9 +528,9 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             }
             let y = to_y(t);
             let stroke = if m == 1 {
-                Stroke::new(1.0, tokens::BORDER_STRONG)
+                Stroke::new(1.0, crate::theme::ui_palette().border_strong)
             } else {
-                Stroke::new(1.0, tokens::BORDER)
+                Stroke::new(1.0, crate::theme::ui_palette().border_subtle)
             };
             painter.line_segment(
                 [Pos2::new(area.left(), y), Pos2::new(area.right(), y)],
@@ -542,7 +542,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             egui::Align2::RIGHT_CENTER,
             decade_label_time(e),
             font.clone(),
-            tokens::TEXT_FAINT,
+            crate::theme::ui_palette().text_tertiary,
         );
     }
     let plot_painter = painter.with_clip_rect(area);
@@ -603,7 +603,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
         while y < area.bottom() {
             plot_painter.line_segment(
                 [Pos2::new(x, y), Pos2::new(x, (y + 5.0).min(area.bottom()))],
-                Stroke::new(1.2, tokens::ERROR),
+                Stroke::new(1.2, crate::theme::ui_palette().error),
             );
             y += 10.0;
         }
@@ -612,13 +612,13 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             egui::Align2::RIGHT_TOP,
             format!("Ik {}", fmt_current(ik)),
             font.clone(),
-            tokens::ERROR,
+            crate::theme::ui_palette().error,
         );
     }
     painter.rect_stroke(
         area,
         0.0,
-        Stroke::new(1.0, tokens::BORDER_STRONG),
+        Stroke::new(1.0, crate::theme::ui_palette().border_strong),
         egui::StrokeKind::Inside,
     );
     if series.is_empty() {
@@ -627,7 +627,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
             egui::Align2::CENTER_CENTER,
             "Tick a device to see its curve",
             egui::FontId::proportional(tokens::FONT_BODY),
-            tokens::TEXT_MUTED,
+            crate::theme::ui_palette().text_secondary,
         );
     }
     // Crosshair and the times at the pointer's current.
@@ -637,7 +637,7 @@ fn plot(ui: &mut egui::Ui, series: &[(&ProjectDevice, Color32)], ik_a: Option<f6
                 Pos2::new(pos.x, area.top()),
                 Pos2::new(pos.x, area.bottom()),
             ],
-            Stroke::new(1.0, tokens::TEXT_FAINT),
+            Stroke::new(1.0, crate::theme::ui_palette().text_tertiary),
         );
         let exp = x0 as f64 + (pos.x - area.left()) as f64 / area.width() as f64 * (x1 - x0) as f64;
         let i = 10f64.powf(exp);
@@ -671,7 +671,7 @@ fn selectivity_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study
         }
         None => {
             ui.colored_label(
-                tokens::WARNING,
+                crate::theme::ui_palette().warning,
                 "No fault current at the supply. Type one above or set supply.short_circuit_ka on the project; until then only the curves can be compared.",
             );
         }
@@ -693,7 +693,7 @@ fn selectivity_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study
                     .spacing([16.0, 6.0])
                     .show(ui, |ui| {
                         for h in ["Upstream", "Downstream", "Selectivity", "Back-up", ""] {
-                            ui.label(egui::RichText::new(h).color(tokens::TEXT_MUTED).size(tokens::FONT_SMALL));
+                            ui.label(egui::RichText::new(h).color(crate::theme::ui_palette().text_secondary).size(tokens::FONT_SMALL));
                         }
                         ui.end_row();
                         for p in &report.pairs {
@@ -708,27 +708,27 @@ fn selectivity_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study
                             };
                             match s.verdict {
                                 Verdict::Total => {
-                                    ui.colored_label(tokens::SUCCESS, format!("Total, {basis}"))
+                                    ui.colored_label(crate::theme::ui_palette().success, format!("Total, {basis}"))
                                 }
                                 Verdict::Partial => ui.colored_label(
-                                    tokens::WARNING,
+                                    crate::theme::ui_palette().warning,
                                     format!("Up to {}, {basis}", fmt_current(s.limit_a)),
                                 ),
                                 Verdict::None => {
-                                    ui.colored_label(tokens::ERROR, format!("None, {basis}"))
+                                    ui.colored_label(crate::theme::ui_palette().error, format!("None, {basis}"))
                                 }
                             };
                             match &p.backup {
                                 Backup::NotNeeded => ui.weak("not needed"),
                                 Backup::Covered(b) => ui.colored_label(
-                                    tokens::INFO,
+                                    crate::theme::ui_palette().info,
                                     match b {
                                         BackupBasis::MakerTable => "covered (maker's table)",
                                         BackupBasis::LetThrough => "covered (let-through)",
                                     },
                                 ),
                                 Backup::NotCovered(why) => {
-                                    ui.colored_label(tokens::ERROR, "not covered").on_hover_text(why)
+                                    ui.colored_label(crate::theme::ui_palette().error, "not covered").on_hover_text(why)
                                 }
                             };
                             if ui.small_button("Show curves").clicked() {
@@ -745,9 +745,9 @@ fn selectivity_tab(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study
             }
             for f in &report.findings {
                 let (glyph, color) = match f.severity {
-                    Severity::Error => ("●", tokens::ERROR),
-                    Severity::Warning => ("●", tokens::WARNING),
-                    Severity::Info => ("●", tokens::INFO),
+                    Severity::Error => ("●", crate::theme::ui_palette().error),
+                    Severity::Warning => ("●", crate::theme::ui_palette().warning),
+                    Severity::Info => ("●", crate::theme::ui_palette().info),
                 };
                 ui.horizontal_wrapped(|ui| {
                     ui.colored_label(color, glyph);
@@ -793,16 +793,21 @@ fn rating_tab(ui: &mut egui::Ui, state: &mut ProtectionState, _study: &Study, ro
         } else {
             "not limited".to_string()
         };
-        ui.label(egui::RichText::new(text).size(22.0).color(tokens::TEXT));
+        ui.label(
+            egui::RichText::new(text)
+                .size(22.0)
+                .color(crate::theme::ui_palette().text_primary),
+        );
         ui.add_space(10.0);
         match (r.verdict, results.supply_ka) {
             (sccr::Verdict::Sufficient, Some(k)) => ui.colored_label(
-                tokens::SUCCESS,
+                crate::theme::ui_palette().success,
                 format!("at least the {} kA available", trim(k)),
             ),
-            (sccr::Verdict::Insufficient, Some(k)) => {
-                ui.colored_label(tokens::ERROR, format!("below the {} kA available", trim(k)))
-            }
+            (sccr::Verdict::Insufficient, Some(k)) => ui.colored_label(
+                crate::theme::ui_palette().error,
+                format!("below the {} kA available", trim(k)),
+            ),
             _ => ui.weak("no fault current at the supply to compare with"),
         };
     });
@@ -824,7 +829,7 @@ fn rating_tab(ui: &mut egui::Ui, state: &mut ProtectionState, _study: &Study, ro
                 .spacing([16.0, 4.0])
                 .show(ui, |ui| {
                     for h in ["Component", "Where", "Effective", "Basis"] {
-                        ui.label(egui::RichText::new(h).color(tokens::TEXT_MUTED).size(tokens::FONT_SMALL));
+                        ui.label(egui::RichText::new(h).color(crate::theme::ui_palette().text_secondary).size(tokens::FONT_SMALL));
                     }
                     ui.end_row();
                     for row in &r.rows {
@@ -888,7 +893,7 @@ fn limiter_credit(
                         "Withstands, peak kA",
                         "Withstands, A\u{b2}s",
                     ] {
-                        ui.label(egui::RichText::new(h).color(tokens::TEXT_MUTED).size(tokens::FONT_SMALL));
+                        ui.label(egui::RichText::new(h).color(crate::theme::ui_palette().text_secondary).size(tokens::FONT_SMALL));
                     }
                     ui.end_row();
                     for row in rows {

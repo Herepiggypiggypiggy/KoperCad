@@ -301,7 +301,7 @@ impl NovoApp {
                         egui::Align2::CENTER_TOP,
                         "Right click for New page, New page group or New cabinet",
                         egui::FontId::proportional(tokens::FONT_SMALL),
-                        tokens::TEXT_FAINT,
+                        crate::theme::ui_palette().text_tertiary,
                     );
                 }
                 if bg.secondary_clicked() || bg.clicked() {
@@ -423,8 +423,11 @@ impl NovoApp {
         let mut file = false;
         let mut dismiss = false;
         egui::Frame::new()
-            .fill(tokens::BG_2)
-            .stroke(egui::Stroke::new(1.0, tokens::BORDER))
+            .fill(crate::theme::ui_palette().raised)
+            .stroke(egui::Stroke::new(
+                1.0,
+                crate::theme::ui_palette().border_subtle,
+            ))
             .corner_radius(4.0)
             .inner_margin(egui::Margin::symmetric(8, 6))
             .show(ui, |ui| {
@@ -435,7 +438,7 @@ impl NovoApp {
                         if n == 1 { "page is" } else { "pages are" }
                     ))
                     .size(tokens::FONT_SMALL + 1.0)
-                    .color(tokens::TEXT_MUTED),
+                    .color(crate::theme::ui_palette().text_secondary),
                 );
                 ui.horizontal(|ui| {
                     file = novo_theme::widgets::primary_button(ui, "File them").clicked();
@@ -693,16 +696,20 @@ impl NovoApp {
             painter.rect_filled(
                 rect.shrink2(egui::vec2(2.0, 1.0)),
                 radius,
-                tokens::ACCENT_SELECTION,
+                crate::theme::ui_palette().accent_wash,
             );
         } else if resp.hovered() || selected {
-            painter.rect_filled(rect.shrink2(egui::vec2(2.0, 1.0)), radius, tokens::BG_3);
+            painter.rect_filled(
+                rect.shrink2(egui::vec2(2.0, 1.0)),
+                radius,
+                crate::theme::ui_palette().control,
+            );
         }
         if selected {
             painter.rect_stroke(
                 rect.shrink2(egui::vec2(2.0, 1.0)),
                 radius,
-                egui::Stroke::new(1.0, tokens::BORDER_STRONG),
+                egui::Stroke::new(1.0, crate::theme::ui_palette().border_strong),
                 egui::StrokeKind::Inside,
             );
         }
@@ -724,7 +731,7 @@ impl NovoApp {
                 egui::Align2::CENTER_CENTER,
                 arrow,
                 egui::FontId::proportional(11.0),
-                tokens::TEXT_MUTED,
+                crate::theme::ui_palette().text_secondary,
             );
         }
         x += 14.0;
@@ -735,7 +742,7 @@ impl NovoApp {
                 } else {
                     icons::FOLDER_OPEN
                 },
-                tokens::TEXT_MUTED,
+                crate::theme::ui_palette().text_secondary,
             ),
             RowKind::Cabinet { enclosure, .. } => (
                 if *enclosure {
@@ -743,12 +750,17 @@ impl NovoApp {
                 } else {
                     icons::MAP_PIN
                 },
-                tokens::ACCENT,
+                crate::theme::ui_palette().accent,
             ),
-            RowKind::Generated { .. } => (icons::LIST_NUMBERS, tokens::TEXT_MUTED),
-            RowKind::Page { drawn: true, .. } => (icons::FILE_TEXT, tokens::TEXT_MUTED),
-            RowKind::Page { .. } => (icons::FILE_DASHED, tokens::TEXT_FAINT),
-            RowKind::Empty => ("", tokens::TEXT_FAINT),
+            RowKind::Generated { .. } => (
+                icons::LIST_NUMBERS,
+                crate::theme::ui_palette().text_secondary,
+            ),
+            RowKind::Page { drawn: true, .. } => {
+                (icons::FILE_TEXT, crate::theme::ui_palette().text_secondary)
+            }
+            RowKind::Page { .. } => (icons::FILE_DASHED, crate::theme::ui_palette().text_tertiary),
+            RowKind::Empty => ("", crate::theme::ui_palette().text_tertiary),
         };
         if !icon.is_empty() {
             painter.text(
@@ -822,9 +834,9 @@ impl NovoApp {
         };
         let is_node = matches!(row.kind, RowKind::Group { .. } | RowKind::Cabinet { .. });
         let label_color = match &row.kind {
-            RowKind::Empty => tokens::TEXT_FAINT,
-            RowKind::Page { drawn: false, .. } => tokens::TEXT_MUTED,
-            _ => tokens::TEXT,
+            RowKind::Empty => crate::theme::ui_palette().text_tertiary,
+            RowKind::Page { drawn: false, .. } => crate::theme::ui_palette().text_secondary,
+            _ => crate::theme::ui_palette().text_primary,
         };
         let right_w = if right.is_empty() { 0.0 } else { 56.0 };
         let right_edge = rect.right() - 8.0;
@@ -834,7 +846,7 @@ impl NovoApp {
                 egui::Align2::RIGHT_CENTER,
                 &right,
                 egui::FontId::proportional(tokens::FONT_SMALL),
-                tokens::TEXT_FAINT,
+                crate::theme::ui_palette().text_tertiary,
             );
         }
         let clip = egui::Rect::from_min_max(
@@ -859,10 +871,10 @@ impl NovoApp {
                 egui::Align2::LEFT_CENTER,
                 &text,
                 egui::FontId::monospace(tokens::FONT_MONO),
-                tokens::TEXT_MUTED,
+                crate::theme::ui_palette().text_secondary,
             );
             let (title, color) = if weak.is_empty() {
-                ("Untitled", tokens::TEXT_FAINT)
+                ("Untitled", crate::theme::ui_palette().text_tertiary)
             } else {
                 (weak.as_str(), label_color)
             };
@@ -891,7 +903,7 @@ impl NovoApp {
             ui.painter_at(rect).circle_filled(
                 egui::pos2(rect.right() - 4.0, mid),
                 2.5,
-                tokens::ACCENT,
+                crate::theme::ui_palette().accent,
             );
         }
 
@@ -1900,10 +1912,10 @@ impl NovoApp {
                             form.focused = true;
                         }
                         if valid.is_empty() {
-                            ui.colored_label(tokens::ERROR, "Give it a name");
+                            ui.colored_label(crate::theme::ui_palette().error, "Give it a name");
                         } else if exists {
                             ui.colored_label(
-                                tokens::WARNING,
+                                crate::theme::ui_palette().warning,
                                 format!("{valid} exists: its layout stays, a page is added"),
                             );
                         } else {

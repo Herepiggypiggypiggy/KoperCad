@@ -24,6 +24,7 @@ use novo_workflow::palette::{Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
 use novo_view3d::camera::ViewPreset;
+use novo_view3d::scene::ItemKind;
 
 use super::standards_report::StandardsFormat;
 use super::view3d::Pending;
@@ -104,6 +105,8 @@ pub(crate) struct Workbench {
     pub(super) languages: Option<super::languages::LanguagesWindow>,
     /// The Renumber devices window, while it is open.
     pub(super) device_renumber: Option<super::device_renumber::DeviceRenumber>,
+    /// The shared property sheet of the selection (window and inspector).
+    pub(super) selection_sheet: super::selection_sheet::SelectionSheet,
     /// The Project rules window is open.
     pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
@@ -263,6 +266,7 @@ impl Default for Workbench {
             numbering: None,
             net_trace: None,
             device_renumber: None,
+            selection_sheet: Default::default(),
             project_rules: false,
             page_form: None,
             sheet_import: None,
@@ -371,6 +375,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "page.move_up",
     "page.move_down",
     "nav.partner",
+    "nav.show_schematic",
+    "nav.show_cabinet",
+    "nav.show_3d",
     "nav.all_references",
     "nav.back",
     "nav.forward",
@@ -432,9 +439,29 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_shell",
     "view.3d_wires",
     "view.3d_shadows",
+    "view.3d_align_left",
+    "view.3d_align_hcentre",
+    "view.3d_align_right",
+    "view.3d_align_top",
+    "view.3d_align_vcentre",
+    "view.3d_align_bottom",
+    "view.3d_spread_h",
+    "view.3d_spread_v",
+    "view.3d_ssao",
     "view.3d_dimensions",
     "view.3d_quality",
     "view.3d_stats",
+    "view.3d_section",
+    "view.3d_save_view",
+    "view.3d_wire_runs",
+    "view.3d_hints",
+    "view.3d_select_devices",
+    "view.3d_select_rails",
+    "view.3d_select_ducts",
+    "view.3d_hide",
+    "view.3d_isolate",
+    "view.3d_show_all",
+    "view.3d_duplicate",
     "view.3d_position",
     "view.3d_place",
     "view.iso",
@@ -488,6 +515,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "parts.import_step",
     "parts.import_folder",
     "parts.auto_assign",
+    "edit.shared_properties",
     "parts.clear",
     "parts.remove_unused",
     "project.standard",
@@ -845,6 +873,11 @@ impl NovoApp {
             }
             "edit.rotate" => self.editor_key(EditorKey::Rotate),
             "edit.mirror" => self.editor_key(EditorKey::Mirror),
+            "edit.duplicate" if self.workspace() == Workspace::View3d => self.view3d_duplicate(),
+            "view.3d_duplicate" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_duplicate();
+            }
             "edit.reset_note" => {
                 let selection = self.selection();
                 self.with_editor(|editor, doc| editor.reset_notes(doc, &selection));
@@ -871,6 +904,9 @@ impl NovoApp {
             "page.rename" | "page.duplicate" | "page.delete" | "page.move_up"
             | "page.move_down" => self.page_command(id),
             "nav.partner" => self.go_partner(),
+            "nav.show_schematic" => self.show_in_schematic(),
+            "nav.show_cabinet" => self.show_on_plate(Workspace::Cabinet),
+            "nav.show_3d" => self.show_on_plate(Workspace::View3d),
             "nav.all_references" => self.list_occurrences(),
             "nav.back" | "nav.forward" => self.go_history(id == "nav.back"),
             "proposal.accept" => self.accept_proposal(),
@@ -938,6 +974,10 @@ impl NovoApp {
                 self.switch_workspace(Workspace::View3d);
                 self.view3d.controls.dimensions ^= true;
             }
+            "view.3d_ssao" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.controls.ssao ^= true;
+            }
             "view.3d_door" | "view.3d_shell" | "view.3d_wires" => {
                 self.switch_workspace(Workspace::View3d);
                 let limit = self.view3d_door_limit();
@@ -950,6 +990,55 @@ impl NovoApp {
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
                 }
+            }
+            "view.3d_section" => {
+                self.switch_workspace(Workspace::View3d);
+                let section = &mut self.view3d.view.state.section;
+                *section = match section {
+                    Some(_) => None,
+                    None => Some(novo_view3d::Section::default()),
+                };
+            }
+            "view.3d_save_view" => {
+                // Saved in the view's next frame, once the camera is fitted.
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.save_view = true;
+            }
+            "view.3d_align_left"
+            | "view.3d_align_hcentre"
+            | "view.3d_align_right"
+            | "view.3d_align_top"
+            | "view.3d_align_vcentre"
+            | "view.3d_align_bottom"
+            | "view.3d_spread_h"
+            | "view.3d_spread_v" => {
+                self.switch_workspace(Workspace::View3d);
+                if let Some(op) = super::view3d_align::Op::from_command(id) {
+                    self.view3d_arrange(op);
+                }
+            }
+            "view.3d_wire_runs" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.wire_runs ^= true;
+                if self.view3d.wire_runs {
+                    self.view3d.controls.layers.wires = true;
+                }
+            }
+            "view.3d_hints" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.hints.toggle();
+            }
+            "view.3d_select_devices" | "view.3d_select_rails" | "view.3d_select_ducts" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_select_kind(match id {
+                    "view.3d_select_devices" => ItemKind::Device,
+                    "view.3d_select_rails" => ItemKind::Rail,
+                    _ => ItemKind::Duct,
+                });
+            }
+            "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d_visibility(id);
             }
             "view.3d_position" => {
                 self.switch_workspace(Workspace::View3d);
@@ -1180,6 +1269,7 @@ impl NovoApp {
             "plc.overview" => self.wb.plc_overview = true,
             "parts.import_folder" => self.import_parts_folder(),
             "parts.auto_assign" => self.start_auto_assign(),
+            "edit.shared_properties" => self.open_selection_sheet(),
             "parts.clear" => self.clear_selected_parts(),
             "parts.remove_unused" => self.remove_unused_project_parts(),
             "project.standard" => self.wb.project_settings = true,

@@ -190,7 +190,16 @@ fn wire_colour_in(project: &Project, netlist: &Netlist, wire: WireId) -> Option<
 /// The routed wires that lie on the plate of `id`, ready for the scene. The
 /// routes are the Cabinet's, so the 3D view and the wire list agree.
 pub fn wires(project: &Project, id: StructureId) -> Vec<WireInput> {
-    let routed = route_project(project);
+    wires_with(project, id, &route_project(project))
+}
+
+/// [`wires`] from routes already made, so a screen that also reads lengths
+/// routes the project once.
+pub fn wires_with(
+    project: &Project,
+    id: StructureId,
+    routed: &novo_routing::model::Routed,
+) -> Vec<WireInput> {
     let Some((_, plan)) = routed.plans.iter().find(|(s, _)| *s == id) else {
         return Vec::new();
     };

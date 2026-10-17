@@ -2314,6 +2314,7 @@ impl Editor {
     /// Puts a symbol's note `offset` mm from its default place, or back
     /// there for `None`, one undo step. The note then stays where it was put
     /// whatever is drawn around it.
+    #[cfg(feature = "art")]
     pub fn set_note_offset(
         &mut self,
         doc: &mut Document,
@@ -2338,6 +2339,7 @@ impl Editor {
 
     /// Puts the notes of the selected symbols back to their default
     /// places, one undo step. False when none of them was moved.
+    #[cfg(feature = "art")]
     pub fn reset_notes(&mut self, doc: &mut Document, selection: &[AnyId]) -> bool {
         use novo_canvas::model::{NOTE_DX, NOTE_DY};
         let moved: Vec<SymbolId> = selection
