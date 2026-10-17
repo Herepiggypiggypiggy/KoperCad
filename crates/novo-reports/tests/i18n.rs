@@ -328,3 +328,76 @@ fn a_captured_value_that_looks_like_a_placeholder_is_kept() {
     let tr = Translator::new("nl", &table);
     assert_eq!(tr.tr("Line {b} x"), "x {b}");
 }
+
+#[test]
+fn a_language_file_round_trips() {
+    let mut table = ProjectTable::default();
+    table.set("nl", "Wire", "Ader").unwrap();
+    let mine = Translator::new("nl", &table);
+    // What the user exports is the effective language: shipped plus own.
+    let mut file = i18n::builtin().remove(0);
+    file.set("Wire", "Ader");
+    let json = file.to_json();
+    let back = Catalog::from_json(&json).unwrap();
+    assert_eq!(back, file);
+    let mut other = ProjectTable::default();
+    assert!(other.put_language(back).is_empty());
+    assert_eq!(Translator::new("nl", &other).tr("Wire"), "Ader");
+    assert_eq!(mine.tr("Wire"), "Ader");
+}
+
+#[test]
+fn a_bad_language_file_is_refused_with_a_reason() {
+    assert!(Catalog::from_json("not json").is_err());
+    assert!(matches!(
+        Catalog::from_json(r#"{"code":"  ","entries":{}}"#),
+        Err(i18n::LanguageFileError::NoCode)
+    ));
+    let c =
+        Catalog::from_json(r#"{"code":"DE","name":"Deutsch","entries":{"Wire":"Draht"}}"#).unwrap();
+    assert_eq!(c.code, "de");
+}
+
+#[test]
+fn merging_a_language_file_keeps_the_projects_own_entries() {
+    let mut table = ProjectTable::default();
+    table.set("nl", "Wire", "Ader").unwrap();
+    let mut file = Catalog::new("nl", "Nederlands");
+    file.set("Wire", "Draad");
+    file.set("Cable", "Kabel");
+    file.set("Line {n}", "Regel");
+    let bad = table.merge_language(file);
+    assert_eq!(bad.len(), 1);
+    let tr = Translator::new("nl", &table);
+    assert_eq!(tr.tr("Wire"), "Ader", "the project's entry wins");
+    assert_eq!(tr.tr("Cable"), "Kabel", "the file fills in the rest");
+    assert_eq!(table.language("nl").unwrap().name, "Nederlands");
+}
+
+#[test]
+fn the_bench_cut_list_summary_reads_in_dutch() {
+    use novo_reports::{BenchCut, Report};
+    let mut doc = Document::default();
+    motor_starter(&mut doc).expect("fixture");
+    // The fixture has no cabinet, so every length is an estimate.
+    let output = BenchCut.generate(doc.project());
+    let tr = nl();
+    let summary = &output.sections[0];
+    assert!(
+        summary.title.starts_with("What to pull · "),
+        "{}",
+        summary.title
+    );
+    let dutch = translate_output(&output, &tr);
+    let title = &dutch.sections[0].title;
+    assert!(title.starts_with("Te trekken · "), "{title}");
+    assert!(title.contains("lengtes zijn schattingen"), "{title}");
+    assert!(!title.contains("estimates"), "{title}");
+    // The numbers are filled in, and every header and the title are known.
+    assert!(!title.contains('{'), "{title}");
+    assert_eq!(dutch.sections[0].columns[7].header, "Geschat");
+    assert_eq!(
+        missing(&tr, &strings_of_output(&output)),
+        Vec::<String>::new()
+    );
+}

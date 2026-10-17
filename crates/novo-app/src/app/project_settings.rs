@@ -127,17 +127,16 @@ impl NovoApp {
             )
         });
         let modal = egui::Modal::new(egui::Id::new("project_settings")).show(ctx, |ui| {
-            ui.set_width(360.0);
-            ui.heading("Project settings");
-            ui.add_space(6.0);
-            ui.strong("Drawing standard");
-            ui.weak("Picks the symbol pack for new symbols.");
-            for (value, label) in [
-                (Pack::Iec, "IEC 60617 (default)"),
-                (Pack::Nfpa, "NFPA 79 / ANSI Y32.2"),
-            ] {
-                ui.radio_value(&mut pack, value, label);
-            }
+            ui.set_width(novo_theme::dialog_width::MEDIUM);
+            super::dialog_ui::title(ui, "Project settings", "");
+            super::dialog_ui::section(ui, "Drawing standard", true);
+            super::dialog_ui::choice(
+                ui,
+                "Symbol pack",
+                "Picks the symbol pack for new symbols.",
+                &mut pack,
+                &[(Pack::Iec, "IEC 60617"), (Pack::Nfpa, "NFPA 79 / ANSI Y32.2")],
+            );
             if !stored.is_empty() && Pack::from_id(&stored).is_none() {
                 ui.colored_label(
                     ui.visuals().warn_fg_color,
@@ -147,24 +146,25 @@ impl NovoApp {
             if let Some(plan) = &plan {
                 apply = switch_section(ui, plan);
             }
-            ui.add_space(10.0);
-            ui.strong("Names for new groups and cabinets");
-            ui.weak(
+            super::dialog_ui::section(ui, "Names for new groups and cabinets", false);
+            super::dialog_ui::hint(
+                ui,
                 "Nothing to set up: a new group or cabinet continues the names this project \
 already has. These letters only start a project that has none yet. Yours, for every project.",
             );
+            ui.add_space(4.0);
             egui::Grid::new("naming_prefixes")
                 .num_columns(2)
-                .spacing([10.0, 6.0])
+                .spacing([12.0, 6.0])
                 .show(ui, |ui| {
-                    ui.label("Page group starts with");
+                    ui.label(egui::RichText::new("Page group starts with").weak());
                     ui.add(
                         egui::TextEdit::singleline(&mut group_prefix)
                             .hint_text("G")
                             .desired_width(80.0),
                     );
                     ui.end_row();
-                    ui.label("Cabinet starts with");
+                    ui.label(egui::RichText::new("Cabinet starts with").weak());
                     ui.add(
                         egui::TextEdit::singleline(&mut cabinet_prefix)
                             .hint_text("A")
@@ -173,11 +173,14 @@ already has. These letters only start a project that has none yet. Yours, for ev
                     ui.end_row();
                 });
             if let Some((group, cabinet)) = &preview {
-                ui.weak(format!("Next page group {group}, next cabinet {cabinet}"));
+                super::dialog_ui::hint(
+                    ui,
+                    &format!("Next page group {group}, next cabinet {cabinet}"),
+                );
             }
-            ui.add_space(10.0);
-            ui.strong("Extra design checks");
-            ui.weak("Off until you ask. Findings appear under Issues.");
+            super::dialog_ui::section(ui, "Extra design checks", false);
+            super::dialog_ui::hint(ui, "Off until you ask. Findings appear under Issues.");
+            ui.add_space(4.0);
             ui.checkbox(&mut tag_rule, "Device names follow page and column")
                 .on_hover_text(
                     "A name is its letters, the two-digit page and the column of its main \
@@ -193,8 +196,7 @@ structure node names.",
                     "Report a device on a neutral conductor unless it is a terminal or plug, \
 or its Supply or External property is set.",
                 );
-            ui.add_space(8.0);
-            ui.button("Close (Esc)").clicked()
+            super::dialog_ui::done(ui)
         });
         self.set_standard(pack);
         self.set_project_property("tag.rule", "page-column", tag_rule);
@@ -218,8 +220,7 @@ fn switch_section(ui: &mut egui::Ui, plan: &novo_workflow::switch::SwitchPlan) -
         return false;
     }
     let name = plan.pack.standard();
-    ui.add_space(8.0);
-    ui.strong("Placed symbols");
+    super::dialog_ui::section(ui, "Placed symbols", false);
     let mut pressed = false;
     if !plan.rekey.is_empty() {
         ui.label(format!(

@@ -28,6 +28,26 @@ pub const FIXED_SECTION_TITLES: &[&str] = &[
     "Wires to cut",
 ];
 
+/// Section titles that are fixed text with project numbers filled in, as
+/// `{name}` patterns. Translated through the same pattern entries.
+pub const FIXED_SECTION_TITLE_PATTERNS: &[&str] =
+    &["What to pull · {estimated} of {total} lengths are estimates (~): measure on the plate"];
+
+/// Whether a section title is fixed program text: one of
+/// [`FIXED_SECTION_TITLES`] or a filled-in [`FIXED_SECTION_TITLE_PATTERNS`].
+pub fn is_fixed_title(title: &str) -> bool {
+    FIXED_SECTION_TITLES.contains(&title)
+        || FIXED_SECTION_TITLE_PATTERNS.iter().any(|pattern| {
+            let (head, tail) = (
+                &pattern[..pattern.find('{').unwrap_or(pattern.len())],
+                &pattern[pattern.rfind('}').map_or(0, |i| i + 1)..],
+            );
+            title.len() > head.len() + tail.len()
+                && title.starts_with(head)
+                && title.ends_with(tail)
+        })
+}
+
 /// A text that is worth translating: it has a letter outside `{fields}`.
 pub fn is_translatable(text: &str) -> bool {
     let mut depth = 0;
@@ -44,7 +64,7 @@ pub fn is_translatable(text: &str) -> bool {
 
 fn section(tr: &Translator, s: &Section) -> Section {
     let mut out = s.clone();
-    if FIXED_SECTION_TITLES.contains(&s.title.as_str()) {
+    if is_fixed_title(&s.title) {
         out.title = tr.tr(&s.title).into_owned();
     }
     for c in &mut out.columns {
@@ -161,7 +181,7 @@ pub fn strings_of_output(output: &ReportOutput) -> Vec<String> {
     let mut out = Vec::new();
     push(&mut out, &output.title);
     for s in &output.sections {
-        if FIXED_SECTION_TITLES.contains(&s.title.as_str()) {
+        if is_fixed_title(&s.title) {
             push(&mut out, &s.title);
         }
         for c in &s.columns {

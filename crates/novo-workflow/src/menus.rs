@@ -52,6 +52,12 @@ fn group_default(group: &str) -> Option<MenuPlace> {
 
 /// Commands whose menu differs from their group's.
 const PLACEMENTS: &[(&str, MenuPlace)] = &[
+    // File > Open: the ways to open a project (the Recent list joins them).
+    ("file.open", under("File", "Open")),
+    ("file.open_read_only", under("File", "Open")),
+    ("file.example", under("File", "Open")),
+    ("macro.browser", under("File", "Macros")),
+    ("macro.import", under("File", "Macros")),
     ("page.new", under("File", "Pages")),
     ("page.rename", under("File", "Pages")),
     ("page.duplicate", under("File", "Pages")),
@@ -111,10 +117,11 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.cable_schedule", at("Reports")),
     ("report.plugs", at("Reports")),
     ("report.add_page", at("Reports")),
-    ("export.report_pdf", at("Reports")),
+    ("export.report_pdf", under("Reports", "Export")),
     // Edit
     ("edit.rotate", at("Edit")),
     ("edit.mirror", at("Edit")),
+    ("edit.shared_properties", at("Edit")),
     ("edit.renumber", under("Edit", "Renumber")),
     ("interruption.renumber", under("Edit", "Renumber")),
     ("plc.renumber_io", under("Edit", "Renumber")),
@@ -128,6 +135,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("plc.overview", under("Draw", "PLC")),
     ("macro.save", under("Draw", "Macros")),
     ("macro.place", under("Draw", "Macros")),
+    ("macro.edit", under("Draw", "Macros")),
+    ("macro.export_pack", under("File", "Macros")),
     ("terminal.connect", under("Draw", "Terminals")),
     ("terminal.disconnect", under("Draw", "Terminals")),
     ("terminal.toggle_pe", under("Draw", "Terminals")),
@@ -135,15 +144,18 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("terminal.strip_up", under("Draw", "Terminals")),
     ("terminal.strip_down", under("Draw", "Terminals")),
     ("terminal.strip_lowest", under("Draw", "Terminals")),
-    ("terminal.add_spares", under("Draw", "Terminals")),
-    ("terminal.rename", under("Draw", "Terminals")),
-    ("terminal.renumber", under("Draw", "Terminals")),
-    ("terminal.join_duplicates", under("Draw", "Terminals")),
-    ("terminal.set_kind", under("Draw", "Terminals")),
-    ("terminal.order_up", under("Draw", "Terminals")),
-    ("terminal.order_down", under("Draw", "Terminals")),
-    ("terminal.style", under("Draw", "Terminals")),
-    ("terminal.restore_declined", under("Draw", "Terminals")),
+    ("terminal.add_spares", under("Draw", "Terminal strips")),
+    ("terminal.rename", under("Draw", "Terminal strips")),
+    ("terminal.renumber", under("Draw", "Terminal strips")),
+    ("terminal.join_duplicates", under("Draw", "Terminal strips")),
+    ("terminal.set_kind", under("Draw", "Terminal strips")),
+    ("terminal.order_up", under("Draw", "Terminal strips")),
+    ("terminal.order_down", under("Draw", "Terminal strips")),
+    ("terminal.style", under("Draw", "Terminal strips")),
+    (
+        "terminal.restore_declined",
+        under("Draw", "Terminal strips"),
+    ),
     // View
     ("view.schematic", under("View", "Workspace")),
     ("view.cabinet", under("View", "Workspace")),
@@ -152,9 +164,31 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("view.3d_shell", under("View", "3D")),
     ("view.3d_wires", under("View", "3D")),
     ("view.3d_shadows", under("View", "3D")),
+    ("view.3d_align_left", under("View", "3D")),
+    ("view.3d_align_hcentre", under("View", "3D")),
+    ("view.3d_align_right", under("View", "3D")),
+    ("view.3d_align_top", under("View", "3D")),
+    ("view.3d_align_vcentre", under("View", "3D")),
+    ("view.3d_align_bottom", under("View", "3D")),
+    ("view.3d_spread_h", under("View", "3D")),
+    ("view.3d_spread_v", under("View", "3D")),
+    ("view.3d_ssao", under("View", "3D")),
     ("view.3d_dimensions", under("View", "3D")),
     ("view.3d_quality", under("View", "3D")),
     ("view.3d_stats", under("View", "3D")),
+    ("view.3d_section", under("View", "3D")),
+    ("view.3d_save_view", under("View", "3D")),
+    ("view.3d_wire_runs", under("View", "3D")),
+    ("view.3d_hints", under("View", "3D")),
+    ("view.3d_select_devices", under("View", "3D")),
+    ("view.3d_select_rails", under("View", "3D")),
+    ("view.3d_select_ducts", under("View", "3D")),
+    ("view.3d_hide", under("View", "3D")),
+    ("view.3d_isolate", under("View", "3D")),
+    ("view.3d_show_all", under("View", "3D")),
+    ("view.3d_duplicate", under("View", "3D")),
+    ("view.3d_position", under("View", "3D")),
+    ("view.3d_place", under("View", "3D")),
     ("view.iso", under("View", "3D")),
     ("view.front", under("View", "3D")),
     ("view.top", under("View", "3D")),
@@ -195,16 +229,17 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("sim.plc_program", at("Simulate")),
     ("simulate.motor-start", at("Simulate")),
     ("sim.faults", at("Simulate")),
+    ("sim.add_fault", at("Simulate")),
     ("view.protection", at("Simulate")),
     ("heat.simulate", under("Simulate", "Heat")),
     // Reports
-    ("export.reports", at("Reports")),
-    ("export.assembly", at("Reports")),
+    ("export.reports", under("Reports", "Export")),
+    ("export.assembly", under("Reports", "Export")),
     ("view.bench", at("Reports")),
     ("report.designer", at("Reports")),
-    ("export.bench_cut", at("Reports")),
-    ("export.ferrules", at("Reports")),
-    ("export.labels", at("Reports")),
+    ("export.bench_cut", under("Reports", "Export")),
+    ("export.ferrules", under("Reports", "Export")),
+    ("export.labels", under("Reports", "Export")),
     ("report.toc", at("Reports")),
     ("report.bom", at("Reports")),
     ("report.devices", at("Reports")),
@@ -217,6 +252,36 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.cables", at("Reports")),
     ("report.cutlist", at("Reports")),
     ("report.labels", at("Reports")),
+];
+
+/// Placements added by the schematic menu regroup (File, Edit, Help). Kept
+/// apart from [`PLACEMENTS`] so the two tables never edit the same lines.
+const REGROUPED: &[(&str, MenuPlace)] = &[
+    // File: project settings and the library each get one submenu, so the
+    // top level is only what you do to a file.
+    ("project.rules", under("File", "Project")),
+    ("project.standard", under("File", "Project")),
+    ("project.options", under("File", "Project")),
+    ("project.variant", under("File", "Project")),
+    ("project.generate", under("File", "Project")),
+    ("parts.browser", under("File", "Library")),
+    ("parts.import_step", under("File", "Library")),
+    ("import.spreadsheet", under("File", "Import")),
+    // Edit: the paste variants, the part commands and the numbering
+    // commands are families.
+    ("edit.paste_keep_tags", under("Edit", "Paste special")),
+    ("edit.paste_in_place", under("Edit", "Paste special")),
+    ("parts.auto_assign", under("Edit", "Parts")),
+    ("parts.clear", under("Edit", "Parts")),
+    ("parts.remove_unused", under("Edit", "Parts")),
+    ("wires.number", under("Edit", "Wire numbers")),
+    ("wires.numbering", under("Edit", "Wire numbers")),
+    ("wires.check_numbers", under("Edit", "Wire numbers")),
+    ("wires.set_number", under("Edit", "Wire numbers")),
+    ("wires.unlock_number", under("Edit", "Wire numbers")),
+    ("wires.renumber", under("Edit", "Renumber")),
+    // Help: both fast-key walk-throughs sit together.
+    ("file.practice", at("Help")),
 ];
 
 /// Commands that are a key or a pointer gesture and have no menu row.
@@ -244,6 +309,7 @@ pub fn place(info: &CommandInfo) -> Option<MenuPlace> {
     }
     PLACEMENTS
         .iter()
+        .chain(REGROUPED)
         .find(|(id, _)| *id == info.id)
         .map(|(_, place)| *place)
         .or_else(|| group_default(info.group))
@@ -281,6 +347,10 @@ const SUBMENU_ORDER: &[&str] = &[
     "Heat",
     "Lesson",
 ];
+
+/// Submenus drawn right after a plain command instead of after all of them:
+/// (submenu, the command it follows). File > Open sits under New project.
+const AFTER: &[(&str, &str)] = &[("Open", "file.new")];
 
 /// One row of a drawn menu.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -320,7 +390,22 @@ pub fn layout(menu: &str) -> Vec<MenuItem> {
             .unwrap_or(SUBMENU_ORDER.len())
     };
     subs.sort_by_key(|(name, _)| rank(name));
-    let mut out = plain;
+    let mut out = Vec::new();
+    for item in plain {
+        let id = match &item {
+            MenuItem::Command(info) => info.id,
+            _ => "",
+        };
+        out.push(item);
+        for (sub, after) in AFTER {
+            if *after == id
+                && let Some(n) = subs.iter().position(|(name, _)| name == sub)
+            {
+                let (name, items) = subs.remove(n);
+                out.push(MenuItem::Submenu { name, items });
+            }
+        }
+    }
     let blocks = [
         subs.into_iter()
             .map(|(name, items)| MenuItem::Submenu { name, items })
@@ -328,6 +413,187 @@ pub fn layout(menu: &str) -> Vec<MenuItem> {
         last,
     ];
     for block in blocks {
+        if !block.is_empty() {
+            if !out.is_empty() {
+                out.push(MenuItem::Separator);
+            }
+            out.extend(block);
+        }
+    }
+    out
+}
+
+/// The blocks of plain rows of each menu, top to bottom; a separator is
+/// drawn between blocks. Commands of the menu that no block names follow in
+/// a last block, in registry order, so a new command still appears.
+const BLOCKS: &[(&str, &[&[&str]])] = &[
+    (
+        "File",
+        &[
+            &["file.new", "file.open", "file.example"],
+            &["file.save", "file.save_as", "file.close"],
+            &["app.preferences"],
+        ],
+    ),
+    (
+        "Edit",
+        &[
+            &["edit.undo", "edit.redo"],
+            &["edit.cut", "edit.copy", "edit.paste"],
+            &["edit.duplicate", "edit.select_all", "edit.delete"],
+            &["edit.rename", "edit.rotate", "edit.mirror"],
+        ],
+    ),
+    (
+        "Draw",
+        &[
+            &["tool.place", "tool.connect", "wire.mode", "tool.cable"],
+            &["proposal.accept", "proposal.accept_all"],
+            &["draw.tidy", "xref.link"],
+        ],
+    ),
+    (
+        "Check",
+        &[
+            &["check.problems", "check.standards"],
+            &[
+                "check.calculations",
+                "check.electrical_inputs",
+                "check.safety",
+            ],
+            &["check.next_problem", "check.previous_problem"],
+        ],
+    ),
+    (
+        "Reports",
+        &[
+            &[
+                "report.toc",
+                "report.bom",
+                "report.devices",
+                "report.wires",
+                "report.terminals",
+                "report.cables",
+                "report.cutlist",
+                "report.labels",
+                "report.wirecut",
+                "report.io",
+                "report.cable_schedule",
+                "report.plugs",
+            ],
+            &["report.add_page", "report.designer", "view.bench"],
+        ],
+    ),
+    (
+        "Simulate",
+        &[&[
+            "sim.live",
+            "simulate.motor-start",
+            "sim.plc_program",
+            "sim.faults",
+            "view.protection",
+        ]],
+    ),
+    (
+        "Help",
+        &[
+            &[
+                "help.learn",
+                "view.shortcuts",
+                "help.walkthrough",
+                "file.practice",
+                "help.show_hints",
+            ],
+            &["help.about"],
+        ],
+    ),
+];
+
+/// Submenus drawn first, in this order, for the menus named here; the
+/// others follow in the order [`layout`] gives them.
+const SUB_FIRST: &[(&str, &[&str])] = &[
+    (
+        "File",
+        &[
+            "Project",
+            "Library",
+            "Macros",
+            "Pages",
+            "Import",
+            "Revisions",
+            "Export drawings",
+            "Export reports",
+            "Export production",
+            "Export PLC",
+            "Export interchange",
+        ],
+    ),
+    (
+        "Edit",
+        &["Paste special", "Parts", "Wire numbers", "Renumber"],
+    ),
+    (
+        "Draw",
+        &["Terminals", "Terminal strips", "Cables", "PLC", "Macros"],
+    ),
+];
+
+/// What the menu bar draws: [`layout`] with the plain rows in their
+/// [`BLOCKS`] (a separator between blocks) and the submenus in
+/// [`SUB_FIRST`] order.
+pub fn drawn(menu: &str) -> Vec<MenuItem> {
+    let mut plain: Vec<&'static CommandInfo> = Vec::new();
+    let mut subs = Vec::new();
+    let mut tail = Vec::new();
+    let mut after_plain = false;
+    for item in layout(menu) {
+        match item {
+            MenuItem::Command(c) if !after_plain => plain.push(c),
+            MenuItem::Command(c) => tail.push(MenuItem::Command(c)),
+            MenuItem::Submenu { .. } => {
+                after_plain = true;
+                subs.push(item);
+            }
+            MenuItem::Separator => after_plain = true,
+        }
+    }
+    let first = SUB_FIRST
+        .iter()
+        .find(|(m, _)| *m == menu)
+        .map_or(&[][..], |(_, names)| *names);
+    subs.sort_by_key(|item| match item {
+        MenuItem::Submenu { name, .. } => {
+            first.iter().position(|n| n == name).unwrap_or(first.len())
+        }
+        _ => usize::MAX,
+    });
+    let blocks = BLOCKS
+        .iter()
+        .find(|(m, _)| *m == menu)
+        .map_or(&[][..], |(_, blocks)| *blocks);
+    let mut out = Vec::new();
+    let mut rest = plain;
+    for block in blocks {
+        let mut taken = Vec::new();
+        for id in *block {
+            if let Some(at) = rest.iter().position(|c| c.id == *id) {
+                taken.push(rest.remove(at));
+            }
+        }
+        if !taken.is_empty() {
+            if !out.is_empty() {
+                out.push(MenuItem::Separator);
+            }
+            out.extend(taken.into_iter().map(MenuItem::Command));
+        }
+    }
+    if !rest.is_empty() {
+        if !out.is_empty() {
+            out.push(MenuItem::Separator);
+        }
+        out.extend(rest.into_iter().map(MenuItem::Command));
+    }
+    for block in [subs, tail] {
         if !block.is_empty() {
             if !out.is_empty() {
                 out.push(MenuItem::Separator);
@@ -359,19 +625,19 @@ mod tests {
     #[test]
     fn placements_name_real_commands_and_menus() {
         let ids: HashSet<_> = COMMANDS.iter().map(|c| c.id).collect();
-        for (id, place) in PLACEMENTS {
+        for (id, place) in PLACEMENTS.iter().chain(REGROUPED) {
             assert!(ids.contains(id), "{id} is not a command");
             assert!(MENUS.contains(&place.menu), "{id}: no menu {}", place.menu);
         }
         for (id, _) in PALETTE_ONLY {
             assert!(ids.contains(id), "{id} is not a command");
             assert!(
-                PLACEMENTS.iter().all(|(p, _)| p != id),
+                PLACEMENTS.iter().chain(REGROUPED).all(|(p, _)| p != id),
                 "{id} is both placed and palette-only"
             );
         }
         let mut seen = HashSet::new();
-        for (id, _) in PLACEMENTS {
+        for (id, _) in PLACEMENTS.iter().chain(REGROUPED) {
             assert!(seen.insert(id), "{id} is placed twice");
         }
     }
@@ -448,6 +714,95 @@ mod tests {
         let view: Vec<_> = entries("View").iter().map(|(c, _)| c.id).collect();
         assert!(view.contains(&"view.cabinet") && view.contains(&"nav.back"));
     }
+    /// Every id the blocks and the submenu order name is real and sits in
+    /// that menu, and no id is named twice.
+    #[test]
+    fn the_block_tables_name_real_rows_of_their_menu() {
+        let ids: HashSet<_> = COMMANDS.iter().map(|c| c.id).collect();
+        for (menu, blocks) in BLOCKS {
+            assert!(MENUS.contains(menu), "no menu {menu}");
+            let mut seen = HashSet::new();
+            for id in blocks.iter().flat_map(|b| b.iter()) {
+                assert!(ids.contains(id), "{id} is not a command");
+                assert!(seen.insert(*id), "{id} is in two blocks of {menu}");
+            }
+        }
+        for (menu, names) in SUB_FIRST {
+            assert!(MENUS.contains(menu), "no menu {menu}");
+            for name in *names {
+                let named = entries(menu).iter().any(|(_, p)| p.submenu == Some(*name));
+                assert!(named, "{menu} has no submenu {name}");
+            }
+        }
+    }
+
+    /// The drawn menu holds exactly the rows of the layout, once each.
+    #[test]
+    fn drawn_menus_keep_every_row_once() {
+        for menu in MENUS {
+            let count = |items: Vec<MenuItem>| {
+                let mut ids: Vec<&str> = Vec::new();
+                for item in items {
+                    match item {
+                        MenuItem::Command(c) => ids.push(c.id),
+                        MenuItem::Submenu { items, .. } => ids.extend(items.iter().map(|c| c.id)),
+                        MenuItem::Separator => {}
+                    }
+                }
+                ids.sort_unstable();
+                ids
+            };
+            assert_eq!(count(drawn(menu)), count(layout(menu)), "{menu}");
+        }
+    }
+
+    /// No separator opens, closes or doubles up a menu, and Quit ends File.
+    #[test]
+    fn drawn_menus_have_tidy_separators() {
+        for menu in MENUS {
+            let items = drawn(menu);
+            assert_ne!(items.first(), Some(&MenuItem::Separator), "{menu}");
+            assert_ne!(items.last(), Some(&MenuItem::Separator), "{menu}");
+            for pair in items.windows(2) {
+                assert!(
+                    !(pair[0] == MenuItem::Separator && pair[1] == MenuItem::Separator),
+                    "{menu}: two separators in a row"
+                );
+            }
+        }
+        let file = drawn("File");
+        assert_eq!(
+            file.last(),
+            Some(&MenuItem::Command(
+                crate::commands::get("file.quit").unwrap()
+            ))
+        );
+    }
+
+    /// A menu stays short enough for a 768 px window: the schematic-side
+    /// menus show at most 14 plain rows and a submenu at most 12. View and
+    /// the Export submenus (capped at 10 by their own test) are left out.
+    #[test]
+    fn schematic_menus_are_not_long_lists() {
+        for menu in MENUS {
+            if menu == "View" {
+                continue;
+            }
+            let items = drawn(menu);
+            let plain = items
+                .iter()
+                .filter(|i| matches!(i, MenuItem::Command(_)))
+                .count();
+            assert!(plain <= 15, "{menu} has {plain} plain rows");
+            for item in &items {
+                if let MenuItem::Submenu { name, items } = item
+                    && !name.starts_with("Export")
+                {
+                    assert!(items.len() <= 12, "{menu} > {name}: {}", items.len());
+                }
+            }
+        }
+    }
 
     #[test]
     fn the_export_menu_is_split_and_every_export_has_a_submenu_of_its_own() {
@@ -470,6 +825,43 @@ mod tests {
         }
     }
 
+    /// The things a person does most in a menu come first.
+    #[test]
+    fn edit_starts_with_undo_and_file_with_new() {
+        let first = |menu| match drawn(menu).first() {
+            Some(MenuItem::Command(c)) => c.id,
+            other => panic!("{menu} starts with {other:?}"),
+        };
+        assert_eq!(first("File"), "file.new");
+        assert_eq!(first("Edit"), "edit.undo");
+        assert_eq!(first("Draw"), "tool.place");
+    }
+
+    #[test]
+    fn open_commands_share_a_submenu_under_new_and_the_file_menu_stays_short() {
+        let file = layout("File");
+        let at_new = file
+            .iter()
+            .position(|i| matches!(i, MenuItem::Command(c) if c.id == "file.new"))
+            .unwrap();
+        match &file[at_new + 1] {
+            MenuItem::Submenu {
+                name: "Open",
+                items,
+            } => {
+                let ids: Vec<_> = items.iter().map(|c| c.id).collect();
+                assert_eq!(ids, ["file.open", "file.open_read_only", "file.example"]);
+            }
+            other => panic!("expected File > Open after New project, got {other:?}"),
+        }
+        // About 26 px a row keeps the whole menu inside 700 px.
+        let rows = file
+            .iter()
+            .filter(|i| !matches!(i, MenuItem::Separator))
+            .count();
+        assert!(rows <= 26, "the File menu has {rows} rows");
+    }
+
     #[test]
     fn the_new_report_and_export_commands_have_their_homes() {
         let home = |id: &str| place(crate::commands::get(id).unwrap()).unwrap();
@@ -479,10 +871,10 @@ mod tests {
             "report.cable_schedule",
             "report.plugs",
             "report.add_page",
-            "export.report_pdf",
         ] {
             assert_eq!(home(id), at("Reports"), "{id}");
         }
+        assert_eq!(home("export.report_pdf"), under("Reports", "Export"));
         assert_eq!(home("export.pdf_page"), under("File", "Export drawings"));
         assert_eq!(home("export.plate_dxf"), under("File", "Export drawings"));
     }

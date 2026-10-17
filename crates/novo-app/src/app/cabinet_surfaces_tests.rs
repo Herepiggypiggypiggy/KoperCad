@@ -157,3 +157,112 @@ fn the_surface_command_explains_a_plate_only_cabinet() {
     let shown = d.app.messages().last().expect("a message").text.clone();
     assert!(shown.contains("only its mounting plate"), "{shown}");
 }
+
+#[test]
+fn a_picked_surface_is_drawn_from_its_own_layout_and_cannot_be_edited_yet() {
+    use super::cabinet::Ask;
+    use super::cabinet_surfaces::surface_layout;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    let cab = cabinet(&mut d, true);
+    let (k1, s1) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Devices", |tx| {
+            let a = tx.add_device(DeviceTag::parse("-K1").unwrap(), "")?;
+            let b = tx.add_device(DeviceTag::parse("-S1").unwrap(), "")?;
+            place_device(tx, cab, a.raw(), 20.0, 20.0, false)?;
+            place_device(tx, cab, b.raw(), 80.0, 20.0, false)?;
+            Ok((a, b))
+        })
+        .unwrap()
+        .0;
+    let pid = project(&d)
+        .all::<novo_core::CabinetPlacement>()
+        .find(|p| p.device == s1)
+        .unwrap()
+        .id;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Surface", |tx| {
+            tx.set_property(pid, "surface", Some(Value::Text("door".into())))
+        })
+        .unwrap();
+    let sum = summarize(project(&d), cab).unwrap();
+    let stored = novo_layout::model::load(project(&d), cab).unwrap();
+    let door = surface_layout(&stored, &sum, "door").unwrap();
+    assert_eq!((door.plate.width, door.plate.height), (800.0, 1000.0));
+    assert_eq!(door.placements.len(), 1);
+    assert_eq!(door.placements[0].id, s1.raw());
+    assert!(door.rails.is_empty() && door.enclosure.is_none());
+    let plate = surface_layout(&stored, &sum, "plate").unwrap();
+    assert_eq!(plate.placements.len(), 1);
+    assert_eq!(plate.placements[0].id, k1.raw());
+
+    // Picked in the app: every edit that would land on the plate is refused
+    // and the stored plate, enclosure and placements are kept.
+    d.app.cabinet.surface = Some("door".into());
+    d.frame();
+    let plate_before = project(&d)
+        .get::<novo_core::Structure>(cab)
+        .unwrap()
+        .plate
+        .unwrap();
+    let enclosure_before = novo_layout::model::enclosure_of(project(&d), cab).unwrap();
+    let mut bigger = enclosure_before;
+    bigger.width += 100.0;
+    let asks = vec![
+        Ask::PlaceAll,
+        Ask::Accept,
+        Ask::SetRailLengths(vec![(1, 100.0)]),
+        Ask::SetPlate(cab),
+        Ask::SetPlateSize(
+            cab,
+            MountingPlate {
+                width: 800.0,
+                height: 1000.0,
+                margin: 10.0,
+            },
+        ),
+        Ask::SetEnclosure(bigger),
+    ];
+    for ask in asks {
+        d.app.messages.clear();
+        d.app.cabinet_ask(ask, Some(cab), None, &[]);
+        let msg = d.app.messages().last().expect("a message").text.clone();
+        assert!(msg.contains("only be changed on the plate"), "{msg}");
+    }
+    let after = novo_layout::model::load(project(&d), cab).unwrap();
+    assert_eq!(after.placements.len(), 2, "nothing was removed");
+    assert_eq!(
+        project(&d).get::<novo_core::Structure>(cab).unwrap().plate,
+        Some(plate_before),
+        "the mounting plate size is untouched"
+    );
+    assert_eq!(
+        novo_layout::model::enclosure_of(project(&d), cab),
+        Some(enclosure_before),
+        "the enclosure is untouched"
+    );
+
+    // Back on the plate the same edits go through.
+    d.app.cabinet.surface = None;
+    d.frame();
+    d.app
+        .cabinet_ask(Ask::Remove(vec![k1.raw()]), Some(cab), None, &[]);
+    let after = novo_layout::model::load(project(&d), cab).unwrap();
+    assert_eq!(after.placements.len(), 1, "the plate is editable again");
+
+    // A surface that is gone is reported, and the plate is shown.
+    d.app.cabinet.surface = Some("attic".into());
+    d.frame();
+    assert_eq!(d.app.cabinet.surface, None);
+    let msg = d.app.messages().last().expect("a message").text.clone();
+    assert!(msg.contains("'attic' no longer exists"), "{msg}");
+    let _ = &ctx;
+}
