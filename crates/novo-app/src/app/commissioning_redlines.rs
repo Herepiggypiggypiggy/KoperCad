@@ -33,6 +33,7 @@ pub(super) enum Kind {
     Note,
     WireNumber,
     DeviceTag,
+    TerminalName,
 }
 
 /// The "new redline" form.
@@ -46,7 +47,10 @@ fn kinds_for(target: Target) -> &'static [(Kind, &'static str)] {
     match target {
         Target::Wire(_) => &[(Kind::Note, "Note"), (Kind::WireNumber, "New number")],
         Target::Device(_) => &[(Kind::Note, "Note"), (Kind::DeviceTag, "New tag")],
-        Target::Terminal(_) => &[(Kind::Note, "Note")],
+        Target::Terminal(_) => &[
+            (Kind::Note, "Note"),
+            (Kind::TerminalName, "New designation"),
+        ],
     }
 }
 
@@ -81,6 +85,7 @@ pub(super) fn redlines_tab(
                 Kind::Note => "What differs on the machine",
                 Kind::WireNumber => "Number on the machine",
                 Kind::DeviceTag => "Tag on the machine, e.g. -F33",
+                Kind::TerminalName => "Designation on the machine, e.g. 3 or PE",
             };
             ui.add(
                 egui::TextEdit::singleline(&mut mode.redline.text)
@@ -139,6 +144,7 @@ pub(super) fn redlines_tab(
                     Change::Note => format!("{}: {}", r.label, r.note.trim()),
                     Change::WireNumber(n) => format!("{} → number {}", r.label, n.trim()),
                     Change::DeviceTag(t) => format!("{} → tag {}", r.label, t.trim()),
+                    Change::TerminalName(n) => format!("{} → designation {}", r.label, n.trim()),
                 };
                 let row = widgets::row(ui, false, |ui| {
                     ui.label(egui::RichText::new(icons::CIRCLE).color(color));
@@ -184,6 +190,7 @@ fn add_redline(mode: &mut CommissioningMode, info: &TargetInfo) {
         Kind::Note => (Change::Note, text),
         Kind::WireNumber => (Change::WireNumber(text), String::new()),
         Kind::DeviceTag => (Change::DeviceTag(text), String::new()),
+        Kind::TerminalName => (Change::TerminalName(text), String::new()),
     };
     let redline = Redline {
         id: 0,

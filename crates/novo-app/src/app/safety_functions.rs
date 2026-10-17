@@ -321,11 +321,14 @@ fn parts_ui(
                         }
                     }
                 });
-            for (b, label) in [(Basis::B10d, "B10d"), (Basis::Mttfd, "MTTFd")] {
-                if ui.selectable_label(p.basis == b, label).clicked() && p.basis != b {
-                    p.basis = b;
-                    changed = true;
-                }
+            let mut basis = usize::from(p.basis == Basis::Mttfd);
+            if widgets::segmented(ui, &mut basis, &["B10d", "MTTFd"]) {
+                p.basis = if basis == 0 {
+                    Basis::B10d
+                } else {
+                    Basis::Mttfd
+                };
+                changed = true;
             }
             let mut own = p.value.is_some();
             if ui.checkbox(&mut own, "own value").changed() {
