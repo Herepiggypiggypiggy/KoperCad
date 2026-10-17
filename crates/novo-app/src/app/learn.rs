@@ -105,6 +105,8 @@ pub(crate) const ANCHORS: &[&str] = &[
     "outline.toggle",
     "commissioning.who",
     "commissioning.punch",
+    "commissioning.redlines",
+    "commissioning.redline_apply",
     "commissioning.report",
     "commissioning.photo",
     "commissioning.field_export",
