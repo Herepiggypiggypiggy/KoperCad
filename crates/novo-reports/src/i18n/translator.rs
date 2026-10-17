@@ -62,7 +62,20 @@ impl Translator {
         if c.name.is_empty() {
             c.name = self.project.name.clone();
         }
+        c.decimal = self
+            .project
+            .decimal_char()
+            .or(self.shipped.decimal_char())
+            .map(String::from);
         c
+    }
+
+    /// The decimal separator of measured values in this language.
+    pub fn decimal(&self) -> char {
+        self.project
+            .decimal_char()
+            .or(self.shipped.decimal_char())
+            .unwrap_or('.')
     }
 
     pub fn code(&self) -> &str {

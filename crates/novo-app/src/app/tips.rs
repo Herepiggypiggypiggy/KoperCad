@@ -44,6 +44,62 @@ pub(crate) fn tip_text(keymap: &Keymap, label: &str, command: &str) -> String {
     }
 }
 
+/// Commands whose tooltips are drawn where the keymap is out of reach (a
+/// free function with only the `Ui`); [`publish_keys`] puts their keys in
+/// the egui context each frame and [`hover`] reads them back.
+pub(super) const TIP_COMMANDS: &[&str] = &[
+    "view.3d_door",
+    "heat.toggle",
+    "view.cabinet_table",
+    "sim.live",
+    "cabinet.rails",
+    "view.command_palette",
+    "edit.undo",
+];
+
+type TipKeys = std::sync::Arc<std::collections::BTreeMap<&'static str, String>>;
+
+fn tip_keys_id() -> egui::Id {
+    egui::Id::new("tip_keys")
+}
+
+/// The live keys of [`TIP_COMMANDS`], for [`hover`].
+pub(super) fn publish_keys(ctx: &egui::Context, keymap: &Keymap) {
+    let keys: std::collections::BTreeMap<_, _> = TIP_COMMANDS
+        .iter()
+        .filter_map(|c| keymap.shortcut_text(c).map(|k| (*c, k)))
+        .collect();
+    ctx.data_mut(|d| d.insert_temp(tip_keys_id(), TipKeys::new(keys)));
+}
+
+/// The live key of a [`TIP_COMMANDS`] command, or `fallback` when it has none.
+pub(super) fn key_or(ctx: &egui::Context, command: &str, fallback: &str) -> String {
+    debug_assert!(
+        TIP_COMMANDS.contains(&command),
+        "add `{command}` to TIP_COMMANDS"
+    );
+    ctx.data(|d| d.get_temp::<TipKeys>(tip_keys_id()))
+        .and_then(|keys| keys.get(command).cloned())
+        .unwrap_or_else(|| fallback.to_owned())
+}
+
+/// `Label · Key` for a [`TIP_COMMANDS`] command, from any drawing code
+/// that has the context. Never type a key into a tooltip: add the command
+/// to the list and call this.
+pub(super) fn hover(ctx: &egui::Context, label: &str, command: &str) -> String {
+    debug_assert!(
+        TIP_COMMANDS.contains(&command),
+        "add `{command}` to TIP_COMMANDS"
+    );
+    let key = ctx
+        .data(|d| d.get_temp::<TipKeys>(tip_keys_id()))
+        .and_then(|keys| keys.get(command).cloned());
+    match key {
+        Some(key) => format!("{label} · {key}"),
+        None => label.to_owned(),
+    }
+}
+
 /// A hint's text with its key filled in.
 pub(super) fn hint_text(keymap: &Keymap, hint: &Hint) -> String {
     let key = keymap

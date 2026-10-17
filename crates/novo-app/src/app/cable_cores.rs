@@ -129,9 +129,10 @@ pub(super) fn header_controls(
         }
         if ui
             .small_button("Delete cable")
-            .on_hover_text(
-                "Removes the cable; its wires stay and are proposed again. Ctrl+Z brings it back",
-            )
+            .on_hover_text(format!(
+                "Removes the cable; its wires stay and are proposed again. {} brings it back",
+                super::tips::key_or(ui.ctx(), "edit.undo", "Undo")
+            ))
             .clicked()
         {
             actions.push(CableAction::Delete);
