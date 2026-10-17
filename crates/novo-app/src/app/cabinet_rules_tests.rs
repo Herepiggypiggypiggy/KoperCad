@@ -151,6 +151,7 @@ fn the_inspector_names_the_rule_and_the_rule_a_hand_edit_breaks() {
         problems: Vec::new(),
         rule: None,
         why: None,
+        surface: None,
     }]);
     cabinet_rules::annotate(&mut facts, &d.app.cabinet.rules, &judged, &|id| {
         format!("-D{id}")

@@ -17,6 +17,7 @@ mod cabinet_rails;
 #[allow(dead_code)] // called from cabinet_show once the duct drawing PR is in
 mod cabinet_routes;
 mod cabinet_rules;
+mod cabinet_surface_move;
 mod cabinet_surfaces;
 mod cable_controls;
 mod cable_cores;
@@ -111,6 +112,7 @@ mod plc_link;
 mod plc_run;
 mod potentials;
 mod preferences;
+mod probe;
 mod project_rules;
 mod project_settings;
 mod protection;
@@ -142,6 +144,7 @@ mod title_revisions;
 mod userkeymap;
 mod variants;
 mod view3d;
+mod view3d_align;
 mod view3d_controls;
 mod view3d_duplicate;
 mod view3d_heat;
@@ -155,8 +158,10 @@ mod view3d_rail;
 #[cfg(test)]
 mod view3d_rail_tests;
 mod view3d_stats;
+mod view3d_surfaces;
 #[cfg(test)]
 mod view3d_tests;
+mod view3d_views;
 mod view3d_wires;
 mod whats_new;
 mod wheel;
@@ -180,6 +185,8 @@ mod cabinet_rails_tests;
 mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
+#[cfg(test)]
+mod cabinet_surface_move_tests;
 #[cfg(test)]
 mod cabinet_surfaces_tests;
 #[cfg(test)]
@@ -1114,12 +1121,15 @@ impl NovoApp {
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
                     || *id == "view.3d_door"
+                    || id.starts_with("view.3d_align")
+                    || id.starts_with("view.3d_spread")
                     || *id == "view.3d_wire_runs"
                     || *id == "view.3d_duplicate"
                     || (*id == "edit.duplicate" && in_3d)
                     || *id == "view.3d_position"
                     || *id == "view.3d_place"
                     || *id == "view.3d_stats"
+                    || *id == "view.3d_section"
                     || *id == "view.3d_hints"
                     || matches!(*id, "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all")
                     || id.starts_with("heat.")

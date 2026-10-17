@@ -36,7 +36,7 @@ const DEFAULT_PLATE: MountingPlate = MountingPlate {
 
 pub(super) struct CabinetState {
     pub(super) view: CanvasView,
-    scene: CabinetScene,
+    pub(super) scene: CabinetScene,
     /// The panel shown, by its location (`+K1B1G1`).
     pub(super) location: Option<DeviceTag>,
     /// A `Place all` plan waiting for Enter.
@@ -162,6 +162,8 @@ pub(super) enum Ask {
     SetEnclosure(novo_layout::enclosure::Enclosure),
     /// Set a panel-building value (power loss, mounting, clearance) of a device.
     SetPanelValue(super::cabinet_panel::PanelEdit),
+    /// Put a placed device on another surface of the cabinet (plate, door, ...).
+    SetSurface(u64, String),
     /// Cut rails to new lengths (rail id, length in mm), from the cut list.
     SetRailLengths(Vec<(u64, f64)>),
 }
@@ -261,6 +263,15 @@ pub(super) fn problem_lines(
             lines.push(format!(
                 "Only {gap:.0} mm from {}",
                 tag_of(if a == id { b } else { a })
+            ));
+        }
+    }
+    for c in &report.opening_conflicts {
+        if c.device == id {
+            lines.push(format!(
+                "Covers the wiring opening '{}' [{}]",
+                c.opening,
+                novo_layout::openings::RULE_OPENING_KEEPOUT
             ));
         }
     }
@@ -492,6 +503,16 @@ impl NovoApp {
                 }
                 found.or(layout)
             }
+            // The plate view draws what is mounted on the plate; devices put
+            // on the door or a wall show on that surface instead.
+            (None, Some(sum), Some(_)) => layout.map(|mut l| {
+                l.placements.retain(|p| {
+                    sum.assigned
+                        .get(&p.id)
+                        .is_none_or(|name| name.as_str() == MAIN_PLATE)
+                });
+                l
+            }),
             _ => layout,
         };
         self.cabinet.rules.ensure_loaded();
@@ -506,6 +527,10 @@ impl NovoApp {
             .unwrap_or_default();
         if let Some(l) = on_surface.as_ref().and(layout.as_ref()) {
             cands.retain(|c| l.placements.iter().any(|p| p.id == c.id));
+        } else if let Some(sum) = &surfaces {
+            // A device mounted on the door or a wall is placed, not waiting
+            // for a spot on the plate.
+            super::cabinet_surface_move::keep_plate_candidates(&mut cands, sum);
         }
         let sizing_devices = structure
             .map(|s| novo_layout::sizing_model::sizing_devices(project, s))
@@ -545,6 +570,8 @@ impl NovoApp {
                     + r.outside.len()
                     + r.too_close.len()
                     + r.rail_overflows.len()
+                    + r.opening_conflicts.len()
+                    + s.opening_problems.len()
                     + r.duct_overlaps.len()
                     + s.door_report().map_or(0, |d| d.problems())
                     + s.swing_report().map_or(0, |d| d.problems());
@@ -1225,6 +1252,7 @@ impl NovoApp {
                         if let Some(j) = &judged {
                             cabinet_rules::annotate(&mut facts, &self.cabinet.rules, j, &tag_of);
                         }
+                        super::cabinet_surface_move::annotate(&mut facts, surfaces.as_ref());
                         // On the side away from the selection.
                         let centre = shown
                             .placements
@@ -1790,6 +1818,48 @@ impl NovoApp {
         }
     }
 
+    /// Tells what the surface rules did to `Place all`: the devices that
+    /// belong on another surface and are not on the plate plan, and rules
+    /// that could not be used. Returns how many devices were sent to another
+    /// surface.
+    fn surface_rule_messages(
+        &mut self,
+        structure: Option<StructureId>,
+        layout: &CabinetLayout,
+    ) -> usize {
+        let (Some(s), Some(project)) = (structure, self.backend.document().map(|d| d.project()))
+        else {
+            return 0;
+        };
+        let split = cabinet_rules::surface_split(project, s, layout);
+        let tag = |id: u64| {
+            project
+                .get::<novo_core::Device>(novo_core::DeviceId::from(id))
+                .map_or_else(|| format!("device {id}"), |d| d.tag.to_string())
+        };
+        let sent: usize = split.others.iter().map(|(_, specs)| specs.len()).sum();
+        let mut notes: Vec<(Level, String)> = split
+            .problems
+            .iter()
+            .map(|p| (Level::Warning, p.clone()))
+            .collect();
+        for (surface, specs) in &split.others {
+            let tags: Vec<String> = specs.iter().map(|sp| tag(sp.id)).collect();
+            notes.push((
+                Level::Info,
+                format!(
+                    "By the surface rules {} belong on the {surface} [{}] and are not placed on the plate",
+                    tags.join(", "),
+                    novo_layout::surface_rules::RULE_SURFACE
+                ),
+            ));
+        }
+        for (level, text) in notes {
+            self.message(level, text);
+        }
+        sent
+    }
+
     /// What Place all leaves off the plate, by name with the reason: devices
     /// that do not fit, and devices no cabinet takes because their tag has
     /// no location while the project has several. `None` when all is placed.
@@ -1948,6 +2018,7 @@ impl NovoApp {
                         }
                         _ => layout.preview(cands),
                     };
+                    let sent_elsewhere = self.surface_rule_messages(structure, &layout);
                     let left_out = self.left_out_text(structure, &plan);
                     if plan.placements.is_empty() {
                         match left_out {
@@ -1959,6 +2030,9 @@ impl NovoApp {
                             {
                                 self.message(Level::Info, "Every device is already on the plate");
                             }
+                            // Everything that was left went to another surface;
+                            // the surface message above already said so.
+                            None if sent_elsewhere > 0 => {}
                             None => self.message(Level::Info, "Nothing fits on the plate"),
                         }
                     } else {
@@ -2057,6 +2131,14 @@ impl NovoApp {
                     Ok(None) => {}
                     Err(e) => self.message(Level::Warning, e.to_string()),
                 }
+            }
+            Ask::SetSurface(device, surface) => {
+                let Some(structure) = structure else {
+                    return;
+                };
+                self.cabinet_edit("Set surface", move |tx| {
+                    super::cabinet_surface_move::set(tx, structure, device, &surface)
+                });
             }
             Ask::SetPlateSize(s, plate) => {
                 self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));

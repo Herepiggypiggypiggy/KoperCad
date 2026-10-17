@@ -196,6 +196,62 @@ fn hiding_the_door_layer_closes_it_and_a_door_command_brings_it_back() {
 }
 
 #[test]
+fn the_section_command_cuts_the_picture_and_picking_follows_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    assert!(d.app.view3d.view.state.section.is_none());
+    d.app.run_command(&ctx, "view.3d_section", None);
+    assert!(d.app.view3d.view.state.section.is_some());
+    d.frame();
+    // The scene itself is whole: only the picture is cut.
+    assert!(has(scene(&d), ItemKind::Plate));
+    d.app.run_command(&ctx, "view.3d_section", None);
+    assert!(d.app.view3d.view.state.section.is_none());
+}
+
+#[test]
+fn the_save_view_command_keeps_the_camera_in_the_settings() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    // Headless there is no first-show fit: fit once, as a shown view would.
+    let scene = scene(&d).clone();
+    d.app.view3d.view.fit(&scene, 0.0, true);
+    d.app.view3d.view.camera.yaw = 0.9;
+    d.app.run_command(&ctx, "view.3d_save_view", None);
+    d.frame();
+    let views = &d.app.settings.camera_views;
+    assert_eq!(views.len(), 1);
+    assert_eq!(views[0].name, "View 1");
+    assert!((views[0].yaw - 0.9).abs() < 1e-6);
+}
+
+#[test]
+fn a_view_saved_before_the_3d_view_was_ever_shown_is_the_fitted_camera() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    // A fresh 3D view: its camera is the unfitted default until it is shown.
+    d.app.view3d.view = novo_view3d::widget::View3d::new(1);
+    let unfitted = d.app.view3d.view.camera;
+    d.app.run_command(&ctx, "view.3d_save_view", None);
+    d.frame();
+    // Not shown and fitted yet (no graphics adapter here): nothing is saved.
+    assert!(d.app.settings.camera_views.is_empty());
+    assert!(d.app.view3d.save_view);
+    let scene = scene(&d).clone();
+    d.app.view3d.view.fit(&scene, 0.0, true);
+    d.frame();
+    let views = &d.app.settings.camera_views;
+    assert_eq!(views.len(), 1);
+    assert_ne!(
+        views[0].distance, unfitted.distance,
+        "the saved camera is the fitted one"
+    );
+}
+
+#[test]
 fn the_hints_command_folds_and_unfolds_the_legend() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
@@ -552,6 +608,9 @@ fn dimensions_toggle_by_command_and_measure_the_selected_part_from_the_cabinet()
 fn restore_quality_returns_a_stepped_down_view_to_the_adapters_tier() {
     use novo_view3d::render::Tier;
     use novo_view3d::widget::register_adapter;
+    let _guard = super::view3d_move_tests::STATS_GUARD
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
     let ctx = d.ctx.clone();
@@ -657,4 +716,225 @@ fn duplicate_in_3d_adds_a_device_with_the_next_tag_on_the_plate_and_undo_takes_i
     d.frame();
     let project = d.app.backend.document().unwrap().project();
     assert_eq!(project.all::<novo_core::Device>().count(), devices);
+}
+
+#[test]
+fn a_picked_surface_shows_as_panes_in_the_3d_view_and_clear_when_none_is_picked() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.frame();
+    assert!(
+        d.app.view3d.surface_panes.is_empty(),
+        "nothing picked, toggle off"
+    );
+    d.app.cabinet.surface = Some("door".to_owned());
+    d.frame();
+    let picked = d.app.view3d.surface_panes.len();
+    assert!(picked > 0, "the picked door is drawn");
+    d.app.cabinet.surface = None;
+    d.frame();
+    assert!(d.app.view3d.surface_panes.is_empty());
+}
+
+/// World-space bounding box of an item's local box.
+fn world_bounds(item: &novo_view3d::scene::Item) -> (glam::Vec3, glam::Vec3) {
+    let m = item.pose.matrix();
+    let (hx, hy, sz) = (item.size.x / 2.0, item.size.y / 2.0, item.size.z);
+    let mut lo = glam::Vec3::splat(f32::MAX);
+    let mut hi = glam::Vec3::splat(f32::MIN);
+    for x in [-hx, hx] {
+        for y in [-hy, hy] {
+            for z in [0.0, sz] {
+                let p = m.transform_point3(glam::Vec3::new(x, y, z));
+                lo = lo.min(p);
+                hi = hi.max(p);
+            }
+        }
+    }
+    (lo, hi)
+}
+
+#[test]
+fn the_surface_panes_land_on_the_real_shell_and_the_door_pane_is_the_door() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.app.cabinet.surface = Some("door".to_owned());
+    d.frame();
+    d.frame();
+    let summary = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        super::cabinet_surfaces::summarize(project, cab).unwrap()
+    };
+    let names: Vec<&str> = summary
+        .rows
+        .iter()
+        .filter(|r| r.name != "plate")
+        .map(|r| r.name.as_str())
+        .collect();
+    let novo_view3d::Overlay::Mesh(mesh) = &d.app.view3d.surface_panes[0] else {
+        panic!("the panes are the first overlay")
+    };
+    assert_eq!(mesh.positions.len(), names.len() * 4);
+    let bounds = |i: usize| {
+        let c = &mesh.positions[i * 4..i * 4 + 4];
+        (
+            c.iter()
+                .copied()
+                .fold(glam::Vec3::splat(f32::MAX), glam::Vec3::min),
+            c.iter()
+                .copied()
+                .fold(glam::Vec3::splat(f32::MIN), glam::Vec3::max),
+        )
+    };
+    let items = &scene(&d).items;
+    // The enclosure shell: every pane lies inside it, and the door pane
+    // fills the door ghost's face. The scene's box starts at the plate; the
+    // cabinet's walls reach back to the back wall, `plate_setback` behind it.
+    let setback = {
+        let project = d.app.backend.document().unwrap().project();
+        let cab = project.structures().find(|s| s.enclosure).unwrap().id;
+        novo_layout::model::enclosure_of(project, cab)
+            .unwrap()
+            .plate_setback as f32
+    };
+    let shell = items
+        .iter()
+        .filter(|i| matches!(i.id.kind, ItemKind::Enclosure | ItemKind::Door))
+        .map(world_bounds)
+        .fold(
+            (glam::Vec3::splat(f32::MAX), glam::Vec3::splat(f32::MIN)),
+            |(a, b), (lo, hi)| (a.min(lo), b.max(hi)),
+        );
+    for (i, name) in names.iter().enumerate() {
+        let (lo, hi) = bounds(i);
+        assert!(
+            lo.cmpge(shell.0 - glam::Vec3::new(1.0, 1.0, setback + 1.0))
+                .all()
+                && hi.cmple(shell.1 + 1.0).all(),
+            "{name} pane {lo:?}..{hi:?} outside the shell {:?}..{:?}",
+            shell.0,
+            shell.1
+        );
+    }
+    let door = items
+        .iter()
+        .find(|i| i.id.kind == ItemKind::Door)
+        .expect("a door in the scene");
+    let (dlo, dhi) = world_bounds(door);
+    let i = names
+        .iter()
+        .position(|n| *n == "door")
+        .expect("a door surface");
+    let (plo, phi) = bounds(i);
+    let tol = 1.5;
+    assert!(
+        (plo.x - dlo.x).abs() < tol
+            && (phi.x - dhi.x).abs() < tol
+            && (plo.y - dlo.y).abs() < tol
+            && (phi.y - dhi.y).abs() < tol,
+        "door pane {plo:?}..{phi:?} vs door {dlo:?}..{dhi:?}"
+    );
+    assert!(plo.z >= dlo.z - tol && phi.z <= dhi.z + tol);
+}
+
+/// K1 of the starter: its device id and one of its symbols.
+fn k1(d: &Drive) -> (novo_core::DeviceId, novo_core::SymbolId) {
+    let project = d.app.backend.document().unwrap().project();
+    let device = project.devices_by_tag(&DeviceTag::parse("=A1+CAB-K1").unwrap())[0];
+    let symbol = project
+        .symbols()
+        .find(|s| s.device() == Some(device))
+        .expect("K1 is drawn")
+        .id;
+    (device, symbol)
+}
+
+/// Opens the drawing on the device's main symbol, selected.
+fn draw_selected(d: &mut Drive, device: novo_core::DeviceId) {
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.schematic", None);
+    let place = d.app.device_main(device).expect("K1 is drawn");
+    d.app.jump(place, false);
+    for _ in 0..4 {
+        d.frame();
+    }
+}
+
+#[test]
+fn show_in_3d_from_the_schematic_selects_and_frames_the_device() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let (device, _) = k1(&d);
+    draw_selected(&mut d, device);
+    assert_eq!(d.app.probe_devices(), vec![device]);
+    d.app.run_command(&ctx, "nav.show_3d", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    assert!(
+        d.app
+            .view3d
+            .view
+            .state
+            .selection
+            .contains(&novo_view3d::ItemId::new(ItemKind::Device, device.raw())),
+        "the device is selected in 3D"
+    );
+}
+
+#[test]
+fn show_in_cabinet_selects_the_device_on_the_plate() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let (device, _) = k1(&d);
+    draw_selected(&mut d, device);
+    d.app.run_command(&ctx, "nav.show_cabinet", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::Cabinet);
+    assert_eq!(
+        d.app.cabinet.view.selection.ids(),
+        vec![novo_canvas::cabinet::box_item(device.raw())]
+    );
+}
+
+#[test]
+fn show_in_schematic_from_the_plate_opens_the_devices_symbol() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let (device, symbol) = k1(&d);
+    d.app.run_command(&ctx, "view.cabinet", None);
+    d.frame();
+    d.app.cabinet.view.selection.apply(
+        [novo_canvas::cabinet::box_item(device.raw())],
+        novo_canvas::selection::SelectOp::Replace,
+    );
+    d.app.run_command(&ctx, "nav.show_schematic", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(d.app.workspace(), Workspace::Schematic);
+    let shown = d.app.selected_symbol();
+    let project = d.app.backend.document().unwrap().project();
+    let owner = shown
+        .and_then(|s| project.symbol(s))
+        .and_then(|s| s.device());
+    assert_eq!(
+        owner,
+        Some(device),
+        "a symbol of K1 is selected ({symbol:?} is one)"
+    );
+}
+
+#[test]
+fn show_in_with_nothing_selected_says_so_and_stays() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.cabinet.view.selection.clear();
+    d.app.run_command(&ctx, "nav.show_schematic", None);
+    d.frame();
+    assert_eq!(d.app.workspace(), Workspace::View3d);
 }

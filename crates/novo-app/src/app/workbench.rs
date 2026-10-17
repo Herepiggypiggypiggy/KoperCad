@@ -375,6 +375,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "page.move_up",
     "page.move_down",
     "nav.partner",
+    "nav.show_schematic",
+    "nav.show_cabinet",
+    "nav.show_3d",
     "nav.all_references",
     "nav.back",
     "nav.forward",
@@ -436,10 +439,20 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_shell",
     "view.3d_wires",
     "view.3d_shadows",
+    "view.3d_align_left",
+    "view.3d_align_hcentre",
+    "view.3d_align_right",
+    "view.3d_align_top",
+    "view.3d_align_vcentre",
+    "view.3d_align_bottom",
+    "view.3d_spread_h",
+    "view.3d_spread_v",
     "view.3d_ssao",
     "view.3d_dimensions",
     "view.3d_quality",
     "view.3d_stats",
+    "view.3d_section",
+    "view.3d_save_view",
     "view.3d_wire_runs",
     "view.3d_hints",
     "view.3d_select_devices",
@@ -891,6 +904,9 @@ impl NovoApp {
             "page.rename" | "page.duplicate" | "page.delete" | "page.move_up"
             | "page.move_down" => self.page_command(id),
             "nav.partner" => self.go_partner(),
+            "nav.show_schematic" => self.show_in_schematic(),
+            "nav.show_cabinet" => self.show_on_plate(Workspace::Cabinet),
+            "nav.show_3d" => self.show_on_plate(Workspace::View3d),
             "nav.all_references" => self.list_occurrences(),
             "nav.back" | "nav.forward" => self.go_history(id == "nav.back"),
             "proposal.accept" => self.accept_proposal(),
@@ -973,6 +989,32 @@ impl NovoApp {
                     }
                     "view.3d_shell" => controls.layers.shell = !controls.layers.shell,
                     _ => controls.layers.wires = !controls.layers.wires,
+                }
+            }
+            "view.3d_section" => {
+                self.switch_workspace(Workspace::View3d);
+                let section = &mut self.view3d.view.state.section;
+                *section = match section {
+                    Some(_) => None,
+                    None => Some(novo_view3d::Section::default()),
+                };
+            }
+            "view.3d_save_view" => {
+                // Saved in the view's next frame, once the camera is fitted.
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.save_view = true;
+            }
+            "view.3d_align_left"
+            | "view.3d_align_hcentre"
+            | "view.3d_align_right"
+            | "view.3d_align_top"
+            | "view.3d_align_vcentre"
+            | "view.3d_align_bottom"
+            | "view.3d_spread_h"
+            | "view.3d_spread_v" => {
+                self.switch_workspace(Workspace::View3d);
+                if let Some(op) = super::view3d_align::Op::from_command(id) {
+                    self.view3d_arrange(op);
                 }
             }
             "view.3d_wire_runs" => {

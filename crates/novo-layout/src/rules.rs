@@ -1326,6 +1326,28 @@ pub mod model {
             .collect()
     }
 
+    /// The surface rules of an enclosure (`surface_rules` property) and the
+    /// sentences for lines that could not be read.
+    pub fn surface_rules(
+        project: &Project,
+        id: StructureId,
+    ) -> (crate::surface_rules::SurfaceRules, Vec<String>) {
+        match project
+            .get::<novo_core::Structure>(id)
+            .and_then(|s| s.properties.get(crate::surface_rules::SURFACE_RULES_KEY))
+        {
+            Some(Value::Text(t)) => crate::surface_rules::SurfaceRules::parse(t),
+            Some(_) => (
+                Default::default(),
+                vec![format!(
+                    "The '{}' property should be text such as 'door: H S P'.",
+                    crate::surface_rules::SURFACE_RULES_KEY
+                )],
+            ),
+            None => Default::default(),
+        }
+    }
+
     /// The rule violations of an enclosure's placed devices and ducts;
     /// empty when it has no plate.
     pub fn violations(

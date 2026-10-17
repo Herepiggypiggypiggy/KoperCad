@@ -100,6 +100,45 @@ impl RulesState {
     }
 }
 
+/// The devices not yet placed, sorted by the structure's surface rules
+/// (`surface_rules` property): `plate` stays here, `others` belong on the
+/// door or another surface. Without an enclosure there is no other surface,
+/// so everything stays on the plate and the problems say so.
+pub(super) fn surface_split(
+    project: &Project,
+    structure: StructureId,
+    layout: &CabinetLayout,
+) -> novo_layout::surface_rules::Split {
+    use novo_layout::surface_rules::{Split, split};
+    let specs: Vec<Spec> = novo_layout::rules::model::specs(project, structure)
+        .into_iter()
+        .filter(|s| !layout.placements.iter().any(|p| p.id == s.id))
+        .collect();
+    let (rules, mut problems) = novo_layout::rules::model::surface_rules(project, structure);
+    let Some(enclosure) = layout.enclosure.as_ref() else {
+        if !rules.rules.is_empty() {
+            problems.push(
+                "Surface rules need the inside size of the enclosure; every device stays on the plate"
+                    .to_owned(),
+            );
+        }
+        return Split {
+            plate: specs,
+            others: Vec::new(),
+            problems,
+        };
+    };
+    let (surfaces, _) = novo_layout::surfaces::Surfaces::from_enclosure(
+        enclosure,
+        &layout.plate,
+        &novo_layout::model::extra_surfaces(project, structure),
+    );
+    let mut out = split(&specs, &rules, &surfaces);
+    problems.append(&mut out.problems);
+    out.problems = problems;
+    out
+}
+
 /// The plan for the devices not yet placed, by the rules, below what is
 /// already on the plate; with the reason for every decision.
 pub(super) fn plan(
@@ -108,10 +147,7 @@ pub(super) fn plan(
     layout: &CabinetLayout,
     rules: &RuleSet,
 ) -> (Plan, Explanation) {
-    let specs: Vec<Spec> = novo_layout::rules::model::specs(project, structure)
-        .into_iter()
-        .filter(|s| !layout.placements.iter().any(|p| p.id == s.id))
-        .collect();
+    let specs = surface_split(project, structure, layout).plate;
     let top = layout
         .placements
         .iter()

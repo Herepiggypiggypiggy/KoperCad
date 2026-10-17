@@ -341,6 +341,9 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["alle verwijzingen", "waar gebruikt"],
     ),
+    nl("nav.show_schematic", &[], &["toon in schema", "in schema"]),
+    nl("nav.show_cabinet", &[], &["toon in kast", "in kast"]),
+    nl("nav.show_3d", &[], &["toon in 3d", "in 3d"]),
     nl("nav.back", &[], &["terug"]),
     nl("nav.forward", &[], &["vooruit"]),
     nl("nav.previous_page", &[], &["vorige pagina"]),
@@ -723,6 +726,46 @@ pub const DUTCH: &[Aliases] = &[
         &["schaduw", "schaduwen"],
     ),
     nl(
+        "view.3d_align_left",
+        &["links uitlijnen in 3d"],
+        &["uitlijnen", "links"],
+    ),
+    nl(
+        "view.3d_align_hcentre",
+        &["horizontaal centreren in 3d"],
+        &["centreren", "midden"],
+    ),
+    nl(
+        "view.3d_align_right",
+        &["rechts uitlijnen in 3d"],
+        &["rechts", "uitlijnen"],
+    ),
+    nl(
+        "view.3d_align_top",
+        &["boven uitlijnen in 3d"],
+        &["boven", "uitlijnen"],
+    ),
+    nl(
+        "view.3d_align_vcentre",
+        &["verticaal centreren in 3d"],
+        &["verticaal", "midden"],
+    ),
+    nl(
+        "view.3d_align_bottom",
+        &["onder uitlijnen in 3d"],
+        &["onder", "uitlijnen"],
+    ),
+    nl(
+        "view.3d_spread_h",
+        &["gelijkmatig verdelen horizontaal in 3d"],
+        &["verdelen", "gelijk"],
+    ),
+    nl(
+        "view.3d_spread_v",
+        &["gelijkmatig verdelen verticaal in 3d"],
+        &["verdelen", "gelijk"],
+    ),
+    nl(
         "view.3d_wire_runs",
         &["draadlengtes tonen in 3d"],
         &["draadlengte", "draden", "lengtes", "afkorten"],
@@ -761,6 +804,16 @@ pub const DUTCH: &[Aliases] = &[
         "view.3d_stats",
         &["3d snelheid tonen"],
         &["framesnelheid", "prestaties", "snelheid"],
+    ),
+    nl(
+        "view.3d_section",
+        &["doorsnede maken in 3d"],
+        &["doorsnede", "snijvlak"],
+    ),
+    nl(
+        "view.3d_save_view",
+        &["3d zicht opslaan"],
+        &["zicht opslaan", "camera opslaan"],
     ),
     nl(
         "view.3d_hints",

@@ -161,6 +161,9 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
 
 /// Tells the statistics and the frame governor which adapter draws. [`install`]
 /// does it; a host without a window (tests, headless tools) calls it itself.
+/// It replaces the process-wide recorder the Stats panel reads, so a test that
+/// calls it, or reads that panel's height, takes `STATS_GUARD` (in the app's
+/// `view3d_move_tests`) to keep parallel tests apart.
 pub fn register_adapter(name: &str, backend: &str, tier: Tier) {
     if let Ok(mut guard) = STATS.lock() {
         *guard = Some(Recorder {
@@ -640,37 +643,59 @@ impl View3d {
         adjusted.clone()
     }
 
+    /// Whether the camera has been put somewhere on purpose (fitted when the
+    /// view was first shown, or moved by a fit or a saved view) rather than
+    /// still being the default.
+    pub fn is_fitted(&self) -> bool {
+        !self.needs_fit
+    }
+
     /// Frames the whole scene on the next frame.
     pub fn request_fit(&mut self) {
         self.needs_fit = true;
     }
 
     /// Eases to a view cube face from where the camera is (`view.iso` and the cube).
+    ///
+    /// With something selected the view frames the selection, so "front" and
+    /// "top" look at what you picked; with nothing selected it frames the
+    /// whole scene.
     pub fn go_to(&mut self, preset: ViewPreset, scene: &Scene, now: f64, reduced: bool) {
         let mut to = self.camera;
         feel::enter_standard(&mut to, preset);
-        to.fit(&scene.bounds(), self.last_aspect);
+        to.fit(&self.framing_bounds(scene), self.last_aspect);
+        self.auto_ortho = to.projection == Projection::Orthographic;
+        self.animate_to(to, now, reduced);
+    }
+
+    /// Eases the camera to `to` (a saved view).
+    pub fn go_to_camera(&mut self, to: Camera, now: f64, reduced: bool) {
         self.auto_ortho = to.projection == Projection::Orthographic;
         self.animate_to(to, now, reduced);
     }
 
     /// `view.fit`: the selection, or everything when nothing is selected.
     pub fn fit(&mut self, scene: &Scene, now: f64, reduced: bool) {
+        let b = self.framing_bounds(scene);
+        let mut to = self.camera;
+        to.fit(&b, self.last_aspect);
+        self.animate_to(to, now, reduced);
+    }
+
+    /// What a fit or a standard view frames: the selection, or the scene.
+    fn framing_bounds(&self, scene: &Scene) -> crate::math::Aabb {
         let mut b = crate::math::Aabb::EMPTY;
         for id in &self.state.selection {
             if let Some(item) = scene.get(*id) {
                 b = b.union(&scene.world_bounds(item));
             }
         }
-        if b.is_empty() {
-            b = scene.bounds();
-        }
-        let mut to = self.camera;
-        to.fit(&b, self.last_aspect);
-        self.animate_to(to, now, reduced);
+        if b.is_empty() { scene.bounds() } else { b }
     }
 
     fn animate_to(&mut self, to: Camera, now: f64, reduced: bool) {
+        // Moving the camera on purpose replaces the first-show fit.
+        self.needs_fit = false;
         self.inertia.stop();
         let mut tr = Transition::new(self.camera, to, reduced);
         if tr.done() {
@@ -1517,7 +1542,51 @@ fn frame_key(
         state.display.shadows,
     )
         .hash(&mut h);
+    state
+        .section
+        .map(|s| (s.axis as u8, s.at.to_bits(), s.flip))
+        .hash(&mut h);
     h.finish()
+}
+
+#[cfg(test)]
+mod frame_key_tests {
+    use super::*;
+    use crate::view_state::Section;
+
+    fn key(state: &ViewState) -> u64 {
+        let scene = Scene::new(crate::scene::PlateFrame {
+            width: 1.0,
+            height: 1.0,
+        });
+        frame_key(
+            &scene,
+            &MeshLibrary::new(),
+            &Camera::default(),
+            state,
+            (10, 10),
+            (Mode::Interactive, None, false),
+            0,
+        )
+    }
+
+    #[test]
+    fn the_section_changes_the_frame_key() {
+        let none = ViewState::default();
+        let mut s = ViewState {
+            section: Some(Section::default()),
+            ..ViewState::default()
+        };
+        let on = key(&s);
+        assert_ne!(key(&none), on);
+        s.section.as_mut().unwrap().at = 0.6;
+        let moved = key(&s);
+        assert_ne!(on, moved);
+        s.section.as_mut().unwrap().flip = true;
+        assert_ne!(moved, key(&s));
+        s.section.as_mut().unwrap().axis = crate::view_state::SectionAxis::X;
+        assert_ne!(on, key(&s));
+    }
 }
 
 #[cfg(test)]
@@ -1680,6 +1749,44 @@ mod stats_tests {
         view.govern(&ctx, false);
         assert!(view.occlusion_now(), "reset brings it back");
         *STATS.lock().unwrap() = None;
+    }
+}
+
+#[cfg(test)]
+mod framing_tests {
+    use super::*;
+    use crate::scene::{Item, ItemId, ItemKind, PlateFrame, Pose, Shape};
+
+    fn scene() -> Scene {
+        let mut s = Scene::new(PlateFrame {
+            width: 1000.0,
+            height: 1000.0,
+        });
+        for (raw, x) in [(1, 100.0), (2, 900.0)] {
+            s.push(Item::new(
+                ItemId::new(ItemKind::Device, raw),
+                Shape::Box,
+                Pose::at(Vec3::new(x, 500.0, 0.0)),
+                Vec3::splat(50.0),
+            ));
+        }
+        s
+    }
+
+    #[test]
+    fn a_standard_view_frames_the_selection_when_there_is_one() {
+        let s = scene();
+        let mut v = View3d::new(1);
+        v.go_to(ViewPreset::Front, &s, 0.0, true);
+        let whole = v.camera.target;
+        v.state.selection.insert(ItemId::new(ItemKind::Device, 1));
+        v.go_to(ViewPreset::Front, &s, 0.0, true);
+        assert!(
+            v.camera.target.x < whole.x - 100.0,
+            "{:?} {whole:?}",
+            v.camera.target
+        );
+        assert!(v.camera.distance > 0.0);
     }
 }
 

@@ -25,6 +25,7 @@ use super::heat_3d::{self, Heat3d, Place};
 use super::heat_legend;
 use super::heat_probe::{self, ProbeState};
 use super::heat_spots;
+use super::view3d_align;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
 use super::view3d_hints::Hints;
@@ -33,6 +34,7 @@ use super::view3d_nudge::{self, Fields, Step};
 use super::view3d_place::{self, PlaceList};
 use super::view3d_rail;
 use super::view3d_stats::{Build, Stats};
+use super::view3d_views::{self, ViewsAction};
 use super::view3d_wires::{self, WireFacts};
 
 /// The one view of the app.
@@ -49,12 +51,21 @@ pub(crate) struct View3dMode {
     pub(super) place: PlaceList,
     /// The landing box drawn last frame, to redraw the overlays when it changes.
     ghost_shown: Vec<([i64; 4], bool)>,
+    /// The surface panes drawn, and what they were built for (enclosure,
+    /// project revision, picked surface, shown).
+    surfaces_shown: Option<(StructureId, u64, Option<String>, bool)>,
+    pub(super) surface_panes: Vec<novo_view3d::Overlay>,
     library: Arc<MeshLibrary>,
     /// The enclosure and project revision the scene was built for.
     pub(super) built: Option<(StructureId, u64, Arc<Scene>)>,
     /// A standard view or a fit asked for by a command, run on the next frame
     /// (when the scene is at hand).
     pub(super) pending: Option<Pending>,
+    /// `view.3d_save_view` asked for: saved after the view has been shown, so
+    /// the camera is the fitted one a person saw.
+    pub(super) save_view: bool,
+    /// A message for the next frame (the save's result).
+    pub(super) notice: Option<&'static str>,
     /// A select-by-type asked for before the scene was built, applied right
     /// after it is.
     pub(super) pending_select: Option<ItemKind>,
@@ -108,9 +119,13 @@ impl Default for View3dMode {
             position: Fields::default(),
             place: PlaceList::default(),
             ghost_shown: Vec::new(),
+            surfaces_shown: None,
+            surface_panes: Vec::new(),
             library: Arc::new(MeshLibrary::new()),
             built: None,
             pending: None,
+            save_view: false,
+            notice: None,
             pending_select: None,
             synced: (0, BTreeSet::new()),
             menu: None,
@@ -223,6 +238,9 @@ impl NovoApp {
 
     /// The 3D view in the central area.
     pub(super) fn view3d_show(&mut self, ui: &mut egui::Ui) {
+        if let Some(text) = self.view3d.notice.take() {
+            self.message(super::Level::Info, text);
+        }
         let Some(document) = self.backend.document() else {
             return;
         };
@@ -300,16 +318,9 @@ impl NovoApp {
         let options = ViewOptions {
             reduced_motion: self.settings.reduce_motion,
         };
-        let now = ui.input(|i| i.time);
         if let Some(kind) = mode.pending_select.take() {
             mode.view.state.selection = novo_view3d::hide::of_kind(scene, kind);
         }
-        match mode.pending.take() {
-            Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
-            Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
-            None => {}
-        }
-
         // The Cabinet's selection reaches the 3D view when it changed there.
         let cabinet_rev = self.cabinet.view.selection.revision();
         if cabinet_rev != mode.synced.0 {
@@ -323,6 +334,13 @@ impl NovoApp {
                 .map(|d| ItemId::new(ItemKind::Device, d))
                 .collect();
             mode.synced = (cabinet_rev, mode.view.state.selection.clone());
+        }
+
+        let now = ui.input(|i| i.time);
+        match mode.pending.take() {
+            Some(Pending::Fit) => mode.view.fit(scene, now, options.reduced_motion),
+            Some(Pending::Preset(p)) => mode.view.go_to(p, scene, now, options.reduced_motion),
+            None => {}
         }
 
         // A run started here advances here, not only in the Cabinet; the
@@ -379,8 +397,23 @@ impl NovoApp {
                 )
             })
             .collect();
-        let ghost_changed = mode.ghost_shown != ghost_key;
+        let mut ghost_changed = mode.ghost_shown != ghost_key;
         mode.ghost_shown = ghost_key;
+        // The surfaces as faint panes: rebuilt when the model, the picked
+        // surface or the toggle changed.
+        let picked = self.cabinet.surface.clone();
+        let panes_on = super::view3d_surfaces::wanted(mode.controls.surfaces, picked.as_deref());
+        let panes_key = (id, revision, picked.clone(), panes_on);
+        if mode.surfaces_shown.as_ref() != Some(&panes_key) {
+            mode.surface_panes = match super::cabinet_surfaces::summarize(project, id) {
+                Some(sum) if panes_on => {
+                    super::view3d_surfaces::overlays(&sum, picked.as_deref(), scene.frame)
+                }
+                _ => Vec::new(),
+            };
+            mode.surfaces_shown = Some(panes_key);
+            ghost_changed = true;
+        }
         let stored = load(project, id);
         if let Some(lay) = &stored {
             let tag_of = |d: u64| {
@@ -450,12 +483,14 @@ impl NovoApp {
             .map(|(sol, at)| probe_marker(sol, at));
         if !tracing && (heat_changed || ghost_changed || probe_changed) {
             let mut all = mode.heat_base.clone();
+            all.extend(mode.surface_panes.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker.clone());
             mode.view.set_overlays(all);
         }
         if tracing {
             let mut all = mode.heat_base.clone();
+            all.extend(mode.surface_panes.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
             let t = heat_3d::tracers(&mode.heat_flow, ui.input(|i| i.time));
@@ -480,15 +515,36 @@ impl NovoApp {
         let view_rect = ui.available_rect_before_wrap();
         mode.controls.ssao_available = mode.view.occlusion_available();
         mode.controls.reduced = mode.view.stepped_down().is_some() || mode.view.occlusion_paused();
-        let (_, asked) = view3d_controls::toolbar(
+        let (changed, asked) = view3d_controls::toolbar(
             ui.ctx(),
             view_rect,
             &mut mode.controls,
             limit,
+            &self.settings.camera_views,
             !mode.view.state.selection.is_empty(),
+            &mut mode.view.state.section,
         );
         if let Some(command) = asked {
             self.wb.queued.push(command);
+        }
+        match changed.views {
+            Some(ViewsAction::Save) => {
+                // The menu disables Save when it is full.
+                view3d_views::save(&mut self.settings.camera_views, &mode.view.camera);
+            }
+            Some(ViewsAction::Go(i)) => {
+                if let Some(b) = self.settings.camera_views.get(i) {
+                    mode.view.go_to_camera(
+                        view3d_views::camera_of(b),
+                        now,
+                        self.settings.reduce_motion,
+                    );
+                }
+            }
+            Some(ViewsAction::Delete(i)) if i < self.settings.camera_views.len() => {
+                self.settings.camera_views.remove(i);
+            }
+            _ => {}
         }
         if std::mem::take(&mut mode.controls.restore) {
             mode.view.reset_quality();
@@ -545,6 +601,18 @@ impl NovoApp {
             options,
         );
         super::cabinet_bar::note_rect(ui.ctx(), "workspace.view3d", "3D canvas", out.rect, false);
+        // A save asked for from another workspace waits for the first shown
+        // (and fitted) camera.
+        if mode.save_view && mode.view.is_fitted() {
+            mode.save_view = false;
+            mode.notice = Some(
+                if view3d_views::save(&mut self.settings.camera_views, &mode.view.camera) {
+                    "View saved: Views menu in the 3D toolbar"
+                } else {
+                    "The Views menu holds twelve views: forget one first"
+                },
+            );
+        }
         mode.view.state.hover = out.hover;
         // Wire runs: a card for the wire under the pointer, and the list.
         let wire_facts = mode
@@ -768,6 +836,16 @@ impl NovoApp {
             .map(|i| i.raw)
             .collect();
         let mut ask = None;
+        if devices.len() >= 2
+            && let Some(op) = view3d_align::strip(ui.ctx(), out.rect, devices.len())
+        {
+            self.wb.queued.push(
+                view3d_align::OPS
+                    .iter()
+                    .find(|o| o.3 == op)
+                    .map_or("view.3d_align_left", |o| o.0),
+            );
+        }
         if let Some(stored) = load(project, id) {
             if let [one] = devices.as_slice()
                 && !mode.position.hidden
