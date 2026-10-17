@@ -22,8 +22,9 @@ use std::path::{Path, PathBuf};
 use eframe::egui;
 use novo_reports::{
     BenchCut, FerruleSize, FerruleStandard, FerruleTable, LabelRun, LabelSettings, LabelStock,
-    Labels, Report, ReportOutput, SheetGrid, TapeStock, WireCutJob, ferrule_counts, is_estimate,
-    label_items, layout_labels, stock_presets, wire_cut_jobs_with, with_spares,
+    Labels, Report, ReportOutput, SIZES_MM2, SheetGrid, TapeStock, UnsetWires, WireCutJob,
+    WireDefaults, apply_wire_defaults, ferrule_counts, is_estimate, label_items, layout_labels,
+    stock_presets, unset_wires, wire_cut_jobs_with, with_spares,
 };
 use novo_theme::table::{
     ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths_min, header_min_widths,
@@ -48,6 +49,17 @@ struct Cache {
     standard: FerruleStandard,
     jobs: Vec<WireCutJob>,
     labels: ReportOutput,
+    /// Wires of the cut list that still have no size or colour.
+    unset: UnsetWires,
+}
+
+/// The size and colour typed into the "fill in" row of the cut list tab.
+#[derive(Clone, Default)]
+struct DefaultsDraft {
+    size_mm2: Option<f64>,
+    fill_colours: bool,
+    /// Colour code for wires that are not earth or neutral.
+    colour: String,
 }
 
 /// The window's state: the drafts being edited and the last computation.
@@ -56,6 +68,7 @@ pub(super) struct BenchState {
     pub(super) standard: FerruleStandard,
     pub(super) labels: LabelSettings,
     cache: Option<Cache>,
+    defaults: DefaultsDraft,
 }
 
 impl BenchState {
@@ -65,6 +78,10 @@ impl BenchState {
             standard,
             labels,
             cache: None,
+            defaults: DefaultsDraft {
+                colour: "BK".into(),
+                ..DefaultsDraft::default()
+            },
         }
     }
 }
@@ -145,6 +162,26 @@ impl NovoApp {
                 None
             }
         }
+    }
+
+    /// Puts the window's default size and colours on the wires that have
+    /// none, as one undo step, and says how many it changed.
+    pub(super) fn fill_wire_defaults(&mut self, defaults: &WireDefaults) {
+        let mut counts = (0, 0);
+        if !self.edit_project("Fill in wire sizes and colours", |tx| {
+            counts = apply_wire_defaults(tx, defaults)?;
+            Ok(())
+        }) {
+            return;
+        }
+        let (sized, coloured) = counts;
+        let text = match (sized, coloured) {
+            (0, 0) => "No wire needed a size or a colour".to_owned(),
+            (s, 0) => format!("Set the size of {s} wires"),
+            (0, c) => format!("Set the colour of {c} wires"),
+            (s, c) => format!("Set the size of {s} wires and the colour of {c}"),
+        };
+        self.message(Level::Info, text);
     }
 
     pub(super) fn export_bench_cut(&mut self) -> Option<PathBuf> {
@@ -244,7 +281,7 @@ impl NovoApp {
                 "No ferrules to crimp yet: connect two device pins".to_owned()
             } else if unknown > 0 {
                 format!(
-                    "No ferrules to crimp: {unknown} wire ends have no wire size. Set the size on the wires (select them, Inspector)"
+                    "No ferrules to crimp: {unknown} wire ends have no wire size. Set the size on the wires (select them, Inspector), or fill it in for all of them under Reports > Bench output > Cut list"
                 )
             } else if off > 0 {
                 "No ferrules to crimp: ferrules are switched off on every wire".to_owned()
@@ -385,6 +422,7 @@ impl NovoApp {
                 standard: state.standard.clone(),
                 jobs: wire_cut_jobs_with(project, &state.standard),
                 labels: Labels.generate(project),
+                unset: unset_wires(project),
             });
         }
         let stored_standard = FerruleStandard::of(project);
@@ -412,7 +450,7 @@ impl NovoApp {
                 }
                 ui.add_space(8.0);
                 match state.tab {
-                    Tab::CutList => cut_tab(ui, &state, &rules, &mut action),
+                    Tab::CutList => cut_tab(ui, &mut state, &rules, &mut action),
                     Tab::Ferrules => ferrule_tab(ui, &mut state, &stored_standard, &mut action),
                     Tab::Labels => label_tab(ui, &mut state, &stored_labels, &mut action),
                 }
@@ -437,6 +475,7 @@ impl NovoApp {
             Some(Act::ExportLabelsCsv) => {
                 self.export_labels_csv();
             }
+            Some(Act::FillDefaults(defaults)) => self.fill_wire_defaults(&defaults),
             Some(Act::SaveStandard(standard)) => {
                 self.cabinet_edit("Ferrule standard", move |tx| {
                     FerruleStandard::store(tx, &standard)
@@ -460,6 +499,7 @@ enum Act {
     ExportFerrules,
     ExportLabels,
     ExportLabelsCsv,
+    FillDefaults(WireDefaults),
     SaveStandard(FerruleStandard),
     SaveLabels(LabelSettings),
 }
@@ -541,7 +581,7 @@ fn readiness_strip(ui: &mut egui::Ui, gaps: &[Gap], act: &mut Option<Act>) {
 
 fn cut_tab(
     ui: &mut egui::Ui,
-    state: &BenchState,
+    state: &mut BenchState,
     rules: &novo_routing::WireRules,
     act: &mut Option<Act>,
 ) {
@@ -588,6 +628,8 @@ fn cut_tab(
         );
     }
     ui.add_space(4.0);
+    defaults_row(ui, &mut state.defaults, &cache.unset, act);
+    ui.add_space(4.0);
     ui.weak(format!(
         "Cut length = route + {} mm per end for a ferrule ({} mm from {} mm² for a lug). Change the allowances under Cabinet > Routes.",
         rules.ferrule_mm, rules.lug_mm, rules.lug_from_mm2
@@ -610,6 +652,86 @@ fn cut_tab(
     });
     ui.add_space(6.0);
     cut_table(ui, jobs);
+}
+
+/// Sizes and colours are not set by drawing. Says how many wires lack them
+/// and fills them in for the wires that have none, nothing else.
+fn defaults_row(
+    ui: &mut egui::Ui,
+    draft: &mut DefaultsDraft,
+    unset: &UnsetWires,
+    act: &mut Option<Act>,
+) {
+    if unset.is_complete() {
+        novo_theme::widgets::banner(
+            ui,
+            novo_theme::widgets::Level::Success,
+            "Every wire has a size and a colour",
+            |_| {},
+        );
+        return;
+    }
+    let mut missing = Vec::new();
+    if !unset.no_size.is_empty() {
+        missing.push(format!(
+            "{} of {} wires have no size (no strip length, no ferrule)",
+            unset.no_size.len(),
+            unset.total
+        ));
+    }
+    if !unset.no_colour.is_empty() {
+        missing.push(format!(
+            "{} have no colour (blank in the list)",
+            unset.no_colour.len()
+        ));
+    }
+    novo_theme::widgets::banner(
+        ui,
+        novo_theme::widgets::Level::Warning,
+        &format!("Not set: {}.", missing.join("; ")),
+        |_| {},
+    );
+    ui.add_space(4.0);
+    ui.horizontal_wrapped(|ui| {
+        ui.label("Size for wires without one");
+        egui::ComboBox::from_id_salt("bench_default_size")
+            .selected_text(
+                draft
+                    .size_mm2
+                    .map_or("choose a size".to_owned(), |s| format!("{s} mm²")),
+            )
+            .show_ui(ui, |ui| {
+                for size in SIZES_MM2 {
+                    ui.selectable_value(&mut draft.size_mm2, Some(size), format!("{size} mm²"));
+                }
+            });
+        ui.checkbox(&mut draft.fill_colours, "Colours")
+            .on_hover_text(
+                "Earth wires get green-yellow, neutral and 0 V blue (IEC 60757); the rest get the colour typed here",
+            );
+        ui.add_enabled(
+            draft.fill_colours,
+            egui::TextEdit::singleline(&mut draft.colour)
+                .hint_text("BK")
+                .desired_width(48.0),
+        );
+        let size = draft.size_mm2.filter(|_| !unset.no_size.is_empty());
+        let colours = draft.fill_colours && !unset.no_colour.is_empty();
+        if ui
+            .add_enabled(size.is_some() || colours, egui::Button::new("Fill in"))
+            .on_hover_text(
+                "Only wires without a value change; sizes and colours you set stay. One undo step",
+            )
+            .clicked()
+        {
+            *act = Some(Act::FillDefaults(WireDefaults {
+                size_mm2: size,
+                colour: Some(draft.colour.trim().to_owned()).filter(|c| !c.is_empty()),
+                fill_colours: colours,
+            }));
+        }
+    });
+    ui.weak("The size is a choice for the bench; the standards check still judges it against the breaker.");
 }
 
 /// The wires to cut, in the order of the printed list (size and colour

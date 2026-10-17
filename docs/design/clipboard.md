@@ -1,7 +1,7 @@
 # Copy, cut and paste
 
 Where: Edit menu (Copy, Cut, Paste, Paste with the original tags where free,
-Paste in place), Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+Shift+V, Ctrl+Alt+V, Ctrl+K.
+Paste in place), Ctrl+C, Ctrl+X, Ctrl+V, Ctrl+Shift+V, Ctrl+Shift+I, Ctrl+K.
 
 Engine: `novo_workflow::clipboard`. A copy is a snapshot (`Clip`) of the
 selection: symbols, junctions, the wires between them, their texts, and the
@@ -12,7 +12,8 @@ Ctrl+D (smart duplicate) is the same code, capture and paste in one step.
 
 Paste: the drawing follows the pointer as a ghost on the grid; a click drops
 it, selected, as one undo step. Esc cancels. Paste in place drops it at the
-copied position. Pins that land on wires or pins join, as after a move.
+copied position.
+It has no Alt chord: Ctrl+Alt is AltGr on many layouts (Dutch). Pins that land on wires or pins join, as after a move.
 
 Tags: Ctrl+V gives each copied device the next free number of its letter code
 in the structure of the page it lands on. Ctrl+Shift+V (and a paste after a

@@ -44,6 +44,9 @@ pub(crate) struct Controls {
     /// The door, walls, roof, floor and extra plates as faint panes (View
     /// > Cabinet > Cabinet surfaces picks one to highlight).
     pub(super) surfaces: bool,
+    /// A marker where each terminal of a part is (Parts window > Connection
+    /// points finds or edits them).
+    pub(super) pins: bool,
 }
 
 impl Default for Controls {
@@ -63,6 +66,7 @@ impl Default for Controls {
             missing_data: false,
             heat_panel: false,
             surfaces: false,
+            pins: false,
         }
     }
 }
@@ -147,6 +151,7 @@ pub(super) fn toolbar(
                 controls.ssao && controls.ssao_available,
                 controls.missing_data,
                 controls.surfaces,
+                controls.pins,
             ]
             .iter()
             .filter(|b| **b)
@@ -168,6 +173,14 @@ pub(super) fn toolbar(
                         "Surfaces",
                         "Show the door, walls, roof, floor and extra plates as faint panes. \
                          The surface picked in the Cabinet header is highlighted.",
+                    );
+                    toggle(
+                        ui,
+                        &mut controls.pins,
+                        "Connection points",
+                        "Mark where each terminal of a part is: green when measured or \
+                         typed, amber when estimated. Set them in the Parts window > \
+                         Connection points.",
                     );
                     toggle(
                         ui,

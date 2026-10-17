@@ -192,3 +192,43 @@ fn the_ferrule_table_prints_on_one_sheet_when_it_fits() {
     let pages = Pdf::load_mem(&bytes).expect("valid pdf").get_pages().len();
     assert_eq!(pages, 1, "{} sections", table.sections.len());
 }
+
+fn flow_report(sections: Vec<novo_reports::Section>) -> novo_reports::ReportOutput {
+    novo_reports::ReportOutput {
+        report: "flow".into(),
+        title: "Flow".into(),
+        revision: 0,
+        sections,
+    }
+}
+
+#[test]
+fn a_flowing_section_keeps_its_bookmark_on_the_shared_sheet() {
+    let report = flow_report(vec![table("a", 2, false), table("b", 5, true)]);
+    let bytes = export_report_pdf(&[&report], &ReportPdfOptions::default());
+    let pdf = Pdf::load_mem(&bytes).expect("valid pdf");
+    let marks = pdf.get_toc().expect("outline").toc;
+    let titles: Vec<&str> = marks.iter().map(|m| m.title.as_str()).collect();
+    assert_eq!(titles, ["Flow · a", "Flow · b"]);
+    assert_eq!(marks[0].page, marks[1].page, "one shared sheet");
+}
+
+#[test]
+fn a_continued_flowing_table_numbers_its_sheets_by_the_document_only() {
+    let report = flow_report(vec![table("a", 2, false), table("b", 30, true)]);
+    let bytes = export_report_pdf(&[&report], &ReportPdfOptions::default());
+    let texts = page_texts(&Pdf::load_mem(&bytes).expect("valid pdf"));
+    assert_eq!(texts.len(), 2);
+    assert!(texts[1].contains("(continued)"), "{}", texts[1]);
+    assert_eq!(texts[1].matches("page ").count(), 1, "{}", texts[1]);
+    assert!(texts[1].contains("page 2 / 2"), "{}", texts[1]);
+}
+
+#[test]
+fn two_outputs_with_the_same_report_id_do_not_flow_into_each_other() {
+    let first = flow_report(vec![table("a", 2, false)]);
+    let second = flow_report(vec![table("b", 5, true)]);
+    let bytes = export_report_pdf(&[&first, &second], &ReportPdfOptions::default());
+    let pages = Pdf::load_mem(&bytes).expect("valid pdf").get_pages().len();
+    assert_eq!(pages, 2);
+}

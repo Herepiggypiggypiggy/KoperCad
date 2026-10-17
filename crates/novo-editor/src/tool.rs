@@ -250,6 +250,10 @@ pub struct Preview {
     /// Corners: the corner or T piece the next click places, with the arms
     /// it would have (DESIGN.md §4 "Wiring modes"). R flips the elbow.
     pub piece: Option<WirePiece>,
+    /// A row drag that stopped short: the footprint (corners) of the first
+    /// position left out because it would overlap another device. Drawn as
+    /// a red box with a cross so the missing symbol is explained.
+    pub refused: Option<(Point, Point)>,
 }
 
 /// A corner (two arms) or T (three arms) piece of a wire in progress.
@@ -2858,7 +2862,7 @@ impl Editor {
             }
             Tool::Text => "Text: click where it goes, then type · Esc cancels".into(),
             Tool::Paste(_) => {
-                "Paste: click to drop it · Esc cancels · Ctrl+Alt+V pastes in place".into()
+                "Paste: click to drop it · Esc cancels · Ctrl+Shift+I pastes in place".into()
             }
             Tool::Move(m) => self.link_hint.clone().unwrap_or_else(|| {
                 let wires = if m.carry {
@@ -2922,8 +2926,20 @@ impl Editor {
                     let origins = match pole_plan.as_ref() {
                         Some(r) => vec![r.origin],
                         None => match self.row_plan(doc, page) {
-                            Some((at, _, _)) if !at.is_empty() => at,
-                            _ => vec![cursor],
+                            Some((at, stopped, _)) => {
+                                preview.refused = stopped.map(|origin| {
+                                    row::bounds_on_page(
+                                        symbol,
+                                        &Placement {
+                                            origin,
+                                            rotation: p.rotation,
+                                            mirrored: p.mirrored,
+                                        },
+                                    )
+                                });
+                                if at.is_empty() { vec![cursor] } else { at }
+                            }
+                            None => vec![cursor],
                         },
                     };
                     for origin in origins {
