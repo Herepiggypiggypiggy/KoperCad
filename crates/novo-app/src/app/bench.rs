@@ -436,7 +436,7 @@ impl NovoApp {
 
         let mut open = true;
         let mut action: Option<Act> = None;
-        super::panel::dialog(ctx, "Bench output", [560.0, 0.0])
+        super::panel::dialog(ctx, "Bench output", [560.0, 640.0])
             .open(&mut open)
             .show(ctx, |ui| {
                 readiness_strip(ui, &ready, &mut action);
