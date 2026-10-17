@@ -1,7 +1,8 @@
 //! Devices mounted on the door: drawn standing out from the inside of the
 //! door into the enclosure and swinging with it, and the devices a swing hit
 //! involves (the door device and the plate device it touches) marked as
-//! collisions. Devices on other surfaces are not drawn yet.
+//! collisions. Devices on the other surfaces are overlays in novo-app
+//! (view3d_surface_devices.rs).
 
 use std::collections::BTreeSet;
 
