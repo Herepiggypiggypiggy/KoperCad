@@ -19,9 +19,8 @@
 //! [`crate::model`].
 //!
 //! **Depth.** A device's standoff from the plate is its `depth_mm`, device
-//! property first, then the first part that has one. This is the same rule
-//! the door checks use; once `novo_layout` exposes it as one shared function
-//! this module calls that instead (see `handoff/thermal-engine`).
+//! property first, then the first part that has one. This is the shared rule
+//! `novo_layout::model::device_depth`, the same one the door checks use.
 
 use novo_core::{Device, DeviceId, Part, Project, Properties, StructureId, Value};
 use novo_layout::model::{enclosure_of, load};
@@ -226,16 +225,11 @@ pub fn device_loss_estimated(project: &Project, device: &Device) -> bool {
     })
 }
 
-/// Standoff of a device from the plate, mm: its own `depth_mm`, else the
-/// first part with a positive one.
+/// Standoff of a device from the plate, mm: the one shared rule of
+/// `novo_layout::model::device_depth` (the device's own `depth_mm` wins over
+/// the first part that has one), the same number the door checks use.
 pub fn device_depth_mm(project: &Project, device: &Device) -> Option<f64> {
-    let positive =
-        |properties: &Properties| usable(properties, keys::DEPTH_MM).filter(|d| *d > 0.0);
-    positive(&device.properties).or_else(|| {
-        parts(project, device)
-            .iter()
-            .find_map(|p| positive(&p.properties))
-    })
+    novo_layout::model::device_depth(project, device).filter(|d| d.is_finite())
 }
 
 /// Builds the scenario of one enclosure.
