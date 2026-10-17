@@ -152,6 +152,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("terminal.renumber", under("Draw", "Terminal strips")),
     ("terminal.join_duplicates", under("Draw", "Terminal strips")),
     ("terminal.set_kind", under("Draw", "Terminal strips")),
+    ("terminal.set_level", under("Draw", "Terminal strips")),
+    ("terminal.set_jumper", under("Draw", "Terminal strips")),
     ("terminal.order_up", under("Draw", "Terminal strips")),
     ("terminal.order_down", under("Draw", "Terminal strips")),
     ("terminal.style", under("Draw", "Terminal strips")),

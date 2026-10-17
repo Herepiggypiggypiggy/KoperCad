@@ -456,6 +456,16 @@ pub const DUTCH: &[Aliases] = &[
         &["klemtype", "soort klem", "klemmenstrook"],
     ),
     nl(
+        "terminal.set_level",
+        &[],
+        &["klemniveau", "niveau", "etage", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.set_jumper",
+        &[],
+        &["brugnummer", "brug", "klemmen overbruggen", "klemmenstrook"],
+    ),
+    nl(
         "terminal.order_up",
         &[],
         &["klem omhoog", "volgorde", "klemmenstrook"],

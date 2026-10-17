@@ -986,6 +986,26 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["feed-through", "PE", "N", "fuse", "disconnect"],
     ),
+    with_arguments(
+        cmd(
+            "terminal.set_level",
+            "Set terminal level",
+            "Edit",
+            &["strip", "multi-level", "level", "tier", "deck"],
+            Needs::Project,
+        ),
+        &["1", "2", "3", "4"],
+    ),
+    with_arguments(
+        cmd(
+            "terminal.set_jumper",
+            "Set terminal jumper number",
+            "Edit",
+            &["strip", "bridge", "jumper", "link"],
+            Needs::Project,
+        ),
+        &["next", "none"],
+    ),
     cmd(
         "terminal.order_up",
         "Move terminal up in strip",
