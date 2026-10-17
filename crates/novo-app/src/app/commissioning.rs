@@ -16,8 +16,8 @@ use eframe::egui;
 use novo_canvas::marks::{Mark, MarkKind};
 use novo_canvas::model::item_id;
 use novo_commissioning::{
-    CheckKind, CheckRecord, CheckState, CommissioningStore, Progress, PunchItem, PunchState, Scope,
-    Severity, Target, TargetInfo, progress, targets,
+    CheckKind, CheckRecord, CheckState, CommissioningStore, FieldPackage, Progress, PunchItem,
+    PunchState, Scope, Severity, Target, TargetInfo, progress, targets,
 };
 use novo_core::{PageId, Project};
 use novo_pdf::{ReportFileFormat, ReportPdfOptions};
@@ -40,6 +40,12 @@ const ARM_SECONDS: f64 = 5.0;
 pub(super) const TABLET_MAX_WIDTH: f32 = 1200.0;
 /// The panel's width in the tablet layout.
 pub(super) const TABLET_PANEL_WIDTH: f32 = 380.0;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum FieldAction {
+    Export,
+    Import,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -361,6 +367,7 @@ impl NovoApp {
         let current = self.current_page;
         let mut go: Option<Place> = None;
         let mut export: Option<ReportFileFormat> = None;
+        let mut field: Option<FieldAction> = None;
         let tablet = self.commissioning_tablet();
         {
             let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
@@ -383,7 +390,9 @@ impl NovoApp {
                 let punch = egui::Rect::from_min_max(egui::pos2(r.center().x, r.top()), r.max);
                 note_rect(ui.ctx(), "commissioning.punch", "Punch tab", punch, false);
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    export = header_menu(ui, mode, &mut large, tablet);
+                    let (report, action) = header_menu(ui, mode, &mut large, tablet);
+                    export = report;
+                    field = action;
                 });
             });
             if large != mode.large {
@@ -427,7 +436,88 @@ impl NovoApp {
         if let Some(format) = export {
             self.export_commissioning_report(format);
         }
+        match field {
+            Some(FieldAction::Export) => self.export_field_results(),
+            Some(FieldAction::Import) => self.import_field_results(),
+            None => {}
+        }
         false
+    }
+
+    /// Writes the field results (checks and punch items) to a `.kcfield`
+    /// file the person picks, to carry to another machine.
+    pub(super) fn export_field_results(&mut self) {
+        let Some(name) = self.project_name() else {
+            return;
+        };
+        self.load_commissioning();
+        let (Some(mode), Some(doc)) = (self.wb.commissioning.as_ref(), self.backend.document())
+        else {
+            return;
+        };
+        let package = FieldPackage::new(&name, &mode.who, &now(), &mode.store, doc.project());
+        let mut dialog = rfd::FileDialog::new()
+            .set_title("Export field results")
+            .set_file_name(format!("{name} field results.kcfield"))
+            .add_filter("KoperCAD field results", &["kcfield"]);
+        if let Some(dir) = projects_dir() {
+            dialog = dialog.set_directory(dir);
+        }
+        let Some(path) = dialog.save_file() else {
+            return;
+        };
+        match write_replacing(&path, package.to_json().as_bytes()) {
+            Ok(()) => self.message(Level::Info, format!("Exported {}", path.display())),
+            Err(e) => self.message(Level::Error, format!("Could not export field results: {e}")),
+        }
+    }
+
+    /// Merges a `.kcfield` file into this project's commissioning data.
+    pub(super) fn import_field_results(&mut self) {
+        let mut dialog = rfd::FileDialog::new()
+            .set_title("Import field results")
+            .add_filter("KoperCAD field results", &["kcfield"]);
+        if let Some(dir) = projects_dir() {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(path) = dialog.pick_file() {
+            self.import_field_results_from(&path);
+        }
+    }
+
+    pub(super) fn import_field_results_from(&mut self, path: &Path) {
+        self.load_commissioning();
+        let text = match std::fs::read_to_string(path) {
+            Ok(text) => text,
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not read {}: {e}", path.display()),
+                );
+                return;
+            }
+        };
+        let package = match FieldPackage::from_json(&text) {
+            Ok(package) => package,
+            Err(e) => {
+                self.message(Level::Error, e.to_string());
+                return;
+            }
+        };
+        let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
+        else {
+            return;
+        };
+        let report = package.merge_into(&mut mode.store, doc.project());
+        if report.changed() {
+            mode.dirty = true;
+        }
+        let text = format!(
+            "Imported field results from {}: {}",
+            package.exported_by,
+            report.summary()
+        );
+        self.message(Level::Info, text);
     }
 
     /// The `export.commissioning` command: the report as a PDF.
@@ -554,8 +644,9 @@ fn header_menu(
     mode: &mut CommissioningMode,
     large: &mut bool,
     tablet: bool,
-) -> Option<ReportFileFormat> {
+) -> (Option<ReportFileFormat>, Option<FieldAction>) {
     let mut export = None;
+    let mut field = None;
     let name = if mode.who.trim().is_empty() {
         "By".to_owned()
     } else {
@@ -591,6 +682,32 @@ fn header_menu(
             }
         }
         ui.add_space(space::S);
+        widgets::section_label(ui, "Field results");
+        for (label, action, hint, id, name) in [
+            (
+                "Export field results",
+                FieldAction::Export,
+                "Save your ticks and punch items as a file to carry to the desk (no cloud)",
+                "commissioning.field_export",
+                "Export field results item",
+            ),
+            (
+                "Import field results",
+                FieldAction::Import,
+                "Merge a field results file into this project; newer decisions win",
+                "commissioning.field_import",
+                "Import field results item",
+            ),
+        ] {
+            let item = widgets::menu_item(ui, Some(icons::FILE_TEXT), label, None, true)
+                .on_hover_text(hint);
+            note_ctx(ui.ctx(), id, name, &item);
+            if item.clicked() {
+                field = Some(action);
+                ui.close();
+            }
+        }
+        ui.add_space(space::S);
         // The tablet layout always has them on.
         ui.add_enabled(!tablet, egui::Checkbox::new(large, "Large buttons"));
     });
@@ -603,8 +720,20 @@ fn header_menu(
             "Write PDF report item",
             &menu.response,
         );
+        note_ctx(
+            ui.ctx(),
+            "commissioning.field_export",
+            "Export field results item",
+            &menu.response,
+        );
+        note_ctx(
+            ui.ctx(),
+            "commissioning.field_import",
+            "Import field results item",
+            &menu.response,
+        );
     }
-    export
+    (export, field)
 }
 
 fn checks_tab(
@@ -871,6 +1000,7 @@ fn punch_tab(
                 raised_at: now(),
                 closed_by: None,
                 closed_at: None,
+                signature: None,
             });
             mode.dirty = true;
         }

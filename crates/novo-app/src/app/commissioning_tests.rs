@@ -236,6 +236,70 @@ fn the_switcher_the_pages_list_and_the_commissioning_controls_are_anchors() {
     }
 }
 
+#[test]
+fn field_results_from_a_file_merge_into_the_project() {
+    use novo_commissioning::{CheckRecord, FieldPackage};
+    let (dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let wire = targets(d.doc().project())
+        .into_iter()
+        .map(|t| t.target)
+        .find(|t| matches!(t, Target::Wire(_)))
+        .expect("a wire");
+    let mut field = CommissioningStore::new();
+    field
+        .set_check(CheckRecord {
+            target: wire,
+            check: CheckKind::Continuity,
+            state: CheckState::Passed,
+            by: "tablet".into(),
+            at: "2026-10-16T09:00:00Z".into(),
+            value: String::new(),
+            note: String::new(),
+        })
+        .unwrap();
+    let file = dir.path().join("walk.kcfield");
+    std::fs::write(
+        &file,
+        FieldPackage::new(
+            "Example",
+            "tablet",
+            "2026-10-16T10:00:00Z",
+            &field,
+            d.doc().project(),
+        )
+        .to_json(),
+    )
+    .unwrap();
+    d.app.import_field_results_from(&file);
+    d.frame();
+    let mode = d.app.wb.commissioning.as_ref().unwrap();
+    assert_eq!(
+        mode.store.state(wire, CheckKind::Continuity),
+        CheckState::Passed
+    );
+    // kept in the project file, not only in memory
+    let json = d.app.backend.commissioning_json().expect("saved");
+    assert!(json.contains("tablet"));
+    // a file that is not field results is refused and changes nothing
+    let junk = dir.path().join("junk.kcfield");
+    std::fs::write(&junk, "{}").unwrap();
+    d.app.import_field_results_from(&junk);
+    assert_eq!(
+        d.app
+            .wb
+            .commissioning
+            .as_ref()
+            .unwrap()
+            .store
+            .records()
+            .count(),
+        1
+    );
+}
+
 /// One frame of a window `w` by `h` points.
 fn frame_sized(d: &mut Drive, w: f32, h: f32) {
     let input = egui::RawInput {
