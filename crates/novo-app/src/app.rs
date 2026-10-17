@@ -1954,6 +1954,17 @@ impl NovoApp {
                         }
                     }
                 }
+                ui.add_space(16.0);
+                ui.small("WHAT ELSE IS IN HERE");
+                for line in [
+                    "Cabinet: size the enclosure, place devices, cut lists",
+                    "3D: look inside the cabinet (needs a mounting plate)",
+                    "Heat: temperatures and airflow, under Simulate",
+                    "Commissioning: checks and punch list",
+                    "Ctrl+K finds every command",
+                ] {
+                    ui.weak(line);
+                }
                 let recent = self.settings.recent_projects.clone();
                 if !recent.is_empty() {
                     ui.add_space(16.0);
