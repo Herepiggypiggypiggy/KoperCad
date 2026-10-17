@@ -2,9 +2,9 @@
 
 Repo herepiggypiggypiggy/kopercad, branch claude/project-thread-7gkab5 (restart from main after each merge). Reviewer R2 cse_01SEokxUZ1MKDwyQvLm4DPys, lead A cse_01FiLvRBKEcNNHbQEGhYyL1S.
 
-State: PR 1 (#568, score + Quality tab) merged. PR 2 (duplicates and conflicts) written locally, see PROGRESS.md for the PR number and SHA.
-Files: crates/novo-parts/src/quality.rs (score, report, duplicates), tests/quality.rs and tests/quality_duplicates.rs, crates/novo-app/src/app/parts_quality.rs (Parts window tabs Parts / Quality / Duplicates).
-Next: PR 3 review queue (sidecar parts-review.json next to the catalog, fingerprint via sha2; import:* parts untrusted until approved; authored trusted), Approve/Reject in the Quality tab.
+State: #568 (score + Quality tab) and #979 (Duplicates tab) merged. PR 3 (import review queue) written; see PROGRESS.md for the PR number and SHA.
+Files: crates/novo-parts/src/quality.rs (score, duplicates, ReviewLedger), tests quality.rs, quality_duplicates.rs, quality_review.rs; crates/novo-app/src/app/parts_quality.rs (tabs Parts / Quality / Duplicates / Review).
+Review rules: source starting import: is untrusted until approved; authored is trusted; no provenance is Unrecorded (not queued). Decisions live in parts-review.json next to parts.json, keyed by maker+order, with a sha256 fingerprint that ignores assets and terminal positions. A broken file blocks decisions and is never overwritten.
+Open / later: untrusted badge in the Parts list and detail (needs a hook in parts.rs, ask the Parts library lane); incoming_conflicts has no caller (import dialog thread); CLI `kopercad-cli parts quality`; refresh is manual after in-place edits.
 Resume: CARGO_PROFILE_DEV_DEBUG=0 cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
 Rules: no push after READY; no catalog.rs/schema.rs edits; tests in new files; send heads to R2 and lead A.
-Decisions: score counts only recorded data; unknown is never a conflict; same-order-number across unrelated makers is only a candidate.
