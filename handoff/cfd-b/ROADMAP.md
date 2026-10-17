@@ -11,7 +11,7 @@ Done
 - PR 4: turbulence option in CabinetSolver, snapshot ratio, accuracy text, vented box study.
 
 Next, in order
-1. Openings (inflow/outflow turbulence values) once the open faces are stable in lane C2.
+1. Openings: the two approximations in HANDOFF (closed share of a vent still a wall for the flow only; inflow k/omega taken from the cell) and ambient-level inflow turbulence values.
 2. Model choice in the UI (CFD-F); effect of solid walls on a cabinet temperature is still unmeasured against a reference.
 3. Second-order convection for k and omega; moving-wall velocity relative to the wall in the wall functions.
 4. A wall-function variant for buoyant boundary layers on coarse cells (coarse cells are 50 % low today); or mesh rule from lane C1: resolve the wall layer on hot surfaces.
@@ -19,3 +19,5 @@ Next, in order
 
 Open questions
 - Where CFD-F exposes the model choice (default SST, k-epsilon as "cross check").
+
+Done later: PR 5 second-order k/omega (option), film-face fix. Next: expose the model and second-order switch in the UI via CFD-F; make second order the default only if a benchmark ever gains from it (none did).

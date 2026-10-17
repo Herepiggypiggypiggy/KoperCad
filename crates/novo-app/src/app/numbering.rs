@@ -114,7 +114,12 @@ impl NovoApp {
             self.message(Level::Info, "Select a wire first");
             return;
         };
-        let number = argument.unwrap_or_default().trim().to_owned();
+        let Some(argument) = argument else {
+            // From the menu there is no number yet: ask for it.
+            self.wb.number_prompt = Some(String::new());
+            return;
+        };
+        let number = argument.trim().to_owned();
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
@@ -131,6 +136,33 @@ impl NovoApp {
                 self.message(Level::Info, text);
             }
             Err(e) => self.message(Level::Warning, format!("Wire number: {e}")),
+        }
+    }
+
+    /// The one-field "Set wire number" prompt (Edit > Set wire number).
+    pub(super) fn number_prompt_window(&mut self, ctx: &egui::Context) {
+        let Some(mut text) = self.wb.number_prompt.take() else {
+            return;
+        };
+        let mut open = true;
+        let mut done = false;
+        super::panel::dialog(ctx, "Set wire number", [320.0, 130.0])
+            .open(&mut open)
+            .show(ctx, |ui| {
+                ui.label("Number for the selected wire's net (empty clears it):");
+                let edit = ui.add(egui::TextEdit::singleline(&mut text).desired_width(200.0));
+                if !edit.has_focus() && !done {
+                    edit.request_focus();
+                }
+                let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                ui.horizontal(|ui| {
+                    done = ui.button("Set").clicked() || enter;
+                });
+            });
+        if done {
+            self.set_wire_number(Some(&text));
+        } else if open {
+            self.wb.number_prompt = Some(text);
         }
     }
 

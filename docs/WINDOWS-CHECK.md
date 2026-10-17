@@ -44,9 +44,9 @@ No step needs admin rights. If one asks for it, stop and say so.
   the pointer across a wedge without stopping: the outer ring does not jump to it. Rest on a
   wedge for a moment: the outer ring follows. Choosing in the first ring does not place anything
   until you choose in the second ring.
-- **Moving preference.** Preferences, "Moving a symbol": "Leaves its wires" is the default. Drag
-  a symbol: it moves alone and its wires stay. Switch to "Takes its wires along": a plain drag now
-  carries the wires. Shift always does the other one.
+- **Moving preference.** Preferences, "Moving a symbol": "Takes its wires along" is the default. Drag
+  a symbol: its wires stretch with it and no end is left open. Switch to "Leaves its wires": a plain
+  drag now moves it alone and its wires stay as open ends. Shift always does the other one.
 - **Shift+M (needs a build that includes #294; skip it otherwise).** Select a symbol and press
   M: it moves as the Moving preference says. Shift+M always carries the wires, and keeps
   carrying them after you release Shift. Esc cancels and puts it back.

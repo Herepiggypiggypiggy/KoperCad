@@ -455,6 +455,10 @@ impl NovoApp {
                     part(2.0),
                     false,
                 );
+            });
+            // The menu sits on its own row: beside the tabs it took their
+            // room and cut the third one off in the narrow side panel.
+            ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let (report, action) = header_menu(ui, mode, &mut large, tablet);
                     export = report;
@@ -542,7 +546,7 @@ impl NovoApp {
         };
         let mut package = FieldPackage::new(&name, &mode.who, &now(), &mode.store, doc.project());
         self.pack_field_photos(&mut package);
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Export field results")
             .set_file_name(format!("{name} field results.kcfield"))
             .add_filter("KoperCAD field results", &["kcfield"]);
@@ -566,7 +570,7 @@ impl NovoApp {
 
     /// Merges a `.kcfield` file into this project's commissioning data.
     pub(super) fn import_field_results(&mut self) {
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Import field results")
             .add_filter("KoperCAD field results", &["kcfield"]);
         if let Some(dir) = projects_dir() {

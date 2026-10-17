@@ -95,7 +95,9 @@ impl NovoApp {
         ui.horizontal_wrapped(|ui| {
             for (i, name) in ["errors", "warnings", "infos"].into_iter().enumerate() {
                 let chip = format!("{} {name}", counts[i]);
-                if novo_theme::widgets::chip(ui, &chip, self.wb.issue_filter[i]).clicked() {
+                let response = novo_theme::widgets::chip(ui, &chip, self.wb.issue_filter[i]);
+                self.learn_row("issues.list", &chip, response.rect);
+                if response.clicked() {
                     self.wb.issue_filter[i] ^= true;
                 }
             }
@@ -154,11 +156,14 @@ impl NovoApp {
                         egui::TextFormat::simple(font, ui.visuals().text_color()),
                     );
                     let row = ui.selectable_label(false, text);
+                    self.learn_row("issues.list", &p.message, row.rect);
                     if row.clicked() {
                         go = Some(*i);
                     }
                     row.context_menu(|ui| {
-                        if ui.button("Go to").clicked() {
+                        let go_to = ui.button("Go to");
+                        self.learn_row("issues.list", "Go to", go_to.rect);
+                        if go_to.clicked() {
                             go = Some(*i);
                             ui.close();
                         }
@@ -168,11 +173,15 @@ impl NovoApp {
                             self.wb.queued.push("parts.auto_assign");
                             ui.close();
                         }
-                        if ui.button("Waive with a reason…").clicked() {
+                        let waive = ui.button("Waive with a reason…");
+                        self.learn_row("issues.list", "Waive with a reason…", waive.rect);
+                        if waive.clicked() {
                             self.wb.waiving = Some((*i, String::new()));
                             ui.close();
                         }
-                        if ui.button("Copy message").clicked() {
+                        let copy = ui.button("Copy message");
+                        self.learn_row("issues.list", "Copy message", copy.rect);
+                        if copy.clicked() {
                             ui.ctx().copy_text(p.message.clone());
                             ui.close();
                         }
@@ -226,15 +235,18 @@ impl NovoApp {
         };
         ui.group(|ui| {
             ui.label(format!("Waive: {}", problem.message));
-            ui.add(
+            let field = ui.add(
                 egui::TextEdit::singleline(&mut reason)
                     .hint_text("Why this is acceptable")
                     .desired_width(f32::INFINITY),
             );
+            self.anchor("issues.waive_reason", field.rect, "Reason");
             let mut keep = true;
             ui.horizontal(|ui| {
                 let ready = !reason.trim().is_empty();
-                if ui.add_enabled(ready, egui::Button::new("Waive")).clicked() {
+                let waive = ui.add_enabled(ready, egui::Button::new("Waive"));
+                self.anchor("issues.waive", waive.rect, "Waive");
+                if waive.clicked() {
                     keep = false;
                     let Some(doc) = self.backend.document_mut() else {
                         return;
@@ -271,17 +283,25 @@ impl NovoApp {
             return;
         }
         let mut restore = None;
-        egui::CollapsingHeader::new(format!("Waived ({})", waived.len())).show(ui, |ui| {
+        let header = egui::CollapsingHeader::new(format!("Waived ({})", waived.len()));
+        let shown = header.show(ui, |ui| {
             for w in &waived {
                 ui.label(&w.problem.message);
                 ui.horizontal(|ui| {
                     ui.weak(format!("Reason: {}", w.reason));
-                    if ui.small_button("Restore").clicked() {
+                    let button = ui.small_button("Restore");
+                    self.anchor("issues.restore", button.rect, "Restore");
+                    if button.clicked() {
                         restore = Some(w.waiver);
                     }
                 });
             }
         });
+        self.learn_row(
+            "issues.list",
+            &format!("Waived ({})", waived.len()),
+            shown.header_response.rect,
+        );
         if let Some(id) = restore
             && let Some(doc) = self.backend.document_mut()
         {

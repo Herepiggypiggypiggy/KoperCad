@@ -136,7 +136,14 @@ fn the_match_differs_between_rows_and_is_not_the_data_quality() {
     let worst = rows.iter().map(|r| r.fit.percent).min().unwrap();
     assert!(best > worst, "{best} {worst}");
     for row in &rows {
-        if part_role(row.part) == Some(Role::Mcb) {
+        // F3 is a one-pole breaker: the one-pole MCBs match fully.
+        if part_role(row.part) == Some(Role::Mcb)
+            && row
+                .part
+                .data
+                .get("poles")
+                .is_some_and(|v| *v == novo_core::Value::Int(1))
+        {
             assert_eq!(row.fit.percent, best);
         } else if part_role(row.part) == Some(Role::FuseHolder) {
             assert!(row.fit.percent < 50);
@@ -177,7 +184,8 @@ fn a_part_that_does_not_say_what_it_is_ranks_below_a_confirmed_one() {
     catalog.upsert(breaker);
     let rows = suggestions_for_device(&catalog, doc.project(), gate.f3, "", 10);
     assert_eq!(rows[0].part.order_number, "B-1");
-    assert_eq!(rows[0].fit.percent, 100);
+    // The breaker does not state its poles, so that check earns half.
+    assert!(rows[0].fit.percent >= 85, "{}", rows[0].fit.percent);
     assert!(rows[1].fit.percent < 50);
 }
 
@@ -197,4 +205,58 @@ fn rating_a_large_catalog_is_fast() {
     // Debug build, shared runner: a loose bound that still catches a
     // quadratic or per-part netlist rebuild.
     assert!(t.elapsed().as_millis() < 2000, "{:?}", t.elapsed());
+}
+
+#[test]
+fn a_three_pole_breaker_ranks_three_pole_parts_first() {
+    use novo_core::{DeviceTag, Pin, Placement, Point, SymbolRole};
+    let (mut doc, gate, catalog) = starter();
+    let (f9, _) = doc
+        .transact("Three-pole breaker", |tx| {
+            let f9 = tx.add_device(DeviceTag::parse("-F9").unwrap(), "Breaker")?;
+            let pins = [
+                ("1", 0.0, 0.0),
+                ("2", 0.0, 16.0),
+                ("3", 8.0, 0.0),
+                ("4", 8.0, 16.0),
+                ("5", 16.0, 0.0),
+                ("6", 16.0, 16.0),
+            ]
+            .map(|(n, x, y)| Pin::new(n, x, y))
+            .to_vec();
+            tx.place_symbol(
+                gate.main_page,
+                "iec/protection/mcb_3p",
+                Placement::at(Point::new(120.0, 40.0)),
+                pins,
+                SymbolRole::Device {
+                    device: f9,
+                    main: true,
+                },
+            )?;
+            Ok(f9)
+        })
+        .unwrap();
+    let rows = suggestions_for_device(&catalog, doc.project(), f9, "", 50);
+    let poles = |s: &novo_parts::Suggestion| {
+        s.part
+            .data
+            .get("poles")
+            .and_then(|v| match v {
+                novo_core::Value::Int(n) => Some(*n),
+                novo_core::Value::Float(f) => Some(*f as i64),
+                _ => None,
+            })
+            .unwrap_or(0)
+    };
+    let top = &rows[0];
+    assert_eq!(part_role(top.part), Some(Role::Mcb));
+    assert_eq!(poles(top), 3, "{}: {:?}", top.part.order_number, top.fit);
+    assert_eq!(top.fit.percent, 100);
+    let one_pole = rows
+        .iter()
+        .find(|r| part_role(r.part) == Some(Role::Mcb) && poles(r) == 1)
+        .expect("a one-pole breaker is still listed");
+    assert!(one_pole.fit.percent < top.fit.percent);
+    assert!(one_pole.fit.reasons.iter().any(|r| r.contains("poles")));
 }

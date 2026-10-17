@@ -57,8 +57,11 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
         &connections,
         &novo_routing::WireRules::of(project).routing,
     );
-    let wire = |job: u64| project.wires().find(|w| w.id.raw() == job).map(|w| w.id);
-    for (_, plan) in &routed.plans {
+    let wires: std::collections::HashMap<u64, WireId> =
+        project.wires().map(|w| (w.id.raw(), w.id)).collect();
+    let wire = |job: u64| wires.get(&job).copied();
+    let mut guessed: Vec<AnyId> = Vec::new();
+    for (structure, plan) in &routed.plans {
         for problem in &plan.problems {
             match problem {
                 RoutingProblem::FreeAir { job } => {
@@ -85,9 +88,45 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
                         ),
                     ));
                 }
-                _ => {}
+                RoutingProblem::UnsizedDuct { jobs, .. } => {
+                    let mut at: Vec<AnyId> = jobs
+                        .iter()
+                        .filter_map(|j| wire(*j))
+                        .map(AnyId::Wire)
+                        .collect();
+                    if at.is_empty() {
+                        continue;
+                    }
+                    at.sort();
+                    let plate = project
+                        .structures()
+                        .find(|s| s.id == *structure)
+                        .map_or_else(|| "a plate".to_owned(), |s| s.tag.to_string());
+                    out.push(Problem::new(
+                        ProblemKind::UnsizedDuct,
+                        at,
+                        format!(
+                            "A duct on {plate} has no size, so its fill cannot be checked: set its width and height"
+                        ),
+                    ));
+                }
+                RoutingProblem::GuessedWire { job } => {
+                    guessed.extend(wire(*job).map(AnyId::Wire));
+                }
             }
         }
+    }
+    if !guessed.is_empty() {
+        guessed.sort();
+        let n = guessed.len();
+        out.push(Problem::new(
+            ProblemKind::GuessedWire,
+            guessed,
+            format!(
+                "{n} wire{} no cross-section: routed with a default size, so duct fill is approximate",
+                if n == 1 { " has" } else { "s have" }
+            ),
+        ));
     }
 }
 

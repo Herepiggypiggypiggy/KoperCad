@@ -537,10 +537,17 @@ impl BenchCut {
             .filter(|j| j.cross_section_mm2.is_none())
             .count();
         let no_colour = jobs.iter().filter(|j| j.colour.is_empty()).count();
+        let no_number = jobs.iter().filter(|j| j.number.trim().is_empty()).count();
         let mut notes: Vec<String> = Vec::new();
+        if no_number > 0 {
+            notes.push(format!(
+                "{no_number} of {} wires have no wire number (shown as \"-\"), so the wires cannot be told apart and the labels are blank. Number them under Edit > Wire numbers (Ctrl+K, number wires), then print again.",
+                jobs.len()
+            ));
+        }
         if no_size > 0 {
             notes.push(format!(
-                "{no_size} of {} wires have no cross-section set (listed under \"size not set\"): they get no strip length and no ferrule. Set the size on the wire.",
+                "{no_size} of {} wires have no cross-section set (listed under \"size not set\"): they get no strip length and no ferrule. Set the size on the wire, or fill it in for all of them under Reports > Bench output.",
                 jobs.len()
             ));
         }

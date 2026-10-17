@@ -1,9 +1,10 @@
 # PARTS-Q handoff
 
-Branch: claude/project-thread-7gkab5 (repo herepiggypiggypiggy/kopercad). Reviewer slot R2 (data and engines), lead A cse_01FiLvRBKEcNNHbQEGhYyL1S.
+Repo herepiggypiggypiggy/kopercad, branch claude/project-thread-7gkab5 (restart from main after each merge). Reviewer R2 cse_01SEokxUZ1MKDwyQvLm4DPys, lead A cse_01FiLvRBKEcNNHbQEGhYyL1S.
 
-State: PR 1 written (see PROGRESS.md for SHA once pushed). Files: crates/novo-parts/src/quality.rs (+ 2 export lines in lib.rs), crates/novo-parts/tests/quality.rs, crates/novo-app/src/app/parts_quality.rs, hook in app/parts.rs (field, init, 5 lines at top of parts_ui), `mod parts_quality;` in app.rs.
-
-Resume: `CARGO_PROFILE_DEV_DEBUG=0 cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace`.
-Rules: after READY do not push; follow-ups go in a new PR from main. Tests in new files. No catalog.rs/schema.rs edits.
-Decisions: score counts only recorded data; Partial = half; unknown source of power loss is Partial; trust state will live in a sidecar file, not the catalog schema.
+State: PR 1 (#568, score + Quality tab) merged. PR 2 (duplicates and conflicts) written locally, see PROGRESS.md for the PR number and SHA.
+Files: crates/novo-parts/src/quality.rs (score, report, duplicates), tests/quality.rs and tests/quality_duplicates.rs, crates/novo-app/src/app/parts_quality.rs (Parts window tabs Parts / Quality / Duplicates).
+Next: PR 3 review queue (sidecar parts-review.json next to the catalog, fingerprint via sha2; import:* parts untrusted until approved; authored trusted), Approve/Reject in the Quality tab.
+Resume: CARGO_PROFILE_DEV_DEBUG=0 cargo fmt --all && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace
+Rules: no push after READY; no catalog.rs/schema.rs edits; tests in new files; send heads to R2 and lead A.
+Decisions: score counts only recorded data; unknown is never a conflict; same-order-number across unrelated makers is only a candidate.

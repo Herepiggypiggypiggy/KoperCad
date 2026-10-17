@@ -78,6 +78,11 @@ impl CutList {
     }
 }
 
+/// The summary's title with the number of wires listed: the wire list's
+/// connections, without the supply and PE leads of the wire production.
+pub(crate) const CUT_LIST_COUNT_TITLE: &str =
+    "Summary · {n} wires between device pins (supply and PE leads: see Wire production)";
+
 /// The largest cross-section named in a wire-list cell: a number, or a text
 /// of several (`0.75, 1.5`) when a daisy chain mixes wires.
 fn cross_section(cell: &Cell) -> Option<f64> {
@@ -255,6 +260,9 @@ impl Report for CutList {
         }
         let mut sections = Vec::new();
         if !tables.is_empty() {
+            // Same rows as the wire list, so the same count and the same
+            // words for it.
+            summary.title = CUT_LIST_COUNT_TITLE.replace("{n}", &wires.len().to_string());
             sections.push(summary);
             sections.extend(tables);
         }

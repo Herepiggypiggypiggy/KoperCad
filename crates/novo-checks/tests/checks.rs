@@ -545,7 +545,7 @@ fn undersized_wires_on_protective_devices() {
     assert_eq!(thin[0].at, vec![AnyId::from(breaker), AnyId::from(wire)]);
     assert_eq!(
         thin[0].message,
-        "-F1 is rated 16 A, but a 1.5 mm² wire on it carries about 12.2 A"
+        "-F1 is rated 16 A, but a 1.5 mm² wire on it carries about 12.2 A (planning value)"
     );
 
     // 10 A on 1.5 mm² is fine; 16 A on 2.5 mm² is fine.
@@ -562,7 +562,7 @@ fn undersized_wires_on_protective_devices() {
     let thin = of_kind(&thin, ProblemKind::UndersizedWire);
     assert_eq!(
         thin[0].message,
-        "-F1 is rated 6 A, but a 0.5 mm² wire on it carries about 5.07 A"
+        "-F1 is rated 6 A, but a 0.5 mm² wire on it carries about 5.07 A (planning value)"
     );
     // A cable core's cross-section counts for its wire.
     let (project, _) = breaker_with_wire("iec/protection/mcb_3p", 16.0, None);
@@ -662,7 +662,7 @@ fn several_thin_wires_are_counted_and_an_overload_relay_is_rated_up_to() {
     assert_eq!(thin.len(), 1, "{problems:#?}");
     assert_eq!(
         thin[0].message,
-        "-F1 is rated up to 16 A, but 2 wires on it are too thin; the thinnest, 1 mm², carries about 9.6 A"
+        "-F1 is rated up to 16 A, but 2 wires on it are too thin; the thinnest, 1 mm², carries about 9.6 A (planning value)"
     );
 }
 

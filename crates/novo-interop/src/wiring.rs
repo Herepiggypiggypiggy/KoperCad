@@ -44,6 +44,17 @@ fn rect(layer: &str, x: f64, y: f64, w: f64, h: f64) -> Entity {
     )
 }
 
+/// How the table names a length. A wire to the door is a model: the gap
+/// between plate and door and the hinge loop are not in it (same wording as
+/// the wire list).
+fn basis_text(kind: Kind, to_door: bool) -> &'static str {
+    match kind {
+        _ if to_door => "door, no gap",
+        Kind::FreeAir => "free air",
+        Kind::Ducted => "routed",
+    }
+}
+
 /// The wiring plan of an enclosure's plate, or `None` when it has none.
 pub fn wiring_dxf(project: &Project, structure: StructureId) -> Option<Drawing> {
     let layout = novo_layout::model::load(project, structure)?;
@@ -184,10 +195,11 @@ pub fn wiring_dxf(project: &Project, structure: StructureId) -> Option<Drawing> 
                 VAlign::Bottom,
             ));
         }
-        let basis = match route.kind {
-            Kind::FreeAir => "free air",
-            Kind::Ducted => "routed",
-        };
+        let to_door = routed
+            .surface_legs
+            .get(&route.job)
+            .is_some_and(|leg| leg.opening.is_some());
+        let basis = basis_text(route.kind, to_door);
         table.push((format!("{label}  {ends}"), length, basis));
     }
 
@@ -215,4 +227,16 @@ pub fn wiring_dxf(project: &Project, structure: StructureId) -> Option<Drawing> 
         ));
     }
     Some(d)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_wire_to_the_door_is_not_called_routed() {
+        assert_eq!(basis_text(Kind::Ducted, true), "door, no gap");
+        assert_eq!(basis_text(Kind::Ducted, false), "routed");
+        assert_eq!(basis_text(Kind::FreeAir, false), "free air");
+    }
 }

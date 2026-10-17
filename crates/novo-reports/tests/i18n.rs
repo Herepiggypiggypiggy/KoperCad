@@ -59,7 +59,18 @@ fn switching_language_changes_every_report_string() {
                 );
                 assert_eq!(ca.key, cb.key, "column keys never change");
             }
-            assert_eq!(a.rows, b.rows, "project data is not translated");
+            // Only the fixed program words in cells change (the length
+            // basis, check names); tags, names and numbers are project data.
+            assert_eq!(a.rows.len(), b.rows.len());
+            for (ra, rb) in a.rows.iter().zip(&b.rows) {
+                assert_eq!(ra.sources, rb.sources);
+                for (xa, xb) in ra.cells.iter().zip(&rb.cells) {
+                    match xa {
+                        Cell::Text(t) if i18n::is_fixed_cell(t) => {}
+                        _ => assert_eq!(xa, xb, "project data is not translated"),
+                    }
+                }
+            }
             assert_eq!(a.key, b.key);
         }
     }
@@ -505,4 +516,102 @@ fn a_language_file_can_set_the_decimal_separator() {
     // Anything but `,` or `.` is ignored.
     let odd = Catalog::from_json(r#"{"code":"x","decimal":"'"}"#).unwrap();
     assert_eq!(odd.decimal_char(), None);
+}
+
+#[test]
+fn only_real_fixed_texts_match_the_checklist_patterns() {
+    let tr = nl();
+    let mut s = Section::new("s", "", vec![Column::new("c", "Description", 20.0)]);
+    for text in [
+        "R1 DIN rail",
+        "Heavy duty DIN rail",
+        "R2 at 20",
+        "Panel at door",
+        "R3 at 2.5",
+        "Left",
+        "Plate2",
+        "Plateau",
+    ] {
+        s.push(vec![Cell::text(text)], vec![]);
+    }
+    let out = ReportOutput {
+        report: "t".into(),
+        title: "".into(),
+        revision: 0,
+        sections: vec![s],
+    };
+    let rows: Vec<String> = translate_output(&out, &tr).sections[0]
+        .text_rows()
+        .into_iter()
+        .flatten()
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            "R1 DIN-rail",
+            // A part description that only ends like the pattern is data.
+            "Heavy duty DIN rail",
+            "R2 op 20",
+            "Panel at door",
+            "R3 op 2,5",
+            "Links",
+            "Plaat2",
+            "Plateau",
+        ]
+    );
+}
+
+#[test]
+fn only_measure_placeholders_follow_the_decimal_sign() {
+    let mut table = ProjectTable::default();
+    table.set("nl", "Sheet {n}", "Blad {n}").unwrap();
+    let tr = Translator::new("nl", &table);
+    // A sheet name that looks like a decimal keeps its point.
+    assert_eq!(tr.tr("Sheet 1.2"), "Blad 1.2");
+    assert_eq!(tr.tr("Hole dia 4.2"), "Gat dia 4,2");
+    // A measure placeholder only captures a number.
+    assert_eq!(tr.tr("Hole dia big"), "Hole dia big");
+}
+
+#[test]
+fn the_length_basis_words_are_dutch_and_a_tag_that_looks_like_one_is_not_a_fixed_word() {
+    let basis = [
+        "routed",
+        "routed, no depth",
+        "free air",
+        "door, no gap",
+        "estimate",
+    ];
+    let mut section = Section::new("s", "Basis", vec![Column::new("basis", "Basis", 12.0)]);
+    for word in basis {
+        section.push(vec![Cell::text(word)], vec![]);
+    }
+    let output = ReportOutput {
+        report: "t".into(),
+        title: "Basis".into(),
+        revision: 0,
+        sections: vec![section],
+    };
+    let dutch = translate_output(&output, &nl());
+    let got: Vec<_> = dutch.sections[0]
+        .rows
+        .iter()
+        .map(|r| dutch.sections[0].cell_text(&r.cells[0]))
+        .collect();
+    assert_eq!(
+        got,
+        [
+            "gerouteerd",
+            "gerouteerd, zonder diepte",
+            "vrije lucht",
+            "deur, zonder tussenruimte",
+            "schatting"
+        ]
+    );
+    // English keeps the words.
+    let english = translate_output(&output, &Translator::english());
+    assert_eq!(
+        english.sections[0].cell_text(&english.sections[0].rows[3].cells[0]),
+        "door, no gap"
+    );
 }

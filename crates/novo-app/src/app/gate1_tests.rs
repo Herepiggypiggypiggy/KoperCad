@@ -1136,6 +1136,10 @@ fn the_tool_dock_switches_tools_and_steps_aside_for_a_drag() {
     use novo_workflow::keymap::Focus;
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
+    // The click below finds Connect by the icon-only geometry.
+    d.app
+        .settings
+        .set_dock_labels(crate::settings::DockLabels::Never);
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);
     d.frame();
@@ -2446,21 +2450,7 @@ fn the_moving_preference_and_shift_choose_whether_wires_go_along() {
     };
     let hint = |d: &mut Drive| d.app.canvas.schematic().unwrap().status_text().unwrap();
 
-    // Default: leave the wires; the hint offers Shift for the other one.
-    d.app
-        .canvas
-        .schematic()
-        .unwrap()
-        .editor
-        .begin_move(&[AnyId::Symbol(k)]);
-    d.frame();
-    assert!(!carry(&mut d));
-    assert!(hint(&mut d).contains("Shift: take the wires along"));
-    d.app.canvas.schematic().unwrap().editor.leave_tool();
-
-    // Preference "takes its wires along": the hint flips.
-    d.app.settings.move_carries = true;
-    d.frame();
+    // Default: take the wires along; the hint offers Shift for the other one.
     d.app
         .canvas
         .schematic()
@@ -2470,6 +2460,20 @@ fn the_moving_preference_and_shift_choose_whether_wires_go_along() {
     d.frame();
     assert!(carry(&mut d));
     assert!(hint(&mut d).contains("Shift: leave the wires"));
+    d.app.canvas.schematic().unwrap().editor.leave_tool();
+
+    // Preference "leaves its wires": the hint flips.
+    d.app.settings.move_leaves_wires = true;
+    d.frame();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .begin_move(&[AnyId::Symbol(k)]);
+    d.frame();
+    assert!(!carry(&mut d));
+    assert!(hint(&mut d).contains("Shift: take the wires along"));
 }
 
 #[test]
@@ -2880,6 +2884,19 @@ fn plc_tags_leave_as_files_and_the_programmers_edits_come_back() {
     assert_eq!(written[0].file_name().unwrap(), "Plant PLC.xml");
     let xml = std::fs::read_to_string(&written[0]).unwrap();
     assert!(xml.contains("address=\"%IX0.0\""), "{xml}");
+    // The export toast names the file and offers to open the folder.
+    let toast = d
+        .app
+        .messages()
+        .iter()
+        .rev()
+        .find(|m| m.text.starts_with("Exported"))
+        .expect("an export toast");
+    assert_eq!(
+        toast.file.as_deref(),
+        Some(written[0].as_path()),
+        "{toast:?}"
+    );
 
     // The programmer rewords the comment and renames the tag; the preview
     // lists it, Esc leaves the project alone, Enter applies one undo step.

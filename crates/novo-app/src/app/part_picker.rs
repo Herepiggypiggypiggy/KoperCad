@@ -14,7 +14,7 @@ use super::{Level, NovoApp};
 use eframe::egui;
 use novo_core::{AnyId, DeviceId, Project};
 use novo_parts::{
-    AssignMode, Catalog, CatalogPart, Fit, Grade, PartKey, assess, assign_part,
+    AssignMode, Catalog, CatalogPart, Fill, Fit, Grade, PartKey, assess, assign_part,
     suggestions_for_device,
 };
 
@@ -99,6 +99,9 @@ pub(super) struct Candidate {
     pub(super) detail: String,
     pub(super) percent: u8,
     pub(super) grade: Grade,
+    /// What the part's catalog entry lacks, one phrase per gap, for the
+    /// tooltip of the data tag.
+    pub(super) gaps: Vec<String>,
     /// How well the part suits the device; `None` in lists with no device
     /// (cable parts).
     pub(super) fit: Option<Fit>,
@@ -118,6 +121,17 @@ impl Candidate {
             detail,
             percent: quality.percent,
             grade: quality.grade(),
+            gaps: quality
+                .gaps()
+                .map(|f| {
+                    let what = f.criterion.label();
+                    match (f.fill, f.note.is_empty()) {
+                        (Fill::Missing, _) => format!("{what}: missing"),
+                        (_, true) => format!("{what}: incomplete"),
+                        (_, false) => format!("{what}: {}", f.note),
+                    }
+                })
+                .collect(),
             fit: None,
         }
     }
@@ -174,12 +188,30 @@ fn match_color(fit: &Fit) -> egui::Color32 {
     }
 }
 
-fn grade_color(grade: Grade) -> egui::Color32 {
+/// The data tag is information, not an error: a thin catalog entry is
+/// amber at worst.
+fn data_color(grade: Grade) -> egui::Color32 {
     match grade {
         Grade::Good => crate::theme::ui_palette().success,
-        Grade::Fair => crate::theme::ui_palette().warning,
-        Grade::Poor => crate::theme::ui_palette().error,
+        Grade::Fair | Grade::Poor => crate::theme::ui_palette().warning,
     }
+}
+
+/// What the data tag means and what is missing for this part.
+fn data_tooltip(c: &Candidate) -> String {
+    let mut text = format!(
+        "How complete this part's catalog entry is: {}% ({}). It says nothing about whether the \
+         part suits the device (that is the Match). A thin entry still works; sizes, terminals, \
+         power loss and the 3D model are left out of cabinet layout, heat and reports.",
+        c.percent,
+        c.grade.label()
+    );
+    if !c.gaps.is_empty() {
+        text.push_str("\n\nMissing: ");
+        text.push_str(&c.gaps.join("; "));
+    }
+    text.push_str("\nSee Parts > Quality.");
+    text
 }
 
 /// The search field and the list. Returns the part the user clicked.
@@ -219,10 +251,10 @@ pub(super) fn picker_ui(
                         ));
                     }
                     ui.small(
-                        egui::RichText::new(format!("Data {} {}%", c.grade.label(), c.percent))
-                            .color(grade_color(c.grade)),
+                        egui::RichText::new(format!("Data: {} {}%", c.grade.label(), c.percent))
+                            .color(data_color(c.grade)),
                     )
-                    .on_hover_text("How complete the part's data is (Parts > Quality)");
+                    .on_hover_text(data_tooltip(c));
                     if !c.detail.is_empty() {
                         ui.small(&c.detail);
                     }
@@ -336,6 +368,20 @@ mod tests {
             rows.iter().all(|c| c.fit.is_some()),
             "every row has a match"
         );
+    }
+
+    #[test]
+    fn the_data_tag_says_what_it_means_and_what_is_missing() {
+        let part = CatalogPart::new("Acme", "X-1");
+        let c = Candidate::of(&part);
+        assert_eq!(c.grade, Grade::Poor);
+        assert!(!c.gaps.is_empty(), "a bare part lacks data");
+        let tip = data_tooltip(&c);
+        assert!(
+            tip.contains("catalog entry") && tip.contains("Missing:"),
+            "{tip}"
+        );
+        assert_eq!(data_color(c.grade), crate::theme::ui_palette().warning);
     }
 
     #[test]

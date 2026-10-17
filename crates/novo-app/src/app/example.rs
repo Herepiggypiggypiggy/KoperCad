@@ -32,6 +32,9 @@ pub(crate) fn build_example(doc: &mut Document) -> ModelResult<novo_core::Change
         // The pages are filed by their devices' tags (=A1, +CAB), so the
         // outline shows the example as a tree.
         super::outline_tree::auto_file(tx)?;
+        // Numbered with the project's scheme, so the wire list, the labels and
+        // the commissioning list name wires by number and not by id.
+        novo_numbering::number_new_wires(tx)?;
         give_parts_their_data(tx)?;
         add_cabinet(tx)?;
         tx.set_info(|info| {

@@ -77,9 +77,13 @@ fn main() {
         l.max_steps = 400_000;
         l.max_time_s = 6000.0;
     }
+    if std::env::args().any(|a| a == "march") {
+        tuning = tuning.marched();
+    }
     let t0 = std::time::Instant::now();
     let s = CabinetSolver::new(tuning)
         .with_turbulence(model)
+        .with_second_order_turbulence(std::env::args().any(|a| a == "2nd"))
         .solve(&scn, Fidelity::Coarse, &Control::new(), &mut |_| {})
         .unwrap();
     // volume weighted mean air temperature
@@ -97,6 +101,42 @@ fn main() {
             }
         }
     }
+    // exhaust through the top louvre: first air cell of every column under the
+    // top wall within the louvre's width, upward flow (y points down)
+    let (mut q_out, mut qt) = (0.0, 0.0);
+    for k in 0..g.nz {
+        for i in 0..g.nx {
+            let xc = 0.5 * (g.x_edges_mm[i] + g.x_edges_mm[i + 1]);
+            if !(200.0..=400.0).contains(&xc) {
+                continue;
+            }
+            if let Some(j) = (0..g.ny).find(|j| s.material[g.index(i, *j, k)] == 0) {
+                let c = g.index(i, j, k);
+                let vy = f64::from(s.velocity[c][1]);
+                if vy < 0.0 {
+                    let area = (g.x_edges_mm[i + 1] - g.x_edges_mm[i])
+                        * (g.z_edges_mm[k + 1] - g.z_edges_mm[k])
+                        * 1e-6;
+                    q_out += -vy * area;
+                    qt += -vy * area * f64::from(s.temperature_c[c]);
+                }
+            }
+        }
+    }
+    let rho_cp = 1.2 * 1006.0;
+    let q_2d = two_d
+        .openings
+        .iter()
+        .filter(|f| !f.is_fan)
+        .map(|f| f.flow_m3h.abs() / 3600.0)
+        .fold(0.0_f64, f64::max);
+    println!(
+        "EXHAUST top louvre 3D flow {:.5} m3/s rise {:.2} K | 2D flow {:.5} m3/s rise {:.2} K",
+        q_out,
+        qt / q_out.max(1e-12) - 25.0,
+        q_2d,
+        two_d.balance.openings_w / (rho_cp * q_2d)
+    );
     let d3 = &s.devices[0];
     let max_ratio = s.turb_visc_ratio.iter().fold(0.0_f32, |a, v| a.max(*v));
     println!(

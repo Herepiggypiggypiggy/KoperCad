@@ -160,6 +160,87 @@ fn a_wire_between_placed_devices_without_a_duct_is_found() {
     );
 }
 
+/// -K1 and -K2 on a 400 mm plate with a vertical duct between them and a
+/// wire from one to the other. The duct has no size and the wire no
+/// cross-section until the test says so.
+fn wire_through_a_duct() -> (Project, RailId, WireId) {
+    let (project, ids) = build(|tx| {
+        let page = tx.add_page("1")?;
+        let cab = tx.add_structure(tag("+CAB1"), "", true)?;
+        tx.set_plate(
+            cab,
+            Some(MountingPlate {
+                width: 400.0,
+                height: 400.0,
+                margin: 10.0,
+            }),
+        )?;
+        let duct = tx.add_rail(cab, 200.0, 20.0, 360.0, RailKind::Duct)?;
+        tx.update::<Rail>(duct, |r| r.vertical = true)?;
+        let mut pins = Vec::new();
+        for (t, x) in [("-K1", 50.0), ("-K2", 300.0)] {
+            let d = tx.add_device(tag(t), "")?;
+            tx.place_device(d, cab, Point::new(x, 100.0), false, None)?;
+            let s = tx.place_symbol(
+                page,
+                "iec/contacts/no",
+                Placement::at(Point::new(x, 10.0)),
+                vec![Pin::new("1", 0.0, 0.0)],
+                SymbolRole::Device {
+                    device: d,
+                    main: true,
+                },
+            )?;
+            pins.push(Endpoint::pin(s, 0));
+        }
+        let wire = tx.connect(pins[0], pins[1])?;
+        Ok((duct, wire))
+    });
+    (project, ids.0, ids.1)
+}
+
+#[test]
+fn a_duct_without_a_size_is_an_info_on_the_wires_through_it() {
+    let (mut project, duct, wire) = wire_through_a_duct();
+    let problems = check(&project);
+    let found = of_kind(&problems, ProblemKind::UnsizedDuct);
+    assert_eq!(found.len(), 1, "{problems:#?}");
+    assert_eq!(found[0].at, vec![AnyId::Wire(wire)]);
+    assert_eq!(found[0].kind.severity(), novo_checks::Severity::Info);
+    assert!(of_kind(&problems, ProblemKind::WireWithoutDuct).is_empty());
+
+    project
+        .transact("size", |tx| tx.set_rail_size(duct, 360.0, 40.0, 60.0))
+        .unwrap();
+    assert!(of_kind(&check(&project), ProblemKind::UnsizedDuct).is_empty());
+}
+
+#[test]
+fn wires_without_a_cross_section_are_one_aggregated_info() {
+    let (mut project, _, wire) = wire_through_a_duct();
+    let problems = check(&project);
+    let found = of_kind(&problems, ProblemKind::GuessedWire);
+    assert_eq!(found.len(), 1, "{problems:#?}");
+    assert_eq!(found[0].at, vec![AnyId::Wire(wire)]);
+    assert_eq!(found[0].kind.severity(), novo_checks::Severity::Info);
+    assert!(found[0].message.starts_with("1 wire has no cross-section"));
+
+    project
+        .transact("size", |tx| {
+            tx.update::<Wire>(wire, |w| w.cross_section_mm2 = Some(1.5))
+        })
+        .unwrap();
+    assert!(of_kind(&check(&project), ProblemKind::GuessedWire).is_empty());
+}
+
+#[test]
+fn the_routing_infos_wait_until_a_layout_exists() {
+    let project = Project::default();
+    let problems = check(&project);
+    assert!(of_kind(&problems, ProblemKind::UnsizedDuct).is_empty());
+    assert!(of_kind(&problems, ProblemKind::GuessedWire).is_empty());
+}
+
 #[test]
 fn the_report_lists_open_and_waived_problems() {
     let mut project = one_unplaced();

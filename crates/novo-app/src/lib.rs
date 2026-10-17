@@ -18,7 +18,11 @@ mod app;
 mod backend;
 mod canvas;
 mod command_field;
+mod control;
+pub mod diag;
+mod dialogs;
 mod editor_canvas;
+mod gpu;
 mod keys;
 mod migrate;
 mod model_canvas;
@@ -55,8 +59,44 @@ pub const LEGACY_DATA_DIR_NAME: &str = "NovoElectric";
 /// File extension of a KoperCAD project file, without the dot.
 pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
 
+/// Smallest window, in points; narrower and the top bar no longer fits. A
+/// 1366 x 768 laptop at 200% scaling offers
+/// 683 x 384 points, so the floor has to sit below that or the bottom of the
+/// window (status bar) is pushed off the screen.
+pub(crate) const MIN_WINDOW: [f32; 2] = [680.0, 320.0];
+
 fn window_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(novo_theme::brand::ICON_PNG_256).unwrap_or_default()
+}
+
+/// Reads the command line (without the program name): the `--profile-dir
+/// <folder>` (or `--profile-dir=<folder>`) flag and the project file to open.
+/// The control-mode flags are skipped here; `control` reads them.
+fn command_line(
+    args: impl Iterator<Item = std::ffi::OsString>,
+) -> (Option<std::path::PathBuf>, Option<std::path::PathBuf>) {
+    let mut profile = None;
+    let mut file = None;
+    let mut args = args;
+    while let Some(arg) = args.next() {
+        if arg == "--profile-dir" {
+            profile = args.next().map(std::path::PathBuf::from);
+        } else if let Some(dir) = arg.to_str().and_then(|a| a.strip_prefix("--profile-dir=")) {
+            profile = Some(std::path::PathBuf::from(dir));
+        } else if !control::is_control_arg(&arg) && file.is_none() {
+            file = Some(std::path::PathBuf::from(arg));
+        }
+    }
+    (profile.filter(|p| !p.as_os_str().is_empty()), file)
+}
+
+/// Applies the `--profile-dir` flag. `main` calls it before [`diag::init`], so the
+/// log and crash files go to the profile folder too; [`run`] repeats it (the
+/// first call wins).
+pub fn apply_profile_flag() {
+    if let (Some(dir), _) = command_line(std::env::args_os().skip(1)) {
+        novo_storage::profile::set_root(dir);
+    }
 }
 
 /// Opens the main window and runs until it is closed.
@@ -64,8 +104,11 @@ fn window_icon() -> egui::IconData {
 /// A project file passed as the first argument (as Windows does when a
 /// `.novo` file is double-clicked) is opened on start.
 pub fn run() -> eframe::Result {
-    let startup_file = std::env::args_os().nth(1).map(|arg| {
-        let path = std::path::PathBuf::from(arg);
+    let (profile, startup_file) = command_line(std::env::args_os().skip(1));
+    if let Some(dir) = profile {
+        novo_storage::profile::set_root(dir);
+    }
+    let startup_file = startup_file.map(|path| {
         // absolute() rather than canonicalize(): no \\?\ prefix on Windows.
         std::path::absolute(&path).unwrap_or(path)
     });
@@ -74,9 +117,14 @@ pub fn run() -> eframe::Result {
             .with_title(APP_NAME)
             .with_app_id("kopercad")
             .with_inner_size([1280.0, 800.0])
-            .with_min_inner_size([640.0, 400.0])
+            .with_min_inner_size(MIN_WINDOW)
             .with_icon(window_icon()),
         renderer: eframe::Renderer::Wgpu,
+        wgpu_options: gpu::configuration(),
+        // eframe keeps the window settings (`app.ron`) under the user's data
+        // folder; with a profile folder they go there too.
+        persistence_path: novo_storage::profile::root()
+            .map(|r| r.join("roaming").join(DATA_DIR_NAME).join("app.ron")),
         ..Default::default()
     };
     // The first argument names eframe's settings folder; move the old one first.
@@ -85,13 +133,24 @@ pub fn run() -> eframe::Result {
         DATA_DIR_NAME,
         options,
         Box::new(move |cc| {
+            if let Some(port) = control::requested_port() {
+                control::install(&cc.egui_ctx, port);
+            }
             let canvas: Box<dyn CanvasView> = match cc.wgpu_render_state.as_ref() {
                 Some(rs) => {
+                    let info = rs.adapter.get_info();
+                    diag::set_gpu(format!(
+                        "{} ({:?}, driver {} {})",
+                        info.name, info.backend, info.driver, info.driver_info
+                    ));
                     EditorCanvas::install(rs);
                     novo_view3d::widget::install(rs, 1);
                     Box::new(EditorCanvas::default())
                 }
-                None => Box::new(PlaceholderCanvas::default()),
+                None => {
+                    diag::set_gpu("none (no graphics adapter)".to_owned());
+                    Box::new(PlaceholderCanvas::default())
+                }
             };
             let mut backend = match data_dir() {
                 Some(dir) => StorageBackend::with_untitled_dir(dir.join("untitled")),
@@ -120,7 +179,9 @@ fn data_dir() -> Option<std::path::PathBuf> {
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
     };
-    let base = if cfg!(windows) {
+    let base = if let Some(root) = novo_storage::profile::root() {
+        root.join("local")
+    } else if cfg!(windows) {
         env("LOCALAPPDATA")?
     } else if cfg!(target_os = "macos") {
         env("HOME")?.join("Library/Application Support")
@@ -141,7 +202,9 @@ fn recovery_dir() -> Option<std::path::PathBuf> {
             .filter(|v| !v.is_empty())
             .map(PathBuf::from)
     };
-    let base = if cfg!(windows) {
+    let base = if let Some(root) = novo_storage::profile::root() {
+        root.join("local")
+    } else if cfg!(windows) {
         env("LOCALAPPDATA")?
     } else if cfg!(target_os = "macos") {
         env("HOME")?.join("Library/Application Support")
@@ -157,5 +220,30 @@ mod tests {
     fn window_icon_decodes() {
         let icon = super::window_icon();
         assert_eq!((icon.width, icon.height), (256, 256));
+    }
+}
+
+#[cfg(test)]
+mod command_line_tests {
+    use super::command_line;
+    use std::ffi::OsString;
+    use std::path::PathBuf;
+
+    fn parse(args: &[&str]) -> (Option<PathBuf>, Option<PathBuf>) {
+        command_line(args.iter().map(OsString::from))
+    }
+
+    #[test]
+    fn the_profile_flag_takes_its_value_and_is_not_a_project_file() {
+        assert_eq!(
+            parse(&["--profile-dir", "C:\\clean", "plant.novo"]),
+            (Some("C:\\clean".into()), Some("plant.novo".into()))
+        );
+        assert_eq!(
+            parse(&["--profile-dir=clean", "--control"]),
+            (Some("clean".into()), None)
+        );
+        assert_eq!(parse(&["plant.novo"]), (None, Some("plant.novo".into())));
+        assert_eq!(parse(&["--profile-dir="]), (None, None));
     }
 }

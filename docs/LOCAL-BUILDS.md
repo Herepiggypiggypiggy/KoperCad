@@ -57,3 +57,16 @@ runners; check the billing page.
   the EPLAN folder that must never be touched. A separate Windows user would
   isolate that but needs admin to create. It also only works while he is
   logged in with the PC on.
+
+## 4. Release builds (tag `v*`)
+
+Pushing a tag `vX.Y.Z` runs `.github/workflows/package-windows.yml`: it builds
+the per-user installer and a portable zip (`kopercad.exe`, `kopercad-cli.exe`,
+`run.cmd`, a README and `BUILD_INFO.txt`), checks that neither asks for admin
+rights, installs the setup as a standard user, then a separate `release` job
+(tag pushes only, the only write token, checks out no code) attaches
+`KoperCAD-X.Y.Z-setup.exe`, `KoperCAD-X.Y.Z-portable.zip`, `SHA256SUMS` and
+`BUILD_INFO.txt` to a GitHub pre-release. A release candidate tag
+`vX.Y.Z-rcN` builds the same crate version and creates the release as a draft.
+The tag must match the crate version (minus the `-rcN`). Re-running the job on
+the same tag replaces the attached files.

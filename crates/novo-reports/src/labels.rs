@@ -11,6 +11,11 @@ use crate::{CsvOptions, WireList, to_csv};
 /// The most text lines a label carries.
 pub const LABEL_LINES: usize = 3;
 
+/// Title of the wire labels, with the count: one label per end, two for each
+/// connection of the wire list (not the supply and PE leads).
+pub(crate) const WIRE_LABELS_COUNT_TITLE: &str =
+    "Wire labels · {n} (one per wire end: two for each wire-list connection)";
+
 /// The labels of a project: one table per kind, one row per label, the text
 /// in up to [`LABEL_LINES`] lines.
 ///
@@ -89,6 +94,8 @@ impl Report for Labels {
                 }
             }
         }
+
+        wires.title = WIRE_LABELS_COUNT_TITLE.replace("{n}", &wires.rows.len().to_string());
 
         // Terminals: strips in tag order, terminals in strip order.
         let mut terminals = section("terminals", "Terminal labels");

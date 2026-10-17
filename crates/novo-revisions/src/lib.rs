@@ -18,7 +18,7 @@ use novo_core::{AnyId, PageId, Project, Record, Revision, RevisionId};
 
 pub use compare::{CompareError, Comparison, Group, Side, compare, group_of};
 pub use fields::{FieldChange, field_changes};
-pub use issue::{IssueError, Issued, issue_revision, issue_revision_as};
+pub use issue::{IssueError, Issued, issue_revision, issue_revision_as, issue_revision_noted};
 pub use list::{ChangeRow, change_list, list_of};
 pub use report::{REPORT_ID, change_report};
 pub use sheets::{SheetChange, SheetChangeKind, changed_sheet_fingerprints, changed_sheets};
