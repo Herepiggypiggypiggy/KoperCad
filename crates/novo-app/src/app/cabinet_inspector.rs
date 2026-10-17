@@ -235,7 +235,7 @@ fn show(
                         } else {
                             String::new()
                         },
-                        false,
+                        d.why.is_some(),
                         |ui| {
                             if d.rotated {
                                 widgets::field(ui, "Rotated", "90 degrees");
@@ -244,7 +244,24 @@ fn show(
                                 widgets::field(ui, "Mounted on", rail);
                             }
                             if let Some(rule) = &d.rule {
-                                widgets::field(ui, "Place rule", rule);
+                                // The rule text can be long: wrap it inside the panel.
+                                ui.horizontal_top(|ui| {
+                                    ui.add_sized(
+                                        [84.0, 0.0],
+                                        egui::Label::new(
+                                            egui::RichText::new("Place rule")
+                                                .color(crate::theme::ui_palette().text_secondary),
+                                        ),
+                                    );
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(rule)
+                                                .monospace()
+                                                .color(crate::theme::ui_palette().text_primary),
+                                        )
+                                        .wrap(),
+                                    );
+                                });
                             }
                             if let Some(why) = &d.why {
                                 ui.weak(why);
