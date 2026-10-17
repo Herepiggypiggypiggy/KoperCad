@@ -378,3 +378,82 @@ fn the_wire_list_shows_the_numbers() {
         );
     }
 }
+
+#[test]
+fn each_phase_strand_is_numbered_top_to_bottom_before_the_next() {
+    let mut doc = Document::default();
+    novo_tests::motor_starter(&mut doc).unwrap();
+    let scheme = Scheme::new(SchemeKind::Sequential);
+    let p = plan(doc.project(), &scheme, Mode::Renumber, &Scope::Project);
+    let order: Vec<(String, String)> = p
+        .groups
+        .iter()
+        .filter_map(|g| Some((g.potential.clone()?, g.new.clone()?)))
+        .collect();
+    // The three phases are all there, so the checks below cannot pass empty.
+    for phase in ["L1", "L2", "L3"] {
+        assert!(
+            order.iter().any(|(p, _)| p == phase),
+            "{phase} in {order:?}"
+        );
+    }
+    // Potentials in the order their groups were numbered: each phase once.
+    let mut seen: Vec<&str> = Vec::new();
+    for (potential, _) in &order {
+        if seen.last() != Some(&potential.as_str()) {
+            assert!(!seen.contains(&potential.as_str()), "{order:?}");
+            seen.push(potential);
+        }
+    }
+    let numbers: Vec<u32> = order.iter().map(|(_, n)| n.parse().unwrap()).collect();
+    assert!(numbers.windows(2).all(|w| w[0] < w[1]), "{order:?}");
+}
+
+/// A contactor, an overload relay whose heaters conduct (permanent bridges)
+/// and a motor, wired in a line: three phases, six wires.
+fn through_overload(tx: &mut Tx<'_>) -> Result<Vec<WireId>> {
+    let page = tx.add_page("1")?;
+    let [k, f, m] = [("-K1", "Contactor"), ("-F2", "Overload"), ("-M1", "Motor")]
+        .map(|(t, n)| tx.add_device(tag(t), n).unwrap());
+    let k1 = block(tx, page, k, 40.0, 20.0)?;
+    let f2 = block(tx, page, f, 40.0, 60.0)?;
+    let m1 = block(tx, page, m, 40.0, 100.0)?;
+    tx.update::<novo_core::SymbolInstance>(f2, |s| s.bridges = vec![vec![0, 1]])?;
+    // Pin 0 of the relay is the heater input, pin 1 its output.
+    Ok(vec![
+        tx.connect(Endpoint::pin(k1, 0), Endpoint::pin(f2, 0))?,
+        tx.connect(Endpoint::pin(f2, 1), Endpoint::pin(m1, 0))?,
+    ])
+}
+
+#[test]
+fn a_wire_into_and_out_of_a_bridged_device_get_different_numbers() {
+    let mut doc = Document::default();
+    let (wires, _) = doc.transact("Draw", through_overload).unwrap();
+    // The netlist conducts through the heater: one electrical node.
+    let net = doc.project().netlist();
+    assert!(
+        net.connected(
+            Endpoint::pin(
+                doc.project()
+                    .wire(wires[0])
+                    .unwrap()
+                    .from
+                    .as_pin()
+                    .unwrap()
+                    .symbol,
+                0
+            ),
+            doc.project().wire(wires[1]).unwrap().to
+        )
+    );
+    let scheme = Scheme::new(SchemeKind::Sequential);
+    run(&mut doc, &scheme, Mode::Fill);
+    let n = numbers(&doc, &wires);
+    assert!(n[0].is_some() && n[1].is_some());
+    assert_ne!(n[0], n[1], "two wires on the bench, two numbers");
+    // Stable on a second run, and no conflict is reported.
+    let again = run(&mut doc, &scheme, Mode::Fill);
+    assert!(again.is_empty());
+    assert!(check(doc.project(), &scheme).is_empty());
+}

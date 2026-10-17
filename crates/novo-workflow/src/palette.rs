@@ -154,6 +154,10 @@ pub const RECENT_SHOWN: usize = 5;
 const EXACT: i32 = 100_000;
 /// Added to a command's match on its own label.
 const LABEL_BONUS: i32 = 50;
+
+/// The most a command's keyword (not its label or verb) can score, kept
+/// below a symbol's name so a part-like word finds the part first.
+const KEYWORD_CAP: i32 = 400;
 /// The lowest score (a whole word prefix) a recent pick is lifted from.
 const RECENT_MIN_MATCH: i32 = 250;
 
@@ -231,7 +235,18 @@ impl Palette {
                     rows.extend(pages.into_iter().filter(|r| r.kind == Kind::Page));
                 }
             }
-            command_rows(query, wants_next, sources, &mut rows);
+            // A word that names a part ranks the part above commands that only
+            // list it as a keyword.
+            let names_part = sources.library.is_some_and(|library| {
+                self.symbols
+                    .search(library, query)
+                    .iter()
+                    .take(10)
+                    .any(|hit| {
+                        fuzzy::score(query, &hit.symbol.name).is_some_and(|s| s >= RECENT_MIN_MATCH)
+                    })
+            });
+            command_rows(query, wants_next, names_part, sources, &mut rows);
         }
         if let Some(library) = sources.library {
             for hit in self.symbols.search(library, query).into_iter().take(10) {
@@ -723,7 +738,13 @@ fn split_verb<'q>(info: &CommandInfo, query: &'q str) -> Option<(&'static str, &
         .max_by_key(|(v, _)| v.len())
 }
 
-fn command_rows(query: &str, wants_next: bool, sources: &Sources<'_>, rows: &mut Vec<Row>) {
+fn command_rows(
+    query: &str,
+    wants_next: bool,
+    names_part: bool,
+    sources: &Sources<'_>,
+    rows: &mut Vec<Row>,
+) {
     // The longest verb phrase typed wins: `accept all` is the accept-all
     // command, not `accept` with the argument `all`.
     let longest = COMMANDS
@@ -759,18 +780,22 @@ fn command_rows(query: &str, wants_next: bool, sources: &Sources<'_>, rows: &mut
         }
         let full = format!("{} {}", info.group, info.label);
         let dutch = language::dutch(info.id).map_or(&[][..], |a| a.words);
-        let words = [info.label]
-            .into_iter()
-            .chain(info.keywords.iter().copied())
-            .chain(verbs_of(info))
-            .chain(dutch.iter().copied());
+        // The label and the verbs rank at full strength; a keyword or a Dutch
+        // word is a hint that finds the command but must not outrank a
+        // symbol that is named by the same word (`overload` is the overload
+        // relay, not the fault scenarios).
+        let direct = [info.label].into_iter().chain(verbs_of(info));
+        let hints = info.keywords.iter().copied().chain(dutch.iter().copied());
         // The label itself counts for more than a keyword or a Dutch
         // word: `ro` lists Rotate before the commands with a keyword
         // like `route`.
         let by_label = fuzzy::score(query, info.label).map(|s| s + LABEL_BONUS);
+        let by_hint = fuzzy::best_score(query, hints)
+            .map(|s| if names_part { s.min(KEYWORD_CAP) } else { s });
         let score = fuzzy::score(query, &full)
-            .max(fuzzy::best_score(query, words))
-            .max(by_label);
+            .max(fuzzy::best_score(query, direct))
+            .max(by_label)
+            .max(by_hint);
         if let Some(score) = score {
             let mut row = command_row(info, sources, "", score);
             // A verb that takes chips completes to itself first.
