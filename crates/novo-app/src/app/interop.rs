@@ -352,7 +352,7 @@ impl NovoApp {
     pub(super) fn eplan_export_script(&mut self) {
         let mut dialog =
             crate::dialogs::FileDialog::new().set_title("Folder for the EPLAN export script");
-        if let Some(dir) = dirs::document_dir().filter(|d| d.is_dir()) {
+        if let Some(dir) = novo_storage::profile::document_dir().filter(|d| d.is_dir()) {
             dialog = dialog.set_directory(dir);
         }
         if let Some(folder) = dialog.pick_folder() {
@@ -457,7 +457,7 @@ impl NovoApp {
             );
             return false;
         };
-        let out = dirs::cache_dir()
+        let out = novo_storage::profile::cache_dir()
             .unwrap_or_else(std::env::temp_dir)
             .join("KoperCAD")
             .join("dwg");
@@ -506,7 +506,7 @@ impl NovoApp {
     pub(super) fn choose_dwg_converter(&mut self) {
         let mut dialog =
             crate::dialogs::FileDialog::new().set_title("Choose dwg2dxf or ODAFileConverter");
-        if let Some(dir) = dirs::data_local_dir().filter(|d| d.is_dir()) {
+        if let Some(dir) = novo_storage::profile::data_local_dir().filter(|d| d.is_dir()) {
             dialog = dialog.set_directory(dir);
         }
         if let Some(program) = dialog.pick_file() {

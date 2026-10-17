@@ -2297,7 +2297,7 @@ fn ago(t: SystemTime) -> String {
 fn projects_dir() -> Option<PathBuf> {
     // A profile without a Documents folder (Linux without XDG dirs, a
     // stripped account) still gets a place for exports: the home folder.
-    dirs::document_dir()
+    novo_storage::profile::document_dir()
         .or_else(dirs::home_dir)
         .map(|docs| crate::migrate::projects_dir_in(&docs))
 }

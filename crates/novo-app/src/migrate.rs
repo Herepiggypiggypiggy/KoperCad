@@ -47,7 +47,7 @@ pub(crate) fn migrate_roaming_data() {
     if !cfg!(windows) {
         return;
     }
-    if let Some(base) = dirs::data_dir() {
+    if let Some(base) = novo_storage::profile::data_dir() {
         let _ = migrate_dir(&base.join(LEGACY_DATA_DIR_NAME), &base.join(DATA_DIR_NAME));
     }
 }

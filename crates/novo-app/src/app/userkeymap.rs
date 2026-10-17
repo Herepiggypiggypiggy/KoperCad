@@ -13,7 +13,7 @@ pub const KEYMAP_FILE: &str = "keymap.txt";
 /// `%APPDATA%\KoperCAD\keymap.txt` (the platform's data folder elsewhere).
 pub fn keymap_path() -> Option<PathBuf> {
     Some(
-        dirs::data_dir()?
+        novo_storage::profile::data_dir()?
             .join(crate::DATA_DIR_NAME)
             .join(KEYMAP_FILE),
     )
