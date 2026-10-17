@@ -2312,6 +2312,7 @@ dependencies = [
  "egui-wgpu",
  "flate2",
  "glam",
+ "log",
  "naga",
  "novo-checks",
  "novo-core",
