@@ -12,13 +12,17 @@
 //! one is stored it starts from the layout of the same width).
 //!
 //! The panels a slot keeps are the outline (pinned or flyout, and what it
-//! lists), the drawer tab and whether the inspector stays docked. Leaving a
+//! lists), the drawer tab, whether the inspector stays docked, and where the
+//! person left the floating panels (the inspectors, the lesson card, the 3D
+//! toolbar; their size is egui's own and is shared by all layouts). Leaving a
 //! slot, changing size class or closing the app stores them under
 //! `"<slot>/<class>"` in the settings; coming back puts them back. A slot
 //! never opened at a size starts from the default below.
 //!
 //! Where the user finds it: View › Layouts, the command field (`layout`),
 //! and the workspace chips, which open the slot last used in them.
+
+use std::collections::BTreeMap;
 
 use super::workspace::{
     Workspace, drawer_from_id, drawer_id, outline_mode_from_id, outline_mode_id,
@@ -204,6 +208,7 @@ impl Slot {
             outline_mode: pages,
             drawer: None,
             inspector_pinned: Some(false),
+            panels: BTreeMap::new(),
         };
         match self {
             // The drawing and nothing else; the outline follows the width.
@@ -275,6 +280,19 @@ impl NovoApp {
             outline_mode: outline_mode_id(self.outline_mode).to_owned(),
             drawer: self.wb.drawer.map(|d| drawer_id(d).to_owned()),
             inspector_pinned: Some(self.wb.inspector.pinned),
+            panels: self.panel_places.clone(),
+        }
+    }
+
+    /// Once a frame, before the window size is followed: hands a layout's
+    /// panel positions to the panels, or reads where the panels are now so
+    /// that the next store keeps them.
+    pub(super) fn sync_panels(&mut self, ctx: &eframe::egui::Context) {
+        if let Some(layout) = self.panel_pending.take() {
+            super::panel::place_all(ctx, &layout);
+            self.panel_places = layout;
+        } else {
+            self.panel_places = super::panel::places(ctx);
         }
     }
 
@@ -294,6 +312,7 @@ impl NovoApp {
         if let Some(pinned) = layout.inspector_pinned {
             self.wb.inspector.pinned = pinned;
         }
+        self.panel_pending = Some(layout.panels.clone());
         // A flyout left open would show over the next layout's canvas.
         self.outline_open = false;
     }

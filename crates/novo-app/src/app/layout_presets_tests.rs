@@ -151,6 +151,7 @@ fn layouts_written_before_sizes_existed_still_apply() {
             outline_mode: "changes".into(),
             drawer: Some("cables".into()),
             inspector_pinned: None,
+            panels: Default::default(),
         },
     );
     d.app.size_class = None;
@@ -213,4 +214,25 @@ fn a_short_window_keeps_its_layout_apart_and_starts_from_the_tall_one() {
     d.app.run_command(&ctx, "layout.reset", None);
     assert!(!d.app.settings.workspaces.contains_key("draw/wide/short"));
     assert!(d.app.settings.workspaces.contains_key("draw/wide"));
+}
+
+#[test]
+fn a_moved_panel_is_part_of_the_layout() {
+    let (_dir, mut d) = open_project();
+    let ctx = d.ctx.clone();
+    d.frame();
+    d.app.follow_window_size(1920.0);
+    // The person dragged a panel while Draw was on screen.
+    d.app.panel_places.insert("probe".into(), [321, 123]);
+    d.app.run_command(&ctx, "layout.review", None);
+    let draw = &d.app.settings.workspaces["draw/wide"];
+    assert_eq!(draw.panels.get("probe"), Some(&[321, 123]));
+    // Review never moved it: it is handed back to its own side.
+    assert_eq!(d.app.panel_pending, Some(Default::default()));
+    d.app.run_command(&ctx, "layout.draw", None);
+    assert_eq!(
+        d.app.panel_pending.as_ref().and_then(|p| p.get("probe")),
+        Some(&[321, 123]),
+        "Draw puts it back where it was left"
+    );
 }

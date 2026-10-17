@@ -261,6 +261,14 @@ Settings { last_workspace: Workspace, workspaces: map Workspace -> WorkspaceLayo
   is stored the window starts from the layout of the same width, so nothing
   is lost the first time the window gets shorter. Reset this workspace layout
   clears the layout of the size on screen only.
+- **Floating panel positions (built).** A layout also keeps where the person
+  dragged the floating panels (the inspectors, the lesson card, the 3D
+  toolbar and stats): `WorkspaceLayout.panels`, panel id to the top left
+  corner in points, only for panels that were moved. Opening a preset or
+  changing size class puts those panels there and sends every other panel
+  back to its own side; a panel that is closed picks its place up when it
+  opens. Panel size is not kept per layout (egui's own memory, shared by all
+  layouts). Dragging in one preset never moves the panel in another.
 - Switching restores the target's layout; leaving saves the current one.
 - The first time a workspace opens it gets its default from §3.
 - A new project opens in the workspace it was left in, with the same page and
