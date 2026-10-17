@@ -575,7 +575,6 @@ impl NovoApp {
         }
     }
 
-    /// Selects a wire on its page (the command field's "wire 105").
     /// Opens the page of a cable's first wired core and selects the cores'
     /// wires on it together. Cores on other pages are counted in a message:
     /// a selection belongs to one page.
@@ -607,6 +606,7 @@ impl NovoApp {
         }
     }
 
+    /// Selects a wire on its page (the command field's "wire 105").
     pub(super) fn go_to_wire(&mut self, wire: WireId) {
         let page = self
             .backend

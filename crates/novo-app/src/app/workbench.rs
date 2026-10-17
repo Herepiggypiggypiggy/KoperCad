@@ -1533,12 +1533,11 @@ impl NovoApp {
                 view.canvas.reveal([item]);
             }
         }
-        if let Some((page, ids)) = self
+        if let Some((_, ids)) = self
             .wb
             .pending_items
             .take_if(|(p, _)| Some(*p) == self.current_page)
         {
-            let _ = page;
             if let Some(view) = self.canvas.schematic() {
                 let items: Vec<_> = ids.iter().map(|&id| item_id(id)).collect();
                 view.canvas.selection.clear();
