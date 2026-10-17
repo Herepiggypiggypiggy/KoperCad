@@ -1580,7 +1580,9 @@ impl NovoApp {
                     ui.weak(self.saved_state());
                 }
                 self.issue_pill(ui);
-                self.whats_new_pill(ui);
+                if fit.whats_new_pill {
+                    self.whats_new_pill(ui);
+                }
                 let shortcut = Action::CommandPalette
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
@@ -1627,9 +1629,12 @@ impl NovoApp {
             return;
         }
         // Commissioning is the longest name and the panel names itself in
-        // its header: the button is its icon, the name in the tooltip.
+        // its header: the button is its icon, the name in the tooltip. So it
+        // is on a window under 760 points (a 1366 screen at 200 %), where the
+        // bar has no room for the word.
         let text = match self.outline_mode {
             OutlineMode::Commissioning => self.outline_mode.icon(),
+            _ if self.window_width < menu_bar::ICON_ONLY_BELOW => self.outline_mode.icon(),
             mode => mode.label(),
         };
         let toggle = ui
@@ -2970,7 +2975,7 @@ const SCREEN_MARGIN: egui::Vec2 = egui::vec2(0.0, 80.0);
 /// The size a window of `inner` gets on a screen of `monitor`, or `None`
 /// when it already fits.
 fn fitted_size(inner: egui::Vec2, monitor: egui::Vec2) -> Option<egui::Vec2> {
-    let room = (monitor - SCREEN_MARGIN).max(egui::vec2(640.0, 400.0));
+    let room = (monitor - SCREEN_MARGIN).max(egui::Vec2::from(crate::MIN_WINDOW));
     let fitted = inner.min(room);
     (fitted != inner).then_some(fitted)
 }
@@ -3040,6 +3045,16 @@ mod fit_tests {
     #[test]
     fn a_tiny_screen_never_goes_below_the_minimum() {
         let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(500.0, 400.0));
-        assert_eq!(got, Some(egui::vec2(640.0, 400.0)));
+        assert_eq!(got, Some(egui::vec2(560.0, 320.0)));
+    }
+
+    #[test]
+    fn a_1366_by_768_laptop_at_every_scale_keeps_the_window_on_the_screen() {
+        // Points offered at 100, 125, 150 and 200 %.
+        for scale in [1.0_f32, 1.25, 1.5, 2.0] {
+            let monitor = egui::vec2(1366.0, 768.0) / scale;
+            let got = fitted_size(egui::vec2(1280.0, 800.0), monitor).unwrap();
+            assert!(got.x <= monitor.x && got.y <= monitor.y, "{scale}: {got:?}");
+        }
     }
 }
