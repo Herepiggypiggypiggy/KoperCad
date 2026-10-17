@@ -55,6 +55,7 @@ mod electrical;
 mod eplan_export;
 mod eplan_import;
 mod eplan_parts;
+mod error_words;
 mod example;
 mod faults;
 mod heat;
@@ -229,6 +230,8 @@ mod commissioning_tests;
 mod compare_tests;
 #[cfg(test)]
 mod eplan_ui_tests;
+#[cfg(test)]
+mod error_words_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
@@ -747,6 +750,8 @@ impl NovoApp {
             Level::Warning => log::warn!("{text}"),
             Level::Error => log::error!("{text}"),
         }
+        // The log keeps the raw error; the person gets plain words.
+        let text = error_words::plain(&text);
         // The same message again (a failing export tried twice) renews the
         // one on screen instead of stacking a copy.
         if let Some(same) = self
