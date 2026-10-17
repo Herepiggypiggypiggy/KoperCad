@@ -38,30 +38,36 @@ pub fn waive(tx: &mut Tx<'_>, problem: &Problem, reason: &str) -> Result<Dismiss
     Ok(id)
 }
 
+/// Splits checked problems into the open ones and the waived ones.
+fn split(project: &Project, problems: Vec<Problem>) -> (Vec<Problem>, Vec<Waived>) {
+    let mut open = Vec::new();
+    let mut waived = Vec::new();
+    for problem in problems {
+        let Some(d) = waiver_of(project, &problem) else {
+            open.push(problem);
+            continue;
+        };
+        let reason = match d.properties.get(REASON) {
+            Some(Value::Text(t)) => t.clone(),
+            _ => String::new(),
+        };
+        waived.push(Waived {
+            reason,
+            waiver: d.id,
+            problem,
+        });
+    }
+    (open, waived)
+}
+
 /// The problems that have not been waived.
 pub fn check_open(project: &Project) -> Vec<Problem> {
-    let mut problems = check(project);
-    problems.retain(|p| waiver_of(project, p).is_none());
-    problems
+    split(project, check(project)).0
 }
 
 /// The waived problems with their reasons, in reading order.
 pub fn waived_problems(project: &Project) -> Vec<Waived> {
-    check(project)
-        .into_iter()
-        .filter_map(|problem| {
-            let d = waiver_of(project, &problem)?;
-            let reason = match d.properties.get(REASON) {
-                Some(Value::Text(t)) => t.clone(),
-                _ => String::new(),
-            };
-            Some(Waived {
-                problem,
-                reason,
-                waiver: d.id,
-            })
-        })
-        .collect()
+    split(project, check(project)).1
 }
 
 /// The design checks as lines of text for a printed report: a headline, the
@@ -75,8 +81,7 @@ pub fn report_lines(project: &Project) -> Vec<(bool, String)> {
             .map(|page| format!("  (page {})", page.name))
             .unwrap_or_default()
     };
-    let open = check_open(project);
-    let waived = waived_problems(project);
+    let (open, waived) = split(project, check(project));
     let mut lines = vec![
         (true, "Design checks".to_owned()),
         (false, crate::Summary::of(&open).pill_text()),
