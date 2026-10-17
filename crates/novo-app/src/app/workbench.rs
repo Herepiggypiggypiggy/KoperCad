@@ -182,6 +182,9 @@ pub(crate) struct Workbench {
     pub(super) sim: super::simulate::SimState,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
+    /// The card's close was clicked while the outline shows Changes: the tab
+    /// then waits for "Turn on" instead of switching the mode back on.
+    pub(super) changes_closed: bool,
     /// Commissioning mode's data and panel state, once opened.
     pub(super) commissioning: Option<super::commissioning::CommissioningMode>,
     /// The background drawing last handed to the canvas: page, project
@@ -303,6 +306,7 @@ impl Default for Workbench {
             live: Default::default(),
             sim: super::simulate::SimState::new(),
             changes: None,
+            changes_closed: false,
             background_panel: None,
             bench: None,
             pdf_options: None,
