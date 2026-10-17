@@ -111,6 +111,8 @@ pub(crate) struct Workbench {
     pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
+    /// Text of the open "Set wire number" prompt.
+    pub(super) number_prompt: Option<String>,
     /// The net trace window (`net.trace`), while it is open.
     pub(super) net_trace: Option<super::net_trace::NetTrace>,
     /// The new pages, group and panel form, while open.
@@ -267,6 +269,7 @@ impl Default for Workbench {
             safety: None,
             languages: None,
             numbering: None,
+            number_prompt: None,
             net_trace: None,
             device_renumber: None,
             selection_sheet: Default::default(),

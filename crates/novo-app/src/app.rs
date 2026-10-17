@@ -1340,6 +1340,7 @@ impl NovoApp {
         self.safety_window(&ctx);
         self.languages_window(&ctx);
         self.numbering_window(&ctx);
+        self.number_prompt_window(&ctx);
         self.net_trace_window(&ctx);
         self.terminal_edit_windows(&ctx);
         self.page_form_dialog(&ctx);
