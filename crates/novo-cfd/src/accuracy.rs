@@ -35,6 +35,8 @@ pub fn flow_core_statement() -> AccuracyStatement {
                 .into(),
             "Sealed-enclosure air rise lies up to 15% below the IEC 60890 estimate and the 2D engine (stratified air)."
                 .into(),
+            "In a vented box the exhaust air over a heat source is about 20% hotter and the vent flow 11 to 13% lower than the 2D estimate; housing temperature agrees within about 7% (model comparison, not a measurement)."
+                .into(),
             "Results for a cabinet carry the uncertainty of the loss data and boundary conditions."
                 .into(),
             "Time integration is first order: heat-up curves need small steps.".into(),

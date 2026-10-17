@@ -100,6 +100,7 @@ how_nl = [
   "De tekening verschijnt bleek achter de pagina.",
 ]
 expect = { command = "file.import_dxf_background" }
+manual = "Opens a file dialog to pick a DXF file."
 
 [[step]]
 id = "trace"
@@ -125,6 +126,7 @@ how_nl = [
   "Het is één stap, dus {key:edit.undo} brengt de achtergrond terug.",
 ]
 expect = { command = "file.remove_background" }
+manual = "Needs the background from the previous step, which is a file dialog."
 
 [[step]]
 id = "done"

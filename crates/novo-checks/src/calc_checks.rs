@@ -29,6 +29,7 @@
 //! | `supply.network_sk_mva_max`, `supply.network_sk_mva_min` | project | fault level of the network behind the transformer, MVA |
 //! | `supply.voltage_v` | project | line-to-line voltage for the loop, V (400) |
 //! | `check.voltage_drop_pct` | project | drop limit, percent (5) |
+//! | `check.pe_resistance_ohm` | project | limit for the protective core of one cable at 20 °C, Ω (silent without it) |
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
@@ -41,7 +42,7 @@ use crate::calc::cable::{Circuit, Loaded, Method, check_overload};
 use crate::calc::drop::{Run, Supply, check_drop};
 use crate::calc::motor::{ShortCircuitDevice, Starter, check_starter};
 use crate::calc::network::{Branch, Network, SourceModel, Transformer};
-use crate::calc::pe::check_pe_section;
+use crate::calc::pe::{check_continuity, check_pe_section, path_resistance};
 use crate::calc::short_circuit::{
     Trip, check_breaking_capacity, check_disconnection, check_withstand,
 };
@@ -73,6 +74,7 @@ pub const SUPPLY_NETWORK_SK_MVA_MIN: &str = "supply.network_sk_mva_min";
 pub const SUPPLY_SHORT_CIRCUIT_KA: &str = "supply.short_circuit_ka";
 pub const SUPPLY_VOLTAGE_V: &str = "supply.voltage_v";
 pub const VOLTAGE_DROP_PCT: &str = "check.voltage_drop_pct";
+pub const PE_RESISTANCE_OHM: &str = "check.pe_resistance_ohm";
 
 const DEFAULT_SUPPLY_VOLTAGE: f64 = 400.0;
 
@@ -577,6 +579,30 @@ fn protective_conductors(cx: &Context<'_>, out: &mut Vec<Problem>) {
         };
         if let Some(mut finding) = check_pe_section(phase, pe) {
             finding.message = format!("{}: {}", cable.tag, finding.message);
+            out.push(problem(
+                ProblemKind::ProtectiveConductor,
+                finding,
+                vec![AnyId::Cable(cable.id)],
+            ));
+        }
+        // Continuity of this cable's own protective core. A path across
+        // several cables is not followed; each cable is judged alone.
+        let Some(length) = cable.length_m.filter(|l| *l > 0.0) else {
+            continue;
+        };
+        // The standards give section and loop rules, not one ohm figure,
+        // so without a limit from the project there is nothing to judge.
+        let Some(limit) =
+            number(&cx.project.info().properties, PE_RESISTANCE_OHM).filter(|l| *l > 0.0)
+        else {
+            continue;
+        };
+        let resistance = path_resistance(&[(pe, length)], 20.0);
+        if let Some(mut finding) = resistance.and_then(|r| check_continuity(r, limit)) {
+            finding.message = format!(
+                "{}: {} (planning value, verify)",
+                cable.tag, finding.message
+            );
             out.push(problem(
                 ProblemKind::ProtectiveConductor,
                 finding,
