@@ -107,6 +107,11 @@ pub const DUTCH: &[Aliases] = &[
         &["nieuw", "wat is nieuw", "nieuwigheden"],
     ),
     nl(
+        "help.next_lesson",
+        &[],
+        &["volgende les", "les doorgaan", "doorgaan met leren"],
+    ),
+    nl(
         "help.numbers",
         &[],
         &["over de getallen", "schatting", "model", "rekenwaarde"],

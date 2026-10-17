@@ -155,6 +155,8 @@ pub(crate) struct LearnState {
     /// The Learn window is open.
     pub(super) window: bool,
     pub(super) filter: String,
+    /// The Learn window lists only this track (Help > Learning paths).
+    pub(super) only_track: Option<String>,
     pub(super) show_drafts: bool,
     pub(super) confirm_restart: bool,
     /// Lessons whose lint has errors, so they are not offered yet.
@@ -202,6 +204,7 @@ impl LearnState {
             hidden: false,
             window: false,
             filter: String::new(),
+            only_track: None,
             show_drafts: false,
             confirm_restart: false,
             coming: None,
@@ -353,6 +356,15 @@ impl LearnState {
 
     pub(super) fn file(&self, path: &str) -> Option<&str> {
         self.files.get(path).map(String::as_str)
+    }
+
+    /// The lesson Help and the Learn window offer: the one on the card,
+    /// else the next one the person can do.
+    pub(super) fn offered(&self) -> Option<Entry> {
+        let running = self.running().and_then(|id| self.catalog.get(id));
+        running
+            .or_else(|| self.catalog.next_lesson(&self.progress, self.show_drafts))
+            .cloned()
     }
 
     /// The id of the lesson being done.
@@ -954,7 +966,17 @@ impl NovoApp {
                         self.learn.window = true;
                     }
                 },
-                None => self.learn.window = !self.learn.window,
+                None => {
+                    self.learn.window = !self.learn.window;
+                    self.learn.only_track = None;
+                }
+            },
+            "help.next_lesson" => match self.learn.offered() {
+                Some(entry) if self.learn.running() == Some(entry.lesson.id.as_str()) => {
+                    self.continue_lesson();
+                }
+                Some(entry) => self.start_lesson(&entry.lesson.id),
+                None => self.learn.window = true,
             },
             "learn.next" => self.learn_move(Move::Next),
             "learn.back" => self.learn_move(Move::Back),
