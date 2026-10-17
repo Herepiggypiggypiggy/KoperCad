@@ -129,6 +129,9 @@ pub(crate) struct Workbench {
     /// An item to select and centre once its page is shown (a row of the
     /// Changes list).
     pub(super) pending_item: Option<(PageId, AnyId)>,
+    /// Several items to select together on a page, once it is shown (a
+    /// cable's core wires from the outline).
+    pub(super) pending_items: Option<(PageId, Vec<AnyId>)>,
     /// The drawing's layer and rect last frame: a focused widget there is
     /// the canvas, anywhere else a panel.
     pub(super) canvas_area: Option<(egui::LayerId, egui::Rect)>,
@@ -276,6 +279,7 @@ impl Default for Workbench {
             nav: Navigator::default(),
             pending: None,
             pending_item: None,
+            pending_items: None,
             canvas_area: None,
             occurrences: None,
             drawer: None,
@@ -1527,6 +1531,21 @@ impl NovoApp {
                 view.canvas.selection.clear();
                 view.canvas.selection.apply([item], SelectOp::Replace);
                 view.canvas.reveal([item]);
+            }
+        }
+        if let Some((page, ids)) = self
+            .wb
+            .pending_items
+            .take_if(|(p, _)| Some(*p) == self.current_page)
+        {
+            let _ = page;
+            if let Some(view) = self.canvas.schematic() {
+                let items: Vec<_> = ids.iter().map(|&id| item_id(id)).collect();
+                view.canvas.selection.clear();
+                view.canvas
+                    .selection
+                    .apply(items.iter().copied(), SelectOp::Replace);
+                view.canvas.reveal(items);
             }
         }
         self.highlight_related();

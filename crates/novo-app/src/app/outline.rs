@@ -329,6 +329,10 @@ impl NovoApp {
                 self.go_to_wire(wire);
                 closed = true;
             }
+            Some(NetJump::Cable(wires)) => {
+                self.go_to_cable_wires(&wires);
+                closed = true;
+            }
             Some(NetJump::EmptyCable(tag)) => self.message(
                 super::Level::Info,
                 format!("{tag} has no core wired yet, so there is no wire to go to"),
@@ -343,7 +347,7 @@ impl NovoApp {
 
     /// The Wires and Cables sections under the page tree: every wire by
     /// page and every cable, each a row that jumps to it (a wire opens its
-    /// page and selects it, a cable goes to its first wired core). With a
+    /// page and selects it, a cable selects all its wired cores). With a
     /// filter the sections open on what matches.
     fn net_sections(&self, ui: &mut egui::Ui, filter: &str) -> Option<NetJump> {
         let project = self.backend.document()?.project();
@@ -393,12 +397,13 @@ impl NovoApp {
                 for cable in list {
                     if ui
                         .selectable_label(false, &cable.text)
-                        .on_hover_text("Go to the first wired core of this cable")
+                        .on_hover_text("Select all wired cores of this cable")
                         .clicked()
                     {
-                        jump = Some(match cable.first_wire {
-                            Some(w) => NetJump::Wire(w),
-                            None => NetJump::EmptyCable(cable.text.clone()),
+                        jump = Some(if cable.wires.is_empty() {
+                            NetJump::EmptyCable(cable.text.clone())
+                        } else {
+                            NetJump::Cable(cable.wires.clone())
                         });
                     }
                 }
@@ -1573,6 +1578,8 @@ impl NovoApp {
 /// What a click on a Wires or Cables row asks for.
 enum NetJump {
     Wire(novo_core::WireId),
+    /// A cable with wired cores: all of them are selected together.
+    Cable(Vec<novo_core::WireId>),
     /// A cable with no wired core; its text for the message.
     EmptyCable(String),
 }

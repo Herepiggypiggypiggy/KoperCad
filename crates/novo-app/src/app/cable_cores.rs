@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 
 use eframe::egui;
 use novo_cables::{CableProposal, CableType};
-use novo_core::{AnyId, Cable, CableId, DeviceTag, Project, WireId};
+use novo_core::{AnyId, Cable, CableId, DeviceTag, PageId, Project, WireId};
 
 use super::cable_controls::{CableAction, CableEdit};
 use super::drawers::DrawerAction;
@@ -576,6 +576,37 @@ impl NovoApp {
     }
 
     /// Selects a wire on its page (the command field's "wire 105").
+    /// Opens the page of a cable's first wired core and selects the cores'
+    /// wires on it together. Cores on other pages are counted in a message:
+    /// a selection belongs to one page.
+    pub(super) fn go_to_cable_wires(&mut self, wires: &[WireId]) {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        let pages: Vec<(WireId, PageId)> = wires
+            .iter()
+            .filter_map(|&w| project.wire(w).map(|x| (w, x.page)))
+            .collect();
+        let Some(&(_, page)) = pages.first() else {
+            self.message(Level::Info, "Those wires no longer exist");
+            return;
+        };
+        let here: Vec<AnyId> = pages
+            .iter()
+            .filter(|(_, p)| *p == page)
+            .map(|(w, _)| AnyId::Wire(*w))
+            .collect();
+        let elsewhere = pages.len() - here.len();
+        self.show_page(page);
+        self.wb.pending_items = Some((page, here));
+        if elsewhere > 0 {
+            self.message(
+                Level::Info,
+                format!("{elsewhere} more cores are wired on other pages"),
+            );
+        }
+    }
+
     pub(super) fn go_to_wire(&mut self, wire: WireId) {
         let page = self
             .backend
