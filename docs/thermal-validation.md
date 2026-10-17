@@ -36,6 +36,7 @@ Errors are signed, relative to the reference unless marked abs.
 | Porous slab as fan load (CFD-C2, `ducts.rs`) | exact operating point | flow | -0.04% and -0.03% at two time steps |
 | IEC 60890 wall films (CFD-C2) | k A_eff | conductance sum | below 1e-9 relative |
 | Sealed enclosure 50 W, mean air rise (fixed in #675 with ThermalBc::Overall) | IEC 60890 hand calc 6.29 K, 2D engine 6.10 K | 3D mean air rise | 5.84 K on 1000 cells, 5.37 on 1800, 5.36 on 6000: -7% to -15% vs IEC, -4% to -12% vs 2D (the 3D mean is lower because the air is stratified); test band 20% |
+| Cabinet solver as the app runs it (`tests/validation_cabinet.rs`, CFD-INT), sealed 50 W and vented 100 W, 1500 and 3000 cells | 2D engine (and IEC 60890 for the sealed case) | mean air rise; housing rise; plate share | air -11 to -14% (IEC -13 to -14%) sealed and -15 to -16% vented; housing +5 to +7%; plate share within 0.005; test bands 20%, 12%, 0.03. Above 6000 cells the housing rise creeps to +10..20% (see the accuracy statement). Not checked against a measurement. `ENCLOSURE_VALIDATED` is true on this basis |
 | Transient slab, dt = tau/200 and tau/400 | Fourier series | centre temperature at 0.1 tau | +2.34% and +1.19% (first order in dt) |
 
 ## What this says

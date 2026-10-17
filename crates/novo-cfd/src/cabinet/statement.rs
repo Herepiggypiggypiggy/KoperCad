@@ -14,7 +14,7 @@ use crate::turb::TurbModel;
 /// Set when the cabinet against IEC 60890 and the 2D engine is within the
 /// tolerance of `tests/validation_cabinet.rs` for the sealed and the vented
 /// reference cabinet. Flip it in the PR that makes that test pass.
-pub const ENCLOSURE_VALIDATED: bool = false;
+pub const ENCLOSURE_VALIDATED: bool = true;
 
 /// The accuracy statement of a result at `fidelity`.
 pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
@@ -44,7 +44,17 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
             .into_iter()
             .filter(|l| !l.starts_with("Open vents")),
     );
-    if !ENCLOSURE_VALIDATED {
+    if ENCLOSURE_VALIDATED {
+        limits.insert(
+            0,
+            "Checked against IEC 60890 and the 2D engine on a sealed 50 W and a vented 100 W \
+             reference cabinet (1500 to 3000 cells): the mean air rise is 11 to 16 % below the \
+             2D engine (the 3D mean is lower because the air stratifies), the housing rise \
+             5 to 7 % above it, the plate share within 0.01. Not checked against a \
+             measurement; other layouts, fans and ducts are covered by their own cases only."
+                .into(),
+        );
+    } else {
         limits.insert(
             0,
             "Enclosure temperatures are not yet validated against IEC 60890 and the 2D engine."
