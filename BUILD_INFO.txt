@@ -1,0 +1,8 @@
+KoperCAD experimental build 2026-10-17T14:46:52Z
+
+Included:
+main d6f1e6ee
+#951 e0f0c928 3D Heat strip: Arrows hover quotes the top speed only while Arrows is on
+#958 8f6ecb92 Help menu: Next lesson and Learning paths
+#988 8a6d4549 CFD-G: vented cabinet with three devices against the 2D engine
+#1004 05dd92e2 Preferences: my symbol folder
