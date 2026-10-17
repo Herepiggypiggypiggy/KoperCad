@@ -100,8 +100,9 @@ recovered work. A clean close removes the recovery file. Your .novo file is only
 changed when you press Ctrl+S.
 
 Uninstalling (Windows Settings > Apps) removes the program and leaves your
-projects and settings alone. To start completely fresh, delete the KoperCAD folders under %APPDATA% and %LOCALAPPDATA%, and the
-NovoElectric folder under %LOCALAPPDATA%.
+projects and settings alone. To start completely fresh without touching your real settings, run
+kopercad.exe --profile-dir C:\Users\you\kopercad-test (a new empty folder; delete it to start
+over). Everything the program keeps then goes into that folder.
 
 
 4. If something goes wrong
