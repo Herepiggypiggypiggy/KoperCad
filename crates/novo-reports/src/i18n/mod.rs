@@ -42,7 +42,9 @@ pub use apply::{
     render_in, strings_of_output, strings_of_template, translate_layout, translate_output,
     translate_template,
 };
-pub use catalog::{Catalog, CatalogProblem, builtin, check_entry, placeholders};
+pub use catalog::{
+    Catalog, CatalogProblem, EXTENSION, LanguageFileError, builtin, check_entry, placeholders,
+};
 pub use project::{LANGUAGE_KEY, ProjectTable, TABLE_KEY, language_of};
 pub use translator::{ENGLISH, Translator};
 

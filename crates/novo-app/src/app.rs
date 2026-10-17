@@ -37,6 +37,9 @@ mod commissioning_redlines;
 mod commissioning_signature;
 #[cfg(test)]
 mod commissioning_signature_tests;
+mod commissioning_viewer;
+#[cfg(test)]
+mod commissioning_viewer_tests;
 mod compare;
 mod designer;
 mod device_renumber;
@@ -165,6 +168,9 @@ mod view3d_rail;
 #[cfg(test)]
 mod view3d_rail_tests;
 mod view3d_stats;
+mod view3d_surface_devices;
+#[cfg(test)]
+mod view3d_surface_devices_tests;
 mod view3d_surfaces;
 #[cfg(test)]
 mod view3d_tests;
