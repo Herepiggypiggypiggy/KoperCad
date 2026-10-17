@@ -94,10 +94,17 @@ fn duplicates_ui(ui: &mut egui::Ui, state: &mut QualityTab, catalog: &Catalog) -
         ui.weak("No duplicates found. Parts are compared by order number and type number.");
         return None;
     }
-    ui.weak(format!(
-        "{} groups. Only values both parts record are compared; a missing value is not a conflict.",
-        groups.len()
-    ));
+    let mut refresh = false;
+    ui.horizontal(|ui| {
+        ui.weak(format!(
+            "{} groups. Only values both parts record are compared; a missing value is not a conflict.",
+            groups.len()
+        ));
+        refresh = ui
+            .small_button("Refresh")
+            .on_hover_text("Find duplicates again after editing parts")
+            .clicked();
+    });
     ui.separator();
     egui::Panel::right("parts_duplicates_detail")
         .exact_size(340.0)
@@ -122,7 +129,15 @@ fn duplicates_ui(ui: &mut egui::Ui, state: &mut QualityTab, catalog: &Catalog) -
             for c in &group.conflicts {
                 ui.strong(&c.field);
                 for (key, value) in group.members.iter().zip(&c.values) {
-                    let who = catalog.get(key).map_or("", |p| p.manufacturer.as_str());
+                    // Members of a type-number group share the maker, so name each
+                    // by its order number (the maker when that is empty).
+                    let who = catalog.get(key).map_or("", |p| {
+                        if p.order_number.is_empty() {
+                            p.manufacturer.as_str()
+                        } else {
+                            p.order_number.as_str()
+                        }
+                    });
                     ui.weak(format!(
                         "{who}: {}",
                         value.as_deref().unwrap_or("not recorded")
@@ -153,6 +168,9 @@ fn duplicates_ui(ui: &mut egui::Ui, state: &mut QualityTab, catalog: &Catalog) -
         });
     });
     state.group = picked;
+    if refresh {
+        state.dupes = None;
+    }
     jump
 }
 
