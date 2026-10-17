@@ -123,7 +123,9 @@ pub fn accuracy_with_turbulence(fidelity: Fidelity, model: TurbModel) -> Accurac
             "Turbulence: {name} with wall functions; radiation is not modelled, so surface \
              temperatures of hot devices are slightly high. The wall functions assume attached \
              flow, and the heat flux of natural-convection walls is under-predicted when the \
-             first cell is thicker than the boundary layer (coarse grids)."
+             first cell is thicker than the boundary layer (coarse grids). Device surfaces use \
+             the device film model, not the wall function. In a vented 100 W box the result \
+             differed from laminar by under 3 %; fan-driven flow is not checked yet."
         );
     }
     a.headline.push_str(&format!(" Turbulence: {name}."));
