@@ -455,6 +455,10 @@ impl NovoApp {
                     part(2.0),
                     false,
                 );
+            });
+            // The menu sits on its own row: beside the tabs it took their
+            // room and cut the third one off in the narrow side panel.
+            ui.horizontal(|ui| {
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     let (report, action) = header_menu(ui, mode, &mut large, tablet);
                     export = report;

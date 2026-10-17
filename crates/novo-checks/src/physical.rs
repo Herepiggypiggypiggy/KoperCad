@@ -57,7 +57,9 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
         &connections,
         &novo_routing::WireRules::of(project).routing,
     );
-    let wire = |job: u64| project.wires().find(|w| w.id.raw() == job).map(|w| w.id);
+    let wires: std::collections::HashMap<u64, WireId> =
+        project.wires().map(|w| (w.id.raw(), w.id)).collect();
+    let wire = |job: u64| wires.get(&job).copied();
     let mut guessed: Vec<AnyId> = Vec::new();
     for (structure, plan) in &routed.plans {
         for problem in &plan.problems {

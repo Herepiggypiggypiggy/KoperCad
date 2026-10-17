@@ -11,6 +11,7 @@ Done (PR 1, this branch `claude/project-thread-bdmgix`):
 - Storage: user folder, project property `designer.templates`, project > user > built-in resolution.
 - `novo_pdf::export_layouts_pdf`, golden content stream test, frame pixel-diff tests.
 - `designer::ENTRY` (Reports workspace > Designer, command `reports.designer`).
+- `report.designer`: opens the report designer, with its language choice (the preview follows the project's report language and refreshes when it changes).
 
 Next, in order:
 1. UI lane (R3): Reports workspace > Designer tab: template list, canvas with live preview, table builder panel, title block editor; registers `reports.designer`.
@@ -27,3 +28,5 @@ Done in PR 3: CLI `--language` on export commands and commissioning-report, `nov
 Decision: Dutch is the report/PDF language only. Menus, command ids and file formats stay English.
 
 PR 4: language files (File > Report languages > Save/Load language file; `Catalog::to_json/from_json`, `*.kopercad-lang.json`). Import is two undo steps (table, then language).
+
+Lane status (2026-10-17): DOC-2 is complete for reports, pages, PDF, CSV, Excel, CLI and Python. Done after PR 4: decimal sign per language (language file field `decimal`, Languages window chips), fixed cell words and assembly checklist texts in Dutch, surface names and rail mount text, numbers in translated patterns follow the decimal sign (measurement placeholders only). Not done, by decision: menus and commands stay English; the wire cut machine file stays English; user-named surfaces and project data are never translated. A new fixed word written by a report must be added to `FIXED_CELL_TEXTS` or `FIXED_CELL_PATTERNS` and `nl.json`; a test fails until it has a Dutch entry.

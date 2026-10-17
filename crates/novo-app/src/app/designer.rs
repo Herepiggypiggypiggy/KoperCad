@@ -57,6 +57,8 @@ pub(super) struct DesignerState {
     project_data: bool,
     /// The last render, kept while the draft and data are unchanged.
     cache: Option<(Template, bool, u64, Rendered)>,
+    /// The report language `cache` was rendered in; a new language renders again.
+    cache_language: String,
     /// A pick or a new template waiting for the person to agree to drop
     /// the unsaved edits.
     pending: Option<Act>,
@@ -74,6 +76,7 @@ impl DesignerState {
             page: 0,
             project_data: false,
             cache: None,
+            cache_language: String::new(),
             pending: None,
         };
         s.reload(project);
@@ -307,10 +310,13 @@ impl NovoApp {
         let revision = project.revision();
         // Render again only when the draft, the data choice or the project
         // changed.
-        let stale = state.cache.as_ref().is_none_or(|(t, live, rev, _)| {
-            *t != state.draft || *live != state.project_data || *rev != revision
-        });
+        let language = novo_reports::i18n::language_of(project);
+        let stale = state.cache_language != language
+            || state.cache.as_ref().is_none_or(|(t, live, rev, _)| {
+                *t != state.draft || *live != state.project_data || *rev != revision
+            });
         if stale {
+            state.cache_language = language;
             let rendered = if state.project_data {
                 self.render_with_project(&state.draft)
             } else {
@@ -1290,6 +1296,25 @@ mod tests {
         d.app.reports_view.template = Some("Wire list".into());
         let through = d.app.export_report("wires", ReportFormat::Pdf).unwrap();
         assert!(is_pdf(&through));
+    }
+
+    #[test]
+    fn switching_the_report_language_refreshes_the_preview() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = app(dir.path());
+        d.app.wb.queued.push("report.designer");
+        d.frame();
+        state(&mut d).project_data = true;
+        d.frame();
+        assert_eq!(state(&mut d).cache_language, "en");
+        d.app.set_report_language("nl");
+        d.frame();
+        assert_eq!(state(&mut d).cache_language, "nl");
+        let st = state(&mut d);
+        // Only the language differs from the cached render.
+        st.cache_language = "en".into();
+        d.frame();
+        assert_eq!(state(&mut d).cache_language, "nl");
     }
 
     #[test]

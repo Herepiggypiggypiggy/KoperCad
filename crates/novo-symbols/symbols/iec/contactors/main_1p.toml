@@ -5,7 +5,7 @@ description = "1-pole main (power) contacts of a contactor, switched by the coil
 standard = "IEC 60617"
 category = "contactors"
 function = "contact.main"
-keywords = ["contactor", "main contact", "power", "1p"]
+keywords = ["contactor", "main contact", "power contactor", "main contacts", "power contacts", "power", "1p"]
 aliases = ["km1"]
 
 connections = [

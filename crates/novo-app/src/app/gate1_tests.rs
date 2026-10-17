@@ -2880,6 +2880,19 @@ fn plc_tags_leave_as_files_and_the_programmers_edits_come_back() {
     assert_eq!(written[0].file_name().unwrap(), "Plant PLC.xml");
     let xml = std::fs::read_to_string(&written[0]).unwrap();
     assert!(xml.contains("address=\"%IX0.0\""), "{xml}");
+    // The export toast names the file and offers to open the folder.
+    let toast = d
+        .app
+        .messages()
+        .iter()
+        .rev()
+        .find(|m| m.text.starts_with("Exported"))
+        .expect("an export toast");
+    assert_eq!(
+        toast.file.as_deref(),
+        Some(written[0].as_path()),
+        "{toast:?}"
+    );
 
     // The programmer rewords the comment and renames the tag; the preview
     // lists it, Esc leaves the project alone, Enter applies one undo step.

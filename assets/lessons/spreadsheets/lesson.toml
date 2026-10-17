@@ -93,6 +93,7 @@ how_nl = [
 ]
 point = { ui = "palette.button" }
 expect = { command = "import.spreadsheet" }
+manual = "Opens a file dialog to pick the edited workbook, which the replay cannot answer."
 
 [[step]]
 id = "preview"
@@ -141,6 +142,7 @@ how_nl = [
   "Het apparaat **-K1** heet nu **Pump 1 contactor**.",
 ]
 expect = { field = { device = "-K1", name = "description", equals = "Pump 1 contactor" } }
+manual = "Needs the workbook edited in Excel outside the app first."
 
 [[step]]
 id = "undo"

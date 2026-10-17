@@ -58,6 +58,7 @@
 //! | [`CoilSupply`](ProblemKind::CoilSupply) | warning | A coil not fed between a control voltage and its return |
 //! | [`PlugPinOneSided`](ProblemKind::PlugPinOneSided) | warning | A plug pin wired on one half only |
 //! | [`RelaySize`](ProblemKind::RelaySize) | warning | A relay larger than the contacts drawn need, when its sizes are declared |
+//! | [`CoilOnPowerFeed`](ProblemKind::CoilOnPowerFeed) | warning | A one-pole coil wired to a three-phase feed; the power contacts belong there |
 //! | [`CableText`](ProblemKind::CableText) | warning | A cable whose cores, cross-section or protective core disagree with its `4G1.5` text |
 //! | [`NeutralUse`](ProblemKind::NeutralUse) | warning | A device on a neutral net that is neither supply nor external (opt-in) |
 //! | [`PlugPins`](ProblemKind::PlugPins) | info | Overview of the pins of a plug, wired and free |
@@ -256,6 +257,8 @@ pub enum ProblemKind {
     PlugPinOneSided,
     /// A relay larger than the auxiliary contacts drawn need (C08).
     RelaySize,
+    /// A one-pole coil wired to a three-phase power feed.
+    CoilOnPowerFeed,
     /// A cable whose cores disagree with its text such as `4G1.5` (C12).
     CableText,
     /// A device on a neutral net that is neither supply nor external, when selected (C16).
@@ -324,7 +327,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 66] = [
+    pub const ALL: [ProblemKind; 67] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -385,6 +388,7 @@ impl ProblemKind {
         ProblemKind::CoilSupply,
         ProblemKind::PlugPinOneSided,
         ProblemKind::RelaySize,
+        ProblemKind::CoilOnPowerFeed,
         ProblemKind::CableText,
         ProblemKind::NeutralUse,
         ProblemKind::PlugPins,
@@ -447,6 +451,7 @@ impl ProblemKind {
             | ProblemKind::CoilSupply
             | ProblemKind::PlugPinOneSided
             | ProblemKind::RelaySize
+            | ProblemKind::CoilOnPowerFeed
             | ProblemKind::CableText
             | ProblemKind::NeutralUse
             | ProblemKind::TagRule
@@ -527,6 +532,7 @@ impl ProblemKind {
             ProblemKind::CoilSupply => "Coil supply",
             ProblemKind::PlugPinOneSided => "Plug pin on one half",
             ProblemKind::RelaySize => "Relay too large",
+            ProblemKind::CoilOnPowerFeed => "Coil on a power feed",
             ProblemKind::CableText => "Cable text",
             ProblemKind::NeutralUse => "Neutral use",
             ProblemKind::PlugPins => "Plug pins",
@@ -599,6 +605,7 @@ impl ProblemKind {
             ProblemKind::CoilSupply => "check.coil_supply",
             ProblemKind::PlugPinOneSided => "check.plug_pin_one_sided",
             ProblemKind::RelaySize => "check.relay_size",
+            ProblemKind::CoilOnPowerFeed => "check.coil_on_power_feed",
             ProblemKind::CableText => "check.cable_text",
             ProblemKind::NeutralUse => "check.neutral_use",
             ProblemKind::PlugPins => "check.plug_pins",
@@ -745,6 +752,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     house_rules::motor_phases(&cx, netlist, &mut problems);
     house_rules::coil_supply(&cx, netlist, &mut problems);
     more_rules::relay_size(&cx, &mut problems);
+    more_rules::coil_on_power_feed(&cx, &mut problems);
     more_rules::cable_text(&cx, &mut problems);
     more_rules::neutral_use(&cx, netlist, &mut problems);
     more_rules::plug_overview(&cx, &mut problems);

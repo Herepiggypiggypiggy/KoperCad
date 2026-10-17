@@ -17,6 +17,10 @@ pub(crate) enum Basis {
     /// Both devices are placed on one plate but no duct reaches both: a
     /// straight Manhattan line, which the routing engine flags as a problem.
     FreeAir,
+    /// One end is on the door or another surface: the plate leg is routed,
+    /// the leg on the surface is measured from the opening, and the distance
+    /// between plate and door and the hinge loop are left out.
+    Door,
     /// At least one device is not placed on a plate: see [`estimate`].
     Estimate,
 }
@@ -27,6 +31,7 @@ impl Basis {
             Basis::Routed => "routed",
             Basis::RoutedFlat => "routed, no depth",
             Basis::FreeAir => "free air",
+            Basis::Door => "door, no gap",
             Basis::Estimate => "estimate",
         }
     }
@@ -110,6 +115,15 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
                 Some(route) => CutLength {
                     mm: route.length_mm,
                     basis: match route.kind {
+                        // Through an opening to the door: a model, the gap and
+                        // the hinge loop are not in the length.
+                        _ if routed
+                            .surface_legs
+                            .get(&(i as u64))
+                            .is_some_and(|leg| leg.opening.is_some()) =>
+                        {
+                            Basis::Door
+                        }
                         Kind::Ducted if routed.unknown_height.contains(&(i as u64)) => {
                             Basis::RoutedFlat
                         }

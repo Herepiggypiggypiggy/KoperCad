@@ -843,6 +843,61 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
 }
 
 #[test]
+fn a_wire_to_the_door_is_a_model_and_says_so() {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    let (mut doc, h) = starter();
+    doc.transact("Cabinet", |tx| {
+        let cab = tx.add_structure(DeviceTag::parse("+CAB")?, "Cabinet", true)?;
+        tx.set_plate(
+            cab,
+            Some(MountingPlate {
+                width: 400.0,
+                height: 400.0,
+                margin: 10.0,
+            }),
+        )?;
+        novo_layout::model::set_enclosure(
+            tx,
+            cab,
+            &Enclosure {
+                width: 450.0,
+                height: 450.0,
+                depth: 200.0,
+                plate_setback: 20.0,
+                door: Some(Door {
+                    hinge: Hinge::Left,
+                    ..Door::default()
+                }),
+                front_clearance: None,
+                hinge_side_clearance: None,
+            },
+        )?;
+        tx.set_property(
+            cab,
+            "opening.gland",
+            Some(novo_core::Value::Text(
+                "plate round 25 150 300 to door 200 150".into(),
+            )),
+        )?;
+        tx.place_device(h.f1, cab, Point::new(50.0, 50.0), false, None)?;
+        tx.place_device(h.k1, cab, Point::new(100.0, 100.0), false, None)?;
+        let id = tx
+            .project()
+            .all::<novo_core::CabinetPlacement>()
+            .find(|c| c.device == h.k1)
+            .expect("placed")
+            .id;
+        tx.set_property(id, "surface", Some(novo_core::Value::Text("door".into())))?;
+        Ok(())
+    })
+    .expect("layout");
+    let wires = report(&doc, "wires");
+    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!(row[9], "door, no gap", "{row:?}");
+    assert!(novo_reports::is_estimate(&row[9]), "marked ~ on the bench");
+}
+
+#[test]
 fn wire_list_csv_carries_the_cut_length() {
     let (doc, _) = starter();
     let csv = to_csv(&report(&doc, "wires"), &CsvOptions::default());

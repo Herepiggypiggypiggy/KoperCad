@@ -183,3 +183,36 @@ fn the_changes_and_live_cards_start_apart_and_reset_after_a_move() {
         super::panel::id("changes_card")
     ));
 }
+
+#[test]
+fn closing_the_changes_card_keeps_the_tab_from_turning_it_back_on() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let issued = d
+        .app
+        .backend
+        .issue_revision(None, "2026-10-15", "TV", "First")
+        .unwrap();
+    d.app.changed_outside_canvas(&issued.changes);
+    d.app.outline_mode = OutlineMode::Changes;
+    d.app.outline_open = true;
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.changes.is_some(), "the tab turns the mode on");
+    // What the card's close button does.
+    d.app.wb.changes = None;
+    d.app.wb.changes_closed = true;
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.changes.is_none(), "the tab leaves the mode off");
+    // Another tab and back is a fresh opening.
+    d.app.outline_mode = OutlineMode::Pages;
+    d.frame();
+    d.app.outline_mode = OutlineMode::Changes;
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.changes.is_some(), "reopening the tab turns it on");
+}
