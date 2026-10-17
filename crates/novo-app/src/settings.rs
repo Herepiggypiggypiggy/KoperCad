@@ -92,6 +92,10 @@ pub struct Settings {
     /// (`app/pdf_options.rs`): a per-user preference, kept in the settings
     /// file under the user's profile.
     pub pdf_choice: PdfChoice,
+    /// A folder of the person's own symbols (`*.toml`, ids relative to the
+    /// folder), offered beside the built-in pack. Per user, not in the
+    /// project.
+    pub symbol_folder: Option<PathBuf>,
 }
 
 /// A saved 3D camera: where it looks from, in the view's own units.

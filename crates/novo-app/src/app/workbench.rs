@@ -129,6 +129,8 @@ pub(crate) struct Workbench {
     /// An item to select and centre once its page is shown (a row of the
     /// Changes list).
     pub(super) pending_item: Option<(PageId, AnyId)>,
+    /// The person's symbol folder as last loaded into the catalog.
+    pub(super) custom_symbols: super::symbol_folder::CustomSymbols,
     /// The drawing's layer and rect last frame: a focused widget there is
     /// the canvas, anywhere else a panel.
     pub(super) canvas_area: Option<(egui::LayerId, egui::Rect)>,
@@ -276,6 +278,7 @@ impl Default for Workbench {
             nav: Navigator::default(),
             pending: None,
             pending_item: None,
+            custom_symbols: Default::default(),
             canvas_area: None,
             occurrences: None,
             drawer: None,

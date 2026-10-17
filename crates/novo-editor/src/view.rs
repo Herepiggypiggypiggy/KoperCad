@@ -417,6 +417,12 @@ impl SchematicView {
         self.menu = None;
     }
 
+    /// Draws symbols from the catalog's library again, after the catalog
+    /// was replaced (a symbol folder was chosen).
+    pub fn refresh_art(&mut self) {
+        self.art = LibraryArt::new(self.editor.catalog.library(), self.style.symbol);
+    }
+
     /// Draws the page with `style` (the app's theme) instead of the
     /// default look; the scene is rebuilt on the next frame.
     pub fn set_style(&mut self, style: ModelStyle) {
