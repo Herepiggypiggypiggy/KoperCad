@@ -249,7 +249,8 @@ fn surfaces_of(project: &Project, structure: StructureId) -> Surfaces {
 /// same such surface is a straight run (`Kind::FreeAir`, no duct there). A
 /// wire between the plate and such a surface leaves the plate through the
 /// wiring opening that adds the least wire
-/// ([`novo_layout::openings::best_passage`]): the plate leg is routed through
+/// ([`novo_layout::openings::best_passage`], an approximate choice: it ranks
+/// by straight-line distance, while the plate leg runs through the ducts): the plate leg is routed through
 /// the ducts to the opening and the rest is added to its length (see
 /// [`SurfaceLeg`]).
 pub fn route_connections(project: &Project, connections: &[Connection], rules: &Rules) -> Routed {
@@ -392,8 +393,14 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         out.plans.push((structure, p));
     }
     for (id, mm) in extra {
-        if let Some(route) = out.routes.get_mut(&id) {
-            route.length_mm += mm;
+        match out.routes.get_mut(&id) {
+            Some(route) => route.length_mm += mm,
+            // The plate leg gave no route: the wire is not routed, and no
+            // opening or length is claimed for it.
+            None => {
+                out.surface_legs.remove(&id);
+                out.unrouted.push(id);
+            }
         }
     }
     out

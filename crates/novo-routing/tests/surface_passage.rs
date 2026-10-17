@@ -25,6 +25,10 @@ fn pin(tx: &mut novo_core::Tx<'_>, page: novo_core::PageId, device: novo_core::D
 
 /// K1 on the plate, H1 and H2 on the door, optionally one opening.
 fn project(opening: bool) -> (Project, StructureId, Vec<PinRef>) {
+    project_with(opening, true)
+}
+
+fn project_with(opening: bool, duct: bool) -> (Project, StructureId, Vec<PinRef>) {
     let mut p = Project::new("t");
     let (out, _) = p
         .transact("setup", |tx| {
@@ -53,9 +57,11 @@ fn project(opening: bool) -> (Project, StructureId, Vec<PinRef>) {
                     hinge_side_clearance: None,
                 },
             )?;
-            let duct = tx.add_rail(cab, 150.0, 80.0, 250.0, RailKind::Duct)?;
-            tx.update::<novo_core::Rail>(duct, |r| r.vertical = true)?;
-            tx.set_rail_size(duct, 250.0, 40.0, 60.0)?;
+            if duct {
+                let duct = tx.add_rail(cab, 150.0, 80.0, 250.0, RailKind::Duct)?;
+                tx.update::<novo_core::Rail>(duct, |r| r.vertical = true)?;
+                tx.set_rail_size(duct, 250.0, 40.0, 60.0)?;
+            }
             if opening {
                 tx.set_property(
                     cab,
@@ -144,4 +150,13 @@ fn without_an_opening_a_door_wire_stays_unrouted() {
     let r = route_connections(&p, &[conn(5, pins[0], pins[1])], &Rules::default());
     assert_eq!(r.unrouted, vec![5]);
     assert!(r.routes.is_empty() && r.surface_legs.is_empty());
+}
+
+#[test]
+fn a_plate_end_no_duct_reaches_is_still_one_consistent_wire() {
+    let (p, cab, pins) = project_with(true, false);
+    let r = route_connections(&p, &[conn(7, pins[0], pins[1])], &Rules::default());
+    assert!(r.unrouted.is_empty() && r.plans.len() == 1, "{cab:?}");
+    assert_eq!(r.routes[&7].kind, Kind::FreeAir);
+    assert_eq!(r.surface_legs[&7].opening.as_deref(), Some("gland"));
 }
