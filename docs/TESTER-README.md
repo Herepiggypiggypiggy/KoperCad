@@ -179,6 +179,5 @@ Please do not report these as new; do tell us if one of them blocks your work.
 * Third-party software licences: THIRD_PARTY_NOTICES.txt next to this file.
 * Source documents: docs\ in the repository, starting with docs/DESIGN.md.
 
-KoperCAD is a work in progress by KoperVonk. The licence terms are still being
-settled; until you are told otherwise, please keep this beta to yourself and use
-it for testing.
+KoperCAD is a work in progress by KoperVonk, released as open source under the MIT or
+Apache-2.0 licence, at your option (LICENSE-MIT and LICENSE-APACHE).
