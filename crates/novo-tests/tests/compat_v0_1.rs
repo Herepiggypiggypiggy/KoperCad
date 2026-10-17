@@ -398,8 +398,10 @@ fn child_save_loop() {
     // A full save replaces every record in one transaction, the longest
     // write the app does (an incremental save is a shorter transaction).
     let mut file = ProjectFile::open(&path).unwrap();
-    for i in 0.. {
-        file.save(if i % 2 == 0 { &b } else { &a }).unwrap();
+    let mut next_is_b = true;
+    loop {
+        file.save(if next_is_b { &b } else { &a }).unwrap();
+        next_is_b = !next_is_b;
     }
 }
 
@@ -411,6 +413,17 @@ fn run_child(test: &str, path: &Path, lifetime: Duration) {
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
+    // Wait until the child is really writing (the file changed), however
+    // slow the runner is to start it, then let it run on for `lifetime`.
+    let started = std::fs::metadata(path).and_then(|m| m.modified()).unwrap();
+    let deadline = std::time::Instant::now() + Duration::from_secs(60);
+    while std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .is_ok_and(|m| m == started)
+        && std::time::Instant::now() < deadline
+    {
+        std::thread::sleep(Duration::from_millis(5));
+    }
     std::thread::sleep(lifetime);
     child.kill().unwrap();
     child.wait().unwrap();
@@ -427,12 +440,8 @@ fn a_process_killed_while_saving_leaves_a_whole_file_every_time() {
             .unwrap()
             .close()
             .unwrap();
-        // Staggered kill moments: some land in startup, most in the loop.
-        run_child(
-            "child_save_loop",
-            &path,
-            Duration::from_millis(250 + round * 37),
-        );
+        // Staggered kill moments, counted from the first write.
+        run_child("child_save_loop", &path, Duration::from_millis(round * 37));
         let opened = Session::open(&path)
             .unwrap_or_else(|e| panic!("round {round}: the file after the kill: {e}"));
         let json = opened.project.to_json();
@@ -444,7 +453,7 @@ fn a_process_killed_while_saving_leaves_a_whole_file_every_time() {
         saves_seen += usize::from(save_seq(&path) > 1);
     }
     assert!(
-        saves_seen >= 5,
+        saves_seen >= 8,
         "the child must have been saving when it was killed ({saves_seen} of 10 rounds)"
     );
 }
