@@ -67,13 +67,14 @@
 //! | [`DeviceOutsidePlate`](ProblemKind::DeviceOutsidePlate) | error | A device beyond the usable area of its plate |
 //! | [`DevicesTooClose`](ProblemKind::DevicesTooClose) | warning | Two devices closer than their clearance |
 //! | [`RailOverflow`](ProblemKind::RailOverflow) | warning | Devices needing more room than their DIN rail has |
+//! | [`DuctOverlap`](ProblemKind::DuctOverlap) | error | A wiring duct lying over a DIN rail or a device on the plate |
 //! | [`DeviceTooDeep`](ProblemKind::DeviceTooDeep) | error | A device deeper than the room between plate and door |
 //! | [`DoorGapTight`](ProblemKind::DoorGapTight) | warning | A device that leaves less than the minimum gap to the door |
 //! | [`DepthUnknown`](ProblemKind::DepthUnknown) | info | A placed device without a depth, so the door was not checked |
 //! | [`PlateTooBig`](ProblemKind::PlateTooBig) | error | A plate larger than the inside of its enclosure |
 //! | [`SafetyLevelNotMet`](ProblemKind::SafetyLevelNotMet) | error | A safety function whose achieved performance level is below the required one (ISO 13849-1 calculation aid) |
 //! | [`SafetyBinding`](ProblemKind::SafetyBinding) | warning | A safety function block bound to a device that is missing or states no reliability data |
-//! | [`DoorSwing`](ProblemKind::DoorSwing) | warning | An open door that needs more room outside than the site allows |
+//! | [`DoorSwing`](ProblemKind::DoorSwing) | warning | An open door that needs more room outside than the site allows, or a device on the door that touches a wall or a plate device as the door opens |
 //!
 //! A problem can be waived with a reason ([`waive`]); [`check_open`] leaves
 //! waived problems out and [`waived_problems`] lists them for the report.
@@ -291,6 +292,8 @@ pub enum ProblemKind {
     DevicesTooClose,
     /// Devices on a DIN rail that need more room than the rail has.
     RailOverflow,
+    /// A wiring duct that lies over a DIN rail or a device on the plate.
+    DuctOverlap,
     /// A device deeper than the room between the plate and the door
     /// (novo-layout's door report); only for enclosures with an interior.
     DeviceTooDeep,
@@ -312,7 +315,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 63] = [
+    pub const ALL: [ProblemKind; 64] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -345,6 +348,7 @@ impl ProblemKind {
         ProblemKind::DeviceOutsidePlate,
         ProblemKind::DevicesTooClose,
         ProblemKind::RailOverflow,
+        ProblemKind::DuctOverlap,
         ProblemKind::DeviceTooDeep,
         ProblemKind::DoorGapTight,
         ProblemKind::DepthUnknown,
@@ -389,6 +393,7 @@ impl ProblemKind {
             | ProblemKind::CableRating
             | ProblemKind::DeviceCollision
             | ProblemKind::DeviceOutsidePlate
+            | ProblemKind::DuctOverlap
             | ProblemKind::DeviceTooDeep
             | ProblemKind::SafetyLevelNotMet
             | ProblemKind::PlateTooBig => Severity::Error,
@@ -481,6 +486,7 @@ impl ProblemKind {
             ProblemKind::DeviceOutsidePlate => "Device off the plate",
             ProblemKind::DevicesTooClose => "Devices too close",
             ProblemKind::RailOverflow => "Rail overfull",
+            ProblemKind::DuctOverlap => "Duct over rail or device",
             ProblemKind::DeviceTooDeep => "Device too deep",
             ProblemKind::DoorGapTight => "Door gap tight",
             ProblemKind::DepthUnknown => "Depth unknown",
@@ -550,6 +556,7 @@ impl ProblemKind {
             ProblemKind::DeviceOutsidePlate => "check.device_outside_plate",
             ProblemKind::DevicesTooClose => "check.devices_too_close",
             ProblemKind::RailOverflow => "check.rail_overflow",
+            ProblemKind::DuctOverlap => "check.duct_overlap",
             ProblemKind::DeviceTooDeep => "check.device_too_deep",
             ProblemKind::DoorGapTight => "check.door_gap_tight",
             ProblemKind::DepthUnknown => "check.depth_unknown",

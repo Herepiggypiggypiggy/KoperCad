@@ -452,7 +452,8 @@ impl Report for FerruleTable {
 /// each end, and the end allowance shown apart from the route.
 ///
 /// A summary opens the report (wires and metres to pull per group) and says
-/// how many lengths are estimates; those carry a `~` in the table.
+/// how many lengths are estimates (in its heading, and per group in a column);
+/// those carry a `~` in the table. No page is spent on a note alone.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct BenchCut;
 
@@ -484,9 +485,20 @@ impl BenchCut {
             }
         }
 
+        // The estimates note rides in the summary's title and a column, not on
+        // a page of its own (every section starts a new page when printed).
+        let estimates = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
+        let summary_title = if estimates > 0 {
+            format!(
+                "What to pull · {estimates} of {} lengths are estimates (~): measure on the plate",
+                jobs.len()
+            )
+        } else {
+            "What to pull".to_owned()
+        };
         let mut summary = Section::new(
             "summary",
-            "What to pull",
+            &summary_title,
             vec![
                 Column::new("done", "", 5.0),
                 Column::new("mm2", "mm²", 8.0).right(),
@@ -495,6 +507,7 @@ impl BenchCut {
                 Column::new("metres", "Metres", 10.0).right(),
                 Column::new("longest", "Longest mm", 12.0).right(),
                 Column::new("ferrule", "Ferrule", 14.0),
+                Column::new("estimates", "Estimated", 10.0).right(),
             ],
         );
         for (mm2, colour, list) in &groups {
@@ -513,27 +526,12 @@ impl BenchCut {
                     Cell::Number((mm / 1000.0 * 10.0).ceil() / 10.0),
                     Cell::Number(longest),
                     Cell::text(ferrule),
+                    Cell::Int(list.iter().filter(|j| is_estimate(&j.basis)).count() as i64),
                 ],
                 Vec::new(),
             );
         }
-        let estimates = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
         let mut sections = vec![summary];
-        if estimates > 0 {
-            let mut note = Section::new(
-                "estimates",
-                "Check before cutting",
-                vec![Column::new("note", "", 60.0)],
-            );
-            note.push(
-                vec![Cell::text(format!(
-                    "{estimates} of {} lengths are estimates (marked ~): the wire is not routed through ducts, or a device has no pin position. Measure these on the plate.",
-                    jobs.len()
-                ))],
-                Vec::new(),
-            );
-            sections.push(note);
-        }
 
         for (mm2, colour, list) in &groups {
             let total: f64 = list.iter().map(|j| j.cut_mm).sum();

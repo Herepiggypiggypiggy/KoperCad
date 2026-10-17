@@ -5,12 +5,14 @@
 use std::collections::BTreeMap;
 
 use crate::enclosure::{DoorReport, Enclosure, check};
+use crate::openings::{Opening, OpeningConflict, conflicts};
 use crate::plan::{Candidate, Plan, ROW_GAP_MM, place_all_below};
+use crate::surfaces::MAIN_PLATE;
 use crate::surfaces::Surfaces;
 use crate::swing::{DoorDevice, PlateDevice, SweepSettings, SwingReport, sweep};
 use crate::{
-    Duct, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions, outside,
-    rail_overflows,
+    Duct, DuctOverlap, Margins, Placement, Plate, Rail, Size, clearance_violations, collisions,
+    duct_overlaps, outside, rail_overflows,
 };
 
 /// Default snap grid for free placement (the Cabinet canvas grid).
@@ -23,6 +25,10 @@ pub struct Report {
     pub outside: Vec<u64>,
     pub too_close: Vec<(u64, u64, f64)>,
     pub rail_overflows: Vec<(u64, f64)>,
+    /// Devices that cover a wiring opening of the plate.
+    pub opening_conflicts: Vec<OpeningConflict>,
+    /// Ducts lying over a rail or a device.
+    pub duct_overlaps: Vec<DuctOverlap>,
     /// Placed devices whose size is the default guess.
     pub guessed: Vec<u64>,
 }
@@ -33,6 +39,8 @@ impl Report {
             && self.outside.is_empty()
             && self.too_close.is_empty()
             && self.rail_overflows.is_empty()
+            && self.opening_conflicts.is_empty()
+            && self.duct_overlaps.is_empty()
     }
 }
 
@@ -48,9 +56,22 @@ pub struct CabinetLayout {
     pub enclosure: Option<Enclosure>,
     /// Depth of the parts of placed devices, by device id, where known.
     pub depths: BTreeMap<u64, f64>,
+    /// Wiring openings (`opening.<name>` structure properties).
+    pub openings: Vec<Opening>,
+    /// Opening properties that could not be read.
+    pub opening_problems: Vec<String>,
     /// Devices on the inside of the door (door coordinates), swept when the
     /// door opens.
     pub door_devices: Vec<DoorDevice>,
+    /// Placed devices that sit on a surface other than the mounting plate
+    /// (door, walls, extra plates), by device id with the surface name. Their
+    /// positions are in that surface's millimetres, so the plate checks and
+    /// the swing obstacles leave them out.
+    pub off_plate: BTreeMap<u64, String>,
+    /// Width and height of every surface of the enclosure by name (the
+    /// plate, door, walls, roof, floor and extra plates), for the drill
+    /// sheets. Empty without an enclosure.
+    pub surface_sizes: BTreeMap<String, (f64, f64)>,
 }
 
 impl CabinetLayout {
@@ -63,8 +84,22 @@ impl CabinetLayout {
             grid: DEFAULT_GRID_MM,
             enclosure: None,
             depths: BTreeMap::new(),
+            openings: Vec::new(),
+            opening_problems: Vec::new(),
             door_devices: Vec::new(),
+            off_plate: BTreeMap::new(),
+            surface_sizes: BTreeMap::new(),
         }
+    }
+
+    /// The placements on the mounting plate itself: all of them except those
+    /// listed in [`CabinetLayout::off_plate`].
+    pub fn on_plate(&self) -> Vec<Placement> {
+        self.placements
+            .iter()
+            .filter(|p| !self.off_plate.contains_key(&p.id))
+            .cloned()
+            .collect()
     }
 
     /// The depth and door checks; `None` until the enclosure has an interior.
@@ -84,7 +119,7 @@ impl CabinetLayout {
         let enclosure = self.enclosure.as_ref()?;
         let (surfaces, _) = Surfaces::from_enclosure(enclosure, &self.plate, &[]);
         let plate_devices: Vec<PlateDevice> = self
-            .placements
+            .on_plate()
             .iter()
             .filter_map(|p| {
                 Some(PlateDevice {
@@ -104,7 +139,7 @@ impl CabinetLayout {
             &SweepSettings::default(),
         );
         report.unchecked_plate = self
-            .placements
+            .on_plate()
             .iter()
             .filter(|p| !self.depths.contains_key(&p.id))
             .map(|p| p.id)
@@ -181,7 +216,7 @@ impl CabinetLayout {
     pub fn preview(&self, all: &[Candidate]) -> Plan {
         let unplaced: Vec<Candidate> = self.unplaced(all).into_iter().cloned().collect();
         let top = self
-            .placements
+            .on_plate()
             .iter()
             .map(|p| p.footprint().bottom() + ROW_GAP_MM)
             .fold(0.0, f64::max);
@@ -216,13 +251,15 @@ impl CabinetLayout {
     }
 
     pub fn report(&self) -> Report {
+        let on_plate = self.on_plate();
         Report {
-            collisions: collisions(&self.placements),
-            outside: outside(&self.plate, &self.placements),
-            too_close: clearance_violations(&self.placements),
-            rail_overflows: rail_overflows(&self.rails, &self.placements),
-            guessed: self
-                .placements
+            collisions: collisions(&on_plate),
+            outside: outside(&self.plate, &on_plate),
+            too_close: clearance_violations(&on_plate),
+            rail_overflows: rail_overflows(&self.rails, &on_plate),
+            opening_conflicts: conflicts(&self.openings, MAIN_PLATE, &on_plate),
+            duct_overlaps: duct_overlaps(&self.ducts, &self.rails, &on_plate),
+            guessed: on_plate
                 .iter()
                 .filter(|p| p.size.guessed)
                 .map(|p| p.id)

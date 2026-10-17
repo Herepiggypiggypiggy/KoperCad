@@ -310,6 +310,13 @@ impl NovoApp {
         if device.is_none() && self.wire_panel(ctx, canvas) {
             return;
         }
+        if device.is_none() {
+            let devices = self.multi_selected_devices();
+            if devices.len() >= 2 && self.multi_inspector(ctx, canvas, &devices) {
+                self.wb.inspector.leaving = None;
+                return;
+            }
+        }
         let Some(device) = device else {
             let pinned = self.wb.inspector.pinned;
             let leaving = self.wb.inspector.leaving.take();
@@ -360,11 +367,16 @@ impl NovoApp {
             self.wb.inspector.picker.open,
         ) {
             (Some(catalog), Some(doc), true) => {
+                // The match reads the circuit (coil voltage), so any edit,
+                // undo or redo makes the rows stale.
                 let scope = format!(
-                    "{device:?}{}",
+                    "{device:?}{}/{}/{:?}/{}",
                     doc.project()
                         .device(device)
-                        .map_or(String::new(), |d| d.tag.to_string())
+                        .map_or(String::new(), |d| d.tag.to_string()),
+                    doc.undo_depth(),
+                    doc.undo_label(),
+                    doc.can_redo()
                 );
                 self.wb.inspector.picker.rows(&scope, |query| {
                     device_candidates(catalog, doc.project(), device, query)
@@ -998,7 +1010,7 @@ fn relation_card(ui: &mut egui::Ui, relation: &Relation) -> egui::Response {
 }
 
 /// Enter, or leaving the field after a change, commits it.
-fn committed(ui: &egui::Ui, response: &egui::Response) -> bool {
+pub(super) fn committed(ui: &egui::Ui, response: &egui::Response) -> bool {
     response.lost_focus() && !ui.input(|i| i.key_pressed(egui::Key::Escape))
 }
 

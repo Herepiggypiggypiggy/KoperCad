@@ -15,7 +15,7 @@ use novo_core::{Project, StructureId};
 use novo_layout::check::Violation;
 use novo_layout::model::{ducts, load};
 use novo_layout::plan::{Plan, ROW_GAP_MM};
-use novo_layout::rules::{Explanation, RuleSet, Spec, place_all_explained};
+use novo_layout::rules::{Explanation, RuleSet, Spec, place_all_around};
 use novo_layout::state::CabinetLayout;
 use novo_layout::stock::{CutPlan, Piece, Stock, optimise, rail_pieces};
 
@@ -100,6 +100,72 @@ impl RulesState {
     }
 }
 
+/// The devices not yet placed, sorted by the structure's surface rules
+/// (`surface_rules` property): `plate` stays here, `others` belong on the
+/// door or another surface. Without an enclosure there is no other surface,
+/// so everything stays on the plate and the problems say so.
+pub(super) fn surface_split(
+    project: &Project,
+    structure: StructureId,
+    layout: &CabinetLayout,
+) -> novo_layout::surface_rules::Split {
+    use novo_layout::surface_rules::{Split, split};
+    let specs: Vec<Spec> = novo_layout::rules::model::specs(project, structure)
+        .into_iter()
+        .filter(|s| !layout.placements.iter().any(|p| p.id == s.id))
+        .collect();
+    let (rules, mut problems) = novo_layout::rules::model::surface_rules(project, structure);
+    let Some(enclosure) = layout.enclosure.as_ref() else {
+        if !rules.rules.is_empty() {
+            problems.push(
+                "Surface rules need the inside size of the enclosure; every device stays on the plate"
+                    .to_owned(),
+            );
+        }
+        return Split {
+            plate: specs,
+            others: Vec::new(),
+            problems,
+        };
+    };
+    let (surfaces, _) = novo_layout::surfaces::Surfaces::from_enclosure(
+        enclosure,
+        &layout.plate,
+        &novo_layout::model::extra_surfaces(project, structure),
+    );
+    let mut out = split(&specs, &rules, &surfaces);
+    problems.append(&mut out.problems);
+    out.problems = problems;
+    out
+}
+
+/// Plans for the devices the surface rules send to other surfaces, one per
+/// surface, in the order of `split.others`. A surface the enclosure does
+/// not have gets no plan.
+pub(super) fn surface_plans(
+    project: &Project,
+    structure: StructureId,
+    layout: &CabinetLayout,
+    split: &novo_layout::surface_rules::Split,
+) -> Vec<(String, Plan)> {
+    let Some(enclosure) = layout.enclosure.as_ref() else {
+        return Vec::new();
+    };
+    let (surfaces, _) = novo_layout::surfaces::Surfaces::from_enclosure(
+        enclosure,
+        &layout.plate,
+        &novo_layout::model::extra_surfaces(project, structure),
+    );
+    split
+        .others
+        .iter()
+        .filter_map(|(name, specs)| {
+            novo_layout::surface_rules::plan_surface(&surfaces, name, specs)
+                .map(|plan| (name.clone(), plan))
+        })
+        .collect()
+}
+
 /// The plan for the devices not yet placed, by the rules, below what is
 /// already on the plate; with the reason for every decision.
 pub(super) fn plan(
@@ -108,21 +174,21 @@ pub(super) fn plan(
     layout: &CabinetLayout,
     rules: &RuleSet,
 ) -> (Plan, Explanation) {
-    let specs: Vec<Spec> = novo_layout::rules::model::specs(project, structure)
-        .into_iter()
-        .filter(|s| !layout.placements.iter().any(|p| p.id == s.id))
-        .collect();
+    let specs = surface_split(project, structure, layout).plate;
     let top = layout
         .placements
         .iter()
         .map(|p| p.footprint().bottom() + ROW_GAP_MM)
         .fold(0.0, f64::max);
-    place_all_explained(
+    // Ducts already on the plate are kept clear, not planned over.
+    let ducts: Vec<_> = layout.ducts.iter().map(|d| d.footprint()).collect();
+    place_all_around(
         &layout.plate,
         &specs,
         rules,
         layout.rails.iter().map(|r| r.id + 1).max().unwrap_or(1),
         top,
+        &ducts,
     )
 }
 
@@ -192,13 +258,14 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
     super::panel::dialog(ctx, "Place rules", [520.0, 0.0])
         .open(&mut open)
         .show(ctx, |ui| {
-            ui.weak(
+            super::dialog_ui::hint(
+                ui,
                 "Where Place all puts each kind of device. One rule per line: \
                  letter codes, zone (top, middle, bottom), rail (own or shared), \
                  class (power, signal), and gap, above, below in mm. \
                  These are practice values, not a standard: change them to your own.",
             );
-            ui.add_space(4.0);
+            ui.add_space(6.0);
             ui.add(
                 egui::TextEdit::multiline(&mut state.text)
                     .code_editor()
@@ -210,11 +277,15 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
                 ui.colored_label(ui.visuals().error_fg_color, e.to_string());
             }
             if let Some(n) = &state.notice {
-                ui.weak(n);
+                super::dialog_ui::hint(ui, n);
             }
+            ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let ok = parsed.is_ok();
-                if ui.add_enabled(ok, egui::Button::new("Save")).clicked()
+                let save = ui
+                    .add_enabled_ui(ok, |ui| novo_theme::widgets::primary_button(ui, "Save"))
+                    .inner;
+                if save.clicked()
                     && let Ok(rules) = parsed
                 {
                     state.notice = Some(match &state.path {
@@ -226,8 +297,15 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
                     });
                     state.rules = rules;
                 }
-                if ui.button("Standard rules").clicked() {
-                    state.text = RuleSet::standard().to_text();
+                let standard = RuleSet::standard().to_text();
+                if super::dialog_ui::confirm_button(
+                    ui,
+                    "standard_rules",
+                    "Standard rules",
+                    "Replace the text above with the standard rules?",
+                    state.text != standard,
+                ) {
+                    state.text = standard;
                     state.notice = None;
                 }
             });

@@ -11,6 +11,9 @@
 //!   already uses (see [`tree::next_name`]); nothing has to be configured
 //!   first.
 //!
+//! Under the tree, the Wires and Cables sections list every wire (by page)
+//! and cable; a click opens the page and selects it ([`super::outline_items`]).
+//!
 //! What the tree shows and every edit are in [`super::outline_tree`], where
 //! they are tested without a window.
 
@@ -21,6 +24,7 @@ use novo_core::{AnyId, Aspect, Command, DeviceTag, MountingPlate, PageId, PageKi
 use novo_layout::sizing::EnclosureSize;
 use novo_theme::{icons, tokens};
 
+use super::outline_items as items;
 use super::outline_tree::{
     self as tree, Act, CabinetSpec, DEFAULT_PLATE, Item, Key, Levels, Naming, RowKind, Target,
     TreeRow,
@@ -253,6 +257,7 @@ impl NovoApp {
         let mut acts: Vec<Act> = Vec::new();
         let mut opened = None;
         let mut select = None;
+        let mut net_jump = None;
         egui::ScrollArea::vertical()
             .auto_shrink(false)
             .show(ui, |ui| {
@@ -271,12 +276,14 @@ impl NovoApp {
                         let out = self.tree_row(ui, &r, Some(place));
                         collect(out, &r, &mut acts, &mut opened, &mut select);
                     }
+                    net_jump = self.net_sections(ui, &filter);
                     return;
                 }
                 for row in &tree_rows {
                     let out = self.tree_row(ui, row, None);
                     collect(out, row, &mut acts, &mut opened, &mut select);
                 }
+                net_jump = self.net_sections(ui, &filter);
                 // The empty space under the rows is part of the tree: a
                 // right click there makes something new.
                 let rest = ui.available_height().max(48.0);
@@ -294,7 +301,7 @@ impl NovoApp {
                         egui::Align2::CENTER_TOP,
                         "Right click for New page, New page group or New cabinet",
                         egui::FontId::proportional(tokens::FONT_SMALL),
-                        tokens::TEXT_FAINT,
+                        crate::theme::ui_palette().text_tertiary,
                     );
                 }
                 if bg.secondary_clicked() || bg.clicked() {
@@ -317,10 +324,86 @@ impl NovoApp {
             self.show_sheet(page, sheet);
             closed = true;
         }
+        match net_jump {
+            Some(NetJump::Wire(wire)) => {
+                self.go_to_wire(wire);
+                closed = true;
+            }
+            Some(NetJump::EmptyCable(tag)) => self.message(
+                super::Level::Info,
+                format!("{tag} has no core wired yet, so there is no wire to go to"),
+            ),
+            None => {}
+        }
         for act in acts {
             self.perform(act);
         }
         closed
+    }
+
+    /// The Wires and Cables sections under the page tree: every wire by
+    /// page and every cable, each a row that jumps to it (a wire opens its
+    /// page and selects it, a cable goes to its first wired core). With a
+    /// filter the sections open on what matches.
+    fn net_sections(&self, ui: &mut egui::Ui, filter: &str) -> Option<NetJump> {
+        let project = self.backend.document()?.project();
+        let filtering = !filter.is_empty();
+        let force = filtering.then_some(true);
+        let mut jump = None;
+        ui.add_space(6.0);
+        let wires = items::wire_count(project);
+        egui::CollapsingHeader::new(format!("Wires ({wires})"))
+            .id_salt("outline_wires")
+            .open(force)
+            .show(ui, |ui| {
+                let groups = items::wire_groups(project, filter);
+                if groups.is_empty() {
+                    ui.weak("No wire matches");
+                }
+                for group in groups {
+                    egui::CollapsingHeader::new(format!(
+                        "Page {} ({})",
+                        group.page_name,
+                        group.wires.len()
+                    ))
+                    .id_salt(("outline_wires_page", group.page))
+                    .open(force)
+                    .show(ui, |ui| {
+                        for wire in &group.wires {
+                            if ui
+                                .selectable_label(false, &wire.text)
+                                .on_hover_text("Open its page and select the wire")
+                                .clicked()
+                            {
+                                jump = Some(NetJump::Wire(wire.id));
+                            }
+                        }
+                    });
+                }
+            });
+        let cables = project.cables().count();
+        egui::CollapsingHeader::new(format!("Cables ({cables})"))
+            .id_salt("outline_cables")
+            .open(force)
+            .show(ui, |ui| {
+                let list = items::cable_items(project, filter);
+                if list.is_empty() {
+                    ui.weak("No cable matches");
+                }
+                for cable in list {
+                    if ui
+                        .selectable_label(false, &cable.text)
+                        .on_hover_text("Go to the first wired core of this cable")
+                        .clicked()
+                    {
+                        jump = Some(match cable.first_wire {
+                            Some(w) => NetJump::Wire(w),
+                            None => NetJump::EmptyCable(cable.text.clone()),
+                        });
+                    }
+                }
+            });
+        jump
     }
 
     /// "N pages are in no group or cabinet" with a button that files them by
@@ -340,8 +423,11 @@ impl NovoApp {
         let mut file = false;
         let mut dismiss = false;
         egui::Frame::new()
-            .fill(tokens::BG_2)
-            .stroke(egui::Stroke::new(1.0, tokens::BORDER))
+            .fill(crate::theme::ui_palette().raised)
+            .stroke(egui::Stroke::new(
+                1.0,
+                crate::theme::ui_palette().border_subtle,
+            ))
             .corner_radius(4.0)
             .inner_margin(egui::Margin::symmetric(8, 6))
             .show(ui, |ui| {
@@ -352,7 +438,7 @@ impl NovoApp {
                         if n == 1 { "page is" } else { "pages are" }
                     ))
                     .size(tokens::FONT_SMALL + 1.0)
-                    .color(tokens::TEXT_MUTED),
+                    .color(crate::theme::ui_palette().text_secondary),
                 );
                 ui.horizontal(|ui| {
                     file = novo_theme::widgets::primary_button(ui, "File them").clicked();
@@ -610,16 +696,20 @@ impl NovoApp {
             painter.rect_filled(
                 rect.shrink2(egui::vec2(2.0, 1.0)),
                 radius,
-                tokens::ACCENT_SELECTION,
+                crate::theme::ui_palette().accent_wash,
             );
         } else if resp.hovered() || selected {
-            painter.rect_filled(rect.shrink2(egui::vec2(2.0, 1.0)), radius, tokens::BG_3);
+            painter.rect_filled(
+                rect.shrink2(egui::vec2(2.0, 1.0)),
+                radius,
+                crate::theme::ui_palette().control,
+            );
         }
         if selected {
             painter.rect_stroke(
                 rect.shrink2(egui::vec2(2.0, 1.0)),
                 radius,
-                egui::Stroke::new(1.0, tokens::BORDER_STRONG),
+                egui::Stroke::new(1.0, crate::theme::ui_palette().border_strong),
                 egui::StrokeKind::Inside,
             );
         }
@@ -641,7 +731,7 @@ impl NovoApp {
                 egui::Align2::CENTER_CENTER,
                 arrow,
                 egui::FontId::proportional(11.0),
-                tokens::TEXT_MUTED,
+                crate::theme::ui_palette().text_secondary,
             );
         }
         x += 14.0;
@@ -652,7 +742,7 @@ impl NovoApp {
                 } else {
                     icons::FOLDER_OPEN
                 },
-                tokens::TEXT_MUTED,
+                crate::theme::ui_palette().text_secondary,
             ),
             RowKind::Cabinet { enclosure, .. } => (
                 if *enclosure {
@@ -660,12 +750,17 @@ impl NovoApp {
                 } else {
                     icons::MAP_PIN
                 },
-                tokens::ACCENT,
+                crate::theme::ui_palette().accent,
             ),
-            RowKind::Generated { .. } => (icons::LIST_NUMBERS, tokens::TEXT_MUTED),
-            RowKind::Page { drawn: true, .. } => (icons::FILE_TEXT, tokens::TEXT_MUTED),
-            RowKind::Page { .. } => (icons::FILE_DASHED, tokens::TEXT_FAINT),
-            RowKind::Empty => ("", tokens::TEXT_FAINT),
+            RowKind::Generated { .. } => (
+                icons::LIST_NUMBERS,
+                crate::theme::ui_palette().text_secondary,
+            ),
+            RowKind::Page { drawn: true, .. } => {
+                (icons::FILE_TEXT, crate::theme::ui_palette().text_secondary)
+            }
+            RowKind::Page { .. } => (icons::FILE_DASHED, crate::theme::ui_palette().text_tertiary),
+            RowKind::Empty => ("", crate::theme::ui_palette().text_tertiary),
         };
         if !icon.is_empty() {
             painter.text(
@@ -739,9 +834,9 @@ impl NovoApp {
         };
         let is_node = matches!(row.kind, RowKind::Group { .. } | RowKind::Cabinet { .. });
         let label_color = match &row.kind {
-            RowKind::Empty => tokens::TEXT_FAINT,
-            RowKind::Page { drawn: false, .. } => tokens::TEXT_MUTED,
-            _ => tokens::TEXT,
+            RowKind::Empty => crate::theme::ui_palette().text_tertiary,
+            RowKind::Page { drawn: false, .. } => crate::theme::ui_palette().text_secondary,
+            _ => crate::theme::ui_palette().text_primary,
         };
         let right_w = if right.is_empty() { 0.0 } else { 56.0 };
         let right_edge = rect.right() - 8.0;
@@ -751,7 +846,7 @@ impl NovoApp {
                 egui::Align2::RIGHT_CENTER,
                 &right,
                 egui::FontId::proportional(tokens::FONT_SMALL),
-                tokens::TEXT_FAINT,
+                crate::theme::ui_palette().text_tertiary,
             );
         }
         let clip = egui::Rect::from_min_max(
@@ -776,10 +871,10 @@ impl NovoApp {
                 egui::Align2::LEFT_CENTER,
                 &text,
                 egui::FontId::monospace(tokens::FONT_MONO),
-                tokens::TEXT_MUTED,
+                crate::theme::ui_palette().text_secondary,
             );
             let (title, color) = if weak.is_empty() {
-                ("Untitled", tokens::TEXT_FAINT)
+                ("Untitled", crate::theme::ui_palette().text_tertiary)
             } else {
                 (weak.as_str(), label_color)
             };
@@ -808,7 +903,7 @@ impl NovoApp {
             ui.painter_at(rect).circle_filled(
                 egui::pos2(rect.right() - 4.0, mid),
                 2.5,
-                tokens::ACCENT,
+                crate::theme::ui_palette().accent,
             );
         }
 
@@ -1475,6 +1570,13 @@ impl NovoApp {
 }
 
 /// What a row asked for during a frame.
+/// What a click on a Wires or Cables row asks for.
+enum NetJump {
+    Wire(novo_core::WireId),
+    /// A cable with no wired core; its text for the message.
+    EmptyCable(String),
+}
+
 #[derive(Default)]
 struct RowOut {
     acts: Vec<Act>,
@@ -1810,10 +1912,10 @@ impl NovoApp {
                             form.focused = true;
                         }
                         if valid.is_empty() {
-                            ui.colored_label(tokens::ERROR, "Give it a name");
+                            ui.colored_label(crate::theme::ui_palette().error, "Give it a name");
                         } else if exists {
                             ui.colored_label(
-                                tokens::WARNING,
+                                crate::theme::ui_palette().warning,
                                 format!("{valid} exists: its layout stays, a page is added"),
                             );
                         } else {

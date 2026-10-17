@@ -10,6 +10,7 @@ use super::heat::{self, HeatState};
 use super::heat_settings::{LEVELS, MODELS, VentSpec, Wall};
 
 /// Margin from the view's corner, in points.
+#[cfg(test)]
 const MARGIN: f32 = 12.0;
 const WIDTH: f32 = 330.0;
 /// The view cube's size and margin (`novo-view3d::widget`); the panel starts
@@ -19,7 +20,8 @@ const CUBE_MARGIN: f32 = 12.0;
 const GAP: f32 = 8.0;
 
 /// Top right corner of the panel: under the cube, inside the view.
-pub(super) fn anchor(view: egui::Rect) -> egui::Pos2 {
+#[cfg(test)]
+fn anchor(view: egui::Rect) -> egui::Pos2 {
     view.right_top() + egui::vec2(-MARGIN, CUBE_MARGIN + CUBE_SIZE + GAP)
 }
 
@@ -60,38 +62,34 @@ pub(super) fn phase_line(running: bool, has_result: bool, stale: bool) -> (&'sta
 /// The panel, top right of the 3D view. `stale` is true when the shown result
 /// was made for another layout.
 pub(super) fn show(ctx: &egui::Context, view: egui::Rect, state: &mut HeatState, stale: bool) {
-    egui::Area::new(egui::Id::new("view3d_heat_panel"))
-        .order(egui::Order::Middle)
-        .pivot(egui::Align2::RIGHT_TOP)
-        .fixed_pos(anchor(view))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_max_width(WIDTH);
-                let room = (view.bottom() - anchor(view).y - MARGIN - 24.0).max(120.0);
-                egui::ScrollArea::vertical()
-                    .max_height(room)
-                    .show(ui, |ui| {
-                        ui.label(egui::RichText::new("Heat").strong());
-                        let (text, warn) =
-                            phase_line(state.running(), state.solution().is_some(), stale);
-                        ui.label(egui::RichText::new(text).small().color(if warn {
-                            t::WARNING
-                        } else {
-                            t::TEXT_MUTED
-                        }));
-                        ui.horizontal_wrapped(|ui| heat::simulate_controls_with(ui, state, false));
-                        let running = state.running();
-                        egui::CollapsingHeader::new("Settings for the next run")
-                            .id_salt("view3d_heat_settings")
-                            .show(ui, |ui| {
-                                ui.add_enabled_ui(!running, |ui| settings(ui, state));
-                            });
-                        egui::CollapsingHeader::new("What is this?")
-                            .id_salt("view3d_heat_about")
-                            .show(ui, |ui| about(ui, state));
-                    });
+    super::panel::Panel::new(
+        "view3d_heat_panel",
+        "Heat",
+        view,
+        super::panel::Side::Right,
+        WIDTH,
+    )
+    // Starts under the view cube; the person can drag it anywhere in the view.
+    .top(CUBE_MARGIN + CUBE_SIZE + GAP)
+    .height(300.0)
+    .show(ctx, |ui| {
+        let (text, warn) = phase_line(state.running(), state.solution().is_some(), stale);
+        ui.label(egui::RichText::new(text).small().color(if warn {
+            t::WARNING
+        } else {
+            t::TEXT_MUTED
+        }));
+        ui.horizontal_wrapped(|ui| heat::simulate_controls_with(ui, state, false));
+        let running = state.running();
+        egui::CollapsingHeader::new("Settings for the next run")
+            .id_salt("view3d_heat_settings")
+            .show(ui, |ui| {
+                ui.add_enabled_ui(!running, |ui| settings(ui, state));
             });
-        });
+        egui::CollapsingHeader::new("What is this?")
+            .id_salt("view3d_heat_about")
+            .show(ui, |ui| about(ui, state));
+    });
 }
 
 fn settings(ui: &mut egui::Ui, state: &mut HeatState) {
