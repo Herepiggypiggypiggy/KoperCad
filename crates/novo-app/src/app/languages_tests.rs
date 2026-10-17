@@ -88,6 +88,55 @@ fn a_translation_that_drops_a_placeholder_is_not_saved() {
     assert!(table.language("nl").is_none());
 }
 
+#[test]
+fn a_language_file_is_saved_and_loaded_back() {
+    let (dir, mut d) = open();
+    // English has nothing to export.
+    assert_eq!(
+        d.app.export_language_file(&dir.path().join("en.json")),
+        None
+    );
+    d.app.set_report_language("nl");
+    let path = dir.path().join("nl.kopercad-lang.json");
+    let count = d.app.export_language_file(&path).expect("written");
+    assert!(count > 100);
+
+    // Someone else's file: a new language, one entry breaking a placeholder.
+    let other = dir.path().join("de.json");
+    std::fs::write(
+        &other,
+        r#"{"code":"DE","name":"Deutsch","entries":{"Wire list":"Drahtliste","Line {n}":"Zeile"}}"#,
+    )
+    .unwrap();
+    assert!(d.app.import_language_file(&other));
+    let tr = d.app.report_translator();
+    assert_eq!(tr.code(), "de");
+    assert_eq!(tr.tr("Wire list"), "Drahtliste");
+    assert_eq!(tr.tr("Line 2"), "Line 2", "the bad entry was left out");
+
+    // Loading again keeps the project's own entries, and is one undo step.
+    d.app.set_report_language("nl");
+    let mut table = ProjectTable::of_project(d.app.backend.document().unwrap().project());
+    table.set("de", "Wire list", "Eigene Drahtliste").unwrap();
+    d.app.set_translation_table("Edit", &table);
+    assert!(d.app.import_language_file(&other));
+    assert_eq!(
+        d.app.report_translator().tr("Wire list"),
+        "Eigene Drahtliste"
+    );
+    assert_eq!(d.app.report_translator().code(), "de");
+    d.app.backend.document_mut().unwrap().undo().unwrap();
+    assert_eq!(
+        d.app.report_translator().code(),
+        "nl",
+        "one step undoes both"
+    );
+
+    assert!(!d.app.import_language_file(&dir.path().join("missing.json")));
+    std::fs::write(dir.path().join("bad.json"), "nope").unwrap();
+    assert!(!d.app.import_language_file(&dir.path().join("bad.json")));
+}
+
 /// A PDF writer that keeps the default `language` prints English whatever
 /// the project says. Every `ReportPdfOptions { .. }` in the app must set it.
 #[test]
