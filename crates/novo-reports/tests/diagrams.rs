@@ -4,7 +4,7 @@
 use std::io::Cursor;
 
 use calamine::{Data, Reader, Xlsx, open_workbook_from_rs};
-use novo_core::{DeviceTag, Document, Page, PageKind, Project};
+use novo_core::{DeviceTag, Document, Page, PageKind, Project, Wire};
 use novo_reports::{
     Cell, Column, LiveReports, ReportOutput, Section, sheet_name, sheet_names, xlsx_bytes,
 };
@@ -40,11 +40,11 @@ fn terminal_diagram_has_one_section_per_strip() {
         strings(&[
             &[
                 "=A1+CAB-F2:2",
-                "",
+                "1 wire, no number",
                 "1",
                 "feed-through",
                 "",
-                "",
+                "1 wire, no number",
                 "=A1+FLD-M1:U1",
                 "=A1-W1 BK",
                 "",
@@ -55,11 +55,11 @@ fn terminal_diagram_has_one_section_per_strip() {
             ],
             &[
                 "=A1+CAB-F2:4",
-                "",
+                "1 wire, no number",
                 "2",
                 "feed-through",
                 "",
-                "",
+                "1 wire, no number",
                 "=A1+FLD-M1:V1",
                 "=A1-W1 BN",
                 "",
@@ -70,11 +70,11 @@ fn terminal_diagram_has_one_section_per_strip() {
             ],
             &[
                 "=A1+CAB-F2:6",
-                "",
+                "1 wire, no number",
                 "3",
                 "feed-through",
                 "",
-                "",
+                "1 wire, no number",
                 "=A1+FLD-M1:W1",
                 "=A1-W1 GY",
                 "",
@@ -85,11 +85,11 @@ fn terminal_diagram_has_one_section_per_strip() {
             ],
             &[
                 "PE",
-                "",
+                "1 wire, no number",
                 "PE",
                 "PE",
                 "",
-                "",
+                "1 wire, no number",
                 "=A1+FLD-M1:PE",
                 "=A1-W1 GNYE",
                 "",
@@ -100,6 +100,35 @@ fn terminal_diagram_has_one_section_per_strip() {
             ],
         ])
     );
+}
+
+#[test]
+fn terminal_diagram_shows_wire_numbers_in_and_out_when_they_exist() {
+    let mut doc = starter();
+    let wires: Vec<_> = doc.project().wires().map(|w| w.id).collect();
+    doc.transact("Number", |tx| {
+        for (i, id) in wires.into_iter().enumerate() {
+            tx.update::<Wire>(id, |w| w.number = Some((i + 1).to_string()))?;
+        }
+        Ok(())
+    })
+    .expect("numbers");
+    let terminals = LiveReports::standard()
+        .get(doc.project(), "terminals")
+        .expect("built in")
+        .clone();
+    let rows = rows(&terminals, "=A1+CAB-X1");
+    assert_eq!(rows.len(), 4);
+    for row in &rows {
+        for cell in [&row[1], &row[5]] {
+            assert!(!cell.is_empty(), "{row:?}");
+            assert!(
+                cell.chars()
+                    .all(|c| c.is_ascii_digit() || c == ',' || c == ' '),
+                "{cell}"
+            );
+        }
+    }
 }
 
 #[test]

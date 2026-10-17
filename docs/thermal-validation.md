@@ -35,6 +35,8 @@ Errors are signed, relative to the reference unless marked abs.
 | Fan into a vent (CFD-C2, `openings.rs`) | analytic operating point | flow | within 3% (test limit) |
 | Porous slab as fan load (CFD-C2, `ducts.rs`) | exact operating point | flow | -0.04% and -0.03% at two time steps |
 | IEC 60890 wall films (CFD-C2) | k A_eff | conductance sum | below 1e-9 relative |
+| Chimney, 10 / 40 / 160 W, 8x16x8 cells (`validation_chimney.rs`; default test runs 40 and 160 W, 10 W measured once by hand) | ideal fully mixed stack law | flow | -14.5% / -14.4% / -14.5%; heat carried out within 0.1% of the source |
+| Chimney 40 W, 12x24x12 cells (ignored test, run with `--ignored`) | ideal stack law | flow | -10.8% (the finer mesh moves the flow +4.3% toward the law); scaling Q ~ P^(1/3) holds to 0.1% |
 | Vented cabinet, 3 devices (40, 60, 20 W), louvre low and high, 1800 / 3500 cells (`validation_cabinet_vents.rs`; 3500 is an ignored test) | 2D engine | housing rise per device | device 1 +4.7% / +5.5%, device 2 (hottest in both engines) +4.1% / +5.4%, device 3 +4.8% / +4.3%; plate shares 0.25 vs 0.26; heat imbalance +0.2% (model vs model, not a measurement) |
 | Sealed enclosure 50 W, mean air rise (fixed in #675 with ThermalBc::Overall; re-measured 2026-10-17 on main) | IEC 60890 hand calc 6.29 K, 2D engine 6.10 K | 3D volume-mean air rise | 5.48 K on 1000 cells, 5.38 on 1800: -12.8% and -14.4% vs IEC, -10.1% and -11.8% vs 2D (steady path 5.478 and 5.380 K); heat imbalance at most 0.1%. The 3D mean is lower because the air is stratified; test band 20% |
 | Vented box 100 W, 1000 then 1800 cells (CFD-C2, `validation_vented.rs`) | 2D engine, mixed air at the vents | air rise seen by the walls (wall-conductance weighted) | +4.5% then +6.7% (model vs model, not a measurement) |
@@ -44,6 +46,7 @@ Errors are signed, relative to the reference unless marked abs.
 | Same vented box | 2D engine | heat leaving through vents | +8.5% then +4.8% (42.5 and 41.0 W vs 39.1 W); heat imbalance +0.2% |
 | Single device 50 W in a sealed cabinet, 700 / 1000 / 1400 cells (CFD-C2, `validation_device.rs`) | 2D engine | housing rise | +4.5% / +5.1% / +5.1% (60.2 K vs 57.3 K); plate share 0.264 to 0.266 vs 0.268 |
 | Full cabinet 50 W, 1500 / 6000 / 20000 cells | 2D engine | housing rise | +5.1% / +10.7% / +14.3%: creeps up with the mesh, not mesh independent; test limit 20% |
+| Cabinet solver as the app runs it (`tests/validation_cabinet.rs`, CFD-INT), sealed 50 W and vented 100 W | 2D engine (and IEC 60890 for the sealed case) | mean air rise; housing rise; plate share | 1500 to 6000 cells: air -11 to -19% (IEC sealed -13 to -14%), housing +5 to +11%, plate share within 0.011. 20000 cells: air -16% sealed and -31% vented, housing +13 to +14%, plate share within 0.022. Not flat with refinement, so `ENCLOSURE_VALIDATED` stays false. Bands in the test: 20% (35% at 20000) air, 15% (20%) housing, 0.03 plate share |
 | Transient slab, dt = tau/200 and tau/400 | Fourier series | centre temperature at 0.1 tau | +2.34% and +1.19% (first order in dt) |
 
 ## What this says
@@ -66,13 +69,16 @@ result now lies in a 5.4 to 5.8 K band on 1000 to 6000 cells, not exactly mesh i
 
 ## Vented box: known difference to the 2D estimate
 
-The 2D estimate assumes mixed air at the vents. Where a heat source sits below a vent the 3D plume leaves 20 to 50%
-hotter (here +21% to +22% in exhaust rise), the volume-mean air rise is about 15% lower, and the vent flow is 11 to 13%
+The 2D estimate assumes mixed air at the vents. Where a heat source sits below a vent the 3D plume leaves about 20% hotter here (up to 50% in CFD-B's turbulence study, 13.5 K against 8.99 K), the volume-mean air rise is about 15% lower, and the vent flow is 11 to 13%
 low, while the walls (+4% to +7% in the wall-seen rise) and the total heat balance agree. This is a model difference, not
 a proven error of either side: nobody has measured this box. The wall-seen metric is the honest comparison for
 housing temperature; the volume mean is not expected to match. The wall conductance counts the vent openings, so the
 wall-seen rise reads a few percent low by construction. The full cabinet row creeps up with the mesh (+5% to +14%),
 so the 20% test band is a guard, not an accuracy claim.
+
+## Chimney: model, not exact
+
+The stack law is an idealisation (fully mixed exhaust, no plume), not a reference solution. The solver sits 11 to 15% below it and the finer mesh moves toward it (+4.3%), so the grid dependence is not yet bounded; the exponent and the energy balance are what the law fixes exactly, and both match. Not a measurement of a real cabinet.
 
 ## Caveats on single rows
 
@@ -88,7 +94,6 @@ so the 20% test band is a guard, not an accuracy claim.
 
 | Case | Blocked on |
 | --- | --- |
-| Chimney against the 2D formulas (CFD-C2 reports a 40% band, laminar) | own test in a later PR |
 | Richardson study on a real cabinet scenario | C1 meshing; the cavity study stands in |
 
 Each becomes a `validation_*` test when its lane lands; the sign-off PR for a lane adds its rows here.

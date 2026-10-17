@@ -3,7 +3,8 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() -> eframe::Result {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info")).init();
+    novo_app::apply_profile_flag();
+    novo_app::diag::init();
     let result = novo_app::run();
     if let Err(e) = &result {
         // Release builds on Windows have no console, so say it in a dialog.
@@ -15,7 +16,10 @@ fn main() -> eframe::Result {
                 "{e}\n\nKoperCAD needs a graphics driver with Vulkan, DirectX 12 or OpenGL support. \
                  Update the graphics driver, or on a remote desktop or virtual machine start KoperCAD \
                  on the local screen. Setting the environment variable WGPU_BACKEND to gl or dx12 \
-                 may help."
+                 may help.{}",
+                novo_app::diag::log_dir()
+                    .map(|d| format!("\n\nThe log is in {}", d.display()))
+                    .unwrap_or_default()
             ))
             .show();
     }

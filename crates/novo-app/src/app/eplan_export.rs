@@ -176,7 +176,7 @@ impl NovoApp {
             form.symbols = None;
         }
         if pick {
-            let mut dialog = rfd::FileDialog::new()
+            let mut dialog = crate::dialogs::FileDialog::new()
                 .set_title("EPLAN symbol table")
                 .add_filter("Symbol table (TOML)", &["toml", "txt"]);
             if let Some(dir) = form

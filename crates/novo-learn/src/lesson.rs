@@ -276,10 +276,52 @@ pub enum SolveOp {
     LiveCoil(LiveCoilOp),
     SetPotential(SetPotentialOp),
     Rename(RenameOp),
+    UiClick(UiClickOp),
+    ListRow(ListRowOp),
+    TypeText(TypeTextOp),
     CabinetPlace(CabinetPlaceOp),
     CabinetRotate(CabinetRotateOp),
     CabinetRemove(CabinetRemoveOp),
     Cabinet(CabinetOp),
+}
+
+/// A pointer click on the middle of an anchored control, as a person's
+/// click: what a step that says "press the Apply button" does.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct UiClickOp {
+    pub ui_click: String,
+}
+
+/// A click on one row of a list (`issues.list`), by the row's text (a part
+/// of it is enough), then, for a right click, on an entry of the menu that
+/// opens.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ListRowOp {
+    pub list_row: ListRowArgs,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ListRowArgs {
+    /// The anchor of the list.
+    pub list: String,
+    /// The row's text, or a part of it.
+    pub row: String,
+    /// Click with the right button, which opens the row's menu.
+    #[serde(default)]
+    pub right: bool,
+    /// The menu entry to click after a right click.
+    #[serde(default)]
+    pub choose: Option<String>,
+}
+
+/// Text typed into the field that has the keyboard focus.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TypeTextOp {
+    pub type_text: String,
 }
 
 /// A drop on the Cabinet plate: the device (by tag) with its top left corner
@@ -798,6 +840,26 @@ mod tests {
         assert!(matches!(&solve[3], SolveOp::Cabinet(c) if c.cabinet == CabinetStep::PlaceAll));
         assert!(matches!(&solve[4], SolveOp::Cabinet(c) if c.cabinet == CabinetStep::Accept));
         let bad = text.replace("place_all", "everything");
+        assert!(Lesson::parse(&bad).is_err());
+    }
+
+    #[test]
+    fn click_and_typing_solve_ops_parse() {
+        let text = format!(
+            "{GOOD}\n[[step]]\nid = \"x\"\ntitle = \"X\"\ntext = \"x\"\n\
+             expect = {{ signal = \"problem_waived\" }}\n\
+             solve = [ {{ ui_click = \"issues.waive\" }}, \
+             {{ list_row = {{ list = \"issues.list\", row = \"-S1\", right = true, choose = \"Waive\" }} }}, \
+             {{ type_text = \"Quote still open\" }} ]\n"
+        );
+        let lesson = Lesson::parse(&text).unwrap();
+        let solve = &lesson.steps.last().unwrap().solve;
+        assert!(matches!(&solve[0], SolveOp::UiClick(u) if u.ui_click == "issues.waive"));
+        assert!(
+            matches!(&solve[1], SolveOp::ListRow(l) if l.list_row.right && l.list_row.choose.is_some())
+        );
+        assert!(matches!(&solve[2], SolveOp::TypeText(t) if t.type_text.starts_with("Quote")));
+        let bad = text.replace("right = true", "left = true");
         assert!(Lesson::parse(&bad).is_err());
     }
 

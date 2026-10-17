@@ -106,8 +106,8 @@ impl NovoApp {
         {
             self.message(Level::Warning, format!("Parts inbox: {e}"));
         }
-        let mut dialog =
-            rfd::FileDialog::new().set_title("Folder with catalog files (BMEcat, CSV, ZIP)");
+        let mut dialog = crate::dialogs::FileDialog::new()
+            .set_title("Folder with catalog files (BMEcat, CSV, ZIP)");
         if let Some(dir) = inbox.filter(|d| d.is_dir()) {
             dialog = dialog.set_directory(dir);
         }

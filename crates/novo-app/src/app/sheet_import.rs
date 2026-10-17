@@ -181,7 +181,7 @@ impl NovoApp {
         if !self.is_open() {
             return;
         }
-        let picked = rfd::FileDialog::new()
+        let picked = crate::dialogs::FileDialog::new()
             .set_title("Import spreadsheet")
             .add_filter("Spreadsheet", &["xlsx", "xlsm", "csv", "tsv", "txt"])
             .pick_file();

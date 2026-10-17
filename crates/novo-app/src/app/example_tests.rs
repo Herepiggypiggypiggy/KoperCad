@@ -208,3 +208,41 @@ fn the_example_cabinet_is_complete_and_simulates() {
         "every loss of the example is an estimate: {items:?}"
     );
 }
+
+#[test]
+fn the_example_wires_are_numbered_and_commissioning_names_them_by_number() {
+    use novo_commissioning::{Target, targets};
+    use novo_reports::{Report, WireList};
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let project = d.doc().project();
+    let unnumbered: Vec<_> = project
+        .wires()
+        .filter(|w| w.number.as_deref().is_none_or(str::is_empty))
+        .map(|w| w.id)
+        .collect();
+    assert!(unnumbered.is_empty(), "unnumbered wires: {unnumbered:?}");
+    let list = WireList.generate(project);
+    let section = &list.sections[0];
+    let col = section.column("number").expect("wire number column");
+    assert!(!section.rows.is_empty());
+    for row in &section.rows {
+        assert!(
+            !row.cells[col].to_string().is_empty(),
+            "a wire-list row without a number: {row:?}"
+        );
+    }
+    let wires: Vec<_> = targets(project)
+        .into_iter()
+        .filter_map(|t| match t.target {
+            Target::Wire(id) => Some((id, t.label)),
+            _ => None,
+        })
+        .collect();
+    assert!(!wires.is_empty());
+    for (id, label) in wires {
+        assert_ne!(label, id.to_string(), "commissioning names a wire by id");
+    }
+}

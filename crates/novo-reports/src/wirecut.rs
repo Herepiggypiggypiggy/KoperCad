@@ -91,8 +91,8 @@ pub struct WireCutJob {
     /// What the machine cuts: the routed length plus the termination
     /// allowance at both ends, the same rule as the cut list.
     pub cut_mm: f64,
-    /// How the length was found: `routed`, `routed, no depth`, `free air`
-    /// or `estimate`.
+    /// How the length was found: `routed`, `routed, no depth`, `free air`,
+    /// `door, no gap` or `estimate`.
     pub basis: String,
     pub end_a: WireEnd,
     pub end_b: WireEnd,
@@ -230,7 +230,12 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
             WireCutJob {
                 wires: item.wires.iter().map(|w| w.id).collect(),
                 cross_section_mm2: section,
-                colour: join_distinct(item.wires.iter().filter_map(|w| w.color.as_deref())),
+                colour: join_distinct(item.wires.iter().filter_map(|w| {
+                    w.color
+                        .clone()
+                        .filter(|c| !c.trim().is_empty())
+                        .or_else(|| crate::wire_defaults::core_colour(project, w.id))
+                })),
                 length_mm: length.mm,
                 cut_mm: length.mm + 2.0 * cut_list.end_allowance_mm(section),
                 basis: length.basis.text().to_owned(),
@@ -298,6 +303,11 @@ pub const JOB_COLUMNS: [&str; 16] = [
     "To",
     "Length basis",
 ];
+
+/// Title of the table of wires to cut, with its count: every connection of
+/// the wire list plus the supply and PE leads that end on a feed.
+pub(crate) const WIRE_CUT_COUNT_TITLE: &str =
+    "Wires to cut · {n} (device pin to device pin, plus supply and PE leads)";
 
 fn job_cells(n: usize, j: &WireCutJob) -> Vec<Cell> {
     vec![
@@ -415,7 +425,8 @@ impl Report for WireCut {
             Column::new("to", "To", 25.0),
             Column::new("basis", "Length basis", 14.0),
         ];
-        let mut cuts = Section::new("cuts", "Wires to cut", columns);
+        let title = WIRE_CUT_COUNT_TITLE.replace("{n}", &jobs.len().to_string());
+        let mut cuts = Section::new("cuts", &title, columns);
         for (i, j) in jobs.iter().enumerate() {
             cuts.push(
                 job_cells(i + 1, j),

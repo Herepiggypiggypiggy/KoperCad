@@ -13,7 +13,7 @@ pub const KEYMAP_FILE: &str = "keymap.txt";
 /// `%APPDATA%\KoperCAD\keymap.txt` (the platform's data folder elsewhere).
 pub fn keymap_path() -> Option<PathBuf> {
     Some(
-        dirs::data_dir()?
+        novo_storage::profile::data_dir()?
             .join(crate::DATA_DIR_NAME)
             .join(KEYMAP_FILE),
     )
@@ -66,7 +66,7 @@ pub fn ensure_file(path: &Path) -> std::io::Result<()> {
 
 /// Hands `path` to the user's own editor (Notepad on Windows). Does nothing
 /// under test.
-fn open_in_editor(path: &Path) -> std::io::Result<()> {
+pub(super) fn open_in_editor(path: &Path) -> std::io::Result<()> {
     if cfg!(test) {
         return Ok(());
     }

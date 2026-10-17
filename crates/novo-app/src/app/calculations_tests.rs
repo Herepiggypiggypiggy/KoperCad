@@ -190,6 +190,72 @@ fn the_calculations_window_draws_with_and_without_inputs() {
 }
 
 #[test]
+fn rows_that_read_the_ampacity_tables_say_planning_value_in_the_copy_text() {
+    let (_dir, mut d, ms) = open();
+    d.app.apply_electrical_input(&SUPPLY[1], "10");
+    d.app.set_device_input(ms.f1, "rated_current_a", "16");
+    d.app.set_device_input(ms.f1, "trip_curve", "c");
+    d.app.set_device_input(ms.f1, "breaking_capacity_ka", "10");
+    {
+        let doc = d.app.backend.document_mut().unwrap();
+        let wires: Vec<_> = doc
+            .project()
+            .all::<novo_core::Wire>()
+            .map(|w| w.id)
+            .collect();
+        doc.transact("inputs", |tx| {
+            for wire in &wires {
+                for edit in [
+                    WireEdit::Section("1.5".into()),
+                    WireEdit::Length("100".into()),
+                    WireEdit::Load("16".into()),
+                ] {
+                    apply(tx, &[*wire], &edit).map_err(novo_core::ModelError::Format)?;
+                }
+            }
+            Ok(())
+        })
+        .unwrap();
+    }
+    let project = d.app.backend.document().unwrap().project();
+    let sheet = calc_sheet(
+        project,
+        &project.netlist(),
+        StarterChoice::default(),
+        &TableSet::builtin(),
+    );
+    let rows: Vec<_> = sheet
+        .circuits
+        .iter()
+        .filter_map(|c| c.report.as_ref())
+        .flat_map(|r| r.rows.iter())
+        .collect();
+    assert!(
+        rows.iter().any(|r| r.title == "Overload"),
+        "the motor starter has a judged circuit: {:?} {:?}",
+        sheet.missing,
+        sheet
+            .circuits
+            .iter()
+            .map(|c| &c.missing)
+            .collect::<Vec<_>>()
+    );
+    let text = super::calculations::sheet_text(&sheet);
+    assert!(
+        text.contains("Overload: IEC 60364-4-43 §433.1 (planning value)"),
+        "{text}"
+    );
+    assert!(
+        text.contains("Voltage drop: IEC 60364-5-52 Annex G (planning value)"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("Breaking capacity: IEC 60364-4-43 §434.5.1 (planning"),
+        "only the table-based rows carry the label: {text}"
+    );
+}
+
+#[test]
 fn safety_functions_edited_in_the_window_are_stored_and_raise_problems() {
     use novo_checks::safety::{FUNCTIONS_KEY, SafetyFunction};
     let (_dir, mut d, _) = open();
@@ -268,4 +334,71 @@ fn the_safety_report_is_written_and_says_not_met() {
     // The success toast says where the file went and offers the folder.
     let toast = d.app.messages().last().unwrap();
     assert_eq!(toast.file.as_deref(), Some(path.as_path()), "{toast:?}");
+}
+
+#[test]
+fn the_safety_calculator_survives_save_close_and_reopen() {
+    use novo_safety::{Category, Severity};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    {
+        let win = d.app.wb.safety.as_mut().unwrap();
+        win.severity = Severity::S1;
+        win.days = 120.0;
+        win.subsystems[0].name = "Door switch".into();
+        win.subsystems[0].category = Category::C4;
+        win.subsystems[0].channel1[0].basis = super::safety::PartBasis::B10d;
+        win.subsystems[0].channel1[0].value = 1_000_000.0;
+    }
+    d.frame();
+    d.frame();
+    assert!(
+        d.app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .info()
+            .properties
+            .contains_key(super::safety_calc::CALCULATOR_KEY)
+    );
+    let path = dir.path().join("plant.novo");
+    assert!(d.app.save_to(&path));
+    d.app.run(&ctx, Action::CloseProject);
+    d.frame();
+    d.app.open_path_as(&path, false);
+    d.frame();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    let win = d.app.wb.safety.as_ref().unwrap();
+    assert_eq!(win.severity, Severity::S1);
+    assert_eq!(win.days, 120.0);
+    assert_eq!(win.subsystems[0].name, "Door switch");
+    assert_eq!(win.subsystems[0].category, Category::C4);
+    assert_eq!(win.subsystems[0].channel1[0].value, 1_000_000.0);
+}
+
+#[test]
+fn an_untouched_safety_calculator_leaves_no_trace_in_the_project() {
+    let (_dir, mut d, _) = open();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    d.frame();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    assert!(
+        !d.app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .info()
+            .properties
+            .contains_key(super::safety_calc::CALCULATOR_KEY)
+    );
 }

@@ -82,6 +82,32 @@ pub enum PatchKind {
     Solid,
     /// Inner face of the enclosure wall.
     Wall,
+    /// The front of the mounting plate, a thin sheet on the rear wall that
+    /// the grid does not resolve (see [`RearPlate`]). Geometrically a wall
+    /// face; physically the plate.
+    Plate,
+}
+
+/// The mounting plate as a surface on the rear face (`z = 0`) of the grid.
+///
+/// A plate of 2.5 mm is thinner than the cells next to it, so the mesh
+/// calls it air. Radiation needs it as a surface with its own emissivity,
+/// and the device feet that stand on it as being in contact, not facing it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RearPlate {
+    /// Share of each column (`i + nx * j`) covered by the plate; a column
+    /// counts as plate from one half.
+    pub cover: Vec<f64>,
+    /// Mesh material id of the plate.
+    pub material: u16,
+    /// Height of the plate surface above the rear wall, mm.
+    pub front_z_mm: f64,
+}
+
+impl RearPlate {
+    fn covers(&self, col: usize) -> bool {
+        self.cover.get(col).is_some_and(|c| *c >= 0.5)
+    }
 }
 
 /// A cell face. `dir` is `2 * axis + (1 if the face is on the high side)`.
@@ -175,6 +201,16 @@ pub(crate) fn face_box_mm(g: &Grid3, f: FaceRef) -> ([f64; 3], [f64; 3]) {
 
 impl PatchSet {
     pub fn from_mesh(mesh: &Mesh, emis: &Emissivity, st: &PatchSettings) -> PatchSet {
+        PatchSet::from_mesh_with(mesh, emis, st, None)
+    }
+
+    /// As [`PatchSet::from_mesh`], with the mounting plate as a rear surface.
+    pub fn from_mesh_with(
+        mesh: &Mesh,
+        emis: &Emissivity,
+        st: &PatchSettings,
+        plate: Option<&RearPlate>,
+    ) -> PatchSet {
         let g = &mesh.grid;
         let n = dims(g);
         let opaque: Vec<bool> = mesh.material.iter().map(|&m| m != 0).collect();
@@ -190,16 +226,30 @@ impl PatchSet {
                     cell: cell as u32,
                     dir,
                 };
+                let col = idx[1] * g.nx + idx[0];
                 if opaque[cell] {
                     if inside {
                         let mut j = idx;
                         j[a] = nb as usize;
                         if !opaque[(j[2] * g.ny + j[1]) * g.nx + j[0]] {
-                            raw.push((face, PatchKind::Solid));
+                            // A foot standing on the plate touches it.
+                            let on_plate = dir == 4
+                                && plate.is_some_and(|p| {
+                                    p.covers(col)
+                                        && (g.z_edges_mm[idx[2]] - p.front_z_mm).abs() < 1e-6
+                                });
+                            if !on_plate {
+                                raw.push((face, PatchKind::Solid));
+                            }
                         }
                     }
                 } else if !inside {
-                    raw.push((face, PatchKind::Wall));
+                    let kind = if dir == 4 && plate.is_some_and(|p| p.covers(col)) {
+                        PatchKind::Plate
+                    } else {
+                        PatchKind::Wall
+                    };
+                    raw.push((face, kind));
                 }
             }
         }
@@ -211,13 +261,13 @@ impl PatchSet {
                 .map(|(r, (f, kind))| {
                     let idx = split(g, f.cell as usize);
                     let a = axis_of(f.dir);
-                    let mat = if *kind == PatchKind::Solid {
-                        mesh.material[f.cell as usize]
-                    } else {
-                        0
+                    let mat = match kind {
+                        PatchKind::Solid => mesh.material[f.cell as usize],
+                        PatchKind::Wall => 0,
+                        PatchKind::Plate => plate.map_or(0, |p| p.material),
                     };
                     let key = (
-                        u8::from(*kind == PatchKind::Wall),
+                        *kind as u8,
                         mat,
                         f.dir,
                         idx[a] as u32,
@@ -297,6 +347,7 @@ impl PatchSet {
             normal[axis_of(d)] = towards_air as f64;
             let emissivity = match kind {
                 PatchKind::Wall => clamp(emis.enclosure_wall),
+                PatchKind::Plate => clamp(emis.plate),
                 PatchKind::Solid => mesh
                     .materials
                     .iter()

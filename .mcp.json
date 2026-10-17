@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "kopercad-test-user": {
+      "command": "scripts/test-user-mcp.sh",
+      "args": []
+    }
+  }
+}

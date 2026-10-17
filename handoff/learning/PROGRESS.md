@@ -9,3 +9,4 @@
 2026-10-16 08:42 UTC #581 merged (lessons listed as early access). Reproduced the misaligned highlights: fixed coordinates versus where the person's own feeds land; fixed with feed/pin targets.
 2026-10-16 09:00 UTC #601: real Show me how with Start/End wire markers, Shift+L keeps the lesson card, `how`/`how_nl` fields; lesson threads told. Next: replay gate and anchors.
 2026-10-16 12:10 UTC #642 merged (replay gate, 142 steps tick). Second runner PR: rename/tee/feed_row/cable/issue_revision/assign_part/held-key ops, `manual` marker, menu-row anchors with fallback, free-text control-name ratchet; fmt, clippy and tests pass locally.
+2026-10-17 10:20 UTC #682 merged. Third runner PR: ui_click, list_row, type_text ops; waive/restore replay; flyout kept open when a row menu entry is chosen; live-view momentary wording.

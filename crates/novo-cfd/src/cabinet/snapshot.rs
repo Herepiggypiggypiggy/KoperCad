@@ -3,7 +3,7 @@
 use novo_layout::Rect;
 use novo_thermal::{DeviceResult, HotSpot, HotSpotKind, Scenario, Status};
 
-use super::statement::accuracy_for;
+use super::statement::{accuracy_for, mark_radiation};
 use crate::flow::{FlowSolver, Mesh as FlowMesh};
 use crate::mesh::CellClass;
 use crate::result::{CfdSnapshot, Fidelity, MaterialKind, Progress};
@@ -67,9 +67,14 @@ impl<'a> View<'a> {
             .collect();
         let mut notes = vec![format!(
             "Cabinet solver, {}: {} cells, laminar buoyant flow with conduction in devices, plate, \
-             rails and walls. Turbulence and radiation are not modelled yet.",
+             rails and walls. {}",
             fidelity.label(),
-            n
+            n,
+            if setup.cfg.radiation.is_some() {
+                "Surface-to-surface radiation is coupled; turbulence is not modelled unless a model is chosen."
+            } else {
+                "Turbulence and radiation are not modelled yet."
+            }
         )];
         notes.push(if setup.cfg.plate.is_some() && !setup.cfg.device_film_h.is_empty() {
             "The mounting plate is a thin sheet on the rear wall with a contact resistance to the \
@@ -104,7 +109,15 @@ impl<'a> View<'a> {
                 monitor_drift_k: 0.0,
             },
             notes,
-            accuracy: accuracy_for(fidelity),
+            accuracy: {
+                let mut a = accuracy_for(fidelity);
+                if setup.cfg.radiation.is_some() {
+                    mark_radiation(&mut a);
+                }
+                a
+            },
+            heat_paths: Vec::new(),
+            radiation_on: setup.cfg.radiation.is_some(),
         };
         View {
             setup,
@@ -127,6 +140,7 @@ impl<'a> View<'a> {
             medium.map_or_else(|| vec![0.0; flow.t.len()], |m| self.surface_flux(flow, m));
         let (devices, unresolved) = self.devices(flow);
         s.devices = devices;
+        s.heat_paths = self.heat_paths(flow);
         for id in unresolved {
             s.notes.push(format!(
                 "Device {id} is smaller than two cells across at this level: its surface temperature is \
@@ -168,6 +182,25 @@ impl<'a> View<'a> {
             }
         }
         out
+    }
+
+    /// Convection, conduction and radiation per device. Needs the lumped
+    /// device model (the plate side and the radiation come from its report).
+    fn heat_paths(&self, flow: &FlowSolver) -> Vec<crate::result::DeviceHeatPaths> {
+        if self.setup.cfg.device_film_h.is_empty() {
+            return Vec::new();
+        }
+        self.setup
+            .device_report(flow)
+            .iter()
+            .zip(&self.scn.devices)
+            .map(|(r, d)| crate::result::DeviceHeatPaths {
+                id: d.id,
+                total_w: d.loss_w,
+                conduction_w: r.to_plate_w,
+                radiation_w: r.radiation_w,
+            })
+            .collect()
     }
 
     /// Results per device, and the ids of those the grid does not resolve.

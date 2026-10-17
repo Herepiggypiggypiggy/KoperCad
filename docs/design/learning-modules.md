@@ -399,6 +399,11 @@ CI (all run in the normal `cargo test --workspace`, Linux, no window)
   `{ assign_part = { device, part } }`, `{ key = "x", hold = 0.5 }` (a held key; a pushbutton is momentary,
   so a pressed-and-released click needs the hold), `{ live_pole }`, `{ live_coil }`, `{ set_potential }`.
   New operations are added with the check kinds above.
+- **Clicking controls.** `{ ui_click = "anchor.id" }` is a real pointer click on a drawn control;
+  `{ list_row = { list = "issues.list", row = "text", right = true, choose = "menu entry" } }` clicks a
+  row of an anchored list (a part of its text is enough), with the right button and then a menu entry
+  if asked (the owner registers rows with `learn_row`); `{ type_text = "..." }` types into the field
+  that has the focus (click its anchor first). Together they replay a step like waiving a problem.
 - **`manual = "why"`** on a step marks it as something the replay cannot do (a file dialog, a printer, a
   real EPLAN). It is an error to give both `manual` and `solve`; an `expect` with neither is a warning, so
   the gap stays visible. The report lists such steps as Manual.
