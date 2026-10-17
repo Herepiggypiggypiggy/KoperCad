@@ -39,8 +39,9 @@ pub fn visuals_for(p: &Palette) -> Visuals {
         widgets: Widgets {
             // Labels, separators, indent lines.
             noninteractive: widget(p.panel, p.border_subtle, p.text_primary),
-            // Buttons and fields at rest: a quiet fill and a hairline.
-            inactive: widget(p.control, p.border_subtle, p.text_primary),
+            // Buttons, fields and the rings of checks and radios at rest: a quiet
+            // fill and a hairline that holds 3:1 on the panel.
+            inactive: widget(p.control, p.border_control, p.text_primary),
             hovered: widget(p.hover, p.border_strong, p.text_strong),
             // Pressed or dragged: the only place a control turns copper.
             active: widget(p.hover, p.accent, p.text_strong),

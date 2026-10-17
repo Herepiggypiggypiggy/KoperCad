@@ -834,7 +834,7 @@ fn guide_ui(ui: &mut egui::Ui, win: &mut PartsWindow) {
         ui.horizontal(|ui| {
             ui.strong("Maker guide");
             ui.weak("KoperCAD never contacts a maker site: you download, it reads.");
-            if ui.small_button("Hide").clicked() {
+            if ui.button("Hide").clicked() {
                 win.guide = false;
             }
         });
@@ -885,7 +885,7 @@ fn new_part_ui(ui: &mut egui::Ui, win: &mut PartsWindow) {
             }
         });
         if let Some(e) = &form.error {
-            ui.colored_label(novo_theme::tokens::WARNING, e);
+            ui.colored_label(crate::theme::ui_palette().warning, e);
         }
         ui.horizontal(|ui| {
             create = ui.button("Save to my catalog").clicked();
@@ -983,7 +983,7 @@ fn parts_ui(
             {
                 actions.push(PartsAction::ImportCatalogFiles);
             }
-            if widgets::primary_button(ui, "New part\u{2026}")
+            if widgets::ghost_button(ui, "New part\u{2026}")
                 .on_hover_text("Add a part by hand to your own catalog.")
                 .clicked()
             {
@@ -1153,17 +1153,17 @@ on the maker's site and drop the file here.",
             }
             ui.horizontal(|ui| {
                 if let Some(url) = &import.page_url
-                    && ui.small_button("Open page again").clicked()
+                    && ui.button("Open page again").clicked()
                 {
                     actions.push(PartsAction::OpenPage(url.clone()));
                 }
-                if ui.small_button("Choose file\u{2026}").clicked() {
+                if ui.button("Choose file\u{2026}").clicked() {
                     actions.push(PartsAction::ChooseFile);
                 }
-                if ui.small_button("Watch another folder\u{2026}").clicked() {
+                if ui.button("Watch another folder\u{2026}").clicked() {
                     actions.push(PartsAction::ChooseFolder);
                 }
-                if ui.small_button("Stop").clicked() {
+                if ui.button("Stop").clicked() {
                     actions.push(PartsAction::StopImport);
                 }
             });
@@ -1176,23 +1176,23 @@ on the maker's site and drop the file here.",
                     .map_or_else(String::new, |n| n.to_string_lossy().into_owned())
             ));
             ui.horizontal(|ui| {
-                if ui.small_button("Import it").clicked() {
+                if ui.button("Import it").clicked() {
                     actions.push(PartsAction::ConfirmFile(path.clone()));
                 }
-                if ui.small_button("Not this one").clicked() {
+                if ui.button("Not this one").clicked() {
                     actions.push(PartsAction::DeclineFile(path.clone()));
                 }
             });
         }
         Phase::Done(summary) => {
             ui.colored_label(
-                novo_theme::tokens::SUCCESS,
+                crate::theme::ui_palette().success,
                 format!("Imported {} ({})", import.label, summary.file),
             );
             for line in &summary.lines {
                 ui.label(line);
             }
-            if ui.small_button("Done").clicked() {
+            if ui.button("Done").clicked() {
                 actions.push(PartsAction::StopImport);
             }
         }
@@ -1202,10 +1202,10 @@ on the maker's site and drop the file here.",
                 format!("Could not import {}: {e}", import.label),
             );
             ui.horizontal(|ui| {
-                if ui.small_button("Try again").clicked() {
+                if ui.button("Try again").clicked() {
                     actions.push(PartsAction::Import(import.key.clone()));
                 }
-                if ui.small_button("Dismiss").clicked() {
+                if ui.button("Dismiss").clicked() {
                     actions.push(PartsAction::StopImport);
                 }
             });

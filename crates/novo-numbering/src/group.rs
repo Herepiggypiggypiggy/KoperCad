@@ -128,7 +128,9 @@ pub(crate) fn fits(target: &Target, number: &str) -> bool {
 }
 
 /// Every group of the project, in reading order: page order, then column,
-/// then top to bottom, then left to right.
+/// then strand by strand (left to right), each strand top to bottom. A
+/// three-phase feed numbers L1 1, 2, 3, then L2 4, 5, 6, not 1, 4, 5 across
+/// the sheet.
 pub fn groups(project: &Project, netlist: &Netlist) -> Vec<Group> {
     let mut pages: Vec<_> = project.pages().collect();
     pages.sort_by(|a, b| {
@@ -232,12 +234,18 @@ fn split_at_device_bridges(project: &Project, wires: &[WireId]) -> Vec<Vec<WireI
     parts.into_values().collect()
 }
 
+/// The strand a group's first point lies on: x in whole millimetres, so a
+/// device drawn a fraction of a millimetre off does not interleave strands.
+fn strand(x: f64) -> i64 {
+    x.round() as i64
+}
+
 fn compare(a: &Group, b: &Group) -> Ordering {
     a.page_rank
         .cmp(&b.page_rank)
         .then(a.column.cmp(&b.column))
+        .then(strand(a.x).cmp(&strand(b.x)))
         .then(a.y.total_cmp(&b.y))
-        .then(a.x.total_cmp(&b.x))
         .then_with(|| a.wires.cmp(&b.wires))
 }
 

@@ -3,7 +3,7 @@
 
 use eframe::egui;
 use novo_heatview::range::{self, Range};
-use novo_theme::{heat, tokens};
+use novo_theme::heat;
 
 use super::heat_3d::Heat3d;
 
@@ -71,14 +71,14 @@ pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32)
         let x = bar.min.x + frac * BAR_LEN;
         painter.line_segment(
             [egui::pos2(x, bar.max.y), egui::pos2(x, bar.max.y + 3.0)],
-            egui::Stroke::new(1.0, tokens::TEXT_MUTED),
+            egui::Stroke::new(1.0, crate::theme::ui_palette().text_secondary),
         );
         painter.text(
             egui::pos2(x, bar.max.y + 4.0),
             egui::Align2::CENTER_TOP,
             format!("{v:.0}"),
             egui::FontId::proportional(10.0),
-            tokens::TEXT_MUTED,
+            crate::theme::ui_palette().text_secondary,
         );
     }
     ui.label(egui::RichText::new("°C").small());

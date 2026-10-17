@@ -246,7 +246,7 @@ fn generated_pages_print_as_named_sheets() {
             expect("20a", "Devices"),
             expect("20b", "Devices"),
             expect("20c", "Devices"),
-            expect("21", ""),
+            expect("21", "(untitled)"),
         ]
     );
 }

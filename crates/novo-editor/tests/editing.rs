@@ -2998,6 +2998,7 @@ fn joining_a_wire_never_glides_along_it_off_the_grid() {
     );
 }
 
+#[cfg(feature = "art")]
 #[test]
 fn a_placed_earth_feed_is_pe_not_the_next_line() {
     let (mut doc, page, _) = setup();

@@ -156,7 +156,7 @@ impl NovoApp {
             Workspace::Reports => None,
             Workspace::View3d if !self.is_open() => Some("Open a project first"),
             Workspace::View3d if !self.view3d_has_cabinet() => {
-                Some("Set a mounting plate in the Cabinet first")
+                Some("3D needs a mounting plate: open Cabinet and press Set plate (Plate setup)")
             }
             Workspace::View3d => None,
             Workspace::Commissioning if !self.is_open() => Some("Open a project first"),
@@ -168,10 +168,12 @@ impl NovoApp {
     /// shows `workspace` with the panels it was left with. Does nothing for
     /// the current one or one that is unavailable.
     pub(crate) fn switch_workspace(&mut self, workspace: Workspace) {
-        if workspace == self.workspace
-            || !workspace.is_built()
-            || self.workspace_unavailable(workspace).is_some()
-        {
+        if workspace == self.workspace || !workspace.is_built() {
+            return;
+        }
+        if let Some(reason) = self.workspace_unavailable(workspace) {
+            // A key or the command field gave no sign why nothing happened.
+            self.message(super::Level::Info, reason);
             return;
         }
         let left_commissioning = self.workspace == Workspace::Commissioning;
@@ -238,7 +240,9 @@ impl NovoApp {
     /// After the last project opened: back to the workspace it was left in,
     /// when that is available.
     pub(super) fn restore_workspace_at_start(&mut self) {
-        if let Some(last) = Workspace::from_id(&self.settings.last_workspace) {
+        if let Some(last) = Workspace::from_id(&self.settings.last_workspace)
+            && self.workspace_unavailable(last).is_none()
+        {
             self.switch_workspace(last);
         }
     }

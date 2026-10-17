@@ -1027,7 +1027,7 @@
         "pin": 0
       },
       "route": [],
-      "number": "6",
+      "number": "4",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1046,7 +1046,7 @@
         "pin": 4
       },
       "route": [],
-      "number": "4",
+      "number": "5",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1065,7 +1065,7 @@
         "pin": 0
       },
       "route": [],
-      "number": "7",
+      "number": "6",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1084,7 +1084,7 @@
         "pin": 0
       },
       "route": [],
-      "number": "5",
+      "number": "7",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1160,7 +1160,7 @@
         "pin": 1
       },
       "route": [],
-      "number": "6",
+      "number": "4",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1179,7 +1179,7 @@
         "pin": 2
       },
       "route": [],
-      "number": "7",
+      "number": "6",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}
@@ -1207,7 +1207,7 @@
           "y": 116.0
         }
       ],
-      "number": "5",
+      "number": "7",
       "color": null,
       "cross_section_mm2": null,
       "properties": {}

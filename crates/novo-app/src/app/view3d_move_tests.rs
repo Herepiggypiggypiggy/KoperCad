@@ -246,6 +246,10 @@ fn placed(d: &Drive, cab: novo_core::StructureId, id: u64) -> (f64, f64, bool) {
     (p.x, p.y, p.rotated)
 }
 
+/// Both tests that touch the process-wide frame recorder (the Stats panel
+/// reads it) take this, so neither sees the other's adapter or timings.
+pub(super) static STATS_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn press(d: &mut Drive, key: egui::Key) {
     d.frame_with(vec![egui::Event::Key {
         key,
@@ -506,7 +510,7 @@ fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
         let rect = |id: egui::Id| ctx.memory(|m| m.area_rect(id));
         let toolbar = rect(super::panel::id("view3d_toolbar")).expect("toolbar");
         let inspector = rect(super::panel::id("cabinet_inspector")).expect("inspector");
-        let heat = rect(egui::Id::new("view3d_heat_panel")).expect("heat panel");
+        let heat = rect(super::panel::id("view3d_heat_panel")).expect("heat panel");
         let stats = rect(super::panel::id("view3d_stats")).expect("stats");
         // The heat key lives in the Heat strip, not in a floating area that could cover these.
         assert!(rect(egui::Id::new("heat_legend")).is_none(), "{w} x {h}");
@@ -665,6 +669,13 @@ fn a_group_of_a_rail_and_its_device_lands_the_device_once() {
 /// the Heat panel and the view cube.
 #[test]
 fn the_rail_card_starts_clear_of_the_other_3d_panels() {
+    let _guard = STATS_GUARD.lock().unwrap_or_else(|e| e.into_inner());
+    // A fresh recorder: the Stats panel's height depends on it.
+    novo_view3d::widget::register_adapter(
+        "Test GPU",
+        "Vulkan",
+        novo_view3d::render::Tier::Discrete,
+    );
     for (w, h) in [(1366.0, 768.0), (900.0, 600.0)] {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
@@ -692,7 +703,7 @@ fn the_rail_card_starts_clear_of_the_other_3d_panels() {
         let rect = |id: egui::Id| ctx.memory(|m| m.area_rect(id));
         let card = rect(super::panel::id("view3d_rail")).expect("rail card");
         let toolbar = rect(super::panel::id("view3d_toolbar")).expect("toolbar");
-        let heat = rect(egui::Id::new("view3d_heat_panel")).expect("heat panel");
+        let heat = rect(super::panel::id("view3d_heat_panel")).expect("heat panel");
         let stats = rect(super::panel::id("view3d_stats")).expect("stats");
         let cube = egui::Rect::from_min_size(
             egui::pos2(heat.right() + 12.0 - 12.0 - 88.0, heat.top() - 8.0 - 88.0),
@@ -710,4 +721,78 @@ fn the_rail_card_starts_clear_of_the_other_3d_panels() {
             );
         }
     }
+}
+
+#[test]
+fn each_arrow_press_in_3d_is_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, a, _) = cabinet_with_two_devices(&mut d);
+    open_3d_with_selection(&mut d, a);
+    // The keys nudge while the pointer is over the view.
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(640.0, 400.0))]);
+    let start = placed(&d, cab, a);
+    press(&mut d, egui::Key::ArrowRight);
+    d.frame();
+    let one = placed(&d, cab, a);
+    assert!(one.0 > start.0, "moved right");
+    press(&mut d, egui::Key::ArrowRight);
+    d.frame();
+    let two = placed(&d, cab, a);
+    assert!(two.0 > one.0, "moved again");
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(placed(&d, cab, a), one, "one undo takes back one press");
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(placed(&d, cab, a), start);
+}
+
+#[test]
+fn a_typed_position_is_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, a, _) = cabinet_with_two_devices(&mut d);
+    let start = placed(&d, cab, a);
+    let l = novo_layout::model::load(project(&d), cab).unwrap();
+    let edit = super::view3d_nudge::set_position(&l, a, Some(start.0 + 30.0), Some(start.1 + 20.0))
+        .expect("a different position is an edit");
+    let Edit::Group { devices, rails } = edit else {
+        panic!("a typed position is a group edit");
+    };
+    d.app.view3d_move_group(cab, devices, rails);
+    assert_eq!(
+        (placed(&d, cab, a).0, placed(&d, cab, a).1),
+        (start.0 + 30.0, start.1 + 20.0)
+    );
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(placed(&d, cab, a), start, "X and Y come back together");
+}
+
+#[test]
+fn duplicating_a_selection_of_two_is_one_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let (cab, a, b) = cabinet_with_two_devices(&mut d);
+    open_3d_with_selection(&mut d, a);
+    d.app.view3d.view.state.selection = BTreeSet::from([dev(a), dev(b)]);
+    let count = |d: &Drive| project(d).all::<novo_core::Device>().count();
+    let placements = |d: &Drive| {
+        novo_layout::model::load(project(d), cab)
+            .unwrap()
+            .placements
+            .len()
+    };
+    let (devices, placed_before) = (count(&d), placements(&d));
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.3d_duplicate", None);
+    d.frame();
+    assert_eq!(count(&d), devices + 2);
+    assert_eq!(placements(&d), placed_before + 2);
+    let layout = novo_layout::model::load(project(&d), cab).unwrap();
+    assert!(layout.report().collisions.is_empty() && layout.report().outside.is_empty());
+    assert_eq!(d.app.view3d.view.state.selection.len(), 2, "both copies");
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(count(&d), devices, "one undo takes both copies back");
 }

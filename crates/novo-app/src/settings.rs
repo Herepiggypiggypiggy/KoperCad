@@ -77,10 +77,27 @@ pub struct Settings {
     /// The id of the newest What's new entry the person has opened the
     /// list over (`assets/whats-new.md`); empty on a first run.
     pub whats_new_seen: String,
+    /// Camera positions saved in the 3D view, per user, not in the project.
+    pub camera_views: Vec<CameraBookmark>,
+    /// A swipe in wheel lines pans the 3D view instead of zooming (Windows
+    /// touchpads); the 3D toolbar's Layers > Trackpad pans.
+    pub trackpad_pans: bool,
     /// What the person last chose in File > Export drawings > Export PDF...
     /// (`app/pdf_options.rs`): a per-user preference, kept in the settings
     /// file under the user's profile.
     pub pdf_choice: PdfChoice,
+}
+
+/// A saved 3D camera: where it looks from, in the view's own units.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct CameraBookmark {
+    pub name: String,
+    pub target: [f32; 3],
+    pub yaw: f32,
+    pub pitch: f32,
+    pub distance: f32,
+    pub fov_y: f32,
+    pub orthographic: bool,
 }
 
 /// The choices of the PDF options dialog. [`PdfChoice::default`] is what the
@@ -274,6 +291,18 @@ mod tests {
         let s: Settings = ron::from_str(old).unwrap();
         assert_eq!(s.recent_actions, vec!["view.fit"]);
         assert_eq!(s.outline_pinned, None);
+    }
+
+    #[test]
+    fn the_trackpad_choice_is_off_in_old_settings_and_survives_a_round_trip() {
+        let old: Settings = ron::from_str("(recent_actions: [\"view.fit\"])").unwrap();
+        assert!(!old.trackpad_pans);
+        let on = Settings {
+            trackpad_pans: true,
+            ..Settings::default()
+        };
+        let back: Settings = ron::from_str(&ron::to_string(&on).unwrap()).unwrap();
+        assert!(back.trackpad_pans);
     }
 
     #[test]
