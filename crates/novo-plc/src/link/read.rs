@@ -221,6 +221,8 @@ fn plcopen(xml: &str) -> Result<TagFile, ReadError> {
     let mut in_doc = false;
     let mut doc = String::new();
     let mut seen_project = false;
+    // Lines are counted as the reader moves on, not from the start each time.
+    let (mut line, mut seen) = (0usize, 0usize);
     loop {
         let event = reader
             .read_event()
@@ -233,7 +235,12 @@ fn plcopen(xml: &str) -> Result<TagFile, ReadError> {
                     "project" => seen_project = true,
                     "variable" => {
                         open = Some(FileTag {
-                            line: xml[..reader.buffer_position() as usize].lines().count(),
+                            line: {
+                                let at = reader.buffer_position() as usize;
+                                line += xml[seen..at].matches('\n').count();
+                                seen = at;
+                                line + 1
+                            },
                             name: attr(&e, "name", dec),
                             address: attr(&e, "address", dec),
                             ..FileTag::default()
