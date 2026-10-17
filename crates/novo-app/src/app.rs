@@ -900,6 +900,19 @@ impl NovoApp {
                     );
                 }
             }
+            // A write-protected file or folder opens for looking instead of
+            // failing: the title and status bar say read-only and Save as
+            // keeps changes in a copy.
+            Err(BackendError::Storage(novo_storage::StorageError::ReadOnly(_))) if !read_only => {
+                self.open_path_as(path, true);
+                self.message(
+                    Level::Warning,
+                    format!(
+                        "{} is write-protected, so it was opened read-only. Use Save as to keep changes in a copy.",
+                        path.display()
+                    ),
+                );
+            }
             Err(e) => {
                 if is_not_found(&e) {
                     self.settings.forget_recent(path);
@@ -2244,7 +2257,12 @@ fn describe_error(verb: &str, path: &Path, e: &BackendError) -> String {
     use novo_storage::StorageError as S;
     match e {
         BackendError::Storage(
-            S::Locked(_) | S::NotAProject(_) | S::NewerFormat { .. } | S::Corrupt { .. },
+            S::Locked(_)
+            | S::NotAProject(_)
+            | S::NewerFormat { .. }
+            | S::UnknownRecord { .. }
+            | S::ReadOnly(_)
+            | S::Corrupt { .. },
         ) => format!("Could not {verb} the project: {e}"),
         _ if is_not_found(e) => format!(
             "Could not {verb} {}: the file does not exist",

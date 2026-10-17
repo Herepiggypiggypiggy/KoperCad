@@ -24,6 +24,20 @@ pub enum StorageError {
         found: u32,
         supported: u32,
     },
+    /// The file or its folder cannot be written, so it cannot be opened for
+    /// editing; it can still be read.
+    #[error(
+        "{} is read-only (the file or its folder is write-protected). Open it read-only, or open it and use Save as to keep changes in a copy",
+        .0.display()
+    )]
+    ReadOnly(PathBuf),
+    /// The file holds a kind of object this version does not know, so it was
+    /// saved by a newer KoperCAD that added one without a schema change.
+    #[error(
+        "{} holds a kind of object this version of KoperCAD does not know ({kind}); it was probably saved by a newer version",
+        path.display()
+    )]
+    UnknownRecord { path: PathBuf, kind: String },
     /// The file is damaged or holds data the model refuses.
     #[error("{} is damaged: {reason}", path.display())]
     Corrupt { path: PathBuf, reason: String },
@@ -53,4 +67,18 @@ pub(crate) fn is_not_a_database(err: &rusqlite::Error) -> bool {
         err.sqlite_error_code(),
         Some(rusqlite::ErrorCode::NotADatabase)
     )
+}
+
+/// Whether a SQLite error on `path` means the file or its folder cannot be
+/// written. "Cannot open" counts only when the file or its folder exists:
+/// a missing folder, a bad name or a vanished drive is a different problem
+/// and keeps its own error.
+pub(crate) fn is_read_only(err: &rusqlite::Error, path: &std::path::Path) -> bool {
+    match err.sqlite_error_code() {
+        Some(rusqlite::ErrorCode::ReadOnly) => true,
+        Some(rusqlite::ErrorCode::CannotOpen) => {
+            path.exists() || path.parent().is_some_and(|dir| dir.is_dir())
+        }
+        _ => false,
+    }
 }
