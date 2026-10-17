@@ -111,6 +111,8 @@ pub(crate) struct Workbench {
     pub(super) project_rules: bool,
     /// The Wire numbering window, while it is open.
     pub(super) numbering: Option<super::numbering::NumberingWindow>,
+    /// Text of the open "Set wire number" prompt.
+    pub(super) number_prompt: Option<String>,
     /// The net trace window (`net.trace`), while it is open.
     pub(super) net_trace: Option<super::net_trace::NetTrace>,
     /// The new pages, group and panel form, while open.
@@ -184,6 +186,9 @@ pub(crate) struct Workbench {
     pub(super) sim: super::simulate::SimState,
     /// Changes mode, while it is on.
     pub(super) changes: Option<super::changes::ChangesMode>,
+    /// The card's close was clicked while the outline shows Changes: the tab
+    /// then waits for "Turn on" instead of switching the mode back on.
+    pub(super) changes_closed: bool,
     /// Commissioning mode's data and panel state, once opened.
     pub(super) commissioning: Option<super::commissioning::CommissioningMode>,
     /// The background drawing last handed to the canvas: page, project
@@ -266,6 +271,7 @@ impl Default for Workbench {
             safety: None,
             languages: None,
             numbering: None,
+            number_prompt: None,
             net_trace: None,
             device_renumber: None,
             selection_sheet: Default::default(),
@@ -306,6 +312,7 @@ impl Default for Workbench {
             live: Default::default(),
             sim: super::simulate::SimState::new(),
             changes: None,
+            changes_closed: false,
             background_panel: None,
             bench: None,
             pdf_options: None,
@@ -351,6 +358,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "net.select",
     "net.trace",
     "help.keymap_file",
+    "help.open_log_folder",
+    "help.copy_problem_report",
     "wire.end_on_part",
     "wire.next_pin",
     "view.command_field_here",
@@ -514,6 +523,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.shortcuts",
     "help.show_hints",
     "help.whats_new",
+    "help.numbers",
     "view.reset_panels",
     "layout.draw",
     "layout.cabinet",
@@ -576,6 +586,8 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "terminal.renumber",
     "terminal.join_duplicates",
     "terminal.set_kind",
+    "terminal.set_level",
+    "terminal.set_jumper",
     "terminal.order_up",
     "terminal.order_down",
     "terminal.style",
@@ -771,6 +783,7 @@ impl NovoApp {
     /// it opens on the release, unless the pointer moved more than 4 px in
     /// between (a held Space pans); every other key runs its command.
     pub(super) fn run_key_command(&mut self, ctx: &egui::Context, id: &str) {
+        crate::diag::note_command(id);
         if id == "tool.place" {
             self.learn_command(id);
             self.hint_command_run(id);
@@ -786,6 +799,7 @@ impl NovoApp {
     /// Runs a command by its novo-workflow id, from a key or the command
     /// field. `argument` is what was typed after its verb.
     pub(super) fn run_command(&mut self, ctx: &egui::Context, id: &str, argument: Option<&str>) {
+        crate::diag::note_command(id);
         self.learn_command(id);
         if id == "help.learn" || id.starts_with("learn.") {
             self.learn_run_command(id, argument);
@@ -871,6 +885,8 @@ impl NovoApp {
             "net.select" => self.select_net(),
             "net.trace" => self.trace_net(),
             "help.keymap_file" => self.open_keymap_file(),
+            "help.open_log_folder" => self.open_log_folder(),
+            "help.copy_problem_report" => self.copy_problem_report(ctx),
             "wire.end_on_part" => self.editor_key(EditorKey::EndOnPart),
             "wire.next_pin" => {
                 // Tab must not leave the drawing: egui's own focus move to
@@ -945,6 +961,8 @@ impl NovoApp {
             | "terminal.renumber"
             | "terminal.join_duplicates"
             | "terminal.set_kind"
+            | "terminal.set_level"
+            | "terminal.set_jumper"
             | "terminal.order_up"
             | "terminal.order_down"
             | "terminal.style"
@@ -1273,10 +1291,16 @@ impl NovoApp {
                 self.export_plc(LinkFormat::Hardware);
             }
             "xref.link" => self.xref_link(argument),
-            "app.preferences" => self.wb.preferences = true,
+            "app.preferences" => {
+                // Preferences is a modal: a floating panel left open behind
+                // it reads as two windows stacked on a small screen.
+                self.sizing.panel_open = false;
+                self.wb.preferences = true;
+            }
             "view.shortcuts" => self.toggle_shortcuts(),
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,
+            "help.numbers" => self.show_numbers = true,
             "view.reset_panels" => super::panel::reset_layout(ctx),
             "layout.draw" | "layout.cabinet" | "layout.3d" | "layout.review" | "layout.reports"
             | "layout.reset" | "layout.reset_all" => {

@@ -11,12 +11,14 @@ use novo_terminals::{RenameProblem, Style};
 use super::{Level, NovoApp};
 
 /// The commands the drawer toolbar and the row menu offer, in order.
-pub(super) const EDIT_COMMANDS: [&str; 9] = [
+pub(super) const EDIT_COMMANDS: [&str; 11] = [
     "terminal.add_spares",
     "terminal.rename",
     "terminal.renumber",
     "terminal.join_duplicates",
     "terminal.set_kind",
+    "terminal.set_level",
+    "terminal.set_jumper",
     "terminal.order_up",
     "terminal.order_down",
     "terminal.style",
@@ -34,9 +36,16 @@ pub(super) const KINDS: [TerminalKind; 5] = [
 
 /// The window a terminal command opened.
 pub(super) enum EditWindow {
-    Rename { find: String, replace: String },
+    Rename {
+        find: String,
+        replace: String,
+    },
     Renumber,
     Kind,
+    /// The level to give the targets (from 1).
+    Level(u8),
+    /// The jumper group to give the targets.
+    Jumper(u32),
     Style,
 }
 
@@ -189,6 +198,28 @@ impl NovoApp {
                 Some(kind) => self.set_kind(&targets, kind),
                 None => self.wb.terminal_edit.window = Some(EditWindow::Kind),
             },
+            "terminal.set_level" => {
+                let typed = argument.and_then(|a| a.trim().parse::<u8>().ok());
+                match typed {
+                    Some(level) => self.set_level(&targets, level),
+                    None => {
+                        let first = self.first_level(&targets);
+                        self.wb.terminal_edit.window = Some(EditWindow::Level(first));
+                    }
+                }
+            }
+            "terminal.set_jumper" => {
+                let free = self.free_jumper(strip);
+                match argument.map(|a| a.trim().to_lowercase()).as_deref() {
+                    Some("none") => self.set_jumper(&targets, None),
+                    Some("next") => self.set_jumper(&targets, Some(free)),
+                    Some(n) if n.trim_start_matches('j').parse::<u32>().is_ok() => {
+                        let n = n.trim_start_matches('j').parse().unwrap_or(free);
+                        self.set_jumper(&targets, Some(n));
+                    }
+                    _ => self.wb.terminal_edit.window = Some(EditWindow::Jumper(free)),
+                }
+            }
             "terminal.order_up" | "terminal.order_down" => {
                 self.move_in_strip(strip, &targets, id == "terminal.order_up");
             }
@@ -239,6 +270,56 @@ impl NovoApp {
                 novo_terminals::set_kind(tx, t, kind)?;
             }
             Ok(())
+        });
+    }
+
+    fn first_level(&self, targets: &[TerminalId]) -> u8 {
+        let project = self.backend.document().map(|d| d.project());
+        targets
+            .first()
+            .and_then(|&t| project?.terminal(t))
+            .map_or(1, |t| t.level)
+    }
+
+    fn free_jumper(&self, strip: DeviceId) -> u32 {
+        self.backend
+            .document()
+            .map_or(1, |d| novo_terminals::free_jumper(d.project(), strip))
+    }
+
+    fn set_level(&mut self, targets: &[TerminalId], level: u8) {
+        if targets.is_empty() {
+            self.message(
+                Level::Warning,
+                "Tick terminals in the table (or select them) first",
+            );
+            return;
+        }
+        self.edit_strip("Set terminal level", |tx| {
+            for &t in targets {
+                novo_terminals::set_level(tx, t, level)?;
+            }
+            Ok(())
+        });
+    }
+
+    /// Bridges the targets under jumper number `jumper`, or takes them out
+    /// of any jumper with `None`. A number already used on the strip joins
+    /// that group.
+    fn set_jumper(&mut self, targets: &[TerminalId], jumper: Option<u32>) {
+        if targets.is_empty() {
+            self.message(
+                Level::Warning,
+                "Tick terminals in the table (or select them) first",
+            );
+            return;
+        }
+        if jumper == Some(0) {
+            self.message(Level::Warning, "Jumper numbers start at 1");
+            return;
+        }
+        self.edit_strip("Set terminal jumper", |tx| {
+            novo_terminals::set_jumper(tx, targets, jumper).map(|_| ())
         });
     }
 
@@ -338,6 +419,8 @@ impl NovoApp {
                 EditWindow::Rename { .. } => ("Rename terminals", "terminal_rename"),
                 EditWindow::Renumber => ("Renumber terminals", "terminal_renumber"),
                 EditWindow::Kind => ("Terminal kind", "terminal_kind"),
+                EditWindow::Level(_) => ("Terminal level", "terminal_level"),
+                EditWindow::Jumper(_) => ("Terminal jumper", "terminal_jumper"),
                 EditWindow::Style => ("Strip style", "terminal_style"),
             };
             super::panel::dialog(ctx, format!("{title} {tag}"), [420.0, 0.0])
@@ -416,6 +499,50 @@ impl NovoApp {
                             }
                         });
                     }
+                    EditWindow::Level(level) => {
+                        ui.weak("Applies to the ticked rows and the selected terminals");
+                        ui.weak("Level 1 is the lowest level of a multi-level terminal");
+                        ui.horizontal(|ui| {
+                            ui.label("Level");
+                            ui.add(egui::DragValue::new(level).range(1..=8));
+                            if novo_theme::widgets::primary_button(ui, "Set level").clicked() {
+                                apply = Some(Apply::Level(*level));
+                            }
+                        });
+                    }
+                    EditWindow::Jumper(number) => {
+                        ui.weak("Applies to the ticked rows and the selected terminals");
+                        ui.weak("Terminals with the same jumper number are bridged");
+                        let groups = jumper_groups(project, strip);
+                        for (n, names) in &groups {
+                            ui.horizontal(|ui| {
+                                ui.label(format!("J{n}: {}", names.join(", ")));
+                                if ui.small_button("Join").clicked() {
+                                    apply = Some(Apply::Jumper(Some(*n)));
+                                }
+                            });
+                        }
+                        if groups.is_empty() {
+                            ui.weak("No jumper on this strip yet");
+                        }
+                        ui.separator();
+                        ui.horizontal(|ui| {
+                            ui.label("Number");
+                            ui.add(egui::DragValue::new(number).range(1..=9999).prefix("J"));
+                            let joins = groups.iter().any(|(n, _)| n == number);
+                            let label = if joins {
+                                format!("Join J{number}")
+                            } else {
+                                format!("Bridge as J{number}")
+                            };
+                            if novo_theme::widgets::primary_button(ui, &label).clicked() {
+                                apply = Some(Apply::Jumper(Some(*number)));
+                            }
+                            if ui.button("Remove from jumper").clicked() {
+                                apply = Some(Apply::Jumper(None));
+                            }
+                        });
+                    }
                     EditWindow::Style => {
                         ui.weak("One symbol per kind for the whole strip");
                         for kind in KINDS {
@@ -473,6 +600,14 @@ impl NovoApp {
                     self.set_kind(&targets, kind);
                     true
                 }
+                Apply::Level(level) => {
+                    self.set_level(&targets, level);
+                    true
+                }
+                Apply::Jumper(number) => {
+                    self.set_jumper(&targets, number);
+                    true
+                }
                 Apply::Style(kind, style) => self.edit_strip("Change strip style", |tx| {
                     novo_terminals::set_strip_style(tx, strip, kind, &style)
                 }),
@@ -489,10 +624,24 @@ impl NovoApp {
     }
 }
 
+/// The jumper groups of a strip with the names of their terminals, by
+/// number.
+fn jumper_groups(project: &novo_core::Project, strip: DeviceId) -> Vec<(u32, Vec<String>)> {
+    let mut groups: std::collections::BTreeMap<u32, Vec<String>> = Default::default();
+    for t in project.terminals_of_strip(strip) {
+        if let Some(j) = t.jumper {
+            groups.entry(j).or_default().push(t.name.clone());
+        }
+    }
+    groups.into_iter().collect()
+}
+
 enum Apply {
     Rename(String, String),
     Renumber,
     Kind(TerminalKind),
+    Level(u8),
+    Jumper(Option<u32>),
     Style(TerminalKind, Style),
     ClearOverride(TerminalId),
 }
@@ -543,7 +692,12 @@ pub(super) fn strip_toolbar(
         )
         .on_hover_text("How many spare terminals Add spares adds");
         for id in EDIT_COMMANDS {
-            if id == "terminal.restore_declined" {
+            // Level and jumper number live in the row menu and the Draw
+            // menu: the toolbar is already a full row.
+            if matches!(
+                id,
+                "terminal.restore_declined" | "terminal.set_level" | "terminal.set_jumper"
+            ) {
                 continue;
             }
             let label = novo_workflow::commands::get(id).map_or(id, |c| c.label);
@@ -825,5 +979,130 @@ mod tests {
         assert!(d.app.declined_wires().is_empty());
         d.app.wb.queued.push("terminal.restore_declined");
         d.frame();
+    }
+
+    fn terminal_ids(d: &Drive, strip: DeviceId) -> Vec<TerminalId> {
+        d.app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .terminals_of_strip(strip)
+            .into_iter()
+            .map(|t| t.id)
+            .collect()
+    }
+
+    fn jumpers(d: &Drive, strip: DeviceId) -> Vec<Option<u32>> {
+        d.app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .terminals_of_strip(strip)
+            .into_iter()
+            .map(|t| t.jumper)
+            .collect()
+    }
+
+    #[test]
+    fn the_level_is_set_from_the_command_and_one_undo_step_takes_it_back() {
+        let (_dir, mut d, x1, _) = drive_with_strip();
+        let ids = terminal_ids(&d, x1);
+        d.app.wb.terminal_edit.rows = vec![ids[0], ids[1]];
+        d.app.terminal_edit_command("terminal.set_level", Some("2"));
+        let levels = |d: &Drive| -> Vec<u8> {
+            d.app
+                .backend
+                .document()
+                .unwrap()
+                .project()
+                .terminals_of_strip(x1)
+                .into_iter()
+                .map(|t| t.level)
+                .collect()
+        };
+        assert_eq!(levels(&d), [2, 2, 1]);
+        undo(&mut d);
+        assert_eq!(levels(&d), [1, 1, 1]);
+        // Without a level the window opens, showing the current one.
+        d.app.terminal_edit_command("terminal.set_level", None);
+        assert!(matches!(
+            d.app.wb.terminal_edit.window,
+            Some(EditWindow::Level(1))
+        ));
+    }
+
+    #[test]
+    fn a_level_clash_is_refused_and_said() {
+        let (_dir, mut d, x1, _) = drive_with_strip();
+        let ids = terminal_ids(&d, x1);
+        // A second terminal named "1" on level 2 is fine; moving another
+        // "1" there would clash.
+        d.app.wb.terminal_edit.rows = vec![ids[0]];
+        d.app.terminal_edit_command("terminal.set_level", Some("2"));
+        let dup = d
+            .app
+            .backend
+            .document_mut()
+            .unwrap()
+            .transact("dup", |tx| tx.add_terminal(x1, "1"))
+            .unwrap()
+            .0;
+        d.app.wb.terminal_edit.rows = vec![dup];
+        d.app.terminal_edit_command("terminal.set_level", Some("2"));
+        let project = d.app.backend.document().unwrap().project();
+        assert_eq!(project.terminal(dup).unwrap().level, 1, "unchanged");
+    }
+
+    #[test]
+    fn explicit_jumper_numbers_bridge_join_and_remove() {
+        let (_dir, mut d, x1, _) = drive_with_strip();
+        let ids = terminal_ids(&d, x1);
+        d.app.wb.terminal_edit.rows = vec![ids[0], ids[1]];
+        d.app
+            .terminal_edit_command("terminal.set_jumper", Some("7"));
+        assert_eq!(jumpers(&d, x1), [Some(7), Some(7), None]);
+        // A number in use joins that group.
+        d.app.wb.terminal_edit.rows = vec![ids[2]];
+        d.app
+            .terminal_edit_command("terminal.set_jumper", Some("J7"));
+        assert_eq!(jumpers(&d, x1), [Some(7), Some(7), Some(7)]);
+        // The next free number starts a new group.
+        d.app.wb.terminal_edit.rows = vec![ids[2]];
+        d.app
+            .terminal_edit_command("terminal.set_jumper", Some("next"));
+        assert_eq!(jumpers(&d, x1), [Some(7), Some(7), Some(8)]);
+        d.app
+            .terminal_edit_command("terminal.set_jumper", Some("none"));
+        assert_eq!(jumpers(&d, x1), [Some(7), Some(7), None]);
+        undo(&mut d);
+        assert_eq!(jumpers(&d, x1), [Some(7), Some(7), Some(8)]);
+        // Zero is refused and changes nothing; no number opens the window.
+        d.app
+            .terminal_edit_command("terminal.set_jumper", Some("0"));
+        assert_eq!(jumpers(&d, x1), [Some(7), Some(7), Some(8)]);
+        d.app.terminal_edit_command("terminal.set_jumper", None);
+        assert!(matches!(
+            d.app.wb.terminal_edit.window,
+            Some(EditWindow::Jumper(9))
+        ));
+    }
+
+    #[test]
+    fn the_level_and_jumper_windows_open_and_apply_from_their_buttons() {
+        let (_dir, mut d, x1, _) = drive_with_strip();
+        let ids = terminal_ids(&d, x1);
+        d.app.wb.terminal_edit.rows = vec![ids[0]];
+        d.app.wb.queued.push("terminal.set_jumper");
+        d.frame();
+        assert!(matches!(
+            d.app.wb.terminal_edit.window,
+            Some(EditWindow::Jumper(1))
+        ));
+        assert_eq!(
+            super::jumper_groups(d.app.backend.document().unwrap().project(), x1),
+            Vec::<(u32, Vec<String>)>::new()
+        );
     }
 }

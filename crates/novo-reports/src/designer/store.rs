@@ -108,7 +108,11 @@ pub fn load_dir(dir: &Path) -> (Vec<Template>, Vec<(PathBuf, StoreError)>) {
 
 /// The user's template folder, if the platform has a data folder.
 pub fn user_dir() -> Option<PathBuf> {
-    Some(dirs::data_dir()?.join("KoperCAD").join("templates"))
+    Some(
+        novo_storage::profile::data_dir()?
+            .join("KoperCAD")
+            .join("templates"),
+    )
 }
 
 /// The project's templates as the string stored in [`PROJECT_KEY`].

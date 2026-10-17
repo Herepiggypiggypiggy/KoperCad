@@ -32,20 +32,20 @@ window draws one side (From or To, any page) read only with
 removed on From, changed on both). How to reach it: command palette
 "Compare revisions" (or Changes card "Compare…") → tick "Show drawing".
 
-Status (2026-10-15 evening): merged #400, #435 (engine), #445 (CLI), #450
-(Python), #468 (Compare window). Open: #487 (revision view) and #493
-(sheet kind `match` in novo-py, reviewer nit from #450), both with reviewer B.
+Status (2026-10-17): merged #400, #435 (engine), #445 (CLI), #450 (Python),
+#468 (Compare window), #487 (revision view), #493. Revision note (PR
+claude/revision-note, on top of WS-02's #490): the Issue revision window has
+a "Note (optional)" box (`issue_revision_noted`, stored as
+`Revision.properties["note"]`), the Compare window shows the note of the
+From/To revisions, `kopercad-cli revisions list` prints it and the JSON
+carries `note`.
 
-Next, for a fresh session: (1) note field. WS-02's #490 adds
-`note: String` to `Command::IssueRevision` (stored in
-`Revision.properties["note"]`, read with `Revision::note()`); after it
-merges, add a note box to the Issue revision window, show `note()` in the
-Compare window pickers and in `revisions list`, and pass it through
-`issue_revision_as`. (2) Workspaces thread moves the Issue/Compare menu
-items under File > Revisions; keep the `revision.*` command ids. (3) Reviewer
-leftovers: old-format snapshot test once a migration exists, fold batch moves
-("12 objects moved together"), `Side::Now` clones the project (borrow if slow).
-The revision table in the frame is #343 (Frame thread, not this one).
+Left: (1) Workspaces thread moves Issue/Compare under File > Revisions;
+keep the `revision.*` ids. (2) Reviewer leftovers: legend in words for the
+outlines and pane height in the drawing view, an Added/Removed case in the
+drawing test, check the first-frame zoom-to-fit in a real window, old-format
+snapshot test once a migration exists, fold batch moves, `Side::Now` clones
+the project. The revision table in the frame is #343 (Frame thread).
 
 ## How to reach it (user-visible entry points)
 

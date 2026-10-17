@@ -78,6 +78,16 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl("layout.reset_all", &[], &["alle indelingen terugzetten"]),
     nl(
+        "help.open_log_folder",
+        &[],
+        &["logboek openen", "logmap openen", "foutrapport"],
+    ),
+    nl(
+        "help.copy_problem_report",
+        &[],
+        &["probleemrapport kopieren", "fout melden", "storing melden"],
+    ),
+    nl(
         "help.keymap_file",
         &[],
         &[
@@ -95,6 +105,11 @@ pub const DUTCH: &[Aliases] = &[
         "help.whats_new",
         &[],
         &["nieuw", "wat is nieuw", "nieuwigheden"],
+    ),
+    nl(
+        "help.numbers",
+        &[],
+        &["over de getallen", "schatting", "model", "rekenwaarde"],
     ),
     nl(
         "help.learn",
@@ -439,6 +454,16 @@ pub const DUTCH: &[Aliases] = &[
         "terminal.set_kind",
         &[],
         &["klemtype", "soort klem", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.set_level",
+        &[],
+        &["klemniveau", "niveau", "etage", "klemmenstrook"],
+    ),
+    nl(
+        "terminal.set_jumper",
+        &[],
+        &["brugnummer", "brug", "klemmen overbruggen", "klemmenstrook"],
     ),
     nl(
         "terminal.order_up",

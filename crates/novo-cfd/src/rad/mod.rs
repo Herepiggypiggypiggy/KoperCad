@@ -24,18 +24,25 @@
 //! Cartesian treatment of the flow: a cell counts as solid when its largest
 //! material share is not air.
 //!
+//! Coupling with the flow solver: [`RadPlan`] (see `couple.rs`) gives the
+//! energy equation the radiative heat as `s - g T` per cell and plate
+//! column, so the slope is taken implicitly. Enabled per run with
+//! `FlowSetup::enable_radiation`, or `CabinetSolver::with_radiation`.
+//!
 //! Where the user finds it: Cabinet view, Heat layer, Simulate dialog,
 //! "Radiation" toggle ([`RadSettings::enabled`]) and the heat split per
 //! device (convection / conduction / radiation) in the device card (app
 //! side is lane CFD-F).
 
+mod couple;
 mod patches;
 mod paths;
 pub mod radiosity;
 mod trace;
 mod viewfactor;
 
-pub use patches::{Emissivity, FaceRef, Patch, PatchKind, PatchSet, PatchSettings};
+pub use couple::{RadInputs, RadLoad, RadPlan, RadState, WallBc};
+pub use patches::{Emissivity, FaceRef, Patch, PatchKind, PatchSet, PatchSettings, RearPlate};
 pub use paths::HeatPaths;
 pub use radiosity::{RadResult, SIGMA};
 pub use viewfactor::{ViewFactorSettings, ViewFactors};
@@ -74,10 +81,20 @@ pub struct RadiationModel {
 impl RadiationModel {
     /// `None` when radiation is switched off or the mesh has no surface.
     pub fn build(mesh: &Mesh, settings: &RadSettings) -> Option<RadiationModel> {
+        RadiationModel::build_with(mesh, settings, None)
+    }
+
+    /// As [`RadiationModel::build`], with the mounting plate as a surface.
+    pub fn build_with(
+        mesh: &Mesh,
+        settings: &RadSettings,
+        plate: Option<&RearPlate>,
+    ) -> Option<RadiationModel> {
         if !settings.enabled {
             return None;
         }
-        let patches = PatchSet::from_mesh(mesh, &settings.emissivity, &settings.patches);
+        let patches =
+            PatchSet::from_mesh_with(mesh, &settings.emissivity, &settings.patches, plate);
         if patches.len() < 2 {
             return None;
         }

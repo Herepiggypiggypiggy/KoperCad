@@ -843,6 +843,61 @@ fn wire_list_routes_lengths_through_the_ducts_of_the_plate() {
 }
 
 #[test]
+fn a_wire_to_the_door_is_a_model_and_says_so() {
+    use novo_layout::enclosure::{Door, Enclosure, Hinge};
+    let (mut doc, h) = starter();
+    doc.transact("Cabinet", |tx| {
+        let cab = tx.add_structure(DeviceTag::parse("+CAB")?, "Cabinet", true)?;
+        tx.set_plate(
+            cab,
+            Some(MountingPlate {
+                width: 400.0,
+                height: 400.0,
+                margin: 10.0,
+            }),
+        )?;
+        novo_layout::model::set_enclosure(
+            tx,
+            cab,
+            &Enclosure {
+                width: 450.0,
+                height: 450.0,
+                depth: 200.0,
+                plate_setback: 20.0,
+                door: Some(Door {
+                    hinge: Hinge::Left,
+                    ..Door::default()
+                }),
+                front_clearance: None,
+                hinge_side_clearance: None,
+            },
+        )?;
+        tx.set_property(
+            cab,
+            "opening.gland",
+            Some(novo_core::Value::Text(
+                "plate round 25 150 300 to door 200 150".into(),
+            )),
+        )?;
+        tx.place_device(h.f1, cab, Point::new(50.0, 50.0), false, None)?;
+        tx.place_device(h.k1, cab, Point::new(100.0, 100.0), false, None)?;
+        let id = tx
+            .project()
+            .all::<novo_core::CabinetPlacement>()
+            .find(|c| c.device == h.k1)
+            .expect("placed")
+            .id;
+        tx.set_property(id, "surface", Some(novo_core::Value::Text("door".into())))?;
+        Ok(())
+    })
+    .expect("layout");
+    let wires = report(&doc, "wires");
+    let row = wire_row(&wires, "=A1+CAB-F1:2", "=A1+CAB-K1:1");
+    assert_eq!(row[9], "door, no gap", "{row:?}");
+    assert!(novo_reports::is_estimate(&row[9]), "marked ~ on the bench");
+}
+
+#[test]
 fn wire_list_csv_carries_the_cut_length() {
     let (doc, _) = starter();
     let csv = to_csv(&report(&doc, "wires"), &CsvOptions::default());
@@ -1007,4 +1062,62 @@ fn a_page_without_a_title_is_listed_as_untitled() {
         rows(&toc, "pages"),
         strings(&[&["7", "(untitled)", "", "", "Schematic"]])
     );
+}
+
+#[test]
+fn each_workshop_report_says_what_its_count_counts_and_the_counts_follow_from_each_other() {
+    let (doc, _) = starter();
+    let count_in = |title: &str| -> usize {
+        title
+            .split(|c: char| !c.is_ascii_digit())
+            .find(|s| !s.is_empty())
+            .and_then(|s| s.parse().ok())
+            .unwrap_or_else(|| panic!("no count in {title:?}"))
+    };
+    let section = |id: &str, key: &str| {
+        report(&doc, id)
+            .sections
+            .into_iter()
+            .find(|s| s.key == key)
+            .unwrap_or_else(|| panic!("no section {key} in {id}"))
+    };
+
+    let wires = section("wires", "wires");
+    let connections = wires.rows.len();
+    assert!(connections > 0);
+    assert_eq!(count_in(&wires.title), connections, "{}", wires.title);
+    assert!(wires.title.contains("connections"), "{}", wires.title);
+
+    // The cut list is the wire list's rows, listed again by size.
+    let cut = report(&doc, "cutlist");
+    let listed: usize = cut
+        .sections
+        .iter()
+        .filter(|s| s.key.starts_with("group-"))
+        .map(|s| s.rows.len())
+        .sum();
+    assert_eq!(listed, connections);
+    let summary = cut.sections.iter().find(|s| s.key == "summary").unwrap();
+    assert_eq!(
+        count_in(summary.title.trim_start_matches("Summary · ")),
+        listed
+    );
+
+    // The wire labels are two per connection.
+    let labels = section("labels", "wires");
+    assert_eq!(labels.rows.len(), 2 * connections);
+    assert_eq!(
+        count_in(labels.title.trim_start_matches("Wire labels · ")),
+        labels.rows.len()
+    );
+
+    // Wire production lists every connection and the supply and PE leads on
+    // top of them, and its title says so.
+    let production = section("wirecut", "cuts");
+    assert!(production.rows.len() >= connections);
+    assert_eq!(
+        count_in(production.title.trim_start_matches("Wires to cut · ")),
+        production.rows.len()
+    );
+    assert!(production.title.contains("supply and PE leads"));
 }

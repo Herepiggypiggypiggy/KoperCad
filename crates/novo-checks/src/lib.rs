@@ -38,6 +38,8 @@
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
+//! | [`UnsizedDuct`](ProblemKind::UnsizedDuct) | info | A duct with wires through it but no cross-section, so its fill cannot be checked |
+//! | [`GuessedWire`](ProblemKind::GuessedWire) | info | Wires with no cross-section, routed with a default size (one problem for all of them) |
 //! | [`AmbiguousInterruption`](ProblemKind::AmbiguousInterruption) | warning | A name used by more than two interruption points |
 //! | [`WireNumber`](ProblemKind::WireNumber) | warning | A wire number used on two nets |
 //! | [`UntaggedDevice`](ProblemKind::UntaggedDevice) | warning | A device without a product level in its tag |
@@ -56,6 +58,7 @@
 //! | [`CoilSupply`](ProblemKind::CoilSupply) | warning | A coil not fed between a control voltage and its return |
 //! | [`PlugPinOneSided`](ProblemKind::PlugPinOneSided) | warning | A plug pin wired on one half only |
 //! | [`RelaySize`](ProblemKind::RelaySize) | warning | A relay larger than the contacts drawn need, when its sizes are declared |
+//! | [`CoilOnPowerFeed`](ProblemKind::CoilOnPowerFeed) | warning | A one-pole coil wired to a three-phase feed; the power contacts belong there |
 //! | [`CableText`](ProblemKind::CableText) | warning | A cable whose cores, cross-section or protective core disagree with its `4G1.5` text |
 //! | [`NeutralUse`](ProblemKind::NeutralUse) | warning | A device on a neutral net that is neither supply nor external (opt-in) |
 //! | [`PlugPins`](ProblemKind::PlugPins) | info | Overview of the pins of a plug, wired and free |
@@ -254,6 +257,8 @@ pub enum ProblemKind {
     PlugPinOneSided,
     /// A relay larger than the auxiliary contacts drawn need (C08).
     RelaySize,
+    /// A one-pole coil wired to a three-phase power feed.
+    CoilOnPowerFeed,
     /// A cable whose cores disagree with its text such as `4G1.5` (C12).
     CableText,
     /// A device on a neutral net that is neither supply nor external, when selected (C16).
@@ -273,6 +278,13 @@ pub enum ProblemKind {
     WireWithoutDuct,
     /// A duct carrying more wires than its fill limit (novo-routing).
     OverfullDuct,
+    /// A duct that wires run through but that has no width and height, so
+    /// its fill cannot be checked (novo-routing).
+    UnsizedDuct,
+    /// Wires routed with a default size because they have no cross-section;
+    /// the fill figures are only as good as that guess (novo-routing). One
+    /// problem lists all of them.
+    GuessedWire,
     /// A rule of a selected standard is not met (IEC 60204-1, NFPA 79,
     /// UL 508A; [`standards`]). Only produced for projects that selected a
     /// standard. Each problem carries its rule id in [`Problem::rule`] and
@@ -315,7 +327,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 64] = [
+    pub const ALL: [ProblemKind; 67] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -342,6 +354,8 @@ impl ProblemKind {
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        ProblemKind::UnsizedDuct,
+        ProblemKind::GuessedWire,
         ProblemKind::Standard,
         ProblemKind::CableRating,
         ProblemKind::DeviceCollision,
@@ -374,6 +388,7 @@ impl ProblemKind {
         ProblemKind::CoilSupply,
         ProblemKind::PlugPinOneSided,
         ProblemKind::RelaySize,
+        ProblemKind::CoilOnPowerFeed,
         ProblemKind::CableText,
         ProblemKind::NeutralUse,
         ProblemKind::PlugPins,
@@ -436,6 +451,7 @@ impl ProblemKind {
             | ProblemKind::CoilSupply
             | ProblemKind::PlugPinOneSided
             | ProblemKind::RelaySize
+            | ProblemKind::CoilOnPowerFeed
             | ProblemKind::CableText
             | ProblemKind::NeutralUse
             | ProblemKind::TagRule
@@ -445,6 +461,8 @@ impl ProblemKind {
             | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart
             | ProblemKind::UnplacedDevice
+            | ProblemKind::UnsizedDuct
+            | ProblemKind::GuessedWire
             | ProblemKind::DepthUnknown
             | ProblemKind::PlugPins
             | ProblemKind::SameShortTag => Severity::Info,
@@ -480,6 +498,8 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
             ProblemKind::OverfullDuct => "Overfull duct",
+            ProblemKind::UnsizedDuct => "Duct without size",
+            ProblemKind::GuessedWire => "Wire size guessed",
             ProblemKind::Standard => "Standards",
             ProblemKind::CableRating => "Cable rating",
             ProblemKind::DeviceCollision => "Devices overlap",
@@ -512,6 +532,7 @@ impl ProblemKind {
             ProblemKind::CoilSupply => "Coil supply",
             ProblemKind::PlugPinOneSided => "Plug pin on one half",
             ProblemKind::RelaySize => "Relay too large",
+            ProblemKind::CoilOnPowerFeed => "Coil on a power feed",
             ProblemKind::CableText => "Cable text",
             ProblemKind::NeutralUse => "Neutral use",
             ProblemKind::PlugPins => "Plug pins",
@@ -551,6 +572,8 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
             ProblemKind::OverfullDuct => "check.overfull_duct",
+            ProblemKind::UnsizedDuct => "check.unsized_duct",
+            ProblemKind::GuessedWire => "check.guessed_wire",
             ProblemKind::Standard => "check.standard",
             ProblemKind::DeviceCollision => "check.device_collision",
             ProblemKind::DeviceOutsidePlate => "check.device_outside_plate",
@@ -582,6 +605,7 @@ impl ProblemKind {
             ProblemKind::CoilSupply => "check.coil_supply",
             ProblemKind::PlugPinOneSided => "check.plug_pin_one_sided",
             ProblemKind::RelaySize => "check.relay_size",
+            ProblemKind::CoilOnPowerFeed => "check.coil_on_power_feed",
             ProblemKind::CableText => "check.cable_text",
             ProblemKind::NeutralUse => "check.neutral_use",
             ProblemKind::PlugPins => "check.plug_pins",
@@ -728,6 +752,7 @@ pub fn check_with(project: &Project, netlist: &Netlist) -> Vec<Problem> {
     house_rules::motor_phases(&cx, netlist, &mut problems);
     house_rules::coil_supply(&cx, netlist, &mut problems);
     more_rules::relay_size(&cx, &mut problems);
+    more_rules::coil_on_power_feed(&cx, &mut problems);
     more_rules::cable_text(&cx, &mut problems);
     more_rules::neutral_use(&cx, netlist, &mut problems);
     more_rules::plug_overview(&cx, &mut problems);

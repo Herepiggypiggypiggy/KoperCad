@@ -98,7 +98,7 @@ impl NovoApp {
                 LinkFormat::Studio5000 => ". Not yet tried in Studio 5000",
                 _ => "",
             };
-            self.message(Level::Info, format!("Exported {what}{count}{tool}"));
+            self.message_file(format!("Exported {what}{count}{tool}"), last);
             self.wb.last_export = Some(last.clone());
         }
         if let Some(first) = out.warnings.first() {
@@ -115,7 +115,7 @@ impl NovoApp {
 
     /// Asks for a tag file and opens the import preview.
     pub(super) fn plc_import_tags(&mut self) {
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Import PLC tags")
             .add_filter("PLC tag file", &["csv", "xml", "xlsx"]);
         if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
@@ -133,6 +133,14 @@ impl NovoApp {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
+        const MAX_BYTES: u64 = 32 * 1024 * 1024;
+        if std::fs::metadata(path).is_ok_and(|m| m.len() > MAX_BYTES) {
+            self.message(
+                Level::Error,
+                format!("{name} is larger than 32 MB, which is too big for a tag file"),
+            );
+            return false;
+        }
         let bytes = match std::fs::read(path) {
             Ok(b) => b,
             Err(e) => {

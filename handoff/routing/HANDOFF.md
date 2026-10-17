@@ -3,7 +3,8 @@
 ## State
 - Repo herepiggypiggypiggy/kopercad, my branch `claude/project-thread-euksez` (restart from main after each merge).
 - Merged: engine, connections (`wire_connections`, `route_project`), fill/plan, Cabinet overlay `novo-app/src/app/cabinet_routes.rs` (#460, not hooked into `cabinet_show` yet).
-- Next: (1) after #413 merges, add ProblemKind UnsizedDuct and GuessedWire (one aggregated Info) in `novo-checks/src/physical.rs` routing(), the `_ => {}` arm; panel thread agreed. (2) The hook PR (Routes toggle, `cabinet.routes`, DESIGN line, UI review) belongs to the UI integration (cabinet) thread; it must reset `OverlayCache` on project open.
+- In review (PR from this branch): the two routing infos in `novo-checks` (`ProblemKind::UnsizedDuct`, `GuessedWire`): users see them in the Issues list (info, not counted on the pill), they are waivable and in the PDF design-checks pages. UnsizedDuct marks the wires through the duct, GuessedWire is one problem listing all wires without a cross-section.
+- Next: (1) the Cabinet hook (Routes toggle, `cabinet.routes`, DESIGN line, UI review) belongs to the UI integration (cabinet) thread; it must reset `OverlayCache` on project open. (2) Possible: jump from an UnsizedDuct issue to the duct on the Cabinet (needs a Rail target in the issue jump; today it jumps to the wire's page).
 
 ## Resume
 ```

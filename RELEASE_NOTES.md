@@ -91,10 +91,12 @@ KoperCAD tells you which is which. Please read the labels.
 
 ## Report a problem
 
-Send the version from Help > About (and BUILD_INFO.txt from the portable zip), what you did, what happened, and the project file if you can.
-After a crash, add any `crash-*.txt` from `%LOCALAPPDATA%\KoperCAD\logs`. Details are in the tester README.
+Use Help > Copy problem report and paste it into your message, with what you did, what happened, and the
+project file if you can. After a crash, KoperCAD offers the crash report on the next start; Help > Open log folder
+opens `%LOCALAPPDATA%\KoperCAD\logs`. Details are in the tester README.
 
 ## Licences
 
-Third-party software is listed in [`THIRD_PARTY_NOTICES.txt`](THIRD_PARTY_NOTICES.txt). The licence for KoperCAD
-itself is being settled; until then please keep the beta to yourself.
+KoperCAD is open source under either the MIT licence ([`LICENSE-MIT`](LICENSE-MIT)) or the Apache-2.0 licence
+([`LICENSE-APACHE`](LICENSE-APACHE)), at your option. Copyright 2026 KoperVonk. Third-party software is listed in
+[`THIRD_PARTY_NOTICES.txt`](THIRD_PARTY_NOTICES.txt).

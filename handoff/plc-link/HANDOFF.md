@@ -2,7 +2,7 @@
 
 Branch `claude/project-thread-expes9` (kopercad), PR from it to main. Code in `crates/novo-plc/src/link/`, tests `crates/novo-plc/tests/link.rs`, app in `crates/novo-app/src/app/plc_link.rs` (+ gate1 test `plc_tags_leave_as_files...`), CLI `export plc`.
 
-State: engine, UI and CLI done and tested. Formats other than CSV are untested against the real tools (see docs/design/plc-link.md table).
+State: #530 merged; nits follow-up PR open. Engine, UI and CLI done. Formats other than CSV still untested against the real tools.
 
 Resume: `cargo test -p novo-plc -p novo-cli -p novo-workflow`, then `cargo test -p novo-app plc_tags`.
 

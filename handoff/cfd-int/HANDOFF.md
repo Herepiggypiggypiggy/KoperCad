@@ -12,3 +12,7 @@ Disk: build only needed packages in debug; the workspace debug build fills the d
 ## Device surface vs cell count (examples/surface_study, sealed 600x800x300, one 50 W device, 2D engine says 82.3 C)
 cells 462: 50.5, 896: 41.0 (both flagged "not resolved", band 25..76 / 25..57); 1890: 80.3; 3213: 82.8; 5980: 83.5 (settled within 1.5%, within 1.5% of 2D). Mean air next to the device 36.0 / 37.5 / 37.6.
 Cause of the old jumps: a device under 2 x 2 x 2 cells gives a cell value, not a surface. The 2.5 mm plate is not resolved by the mesh (first z cell 38 mm); plate_share reads 0 (2D says 0.27) while the plate does conduct in-plane through the cut cell. Forcing plate planes costs 6x in the pressure solve (70+ iterations) so it waits for the faster pressure solver.
+
+## State 2026-10-17: validated flag stays false
+
+`tests/validation_cabinet.rs` is a reference study (sealed 50 W, vented 100 W, 1500 to 20000 cells). Up to 6000 cells air rise is 11 to 19% below the 2D engine and housing +5 to +11%; at 20000 cells vented air is -31% and housing +13%, still moving. The app's levels are 6k/20k/50k, so `ENCLOSURE_VALIDATED` stays false and the numbers are in the statement. Flip it when the trend with refinement is flat (needs the CFD-C2 air-side and mean-rise work); then tighten the bands. Open: raise `Tuning` cell counts after measuring, multi-device case.

@@ -271,7 +271,7 @@ impl NovoApp {
     /// `macro.import`: pick a file and import it, then show the browser.
     pub(super) fn macro_import(&mut self) {
         self.wb.macros.show();
-        let picked = rfd::FileDialog::new()
+        let picked = crate::dialogs::FileDialog::new()
             .set_title("Import macros")
             .add_filter("KoperCAD macros", &["kcmacro", "kcmacropack"])
             .pick_file();
@@ -286,7 +286,7 @@ impl NovoApp {
     /// those the browser's search shows) into one pack, then show the browser.
     pub(super) fn macro_export_pack(&mut self) {
         self.wb.macros.show();
-        let picked = rfd::FileDialog::new()
+        let picked = crate::dialogs::FileDialog::new()
             .set_title("Export macro pack")
             .add_filter("KoperCAD macro pack", &["kcmacropack"])
             .set_file_name("macros.kcmacropack")
@@ -473,7 +473,7 @@ impl NovoApp {
                                     }
                                 });
                             if ui.button("Export...").clicked() {
-                                export = rfd::FileDialog::new()
+                                export = crate::dialogs::FileDialog::new()
                                     .set_title("Export macro")
                                     .add_filter("KoperCAD macro", &["kcmacro"])
                                     .set_file_name(format!("{}.kcmacro", e.name))

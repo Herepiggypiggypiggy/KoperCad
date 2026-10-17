@@ -44,10 +44,22 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
             .into_iter()
             .filter(|l| !l.starts_with("Open vents")),
     );
-    if !ENCLOSURE_VALIDATED {
+    if ENCLOSURE_VALIDATED {
         limits.insert(
             0,
-            "Enclosure temperatures are not yet validated against IEC 60890 and the 2D engine."
+            "Checked against IEC 60890 and the 2D engine on a sealed and a vented reference \
+             cabinet (tests/validation_cabinet.rs); not checked against a measurement."
+                .into(),
+        );
+    } else {
+        limits.insert(
+            0,
+            "Enclosure temperatures are not yet validated. Reference study against the 2D engine \
+             (sealed 50 W, vented 100 W): from 1500 to 6000 cells the mean air rise is 11 to 19 % \
+             below it (the 3D mean is lower because the air stratifies; IEC 60890 sealed: 13 to \
+             14 %) and the housing rise 5 to 11 % above it; at 20000 cells the air rise is 16 % \
+             (sealed) and 31 % (vented) below and the housing 13 to 14 % above, and both are still \
+             moving with refinement, so the result is not yet independent of the grid."
                 .into(),
         );
     }
@@ -57,6 +69,37 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
         benchmarks: core.benchmarks,
         limits,
     }
+}
+
+const RADIATION_MARK: &str = " Radiation: surface to surface.";
+
+/// Marks a statement as one of a run with coupled radiation: the "radiation
+/// is not modelled" remarks go, what the radiation model assumes comes in.
+/// Safe to call twice.
+pub fn mark_radiation(a: &mut AccuracyStatement) {
+    if a.headline.ends_with(RADIATION_MARK) {
+        return;
+    }
+    for l in &mut a.limits {
+        if l.starts_with("Turbulence and radiation are not modelled") {
+            *l = "Turbulence is not modelled: flow in a strongly forced cabinet is laminar.".into();
+        }
+        if let Some(i) = l.find(
+            " radiation is not modelled, so surface temperatures of hot devices are slightly high.",
+        ) {
+            let end = i + " radiation is not modelled, so surface temperatures of hot devices are slightly high.".len();
+            l.replace_range(i..end, "");
+        }
+    }
+    a.limits.push(
+        "Radiation is grey and diffuse, surface to surface between devices, plate and walls \
+         (air is transparent). Emissivities are planning values (devices from the scenario, \
+         painted wall 0.9, bare plate 0.3); faces of cut cells count whole; a wall's surface \
+         temperature uses a fixed film ratio. Checked against analytic view factors, not \
+         against a measurement."
+            .into(),
+    );
+    a.headline.push_str(RADIATION_MARK);
 }
 
 /// The accuracy statement of a result with a turbulence model: the generic

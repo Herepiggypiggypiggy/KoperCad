@@ -8,7 +8,7 @@ use novo_core::{
 };
 use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction, params};
 
-use crate::error::{Result, StorageError, is_busy, is_not_a_database};
+use crate::error::{Result, StorageError, is_busy, is_not_a_database, is_read_only};
 use crate::schema::{self, APPLICATION_ID, MIGRATIONS, Migration};
 use crate::session::AUTOSAVE_SUFFIX;
 
@@ -89,7 +89,7 @@ impl ProjectFile {
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
         let conn = Connection::open_with_flags(path, flags)?;
         let version = check_existing(&conn, path, schema::SCHEMA_VERSION)?;
-        let conn = if version < schema::SCHEMA_VERSION {
+        let conn = if version < schema::SCHEMA_VERSION || !schema::has_side_tables(&conn)? {
             let mut memory = Connection::open_in_memory()?;
             // rusqlite refuses -1 ("all pages") here; one step of any
             // realistic file size copies everything.
@@ -99,6 +99,7 @@ impl ProjectFile {
                 None,
             )?;
             schema::migrate(&mut memory, path, MIGRATIONS, false)?;
+            schema::restore_side_tables(&memory)?;
             memory
         } else {
             conn
@@ -175,7 +176,10 @@ impl ProjectFile {
         if create {
             flags |= OpenFlags::SQLITE_OPEN_CREATE;
         }
-        let mut conn = Connection::open_with_flags(path, flags)?;
+        if !create && !is_autosave(path) && !writable(path)? {
+            return Err(StorageError::ReadOnly(path.to_owned()));
+        }
+        let mut conn = Connection::open_with_flags(path, flags).map_err(|e| classify(e, path))?;
         // EXCLUSIVE locking keeps the write lock between transactions, so the
         // file stays ours until this connection closes.
         conn.execute_batch(
@@ -197,6 +201,9 @@ impl ProjectFile {
         }
         let backup = !create && !is_autosave(path);
         schema::migrate(&mut conn, path, migrations, backup)?;
+        if !create && !schema::has_side_tables(&conn)? {
+            schema::restore_side_tables(&conn).map_err(|e| classify(e, path))?;
+        }
         Ok(ProjectFile {
             conn,
             path: path.to_owned(),
@@ -254,7 +261,13 @@ impl ProjectFile {
         let mut records = Vec::new();
         for row in rows {
             let (id, kind, data) = row?;
-            let record = decode(&kind, &data).map_err(|e| corrupt(format!("object {id}: {e}")))?;
+            let record = decode(&kind, &data).map_err(|e| match e {
+                DecodeError::UnknownKind => StorageError::UnknownRecord {
+                    path: self.path.clone(),
+                    kind: kind.clone(),
+                },
+                DecodeError::Damaged(e) => corrupt(format!("object {id}: {e}")),
+            })?;
             if record.id().raw() != id as u64 {
                 return Err(corrupt(format!("object {id} is stored under the wrong id")));
             }
@@ -476,6 +489,27 @@ impl ProjectFile {
     }
 }
 
+/// Whether the project at `path` can be saved, judged from permission
+/// bits alone so that opening never creates a file next to the project
+/// (a sync client such as OneDrive would see every probe). The file must not
+/// be marked read-only; on Unix its folder must also allow writing, because
+/// every save creates the journal beside it. On Windows the read-only
+/// attribute on a folder (set on Documents and Desktop) does not stop
+/// writes, so only the file is checked there; a save that still fails is
+/// reported by the write itself.
+fn writable(path: &Path) -> Result<bool> {
+    if std::fs::metadata(path)?.permissions().readonly() {
+        return Ok(false);
+    }
+    #[cfg(unix)]
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty())
+        && std::fs::metadata(dir)?.permissions().readonly()
+    {
+        return Ok(false);
+    }
+    Ok(true)
+}
+
 fn ensure_exists(path: &Path) -> Result<()> {
     if path.exists() {
         return Ok(());
@@ -508,6 +542,19 @@ fn check_existing(conn: &Connection, path: &Path, supported: u32) -> Result<u32>
             supported,
         });
     }
+    for table in ["meta", "records"] {
+        let found: i64 = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            [table],
+            |r| r.get(0),
+        )?;
+        if found == 0 {
+            return Err(StorageError::Corrupt {
+                path: path.to_owned(),
+                reason: format!("the {table} table is missing"),
+            });
+        }
+    }
     let check: String = conn.query_row("PRAGMA quick_check", [], |r| r.get(0))?;
     if check != "ok" {
         return Err(StorageError::Corrupt {
@@ -532,7 +579,21 @@ fn lock_existing(path: &Path) -> Result<Option<Connection>> {
          BEGIN EXCLUSIVE; COMMIT;",
     );
     match locked {
-        Ok(()) => Ok(Some(conn)),
+        Ok(()) => {
+            // A project from a newer build is never replaced, even when the
+            // caller means to overwrite it: an older build cannot know what
+            // it would be throwing away.
+            let app_id = schema::application_id(&conn)?;
+            let version = schema::user_version(&conn)?;
+            if app_id == APPLICATION_ID && version > schema::SCHEMA_VERSION {
+                return Err(StorageError::NewerFormat {
+                    path: path.to_owned(),
+                    found: version,
+                    supported: schema::SCHEMA_VERSION,
+                });
+            }
+            Ok(Some(conn))
+        }
         Err(e) if is_not_a_database(&e) => Ok(None),
         Err(e) => Err(classify(e, path)),
     }
@@ -569,6 +630,8 @@ fn classify(err: rusqlite::Error, path: &Path) -> StorageError {
         StorageError::Locked(path.to_owned())
     } else if is_not_a_database(&err) {
         StorageError::NotAProject(path.to_owned())
+    } else if is_read_only(&err, path) {
+        StorageError::ReadOnly(path.to_owned())
     } else {
         err.into()
     }
@@ -612,15 +675,30 @@ fn encode(record: &Record) -> String {
 }
 
 /// Parses a stored record and checks it matches its `kind` column.
-fn decode(kind: &str, data: &str) -> std::result::Result<Record, String> {
-    let record: Record = serde_json::from_str(data).map_err(|e| e.to_string())?;
+fn decode(kind: &str, data: &str) -> std::result::Result<Record, DecodeError> {
+    let record: Record = serde_json::from_str(data).map_err(|e| {
+        // serde names the tag value it could not place; a kind this build
+        // lacks is a newer file, anything else is damage.
+        let text = e.to_string();
+        if text.starts_with("unknown variant") {
+            DecodeError::UnknownKind
+        } else {
+            DecodeError::Damaged(text)
+        }
+    })?;
     if kind_name(record.kind()) != kind {
-        return Err(format!(
+        return Err(DecodeError::Damaged(format!(
             "stored as {kind:?} but holds a {}",
             kind_name(record.kind())
-        ));
+        )));
     }
     Ok(record)
+}
+
+enum DecodeError {
+    /// The record's tag names a kind of object this build does not have.
+    UnknownKind,
+    Damaged(String),
 }
 
 fn finish_save(tx: &Transaction<'_>) -> Result<()> {

@@ -11,6 +11,13 @@ use crate::order::{join_distinct, location_text};
 use crate::report::{Dependencies, Report};
 use crate::table::{Cell, Column, ReportOutput, Section};
 
+/// The wire list's section title with its count. A connection is one row,
+/// whatever number of drawn wires and junctions it passes. The supply and PE
+/// leads that have a feed at one end are not here; the workshop reports
+/// ([`crate::WireCut`]) list them.
+pub(crate) const WIRE_LIST_COUNT_TITLE: &str =
+    "{n} connections between device pins (supply and PE leads: see Wire production)";
+
 /// The wire list: one row per connection between two device or terminal
 /// pins, the way a wireman reads it.
 ///
@@ -193,6 +200,9 @@ impl Report for WireList {
                 members.iter().map(|w| AnyId::from(w.id)).collect(),
             );
         }
+        // Says what the rows are, so the count can be compared with the
+        // other workshop reports (see [`WIRE_LIST_COUNT_TITLE`]).
+        section.title = WIRE_LIST_COUNT_TITLE.replace("{n}", &section.rows.len().to_string());
         ReportOutput {
             report: Self::ID.into(),
             title: self.title(),

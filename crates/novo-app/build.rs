@@ -46,7 +46,44 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
     }
 }
 
+/// Sets `KOPERCAD_BUILD_COMMIT`: `KOPERCAD_BUILD_ID` if given, else the CI
+/// commit, else the short commit of the checkout, else "unknown".
+fn build_commit() {
+    println!("cargo:rerun-if-env-changed=KOPERCAD_BUILD_ID");
+    println!("cargo:rerun-if-env-changed=GITHUB_SHA");
+    let git = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.git");
+    let head = git.join("HEAD");
+    if head.is_file() {
+        println!("cargo:rerun-if-changed={}", head.display());
+        if let Ok(text) = std::fs::read_to_string(&head)
+            && let Some(r) = text.trim().strip_prefix("ref: ")
+            && git.join(r).is_file()
+        {
+            println!("cargo:rerun-if-changed={}", git.join(r).display());
+        }
+    }
+    let short = |s: &str| s.trim().chars().take(12).collect::<String>();
+    let commit = std::env::var("KOPERCAD_BUILD_ID")
+        .ok()
+        .or_else(|| std::env::var("GITHUB_SHA").ok().map(|s| short(&s)))
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| {
+            let out = std::process::Command::new("git")
+                .args(["rev-parse", "--short=12", "HEAD"])
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .output()
+                .ok()?;
+            out.status
+                .success()
+                .then(|| String::from_utf8_lossy(&out.stdout).trim().to_owned())
+        })
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "unknown".to_owned());
+    println!("cargo:rustc-env=KOPERCAD_BUILD_COMMIT={commit}");
+}
+
 fn main() {
+    build_commit();
     embed_lessons();
     println!("cargo:rerun-if-changed=../../assets/branding/icon.ico");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {

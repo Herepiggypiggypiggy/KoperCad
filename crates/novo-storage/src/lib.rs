@@ -36,6 +36,7 @@
 
 mod error;
 mod file;
+pub mod profile;
 pub mod schema;
 mod session;
 

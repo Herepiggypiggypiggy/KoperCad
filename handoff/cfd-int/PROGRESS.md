@@ -1,1 +1,2 @@
 2026-10-16 12:05 UTC CabinetSolver, app wiring, tests; PR 1 opened.
+2026-10-17 UTC #698 merged (wording). CFD-C2's plate sheet and lumped devices (#705) and CFD-FAST's steady path (#688) are in main and the snapshot reads them. Added `tests/validation_cabinet.rs` as a reference study to 20000 cells; R1 showed the trend is not flat at the app's levels, so `ENCLOSURE_VALIDATED` stays false and the numbers are in the statement.

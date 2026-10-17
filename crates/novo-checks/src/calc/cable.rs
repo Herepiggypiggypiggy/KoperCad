@@ -172,7 +172,7 @@ pub fn check_overload(circuit: &Circuit) -> Vec<Finding> {
         out.push(Finding::error(
             Rule::CableRating,
             format!(
-                "the {} mm² cable carries {} A here but is protected by a {} A device",
+                "the {} mm² cable carries {} A here (planning value) but is protected by a {} A device",
                 num(circuit.section_mm2),
                 num(iz),
                 num(inn)

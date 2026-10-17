@@ -37,7 +37,7 @@ pub const TABLES_FILE: &str = "protection-tables.json";
 /// elsewhere).
 pub fn tables_path() -> Option<PathBuf> {
     Some(
-        dirs::data_dir()?
+        novo_storage::profile::data_dir()?
             .join(crate::DATA_DIR_NAME)
             .join(TABLES_FILE),
     )

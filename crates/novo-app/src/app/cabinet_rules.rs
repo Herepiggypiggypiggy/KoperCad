@@ -28,7 +28,7 @@ pub const RULES_FILE: &str = "place-rules.txt";
 /// `%APPDATA%\KoperCAD\place-rules.txt` (the platform's data folder elsewhere).
 pub fn rules_path() -> Option<PathBuf> {
     Some(
-        dirs::data_dir()?
+        novo_storage::profile::data_dir()?
             .join(crate::DATA_DIR_NAME)
             .join(RULES_FILE),
     )
