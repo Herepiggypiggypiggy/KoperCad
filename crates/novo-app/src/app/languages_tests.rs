@@ -199,3 +199,20 @@ fn the_reports_window_exports_in_the_project_language() {
     assert!(!csv_text.contains("Description"), "{csv_text}");
     assert!(pdf_text.contains("Apparatenlijst"), "{pdf_text}");
 }
+
+#[test]
+fn the_decimal_sign_is_set_per_language_and_undone_in_one_step() {
+    let (_dir, mut d) = open();
+    d.app.set_report_language("nl");
+    assert_eq!(d.app.report_translator().decimal(), ',');
+    let mut table = ProjectTable::of_project(d.app.backend.document().unwrap().project());
+    table.set_decimal("nl", '.');
+    d.app.set_translation_table("Set decimal sign", &table);
+    assert_eq!(d.app.report_translator().decimal(), '.');
+    // The choice is stored with the project and does not disturb entries.
+    let back = ProjectTable::of_project(d.app.backend.document().unwrap().project());
+    assert_eq!(back.language("nl").unwrap().decimal_char(), Some('.'));
+    assert_eq!(d.app.report_translator().tr("Wire list"), "Draadlijst");
+    d.app.backend.document_mut().unwrap().undo().unwrap();
+    assert_eq!(d.app.report_translator().decimal(), ',');
+}
