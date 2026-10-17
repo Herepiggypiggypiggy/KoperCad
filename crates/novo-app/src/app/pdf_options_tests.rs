@@ -14,6 +14,7 @@ fn saved_example(dir: &std::path::Path) -> Drive {
     d.app.run(&ctx, Action::OpenExample);
     d.frame();
     assert!(d.app.save_to(&dir.join("Plant.novo")));
+    d.app.wb.pdf_dir = Some(dir.to_owned());
     d
 }
 

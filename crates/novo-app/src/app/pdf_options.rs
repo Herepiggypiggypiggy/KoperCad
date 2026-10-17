@@ -1,4 +1,4 @@
-//! The PDF options dialog: File > Export drawings > Export PDF... asks which
+//! The PDF options dialog: File > Export drawings > Export PDF with options... asks which
 //! pages, bookmarks, links and extras go into the PDF, remembers the answer
 //! per user (the settings file under the user's profile) and exports.
 //! Export PDF and Export this page as PDF stay one-click with the defaults.
@@ -137,7 +137,7 @@ impl NovoApp {
                 } else {
                     format!("pages {}", choice.ranges.trim().replace(' ', ""))
                 };
-                let (dir, stem) = self.export_base()?;
+                let (dir, stem) = self.pdf_base()?;
                 let file = format!("{stem} {tail}.pdf")
                     .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "-");
                 super::pdf::replaceable_path(&dir.join(file))

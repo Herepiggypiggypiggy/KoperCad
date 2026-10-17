@@ -1,8 +1,9 @@
 //! PDF export in the app (novo-pdf, WS-09), never blocked by problems.
-//! A saved project's PDF goes next to its file and takes its name
-//! (`Plant 2.novo` gives `Plant 2.pdf`), so projects with the same title
-//! never share a PDF; a project with no file yet exports to
-//! `<Documents>\KoperCAD\<name>.pdf` under a name not used yet.
+//! Every PDF goes to `<Documents>\KoperCAD` (the profile's Documents folder
+//! under `--profile-dir`), wherever the project file is. A saved project's
+//! PDF takes its file name (`Plant 2.novo` gives `Plant 2.pdf`), so projects
+//! with the same title never share a PDF; a project with no file yet gets
+//! `<name>.pdf` under a name not used yet.
 //!
 //! Only a PDF KoperCAD wrote (its `/Producer`) is ever replaced: a
 //! user's own `<stem>.pdf` stays, and the export takes `<stem> 2.pdf`.
@@ -23,25 +24,35 @@ impl NovoApp {
         self.export_pdf_to(&path)
     }
 
-    /// Where the PDF of every page goes (see the module notes).
-    pub(super) fn pdf_path(&mut self) -> Option<PathBuf> {
-        let name = self.project_name()?;
-        // An untitled project's file is a temporary one; it has no name yet.
-        let file = self.backend.file().filter(|_| !self.backend.is_untitled());
-        match file {
-            Some(file) => Some(replaceable_path(&file.with_extension("pdf"))),
-            None => {
-                let Some(dir) = projects_dir() else {
-                    self.message(Level::Error, "Could not find the Documents folder");
-                    return None;
-                };
-                Some(free_path(&dir, &name))
-            }
+    /// Folder and file stem of this project's PDFs: always the default
+    /// Documents folder (`<Documents>\KoperCAD`, which follows
+    /// `--profile-dir`), named after the saved project.
+    pub(super) fn pdf_base(&mut self) -> Option<(PathBuf, String)> {
+        let (_, stem) = self.export_base()?;
+        #[cfg(test)]
+        if let Some(dir) = self.wb.pdf_dir.clone() {
+            return Some((dir, stem));
         }
+        let Some(dir) = projects_dir() else {
+            self.message(Level::Error, "Could not find the Documents folder");
+            return None;
+        };
+        Some((dir, stem))
     }
 
-    /// Exports only the page on screen, to `<project> page <name>.pdf` next
-    /// to the project (a project with no file yet: in Documents).
+    /// Where the PDF of every page goes (see the module notes).
+    pub(super) fn pdf_path(&mut self) -> Option<PathBuf> {
+        let (dir, stem) = self.pdf_base()?;
+        let saved = self.backend.file().is_some() && !self.backend.is_untitled();
+        Some(if saved {
+            replaceable_path(&dir.join(format!("{stem}.pdf")))
+        } else {
+            free_path(&dir, &stem)
+        })
+    }
+
+    /// Exports only the page on screen, to `<project> page <name>.pdf` in
+    /// the PDF folder.
     pub(super) fn export_pdf_page(&mut self) -> Option<PathBuf> {
         let page = self.current_page?;
         let page_name = self
@@ -50,7 +61,7 @@ impl NovoApp {
             .project()
             .page(page)
             .map(|p| p.name.to_string())?;
-        let (dir, stem) = self.export_base()?;
+        let (dir, stem) = self.pdf_base()?;
         let file = format!("{stem} page {page_name}.pdf").replace(['/', '\\', ':'], "-");
         let path = replaceable_path(&dir.join(file));
         self.export_pdf_pages_to(&path, novo_pdf::PageSet::Pages(vec![page]))
