@@ -1976,14 +1976,30 @@ impl NovoApp {
                 if !unsaved.is_empty() {
                     ui.add_space(16.0);
                     ui.small("UNSAVED");
-                    for (path, changed) in unsaved {
-                        let row = ui.add(
-                            egui::Button::new(format!("Untitled, {}", ago(changed))).frame(false),
-                        );
-                        if row.clicked() {
-                            let ctx = ui.ctx().clone();
-                            self.leave_then(&ctx, Leaving::OpenPath(path));
+                    // The newest few; the rest fold away so a long history
+                    // of crashed or abandoned sessions does not fill the card.
+                    let (newest, older) = unsaved.split_at(unsaved.len().min(UNSAVED_SHOWN));
+                    let mut open = None;
+                    let mut rows = |ui: &mut egui::Ui, list: &[(PathBuf, SystemTime)]| {
+                        for (path, changed) in list {
+                            let row = ui.add(
+                                egui::Button::new(format!("Untitled, {}", ago(*changed)))
+                                    .frame(false),
+                            );
+                            if row.clicked() {
+                                open = Some(path.clone());
+                            }
                         }
+                    };
+                    rows(ui, newest);
+                    if !older.is_empty() {
+                        egui::CollapsingHeader::new(format!("{} older", older.len()))
+                            .id_salt("unsaved_older")
+                            .show(ui, |ui| rows(ui, older));
+                    }
+                    if let Some(path) = open {
+                        let ctx = ui.ctx().clone();
+                        self.leave_then(&ctx, Leaving::OpenPath(path));
                     }
                 }
                 ui.add_space(16.0);
@@ -2273,6 +2289,9 @@ fn describe_error(verb: &str, path: &Path, e: &BackendError) -> String {
         _ => format!("Could not {verb} {}: {e}", path.display()),
     }
 }
+
+/// How many unsaved projects the start card lists before folding the rest.
+const UNSAVED_SHOWN: usize = 4;
 
 /// "3 minutes ago" style text for a past moment.
 fn ago(t: SystemTime) -> String {
