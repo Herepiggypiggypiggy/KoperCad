@@ -759,3 +759,298 @@ pub fn incoming_conflicts(
         })
         .collect()
 }
+
+// ---------------------------------------------------------------------
+// Review queue
+// ---------------------------------------------------------------------
+
+/// Version of the review file written by [`ReviewLedger::save`].
+pub const REVIEW_FORMAT_VERSION: u32 = 1;
+
+/// File name of the review ledger, next to the catalog file.
+pub const REVIEW_FILE_NAME: &str = "parts-review.json";
+
+/// The review ledger belonging to a catalog file: same folder.
+pub fn review_path_for(catalog_path: &std::path::Path) -> std::path::PathBuf {
+    catalog_path.with_file_name(REVIEW_FILE_NAME)
+}
+
+/// Whether a part's data can be relied on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Trust {
+    /// Written by a person in KoperCAD (`authored`).
+    Authored,
+    /// Imported, and a person looked at exactly this data.
+    Reviewed { date: String },
+    /// Imported, and a person said not to use it.
+    Rejected { date: String, note: String },
+    /// Imported and not looked at yet.
+    Unreviewed,
+    /// Reviewed once, but the data changed since.
+    ChangedSinceReview,
+    /// No origin recorded (the starter set, old files). Not queued: there is
+    /// nothing to say who wrote it.
+    Unrecorded,
+}
+
+impl Trust {
+    pub fn label(&self) -> &'static str {
+        match self {
+            Trust::Authored => "Authored",
+            Trust::Reviewed { .. } => "Reviewed",
+            Trust::Rejected { .. } => "Rejected",
+            Trust::Unreviewed => "Untrusted: not reviewed",
+            Trust::ChangedSinceReview => "Untrusted: changed since review",
+            Trust::Unrecorded => "Origin not recorded",
+        }
+    }
+
+    /// Whether the part waits in the review queue.
+    pub fn needs_review(&self) -> bool {
+        matches!(self, Trust::Unreviewed | Trust::ChangedSinceReview)
+    }
+}
+
+/// What a person decided about a part.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Decision {
+    Approved,
+    Rejected,
+}
+
+/// One recorded decision.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ReviewEntry {
+    pub decision: Decision,
+    /// [`fingerprint`] of the data that was looked at.
+    pub fingerprint: String,
+    /// `2026-10-17`.
+    pub date: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+}
+
+/// A fingerprint of what a maker's data says about a part. Local additions
+/// are left out, so storing a STEP file or detecting connection points does
+/// not undo a review: the 3D files and the terminal positions.
+pub fn fingerprint(part: &CatalogPart) -> String {
+    use sha2::{Digest, Sha256};
+    let mut plain = part.clone();
+    plain.assets.clear();
+    for t in &mut plain.terminals {
+        t.position_mm = None;
+    }
+    plain.sources.remove(crate::pins::POSITIONS_SOURCE_KEY);
+    let json = serde_json::to_string(&plain).unwrap_or_default();
+    Sha256::digest(json.as_bytes())
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
+}
+
+fn ledger_key(part: &CatalogPart) -> String {
+    use crate::search::normalize_code;
+    format!(
+        "{}|{}",
+        normalize_code(&part.manufacturer),
+        normalize_code(&part.order_number)
+    )
+}
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct LedgerFile {
+    format: u32,
+    entries: std::collections::BTreeMap<String, ReviewEntry>,
+}
+
+/// Why the review file could not be read or written.
+#[derive(Debug, thiserror::Error)]
+pub enum ReviewError {
+    #[error("cannot access the review file {path}: {source}")]
+    Io {
+        path: std::path::PathBuf,
+        source: std::io::Error,
+    },
+    #[error("the review file {path} is not valid: {source}")]
+    Format {
+        path: std::path::PathBuf,
+        source: serde_json::Error,
+    },
+    #[error("the review file {path} was written by a newer KoperCAD (format {found})")]
+    TooNew {
+        path: std::path::PathBuf,
+        found: u32,
+    },
+}
+
+/// A part waiting for review.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct QueueItem {
+    pub key: PartKey,
+    pub manufacturer: String,
+    pub order_number: String,
+    pub description: String,
+    pub trust: Trust,
+    /// File the data was imported from; groups the queue.
+    pub file: String,
+    /// Completeness, so the thinnest imports can be looked at first.
+    pub percent: u8,
+}
+
+/// Decisions on imported parts. Lives in a file next to the catalog, so the
+/// catalog format stays as it is. A part is trusted only while its data is
+/// exactly what was reviewed.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ReviewLedger {
+    entries: std::collections::BTreeMap<String, ReviewEntry>,
+}
+
+impl ReviewLedger {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Reads the ledger; a missing file is an empty ledger.
+    pub fn load(path: &std::path::Path) -> Result<Self, ReviewError> {
+        let text = match std::fs::read_to_string(path) {
+            Ok(t) => t,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Self::new()),
+            Err(source) => {
+                return Err(ReviewError::Io {
+                    path: path.into(),
+                    source,
+                });
+            }
+        };
+        let file: LedgerFile =
+            serde_json::from_str(&text).map_err(|source| ReviewError::Format {
+                path: path.into(),
+                source,
+            })?;
+        if file.format > REVIEW_FORMAT_VERSION {
+            return Err(ReviewError::TooNew {
+                path: path.into(),
+                found: file.format,
+            });
+        }
+        Ok(ReviewLedger {
+            entries: file.entries,
+        })
+    }
+
+    /// Writes the ledger through a temporary file, so a crash cannot leave
+    /// half a file.
+    pub fn save(&self, path: &std::path::Path) -> Result<(), ReviewError> {
+        let io = |source| ReviewError::Io {
+            path: path.into(),
+            source,
+        };
+        if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+            std::fs::create_dir_all(dir).map_err(io)?;
+        }
+        let text = serde_json::to_string_pretty(&LedgerFile {
+            format: REVIEW_FORMAT_VERSION,
+            entries: self.entries.clone(),
+        })
+        .unwrap_or_default();
+        let tmp = path.with_extension("json.tmp");
+        std::fs::write(&tmp, text).map_err(io)?;
+        std::fs::rename(&tmp, path).map_err(io)
+    }
+
+    /// How much to rely on `part`.
+    pub fn trust_of(&self, part: &CatalogPart) -> Trust {
+        let source = part.provenance.as_ref().map_or("", |p| p.source.trim());
+        if source == "authored" {
+            return Trust::Authored;
+        }
+        if !source.starts_with("import:") {
+            return Trust::Unrecorded;
+        }
+        match self.entries.get(&ledger_key(part)) {
+            None => Trust::Unreviewed,
+            Some(e) if e.fingerprint != fingerprint(part) => Trust::ChangedSinceReview,
+            Some(e) => match e.decision {
+                Decision::Approved => Trust::Reviewed {
+                    date: e.date.clone(),
+                },
+                Decision::Rejected => Trust::Rejected {
+                    date: e.date.clone(),
+                    note: e.note.clone(),
+                },
+            },
+        }
+    }
+
+    /// Records that a person looked at exactly this data and accepts it.
+    pub fn approve(&mut self, part: &CatalogPart, date: &str) {
+        self.record(part, Decision::Approved, date, "");
+    }
+
+    /// Records that a person looked at this data and does not accept it.
+    pub fn reject(&mut self, part: &CatalogPart, date: &str, note: &str) {
+        self.record(part, Decision::Rejected, date, note);
+    }
+
+    fn record(&mut self, part: &CatalogPart, decision: Decision, date: &str, note: &str) {
+        self.entries.insert(
+            ledger_key(part),
+            ReviewEntry {
+                decision,
+                fingerprint: fingerprint(part),
+                date: date.to_owned(),
+                note: note.to_owned(),
+            },
+        );
+    }
+
+    /// Approves every part of `keys` that is still in the queue; returns
+    /// how many.
+    pub fn approve_all(&mut self, catalog: &Catalog, keys: &[PartKey], date: &str) -> usize {
+        let mut done = 0;
+        for key in keys {
+            if let Some(part) = catalog.get(key)
+                && self.trust_of(part).needs_review()
+            {
+                self.approve(part, date);
+                done += 1;
+            }
+        }
+        done
+    }
+
+    /// Imported parts nobody has looked at (or whose data changed since),
+    /// the thinnest data first, then by key.
+    pub fn queue(&self, catalog: &Catalog) -> Vec<QueueItem> {
+        let mut items: Vec<QueueItem> = catalog
+            .parts()
+            .iter()
+            .filter_map(|p| {
+                let trust = self.trust_of(p);
+                trust.needs_review().then(|| QueueItem {
+                    key: p.key(),
+                    manufacturer: p.manufacturer.clone(),
+                    order_number: p.order_number.clone(),
+                    description: p.description.clone(),
+                    trust,
+                    file: p
+                        .provenance
+                        .as_ref()
+                        .map_or_else(String::new, |x| x.file.clone()),
+                    percent: assess(p).percent,
+                })
+            })
+            .collect();
+        items.sort_by(|a, b| a.percent.cmp(&b.percent).then_with(|| a.key.cmp(&b.key)));
+        items
+    }
+}

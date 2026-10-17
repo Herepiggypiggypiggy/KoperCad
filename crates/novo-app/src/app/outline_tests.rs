@@ -577,3 +577,60 @@ fn the_outline_lists_wires_and_cables_and_a_click_goes_to_the_wire() {
     d.frame();
     assert!(d.app.wb.pending_item.is_none(), "the wire was selected");
 }
+
+#[test]
+fn a_cable_row_selects_all_its_wired_cores_on_the_page() {
+    use novo_core::{AnyId, CableCore, Endpoint, Point, Wire};
+    let (_dir, mut d) = drive();
+    let page = d.app.current_page.unwrap();
+    let ((w1, w2, cable), _) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Cable with two wired cores", |tx| {
+            let a = tx.add_junction(page, Point::new(0.0, 0.0))?;
+            let b = tx.add_junction(page, Point::new(20.0, 0.0))?;
+            let wire = |tx: &mut novo_core::Tx<'_>, n: &str| {
+                tx.insert(|id| {
+                    let mut w = Wire::new(id, page, Endpoint::junction(a), Endpoint::junction(b));
+                    w.number = Some(n.into());
+                    w
+                })
+            };
+            let w1 = wire(tx, "1")?;
+            let w2 = wire(tx, "2")?;
+            let cores = vec![
+                CableCore::new("1"),
+                CableCore::new("2"),
+                CableCore::new("3"),
+            ];
+            let cable = tx.add_cable(DeviceTag::parse("-W1").unwrap(), cores)?;
+            tx.assign_core(cable, 0, Some(w1))?;
+            tx.assign_core(cable, 2, Some(w2))?;
+            Ok((w1, w2, cable))
+        })
+        .unwrap();
+    let project = d.app.backend.document().unwrap().project();
+    let item = &super::outline_items::cable_items(project, "")[0];
+    assert_eq!(item.id, cable);
+    assert_eq!(
+        item.wires,
+        vec![w1, w2],
+        "core order, unwired cores skipped"
+    );
+    // What a click on the row does.
+    d.app.go_to_cable_wires(&item.wires.clone());
+    d.frame();
+    d.frame();
+    assert!(d.app.wb.pending_items.is_none(), "the wires were selected");
+    let view = d.app.canvas.schematic().unwrap();
+    for w in [w1, w2] {
+        assert!(
+            view.canvas
+                .selection
+                .contains(novo_canvas::model::item_id(AnyId::Wire(w)))
+        );
+    }
+    assert_eq!(view.canvas.selection.len(), 2);
+}

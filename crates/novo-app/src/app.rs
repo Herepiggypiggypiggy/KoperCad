@@ -534,6 +534,8 @@ impl NovoApp {
         settings: Settings,
     ) -> Self {
         let wb = Workbench::with_recent(&settings.recent_actions);
+        let mut backend = backend;
+        backend.set_autosave_interval(settings.autosave_interval());
         let mut app = Self {
             backend,
             canvas,

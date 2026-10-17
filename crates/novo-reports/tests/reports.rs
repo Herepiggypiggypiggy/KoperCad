@@ -927,7 +927,10 @@ fn cut_list_groups_by_size_and_colour_longest_first() {
     .expect("edit");
     let cuts = CutList::default().generate(doc.project());
     let wires = report(&doc, "wires");
-    let total_wires = wires.section("wires").unwrap().rows.len();
+    // Every wire to cut: the wire list's connections and the supply and PE
+    // leads.
+    let total_wires = report(&doc, "wirecut").section("cuts").unwrap().rows.len();
+    assert!(total_wires > wires.section("wires").unwrap().rows.len());
 
     // Summary first, then one table per cross-section and colour.
     let summary = cuts.section("summary").expect("summary");
@@ -1008,12 +1011,25 @@ fn labels_cover_wires_terminals_and_devices() {
     let kinds: Vec<&str> = labels.sections.iter().map(|s| s.key.as_str()).collect();
     assert_eq!(kinds, ["wires", "terminals", "devices", "cables"]);
 
-    // Two labels per wire-list row: this end shows where the other goes.
+    // Two labels per wire to cut (the wire list's connections and the
+    // supply and PE leads): this end shows where the other goes.
     let wires = rows(&labels, "wires");
+    let cuts = rows(&report(&doc, "wirecut"), "cuts");
+    assert_eq!(wires.len(), 2 * cuts.len());
     let list = rows(&report(&doc, "wires"), "wires");
-    assert_eq!(wires.len(), 2 * list.len());
-    assert_eq!(wires[0], ["", "=A1+CAB-K1:1", "=A1+CAB-F1:2"]);
-    assert_eq!(wires[1], ["", "=A1+CAB-F1:2", "=A1+CAB-K1:1"]);
+    assert!(
+        cuts.len() > list.len(),
+        "the supply and PE leads are labelled"
+    );
+    assert!(wires.contains(&strings(&[&["", "=A1+CAB-K1:1", "=A1+CAB-F1:2"]])[0]));
+    assert!(wires.contains(&strings(&[&["", "=A1+CAB-F1:2", "=A1+CAB-K1:1"]])[0]));
+    // A supply lead names its potential, not the symbol's pin number.
+    assert!(
+        wires
+            .iter()
+            .any(|r| r[1].ends_with("(feed)") || r[2].ends_with("(feed)")),
+        "{wires:?}"
+    );
 
     let terminals = rows(&labels, "terminals");
     assert_eq!(terminals.len(), 4);
@@ -1065,7 +1081,7 @@ fn a_page_without_a_title_is_listed_as_untitled() {
 }
 
 #[test]
-fn each_workshop_report_says_what_its_count_counts_and_the_counts_follow_from_each_other() {
+fn the_workshop_reports_list_the_same_wires_and_each_title_says_what_it_counts() {
     let (doc, _) = starter();
     let count_in = |title: &str| -> usize {
         title
@@ -1082,42 +1098,59 @@ fn each_workshop_report_says_what_its_count_counts_and_the_counts_follow_from_ea
             .unwrap_or_else(|| panic!("no section {key} in {id}"))
     };
 
+    // The wire list: connections between two device pins.
     let wires = section("wires", "wires");
     let connections = wires.rows.len();
     assert!(connections > 0);
     assert_eq!(count_in(&wires.title), connections, "{}", wires.title);
     assert!(wires.title.contains("connections"), "{}", wires.title);
 
-    // The cut list is the wire list's rows, listed again by size.
+    // Wire production: those and the supply and PE leads on top.
+    let production = section("wirecut", "cuts");
+    let to_cut = production.rows.len();
+    assert!(to_cut > connections, "the starter has supply and PE leads");
+    assert_eq!(
+        count_in(production.title.trim_start_matches("Wires to cut · ")),
+        to_cut
+    );
+
+    // The cut list holds exactly the wires production cuts, with the same
+    // cut lengths.
     let cut = report(&doc, "cutlist");
-    let listed: usize = cut
+    let mut cut_mm: Vec<String> = cut
         .sections
         .iter()
         .filter(|s| s.key.starts_with("group-"))
-        .map(|s| s.rows.len())
-        .sum();
-    assert_eq!(listed, connections);
+        .flat_map(|s| {
+            let i = s.column("cut_mm").expect("cut column");
+            s.rows.iter().map(move |r| r.cells[i].to_string())
+        })
+        .collect();
+    let mut produced_mm: Vec<String> = {
+        let i = production.column("cut").expect("cut column");
+        production
+            .rows
+            .iter()
+            .map(|r| r.cells[i].to_string())
+            .collect()
+    };
+    cut_mm.sort();
+    produced_mm.sort();
+    assert_eq!(cut_mm, produced_mm);
     let summary = cut.sections.iter().find(|s| s.key == "summary").unwrap();
     assert_eq!(
         count_in(summary.title.trim_start_matches("Summary · ")),
-        listed
+        to_cut
     );
 
-    // The wire labels are two per connection.
+    // Wire labels: two per wire to cut.
     let labels = section("labels", "wires");
-    assert_eq!(labels.rows.len(), 2 * connections);
+    assert_eq!(labels.rows.len(), 2 * to_cut);
     assert_eq!(
         count_in(labels.title.trim_start_matches("Wire labels · ")),
         labels.rows.len()
     );
-
-    // Wire production lists every connection and the supply and PE leads on
-    // top of them, and its title says so.
-    let production = section("wirecut", "cuts");
-    assert!(production.rows.len() >= connections);
-    assert_eq!(
-        count_in(production.title.trim_start_matches("Wires to cut · ")),
-        production.rows.len()
-    );
-    assert!(production.title.contains("supply and PE leads"));
+    for title in [&production.title, &summary.title] {
+        assert!(title.contains("supply and PE leads"), "{title}");
+    }
 }

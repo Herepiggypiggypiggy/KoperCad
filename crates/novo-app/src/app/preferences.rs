@@ -4,6 +4,8 @@ use eframe::egui;
 use novo_canvas::model::NoteDensity;
 use novo_editor::tool::ConnectMode;
 
+use std::time::Instant;
+
 use super::NovoApp;
 
 impl NovoApp {
@@ -20,6 +22,7 @@ impl NovoApp {
         let mut density = self.settings.xref_density();
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
+        let mut autosave = self.settings.autosave_interval().as_secs() as u32;
         let mut dock_labels = self.settings.dock_labels();
         let mut ui_scale = self.settings.ui_scale_factor().to_bits();
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
@@ -78,6 +81,20 @@ impl NovoApp {
                             (1.25_f32.to_bits(), "125%"),
                             (1.5_f32.to_bits(), "150%"),
                             (2.0_f32.to_bits(), "200%"),
+                        ],
+                    );
+                    section(ui, "Saving", false);
+                    choice(
+                        ui,
+                        "Autosave every",
+                        "How often changes are written to the project file and its recovery file. Shorter loses less after a crash.",
+                        &mut autosave,
+                        &[
+                            (10, "10 s"),
+                            (30, "30 s"),
+                            (60, "1 min"),
+                            (120, "2 min"),
+                            (300, "5 min"),
                         ],
                     );
                     section(ui, "Connections", false);
@@ -198,6 +215,13 @@ impl NovoApp {
         self.settings.ui_scale = (f32::from_bits(ui_scale) * 100.0).round() as u32;
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
+        }
+        if autosave != self.settings.autosave_interval().as_secs() as u32 {
+            self.settings.autosave_seconds = autosave;
+            self.backend
+                .set_autosave_interval(self.settings.autosave_interval());
+            // A shorter wait takes effect now, not after the old one.
+            self.next_tick = Instant::now();
         }
         self.settings.company_macros = company;
         if symbols != self.settings.symbol_folder || reload_symbols {

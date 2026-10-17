@@ -983,7 +983,15 @@ fn parts_ui(
     dragging: bool,
     actions: &mut Vec<PartsAction>,
 ) {
-    if let Some(jump) = super::parts_quality::tab(ui, &mut win.quality, &win.catalog) {
+    if let Some(jump) = super::parts_quality::tab(
+        ui,
+        &mut win.quality,
+        &win.catalog,
+        win.catalog_path
+            .as_deref()
+            .map(novo_parts::review_path_for)
+            .as_deref(),
+    ) {
         if let Some(key) = jump {
             (win.selected, win.query, win.maker) = (Some(key), String::new(), None);
         }

@@ -133,6 +133,9 @@ pub(crate) struct Workbench {
     pub(super) pending_item: Option<(PageId, AnyId)>,
     /// The person's symbol folder as last loaded into the catalog.
     pub(super) custom_symbols: super::symbol_folder::CustomSymbols,
+    /// Several items to select together on a page, once it is shown (a
+    /// cable's core wires from the outline).
+    pub(super) pending_items: Option<(PageId, Vec<AnyId>)>,
     /// The drawing's layer and rect last frame: a focused widget there is
     /// the canvas, anywhere else a panel.
     pub(super) canvas_area: Option<(egui::LayerId, egui::Rect)>,
@@ -285,6 +288,7 @@ impl Default for Workbench {
             pending: None,
             pending_item: None,
             custom_symbols: Default::default(),
+            pending_items: None,
             canvas_area: None,
             occurrences: None,
             drawer: None,
@@ -1555,6 +1559,19 @@ impl NovoApp {
                 view.canvas.selection.apply([item], SelectOp::Replace);
                 view.canvas.reveal([item]);
             }
+        }
+        if let Some((_, ids)) = self
+            .wb
+            .pending_items
+            .take_if(|(p, _)| Some(*p) == self.current_page)
+            && let Some(view) = self.canvas.schematic()
+        {
+            let items: Vec<_> = ids.iter().map(|&id| item_id(id)).collect();
+            view.canvas.selection.clear();
+            view.canvas
+                .selection
+                .apply(items.iter().copied(), SelectOp::Replace);
+            view.canvas.reveal(items);
         }
         self.highlight_related();
     }
