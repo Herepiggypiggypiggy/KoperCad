@@ -68,6 +68,10 @@ pub struct CabinetLayout {
     /// positions are in that surface's millimetres, so the plate checks and
     /// the swing obstacles leave them out.
     pub off_plate: BTreeMap<u64, String>,
+    /// Width and height of every surface of the enclosure by name (the
+    /// plate, door, walls, roof, floor and extra plates), for the drill
+    /// sheets. Empty without an enclosure.
+    pub surface_sizes: BTreeMap<String, (f64, f64)>,
 }
 
 impl CabinetLayout {
@@ -84,6 +88,7 @@ impl CabinetLayout {
             opening_problems: Vec::new(),
             door_devices: Vec::new(),
             off_plate: BTreeMap::new(),
+            surface_sizes: BTreeMap::new(),
         }
     }
 
