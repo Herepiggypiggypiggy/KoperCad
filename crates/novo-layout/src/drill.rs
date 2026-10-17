@@ -11,7 +11,9 @@
 
 use std::collections::HashMap;
 
+use crate::openings::OpeningShape;
 use crate::state::CabinetLayout;
+use crate::surfaces::MAIN_PLATE;
 use crate::{Placement, Rail};
 
 /// Part key: how the device is held. `door_cutout` puts its holes and
@@ -340,6 +342,31 @@ pub fn drill_table(layout: &CabinetLayout, features: &[DeviceFeatures]) -> Drill
                 source: f.label.clone(),
             });
         }
+    }
+
+    for o in &layout.openings {
+        let surface = match o.surface.as_str() {
+            "door" => Surface::Door,
+            MAIN_PLATE => Surface::Plate,
+            other => {
+                problems.push(format!(
+                    "Opening '{}' is on '{other}', which the drill table does not cover.",
+                    o.name
+                ));
+                continue;
+            }
+        };
+        cutouts.push(CutoutRow {
+            no: 0,
+            surface,
+            shape: match o.shape {
+                OpeningShape::Round { dia } => CutoutShape::Round { dia },
+                OpeningShape::Rect { w, h } => CutoutShape::Rect { w, h },
+            },
+            x: round2(o.x),
+            y: round2(o.y),
+            source: format!("Opening {}", o.name),
+        });
     }
 
     holes.sort_by(|a, b| {

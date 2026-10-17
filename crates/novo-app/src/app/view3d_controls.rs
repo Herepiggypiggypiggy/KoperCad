@@ -28,6 +28,8 @@ pub(crate) struct Controls {
     pub(super) ssao: bool,
     /// This GPU draws occlusion at all. Set by the host each frame.
     pub(super) ssao_available: bool,
+    /// A swipe in wheel lines pans instead of zooming (Windows trackpads).
+    pub(super) trackpad_pans: bool,
     /// Measuring lines: the enclosure's size and the selected part's.
     pub(super) dimensions: bool,
     /// The frame governor has stepped the quality down: the toolbar offers
@@ -54,6 +56,7 @@ impl Default for Controls {
             hidden: BTreeSet::new(),
             ssao: true,
             ssao_available: true,
+            trackpad_pans: false,
             dimensions: false,
             reduced: false,
             restore: false,
@@ -189,6 +192,14 @@ pub(super) fn toolbar(
                                 );
                         });
                     }
+                    toggle(
+                        ui,
+                        &mut controls.trackpad_pans,
+                        "Trackpad pans",
+                        "Two-finger swipes pan instead of zoom. For Windows touchpads, which \
+                         send swipes as mouse-wheel steps; a real mouse wheel then pans too. \
+                         Zoom with Ctrl + swipe or a pinch.",
+                    );
                     toggle(
                         ui,
                         &mut controls.missing_data,
