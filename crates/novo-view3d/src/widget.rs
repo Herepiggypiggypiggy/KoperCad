@@ -656,10 +656,14 @@ impl View3d {
     }
 
     /// Eases to a view cube face from where the camera is (`view.iso` and the cube).
+    ///
+    /// With something selected the view frames the selection, so "front" and
+    /// "top" look at what you picked; with nothing selected it frames the
+    /// whole scene.
     pub fn go_to(&mut self, preset: ViewPreset, scene: &Scene, now: f64, reduced: bool) {
         let mut to = self.camera;
         feel::enter_standard(&mut to, preset);
-        to.fit(&scene.bounds(), self.last_aspect);
+        to.fit(&self.framing_bounds(scene), self.last_aspect);
         self.auto_ortho = to.projection == Projection::Orthographic;
         self.animate_to(to, now, reduced);
     }
@@ -672,18 +676,21 @@ impl View3d {
 
     /// `view.fit`: the selection, or everything when nothing is selected.
     pub fn fit(&mut self, scene: &Scene, now: f64, reduced: bool) {
+        let b = self.framing_bounds(scene);
+        let mut to = self.camera;
+        to.fit(&b, self.last_aspect);
+        self.animate_to(to, now, reduced);
+    }
+
+    /// What a fit or a standard view frames: the selection, or the scene.
+    fn framing_bounds(&self, scene: &Scene) -> crate::math::Aabb {
         let mut b = crate::math::Aabb::EMPTY;
         for id in &self.state.selection {
             if let Some(item) = scene.get(*id) {
                 b = b.union(&scene.world_bounds(item));
             }
         }
-        if b.is_empty() {
-            b = scene.bounds();
-        }
-        let mut to = self.camera;
-        to.fit(&b, self.last_aspect);
-        self.animate_to(to, now, reduced);
+        if b.is_empty() { scene.bounds() } else { b }
     }
 
     fn animate_to(&mut self, to: Camera, now: f64, reduced: bool) {
@@ -1742,6 +1749,44 @@ mod stats_tests {
         view.govern(&ctx, false);
         assert!(view.occlusion_now(), "reset brings it back");
         *STATS.lock().unwrap() = None;
+    }
+}
+
+#[cfg(test)]
+mod framing_tests {
+    use super::*;
+    use crate::scene::{Item, ItemId, ItemKind, PlateFrame, Pose, Shape};
+
+    fn scene() -> Scene {
+        let mut s = Scene::new(PlateFrame {
+            width: 1000.0,
+            height: 1000.0,
+        });
+        for (raw, x) in [(1, 100.0), (2, 900.0)] {
+            s.push(Item::new(
+                ItemId::new(ItemKind::Device, raw),
+                Shape::Box,
+                Pose::at(Vec3::new(x, 500.0, 0.0)),
+                Vec3::splat(50.0),
+            ));
+        }
+        s
+    }
+
+    #[test]
+    fn a_standard_view_frames_the_selection_when_there_is_one() {
+        let s = scene();
+        let mut v = View3d::new(1);
+        v.go_to(ViewPreset::Front, &s, 0.0, true);
+        let whole = v.camera.target;
+        v.state.selection.insert(ItemId::new(ItemKind::Device, 1));
+        v.go_to(ViewPreset::Front, &s, 0.0, true);
+        assert!(
+            v.camera.target.x < whole.x - 100.0,
+            "{:?} {whole:?}",
+            v.camera.target
+        );
+        assert!(v.camera.distance > 0.0);
     }
 }
 
