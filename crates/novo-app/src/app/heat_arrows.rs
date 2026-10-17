@@ -63,8 +63,6 @@ pub(crate) fn top_speed(snap: &CfdSnapshot, axis: Axis, at: f32) -> f32 {
     sample(snap, axis, at).2
 }
 
-/// Arrows at plane `at` (0 to 1 along `axis`), in the scene frame. Cells
-/// inside solids get none; air slower than 2 % of the fastest gets none.
 /// The Arrows checkbox hover. The speed is only known while Arrows is on.
 pub(crate) fn hover_text(top: Option<f32>) -> String {
     let speed = top.map_or(String::new(), |t| format!(" (now {t:.2} m/s)"));
@@ -73,6 +71,8 @@ pub(crate) fn hover_text(top: Option<f32>) -> String {
     )
 }
 
+/// Arrows at plane `at` (0 to 1 along `axis`), in the scene frame. Cells
+/// inside solids get none; air slower than 2 % of the fastest gets none.
 pub(crate) fn arrows(snap: &CfdSnapshot, place: Place, axis: Axis, at: f32) -> OverlayLines {
     let mut out = OverlayLines {
         width_px: 1.6,
