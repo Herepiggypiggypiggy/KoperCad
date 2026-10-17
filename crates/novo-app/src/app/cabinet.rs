@@ -1404,6 +1404,25 @@ impl NovoApp {
                         overlay,
                     );
                 }
+                if let Some(mode) = self.wb.commissioning.as_ref() {
+                    let marks = super::commissioning_cabinet::marks(&mode.store, project, &shown);
+                    if !marks.is_empty() {
+                        let rect = out.response.rect;
+                        let hovered = super::commissioning_cabinet::draw(
+                            &ui.painter_at(rect),
+                            rect,
+                            &self.cabinet.view.viewport,
+                            &marks,
+                            novo_theme::Palette::of(ui).warning,
+                            ui.ctx()
+                                .pointer_hover_pos()
+                                .filter(|_| out.response.hovered()),
+                        );
+                        if let Some(text) = hovered {
+                            out.response.clone().on_hover_text(text);
+                        }
+                    }
+                }
                 if let Some(s) = structure {
                     let rect = out.response.rect;
                     let zoom = f64::from(self.cabinet.view.viewport.zoom.max(0.01));
