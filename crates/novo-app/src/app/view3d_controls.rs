@@ -106,6 +106,7 @@ pub(super) const BELOW: f32 = 140.0;
 
 /// The toolbar, top left of the view. `limit` is how far the enclosure's door
 /// opens, `None` when it has none.
+#[allow(clippy::too_many_arguments)] // one call site; a struct would only rename them
 pub(super) fn toolbar(
     ctx: &egui::Context,
     view: egui::Rect,
