@@ -150,6 +150,21 @@ pub(super) fn selected_device(project: &Project, selection: &[AnyId]) -> Option<
     devices.all(|d| d == first).then_some(first)
 }
 
+/// What a device's own row in Relations is called: `Coil` for a coil, else
+/// the symbol's name (a breaker is not a coil).
+fn main_function_name(project: &Project, symbol: novo_core::SymbolId) -> String {
+    let Some(key) = project.symbol(symbol).map(|s| s.symbol.0.as_str()) else {
+        return "Device".to_owned();
+    };
+    if key.contains("/coils/") {
+        return "Coil".to_owned();
+    }
+    novo_symbols::Pack::ALL
+        .iter()
+        .find_map(|&p| novo_symbols::Library::shared(p).get(key))
+        .map_or_else(|| "Device".to_owned(), |s| s.name.clone())
+}
+
 pub(super) fn device_info(
     project: &Project,
     index: Option<&XrefIndex>,
@@ -175,7 +190,7 @@ pub(super) fn device_info(
                         .unwrap_or_default();
                     let at = page_line(&r.location, title);
                     let what = match (r.main, r.kind.label()) {
-                        (true, _) => "Coil".to_owned(),
+                        (true, _) => main_function_name(project, r.symbol),
                         (false, "main") => "Main contacts".to_owned(),
                         (false, "") => "Symbol".to_owned(),
                         (false, k) => format!("{k} contact"),
@@ -1168,6 +1183,40 @@ mod tests {
         let info = device_info(&project, None, None, k1).unwrap();
         assert!(info.part_values.is_empty());
         assert!(project.part(part).is_some());
+    }
+
+    #[test]
+    fn a_breakers_own_relation_row_is_not_called_a_coil() {
+        use novo_core::{Document, Pin, Placement, Point};
+        let mut doc = Document::default();
+        let f1 = doc
+            .transact("Draw", |tx| {
+                let p1 = tx.add_page("1")?;
+                let f1 = tx.add_device(DeviceTag::parse("-F1")?, "")?;
+                tx.place_symbol(
+                    p1,
+                    "iec/protection/fuse_3p",
+                    Placement::at(Point::new(40.0, 40.0)),
+                    vec![Pin::new("1", 0.0, -8.0), Pin::new("2", 0.0, 8.0)],
+                    SymbolRole::Device {
+                        device: f1,
+                        main: true,
+                    },
+                )?;
+                Ok(f1)
+            })
+            .unwrap()
+            .0;
+        let library = novo_symbols::Library::shared(novo_symbols::Pack::Iec);
+        let index = XrefIndex::build(doc.project(), library);
+        let info = device_info(doc.project(), Some(&index), None, f1).unwrap();
+        let own = &info.relations[0];
+        assert!(own.main);
+        assert_eq!(
+            own.what,
+            library.get("iec/protection/fuse_3p").unwrap().name
+        );
+        assert_ne!(own.what, "Coil");
     }
 
     #[test]
