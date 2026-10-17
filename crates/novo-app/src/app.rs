@@ -229,6 +229,8 @@ mod commissioning_tests;
 #[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
+mod context_menu_tests;
+#[cfg(test)]
 mod eplan_ui_tests;
 #[cfg(test)]
 mod error_words_tests;
@@ -1246,6 +1248,7 @@ impl NovoApp {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
             self.sync_connect_mode();
+            self.sync_menu_keys();
             self.sync_catalog();
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
