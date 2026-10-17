@@ -509,6 +509,7 @@ impl NovoApp {
         }
         mode.view.state.display.ssao = mode.controls.ssao;
         mode.view.state.display.dimensions = mode.controls.dimensions;
+        mode.view.state.display.trackpad_pans = mode.controls.trackpad_pans;
         mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);

@@ -22,6 +22,9 @@ pub struct Display {
     /// Show the "?" badge (no part data) on every device. Off: only on the
     /// device under the pointer or in the selection.
     pub missing_marks: bool,
+    /// A swipe reported in wheel lines (Windows, wheel and precision
+    /// touchpad alike) pans instead of zooming. Off: it zooms, as a wheel.
+    pub trackpad_pans: bool,
 }
 
 impl Default for Display {
@@ -33,6 +36,7 @@ impl Default for Display {
             ssao: true,
             dimensions: false,
             missing_marks: false,
+            trackpad_pans: false,
         }
     }
 }
