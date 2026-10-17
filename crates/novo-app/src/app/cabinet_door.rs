@@ -96,13 +96,13 @@ pub(super) struct DoorState {
     pub(super) reveal: Option<&'static str>,
 }
 
-fn mm(ui: &mut egui::Ui, value: &mut f64, max: f64) {
+fn mm(ui: &mut egui::Ui, value: &mut f64, max: f64) -> egui::Response {
     ui.add(
         egui::DragValue::new(value)
             .speed(5.0)
             .range(0.0..=max)
             .suffix(" mm"),
-    );
+    )
 }
 
 /// A value that may be unknown: a check box and, when known, the number.
@@ -154,7 +154,13 @@ impl DoorState {
                 mm(ui, &mut draft.height, 10_000.0);
                 ui.end_row();
                 ui.label("Inside depth");
-                mm(ui, &mut draft.depth, 5_000.0);
+                let depth = mm(ui, &mut draft.depth, 5_000.0);
+                super::cabinet_bar::note_ctx(
+                    ui.ctx(),
+                    "cabinet.door.depth",
+                    "Inside depth",
+                    &depth,
+                );
                 ui.end_row();
                 ui.label("Plate setback");
                 mm(ui, &mut draft.setback, 1_000.0);

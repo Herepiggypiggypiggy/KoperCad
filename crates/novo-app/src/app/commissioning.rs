@@ -446,14 +446,14 @@ impl NovoApp {
                     "commissioning.punch",
                     "Punch tab",
                     part(1.0),
-                    false,
+                    row.inner && tab == 1,
                 );
                 note_rect(
                     ui.ctx(),
                     "commissioning.redlines",
                     "Redlines tab",
                     part(2.0),
-                    false,
+                    row.inner && tab == 2,
                 );
             });
             // The menu sits on its own row: beside the tabs it took their

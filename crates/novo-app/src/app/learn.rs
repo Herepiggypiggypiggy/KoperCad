@@ -122,6 +122,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "cabinet.inspector",
     "cabinet.door",
     "cabinet.surface",
+    "cabinet.door.depth",
     "cabinet.door.apply",
     "cabinet.routes_panel",
     "cabinet.wire_rules",
@@ -1019,19 +1020,22 @@ impl NovoApp {
     }
 
     /// Where a control was last drawn.
+    /// Where `id` is drawn itself, with no fallback to the control that
+    /// opens it.
+    pub(super) fn learn_drawn(&self, id: &str) -> Option<egui::Rect> {
+        self.learn
+            .anchors
+            .get(id)
+            .or_else(|| self.learn.seen.get(id))
+            .copied()
+    }
+
     pub(super) fn learn_anchor(&self, id: &str) -> Option<egui::Rect> {
-        let drawn = |id: &str| {
-            self.learn
-                .anchors
-                .get(id)
-                .or_else(|| self.learn.seen.get(id))
-                .copied()
-        };
         // A control that is folded away or inside a closed menu is pointed
         // at through the one that opens it.
         let mut id = id.to_owned();
         for _ in 0..3 {
-            if let Some(rect) = drawn(&id) {
+            if let Some(rect) = self.learn_drawn(&id) {
                 return Some(rect);
             }
             id = super::learn_labels::anchor_fallback(&id)?;
