@@ -1537,15 +1537,14 @@ impl NovoApp {
             .wb
             .pending_items
             .take_if(|(p, _)| Some(*p) == self.current_page)
+            && let Some(view) = self.canvas.schematic()
         {
-            if let Some(view) = self.canvas.schematic() {
-                let items: Vec<_> = ids.iter().map(|&id| item_id(id)).collect();
-                view.canvas.selection.clear();
-                view.canvas
-                    .selection
-                    .apply(items.iter().copied(), SelectOp::Replace);
-                view.canvas.reveal(items);
-            }
+            let items: Vec<_> = ids.iter().map(|&id| item_id(id)).collect();
+            view.canvas.selection.clear();
+            view.canvas
+                .selection
+                .apply(items.iter().copied(), SelectOp::Replace);
+            view.canvas.reveal(items);
         }
         self.highlight_related();
     }
