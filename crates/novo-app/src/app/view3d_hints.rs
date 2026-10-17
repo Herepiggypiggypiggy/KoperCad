@@ -21,6 +21,10 @@ pub(super) const ROWS: &[(&str, &str)] = &[
         "Zoom to selection",
         "F or Home (everything if nothing is selected)",
     ),
+    (
+        "Hide and isolate",
+        "Ctrl+H hides the selection, Ctrl+I isolates it, Ctrl+Shift+H shows all",
+    ),
     ("Standard views", "Click a face, edge or corner of the cube"),
     ("Door", "Shift+D opens or closes it"),
     ("Menu", "Right-click without dragging"),
@@ -94,6 +98,24 @@ mod tests {
         assert!(h.open);
         h.toggle();
         assert!(!h.open);
+    }
+
+    #[test]
+    fn the_legend_names_the_hide_shortcuts_the_keymap_binds() {
+        let row = ROWS
+            .iter()
+            .find(|(what, _)| *what == "Hide and isolate")
+            .expect("the hide row is listed");
+        for chord in ["Ctrl+H", "Ctrl+I", "Ctrl+Shift+H"] {
+            assert!(row.1.contains(chord), "{chord} is in the row");
+        }
+        let keymap = novo_workflow::keymap::Keymap::default();
+        for id in ["view.3d_hide", "view.3d_isolate", "view.3d_show_all"] {
+            assert!(
+                keymap.bindings().iter().any(|b| b.command == id),
+                "{id} is still bound"
+            );
+        }
     }
 
     #[test]
