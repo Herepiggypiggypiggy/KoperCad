@@ -65,6 +65,14 @@ pub(crate) fn top_speed(snap: &CfdSnapshot, axis: Axis, at: f32) -> f32 {
 
 /// Arrows at plane `at` (0 to 1 along `axis`), in the scene frame. Cells
 /// inside solids get none; air slower than 2 % of the fastest gets none.
+/// The Arrows checkbox hover. The speed is only known while Arrows is on.
+pub(crate) fn hover_text(top: Option<f32>) -> String {
+    let speed = top.map_or(String::new(), |t| format!(" (now {t:.2} m/s)"));
+    format!(
+        "Arrows on the slice plane point where the air goes. Length is relative to the fastest air on this plane{speed}, so two planes cannot be compared by length; air under 2 % of that is not drawn"
+    )
+}
+
 pub(crate) fn arrows(snap: &CfdSnapshot, place: Place, axis: Axis, at: f32) -> OverlayLines {
     let mut out = OverlayLines {
         width_px: 1.6,
@@ -211,5 +219,11 @@ mod tests {
         let mut calm = snapshot();
         calm.velocity.iter_mut().for_each(|v| *v = [0.0; 3]);
         assert!(arrows(&calm, place(), Axis::Z, 0.8).positions.is_empty());
+    }
+
+    #[test]
+    fn the_hover_gives_a_speed_only_while_arrows_are_on() {
+        assert!(!hover_text(None).contains("m/s"));
+        assert!(hover_text(Some(0.31)).contains("(now 0.31 m/s)"));
     }
 }
