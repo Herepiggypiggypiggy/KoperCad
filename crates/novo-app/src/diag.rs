@@ -32,6 +32,9 @@ const TAIL_BYTES: u64 = 64 * 1024;
 /// The commit the program was built from (see `build.rs`).
 pub const BUILD_COMMIT: &str = env!("KOPERCAD_BUILD_COMMIT");
 
+/// When the program was built, UTC (see `build.rs`).
+pub const BUILD_TIME: &str = env!("KOPERCAD_BUILD_TIME");
+
 static LOG_DIR: Mutex<Option<PathBuf>> = Mutex::new(None);
 static LAST_COMMAND: Mutex<String> = Mutex::new(String::new());
 
@@ -98,10 +101,11 @@ pub fn init() {
     *lock(&LOG_DIR) = dir;
     install_panic_hook();
     log::info!(
-        "KoperCAD {} ({BUILD_COMMIT}) starting on {} {}",
+        "KoperCAD {} ({BUILD_COMMIT}, built {BUILD_TIME}) starting on {} {} from {}",
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
         std::env::consts::ARCH,
+        std::env::current_exe().map_or_else(|_| "?".to_owned(), |p| p.display().to_string()),
     );
     // The Windows version needs a child process; do not hold the window up.
     std::thread::spawn(|| {
@@ -185,7 +189,7 @@ fn write_header(out: &mut String) {
     );
     let _ = writeln!(
         out,
-        "KoperCAD {} (build {BUILD_COMMIT}, {})",
+        "KoperCAD {} (build {BUILD_COMMIT}, built {BUILD_TIME}, {})",
         env!("CARGO_PKG_VERSION"),
         if cfg!(debug_assertions) {
             "debug"

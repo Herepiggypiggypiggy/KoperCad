@@ -82,8 +82,41 @@ fn build_commit() {
     println!("cargo:rustc-env=KOPERCAD_BUILD_COMMIT={commit}");
 }
 
+/// Sets `KOPERCAD_BUILD_TIME` (UTC, to the minute): `KOPERCAD_BUILD_TIME` if
+/// given, else the time this build script ran. Tells a tester at a glance how
+/// old the exe in front of them is.
+fn build_time() {
+    println!("cargo:rerun-if-env-changed=KOPERCAD_BUILD_TIME");
+    let time = std::env::var("KOPERCAD_BUILD_TIME")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| {
+            let secs = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            // Civil date from days since 1970 (Howard Hinnant's algorithm).
+            let days = (secs / 86_400) as i64 + 719_468;
+            let era = days.div_euclid(146_097);
+            let doe = days.rem_euclid(146_097);
+            let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+            let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+            let mp = (5 * doy + 2) / 153;
+            let day = doy - (153 * mp + 2) / 5 + 1;
+            let month = if mp < 10 { mp + 3 } else { mp - 9 };
+            let year = yoe + era * 400 + i64::from(month <= 2);
+            let rem = secs % 86_400;
+            format!(
+                "{year:04}-{month:02}-{day:02} {:02}:{:02} UTC",
+                rem / 3600,
+                rem % 3600 / 60
+            )
+        });
+    println!("cargo:rustc-env=KOPERCAD_BUILD_TIME={time}");
+}
+
 fn main() {
     build_commit();
+    build_time();
     embed_lessons();
     println!("cargo:rerun-if-changed=../../assets/branding/icon.ico");
     if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("windows") {

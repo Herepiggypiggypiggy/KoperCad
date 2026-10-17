@@ -2250,7 +2250,11 @@ impl NovoApp {
                 ui.add_space(novo_theme::space::L);
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                 ui.weak(format!("Model API v{}", novo_core::MODEL_VERSION));
-                ui.weak(format!("Build {}", crate::diag::BUILD_COMMIT));
+                ui.weak(format!(
+                    "Build {}, built {}",
+                    crate::diag::BUILD_COMMIT,
+                    crate::diag::BUILD_TIME
+                ));
                 ui.add_space(novo_theme::space::L);
                 ui.button("Close").clicked()
             })
