@@ -25,3 +25,4 @@ Slice 7: a device on the shown surface can be dragged (Drop), turned and taken o
 Slice 9: devices on walls, roof, floor and extra plates are drawn in 3D as overlay boxes (view3d_surface_devices.rs), shown with the surface panes. Not pickable or draggable in 3D yet (edit them in the Cabinet with the surface picked). Next: Inspector forms for a shown surface size (own PR).
 
 Slice 11: surface devices are pickable and draggable in 3D on their own surface. Not yet: arrow-key nudge, rail-like snapping and clash checks on non-plate surfaces; multi-select moves of mixed plate and surface devices move only the plate ones.
+Slice 10: size card in the Inspector for the shown surface (door, walls, roof, floor, extra plates, profiles). Next: route other direct writers of cabinet.surface through pick_surface (R5 note); pick and drag surface devices in 3D.
