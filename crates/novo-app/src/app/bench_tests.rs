@@ -205,3 +205,27 @@ fn the_cut_table_rows_carry_a_tilde_exactly_when_the_length_is_an_estimate() {
         assert!(cells.iter().all(|c| !c.is_empty()), "{cells:?}");
     }
 }
+
+#[test]
+fn the_readiness_strip_names_what_is_missing_and_clears_when_fixed() {
+    let (_dir, mut d) = app_with_wires();
+    let ctx = d.ctx.clone();
+    let jobs = |d: &Drive| {
+        let p = d.doc().project();
+        novo_reports::wire_cut_jobs_with(p, &FerruleStandard::of(p))
+    };
+    let gaps = super::bench::readiness(&jobs(&d), false);
+    assert!(gaps.iter().any(|g| g.text.starts_with("No mounting plate")));
+    assert!(
+        gaps.iter()
+            .any(|g| g.fix == Some(("Number wires", "wires.number")))
+    );
+    d.app.run_command(&ctx, "wires.number", None);
+    d.frame();
+    let gaps = super::bench::readiness(&jobs(&d), true);
+    assert!(
+        !gaps.iter().any(|g| g.text.contains("have no number")),
+        "{gaps:?}"
+    );
+    assert!(!gaps.iter().any(|g| g.text.contains("no cross-section")));
+}
