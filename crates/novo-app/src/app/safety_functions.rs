@@ -13,7 +13,7 @@ use novo_checks::safety::{
     encode, functions, rate,
 };
 use novo_core::Project;
-use novo_theme::{tokens, widgets};
+use novo_theme::widgets;
 
 use super::NovoApp;
 
@@ -96,14 +96,18 @@ pub(super) fn section(
     project: &Project,
     state: &mut BoundFunctions,
     copy: &mut Option<String>,
+    export: &mut bool,
 ) {
     widgets::section_label(ui, "Project safety functions");
-    ui.weak(format!(
-        "Bound to devices by tag; stored in the project ({FUNCTIONS_KEY}) and listed in Issues when the level is not met. Set {B10D_CYCLES} or {MTTFD_YEARS} on a device or its part to take the number from there."
-    ));
+    super::dialog_ui::hint(
+        ui,
+        &format!(
+            "Bound to devices by tag; stored in the project ({FUNCTIONS_KEY}) and listed in Issues when the level is not met. Set {B10D_CYCLES} or {MTTFD_YEARS} on a device or its part to take the number from there."
+        ),
+    );
     if novo_checks::safety::unreadable(project) && !state.dirty {
         ui.colored_label(
-            tokens::ERROR,
+            crate::theme::ui_palette().error,
             "The stored safety functions cannot be read. Editing here replaces them.",
         );
     }
@@ -129,7 +133,7 @@ pub(super) fn section(
         v
     };
     let Some(f) = state.list.get_mut(state.selected) else {
-        ui.weak("No safety function yet.");
+        super::dialog_ui::hint(ui, "No safety function yet.");
         return;
     };
     let rating = rate(project, f);
@@ -140,7 +144,7 @@ pub(super) fn section(
         changed |= ui
             .add(egui::TextEdit::singleline(&mut f.name).desired_width(200.0))
             .changed();
-        if ui.small_button("Delete function").clicked() {
+        if ui.button("Delete function").clicked() {
             remove = true;
         }
     });
@@ -180,7 +184,7 @@ pub(super) fn section(
                 changed |= block_ui(ui, i, block, &devices);
                 if let Some(b) = shown {
                     for text in &b.binding {
-                        ui.colored_label(tokens::WARNING, text);
+                        ui.colored_label(crate::theme::ui_palette().warning, text);
                     }
                 }
             });
@@ -188,7 +192,7 @@ pub(super) fn section(
     ui.horizontal(|ui| {
         for role in [Role::Sensor, Role::Logic, Role::Actuator] {
             if ui
-                .small_button(format!("Add {}", role.label().to_lowercase()))
+                .button(format!("Add {}", role.label().to_lowercase()))
                 .clicked()
             {
                 f.blocks.push(Block::new(role, role.label()));
@@ -200,7 +204,11 @@ pub(super) fn section(
         Some(t) => {
             let ok = rating.met() == Some(true);
             ui.colored_label(
-                if ok { tokens::SUCCESS } else { tokens::ERROR },
+                if ok {
+                    crate::theme::ui_palette().success
+                } else {
+                    crate::theme::ui_palette().error
+                },
                 format!(
                     "Achieved {} (PFHd {:.2e} /h) against required {}: {}",
                     t.pl,
@@ -212,7 +220,7 @@ pub(super) fn section(
         }
         None => {
             ui.colored_label(
-                tokens::WARNING,
+                crate::theme::ui_palette().warning,
                 format!(
                     "Required {}. Not rated until every part has a device and data.",
                     rating.required
@@ -220,9 +228,18 @@ pub(super) fn section(
             );
         }
     }
-    if ui.button("Copy function as text").clicked() {
-        *copy = Some(rating_text(&rating));
-    }
+    ui.horizontal(|ui| {
+        if ui.button("Copy function as text").clicked() {
+            *copy = Some(rating_text(&rating));
+        }
+        if ui
+            .button("Export report (PDF)")
+            .on_hover_text("Writes <project> safety.pdf next to the project file")
+            .clicked()
+        {
+            *export = true;
+        }
+    });
     if remove {
         let at = state.selected;
         state.list.remove(at);
@@ -231,16 +248,17 @@ pub(super) fn section(
     state.dirty |= changed;
 }
 
+/// A choice among a few short values, as a segmented control.
 fn choice(ui: &mut egui::Ui, label: &str, value: &mut String, options: &[&str]) -> bool {
-    let mut changed = false;
-    ui.label(label);
-    for o in options {
-        if ui.selectable_label(value == o, *o).clicked() && value != o {
-            *value = (*o).to_owned();
-            changed = true;
-        }
+    if !label.is_empty() {
+        ui.label(label);
     }
-    changed
+    let mut index = options.iter().position(|o| value == o).unwrap_or(0);
+    if widgets::segmented(ui, &mut index, options) {
+        *value = options[index].to_owned();
+        return true;
+    }
+    false
 }
 
 fn block_ui(ui: &mut egui::Ui, index: usize, block: &mut Block, devices: &[String]) -> bool {
@@ -303,11 +321,14 @@ fn parts_ui(
                         }
                     }
                 });
-            for (b, label) in [(Basis::B10d, "B10d"), (Basis::Mttfd, "MTTFd")] {
-                if ui.selectable_label(p.basis == b, label).clicked() && p.basis != b {
-                    p.basis = b;
-                    changed = true;
-                }
+            let mut basis = usize::from(p.basis == Basis::Mttfd);
+            if widgets::segmented(ui, &mut basis, &["B10d", "MTTFd"]) {
+                p.basis = if basis == 0 {
+                    Basis::B10d
+                } else {
+                    Basis::Mttfd
+                };
+                changed = true;
             }
             let mut own = p.value.is_some();
             if ui.checkbox(&mut own, "own value").changed() {
@@ -331,9 +352,9 @@ fn parts_ui(
                     )
                     .changed();
             } else {
-                ui.weak("from device");
+                super::dialog_ui::hint(ui, "from device");
             }
-            if ui.small_button("Remove").clicked() {
+            if ui.button("Remove").clicked() {
                 remove = Some(i);
             }
         });
@@ -342,7 +363,7 @@ fn parts_ui(
         list.remove(i);
         changed = true;
     }
-    if ui.small_button("Add part").clicked() {
+    if ui.button("Add part").clicked() {
         let n = list.len() + 1;
         list.push(PartRef::new(format!("Part {n}")));
         changed = true;

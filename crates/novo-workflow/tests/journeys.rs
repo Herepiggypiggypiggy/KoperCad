@@ -908,3 +908,29 @@ fn the_report_designer_is_findable_in_both_languages() {
         );
     }
 }
+
+#[test]
+fn the_selection_property_sheet_is_findable_in_both_languages() {
+    let mut doc = Document::default();
+    motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+    for query in [
+        "properties of the selection",
+        "bulk edit",
+        "property sheet",
+        "eigenschappen",
+        "bulk bewerken",
+    ] {
+        let rows = palette.search(query, &src);
+        assert!(
+            rows.iter()
+                .take(3)
+                .any(|r| r.target == Target::Command("edit.shared_properties")),
+            "{query}: {:?}",
+            rows.iter().take(3).map(|r| &r.target).collect::<Vec<_>>()
+        );
+    }
+}

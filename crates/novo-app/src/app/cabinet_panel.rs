@@ -80,7 +80,7 @@ pub(super) fn show(
         ("cabinet_panel_data", id),
         "Panel data",
         &if set == 0 {
-            String::new()
+            "not set".to_owned()
         } else {
             format!("{set} set")
         },

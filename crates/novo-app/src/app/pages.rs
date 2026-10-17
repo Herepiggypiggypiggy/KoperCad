@@ -321,7 +321,7 @@ impl NovoApp {
             .unwrap_or_default();
         let modal = egui::Modal::new(egui::Id::new("page_form")).show(ctx, |ui| {
             ui.set_width(360.0);
-            ui.heading("New pages");
+            super::dialog_ui::title(ui, "New pages", "");
             ui.add_space(4.0);
             egui::Grid::new("page_form_grid").num_columns(2).show(ui, |ui| {
                 ui.label("Page group");
@@ -374,8 +374,8 @@ impl NovoApp {
             });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
-                let ok = ui.button("Create (Enter)").clicked();
-                let cancel = ui.button("Cancel (Esc)").clicked();
+                let ok = novo_theme::widgets::primary_button(ui, "Create (Enter)").clicked();
+                let cancel = novo_theme::widgets::ghost_button(ui, "Cancel (Esc)").clicked();
                 (ok, cancel)
             })
             .inner

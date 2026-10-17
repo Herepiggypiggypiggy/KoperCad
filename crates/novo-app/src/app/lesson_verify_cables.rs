@@ -212,14 +212,12 @@ impl Lv {
             let p = novo_canvas::Vec2::new(x as f32, y as f32);
             let at = view.canvas.viewport.world_to_screen(p);
             let pos = rect.min + egui::vec2(at.x, at.y);
-            if rect.shrink(40.0).contains(pos) {
+            if rect.shrink(120.0).contains(pos) {
                 return pos;
             }
-            let near = novo_canvas::Aabb::new(
-                p - novo_canvas::Vec2::splat(8.0),
-                p + novo_canvas::Vec2::splat(8.0),
-            );
-            view.canvas.reveal_area(near);
+            // The page opens fitted to its content, so a point beyond the
+            // drawing can sit at the edge, under the docks: centre it.
+            view.canvas.viewport.center = p;
             self.d.frame();
         }
         panic!("({x}, {y}) cannot be brought on screen");
@@ -624,6 +622,9 @@ fn wire_numbers_each_instruction_works_in_the_app() {
 
     // type-number: click the wire from terminal 4 to the transmitter, number wire 100
     lv.not_yet("type-number");
+    // The click coordinates were measured on the whole sheet.
+    lv.d.app.canvas.zoom_to_sheet();
+    lv.d.frame();
     lv.click_world(88.0, 116.0);
     let w = lv.wire_between("-X1:4", "-B1:+");
     assert_eq!(

@@ -187,3 +187,21 @@ fn an_invalid_draft_blocks_the_cut_list_and_the_machine_csv_follows_the_draft() 
     let text = std::fs::read_to_string(&csv).unwrap();
     assert!(text.contains("A1.5-14"), "{text}");
 }
+
+#[test]
+fn the_cut_table_rows_carry_a_tilde_exactly_when_the_length_is_an_estimate() {
+    let (_dir, d) = app_with_wires();
+    let jobs = novo_reports::bench_jobs(d.doc().project());
+    assert!(!jobs.is_empty());
+    for job in &jobs {
+        let cells = super::bench::cut_row_texts(job);
+        assert_eq!(
+            cells[5].starts_with('~'),
+            novo_reports::is_estimate(&job.basis),
+            "{cells:?}"
+        );
+        assert_eq!(cells[1], "1.5");
+        assert_eq!(cells[6], job.basis);
+        assert!(cells.iter().all(|c| !c.is_empty()), "{cells:?}");
+    }
+}

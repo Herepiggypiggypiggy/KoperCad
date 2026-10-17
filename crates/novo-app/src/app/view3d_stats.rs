@@ -13,8 +13,6 @@ use novo_view3d::widget::{RenderStats, View3d, percentile, render_stats};
 const WINDOW: usize = 240;
 /// A gap longer than this is the view standing still, not a slow frame.
 const IDLE_GAP_MS: f32 = 250.0;
-/// Margin from the view's corner, in points.
-const MARGIN: f32 = 12.0;
 /// How fast the view turns while measuring: a full turn in 12 seconds.
 const SPIN_RAD_PER_S: f32 = std::f32::consts::TAU / 12.0;
 
@@ -75,50 +73,85 @@ impl Stats {
         if self.spin {
             view.spin(ctx, SPIN_RAD_PER_S);
         }
-        let text = report(render_stats().as_ref(), &self.samples(), self.build);
-        egui::Area::new(egui::Id::new("view3d_stats"))
-            .order(egui::Order::Middle)
-            .pivot(egui::Align2::LEFT_BOTTOM)
-            .fixed_pos(view_rect.left_bottom() + egui::vec2(MARGIN, -MARGIN))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.label(egui::RichText::new(&text).monospace().small());
-                    ui.horizontal(|ui| {
-                        let label = if self.spin {
-                            "✔ Spin the view"
-                        } else {
-                            "Spin the view"
-                        };
-                        if ui
-                            .selectable_label(self.spin, label)
-                            .on_hover_text("Turn the view steadily so every frame is a moving one")
-                            .clicked()
-                        {
-                            self.spin = !self.spin;
-                            self.intervals.clear();
-                        }
-                        if ui
-                            .button("Copy")
-                            .on_hover_text("Copy these lines to paste into a message")
-                            .clicked()
-                        {
-                            ctx.copy_text(text.clone());
-                        }
-                        if ui.button("Close").clicked() {
-                            self.toggle();
-                        }
-                    });
-                });
+        let text = report(
+            render_stats().as_ref(),
+            &self.samples(),
+            self.build,
+            view.occlusion_paused(),
+        );
+        super::panel::Panel::new(
+            "view3d_stats",
+            "Frame statistics",
+            view_rect,
+            super::panel::Side::BottomLeft,
+            400.0,
+        )
+        .fit()
+        .show(ctx, |ui| {
+            ui.label(egui::RichText::new(&text).monospace().small());
+            ui.horizontal(|ui| {
+                let label = if self.spin {
+                    "✔ Spin the view"
+                } else {
+                    "Spin the view"
+                };
+                if ui
+                    .selectable_label(self.spin, label)
+                    .on_hover_text("Turn the view steadily so every frame is a moving one")
+                    .clicked()
+                {
+                    self.spin = !self.spin;
+                    self.intervals.clear();
+                }
+                if ui
+                    .button("Copy")
+                    .on_hover_text("Copy these lines to paste into a message")
+                    .clicked()
+                {
+                    ctx.copy_text(text.clone());
+                }
+                if (view.stepped_down().is_some() || view.occlusion_paused())
+                    && ui
+                        .button("Restore quality")
+                        .on_hover_text("Draw at full quality again")
+                        .clicked()
+                {
+                    view.reset_quality();
+                }
+                if ui.button("Close").clicked() {
+                    self.toggle();
+                }
             });
+        });
     }
 }
 
+/// How much of the view bottom the panel takes, for a panel above it.
+pub(super) const ROOM: f32 = 200.0;
+
 /// The lines of the panel, also what Copy puts on the clipboard.
-pub(super) fn report(stats: Option<&RenderStats>, intervals: &[f32], build: Build) -> String {
+pub(super) fn report(
+    stats: Option<&RenderStats>,
+    intervals: &[f32],
+    build: Build,
+    occlusion_paused: bool,
+) -> String {
     let mut out = String::from("KoperCAD 3D frame statistics\n");
     match stats {
         Some(s) => {
-            let _ = writeln!(out, "GPU: {} ({}, {:?})", s.adapter, s.backend, s.tier);
+            let _ = write!(
+                out,
+                "GPU: {} ({}, {:?})",
+                s.adapter, s.backend, s.adapter_tier
+            );
+            if s.tier != s.adapter_tier {
+                let _ = write!(
+                    out,
+                    ", quality stepped down to {:?} after slow frames",
+                    s.tier
+                );
+            }
+            out.push('\n');
         }
         None => out.push_str("GPU: none (the 3D view is not drawn)\n"),
     }
@@ -135,9 +168,18 @@ pub(super) fn report(stats: Option<&RenderStats>, intervals: &[f32], build: Buil
         );
     }
     if let Some(s) = stats {
+        let occlusion = if s.ssao {
+            "AO on"
+        } else if occlusion_paused {
+            "AO paused"
+        } else if s.adapter_tier != novo_view3d::render::Tier::Discrete {
+            "AO n/a"
+        } else {
+            "AO off"
+        };
         let _ = writeln!(
             out,
-            "Renderer CPU: {:.2} ms median, {:.2} ms 95th percentile",
+            "Renderer CPU: {:.2} ms median, {:.2} ms 95th, {occlusion}",
             s.cpu_p50_ms, s.cpu_p95_ms
         );
         let _ = writeln!(
@@ -163,6 +205,7 @@ mod tests {
             adapter: "Test GPU".into(),
             backend: "Vulkan".into(),
             tier: Tier::Discrete,
+            adapter_tier: Tier::Discrete,
             renders: 10,
             visible_items: 1016,
             draw_calls: 11,
@@ -171,6 +214,7 @@ mod tests {
             msaa: 1,
             cpu_p50_ms: 0.18,
             cpu_p95_ms: 0.4,
+            ssao: true,
         }
     }
 
@@ -181,11 +225,12 @@ mod tests {
             scene_ms: 3.2,
             routing_ms: Some(41.0),
         };
-        let text = report(Some(&stats()), &intervals, build);
+        let text = report(Some(&stats()), &intervals, build, false);
         assert!(text.contains("GPU: Test GPU (Vulkan, Discrete)"), "{text}");
         assert!(text.contains("18.0 ms median"), "{text}");
         assert!(text.contains("56 fps (100 frames)"), "{text}");
         assert!(text.contains("Renderer CPU: 0.18 ms median"), "{text}");
+        assert!(text.contains("0.40 ms 95th, AO on"), "{text}");
         assert!(
             text.contains("1016 items, 11 draw calls, 12700 triangles"),
             "{text}"
@@ -197,8 +242,41 @@ mod tests {
     }
 
     #[test]
+    fn the_report_says_when_the_governor_stepped_the_quality_down() {
+        let stepped = RenderStats {
+            tier: Tier::Integrated,
+            ..stats()
+        };
+        let text = report(Some(&stepped), &[16.0], Build::default(), false);
+        assert!(
+            text.contains(
+                "GPU: Test GPU (Vulkan, Discrete), quality stepped down to Integrated after slow frames"
+            ),
+            "{text}"
+        );
+    }
+
+    #[test]
+    fn the_report_says_when_the_governor_paused_occlusion() {
+        let off = RenderStats {
+            ssao: false,
+            ..stats()
+        };
+        let paused = report(Some(&off), &[16.0], Build::default(), true);
+        assert!(paused.contains("AO paused"), "{paused}");
+        let plain = report(Some(&off), &[16.0], Build::default(), false);
+        assert!(plain.contains("95th, AO off"), "{plain}");
+        let integrated = RenderStats {
+            adapter_tier: Tier::Integrated,
+            ..off
+        };
+        let text = report(Some(&integrated), &[16.0], Build::default(), false);
+        assert!(text.contains("AO n/a"), "{text}");
+    }
+
+    #[test]
     fn without_samples_or_an_adapter_the_report_says_so() {
-        let text = report(None, &[], Build::default());
+        let text = report(None, &[], Build::default(), false);
         assert!(text.contains("GPU: none"), "{text}");
         assert!(text.contains("no samples yet"), "{text}");
         assert!(text.ends_with("Scene build: 0.0 ms"), "{text}");
