@@ -3,6 +3,7 @@
 use std::collections::BTreeSet;
 
 use novo_core::{AnyId, CabinetPlacement, DeviceId, DeviceKind, SymbolRole, WireId};
+use novo_layout::DuctHit;
 use novo_layout::model::load;
 use novo_routing::Problem as RoutingProblem;
 use novo_routing::model::route_connections;
@@ -146,6 +147,43 @@ pub(crate) fn layout(cx: &Context<'_>, out: &mut Vec<Problem>) {
                     gap.round()
                 ),
             ));
+        }
+        for o in report.duct_overlaps {
+            let (at, what) = match o.hit {
+                DuctHit::Device { id, across, along } => (
+                    vec![AnyId::Device(DeviceId::from(id))],
+                    format!(
+                        "{} lies under a duct ({} x {} mm) on the plate of {}",
+                        tag(id),
+                        across.round(),
+                        along.round(),
+                        structure.tag
+                    ),
+                ),
+                DuctHit::Rail { id: rail, by } => (
+                    // A rail has no tag: the devices on it stand for it, a
+                    // bare rail is found by its plate.
+                    {
+                        let on: Vec<AnyId> = layout
+                            .placements
+                            .iter()
+                            .filter(|p| p.rail == Some(rail))
+                            .map(|p| AnyId::Device(DeviceId::from(p.id)))
+                            .collect();
+                        if on.is_empty() {
+                            vec![AnyId::Structure(structure.id)]
+                        } else {
+                            on
+                        }
+                    },
+                    format!(
+                        "A DIN rail of {} runs under a duct for {} mm",
+                        structure.tag,
+                        by.round()
+                    ),
+                ),
+            };
+            out.push(Problem::new(ProblemKind::DuctOverlap, at, what));
         }
         for (rail, over) in report.rail_overflows {
             let devices: Vec<AnyId> = layout

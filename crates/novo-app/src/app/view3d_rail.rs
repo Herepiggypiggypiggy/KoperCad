@@ -155,11 +155,23 @@ pub(super) fn card(
     // Left, under the toolbar, like the Inspector it stands in for (a rail
     // has none): the right edge is the view cube and the Heat panel, the
     // bottom left the statistics.
+    // What rides on it moves with it; said in the title to keep the card
+    // short enough to sit above the statistics on a small window.
+    let on = layout
+        .placements
+        .iter()
+        .filter(|p| p.rail == Some(id))
+        .count();
     let title = format!(
-        "{} {}{}",
+        "{} {}{}{}",
         if duct { "Duct" } else { "DIN rail" },
         id,
-        if vertical { " (down)" } else { "" }
+        if vertical { " (down)" } else { "" },
+        match on {
+            0 => String::new(),
+            1 => ", carries 1 device".to_owned(),
+            n => format!(", carries {n} devices"),
+        }
     );
     super::panel::Panel::new(
         "view3d_rail",
@@ -173,11 +185,10 @@ pub(super) fn card(
     .top(super::view3d_controls::BELOW)
     .bottom_room(bottom_room)
     .show(ctx, |ui| {
-        let on = layout
-            .placements
-            .iter()
-            .filter(|p| p.rail == Some(id))
-            .count();
+        // Rows close together: the card has to fit above the statistics.
+        ui.spacing_mut().item_spacing.y = 1.0;
+        ui.spacing_mut().interact_size.y = 16.0;
+        ui.spacing_mut().button_padding.y = 1.0;
         let mut edit = now;
         let mut changed = false;
         // Two values to a row keep the card short enough to sit above the
@@ -193,6 +204,7 @@ pub(super) fn card(
         }
         egui::Grid::new("view3d_rail_grid")
             .num_columns(4)
+            .spacing([8.0, 1.0])
             .show(ui, |ui| {
                 for (i, (label, field, current, min)) in fields.into_iter().enumerate() {
                     ui.label(label);
@@ -218,12 +230,6 @@ pub(super) fn card(
                     ask = Some(RailAsk::Turn(id));
                 }
             });
-        if on > 0 {
-            ui.weak(format!(
-                "Carries {on} device{}; they move with it",
-                if on == 1 { "" } else { "s" }
-            ));
-        }
         // What the typed (not yet committed) values would do.
         let typed = RailEdit {
             id,
@@ -233,8 +239,20 @@ pub(super) fn card(
             width: state.typed(id, Field::Width).unwrap_or(now.width),
             height: state.typed(id, Field::Height).unwrap_or(now.height),
         };
-        for line in problems(layout, &typed, kind, vertical, tag_of) {
-            ui.colored_label(novo_theme::tokens::ERROR, line);
+        // Only a value being typed can be a problem; the stored ones are fine.
+        let any_typed = [
+            Field::X,
+            Field::Y,
+            Field::Length,
+            Field::Width,
+            Field::Height,
+        ]
+        .iter()
+        .any(|f| state.typed(id, *f).is_some());
+        if any_typed {
+            for line in problems(layout, &typed, kind, vertical, tag_of) {
+                ui.colored_label(crate::theme::ui_palette().error, line);
+            }
         }
         if changed {
             ask = Some(RailAsk::Set(edit));

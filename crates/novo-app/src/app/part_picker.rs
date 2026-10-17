@@ -168,17 +168,17 @@ pub(super) fn cable_candidates(catalog: &Catalog, query: &str) -> Vec<Candidate>
 /// check alone (the letter code) cannot call a part strong.
 fn match_color(fit: &Fit) -> egui::Color32 {
     match fit.percent {
-        80.. if fit.checks >= 2 => novo_theme::tokens::SUCCESS,
-        55.. => novo_theme::tokens::WARNING,
-        _ => novo_theme::tokens::ERROR,
+        80.. if fit.checks >= 2 => crate::theme::ui_palette().success,
+        55.. => crate::theme::ui_palette().warning,
+        _ => crate::theme::ui_palette().error,
     }
 }
 
 fn grade_color(grade: Grade) -> egui::Color32 {
     match grade {
-        Grade::Good => novo_theme::tokens::SUCCESS,
-        Grade::Fair => novo_theme::tokens::WARNING,
-        Grade::Poor => novo_theme::tokens::ERROR,
+        Grade::Good => crate::theme::ui_palette().success,
+        Grade::Fair => crate::theme::ui_palette().warning,
+        Grade::Poor => crate::theme::ui_palette().error,
     }
 }
 
@@ -245,6 +245,18 @@ pub(super) fn assign_device_command(
 ) -> Option<novo_core::Command> {
     let part = catalog.get(key)?;
     assign_part(project, &[device], part, AssignMode::Replace)
+}
+
+/// The command that gives every device of `devices` the catalog part `key`,
+/// as one undo step. `None` when the part is unknown or nothing changes.
+pub(super) fn assign_devices_command(
+    project: &Project,
+    catalog: &Catalog,
+    devices: &[DeviceId],
+    key: &PartKey,
+) -> Option<novo_core::Command> {
+    let part = catalog.get(key)?;
+    assign_part(project, devices, part, AssignMode::Replace)
 }
 
 /// The devices a selection draws: devices themselves and the devices of

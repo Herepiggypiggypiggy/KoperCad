@@ -74,49 +74,47 @@ impl NovoApp {
         let mut rules = stored.clone();
         let kinds = generated_kinds();
         let modal = egui::Modal::new(egui::Id::new("project_rules")).show(ctx, |ui| {
-            ui.set_width(400.0);
-            ui.heading("Project rules");
-            ui.weak("Saved in the project file. Every rule is explicit; undo takes one back.");
-            ui.add_space(6.0);
-            ui.strong("Terminals with the same name on a strip");
-            ui.radio_value(
-                &mut rules.terminals.same_name,
-                SameName::Join,
-                "Join them into one terminal",
-            )
-            .on_hover_text("Two -X2:1 are one electrical point, built from several clamps");
-            ui.radio_value(
-                &mut rules.terminals.same_name,
-                SameName::Refuse,
-                "Refuse a second one",
-            )
-            .on_hover_text("Join duplicates first: a strip with two of one name blocks this");
-            ui.radio_value(
-                &mut rules.terminals.same_name,
-                SameName::Off,
-                "No rule (keep them separate, list them as a finding)",
+            ui.set_width(novo_theme::dialog_width::MEDIUM);
+            super::dialog_ui::title(
+                ui,
+                "Project rules",
+                "Saved in the project file. Every rule is explicit; undo takes one back.",
             );
+            super::dialog_ui::section(ui, "Terminals with the same name on a strip", true);
+            let mut same_name = rules.terminals.same_name;
+            super::dialog_ui::choice(
+                ui,
+                "Same name",
+                "Join: two -X2:1 are one electrical point, built from several clamps. Refuse: join duplicates first, a strip with two of one name blocks this. Off: keep them separate and list them as a finding.",
+                &mut same_name,
+                &[
+                    (SameName::Join, "Join them"),
+                    (SameName::Refuse, "Refuse a second"),
+                    (SameName::Off, "No rule"),
+                ],
+            );
+            rules.terminals.same_name = same_name;
             ui.add_enabled_ui(rules.terminals.same_name == SameName::Join, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label("Clamps of a joined terminal are linked by");
-                    ui.selectable_value(
-                        &mut rules.terminals.join_link,
-                        JoinLink::Connector,
-                        "Connector",
-                    );
-                    ui.selectable_value(&mut rules.terminals.join_link, JoinLink::Jumper, "Jumper");
-                });
+                super::dialog_ui::choice(
+                    ui,
+                    "Clamps of a joined terminal are linked by",
+                    "",
+                    &mut rules.terminals.join_link,
+                    &[(JoinLink::Connector, "Connector"), (JoinLink::Jumper, "Jumper")],
+                );
             });
-            ui.add_space(10.0);
-            ui.strong("Supply potentials");
+            super::dialog_ui::section(ui, "Supply potentials", false);
             ui.checkbox(
                 &mut rules.potentials.from_terminal_names,
                 "A terminal named PE, N or L1 defines that potential",
             )
             .on_hover_text("-X4:PE puts PE on its net without any other action");
-            ui.add_space(10.0);
-            ui.strong("Generated pages");
-            ui.weak("Pages the project adds and keeps current. Deleting one switches it off here.");
+            super::dialog_ui::section(ui, "Generated pages", false);
+            super::dialog_ui::hint(
+                ui,
+                "Pages the project adds and keeps current. Deleting one switches it off here.",
+            );
+            ui.add_space(4.0);
             for (id, title) in &kinds {
                 let mut wanted = rules.wants_generated(id);
                 if ui.checkbox(&mut wanted, title.as_str()).changed() {
@@ -127,8 +125,7 @@ impl NovoApp {
                     }
                 }
             }
-            ui.add_space(8.0);
-            ui.button("Close (Esc)").clicked()
+            super::dialog_ui::done(ui)
         });
         self.set_project_rules(rules);
         if modal.inner || modal.should_close() {

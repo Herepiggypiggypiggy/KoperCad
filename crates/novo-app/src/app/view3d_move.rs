@@ -107,10 +107,12 @@ struct Active {
 /// The top left of a device, or the start of a rail or duct.
 pub(super) fn origin(layout: &CabinetLayout, item: ItemId) -> Option<(f64, f64)> {
     match item.kind {
+        // A device on the door or another surface is not on the plate the
+        // drag works on; move it where its surface is shown.
         ItemKind::Device => layout
             .placements
             .iter()
-            .find(|p| p.id == item.raw)
+            .find(|p| p.id == item.raw && !layout.off_plate.contains_key(&p.id))
             .map(|p| (p.x, p.y)),
         ItemKind::Rail => layout
             .rails
@@ -582,7 +584,7 @@ pub(super) fn show_warning(ctx: &egui::Context, text: &str) {
         .interactable(false)
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.label(egui::RichText::new(text).color(novo_theme::tokens::ERROR));
+                ui.label(egui::RichText::new(text).color(crate::theme::ui_palette().error));
             });
         });
 }

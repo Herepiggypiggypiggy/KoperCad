@@ -41,6 +41,29 @@ impl Step {
     }
 }
 
+/// `v` moved one step in direction `d` (-1, 0 or 1): a grid step lands on the
+/// next grid line, not off by whatever the item had.
+pub(super) fn step_along(grid: f64, v: f64, d: i32, step: Step) -> f64 {
+    if d == 0 {
+        return v;
+    }
+    let d = f64::from(d);
+    match step {
+        Step::Fine => v + d * FINE_MM,
+        Step::Coarse => v + d * COARSE_MM,
+        Step::Grid if grid > 0.0 => {
+            let n = v / grid;
+            // A tolerance keeps an item that is on a line one step on.
+            (if d > 0.0 {
+                (n + 1e-9).floor() + 1.0
+            } else {
+                (n - 1e-9).ceil() - 1.0
+            }) * grid
+        }
+        Step::Grid => v + d * FINE_MM,
+    }
+}
+
 /// The selection moved one step in `dir` (x right, y down; -1, 0 or 1 each)
 /// as one group edit; `None` when nothing movable is selected.
 pub(super) fn nudge(
@@ -53,27 +76,7 @@ pub(super) fn nudge(
         return None;
     }
     let grid = layout.grid;
-    let along = |v: f64, d: i32| -> f64 {
-        if d == 0 {
-            return v;
-        }
-        let d = f64::from(d);
-        match step {
-            Step::Fine => v + d * FINE_MM,
-            Step::Coarse => v + d * COARSE_MM,
-            // Onto the next grid line, not off by whatever the item had.
-            Step::Grid if grid > 0.0 => {
-                let n = v / grid;
-                // A tolerance keeps an item that is on a line one step on.
-                (if d > 0.0 {
-                    (n + 1e-9).floor() + 1.0
-                } else {
-                    (n - 1e-9).ceil() - 1.0
-                }) * grid
-            }
-            Step::Grid => v + d * FINE_MM,
-        }
-    };
+    let along = |v: f64, d: i32| step_along(grid, v, d, step);
     let mut devices = Vec::new();
     let mut rails = Vec::new();
     for item in selection {
@@ -128,11 +131,17 @@ pub(super) fn set_position(
     })
 }
 
+/// The largest offset a typed value may have, mm: far beyond any plate, so
+/// a slipped digit cannot throw a device out of reach.
+pub(super) const MAX_TYPED_MM: f64 = 100_000.0;
+
 /// A number typed in mm: a comma works as the decimal point; nothing else
-/// than a finite number is accepted.
+/// than a finite number within +-`MAX_TYPED_MM` is accepted.
 pub(super) fn parse_mm(text: &str) -> Option<f64> {
     let t = text.trim().trim_end_matches("mm").trim().replace(',', ".");
-    t.parse::<f64>().ok().filter(|v| v.is_finite())
+    t.parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite() && v.abs() <= MAX_TYPED_MM)
 }
 
 /// The text fields of the Position box.
@@ -321,6 +330,9 @@ mod tests {
         assert_eq!(parse_mm("abc"), None);
         assert_eq!(parse_mm("NaN"), None);
         assert_eq!(parse_mm("inf"), None);
+        assert_eq!(parse_mm("100000"), Some(100_000.0));
+        assert_eq!(parse_mm("100001"), None);
+        assert_eq!(parse_mm("-1e9"), None);
     }
 
     #[test]

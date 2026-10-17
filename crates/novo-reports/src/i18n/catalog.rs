@@ -97,6 +97,38 @@ impl Catalog {
     }
 }
 
+/// File name suffix of a language file.
+pub const EXTENSION: &str = ".kopercad-lang.json";
+
+/// Why a language file could not be read.
+#[derive(Debug, thiserror::Error)]
+pub enum LanguageFileError {
+    #[error("not a language file: {0}")]
+    Parse(#[from] serde_json::Error),
+    #[error("the file has no language code")]
+    NoCode,
+}
+
+impl Catalog {
+    /// The language as pretty JSON for a file: the code, the name and the
+    /// entries, sorted so files diff well.
+    pub fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).unwrap_or_default()
+    }
+
+    /// Reads a language file. The code is lower-cased; entries that change
+    /// placeholders are returned with their reasons by the caller through
+    /// [`Catalog::problems`] (or dropped by `ProjectTable::put_language`).
+    pub fn from_json(text: &str) -> Result<Catalog, LanguageFileError> {
+        let mut c: Catalog = serde_json::from_str(text)?;
+        c.code = c.code.trim().to_lowercase();
+        if c.code.is_empty() {
+            return Err(LanguageFileError::NoCode);
+        }
+        Ok(c)
+    }
+}
+
 /// The catalogs that ship with the program: Dutch. English is the source
 /// text itself and needs no file.
 pub fn builtin() -> Vec<Catalog> {

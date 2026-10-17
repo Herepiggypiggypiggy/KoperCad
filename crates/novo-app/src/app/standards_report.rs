@@ -343,13 +343,18 @@ impl NovoApp {
                 novo_pdf::export_report_pdf(&[&report_output(&doc)], &options)
             }
             StandardsFormat::Html => document::to_html(&doc, "").into_bytes(),
-            StandardsFormat::Excel => match novo_reports::xlsx_bytes(&[&report_output(&doc)]) {
-                Ok(bytes) => bytes,
-                Err(e) => {
-                    self.message(Level::Error, format!("Could not write the report: {e}"));
-                    return None;
+            StandardsFormat::Excel => {
+                match novo_reports::xlsx_bytes(&[&novo_reports::i18n::translate_output(
+                    &report_output(&doc),
+                    &self.report_translator(),
+                )]) {
+                    Ok(bytes) => bytes,
+                    Err(e) => {
+                        self.message(Level::Error, format!("Could not write the report: {e}"));
+                        return None;
+                    }
                 }
-            },
+            }
         };
         match write_replacing(path, &bytes) {
             Ok(()) => {

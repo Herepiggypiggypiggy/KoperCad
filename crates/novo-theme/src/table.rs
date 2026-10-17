@@ -49,45 +49,53 @@ pub enum RowState {
     /// The copper wash: the row the keys act on, or one the drawing has
     /// selected.
     Selected,
+    /// The warning wash: a row whose value needs a second look (an estimate).
+    Flagged,
 }
 
 /// Splits `available` width between columns in proportion to `weights`,
 /// leaving room for the gaps, never narrower than a minimum.
 pub fn column_widths(available: f32, weights: &[f64]) -> Vec<f32> {
-    let total: f64 = weights.iter().map(|w| w.max(0.1)).sum();
-    let room = (available - GAP * weights.len() as f32).max(240.0);
-    weights
-        .iter()
-        .map(|w| ((w.max(0.1) / total) as f32 * room).max(MIN_COLUMN))
-        .collect()
+    column_widths_min(available, weights, &vec![MIN_COLUMN; weights.len()])
 }
 
-/// Width a column needs for its header in caption caps, the sort arrow and
-/// the letter spacing, so the header is never cut to "LENGT...".
-pub fn header_width(header: &str) -> f32 {
-    header.chars().count() as f32 * 9.0 + 24.0
-}
-
-/// Like [`column_widths`], but a column is never narrower than its entry in
-/// `mins` (usually [`header_width`]). The extra width those columns take
-/// comes out of the columns that have more than their minimum, so the row
-/// still fits `available` whenever the minimums do.
+/// [`column_widths`] with a minimum per column (a header that must stay
+/// readable). A column held at its minimum takes its width from the others,
+/// so the row still fits `available` whenever the minimums fit at all.
 pub fn column_widths_min(available: f32, weights: &[f64], mins: &[f32]) -> Vec<f32> {
-    let room = (available - GAP * weights.len() as f32).max(240.0);
-    let mut widths = column_widths(available, weights);
-    let floor: Vec<f32> = mins.iter().map(|m| m.max(MIN_COLUMN)).collect();
-    for (w, f) in widths.iter_mut().zip(&floor) {
-        *w = w.max(*f);
-    }
-    let excess = widths.iter().sum::<f32>() - room;
-    let spare: f32 = widths.iter().zip(&floor).map(|(w, f)| w - f).sum();
-    if excess > 0.0 && spare > 0.0 {
-        let cut = excess.min(spare) / spare;
-        for (w, f) in widths.iter_mut().zip(&floor) {
-            *w -= (*w - f) * cut;
+    let n = weights.len();
+    let min_of = |i: usize| mins.get(i).copied().unwrap_or(MIN_COLUMN).max(MIN_COLUMN);
+    let mut room = (available - GAP * n as f32).max(240.0);
+    let mut widths = vec![0.0_f32; n];
+    let mut held = vec![false; n];
+    // Hold every column whose share is below its minimum, then share what is
+    // left between the rest; holding can push another below its minimum, so
+    // repeat until nothing changes.
+    loop {
+        let total: f64 = (0..n)
+            .filter(|&i| !held[i])
+            .map(|i| weights[i].max(0.1))
+            .sum();
+        let mut changed = false;
+        for i in 0..n {
+            if held[i] {
+                widths[i] = min_of(i);
+                continue;
+            }
+            let w = (weights[i].max(0.1) / total) as f32 * room;
+            if w < min_of(i) {
+                held[i] = true;
+                widths[i] = min_of(i);
+                room -= min_of(i);
+                changed = true;
+                break;
+            }
+            widths[i] = w;
+        }
+        if !changed {
+            return widths;
         }
     }
-    widths
 }
 
 fn layout_of(align: TableAlign) -> Layout {
@@ -96,6 +104,27 @@ fn layout_of(align: TableAlign) -> Layout {
         TableAlign::Center => Layout::centered_and_justified(egui::Direction::LeftToRight),
         TableAlign::Right => Layout::right_to_left(Align::Center),
     }
+}
+
+/// The narrowest each column can be and still show its whole header (and a
+/// sort arrow), for [`column_widths_min`].
+pub fn header_min_widths(ui: &Ui, columns: &[TableColumn]) -> Vec<f32> {
+    let small = ui.style().text_styles[&egui::TextStyle::Small]
+        .size
+        .max(12.0);
+    let font = egui::FontId::new(small, fonts::strong_family());
+    columns
+        .iter()
+        .map(|c| {
+            let text = c.header.to_uppercase();
+            let letters = text.chars().count() as f32;
+            let galley = ui
+                .painter()
+                .layout_no_wrap(text, font.clone(), Color32::PLACEHOLDER);
+            // Letter spacing 0.8 per letter, the sort arrow and a hair of room.
+            (galley.size().x + 0.8 * letters + 14.0 + 4.0).ceil()
+        })
+        .collect()
 }
 
 /// The header row. `sort` is the sorted column and whether it ascends.
@@ -186,6 +215,7 @@ pub fn table_row(
     let response = ui.interact(rect, ui.id().with(id), Sense::click());
     let fill: Option<Color32> = match state {
         RowState::Selected => Some(p.accent_wash),
+        RowState::Flagged => Some(p.warning_wash),
         RowState::Normal if response.hovered() => Some(p.control),
         RowState::Normal => None,
     };
@@ -214,25 +244,11 @@ mod tests {
     }
 
     #[test]
-    fn a_header_keeps_its_width_and_the_row_still_fits() {
-        let weights = [1.0, 1.0, 2.0, 2.0, 3.0, 1.0, 4.0];
-        let headers = [
-            "Pos.",
-            "Qty",
-            "Manufacturer",
-            "Order number",
-            "Description",
-            "Length (m)",
-            "Used by",
-        ];
-        let mins: Vec<f32> = headers.iter().map(|h| header_width(h)).collect();
-        let plain = column_widths(1100.0, &weights);
-        assert!(plain[5] < mins[5], "without minimums the header is cut");
-        let w = column_widths_min(1100.0, &weights, &mins);
-        for (i, m) in mins.iter().enumerate() {
-            assert!(w[i] >= *m - 0.01, "column {i}: {} < {m}", w[i]);
-        }
-        let used = w.iter().sum::<f32>() + GAP * w.len() as f32;
-        assert!(used <= 1100.0 + 0.5, "the row is {used} wide");
+    fn held_minimums_do_not_push_the_row_past_the_available_width() {
+        // A heavy column and two small ones that would fall under the minimum.
+        let w = column_widths_min(600.0, &[1.0, 1.0, 20.0], &[56.0, 90.0, 56.0]);
+        assert!(w[0] >= 56.0 && w[1] >= 90.0, "{w:?}");
+        let used: f32 = w.iter().sum::<f32>() + GAP * 3.0;
+        assert!((used - 600.0).abs() < 0.5, "{used} {w:?}");
     }
 }
