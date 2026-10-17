@@ -124,10 +124,17 @@ pub struct FlowConfig {
     pub device_length_m: Vec<f64>,
     pub device_emissivity: f64,
     pub device_view: f64,
+    /// Surface-to-surface radiation between devices, plate and walls. When
+    /// set, the device films are convection only (set `device_emissivity`
+    /// to 0) and the solver refreshes the radiative heat every
+    /// [`RAD_EVERY`] steps or iterations.
+    pub radiation: Option<std::sync::Arc<crate::rad::RadPlan>>,
 }
 
 /// Steps (or steady iterations) between refreshes of the device films.
 pub const FILM_EVERY: usize = 10;
+/// Steps (or steady iterations) between refreshes of the radiative heat.
+pub const RAD_EVERY: usize = 10;
 
 impl FlowConfig {
     /// Air near 25 degrees C with closed no-slip adiabatic walls.
@@ -154,6 +161,7 @@ impl FlowConfig {
             device_length_m: Vec::new(),
             device_emissivity: 0.85,
             device_view: 0.5,
+            radiation: None,
         }
     }
 }
@@ -228,6 +236,10 @@ pub struct FlowSolver {
     /// so only the rest of the film is a boundary layer (see
     /// [`film_conductance`]).
     film_rad: Vec<f64>,
+    rad_state: Option<crate::rad::RadState>,
+    /// Radiative heat of the last update (see [`crate::rad::RadLoad`]).
+    pub rad_load: Option<crate::rad::RadLoad>,
+    rad_clock: usize,
 }
 
 /// Temperatures and constants of the plate sheet.
@@ -463,6 +475,9 @@ impl FlowSolver {
             film_scale,
             film_clock: 0,
             film_rad: vec![0.0; cfg_film_len],
+            rad_state: cfg.radiation.as_ref().map(|p| p.state()),
+            rad_load: None,
+            rad_clock: 0,
             vel,
             p: vec![0.0; cells],
             t: vec![t_init; cells],
@@ -487,6 +502,7 @@ impl FlowSolver {
     /// Counts a step or iteration and refreshes the films every
     /// [`FILM_EVERY`].
     pub(crate) fn tick_films(&mut self) {
+        self.tick_radiation();
         if self.cfg.device_length_m.is_empty() {
             return;
         }
@@ -494,6 +510,37 @@ impl FlowSolver {
         if self.film_clock.is_multiple_of(FILM_EVERY) {
             self.update_device_films();
         }
+    }
+
+    /// Counts a step or iteration and refreshes the radiative heat on the
+    /// first and then every [`RAD_EVERY`].
+    fn tick_radiation(&mut self) {
+        let (Some(plan), Some(state)) = (self.cfg.radiation.clone(), self.rad_state.as_mut())
+        else {
+            return;
+        };
+        self.rad_clock += 1;
+        if !(self.rad_clock - 1).is_multiple_of(RAD_EVERY) {
+            return;
+        }
+        let walls = std::array::from_fn(|f| match self.cfg.faces[f].thermal {
+            ThermalBc::Adiabatic => crate::rad::WallBc::Overall { u: 0.0, t_out: 0.0 },
+            ThermalBc::Fixed(tw) => crate::rad::WallBc::Fixed(tw),
+            ThermalBc::Convective { h, t_out } => crate::rad::WallBc::Overall { u: h, t_out },
+            ThermalBc::Overall { u, t_out } => crate::rad::WallBc::Overall { u, t_out },
+        });
+        let inp = crate::rad::RadInputs {
+            t_c: &self.t,
+            sheet_t_c: self.sheet.as_ref().map(|s| s.t.as_slice()),
+            walls,
+        };
+        self.rad_load = Some(plan.update(state, &inp));
+    }
+
+    /// Net radiative power of a mesh material (0 = enclosure wall), W;
+    /// positive = gives off heat. Zero before the first update.
+    pub fn radiation_power_w(&self, material: u16) -> f64 {
+        self.rad_load.as_ref().map_or(0.0, |l| l.power_w(material))
     }
 
     /// Sets the surface film of every device from the present state: the
@@ -548,7 +595,9 @@ impl FlowSolver {
     /// start; returns the largest change, K.
     pub(crate) fn sheet_sweep(&mut self, dt: f64, po: &[f64]) -> f64 {
         match (self.sheet.as_mut(), self.cfg.plate.as_ref()) {
-            (Some(sh), Some(pl)) => sheet_sweep(&self.mesh, sh, pl, &self.t, dt, po),
+            (Some(sh), Some(pl)) => {
+                sheet_sweep(&self.mesh, sh, pl, &self.t, dt, po, self.rad_load.as_ref())
+            }
             _ => 0.0,
         }
     }
@@ -1212,6 +1261,9 @@ impl FlowSolver {
                 sum += closed * g * m.area(a, ix);
             }
         }
+        if let Some(r) = &self.rad_load {
+            sum += r.wall_out_w[face];
+        }
         if face == 4
             && let (Some(sh), Some(pl)) = (&self.sheet, &self.cfg.plate)
         {
@@ -1439,6 +1491,11 @@ impl FlowSolver {
                             a_sum += cw;
                             a_nb += cw * sh.t[col];
                         }
+                        if let Some(r) = &self.rad_load {
+                            let cv = 1.0 / (cc * m.volume(ix));
+                            a_sum += r.cell_g[id] * cv;
+                            a_nb += r.cell_s[id] * cv;
+                        }
                         let new = (old[id] / dt + rhs[id] + a_nb) / (1.0 / dt + a_sum);
                         change = change.max((new - self.t[id]).abs());
                         scale = scale.max(new.abs());
@@ -1451,7 +1508,15 @@ impl FlowSolver {
                 self.cfg.plate.as_ref(),
                 plate_old.as_ref(),
             ) {
-                change = change.max(sheet_sweep(m, sh, pl, &self.t, dt, po));
+                change = change.max(sheet_sweep(
+                    m,
+                    sh,
+                    pl,
+                    &self.t,
+                    dt,
+                    po,
+                    self.rad_load.as_ref(),
+                ));
             }
             if change <= 1e-12 * scale {
                 break;
@@ -1462,7 +1527,15 @@ impl FlowSolver {
 
 /// One Gauss-Seidel sweep of the plate sheet `sh` against cell temperatures
 /// `t`; see [`FlowSolver::sheet_sweep`].
-fn sheet_sweep(m: &Mesh, sh: &mut Sheet, pl: &PlateSheet, t: &[f64], dt: f64, po: &[f64]) -> f64 {
+fn sheet_sweep(
+    m: &Mesh,
+    sh: &mut Sheet,
+    pl: &PlateSheet,
+    t: &[f64],
+    dt: f64,
+    po: &[f64],
+    rad: Option<&crate::rad::RadLoad>,
+) -> f64 {
     let mut change: f64 = 0.0;
     let nx = sh.geo.nx;
     #[allow(clippy::needless_range_loop)]
@@ -1475,6 +1548,10 @@ fn sheet_sweep(m: &Mesh, sh: &mut Sheet, pl: &PlateSheet, t: &[f64], dt: f64, po
         let cap = pl.cap * area / dt;
         let g_out = pl.u_out * area;
         let (mut num, mut den) = (cap * po[c] + g_out * pl.t_out, cap + g_out);
+        if let Some(r) = rad {
+            num += r.sheet_s[c];
+            den += r.sheet_g[c];
+        }
         let mut link = |g: f64, other: usize| {
             num += g * sh.t[other];
             den += g;

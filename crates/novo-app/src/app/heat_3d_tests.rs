@@ -63,6 +63,8 @@ pub(super) fn snapshot() -> CfdSnapshot {
         },
         notes: Vec::new(),
         accuracy: AccuracyStatement::default(),
+        heat_paths: Vec::new(),
+        radiation_on: false,
     }
 }
 

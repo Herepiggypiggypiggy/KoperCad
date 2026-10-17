@@ -426,6 +426,10 @@ pub struct DeviceReport {
     /// Area of the faces to air that carry the film, m2 (the mesh's
     /// staircase of the device surface).
     pub film_area_m2: f64,
+    /// Net heat the device gives off by radiation to the other surfaces, W
+    /// (zero when radiation is not coupled, see
+    /// [`FlowSetup::enable_radiation`]).
+    pub radiation_w: f64,
 }
 
 /// The plate as a sheet on the rear face of the grid, if the scenario has a
@@ -612,9 +616,41 @@ impl FlowSetup {
                     .unwrap_or(f64::NAN),
                 to_plate_w: to_plate,
                 film_area_m2: solver.device_film_area_m2(slot),
+                radiation_w: self
+                    .classified
+                    .materials
+                    .iter()
+                    .find(|m| m.kind == crate::result::MaterialKind::Device(d.id))
+                    .map_or(0.0, |m| solver.radiation_power_w(m.id)),
             });
         }
         out
+    }
+
+    /// Couples surface-to-surface radiation between the devices, the plate
+    /// and the enclosure walls (lane CFD-D). The device films then carry
+    /// convection only: the radiation that the 2D engine's film folds in
+    /// (against the air temperature) is replaced by the exchange between the
+    /// real surfaces, so the same heat is not counted twice. Returns whether
+    /// radiation was switched on (`settings.enabled` and at least two
+    /// surfaces).
+    pub fn enable_radiation(&mut self, scn: &Scenario, settings: &crate::rad::RadSettings) -> bool {
+        let mut st = settings.clone();
+        st.emissivity.device = scn.params.emissivity;
+        let plate = self.cfg.plate.as_ref().map(|p| crate::rad::RearPlate {
+            cover: p.cover.clone(),
+            material: 1,
+            front_z_mm: scn.params.plate_thickness_mm,
+        });
+        let Some(model) =
+            crate::rad::RadiationModel::build_with(&self.classified, &st, plate.as_ref())
+        else {
+            return false;
+        };
+        let plan = crate::rad::RadPlan::new(model, self.classified.grid.clone());
+        self.cfg.radiation = Some(std::sync::Arc::new(plan));
+        self.cfg.device_emissivity = 0.0;
+        true
     }
 
     pub fn solver(&self) -> FlowSolver {
