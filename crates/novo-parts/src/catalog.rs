@@ -206,6 +206,7 @@ impl CatalogPart {
                 Value::Text(self.letter_codes.join(",")),
             );
         }
+        crate::pins::write_properties(self, &mut properties);
         Part {
             id,
             manufacturer: self.manufacturer.clone(),

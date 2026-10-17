@@ -141,6 +141,10 @@ pub struct Section {
     /// same sheet, when at least a few of its rows fit there, instead of on a
     /// new page. Off by default: every section starts a new page.
     pub flow: bool,
+    /// The decimal separator of measured values on pages and in CSV: `.`
+    /// unless the report language says otherwise. Spreadsheets keep real
+    /// numbers and format them by their own locale.
+    pub decimal: char,
 }
 
 impl Section {
@@ -151,6 +155,18 @@ impl Section {
             columns,
             rows: Vec::new(),
             flow: false,
+            decimal: '.',
+        }
+    }
+
+    /// A cell as printed in this section: measured values use the
+    /// section's decimal separator.
+    pub fn cell_text(&self, cell: &Cell) -> String {
+        match cell {
+            Cell::Number(_) if self.decimal != '.' => {
+                cell.to_string().replace('.', &self.decimal.to_string())
+            }
+            _ => cell.to_string(),
         }
     }
 

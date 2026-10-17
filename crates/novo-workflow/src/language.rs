@@ -66,6 +66,17 @@ pub const DUTCH: &[Aliases] = &[
             "panelen resetten",
         ],
     ),
+    nl("layout.draw", &[], &["indeling tekenen", "tekenen"]),
+    nl("layout.cabinet", &[], &["indeling kast"]),
+    nl("layout.3d", &[], &["indeling 3d", "warmte"]),
+    nl("layout.review", &[], &["indeling controle", "controleren"]),
+    nl("layout.reports", &[], &["indeling rapporten"]),
+    nl(
+        "layout.reset",
+        &[],
+        &["indeling terugzetten", "werkruimte herstellen"],
+    ),
+    nl("layout.reset_all", &[], &["alle indelingen terugzetten"]),
     nl(
         "help.keymap_file",
         &[],
@@ -724,6 +735,11 @@ pub const DUTCH: &[Aliases] = &[
         "view.3d_shadows",
         &["schaduw tonen in 3d"],
         &["schaduw", "schaduwen"],
+    ),
+    nl(
+        "view.3d_measure",
+        &["afstand meten in 3d"],
+        &["meten", "afstand", "liniaal"],
     ),
     nl(
         "view.3d_align_left",

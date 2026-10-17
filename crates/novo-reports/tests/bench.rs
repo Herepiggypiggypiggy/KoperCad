@@ -435,3 +435,38 @@ fn label_settings_round_trip_through_the_project() {
     };
     assert!(!bad.is_valid());
 }
+
+#[test]
+fn the_cut_list_says_when_sizes_and_colours_are_not_set() {
+    let mut doc = cabinet();
+    let wires: Vec<_> = doc.project().wires().map(|w| w.id).collect();
+    doc.transact("Clear", |tx| {
+        for id in wires {
+            tx.update::<Wire>(id, |w| {
+                w.cross_section_mm2 = None;
+                w.color = None;
+            })?;
+        }
+        Ok(())
+    })
+    .expect("clear");
+    let out = BenchCut.generate(doc.project());
+    let notes: Vec<String> = out
+        .section("check")
+        .expect("a check-before-cutting section")
+        .rows
+        .iter()
+        .map(|r| text(&r.cells[0]))
+        .collect();
+    assert!(notes.iter().any(|n| n.contains("no cross-section set")));
+    assert!(notes.iter().any(|n| n.contains("no insulation colour")));
+    // And with everything set, neither note appears.
+    let doc = cabinet();
+    let out = BenchCut.generate(doc.project());
+    let notes: Vec<String> = out
+        .section("check")
+        .map(|s| s.rows.iter().map(|r| text(&r.cells[0])).collect())
+        .unwrap_or_default();
+    assert!(notes.iter().all(|n| !n.contains("no cross-section")));
+    assert!(notes.iter().all(|n| !n.contains("no insulation colour")));
+}

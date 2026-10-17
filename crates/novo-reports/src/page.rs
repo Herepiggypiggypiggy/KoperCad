@@ -289,7 +289,7 @@ pub fn layout_page(report: &ReportOutput, page: &ReportPage, setup: &PageSetup) 
             let text = row
                 .cells
                 .get(i)
-                .map(ToString::to_string)
+                .map(|c| section.cell_text(c))
                 .unwrap_or_default();
             if !text.is_empty() {
                 layout.texts.push(cell(

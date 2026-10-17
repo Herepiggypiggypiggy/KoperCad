@@ -165,7 +165,12 @@ impl NovoApp {
                         body(ui, &mut win, &result);
                     }
                     Some(Err(why)) => {
-                        ui.colored_label(crate::theme::ui_palette().error, why);
+                        novo_theme::widgets::banner(
+                            ui,
+                            novo_theme::widgets::Level::Error,
+                            why,
+                            |_| {},
+                        );
                     }
                     None => {}
                 });
@@ -243,11 +248,13 @@ fn header(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(Level, S
          drawing > Add fault.",
     );
     if win.example {
-        ui.colored_label(
-            crate::theme::ui_palette().warning,
+        novo_theme::widgets::banner(
+            ui,
+            novo_theme::widgets::Level::Warning,
             "Example study: a built-in pump feeder, not your drawing. It shows until you add a \
              fault of your own (right-click in the drawing > Add fault). Save study writes it \
              next to the project to edit by hand.",
+            |_| {},
         );
     }
     for w in &win.prepared.warnings {
@@ -264,8 +271,14 @@ fn header(ui: &mut egui::Ui, win: &mut FaultsWindow, note: &mut Option<(Level, S
     }
     ui.horizontal(|ui| {
         let can_save = win.path.is_some();
+        if !can_save {
+            ui.weak("Save the project first: the study and exports go next to it.");
+        }
         if ui
-            .add_enabled(can_save, egui::Button::new("Save study"))
+            .add_enabled_ui(can_save, |ui| {
+                novo_theme::widgets::primary_button(ui, "Save study")
+            })
+            .inner
             .on_disabled_hover_text("Save the project first; the study is saved next to it")
             .on_hover_text("Writes the study file next to the project")
             .clicked()

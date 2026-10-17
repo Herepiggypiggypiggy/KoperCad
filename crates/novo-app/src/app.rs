@@ -55,6 +55,7 @@ mod electrical;
 mod eplan_export;
 mod eplan_import;
 mod eplan_parts;
+mod error_words;
 mod example;
 mod faults;
 mod heat;
@@ -83,6 +84,7 @@ mod interop;
 mod languages;
 #[cfg(test)]
 mod languages_tests;
+mod layout_presets;
 mod learn;
 mod learn_demo;
 mod learn_labels;
@@ -115,6 +117,9 @@ mod part_picker;
 mod parts;
 mod parts_bulk;
 mod parts_import;
+mod parts_pins;
+#[cfg(test)]
+mod parts_pins_tests;
 mod parts_quality;
 mod pdf;
 mod pdf_options;
@@ -162,6 +167,7 @@ mod view3d_controls;
 mod view3d_duplicate;
 mod view3d_heat;
 mod view3d_hints;
+mod view3d_measure;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
@@ -225,7 +231,11 @@ mod commissioning_tests;
 #[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
+mod context_menu_tests;
+#[cfg(test)]
 mod eplan_ui_tests;
+#[cfg(test)]
+mod error_words_tests;
 #[cfg(test)]
 mod example_tests;
 #[cfg(test)]
@@ -418,6 +428,16 @@ pub struct NovoApp {
     /// What the canvas area shows (docs/design/workspaces.md). The Cabinet
     /// is Ctrl+2.
     workspace: workspace::Workspace,
+    /// The named layout on screen and the one the schematic opens in
+    /// (Draw or Review), and the window size class the layouts are kept
+    /// for (`layout_presets`).
+    slot: layout_presets::Slot,
+    schematic_slot: layout_presets::Slot,
+    size_class: Option<layout_presets::SizeClass>,
+    /// Where the floating panels are now, by panel id (`panel::places`).
+    panel_places: std::collections::BTreeMap<String, [i32; 2]>,
+    /// Panel positions of a layout just put back, handed over next frame.
+    panel_pending: Option<std::collections::BTreeMap<String, [i32; 2]>>,
     cabinet: cabinet::CabinetState,
     reports_view: reports_view::ReportsView,
     view3d: view3d::View3dMode,
@@ -506,6 +526,11 @@ impl NovoApp {
             autosave_failing: false,
             focus_mode: false,
             workspace: workspace::Workspace::Schematic,
+            slot: layout_presets::Slot::Draw,
+            schematic_slot: layout_presets::Slot::Draw,
+            size_class: None,
+            panel_places: Default::default(),
+            panel_pending: None,
             cabinet: cabinet::CabinetState::new(),
             reports_view: Default::default(),
             view3d: Default::default(),
@@ -744,6 +769,8 @@ impl NovoApp {
             Level::Warning => log::warn!("{text}"),
             Level::Error => log::error!("{text}"),
         }
+        // The log keeps the raw error; the person gets plain words.
+        let text = error_words::plain(&text);
         // The same message again (a failing export tried twice) renews the
         // one on screen instead of stacking a copy.
         if let Some(same) = self
@@ -1076,6 +1103,7 @@ impl NovoApp {
             self.started = true;
             self.start();
         }
+        tips::publish_keys(&ctx, &self.wb.keymap);
         self.sync_appearance(&ctx);
         self.fix_current_page();
         self.tick(&ctx);
@@ -1145,6 +1173,7 @@ impl NovoApp {
                     || *id == "cabinet.surface"
                     || *id == "view.command_field_here"
                     || *id == "view.3d"
+                    || id.starts_with("layout.")
                     || *id == "view.3d_door"
                     || id.starts_with("view.3d_align")
                     || id.starts_with("view.3d_spread")
@@ -1154,6 +1183,7 @@ impl NovoApp {
                     || *id == "view.3d_position"
                     || *id == "view.3d_place"
                     || *id == "view.3d_stats"
+                    || *id == "view.3d_measure"
                     || *id == "view.3d_section"
                     || *id == "view.3d_hints"
                     || matches!(*id, "view.3d_hide" | "view.3d_isolate" | "view.3d_show_all")
@@ -1162,6 +1192,8 @@ impl NovoApp {
         }
 
         self.window_width = ctx.content_rect().width();
+        self.sync_panels(&ctx);
+        self.follow_window_size(self.window_width);
         let pinned = self.outline_pinned() && !self.focus_mode;
         if pinned {
             self.outline_open = false;
@@ -1237,6 +1269,7 @@ impl NovoApp {
             self.hud(&ctx, canvas_rect);
             self.sync_wiring_mode();
             self.sync_connect_mode();
+            self.sync_menu_keys();
             self.sync_catalog();
             self.tool_dock(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
@@ -2132,6 +2165,8 @@ impl eframe::App for NovoApp {
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        // The panels of the layout on screen are kept with the rest.
+        self.store_layout();
         eframe::set_value(storage, Settings::STORAGE_KEY, &self.settings);
     }
 

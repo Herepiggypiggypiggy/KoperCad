@@ -14,6 +14,10 @@ pub struct Catalog {
     /// The language's own name, shown in the picker (`Nederlands`).
     #[serde(default)]
     pub name: String,
+    /// The decimal separator of measured values on pages and in CSV: `,` or
+    /// `.`. Left out, the language uses `.`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub decimal: Option<String>,
     #[serde(default)]
     pub entries: BTreeMap<String, String>,
 }
@@ -70,7 +74,17 @@ impl Catalog {
         Catalog {
             code: code.to_owned(),
             name: name.to_owned(),
+            decimal: None,
             entries: BTreeMap::new(),
+        }
+    }
+
+    /// The decimal separator, if the file names a usable one (`,` or `.`).
+    pub fn decimal_char(&self) -> Option<char> {
+        match self.decimal.as_deref().map(str::trim) {
+            Some(",") => Some(','),
+            Some(".") => Some('.'),
+            _ => None,
         }
     }
 

@@ -41,11 +41,20 @@ impl ProjectTable {
         Ok(())
     }
 
+    /// Sets the decimal separator (`,` or `.`) the language prints measured
+    /// values with, creating the language if needed.
+    pub fn set_decimal(&mut self, code: &str, decimal: char) {
+        self.languages
+            .entry(code.to_owned())
+            .or_insert_with(|| Catalog::new(code, ""))
+            .decimal = Some(decimal.to_string());
+    }
+
     /// Removes one entry (the shipped text, or English, shows again).
     pub fn remove(&mut self, code: &str, key: &str) {
         if let Some(c) = self.languages.get_mut(code) {
             c.entries.remove(key);
-            if c.entries.is_empty() && c.name.is_empty() {
+            if c.entries.is_empty() && c.name.is_empty() && c.decimal.is_none() {
                 self.languages.remove(code);
             }
         }
@@ -63,6 +72,9 @@ impl ProjectTable {
             Some(own) => {
                 if own.name.is_empty() {
                     own.name = catalog.name;
+                }
+                if own.decimal.is_none() {
+                    own.decimal = catalog.decimal;
                 }
                 for (key, text) in catalog.entries {
                     own.entries.entry(key).or_insert(text);

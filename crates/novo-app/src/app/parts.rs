@@ -71,6 +71,8 @@ pub(crate) struct PartsWindow {
     geometry: Option<GeometryService>,
     /// The Quality tab (completeness of the catalog).
     quality: super::parts_quality::QualityTab,
+    /// The Connection points block of the part detail.
+    pins: super::parts_pins::PinsState,
     /// The New part form, while open.
     new_part: Option<NewPartForm>,
     /// The maker guide (what to download, where to save), while open.
@@ -160,6 +162,7 @@ impl PartsWindow {
             focus_search: true,
             geometry: None,
             quality: Default::default(),
+            pins: Default::default(),
             new_part: None,
             guide: false,
         }
@@ -287,6 +290,30 @@ impl PartsWindow {
         let (service, library) = (self.geometry.as_ref()?, self.library.as_ref()?);
         let key = service.request(model_job(part, record, library));
         Some(service.geometry(key))
+    }
+
+    /// Writes the detected terminal positions of `key` into the part and the
+    /// user's catalog file.
+    fn save_pins(&mut self, key: &PartKey) {
+        let Some(mut part) = self.catalog.get(key).cloned() else {
+            return;
+        };
+        let Some(detection) = self.pins.detection(key).cloned() else {
+            return;
+        };
+        let written = super::parts_pins::apply(&mut part, &detection, self.pins.with_estimates);
+        let saved = match (written, self.catalog_path.as_ref()) {
+            (0, _) => Err("Nothing to save: no terminal was measured".to_owned()),
+            (_, None) => Err("No profile folder is known, so there is nowhere to save".to_owned()),
+            (_, Some(path)) => super::parts_pins::save_to_user_catalog(path, &part),
+        };
+        self.pins.note = Some(match saved {
+            Ok(()) => {
+                self.catalog.upsert(part);
+                format!("Saved {written} terminal positions to your catalog.")
+            }
+            Err(e) => e,
+        });
     }
 
     /// The makers in the catalog, sorted, each once.
@@ -593,6 +620,10 @@ enum PartsAction {
     OpenPage(String),
     ChooseFile,
     ChooseModel,
+    /// Scan the part's STEP model for connection points.
+    DetectPins(PartKey),
+    /// Save the detected positions into the user's catalog.
+    SavePins(PartKey),
     ChooseFolder,
     StopImport,
     ConfirmFile(PathBuf),
@@ -761,6 +792,19 @@ impl NovoApp {
                     }
                 }
                 PartsAction::ChooseModel => win.choose_model(),
+                PartsAction::DetectPins(key) => {
+                    let step = win
+                        .records(&key)
+                        .into_iter()
+                        .find(|r| FileKind::of_file_name(&r.file_name) == FileKind::Step);
+                    if let (Some(step), Some(lib), Some(part)) =
+                        (step, win.library.as_ref(), win.catalog.get(&key).cloned())
+                    {
+                        let path = lib.path_of(&step);
+                        win.pins.start(ctx, &part, path);
+                    }
+                }
+                PartsAction::SavePins(key) => win.save_pins(&key),
                 PartsAction::ChooseFolder => {
                     if let Some(dir) = rfd::FileDialog::new()
                         .set_title("Folder to watch for downloads")
@@ -1213,15 +1257,22 @@ on the maker's site and drop the file here.",
     }
 }
 
-fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction>) {
-    let Some(part) = win.selected.as_ref().and_then(|k| win.catalog.get(k)) else {
+fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAction>) {
+    let Some(part) = win
+        .selected
+        .as_ref()
+        .and_then(|k| win.catalog.get(k))
+        .cloned()
+    else {
         ui.add_space(8.0);
         ui.weak("Pick a part in the list to see its data.");
         return;
     };
+    let part = &part;
     let p = Palette::of(ui);
     let key = part.key();
     let records = win.records(&key);
+    let mut pins = std::mem::take(&mut win.pins);
     ui.add_space(4.0);
     egui::ScrollArea::vertical()
         .id_salt("parts_detail_scroll")
@@ -1289,6 +1340,18 @@ fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction
                     actions.push(PartsAction::ChooseModel);
                 }
             });
+            let has_step = records
+                .iter()
+                .any(|r| FileKind::of_file_name(&r.file_name) == FileKind::Step);
+            match super::parts_pins::block(ui, &mut pins, part, has_step) {
+                Some(super::parts_pins::PinsAction::Detect) => {
+                    actions.push(PartsAction::DetectPins(key.clone()));
+                }
+                Some(super::parts_pins::PinsAction::Save) => {
+                    actions.push(PartsAction::SavePins(key.clone()));
+                }
+                None => {}
+            }
             if !records.is_empty() {
                 ui.add_space(8.0);
                 if win.confirm_remove.as_ref() == Some(&key) {
@@ -1306,6 +1369,7 @@ fn detail_ui(ui: &mut egui::Ui, win: &PartsWindow, actions: &mut Vec<PartsAction
                 }
             }
         });
+    win.pins = pins;
 }
 
 /// One data row of the detail pane: the name on the left, the value after

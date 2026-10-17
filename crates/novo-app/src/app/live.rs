@@ -883,7 +883,7 @@ impl NovoApp {
         .show(ctx, |ui| {
             if ui
                 .small_button("✕ Close")
-                .on_hover_text("Close · Shift+L")
+                .on_hover_text(super::tips::hover(ui.ctx(), "Close", "sim.live"))
                 .clicked()
             {
                 leave = true;

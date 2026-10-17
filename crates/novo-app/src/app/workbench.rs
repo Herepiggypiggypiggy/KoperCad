@@ -451,6 +451,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.3d_dimensions",
     "view.3d_quality",
     "view.3d_stats",
+    "view.3d_measure",
     "view.3d_section",
     "view.3d_save_view",
     "view.3d_wire_runs",
@@ -511,6 +512,13 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "help.show_hints",
     "help.whats_new",
     "view.reset_panels",
+    "layout.draw",
+    "layout.cabinet",
+    "layout.3d",
+    "layout.review",
+    "layout.reports",
+    "layout.reset",
+    "layout.reset_all",
     "parts.browser",
     "parts.import_step",
     "parts.import_folder",
@@ -991,6 +999,10 @@ impl NovoApp {
                     _ => controls.layers.wires = !controls.layers.wires,
                 }
             }
+            "view.3d_measure" => {
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.measure.toggle();
+            }
             "view.3d_section" => {
                 self.switch_workspace(Workspace::View3d);
                 let section = &mut self.view3d.view.state.section;
@@ -1263,6 +1275,10 @@ impl NovoApp {
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,
             "view.reset_panels" => super::panel::reset_layout(ctx),
+            "layout.draw" | "layout.cabinet" | "layout.3d" | "layout.review" | "layout.reports"
+            | "layout.reset" | "layout.reset_all" => {
+                self.run_layout_command(id);
+            }
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "parts.import_eplan" => self.import_eplan_parts(),

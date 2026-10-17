@@ -238,9 +238,11 @@ fn csv_section(section: &Section, options: &CsvOptions, out: &mut String) {
             .iter()
             .map(|cell| match (cell, options.delimiter) {
                 // With `;` as the delimiter the locale writes decimals with a comma.
-                (Cell::Number(value), ';') => value.to_string().replace('.', ","),
+                (Cell::Number(value), ';') if section.decimal == '.' => {
+                    value.to_string().replace('.', ",")
+                }
                 (Cell::Text(text), _) => csv_text(text, options),
-                _ => cell.to_string(),
+                _ => section.cell_text(cell),
             });
         csv_line(fields, options, out);
     }

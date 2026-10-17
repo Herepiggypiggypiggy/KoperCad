@@ -134,11 +134,17 @@ fn empty_field_is_the_menu() {
     assert_eq!(rows[1].target, Target::Command("page.new"));
     assert_eq!(rows[1].group, "Recent");
     assert_eq!(rows[2].target, Target::Command("view.fit"));
-    // Then every command, by group, with its key and reason.
+    // Then every command under the menu it lives in (the submenu as the
+    // grey detail), the keys-only ones last, with key and reason.
     let menu = &rows[3..];
     assert_eq!(menu.len(), novo_workflow::commands::COMMANDS.len() - 1);
-    assert_eq!(menu[0].group, "Project");
-    assert_eq!(menu.last().unwrap().group, "Export");
+    assert_eq!(menu[0].group, "File");
+    assert_eq!(menu.last().unwrap().group, "Keys");
+    let macros = menu
+        .iter()
+        .find(|r| r.target == Target::Command("macro.browser"))
+        .unwrap();
+    assert_eq!(macros.group, "File");
     let undo = menu
         .iter()
         .find(|r| r.target == Target::Command("edit.undo"))
@@ -881,6 +887,27 @@ fn cables_are_found_by_tag_and_wires_by_number() {
     }
     let rows = palette.search("wire 999", &src);
     assert!(!rows.iter().any(|r| r.kind == Kind::Wire));
+}
+
+#[test]
+fn a_typed_command_shows_the_menu_path_it_lives_in() {
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let project = Project::new("empty");
+    let palette = Palette::default();
+    let src = sources(&project, &library, &keymap);
+    let rows = palette.search("import dxf", &src);
+    let row = rows
+        .iter()
+        .find(|r| r.target == Target::Command("file.import_dxf_background"))
+        .expect("the DXF import");
+    assert_eq!(row.detail, "File › Import");
+    // The path is searchable: a submenu name lists what is in it.
+    let rows = palette.search("revisions", &src);
+    assert!(
+        rows.iter()
+            .any(|r| r.target == Target::Command("revision.issue"))
+    );
 }
 
 #[test]

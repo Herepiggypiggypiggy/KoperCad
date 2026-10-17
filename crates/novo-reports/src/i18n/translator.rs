@@ -62,7 +62,20 @@ impl Translator {
         if c.name.is_empty() {
             c.name = self.project.name.clone();
         }
+        c.decimal = self
+            .project
+            .decimal_char()
+            .or(self.shipped.decimal_char())
+            .map(String::from);
         c
+    }
+
+    /// The decimal separator of measured values in this language.
+    pub fn decimal(&self) -> char {
+        self.project
+            .decimal_char()
+            .or(self.shipped.decimal_char())
+            .unwrap_or('.')
     }
 
     pub fn code(&self) -> &str {
@@ -96,7 +109,15 @@ impl Translator {
             .chain(self.shipped.entries.iter())
             .filter(|(k, _)| k.contains('{'))
             .find_map(|(key, translation)| {
-                let captures = match_pattern(key, text)?;
+                let mut captures = match_pattern(key, text)?;
+                let decimal = self.decimal();
+                if decimal != '.' {
+                    for (_, value) in &mut captures {
+                        if is_decimal_number(value) {
+                            *value = value.replace('.', &decimal.to_string());
+                        }
+                    }
+                }
                 Some(fill(translation, &captures))
             })
     }
@@ -119,6 +140,21 @@ impl Translator {
             return t;
         }
         self.tr(text).into_owned()
+    }
+}
+
+/// A measured value written with a point (`1.5`, `-0.25`): the only kind of
+/// captured text that follows the language's decimal sign.
+fn is_decimal_number(text: &str) -> bool {
+    let digits = text.strip_prefix('-').unwrap_or(text);
+    match digits.split_once('.') {
+        Some((a, b)) => {
+            !a.is_empty()
+                && !b.is_empty()
+                && a.bytes().all(|c| c.is_ascii_digit())
+                && b.bytes().all(|c| c.is_ascii_digit())
+        }
+        None => false,
     }
 }
 

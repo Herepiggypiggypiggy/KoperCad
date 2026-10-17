@@ -7,7 +7,6 @@ use eframe::egui;
 
 use super::workbench::Drawer;
 use super::{NovoApp, OutlineMode};
-use crate::settings::WorkspaceLayout;
 
 /// The places the window can be in. Schematic and Cabinet are built; the
 /// others have their switcher chip now (disabled, saying why) and gain
@@ -91,20 +90,9 @@ impl Workspace {
                 | Workspace::Commissioning
         )
     }
-
-    /// The panels a workspace starts with the first time it opens
-    /// (design §3). Nothing differs from today's behaviour yet: the Cabinet
-    /// starts like the schematic, with the drawer closed.
-    pub(crate) fn default_layout(self) -> WorkspaceLayout {
-        WorkspaceLayout {
-            outline_pinned: None,
-            outline_mode: outline_mode_id(OutlineMode::Pages).to_owned(),
-            drawer: None,
-        }
-    }
 }
 
-fn outline_mode_id(mode: OutlineMode) -> &'static str {
+pub(super) fn outline_mode_id(mode: OutlineMode) -> &'static str {
     match mode {
         OutlineMode::Pages => "pages",
         OutlineMode::Issues => "issues",
@@ -113,7 +101,7 @@ fn outline_mode_id(mode: OutlineMode) -> &'static str {
     }
 }
 
-fn outline_mode_from_id(id: &str) -> OutlineMode {
+pub(super) fn outline_mode_from_id(id: &str) -> OutlineMode {
     match id {
         "issues" => OutlineMode::Issues,
         "changes" => OutlineMode::Changes,
@@ -122,7 +110,7 @@ fn outline_mode_from_id(id: &str) -> OutlineMode {
     }
 }
 
-fn drawer_id(drawer: Drawer) -> &'static str {
+pub(super) fn drawer_id(drawer: Drawer) -> &'static str {
     match drawer {
         Drawer::Terminals => "terminals",
         Drawer::Cables => "cables",
@@ -130,7 +118,7 @@ fn drawer_id(drawer: Drawer) -> &'static str {
     }
 }
 
-fn drawer_from_id(id: &str) -> Option<Drawer> {
+pub(super) fn drawer_from_id(id: &str) -> Option<Drawer> {
     match id {
         "terminals" => Some(Drawer::Terminals),
         "cables" => Some(Drawer::Cables),
@@ -177,13 +165,12 @@ impl NovoApp {
             return;
         }
         let left_commissioning = self.workspace == Workspace::Commissioning;
-        let left = self.layout_snapshot();
-        self.settings
-            .workspaces
-            .insert(self.workspace.id().to_owned(), left);
+        self.store_layout();
         self.workspace = workspace;
         self.settings.last_workspace = workspace.id().to_owned();
-        let layout = self.layout_of(workspace);
+        self.slot = self.slot_for(workspace);
+        self.settings.last_slot = self.slot.id().to_owned();
+        let layout = self.layout_of(self.slot);
         self.apply_layout(&layout);
         // Commissioning is the schematic page, read-only, with the
         // commissioning panel (design section 3.5): the mode goes on and
@@ -204,42 +191,14 @@ impl NovoApp {
         }
     }
 
-    /// The layout `workspace` has stored, or its default.
-    fn layout_of(&self, workspace: Workspace) -> WorkspaceLayout {
-        self.settings
-            .workspaces
-            .get(workspace.id())
-            .cloned()
-            .unwrap_or_else(|| workspace.default_layout())
-    }
-
-    /// The panels as they are now.
-    fn layout_snapshot(&self) -> WorkspaceLayout {
-        WorkspaceLayout {
-            outline_pinned: self.settings.outline_pinned,
-            outline_mode: outline_mode_id(self.outline_mode).to_owned(),
-            drawer: self.wb.drawer.map(|d| drawer_id(d).to_owned()),
-        }
-    }
-
-    fn apply_layout(&mut self, layout: &WorkspaceLayout) {
-        self.settings.outline_pinned = layout.outline_pinned;
-        self.outline_mode = outline_mode_from_id(&layout.outline_mode);
-        self.wb.drawer = layout.drawer.as_deref().and_then(drawer_from_id);
-        // A flyout left open would show over the next workspace's canvas.
-        self.outline_open = false;
-    }
-
-    /// At start-up: the panels of the schematic as last left. The
-    /// workspace that was last open follows once its project is open.
-    pub(super) fn restore_layout_at_start(&mut self) {
-        let layout = self.layout_of(Workspace::Schematic);
-        self.apply_layout(&layout);
-    }
-
     /// After the last project opened: back to the workspace it was left in,
     /// when that is available.
     pub(super) fn restore_workspace_at_start(&mut self) {
+        if let Some(slot) = super::layout_presets::Slot::from_id(&self.settings.last_slot)
+            && slot.workspace() == Workspace::Schematic
+        {
+            self.schematic_slot = slot;
+        }
         if let Some(last) = Workspace::from_id(&self.settings.last_workspace)
             && self.workspace_unavailable(last).is_none()
         {
