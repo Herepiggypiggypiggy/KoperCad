@@ -217,9 +217,6 @@ fn a_picked_surface_is_drawn_from_its_own_layout_and_cannot_be_edited_yet() {
     let mut bigger = enclosure_before;
     bigger.width += 100.0;
     let asks = vec![
-        Ask::Remove(vec![s1.raw()]),
-        Ask::Rotate(vec![s1.raw()]),
-        Ask::Drop(s1.raw(), 300.0, 300.0),
         Ask::PlaceAll,
         Ask::Accept,
         Ask::SetRailLengths(vec![(1, 100.0)]),
@@ -238,10 +235,10 @@ fn a_picked_surface_is_drawn_from_its_own_layout_and_cannot_be_edited_yet() {
         d.app.messages.clear();
         d.app.cabinet_ask(ask, Some(cab), None, &[]);
         let msg = d.app.messages().last().expect("a message").text.clone();
-        assert!(msg.contains("view only"), "{msg}");
+        assert!(msg.contains("only be changed on the plate"), "{msg}");
     }
     let after = novo_layout::model::load(project(&d), cab).unwrap();
-    assert_eq!(after.placements.len(), 2, "nothing was removed or moved");
+    assert_eq!(after.placements.len(), 2, "nothing was removed");
     assert_eq!(
         project(&d).get::<novo_core::Structure>(cab).unwrap().plate,
         Some(plate_before),

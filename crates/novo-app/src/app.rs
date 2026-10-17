@@ -196,6 +196,8 @@ mod cabinet_routes_tests;
 #[cfg(test)]
 mod cabinet_rules_tests;
 #[cfg(test)]
+mod cabinet_surface_edit_tests;
+#[cfg(test)]
 mod cabinet_surface_move_tests;
 #[cfg(test)]
 mod cabinet_surface_plan_tests;

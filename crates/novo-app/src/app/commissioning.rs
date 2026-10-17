@@ -17,7 +17,7 @@ use novo_canvas::marks::{Mark, MarkKind};
 use novo_canvas::model::item_id;
 use novo_commissioning::{
     CheckKind, CheckRecord, CheckState, CommissioningStore, FieldPackage, Progress, PunchItem,
-    PunchState, Scope, Severity, Signature, Target, TargetInfo, progress, targets,
+    PunchState, RedlineState, Scope, Severity, Signature, Target, TargetInfo, progress, targets,
 };
 use novo_core::{PageId, Project};
 use novo_pdf::{ReportFileFormat, ReportPdfOptions};
@@ -366,7 +366,8 @@ impl NovoApp {
         };
         let project = doc.project();
         let mut marks = Vec::new();
-        for info in targets(project).iter().filter(|i| i.pages.contains(&page)) {
+        let infos = targets(project);
+        for info in infos.iter().filter(|i| i.pages.contains(&page)) {
             let (kind, what) = match target_state(&mode.store, info.target) {
                 CheckState::Failed => (MarkKind::Error, "✖ Failed"),
                 CheckState::Passed => (MarkKind::Added, "✔ Passed"),
@@ -375,6 +376,25 @@ impl NovoApp {
             for id in shown_on(project, info.target.any_id(), page) {
                 marks
                     .push(Mark::on(kind, item_id(id)).with_text(format!("{}: {what}", info.label)));
+            }
+        }
+        // Open redlines show where the machine differs from the drawing.
+        for redline in mode
+            .store
+            .redlines()
+            .filter(|r| r.state == RedlineState::Open)
+        {
+            let Some(info) = infos
+                .iter()
+                .find(|i| i.target == redline.target && i.pages.contains(&page))
+            else {
+                continue;
+            };
+            for id in shown_on(project, info.target.any_id(), page) {
+                marks.push(
+                    Mark::on(MarkKind::Modified, item_id(id))
+                        .with_text(format!("Redline: {}", redline.summary())),
+                );
             }
         }
         marks

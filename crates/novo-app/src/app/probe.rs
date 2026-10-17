@@ -57,6 +57,29 @@ impl NovoApp {
         }
     }
 
+    /// The tags of the devices that sit in no cabinet layout yet: selected
+    /// on the plate or in 3D they would show nothing.
+    fn unplaced_tags(&self, devices: &[DeviceId]) -> Vec<String> {
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return Vec::new();
+        };
+        let layouts: Vec<_> = project
+            .structures()
+            .filter(|s| s.enclosure)
+            .filter_map(|s| novo_layout::model::load(project, s.id))
+            .collect();
+        devices
+            .iter()
+            .filter(|d| {
+                !layouts
+                    .iter()
+                    .any(|l| l.placements.iter().any(|p| p.id == d.raw()))
+            })
+            .filter_map(|d| project.get::<Device>(*d))
+            .map(|d| d.tag.to_string())
+            .collect()
+    }
+
     /// `nav.show_cabinet` and `nav.show_3d`: selects the devices on the plate
     /// and switches there; the 3D view also zooms to them.
     pub(super) fn show_on_plate(&mut self, to: Workspace) {
@@ -69,6 +92,7 @@ impl NovoApp {
             .iter()
             .map(|d| novo_canvas::cabinet::box_item(d.raw()))
             .collect();
+        let unplaced = self.unplaced_tags(&devices);
         self.cabinet.table = false;
         self.cabinet.view.selection.apply(
             items.iter().copied(),
@@ -82,6 +106,15 @@ impl NovoApp {
             self.view3d.pending = Some(Pending::Fit);
         } else {
             self.cabinet.view.reveal(items);
+        }
+        if !unplaced.is_empty() {
+            self.message(
+                Level::Info,
+                format!(
+                    "Not placed in a cabinet yet, so nothing to show: {}",
+                    unplaced.join(", ")
+                ),
+            );
         }
     }
 }
