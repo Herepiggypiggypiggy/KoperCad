@@ -3,7 +3,7 @@
 use novo_interop::part3d::pins::{Fix, PinMapping, TerminalFix};
 use novo_parts::{Catalog, CatalogPart, PartTerminal, terminal_position};
 
-use super::parts_pins::{Detection, apply, rows, save_to_user_catalog, summary};
+use super::parts_pins::{Detection, apply, apply_typed, rows, save_to_user_catalog, summary};
 
 fn part() -> CatalogPart {
     let mut p = CatalogPart::new("ACME", "C1");
@@ -79,4 +79,46 @@ fn a_saved_part_reaches_the_catalog_file_and_the_project_part() {
         Some([5.0, 60.0, 20.0])
     );
     std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn typed_positions_are_clamped_to_the_part_and_marked_typed() {
+    let mut p = part();
+    p.dimensions = Some(novo_parts::Dimensions {
+        width_mm: 45.0,
+        height_mm: 90.0,
+        depth_mm: 70.0,
+    });
+    let edits = vec![
+        ("A1".to_owned(), [5.0, 95.0, -3.0]),
+        ("A2".to_owned(), [f64::NAN, 1.0, 1.0]),
+        ("ZZ".to_owned(), [1.0, 1.0, 1.0]),
+    ];
+    assert_eq!(apply_typed(&mut p, &edits), 1);
+    assert_eq!(p.terminals[0].position_mm, Some([5.0, 90.0, 0.0]));
+    assert_eq!(p.terminals[1].position_mm, None);
+    assert_eq!(
+        p.sources.get(novo_parts::POSITIONS_SOURCE_KEY),
+        Some(&novo_parts::DataSource::Typed)
+    );
+    // Typed is not an estimate: routing treats it as measured.
+    let model = p.to_model(novo_core::PartId::from(1));
+    assert_eq!(
+        novo_parts::positions_estimated(&model.properties),
+        Some(false)
+    );
+}
+
+#[test]
+fn a_part_with_a_bad_size_does_not_crash_typed_positions() {
+    let mut p = part();
+    p.dimensions = Some(novo_parts::Dimensions {
+        width_mm: -5.0,
+        height_mm: f64::NAN,
+        depth_mm: 70.0,
+    });
+    let edits = vec![("A1".to_owned(), [5.0, 95.0, 80.0])];
+    assert_eq!(apply_typed(&mut p, &edits), 1);
+    // The bad sizes are ignored; only the good depth limits.
+    assert_eq!(p.terminals[0].position_mm, Some([5.0, 95.0, 70.0]));
 }
