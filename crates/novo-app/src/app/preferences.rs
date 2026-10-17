@@ -12,7 +12,7 @@ impl NovoApp {
             return;
         }
         let mut mode = self.settings.connect_mode();
-        let mut carries = self.settings.move_carries;
+        let mut carries = !self.settings.move_leaves_wires;
         let mut calm = self.settings.reduce_motion;
         let mut company = self.settings.company_macros.clone();
         let mut density = self.settings.xref_density();
@@ -132,7 +132,7 @@ impl NovoApp {
             self.settings.xref_density = density.id().into();
         }
         self.settings.company_macros = company;
-        self.settings.move_carries = carries;
+        self.settings.move_leaves_wires = !carries;
         self.settings.reduce_motion = calm;
         if modal.inner || modal.should_close() {
             self.wb.preferences = false;

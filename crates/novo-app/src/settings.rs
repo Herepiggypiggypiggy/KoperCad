@@ -31,9 +31,12 @@ pub struct Settings {
     /// The initials a revision is issued under (docs/DESIGN.md §7),
     /// asked once and remembered.
     pub initials: String,
-    /// Whether moving a symbol takes its wires along by default (Shift
-    /// does the other one): a per-user preference.
-    pub move_carries: bool,
+    /// Whether moving a symbol leaves its wires behind as open ends by
+    /// default (Shift does the other one): a per-user preference. Off, the
+    /// default, a moved symbol takes its wires along. (An earlier build
+    /// stored the opposite choice as `move_carries`, defaulting to leaving
+    /// them; that key is ignored so nobody keeps a default they never chose.)
+    pub move_leaves_wires: bool,
     /// Whether the live view skips its animations: states switch at once
     /// and a running motor shows an arrow instead of spinning.
     pub reduce_motion: bool,

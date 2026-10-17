@@ -289,13 +289,15 @@ moves, selected or not: the press selects it (as a click would) and the
 drag moves the whole selection if the device was already part of it. Pins
 still win within their grab zone, so a drag from a pin connects (§4, pin
 or body). The move snaps to the grid and Esc during the drag puts everything
-back. A plain drag moves the symbol alone: its wires stay where they are,
-and every wire end that was on one of its pins stays behind as an open
-end (ring and Unconnected flag, `wire.open`, §4 open ends). Where the
+back. A plain drag takes the symbol's wires along, stretching them under
+the no-overlap rules, so nothing is left open (an open end is never what
+a person wanted from moving a device). Shift+drag moves the symbol alone:
+its wires stay where they are, and every wire end that was on one of its
+pins stays behind as an open end (ring and Unconnected flag, `wire.open`,
+§4 open ends). Where the
 moved pins land on a wire or face another pin, the Auto connections
-setting decides whether they connect. Shift+drag takes the wires along,
-stretching them under the no-overlap rules. Preferences, Moving, has the
-choice "Moving a symbol: leaves its wires / takes its wires along"; the
+setting decides whether they connect. Preferences, Moving, has the
+choice "Moving a symbol: takes its wires along (default) / leaves its wires"; the
 choice only sets the default, and Shift always does the other one (the
 dock hint says "Shift: take the wires along" or "Shift: leave the wires"
 and follows the key while it is down, and the status line after the drop
@@ -870,8 +872,8 @@ Acceptance:
     opens its properties with the cursor in the tag; on a wire edits its
     number; on a page tab renames the page. The same gestures in the Connect
     tool do the wire meanings in the table and nothing else.
-18. Click a device, then drag it: it moves alone without M, its wires stay
-    and show open ends; Shift+drag stretches them live, a refused position
+18. Click a device, then drag it: it moves without M and its wires stretch
+    live and stay connected; Shift+drag leaves them as open ends, a refused position
     shown as in check 9; Esc mid-drag restores
     it; undo takes back one move. Dragging an unselected device selects and
     moves it in one gesture. M still picks up and drops.

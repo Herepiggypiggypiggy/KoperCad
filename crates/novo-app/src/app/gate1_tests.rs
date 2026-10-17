@@ -2446,21 +2446,7 @@ fn the_moving_preference_and_shift_choose_whether_wires_go_along() {
     };
     let hint = |d: &mut Drive| d.app.canvas.schematic().unwrap().status_text().unwrap();
 
-    // Default: leave the wires; the hint offers Shift for the other one.
-    d.app
-        .canvas
-        .schematic()
-        .unwrap()
-        .editor
-        .begin_move(&[AnyId::Symbol(k)]);
-    d.frame();
-    assert!(!carry(&mut d));
-    assert!(hint(&mut d).contains("Shift: take the wires along"));
-    d.app.canvas.schematic().unwrap().editor.leave_tool();
-
-    // Preference "takes its wires along": the hint flips.
-    d.app.settings.move_carries = true;
-    d.frame();
+    // Default: take the wires along; the hint offers Shift for the other one.
     d.app
         .canvas
         .schematic()
@@ -2470,6 +2456,20 @@ fn the_moving_preference_and_shift_choose_whether_wires_go_along() {
     d.frame();
     assert!(carry(&mut d));
     assert!(hint(&mut d).contains("Shift: leave the wires"));
+    d.app.canvas.schematic().unwrap().editor.leave_tool();
+
+    // Preference "leaves its wires": the hint flips.
+    d.app.settings.move_leaves_wires = true;
+    d.frame();
+    d.app
+        .canvas
+        .schematic()
+        .unwrap()
+        .editor
+        .begin_move(&[AnyId::Symbol(k)]);
+    d.frame();
+    assert!(!carry(&mut d));
+    assert!(hint(&mut d).contains("Shift: take the wires along"));
 }
 
 #[test]
