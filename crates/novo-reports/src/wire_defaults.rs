@@ -47,8 +47,17 @@ pub struct WireDefaults {
     pub fill_colours: bool,
 }
 
+/// The colour a wire gets from its cable core, when the core's name is a
+/// colour (`BN`, `GNYE`). The core decides, so nothing is filled over it.
+pub(crate) fn core_colour(project: &Project, wire: WireId) -> Option<String> {
+    let (cable, core) = project.core_of_wire(wire)?;
+    let name = &project.cable(cable)?.cores.get(core)?.name;
+    novo_checks::standards::Colour::parse(name).map(|_| name.trim().to_owned())
+}
+
 /// Which wires of the cut list have no size and no colour. A wire of a
-/// cable core counts as sized when its core is.
+/// cable core counts as sized when its core is, and as coloured when the
+/// core's name is a colour.
 pub fn unset_wires(project: &Project) -> UnsetWires {
     let mut out = UnsetWires::default();
     for item in items(project, true) {
@@ -57,7 +66,9 @@ pub fn unset_wires(project: &Project) -> UnsetWires {
             if crate::wirecut::sections(project, &[*wire]).is_empty() {
                 out.no_size.push(wire.id);
             }
-            if wire.color.as_deref().is_none_or(|c| c.trim().is_empty()) {
+            if wire.color.as_deref().is_none_or(|c| c.trim().is_empty())
+                && core_colour(project, wire.id).is_none()
+            {
                 out.no_colour.push(wire.id);
             }
         }
