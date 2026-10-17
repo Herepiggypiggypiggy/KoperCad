@@ -19,3 +19,5 @@ Next, in order
 
 Open questions
 - Where CFD-F exposes the model choice (default SST, k-epsilon as "cross check").
+
+Done later: PR 5 second-order k/omega (option), film-face fix. Next: expose the model and second-order switch in the UI via CFD-F; make second order the default only if a benchmark ever gains from it (none did).

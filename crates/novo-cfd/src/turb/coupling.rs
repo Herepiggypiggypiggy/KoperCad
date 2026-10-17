@@ -71,7 +71,21 @@ impl TurbState {
             .map(|md| md.fluid_frac.iter().map(|f| *f < MIN_OPEN).collect());
         let mut turb = TurbState::new(&grid, solid.as_deref(), cfg, ref_speed);
         if let Some(md) = &flow.cfg.medium {
-            turb.cut = md.fluid_frac.iter().map(|f| *f < 1.0 - 1e-9).collect();
+            // air cells with a thin solid share (a sheet-metal wall inside the
+            // cell) count as well: their heat capacity and conductivity are blended
+            turb.cut = (0..md.fluid_frac.len())
+                .map(|c| {
+                    md.fluid_frac[c] < 1.0 - 1e-9 || md.c_solid[c] > 0.0 || md.k_solid[c] > 0.0
+                })
+                .collect();
+        }
+        if let Some(md) = flow
+            .cfg
+            .medium
+            .as_ref()
+            .filter(|_| !flow.cfg.device_film_h.is_empty())
+        {
+            turb.film = md.dev_frac.iter().map(|d| *d >= 0.5).collect();
         }
         let open: Vec<(usize, usize, bool)> = flow
             .open
@@ -106,7 +120,14 @@ impl TurbState {
             nu[cell][2 * axis + usize::from(high)] = nu_wall;
             // a cell that also holds solid keeps the flow core's own
             // conductance (a wall alpha there is put in series wrongly)
-            if !self.cut.get(cell).copied().unwrap_or(false) {
+            // and so does a device surface: the flow core's film model
+            // (correlation, radiation, exposed area) sets its conductance
+            let ix = self.mesh.ijk(cell);
+            let film_nb = self
+                .mesh
+                .neighbour(ix, axis, high)
+                .is_some_and(|nb| self.film.get(self.mesh.cell(nb)).copied().unwrap_or(false));
+            if !film_nb && !self.cut.get(cell).copied().unwrap_or(false) {
                 alpha[cell][2 * axis + usize::from(high)] = alpha_wall;
             }
         }

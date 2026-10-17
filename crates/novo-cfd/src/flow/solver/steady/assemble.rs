@@ -370,7 +370,7 @@ impl FlowSolver {
                                 } else if let Some(aw) = wall_hi {
                                     kf = dist
                                         / (0.5 * w_hi / (aw * c_hi) + 0.5 * w_lo / self.k_cell[lo]);
-                                } else if nu_t.is_some() {
+                                } else if nu_t.is_some() && !self.film_mask[a][hi] {
                                     let eff = harmonic(k_eff(lo), k_eff(hi));
                                     let mol = harmonic(self.k_cell[lo], self.k_cell[hi]);
                                     kf *= eff / mol;
