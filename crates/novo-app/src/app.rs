@@ -35,6 +35,7 @@ mod commissioning_photos;
 mod compare;
 mod designer;
 mod device_renumber;
+mod dialog_ui;
 mod dock;
 mod drawers;
 mod duplicate;
