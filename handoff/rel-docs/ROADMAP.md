@@ -10,7 +10,7 @@ Done (PR from main, branch `claude/project-thread-d7xekx`):
 
 Next:
 1. After REL-DIAG (B2) merges: check the log folder path and the "Report a problem" wording in the tester README.
-2. After the licence decision card: add `LICENSE.txt` (not by this lane), replace the "keep it to yourself" lines in the README and notes.
+2. Licence done: MIT OR Apache-2.0, KoperVonk (Tadjiro gave permission to pick, 2026-10-17 11:03Z).
 3. Release (#928): ship `docs/TESTER-README.md` as README.txt in the portable zip and the installer, and `THIRD_PARTY_NOTICES.txt` next to it.
 4. Regenerate THIRD_PARTY_NOTICES.txt when Cargo.lock changes before the RC.
 5. At the RC: re-read both READMEs against the real build (menu names, keys, paths).
