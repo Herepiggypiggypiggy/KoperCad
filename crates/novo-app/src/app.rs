@@ -458,6 +458,9 @@ pub struct NovoApp {
     ol: outline::OutlineState,
     /// Window width last frame, which decides whether the outline pins.
     window_width: f32,
+    window_height: f32,
+    /// The window is under `layout_presets::SHORT_BELOW` points high.
+    window_short: bool,
     /// Free room between the top bar's left and right groups last frame;
     /// below zero they overlap. Read by the width test.
     top_bar_gap: f32,
@@ -538,6 +541,8 @@ impl NovoApp {
             page_view: PageView::Function,
             ol: outline::OutlineState::new(),
             window_width: 0.0,
+            window_height: 0.0,
+            window_short: false,
             top_bar_gap: 0.0,
             top_bar_right: 0.0,
             menu_bar_width: 380.0,
@@ -1186,7 +1191,8 @@ impl NovoApp {
         }
 
         self.window_width = ctx.content_rect().width();
-        self.follow_window_size(self.window_width);
+        self.window_height = ctx.content_rect().height();
+        self.follow_window(self.window_width, self.window_height);
         let pinned = self.outline_pinned() && !self.focus_mode;
         if pinned {
             self.outline_open = false;

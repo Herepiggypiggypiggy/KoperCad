@@ -174,3 +174,43 @@ fn the_inspector_pin_is_part_of_the_layout() {
     d.app.run_command(&ctx, "layout.cabinet", None);
     assert!(!d.app.wb.inspector.pinned, "the person's choice is kept");
 }
+
+#[test]
+fn short_windows_have_their_own_class_with_a_hysteresis() {
+    assert!(!next_short(None, 0.0), "not measured yet is tall");
+    assert!(next_short(None, 737.0), "1366 x 768 minus the title bar");
+    assert!(next_short(None, 720.0), "1920 x 1080 at 150%");
+    assert!(!next_short(None, 864.0), "1920 x 1080 at 125%");
+    assert!(!next_short(None, 1080.0));
+    // Near the edge the class stays as it was.
+    assert!(next_short(Some(true), 810.0));
+    assert!(!next_short(Some(false), 790.0));
+    assert!(!next_short(Some(true), 830.0));
+    assert!(next_short(Some(false), 770.0));
+}
+
+#[test]
+fn a_short_window_keeps_its_layout_apart_and_starts_from_the_tall_one() {
+    let (_dir, mut d) = open_project();
+    let ctx = d.ctx.clone();
+    d.frame();
+    d.app.follow_window(1920.0, 1000.0);
+    d.app.wb.drawer = Some(Drawer::Cables);
+    // The window gets shorter: the layout of the same width is the start.
+    d.app.follow_window(1920.0, 700.0);
+    assert!(d.app.window_short);
+    assert_eq!(d.app.wb.drawer, Some(Drawer::Cables));
+    // Closing the drawer here is remembered for short windows only.
+    d.app.wb.drawer = None;
+    d.app.follow_window(1920.0, 1000.0);
+    assert_eq!(d.app.wb.drawer, Some(Drawer::Cables), "the tall layout");
+    d.app.follow_window(1920.0, 700.0);
+    assert_eq!(d.app.wb.drawer, None, "the short layout");
+    let keys: Vec<_> = d.app.settings.workspaces.keys().cloned().collect();
+    assert!(keys.contains(&"draw/wide".to_owned()), "{keys:?}");
+    assert!(keys.contains(&"draw/wide/short".to_owned()), "{keys:?}");
+    // The reset goes back to the default for this size only.
+    d.app.run_command(&ctx, "layout.reset", None);
+    assert!(!d.app.settings.workspaces.contains_key("draw/wide/short"));
+    assert!(d.app.settings.workspaces.contains_key("draw/wide"));
+}

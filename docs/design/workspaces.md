@@ -255,6 +255,12 @@ Settings { last_workspace: Workspace, workspaces: map Workspace -> WorkspaceLayo
   pin is part of the layout. View > Layouts opens a preset; Reset this
   workspace layout (`layout.reset`) and Reset all (`layout.reset_all`) go back
   to the defaults in `layout_presets.rs`.
+- **Short windows (built).** A window under 800 points high (a 1366 x 768
+  laptop, or 1920 x 1080 at 150%) also keeps its layouts apart, under
+  `"<preset>/<class>/short"`, with a 24 point hysteresis. Until a short layout
+  is stored the window starts from the layout of the same width, so nothing
+  is lost the first time the window gets shorter. Reset this workspace layout
+  clears the layout of the size on screen only.
 - Switching restores the target's layout; leaving saves the current one.
 - The first time a workspace opens it gets its default from §3.
 - A new project opens in the workspace it was left in, with the same page and
