@@ -230,7 +230,12 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
             WireCutJob {
                 wires: item.wires.iter().map(|w| w.id).collect(),
                 cross_section_mm2: section,
-                colour: join_distinct(item.wires.iter().filter_map(|w| w.color.as_deref())),
+                colour: join_distinct(item.wires.iter().filter_map(|w| {
+                    w.color
+                        .clone()
+                        .filter(|c| !c.trim().is_empty())
+                        .or_else(|| crate::wire_defaults::core_colour(project, w.id))
+                })),
                 length_mm: length.mm,
                 cut_mm: length.mm + 2.0 * cut_list.end_allowance_mm(section),
                 basis: length.basis.text().to_owned(),
