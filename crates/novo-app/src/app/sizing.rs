@@ -279,10 +279,11 @@ pub(super) fn show_window(ctx: &egui::Context, state: &mut SizingState, devices:
 fn show_panel(ui: &mut egui::Ui, state: &mut SizingState, devices: &[SizingDevice]) {
     state.ensure_loaded();
     ui.weak("Planning values. The enclosure maker's own sizing wins.");
-    ui.add_space(4.0);
-
+    ui.add_space(6.0);
+    novo_theme::widgets::section_label(ui, "Inputs");
     egui::Grid::new("sizing_inputs")
         .num_columns(2)
+        .spacing([12.0, 6.0])
         .show(ui, |ui| {
             ui.label("Free space");
             ui.add(
@@ -320,8 +321,8 @@ fn show_panel(ui: &mut egui::Ui, state: &mut SizingState, devices: &[SizingDevic
                 ui.selectable_value(&mut state.standing, s, s.label());
             }
         });
-    ui.add_space(6.0);
-    ui.separator();
+    ui.add_space(10.0);
+    novo_theme::widgets::section_label(ui, "Result");
 
     if devices.is_empty() {
         ui.weak("This panel has no devices yet.");
@@ -338,7 +339,7 @@ fn show_panel(ui: &mut egui::Ui, state: &mut SizingState, devices: &[SizingDevic
         }
     }
     ui.add_space(8.0);
-    if ui.button("Enclosures...").clicked() {
+    if novo_theme::widgets::ghost_button(ui, "Enclosures...").clicked() {
         state.editor_open = true;
     }
 }
@@ -364,7 +365,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
                 .striped(true)
                 .show(ui, |ui| {
                     for head in ["Name", "W (mm)", "H (mm)", "D (mm)", "Plate W (mm)", "Plate H (mm)", "Margin (mm)", "Material", ""] {
-                        ui.strong(head);
+                        ui.label(egui::RichText::new(head).size(12.0).weak());
                     }
                     ui.end_row();
                     for (i, e) in state.catalog.items.iter_mut().enumerate() {
@@ -398,7 +399,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
                                         .changed();
                                 }
                             });
-                        if ui.small_button("Remove").clicked() {
+                        if novo_theme::widgets::ghost_button(ui, "Remove").clicked() {
                             remove = Some(i);
                         }
                         ui.end_row();
@@ -409,7 +410,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
             }
             ui.add_space(6.0);
             ui.horizontal(|ui| {
-                if ui.button("Add").clicked() {
+                if novo_theme::widgets::primary_button(ui, "Add").clicked() {
                     state.catalog.items.push(EnclosureSize {
                         name: format!("Enclosure {}", state.catalog.items.len() + 1),
                         width: 600.0,

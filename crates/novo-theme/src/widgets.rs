@@ -367,6 +367,16 @@ pub fn tabs(ui: &mut Ui, current: &mut usize, labels: &[&str]) -> bool {
             );
             let width = galley.size().x + 2.0 * space::M + 2.0;
             let (rect, response) = ui.allocate_exact_size(Vec2::new(width, height), Sense::click());
+            // The tab is painted, so name it for screen readers and the
+            // lesson checks that look for a control by its label.
+            response.widget_info(|| {
+                egui::WidgetInfo::selected(
+                    egui::WidgetType::SelectableLabel,
+                    true,
+                    is_current,
+                    *label,
+                )
+            });
             let color = if is_current {
                 p.text_primary
             } else if response.hovered() {
