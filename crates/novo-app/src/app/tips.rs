@@ -6,6 +6,7 @@
 //! counter in `Settings::hints_seen`; after [`HINT_LIMIT`] follows it stops
 //! showing. Help > Show hints again clears the counters.
 
+use eframe::egui;
 use novo_workflow::keymap::Keymap;
 
 use super::NovoApp;
@@ -32,6 +33,11 @@ pub(super) const HINTS: &[Hint] = &[
         id: "first_wire",
         command: "tool.connect",
         text: "Press {key} to connect pins · click one pin, then another",
+    },
+    Hint {
+        id: "empty_3d",
+        command: "cabinet.place-all",
+        text: "Nothing is on the plate yet · {key} places all devices",
     },
 ];
 
@@ -77,7 +83,42 @@ pub(super) fn page_hint(
     hint_due(settings, id).then(|| hint_text(keymap, hint))
 }
 
+/// The hint for a 3D view whose plate holds no devices, while it is due.
+pub(super) fn empty_3d_hint(
+    settings: &Settings,
+    keymap: &Keymap,
+    project: &novo_core::Project,
+    enclosure: novo_core::StructureId,
+) -> Option<String> {
+    let hint = HINTS.iter().find(|h| h.id == "empty_3d")?;
+    if !hint_due(settings, hint.id) {
+        return None;
+    }
+    let layout = novo_layout::model::load(project, enclosure)?;
+    layout
+        .placements
+        .is_empty()
+        .then(|| hint_text(keymap, hint))
+}
+
 impl NovoApp {
+    /// A control's tooltip and its lesson anchor in one call: the tooltip
+    /// reads `Label · Key` from the live keymap, and `anchor` (an id in
+    /// the Learn anchor list) lets a lesson point at the control. Every
+    /// new control with a command goes through this, so its key and its
+    /// findability are never typed by hand.
+    pub(super) fn tip(
+        &mut self,
+        response: egui::Response,
+        anchor: &str,
+        label: &str,
+        command: &str,
+    ) -> egui::Response {
+        self.anchor_response(anchor, &response, label);
+        let text = tip_text(&self.wb.keymap, label, command);
+        response.on_hover_text(text)
+    }
+
     /// A command ran: counts a use for the hint that teaches it.
     pub(super) fn hint_command_run(&mut self, command: &str) {
         for hint in HINTS.iter().filter(|h| h.command == command) {

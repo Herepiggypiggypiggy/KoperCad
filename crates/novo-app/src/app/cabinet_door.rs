@@ -224,10 +224,16 @@ impl DoorState {
                         line(ui, bad, text);
                     }
                 }
+                for text in &layout.opening_problems {
+                    line(ui, true, text.clone());
+                }
                 ui.add_space(6.0);
                 top_view(ui, e, layout, &report);
             }
             _ => {
+                for text in &layout.opening_problems {
+                    line(ui, true, text.clone());
+                }
                 ui.weak("Set the inside size to see the top view and the checks.");
             }
         }
