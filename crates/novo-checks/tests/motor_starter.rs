@@ -210,6 +210,8 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        ProblemKind::UnsizedDuct,
+        ProblemKind::GuessedWire,
         // Only reported once a standard is selected; see tests/standards.
         ProblemKind::Standard,
         ProblemKind::DisconnectionTime,

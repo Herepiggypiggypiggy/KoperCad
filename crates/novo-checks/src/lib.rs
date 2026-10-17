@@ -38,6 +38,8 @@
 //! | [`UnplacedDevice`](ProblemKind::UnplacedDevice) | info | A device not yet placed on a mounting plate |
 //! | [`WireWithoutDuct`](ProblemKind::WireWithoutDuct) | warning | A wire between placed devices that no duct serves |
 //! | [`OverfullDuct`](ProblemKind::OverfullDuct) | warning | A duct filled beyond its limit |
+//! | [`UnsizedDuct`](ProblemKind::UnsizedDuct) | info | A duct with wires through it but no cross-section, so its fill cannot be checked |
+//! | [`GuessedWire`](ProblemKind::GuessedWire) | info | Wires with no cross-section, routed with a default size (one problem for all of them) |
 //! | [`AmbiguousInterruption`](ProblemKind::AmbiguousInterruption) | warning | A name used by more than two interruption points |
 //! | [`WireNumber`](ProblemKind::WireNumber) | warning | A wire number used on two nets |
 //! | [`UntaggedDevice`](ProblemKind::UntaggedDevice) | warning | A device without a product level in its tag |
@@ -273,6 +275,13 @@ pub enum ProblemKind {
     WireWithoutDuct,
     /// A duct carrying more wires than its fill limit (novo-routing).
     OverfullDuct,
+    /// A duct that wires run through but that has no width and height, so
+    /// its fill cannot be checked (novo-routing).
+    UnsizedDuct,
+    /// Wires routed with a default size because they have no cross-section;
+    /// the fill figures are only as good as that guess (novo-routing). One
+    /// problem lists all of them.
+    GuessedWire,
     /// A rule of a selected standard is not met (IEC 60204-1, NFPA 79,
     /// UL 508A; [`standards`]). Only produced for projects that selected a
     /// standard. Each problem carries its rule id in [`Problem::rule`] and
@@ -315,7 +324,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 64] = [
+    pub const ALL: [ProblemKind; 66] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -342,6 +351,8 @@ impl ProblemKind {
         ProblemKind::UnplacedDevice,
         ProblemKind::WireWithoutDuct,
         ProblemKind::OverfullDuct,
+        ProblemKind::UnsizedDuct,
+        ProblemKind::GuessedWire,
         ProblemKind::Standard,
         ProblemKind::CableRating,
         ProblemKind::DeviceCollision,
@@ -445,6 +456,8 @@ impl ProblemKind {
             | ProblemKind::Plc => Severity::Warning,
             ProblemKind::MissingPart
             | ProblemKind::UnplacedDevice
+            | ProblemKind::UnsizedDuct
+            | ProblemKind::GuessedWire
             | ProblemKind::DepthUnknown
             | ProblemKind::PlugPins
             | ProblemKind::SameShortTag => Severity::Info,
@@ -480,6 +493,8 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "Unplaced device",
             ProblemKind::WireWithoutDuct => "Wire without duct",
             ProblemKind::OverfullDuct => "Overfull duct",
+            ProblemKind::UnsizedDuct => "Duct without size",
+            ProblemKind::GuessedWire => "Wire size guessed",
             ProblemKind::Standard => "Standards",
             ProblemKind::CableRating => "Cable rating",
             ProblemKind::DeviceCollision => "Devices overlap",
@@ -551,6 +566,8 @@ impl ProblemKind {
             ProblemKind::UnplacedDevice => "check.unplaced_device",
             ProblemKind::WireWithoutDuct => "check.wire_without_duct",
             ProblemKind::OverfullDuct => "check.overfull_duct",
+            ProblemKind::UnsizedDuct => "check.unsized_duct",
+            ProblemKind::GuessedWire => "check.guessed_wire",
             ProblemKind::Standard => "check.standard",
             ProblemKind::DeviceCollision => "check.device_collision",
             ProblemKind::DeviceOutsidePlate => "check.device_outside_plate",
