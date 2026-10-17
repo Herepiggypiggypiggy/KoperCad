@@ -335,3 +335,70 @@ fn the_safety_report_is_written_and_says_not_met() {
     let toast = d.app.messages().last().unwrap();
     assert_eq!(toast.file.as_deref(), Some(path.as_path()), "{toast:?}");
 }
+
+#[test]
+fn the_safety_calculator_survives_save_close_and_reopen() {
+    use novo_safety::{Category, Severity};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    {
+        let win = d.app.wb.safety.as_mut().unwrap();
+        win.severity = Severity::S1;
+        win.days = 120.0;
+        win.subsystems[0].name = "Door switch".into();
+        win.subsystems[0].category = Category::C4;
+        win.subsystems[0].channel1[0].basis = super::safety::PartBasis::B10d;
+        win.subsystems[0].channel1[0].value = 1_000_000.0;
+    }
+    d.frame();
+    d.frame();
+    assert!(
+        d.app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .info()
+            .properties
+            .contains_key(super::safety_calc::CALCULATOR_KEY)
+    );
+    let path = dir.path().join("plant.novo");
+    assert!(d.app.save_to(&path));
+    d.app.run(&ctx, Action::CloseProject);
+    d.frame();
+    d.app.open_path_as(&path, false);
+    d.frame();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    let win = d.app.wb.safety.as_ref().unwrap();
+    assert_eq!(win.severity, Severity::S1);
+    assert_eq!(win.days, 120.0);
+    assert_eq!(win.subsystems[0].name, "Door switch");
+    assert_eq!(win.subsystems[0].category, Category::C4);
+    assert_eq!(win.subsystems[0].channel1[0].value, 1_000_000.0);
+}
+
+#[test]
+fn an_untouched_safety_calculator_leaves_no_trace_in_the_project() {
+    let (_dir, mut d, _) = open();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    d.frame();
+    d.app.wb.queued.push("check.safety");
+    d.frame();
+    assert!(
+        !d.app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .info()
+            .properties
+            .contains_key(super::safety_calc::CALCULATOR_KEY)
+    );
+}

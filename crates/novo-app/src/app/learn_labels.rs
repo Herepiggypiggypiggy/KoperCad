@@ -78,6 +78,9 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("cabinet.plate_drawing", "Plate drawing"),
     ("cabinet.more", "More"),
     ("issues.list", "Issues list"),
+    ("issues.waive_reason", "Reason"),
+    ("issues.waive", "Waive"),
+    ("issues.restore", "Restore"),
     ("macro.place", "Place macro"),
     ("macros.window", "Macros"),
 ];

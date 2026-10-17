@@ -304,6 +304,11 @@ pub const JOB_COLUMNS: [&str; 16] = [
     "Length basis",
 ];
 
+/// Title of the table of wires to cut, with its count: every connection of
+/// the wire list plus the supply and PE leads that end on a feed.
+pub(crate) const WIRE_CUT_COUNT_TITLE: &str =
+    "Wires to cut · {n} (device pin to device pin, plus supply and PE leads)";
+
 fn job_cells(n: usize, j: &WireCutJob) -> Vec<Cell> {
     vec![
         Cell::Int(n as i64),
@@ -420,7 +425,8 @@ impl Report for WireCut {
             Column::new("to", "To", 25.0),
             Column::new("basis", "Length basis", 14.0),
         ];
-        let mut cuts = Section::new("cuts", "Wires to cut", columns);
+        let title = WIRE_CUT_COUNT_TITLE.replace("{n}", &jobs.len().to_string());
+        let mut cuts = Section::new("cuts", &title, columns);
         for (i, j) in jobs.iter().enumerate() {
             cuts.push(
                 job_cells(i + 1, j),

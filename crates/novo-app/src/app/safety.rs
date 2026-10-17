@@ -5,8 +5,8 @@
 //! the achieved PL, with the series total against the requirement.
 //!
 //! This is a calculation aid, not a certification: the engine's own
-//! disclaimer is shown in the window. The functions are kept for the
-//! session; use "Copy as text" to put the result in the documentation.
+//! disclaimer is shown in the window. The functions and the calculator are kept
+//! in the project; use "Copy as text" to put the result in the documentation.
 
 use std::fmt::Write as _;
 
@@ -175,11 +175,21 @@ fn pl_text(pl: PerformanceLevel) -> String {
 impl NovoApp {
     pub(super) fn toggle_safety(&mut self) {
         match self.wb.safety.take() {
-            Some(win) if win.bound.dirty => {
-                self.store_safety_functions(&win.bound.list);
+            Some(win) => {
+                if win.bound.dirty {
+                    self.store_safety_functions(&win.bound.list);
+                }
+                self.wb.safety = Some(win);
+                self.store_safety_calculator();
+                self.wb.safety = None;
             }
-            Some(_) => {}
-            None if self.is_open() => self.wb.safety = Some(SafetyWindow::default()),
+            None if self.is_open() => {
+                let mut win = SafetyWindow::default();
+                if let Some(d) = self.backend.document() {
+                    super::safety_calc::load(&mut win, d.project());
+                }
+                self.wb.safety = Some(win);
+            }
             None => {}
         }
     }
@@ -201,7 +211,7 @@ impl NovoApp {
                 ui.colored_label(crate::theme::ui_palette().warning, DISCLAIMER);
                 super::dialog_ui::hint(
                     ui,
-                    "ISO 13849-1. Project safety functions are kept in the project; the free calculator below is kept for this session only.",
+                    "ISO 13849-1. Project safety functions are kept in the project; the free calculator below is kept in the project too.",
                 );
                 ui.separator();
                 super::safety_functions::section(ui, &project, &mut win.bound, &mut copy, &mut export);
@@ -223,8 +233,14 @@ impl NovoApp {
         if open {
             self.wb.safety = Some(win);
             self.commit_safety_functions(ctx);
-        } else if win.bound.dirty {
-            self.store_safety_functions(&win.bound.list);
+            self.commit_safety_calculator(ctx);
+        } else {
+            if win.bound.dirty {
+                self.store_safety_functions(&win.bound.list);
+            }
+            self.wb.safety = Some(win);
+            self.store_safety_calculator();
+            self.wb.safety = None;
         }
     }
 }

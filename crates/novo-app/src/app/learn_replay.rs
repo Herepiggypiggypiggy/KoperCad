@@ -228,6 +228,45 @@ impl Drive {
                 Ok(())
             }
             SolveOp::AssignPart(a) => self.replay_assign_part(&a.assign_part),
+            SolveOp::UiClick(u) => {
+                self.app.wb.wheel = None;
+                self.frame();
+                self.frame();
+                let rect = self
+                    .app
+                    .learn_anchor(&u.ui_click)
+                    .ok_or_else(|| format!("the control `{}` is not on screen", u.ui_click))?;
+                self.pointer_click(rect.center(), false);
+                Ok(())
+            }
+            SolveOp::ListRow(l) => {
+                let l = &l.list_row;
+                self.app.wb.wheel = None;
+                self.frame();
+                self.frame();
+                let rect = self.app.learn_row_rect(&l.list, &l.row).ok_or_else(|| {
+                    format!(
+                        "no row `{}` in `{}` (rows drawn: {})",
+                        l.row,
+                        l.list,
+                        self.app.learn_rows_drawn(&l.list)
+                    )
+                })?;
+                self.pointer_click(rect.center(), l.right);
+                if let Some(entry) = &l.choose {
+                    let rect = self
+                        .app
+                        .learn_row_rect(&l.list, entry)
+                        .ok_or_else(|| format!("no menu entry `{entry}` for `{}`", l.list))?;
+                    self.pointer_click(rect.center(), false);
+                }
+                Ok(())
+            }
+            SolveOp::TypeText(t) => {
+                self.frame_with(vec![egui::Event::Text(t.type_text.clone())]);
+                self.frame();
+                Ok(())
+            }
             SolveOp::Rename(r) => self.replay_rename(&r.rename.target, &r.rename.to),
             SolveOp::CabinetPlace(c) => {
                 let a = &c.cabinet_place;
@@ -657,8 +696,21 @@ impl Drive {
         // Windows an earlier lesson's solve left open would sit over the
         // controls this lesson clicks.
         self.app.wb.macros.open = false;
+        self.app.wb.macro_save = None;
+        self.app.wb.project_settings = false;
         self.app.wb.numbering = None;
         self.app.wb.wheel = None;
+        // And so would a dialog (settings, shortcuts): Escape closes each.
+        for _ in 0..4 {
+            self.frame_with(vec![egui::Event::Key {
+                key: egui::Key::Escape,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }]);
+            self.frame();
+        }
         self.app.start_lesson(id);
         self.frame();
         self.frame();
@@ -765,6 +817,25 @@ impl Drive {
                 format!("{lesson}/{}: `{ids}`", step.id)
             })
             .collect()
+    }
+
+    /// A pointer click at `at`, with the right button when `secondary`.
+    fn pointer_click(&mut self, at: egui::Pos2, secondary: bool) {
+        let button = |pressed| egui::Event::PointerButton {
+            pos: at,
+            button: if secondary {
+                egui::PointerButton::Secondary
+            } else {
+                egui::PointerButton::Primary
+            },
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        };
+        self.frame_with(vec![egui::Event::PointerMoved(at)]);
+        self.frame_with(vec![button(true)]);
+        self.frame_with(vec![button(false)]);
+        self.frame();
+        self.frame();
     }
 
     /// A real pointer click on the middle of an anchored control.

@@ -80,6 +80,9 @@ mod heat_run;
 mod heat_run_tests;
 mod heat_settings;
 mod heat_spots;
+mod heat_time;
+#[cfg(test)]
+mod heat_time_tests;
 mod inspector;
 mod interop;
 mod languages;
@@ -140,6 +143,7 @@ mod reports;
 mod reports_view;
 mod revisions;
 mod safety;
+mod safety_calc;
 mod safety_functions;
 mod safety_report;
 mod scene_dump;
@@ -1946,9 +1950,16 @@ impl NovoApp {
         let on_pill = ctx
             .pointer_interact_pos()
             .is_some_and(|p| self.wb.pill_rect.contains(p));
+        // A menu opened from a row of the list (right-click) sits in a layer
+        // of its own; choosing from it is not a click elsewhere.
+        let on_popup = ctx.pointer_interact_pos().is_some_and(|p| {
+            ctx.layer_id_at(p)
+                .is_some_and(|l| l != area.response.layer_id && l.order >= egui::Order::Foreground)
+        });
         let elsewhere = area.response.clicked_elsewhere()
             && !opener(&toggle)
             && !on_pill
+            && !on_popup
             && !self.breadcrumb_link.as_ref().is_some_and(opener);
         if escape || elsewhere {
             self.outline_open = false;

@@ -31,8 +31,8 @@ use super::heat_compare::{self, Diff};
 use super::heat_progress;
 use super::heat_run::{Event, Runner, Solution};
 use super::heat_settings::HeatSettings;
-use novo_cfd::Progress;
 use novo_cfd::sched::Outcome;
+use novo_cfd::{CfdError, Progress};
 
 /// Opacity of the map over the drawing; the devices stay readable through it.
 const MAP_ALPHA: f32 = 0.62;
@@ -125,6 +125,10 @@ pub(super) struct HeatState {
     notice: Option<String>,
     /// Quality level, turbulence model and vents of the next run.
     pub settings: HeatSettings,
+    /// The heat-up over time: frames and the slider over them.
+    pub(super) time: super::heat_time::TimeLine,
+    /// The next run is a heat-up over time, not a steady state.
+    transient_wanted: bool,
 }
 
 /// Where a cached picture came from.
@@ -179,6 +183,8 @@ impl HeatState {
             test_solver: None,
             notice: None,
             settings: HeatSettings::default(),
+            time: super::heat_time::TimeLine::new(),
+            transient_wanted: false,
         }
     }
 
@@ -252,13 +258,20 @@ impl HeatState {
     }
 
     pub(super) fn running(&self) -> bool {
-        self.run.is_some()
+        self.run.is_some() || self.time.running()
     }
 
     /// `heat.simulate`: show the Heat view and start a run on the next frame.
     pub(super) fn request_run(&mut self) {
         self.on = true;
         self.requested = true;
+    }
+
+    /// "Heat-up": show the Heat view and start a run over time on the next
+    /// frame.
+    pub(super) fn request_transient(&mut self) {
+        self.request_run();
+        self.transient_wanted = true;
     }
 
     /// True once per request; the caller then calls [`HeatState::start`].
@@ -279,10 +292,18 @@ impl HeatState {
         meta: Meta,
         top: novo_cfd::Fidelity,
     ) {
-        if self.run.is_some() {
+        if self.running() {
+            self.transient_wanted = false;
             return;
         }
         self.notice = None;
+        if std::mem::take(&mut self.transient_wanted) {
+            let spec = super::heat_time::spec_for_minutes(f64::from(self.time.minutes));
+            self.time
+                .start(super::heat_time::default_solver(), scenario, spec, meta);
+            return;
+        }
+        self.time.clear();
         self.live.clear_superseded();
         self.runs += 1;
         self.pending = Some(meta);
@@ -313,10 +334,12 @@ impl HeatState {
         if let Some(r) = &self.run {
             r.cancel();
         }
+        self.time.cancel();
     }
 
     /// Takes in what the worker has published. Called every frame.
     pub(super) fn poll(&mut self, ctx: &egui::Context) {
+        self.poll_time(ctx);
         let Some(run) = self.run.as_mut() else {
             return;
         };
@@ -373,6 +396,52 @@ impl HeatState {
             self.progress = None;
         } else {
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
+        }
+    }
+
+    /// Takes in the frames of a heat-up and steps the playback.
+    fn poll_time(&mut self, ctx: &egui::Context) {
+        use super::heat_time::Event as T;
+        for e in self.time.poll() {
+            match e {
+                T::Frame(f) => {
+                    let Some(m) = self.time.meta().cloned() else {
+                        continue;
+                    };
+                    self.snap_seq += 1;
+                    let solution = Arc::new(Solution {
+                        snapshot: f.snapshot,
+                        id: self.snap_seq,
+                        scenario_key: m.scenario_key,
+                        layout_key: m.layout_key,
+                        ambient: m.ambient,
+                        plate: m.plate,
+                        messages: m.messages,
+                    });
+                    self.time.push(f.time_s, f.load_factor, solution);
+                }
+                T::Finished(result) => {
+                    self.notice = match &result {
+                        Ok(_) => None,
+                        Err(CfdError::Cancelled) => {
+                            Some("Stopped: the heat-up ends where it was cancelled".into())
+                        }
+                        Err(e) => Some(format!("The heat-up failed: {e}")),
+                    };
+                    self.time.finish(result.ok());
+                }
+                T::Lost => {
+                    self.notice = Some("The heat-up stopped unexpectedly".into());
+                    self.time.finish(None);
+                }
+            }
+        }
+        self.time.tick(ctx.input(|i| i.time));
+        if let Some(sol) = self.time.take_selection() {
+            self.solution = Some(sol);
+        }
+        if self.time.running() || self.time.playing {
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
     }
 
@@ -725,7 +794,27 @@ pub(super) fn simulate_controls(ui: &mut egui::Ui, state: &mut HeatState) {
 /// [`simulate_controls`]; `chip` says whether to add the out of date line
 /// (the 3D panel has its own sentence for it).
 pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, chip: bool) {
-    if state.running() {
+    if state.time.running() {
+        if ui
+            .button("Cancel")
+            .on_hover_text("Stop the heat-up and keep the frames so far")
+            .clicked()
+        {
+            state.cancel();
+        }
+        ui.add(
+            egui::ProgressBar::new(state.time.progress())
+                .desired_width(150.0)
+                .text(
+                    egui::RichText::new(format!(
+                        "Heat-up · {} frames · {:.0} s",
+                        state.time.frames.len(),
+                        state.time.elapsed_s()
+                    ))
+                    .small(),
+                ),
+        );
+    } else if state.running() {
         if ui
             .button("Cancel")
             .on_hover_text("Stop the simulation and keep the latest result")
@@ -765,6 +854,7 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         if simulate.clicked() {
             state.request_run();
         }
+        heat_up_controls(ui, state);
         compare_controls(ui, state);
         if let Some(sol) = &state.solution {
             let p = &sol.snapshot.progress;
@@ -780,6 +870,25 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
     if let Some(n) = &state.notice {
         ui.label(egui::RichText::new(n).small().color(t::WARNING));
     }
+}
+
+/// Heat-up: start a run over time, and the time slider after one.
+fn heat_up_controls(ui: &mut egui::Ui, state: &mut HeatState) {
+    let b = ui.button("Heat-up").on_hover_text(format!(
+        "Simulate how the cabinet heats up from cold over the chosen time. {}",
+        super::heat_time::ESTIMATE_LABEL
+    ));
+    if b.clicked() {
+        state.request_transient();
+    }
+    ui.add(
+        egui::DragValue::new(&mut state.time.minutes)
+            .range(1.0..=1440.0)
+            .speed(1.0)
+            .suffix(" min"),
+    )
+    .on_hover_text("How long the heat-up lasts");
+    super::heat_time::strip(ui, &mut state.time);
 }
 
 /// The devices of a layout as the Heat view reads them (shared by the

@@ -8,3 +8,4 @@
 2026-10-15 20:15 UTC #371 merged. Connection PR: route_connections, anchors at footprint edge midpoints.
 2026-10-15 20:40 UTC #381 merged. Follow-up: library pin direction for anchors, duplicate connection ids unrouted. Wire list thread owns the WireList column; I take the novo-checks routing problems next.
 2026-10-15 21:15 UTC #460 merged: Cabinet routes overlay, route_project, OverlayCache. Waiting on #413 for the two infos; hook is the UI integration thread's.
+2026-10-17 UnsizedDuct and GuessedWire infos added to novo-checks (routing()), 3 tests in tests/design_checks.rs.
