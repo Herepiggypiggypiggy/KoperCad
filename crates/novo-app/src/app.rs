@@ -2366,6 +2366,24 @@ mod tests {
     }
 
     #[test]
+    fn the_interface_size_setting_scales_the_ui_once() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(ctx.zoom_factor(), 1.0);
+        app.settings.ui_scale = 150;
+        // egui takes the new zoom at the end of the pass.
+        frame(&ctx, &mut app, Default::default());
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(ctx.zoom_factor(), 1.5);
+        // Anything else is 100%.
+        app.settings.ui_scale = 137;
+        frame(&ctx, &mut app, Default::default());
+        frame(&ctx, &mut app, Default::default());
+        assert_eq!(ctx.zoom_factor(), 1.0);
+    }
+
+    #[test]
     fn renders_with_and_without_a_project() {
         let ctx = themed_ctx();
         let mut app = app_with(MemoryBackend::default());
