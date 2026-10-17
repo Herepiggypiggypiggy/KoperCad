@@ -8,7 +8,7 @@
 //! [`revision_description`] writes what changed for the revision they are
 //! issued under.
 
-use novo_core::{Command, DeviceTag, Project};
+use novo_core::{Command, DeviceTag, Project, Record};
 use serde::{Deserialize, Serialize};
 
 use crate::check::Target;
@@ -22,6 +22,8 @@ pub enum Change {
     WireNumber(String),
     /// The device carries this tag on the machine.
     DeviceTag(String),
+    /// The terminal carries this designation on the machine (`3`, `PE`).
+    TerminalName(String),
 }
 
 impl Change {
@@ -32,6 +34,7 @@ impl Change {
             (Change::Note, _)
                 | (Change::WireNumber(_), Target::Wire(_))
                 | (Change::DeviceTag(_), Target::Device(_))
+                | (Change::TerminalName(_), Target::Terminal(_))
         )
     }
 
@@ -84,6 +87,7 @@ impl Redline {
             Change::Note => format!("{}: {}", self.label, self.note.trim()),
             Change::WireNumber(n) => format!("Wire {} renumbered {}", self.label, n.trim()),
             Change::DeviceTag(t) => format!("Device {} renamed {}", self.label, t.trim()),
+            Change::TerminalName(n) => format!("Terminal {} renamed {}", self.label, n.trim()),
         }
     }
 }
@@ -124,6 +128,32 @@ fn command_of(r: &Redline, project: &Project) -> Result<Command, String> {
                 .parse()
                 .map_err(|e| format!("{} cannot be renamed to {tag}: {e}", r.label))?;
             Ok(Command::SetTag { device, tag })
+        }
+        (Change::TerminalName(name), Target::Terminal(terminal)) => {
+            let Some(current) = project.terminal(terminal) else {
+                return Err(format!("{} is no longer in the drawing", r.label));
+            };
+            let name = name.trim();
+            if name.is_empty() {
+                return Err(format!("{} needs a designation", r.label));
+            }
+            // A second terminal of the strip with the same designation would
+            // join with this one; that is for the editor to do on purpose.
+            let taken = project
+                .terminals_of_strip(current.strip)
+                .into_iter()
+                .any(|t| t.id != terminal && t.level == current.level && t.name == name);
+            if taken {
+                return Err(format!(
+                    "{} cannot be renamed {name}: the strip already has a terminal {name}",
+                    r.label
+                ));
+            }
+            let mut renamed = current.clone();
+            renamed.name = name.to_owned();
+            Ok(Command::Replace {
+                record: Record::Terminal(renamed),
+            })
         }
         _ => Err(format!("{}: the change does not fit the object", r.label)),
     }
