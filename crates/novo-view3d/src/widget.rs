@@ -67,6 +67,8 @@ pub struct RenderStats {
     /// median and 95th percentile of the last renders. GPU time is not in it.
     pub cpu_p50_ms: f32,
     pub cpu_p95_ms: f32,
+    /// Whether the last render ran the screen-space occlusion passes.
+    pub ssao: bool,
 }
 
 struct Recorder {
@@ -108,6 +110,7 @@ pub fn render_stats() -> Option<RenderStats> {
         msaa: r.msaa,
         cpu_p50_ms: percentile(&cpu, 0.5),
         cpu_p95_ms: percentile(&cpu, 0.95),
+        ssao: r.last.ssao,
     })
 }
 
@@ -158,6 +161,9 @@ pub fn install(render_state: &egui_wgpu::RenderState, msaa_samples: u32) {
 
 /// Tells the statistics and the frame governor which adapter draws. [`install`]
 /// does it; a host without a window (tests, headless tools) calls it itself.
+/// It replaces the process-wide recorder the Stats panel reads, so a test that
+/// calls it, or reads that panel's height, takes `STATS_GUARD` (in the app's
+/// `view3d_move_tests`) to keep parallel tests apart.
 pub fn register_adapter(name: &str, backend: &str, tier: Tier) {
     if let Ok(mut guard) = STATS.lock() {
         *guard = Some(Recorder {
@@ -185,6 +191,40 @@ pub fn is_installed() -> bool {
     INSTALLED.load(Ordering::Relaxed)
 }
 
+/// What the one frame governor steps through: screen-space occlusion first
+/// (the costliest optional pass), then the adapter's tier (resolution while
+/// moving, MSAA, shadow map). Never up by itself; `View3d::reset_quality`
+/// starts again from the adapter.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Level {
+    pub tier: Tier,
+    /// Occlusion may be drawn (when the user's switch is on too).
+    pub ssao: bool,
+}
+
+impl Level {
+    /// Where an adapter of this tier starts: discrete GPUs with occlusion
+    /// (it steps down by itself if the view is slow), the others without.
+    pub fn start(tier: Tier) -> Self {
+        Self {
+            tier,
+            ssao: tier == Tier::Discrete,
+        }
+    }
+}
+
+impl crate::governor::Step for Level {
+    fn step_down(self) -> Option<Self> {
+        if self.ssao {
+            return Some(Self {
+                ssao: false,
+                ..self
+            });
+        }
+        self.tier.step_down().map(|tier| Self { tier, ssao: false })
+    }
+}
+
 struct Resources {
     renderer: Renderer,
     blitter: Blitter,
@@ -210,6 +250,9 @@ struct Callback {
     mode: Mode,
     /// The tier the frame governor stepped down to, if it did.
     governed: Option<Tier>,
+    /// Screen-space occlusion for this picture: the switch, the adapter and
+    /// the frame governor all agree.
+    ssao: bool,
     overlays: Arc<Vec<Overlay>>,
     overlay_revision: u64,
     key: u64,
@@ -242,9 +285,10 @@ impl egui_wgpu::CallbackTrait for Callback {
             used: now,
         });
         slot.used = now;
+        let ssao = self.ssao;
         if slot.key != Some(self.key) {
             let used = self.governed.unwrap_or(*tier);
-            let quality = Quality::new(self.mode, used);
+            let quality = Quality::new(self.mode, used).with_ssao(ssao);
             let stats = renderer.render(
                 device,
                 queue,
@@ -351,8 +395,8 @@ pub struct View3dOutput {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ItemDrag {
     pub id: ItemId,
-    /// The pointer's move on the plate plane since the press (x right, y
-    /// down, mm).
+    /// The pointer's move since the press, on the plate plane (x right, y
+    /// down, mm) or, for an item with a `drag_plane`, on that surface.
     pub delta: (f64, f64),
     /// The button was released this frame.
     pub done: bool,
@@ -400,6 +444,12 @@ fn color3(c: [u8; 3], alpha: u8) -> Color32 {
     Color32::from_rgba_unmultiplied(c[0], c[1], c[2], alpha)
 }
 
+#[cfg(test)]
+thread_local! {
+    /// Label chips laid out so far on this thread (tests only).
+    static LAID_OUT: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// One 3D view: camera, user state and input handling.
 pub struct View3d {
     id: u64,
@@ -425,7 +475,7 @@ pub struct View3d {
     pub drag_items: bool,
     /// The item under the press of the current left drag, and the plate point
     /// of the press.
-    item_grab: Option<(ItemId, (f64, f64))>,
+    item_grab: Option<(ItemId, (f64, f64), Option<crate::drag_plane::DragPlane>)>,
     /// Where the last Alt + click landed and how many times in a row.
     alt_cycle: Option<(Pos2, usize)>,
     last_aspect: f32,
@@ -434,7 +484,7 @@ pub struct View3d {
     overlay_revision: u64,
     door: Option<DoorAnim>,
     /// Steps the render quality down when moving frames stay slow.
-    governor: Option<FrameGovernor<Tier>>,
+    governor: Option<FrameGovernor<Level>>,
     /// The source scene and its copy with the animated door angle.
     door_scene: Option<(Arc<Scene>, Arc<Scene>)>,
 }
@@ -499,7 +549,7 @@ impl View3d {
     /// [`show`]: View3d::show
     pub fn govern(&mut self, ctx: &egui::Context, moving: bool) -> Option<Tier> {
         if self.governor.is_none() {
-            self.governor = adapter_tier().map(|t| FrameGovernor::new(t, false));
+            self.governor = adapter_tier().map(|t| FrameGovernor::new(Level::start(t), false));
         }
         let gov = self.governor.as_mut()?;
         if moving {
@@ -508,13 +558,34 @@ impl View3d {
                 ctx.request_repaint();
             }
         }
-        (Some(gov.tier) != adapter_tier()).then_some(gov.tier)
+        (Some(gov.tier.tier) != adapter_tier()).then_some(gov.tier.tier)
     }
 
     /// The tier the frame governor stepped down to, if it did.
     pub fn stepped_down(&self) -> Option<Tier> {
         let gov = self.governor.as_ref()?;
-        (Some(gov.tier) != adapter_tier()).then_some(gov.tier)
+        (Some(gov.tier.tier) != adapter_tier()).then_some(gov.tier.tier)
+    }
+
+    /// Whether the frame governor has paused screen-space occlusion (the first
+    /// thing it gives up) on an adapter that would start with it.
+    pub fn occlusion_paused(&self) -> bool {
+        let Some(gov) = self.governor.as_ref() else {
+            return false;
+        };
+        !gov.tier.ssao && adapter_tier().is_some_and(|t| Level::start(t).ssao)
+    }
+
+    /// Whether this adapter draws screen-space occlusion at all (discrete
+    /// GPUs; the others start without it and never get it).
+    pub fn occlusion_available(&self) -> bool {
+        adapter_tier().is_some_and(|t| Level::start(t).ssao)
+    }
+
+    /// Whether occlusion is drawn now: the switch is on and the governor
+    /// still allows it.
+    fn occlusion_now(&self) -> bool {
+        self.state.display.ssao && self.governor.as_ref().is_some_and(|g| g.tier.ssao)
     }
 
     /// Forgets the governor's step-downs: the next moving frames start again
@@ -572,37 +643,59 @@ impl View3d {
         adjusted.clone()
     }
 
+    /// Whether the camera has been put somewhere on purpose (fitted when the
+    /// view was first shown, or moved by a fit or a saved view) rather than
+    /// still being the default.
+    pub fn is_fitted(&self) -> bool {
+        !self.needs_fit
+    }
+
     /// Frames the whole scene on the next frame.
     pub fn request_fit(&mut self) {
         self.needs_fit = true;
     }
 
     /// Eases to a view cube face from where the camera is (`view.iso` and the cube).
+    ///
+    /// With something selected the view frames the selection, so "front" and
+    /// "top" look at what you picked; with nothing selected it frames the
+    /// whole scene.
     pub fn go_to(&mut self, preset: ViewPreset, scene: &Scene, now: f64, reduced: bool) {
         let mut to = self.camera;
         feel::enter_standard(&mut to, preset);
-        to.fit(&scene.bounds(), self.last_aspect);
+        to.fit(&self.framing_bounds(scene), self.last_aspect);
+        self.auto_ortho = to.projection == Projection::Orthographic;
+        self.animate_to(to, now, reduced);
+    }
+
+    /// Eases the camera to `to` (a saved view).
+    pub fn go_to_camera(&mut self, to: Camera, now: f64, reduced: bool) {
         self.auto_ortho = to.projection == Projection::Orthographic;
         self.animate_to(to, now, reduced);
     }
 
     /// `view.fit`: the selection, or everything when nothing is selected.
     pub fn fit(&mut self, scene: &Scene, now: f64, reduced: bool) {
+        let b = self.framing_bounds(scene);
+        let mut to = self.camera;
+        to.fit(&b, self.last_aspect);
+        self.animate_to(to, now, reduced);
+    }
+
+    /// What a fit or a standard view frames: the selection, or the scene.
+    fn framing_bounds(&self, scene: &Scene) -> crate::math::Aabb {
         let mut b = crate::math::Aabb::EMPTY;
         for id in &self.state.selection {
             if let Some(item) = scene.get(*id) {
                 b = b.union(&scene.world_bounds(item));
             }
         }
-        if b.is_empty() {
-            b = scene.bounds();
-        }
-        let mut to = self.camera;
-        to.fit(&b, self.last_aspect);
-        self.animate_to(to, now, reduced);
+        if b.is_empty() { scene.bounds() } else { b }
     }
 
     fn animate_to(&mut self, to: Camera, now: f64, reduced: bool) {
+        // Moving the camera on purpose replaces the first-show fit.
+        self.needs_fit = false;
         self.inertia.stop();
         let mut tr = Transition::new(self.camera, to, reduced);
         if tr.done() {
@@ -722,19 +815,23 @@ impl View3d {
             self.last_activity = now;
         }
 
+        let lines_pan = self.state.display.trackpad_pans;
         let (space, alt, (scroll, touch_pan), zoom, hover_pos) = ctx.input(|i| {
             (
                 i.key_down(Key::Space),
                 i.modifiers.alt,
-                split_wheel(i.events.iter().filter_map(|e| match e {
-                    egui::Event::MouseWheel {
-                        unit,
-                        delta,
-                        modifiers,
-                        ..
-                    } => Some((*unit, *delta, modifiers.command)),
-                    _ => None,
-                })),
+                split_wheel(
+                    i.events.iter().filter_map(|e| match e {
+                        egui::Event::MouseWheel {
+                            unit,
+                            delta,
+                            modifiers,
+                            ..
+                        } => Some((*unit, *delta, modifiers.command)),
+                        _ => None,
+                    }),
+                    lines_pan,
+                ),
                 i.zoom_delta(),
                 i.pointer.hover_pos(),
             )
@@ -846,10 +943,9 @@ impl View3d {
             match grabbed {
                 Some((p, hit)) => {
                     let ray = self.camera.ray(Self::ndc(rect, p), aspect);
-                    let start = ray
-                        .plane_hit(Vec3::ZERO, Vec3::Z)
-                        .map(|t| scene.frame.plate(ray.at(t)));
-                    self.item_grab = start.map(|s| (hit.id, s));
+                    let plane = scene.get(hit.id).and_then(|i| i.drag_plane);
+                    let start = crate::drag_plane::drag_point(&ray, plane.as_ref(), &scene.frame);
+                    self.item_grab = start.map(|s| (hit.id, s, plane));
                 }
                 None => self.marquee_from = press,
             }
@@ -859,14 +955,13 @@ impl View3d {
         if self.item_grab.is_some() && ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.item_grab = None;
         }
-        if let Some((id, start)) = self.item_grab {
+        if let Some((id, start, plane)) = self.item_grab {
             let released = response.drag_stopped_by(PointerButton::Primary);
             let now = hover_pos
                 .or_else(|| ctx.input(|i| i.pointer.latest_pos()))
                 .and_then(|p| {
                     let ray = self.camera.ray(Self::ndc(rect, p), aspect);
-                    ray.plane_hit(Vec3::ZERO, Vec3::Z)
-                        .map(|t| scene.frame.plate(ray.at(t)))
+                    crate::drag_plane::drag_point(&ray, plane.as_ref(), &scene.frame)
                 });
             if let Some(now) = now {
                 out.item_drag = Some(ItemDrag {
@@ -1018,6 +1113,7 @@ impl View3d {
         // Frame governor: only frames of a moving view count (an idle view
         // repaints rarely, which is not slowness).
         let governed = self.govern(&ctx, idle <= f64::EPSILON);
+        let ssao = self.occlusion_now();
 
         let ppp = ctx.pixels_per_point();
         let size_px = (
@@ -1030,7 +1126,7 @@ impl View3d {
             &self.camera,
             &self.state,
             size_px,
-            (mode, governed),
+            (mode, governed, ssao),
             self.overlay_revision,
         );
         ui.painter().add(egui_wgpu::Callback::new_paint_callback(
@@ -1045,6 +1141,7 @@ impl View3d {
                 size_px,
                 mode,
                 governed,
+                ssao,
                 overlays: self.overlays.clone(),
                 overlay_revision: self.overlay_revision,
                 key,
@@ -1100,14 +1197,22 @@ impl View3d {
                 dist,
                 rect.height() * ppp,
             ) / ppp;
-            if let (true, Some(label)) = (self.state.display.labels, &item.label)
+            let selected = self.state.selection.contains(&item.id);
+            let hovered = self.state.hover == Some(item.id);
+            // A chip that cannot show (too small on screen, neither selected
+            // nor hovered) is not laid out, unless it is still fading out.
+            let could_show = selected
+                || hovered
+                || size_pt >= labels::MIN_DEVICE_PX
+                || self.label_fades.contains_key(&item.id);
+            if let (true, true, Some(label)) = (self.state.display.labels, could_show, &item.label)
                 && let Some(p) = self.project_in(rect, bounds, front)
             {
                 let galley =
                     painter.layout_no_wrap(label.to_string(), font.clone(), Color32::PLACEHOLDER);
+                #[cfg(test)]
+                LAID_OUT.with(|c| c.set(c.get() + 1));
                 let size = galley.size() + Vec2::new(8.0, 4.0);
-                let selected = self.state.selection.contains(&item.id);
-                let hovered = self.state.hover == Some(item.id);
                 candidates.push(LabelCandidate {
                     id: chips.len() as u64,
                     rect: [p.x - size.x * 0.5, p.y - size.y * 0.5, size.x, size.y],
@@ -1154,7 +1259,8 @@ impl View3d {
         }
 
         // Label chips: which ones show, then fade them in and out.
-        let shown = labels::visible_labels(&candidates);
+        let shown: std::collections::HashSet<u64> =
+            labels::visible_labels(&candidates).into_iter().collect();
         let mut touched: HashMap<ItemId, Fade> = HashMap::new();
         for (n, chip) in chips.iter().enumerate() {
             let on = shown.contains(&(n as u64));
@@ -1366,7 +1472,10 @@ fn paint_face_label(
 /// and precision touchpad, so there a swipe still zooms: not verified on
 /// Windows hardware). Events with Ctrl or Cmd held are the pinch gesture's
 /// (egui turns them into a zoom delta) and count for neither.
-fn split_wheel(events: impl Iterator<Item = (egui::MouseWheelUnit, Vec2, bool)>) -> (f32, Vec2) {
+fn split_wheel(
+    events: impl Iterator<Item = (egui::MouseWheelUnit, Vec2, bool)>,
+    lines_pan: bool,
+) -> (f32, Vec2) {
     let mut zoom = 0.0;
     let mut pan = Vec2::ZERO;
     for (unit, delta, command) in events {
@@ -1374,6 +1483,7 @@ fn split_wheel(events: impl Iterator<Item = (egui::MouseWheelUnit, Vec2, bool)>)
             continue;
         }
         match unit {
+            egui::MouseWheelUnit::Line if lines_pan => pan += delta * POINTS_PER_NOTCH,
             egui::MouseWheelUnit::Line => zoom += delta.y * POINTS_PER_NOTCH,
             egui::MouseWheelUnit::Page => zoom += delta.y * POINTS_PER_NOTCH * 3.0,
             egui::MouseWheelUnit::Point => pan += delta,
@@ -1403,7 +1513,7 @@ fn frame_key(
     camera: &Camera,
     state: &ViewState,
     size_px: (u32, u32),
-    (mode, governed): (Mode, Option<Tier>),
+    (mode, governed, ssao): (Mode, Option<Tier>, bool),
     overlay_revision: u64,
 ) -> u64 {
     let mut h = std::collections::hash_map::DefaultHasher::new();
@@ -1412,6 +1522,9 @@ fn frame_key(
         scene.pose_revision,
         library.revision(),
         overlay_revision,
+        // Hiding or showing items changes the scene without a revision.
+        scene.items.len(),
+        scene.wires.len(),
     )
         .hash(&mut h);
     for v in [
@@ -1427,9 +1540,59 @@ fn frame_key(
     }
     (camera.projection as u8, size_px, mode as u8).hash(&mut h);
     governed.map(|t| t as u8 + 1).hash(&mut h);
+    ssao.hash(&mut h);
     (&state.selection, state.hover, &state.hidden, &state.related).hash(&mut h);
-    (state.display.edges, state.display.labels).hash(&mut h);
+    (
+        state.display.edges,
+        state.display.labels,
+        state.display.shadows,
+    )
+        .hash(&mut h);
+    state
+        .section
+        .map(|s| (s.axis as u8, s.at.to_bits(), s.flip))
+        .hash(&mut h);
     h.finish()
+}
+
+#[cfg(test)]
+mod frame_key_tests {
+    use super::*;
+    use crate::view_state::Section;
+
+    fn key(state: &ViewState) -> u64 {
+        let scene = Scene::new(crate::scene::PlateFrame {
+            width: 1.0,
+            height: 1.0,
+        });
+        frame_key(
+            &scene,
+            &MeshLibrary::new(),
+            &Camera::default(),
+            state,
+            (10, 10),
+            (Mode::Interactive, None, false),
+            0,
+        )
+    }
+
+    #[test]
+    fn the_section_changes_the_frame_key() {
+        let none = ViewState::default();
+        let mut s = ViewState {
+            section: Some(Section::default()),
+            ..ViewState::default()
+        };
+        let on = key(&s);
+        assert_ne!(key(&none), on);
+        s.section.as_mut().unwrap().at = 0.6;
+        let moved = key(&s);
+        assert_ne!(on, moved);
+        s.section.as_mut().unwrap().flip = true;
+        assert_ne!(moved, key(&s));
+        s.section.as_mut().unwrap().axis = crate::view_state::SectionAxis::X;
+        assert_ne!(on, key(&s));
+    }
 }
 
 #[cfg(test)]
@@ -1570,6 +1733,67 @@ mod stats_tests {
         assert!(again.iter().all(Option::is_none), "{again:?}");
         *STATS.lock().unwrap() = None;
     }
+
+    #[test]
+    fn only_a_discrete_adapter_offers_occlusion_and_slowness_pauses_it_first() {
+        let _guard = ONE_AT_A_TIME.lock().unwrap_or_else(|e| e.into_inner());
+        let ctx = egui::Context::default();
+        *STATS.lock().unwrap() = Some(recorder(Tier::Integrated));
+        let mut view = View3d::new(11);
+        view.govern(&ctx, false);
+        assert!(!view.occlusion_available());
+        assert!(!view.occlusion_paused(), "never had it, so not paused");
+        *STATS.lock().unwrap() = Some(recorder(Tier::Discrete));
+        let mut view = View3d::new(12);
+        view.govern(&ctx, false);
+        assert!(view.occlusion_available() && view.occlusion_now());
+        // Slow frames take occlusion away before the tier changes.
+        let slow = drive(&mut view, &ctx, 90, 0.04, true);
+        assert!(slow.iter().all(Option::is_none), "tier unchanged: {slow:?}");
+        assert!(view.occlusion_paused() && !view.occlusion_now());
+        view.reset_quality();
+        view.govern(&ctx, false);
+        assert!(view.occlusion_now(), "reset brings it back");
+        *STATS.lock().unwrap() = None;
+    }
+}
+
+#[cfg(test)]
+mod framing_tests {
+    use super::*;
+    use crate::scene::{Item, ItemId, ItemKind, PlateFrame, Pose, Shape};
+
+    fn scene() -> Scene {
+        let mut s = Scene::new(PlateFrame {
+            width: 1000.0,
+            height: 1000.0,
+        });
+        for (raw, x) in [(1, 100.0), (2, 900.0)] {
+            s.push(Item::new(
+                ItemId::new(ItemKind::Device, raw),
+                Shape::Box,
+                Pose::at(Vec3::new(x, 500.0, 0.0)),
+                Vec3::splat(50.0),
+            ));
+        }
+        s
+    }
+
+    #[test]
+    fn a_standard_view_frames_the_selection_when_there_is_one() {
+        let s = scene();
+        let mut v = View3d::new(1);
+        v.go_to(ViewPreset::Front, &s, 0.0, true);
+        let whole = v.camera.target;
+        v.state.selection.insert(ItemId::new(ItemKind::Device, 1));
+        v.go_to(ViewPreset::Front, &s, 0.0, true);
+        assert!(
+            v.camera.target.x < whole.x - 100.0,
+            "{:?} {whole:?}",
+            v.camera.target
+        );
+        assert!(v.camera.distance > 0.0);
+    }
 }
 
 #[cfg(test)]
@@ -1579,11 +1803,21 @@ mod wheel_tests {
 
     #[test]
     fn a_mouse_wheel_zooms_and_a_trackpad_pans() {
-        let (zoom, pan) = split_wheel([(Line, Vec2::new(0.0, 1.0), false)].into_iter());
+        let (zoom, pan) = split_wheel([(Line, Vec2::new(0.0, 1.0), false)].into_iter(), false);
         assert_eq!((zoom, pan), (POINTS_PER_NOTCH, Vec2::ZERO));
-        let (zoom, pan) = split_wheel([(Point, Vec2::new(4.0, -7.0), false)].into_iter());
+        let (zoom, pan) = split_wheel([(Point, Vec2::new(4.0, -7.0), false)].into_iter(), false);
         assert_eq!((zoom, pan), (0.0, Vec2::new(4.0, -7.0)));
-        let (zoom, _) = split_wheel([(Page, Vec2::new(0.0, 1.0), false)].into_iter());
+        let (zoom, _) = split_wheel([(Page, Vec2::new(0.0, 1.0), false)].into_iter(), false);
+        assert_eq!(zoom, POINTS_PER_NOTCH * 3.0);
+    }
+
+    #[test]
+    fn with_the_trackpad_choice_a_swipe_in_lines_pans_both_ways() {
+        let (zoom, pan) = split_wheel([(Line, Vec2::new(0.5, -1.0), false)].into_iter(), true);
+        assert_eq!(zoom, 0.0);
+        assert_eq!(pan, Vec2::new(0.5, -1.0) * POINTS_PER_NOTCH);
+        // Pages still zoom.
+        let (zoom, _) = split_wheel([(Page, Vec2::new(0.0, 1.0), false)].into_iter(), true);
         assert_eq!(zoom, POINTS_PER_NOTCH * 3.0);
     }
 
@@ -1606,7 +1840,7 @@ mod wheel_tests {
 
     #[test]
     fn events_with_the_command_key_are_the_pinch_and_count_for_nothing() {
-        let (zoom, pan) = split_wheel([(Point, Vec2::new(3.0, 3.0), true)].into_iter());
+        let (zoom, pan) = split_wheel([(Point, Vec2::new(3.0, 3.0), true)].into_iter(), false);
         assert_eq!((zoom, pan), (0.0, Vec2::ZERO));
     }
 }
@@ -1631,6 +1865,59 @@ mod cost_tests {
         out.textures_delta.clear();
     }
 
+    /// A swipe reported in wheel lines zooms by default and pans with the
+    /// Trackpad choice (the Windows case), through a whole frame.
+    #[test]
+    fn a_line_swipe_zooms_or_pans_by_the_trackpad_choice() {
+        install_headless();
+        let (scene, _) = demo::cabinet(&DemoOptions::default());
+        let scene = Arc::new(scene);
+        let lib = Arc::new(MeshLibrary::new());
+        let run = |pans: bool| {
+            let ctx = egui::Context::default();
+            let mut view = View3d::new(13);
+            view.state.display.trackpad_pans = pans;
+            let mut t = 0.0;
+            let mut step = |view: &mut View3d, events: Vec<egui::Event>| {
+                t += 0.02;
+                let input = egui::RawInput {
+                    time: Some(t),
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1366.0, 768.0))),
+                    events,
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(input, |ui| {
+                    view.show(ui, &scene, &lib, &Look::dark(), ViewOptions::default());
+                });
+                out.textures_delta.clear();
+            };
+            step(&mut view, vec![]);
+            let (target, distance) = (view.camera.target, view.camera.distance);
+            let swipe = vec![
+                egui::Event::PointerMoved(Pos2::new(600.0, 400.0)),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Line,
+                    delta: Vec2::new(0.0, 1.0),
+                    phase: egui::TouchPhase::Move,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ];
+            step(&mut view, swipe);
+            for _ in 0..30 {
+                step(&mut view, vec![]);
+            }
+            (
+                (view.camera.target - target).length(),
+                (view.camera.distance - distance).abs(),
+            )
+        };
+        let (moved, zoomed) = run(false);
+        // A wheel zoom goes towards the pointer, so the target may shift too.
+        assert!(zoomed > 1.0, "zooms: {moved} {zoomed}");
+        let (moved, zoomed) = run(true);
+        assert!(moved > 0.0 && zoomed < 1e-3, "pans: {moved} {zoomed}");
+    }
+
     /// The scene bounds walk every item, so a frame takes them once, not once
     /// per label: the label pass once cost 50 ms at 1000 devices.
     #[test]
@@ -1653,5 +1940,136 @@ mod cost_tests {
         let (small, large) = (calls(20), calls(600));
         assert_eq!(small, large, "independent of the item count");
         assert!(large <= 1, "{large} walks of the scene per frame");
+    }
+
+    /// Chips for devices too small on screen to ever carry a label are not
+    /// laid out (a galley each): 3000 devices cost 1.5 ms per frame with them,
+    /// 0.5 ms without.
+    #[test]
+    fn labels_are_only_laid_out_for_devices_that_could_show_one() {
+        install_headless();
+        let (scene, _) = demo::cabinet(&DemoOptions {
+            devices: 600,
+            ..DemoOptions::default()
+        });
+        let labelled = scene.items.iter().filter(|i| i.label.is_some()).count();
+        let scene = Arc::new(scene);
+        let ctx = egui::Context::default();
+        let mut view = View3d::new(11);
+        frame(&mut view, &ctx, &scene, 0.0);
+        let before = LAID_OUT.with(|c| c.get());
+        frame(&mut view, &ctx, &scene, 0.5);
+        let chips = LAID_OUT.with(|c| c.get()) - before;
+        assert!(chips < labelled / 2, "{chips} chips for {labelled} labels");
+        // A selected device still gets its chip, however small.
+        let id = scene.items.iter().find(|i| i.label.is_some()).unwrap().id;
+        view.state.selection.insert(id);
+        let before = LAID_OUT.with(|c| c.get());
+        frame(&mut view, &ctx, &scene, 1.0);
+        assert!(LAID_OUT.with(|c| c.get()) > before, "the selected chip");
+    }
+}
+
+#[cfg(test)]
+mod key_tests {
+    use super::*;
+
+    #[test]
+    fn every_display_switch_changes_the_frame_key() {
+        let scene = Scene::new(crate::scene::PlateFrame {
+            width: 100.0,
+            height: 100.0,
+        });
+        let library = MeshLibrary::new();
+        let camera = Camera::default();
+        let key = |state: &ViewState| {
+            frame_key(
+                &scene,
+                &library,
+                &camera,
+                state,
+                (64, 64),
+                (Mode::Settled, None, true),
+                0,
+            )
+        };
+        let base = ViewState::default();
+        let mut seen = vec![key(&base)];
+        for flip in [
+            |s: &mut ViewState| s.display.edges = !s.display.edges,
+            |s: &mut ViewState| s.display.labels = !s.display.labels,
+            |s: &mut ViewState| s.display.shadows = !s.display.shadows,
+        ] {
+            let mut s = base.clone();
+            flip(&mut s);
+            let k = key(&s);
+            assert!(!seen.contains(&k), "a switch left the picture key alone");
+            seen.push(k);
+        }
+        // Occlusion is part of the key by what is drawn (switch and governor).
+        let without = frame_key(
+            &scene,
+            &library,
+            &camera,
+            &base,
+            (64, 64),
+            (Mode::Settled, None, false),
+            0,
+        );
+        assert!(
+            !seen.contains(&without),
+            "occlusion left the picture key alone"
+        );
+    }
+}
+
+#[cfg(test)]
+mod level_tests {
+    use super::*;
+    use crate::governor::{FrameGovernor, Step};
+
+    fn run(g: &mut FrameGovernor<Level>, ms: f32, secs: f32) -> Vec<Level> {
+        let mut seen = Vec::new();
+        for _ in 0..((secs * 1000.0 / ms) as usize) {
+            seen.extend(g.frame(ms));
+        }
+        seen
+    }
+
+    #[test]
+    fn a_discrete_gpu_starts_with_occlusion_the_others_without() {
+        assert!(Level::start(Tier::Discrete).ssao);
+        assert!(!Level::start(Tier::Integrated).ssao);
+        assert!(!Level::start(Tier::Software).ssao);
+    }
+
+    #[test]
+    fn slow_frames_pause_occlusion_first_then_lower_the_tier_and_stop_there() {
+        let mut g = FrameGovernor::new(Level::start(Tier::Discrete), false);
+        let seen = run(&mut g, 40.0, 12.0);
+        assert_eq!(
+            seen,
+            vec![
+                Level {
+                    tier: Tier::Discrete,
+                    ssao: false
+                },
+                Level {
+                    tier: Tier::Integrated,
+                    ssao: false
+                },
+            ],
+            "one rung at a time, and a hardware adapter never reaches Software"
+        );
+    }
+
+    #[test]
+    fn fast_frames_keep_everything_and_nothing_steps_up() {
+        let mut g = FrameGovernor::new(Level::start(Tier::Discrete), false);
+        assert!(run(&mut g, 8.0, 10.0).is_empty());
+        let mut low = FrameGovernor::new(Level::start(Tier::Integrated), false);
+        assert!(run(&mut low, 4.0, 10.0).is_empty());
+        assert_eq!(low.tier, Level::start(Tier::Integrated));
+        assert_eq!(Level::start(Tier::Integrated).step_down(), None);
     }
 }

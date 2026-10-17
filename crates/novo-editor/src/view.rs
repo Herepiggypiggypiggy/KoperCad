@@ -488,6 +488,10 @@ impl SchematicView {
         self.canvas.zoom_to_fit();
     }
 
+    pub fn zoom_to_sheet(&mut self) {
+        self.canvas.zoom_to_sheet();
+    }
+
     /// What the next click does, for the status bar.
     pub fn status_text(&self) -> Option<String> {
         self.status.clone()
@@ -1918,6 +1922,14 @@ impl SchematicView {
                     }
                     if menu.device.is_some() && ui.button("Go to partner   G").clicked() {
                         chosen = Some(MenuChoice::Command("nav.partner"));
+                    }
+                    if menu.device.is_some() {
+                        if ui.button("Show in Cabinet").clicked() {
+                            chosen = Some(MenuChoice::Command("nav.show_cabinet"));
+                        }
+                        if ui.button("Show in 3D").clicked() {
+                            chosen = Some(MenuChoice::Command("nav.show_3d"));
+                        }
                     }
                     if menu.interruptions > 0 {
                         if ui.button("Rename   F2").clicked() {

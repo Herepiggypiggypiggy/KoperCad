@@ -152,6 +152,9 @@ pub struct Item {
     /// Doors and covers: drawn see-through, after the opaque items.
     pub translucent: bool,
     pub group: Option<GroupId>,
+    /// The surface the item is mounted on when it is not the mounting plate:
+    /// dragging reads in that surface's coordinates.
+    pub drag_plane: Option<crate::drag_plane::DragPlane>,
 }
 
 impl Item {
@@ -166,6 +169,7 @@ impl Item {
             label: None,
             translucent: false,
             group: None,
+            drag_plane: None,
         }
     }
 

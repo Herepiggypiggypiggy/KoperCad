@@ -140,6 +140,8 @@ fn the_store_round_trips_through_json() {
         raised_at: "t".into(),
         closed_by: None,
         closed_at: None,
+        photos: Vec::new(),
+        signature: None,
     });
     assert_eq!(next, 2, "ids continue after a reload");
 }
@@ -218,4 +220,59 @@ fn prune_drops_decisions_about_deleted_objects() {
         .unwrap();
     store.prune(doc.project());
     assert_eq!(store.records().count(), 0);
+}
+
+#[test]
+fn signing_off_verifies_with_the_signer_and_reopening_drops_the_signature() {
+    let mut store = CommissioningStore::new();
+    let id = store.add_punch(PunchItem {
+        id: 0,
+        title: "Loose lug".into(),
+        note: String::new(),
+        severity: Severity::Major,
+        state: PunchState::Fixed,
+        target: None,
+        check: None,
+        raised_by: "tv".into(),
+        raised_at: "2026-10-17T08:00:00Z".into(),
+        closed_by: None,
+        closed_at: None,
+        signature: None,
+        photos: Vec::new(),
+    });
+    let unsigned = Signature::from_strokes("  ", "t", vec![]);
+    assert!(store.sign_off(id, unsigned).is_err());
+    assert_eq!(store.punch(id).unwrap().state, PunchState::Fixed);
+    let sig = Signature::from_strokes(
+        "A. Boss",
+        "2026-10-17T09:00:00Z",
+        vec![vec![[0, 0], [10, 10]]],
+    );
+    store.sign_off(id, sig).unwrap();
+    let item = store.punch(id).unwrap();
+    assert_eq!(item.state, PunchState::Verified);
+    assert_eq!(item.closed_by.as_deref(), Some("A. Boss"));
+    assert_eq!(item.signature.as_ref().unwrap().strokes.len(), 1);
+    store
+        .set_punch_state(id, PunchState::Open, "tv", "t")
+        .unwrap();
+    assert!(store.punch(id).unwrap().signature.is_none());
+}
+
+#[test]
+fn strokes_are_clamped_and_capped() {
+    let long: Vec<[u16; 2]> = (0..5000).map(|i| [i, 2000]).collect();
+    let sig = Signature::from_strokes("x", "t", vec![vec![[5, 5]], long.clone(), long]);
+    let points: usize = sig.strokes.iter().map(Vec::len).sum();
+    assert_eq!(
+        points,
+        Signature::MAX_POINTS,
+        "one-point stroke dropped, total capped"
+    );
+    assert!(
+        sig.strokes
+            .iter()
+            .flatten()
+            .all(|p| p[0] <= 1000 && p[1] <= 1000)
+    );
 }

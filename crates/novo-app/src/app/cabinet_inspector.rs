@@ -36,6 +36,8 @@ pub(super) struct DeviceFacts {
     pub rule: Option<String>,
     /// Why the last `Place all` put the device where it is.
     pub why: Option<String>,
+    /// The surfaces the device can be put on; `None` for a plate-only cabinet.
+    pub surface: Option<super::cabinet_surface_move::SurfaceChoice>,
 }
 
 /// What the inspector shows: the selected devices, or the plate.
@@ -47,6 +49,8 @@ pub(super) enum Facts {
         used_percent: f64,
         placed: usize,
     },
+    /// The shown surface other than the plate, when nothing is selected.
+    Surface(super::cabinet_surface_size::SurfaceCard),
 }
 
 /// Collects what the inspector shows for the layout as drawn (`shown`).
@@ -98,6 +102,7 @@ pub(super) fn gather(
                 problems,
                 rule: None,
                 why: None,
+                surface: None,
             }
         })
         .collect();
@@ -214,6 +219,9 @@ fn show(
                     },
                 );
                 widgets::field(ui, "Position", &d.position);
+                if let Some(name) = super::cabinet_surface_move::show(ui, d) {
+                    ask = Some(Ask::SetSurface(d.id, name));
+                }
                 // How it is held on the plate: closed until asked for, since
                 // the position and size above are what is usually wanted.
                 let held = u32::from(d.rotated)
@@ -229,7 +237,7 @@ fn show(
                         } else {
                             String::new()
                         },
-                        false,
+                        d.why.is_some(),
                         |ui| {
                             if d.rotated {
                                 widgets::field(ui, "Rotated", "90 degrees");
@@ -238,7 +246,24 @@ fn show(
                                 widgets::field(ui, "Mounted on", rail);
                             }
                             if let Some(rule) = &d.rule {
-                                widgets::field(ui, "Place rule", rule);
+                                // The rule text can be long: wrap it inside the panel.
+                                ui.horizontal_top(|ui| {
+                                    ui.add_sized(
+                                        [84.0, 0.0],
+                                        egui::Label::new(
+                                            egui::RichText::new("Place rule")
+                                                .color(crate::theme::ui_palette().text_secondary),
+                                        ),
+                                    );
+                                    ui.add(
+                                        egui::Label::new(
+                                            egui::RichText::new(rule)
+                                                .monospace()
+                                                .color(crate::theme::ui_palette().text_primary),
+                                        )
+                                        .wrap(),
+                                    );
+                                });
                             }
                             if let Some(why) = &d.why {
                                 ui.weak(why);
@@ -268,6 +293,11 @@ fn show(
                     );
                 }
                 ui.separator();
+            }
+        }
+        Facts::Surface(card) => {
+            if let Some(a) = super::cabinet_surface_size::show(ui, card) {
+                ask = Some(a);
             }
         }
         Facts::Plate {
