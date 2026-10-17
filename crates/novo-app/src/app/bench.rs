@@ -428,12 +428,18 @@ impl NovoApp {
         let stored_standard = FerruleStandard::of(project);
         let stored_labels = LabelSettings::of(project);
         let rules = novo_routing::WireRules::of(project);
+        let ready = state
+            .cache
+            .as_ref()
+            .map(|c| readiness(&c.jobs, self.view3d_has_cabinet()))
+            .unwrap_or_default();
 
         let mut open = true;
         let mut action: Option<Act> = None;
         super::panel::dialog(ctx, "Bench output", [560.0, 0.0])
             .open(&mut open)
             .show(ctx, |ui| {
+                readiness_strip(ui, &ready, &mut action);
                 let mut tab = match state.tab {
                     Tab::CutList => 0,
                     Tab::Ferrules => 1,
@@ -453,6 +459,7 @@ impl NovoApp {
             self.wb.bench = Some(state);
         }
         match action {
+            Some(Act::Run(command)) => self.run_command(ctx, command, None),
             Some(Act::ExportCut) => {
                 self.export_bench_cut();
             }
@@ -485,6 +492,8 @@ impl NovoApp {
 }
 
 enum Act {
+    /// A fix button of the readiness strip: runs this command.
+    Run(&'static str),
     ExportCut,
     ExportMachineCsv,
     ExportFerrules,
@@ -493,6 +502,81 @@ enum Act {
     FillDefaults(WireDefaults),
     SaveStandard(FerruleStandard),
     SaveLabels(LabelSettings),
+}
+
+/// One thing the printed bench output cannot be trusted on yet.
+#[derive(Debug, PartialEq)]
+pub(super) struct Gap {
+    pub(super) text: String,
+    /// Button label and the command that starts the fix, if one exists.
+    pub(super) fix: Option<(&'static str, &'static str)>,
+}
+
+/// What is missing before the bench output can be trusted: wires without a
+/// number or a cross-section, ends that get no ferrule, lengths that are
+/// estimates, and no mounting plate (nothing is routed without one).
+pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
+    let mut out = Vec::new();
+    let count = |f: &dyn Fn(&WireCutJob) -> bool| jobs.iter().filter(|j| f(j)).count();
+    if !has_plate {
+        out.push(Gap {
+            text: "No mounting plate: nothing is routed, every length is an estimate".into(),
+            fix: Some(("Open Cabinet", "view.cabinet")),
+        });
+    }
+    let unnumbered = count(&|j| j.number.trim().is_empty());
+    if unnumbered > 0 {
+        out.push(Gap {
+            text: format!("{unnumbered} wires have no number, so their labels and flags are blank"),
+            fix: Some(("Number wires", "wires.number")),
+        });
+    }
+    let no_size = count(&|j| j.cross_section_mm2.is_none());
+    if no_size > 0 {
+        out.push(Gap {
+            text: format!(
+                "{no_size} wires have no cross-section: they get no ferrule and sit in one group. Use Fill in on the Cut list tab, or set it per wire in the wire panel"
+            ),
+            fix: None,
+        });
+    }
+    let (_, off) = novo_reports::ends_without_ferrule(jobs);
+    if off > 0 {
+        out.push(Gap {
+            text: format!("{off} wire ends are set to have no ferrule"),
+            fix: None,
+        });
+    }
+    if has_plate {
+        let estimates = count(&|j| is_estimate(&j.basis));
+        if estimates > 0 {
+            out.push(Gap {
+                text: format!(
+                    "{estimates} lengths are estimates (~): route the wires through ducts"
+                ),
+                fix: Some(("Open Cabinet", "view.cabinet")),
+            });
+        }
+    }
+    out
+}
+
+fn readiness_strip(ui: &mut egui::Ui, gaps: &[Gap], act: &mut Option<Act>) {
+    if gaps.is_empty() {
+        return;
+    }
+    novo_theme::widgets::section_label(ui, "Before you print");
+    for gap in gaps {
+        ui.horizontal_wrapped(|ui| {
+            ui.label(&gap.text);
+            if let Some((label, command)) = gap.fix
+                && ui.small_button(label).clicked()
+            {
+                *act = Some(Act::Run(command));
+            }
+        });
+    }
+    ui.add_space(6.0);
 }
 
 fn cut_tab(
