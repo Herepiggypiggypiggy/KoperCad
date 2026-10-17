@@ -1076,6 +1076,7 @@ impl NovoApp {
             self.started = true;
             self.start();
         }
+        tips::publish_keys(&ctx, &self.wb.keymap);
         self.sync_appearance(&ctx);
         self.fix_current_page();
         self.tick(&ctx);

@@ -1,5 +1,6 @@
 //! Tips, hint counters and the dead-command audit.
 
+use eframe::egui;
 use novo_workflow::commands::COMMANDS;
 use novo_workflow::keymap::Keymap;
 
@@ -214,4 +215,70 @@ fn the_3d_hint_shows_on_an_empty_plate_names_the_key_and_stops_when_devices_sit_
     })
     .unwrap();
     assert!(hint(&d).is_none(), "a placed device ends it");
+}
+
+/// Every `.rs` file under `dir` that is not test code.
+fn source_files(dir: &std::path::Path, out: &mut Vec<std::path::PathBuf>) {
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            source_files(&path, out);
+            continue;
+        }
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let test_code = name.ends_with("_tests.rs") || name.starts_with("lesson_verify");
+        if name.ends_with(".rs") && !test_code {
+            out.push(path);
+        }
+    }
+}
+
+/// A key typed into a tooltip goes stale when the person remaps it, so a
+/// tooltip names its key through `tip_text`, `tip()` or `hover()`.
+#[test]
+fn no_tooltip_has_a_key_typed_into_its_text() {
+    let mut files = Vec::new();
+    source_files(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut files,
+    );
+    assert!(files.len() > 50, "the scan finds the app's sources");
+    let mut typed = Vec::new();
+    for file in files {
+        let src = std::fs::read_to_string(&file).unwrap();
+        for (at, _) in src.match_indices(".on_hover_text(") {
+            let rest = &src[at + ".on_hover_text(".len()..];
+            let rest = &rest[..rest.len().min(200)];
+            let Some(open) = rest.find('"') else { continue };
+            // Only a literal argument: nothing but whitespace before it.
+            if !rest[..open].trim().is_empty() {
+                continue;
+            }
+            let body = &rest[open + 1..];
+            let literal = &body[..body.find('"').unwrap_or(body.len())];
+            if ["Ctrl+", "Shift+", "Alt+"]
+                .iter()
+                .any(|k| literal.contains(k))
+            {
+                typed.push(format!("{}: {literal}", file.display()));
+            }
+        }
+    }
+    assert!(typed.is_empty(), "keys typed into tooltips: {typed:#?}");
+}
+
+#[test]
+fn every_tip_command_is_known_and_hover_reads_its_live_key() {
+    use super::tips::{TIP_COMMANDS, hover, publish_keys};
+    let keymap = Keymap::workflow();
+    let ctx = egui::Context::default();
+    publish_keys(&ctx, &keymap);
+    for c in TIP_COMMANDS {
+        assert!(novo_workflow::commands::is_known(c), "{c}");
+        assert!(keymap.shortcut_text(c).is_some(), "{c} has a key");
+    }
+    assert_eq!(
+        hover(&ctx, "Open or close the door", "view.3d_door"),
+        "Open or close the door · Shift+D"
+    );
 }
