@@ -15,6 +15,7 @@
 
 mod check;
 mod field;
+mod photo;
 mod progress;
 mod punch;
 mod report;
@@ -22,9 +23,10 @@ mod store;
 
 pub use check::{CheckKind, CheckRecord, CheckState, Target};
 pub use field::{FieldError, FieldPackage, MergeReport};
+pub use photo::{is_photo_name, photo_name};
 pub use progress::{
     Progress, Scope, TargetInfo, progress, progress_by_cabinet, progress_by_page, targets,
 };
-pub use punch::{PunchItem, PunchState, Severity, Signature};
+pub use punch::{Photo, PunchItem, PunchState, Severity, Signature};
 pub use report::to_report_input;
 pub use store::{CommissioningError, CommissioningStore};

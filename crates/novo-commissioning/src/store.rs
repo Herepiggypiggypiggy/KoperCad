@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 
 use crate::check::{CheckKind, CheckRecord, CheckState, Target};
-use crate::punch::{PunchItem, PunchState, Severity};
+use crate::punch::{Photo, PunchItem, PunchState, Severity};
 
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum CommissioningError {
@@ -117,6 +117,7 @@ impl CommissioningStore {
             raised_at: at,
             closed_by: None,
             closed_at: None,
+            photos: Vec::new(),
             signature: None,
         });
         Ok(Some(id))
@@ -135,6 +136,19 @@ impl CommissioningStore {
     /// Stores a record as it is, with no punch item opened (merging field results).
     pub(crate) fn put_record(&mut self, record: CheckRecord) {
         self.checks.insert((record.target, record.check), record);
+    }
+
+    /// Attaches a photo to an item; a photo with the same name is not added twice.
+    pub fn add_photo(&mut self, id: u64, photo: Photo) -> Result<bool, CommissioningError> {
+        let item = self
+            .punch
+            .get_mut(&id)
+            .ok_or(CommissioningError::NoPunchItem(id))?;
+        if item.photos.iter().any(|p| p.name == photo.name) {
+            return Ok(false);
+        }
+        item.photos.push(photo);
+        Ok(true)
     }
 
     /// Replaces the item with the same id.
