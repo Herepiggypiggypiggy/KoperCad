@@ -175,7 +175,12 @@ fn rows(
                     )
                 })
                 .unwrap_or_default();
+            let to_door = routed
+                .surface_legs
+                .get(&r.job)
+                .is_some_and(|leg| leg.opening.is_some());
             let basis = match r.kind {
+                _ if to_door => "door, no gap",
                 Kind::FreeAir => "free air",
                 Kind::Ducted if routed.unknown_height.contains(&r.job) => "routed, no depth",
                 Kind::Ducted => "routed",

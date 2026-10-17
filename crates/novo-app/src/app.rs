@@ -105,6 +105,7 @@ mod macro_editor;
 mod macro_editor_tests;
 mod macro_thumb;
 mod menu_bar;
+mod model_labels;
 mod net_trace;
 mod numbering;
 mod onboarding;
@@ -411,6 +412,8 @@ pub struct NovoApp {
     show_about: bool,
     /// The What's new list is open (app/whats_new.rs).
     show_whats_new: bool,
+    /// Help > About the numbers is open (app/model_labels.rs).
+    show_numbers: bool,
     standards_open: bool,
     window_title: String,
     /// Opened on the first frame, so errors show in the window.
@@ -520,6 +523,7 @@ impl NovoApp {
             messages: Vec::new(),
             show_about: false,
             show_whats_new: false,
+            show_numbers: false,
             standards_open: false,
             window_title: String::new(),
             open_on_start: None,
@@ -1306,6 +1310,7 @@ impl NovoApp {
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
         self.whats_new_window(&ctx);
+        self.numbers_window(&ctx);
         self.background_panel(&ctx);
         self.bench_window(&ctx);
         self.pdf_options_window(&ctx);
@@ -1450,6 +1455,7 @@ impl NovoApp {
     fn modal_open_but_wheel(&self) -> bool {
         self.show_about
             || self.show_whats_new
+            || self.show_numbers
             || self.wb.renumber.is_some()
             || self.wb.page_form.is_some()
             || self.wb.sheet_import.is_some()

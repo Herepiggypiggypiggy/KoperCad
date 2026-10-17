@@ -511,6 +511,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.shortcuts",
     "help.show_hints",
     "help.whats_new",
+    "help.numbers",
     "view.reset_panels",
     "layout.draw",
     "layout.cabinet",
@@ -1274,6 +1275,7 @@ impl NovoApp {
             "view.shortcuts" => self.toggle_shortcuts(),
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,
+            "help.numbers" => self.show_numbers = true,
             "view.reset_panels" => super::panel::reset_layout(ctx),
             "layout.draw" | "layout.cabinet" | "layout.3d" | "layout.review" | "layout.reports"
             | "layout.reset" | "layout.reset_all" => {

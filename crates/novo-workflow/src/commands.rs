@@ -1732,6 +1732,22 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Nothing,
     ),
     cmd(
+        "help.numbers",
+        "About the numbers",
+        "View",
+        &[
+            "estimate",
+            "model",
+            "planning value",
+            "accuracy",
+            "pfhd",
+            "ampacity",
+            "validated",
+            "help",
+        ],
+        Needs::Nothing,
+    ),
+    cmd(
         "help.whats_new",
         "What's new",
         "View",

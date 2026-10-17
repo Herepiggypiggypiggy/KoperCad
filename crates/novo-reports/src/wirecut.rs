@@ -91,8 +91,8 @@ pub struct WireCutJob {
     /// What the machine cuts: the routed length plus the termination
     /// allowance at both ends, the same rule as the cut list.
     pub cut_mm: f64,
-    /// How the length was found: `routed`, `routed, no depth`, `free air`
-    /// or `estimate`.
+    /// How the length was found: `routed`, `routed, no depth`, `free air`,
+    /// `door, no gap` or `estimate`.
     pub basis: String,
     pub end_a: WireEnd,
     pub end_b: WireEnd,
