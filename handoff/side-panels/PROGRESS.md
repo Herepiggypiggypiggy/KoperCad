@@ -15,3 +15,6 @@
 
 ## Dialog sweep 2 (branch claude/panels-dialogs-2)
 - Place rules and DXF background use dialog_ui::hint and primary/ghost buttons. Pictures of Project rules and Project settings at 1366x768 in design/side-panels (after-1366-project-rules.png, after-1366-project-settings.png). Place rules and DXF background have no picture yet (need a cabinet / imported DXF).
+
+## Confirm before overwrite (branch claude/panels-confirm)
+- "Standard rules" (Place rules) and "Reset" (DXF background) ask "Replace / Cancel" first when they would overwrite something different (`dialog_ui::confirm_button`). No ask when the text or placement is already the default.
