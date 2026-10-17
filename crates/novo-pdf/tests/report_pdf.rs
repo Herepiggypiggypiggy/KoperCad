@@ -123,3 +123,72 @@ fn report_bytes_writes_each_format() {
             .contains("Progress per cabinet")
     );
 }
+
+fn table(key: &str, rows: usize, flow: bool) -> novo_reports::Section {
+    use novo_reports::{Cell, Column, Section};
+    let mut s = Section::new(key, key, vec![Column::new("n", "No", 10.0)]);
+    for i in 0..rows {
+        s.push(vec![Cell::Int(i as i64)], Vec::new());
+    }
+    s.flow = flow;
+    s
+}
+
+fn pages_of(sections: Vec<novo_reports::Section>) -> usize {
+    let report = novo_reports::ReportOutput {
+        report: "flow".into(),
+        title: "Flow".into(),
+        revision: 0,
+        sections,
+    };
+    let bytes = export_report_pdf(&[&report], &ReportPdfOptions::default());
+    Pdf::load_mem(&bytes).expect("valid pdf").get_pages().len()
+}
+
+#[test]
+fn a_flowing_section_shares_the_sheet_of_the_one_before() {
+    // Without the flag every section starts a new page.
+    assert_eq!(
+        pages_of(vec![table("a", 2, false), table("b", 5, false)]),
+        2
+    );
+    // With it a short table follows on the same sheet.
+    assert_eq!(pages_of(vec![table("a", 2, false), table("b", 5, true)]), 1);
+    // A long one starts there and continues on the next sheet.
+    assert_eq!(
+        pages_of(vec![table("a", 2, false), table("b", 30, true)]),
+        2
+    );
+    // Too little room left for a few rows: it starts a new page.
+    assert_eq!(
+        pages_of(vec![table("a", 24, false), table("b", 5, true)]),
+        2
+    );
+}
+
+#[test]
+fn the_bench_cut_list_starts_its_first_wire_group_under_the_summary() {
+    use novo_reports::{BenchCut, Report};
+    let mut doc = novo_core::Document::default();
+    novo_tests::motor_starter(&mut doc).expect("fixture");
+    let output = BenchCut.generate(doc.project());
+    assert!(output.sections.len() >= 2);
+    assert!(!output.sections[0].flow);
+    assert_eq!(output.sections.iter().filter(|s| s.flow).count(), 1);
+    let bytes = export_report_pdf(&[&output], &ReportPdfOptions::default());
+    let pages = Pdf::load_mem(&bytes).expect("valid pdf").get_pages().len();
+    assert!(pages < output.sections.len(), "{pages} pages");
+}
+
+#[test]
+fn the_ferrule_table_prints_on_one_sheet_when_it_fits() {
+    use novo_reports::{FerruleStandard, FerruleTable, bench_jobs};
+    let mut doc = novo_core::Document::default();
+    novo_tests::motor_starter(&mut doc).expect("fixture");
+    let jobs = bench_jobs(doc.project());
+    let table = FerruleTable::build(doc.project(), &jobs, &FerruleStandard::default());
+    assert!(table.sections.len() >= 2, "ferrules and the standard");
+    let bytes = export_report_pdf(&[&table], &ReportPdfOptions::default());
+    let pages = Pdf::load_mem(&bytes).expect("valid pdf").get_pages().len();
+    assert_eq!(pages, 1, "{} sections", table.sections.len());
+}

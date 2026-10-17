@@ -372,7 +372,8 @@ impl FerruleTable {
                     Vec::new(),
                 );
             }
-            sections.push(skipped);
+            // A few lines: they share the sheet of the table above.
+            sections.push(skipped.flowing());
         }
 
         let mut std_section = Section::new(
@@ -409,7 +410,7 @@ impl FerruleTable {
                 Vec::new(),
             );
         }
-        sections.push(std_section);
+        sections.push(std_section.flowing());
 
         ReportOutput {
             report: Self::ID.into(),
@@ -562,6 +563,7 @@ impl BenchCut {
             sections.push(note);
         }
 
+        let mut first_group = true;
         for (mm2, colour, list) in &groups {
             let total: f64 = list.iter().map(|j| j.cut_mm).sum();
             let heading = format!(
@@ -613,7 +615,13 @@ impl BenchCut {
                     j.wires.iter().map(|w| novo_core::AnyId::from(*w)).collect(),
                 );
             }
-            sections.push(section);
+            // The first wire group follows the summary on its sheet.
+            sections.push(if first_group {
+                section.flowing()
+            } else {
+                section
+            });
+            first_group = false;
         }
 
         ReportOutput {

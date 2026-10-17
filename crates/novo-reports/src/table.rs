@@ -137,6 +137,10 @@ pub struct Section {
     pub title: String,
     pub columns: Vec<Column>,
     pub rows: Vec<Row>,
+    /// A printed report may start this section under the previous one on the
+    /// same sheet, when at least a few of its rows fit there, instead of on a
+    /// new page. Off by default: every section starts a new page.
+    pub flow: bool,
     /// The decimal separator of measured values on pages and in CSV: `.`
     /// unless the report language says otherwise. Spreadsheets keep real
     /// numbers and format them by their own locale.
@@ -150,6 +154,7 @@ impl Section {
             title: title.to_owned(),
             columns,
             rows: Vec::new(),
+            flow: false,
             decimal: '.',
         }
     }
@@ -163,6 +168,12 @@ impl Section {
             }
             _ => cell.to_string(),
         }
+    }
+
+    /// This section may flow on under the previous one when printed.
+    pub fn flowing(mut self) -> Self {
+        self.flow = true;
+        self
     }
 
     /// Adds a row, padding or cutting it to the column count.
