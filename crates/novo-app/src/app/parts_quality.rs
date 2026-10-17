@@ -268,8 +268,8 @@ fn review_ui(
                 "Nothing waits for review. Imported parts show up here until you approve them.",
             );
         } else {
-            ui.strong(format!("{} imported parts are untrusted", queue.len()));
-            ui.weak("until you approve them.");
+            ui.strong(format!("{} imported parts not reviewed yet", queue.len()));
+            ui.weak("Review is a record, not a gate: nothing else in KoperCAD reads it yet.");
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             refresh = ui
@@ -433,7 +433,9 @@ fn apply_decision(
             ledger.reject(part, &date, state.reject_note.trim());
         }
         state.reject_note.clear();
-        state.note = Some("Rejected. The part is kept but marked do not use.".into());
+        state.note = Some(
+            "Rejected. Recorded in parts-review.json; parts are not blocked anywhere yet.".into(),
+        );
     }
     if let Some(path) = path
         && let Err(e) = ledger.save(path)
