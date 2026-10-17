@@ -76,7 +76,9 @@ pub(crate) struct CommissioningMode {
     /// seconds); a second touch within `ARM_SECONDS` does it.
     armed: Option<(Target, f64)>,
     /// The store changed and is not yet kept in the project file.
-    dirty: bool,
+    pub(super) dirty: bool,
+    /// A punch item whose "Add photo" was touched; the picker opens after the panel.
+    pub(super) photo_for: Option<u64>,
 }
 
 impl CommissioningMode {
@@ -100,6 +102,7 @@ impl CommissioningMode {
             large: false,
             armed: None,
             dirty: false,
+            photo_for: None,
         }
     }
 
@@ -122,7 +125,7 @@ impl CommissioningMode {
 }
 
 /// Now as ISO 8601 text, UTC.
-fn now() -> String {
+pub(super) fn now() -> String {
     let secs = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
@@ -315,7 +318,7 @@ impl NovoApp {
     }
 
     /// Reads the project's commissioning data when the mode has none yet.
-    fn load_commissioning(&mut self) {
+    pub(super) fn load_commissioning(&mut self) {
         if self.wb.commissioning.is_some() || self.backend.document().is_none() {
             return;
         }
@@ -433,6 +436,14 @@ impl NovoApp {
         if let Some(place) = go {
             self.jump(place, true);
         }
+        if let Some(id) = self
+            .wb
+            .commissioning
+            .as_mut()
+            .and_then(|m| m.photo_for.take())
+        {
+            self.add_punch_photos(id);
+        }
         if let Some(format) = export {
             self.export_commissioning_report(format);
         }
@@ -455,7 +466,8 @@ impl NovoApp {
         else {
             return;
         };
-        let package = FieldPackage::new(&name, &mode.who, &now(), &mode.store, doc.project());
+        let mut package = FieldPackage::new(&name, &mode.who, &now(), &mode.store, doc.project());
+        self.pack_field_photos(&mut package);
         let mut dialog = rfd::FileDialog::new()
             .set_title("Export field results")
             .set_file_name(format!("{name} field results.kcfield"))
@@ -512,6 +524,7 @@ impl NovoApp {
         if report.changed() {
             mode.dirty = true;
         }
+        self.unpack_field_photos(&package);
         let text = format!(
             "Imported field results from {}: {}",
             package.exported_by,
@@ -1000,6 +1013,7 @@ fn punch_tab(
                 raised_at: now(),
                 closed_by: None,
                 closed_at: None,
+                photos: Vec::new(),
                 signature: None,
             });
             mode.dirty = true;
@@ -1090,7 +1104,18 @@ fn punch_tab(
                     {
                         mode.dirty = true;
                     }
+                    let photo = ui.button("Add photo").on_hover_text(
+                        "Attach pictures of the issue; they travel in the field results file",
+                    );
+                    note_ctx(ui.ctx(), "commissioning.photo", "Add photo button", &photo);
+                    if photo.clicked() {
+                        mode.photo_for = Some(item.id);
+                    }
                 });
+                if !item.photos.is_empty() {
+                    let names: Vec<&str> = item.photos.iter().map(|p| p.name.as_str()).collect();
+                    ui.weak(format!("Photos: {}", names.join(", ")));
+                }
                 ui.add_space(space::S);
             }
         });

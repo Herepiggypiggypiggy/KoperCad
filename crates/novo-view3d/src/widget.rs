@@ -815,19 +815,23 @@ impl View3d {
             self.last_activity = now;
         }
 
+        let lines_pan = self.state.display.trackpad_pans;
         let (space, alt, (scroll, touch_pan), zoom, hover_pos) = ctx.input(|i| {
             (
                 i.key_down(Key::Space),
                 i.modifiers.alt,
-                split_wheel(i.events.iter().filter_map(|e| match e {
-                    egui::Event::MouseWheel {
-                        unit,
-                        delta,
-                        modifiers,
-                        ..
-                    } => Some((*unit, *delta, modifiers.command)),
-                    _ => None,
-                })),
+                split_wheel(
+                    i.events.iter().filter_map(|e| match e {
+                        egui::Event::MouseWheel {
+                            unit,
+                            delta,
+                            modifiers,
+                            ..
+                        } => Some((*unit, *delta, modifiers.command)),
+                        _ => None,
+                    }),
+                    lines_pan,
+                ),
                 i.zoom_delta(),
                 i.pointer.hover_pos(),
             )
@@ -1470,7 +1474,10 @@ fn paint_face_label(
 /// and precision touchpad, so there a swipe still zooms: not verified on
 /// Windows hardware). Events with Ctrl or Cmd held are the pinch gesture's
 /// (egui turns them into a zoom delta) and count for neither.
-fn split_wheel(events: impl Iterator<Item = (egui::MouseWheelUnit, Vec2, bool)>) -> (f32, Vec2) {
+fn split_wheel(
+    events: impl Iterator<Item = (egui::MouseWheelUnit, Vec2, bool)>,
+    lines_pan: bool,
+) -> (f32, Vec2) {
     let mut zoom = 0.0;
     let mut pan = Vec2::ZERO;
     for (unit, delta, command) in events {
@@ -1478,6 +1485,7 @@ fn split_wheel(events: impl Iterator<Item = (egui::MouseWheelUnit, Vec2, bool)>)
             continue;
         }
         match unit {
+            egui::MouseWheelUnit::Line if lines_pan => pan += delta * POINTS_PER_NOTCH,
             egui::MouseWheelUnit::Line => zoom += delta.y * POINTS_PER_NOTCH,
             egui::MouseWheelUnit::Page => zoom += delta.y * POINTS_PER_NOTCH * 3.0,
             egui::MouseWheelUnit::Point => pan += delta,
@@ -1797,11 +1805,21 @@ mod wheel_tests {
 
     #[test]
     fn a_mouse_wheel_zooms_and_a_trackpad_pans() {
-        let (zoom, pan) = split_wheel([(Line, Vec2::new(0.0, 1.0), false)].into_iter());
+        let (zoom, pan) = split_wheel([(Line, Vec2::new(0.0, 1.0), false)].into_iter(), false);
         assert_eq!((zoom, pan), (POINTS_PER_NOTCH, Vec2::ZERO));
-        let (zoom, pan) = split_wheel([(Point, Vec2::new(4.0, -7.0), false)].into_iter());
+        let (zoom, pan) = split_wheel([(Point, Vec2::new(4.0, -7.0), false)].into_iter(), false);
         assert_eq!((zoom, pan), (0.0, Vec2::new(4.0, -7.0)));
-        let (zoom, _) = split_wheel([(Page, Vec2::new(0.0, 1.0), false)].into_iter());
+        let (zoom, _) = split_wheel([(Page, Vec2::new(0.0, 1.0), false)].into_iter(), false);
+        assert_eq!(zoom, POINTS_PER_NOTCH * 3.0);
+    }
+
+    #[test]
+    fn with_the_trackpad_choice_a_swipe_in_lines_pans_both_ways() {
+        let (zoom, pan) = split_wheel([(Line, Vec2::new(0.5, -1.0), false)].into_iter(), true);
+        assert_eq!(zoom, 0.0);
+        assert_eq!(pan, Vec2::new(0.5, -1.0) * POINTS_PER_NOTCH);
+        // Pages still zoom.
+        let (zoom, _) = split_wheel([(Page, Vec2::new(0.0, 1.0), false)].into_iter(), true);
         assert_eq!(zoom, POINTS_PER_NOTCH * 3.0);
     }
 
@@ -1824,7 +1842,7 @@ mod wheel_tests {
 
     #[test]
     fn events_with_the_command_key_are_the_pinch_and_count_for_nothing() {
-        let (zoom, pan) = split_wheel([(Point, Vec2::new(3.0, 3.0), true)].into_iter());
+        let (zoom, pan) = split_wheel([(Point, Vec2::new(3.0, 3.0), true)].into_iter(), false);
         assert_eq!((zoom, pan), (0.0, Vec2::ZERO));
     }
 }
@@ -1847,6 +1865,59 @@ mod cost_tests {
             view.show(ui, scene, &lib, &Look::dark(), ViewOptions::default());
         });
         out.textures_delta.clear();
+    }
+
+    /// A swipe reported in wheel lines zooms by default and pans with the
+    /// Trackpad choice (the Windows case), through a whole frame.
+    #[test]
+    fn a_line_swipe_zooms_or_pans_by_the_trackpad_choice() {
+        install_headless();
+        let (scene, _) = demo::cabinet(&DemoOptions::default());
+        let scene = Arc::new(scene);
+        let lib = Arc::new(MeshLibrary::new());
+        let run = |pans: bool| {
+            let ctx = egui::Context::default();
+            let mut view = View3d::new(13);
+            view.state.display.trackpad_pans = pans;
+            let mut t = 0.0;
+            let mut step = |view: &mut View3d, events: Vec<egui::Event>| {
+                t += 0.02;
+                let input = egui::RawInput {
+                    time: Some(t),
+                    screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1366.0, 768.0))),
+                    events,
+                    ..Default::default()
+                };
+                let mut out = ctx.run_ui(input, |ui| {
+                    view.show(ui, &scene, &lib, &Look::dark(), ViewOptions::default());
+                });
+                out.textures_delta.clear();
+            };
+            step(&mut view, vec![]);
+            let (target, distance) = (view.camera.target, view.camera.distance);
+            let swipe = vec![
+                egui::Event::PointerMoved(Pos2::new(600.0, 400.0)),
+                egui::Event::MouseWheel {
+                    unit: egui::MouseWheelUnit::Line,
+                    delta: Vec2::new(0.0, 1.0),
+                    phase: egui::TouchPhase::Move,
+                    modifiers: egui::Modifiers::NONE,
+                },
+            ];
+            step(&mut view, swipe);
+            for _ in 0..30 {
+                step(&mut view, vec![]);
+            }
+            (
+                (view.camera.target - target).length(),
+                (view.camera.distance - distance).abs(),
+            )
+        };
+        let (moved, zoomed) = run(false);
+        // A wheel zoom goes towards the pointer, so the target may shift too.
+        assert!(zoomed > 1.0, "zooms: {moved} {zoomed}");
+        let (moved, zoomed) = run(true);
+        assert!(moved > 0.0 && zoomed < 1e-3, "pans: {moved} {zoomed}");
     }
 
     /// The scene bounds walk every item, so a frame takes them once, not once

@@ -38,6 +38,19 @@ pub struct Signature {
     pub strokes: Vec<Vec<[u16; 2]>>,
 }
 
+/// A photo taken for a punch item. The picture itself is a file beside the
+/// project (`<project> field photos/<name>`); the store keeps only its name.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Photo {
+    /// File name, content-addressed (see [`photo_name`](crate::photo_name)),
+    /// so the same picture from two devices is one file.
+    pub name: String,
+    /// When it was attached, ISO 8601 text.
+    pub at: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+}
+
 /// An open issue found while commissioning, drawn or not.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PunchItem {
@@ -59,6 +72,9 @@ pub struct PunchItem {
     pub closed_by: Option<String>,
     #[serde(default)]
     pub closed_at: Option<String>,
+    /// Pictures of the issue, oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub photos: Vec<Photo>,
     /// Who accepted the fix at the machine.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signature: Option<Signature>,

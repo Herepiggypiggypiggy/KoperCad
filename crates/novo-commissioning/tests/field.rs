@@ -131,6 +131,7 @@ fn punch_items_from_two_devices_do_not_collide() {
         raised_at: at.into(),
         closed_by: None,
         closed_at: None,
+        photos: Vec::new(),
         signature: None,
     };
     let mut desk = CommissioningStore::new();
@@ -224,4 +225,80 @@ fn a_file_from_another_project_does_not_merge_onto_wrong_ids() {
     // the same project still merges
     let ok = package.merge_into(&mut desk, doc_a.project());
     assert_eq!(ok.checks_added, 1);
+}
+
+#[test]
+fn photos_travel_in_the_file_and_merge_by_name() {
+    let (doc, _) = starter();
+    let project = doc.project();
+    let item = PunchItem {
+        id: 0,
+        title: "door seal".into(),
+        note: String::new(),
+        severity: Severity::Minor,
+        state: PunchState::Open,
+        target: None,
+        check: None,
+        raised_by: "tv".into(),
+        raised_at: "2026-10-16T09:00:00Z".into(),
+        closed_by: None,
+        closed_at: None,
+        photos: Vec::new(),
+        signature: None,
+    };
+    let picture: Vec<u8> = (0..=255u8).chain(0..=7).collect(); // not a multiple of 3
+    let name = photo_name(&picture, "JPG");
+    assert!(is_photo_name(&name));
+    assert_eq!(name, photo_name(&picture, ".jpg"), "same bytes, same name");
+    assert_ne!(name, photo_name(&picture[1..], "jpg"));
+    assert_eq!(photo_name(&picture, "../../x"), photo_name(&picture, "jpg"));
+    assert!(!is_photo_name("../evil.jpg") && !is_photo_name("a.jpg"));
+
+    let mut field = CommissioningStore::new();
+    let id = field.add_punch(item.clone());
+    let photo = Photo {
+        name: name.clone(),
+        at: "2026-10-16T09:05:00Z".into(),
+        note: String::new(),
+    };
+    assert!(field.add_photo(id, photo.clone()).unwrap());
+    assert!(!field.add_photo(id, photo).unwrap(), "no duplicate");
+    assert!(
+        field
+            .add_photo(
+                99,
+                Photo {
+                    name: name.clone(),
+                    at: String::new(),
+                    note: String::new()
+                }
+            )
+            .is_err()
+    );
+
+    let mut package = FieldPackage::new("P", "tab", "t", &field, project);
+    package.attach_photos(|n| (n == name).then(|| picture.clone()));
+    let back = FieldPackage::from_json(&package.to_json()).unwrap();
+    assert_eq!(back.photo_files(), vec![(name.clone(), picture.clone())]);
+
+    // the desk has the item without the photo: the merge adds it
+    let mut desk = CommissioningStore::new();
+    desk.add_punch(item);
+    let report = back.merge_into(&mut desk, project);
+    assert_eq!(report.photos_added, 1);
+    assert_eq!(desk.punch_items().next().unwrap().photos.len(), 1);
+    assert!(!back.merge_into(&mut desk, project).changed(), "idempotent");
+}
+
+#[test]
+fn a_photo_name_that_could_escape_the_folder_is_not_read_from_a_file() {
+    let (doc, _) = starter();
+    let json = FieldPackage::new("P", "t", "t", &CommissioningStore::new(), doc.project())
+        .to_json()
+        .replace(
+            "\"labels\"",
+            "\"photos\": [{\"name\": \"../../x.jpg\", \"data\": \"AAAA\"}], \"labels\"",
+        );
+    let package = FieldPackage::from_json(&json).unwrap();
+    assert!(package.photo_files().is_empty());
 }
