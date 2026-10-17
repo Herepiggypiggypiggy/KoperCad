@@ -18,3 +18,5 @@
 
 ## Confirm before overwrite (branch claude/panels-confirm)
 - "Standard rules" (Place rules) and "Reset" (DXF background) ask "Replace / Cancel" first when they would overwrite something different (`dialog_ui::confirm_button`). No ask when the text or placement is already the default.
+## Report languages (branch claude/panels-languages)
+- Languages window (File > Report languages): 12 px hints, ENGLISH/TRANSLATION header row, primary Add (disabled until a new code is typed), one merged hint at the bottom. Picture of the English view at 1366x768.
