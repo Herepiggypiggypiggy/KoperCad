@@ -35,6 +35,7 @@ Errors are signed, relative to the reference unless marked abs.
 | Fan into a vent (CFD-C2, `openings.rs`) | analytic operating point | flow | within 3% (test limit) |
 | Porous slab as fan load (CFD-C2, `ducts.rs`) | exact operating point | flow | -0.04% and -0.03% at two time steps |
 | IEC 60890 wall films (CFD-C2) | k A_eff | conductance sum | below 1e-9 relative |
+| Vented cabinet, 3 devices (40, 60, 20 W), louvre low and high, 1800 / 3500 cells (`validation_cabinet_vents.rs`; 3500 is an ignored test) | 2D engine | housing rise per device | device 1 +4.7% / +5.5%, device 2 (hottest in both engines) +4.1% / +5.4%, device 3 +4.8% / +4.3%; plate shares 0.25 vs 0.26; heat imbalance +0.2% (model vs model, not a measurement) |
 | Sealed enclosure 50 W, mean air rise (fixed in #675 with ThermalBc::Overall; re-measured 2026-10-17 on main) | IEC 60890 hand calc 6.29 K, 2D engine 6.10 K | 3D volume-mean air rise | 5.48 K on 1000 cells, 5.38 on 1800: -12.8% and -14.4% vs IEC, -10.1% and -11.8% vs 2D (steady path 5.478 and 5.380 K); heat imbalance at most 0.1%. The 3D mean is lower because the air is stratified; test band 20% |
 | Vented box 100 W, 1000 then 1800 cells (CFD-C2, `validation_vented.rs`) | 2D engine, mixed air at the vents | air rise seen by the walls (wall-conductance weighted) | +4.5% then +6.7% (model vs model, not a measurement) |
 | Same vented box | 2D engine | volume-mean air rise | -14.6% then -14.8%; does not flatten with the mesh (stratification, see below) |
@@ -87,7 +88,6 @@ so the 20% test band is a guard, not an accuracy claim.
 
 | Case | Blocked on |
 | --- | --- |
-| Cabinet with several devices and vents against the 2D engine | own test in a later PR (single device, full cabinet and one vented box are done) |
 | Chimney against the 2D formulas (CFD-C2 reports a 40% band, laminar) | own test in a later PR |
 | Richardson study on a real cabinet scenario | C1 meshing; the cavity study stands in |
 
