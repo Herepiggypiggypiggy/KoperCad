@@ -41,11 +41,11 @@ text = "The list names every problem and where it is, errors first, so you can w
 text_nl = "De lijst noemt elk probleem en waar het zit, fouten eerst, zodat je ze op volgorde kunt afwerken."
 how = [
   "Click the pill in the top bar, or open **Check** and choose **Problems**.",
-  "The **Issues** list opens in the page panel, with a count on each filter: errors, warnings and infos.",
+  "The {ui:issues.list} opens in the page panel, with a count on each filter: errors, warnings and infos.",
 ]
 how_nl = [
   "Klik op de knop in de bovenbalk, of open **Check** en kies **Problems**.",
-  "De lijst **Issues** opent in het paginapaneel, met een aantal bij elk filter: fouten, waarschuwingen en infos.",
+  "De {ui:issues.list} opent in het paginapaneel, met een aantal bij elk filter: fouten, waarschuwingen en infos.",
 ]
 point = { ui = "issue.pill" }
 expect = { any = [ { clicked = "issue.pill" }, { command = "check.problems" } ] }
@@ -114,12 +114,12 @@ Soms is een probleem bedoeld. Het **negeren** (waive) zegt: ik weet het, dit is 
 Het negeren blijft met je reden in het project staan, zodat een collega het later kan lezen.
 """
 how = [
-  "In the **Issues** list click the **infos** filter.",
+  "In the {ui:issues.list} click the **infos** filter.",
   "Right-click **-S1: No part** and choose **Waive with a reason...**.",
   "Type **Quote still open** and press **Waive**. The note leaves the list.",
 ]
 how_nl = [
-  "Klik in de lijst **Issues** op het filter **infos**.",
+  "Klik in de {ui:issues.list} op het filter **infos**.",
   "Klik met de rechtermuisknop op **-S1: No part** en kies **Waive with a reason...**.",
   "Typ **Quote still open** en druk op **Waive**. De notitie verdwijnt uit de lijst.",
 ]
