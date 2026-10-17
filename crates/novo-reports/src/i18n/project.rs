@@ -64,6 +64,9 @@ impl ProjectTable {
                 if own.name.is_empty() {
                     own.name = catalog.name;
                 }
+                if own.decimal.is_none() {
+                    own.decimal = catalog.decimal;
+                }
                 for (key, text) in catalog.entries {
                     own.entries.entry(key).or_insert(text);
                 }

@@ -274,7 +274,7 @@ fn table(layout: &mut PageLayout, t: &TableElement, section: &Section, page: usi
             let text = row
                 .cells
                 .get(i)
-                .map(ToString::to_string)
+                .map(|c| section.cell_text(c))
                 .unwrap_or_default();
             if !text.is_empty() {
                 layout.texts.push(cell(i, y, spec.row_mm, text, false));
