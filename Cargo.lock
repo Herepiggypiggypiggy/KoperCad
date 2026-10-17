@@ -1916,6 +1916,7 @@ dependencies = [
  "rfd",
  "ron",
  "serde",
+ "serde_json",
  "tempfile",
  "winresource",
 ]

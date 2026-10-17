@@ -26,6 +26,7 @@ use serde_json::{Value, json};
 mod eplan;
 mod macros;
 mod parts;
+mod testuser;
 
 /// Process exit codes.
 pub mod exit {
@@ -73,6 +74,10 @@ enum Cmd {
     /// export.
     #[command(subcommand)]
     Eplan(eplan::Eplan),
+    /// An MCP server that lets an AI assistant use the real KoperCAD window
+    /// (screenshots, mouse, keyboard) as a first-time user. See
+    /// docs/testing/visual-test-user.md.
+    TestUser(testuser::TestUser),
     /// Show a summary of a project file.
     Info {
         file: PathBuf,
@@ -443,6 +448,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
     match command {
         Cmd::Macros(cmd) => macros::run(cmd, out),
         Cmd::Eplan(cmd) => eplan::run(cmd, out),
+        Cmd::TestUser(opts) => testuser::run(opts, out),
         Cmd::Parts(cmd) => parts::run(cmd, out),
         Cmd::Info { file, json } => {
             let project = read(&file)?;
