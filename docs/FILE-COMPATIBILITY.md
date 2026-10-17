@@ -1,0 +1,36 @@
+# Project file compatibility
+
+A KoperCAD project is one `.novo` file: a SQLite database (`crates/novo-storage`). Two numbers decide whether a build can read it.
+
+| Number | Where | Meaning |
+| --- | --- | --- |
+| Schema version | SQLite `user_version`; `novo_storage::schema::SCHEMA_VERSION` | Layout of the database (tables, how rows are shaped). KoperCAD 0.1 writes **3**. |
+| Record format | `meta.record_format`; `novo_core::JSON_FORMAT_VERSION` | JSON shape of one object. Currently **1**. |
+
+## Promises
+
+1. **Newer build reads older files.** Every schema step is a migration (`schema::MIGRATIONS`). Opening an older file runs all pending steps in one transaction, so a failed upgrade leaves the file as it was. Before the first write the old file is copied to `<file>.v<old>.bak` (the newest backup per old version is kept). Reading (the CLI, Python, Open read-only) upgrades in memory and never writes.
+2. **Older build refuses newer files, untouched.** A file with a higher schema version, a higher record format, or an object kind the build does not know gives a readable message ("saved by a newer version of KoperCAD ...") and is not opened for writing. Save as and New project onto such a file are refused too. No backup, recovery or temp file is left beside it.
+3. **A crash or kill never leaves half a save.** A save is one SQLite transaction with a rollback journal and `synchronous=FULL`; a process killed mid-save leaves the previous save (SQLite rolls the journal back on the next open). Save as and the first save of a project write a `<file>.saving` temp file and rename it over the target, so the target is either the old file or the new one. Unsaved work is autosaved to a recovery file (app data `recovery` folder); the next start offers it again.
+
+## Rules for changing the format
+
+- **Adding an optional field or a new kind of record** to the model: allowed within the current versions only when an older build can ignore it. Fields use `#[serde(default)]`; a new record kind makes an older build refuse the file (promise 2, unknown kind), which is the safe outcome. Prefer a schema bump when an older build would otherwise silently drop data on re-save.
+- **Changing or removing a field, renaming a kind, or moving data between tables**: add a migration (`schema::MIGRATIONS`, one step higher) that rewrites the rows, and bump `JSON_FORMAT_VERSION` only when the JSON itself changes incompatibly. Never edit an existing migration.
+- Add a golden file for the new version (below) and keep all older golden files.
+- Releases: the schema version a release writes is recorded in the release notes. Once a version is released, its golden file never changes.
+
+## Golden files and tests
+
+`crates/novo-tests/tests/golden/v0.1-motor-starter.novo` (+ `.json`) is the file KoperCAD 0.1 writes: the motor starter, an issued revision with its snapshot, and a sidecar document. `crates/novo-tests/tests/compat_v0_1.rs` pins:
+
+- the golden file opens, equals its JSON, survives Save as, close and reopen;
+- the same project built in code still serialises to the golden JSON (a model change that alters the saved form fails here);
+- schema 1 and 2 files (cut from the golden file) upgrade with a backup and lose nothing; every earlier model JSON in the repository (`format_v1.json`, all lesson projects) loads, saves and reopens;
+- newer schema, and unknown record kind: readable error, bytes unchanged, no side files;
+- a real child process killed at staggered moments while saving: the file always opens as the old or the new save;
+- a child that autosaves and aborts: the app backend offers the work back on the next open.
+
+To rewrite the golden files after an **intended** format change (and only then): `KOPERCAD_REGEN_GOLDEN=1 cargo test -p novo-tests --test compat_v0_1 regenerate_golden`. For a released version, add a new golden file instead.
+
+Verified on headless Linux only; the Windows run (rename over an open file, antivirus locking) is part of the release's Windows pass.

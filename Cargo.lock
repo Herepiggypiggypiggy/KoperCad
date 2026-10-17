@@ -2266,6 +2266,7 @@ dependencies = [
  "novo-theme",
  "novo-workflow",
  "novo-xref",
+ "rusqlite",
  "serde_json",
  "tempfile",
  "toml",

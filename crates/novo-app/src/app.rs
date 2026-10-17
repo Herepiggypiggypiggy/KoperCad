@@ -2199,7 +2199,11 @@ fn describe_error(verb: &str, path: &Path, e: &BackendError) -> String {
     use novo_storage::StorageError as S;
     match e {
         BackendError::Storage(
-            S::Locked(_) | S::NotAProject(_) | S::NewerFormat { .. } | S::Corrupt { .. },
+            S::Locked(_)
+            | S::NotAProject(_)
+            | S::NewerFormat { .. }
+            | S::UnknownRecord { .. }
+            | S::Corrupt { .. },
         ) => format!("Could not {verb} the project: {e}"),
         _ if is_not_found(e) => format!(
             "Could not {verb} {}: the file does not exist",

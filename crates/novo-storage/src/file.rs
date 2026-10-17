@@ -254,7 +254,13 @@ impl ProjectFile {
         let mut records = Vec::new();
         for row in rows {
             let (id, kind, data) = row?;
-            let record = decode(&kind, &data).map_err(|e| corrupt(format!("object {id}: {e}")))?;
+            let record = decode(&kind, &data).map_err(|e| match e {
+                DecodeError::UnknownKind => StorageError::UnknownRecord {
+                    path: self.path.clone(),
+                    kind: kind.clone(),
+                },
+                DecodeError::Damaged(e) => corrupt(format!("object {id}: {e}")),
+            })?;
             if record.id().raw() != id as u64 {
                 return Err(corrupt(format!("object {id} is stored under the wrong id")));
             }
@@ -532,7 +538,21 @@ fn lock_existing(path: &Path) -> Result<Option<Connection>> {
          BEGIN EXCLUSIVE; COMMIT;",
     );
     match locked {
-        Ok(()) => Ok(Some(conn)),
+        Ok(()) => {
+            // A project from a newer build is never replaced, even when the
+            // caller means to overwrite it: an older build cannot know what
+            // it would be throwing away.
+            let app_id = schema::application_id(&conn)?;
+            let version = schema::user_version(&conn)?;
+            if app_id == APPLICATION_ID && version > schema::SCHEMA_VERSION {
+                return Err(StorageError::NewerFormat {
+                    path: path.to_owned(),
+                    found: version,
+                    supported: schema::SCHEMA_VERSION,
+                });
+            }
+            Ok(Some(conn))
+        }
         Err(e) if is_not_a_database(&e) => Ok(None),
         Err(e) => Err(classify(e, path)),
     }
@@ -612,15 +632,30 @@ fn encode(record: &Record) -> String {
 }
 
 /// Parses a stored record and checks it matches its `kind` column.
-fn decode(kind: &str, data: &str) -> std::result::Result<Record, String> {
-    let record: Record = serde_json::from_str(data).map_err(|e| e.to_string())?;
+fn decode(kind: &str, data: &str) -> std::result::Result<Record, DecodeError> {
+    let record: Record = serde_json::from_str(data).map_err(|e| {
+        // serde names the tag value it could not place; a kind this build
+        // lacks is a newer file, anything else is damage.
+        let text = e.to_string();
+        if text.starts_with("unknown variant") {
+            DecodeError::UnknownKind
+        } else {
+            DecodeError::Damaged(text)
+        }
+    })?;
     if kind_name(record.kind()) != kind {
-        return Err(format!(
+        return Err(DecodeError::Damaged(format!(
             "stored as {kind:?} but holds a {}",
             kind_name(record.kind())
-        ));
+        )));
     }
     Ok(record)
+}
+
+enum DecodeError {
+    /// The record's tag names a kind of object this build does not have.
+    UnknownKind,
+    Damaged(String),
 }
 
 fn finish_save(tx: &Transaction<'_>) -> Result<()> {

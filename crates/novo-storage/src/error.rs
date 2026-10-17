@@ -24,6 +24,13 @@ pub enum StorageError {
         found: u32,
         supported: u32,
     },
+    /// The file holds a kind of object this version does not know, so it was
+    /// saved by a newer KoperCAD that added one without a schema change.
+    #[error(
+        "{} holds a kind of object this version of KoperCAD does not know ({kind}); it was probably saved by a newer version",
+        path.display()
+    )]
+    UnknownRecord { path: PathBuf, kind: String },
     /// The file is damaged or holds data the model refuses.
     #[error("{} is damaged: {reason}", path.display())]
     Corrupt { path: PathBuf, reason: String },
