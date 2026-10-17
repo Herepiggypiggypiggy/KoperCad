@@ -351,3 +351,55 @@ fn a_tablet_window_pins_a_wider_panel_with_large_buttons() {
     assert!(d.app.outline_pinned());
     assert_eq!(d.app.outline_width(), crate::app::OUTLINE_WIDTH);
 }
+
+#[test]
+fn redlines_apply_to_the_drawing_in_one_undo_step_and_offer_a_revision() {
+    use novo_commissioning::{Change, Redline, RedlineState};
+    let (_dir, mut d) = example();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.commissioning", None);
+    d.frame();
+    let wire = targets(d.doc().project())
+        .into_iter()
+        .find(|t| matches!(t.target, Target::Wire(_)))
+        .expect("a wire");
+    let Target::Wire(id) = wire.target else {
+        unreachable!()
+    };
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    mode.selected = Some(wire.target);
+    mode.store
+        .add_redline(Redline {
+            id: 0,
+            target: wire.target,
+            label: wire.label.clone(),
+            change: Change::WireNumber("RL77".into()),
+            note: String::new(),
+            by: "tv".into(),
+            at: "2026-10-17T08:00:00Z".into(),
+            state: RedlineState::Open,
+        })
+        .unwrap();
+    // the Redlines tab draws, also at tablet size
+    mode.tab = super::commissioning::Tab::Redlines;
+    d.frame();
+    d.frame();
+    d.app.apply_redlines(true);
+    d.frame();
+    let number = |d: &Drive| d.doc().project().wire(id).unwrap().number.clone();
+    assert_eq!(number(&d).as_deref(), Some("RL77"));
+    let mode = d.app.wb.commissioning.as_ref().unwrap();
+    assert_eq!(mode.store.open_redline_count(), 0);
+    let draft = d.app.wb.issue.as_ref().expect("the revision dialog opens");
+    assert!(draft.description.contains("RL77"), "{}", draft.description);
+    // undo is off while the mode shows; back in the schematic it is one step
+    d.app.run_command(&ctx, "view.schematic", None);
+    d.frame();
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_ne!(
+        number(&d).as_deref(),
+        Some("RL77"),
+        "one undo takes it back"
+    );
+}

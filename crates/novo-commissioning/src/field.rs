@@ -15,6 +15,7 @@ use crate::check::{CheckKind, Target};
 use crate::photo::{self, is_photo_name};
 use crate::progress::targets;
 use crate::punch::{PunchItem, PunchState};
+use crate::redline::{Change, Redline, RedlineState};
 use crate::store::CommissioningStore;
 
 /// Marker in the file so other JSON is not taken for a field package.
@@ -78,6 +79,8 @@ pub struct MergeReport {
     pub mismatched_targets: usize,
     pub punch_added: usize,
     pub punch_updated: usize,
+    pub redlines_added: usize,
+    pub redlines_updated: usize,
     /// Photos attached to items that were already here.
     pub photos_added: usize,
 }
@@ -88,6 +91,8 @@ impl MergeReport {
             + self.checks_updated
             + self.punch_added
             + self.punch_updated
+            + self.redlines_added
+            + self.redlines_updated
             + self.photos_added
             > 0
     }
@@ -97,6 +102,12 @@ impl MergeReport {
             "{} new and {} changed checks, {} new and {} changed punch items",
             self.checks_added, self.checks_updated, self.punch_added, self.punch_updated
         );
+        if self.redlines_added + self.redlines_updated > 0 {
+            text.push_str(&format!(
+                ", {} new and {} changed redlines",
+                self.redlines_added, self.redlines_updated
+            ));
+        }
         if self.photos_added > 0 {
             text.push_str(&format!(", {} new photos", self.photos_added));
         }
@@ -173,12 +184,15 @@ impl FieldPackage {
     }
 
     /// The picture files in the package as (name, bytes). Names that could
-    /// not have come from [`photo_name`] and unreadable data are dropped.
+    /// not have come from [`photo_name`], unreadable data and pictures whose
+    /// bytes do not hash to their name are dropped.
     pub fn photo_files(&self) -> Vec<(String, Vec<u8>)> {
         self.photos
             .iter()
             .filter(|p| is_photo_name(&p.name))
             .filter_map(|p| photo::decode(&p.data).map(|b| (p.name.clone(), b)))
+            // A hand-edited file cannot plant another picture under a real name.
+            .filter(|(name, bytes)| photo::name_matches(name, bytes))
             .collect()
     }
 
@@ -293,8 +307,44 @@ impl FieldPackage {
                 }
             }
         }
+        for incoming in self.store.redlines() {
+            match verdict(incoming.target) {
+                Verdict::Same => {}
+                Verdict::Unknown => {
+                    report.unknown_targets += 1;
+                    continue;
+                }
+                Verdict::Other => {
+                    report.mismatched_targets += 1;
+                    continue;
+                }
+            }
+            let found = store
+                .redlines()
+                .find(|r| redline_key(r) == redline_key(incoming))
+                .cloned();
+            match found {
+                None => {
+                    if store.add_redline(incoming.clone()).is_ok() {
+                        report.redlines_added += 1;
+                    }
+                }
+                Some(have) => {
+                    if have.state == RedlineState::Open && incoming.state != RedlineState::Open {
+                        let mut redline = incoming.clone();
+                        redline.id = have.id;
+                        store.put_redline(redline);
+                        report.redlines_updated += 1;
+                    }
+                }
+            }
+        }
         report
     }
+}
+
+fn redline_key(r: &Redline) -> (String, String, Target, Change) {
+    (r.at.clone(), r.by.clone(), r.target, r.change.clone())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]

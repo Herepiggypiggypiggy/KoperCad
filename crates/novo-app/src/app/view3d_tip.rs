@@ -15,11 +15,13 @@ pub(super) struct Tip {
     pub lines: Vec<String>,
 }
 
-/// The tip for a device; `heat` is its row of the last heat result, if any.
+/// The tip for a device; `heat` is its row of the last heat result, if any,
+/// and `stale` whether the cabinet changed since that result.
 pub(super) fn tip(
     project: &Project,
     device: DeviceId,
     heat: Option<(&DeviceResult, f64)>,
+    stale: bool,
 ) -> Option<Tip> {
     let d = project.get::<Device>(device)?;
     let mut lines = Vec::new();
@@ -54,7 +56,14 @@ pub(super) fn tip(
             }
         }
         lines.push(text);
-        lines.push("From the last heat run".to_owned());
+        lines.push(
+            if stale {
+                "From the last heat run (out of date: the cabinet changed since)"
+            } else {
+                "From the last heat run"
+            }
+            .to_owned(),
+        );
     }
     Some(Tip {
         title: d.tag.to_string(),
@@ -129,7 +138,7 @@ mod tests {
     #[test]
     fn the_tip_names_the_device_its_part_state_and_its_loss() {
         let (project, device) = project(Some(12.0));
-        let tip = tip(&project, device, None).unwrap();
+        let tip = tip(&project, device, None, false).unwrap();
         assert!(tip.title.contains("K1"), "{}", tip.title);
         let text = tip.lines.join("\n");
         assert!(text.contains("Motor contactor"));
@@ -141,18 +150,39 @@ mod tests {
     #[test]
     fn a_heat_result_adds_the_temperature_and_the_margin() {
         let (project, device) = project(Some(12.0));
-        let ok = tip(&project, device, Some((&result(55.0, Some(20.0)), 35.0))).unwrap();
+        let ok = tip(
+            &project,
+            device,
+            Some((&result(55.0, Some(20.0)), 35.0)),
+            false,
+        )
+        .unwrap();
         let text = ok.lines.join("\n");
         assert!(text.contains("55 °C surface"), "{text}");
         assert!(text.contains("20 K to its limit"));
         assert!(text.contains("last heat run"));
-        let over = tip(&project, device, Some((&result(95.0, Some(-5.0)), 35.0))).unwrap();
+        let over = tip(
+            &project,
+            device,
+            Some((&result(95.0, Some(-5.0)), 35.0)),
+            false,
+        )
+        .unwrap();
         assert!(over.lines.join("\n").contains("5 K over its limit"));
+        assert!(!text.contains("out of date"), "{text}");
+        let old = tip(
+            &project,
+            device,
+            Some((&result(55.0, Some(20.0)), 35.0)),
+            true,
+        )
+        .unwrap();
+        assert!(old.lines.join("\n").contains("out of date"), "{old:?}");
     }
 
     #[test]
     fn a_device_that_is_gone_has_no_tip() {
         let (project, _) = project(None);
-        assert!(tip(&project, DeviceId::from(9_999), None).is_none());
+        assert!(tip(&project, DeviceId::from(9_999), None, false).is_none());
     }
 }

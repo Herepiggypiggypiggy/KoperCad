@@ -53,6 +53,8 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("outline.toggle", "Pages button"),
     ("commissioning.who", "By menu"),
     ("commissioning.punch", "Punch tab"),
+    ("commissioning.redlines", "Redlines tab"),
+    ("commissioning.redline_apply", "Apply button"),
     ("commissioning.report", "Write PDF report item"),
     ("commissioning.photo", "Add photo button"),
     ("commissioning.field_export", "Export field results item"),

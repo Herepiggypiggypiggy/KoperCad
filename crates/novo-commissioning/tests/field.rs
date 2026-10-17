@@ -302,3 +302,62 @@ fn a_photo_name_that_could_escape_the_folder_is_not_read_from_a_file() {
     let package = FieldPackage::from_json(&json).unwrap();
     assert!(package.photo_files().is_empty());
 }
+
+#[test]
+fn a_picture_that_does_not_hash_to_its_name_is_dropped() {
+    let (doc, _) = starter();
+    let real = vec![1u8, 2, 3, 4, 5];
+    let name = photo_name(&real, "jpg");
+    let package = FieldPackage::new("A", "tv", "t", &CommissioningStore::new(), doc.project());
+    let mut value: serde_json::Value = serde_json::from_str(&package.to_json()).unwrap();
+    // "AAAA" decodes to three zero bytes, not the picture the name stands for
+    value["photos"] = serde_json::json!([{"name": name, "data": "AAAA"}]);
+    let back = FieldPackage::from_json(&value.to_string()).unwrap();
+    assert!(
+        back.photo_files().is_empty(),
+        "wrong bytes under a real name"
+    );
+
+    // the same name with the right bytes is kept
+    let mut good = package.clone();
+    good.attach_photos(|_| None);
+    let mut value: serde_json::Value = serde_json::from_str(&good.to_json()).unwrap();
+    let data = {
+        let mut p = FieldPackage::new("A", "tv", "t", &store_with_photo(&name), doc.project());
+        p.attach_photos(|n| (n == name).then(|| real.clone()));
+        serde_json::from_str::<serde_json::Value>(&p.to_json()).unwrap()["photos"].clone()
+    };
+    value["photos"] = data;
+    let back = FieldPackage::from_json(&value.to_string()).unwrap();
+    assert_eq!(back.photo_files(), vec![(name, real)]);
+}
+
+fn store_with_photo(name: &str) -> CommissioningStore {
+    let mut store = CommissioningStore::new();
+    let id = store.add_punch(PunchItem {
+        id: 0,
+        title: "x".into(),
+        note: String::new(),
+        severity: Severity::Minor,
+        state: PunchState::Open,
+        target: None,
+        check: None,
+        raised_by: "tv".into(),
+        raised_at: "t".into(),
+        closed_by: None,
+        closed_at: None,
+        signature: None,
+        photos: Vec::new(),
+    });
+    store
+        .add_photo(
+            id,
+            Photo {
+                name: name.into(),
+                at: "t".into(),
+                note: String::new(),
+            },
+        )
+        .unwrap();
+    store
+}
