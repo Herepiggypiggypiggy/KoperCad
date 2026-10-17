@@ -6,3 +6,4 @@
 2026-10-16 13:00 UTC PR 4: turbulence option in CabinetSolver (`with_turbulence`), snapshot `turb_visc_ratio`, accuracy text; vented box study (see HANDOFF).
 2026-10-17 09:40 UTC #694 merged (13:30 on 10-16). Doc PR: R1 corrections, exhaust print in turb_vented. Next: second-order convection for k and omega.
 2026-10-17 11:00 UTC PR 5: second-order k/omega option, film faces and cut cells kept out of the turbulence heat hooks (device 35 % too cold / 4x too hot found), vented table redone: turbulence changes the vented box by under 3 %.
+2026-10-17 12:30 UTC #1015 merged. Looked at a buoyancy-aware wall function: low payoff for the cabinet (enclosure walls use the Overall BC and devices the film model, so the turbulence wall alpha barely reaches the result); kept as documented limit. Accuracy text now says so. Draft only until the release candidate is tagged (coordinator).
