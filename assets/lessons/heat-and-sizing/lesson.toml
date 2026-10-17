@@ -51,17 +51,17 @@ solve = [ { command = "view.cabinet" } ]
 
 [[step]]
 id = "heat-on"
-how = ["Click Heat in the View group of the Cabinet bar, or press {key:heat.toggle}.", "Find the chips Map, Contours, Airflow and Badges."]
-how_nl = ["Klik op Heat in de groep View van de Cabinet-balk of druk op {key:heat.toggle}.", "Zoek de chips Map, Contours, Airflow en Badges."]
+how = ["Click Heat in the View group of the Cabinet bar, or press {key:heat.toggle}.", "Find the chips Map, Contours, Airflow and Badges in the strip under the bar."]
+how_nl = ["Klik op Heat in de groep View van de Cabinet-balk of druk op {key:heat.toggle}.", "Zoek de chips Map, Contours, Airflow en Badges in de strook onder de balk."]
 title = "Turn on Heat"
 title_nl = "Zet Heat aan"
 text = """
 Click **Heat** in the View group of the Cabinet bar (or press {key:heat.toggle}; in a narrow window the bar folds Heat into **More**). A coloured {tip:heat-map} appears under the devices, a legend **TEMPERATURE** appears in the corner,
-and four chips appear next to the button: **Map**, **Contours**, **Airflow** and **Badges**. Each chip switches one layer on or off.
+and four chips appear in the strip under the bar: **Map**, **Contours**, **Airflow** and **Badges**. Each chip switches one layer on or off; Map, Contours and Badges start on, Airflow off.
 """
 text_nl = """
 Klik op **Heat** in de groep View van de Cabinet-balk (of druk op {key:heat.toggle}; in een smal venster zit Heat in **More**). Onder de componenten verschijnt een gekleurde {tip:heat-map}, in de hoek een legenda **TEMPERATURE**
-en naast de knop vier chips: **Map**, **Contours**, **Airflow** en **Badges**. Elke chip zet één laag aan of uit.
+en in de strook onder de balk vier chips: **Map**, **Contours**, **Airflow** en **Badges**. Elke chip zet één laag aan of uit; Map, Contours en Badges staan eerst aan, Airflow uit.
 """
 point = { ui = "cabinet.heat" }
 expect = { command = "heat.toggle" }
@@ -81,7 +81,7 @@ De kleurbalk loopt van koel naar heet met streepjes in °C en de regel eronder z
 Zolang je geen simulatie draait zegt de legenda "Preview model from the part losses, not a solver result": het beeld is snel en toont waar warmte zich ophoopt, geen exacte temperaturen.
 De heetste plek zit bij de transformator **-T1**, de grootste bron.
 """
-point = { ui = "cabinet.heat" }
+point = { ui = "heat.legend" }
 
 [[step]]
 id = "total-loss"
@@ -93,21 +93,21 @@ Under the colour bar the legend says "Total loss 34 W", the sum of the part loss
 text_nl = """
 Onder de kleurbalk zegt de legenda "Total loss 34 W", de som van de artikelverliezen. Heeft een artikel geen verliesgegevens, dan zegt de legenda ook hoeveel componenten die missen.
 """
-point = { ui = "cabinet.heat" }
+point = { ui = "heat.legend" }
 
 [[step]]
 id = "badges"
 title = "Hot spots and badges"
 title_nl = "Hotspots en badges"
 text = """
-With **Badges** on, a hot spot carries a label such as "-T1  45 °C", and hovering a device says how many K it is above the plate mean.
+The hot-spot cards always show, a label such as "-T1  45 °C". **Badges** adds a small temperature pill on every device.
 Switch **Contours** on to see lines of equal temperature around the sources.
 """
 text_nl = """
-Met **Badges** aan krijgt een hotspot een label als "-T1  45 °C" en als je boven een component blijft hangen staat er hoeveel K het boven het gemiddelde van de plaat ligt.
+De hotspotkaarten staan altijd aan, met een label als "-T1  45 °C". **Badges** voegt een klein temperatuurlabel op elk component toe.
 Zet **Contours** aan om lijnen van gelijke temperatuur rond de bronnen te zien.
 """
-point = { ui = "cabinet.heat" }
+point = { ui = "heat.chips" }
 
 [[step]]
 id = "unknown"
@@ -149,16 +149,16 @@ how_nl = ["Klik op Simulate naast de Heat-chips.", "Wacht tot de legenda zegt da
 title = "Simulate it for real"
 title_nl = "Simuleer het echt"
 text = """
-Click **Simulate** (or run **Simulate heat of the cabinet** from the palette). The solver runs in the background: the header shows how long it has been running, and **Cancel** stops it and keeps the latest result.
+Click **Simulate** (or run **Simulate heat of the cabinet** from the palette). The solver runs in the background: the strip under the bar shows how long it has been running, and **Cancel** stops it and keeps the latest result.
 When it finishes, the legend names the fidelity of the result and says whether it converged, and the map is replaced by the solved field.
 If you move a device afterwards, the legend says "Out of date: the layout changed since this run".
 """
 text_nl = """
-Klik op **Simulate** (of voer **Simulate heat of the cabinet** uit via het palet). De solver draait op de achtergrond: de kopregel toont hoe lang hij al bezig is en **Cancel** stopt hem en houdt het laatste resultaat.
+Klik op **Simulate** (of voer **Simulate heat of the cabinet** uit via het palet). De solver draait op de achtergrond: de strook onder de balk toont hoe lang hij al bezig is en **Cancel** stopt hem en houdt het laatste resultaat.
 Als hij klaar is noemt de legenda de nauwkeurigheid van het resultaat en of het geconvergeerd is en wordt de kaart vervangen door het opgeloste veld.
 Verplaats je daarna een component, dan zegt de legenda "Out of date: the layout changed since this run".
 """
-point = { ui = "cabinet.heat" }
+point = { ui = "heat.simulate" }
 expect = { command = "heat.simulate" }
 solve = [ { command = "heat.simulate" } ]
 
@@ -175,8 +175,8 @@ Zowel het voorbeeld als de simulatie zijn planningshulpmiddelen. Ze tonen waar w
 
 [[step]]
 id = "balance"
-how = ["Click Size enclosure in the Arrange group (under More in a narrow window).", "Click Add to add Enclosure 1.", "Read the result under the list."]
-how_nl = ["Klik op Size enclosure in de groep Arrange (in een smal venster onder More).", "Klik op Add om Enclosure 1 toe te voegen.", "Lees het resultaat onder de lijst."]
+how = ["Click Size enclosure in the Arrange group (under More in a narrow window).", "Read the inputs and the result in the window."]
+how_nl = ["Klik op Size enclosure in de groep Arrange (in een smal venster onder More).", "Lees de invoeren en het resultaat in het venster."]
 title = "What the heat means for the box"
 title_nl = "Wat de warmte voor de kast betekent"
 text = """

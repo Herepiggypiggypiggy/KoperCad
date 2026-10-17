@@ -597,14 +597,17 @@ pub(super) fn toggle(ui: &mut egui::Ui, state: &mut HeatState) -> egui::Response
 /// Heat is on.
 pub(super) fn strip(ui: &mut egui::Ui, state: &mut HeatState) {
     let chip = |ui: &mut egui::Ui, on: &mut bool, label: &str| {
-        if ui.selectable_label(*on, label).clicked() {
+        let r = novo_theme::widgets::filter_toggle(ui, label, *on);
+        if r.clicked() {
             *on = !*on;
         }
+        r.rect
     };
-    chip(ui, &mut state.map, "Map");
-    chip(ui, &mut state.contours, "Contours");
-    chip(ui, &mut state.airflow, "Airflow");
-    chip(ui, &mut state.badges, "Badges");
+    let mut chips = chip(ui, &mut state.map, "Map");
+    chips = chips.union(chip(ui, &mut state.contours, "Contours"));
+    chips = chips.union(chip(ui, &mut state.airflow, "Airflow"));
+    chips = chips.union(chip(ui, &mut state.badges, "Badges"));
+    super::cabinet_bar::note_rect(ui.ctx(), "heat.chips", "Heat chips", chips, false);
     simulate_controls(ui, state);
 }
 
@@ -679,11 +682,15 @@ fn status_label(p: &novo_cfd::Progress, validated: bool) -> String {
     format!("{} · {state}", p.fidelity.label())
 }
 
-/// Total loss of the devices that have a figure, and how many have none.
-fn totals(input: &Input) -> (f64, usize) {
+/// Total loss of the devices that have a figure, the number that have one,
+/// and how many have none. The total is never negative zero (the sum of no
+/// terms is -0.0 in Rust and would print as "-0 W").
+fn totals(input: &Input) -> (f64, usize, usize) {
     let known = input.items.iter().filter(|i| i.loss_known);
+    let (total, n) = known.fold((0.0_f64, 0), |(t, n), i| (t + i.loss_w, n + 1));
     (
-        known.map(|i| i.loss_w).sum(),
+        total + 0.0,
+        n,
         input.items.iter().filter(|i| !i.loss_known).count(),
     )
 }
@@ -747,11 +754,11 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
             }
         }
     } else {
-        if ui
+        let simulate = ui
             .button("Simulate")
-            .on_hover_text("Simulate the heat and airflow of this cabinet (Ctrl+K, heat)")
-            .clicked()
-        {
+            .on_hover_text("Simulate the heat and airflow of this cabinet (Ctrl+K, heat)");
+        super::cabinet_bar::note_ctx(ui.ctx(), "heat.simulate", "Simulate button", &simulate);
+        if simulate.clicked() {
             state.request_run();
         }
         compare_controls(ui, state);
@@ -837,7 +844,14 @@ pub(super) fn start_run(
             };
             state.start(bridge.scenario, meta);
         }
-        Err(e) => state.fail(format!("Cannot simulate: {e}")),
+        Err(e) => {
+            let hint = if e.to_string().contains("is not set") {
+                ". Set it in the Cabinet: Size enclosure or Plate setup"
+            } else {
+                ""
+            };
+            state.fail(format!("Cannot simulate: {e}{hint}"));
+        }
     }
 }
 
@@ -925,7 +939,7 @@ pub(super) fn paint_over(
         paint_badges(&painter, cache, input, &to_screen, viewport.zoom);
     }
     if delta.is_none() {
-        paint_peaks(&painter, cache, &to_screen);
+        paint_peaks(&painter, cache, input, &to_screen);
     }
     let stale = matches!(&cache.source, Source::Solved(sol) if state.live.out_of_date(sol, layout_key(input)));
     if let Some(d) = delta {
@@ -1273,6 +1287,8 @@ fn paint_badges(
     zoom: f32,
 ) {
     let font = FontId::monospace(t::FONT_SMALL);
+    let plate_left = to_screen(0.0, 0.0).x;
+    let mut placed: Vec<Rect> = Vec::new();
     for i in input
         .items
         .iter()
@@ -1287,14 +1303,46 @@ fn paint_badges(
             verdict,
             margin_k,
         } = reading(cache, i);
-        let (text, width) = match margin_k {
-            Some(m) => (format!("{temp:.0} °C · {m:+.0} K"), 128.0),
-            None => (format!("{temp:.0} °C"), 88.0),
+        // The badge names its device ("F1  46 °C") whenever the device is
+        // wide enough; a badge without a name only where it is not.
+        let reading_text = match margin_k {
+            Some(m) => format!("{temp:.0} °C · {m:+.0} K"),
+            None => format!("{temp:.0} °C"),
         };
-        // Only where the pill fits inside the device.
-        if (i.w as f32) * zoom < width + 8.0 || (i.h as f32) * zoom < 30.0 {
-            continue;
-        }
+        let measure = |text: &str| {
+            painter
+                .layout_no_wrap(text.to_owned(), font.clone(), t::TEXT)
+                .size()
+                .x
+                + 30.0
+        };
+        let named = if i.tag.is_empty() {
+            reading_text.clone()
+        } else {
+            format!("{}  {reading_text}", i.tag)
+        };
+        // The named badge may reach left over the free plate, but never over
+        // another badge or past the plate edge; then it is the temperature
+        // alone, and only where that fits inside the device.
+        let br = to_screen(i.x + i.w, i.y + i.h);
+        let rect_for = |width: f32| {
+            Rect::from_min_size(br - Vec2::new(width + 6.0, 26.0), Vec2::new(width, 20.0))
+        };
+        let named_width = measure(&named);
+        let named_rect = rect_for(named_width);
+        let (text, width) = if (i.h as f32) * zoom >= 30.0
+            && named_rect.left() >= plate_left
+            && !placed.iter().any(|q| q.intersects(named_rect.expand(2.0)))
+        {
+            (named, named_width)
+        } else {
+            let w = measure(&reading_text);
+            if (i.w as f32) * zoom < w + 8.0 || (i.h as f32) * zoom < 30.0 {
+                continue;
+            }
+            (reading_text, w)
+        };
+        placed.push(rect_for(width));
         let dot = t::TEXT_MUTED;
         let dot = match verdict {
             Verdict::Ok => t::SUCCESS,
@@ -1302,8 +1350,7 @@ fn paint_badges(
             Verdict::Over => t::ERROR,
             Verdict::Unknown => dot,
         };
-        let br = to_screen(i.x + i.w, i.y + i.h);
-        let pill = Rect::from_min_size(br - Vec2::new(width + 6.0, 26.0), Vec2::new(width, 20.0));
+        let pill = rect_for(width);
         painter.rect(
             pill,
             10.0,
@@ -1351,13 +1398,47 @@ fn paint_no_data(
     );
 }
 
-fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f64) -> Pos2) {
+/// The two lines of a hot-spot card: where, and how the field's temperature
+/// there relates to the plate mean and to the device whose badge shows its
+/// own, usually higher, surface temperature.
+fn peak_text(tag: &str, value: f64, mean: f64, device: Option<f64>) -> (String, String) {
+    let head = if tag.is_empty() {
+        format!("{value:.0} °C")
+    } else {
+        format!("Plate by {tag}  {value:.0} °C")
+    };
+    let detail = match device {
+        Some(d) if (d - value).abs() >= 1.0 => {
+            format!(
+                "{:+.0} K on the plate mean · device {d:.0} °C",
+                value - mean
+            )
+        }
+        _ => format!("{:+.0} K on the plate mean", value - mean),
+    };
+    (head, detail)
+}
+
+fn paint_peaks(
+    painter: &egui::Painter,
+    cache: &Cache,
+    input: &Input,
+    to_screen: &dyn Fn(f64, f64) -> Pos2,
+) {
     let title = FontId::proportional(t::FONT_SMALL);
     let mut placed: Vec<Rect> = Vec::new();
     for (p, tag) in &cache.peaks {
         let at = to_screen(p.x, p.y);
         painter.circle_stroke(at, 4.0, Stroke::new(1.5, t::TEXT));
-        let mut card = Rect::from_min_size(at + Vec2::new(14.0, -30.0), Vec2::new(150.0, 34.0));
+        // The peak is the field's temperature at that point; the device badge
+        // is the device's own surface. Say which is which, and give both when
+        // they differ, so a tag never carries two different numbers unexplained.
+        let device = input
+            .items
+            .iter()
+            .find(|i| !tag.is_empty() && i.tag == *tag && i.loss_known)
+            .map(|i| device_temp(cache, i));
+        let mut card = Rect::from_min_size(at + Vec2::new(14.0, -30.0), Vec2::new(210.0, 34.0));
         // Cards never overlap each other: step down until there is room.
         while placed.iter().any(|q| q.intersects(card.expand(2.0))) {
             card = card.translate(Vec2::new(0.0, 38.0));
@@ -1371,11 +1452,7 @@ fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f
             Stroke::new(1.0, t::BORDER_STRONG),
             egui::StrokeKind::Inside,
         );
-        let head = if tag.is_empty() {
-            format!("{:.0} °C", p.value)
-        } else {
-            format!("{tag}  {:.0} °C", p.value)
-        };
+        let (head, detail) = peak_text(tag, f64::from(p.value), f64::from(cache.mean), device);
         painter.text(
             card.min + Vec2::new(8.0, 5.0),
             Align2::LEFT_TOP,
@@ -1386,7 +1463,7 @@ fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f
         painter.text(
             card.min + Vec2::new(8.0, 19.0),
             Align2::LEFT_TOP,
-            format!("{:.0} K above the plate mean", p.value - cache.mean),
+            detail,
             title.clone(),
             t::TEXT_MUTED,
         );
@@ -1394,109 +1471,121 @@ fn paint_peaks(painter: &egui::Painter, cache: &Cache, to_screen: &dyn Fn(f64, f
 }
 
 fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: bool) {
-    egui::Area::new(egui::Id::new("heat_legend"))
-        .fixed_pos(rect.right_top() + Vec2::new(-176.0, 12.0))
-        .order(egui::Order::Foreground)
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_width(140.0);
-                ui.label(
-                    egui::RichText::new("TEMPERATURE")
-                        .small()
-                        .strong()
-                        .color(t::TEXT_MUTED),
+    let shown = super::panel::Panel::new(
+        "heat_legend",
+        "Temperature",
+        rect,
+        super::panel::Side::Right,
+        164.0,
+    )
+    .top(12.0)
+    .fixed_open()
+    .fit()
+    .show(ctx, |ui| {
+        ui.scope(|ui| {
+            ui.set_width(140.0);
+            let height = 180.0;
+            let (bar, _) = ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
+            let mut mesh = egui::Mesh::default();
+            let steps = 24;
+            for s in 0..=steps {
+                let f = s as f32 / steps as f32;
+                let y = bar.bottom() - f * height;
+                let c = rgb(heat::ramp(f), 1.0);
+                mesh.colored_vertex(Pos2::new(bar.left(), y), c);
+                mesh.colored_vertex(Pos2::new(bar.right(), y), c);
+            }
+            for s in 0..steps as u32 {
+                let i = s * 2;
+                mesh.add_triangle(i, i + 1, i + 2);
+                mesh.add_triangle(i + 1, i + 3, i + 2);
+            }
+            let p = ui.painter();
+            p.add(Shape::mesh(mesh));
+            for tick in range::ticks(cache.range) {
+                let y = bar.bottom() - cache.range.t(tick) * height;
+                p.line_segment(
+                    [Pos2::new(bar.right(), y), Pos2::new(bar.right() + 5.0, y)],
+                    Stroke::new(1.0, t::TEXT_MUTED),
                 );
-                let height = 180.0;
-                let (bar, _) =
-                    ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
-                let mut mesh = egui::Mesh::default();
-                let steps = 24;
-                for s in 0..=steps {
-                    let f = s as f32 / steps as f32;
-                    let y = bar.bottom() - f * height;
-                    let c = rgb(heat::ramp(f), 1.0);
-                    mesh.colored_vertex(Pos2::new(bar.left(), y), c);
-                    mesh.colored_vertex(Pos2::new(bar.right(), y), c);
-                }
-                for s in 0..steps as u32 {
-                    let i = s * 2;
-                    mesh.add_triangle(i, i + 1, i + 2);
-                    mesh.add_triangle(i + 1, i + 3, i + 2);
-                }
-                let p = ui.painter();
-                p.add(Shape::mesh(mesh));
-                for tick in range::ticks(cache.range) {
-                    let y = bar.bottom() - cache.range.t(tick) * height;
-                    p.line_segment(
-                        [Pos2::new(bar.right(), y), Pos2::new(bar.right() + 5.0, y)],
-                        Stroke::new(1.0, t::TEXT_MUTED),
-                    );
-                    p.text(
-                        Pos2::new(bar.right() + 9.0, y),
-                        Align2::LEFT_CENTER,
-                        format!("{tick:.0}"),
-                        FontId::monospace(t::FONT_SMALL),
-                        t::TEXT_MUTED,
-                    );
-                }
-                ui.label(
-                    egui::RichText::new(format!("°C · ambient {:.0}", cache.ambient))
-                        .small()
-                        .color(t::TEXT_MUTED),
+                p.text(
+                    Pos2::new(bar.right() + 9.0, y),
+                    Align2::LEFT_CENTER,
+                    format!("{tick:.0}"),
+                    FontId::monospace(t::FONT_SMALL),
+                    t::TEXT_MUTED,
                 );
-                ui.add_space(4.0);
-                let small = |text: &str, color| egui::RichText::new(text).small().color(color);
-                let (total_w, unknown) = totals(input);
+            }
+            ui.label(
+                egui::RichText::new(format!("°C · ambient {:.0}", cache.ambient))
+                    .small()
+                    .color(t::TEXT_MUTED),
+            );
+            ui.add_space(4.0);
+            let small = |text: &str, color| egui::RichText::new(text).small().color(color);
+            let (total_w, with_data, unknown) = totals(input);
+            if with_data > 0 {
                 ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
-                if let Some(note) = estimate_note(input) {
-                    ui.label(small(&note, t::WARNING));
-                }
-                if unknown > 0 {
-                    let (noun, verb) = if unknown == 1 {
-                        ("device", "has")
-                    } else {
-                        ("devices", "have")
-                    };
+            }
+            if let Some(note) = estimate_note(input) {
+                ui.label(small(&note, t::WARNING));
+            }
+            if unknown > 0 {
+                let (noun, verb) = if unknown == 1 {
+                    ("device", "has")
+                } else {
+                    ("devices", "have")
+                };
+                ui.label(small(
+                    &format!("{unknown} {noun} {verb} no loss data (shown dashed)"),
+                    t::WARNING,
+                ));
+            }
+            match &cache.source {
+                Source::Synthetic => {
                     ui.label(small(
-                        &format!("{unknown} {noun} {verb} no loss data (shown dashed)"),
-                        t::WARNING,
+                        "Preview model from the part losses, not a solver result. \
+                             Press Simulate for a real run.",
+                        t::TEXT_MUTED,
                     ));
                 }
-                match &cache.source {
-                    Source::Synthetic => {
+                Source::Solved(sol) => {
+                    let p = &sol.snapshot.progress;
+                    let validated = sol.snapshot.accuracy.validated;
+                    ui.label(small(&status_label(p, validated), t::TEXT));
+                    if stale {
                         ui.label(small(
-                            "Preview model from the part losses, not a solver result. \
-                             Press Simulate for a real run.",
-                            t::TEXT_MUTED,
+                            "Out of date: the layout changed since this run.",
+                            t::WARNING,
                         ));
                     }
-                    Source::Solved(sol) => {
-                        let p = &sol.snapshot.progress;
-                        let validated = sol.snapshot.accuracy.validated;
-                        ui.label(small(&status_label(p, validated), t::TEXT));
-                        if stale {
-                            ui.label(small(
-                                "Out of date: the layout changed since this run.",
-                                t::WARNING,
-                            ));
-                        }
-                        if !p.converged {
-                            ui.label(small("Not converged.", t::WARNING));
-                        }
-                        let a = &sol.snapshot.accuracy;
-                        if !a.headline.is_empty() {
-                            ui.label(small(&a.headline, t::TEXT_MUTED));
-                        }
-                        for n in sol.snapshot.notes.iter().take(2) {
-                            ui.label(small(n, t::TEXT_MUTED));
-                        }
-                        for m in &sol.messages {
-                            ui.label(small(m, t::WARNING));
-                        }
+                    if !p.converged {
+                        ui.label(small("Not converged.", t::WARNING));
+                    }
+                    let a = &sol.snapshot.accuracy;
+                    if !a.headline.is_empty() {
+                        ui.label(small(&a.headline, t::TEXT_MUTED));
+                    }
+                    for n in sol.snapshot.notes.iter().take(2) {
+                        ui.label(small(n, t::TEXT_MUTED));
+                    }
+                    for m in &sol.messages {
+                        ui.label(small(m, t::WARNING));
                     }
                 }
-            });
+            }
         });
+    });
+    // The whole panel, title bar and frame, is what the tour points at.
+    if let Some(shown) = shown {
+        super::cabinet_bar::note_rect(
+            ctx,
+            "heat.legend",
+            "Heat legend",
+            shown.response.rect,
+            false,
+        );
+    }
 }
 
 #[cfg(test)]
@@ -1751,8 +1840,16 @@ mod tests {
         let mut i = input();
         i.items[1].loss_known = false;
         i.items[1].loss_w = 0.0;
-        assert_eq!(totals(&i), (80.0, 1));
-        assert_eq!(totals(&input()), (82.0, 0));
+        assert_eq!(totals(&i), (80.0, 1, 1));
+        assert_eq!(totals(&input()), (82.0, 2, 0));
+        // No figure anywhere: a positive zero, never "-0 W".
+        for item in &mut i.items {
+            item.loss_known = false;
+            item.loss_w = 0.0;
+        }
+        let (total, with_data, _) = totals(&i);
+        assert_eq!(with_data, 0);
+        assert_eq!(format!("{total:.0}"), "0");
         // Knowing a loss changes the picture's cache key.
         assert_ne!(layout_key(&i), layout_key(&input()));
     }
@@ -1859,5 +1956,15 @@ mod tests {
         s.clear_kept();
         assert!(!s.side && s.take_fit(), "leaving Side refits too");
         assert_eq!(s.extent_mm(600.0), 600.0);
+    }
+
+    #[test]
+    fn a_hot_spot_card_names_the_plate_and_the_device_when_they_differ() {
+        let (head, detail) = peak_text("F1", 47.0, 36.0, Some(55.0));
+        assert_eq!(head, "Plate by F1  47 °C");
+        assert_eq!(detail, "+11 K on the plate mean · device 55 °C");
+        let (_, same) = peak_text("F1", 47.0, 36.0, Some(47.4));
+        assert_eq!(same, "+11 K on the plate mean");
+        assert_eq!(peak_text("", 47.0, 36.0, None).0, "47 °C");
     }
 }

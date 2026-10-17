@@ -179,6 +179,7 @@ impl NovoApp {
                 .filter(|s| s.key.contains(':'))
                 .map(|s| (s.key.clone(), ROW_MM))
                 .collect::<BTreeMap<_, _>>(),
+            language: self.report_translator(),
             ..ReportPdfOptions::default()
         };
         let bytes = export_report_pdf(&[&pack], &options);
@@ -186,7 +187,7 @@ impl NovoApp {
         match write_replacing(path, &bytes) {
             Ok(()) => {
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message(Level::Info, format!("{verb} {}", path.display()));
+                self.message_file(format!("{verb} {}", path.display()), path);
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }

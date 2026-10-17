@@ -77,6 +77,12 @@ Colour of selection, hover and problems is **not** a material: it is drawn by th
   time stays above 20 ms for two seconds, and never steps up on its own (no flicker); the user can pick
   a tier in settings.
 
+  Implemented: one governor (`View3d::govern`, fed with egui's frame interval while the view moves) steps
+  through a `Level`: screen-space occlusion first (discrete GPUs start with it, the others without), then the
+  adapter tier (resolution while moving, MSAA, shadow map), and a hardware adapter never goes down to Software.
+  One restore path, `View3d::reset_quality`: the "Restore quality" buttons, the command `view.3d_quality`, and
+  switching **Occlusion** (3D toolbar Layers menu, View > 3D > Ambient occlusion) off and on again.
+
 | Tier | MSAA | Shadow | Contact term | Edges | Wires |
 | --- | --- | --- | --- | --- | --- |
 | Low | 2x | none (contact term only) | baked | crease only | ribbons and lines |

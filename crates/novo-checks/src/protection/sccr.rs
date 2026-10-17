@@ -371,15 +371,24 @@ fn matches(class: &Class, p: &Protector) -> bool {
 /// to the limiter's own capacity `cap_a`.
 fn let_through_limit(limiter: &Protector, w: Withstand, from_a: f64, cap_a: f64) -> Option<f64> {
     let table = limiter.let_through.as_ref()?;
+    // No credit from numbers nobody gave: not above the table's last point
+    // (the table would extrapolate), and not when the component's own
+    // rating lies below the first point (the limiter does not limit there).
+    let first = table.points()[0].0;
+    let last = table.points()[table.points().len() - 1].0;
+    if from_a < first {
+        return None;
+    }
+    let cap_a = cap_a.min(last);
     let fits = |i: f64| {
         table
             .at(i)
             .is_some_and(|(ip, e)| ip <= w.peak_a && e <= w.i2t)
     };
-    if !(from_a.is_finite() && cap_a > from_a && fits(from_a.max(table.points()[0].0))) {
+    if !(from_a.is_finite() && cap_a > from_a && fits(from_a)) {
         return None;
     }
-    let (mut lo, mut hi) = (from_a.max(table.points()[0].0), cap_a);
+    let (mut lo, mut hi) = (from_a, cap_a);
     if fits(hi) {
         return Some(hi);
     }
@@ -695,6 +704,7 @@ mod tests {
             rating_a: 30.0,
             let_through: Some(
                 LetThrough::new(vec![
+                    (1_000.0, 2_000.0, 5.0e3),
                     (10_000.0, 5_000.0, 5.0e4),
                     (50_000.0, 10_000.0, 2.0e5),
                     (100_000.0, 20_000.0, 4.0e5),
