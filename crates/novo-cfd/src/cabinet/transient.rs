@@ -26,8 +26,9 @@ use std::time::Instant;
 use novo_thermal::Scenario;
 
 use super::CabinetSolver;
+use super::radiation::RadiationCoupling;
 use super::snapshot::View;
-use super::statement::accuracy_with_turbulence;
+use super::statement::{accuracy_with, radiation_notes};
 use crate::flow::FlowSolver;
 use crate::mesh::MeshSettings;
 use crate::result::{Fidelity, Progress, Residuals};
@@ -80,6 +81,13 @@ impl TransientSolver for CabinetSolver {
         }
         let mut flow = setup.solver();
         flow.cfg.pressure_tol = lvl.pressure_tol;
+        // surface radiation, coupled like the steady levels do (the lumped film
+        // radiation is off while it is on)
+        let mut rad = lvl
+            .radiation
+            .then(|| RadiationCoupling::new(&setup.classified, &mut flow, &self.radiation))
+            .flatten();
+        let rad_on = rad.is_some();
         let mut notes = vec![
             "Heat-up over time with the real heat capacities of the solids (planning values; \
              devices are uniform blocks); first-order time stepping."
@@ -194,7 +202,12 @@ impl TransientSolver for CabinetSolver {
             let mut snap = view.build(flow, &progress);
             if let Some(t) = turb {
                 snap.turb_visc_ratio = t.viscosity_ratio();
-                snap.accuracy = accuracy_with_turbulence(fidelity, model);
+            }
+            if turb.is_some() || rad_on {
+                snap.accuracy = accuracy_with(fidelity, model, rad_on);
+            }
+            if rad_on {
+                radiation_notes(&mut snap.notes, model);
             }
             snap.notes.extend(notes.iter().cloned());
             snap.notes.push(format!(
@@ -264,6 +277,9 @@ impl TransientSolver for CabinetSolver {
                 .clamp(1e-4, 5.0)
                 .min(target - t)
                 .max(MIN_STEP_S);
+            if let Some(r) = &mut rad {
+                r.tick(&mut flow);
+            }
             if let Some(t) = &turb {
                 t.push_to_flow(&mut flow);
             }

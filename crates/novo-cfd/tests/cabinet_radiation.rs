@@ -166,3 +166,40 @@ fn switched_off_in_the_settings_it_changes_nothing() {
     assert!(flow.extra_heat_w_m3.is_none());
     assert!(flow.cfg.device_view > 0.0);
 }
+
+#[test]
+fn the_transient_couples_radiation_and_keeps_its_energy_books() {
+    use novo_cfd::{TransientSolver, TransientSpec};
+    let mut t = Tuning::default().with_cells(2000);
+    for l in [&mut t.coarse, &mut t.medium, &mut t.fine] {
+        l.radiation = true;
+        l.full_snapshot_every = Duration::ZERO;
+    }
+    let spec = TransientSpec {
+        duration_s: 300.0,
+        frame_interval_s: 100.0,
+        ..TransientSpec::default()
+    };
+    let mut last = None;
+    let sum = CabinetSolver::new(t)
+        .solve_transient(
+            &scenario(),
+            Fidelity::Coarse,
+            &spec,
+            &Control::new(),
+            &mut |f| last = Some(f.clone()),
+        )
+        .unwrap();
+    let f = last.unwrap();
+    let text = f.snapshot.notes.join(" ") + &f.snapshot.accuracy.limits.join(" ");
+    assert!(text.contains("surface-to-surface"), "{text}");
+    assert!(
+        f.snapshot.progress.energy_balance_rel < 0.05,
+        "{}",
+        f.snapshot.progress.energy_balance_rel
+    );
+    // the hot device warms first, the idle one follows
+    let (hot, cold) = (&sum.devices[0].surface_c, &sum.devices[1].surface_c);
+    assert!(hot.last() > hot.first() && cold.last() >= cold.first());
+    assert!(hot.last() > cold.last());
+}
