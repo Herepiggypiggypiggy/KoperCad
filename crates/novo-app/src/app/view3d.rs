@@ -458,14 +458,12 @@ impl NovoApp {
                     .unwrap_or(10.0);
                 view3d_move::ghost(l, &scene.frame, top)
             })
-            .chain(
-                mode.surface_drag
-                    .iter()
-                    .zip(super::cabinet_surfaces::summarize(project, id))
-                    .flat_map(|(d, sum)| {
-                        super::view3d_surface_devices::ghost(&sum, d, scene.frame)
-                    }),
-            )
+            .chain(mode.surface_drag.iter().flat_map(|d| {
+                // Only while a surface device is dragged.
+                super::cabinet_surfaces::summarize(project, id)
+                    .map(|sum| super::view3d_surface_devices::ghost(&sum, d, scene.frame))
+                    .unwrap_or_default()
+            }))
             .collect();
         let mut heat_changed = false;
         if !mode.probe.on {
