@@ -12,7 +12,8 @@
 //! its temperature field; the velocity field develops again within seconds.
 //!
 //! Limits: first-order time stepping with explicit convection and the CFL of
-//! the level, laminar. The wall-clock budget of the level ends the run early
+//! the level; laminar unless the solver carries a turbulence model (stepped
+//! with the flow as in the false-transient march). The wall-clock budget of the level ends the run early
 //! and says so in the notes of the last frame; the summary then stops at the
 //! time reached.
 //!
@@ -26,6 +27,7 @@ use novo_thermal::Scenario;
 
 use super::CabinetSolver;
 use super::snapshot::View;
+use super::statement::accuracy_with_turbulence;
 use crate::flow::FlowSolver;
 use crate::mesh::MeshSettings;
 use crate::result::{Fidelity, Progress, Residuals};
@@ -34,9 +36,12 @@ use crate::solver::{CfdError, Control, Solver};
 use crate::transient::{
     DeviceSeries, TransientFrame, TransientSolver, TransientSpec, TransientSummary,
 };
+use crate::turb::{TurbModel, TurbState};
 
 /// Shortest step worth taking when a frame or a load change is that close, s.
 const MIN_STEP_S: f64 = 1e-6;
+/// Gauss-Seidel sweeps of the turbulence equations per flow step (as in the march).
+const TURB_SWEEPS: usize = 3;
 
 impl TransientSolver for CabinetSolver {
     fn solve_transient(
@@ -61,7 +66,7 @@ impl TransientSolver for CabinetSolver {
         let mesh = MeshSettings::for_fidelity(fidelity)
             .map(|m| MeshSettings {
                 target_cells: lvl.target_cells.unwrap_or(m.target_cells),
-                ..m
+                ..lvl.mesh.unwrap_or(m)
             })
             .map_err(|e| CfdError::Setup(e.to_string()))?;
         let st = SolidsSettings {
@@ -109,6 +114,12 @@ impl TransientSolver for CabinetSolver {
         }
 
         let view = View::new(&setup, scenario, fidelity);
+        // The model of the solver, marched together with the flow (the same
+        // coupling as the false-transient march).
+        let mut turb = (self.turbulence != TurbModel::Laminar).then(|| {
+            let h = flow.mesh.edges[1].last().copied().unwrap_or(1.0);
+            TurbState::for_flow(&flow, self.turbulence, 0.1, 0.02 * h)
+        });
         let cells = flow.mesh.cells();
         let air: Vec<(usize, f64)> = (0..cells)
             .filter(|&c| {
@@ -139,6 +150,7 @@ impl TransientSolver for CabinetSolver {
             time_constant_s: None,
         };
         let ambient = setup.ambient_c;
+        let model = self.turbulence;
         let mut prev_stored = (flow.time, flow.stored_heat_j(ambient));
         let mut steps = 0usize;
         let mut last_info = (0.0, 0.0);
@@ -148,6 +160,7 @@ impl TransientSolver for CabinetSolver {
                         last_info: (f64, f64),
                         done: bool,
                         extra: Option<String>,
+                        turb: Option<&TurbState>,
                         sum: &mut TransientSummary| {
             let load = spec.load_at(flow.time);
             let heat = (setup.heat_w * load).max(1e-12);
@@ -179,6 +192,10 @@ impl TransientSolver for CabinetSolver {
                 monitor_drift_k: 0.0,
             };
             let mut snap = view.build(flow, &progress);
+            if let Some(t) = turb {
+                snap.turb_visc_ratio = t.viscosity_ratio();
+                snap.accuracy = accuracy_with_turbulence(fidelity, model);
+            }
             snap.notes.extend(notes.iter().cloned());
             snap.notes.push(format!(
                 "Time {:.0} s of {:.0} s, load {:.0} %.",
@@ -210,7 +227,7 @@ impl TransientSolver for CabinetSolver {
             });
         };
 
-        emit(&flow, 0, last_info, false, None, &mut sum);
+        emit(&flow, 0, last_info, false, None, turb.as_ref(), &mut sum);
         let mut frame = 1usize;
         while flow.time < spec.duration_s - MIN_STEP_S {
             if control.is_cancelled() {
@@ -227,6 +244,7 @@ impl TransientSolver for CabinetSolver {
                         "Stopped at {:.0} s of {:.0} s: the time budget of this level ran out.",
                         flow.time, spec.duration_s
                     )),
+                    turb.as_ref(),
                     &mut sum,
                 );
                 break;
@@ -246,7 +264,13 @@ impl TransientSolver for CabinetSolver {
                 .clamp(1e-4, 5.0)
                 .min(target - t)
                 .max(MIN_STEP_S);
+            if let Some(t) = &turb {
+                t.push_to_flow(&mut flow);
+            }
             let info = flow.step(dt);
+            if let Some(t) = &mut turb {
+                t.advance_with(&flow, dt, TURB_SWEEPS);
+            }
             last_info = (info.max_accel, info.max_dtdt);
             steps += 1;
             if flow.divergence_max() > 1.0 || !flow.mean_temperature().is_finite() {
@@ -255,7 +279,7 @@ impl TransientSolver for CabinetSolver {
             if flow.time >= next_frame - MIN_STEP_S {
                 frame += 1;
                 let done = flow.time >= spec.duration_s - MIN_STEP_S;
-                emit(&flow, steps, last_info, done, None, &mut sum);
+                emit(&flow, steps, last_info, done, None, turb.as_ref(), &mut sum);
             }
         }
         sum.time_constant_s = time_constant(&sum.times_s, &sum.mean_air_c);

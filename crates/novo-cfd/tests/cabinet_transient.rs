@@ -249,3 +249,35 @@ fn the_time_constant_reads_off_a_settled_rise() {
     let (_, sum) = run(&spec);
     assert_eq!(sum.time_constant_s, None, "300 s is far from settled");
 }
+
+#[test]
+fn a_turbulence_model_runs_with_the_transient_and_marks_the_frames() {
+    use novo_cfd::turb::TurbModel;
+    let spec = TransientSpec {
+        duration_s: 200.0,
+        frame_interval_s: 100.0,
+        ..TransientSpec::default()
+    };
+    let mut frames = Vec::new();
+    let sum = solver(None)
+        .with_turbulence(TurbModel::KOmegaSst)
+        .solve_transient(
+            &scenario(),
+            Fidelity::Coarse,
+            &spec,
+            &Control::new(),
+            &mut |f| frames.push(f.clone()),
+        )
+        .unwrap();
+    let last = &frames.last().unwrap().snapshot;
+    let max_ratio = last.turb_visc_ratio.iter().cloned().fold(0.0f32, f32::max);
+    println!("TRANSIENT | SST: largest nu_t/nu {max_ratio:.2}");
+    assert!(max_ratio > 0.0);
+    assert!(
+        last.accuracy
+            .limits
+            .iter()
+            .any(|l| l.to_lowercase().contains("turbulen"))
+    );
+    assert!(sum.devices[0].surface_c.last().unwrap() > &25.0);
+}
