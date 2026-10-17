@@ -89,7 +89,8 @@ pub use pins::{
     terminal_position, write_properties as write_terminal_positions,
 };
 pub use quality::{
-    Completeness, Criterion, Fill, Finding, Grade, PartQuality, QualityReport, assess,
+    Completeness, Conflict, Criterion, DuplicateGroup, DuplicateReason, Fill, Finding, Grade,
+    PartQuality, QualityReport, assess, conflicts_between, duplicate_groups, incoming_conflicts,
     report as quality_report,
 };
 pub use recipes::{
