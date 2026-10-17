@@ -842,19 +842,22 @@ fn depth_pipeline(
     })
 }
 
-/// A fullscreen triangle into a one-channel texture (the occlusion passes).
 /// Polls a future that wgpu resolves at once on native (an error scope's end).
-fn block_on_ready<T>(future: impl std::future::Future<Output = T>) -> T {
+/// Gives up after a few thousand tries and reports `None`, so a future that
+/// never becomes ready costs the effect, not a hang.
+fn block_on_ready<T>(future: impl std::future::Future<Output = Option<T>>) -> Option<T> {
     let mut future = std::pin::pin!(future);
     let mut cx = std::task::Context::from_waker(std::task::Waker::noop());
-    loop {
+    for _ in 0..4096 {
         if let std::task::Poll::Ready(v) = future.as_mut().poll(&mut cx) {
             return v;
         }
         std::thread::yield_now();
     }
+    None
 }
 
+/// A fullscreen triangle into a one-channel texture (the occlusion passes).
 fn fullscreen_pipeline(
     device: &wgpu::Device,
     module: &wgpu::ShaderModule,
@@ -1148,7 +1151,10 @@ impl Renderer {
         let depth_pipeline = depth_pipeline(device, &module, &shadow_layout);
         // Built inside an error scope: a driver that cannot compile the shader
         // (an OpenGL-only laptop GPU) must lose the effect, not the program.
-        let scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
+        // A shader the backend cannot translate is reported as an internal
+        // error, so both kinds are caught (popped in reverse order).
+        let internal_scope = device.push_error_scope(wgpu::ErrorFilter::Internal);
+        let validation_scope = device.push_error_scope(wgpu::ErrorFilter::Validation);
         let ssao_pipeline = fullscreen_pipeline(
             device,
             &module,
@@ -1163,7 +1169,9 @@ impl Renderer {
             "fs_blur",
             &[Some(&shadow_layout), Some(&ssao_blur_layout)],
         );
-        let ssao_pipelines = match block_on_ready(scope.pop()) {
+        let error =
+            block_on_ready(validation_scope.pop()).or_else(|| block_on_ready(internal_scope.pop()));
+        let ssao_pipelines = match error {
             Some(error) => {
                 log::warn!(
                     "3D view: ambient occlusion is off, the graphics driver cannot build it: {error}"
