@@ -115,6 +115,7 @@ fn dragging_two_selected_devices_keeps_every_wire_attached() {
     );
 }
 
+#[cfg(feature = "egui")]
 #[test]
 fn a_view_drags_with_the_wires_unless_told_otherwise() {
     assert!(novo_editor::view::SchematicView::default().move_carries);
