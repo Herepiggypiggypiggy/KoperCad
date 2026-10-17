@@ -2258,6 +2258,7 @@ dependencies = [
  "novo-checks",
  "novo-core",
  "novo-editor",
+ "novo-numbering",
  "novo-parts",
  "novo-pdf",
  "novo-plc",

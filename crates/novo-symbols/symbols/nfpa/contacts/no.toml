@@ -5,7 +5,7 @@ description = "Normally open contact, used for auxiliary contacts of relays and 
 standard = "NFPA 79 / ANSI Y32.2"
 category = "contacts"
 function = "contact.no"
-keywords = ["no", "make", "normally open", "auxiliary", "nfpa", "ansi"]
+keywords = ["no", "make", "normally open", "auxiliary", "nfpa", "ansi", "contactor auxiliary", "aux contact"]
 aliases = ["no"]
 favorite = true
 

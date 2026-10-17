@@ -339,6 +339,7 @@ impl NovoApp {
         }
         if leave {
             self.wb.changes = None;
+            self.wb.changes_closed = true;
         }
         if compare {
             self.open_compare_from_changes();
@@ -366,6 +367,13 @@ impl NovoApp {
             ui.weak("No revision yet. Issue one (Ctrl+K, issue), then Changes compares with it.");
             return false;
         };
+        if self.wb.changes.is_none() && self.wb.changes_closed {
+            ui.weak("Changes mode is off.");
+            if ui.button("Turn on").clicked() {
+                self.wb.changes_closed = false;
+            }
+            return false;
+        }
         if self.wb.changes.is_none() {
             if self.backend.revision_snapshot(latest).is_none() {
                 ui.weak("The latest revision has no kept copy to compare with.");

@@ -540,7 +540,7 @@ impl BenchCut {
         let mut notes: Vec<String> = Vec::new();
         if no_size > 0 {
             notes.push(format!(
-                "{no_size} of {} wires have no cross-section set (listed under \"size not set\"): they get no strip length and no ferrule. Set the size on the wire.",
+                "{no_size} of {} wires have no cross-section set (listed under \"size not set\"): they get no strip length and no ferrule. Set the size on the wire, or fill it in for all of them under Reports > Bench output.",
                 jobs.len()
             ));
         }

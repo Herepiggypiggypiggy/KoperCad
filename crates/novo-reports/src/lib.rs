@@ -100,6 +100,7 @@ mod sheets;
 mod strip_diagram;
 mod table;
 mod toc;
+mod wire_defaults;
 mod wirecut;
 mod wires;
 
@@ -135,6 +136,7 @@ pub use strip_diagram::{
 };
 pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::{PanelContents, TableOfContents};
+pub use wire_defaults::{SIZES_MM2, UnsetWires, WireDefaults, apply_wire_defaults, unset_wires};
 pub use wirecut::{
     FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut, WireCutJob, WireEnd,
     typical_strip_mm, wire_cut_csv, wire_cut_jobs, wire_cut_jobs_with,

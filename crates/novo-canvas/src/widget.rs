@@ -1119,7 +1119,10 @@ impl CanvasView {
         const MAX_SIZE: f32 = 512.0;
         let zoom = self.viewport.zoom;
         // Zoomed out past reading even the tallest text: nothing to visit.
-        if scene.max_label_height() * zoom < self.min_label_size {
+        // With the text floor on, small text is lifted instead of dropped, so
+        // the cull is lower than `min_label_size`.
+        let cull = crate::declutter::candidate_size(self.min_text_px, self.min_label_size);
+        if scene.max_label_height() * zoom < cull {
             return;
         }
         let painter = ui.painter_at(rect);
@@ -1134,7 +1137,7 @@ impl CanvasView {
             }
             for (i, l) in item.labels.iter().enumerate() {
                 let size = l.height * zoom;
-                if size >= self.min_label_size && size <= MAX_SIZE && !l.text.is_empty() {
+                if size >= cull && size <= MAX_SIZE && !l.text.is_empty() {
                     todo.push((size, id, i));
                 }
             }

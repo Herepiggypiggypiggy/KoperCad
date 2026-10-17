@@ -12,7 +12,10 @@ fn main() -> eframe::Result {
             .set_level(rfd::MessageLevel::Error)
             .set_title("KoperCAD could not start")
             .set_description(format!(
-                "{e}\n\nKoperCAD needs a graphics driver with Vulkan, DirectX 12 or OpenGL support."
+                "{e}\n\nKoperCAD needs a graphics driver with Vulkan, DirectX 12 or OpenGL support. \
+                 Update the graphics driver, or on a remote desktop or virtual machine start KoperCAD \
+                 on the local screen. Setting the environment variable WGPU_BACKEND to gl or dx12 \
+                 may help."
             ))
             .show();
     }

@@ -64,6 +64,8 @@ fn setup_for(options: &ReportPdfOptions, section_key: &str) -> PageSetup {
     setup.title_block_mm = FOOTER_MM;
     setup.margins.left = 15.0;
     setup.margins.bottom = 8.0;
+    // The footer numbers the whole document.
+    setup.page_number = false;
     if let Some(row) = options.row_mm.get(section_key) {
         setup.row_mm = *row;
     }
@@ -148,14 +150,25 @@ fn draw_layout(w: &mut draw::PageWriter, layout: &PageLayout) {
     }
 }
 
-/// One sheet to write: its layout, an optional bookmark, its height in mm.
+/// One sheet to write: its layout, its bookmarks (a sheet shared by flowing
+/// sections has several), its height in mm.
 struct Sheet {
     layout: PageLayout,
-    bookmark: Option<String>,
+    bookmarks: Vec<String>,
     height: f32,
-    /// The report the sheet belongs to, and where its content ends (mm).
-    report: String,
+    /// The report (its place in the list) the sheet belongs to, and where its
+    /// content ends (mm).
+    report: usize,
     bottom: f64,
+}
+
+/// The bookmark and heading name of a section: report, then section title.
+fn section_title(report: &ReportOutput, section: &novo_reports::Section) -> String {
+    if section.title.is_empty() {
+        report.title.clone()
+    } else {
+        format!("{} · {}", report.title, section.title)
+    }
 }
 
 /// Space between a section and the one flowing on under it, in mm.
@@ -179,7 +192,7 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
         .iter()
         .map(|r| translate_output(r, &options.language))
         .collect();
-    for report in &translated {
+    for (report_no, report) in translated.iter().enumerate() {
         // Paging is per section: rows per page depends on the section's
         // row height.
         for section in &report.sections {
@@ -194,7 +207,7 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
             let mut flowed = false;
             if section.flow
                 && let Some(prev) = sheets.last_mut()
-                && prev.report == report.report
+                && prev.report == report_no
             {
                 let room = setup.format.size_mm().1
                     - setup.margins.bottom
@@ -213,12 +226,7 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
                         rows: 0..k,
                         continued: false,
                     };
-                    let mut layout = layout_page(&single, &first, &setup);
-                    let heading_number = "page 1 / 1".to_owned();
-                    let heading_y = setup.margins.top;
-                    layout
-                        .texts
-                        .retain(|t| !(t.text == heading_number && t.y == heading_y && !t.bold));
+                    let layout = layout_page(&single, &first, &setup);
                     let layout = translate_layout(&layout, &options.language);
                     let dy = prev.bottom + FLOW_GAP_MM - setup.margins.top;
                     for t in layout.texts {
@@ -234,6 +242,7 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
                         });
                     }
                     prev.bottom = prev.layout.bottom();
+                    prev.bookmarks.push(section_title(report, section));
                     let per_page = setup.rows_per_page();
                     pages.clear();
                     let mut start = k;
@@ -256,27 +265,18 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
                 }
             }
             for (n, page) in pages.iter().enumerate() {
-                let mut layout = layout_page(&single, page, &setup);
-                // layout_page prints "page n / m" within the one-section
-                // report; the footer carries the document number instead.
-                // Drop exactly that heading box, never a table cell.
-                let heading_number = format!("page {} / {}", page.number, page.count);
-                let heading_y = setup.margins.top;
-                layout
-                    .texts
-                    .retain(|t| !(t.text == heading_number && t.y == heading_y && !t.bold));
+                let layout = layout_page(&single, page, &setup);
                 let layout = translate_layout(&layout, &options.language);
                 let layout_bottom = layout.bottom();
-                let title = if section.title.is_empty() {
-                    report.title.clone()
-                } else {
-                    format!("{} · {}", report.title, section.title)
-                };
                 sheets.push(Sheet {
                     height: layout.height as f32,
                     layout,
-                    bookmark: (n == 0 && !flowed).then_some(title),
-                    report: report.report.clone(),
+                    bookmarks: if n == 0 && !flowed {
+                        vec![section_title(report, section)]
+                    } else {
+                        Vec::new()
+                    },
+                    report: report_no,
                     bottom: layout_bottom,
                 });
             }
@@ -304,11 +304,12 @@ pub fn export_layouts_pdf(
         .map(|(i, layout)| Sheet {
             height: layout.height as f32,
             layout: layout.clone(),
-            bookmark: bookmarks
+            bookmarks: bookmarks
                 .iter()
-                .find(|(p, _)| *p == i)
-                .map(|(_, t)| t.clone()),
-            report: String::new(),
+                .filter(|(p, _)| *p == i)
+                .map(|(_, t)| t.clone())
+                .collect(),
+            report: 0,
             bottom: layout.bottom(),
         })
         .collect();
@@ -349,7 +350,7 @@ fn write_sheets(
     let mut pdf = Pdf::new();
     let mut catalog = pdf.catalog(catalog_id);
     catalog.pages(tree_id);
-    let has_marks = sheets.iter().any(|s| s.bookmark.is_some());
+    let has_marks = sheets.iter().any(|s| !s.bookmarks.is_empty());
     if has_marks {
         catalog.outlines(outline_id);
         catalog.page_mode(PageMode::UseOutlines);
@@ -443,7 +444,7 @@ fn write_sheets(
         let marks: Vec<(usize, &str)> = sheets
             .iter()
             .enumerate()
-            .filter_map(|(i, s)| s.bookmark.as_deref().map(|b| (i, b)))
+            .flat_map(|(i, s)| s.bookmarks.iter().map(move |b| (i, b.as_str())))
             .collect();
         let items: Vec<Ref> = marks.iter().map(|_| alloc()).collect();
         pdf.outline(outline_id)

@@ -781,6 +781,24 @@ impl SchematicView {
                 Stroke::screen(2.0, self.canvas.style.hover.color),
             )));
         }
+        if let Some((lo, hi)) = preview.refused {
+            // The row stopped before this position: another device is in
+            // the way. A red box with a cross where the next symbol would be.
+            let red = Stroke::screen(2.0, self.canvas.style.error);
+            let (a, b) = (model::vec(lo), model::vec(hi));
+            let (c, d) = (Vec2::new(a.x, b.y), Vec2::new(b.x, a.y));
+            for shape in [
+                Shape::polyline([a, d, b, c, a], false),
+                Shape::polyline([a, b], false),
+                Shape::polyline([c, d], false),
+            ] {
+                items.push(
+                    Item::new(layer)
+                        .unselectable()
+                        .with(Primitive::stroked(shape, red)),
+                );
+            }
+        }
         if !preview.proposals.is_empty() {
             let zoom = self.canvas.viewport.zoom;
             items.push(proposal_item(

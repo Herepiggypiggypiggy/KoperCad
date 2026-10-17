@@ -209,15 +209,18 @@ impl NovoApp {
             ),
         };
         self.wb.last_export = Some(last.clone());
+        // The toast carries an "Open folder" button.
         if report.is_lossless() {
-            self.message(
+            self.raise(
                 Level::Info,
                 format!("Exported {what} to {place}. {}", report.summary()),
+                Some(last.clone()),
             );
         } else {
-            self.message(
+            self.raise(
                 Level::Warning,
                 format!("Exported {what} to {place}.\n{}", report.text()),
+                Some(last.clone()),
             );
         }
     }

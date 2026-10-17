@@ -3185,3 +3185,51 @@ fn a_feed_dropped_on_a_coils_low_side_is_neutral_and_the_high_side_is_l1() {
     assert_eq!(name(&doc, high), "L1");
     assert_eq!(name(&doc, low), "N");
 }
+
+/// The release probe: breaker, motor, then the contactor's power contacts
+/// dropped on the three feed wires. Each wire is split by the contacts, so
+/// L1, L2 and L3 run breaker pin to contact pin to motor pin.
+#[test]
+fn power_contacts_dropped_on_the_feed_land_on_all_three_wires() {
+    let (mut doc, page, mut editor) = setup();
+    for (id, at) in [
+        ("iec/protection/mcb_3p", p(100.0, 40.0)),
+        ("iec/motors/motor_3ph", p(100.0, 200.0)),
+    ] {
+        editor.begin_place(id, None);
+        editor.click(&mut doc, page, at, TOL);
+        editor.leave_tool();
+    }
+    let breaker = symbol_at(&doc, page, p(100.0, 40.0));
+    let motor = symbol_at(&doc, page, p(100.0, 200.0));
+    for (a, b) in [("2", "U1"), ("4", "V1"), ("6", "W1")] {
+        editor.begin_wire();
+        click_pin(&mut editor, &mut doc, page, breaker, a);
+        click_pin(&mut editor, &mut doc, page, motor, b);
+        editor.leave_tool();
+    }
+    editor.auto_connect = true;
+    editor.begin_place("iec/contactors/main_3p", None);
+    editor.click(&mut doc, page, p(100.0, 100.0), TOL);
+    editor.leave_tool();
+    let contacts = symbol_at(&doc, page, p(100.0, 100.0));
+    for (feed, top, bottom, load) in [
+        ("2", "1", "2", "U1"),
+        ("4", "3", "4", "V1"),
+        ("6", "5", "6", "W1"),
+    ] {
+        let net = |a: Endpoint, b: Endpoint| connected(&doc, a, b);
+        assert!(
+            net(pin(&doc, breaker, feed), pin(&doc, contacts, top)),
+            "{feed}"
+        );
+        assert!(
+            net(pin(&doc, contacts, bottom), pin(&doc, motor, load)),
+            "{load}"
+        );
+        assert!(
+            !net(pin(&doc, breaker, feed), pin(&doc, motor, load)),
+            "{feed} bypasses the contacts"
+        );
+    }
+}

@@ -1113,7 +1113,13 @@ fn list_ui(
 ) {
     if rows.is_empty() {
         ui.add_space(12.0);
-        ui.weak("No part matches. Change the search or the maker.");
+        if win.query.trim().is_empty() && win.maker.is_none() {
+            ui.weak(
+                "The catalog is empty. Press Import catalog files above, or use File > Import > Import parts from a folder to load a whole folder of maker files.",
+            );
+        } else {
+            ui.weak("No part matches. Change the search or the maker.");
+        }
         return;
     }
     let columns = [

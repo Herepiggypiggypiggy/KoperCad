@@ -639,14 +639,17 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
                 print(out, "No revisions issued yet")?;
             } else {
                 for (r, kept) in rows {
-                    let note = if kept { "" } else { "  (no kept copy)" };
+                    let copy = if kept { "" } else { "  (no kept copy)" };
                     print(
                         out,
                         &format!(
-                            "{}  {}  {}  {}{note}",
+                            "{}  {}  {}  {}{copy}",
                             r.index, r.date, r.author, r.description
                         ),
                     )?;
+                    if !r.note().is_empty() {
+                        print(out, &format!("    Note: {}", r.note().replace('\n', " ")))?;
+                    }
                 }
             }
             Ok(exit::OK)
