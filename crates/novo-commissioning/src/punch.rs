@@ -27,6 +27,17 @@ impl PunchState {
     }
 }
 
+/// A hand signature taken on a tablet: the typed name and, when drawn, the
+/// pen strokes (pad units, 0..=1000 in both directions).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Signature {
+    pub name: String,
+    /// When it was signed, ISO 8601 text.
+    pub at: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub strokes: Vec<Vec<[u16; 2]>>,
+}
+
 /// An open issue found while commissioning, drawn or not.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PunchItem {
@@ -48,4 +59,7 @@ pub struct PunchItem {
     pub closed_by: Option<String>,
     #[serde(default)]
     pub closed_at: Option<String>,
+    /// Who accepted the fix at the machine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signature: Option<Signature>,
 }

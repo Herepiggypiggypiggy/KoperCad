@@ -63,6 +63,9 @@ pub(crate) const ANCHORS: &[&str] = &[
     "dock.select",
     "dock.place",
     "dock.connect",
+    "dock.cable",
+    "dock.undo",
+    "dock.redo",
     "dock.corners",
     "dock.lines",
     "dock.hint",
@@ -103,6 +106,8 @@ pub(crate) const ANCHORS: &[&str] = &[
     "commissioning.who",
     "commissioning.punch",
     "commissioning.report",
+    "commissioning.field_export",
+    "commissioning.field_import",
     "commissioning.next_open",
     "commissioning.pass",
     "commissioning.fail",
@@ -111,6 +116,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "cabinet.problems",
     "cabinet.inspector",
     "cabinet.door",
+    "cabinet.surface",
     "cabinet.door.apply",
     "cabinet.routes_panel",
     "cabinet.wire_rules",
@@ -532,7 +538,7 @@ impl NovoApp {
                 Tool::Place(_) => "place",
                 Tool::Wire(_) => "wire",
                 Tool::Cable(_) => "cable",
-                Tool::Select | Tool::Move(_) | Tool::Paste(_) => "select",
+                Tool::Select | Tool::Move(_) | Tool::Paste(_) | Tool::Text => "select",
             }
             .to_owned();
             facts.selection = view

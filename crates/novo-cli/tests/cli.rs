@@ -406,6 +406,34 @@ fn export_labels_in_two_layouts() {
 }
 
 #[test]
+fn reports_print_in_the_chosen_language() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = project(dir.path(), false);
+
+    let english = novo(&["export", "devices", s(&path)]);
+    assert_eq!(english.code, exit::OK, "{}", english.err);
+    assert!(english.out.contains("Description"), "{}", english.out);
+
+    let dutch = novo(&["export", "devices", s(&path), "--language", "nl"]);
+    assert_eq!(dutch.code, exit::OK, "{}", dutch.err);
+    assert!(dutch.out.contains("Omschrijving"), "{}", dutch.out);
+    assert!(!dutch.out.contains("Description"));
+    assert!(dutch.out.contains("'-K1"), "cell values stay as they are");
+
+    let bad = novo(&["export", "devices", s(&path), "--language", "xx"]);
+    assert_eq!(bad.code, exit::USAGE);
+
+    let commissioning = novo(&["commissioning-report", s(&path), "--language", "nl"]);
+    assert_eq!(commissioning.code, exit::OK, "{}", commissioning.err);
+    let bad = novo(&["commissioning-report", s(&path), "--language", "xx"]);
+    assert_eq!(
+        bad.code,
+        exit::USAGE,
+        "unknown code is a usage error here too"
+    );
+}
+
+#[test]
 fn export_reports_as_excel_and_csv() {
     use calamine::{Reader, Xlsx, open_workbook};
 

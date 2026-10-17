@@ -997,3 +997,14 @@ fn label_csv_layouts() {
     assert_eq!(LabelLayout::parse("P-Touch"), Some(LabelLayout::Brother));
     assert_eq!(LabelLayout::parse("zebra"), None);
 }
+
+#[test]
+fn a_page_without_a_title_is_listed_as_untitled() {
+    let mut doc = Document::default();
+    doc.transact("page", |tx| tx.add_page("7")).unwrap();
+    let toc = report(&doc, "toc");
+    assert_eq!(
+        rows(&toc, "pages"),
+        strings(&[&["7", "(untitled)", "", "", "Schematic"]])
+    );
+}

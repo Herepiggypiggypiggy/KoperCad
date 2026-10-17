@@ -89,6 +89,7 @@ fn simulate_commands_live_in_the_simulate_menu_and_leave_cabinet_for_the_schemat
         "sim.plc_program",
         "simulate.motor-start",
         "sim.faults",
+        "sim.add_fault",
         "view.protection",
     ] {
         assert!(ids.contains(&id), "{id} is not in Simulate");
