@@ -531,7 +531,36 @@ impl BenchCut {
                 Vec::new(),
             );
         }
+        let no_size = jobs
+            .iter()
+            .filter(|j| j.cross_section_mm2.is_none())
+            .count();
+        let no_colour = jobs.iter().filter(|j| j.colour.is_empty()).count();
+        let mut notes: Vec<String> = Vec::new();
+        if no_size > 0 {
+            notes.push(format!(
+                "{no_size} of {} wires have no cross-section set (listed under \"size not set\"): they get no strip length and no ferrule. Set the size on the wire.",
+                jobs.len()
+            ));
+        }
+        if no_colour > 0 {
+            notes.push(format!(
+                "{no_colour} of {} wires have no insulation colour set, so their Colour is blank here. Ferrule sleeve colours come from the ferrule standard and are on the ferrule table.",
+                jobs.len()
+            ));
+        }
         let mut sections = vec![summary];
+        if !notes.is_empty() {
+            let mut note = Section::new(
+                "check",
+                "Check before cutting",
+                vec![Column::new("note", "", 60.0)],
+            );
+            for text in notes {
+                note.push(vec![Cell::text(text)], Vec::new());
+            }
+            sections.push(note);
+        }
 
         for (mm2, colour, list) in &groups {
             let total: f64 = list.iter().map(|j| j.cut_mm).sum();
