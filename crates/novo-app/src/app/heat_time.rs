@@ -22,6 +22,10 @@ const FRAMES: f64 = 60.0;
 /// A play-through of the whole timeline takes this long, s.
 const PLAY_S: f64 = 10.0;
 
+/// What the heat-up frames are, next to the steady 3D Heat result.
+pub(super) const ESTIMATE_LABEL: &str = "2D estimate, extruded; not the 3D solver";
+pub(super) const ESTIMATE_HOVER: &str = "The heat-up is the 2D engine's transient run extruded through the depth (planning values, no physics in z). The steady Heat run uses the 3D cabinet solver.";
+
 /// The transient solver the app uses. One place to change when the cabinet
 /// solver gets a transient path; until then the 2D engine's, extruded.
 pub(super) fn default_solver() -> Arc<dyn TransientSolver> {
@@ -320,7 +324,7 @@ pub(super) fn plot(s: &TransientSummary, shown_s: f64, w: f32, h: f32) -> Option
 
 /// Play, the slider, the shown time and the curve of the air temperature.
 pub(super) fn strip(ui: &mut egui::Ui, tl: &mut TimeLine) {
-    use novo_theme::tokens as t;
+    let t = crate::theme::ui_palette();
     if tl.frames.is_empty() {
         return;
     }
@@ -358,8 +362,10 @@ pub(super) fn strip(ui: &mut egui::Ui, tl: &mut TimeLine) {
             frame.load * 100.0
         ))
         .small()
-        .color(t::TEXT_MUTED),
+        .color(t.text_secondary),
     );
+    ui.label(egui::RichText::new(ESTIMATE_LABEL).small().color(t.warning))
+        .on_hover_text(ESTIMATE_HOVER);
     if let Some(s) = &tl.summary {
         let size = egui::vec2(110.0, 18.0);
         let (rect, resp) = ui.allocate_exact_size(size, egui::Sense::hover());
@@ -372,16 +378,16 @@ pub(super) fn strip(ui: &mut egui::Ui, tl: &mut TimeLine) {
             let painter = ui.painter();
             painter.add(egui::Shape::line(
                 pts(&p.max),
-                egui::Stroke::new(1.2, t::WARNING),
+                egui::Stroke::new(1.2, t.warning),
             ));
             painter.add(egui::Shape::line(
                 pts(&p.mean),
-                egui::Stroke::new(1.2, t::TEXT_MUTED),
+                egui::Stroke::new(1.2, t.text_secondary),
             ));
             let x = rect.min.x + p.cursor_x;
             painter.line_segment(
                 [egui::pos2(x, rect.min.y), egui::pos2(x, rect.max.y)],
-                egui::Stroke::new(1.0, t::TEXT),
+                egui::Stroke::new(1.0, t.text_primary),
             );
         }
         let tc = s

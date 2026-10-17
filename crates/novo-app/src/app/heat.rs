@@ -874,9 +874,10 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
 
 /// Heat-up: start a run over time, and the time slider after one.
 fn heat_up_controls(ui: &mut egui::Ui, state: &mut HeatState) {
-    let b = ui
-        .button("Heat-up")
-        .on_hover_text("Simulate how the cabinet heats up from cold over the chosen time");
+    let b = ui.button("Heat-up").on_hover_text(format!(
+        "Simulate how the cabinet heats up from cold over the chosen time. {}",
+        super::heat_time::ESTIMATE_LABEL
+    ));
     if b.clicked() {
         state.request_transient();
     }

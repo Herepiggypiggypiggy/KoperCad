@@ -10,3 +10,4 @@
 - 2026-10-16: PR 8: animated tracers on the 3D airflow lines (bright dashes moving downwind, faster lines cycle faster, still when reduce motion is on) and an asymmetric-layout test for the plate-frame mapping (R3 note on #664). Time slider waits for transient frames from CFD-A. #652 and #664 merged.
 - 2026-10-16: handoff brought up to date after #652, #664, #666 merged; CabinetSolver is the default solver.
 - 2026-10-17: PR 9: time slider. Heat-up button (length in minutes) runs a TransientSolver (2D stub for now, swap point heat_time::default_solver); Play, slider, load share and an air-temperature curve with a cursor under the Simulate controls (Cabinet strip and 3D Heat panel). Turbulence switch was already done by the 3D thread (#714).
+- 2026-10-17: PR 9 review fixes: heat_time::strip uses ui_palette(); strip and Heat-up hover carry '2D estimate, extruded; not the 3D solver'.
