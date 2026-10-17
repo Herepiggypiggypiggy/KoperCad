@@ -227,7 +227,7 @@ impl NovoApp {
 
     /// Asks for an AutomationML file and previews it.
     pub(super) fn import_aml(&mut self) {
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Import AutomationML")
             .add_filter("AutomationML", &["aml", "xml"]);
         if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
@@ -350,7 +350,8 @@ impl NovoApp {
     /// Asks for a folder and writes the EPLAN export script, the instructions
     /// (English and Dutch) and a self-test file there, then shows the steps.
     pub(super) fn eplan_export_script(&mut self) {
-        let mut dialog = rfd::FileDialog::new().set_title("Folder for the EPLAN export script");
+        let mut dialog =
+            crate::dialogs::FileDialog::new().set_title("Folder for the EPLAN export script");
         if let Some(dir) = dirs::document_dir().filter(|d| d.is_dir()) {
             dialog = dialog.set_directory(dir);
         }
@@ -428,7 +429,7 @@ impl NovoApp {
             self.message(Level::Info, "Open a page first");
             return;
         }
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Import DWG as background")
             .add_filter("DWG drawing", &["dwg"]);
         if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
@@ -503,7 +504,8 @@ impl NovoApp {
 
     /// Lets the person point KoperCAD at a converter program of their own.
     pub(super) fn choose_dwg_converter(&mut self) {
-        let mut dialog = rfd::FileDialog::new().set_title("Choose dwg2dxf or ODAFileConverter");
+        let mut dialog =
+            crate::dialogs::FileDialog::new().set_title("Choose dwg2dxf or ODAFileConverter");
         if let Some(dir) = dirs::data_local_dir().filter(|d| d.is_dir()) {
             dialog = dialog.set_directory(dir);
         }

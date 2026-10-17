@@ -433,6 +433,44 @@ mod width_tests {
     }
 
     #[test]
+    fn the_smallest_windows_draw_every_workspace_without_a_panic() {
+        use super::super::workspace::Workspace;
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::OpenExample);
+        // The window floor, and 1366 x 768 at 200 %.
+        for (w, h) in [(680.0, 320.0), (683.0, 384.0)] {
+            for workspace in [
+                Workspace::Schematic,
+                Workspace::Cabinet,
+                Workspace::View3d,
+                Workspace::Reports,
+                Workspace::Commissioning,
+            ] {
+                d.app.switch_workspace(workspace);
+                for _ in 0..3 {
+                    let input = egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(w, h),
+                        )),
+                        ..Default::default()
+                    };
+                    let app = &mut d.app;
+                    let mut out = d.ctx.run_ui(input, |ui| app.show(ui));
+                    out.textures_delta.clear();
+                }
+                assert!(
+                    d.app.top_bar_gap >= 0.0,
+                    "{workspace:?} at {w}x{h}: the top bar overlaps by {}",
+                    -d.app.top_bar_gap
+                );
+            }
+        }
+    }
+
+    #[test]
     fn below_1100_the_menus_fold_into_the_mark() {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));

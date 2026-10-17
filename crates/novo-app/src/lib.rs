@@ -18,7 +18,9 @@ mod app;
 mod backend;
 mod canvas;
 mod command_field;
+mod control;
 pub mod diag;
+mod dialogs;
 mod editor_canvas;
 mod gpu;
 mod keys;
@@ -57,10 +59,11 @@ pub const LEGACY_DATA_DIR_NAME: &str = "NovoElectric";
 /// File extension of a KoperCAD project file, without the dot.
 pub const PROJECT_EXTENSION: &str = novo_storage::PROJECT_EXTENSION;
 
-/// Smallest window, in points. A 1366 x 768 laptop at 200% scaling offers
+/// Smallest window, in points; narrower and the top bar no longer fits. A
+/// 1366 x 768 laptop at 200% scaling offers
 /// 683 x 384 points, so the floor has to sit below that or the bottom of the
 /// window (status bar) is pushed off the screen.
-pub(crate) const MIN_WINDOW: [f32; 2] = [560.0, 320.0];
+pub(crate) const MIN_WINDOW: [f32; 2] = [680.0, 320.0];
 
 fn window_icon() -> egui::IconData {
     eframe::icon_data::from_png_bytes(novo_theme::brand::ICON_PNG_256).unwrap_or_default()
@@ -71,11 +74,14 @@ fn window_icon() -> egui::IconData {
 /// A project file passed as the first argument (as Windows does when a
 /// `.novo` file is double-clicked) is opened on start.
 pub fn run() -> eframe::Result {
-    let startup_file = std::env::args_os().nth(1).map(|arg| {
-        let path = std::path::PathBuf::from(arg);
-        // absolute() rather than canonicalize(): no \\?\ prefix on Windows.
-        std::path::absolute(&path).unwrap_or(path)
-    });
+    let startup_file = std::env::args_os()
+        .skip(1)
+        .find(|a| !control::is_control_arg(a))
+        .map(|arg| {
+            let path = std::path::PathBuf::from(arg);
+            // absolute() rather than canonicalize(): no \\?\ prefix on Windows.
+            std::path::absolute(&path).unwrap_or(path)
+        });
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(APP_NAME)
@@ -93,6 +99,9 @@ pub fn run() -> eframe::Result {
         DATA_DIR_NAME,
         options,
         Box::new(move |cc| {
+            if let Some(port) = control::requested_port() {
+                control::install(&cc.egui_ctx, port);
+            }
             let canvas: Box<dyn CanvasView> = match cc.wgpu_render_state.as_ref() {
                 Some(rs) => {
                     let info = rs.adapter.get_info();

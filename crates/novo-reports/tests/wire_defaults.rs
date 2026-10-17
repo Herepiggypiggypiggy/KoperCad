@@ -126,3 +126,46 @@ fn without_filling_colours_none_are_set() {
         .0;
     assert_eq!(coloured, 0);
 }
+
+#[test]
+fn a_colour_from_the_cable_core_is_not_filled_over_and_shows_on_the_cut_list() {
+    let mut doc = Document::default();
+    let h = motor_starter(&mut doc).expect("fixture builds");
+    // The four motor wires lie on cores named BK, BN, GY and GNYE.
+    let ids: Vec<_> = doc.project().wires().map(|w| w.id).collect();
+    doc.transact("Clear", |tx| {
+        for id in ids {
+            tx.update::<Wire>(id, |w| w.color = None)?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let unset = unset_wires(doc.project());
+    for wire in h.motor_wires {
+        assert!(
+            !unset.no_colour.contains(&wire),
+            "the core gives its colour"
+        );
+    }
+    doc.transact("Defaults", |tx| {
+        apply_wire_defaults(
+            tx,
+            &WireDefaults {
+                size_mm2: None,
+                colour: Some("RD".into()),
+                fill_colours: true,
+            },
+        )
+    })
+    .unwrap();
+    for wire in h.motor_wires {
+        assert_eq!(doc.project().wire(wire).unwrap().color, None);
+    }
+    // The cut list prints the core's colour for the motor earth wire.
+    let jobs = wire_cut_jobs(doc.project());
+    assert!(jobs.iter().any(|j| j.colour == "GNYE"));
+    assert!(
+        jobs.iter()
+            .all(|j| j.colour != "RD" || !j.wires.iter().any(|w| h.motor_wires.contains(w)))
+    );
+}

@@ -2,7 +2,7 @@
 
 Branch `claude/project-thread-gtjd91`, one PR per slice from main. Slice 1 PR: see PROGRESS.md.
 
-State: slice 1 complete and tested (checks, reports, workflow, app, cfd cabinet tests; clippy -D warnings).
+State: slices 1 and 2 merged (#969, #970); slice 3 (Calculations badge, Dutch basis words) in review.
 
 Resume: read `release/v0.1-plan.md` section 8 (model versus exact), then ROADMAP.md "Next". Add a new number to `Model` and `ROWS` in `novo-app/src/app/model_labels.rs` first; the page and the guard test pick it up.
 

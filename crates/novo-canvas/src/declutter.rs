@@ -29,7 +29,9 @@ const PAD: f32 = 2.0;
 /// The most secondary text is enlarged to reach the floor. Wire numbers are
 /// 2 mm high, so with the sheet fitted on a 1366x768 laptop (about 1.9 px per
 /// mm) they reach the floor at a boost of 2.4; a limit of 2 hid them there.
-pub const SECONDARY_MAX_BOOST: f32 = 3.0;
+/// A 683 x 384 window shows the whole sheet at about 0.9 px per mm, a boost
+/// of 5; collisions still hide what does not fit.
+pub const SECONDARY_MAX_BOOST: f32 = 5.0;
 
 /// Smallest on-screen height a label may have and still be considered, so
 /// that it can be lifted to `floor`: the floor over the biggest boost any
@@ -184,9 +186,21 @@ mod tests {
     }
 
     #[test]
+    fn wire_numbers_stay_readable_with_the_whole_sheet_in_a_683_by_384_window() {
+        // About 0.9 px per mm: a 2 mm wire number is 1.8 px.
+        let size = 2.0 * 0.9;
+        assert!(size >= candidate_size(9.0, 4.0));
+        let out = plan(
+            vec![cand(0, Priority::Secondary, size, Vec2::ZERO, 12.0)],
+            9.0,
+        );
+        assert_eq!(out.len(), 1);
+    }
+
+    #[test]
     fn candidate_size_never_exceeds_the_cull() {
-        assert_eq!(candidate_size(9.0, 4.0), 3.0);
-        assert_eq!(candidate_size(9.0, 2.0), 2.0);
+        assert_eq!(candidate_size(9.0, 4.0), 1.8);
+        assert_eq!(candidate_size(9.0, 1.0), 1.0);
         assert_eq!(candidate_size(0.0, 4.0), 4.0);
     }
 
@@ -225,7 +239,7 @@ mod tests {
     #[test]
     fn secondary_text_is_hidden_rather_than_blown_up() {
         let out = plan(
-            vec![cand(0, Priority::Secondary, 2.0, Vec2::ZERO, 10.0)],
+            vec![cand(0, Priority::Secondary, 1.5, Vec2::ZERO, 10.0)],
             9.0,
         );
         assert!(out.is_empty());

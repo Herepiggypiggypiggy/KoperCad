@@ -52,6 +52,11 @@ pub fn is_fixed_title(title: &str) -> bool {
 /// [`FIXED_CELL_PATTERNS`] entry), so a tag or a part name is never touched.
 pub const FIXED_CELL_TEXTS: &[&str] = &[
     "(no part)",
+    "door, no gap",
+    "estimate",
+    "free air",
+    "routed",
+    "routed, no depth",
     "Built by (name)",
     "Cut DIN rail",
     "Cut Wiring duct",

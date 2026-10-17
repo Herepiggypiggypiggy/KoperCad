@@ -510,3 +510,252 @@ fn csv_field(out: &mut String, text: &str) {
         out.push_str(text);
     }
 }
+
+// ---------------------------------------------------------------------
+// Duplicates and conflicting values
+// ---------------------------------------------------------------------
+
+/// Why two or more catalog parts look like the same article.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum DuplicateReason {
+    /// The same order number under maker names that spell one maker two
+    /// ways (`Siemens` and `Siemens AG`).
+    SameMakerSpelling,
+    /// The same order number under unrelated makers. Often a coincidence
+    /// with a short code, so it is only a candidate.
+    SameOrderNumber,
+    /// The same type number under one maker with different order numbers.
+    /// Variants (coil voltage, packaging) share a type number legitimately.
+    SameTypeNumber,
+}
+
+impl DuplicateReason {
+    pub fn label(self) -> &'static str {
+        match self {
+            DuplicateReason::SameMakerSpelling => "Same order number, maker spelled two ways",
+            DuplicateReason::SameOrderNumber => "Same order number, different makers",
+            DuplicateReason::SameTypeNumber => "Same type number, different order numbers",
+        }
+    }
+
+    /// Whether this is very likely one article entered twice.
+    pub fn likely(self) -> bool {
+        self == DuplicateReason::SameMakerSpelling
+    }
+}
+
+/// A field that two or more members of a group record with different values.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Conflict {
+    /// `width_mm`, `price`, `rated_current_a`, `lifecycle`, ...
+    pub field: String,
+    /// The value each member records, aligned with the members; `None` where
+    /// that member does not record the field.
+    pub values: Vec<Option<String>>,
+}
+
+/// Parts that look like one article, with the values they disagree on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DuplicateGroup {
+    pub reason: DuplicateReason,
+    /// Sorted by key.
+    pub members: Vec<PartKey>,
+    pub conflicts: Vec<Conflict>,
+}
+
+/// A value of one field, ready for comparison.
+enum Datum {
+    Num(f64, String),
+    Text(String),
+}
+
+impl Datum {
+    fn show(&self) -> &str {
+        match self {
+            Datum::Num(_, s) | Datum::Text(s) => s,
+        }
+    }
+
+    fn same(&self, other: &Datum) -> bool {
+        match (self, other) {
+            (Datum::Num(a, _), Datum::Num(b, _)) => {
+                (a - b).abs() <= 1e-9_f64.max(1e-6 * a.abs().max(b.abs()))
+            }
+            (Datum::Text(a), Datum::Text(b)) => a.trim().eq_ignore_ascii_case(b.trim()),
+            _ => false,
+        }
+    }
+}
+
+fn num_datum(v: f64) -> Datum {
+    Datum::Num(v, crate::sheet::display_value(&Value::Float(v)))
+}
+
+/// The recorded fields of a part that two sources can disagree about.
+/// Fields the part does not record are left out: unknown is not a value.
+fn recorded_fields(part: &CatalogPart) -> std::collections::BTreeMap<String, Datum> {
+    let mut out = std::collections::BTreeMap::new();
+    if let Some(d) = part.dimensions {
+        for (k, v) in [
+            (keys::WIDTH_MM, d.width_mm),
+            (keys::HEIGHT_MM, d.height_mm),
+            (keys::DEPTH_MM, d.depth_mm),
+        ] {
+            out.insert(k.to_owned(), num_datum(v));
+        }
+    }
+    for (key, value) in &part.data {
+        if crate::sheet::is_internal_key(key) || out.contains_key(key) {
+            continue;
+        }
+        let datum = match value {
+            Value::Float(v) => num_datum(*v),
+            Value::Int(v) => num_datum(*v as f64),
+            Value::Bool(b) => Datum::Text(b.to_string()),
+            Value::Text(t) if t.trim().is_empty() => continue,
+            Value::Text(t) => Datum::Text(t.clone()),
+        };
+        out.insert(key.clone(), datum);
+    }
+    if let Some(p) = part.price.as_ref().filter(|p| p.amount.is_finite()) {
+        out.insert(
+            "price".into(),
+            Datum::Text(format!("{:.4} {}", p.each(), p.currency.trim())),
+        );
+    }
+    if part.lifecycle != crate::schema::Lifecycle::Unknown {
+        out.insert(
+            "lifecycle".into(),
+            Datum::Text(format!("{:?}", part.lifecycle)),
+        );
+    }
+    if let Some(e) = &part.class.etim {
+        out.insert("etim".into(), Datum::Text(e.clone()));
+    }
+    if let Some(e) = &part.class.eclass {
+        out.insert("eclass".into(), Datum::Text(e.clone()));
+    }
+    if !part.terminals.is_empty() {
+        out.insert(
+            "terminal_count".into(),
+            Datum::Num(
+                part.terminals.len() as f64,
+                part.terminals.len().to_string(),
+            ),
+        );
+    }
+    out
+}
+
+/// The fields at least two of `parts` record with different values.
+pub fn conflicts_between(parts: &[&CatalogPart]) -> Vec<Conflict> {
+    let fields: Vec<_> = parts.iter().map(|p| recorded_fields(p)).collect();
+    let names: std::collections::BTreeSet<&String> = fields.iter().flat_map(|f| f.keys()).collect();
+    let mut out = Vec::new();
+    for name in names {
+        let present: Vec<&Datum> = fields.iter().filter_map(|f| f.get(name)).collect();
+        if present.len() < 2 || present.iter().all(|d| d.same(present[0])) {
+            continue;
+        }
+        out.push(Conflict {
+            field: name.clone(),
+            values: fields
+                .iter()
+                .map(|f| f.get(name).map(|d| d.show().to_owned()))
+                .collect(),
+        });
+    }
+    out
+}
+
+/// Order numbers shorter than this are too generic to call a duplicate.
+const MIN_ORDER_LEN: usize = 4;
+/// Same for type numbers.
+const MIN_TYPE_LEN: usize = 3;
+
+/// Whether two normalised maker names spell the same maker
+/// (`siemens` and `siemensag`).
+fn same_maker(a: &str, b: &str) -> bool {
+    let (short, long) = if a.len() <= b.len() { (a, b) } else { (b, a) };
+    short.len() >= 3 && long.starts_with(short)
+}
+
+/// Finds parts that look like one article entered twice, with the values
+/// they disagree on. Deterministic: likely duplicates first, then by key.
+pub fn duplicate_groups(catalog: &Catalog) -> Vec<DuplicateGroup> {
+    use crate::search::normalize_code;
+    use std::collections::{BTreeMap, HashMap};
+
+    let mut by_order: HashMap<String, Vec<&CatalogPart>> = HashMap::new();
+    let mut by_type: HashMap<(String, String), Vec<&CatalogPart>> = HashMap::new();
+    for part in catalog.parts() {
+        let order = normalize_code(&part.order_number);
+        if order.len() >= MIN_ORDER_LEN {
+            by_order.entry(order).or_default().push(part);
+        }
+        let ty = normalize_code(&part.type_number);
+        if ty.len() >= MIN_TYPE_LEN {
+            by_type
+                .entry((normalize_code(&part.manufacturer), ty))
+                .or_default()
+                .push(part);
+        }
+    }
+    let mut groups: BTreeMap<(DuplicateReason, PartKey), DuplicateGroup> = BTreeMap::new();
+    let mut add = |reason: DuplicateReason, mut parts: Vec<&CatalogPart>| {
+        parts.sort_by_key(|p| p.key());
+        let members: Vec<PartKey> = parts.iter().map(|p| p.key()).collect();
+        let conflicts = conflicts_between(&parts);
+        groups.insert(
+            (reason, members[0].clone()),
+            DuplicateGroup {
+                reason,
+                members,
+                conflicts,
+            },
+        );
+    };
+    for parts in by_order.into_values().filter(|p| p.len() > 1) {
+        let makers: Vec<String> = parts
+            .iter()
+            .map(|p| normalize_code(&p.manufacturer))
+            .collect();
+        let spelled_alike = makers
+            .iter()
+            .enumerate()
+            .all(|(i, a)| makers.iter().skip(i + 1).all(|b| same_maker(a, b)));
+        let reason = if spelled_alike {
+            DuplicateReason::SameMakerSpelling
+        } else {
+            DuplicateReason::SameOrderNumber
+        };
+        add(reason, parts);
+    }
+    for parts in by_type.into_values().filter(|p| p.len() > 1) {
+        add(DuplicateReason::SameTypeNumber, parts);
+    }
+    let mut out: Vec<DuplicateGroup> = groups.into_values().collect();
+    out.sort_by(|a, b| {
+        a.reason
+            .cmp(&b.reason)
+            .then_with(|| a.members.cmp(&b.members))
+    });
+    out
+}
+
+/// Parts of an incoming set (a maker file about to be merged) that exist in
+/// the catalog under the same key but record different values. `values` of
+/// each conflict are `[catalog, incoming]`.
+pub fn incoming_conflicts(
+    catalog: &Catalog,
+    incoming: &[CatalogPart],
+) -> Vec<(PartKey, Vec<Conflict>)> {
+    incoming
+        .iter()
+        .filter_map(|new| {
+            let old = catalog.get(&new.key())?;
+            let conflicts = conflicts_between(&[old, new]);
+            (!conflicts.is_empty()).then(|| (new.key(), conflicts))
+        })
+        .collect()
+}

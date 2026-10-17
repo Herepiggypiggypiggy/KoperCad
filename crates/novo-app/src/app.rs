@@ -142,6 +142,7 @@ mod revisions;
 mod safety;
 mod safety_functions;
 mod safety_report;
+mod scene_dump;
 mod selection_sheet;
 #[cfg(test)]
 mod selection_sheet_tests;
@@ -238,6 +239,8 @@ mod compare_tests;
 #[cfg(test)]
 mod context_menu_tests;
 #[cfg(test)]
+mod dock_labels_tests;
+#[cfg(test)]
 mod eplan_ui_tests;
 #[cfg(test)]
 mod error_words_tests;
@@ -277,6 +280,8 @@ mod read_only_tests;
 mod route_all_tests;
 #[cfg(test)]
 mod shortcuts_sheet_tests;
+#[cfg(test)]
+mod small_window_tests;
 #[cfg(test)]
 mod tips_tests;
 #[cfg(test)]
@@ -826,7 +831,7 @@ impl NovoApp {
         match next {
             Leaving::New => self.new_project(),
             Leaving::Open => {
-                let mut dialog = rfd::FileDialog::new()
+                let mut dialog = crate::dialogs::FileDialog::new()
                     .set_title("Open project")
                     .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
                 if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
@@ -837,7 +842,7 @@ impl NovoApp {
                 }
             }
             Leaving::OpenReadOnly => {
-                let mut dialog = rfd::FileDialog::new()
+                let mut dialog = crate::dialogs::FileDialog::new()
                     .set_title("Open project read-only")
                     .add_filter("KoperCAD project", &[PROJECT_EXTENSION]);
                 if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
@@ -905,6 +910,19 @@ impl NovoApp {
                         ),
                     );
                 }
+            }
+            // A write-protected file or folder opens for looking instead of
+            // failing: the title and status bar say read-only and Save as
+            // keeps changes in a copy.
+            Err(BackendError::Storage(novo_storage::StorageError::ReadOnly(_))) if !read_only => {
+                self.open_path_as(path, true);
+                self.message(
+                    Level::Warning,
+                    format!(
+                        "{} is write-protected, so it was opened read-only. Use Save as to keep changes in a copy.",
+                        path.display()
+                    ),
+                );
             }
             Err(e) => {
                 if is_not_found(&e) {
@@ -1060,7 +1078,7 @@ impl NovoApp {
 
     fn save_as(&mut self) -> bool {
         let name = self.project_name().unwrap_or_else(|| "Untitled".into());
-        let mut dialog = rfd::FileDialog::new()
+        let mut dialog = crate::dialogs::FileDialog::new()
             .set_title("Save project")
             .add_filter("KoperCAD project", &[PROJECT_EXTENSION])
             .set_file_name(project_file_name(&name));
@@ -1608,8 +1626,12 @@ impl NovoApp {
                     .shortcut()
                     .map(|s| ui.ctx().format_shortcut(&s))
                     .unwrap_or_default();
-                let label = if fit.search.is_empty() {
+                let label = if fit.search.is_empty() && fit.whats_new_pill {
                     shortcut.clone()
+                } else if fit.search.is_empty() {
+                    // Too narrow for the key name: the magnifier, the key in
+                    // the tooltip.
+                    novo_theme::icons::action::FIND.to_owned()
                 } else {
                     fit.search.to_owned()
                 };
@@ -2075,7 +2097,9 @@ impl NovoApp {
             .pivot(egui::Align2::LEFT_BOTTOM)
             .fixed_pos(canvas.left_bottom() + egui::vec2(12.0, -12.0))
             .show(ctx, |ui| {
-                ui.set_max_width(420.0);
+                // Never wider than the canvas: a 683 point window has less
+                // room than the usual 420.
+                ui.set_max_width(420.0_f32.min((canvas.width() - 24.0).max(160.0)));
                 for &i in shown.iter().rev() {
                     let m = &self.messages[i];
                     let color = match m.level {
@@ -2084,10 +2108,14 @@ impl NovoApp {
                         Level::Error => ui.visuals().error_fg_color,
                     };
                     let frame = egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        let shown_text = match &m.file {
+                            Some(file) => elide_path(&m.text, file, 36),
+                            None => m.text.clone(),
+                        };
                         let text = if m.count > 1 {
-                            format!("{} (x{})", m.text, m.count)
+                            format!("{shown_text} (x{})", m.count)
                         } else {
-                            m.text.clone()
+                            shown_text
                         };
                         ui.add(egui::Label::new(egui::RichText::new(text).color(color)).wrap());
                         if let Some(file) = &m.file
@@ -2209,6 +2237,9 @@ impl eframe::App for NovoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         fit_window_to_screen(ui.ctx());
         self.show(ui);
+        if crate::control::scene_wanted() {
+            crate::control::publish_scene(self.scene_json());
+        }
     }
 
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
@@ -2243,7 +2274,12 @@ fn describe_error(verb: &str, path: &Path, e: &BackendError) -> String {
     use novo_storage::StorageError as S;
     match e {
         BackendError::Storage(
-            S::Locked(_) | S::NotAProject(_) | S::NewerFormat { .. } | S::Corrupt { .. },
+            S::Locked(_)
+            | S::NotAProject(_)
+            | S::NewerFormat { .. }
+            | S::UnknownRecord { .. }
+            | S::ReadOnly(_)
+            | S::Corrupt { .. },
         ) => format!("Could not {verb} the project: {e}"),
         _ if is_not_found(e) => format!(
             "Could not {verb} {}: the file does not exist",
@@ -3029,6 +3065,28 @@ mod tests {
     }
 }
 
+/// `text` with the full path of `file` cut to its last folder and file name
+/// when it is longer than `keep` characters, so a toast about a written file
+/// stays on a line or two. The whole path is still on the "Open folder"
+/// button's folder.
+fn elide_path(text: &str, file: &Path, keep: usize) -> String {
+    let full = file.display().to_string();
+    if full.chars().count() <= keep || !text.contains(&full) {
+        return text.to_owned();
+    }
+    let name = file.file_name().map(|n| n.to_string_lossy().into_owned());
+    let folder = file
+        .parent()
+        .and_then(Path::file_name)
+        .map(|n| n.to_string_lossy().into_owned());
+    let short = match (folder, name) {
+        (Some(folder), Some(name)) => format!("…/{folder}/{name}"),
+        (None, Some(name)) => format!("…/{name}"),
+        _ => return text.to_owned(),
+    };
+    text.replace(&full, &short)
+}
+
 /// Room the system keeps for the taskbar and the window's title bar, in
 /// points, when a window is made to fit the screen.
 const SCREEN_MARGIN: egui::Vec2 = egui::vec2(0.0, 80.0);
@@ -3088,6 +3146,23 @@ mod fit_tests {
     }
 
     #[test]
+    fn a_long_path_in_a_toast_is_cut_to_folder_and_name() {
+        let file = Path::new("/home/someone/Documents/KoperCAD/Motor starter.pdf");
+        let text = format!("Exported the drawing to {}", file.display());
+        assert_eq!(
+            elide_path(&text, file, 36),
+            "Exported the drawing to …/KoperCAD/Motor starter.pdf"
+        );
+        // Short paths and texts without the path stay as they are.
+        let short = Path::new("/tmp/a.pdf");
+        assert_eq!(
+            elide_path("Saved /tmp/a.pdf", short, 36),
+            "Saved /tmp/a.pdf"
+        );
+        assert_eq!(elide_path("Saved", file, 36), "Saved");
+    }
+
+    #[test]
     fn a_window_that_fits_is_left_alone() {
         assert_eq!(
             fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1920.0, 1080.0)),
@@ -3106,7 +3181,7 @@ mod fit_tests {
     #[test]
     fn a_tiny_screen_never_goes_below_the_minimum() {
         let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(500.0, 400.0));
-        assert_eq!(got, Some(egui::vec2(560.0, 320.0)));
+        assert_eq!(got, Some(egui::vec2(680.0, 320.0)));
     }
 
     #[test]

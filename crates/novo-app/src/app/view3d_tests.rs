@@ -316,12 +316,12 @@ fn the_hints_command_folds_and_unfolds_the_legend() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = drive_with_cabinet(dir.path());
     let ctx = d.ctx.clone();
-    assert!(d.app.view3d.hints.open);
+    assert!(!d.app.view3d.hints.open, "starts as the chip");
     d.app.run_command(&ctx, "view.3d_hints", None);
     d.frame();
-    assert!(!d.app.view3d.hints.open);
-    d.app.run_command(&ctx, "view.3d_hints", None);
     assert!(d.app.view3d.hints.open);
+    d.app.run_command(&ctx, "view.3d_hints", None);
+    assert!(!d.app.view3d.hints.open);
 }
 
 #[test]
