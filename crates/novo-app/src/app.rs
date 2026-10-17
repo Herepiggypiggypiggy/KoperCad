@@ -18,6 +18,7 @@ mod cabinet_rails;
 mod cabinet_routes;
 mod cabinet_rules;
 mod cabinet_surface_move;
+mod cabinet_surface_size;
 mod cabinet_surfaces;
 mod cable_controls;
 mod cable_cores;
@@ -198,6 +199,8 @@ mod cabinet_surface_edit_tests;
 mod cabinet_surface_move_tests;
 #[cfg(test)]
 mod cabinet_surface_plan_tests;
+#[cfg(test)]
+mod cabinet_surface_size_tests;
 #[cfg(test)]
 mod cabinet_surfaces_tests;
 #[cfg(test)]

@@ -9,3 +9,4 @@
 2026-10-17 UTC #876 merged. Swing hits of door devices are now Issues rows (novo-checks door.rs, ProblemKind::DoorSwing, point at the device). Next: 3D marks for the devices involved.
 2026-10-17 UTC slice 6: devices on the door are drawn in the 3D scene on the door's inside (hinge group), swing hits mark the door device and the plate device it touches as collisions; off-plate devices no longer drawn on the plate (novo-view3d build/door_devices.rs).
 2026-10-17 UTC slice 7: Drop/Rotate/Remove allowed on a shown surface; 3D drag skips off-plate devices; cabinet_surface_edit_tests.rs.
+2026-10-17 UTC slice 10: Inspector size card for the shown surface (Ask::SetSurfaceSize, cabinet_surface_size.rs): width, height, margin (and corner for a profile) stored as the surface.<name> structure property; Planning values removes it. Shown when a surface other than the plate is picked and nothing is selected. 'Place all' and the plate form stay plate-only.

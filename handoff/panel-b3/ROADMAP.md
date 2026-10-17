@@ -21,3 +21,5 @@ Next, after PANEL-B2 slice 4 (#876) is on main: swing marks in 3D from `swing_re
 Slice 5: swing hits of devices on the door are Issues rows (novo-checks door.rs, ProblemKind::DoorSwing; the row points at the door device and the plate device it touches). Next: 3D marks (Mark::Collision on those items), then inspector forms for the shown surface.
 Slice 6: devices on the door in the 3D scene (build/door_devices.rs) and swing marks (Mark::Collision on the door device and the plate device it touches). Devices on walls, roof, floor and extra plates are still not drawn in 3D.
 Slice 7: a device on the shown surface can be dragged (Drop), turned and taken off in the Cabinet; plan, rails, plate size and the enclosure stay plate-only. Door devices are not dragged in 3D (their position is edited where the door is shown).
+
+Slice 10: size card in the Inspector for the shown surface (door, walls, roof, floor, extra plates, profiles). Next: route other direct writers of cabinet.surface through pick_surface (R5 note); pick and drag surface devices in 3D.
