@@ -535,7 +535,7 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     if no_size > 0 {
         out.push(Gap {
             text: format!(
-                "{no_size} wires have no cross-section: they get no ferrule and sit in one group. Set it in the wire panel (select a wire)"
+                "{no_size} wires have no cross-section: they get no ferrule and sit in one group. Use Fill in on the Cut list tab, or set it per wire in the wire panel"
             ),
             fix: None,
         });
