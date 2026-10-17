@@ -22,6 +22,9 @@ pub struct Display {
     /// Show the "?" badge (no part data) on every device. Off: only on the
     /// device under the pointer or in the selection.
     pub missing_marks: bool,
+    /// A swipe reported in wheel lines (Windows, wheel and precision
+    /// touchpad alike) pans instead of zooming. Off: it zooms, as a wheel.
+    pub trackpad_pans: bool,
 }
 
 impl Default for Display {
@@ -33,6 +36,7 @@ impl Default for Display {
             ssao: true,
             dimensions: false,
             missing_marks: false,
+            trackpad_pans: false,
         }
     }
 }
@@ -94,6 +98,28 @@ impl Default for Section {
 }
 
 impl Section {
+    /// The scene's low and high ends along the axis, in mm.
+    pub fn range(&self, bounds: &Aabb) -> (f32, f32) {
+        let u = self.axis.unit();
+        (bounds.min.dot(u), bounds.max.dot(u))
+    }
+
+    /// Where the plane stands along the axis, in mm.
+    pub fn position_mm(&self, bounds: &Aabb) -> f32 {
+        let (lo, hi) = self.range(bounds);
+        lo + (hi - lo) * self.at.clamp(0.0, 1.0)
+    }
+
+    /// Put the plane at `mm` along the axis, kept inside the scene. A
+    /// non-finite value leaves it where it is.
+    pub fn set_position_mm(&mut self, bounds: &Aabb, mm: f32) {
+        let (lo, hi) = self.range(bounds);
+        if !mm.is_finite() || hi <= lo {
+            return;
+        }
+        self.at = ((mm - lo) / (hi - lo)).clamp(0.0, 1.0);
+    }
+
     /// The plane as `(n, w)`: a point `p` is cut away when `n . p + w > 0`.
     pub fn plane(&self, bounds: &Aabb) -> (Vec3, f32) {
         let u = self.axis.unit();
@@ -160,6 +186,21 @@ mod tests {
         let s = Section::default();
         assert!(s.cuts(&bounds(), Vec3::new(10.0, 10.0, 40.0)));
         assert!(!s.cuts(&bounds(), Vec3::new(10.0, 10.0, 10.0)));
+    }
+
+    #[test]
+    fn the_plane_position_reads_and_sets_in_mm() {
+        let mut s = Section::default();
+        // Default: middle of the 50 mm depth.
+        assert!((s.position_mm(&bounds()) - 25.0).abs() < 1e-4);
+        s.set_position_mm(&bounds(), 40.0);
+        assert!((s.at - 0.8).abs() < 1e-4);
+        s.set_position_mm(&bounds(), 900.0);
+        assert_eq!(s.at, 1.0);
+        s.set_position_mm(&bounds(), -5.0);
+        assert_eq!(s.at, 0.0);
+        s.set_position_mm(&bounds(), f32::NAN);
+        assert_eq!(s.at, 0.0);
     }
 
     #[test]

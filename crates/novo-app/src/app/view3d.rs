@@ -509,6 +509,7 @@ impl NovoApp {
         }
         mode.view.state.display.ssao = mode.controls.ssao;
         mode.view.state.display.dimensions = mode.controls.dimensions;
+        mode.view.state.display.trackpad_pans = mode.controls.trackpad_pans;
         mode.view.state.display.missing_marks = mode.controls.missing_data;
         // The toolbar sits in the view's corner; the door goes where it says.
         let limit = model::door_limit_deg(project, id);
@@ -523,6 +524,7 @@ impl NovoApp {
             &self.settings.camera_views,
             !mode.view.state.selection.is_empty(),
             &mut mode.view.state.section,
+            &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
         );
         if let Some(command) = asked {
             self.wb.queued.push(command);
@@ -622,7 +624,12 @@ impl NovoApp {
                 let row = sol.snapshot.devices.iter().find(|d| d.id == hover.raw)?;
                 Some((row, sol.ambient))
             });
-            if let Some(tip) = super::view3d_tip::tip(project, DeviceId::from(hover.raw), row) {
+            if let Some(tip) = super::view3d_tip::tip(
+                project,
+                DeviceId::from(hover.raw),
+                row,
+                self.cabinet.heat.live.is_stale(),
+            ) {
                 super::view3d_tip::show(ui.ctx(), &tip);
             }
         }

@@ -640,7 +640,7 @@ mod tests {
                 .iter()
                 .find(|(info, _)| info.id == id)
                 .unwrap_or_else(|| panic!("{id} is not in the Draw menu"));
-            assert_eq!(place.submenu, Some("Terminals"), "{id}");
+            assert_eq!(place.submenu, Some("Terminal strips"), "{id}");
         }
     }
 

@@ -938,3 +938,47 @@ fn show_in_with_nothing_selected_says_so_and_stays() {
     d.frame();
     assert_eq!(d.app.workspace(), Workspace::View3d);
 }
+
+#[test]
+fn show_in_3d_for_an_unplaced_device_says_it_has_nothing_to_show() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let (device, _) = k1(&d);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Unplace K1", |tx| {
+            novo_layout::model::unplace_device(tx, device.raw())
+        })
+        .expect("unplaced");
+    draw_selected(&mut d, device);
+    d.app.run_command(&ctx, "nav.show_3d", None);
+    d.frame();
+    // It still switches and selects, and the message says why nothing shows.
+    assert_eq!(d.app.workspace(), Workspace::View3d);
+    let last = d.app.messages().last().expect("a message").text.clone();
+    assert!(last.contains("Not placed") && last.contains("K1"), "{last}");
+}
+
+#[test]
+fn show_in_3d_for_a_placed_device_asks_for_a_fit() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    let (device, _) = k1(&d);
+    draw_selected(&mut d, device);
+    d.app.run_command(&ctx, "nav.show_3d", None);
+    assert!(
+        matches!(d.app.view3d.pending, Some(super::view3d::Pending::Fit)),
+        "the 3D view is asked to frame the device before its first frame"
+    );
+    assert!(
+        d.app
+            .messages()
+            .last()
+            .is_none_or(|m| !m.text.contains("Not placed")),
+        "a placed device gets no warning"
+    );
+}

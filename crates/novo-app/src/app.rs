@@ -31,9 +31,15 @@ mod changes;
 mod checks;
 mod clipboard;
 mod commissioning;
+mod commissioning_photos;
+mod commissioning_redlines;
+mod commissioning_signature;
+#[cfg(test)]
+mod commissioning_signature_tests;
 mod compare;
 mod designer;
 mod device_renumber;
+mod dialog_ui;
 mod dock;
 mod drawers;
 mod duplicate;
@@ -189,6 +195,8 @@ mod cabinet_rules_tests;
 #[cfg(test)]
 mod cabinet_surface_move_tests;
 #[cfg(test)]
+mod cabinet_surface_plan_tests;
+#[cfg(test)]
 mod cabinet_surfaces_tests;
 #[cfg(test)]
 mod cabinet_tests;
@@ -196,6 +204,8 @@ mod cabinet_tests;
 mod changes_tests;
 #[cfg(test)]
 mod clipboard_tests;
+#[cfg(test)]
+mod commissioning_photos_tests;
 #[cfg(test)]
 mod commissioning_tests;
 #[cfg(test)]
