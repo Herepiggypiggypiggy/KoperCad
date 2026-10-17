@@ -60,6 +60,8 @@ struct Server {
     children: Vec<Child>,
     shot_no: u32,
     shots: PathBuf,
+    /// Keep the profile folder of the last start (a "crash" test relaunch).
+    keep_profile: bool,
 }
 
 impl Server {
@@ -74,6 +76,7 @@ impl Server {
             children: Vec::new(),
             shot_no: 0,
             shots,
+            keep_profile: false,
         }
     }
 
@@ -228,6 +231,7 @@ impl Server {
             }
             "restart" => {
                 self.stop();
+                self.keep_profile = a["fresh"] == json!(false);
                 if let Some(p) = a["project"].as_str() {
                     self.opts.project = Some(PathBuf::from(p));
                 }
@@ -282,7 +286,12 @@ impl Server {
 
     fn screenshot(&mut self) -> Result<Vec<Value>, String> {
         self.shot_no += 1;
-        let path = self.shots.join(format!("shot-{:03}.png", self.shot_no));
+        let stamp = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs() % 100_000);
+        let path = self
+            .shots
+            .join(format!("shot-{stamp:05}-{:03}.png", self.shot_no));
         let r = self.send(json!({"cmd": "screenshot", "path": path.display().to_string()}))?;
         let bytes = std::fs::read(&path).map_err(|e| format!("cannot read screenshot: {e}"))?;
         Ok(vec![
@@ -351,7 +360,10 @@ impl Server {
     fn launch(&mut self) -> Result<u16, String> {
         let app = self.opts.app.clone().unwrap_or_else(default_app);
         let work = std::env::temp_dir().join(format!("kopercad-test-user-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&work);
+        if !self.keep_profile {
+            let _ = std::fs::remove_dir_all(&work);
+        }
+        let _ = std::fs::remove_file(work.join("port"));
         std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
         std::fs::create_dir_all(&self.shots).map_err(|e| e.to_string())?;
         let port_file = work.join("port");
@@ -360,14 +372,28 @@ impl Server {
         if let Some(p) = &self.opts.project {
             cmd.arg(p);
         }
+        // The app's own output is kept next to the screenshots: a crash shows there.
+        let log = std::fs::File::create(self.shots.join("app.log")).map_err(|e| e.to_string())?;
+        let log_err = log.try_clone().map_err(|e| e.to_string())?;
         cmd.env("KOPERCAD_CONTROL_PORT_FILE", &port_file)
-            .stdout(Stdio::null())
-            .stderr(Stdio::null());
+            .env("RUST_BACKTRACE", "1")
+            .stdout(log)
+            .stderr(log_err);
         if !self.opts.real_profile {
             // An empty profile: the first-run look a new user gets.
             let home = work.join("home");
-            let _ = std::fs::create_dir_all(&home);
+            let _ = std::fs::create_dir_all(home.join("Documents"));
+            // Linux finds Documents through this file (a Windows known folder elsewhere).
+            let _ = std::fs::create_dir_all(home.join("config"));
+            let _ = std::fs::write(
+                home.join("config/user-dirs.dirs"),
+                format!(
+                    "XDG_DOCUMENTS_DIR=\"{}\"\n",
+                    home.join("Documents").display()
+                ),
+            );
             cmd.env("HOME", &home)
+                .env("XDG_DOCUMENTS_DIR", home.join("Documents"))
                 .env("XDG_DATA_HOME", home.join("data"))
                 .env("XDG_CONFIG_HOME", home.join("config"))
                 .env("APPDATA", home.join("AppData"))
