@@ -83,6 +83,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.about", at("Help")),
     ("view.shortcuts", at("Help")),
     ("help.keymap_file", at("Help")),
+    ("help.open_log_folder", at("Help")),
+    ("help.copy_problem_report", at("Help")),
     // File > Export, split by what the file is for.
     ("export.pdf", under("File", "Export drawings")),
     ("export.pdf_options", under("File", "Export drawings")),

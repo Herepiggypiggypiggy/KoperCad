@@ -253,7 +253,7 @@ mod tests {
                 "calculations.rs",
                 include_str!("calculations.rs"),
                 &["rating"],
-                &["PLANNING_NOTE"],
+                &["PLANNING_NOTE", "model_labels::"],
             ),
             (
                 "standards.rs",

@@ -46,6 +46,7 @@ mod commissioning_viewer_tests;
 mod compare;
 mod designer;
 mod device_renumber;
+mod diagnostics;
 mod dialog_ui;
 mod dock;
 mod drawers;
@@ -238,6 +239,8 @@ mod compare_tests;
 #[cfg(test)]
 mod context_menu_tests;
 #[cfg(test)]
+mod dock_labels_tests;
+#[cfg(test)]
 mod eplan_ui_tests;
 #[cfg(test)]
 mod error_words_tests;
@@ -277,6 +280,8 @@ mod read_only_tests;
 mod route_all_tests;
 #[cfg(test)]
 mod shortcuts_sheet_tests;
+#[cfg(test)]
+mod small_window_tests;
 #[cfg(test)]
 mod tips_tests;
 #[cfg(test)]
@@ -414,6 +419,8 @@ pub struct NovoApp {
     wb: Workbench,
     messages: Vec<Message>,
     show_about: bool,
+    /// The crash report the last run left behind, until answered.
+    crash_report: Option<PathBuf>,
     /// The What's new list is open (app/whats_new.rs).
     show_whats_new: bool,
     /// Help > About the numbers is open (app/model_labels.rs).
@@ -508,6 +515,11 @@ impl NovoApp {
         let mut app = Self::with_settings(backend, canvas, settings);
         app.load_user_keymap();
         app.learn_init_paths();
+        app.crash_report = crate::diag::take_pending_crash();
+        if std::env::var_os("KOPERCAD_FORCE_PANIC").is_some() {
+            // Diagnostics check: the report must appear in the log folder.
+            panic!("forced panic (KOPERCAD_FORCE_PANIC is set)");
+        }
         app
     }
 
@@ -526,6 +538,7 @@ impl NovoApp {
             wb,
             messages: Vec::new(),
             show_about: false,
+            crash_report: None,
             show_whats_new: false,
             show_numbers: false,
             standards_open: false,
@@ -897,6 +910,19 @@ impl NovoApp {
                         ),
                     );
                 }
+            }
+            // A write-protected file or folder opens for looking instead of
+            // failing: the title and status bar say read-only and Save as
+            // keeps changes in a copy.
+            Err(BackendError::Storage(novo_storage::StorageError::ReadOnly(_))) if !read_only => {
+                self.open_path_as(path, true);
+                self.message(
+                    Level::Warning,
+                    format!(
+                        "{} is write-protected, so it was opened read-only. Use Save as to keep changes in a copy.",
+                        path.display()
+                    ),
+                );
             }
             Err(e) => {
                 if is_not_found(&e) {
@@ -1301,6 +1327,7 @@ impl NovoApp {
         self.occurrences_popup(&ctx, canvas_rect);
         self.command_field(&ctx, canvas_rect);
         self.recovery_dialog(&ctx);
+        self.crash_dialog(&ctx);
         self.about_dialog(&ctx);
         self.standards_window(&ctx);
         self.learn_window(&ctx);
@@ -1466,6 +1493,7 @@ impl NovoApp {
             || self.wb.sheet_import.is_some()
             || self.ol.dialog_open()
             || self.backend.recovery_offer().is_some()
+            || self.crash_report.is_some()
     }
 
     fn update_title(&mut self, ctx: &egui::Context) {
@@ -2069,7 +2097,9 @@ impl NovoApp {
             .pivot(egui::Align2::LEFT_BOTTOM)
             .fixed_pos(canvas.left_bottom() + egui::vec2(12.0, -12.0))
             .show(ctx, |ui| {
-                ui.set_max_width(420.0);
+                // Never wider than the canvas: a 683 point window has less
+                // room than the usual 420.
+                ui.set_max_width(420.0_f32.min((canvas.width() - 24.0).max(160.0)));
                 for &i in shown.iter().rev() {
                     let m = &self.messages[i];
                     let color = match m.level {
@@ -2078,10 +2108,14 @@ impl NovoApp {
                         Level::Error => ui.visuals().error_fg_color,
                     };
                     let frame = egui::Frame::popup(ui.style()).show(ui, |ui| {
+                        let shown_text = match &m.file {
+                            Some(file) => elide_path(&m.text, file, 36),
+                            None => m.text.clone(),
+                        };
                         let text = if m.count > 1 {
-                            format!("{} (x{})", m.text, m.count)
+                            format!("{shown_text} (x{})", m.count)
                         } else {
-                            m.text.clone()
+                            shown_text
                         };
                         ui.add(egui::Label::new(egui::RichText::new(text).color(color)).wrap());
                         if let Some(file) = &m.file
@@ -2187,6 +2221,7 @@ impl NovoApp {
                 ui.add_space(novo_theme::space::L);
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                 ui.weak(format!("Model API v{}", novo_core::MODEL_VERSION));
+                ui.weak(format!("Build {}", crate::diag::BUILD_COMMIT));
                 ui.add_space(novo_theme::space::L);
                 ui.button("Close").clicked()
             })
@@ -2214,6 +2249,9 @@ impl eframe::App for NovoApp {
     }
 
     fn on_exit(&mut self) {
+        // Only a process that died leaves a crash marker; a panic the program
+        // survived (a failed solver run) is not offered as a crash.
+        crate::diag::clear_pending_crash();
         // A clean close deletes the recovery file, so the next start does
         // not offer to restore work that was deliberately not saved.
         if let Err(e) = self.backend.close() {
@@ -2236,7 +2274,12 @@ fn describe_error(verb: &str, path: &Path, e: &BackendError) -> String {
     use novo_storage::StorageError as S;
     match e {
         BackendError::Storage(
-            S::Locked(_) | S::NotAProject(_) | S::NewerFormat { .. } | S::Corrupt { .. },
+            S::Locked(_)
+            | S::NotAProject(_)
+            | S::NewerFormat { .. }
+            | S::UnknownRecord { .. }
+            | S::ReadOnly(_)
+            | S::Corrupt { .. },
         ) => format!("Could not {verb} the project: {e}"),
         _ if is_not_found(e) => format!(
             "Could not {verb} {}: the file does not exist",
@@ -3022,6 +3065,28 @@ mod tests {
     }
 }
 
+/// `text` with the full path of `file` cut to its last folder and file name
+/// when it is longer than `keep` characters, so a toast about a written file
+/// stays on a line or two. The whole path is still on the "Open folder"
+/// button's folder.
+fn elide_path(text: &str, file: &Path, keep: usize) -> String {
+    let full = file.display().to_string();
+    if full.chars().count() <= keep || !text.contains(&full) {
+        return text.to_owned();
+    }
+    let name = file.file_name().map(|n| n.to_string_lossy().into_owned());
+    let folder = file
+        .parent()
+        .and_then(Path::file_name)
+        .map(|n| n.to_string_lossy().into_owned());
+    let short = match (folder, name) {
+        (Some(folder), Some(name)) => format!("…/{folder}/{name}"),
+        (None, Some(name)) => format!("…/{name}"),
+        _ => return text.to_owned(),
+    };
+    text.replace(&full, &short)
+}
+
 /// Room the system keeps for the taskbar and the window's title bar, in
 /// points, when a window is made to fit the screen.
 const SCREEN_MARGIN: egui::Vec2 = egui::vec2(0.0, 80.0);
@@ -3078,6 +3143,23 @@ mod fit_tests {
     fn a_window_taller_than_a_small_screen_shrinks_to_it() {
         let got = fitted_size(egui::vec2(1280.0, 800.0), egui::vec2(1366.0, 768.0));
         assert_eq!(got, Some(egui::vec2(1280.0, 688.0)));
+    }
+
+    #[test]
+    fn a_long_path_in_a_toast_is_cut_to_folder_and_name() {
+        let file = Path::new("/home/someone/Documents/KoperCAD/Motor starter.pdf");
+        let text = format!("Exported the drawing to {}", file.display());
+        assert_eq!(
+            elide_path(&text, file, 36),
+            "Exported the drawing to …/KoperCAD/Motor starter.pdf"
+        );
+        // Short paths and texts without the path stay as they are.
+        let short = Path::new("/tmp/a.pdf");
+        assert_eq!(
+            elide_path("Saved /tmp/a.pdf", short, 36),
+            "Saved /tmp/a.pdf"
+        );
+        assert_eq!(elide_path("Saved", file, 36), "Saved");
     }
 
     #[test]

@@ -30,18 +30,11 @@ pub(super) const ROWS: &[(&str, &str)] = &[
     ("Menu", "Right-click without dragging"),
 ];
 
-/// Whether the card is open.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Whether the card is open. It starts folded to the chip: the open card
+/// covers a quarter of a small view, and the chip reopens it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) struct Hints {
     pub(super) open: bool,
-}
-
-impl Default for Hints {
-    fn default() -> Self {
-        // Open at first so a new user sees how to move; the chip stays
-        // after it is closed.
-        Hints { open: true }
-    }
 }
 
 impl Hints {
@@ -93,11 +86,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_card_starts_open_and_toggles() {
+    fn the_card_starts_folded_and_toggles() {
         let mut h = Hints::default();
-        assert!(h.open);
-        h.toggle();
         assert!(!h.open);
+        h.toggle();
+        assert!(h.open);
     }
 
     #[test]

@@ -157,7 +157,7 @@ pub(crate) struct LearnState {
     /// Lessons whose lint has errors, so they are not offered yet.
     coming: Option<BTreeSet<String>>,
     /// Controls registered so far this frame, and last frame.
-    anchors: BTreeMap<String, egui::Rect>,
+    pub(super) anchors: BTreeMap<String, egui::Rect>,
     seen: BTreeMap<String, egui::Rect>,
     /// The visible name of a control, for `{ui:...}` in step text.
     pub(super) labels: BTreeMap<String, String>,

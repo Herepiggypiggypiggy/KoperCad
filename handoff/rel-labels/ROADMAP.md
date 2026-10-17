@@ -13,12 +13,18 @@ Scope: blocker B11 of `release/v0.1-plan.md`. Every number that is a model, an e
 - Standards check text and PDF footer: "subset of the standard ... not a certification".
 - Guard test: `a_file_that_shows_a_model_number_carries_its_label` in model_labels.rs.
 
+## Done (slice 2, #970)
+- DXF wiring table: `door, no gap` for door wires.
+
+## Done (slice 3)
+- Calculations window: "(planning value)" badge on the Overload and Voltage drop rows and on the Iz line; the copy text carries the label on those rows.
+- Dutch: length basis words (`routed`, `routed, no depth`, `free air`, `door, no gap`, `estimate`) in `nl.json` and `FIXED_CELL_TEXTS`, so Dutch wire lists, cut lists and the DXF-style tables read Dutch.
+
 ## Next, in order
-1. DXF wiring export (`novo-interop/src/wiring.rs`) still says `routed` for door wires (it has no access to the surface legs).
-2. Calculations window and copy text: ampacity badge per row, not only the top note.
-3. Ferrule/cut list PDF footers: one line "~ = estimate, door wires leave out the gap" (check bench footers).
-4. Dutch strings for the new texts (DOC-2).
-5. Extend the guard test with the reports' PDF footers.
+1. Ferrule/cut list PDF footers: one line "~ = estimate, door wires leave out the gap" (check bench footers).
+2. Dutch for the standards report footer and safety PDF footer (app side, not on the report translator yet).
+3. Guard test: also check a number sits next to its label (today it only checks the label is somewhere in the file).
+4. Comment on `is_estimate` (bench.rs) that any basis other than routed is an estimate on purpose.
 
 ## Open questions
 None blocking.

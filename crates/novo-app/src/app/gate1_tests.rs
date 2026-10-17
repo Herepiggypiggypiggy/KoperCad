@@ -1136,6 +1136,10 @@ fn the_tool_dock_switches_tools_and_steps_aside_for_a_drag() {
     use novo_workflow::keymap::Focus;
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
+    // The click below finds Connect by the icon-only geometry.
+    d.app
+        .settings
+        .set_dock_labels(crate::settings::DockLabels::Never);
     let ctx = d.ctx.clone();
     d.app.run(&ctx, Action::NewProject);
     d.frame();
