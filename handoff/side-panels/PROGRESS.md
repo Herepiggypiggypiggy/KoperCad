@@ -5,3 +5,6 @@
 
 ## Cabinet inspector nits (branch claude/panels-cabinet-nits)
 - Placement opens when a "why" is present, Panel data summary reads "not set" when empty, the Place rule value wraps inside the panel.
+
+## Parts polish (branch claude/parts-polish)
+- #798 was superseded by #841. Left from it: only one primary button in view (New part is plain, "Use for selected device" is the primary) and no 11 px buttons in the Parts guide strips.
