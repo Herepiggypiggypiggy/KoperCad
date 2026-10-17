@@ -1,7 +1,9 @@
 //! The 3D workspace's toolbar and commands: layers, wires and the door.
 
 use eframe::egui;
-use novo_core::{CableCore, DeviceTag, MountingPlate, Point, RailKind, Wire, WireId};
+use novo_core::{
+    CableCore, DeviceTag, MountingPlate, Point, PotentialKind, RailKind, Wire, WireId,
+};
 use novo_layout::enclosure::{Door, Enclosure, Hinge};
 use novo_layout::model::set_enclosure;
 use novo_tests::motor_starter;
@@ -151,6 +153,64 @@ fn a_wire_without_a_colour_takes_it_from_its_cable_core_name() {
     // BK is a colour code and colours the wire; "1" is a number and does not.
     assert_eq!(tint_of(ids[0]), Some([0x1B, 0x1B, 0x1E]));
     assert_eq!(tint_of(ids[1]), None);
+}
+
+#[test]
+fn a_wire_without_a_colour_takes_the_colour_of_its_potential() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ids = wire_ids(&d);
+    let doc = d.app.backend.document_mut().unwrap();
+    doc.transact("Earth", |tx| {
+        let pe = tx.add_potential("PE", PotentialKind::ProtectiveEarth)?;
+        let l1 = tx.add_potential("L1", PotentialKind::Line)?;
+        tx.set_wire_potential(ids[0], Some(pe))?;
+        tx.set_wire_potential(ids[1], Some(l1))?;
+        Ok(())
+    })
+    .unwrap();
+    d.frame();
+    fn look(d: &Drive, id: WireId) -> (Option<[u8; 3]>, Option<[u8; 3]>) {
+        let w = scene(d)
+            .wires
+            .iter()
+            .find(|w| w.id.raw == id.raw())
+            .expect("the wire is still in the scene");
+        (w.tint, w.stripe)
+    }
+    assert_eq!(
+        look(&d, ids[0]),
+        (Some([0x7F, 0xB0, 0x20]), Some([0xE3, 0xD3, 0x4A])),
+        "PE is green-yellow"
+    );
+    assert_eq!(
+        look(&d, ids[1]),
+        (None, None),
+        "a line conductor stays plain"
+    );
+    // Neutral and 0 V are blue, positive DC red (3d-look.md section 3).
+    for (name, kind, tint) in [
+        ("N", PotentialKind::Neutral, [0x2F, 0x6F, 0xD0]),
+        ("0V", PotentialKind::DcNegative, [0x2F, 0x6F, 0xD0]),
+        ("24V", PotentialKind::DcPositive, [0xB3, 0x3A, 0x3A]),
+    ] {
+        let doc = d.app.backend.document_mut().unwrap();
+        doc.transact("Potential", |tx| {
+            let p = tx.add_potential(name, kind)?;
+            tx.set_wire_potential(ids[1], Some(p))
+        })
+        .unwrap();
+        d.frame();
+        assert_eq!(look(&d, ids[1]), (Some(tint), None), "{name}");
+    }
+    // The schematic's own colour wins.
+    let doc = d.app.backend.document_mut().unwrap();
+    doc.transact("Colour", |tx| {
+        tx.update::<Wire>(ids[0], |w| w.color = Some("BU".into()))
+    })
+    .unwrap();
+    d.frame();
+    assert_eq!(look(&d, ids[0]), (Some([0x2F, 0x6F, 0xD0]), None));
 }
 
 #[test]

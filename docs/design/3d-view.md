@@ -333,11 +333,14 @@ amber tint are never the only difference.
   only while a segment is at least 12 px on screen (farther away it is the body
   colour, which also keeps the instance count down). Green-yellow is the
   protective conductor, white with a blue stripe the grounded dc one.
-- **No colour set.** The wire stays the neutral grey of 3d-look.md. The spec's
-  colour by potential (AC control red, neutral blue, 24 V red, PE green-yellow
-  when the potential says so) is not done: it needs the potential's role from
-  the editor, which the model does not store yet. A colour is never the only
-  carrier: the label and the inspector name the wire.
+- **No colour set.** The wire takes the colour of its potential from 3d-look.md
+  section 3, when the netlist gives its net exactly one: protective earth
+  green-yellow, neutral and 0 V blue, positive DC red. A line conductor, a PEN
+  conductor and a signal stay the neutral grey: the spec's "power black, control
+  red" needs the circuit class, which the model does not store. The schematic's
+  own colour, then the cable core's name, always win, and the standards checks
+  still judge the wire only by those two. A colour is never the only carrier:
+  the label and the inspector name the wire.
 - **Seen through the closed door.** The door and the enclosure are ghosts
   (translucent), wires and ducts are opaque and drawn first, so wires show with
   the door closed; a GPU test renders a blue wire behind the closed door and
