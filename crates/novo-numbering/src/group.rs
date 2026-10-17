@@ -3,7 +3,9 @@
 //! Numbers belong to the electrical node, not to a drawn segment: every wire
 //! of a net carries the same number, across junctions and across pages
 //! (through interruption points). A contact or fuse ends the net, so the
-//! wire after it gets its own number, as on a printed wire list.
+//! wire after it gets its own number, as on a printed wire list. So does a
+//! device the net conducts through (an overload relay's heaters): the wire
+//! into it and the wire out of it are two wires and carry two numbers.
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -126,7 +128,9 @@ pub(crate) fn fits(target: &Target, number: &str) -> bool {
 }
 
 /// Every group of the project, in reading order: page order, then column,
-/// then top to bottom, then left to right.
+/// then strand by strand (left to right), each strand top to bottom. A
+/// three-phase feed numbers L1 1, 2, 3, then L2 4, 5, 6, not 1, 4, 5 across
+/// the sheet.
 pub fn groups(project: &Project, netlist: &Netlist) -> Vec<Group> {
     let mut pages: Vec<_> = project.pages().collect();
     pages.sort_by(|a, b| {
@@ -142,7 +146,7 @@ pub fn groups(project: &Project, netlist: &Netlist) -> Vec<Group> {
         .nets()
         .iter()
         .filter(|n| !n.wires.is_empty())
-        .map(|n| n.wires.clone())
+        .flat_map(|n| split_at_device_bridges(project, &n.wires))
         .collect();
     let in_net: std::collections::HashSet<WireId> = sets.iter().flatten().copied().collect();
     sets.extend(
@@ -163,12 +167,85 @@ pub fn groups(project: &Project, netlist: &Netlist) -> Vec<Group> {
     out
 }
 
+/// Splits a net's wires where the net only continues through a device's
+/// internal bridge (an overload relay's heaters): the wire into the device
+/// and the wire out of it are two wires on the bench and need two numbers,
+/// although the netlist conducts through the device. Terminals, interruption
+/// points and potential feeds stay transparent, as do junctions.
+fn split_at_device_bridges(project: &Project, wires: &[WireId]) -> Vec<Vec<WireId>> {
+    use novo_core::{Endpoint, SymbolRole};
+    use std::collections::HashMap;
+
+    fn find(parent: &mut [usize], mut i: usize) -> usize {
+        while parent[i] != i {
+            parent[i] = parent[parent[i]];
+            i = parent[i];
+        }
+        i
+    }
+
+    // The thing a wire end hangs on: wires that share a key are one wire.
+    #[derive(Hash, PartialEq, Eq)]
+    enum Key {
+        Endpoint(Endpoint),
+        Symbol(novo_core::SymbolId),
+        Terminal(novo_core::TerminalId),
+        Interruption(String),
+    }
+    let keys = |end: Endpoint| -> Vec<Key> {
+        let Endpoint::Pin { symbol, .. } = end else {
+            return vec![Key::Endpoint(end)];
+        };
+        let Some(sym) = project.symbol(symbol) else {
+            return vec![Key::Endpoint(end)];
+        };
+        match &sym.role {
+            SymbolRole::Device { .. } => vec![Key::Endpoint(end)],
+            SymbolRole::Terminal { .. } => {
+                let mut keys = vec![Key::Symbol(symbol)];
+                if let Some(t) = end.as_pin().and_then(|p| sym.terminal_of_pin(p.pin)) {
+                    keys.push(Key::Terminal(t));
+                }
+                keys
+            }
+            SymbolRole::Interruption { name } => vec![Key::Interruption(name.clone())],
+            SymbolRole::PotentialFeed { .. } | SymbolRole::Unassigned => vec![Key::Symbol(symbol)],
+        }
+    };
+
+    let mut parent: Vec<usize> = (0..wires.len()).collect();
+    let mut first: HashMap<Key, usize> = HashMap::new();
+    for (i, id) in wires.iter().enumerate() {
+        let Some(wire) = project.wire(*id) else {
+            continue;
+        };
+        for end in wire.ends() {
+            for key in keys(end) {
+                let other = *first.entry(key).or_insert(i);
+                let (a, b) = (find(&mut parent, i), find(&mut parent, other));
+                parent[a] = b;
+            }
+        }
+    }
+    let mut parts: BTreeMap<usize, Vec<WireId>> = BTreeMap::new();
+    for (i, id) in wires.iter().enumerate() {
+        parts.entry(find(&mut parent, i)).or_default().push(*id);
+    }
+    parts.into_values().collect()
+}
+
+/// The strand a group's first point lies on: x in whole millimetres, so a
+/// device drawn a fraction of a millimetre off does not interleave strands.
+fn strand(x: f64) -> i64 {
+    x.round() as i64
+}
+
 fn compare(a: &Group, b: &Group) -> Ordering {
     a.page_rank
         .cmp(&b.page_rank)
         .then(a.column.cmp(&b.column))
+        .then(strand(a.x).cmp(&strand(b.x)))
         .then(a.y.total_cmp(&b.y))
-        .then(a.x.total_cmp(&b.x))
         .then_with(|| a.wires.cmp(&b.wires))
 }
 

@@ -103,7 +103,7 @@ fn door_devices_go_to_the_door_and_cutouts_default_to_the_centre() {
     assert_eq!((t.cutouts[0].x, t.cutouts[0].y), (120.0, 160.0));
     // Only the rail holes stay on the plate.
     assert!(t.holes.iter().all(|h| h.surface == Surface::Plate));
-    assert_eq!(tables(&t, Surface::Door).len(), 1);
+    assert_eq!(tables(&t, &Surface::Door).len(), 1);
 }
 
 #[test]
@@ -120,7 +120,7 @@ fn the_drawing_carries_dimensions_and_every_hole() {
     let l = layout();
     let f = features_from_text(7, "-K1", None, Some("5,5,4.2"), None);
     let t = drill_table(&l, std::slice::from_ref(&f));
-    let d = plate_drawing(&l, &[f], &t, Surface::Plate, 5.0);
+    let d = plate_drawing(&l, &[f], &t, &Surface::Plate, 5.0);
     let texts: Vec<_> = d.marks.texts.iter().map(|x| x.text.as_str()).collect();
     assert!(texts.contains(&"600") && texts.contains(&"800"));
     assert!(texts.contains(&"-K1"));
@@ -224,7 +224,7 @@ fn vertical_rails_get_holes_down_their_length_and_are_drawn_vertical() {
     l.rails = vec![r];
     let t = drill_table(&l, &[]);
     assert!(t.holes.iter().all(|h| h.x == 100.0));
-    let d = plate_drawing(&l, &[], &t, Surface::Plate, 5.0);
+    let d = plate_drawing(&l, &[], &t, &Surface::Plate, 5.0);
     let rail_lines: Vec<_> = d
         .marks
         .shapes
@@ -248,7 +248,7 @@ fn the_door_sheet_takes_its_size_from_the_enclosure() {
     let f = features_from_text(7, "-P1", Some("door_cutout"), None, Some("rect 22.5x22.5"));
     let t = drill_table(&l, std::slice::from_ref(&f));
     let door = |l: &CabinetLayout, scale| {
-        plate_drawing(l, std::slice::from_ref(&f), &t, Surface::Door, scale)
+        plate_drawing(l, std::slice::from_ref(&f), &t, &Surface::Door, scale)
     };
     assert_eq!((door(&l, 5.0).width, door(&l, 5.0).height), (600.0, 800.0));
 
@@ -263,6 +263,6 @@ fn the_door_sheet_takes_its_size_from_the_enclosure() {
     });
     let d = door(&l, 5.0);
     assert_eq!((d.width, d.height), (650.0, 850.0));
-    let plate = plate_drawing(&l, std::slice::from_ref(&f), &t, Surface::Plate, 5.0);
+    let plate = plate_drawing(&l, std::slice::from_ref(&f), &t, &Surface::Plate, 5.0);
     assert_eq!((plate.width, plate.height), (600.0, 800.0));
 }
