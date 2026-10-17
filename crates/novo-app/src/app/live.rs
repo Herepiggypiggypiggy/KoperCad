@@ -22,7 +22,6 @@ use novo_sim::{
     Clock, Live, PoleState, Settled, Solution, inputs_seen, is_coil, is_lamp, is_load, is_motor,
     is_plc_input, is_plc_output, loads_on, settle_timed,
 };
-use novo_theme::{tokens, widgets};
 
 use super::live_anim::{Anim, Frame};
 use super::{Level, NovoApp};
@@ -627,10 +626,12 @@ impl NovoApp {
                 let (color, width) = match &wire.live {
                     Live::Dead => (novo_theme::canvas::to_color32(dead_wire), 2.5),
                     Live::Carries(p) => {
-                        let color = colors.get(p).map_or(tokens::ACCENT, |c| c.1);
+                        let color = colors
+                            .get(p)
+                            .map_or(crate::theme::ui_palette().accent, |c| c.1);
                         (color.gamma_multiply(0.9), LIT_WIDTH)
                     }
-                    Live::Shorted(_) => (tokens::ERROR, LIT_WIDTH + 1.0),
+                    Live::Shorted(_) => (crate::theme::ui_palette().error, LIT_WIDTH + 1.0),
                 };
                 let [r, g, b, a] = color.to_srgba_unmultiplied();
                 (
@@ -717,17 +718,17 @@ impl NovoApp {
                         p.circle_stroke(
                             rect.center(),
                             BADGE + 2.0,
-                            egui::Stroke::new(1.5, tokens::WARNING),
+                            egui::Stroke::new(1.5, crate::theme::ui_palette().warning),
                         );
                     }
                     if badge.closed {
-                        p.circle_filled(rect.center(), BADGE, tokens::SUCCESS);
+                        p.circle_filled(rect.center(), BADGE, crate::theme::ui_palette().success);
                     } else {
-                        p.circle_filled(rect.center(), BADGE, tokens::BG_1);
+                        p.circle_filled(rect.center(), BADGE, crate::theme::ui_palette().panel);
                         p.circle_stroke(
                             rect.center(),
                             BADGE,
-                            egui::Stroke::new(1.5, tokens::TEXT_MUTED),
+                            egui::Stroke::new(1.5, crate::theme::ui_palette().text_secondary),
                         );
                     }
                     pole_rect.get_or_insert(rect);
@@ -776,13 +777,13 @@ impl NovoApp {
                         egui::Rect::from_center_size(rect.center(), egui::Vec2::splat(BADGE * 2.0));
                     let p = ui.painter();
                     if badge.on {
-                        p.rect_filled(square, 2.0, tokens::SUCCESS);
+                        p.rect_filled(square, 2.0, crate::theme::ui_palette().success);
                     } else {
-                        p.rect_filled(square, 2.0, tokens::BG_1);
+                        p.rect_filled(square, 2.0, crate::theme::ui_palette().panel);
                         p.rect_stroke(
                             square,
                             2.0,
-                            egui::Stroke::new(1.5, tokens::TEXT_MUTED),
+                            egui::Stroke::new(1.5, crate::theme::ui_palette().text_secondary),
                             egui::StrokeKind::Inside,
                         );
                     }
@@ -820,12 +821,16 @@ impl NovoApp {
                         .allocate_exact_size(egui::Vec2::splat(BADGE * 1.6), egui::Sense::hover());
                     let p = ui.painter();
                     if *high {
-                        p.circle_filled(rect.center(), BADGE * 0.7, tokens::SUCCESS);
+                        p.circle_filled(
+                            rect.center(),
+                            BADGE * 0.7,
+                            crate::theme::ui_palette().success,
+                        );
                     } else {
                         p.circle_stroke(
                             rect.center(),
                             BADGE * 0.7,
-                            egui::Stroke::new(1.5, tokens::TEXT_MUTED),
+                            egui::Stroke::new(1.5, crate::theme::ui_palette().text_secondary),
                         );
                     }
                 });
@@ -849,12 +854,12 @@ impl NovoApp {
                     p.circle_filled(
                         rect.center(),
                         BADGE * 2.5,
-                        tokens::WARNING.gamma_multiply(0.18),
+                        crate::theme::ui_palette().warning.gamma_multiply(0.18),
                     );
                     p.circle_filled(
                         rect.center(),
                         BADGE * 1.5,
-                        tokens::WARNING.gamma_multiply(0.35),
+                        crate::theme::ui_palette().warning.gamma_multiply(0.35),
                     );
                 });
         }
@@ -865,87 +870,89 @@ impl NovoApp {
         let mut open_plc = false;
         let plc_running = self.wb.live.plc.is_running();
         let mut open_motor: Option<SymbolId> = None;
-        let card = egui::Area::new(egui::Id::new("live_card"))
-            .order(egui::Order::Middle)
-            .fixed_pos(canvas.left_top() + egui::vec2(12.0, 10.0))
-            .show(ctx, |ui| {
-                egui::Frame::popup(ui.style()).show(ui, |ui| {
-                    ui.set_max_width(240.0);
-                    ui.horizontal(|ui| {
-                        widgets::section_label(ui, "Live potentials");
-                        if ui
-                            .small_button("✕")
-                            .on_hover_text(super::tips::hover(ui.ctx(), "Close", "sim.live"))
-                            .clicked()
-                        {
-                            leave = true;
-                        }
-                    });
-                    if badges.is_empty() {
-                        ui.weak("No switched contacts on this page");
-                    } else {
-                        ui.horizontal(|ui| {
-                            ui.weak(format!("{closed} of {} poles closed", badges.len()));
-                            if ui
-                                .small_button("Reset")
-                                .on_hover_text("Back to the plant at rest")
-                                .clicked()
-                            {
-                                open_all = true;
-                            }
-                        });
-                    }
-                    ui.horizontal(|ui| {
-                        if ui
-                            .small_button("PLC program…")
-                            .on_hover_text(
-                                "Run a ladder or Structured Text program on the drawn I/O",
-                            )
-                            .clicked()
-                        {
-                            open_plc = true;
-                        }
-                        if plc_running {
-                            ui.colored_label(tokens::SUCCESS, "running");
-                        }
-                    });
-                    ui.add_space(2.0);
-                    for (potential, nets) in &legend.carried {
-                        let Some((name, color)) = colors.get(potential) else {
-                            continue;
-                        };
-                        ui.horizontal(|ui| {
-                            let (rect, _) =
-                                ui.allocate_exact_size(egui::vec2(14.0, 4.0), egui::Sense::hover());
-                            ui.painter().rect_filled(rect, 2.0, *color);
-                            ui.label(name);
-                            ui.weak(format!("{nets} net{}", if *nets == 1 { "" } else { "s" }));
-                        });
-                    }
-                    if legend.shorted > 0 {
-                        ui.colored_label(
-                            tokens::ERROR,
-                            format!(
-                                "{} short{}: potentials meet",
-                                legend.shorted,
-                                if legend.shorted == 1 { "" } else { "s" }
-                            ),
-                        );
-                    }
-                    if let Some(left) = timing {
-                        ui.weak(format!("A timer is running, {left:.1} s left"));
-                    }
-                    open_motor = super::simulate::values_block(ui, project, &analysis, &|s| {
-                        symbol_name(project, s)
-                    });
-                    if legend.carried.is_empty() && legend.shorted == 0 {
-                        ui.weak("Nothing is energized");
+        let card = super::panel::Panel::new(
+            "live_card",
+            "Live potentials",
+            canvas,
+            super::panel::Side::Left,
+            240.0,
+        )
+        .top(10.0)
+        .fixed_open()
+        .fit()
+        .show(ctx, |ui| {
+            if ui
+                .small_button("✕ Close")
+                .on_hover_text(super::tips::hover(ui.ctx(), "Close", "sim.live"))
+                .clicked()
+            {
+                leave = true;
+            }
+            if badges.is_empty() {
+                ui.weak("No switched contacts on this page");
+            } else {
+                ui.horizontal(|ui| {
+                    ui.weak(format!("{closed} of {} poles closed", badges.len()));
+                    if ui
+                        .small_button("Reset")
+                        .on_hover_text("Back to the plant at rest")
+                        .clicked()
+                    {
+                        open_all = true;
                     }
                 });
+            }
+            ui.horizontal(|ui| {
+                if ui
+                    .small_button("PLC program…")
+                    .on_hover_text("Run a ladder or Structured Text program on the drawn I/O")
+                    .clicked()
+                {
+                    open_plc = true;
+                }
+                if plc_running {
+                    ui.colored_label(crate::theme::ui_palette().success, "running");
+                }
             });
+            ui.add_space(2.0);
+            for (potential, nets) in &legend.carried {
+                let Some((name, color)) = colors.get(potential) else {
+                    continue;
+                };
+                ui.horizontal(|ui| {
+                    let (rect, _) =
+                        ui.allocate_exact_size(egui::vec2(14.0, 4.0), egui::Sense::hover());
+                    ui.painter().rect_filled(rect, 2.0, *color);
+                    ui.label(name);
+                    ui.weak(format!("{nets} net{}", if *nets == 1 { "" } else { "s" }));
+                });
+            }
+            if legend.shorted > 0 {
+                ui.colored_label(
+                    crate::theme::ui_palette().error,
+                    format!(
+                        "{} short{}: potentials meet",
+                        legend.shorted,
+                        if legend.shorted == 1 { "" } else { "s" }
+                    ),
+                );
+            }
+            if let Some(left) = timing {
+                ui.weak(format!("A timer is running, {left:.1} s left"));
+            }
+            open_motor =
+                super::simulate::values_block(ui, project, &analysis, &|s| symbol_name(project, s));
+            if legend.carried.is_empty() && legend.shorted == 0 {
+                ui.weak("Nothing is energized");
+            }
+        });
 
         for (id, rect, label) in [
-            ("live.card", Some(card.response.rect), "Live potentials"),
+            (
+                "live.card",
+                card.map(|c| c.response.rect),
+                "Live potentials",
+            ),
             ("live.pole", pole_rect, "Pole badge"),
             ("live.coil", coil_rect, "Coil badge"),
             ("live.output", output_rect, "Output badge"),

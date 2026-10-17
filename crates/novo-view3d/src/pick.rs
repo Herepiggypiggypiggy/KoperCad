@@ -26,14 +26,22 @@ pub struct Hit {
 /// ones.
 pub fn pick_all(scene: &Scene, state: &ViewState, ray: &Ray) -> Vec<Hit> {
     let mut hits: Vec<(bool, Hit)> = Vec::new();
+    // With a section plane, only what the picture still shows can be hit.
+    let section = state.section.map(|s| (s, scene.bounds()));
     for item in &scene.items {
         if !state.is_visible(item.id.kind) {
             continue;
         }
         let m = scene.world_matrix(item);
         let local = ray.to_local(&m);
-        if let Some((near, _)) = item.local_bounds().ray_interval(&local) {
-            let t = near.max(0.0);
+        if let Some((near, far)) = item.local_bounds().ray_interval(&local) {
+            let mut t = near.max(0.0);
+            if let Some((s, b)) = &section {
+                match s.clip_interval(b, ray.origin, ray.dir, t, far) {
+                    Some((lo, _)) => t = lo,
+                    None => continue,
+                }
+            }
             hits.push((
                 item.translucent,
                 Hit {
@@ -52,8 +60,15 @@ pub fn pick_all(scene: &Scene, state: &ViewState, ray: &Ray) -> Vec<Hit> {
             for seg in wire::segments(wire) {
                 let local = ray.to_local(&seg.frame());
                 let b = Aabb::new(Vec3::new(-r, -r, 0.0), Vec3::new(r, r, seg.length()));
-                if let Some((near, _)) = b.ray_interval(&local) {
-                    best = Some(best.map_or(near.max(0.0), |t| t.min(near.max(0.0))));
+                if let Some((near, far)) = b.ray_interval(&local) {
+                    let mut t = near.max(0.0);
+                    if let Some((s, sb)) = &section {
+                        match s.clip_interval(sb, ray.origin, ray.dir, t, far) {
+                            Some((lo, _)) => t = lo,
+                            None => continue,
+                        }
+                    }
+                    best = Some(best.map_or(t, |b| b.min(t)));
                 }
             }
             if let Some(t) = best {

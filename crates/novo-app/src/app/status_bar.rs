@@ -8,7 +8,6 @@ use std::time::Duration;
 
 use eframe::egui;
 use novo_core::AnyId;
-use novo_theme::tokens;
 
 use super::workspace::Workspace;
 use super::{Level, NovoApp, TOAST_INFO};
@@ -36,6 +35,11 @@ impl NovoApp {
             return;
         }
         let message = self.status_message(ui.ctx());
+        let tool = if self.workspace() == Workspace::Schematic && self.is_open() {
+            self.tool_hint()
+        } else {
+            super::dock::ToolHint::default()
+        };
         let selection = self.selection_summary();
         let values = self.status_values();
         let chips = self.mode_chips();
@@ -44,23 +48,49 @@ impl NovoApp {
         let recent = self.recent_messages();
         let unsaved = matches!(saved, "Not saved yet" | "Not saved");
         let mut run = None;
+        // Where the hint and the proposal count are, for the lessons.
+        let mut spots: Vec<(&'static str, egui::Rect, &'static str)> = Vec::new();
         egui::Panel::bottom("status_bar")
             .exact_size(STATUS_BAR)
             .show(ui, |ui| {
                 ui.style_mut().override_text_style = Some(egui::TextStyle::Small);
-                ui.visuals_mut().override_text_color = Some(tokens::TEXT_MUTED);
+                ui.visuals_mut().override_text_color =
+                    Some(crate::theme::ui_palette().text_secondary);
                 ui.horizontal_centered(|ui| {
                     // The message gives way to the slots on its right: it is
                     // cut to half the bar, with the whole text on hover.
                     let room = ui.available_width() * 0.5;
                     ui.scope(|ui| {
                         ui.set_max_width(room);
-                        match &message {
-                            Some((text, _)) => {
+                        // A refusal, a step in progress and the rest of a
+                        // device outrank a message; only the empty-page tip
+                        // gives way to one.
+                        let hint = (tool.refused || !tool.tip || message.is_none())
+                            .then_some(&tool.text)
+                            .filter(|t| !t.is_empty());
+                        match (hint, &message) {
+                            (Some(text), _) if tool.refused => {
+                                let text = format!("{} {text}", novo_theme::icons::status::WARNING);
+                                let label = ui.add(
+                                    egui::Label::new(
+                                        egui::RichText::new(&text)
+                                            .color(novo_theme::Palette::of(ui).error),
+                                    )
+                                    .truncate(),
+                                );
+                                spots.push(("dock.hint", label.rect, "hint"));
+                                label.on_hover_text(text);
+                            }
+                            (Some(text), _) => {
+                                let label = ui.add(egui::Label::new(text).truncate());
+                                spots.push(("dock.hint", label.rect, "hint"));
+                                label.on_hover_text(text);
+                            }
+                            (None, Some((text, _))) => {
                                 let label = ui.add(egui::Label::new(text).truncate());
                                 label.on_hover_text(text);
                             }
-                            None => {
+                            (None, None) => {
                                 let hint =
                                     ui.add(egui::Label::new(self.workspace_hint()).truncate());
                                 if !recent.is_empty() {
@@ -69,6 +99,12 @@ impl NovoApp {
                             }
                         }
                     });
+                    if tool.proposals > 0 {
+                        ui.separator();
+                        let label = ui.label(format!("{} proposed", tool.proposals));
+                        spots.push(("dock.proposals", label.rect, "proposals"));
+                        label.on_hover_text("↵ accept · Tab next · Delete decline");
+                    }
                     if let Some(selection) = &selection {
                         ui.separator();
                         ui.label(selection);
@@ -108,9 +144,10 @@ impl NovoApp {
                         }
                         for chip in &chips {
                             let button = egui::Button::new(
-                                egui::RichText::new(chip.label).color(tokens::TEXT),
+                                egui::RichText::new(chip.label)
+                                    .color(crate::theme::ui_palette().text_primary),
                             )
-                            .fill(tokens::BG_3)
+                            .fill(crate::theme::ui_palette().control)
                             .small();
                             if ui.add(button).on_hover_text(chip.hover).clicked() {
                                 run = Some(chip.command);
@@ -119,6 +156,9 @@ impl NovoApp {
                     });
                 });
             });
+        for (id, rect, label) in spots {
+            self.anchor(id, rect, label);
+        }
         if let Some(command) = run {
             self.wb.queued.push(command);
         }

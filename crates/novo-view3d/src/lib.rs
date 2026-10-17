@@ -5,6 +5,7 @@
 //! project model, so they are tested headless. The renderer is behind the
 //! `gpu` feature and the egui widget behind `egui`.
 
+pub mod ao;
 pub mod appearance;
 #[cfg(feature = "model")]
 pub mod build;
@@ -12,9 +13,12 @@ pub mod camera;
 pub mod cube;
 pub mod cull;
 pub mod demo;
+pub mod dimension;
 pub mod door;
+pub mod drag_plane;
 pub mod feel;
 pub mod governor;
+pub mod hide;
 pub mod labels;
 pub mod layers;
 pub mod look;
@@ -43,4 +47,4 @@ pub use scene::{
     CONTRACT_VERSION, Group, GroupId, Item, ItemId, ItemKind, Mark, PlateFrame, Pose, Profile,
     Scene, Shape, Wire,
 };
-pub use view_state::{Display, ViewState};
+pub use view_state::{Display, Section, SectionAxis, ViewState};
