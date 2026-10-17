@@ -7,4 +7,5 @@
 2026-10-16 UTC #874 R5: added app test that the panes land on the real shell (door pane = door ghost). Finding: the scene's enclosure box starts at the plate while the walls reach plate_setback behind it. No GPU adapter in cloud: screenshot of picked door and roof needs a desktop run.
 2026-10-16 23:50 UTC slice 4: Inspector 'On surface' row (Ask::SetSurface, cabinet_surface_move.rs); plate view hides devices mounted elsewhere; 5 tests in cabinet_surface_move_tests.rs. Needs a desktop look.
 2026-10-17 UTC #876 merged. Swing hits of door devices are now Issues rows (novo-checks door.rs, ProblemKind::DoorSwing, point at the device). Next: 3D marks for the devices involved.
+2026-10-17 UTC slice 6: devices on the door are drawn in the 3D scene on the door's inside (hinge group), swing hits mark the door device and the plate device it touches as collisions; off-plate devices no longer drawn on the plate (novo-view3d build/door_devices.rs).
 2026-10-17 UTC slice 7: Drop/Rotate/Remove allowed on a shown surface; 3D drag skips off-plate devices; cabinet_surface_edit_tests.rs.

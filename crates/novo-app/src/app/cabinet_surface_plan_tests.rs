@@ -121,3 +121,30 @@ fn cancel_drops_the_door_part_of_the_plan() {
     assert!(d.app.cabinet.preview.is_none() && d.app.cabinet.surface_preview.is_empty());
     assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
 }
+
+#[test]
+fn enter_from_the_door_view_stores_the_whole_plan() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let cab = cabinet(&mut d);
+    let layout = load(project(&d), cab);
+    let cands = candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.app.cabinet.surface = Some("door".into());
+    d.frame();
+    // The preview is still up in the door view, which draws its door part.
+    assert!(d.app.cabinet.preview.is_some());
+    d.app.messages.clear();
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+    assert!(
+        !d.app
+            .messages()
+            .iter()
+            .any(|m| m.text.contains("view only")),
+        "{:?}",
+        d.app.messages()
+    );
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 3);
+    assert_eq!(load(project(&d), cab).unwrap().door_devices.len(), 2);
+}

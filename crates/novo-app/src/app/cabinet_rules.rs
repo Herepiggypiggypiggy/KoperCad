@@ -258,13 +258,14 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
     super::panel::dialog(ctx, "Place rules", [520.0, 0.0])
         .open(&mut open)
         .show(ctx, |ui| {
-            ui.weak(
+            super::dialog_ui::hint(
+                ui,
                 "Where Place all puts each kind of device. One rule per line: \
                  letter codes, zone (top, middle, bottom), rail (own or shared), \
                  class (power, signal), and gap, above, below in mm. \
                  These are practice values, not a standard: change them to your own.",
             );
-            ui.add_space(4.0);
+            ui.add_space(6.0);
             ui.add(
                 egui::TextEdit::multiline(&mut state.text)
                     .code_editor()
@@ -276,11 +277,15 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
                 ui.colored_label(ui.visuals().error_fg_color, e.to_string());
             }
             if let Some(n) = &state.notice {
-                ui.weak(n);
+                super::dialog_ui::hint(ui, n);
             }
+            ui.add_space(6.0);
             ui.horizontal(|ui| {
                 let ok = parsed.is_ok();
-                if ui.add_enabled(ok, egui::Button::new("Save")).clicked()
+                let save = ui
+                    .add_enabled_ui(ok, |ui| novo_theme::widgets::primary_button(ui, "Save"))
+                    .inner;
+                if save.clicked()
                     && let Ok(rules) = parsed
                 {
                     state.notice = Some(match &state.path {
@@ -292,7 +297,7 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
                     });
                     state.rules = rules;
                 }
-                if ui.button("Standard rules").clicked() {
+                if novo_theme::widgets::ghost_button(ui, "Standard rules").clicked() {
                     state.text = RuleSet::standard().to_text();
                     state.notice = None;
                 }
