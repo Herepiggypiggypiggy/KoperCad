@@ -126,6 +126,11 @@ pub trait ProjectBackend {
         false
     }
 
+    /// Sets how often the open project and its recovery file are written
+    /// (the Preferences autosave interval). Applies to every project opened
+    /// later too.
+    fn set_autosave_interval(&mut self, _interval: Duration) {}
+
     /// Writes the open project to `path` and clears the unsaved flag.
     fn save(&mut self, path: &Path) -> Result<(), BackendError>;
 
@@ -250,6 +255,8 @@ pub struct StorageBackend {
     /// The file the open project was read from without being able to write
     /// it back. There is no session then: no lock, no recovery file.
     read_only: Option<PathBuf>,
+    /// The person's autosave interval; `None` keeps the storage default.
+    autosave_interval: Option<Duration>,
     /// Tests: writes to the project file fail, as for a locked file or a
     /// drive that went away.
     #[cfg(test)]
@@ -582,12 +589,22 @@ impl ProjectBackend for StorageBackend {
         Ok(())
     }
 
+    fn set_autosave_interval(&mut self, interval: Duration) {
+        self.autosave_interval = Some(interval);
+        if let Some(session) = self.session.as_mut() {
+            session.set_autosave_interval(interval);
+        }
+    }
+
     fn tick(&mut self) -> Result<Option<Duration>, BackendError> {
         let fail = self.writes_fail();
         let (Some(session), Some(document)) = (self.session.as_mut(), self.document.as_mut())
         else {
             return Ok(None);
         };
+        if let Some(interval) = self.autosave_interval {
+            session.set_autosave_interval(interval);
+        }
         let changed = self.restored_unsaved || document.is_dirty();
         if self.untitled.is_none() && self.recovery.is_none() && changed {
             if let Err(e) = Self::write(session, document.project(), fail) {
@@ -997,6 +1014,26 @@ pub(crate) mod tests {
         next.save(&path).unwrap();
         next.close().unwrap();
         assert!(!file.exists());
+    }
+
+    #[test]
+    fn the_chosen_autosave_interval_applies_to_projects_opened_later_and_recovery_still_works() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let mut backend = StorageBackend::default();
+        backend.set_autosave_interval(Duration::from_secs(10));
+        backend.new_project("Plant").unwrap();
+        backend.save(&path).unwrap();
+        assert_eq!(
+            backend.tick().unwrap(),
+            Some(Duration::from_secs(10)),
+            "the next wake-up follows the chosen interval"
+        );
+        backend.set_autosave_interval(Duration::from_secs(120));
+        assert_eq!(backend.tick().unwrap(), Some(Duration::from_secs(120)));
+        // The interval does not change what recovery keeps.
+        crash_after_autosave(&dir.path().join("other.novo"));
+        assert!(autosave_path(dir.path().join("other.novo")).exists());
     }
 
     #[test]

@@ -92,7 +92,15 @@ pub struct Settings {
     /// (`app/pdf_options.rs`): a per-user preference, kept in the settings
     /// file under the user's profile.
     pub pdf_choice: PdfChoice,
+    /// Seconds between the writes that keep the open project and its
+    /// recovery file current. 0: the default (`DEFAULT_AUTOSAVE_SECONDS`).
+    pub autosave_seconds: u32,
 }
+
+/// The autosave interval when the person has not chosen one.
+pub const DEFAULT_AUTOSAVE_SECONDS: u32 = 30;
+/// The intervals Preferences offers, in seconds.
+pub const AUTOSAVE_CHOICES: [u32; 5] = [10, 30, 60, 120, 300];
 
 /// A saved 3D camera: where it looks from, in the view's own units.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -227,6 +235,19 @@ impl Settings {
         novo_canvas::model::NoteDensity::from_id(&self.xref_density)
     }
 
+    /// The autosave interval: a chosen one inside the offered range, else
+    /// the default.
+    pub fn autosave_interval(&self) -> std::time::Duration {
+        let s = match self.autosave_seconds {
+            0 => DEFAULT_AUTOSAVE_SECONDS,
+            s => s.clamp(
+                AUTOSAVE_CHOICES[0],
+                AUTOSAVE_CHOICES[AUTOSAVE_CHOICES.len() - 1],
+            ),
+        };
+        std::time::Duration::from_secs(u64::from(s))
+    }
+
     pub const STORAGE_KEY: &str = "novo_settings";
 
     /// The wiring mode; Corners unless the person chose Lines.
@@ -294,6 +315,21 @@ mod tests {
             s.recent_projects,
             vec![PathBuf::from("a.novo"), PathBuf::from("b.novo")]
         );
+    }
+
+    #[test]
+    fn the_autosave_interval_defaults_and_stays_in_the_offered_range() {
+        use std::time::Duration;
+        let mut s = Settings::default();
+        assert_eq!(s.autosave_interval(), Duration::from_secs(30));
+        s.autosave_seconds = 60;
+        assert_eq!(s.autosave_interval(), Duration::from_secs(60));
+        s.autosave_seconds = 1;
+        assert_eq!(s.autosave_interval(), Duration::from_secs(10));
+        s.autosave_seconds = 86_400;
+        assert_eq!(s.autosave_interval(), Duration::from_secs(300));
+        let old: Settings = ron::from_str("(recent_actions: [\"view.fit\"])").unwrap();
+        assert_eq!(old.autosave_seconds, 0);
     }
 
     #[test]

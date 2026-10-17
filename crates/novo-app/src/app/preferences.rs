@@ -4,6 +4,8 @@ use eframe::egui;
 use novo_canvas::model::NoteDensity;
 use novo_editor::tool::ConnectMode;
 
+use std::time::Instant;
+
 use super::NovoApp;
 
 impl NovoApp {
@@ -18,6 +20,7 @@ impl NovoApp {
         let mut density = self.settings.xref_density();
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
+        let mut autosave = self.settings.autosave_interval().as_secs() as u32;
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
             ui.set_width(
                 novo_theme::dialog_width::MEDIUM
@@ -52,6 +55,20 @@ impl NovoApp {
                         "Compact fits more on a small screen; Touch has large controls for a tablet.",
                         &mut ui_density,
                         &densities,
+                    );
+                    section(ui, "Saving", false);
+                    choice(
+                        ui,
+                        "Autosave every",
+                        "How often changes are written to the project file and its recovery file. Shorter loses less after a crash.",
+                        &mut autosave,
+                        &[
+                            (10, "10 s"),
+                            (30, "30 s"),
+                            (60, "1 min"),
+                            (120, "2 min"),
+                            (300, "5 min"),
+                        ],
                     );
                     section(ui, "Connections", false);
                     choice(
@@ -130,6 +147,13 @@ impl NovoApp {
         self.settings.appearance_density = ui_density.id().into();
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
+        }
+        if autosave != self.settings.autosave_interval().as_secs() as u32 {
+            self.settings.autosave_seconds = autosave;
+            self.backend
+                .set_autosave_interval(self.settings.autosave_interval());
+            // A shorter wait takes effect now, not after the old one.
+            self.next_tick = Instant::now();
         }
         self.settings.company_macros = company;
         self.settings.move_carries = carries;
