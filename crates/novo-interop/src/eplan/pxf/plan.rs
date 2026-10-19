@@ -19,8 +19,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
     Cable, CableCore, ChangeSet, DeviceId, DeviceKind, DeviceTag, Document, Endpoint, Part, PartId,
-    Placement, Point, Project, SymbolInstance, SymbolRole, TerminalId, TextContent, TextPlacement,
-    Wire,
+    Placement, Point, Project, SymbolInstance, SymbolRole, TerminalId, TextAnchor, TextContent,
+    TextPlacement, Wire,
 };
 
 use super::draw::{Drawing, Role, draw};
@@ -511,6 +511,7 @@ impl PxfPlan {
             + self.drawing.symbols.len()
             + self.drawing.wires.len()
             + self.texts.len()
+            + self.drawing.junctions.len()
             + self.drawing.stats.box_symbols
             + self
                 .devices
@@ -683,14 +684,15 @@ impl PxfPlan {
                 })?;
             }
             if !s.label.is_empty() {
-                // Boxes carry no artwork of their own: name the function.
+                // Boxes carry no artwork of their own: name the function inside.
                 tx.add_text(
                     page,
                     TextContent::Literal {
                         text: s.label.clone(),
                     },
+                    // The placeholder body is centred on the origin.
                     TextPlacement {
-                        offset: Point::new(0.0, -2.5),
+                        anchor: TextAnchor::MiddleCenter,
                         ..Default::default()
                     },
                     Some(id.into()),
@@ -698,6 +700,13 @@ impl PxfPlan {
                 created += 1;
             }
             placed.push(Some(id));
+            created += 1;
+        }
+        for (pg, at) in &self.drawing.junctions {
+            let Some(&page) = page_ids.get(pg) else {
+                continue;
+            };
+            tx.add_junction(page, *at)?;
             created += 1;
         }
         for t in &self.texts {

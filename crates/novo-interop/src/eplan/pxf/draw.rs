@@ -96,6 +96,8 @@ pub struct DrawStats {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(super) struct Drawing {
     pub symbols: Vec<DrawnSymbol>,
+    /// Connection dots at T and cross joints: page index and position.
+    pub junctions: Vec<(usize, Point)>,
     pub wires: Vec<DrawnWire>,
     pub stats: DrawStats,
     /// The nets EPLAN's rules give, and which drawn pin each point is.
@@ -423,6 +425,10 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             (70, 3) => &[Dir::Down, Dir::Left],
             _ => &[Dir::Up, Dir::Right, Dir::Down, Dir::Left],
         };
+        if legs.len() >= 3 {
+            // A T or cross joint: EPLAN draws a dot there.
+            out.junctions.push((page, Point::new(x, PAGE_HEIGHT - y)));
+        }
         graph
             .points
             .push(ConnPoint::node(&format!("n{ni}"), page as u32, x, y, legs));
