@@ -751,6 +751,74 @@ fn place_all_names_a_device_no_cabinet_takes() {
 }
 
 #[test]
+fn place_all_names_many_left_out_devices_in_one_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Crowded cabinet", |tx| {
+            tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            let part = tx.add_part("ACME", "Big")?;
+            tx.set_property(part, "width_mm", Some(Value::Float(200.0)))?;
+            tx.set_property(part, "height_mm", Some(Value::Float(300.0)))?;
+            for n in 1..=30 {
+                let tag = DeviceTag::parse(&format!("=A1+CAB1-K{n}")).unwrap();
+                let device = tx.add_device(tag, "")?;
+                tx.assign_part(device, part)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d)
+        .structures()
+        .find(|s| s.enclosure && s.tag.to_string() == "+CAB1")
+        .unwrap()
+        .id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    d.frame();
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app
+        .cabinet_ask(Ask::PlaceAll, Some(cab), layout_of(&d, cab), &cands);
+    let texts: Vec<_> = d.app.messages().iter().map(|m| m.text.clone()).collect();
+    let left_out: Vec<_> = texts
+        .iter()
+        .filter(|t| t.starts_with("Not placed:"))
+        .collect();
+    assert_eq!(left_out.len(), 1, "{texts:?}");
+    assert!(left_out[0].contains("devices (no room left on the plate), for example"));
+    assert!(left_out[0].len() < 200, "{}", left_out[0]);
+
+    // The offered plate is one Place all really fills; none is offered once
+    // everything is placed.
+    let rules = novo_layout::rules::RuleSet::standard();
+    let layout = layout_of(&d, cab).unwrap();
+    let plate = super::cabinet_rules::plate_that_holds(project(&d), cab, &layout, &rules)
+        .expect("a bigger plate holds all 30");
+    assert!(plate.width >= 600.0 && plate.height >= 800.0);
+    d.app
+        .cabinet_ask(Ask::SetPlateSize(cab, plate), Some(cab), None, &[]);
+    d.frame();
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app
+        .cabinet_ask(Ask::PlaceAll, Some(cab), layout_of(&d, cab), &cands);
+    assert!(
+        d.app
+            .cabinet
+            .preview
+            .as_ref()
+            .is_some_and(|p| p.unplaced.is_empty()),
+        "{plate:?}"
+    );
+}
+
+#[test]
 fn place_all_command_shows_the_preview_from_any_workspace() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
