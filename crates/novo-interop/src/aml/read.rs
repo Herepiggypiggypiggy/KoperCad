@@ -131,6 +131,20 @@ pub struct PlantSymbol {
     /// What the symbol is: `coil`, `contact`, `terminal`, `lamp`, `motor`...
     pub kind: String,
     pub pins: Vec<PlantPin>,
+    /// The net an interruption point (`Kind` `interruption`) is named after:
+    /// points of the same name on different pages are one conductor.
+    pub net: Option<String>,
+}
+
+/// One straight run of a wire as the file draws it (role `Wire` inside a
+/// net): from one point to another on a page, millimetres, y up. Runs meet
+/// at pins, at corners and at junctions; the importer joins them into wires.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlantSegment {
+    /// Name of the page it is on (matches a [`PlantPage::name`]).
+    pub page: String,
+    pub from: (f64, f64),
+    pub to: (f64, f64),
 }
 
 /// A net: the symbol pins that are one conductor, as `(symbol, pin)` indexes
@@ -139,6 +153,9 @@ pub struct PlantSymbol {
 pub struct PlantNet {
     pub name: String,
     pub pins: Vec<(usize, usize)>,
+    /// The file draws this net's wires (it has runs): they are drawn as
+    /// given and nothing is routed for it.
+    pub drawn: bool,
 }
 
 /// Everything a file holds that KoperCAD can create.
@@ -151,6 +168,9 @@ pub struct Plant {
     pub pages: Vec<PlantPage>,
     pub symbols: Vec<PlantSymbol>,
     pub nets: Vec<PlantNet>,
+    /// The runs of the wires the file draws, by page name; empty when the
+    /// file only lists nets.
+    pub segments: Vec<PlantSegment>,
     pub texts: Vec<PlantText>,
     pub shapes: Vec<PlantShape>,
     pub report: Report,
@@ -281,7 +301,8 @@ struct Reader {
     /// Both ends of every internal link, by the ids they name.
     link_ends: Vec<(String, String)>,
     /// Nets as read: name and the ids of their net points.
-    net_points: Vec<(String, Vec<String>)>,
+    net_points: Vec<(String, Vec<String>, bool)>,
+
     /// Symbols of devices that were skipped (a repeated tag).
     lost_symbols: usize,
 }
@@ -414,7 +435,7 @@ impl Reader {
                 self.net(node, &name);
                 return;
             }
-            "wire" | "connection" => return,
+            "wire" | "junction" | "connection" => return,
             _ => {}
         }
 
@@ -745,12 +766,41 @@ impl Reader {
                 at: (x, y),
                 kind: first(&a, &["Kind"]).unwrap_or("generic").to_string(),
                 pins,
+                net: first(&a, &["Net"]).map(str::to_string),
             });
         }
     }
 
     /// A net element: its name and the ids of its net points.
     fn net(&mut self, node: &Node, name: &str) {
+        // The wire runs the file draws for this net.
+        let before = self.plant.segments.len();
+        for w in node
+            .children
+            .iter()
+            .filter(|c| c.name == "InternalElement" && role_of(c) == "wire")
+        {
+            let a = attributes(w);
+            let num = |k: &str| {
+                first(&a, &[k])
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .filter(|v| v.is_finite() && v.abs() <= MAX_PAGE_MM)
+            };
+            if let (Some(page), Some(x1), Some(y1), Some(x2), Some(y2)) = (
+                first(&a, &["Page"]),
+                num("X1"),
+                num("Y1"),
+                num("X2"),
+                num("Y2"),
+            ) {
+                self.plant.segments.push(PlantSegment {
+                    page: page.to_string(),
+                    from: (x1, y1),
+                    to: (x2, y2),
+                });
+            }
+        }
+        let drawn = self.plant.segments.len() > before;
         let points: Vec<String> = node
             .children
             .iter()
@@ -764,7 +814,7 @@ impl Reader {
             } else {
                 name.to_string()
             };
-            self.net_points.push((name, points));
+            self.net_points.push((name, points, drawn));
         }
     }
 
@@ -778,7 +828,7 @@ impl Reader {
         }
         let mut resolved = 0usize;
         let mut nets = Vec::new();
-        for (name, points) in &self.net_points {
+        for (name, points, drawn) in &self.net_points {
             let mut pins: Vec<(usize, usize)> = Vec::new();
             for p in points {
                 for other in partner.get(p.as_str()).into_iter().flatten() {
@@ -794,6 +844,7 @@ impl Reader {
                 nets.push(PlantNet {
                     name: name.clone(),
                     pins,
+                    drawn: *drawn,
                 });
             }
         }

@@ -1,0 +1,1440 @@
+<?xml version="1.0" encoding="utf-8"?>
+<CAEXFile FileName="DEMO-1.aml" SchemaVersion="2.15" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="CAEX_ClassModel_V2.15.xsd">
+  <AdditionalInformation>
+    <WriterHeader>
+      <WriterName>crane-configurator</WriterName>
+      <WriterID>KoperVonk.CraneConfigurator</WriterID>
+      <WriterVendor>KoperVonk</WriterVendor>
+      <WriterVersion>1</WriterVersion>
+      <WriterRelease>1</WriterRelease>
+      <LastWritingDateTime>1970-01-01T00:00:00</LastWritingDateTime>
+      <WriterProjectTitle>DEMO-1</WriterProjectTitle>
+      <WriterProjectID>627b9b2c-b230-59fb-967c-20dd2e7faffe</WriterProjectID>
+    </WriterHeader>
+  </AdditionalInformation>
+  <InstanceHierarchy Name="DEMO-1">
+    <InternalElement ID="627b9b2c-b230-59fb-967c-20dd2e7faffe" Name="DEMO-1">
+      <Attribute Name="Description" AttributeDataType="xs:string">
+        <Value>Hoist feeder</Value>
+      </Attribute>
+      <InternalElement ID="3d09ea0a-f4ed-5c53-82d4-df51cf9314f7" Name="Pages">
+        <InternalElement ID="c5664c81-dc93-553f-a201-0a7dd58a3a18" Name="=D1+C1/01">
+          <Attribute Name="Title" AttributeDataType="xs:string">
+            <Value>Hoist feeder</Value>
+          </Attribute>
+          <Attribute Name="Function" AttributeDataType="xs:string">
+            <Value>D1</Value>
+          </Attribute>
+          <Attribute Name="Location" AttributeDataType="xs:string">
+            <Value>C1</Value>
+          </Attribute>
+          <Attribute Name="Number" AttributeDataType="xs:string">
+            <Value>01</Value>
+          </Attribute>
+          <InternalElement ID="54b90ac1-5353-50c7-a883-0431fc4b3534" Name="d12">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="Kind" AttributeDataType="xs:string">
+              <Value>earth</Value>
+            </Attribute>
+            <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+              <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+                <Value>168</Value>
+              </Attribute>
+              <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+                <Value>100</Value>
+              </Attribute>
+              <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+            </Attribute>
+            <ExternalInterface ID="d10bd64b-440a-5956-8eef-94b2ddda08c1" Name="1" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+              <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="Faces" AttributeDataType="xs:string">
+                <Value>up</Value>
+              </Attribute>
+            </ExternalInterface>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+          </InternalElement>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Page" />
+        </InternalElement>
+        <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/PageGroup" />
+      </InternalElement>
+      <InternalElement ID="e6702f28-ff14-57a4-a18e-0441c734368a" Name="+C1">
+        <Attribute Name="Tag" AttributeDataType="xs:string">
+          <Value>+C1</Value>
+        </Attribute>
+        <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Location" />
+      </InternalElement>
+      <InternalElement ID="3ef207b3-ce62-569d-aaa2-1500edfdb131" Name="=D1">
+        <Attribute Name="Tag" AttributeDataType="xs:string">
+          <Value>=D1</Value>
+        </Attribute>
+        <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/PlantSection" />
+      </InternalElement>
+      <InternalElement ID="f71fcf01-1bcc-550d-9cf8-6d430b92db22" Name="=D1+C1-X1">
+        <Attribute Name="Tag" AttributeDataType="xs:string">
+          <Value>=D1+C1-X1</Value>
+        </Attribute>
+        <ExternalInterface ID="6dc1f0ec-35f6-5cd9-830c-5c97593acea6" Name="L1" RefBaseClassPath="KoperCADInterfaceClassLib/Terminal">
+          <Attribute Name="Level" AttributeDataType="xs:int">
+            <Value>1</Value>
+          </Attribute>
+        </ExternalInterface>
+        <ExternalInterface ID="e273084d-148e-58c5-b36a-ccc313db71f6" Name="L2" RefBaseClassPath="KoperCADInterfaceClassLib/Terminal">
+          <Attribute Name="Level" AttributeDataType="xs:int">
+            <Value>1</Value>
+          </Attribute>
+        </ExternalInterface>
+        <ExternalInterface ID="80fd7831-c473-561c-a672-85d281c0a9ed" Name="L3" RefBaseClassPath="KoperCADInterfaceClassLib/Terminal">
+          <Attribute Name="Level" AttributeDataType="xs:int">
+            <Value>1</Value>
+          </Attribute>
+        </ExternalInterface>
+        <InternalElement ID="844c26b8-22d8-51fa-bd44-13f3de9b6514" Name="d1">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>terminal</Value>
+          </Attribute>
+          <Attribute Name="Terminal" AttributeDataType="xs:string">
+            <Value>L1</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>60</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>250</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="57f786d6-808b-5f8e-900f-7c89da90dfb6" Name="1" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="cdf3adb2-580e-50d8-95bf-309697fa7dd6" Name="2" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-4</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <InternalElement ID="674faff7-e2cc-5fd5-8798-c35171b4e413" Name="d2">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>terminal</Value>
+          </Attribute>
+          <Attribute Name="Terminal" AttributeDataType="xs:string">
+            <Value>L2</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>68</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>250</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="8fd4fb38-000b-5f5b-9f5a-d34adcd7c5ef" Name="1" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="162351f9-86bc-53e7-b0cf-f3edffbfa3b0" Name="2" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-4</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <InternalElement ID="77b550ae-906b-5ee7-b24f-390da80bc4b1" Name="d3">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>terminal</Value>
+          </Attribute>
+          <Attribute Name="Terminal" AttributeDataType="xs:string">
+            <Value>L3</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>76</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>250</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="327c1cca-6047-5255-888a-a3aaa583c595" Name="1" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="ea7d54c1-e325-597b-ba7d-476e2f3677d1" Name="2" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-4</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/TerminalStrip" />
+      </InternalElement>
+      <InternalElement ID="57cc32b6-dcf1-56e5-91f1-4045bc090605" Name="=D1+C1-X2">
+        <Attribute Name="Tag" AttributeDataType="xs:string">
+          <Value>=D1+C1-X2</Value>
+        </Attribute>
+        <ExternalInterface ID="c629a336-b653-5dc8-888d-b59d6bd19538" Name="N" RefBaseClassPath="KoperCADInterfaceClassLib/Terminal">
+          <Attribute Name="Level" AttributeDataType="xs:int">
+            <Value>1</Value>
+          </Attribute>
+        </ExternalInterface>
+        <ExternalInterface ID="3369df63-182e-59e0-be5b-8d9618facdc2" Name="PE" RefBaseClassPath="KoperCADInterfaceClassLib/Terminal">
+          <Attribute Name="Level" AttributeDataType="xs:int">
+            <Value>1</Value>
+          </Attribute>
+        </ExternalInterface>
+        <InternalElement ID="5fdb25ae-128b-5cd9-89bc-3227bb63caf3" Name="d4">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>terminal</Value>
+          </Attribute>
+          <Attribute Name="Terminal" AttributeDataType="xs:string">
+            <Value>N</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>250</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="a84631a8-0b7d-5f41-b9ed-a4dc41463b38" Name="1" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="cd900815-48fe-5a57-9210-a16d16635654" Name="2" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-4</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <InternalElement ID="6a30966d-f74c-5785-8599-b24a9f8fc35f" Name="d5">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>terminal</Value>
+          </Attribute>
+          <Attribute Name="Terminal" AttributeDataType="xs:string">
+            <Value>PE</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>168</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>250</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="b7717213-fcc7-5bef-b9c6-995058c84a49" Name="1" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="5381dfc6-97b8-595f-8ed3-3381f0f1b5f3" Name="2" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-4</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/TerminalStrip" />
+      </InternalElement>
+      <InternalElement ID="81cbb928-b59a-5f35-8cfd-50e6726747d7" Name="=D1+C1-Q1">
+        <Attribute Name="Tag" AttributeDataType="xs:string">
+          <Value>=D1+C1-Q1</Value>
+        </Attribute>
+        <InternalElement ID="cff60155-a871-5cd3-81b9-8fed47c54bce" Name="d6">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>power_poles</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>60</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>210</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="ffe581d7-8515-52d9-8ffd-3622534d9c6d" Name="1" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="ce3f2771-08f4-5c26-90fe-d9193b51dd5b" Name="2" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-16</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="a7801724-cd8b-5bfd-9057-fa1edce7a875" Name="3" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>8</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="d9b34d49-badf-5e74-b487-816a868b591d" Name="4" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>8</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-16</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="644ec996-5933-5ed1-a1fa-fb04239afa30" Name="5" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>16</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="96017cc3-03d9-5d2d-881d-f092d4d0db88" Name="6" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>16</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-16</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Device" />
+      </InternalElement>
+      <InternalElement ID="5e0b1ec7-dcff-54a7-aa22-59d7299ac98c" Name="=D1+C1-K1">
+        <Attribute Name="Tag" AttributeDataType="xs:string">
+          <Value>=D1+C1-K1</Value>
+        </Attribute>
+        <InternalElement ID="e17f9248-ada9-50bb-a66b-39d43ec1adc2" Name="d7">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>power_poles</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>60</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="a73a1e45-61d1-5130-8b6d-c456882dbc6a" Name="1" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="333dd945-5b37-5846-a66e-913e5b474b25" Name="2" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-16</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="0545c4fb-7952-5a8c-90c9-5365aed64f90" Name="3" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>8</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="72df108e-8905-591a-a0fb-2dab55331559" Name="4" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>8</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-16</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="24372a78-aeb7-51a1-8a38-e0761cc8e682" Name="5" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>16</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="33cbe847-8624-599c-b34b-61600f8c48dd" Name="6" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>16</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-16</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <InternalElement ID="4ab111bc-7e73-54af-8bb0-c8c225bee7e1" Name="d9">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>coil</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>150</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>200</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="b7b79bf0-4630-5933-993a-b07ee5c368ef" Name="A1" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="fe8702cd-1c65-55f6-9c10-f3cf66c577d8" Name="A2" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-8</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <InternalElement ID="784f1cc9-f166-5c0f-803a-9f2d83625097" Name="d10">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>contact</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>200</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="a6f3a15f-1809-514a-ac02-e587302d255a" Name="13" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="5dec5f21-21de-589f-8cf0-90782c7bd591" Name="14" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-8</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Device" />
+      </InternalElement>
+      <InternalElement ID="2efdc119-d4d5-517e-9d52-e40070b6aa14" Name="=D1+C1-M1">
+        <Attribute Name="Tag" AttributeDataType="xs:string">
+          <Value>=D1+C1-M1</Value>
+        </Attribute>
+        <InternalElement ID="84f2468d-c88d-5973-811d-10bee7190739" Name="d8">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>motor</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>60</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>104</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="65ed1ec2-22d9-5fff-a466-1cb31e1fb5c0" Name="U" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="451458cc-7d74-5d68-984b-2425d0b6b4e8" Name="V" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>8</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="ae8148cf-1258-52be-af21-aa142702a8ca" Name="W" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>16</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Device" />
+      </InternalElement>
+      <InternalElement ID="9bd666ec-d365-5395-86e1-7457835108b4" Name="=D1+C1-H1">
+        <Attribute Name="Tag" AttributeDataType="xs:string">
+          <Value>=D1+C1-H1</Value>
+        </Attribute>
+        <InternalElement ID="4d7f8cb9-671a-5075-85cc-117c4a79fb44" Name="d11">
+          <Attribute Name="Page" AttributeDataType="xs:string">
+            <Value>=D1+C1/01</Value>
+          </Attribute>
+          <Attribute Name="Kind" AttributeDataType="xs:string">
+            <Value>lamp</Value>
+          </Attribute>
+          <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+            <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+              <Value>150</Value>
+            </Attribute>
+            <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+              <Value>0</Value>
+            </Attribute>
+          </Attribute>
+          <ExternalInterface ID="6d34ee57-bba2-5224-aea9-4772bd924c79" Name="X1" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>up</Value>
+            </Attribute>
+          </ExternalInterface>
+          <ExternalInterface ID="4815a370-c3d8-5b06-b79b-5156607c0c68" Name="X2" RefBaseClassPath="KoperCADInterfaceClassLib/Pin">
+            <Attribute Name="X" AttributeDataType="xs:double" Unit="mm">
+              <Value>0</Value>
+            </Attribute>
+            <Attribute Name="Y" AttributeDataType="xs:double" Unit="mm">
+              <Value>-8</Value>
+            </Attribute>
+            <Attribute Name="Faces" AttributeDataType="xs:string">
+              <Value>down</Value>
+            </Attribute>
+          </ExternalInterface>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Symbol" />
+        </InternalElement>
+        <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Device" />
+      </InternalElement>
+      <InternalElement ID="b10c717f-4eb8-54ca-b957-f63418a420d7" Name="Nets">
+        <InternalElement ID="7b5c829c-7f4d-539f-acc9-0c41911d0232" Name="L1">
+          <Attribute Name="Potential" AttributeDataType="xs:string">
+            <Value>L1</Value>
+          </Attribute>
+          <ExternalInterface ID="5c9e1372-4f1c-5fc6-a0f1-77ea635c2759" Name="d1.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="f9c5f5eb-2c92-5f1f-a825-b24c0bb6394d" Name="d6.0" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="81b8b61b-ef40-503c-a868-a70297e21e2c" Name="d6.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="bea963c2-cc82-581d-8774-75a28d61d87a" Name="d7.0" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="72264da3-c01b-583d-b2eb-50c30093c9d5" Name="d7.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="df130319-d4d1-515f-9e06-71f628b203dc" Name="d8.0" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <InternalElement ID="20dda8ed-74bc-5357-a71d-e6affdc4fb79" Name="Wire1">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>60</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>246</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>60</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>210</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="19c1e276-13b2-5c07-97f7-d149b3aee687" Name="Wire2">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>60</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>194</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>60</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="39deffe2-797b-5ff3-bc26-1c71f1a9f3a7" Name="Wire3">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>60</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>144</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>60</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>104</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Net" />
+        </InternalElement>
+        <InternalElement ID="32614cb9-82ba-5534-9623-ebef3e388cd3" Name="L2">
+          <Attribute Name="Potential" AttributeDataType="xs:string">
+            <Value>L2</Value>
+          </Attribute>
+          <ExternalInterface ID="80d8d122-a6e4-5bc7-9abe-820903a21682" Name="d2.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="c0fe19cc-7534-53a7-bb86-ac20a0a813e6" Name="d6.2" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="ba4e2465-c0d8-50a8-bab2-848b6bc94bc5" Name="d6.3" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="97276ed3-700c-5013-be12-2eef05bf4d4b" Name="d7.2" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="42eb3e1b-e5f1-5949-ae83-9441208b71b8" Name="d7.3" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="84d4506a-dda1-58f6-a7e8-b2a38d3cfef0" Name="d8.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <InternalElement ID="845f6f92-51c6-5618-bbc5-b975b8e351e1" Name="Wire1">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>68</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>246</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>68</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>210</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="04672d02-7b5e-52d5-9cca-23a0c05e51db" Name="Wire2">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>68</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>194</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>68</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="f8eb6655-73c9-5f03-b6c2-83c888c48565" Name="Wire3">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>68</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>144</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>68</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>104</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Net" />
+        </InternalElement>
+        <InternalElement ID="be5033f1-7099-5a86-8bc5-16c79d618526" Name="L3">
+          <Attribute Name="Potential" AttributeDataType="xs:string">
+            <Value>L3</Value>
+          </Attribute>
+          <ExternalInterface ID="84b11ab3-e634-567b-8fc7-d4473f316364" Name="d3.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="eafdd4c8-14b3-5879-9887-135089285c31" Name="d6.4" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="50d9d39d-c4cb-510a-bb1f-0ead0ef792f1" Name="d6.5" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="5185c70d-c651-55c4-9313-d447f7c4045e" Name="d7.4" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="063f3291-7be8-58ef-8208-cbf84f08b2c7" Name="d7.5" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="df00e245-facc-51ef-82ac-aa3582952871" Name="d8.2" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="a2728c6d-15cd-5224-92f9-d8a395dfd45e" Name="d10.0" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="fad3d52b-fdff-55a2-b3c0-3cc0a69bc9e4" Name="d9.0" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <InternalElement ID="c3112958-12ea-53bf-8147-27c43e72e599" Name="Wire1">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>76</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>246</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>76</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>226</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="4267360b-388e-5be5-b0b4-591f642d49ff" Name="Wire2">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>76</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>226</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>76</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>210</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="dd8a84f9-4c96-527a-8c75-046df3dfaf8c" Name="Wire3">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>76</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>194</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>76</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="3c762436-2f6b-57a5-9a26-4521c96ee4df" Name="Wire4">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>76</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>144</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>76</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>104</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="80bd53a8-c401-5897-93ec-06bdf4cd7fc4" Name="Wire5">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>76</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>226</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>226</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="f6542ad1-0f5f-5732-87a2-76384c0b479c" Name="Wire6">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>226</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>200</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="a2f3080e-c3e3-565e-90f8-5230ec2f41ae" Name="Wire7">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>226</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>150</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>226</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="2d5ccde1-8080-5b8e-9f28-63649f2e6a9f" Name="Wire8">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>150</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>226</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>150</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>200</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="427c8ab5-ea98-552a-8a99-d40bd9aa7900" Name="Junction1">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+              <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+                <Value>76</Value>
+              </Attribute>
+              <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+                <Value>226</Value>
+              </Attribute>
+              <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Junction" />
+          </InternalElement>
+          <InternalElement ID="9b8d9cb7-6133-5f84-ba83-bd19d337ef36" Name="Junction2">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+              <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+                <Value>110</Value>
+              </Attribute>
+              <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+                <Value>226</Value>
+              </Attribute>
+              <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Junction" />
+          </InternalElement>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Net" />
+        </InternalElement>
+        <InternalElement ID="99a54189-8e58-5bbf-a5d8-f7d83a989ecd" Name="N">
+          <Attribute Name="Potential" AttributeDataType="xs:string">
+            <Value>N</Value>
+          </Attribute>
+          <ExternalInterface ID="1520d492-1ac6-5cd4-a53a-d3b9911f7e62" Name="d4.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="a3046c9a-7b40-5f1b-adf9-d78d936dffe1" Name="d9.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="f70a9bf9-26dc-56be-8c53-24d5e4d593c4" Name="d11.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <InternalElement ID="ee2ce85d-ef57-5f72-99b7-3bb603d4c85d" Name="Wire1">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>246</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>180</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="da5c3b0f-e237-5b85-af8e-7bcebaa34a76" Name="Wire2">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>150</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>192</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>150</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>180</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="66097b6a-e111-545c-832d-257e03abaf32" Name="Wire3">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>150</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>180</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>180</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="26d4ad3c-607d-5c83-b589-040117b0db5b" Name="Wire4">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>180</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>130</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="aad8f5b5-ef5a-58eb-a650-62938f673e80" Name="Wire5">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>160</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>130</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>130</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="9277ba30-a023-57a1-9547-dd9be42e91de" Name="Wire6">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>130</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>142</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <InternalElement ID="5e23cd76-ed7b-54f7-bb36-2549cd20af98" Name="Junction1">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="Frame" RefSemantic="AutomationMLBaseAttributeType/Frame">
+              <Attribute Name="x" AttributeDataType="xs:double" Unit="mm">
+                <Value>160</Value>
+              </Attribute>
+              <Attribute Name="y" AttributeDataType="xs:double" Unit="mm">
+                <Value>180</Value>
+              </Attribute>
+              <Attribute Name="z" AttributeDataType="xs:double" Unit="mm">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="rx" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="ry" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+              <Attribute Name="rz" AttributeDataType="xs:double" Unit="deg">
+                <Value>0</Value>
+              </Attribute>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Junction" />
+          </InternalElement>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Net" />
+        </InternalElement>
+        <InternalElement ID="da7b2e9f-f6ae-56d5-91c5-05fa31f592cc" Name="L3c">
+          <Attribute Name="Potential" AttributeDataType="xs:string">
+            <Value>L3c</Value>
+          </Attribute>
+          <ExternalInterface ID="7c16d299-cfaa-5728-a1b3-50797fe67b73" Name="d10.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="c7e47a68-0cce-5f6c-a5b2-b5ea50a19e33" Name="d11.0" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <InternalElement ID="50909353-2322-58d6-a11c-e407e07a7b21" Name="Wire1">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>192</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>110</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>150</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Net" />
+        </InternalElement>
+        <InternalElement ID="e3720fda-fcb2-5855-b0de-06d3d9d0a4d2" Name="PE">
+          <Attribute Name="Potential" AttributeDataType="xs:string">
+            <Value>PE</Value>
+          </Attribute>
+          <ExternalInterface ID="622fe058-abe4-52ae-bd22-7ae8cd3725d8" Name="d5.1" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <ExternalInterface ID="3fe603cf-e1da-527e-ab85-9dabcaf4f267" Name="d12.0" RefBaseClassPath="KoperCADInterfaceClassLib/NetPoint" />
+          <InternalElement ID="22307e17-bd1e-5b83-a37a-6ac4b34acd78" Name="Wire1">
+            <Attribute Name="Page" AttributeDataType="xs:string">
+              <Value>=D1+C1/01</Value>
+            </Attribute>
+            <Attribute Name="X1" AttributeDataType="xs:double" Unit="mm">
+              <Value>168</Value>
+            </Attribute>
+            <Attribute Name="Y1" AttributeDataType="xs:double" Unit="mm">
+              <Value>246</Value>
+            </Attribute>
+            <Attribute Name="X2" AttributeDataType="xs:double" Unit="mm">
+              <Value>168</Value>
+            </Attribute>
+            <Attribute Name="Y2" AttributeDataType="xs:double" Unit="mm">
+              <Value>100</Value>
+            </Attribute>
+            <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Wire" />
+          </InternalElement>
+          <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Net" />
+        </InternalElement>
+        <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/NetGroup" />
+      </InternalElement>
+      <RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Project" />
+      <InternalLink Name="pin" RefPartnerSideA="cdf3adb2-580e-50d8-95bf-309697fa7dd6" RefPartnerSideB="5c9e1372-4f1c-5fc6-a0f1-77ea635c2759" />
+      <InternalLink Name="pin" RefPartnerSideA="ffe581d7-8515-52d9-8ffd-3622534d9c6d" RefPartnerSideB="f9c5f5eb-2c92-5f1f-a825-b24c0bb6394d" />
+      <InternalLink Name="pin" RefPartnerSideA="ce3f2771-08f4-5c26-90fe-d9193b51dd5b" RefPartnerSideB="81b8b61b-ef40-503c-a868-a70297e21e2c" />
+      <InternalLink Name="pin" RefPartnerSideA="a73a1e45-61d1-5130-8b6d-c456882dbc6a" RefPartnerSideB="bea963c2-cc82-581d-8774-75a28d61d87a" />
+      <InternalLink Name="pin" RefPartnerSideA="333dd945-5b37-5846-a66e-913e5b474b25" RefPartnerSideB="72264da3-c01b-583d-b2eb-50c30093c9d5" />
+      <InternalLink Name="pin" RefPartnerSideA="65ed1ec2-22d9-5fff-a466-1cb31e1fb5c0" RefPartnerSideB="df130319-d4d1-515f-9e06-71f628b203dc" />
+      <InternalLink Name="pin" RefPartnerSideA="162351f9-86bc-53e7-b0cf-f3edffbfa3b0" RefPartnerSideB="80d8d122-a6e4-5bc7-9abe-820903a21682" />
+      <InternalLink Name="pin" RefPartnerSideA="a7801724-cd8b-5bfd-9057-fa1edce7a875" RefPartnerSideB="c0fe19cc-7534-53a7-bb86-ac20a0a813e6" />
+      <InternalLink Name="pin" RefPartnerSideA="d9b34d49-badf-5e74-b487-816a868b591d" RefPartnerSideB="ba4e2465-c0d8-50a8-bab2-848b6bc94bc5" />
+      <InternalLink Name="pin" RefPartnerSideA="0545c4fb-7952-5a8c-90c9-5365aed64f90" RefPartnerSideB="97276ed3-700c-5013-be12-2eef05bf4d4b" />
+      <InternalLink Name="pin" RefPartnerSideA="72df108e-8905-591a-a0fb-2dab55331559" RefPartnerSideB="42eb3e1b-e5f1-5949-ae83-9441208b71b8" />
+      <InternalLink Name="pin" RefPartnerSideA="451458cc-7d74-5d68-984b-2425d0b6b4e8" RefPartnerSideB="84d4506a-dda1-58f6-a7e8-b2a38d3cfef0" />
+      <InternalLink Name="pin" RefPartnerSideA="ea7d54c1-e325-597b-ba7d-476e2f3677d1" RefPartnerSideB="84b11ab3-e634-567b-8fc7-d4473f316364" />
+      <InternalLink Name="pin" RefPartnerSideA="644ec996-5933-5ed1-a1fa-fb04239afa30" RefPartnerSideB="eafdd4c8-14b3-5879-9887-135089285c31" />
+      <InternalLink Name="pin" RefPartnerSideA="96017cc3-03d9-5d2d-881d-f092d4d0db88" RefPartnerSideB="50d9d39d-c4cb-510a-bb1f-0ead0ef792f1" />
+      <InternalLink Name="pin" RefPartnerSideA="24372a78-aeb7-51a1-8a38-e0761cc8e682" RefPartnerSideB="5185c70d-c651-55c4-9313-d447f7c4045e" />
+      <InternalLink Name="pin" RefPartnerSideA="33cbe847-8624-599c-b34b-61600f8c48dd" RefPartnerSideB="063f3291-7be8-58ef-8208-cbf84f08b2c7" />
+      <InternalLink Name="pin" RefPartnerSideA="ae8148cf-1258-52be-af21-aa142702a8ca" RefPartnerSideB="df00e245-facc-51ef-82ac-aa3582952871" />
+      <InternalLink Name="pin" RefPartnerSideA="a6f3a15f-1809-514a-ac02-e587302d255a" RefPartnerSideB="a2728c6d-15cd-5224-92f9-d8a395dfd45e" />
+      <InternalLink Name="pin" RefPartnerSideA="b7b79bf0-4630-5933-993a-b07ee5c368ef" RefPartnerSideB="fad3d52b-fdff-55a2-b3c0-3cc0a69bc9e4" />
+      <InternalLink Name="pin" RefPartnerSideA="cd900815-48fe-5a57-9210-a16d16635654" RefPartnerSideB="1520d492-1ac6-5cd4-a53a-d3b9911f7e62" />
+      <InternalLink Name="pin" RefPartnerSideA="fe8702cd-1c65-55f6-9c10-f3cf66c577d8" RefPartnerSideB="a3046c9a-7b40-5f1b-adf9-d78d936dffe1" />
+      <InternalLink Name="pin" RefPartnerSideA="4815a370-c3d8-5b06-b79b-5156607c0c68" RefPartnerSideB="f70a9bf9-26dc-56be-8c53-24d5e4d593c4" />
+      <InternalLink Name="pin" RefPartnerSideA="5dec5f21-21de-589f-8cf0-90782c7bd591" RefPartnerSideB="7c16d299-cfaa-5728-a1b3-50797fe67b73" />
+      <InternalLink Name="pin" RefPartnerSideA="6d34ee57-bba2-5224-aea9-4772bd924c79" RefPartnerSideB="c7e47a68-0cce-5f6c-a5b2-b5ea50a19e33" />
+      <InternalLink Name="pin" RefPartnerSideA="5381dfc6-97b8-595f-8ed3-3381f0f1b5f3" RefPartnerSideB="622fe058-abe4-52ae-bd22-7ae8cd3725d8" />
+      <InternalLink Name="pin" RefPartnerSideA="d10bd64b-440a-5956-8eef-94b2ddda08c1" RefPartnerSideB="3fe603cf-e1da-527e-ab85-9dabcaf4f267" />
+    </InternalElement>
+  </InstanceHierarchy>
+  <InterfaceClassLib Name="KoperCADInterfaceClassLib">
+    <Description>KoperCAD connection points</Description>
+    <Version>1.0.0</Version>
+    <InterfaceClass Name="Terminal" />
+    <InterfaceClass Name="Pin" />
+    <InterfaceClass Name="NetPoint" />
+  </InterfaceClassLib>
+  <RoleClassLib Name="KoperCADRoleClassLib">
+    <Description>KoperCAD electrical roles</Description>
+    <Version>1.0.0</Version>
+    <RoleClass Name="Project" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Structure" />
+    <RoleClass Name="PlantSection" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Structure" />
+    <RoleClass Name="Location" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Structure" />
+    <RoleClass Name="Enclosure" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Structure" />
+    <RoleClass Name="Device" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="TerminalStrip" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="Connector" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="Plc" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="Cable" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="CableCore" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="NetGroup" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Group" />
+    <RoleClass Name="Net" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Group" />
+    <RoleClass Name="PageGroup" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Group" />
+    <RoleClass Name="Page" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Structure" />
+    <RoleClass Name="Symbol" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="Wire" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="Junction" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="Text" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="Line" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+    <RoleClass Name="Rectangle" RefBaseClassPath="AutomationMLBaseRoleClassLib/AutomationMLBaseRole/Resource" />
+  </RoleClassLib>
+  <RoleClassLib Name="AutomationMLBaseRoleClassLib">
+    <Description>Standard AutomationML base roles</Description>
+    <Version>2.10.0</Version>
+    <RoleClass Name="AutomationMLBaseRole">
+      <RoleClass Name="Group" />
+      <RoleClass Name="Facet" />
+      <RoleClass Name="Resource" />
+      <RoleClass Name="Product" />
+      <RoleClass Name="Process" />
+      <RoleClass Name="Structure" />
+      <RoleClass Name="PropertySet" />
+    </RoleClass>
+  </RoleClassLib>
+</CAEXFile>
