@@ -33,3 +33,5 @@ Traps
 - Plate test with the cavity uses the core temperature at mid height; it is a cavity, not an infinite plate.
 
 Contacts: R1 `cse_01NCdhCktKEbKPHFBvi2Tjsp`, lead A `cse_01FiLvRBKEcNNHbQEGhYyL1S`, CFD-A `session_01ES8fwPNsJAC5x14QbAkDQ9`.
+
+Exhaust spread (R1 re-run, 6000 cells, steady laminar/SST, march k-eps): laminar 12.75 K, SST 13.19 (+3.5 %), k-eps 12.24 (-4.0 %); at 3402 cells laminar 12.98, SST 13.64 (+5 %), k-eps 14.39 (+11 %). The exhaust temperature moves by a few percent either way with mesh and path; the accuracy text quotes both cases.

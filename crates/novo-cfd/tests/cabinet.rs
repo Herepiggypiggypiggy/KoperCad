@@ -458,3 +458,27 @@ fn a_result_with_a_fan_states_how_good_its_heat_balance_is() {
     let (plain, _) = solve(&scenario(true));
     assert!(!plain.notes.iter().any(|n| n.starts_with("Fan case")));
 }
+
+#[test]
+fn the_turbulence_statement_stays_whole_when_radiation_is_marked() {
+    use novo_cfd::cabinet::{accuracy_with_turbulence, mark_radiation};
+    use novo_cfd::turb::TurbModel;
+    let mut a = accuracy_with_turbulence(Fidelity::Fine, TurbModel::KOmegaSst);
+    assert!(
+        a.limits
+            .iter()
+            .any(|l| l.contains("Radiation is not modelled"))
+    );
+    mark_radiation(&mut a);
+    assert!(
+        a.limits
+            .iter()
+            .all(|l| !l.to_lowercase().contains("radiation is not modelled"))
+    );
+    let t = a
+        .limits
+        .iter()
+        .find(|l| l.starts_with("Turbulence: "))
+        .unwrap();
+    assert!(t.ends_with("fan-driven flow is not checked yet."), "{t}");
+}
