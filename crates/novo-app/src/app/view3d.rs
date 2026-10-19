@@ -1229,7 +1229,7 @@ fn heat_controls(
             .on_hover_text("How solid the cloud looks");
         }
         ui.checkbox(&mut h.carry, "Heat flow").on_hover_text(
-            "Where the heat goes: orange lines and moving dashes follow the heat the air carries away from hot parts (brighter is more heat per area); arrows inside plate, rails and devices show heat conducted through them. Derived from the solved temperature and air speed; surface radiation is not included",
+            "Where the heat goes: orange lines and moving dashes follow the heat the air carries away from hot parts (brighter is more heat per area); arrows inside plate, rails and devices show heat conducted through them. Derived from the solved temperature and air speed; surface radiation is not included. Air colder than ambient takes heat in, so its lines point against the air",
         );
         ui.checkbox(&mut h.arrows, "Arrows").on_hover_text(format!(
             "Arrows on the slice plane point where the air goes. Length is relative to the fastest air on this plane (now {top:.2} m/s), so two planes cannot be compared by length; air under 2 % of that is not drawn"

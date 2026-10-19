@@ -99,16 +99,28 @@ pub fn magnitude(q: [f32; 3]) -> f32 {
     (q[0] * q[0] + q[1] * q[1] + q[2] * q[2]).sqrt()
 }
 
-/// Trilinear flux at a point, W/m2.
+/// Trilinear flux in the air at a point, W/m2. Only air cells take part (the
+/// weights of the others are dropped and the rest renormalised): the flux in
+/// a solid is conduction, orders of magnitude above what the air carries, and
+/// a few percent of it would decide the direction next to a device. Zero when
+/// no air cell is near.
 pub fn flux_at(snap: &CfdSnapshot, field: &[[f32; 3]], p: [f64; 3]) -> [f32; 3] {
     let t = taps(snap, p);
     let mut q = [0.0f32; 3];
+    let mut weight = 0.0f32;
     for n in 0..8 {
+        if snap.material[t.idx[n]] != 0 {
+            continue;
+        }
+        weight += t.w[n];
         for (c, out) in q.iter_mut().enumerate() {
             *out += field[t.idx[n]][c] * t.w[n];
         }
     }
-    q
+    if weight <= 1e-6 {
+        return [0.0; 3];
+    }
+    q.map(|v| v / weight)
 }
 
 /// Strongest flux in the air, W/m2.
@@ -304,6 +316,24 @@ mod tests {
         // Nothing moves when the air is at ambient.
         let calm = flux_field(&s, 30.0);
         assert!(super::seeds(&s, &calm, [2, 2, 2], 0.1).is_empty());
+    }
+
+    #[test]
+    fn flux_in_the_air_ignores_the_conduction_of_a_solid_beside_it() {
+        let s = snap();
+        let mut f = flux_field(&s, 20.0);
+        // Make the plate conduct along +y, a thousand times the air's flux.
+        for (q, m) in f.iter_mut().zip(&s.material) {
+            if *m != 0 {
+                *q = [0.0, 1.0e6, 0.0];
+            }
+        }
+        // Half a cell (5 mm) from the plate surface at x = 50.
+        let q = flux_at(&s, &f, [55.0, 20.0, 20.0]);
+        let m = magnitude(q);
+        assert!(m > 0.0 && q[0] / m > 0.99, "{q:?}");
+        // Deep in the solid there is no air tap: zero.
+        assert_eq!(flux_at(&s, &f, [5.0, 20.0, 20.0]), [0.0; 3]);
     }
 
     #[test]
