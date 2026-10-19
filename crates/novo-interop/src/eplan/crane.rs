@@ -335,11 +335,11 @@ mod tests {
         for v in ["v9", "v10"] {
             let d = t.path().join("output/custom/demo").join(v);
             fs::create_dir_all(&d).unwrap();
-            fs::write(d.join("705-1.epj"), "<x/>").unwrap();
+            fs::write(d.join("123-1.epj"), "<x/>").unwrap();
         }
         let v10 = t.path().join("output/custom/demo/v10");
         fs::write(
-            v10.join("705-1_Projectcontrole.md"),
+            v10.join("123-1_Projectcontrole.md"),
             "# x\n\n72 automatische controles: 54 in orde.\n\n**Oordeel: GOED MET OPMERKINGEN**\n",
         )
         .unwrap();
@@ -351,7 +351,7 @@ mod tests {
         fs::create_dir_all(t.path().join("custom/demo")).unwrap();
         fs::write(
             t.path().join("custom/demo/project.json"),
-            r#"{"project":"705-1","customer":"Acme","brand":"B","kind":"crane"}"#,
+            r#"{"project":"123-1","customer":"Acme","brand":"B","kind":"crane"}"#,
         )
         .unwrap();
         t
@@ -365,7 +365,7 @@ mod tests {
             t.path().join("output/custom"),
             t.path().join("output/custom/demo"),
             t.path().join("output/custom/demo/v10"),
-            t.path().join("output/custom/demo/v10/705-1.epj"),
+            t.path().join("output/custom/demo/v10/123-1.epj"),
         ] {
             let s = locate(&p).unwrap();
             assert_eq!(s.version, Some(10), "{p:?}");

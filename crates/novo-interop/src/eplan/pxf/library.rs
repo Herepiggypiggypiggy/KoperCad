@@ -174,10 +174,18 @@ impl PxfLibrary {
     }
 }
 
-/// A number as the file writes it. `NaN`, `inf` and values that overflow
-/// parse as `f64` in Rust but must never reach the model.
+/// Largest magnitude a number from a file may have (millimetres, radians,
+/// factors): far beyond any sheet, and small enough that sums of them stay
+/// finite.
+const MAX_MAGNITUDE: f64 = 1e7;
+
+/// A number as the file writes it. `NaN`, `inf`, values that overflow and
+/// absurdly large ones parse as `f64` in Rust but must never reach the model.
 pub(super) fn finite(s: &str) -> Option<f64> {
-    s.trim().parse::<f64>().ok().filter(|v| v.is_finite())
+    s.trim()
+        .parse::<f64>()
+        .ok()
+        .filter(|v| v.is_finite() && v.abs() <= MAX_MAGNITUDE)
 }
 
 /// `x/y` as the file writes a point.

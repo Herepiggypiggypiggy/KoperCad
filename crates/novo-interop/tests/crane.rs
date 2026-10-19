@@ -122,7 +122,8 @@ fn non_finite_numbers_in_a_file_never_reach_the_model() {
     let bad = text
         .replace(r#"A762="50/240""#, r#"A762="NaN/240""#)
         .replace(r#"A862="0/-8""#, r#"A862="0/inf""#)
-        .replace(r#"A762="80/260""#, r#"A762="1e999/260""#);
+        .replace(r#"A762="80/260""#, r#"A762="1e999/260""#)
+        .replace(r#"A762="50/150""#, r#"A762="1e308/150""#);
     assert_ne!(bad, text);
     let file = read_pxf_str(&bad).unwrap();
     let plan = plan_pxf(&Project::new("x"), &file, &PxfOptions::default());
