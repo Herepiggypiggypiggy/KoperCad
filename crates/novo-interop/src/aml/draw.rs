@@ -208,6 +208,39 @@ fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
     }
 }
 
+/// Longest interruption point name drawn as the file gives it.
+const SHORT_NAME: usize = 8;
+
+/// Short, unique names for the interruption points of a file's nets, in net
+/// order. The file's own name is kept when it is short; a long one (the
+/// configurator writes a page path and title) would be printed beside every
+/// point and over its neighbours, so the net gets a plain `N<number>` and
+/// pairs by that.
+fn point_names(nets: &[super::read::PlantNet]) -> Vec<String> {
+    let short = |n: &str| n.chars().count() <= SHORT_NAME && !n.chars().any(char::is_whitespace);
+    let mut taken: BTreeSet<String> = nets
+        .iter()
+        .map(|n| n.name.as_str())
+        .filter(|n| short(n))
+        .map(str::to_string)
+        .collect();
+    let mut next = 1usize;
+    nets.iter()
+        .map(|n| {
+            if short(&n.name) {
+                return n.name.clone();
+            }
+            loop {
+                let name = format!("N{next}");
+                next += 1;
+                if taken.insert(name.clone()) {
+                    break name;
+                }
+            }
+        })
+        .collect()
+}
+
 /// A right-angle run from `a` to `b`, leaving `a` along its pin direction.
 fn route(a: Point, b: Point, leave: Option<Direction>) -> Vec<Point> {
     if (a.x - b.x).abs() < 1e-6 || (a.y - b.y).abs() < 1e-6 {
@@ -333,7 +366,8 @@ pub(super) fn draw(
 
     let lib = Library::shared(Pack::Iec);
     let ip_symbol = lib.get(INTERRUPTION);
-    for net in &plant.nets {
+    let names = point_names(&plant.nets);
+    for (net, point_name) in plant.nets.iter().zip(names) {
         // The net's pins by page, only those that were placed.
         let mut by_page: BTreeMap<usize, Vec<(&Placed, usize)>> = BTreeMap::new();
         for &(si, pi) in &net.pins {
@@ -381,7 +415,7 @@ pub(super) fn draw(
                     Placement::at(origin),
                     pins,
                     SymbolRole::Interruption {
-                        name: net.name.clone(),
+                        name: point_name.clone(),
                     },
                 )?;
                 tx.connect(Endpoint::pin(m.id, m.pin_of[mi]), Endpoint::pin(ip, 0))?;

@@ -303,3 +303,30 @@ fn the_preview_counts_only_nets_it_would_wire() {
             .contains("wire")
     );
 }
+
+#[test]
+fn a_long_net_name_is_not_printed_beside_its_interruption_points() {
+    let long = "=A1+CAB1/02 Outputs and a long page title.7";
+    let plant = read_aml(&file().replace("\"L1\"", &format!("\"{long}\""))).unwrap();
+    let mut doc = Document::new(Project::new("t"));
+    plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
+    let names: Vec<String> = doc
+        .project()
+        .symbols()
+        .filter_map(|s| match &s.role {
+            SymbolRole::Interruption { name } => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names.len(), 2, "one point on each page");
+    assert_eq!(names[0], names[1], "both ends pair by the same name");
+    assert!(names[0].len() <= 8 && !names[0].contains(' '), "{names:?}");
+}
+
+#[test]
+fn a_page_label_splits_into_structure_and_name_with_its_title_apart() {
+    let p = imported();
+    let page = p.pages().find(|p| p.name == "02").expect("page 02");
+    assert_eq!(page.structure.to_string(), "=A1+CAB1");
+    assert_eq!(page.title, "Outputs");
+}

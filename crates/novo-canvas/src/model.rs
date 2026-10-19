@@ -1594,7 +1594,8 @@ impl PageScene {
                 .text(t)
                 .is_some_and(|t| t.content == TextContent::DeviceTag)
         });
-        let text = symbol_text(project, sym).filter(|_| !tag_text);
+        let text =
+            symbol_text(project, sym).filter(|_| !tag_text && !repeats_pin_tag(project, sym));
         let mut tag = None;
         if let Some(text) = text {
             // To the right of the placed symbol, vertically centred on its
@@ -2191,6 +2192,22 @@ pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
         }
         SymbolRole::Unassigned => None,
     }
+}
+
+/// Whether `sym` is a plug or connector pin whose device already shows its tag
+/// on another pin of the same page: a plug of twenty pins names itself once,
+/// each pin keeps its own number.
+fn repeats_pin_tag(project: &Project, sym: &SymbolInstance) -> bool {
+    let SymbolRole::Device { device, .. } = &sym.role else {
+        return false;
+    };
+    if novo_symbols::Pack::path_of(&sym.symbol.0) != "connectivity/device_pin" {
+        return false;
+    }
+    project
+        .symbols_of_device(*device)
+        .into_iter()
+        .any(|o| o.id < sym.id && o.page == sym.page && o.symbol == sym.symbol)
 }
 
 /// Terminals of one strip further apart than this (mm, between symbol
