@@ -296,6 +296,8 @@ pub struct PxfFile {
     pub cores: Vec<PxfCore>,
     pub interruptions: Vec<PxfInterruption>,
     pub texts: Vec<PxfText>,
+    /// Lines, rectangles, arcs, polygons and location boxes on pages.
+    pub shapes: Vec<super::graphics::PxfShape>,
     pub nodes: Vec<PxfNode>,
     pub project: PxfProjectData,
     pub structures: Vec<PxfStructure>,

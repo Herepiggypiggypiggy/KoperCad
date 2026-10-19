@@ -74,3 +74,26 @@ fn the_drawn_pages_keep_the_nets_of_the_real_project() {
     // Only same-name terminals and names used more than twice may join more.
     assert!(c.project_only.len() < 10, "{:?}", c.project_only);
 }
+
+/// Lines, rectangles, arcs and location boxes of the real project reach the
+/// pages as background drawings.
+#[test]
+fn the_real_project_keeps_its_lines_and_location_boxes() {
+    let Some(path) = real_file() else { return };
+    let (plan, _, _) = novo_interop::eplan::crane::plan_crane(
+        &novo_core::Project::new("x"),
+        &path,
+        &novo_interop::eplan::pxf::PxfOptions::default(),
+    )
+    .unwrap();
+    let r = plan.report();
+    eprintln!("{}", r.text());
+    let mut doc = novo_core::Document::new(novo_core::Project::new("x"));
+    plan.apply(&mut doc).unwrap();
+    let with_bg = doc
+        .project()
+        .pages()
+        .filter(|p| novo_interop::underlay::stored_text(&p.properties).is_some())
+        .count();
+    assert!(with_bg >= 15, "{with_bg} pages with a background drawing");
+}

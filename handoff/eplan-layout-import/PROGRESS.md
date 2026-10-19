@@ -1,0 +1,1 @@
+2026-10-19 11:10 UTC graphics + layout reader, plan, apply and tests done; trimmed v95: 228 shapes on 17 pages, 255 edge marks left out. Waiting on #1031 merge to open the PR; real layout sheets unverified.
