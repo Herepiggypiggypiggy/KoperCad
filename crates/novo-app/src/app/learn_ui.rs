@@ -863,3 +863,13 @@ impl NovoApp {
         }
     }
 }
+
+/// Draws a lesson chip from [`LearnState::chip`] and returns the lesson id
+/// when it is clicked.
+pub(super) fn chip_button(ui: &mut egui::Ui, chip: Option<&(String, String)>) -> Option<String> {
+    let (id, label) = chip?;
+    ui.small_button(label)
+        .on_hover_text("Start or continue this lesson")
+        .clicked()
+        .then(|| id.clone())
+}
