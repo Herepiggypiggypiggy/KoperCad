@@ -25,6 +25,7 @@
 //! resolved and lists the ones that fell back or lost pins.
 
 mod generic;
+mod geometry;
 mod pins;
 mod table;
 mod user;
@@ -36,6 +37,7 @@ use novo_symbols::{Library, Pack, Symbol, letter_code};
 use crate::report::Report;
 
 pub use generic::generic_symbol;
+pub use geometry::{Fit, MAX_COST_PER_POINT, MAX_POINTS, Port, fit as fit_geometry};
 pub use pins::{PinMap, match_pins};
 pub use table::{Entry, Table, name_score, normalize};
 pub use user::{SymbolKey, UserTable};
@@ -326,48 +328,18 @@ impl SymbolMapper {
             .filter(|l| !l.is_empty());
 
         // 2. By name.
-        let input = source
-            .function
-            .as_deref()
-            .map(table::tokens)
-            .unwrap_or_default();
-        if !input.is_empty() {
-            let mut found: Vec<Candidate> = Vec::new();
-            for (index, entry) in table.entries.iter().enumerate() {
-                let best = entry
-                    .tokens
-                    .iter()
-                    .map(|t| name_score(&input, t))
-                    .max()
-                    .unwrap_or(0);
-                if best < MIN_NAME_SCORE {
-                    continue;
-                }
-                let Some(pins) = self.pin_fit(entry, &source.pins) else {
-                    continue;
-                };
-                let boost = match letters.as_deref() {
-                    Some(l) if entry.letters.first().map(String::as_str) == Some(l) => 5,
-                    Some(l) if entry.letters.iter().any(|e| e == l) => 2,
-                    _ => 0,
-                };
-                found.push(Candidate {
-                    entry,
-                    index,
-                    score: best + boost,
-                    pins,
-                });
-            }
-            if let Some(best) = pick(found, !source.pins.is_empty()) {
-                return self.resolved(best.0, Basis::Name, best.1);
-            }
+        if let Some(found) = self.by_name(source, letters.as_deref(), None) {
+            return found;
         }
 
         // 3. By letters and a complete pin fit. A device that has a function
         // text nobody recognised stays generic: guessing from letters alone
         // would put a weighing amplifier (A, pins 1 2) in as a relay output.
         if let Some(l) = letters.as_deref()
-            && input.is_empty()
+            && source
+                .function
+                .as_deref()
+                .is_none_or(|f| table::tokens(f).is_empty())
             && !source.pins.is_empty()
         {
             let mut found: Vec<Candidate> = Vec::new();
@@ -418,6 +390,74 @@ impl SymbolMapper {
             pins,
             ambiguous: false,
         }
+    }
+
+    /// The by-name step of [`SymbolMapper::map`]. With `ports`, only symbols
+    /// that have exactly that many connections count, so a family sharing
+    /// one name (the variable motor, the terminal with N points) resolves by
+    /// how many points the device has even when its pins carry no names.
+    fn by_name(
+        &self,
+        source: &EplanSymbol,
+        letters: Option<&str>,
+        ports: Option<usize>,
+    ) -> Option<Resolved> {
+        let table = Table::builtin();
+        let input = source
+            .function
+            .as_deref()
+            .map(table::tokens)
+            .unwrap_or_default();
+        if input.is_empty() {
+            return None;
+        }
+        let mut found: Vec<Candidate> = Vec::new();
+        for (index, entry) in table.entries.iter().enumerate() {
+            let best = entry
+                .tokens
+                .iter()
+                .map(|t| name_score(&input, t))
+                .max()
+                .unwrap_or(0);
+            if best < MIN_NAME_SCORE {
+                continue;
+            }
+            if let Some(n) = ports
+                && self.symbol(entry).is_none_or(|s| s.connections.len() != n)
+            {
+                continue;
+            }
+            let Some(pins) = self.pin_fit(entry, &source.pins) else {
+                continue;
+            };
+            let boost = match letters {
+                Some(l) if entry.letters.first().map(String::as_str) == Some(l) => 5,
+                Some(l) if entry.letters.iter().any(|e| e == l) => 2,
+                _ => 0,
+            };
+            found.push(Candidate {
+                entry,
+                index,
+                score: best + boost,
+                pins,
+            });
+        }
+        let best = pick(found, !source.pins.is_empty())?;
+        Some(self.resolved(best.0, Basis::Name, best.1))
+    }
+
+    /// Maps a device that is known to have `ports` connection points: the
+    /// library symbol of that name with exactly that many connections, or
+    /// `None` (never a generic box) when the name matches no such symbol.
+    /// This is for placements whose pins have no designations, where the
+    /// count is the only thing that tells the members of a family apart.
+    pub fn map_fitting(&self, source: &EplanSymbol, ports: usize) -> Option<Resolved> {
+        let letters = source
+            .letters
+            .as_deref()
+            .map(|l| l.trim().to_uppercase())
+            .filter(|l| !l.is_empty());
+        self.by_name(source, letters.as_deref(), Some(ports))
     }
 
     fn resolved(&self, entry: &Entry, basis: Basis, (pins, ambiguous): (PinMap, bool)) -> Resolved {

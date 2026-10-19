@@ -332,3 +332,128 @@ fn text_matching_folds_umlauts_and_ignores_case_and_punctuation() {
     let r = mapper.map(&dev("Not-Aus", "S", &["11", "12"]));
     assert_eq!(r.symbol_id(), Some("iec/operators/emergency_stop"));
 }
+
+/// The devices a crane configurator project draws that used to become
+/// boxes: each resolves to a symbol of KoperCAD's own.
+#[test]
+fn the_configurators_odd_devices_have_symbols_of_their_own() {
+    let mapper = SymbolMapper::new(Pack::Iec);
+    let id = |d: &EplanSymbol| {
+        let r = mapper.map(d);
+        assert_ne!(r.basis, Basis::Generic, "{}", d.label());
+        r.symbol_id().unwrap().to_string()
+    };
+    assert_eq!(
+        id(&dev("Device connection point", "", &["A1"])),
+        "iec/connectivity/device_pin"
+    );
+    assert_eq!(
+        id(&dev("Device connection point", "", &["13"])),
+        "iec/connectivity/device_pin"
+    );
+    assert_eq!(
+        id(&dev(
+            "Insulated wire termination, general device",
+            "",
+            &["1"]
+        )),
+        "iec/connectivity/wire_end_insulated"
+    );
+    assert_eq!(
+        id(&dev(
+            "Terminal, general, 3 connection points",
+            "X",
+            &["1", "2", "3"]
+        )),
+        "iec/terminals/terminal_tap"
+    );
+    assert_eq!(
+        id(&dev(
+            "Female receptacle with PE, 5 connection points",
+            "",
+            &["L1", "L2", "L3", "N", "PE"]
+        )),
+        "iec/terminals/socket_3p_n_pe"
+    );
+    assert_eq!(
+        id(&dev(
+            "Switch, triple NO contact",
+            "Q",
+            &["1", "2", "3", "4", "5", "6"]
+        )),
+        "iec/switches/main_switch_3p"
+    );
+}
+
+#[test]
+fn the_variable_motor_resolves_by_its_pin_names_or_by_how_many_points_it_has() {
+    let mapper = SymbolMapper::new(Pack::Iec);
+    // Winding ends named 1U..2W plus earth: the 6 terminal motor, by name.
+    let named = dev(
+        "Motor with PE, variable",
+        "M",
+        &["1U", "1V", "1W", "2W", "2V", "2U", "PE"],
+    );
+    let r = mapper.map(&named);
+    assert_eq!(r.symbol_id(), Some("iec/motors/motor_3ph_6t"));
+    assert!(r.pins.is_complete() && !r.pins.positional);
+    assert_eq!(r.pins.connection("1U"), Some("U1"));
+    assert_eq!(r.pins.connection("2W"), Some("W2"));
+    // No pin names at all: only the count tells the family apart.
+    let bare = dev("Motor with PE, variable", "M", &[]);
+    for (points, symbol) in [
+        (4, "iec/motors/motor_3ph"),
+        (6, "iec/motors/motor_3ph_pe_t2"),
+        (7, "iec/motors/motor_3ph_6t"),
+    ] {
+        let r = mapper.map_fitting(&bare, points).unwrap();
+        assert_eq!(r.symbol_id(), Some(symbol), "{points} points");
+    }
+    assert!(mapper.map_fitting(&bare, 5).is_none());
+    // Plain map() on the shared name takes a motor, never a box.
+    let plain = mapper.map(&bare);
+    assert_eq!(plain.basis, Basis::Name);
+    assert!(plain.symbol_id().unwrap().starts_with("iec/motors/"));
+}
+
+#[test]
+fn a_family_by_point_count_never_falls_back_to_a_box() {
+    let mapper = SymbolMapper::new(Pack::Iec);
+    let female = dev("Female pin, 2 connection points", "X", &[]);
+    assert_eq!(
+        mapper.map_fitting(&female, 1).unwrap().symbol_id(),
+        Some("iec/terminals/socket_contact")
+    );
+    let trafo = dev("Transformer, 5 connection points with PE", "T", &[]);
+    assert_eq!(
+        mapper.map_fitting(&trafo, 5).unwrap().symbol_id(),
+        Some("iec/transformers/transformer_1ph_pe")
+    );
+    // A name nobody knows is not guessed.
+    assert!(mapper.map_fitting(&dev("Black box", "U", &[]), 2).is_none());
+}
+
+#[test]
+fn the_new_symbols_exist_in_both_packs_and_validate() {
+    for pack in Pack::ALL {
+        let lib = Library::shared(pack);
+        for path in [
+            "connectivity/device_pin",
+            "connectivity/wire_end_insulated",
+            "motors/motor_3ph_pe_t2",
+            "terminals/plug_3p_n_pe",
+            "terminals/plug_3p_pe",
+            "terminals/plug_contact",
+            "terminals/socket_3p_n_pe",
+            "terminals/socket_3p_pe",
+            "terminals/socket_contact",
+            "terminals/terminal_tap",
+            "transformers/transformer_1ph_pe",
+        ] {
+            let symbol = lib
+                .get(&format!("{}/{path}", pack.id()))
+                .unwrap_or_else(|| panic!("{path} missing in {}", pack.id()));
+            assert_eq!(validate(symbol), vec![], "{}", symbol.id);
+        }
+    }
+}

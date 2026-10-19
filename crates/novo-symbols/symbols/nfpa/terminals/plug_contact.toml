@@ -1,0 +1,25 @@
+format = 1
+id = "nfpa/terminals/plug_contact"
+name = "Plug contact, wire side"
+description = "One male contact of a plug connector seen from its wire side only. It mates with the socket contact of the same pin number on the other half."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "terminals"
+function = "connector.male"
+keywords = ["plug", "male", "pin", "contact", "connector pin", "plug half", "nfpa", "ansi"]
+aliases = ["xmc"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 4], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-0.8, 4], size = [1.6, 3], fill = true },
+]
+
+[behavior]
+kind = "none"
