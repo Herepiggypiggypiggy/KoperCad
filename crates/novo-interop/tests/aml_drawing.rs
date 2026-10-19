@@ -416,4 +416,10 @@ fn lines_and_rectangles_become_the_pages_background() {
     };
     assert!(with_drawing("01"));
     assert!(!with_drawing("02"));
+    // The background flips with the page's own height, not a fixed sheet.
+    let page = p.pages().find(|g| g.name == "01").unwrap();
+    assert_eq!(
+        page.properties.get("underlay.h"),
+        Some(&novo_core::Value::Float(page.format.size_mm().1))
+    );
 }
