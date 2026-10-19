@@ -123,3 +123,14 @@ fn a_plain_location_becomes_the_cabinet_without_a_second_node() {
             .is_err()
     );
 }
+
+#[test]
+fn set_enclosure_on_an_unknown_node_is_not_found() {
+    let mut doc = Document::default();
+    let err = doc
+        .transact("Create cabinet", |tx| {
+            tx.set_enclosure(StructureId(9999), true)
+        })
+        .unwrap_err();
+    assert_eq!(err, ModelError::NotFound(StructureId(9999).into()));
+}
