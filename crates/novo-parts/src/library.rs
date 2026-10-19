@@ -162,6 +162,14 @@ impl LocalLibrary {
         self.root.join("records.json")
     }
 
+    /// One read-modify-write of the records file at a time in this process:
+    /// an abandoned slow import can finish while its retry runs, and both
+    /// would otherwise share one temp file and overwrite each other.
+    fn lock() -> std::sync::MutexGuard<'static, ()> {
+        static WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        WRITE.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     fn read(&self) -> Result<RecordsFile, LibraryError> {
         let path = self.records_path();
         let text = match fs::read_to_string(&path) {
@@ -258,6 +266,7 @@ impl LocalLibrary {
             imported: imported.to_owned(),
             flow,
         };
+        let _lock = Self::lock();
         // Read the records first: a newer or damaged records file must not
         // leave a stored file nobody knows about.
         let mut file = self.read()?;
@@ -276,6 +285,7 @@ impl LocalLibrary {
 
     /// Removes a part's files and records (the user's "Remove from library").
     pub fn remove(&self, key: &PartKey) -> Result<usize, LibraryError> {
+        let _lock = Self::lock();
         let mut file = self.read()?;
         let (gone, keep): (Vec<_>, Vec<_>) =
             file.records.into_iter().partition(|r| &r.key() == key);
@@ -297,6 +307,7 @@ impl LocalLibrary {
 
     /// Remembers that the user accepted the notice for a manufacturer.
     pub fn accept_notice(&self, manufacturer: &str) -> Result<(), LibraryError> {
+        let _lock = Self::lock();
         let mut file = self.read()?;
         if !self.notice_accepted(manufacturer) {
             file.notices.push(manufacturer.to_owned());

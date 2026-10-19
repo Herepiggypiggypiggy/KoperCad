@@ -27,7 +27,7 @@ use novo_theme::table::{
 };
 use novo_theme::{Palette, widgets};
 
-use super::parts_import::{Import, Phase, import_path};
+use super::parts_import::{Import, Phase};
 use super::revisions::today;
 use super::{Level, NovoApp};
 
@@ -77,6 +77,9 @@ pub(crate) struct PartsWindow {
     new_part: Option<NewPartForm>,
     /// The maker guide (what to download, where to save), while open.
     guide: bool,
+    /// Repaints the window when a background read finishes; set on the first
+    /// frame.
+    wake: Option<egui::Context>,
 }
 
 /// The fields of the New part form.
@@ -165,6 +168,7 @@ impl PartsWindow {
             pins: Default::default(),
             new_part: None,
             guide: false,
+            wake: None,
         }
     }
 
@@ -236,7 +240,9 @@ impl PartsWindow {
         ));
     }
 
-    /// Imports a file for the target part and records the result.
+    /// Imports a file for the target part. The file is stored and read on a
+    /// worker thread (a big ZIP or EDZ must not freeze the window); the
+    /// window collects the result in [`PartsWindow::collect_import`].
     fn import_file(&mut self, path: &Path, flow: ImportFlow) {
         let Some(part) = self.target() else {
             return;
@@ -244,29 +250,67 @@ impl PartsWindow {
         if self.import.as_ref().is_none_or(|i| i.key != part.key()) {
             self.start_import(&part.key());
         }
-        let Some(library) = self.library.as_ref() else {
+        let Some(library) = self.library.clone() else {
+            if let Some(i) = self.import.as_mut() {
+                i.phase = Phase::Failed("there is no profile folder to keep the library in".into());
+            }
             return;
         };
-        let result = import_path(
-            &part,
-            path,
-            flow,
-            library,
-            &self.sources,
-            self.catalog_path.as_deref(),
-            &today(),
-        );
-        let phase = match result {
-            Ok((summary, changed)) => {
-                for p in changed {
-                    self.catalog.upsert(p);
-                }
-                Phase::Done(summary)
-            }
-            Err(e) => Phase::Failed(e),
-        };
+        let wake = self.wake.clone();
+        let (sources, catalog_path, today) =
+            (self.sources.clone(), self.catalog_path.clone(), today());
         if let Some(i) = self.import.as_mut() {
-            i.phase = phase;
+            i.begin_read(
+                part,
+                path,
+                flow,
+                library,
+                sources,
+                catalog_path,
+                today,
+                move || {
+                    if let Some(ctx) = &wake {
+                        ctx.request_repaint();
+                    }
+                },
+            );
+        }
+    }
+
+    /// Makes `key` the selected part. A wait for a download belongs to the
+    /// part it was started for; picking another part ends it, so a file
+    /// dropped next is never filed under the old part.
+    fn select(&mut self, key: PartKey) {
+        if self
+            .import
+            .as_ref()
+            .is_some_and(|i| i.key != key && matches!(i.phase, Phase::Waiting | Phase::Confirm(_)))
+        {
+            self.import = None;
+        }
+        self.selected = Some(key);
+    }
+
+    /// One frame of the import: collects a finished read, ends a wait or
+    /// read that ran too long, and takes in a file the Downloads watch found.
+    fn pump_import(&mut self, now: f64) {
+        self.collect_import(now);
+        if let Some(found) = self.import.as_mut().and_then(|i| i.poll(now)) {
+            if found.names_the_part {
+                self.import_file(&found.path, ImportFlow::Downloads);
+            } else if let Some(i) = self.import.as_mut() {
+                i.phase = Phase::Confirm(found.path);
+            }
+        }
+    }
+
+    /// Moves the import's clocks on and merges what a finished read added
+    /// into the open catalog. Called every frame.
+    fn collect_import(&mut self, now: f64) {
+        if let Some(done) = self.import.as_mut().and_then(|i| i.tick(now)) {
+            for p in done.changed {
+                self.catalog.upsert(p);
+            }
         }
     }
 
@@ -706,6 +750,7 @@ impl NovoApp {
         };
         let mut open = true;
         let mut actions = Vec::new();
+        win.wake.get_or_insert_with(|| ctx.clone());
         win.geometry.get_or_insert_with(|| {
             let wake = ctx.clone();
             GeometryService::new(
@@ -757,17 +802,11 @@ impl NovoApp {
             }
         }
         let now = ctx.input(|i| i.time);
-        if let Some(found) = win.import.as_mut().and_then(|i| i.poll(now)) {
-            if found.names_the_part {
-                win.import_file(&found.path, ImportFlow::Downloads);
-            } else if let Some(i) = win.import.as_mut() {
-                i.phase = Phase::Confirm(found.path);
-            }
-        }
+        win.pump_import(now);
         if win
             .import
             .as_ref()
-            .is_some_and(|i| i.phase == Phase::Waiting)
+            .is_some_and(|i| matches!(i.phase, Phase::Waiting | Phase::Reading))
         {
             ctx.request_repaint_after(std::time::Duration::from_secs_f64(
                 super::parts_import::POLL_SECONDS,
@@ -798,7 +837,7 @@ impl NovoApp {
                     open_dir = default_library_root().map(|d| (d, false));
                 }
                 PartsAction::NewPart => win.new_part = Some(NewPartForm::default()),
-                PartsAction::Select(key) => win.selected = Some(key),
+                PartsAction::Select(key) => win.select(key),
                 PartsAction::Import(key) => {
                     win.start_import(&key);
                     if let Some(url) = win.import.as_ref().and_then(|i| i.page_url.clone()) {
@@ -1221,6 +1260,24 @@ you can also drop it on this window.",
                 )),
                 _ => ui.label("Drop the downloaded file on this window, or choose it."),
             };
+            let minutes = (super::parts_import::WAIT_LIMIT_SECONDS / 60.0).round();
+            ui.weak(format!(
+                "Waiting for the download: {}. If nothing arrives within {minutes} minutes this stops by \
+itself; Stop ends it now.",
+                import.waited_text()
+            ));
+            let passed = import.passed_over();
+            if !passed.is_empty() {
+                ui.colored_label(
+                    ui.visuals().warn_fg_color,
+                    format!(
+                        "Arrived in Downloads but not taken, because the name does not mention {}: \
+{}. If one of them is the file, press Choose file\u{2026} and pick it.",
+                        import.label,
+                        passed.join(", ")
+                    ),
+                );
+            }
             if let Some(w) = &import.order_warning {
                 ui.colored_label(ui.visuals().warn_fg_color, w);
             }
@@ -1249,6 +1306,16 @@ on the maker's site and drop the file here.",
                     actions.push(PartsAction::StopImport);
                 }
             });
+        }
+        Phase::Reading => {
+            ui.horizontal(|ui| {
+                ui.spinner();
+                ui.strong(format!("Reading the file for {}", import.label));
+            });
+            ui.weak("This runs in the background; you can keep working.");
+            if ui.button("Stop").clicked() {
+                actions.push(PartsAction::StopImport);
+            }
         }
         Phase::Confirm(path) => {
             ui.strong(format!("Importing {}", import.label));
@@ -1673,6 +1740,14 @@ mod tests {
         assert!(win.import.is_none(), "nothing selected: nothing happens");
         win.selected = Some(key.clone());
         win.import_file(&file, ImportFlow::Manual);
+        let done = win
+            .import
+            .as_mut()
+            .unwrap()
+            .wait_read(std::time::Duration::from_secs(20));
+        for p in done.into_iter().flat_map(|d| d.changed) {
+            win.catalog.upsert(p);
+        }
         let imp = win.import.as_ref().unwrap();
         assert!(matches!(imp.phase, Phase::Done(_)), "{:?}", imp.phase);
         let row = win.rows().into_iter().find(|(k, _)| *k == key).unwrap();
@@ -1817,3 +1892,7 @@ mod tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "parts_import_tests.rs"]
+mod import_tests;

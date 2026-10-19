@@ -721,6 +721,9 @@ pub struct DownloadsWatcher {
     order_codes: Vec<String>,
     recipe: Option<&'static MakerRecipe>,
     last_sizes: HashMap<PathBuf, u64>,
+    /// New model, drawing or archive files the watch left alone because
+    /// their names do not mention the part, so the app can say what it saw.
+    skipped: Vec<PathBuf>,
 }
 
 impl DownloadsWatcher {
@@ -737,6 +740,7 @@ impl DownloadsWatcher {
             order_codes: vec![crate::search::normalize_code(order_number)],
             recipe: None,
             last_sizes: HashMap::new(),
+            skipped: Vec::new(),
         }
     }
 
@@ -755,6 +759,13 @@ impl DownloadsWatcher {
             w.recipe = Some(recipe);
         }
         w
+    }
+
+    /// Files that arrived since the click but were left alone because their
+    /// names do not mention the part (a STEP, DXF or ZIP file). The app lists
+    /// them, so a wait is never silent about a download that was passed over.
+    pub fn skipped(&self) -> &[PathBuf] {
+        &self.skipped
     }
 
     /// Files that have arrived and finished. A STEP or DXF file must carry
@@ -792,7 +803,16 @@ impl DownloadsWatcher {
                     FileKind::Other => false,
                 };
             let Ok(meta) = entry.metadata() else { continue };
-            if !suits || !meta.is_file() || meta.modified().is_ok_and(|m| m < self.since) {
+            let new = meta.is_file() && !meta.modified().is_ok_and(|m| m < self.since);
+            if !suits && new && meta.len() > 0 {
+                if matches!(kind, FileKind::Step | FileKind::Dxf | FileKind::Zip)
+                    && !self.skipped.contains(&path)
+                {
+                    self.skipped.push(path);
+                }
+                continue;
+            }
+            if !suits || !new {
                 continue;
             }
             let size = meta.len();
