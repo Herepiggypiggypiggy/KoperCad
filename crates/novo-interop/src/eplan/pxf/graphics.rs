@@ -110,6 +110,22 @@ fn all_outside(pts: &[(f64, f64)]) -> bool {
         || pts.iter().all(|p| p.1 <= 0.0)
 }
 
+/// Coordinates a sheet drawing can sensibly have (the sheet is 420 x 297 mm
+/// and some layout sheets keep a full-size copy a metre or two to one side).
+/// Anything beyond is a damaged or hostile file: it is skipped before any
+/// dash is generated, so work stays bounded by the sheet, not by the file.
+const COORD_LIMIT: f64 = 5000.0;
+/// Most drawing entities one page's background may take while it is built.
+const MAX_ENTITIES: usize = 60_000;
+
+fn wild(pts: &[(f64, f64)], extra: f64) -> bool {
+    !extra.is_finite()
+        || extra.abs() > COORD_LIMIT
+        || pts
+            .iter()
+            .any(|p| !(p.0.abs() <= COORD_LIMIT && p.1.abs() <= COORD_LIMIT))
+}
+
 fn pt(p: (f64, f64)) -> Point {
     Point::new(p.0, p.1)
 }
@@ -175,11 +191,21 @@ pub(super) fn build(
             ShapeKind::Polygon { points, .. } => (points.clone(), "lines"),
             ShapeKind::LocationBox { a, b, .. } => (vec![*a, *b], "boxes"),
         };
-        if pts.is_empty() || all_outside(&pts) {
+        let radius = match &s.kind {
+            ShapeKind::Arc { radius, .. } => *radius,
+            _ => 0.0,
+        };
+        if pts.is_empty() || all_outside(&pts) || wild(&pts, radius) {
             stats.outside += 1;
             continue;
         }
         let d = by_page.entry(page).or_default();
+        if d.entities.len() >= MAX_ENTITIES {
+            if !stats.too_large.contains(&page) {
+                stats.too_large.push(page);
+            }
+            continue;
+        }
         match &s.kind {
             ShapeKind::Line { a, b } => {
                 line(layer, *a, *b, s.dashed, d);
@@ -260,6 +286,9 @@ pub(super) fn build(
     }
     let mut out = BTreeMap::new();
     for (page, drawing) in by_page {
+        if stats.too_large.contains(&page) {
+            continue;
+        }
         let text = write_dxf(&drawing);
         if text.len() > underlay::MAX_BYTES {
             stats.too_large.push(page);

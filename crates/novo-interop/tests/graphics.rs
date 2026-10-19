@@ -125,3 +125,33 @@ fn other_readers_can_ask_for_a_background_from_plain_shapes() {
     assert!(props.iter().any(|(k, _)| *k == underlay::KEY_DXF));
     assert!(background_properties(&[]).is_none());
 }
+
+#[test]
+fn shapes_with_huge_coordinates_are_dropped_not_drawn() {
+    use novo_interop::eplan::pxf::{PxfShape, background_properties};
+    let far = 1e12;
+    let shape = |kind| PxfShape {
+        page: None,
+        kind,
+        pen: None,
+        dashed: true,
+    };
+    let shapes = [
+        shape(ShapeKind::Line {
+            a: (0.0, 0.0),
+            b: (far, 0.0),
+        }),
+        shape(ShapeKind::Rect {
+            a: (0.0, 0.0),
+            b: (far, far),
+        }),
+        shape(ShapeKind::LocationBox {
+            a: (0.0, 0.0),
+            b: (far, far),
+            function: String::new(),
+            location: "K1".into(),
+        }),
+    ];
+    // Returns at once with nothing to draw.
+    assert!(background_properties(&shapes).is_none());
+}

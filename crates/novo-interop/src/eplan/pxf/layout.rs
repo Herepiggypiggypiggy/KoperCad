@@ -204,12 +204,24 @@ fn median(mut v: Vec<f64>) -> Option<f64> {
     v.get(v.len() / 2).copied()
 }
 
-/// Reads every mounting plate sheet in the file.
-pub(super) fn read_sheets(file: &PxfFile) -> Vec<LayoutSheet> {
+/// Most rectangles or texts one sheet may hold for the layout read; the
+/// matching below is quadratic, and a real sheet has a few hundred to a few
+/// thousand.
+const MAX_SHEET_OBJECTS: usize = 4000;
+/// A cabinet plate the title may state, in millimetres.
+const PLATE_RANGE: std::ops::RangeInclusive<f64> = 100.0..=5000.0;
+
+/// Reads every mounting plate sheet in the file; the second value says which
+/// sheets were left alone and why.
+pub(super) fn read_sheets(file: &PxfFile) -> (Vec<LayoutSheet>, Vec<String>) {
+    let mut skipped = Vec::new();
     let mut out = Vec::new();
     for (pi, page) in file.pages.iter().enumerate() {
         let ts = texts(file, pi);
-        let titled = ts.iter().find_map(|(_, s, _)| parse_title(s));
+        let titled = ts
+            .iter()
+            .find_map(|(_, s, _)| parse_title(s))
+            .filter(|(_, _, w, h)| PLATE_RANGE.contains(w) && PLATE_RANGE.contains(h));
         let named = page
             .title
             .get("en_US")
@@ -219,6 +231,15 @@ pub(super) fn read_sheets(file: &PxfFile) -> Vec<LayoutSheet> {
             continue;
         }
         let rs = rects(file, pi);
+        if rs.len() > MAX_SHEET_OBJECTS || ts.len() > MAX_SHEET_OBJECTS {
+            skipped.push(format!(
+                "Sheet {} has {} rectangles and {} texts; the cabinet layout is not read from sheets that large (limit {MAX_SHEET_OBJECTS}).",
+                page.label(),
+                rs.len(),
+                ts.len()
+            ));
+            continue;
+        }
         // The plate: the biggest rectangle drawn with the plate pen.
         let Some(plate) = rs
             .iter()
@@ -424,5 +445,5 @@ pub(super) fn read_sheets(file: &PxfFile) -> Vec<LayoutSheet> {
             notes,
         });
     }
-    out
+    (out, skipped)
 }

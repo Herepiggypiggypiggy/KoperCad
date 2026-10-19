@@ -361,13 +361,13 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         Default::default()
     };
     let mut layout_options = 0usize;
+    let mut layout_skipped: Vec<String> = Vec::new();
     let layouts: Vec<LayoutSheet> = if opts.draw {
         let mut seen = BTreeSet::new();
         let mut out = Vec::new();
-        for l in read_sheets(file)
-            .into_iter()
-            .filter(|l| created.contains(&l.page))
-        {
+        let (sheets, skipped) = read_sheets(file);
+        layout_skipped = skipped;
+        for l in sheets.into_iter().filter(|l| created.contains(&l.page)) {
             // Layout options A, B and C show the same cabinet: the first is placed.
             if seen.insert(l.location.clone()) {
                 out.push(l);
@@ -433,6 +433,9 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             report.note(format!(
                 "{layout_options} more mounting plate sheets show a cabinet that is already placed (layout options); they stay as drawings and are not placed a second time."
             ));
+        }
+        for n in &layout_skipped {
+            report.note(n.clone());
         }
         for l in &layouts {
             report.note(format!(

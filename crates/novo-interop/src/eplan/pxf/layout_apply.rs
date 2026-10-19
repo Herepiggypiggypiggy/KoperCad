@@ -16,38 +16,43 @@ const HEIGHT_KEY: &str = "height_mm";
 /// Cross-section depth of a duct: the sheet only shows the width.
 const DUCT_DEPTH_MM: f64 = 75.0;
 
-fn find_device(
-    tx: &Tx<'_>,
-    device_ids: &BTreeMap<String, DeviceId>,
-    location: &str,
-    d: &LayoutDevice,
-) -> Option<DeviceId> {
-    let want_loc = format!("+{location}-");
-    let matches = |tag: &DeviceTag, loose: bool| {
-        let s = tag.to_string();
-        s.contains(&want_loc)
-            && s.ends_with(&d.name)
-            && (loose || d.function.is_empty() || s.starts_with(&format!("={}", d.function)))
-    };
-    // Devices of this import first, then any device of the project.
-    for loose in [false, true] {
-        for (text, id) in device_ids {
-            if let Ok(tag) = DeviceTag::parse(text)
-                && matches(&tag, loose)
-            {
+/// Device tags of the import, parsed once per sheet set.
+struct Tags(Vec<(DeviceTag, DeviceId)>);
+
+impl Tags {
+    fn new(device_ids: &BTreeMap<String, DeviceId>) -> Self {
+        Self(
+            device_ids
+                .iter()
+                .filter_map(|(text, id)| DeviceTag::parse(text).ok().map(|t| (t, *id)))
+                .collect(),
+        )
+    }
+
+    fn find(&self, tx: &Tx<'_>, location: &str, d: &LayoutDevice) -> Option<DeviceId> {
+        let want_loc = format!("+{location}-");
+        let matches = |tag: &DeviceTag, loose: bool| {
+            let s = tag.to_string();
+            s.contains(&want_loc)
+                && s.ends_with(&d.name)
+                && (loose || d.function.is_empty() || s.starts_with(&format!("={}", d.function)))
+        };
+        // Devices of this import first, then any device of the project.
+        for loose in [false, true] {
+            if let Some((_, id)) = self.0.iter().find(|(t, _)| matches(t, loose)) {
                 return Some(*id);
             }
+            let found = tx
+                .project()
+                .devices()
+                .find(|dev| matches(&dev.tag, loose))
+                .map(|dev| dev.id);
+            if found.is_some() {
+                return found;
+            }
         }
-        let found = tx
-            .project()
-            .devices()
-            .find(|dev| matches(&dev.tag, loose))
-            .map(|dev| dev.id);
-        if found.is_some() {
-            return found;
-        }
+        None
     }
-    None
 }
 
 /// Returns how many records it created.
@@ -56,6 +61,7 @@ pub(super) fn place_sheets(
     sheets: &[LayoutSheet],
     device_ids: &BTreeMap<String, DeviceId>,
 ) -> Result<usize, novo_core::ModelError> {
+    let tags = Tags::new(device_ids);
     let mut created = 0usize;
     for sheet in sheets {
         let Ok(tag) = DeviceTag::parse(&format!("+{}", sheet.location)) else {
@@ -97,16 +103,9 @@ pub(super) fn place_sheets(
             created += 1;
         }
         for d in &sheet.devices {
-            let Some(device) = find_device(tx, device_ids, &sheet.location, d) else {
+            let Some(device) = tags.find(tx, &sheet.location, d) else {
                 continue;
             };
-            tx.update::<Device>(device, |dev| {
-                for (key, v) in [(WIDTH_KEY, d.w), (HEIGHT_KEY, d.h)] {
-                    dev.properties
-                        .entry(key.to_string())
-                        .or_insert(Value::Float((v * 10.0).round() / 10.0));
-                }
-            })?;
             // On a rail when the rail's centre line crosses the footprint
             // and the footprint lies within the rail's run.
             let rail = rail_ids.iter().find_map(|(id, r)| {
@@ -116,7 +115,20 @@ pub(super) fn place_sheets(
                     && d.x + d.w <= r.x + r.length + 0.5)
                     .then_some((*id, d.x - r.x))
             });
-            tx.place_device(device, sid, Point::new(d.x, d.y), false, rail)?;
+            // A device that cannot be placed is left out; the import goes on.
+            if tx
+                .place_device(device, sid, Point::new(d.x, d.y), false, rail)
+                .is_err()
+            {
+                continue;
+            }
+            tx.update::<Device>(device, |dev| {
+                for (key, v) in [(WIDTH_KEY, d.w), (HEIGHT_KEY, d.h)] {
+                    dev.properties
+                        .entry(key.to_string())
+                        .or_insert(Value::Float((v * 10.0).round() / 10.0));
+                }
+            })?;
             created += 1;
         }
     }
