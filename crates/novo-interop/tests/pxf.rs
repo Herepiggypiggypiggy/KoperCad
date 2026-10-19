@@ -15,7 +15,7 @@ fn the_plan_previews_then_applies_as_one_undo_step() {
     let mut doc = Document::default();
     let plan = plan_pxf(doc.project(), &file, &PxfOptions::default());
     let r = plan.report();
-    assert_eq!(r.count_of("pages (empty)"), 2);
+    assert_eq!(r.count_of("pages"), 2);
     assert_eq!(r.count_of("terminal strips"), 1);
     assert_eq!(r.count_of("terminals"), 1);
     assert_eq!(r.count_of("cables"), 1);
