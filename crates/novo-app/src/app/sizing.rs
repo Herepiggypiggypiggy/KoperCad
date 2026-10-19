@@ -8,6 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use eframe::egui;
+use novo_core::MountingPlate;
 use novo_layout::sizing::{
     EnclosureCatalog, EnclosureSize, Installation, Material, Note, Recommendation, SizingDevice,
     SizingRequest, recommend,
@@ -41,6 +42,32 @@ pub fn save_catalog(catalog: &EnclosureCatalog, path: &Path) -> std::io::Result<
         std::fs::create_dir_all(dir)?;
     }
     std::fs::write(path, catalog.to_csv())
+}
+
+/// Round-up step of a plate size, mm: sizes a person would order.
+const PLATE_STEP_MM: f64 = 50.0;
+
+/// A plate whose usable area (inside its margin) holds `required` mm2, with
+/// the proportions and margin of `like`. Never smaller than `like` in either
+/// direction, sides rounded up to 50 mm.
+pub fn plate_for_area(required: f64, like: MountingPlate) -> MountingPlate {
+    let aspect = if like.width > 0.0 && like.height > 0.0 {
+        like.width / like.height
+    } else {
+        0.75
+    };
+    let inner_w = (required.max(0.0) * aspect).sqrt();
+    let inner_h = if inner_w > 0.0 {
+        required / inner_w
+    } else {
+        0.0
+    };
+    let round = |side: f64| (side / PLATE_STEP_MM).ceil() * PLATE_STEP_MM;
+    MountingPlate {
+        width: round(inner_w + 2.0 * like.margin).max(like.width),
+        height: round(inner_h + 2.0 * like.margin).max(like.height),
+        margin: like.margin,
+    }
 }
 
 /// How the enclosure stands; the choices of the panel.
@@ -86,6 +113,8 @@ pub(super) struct SizingState {
     /// The "Size the enclosure" window is open.
     pub(super) panel_open: bool,
     pub(super) editor_open: bool,
+    /// A plate the person asked for with Apply; the Cabinet takes it.
+    pub(super) apply: Option<MountingPlate>,
     /// The list has edits not yet written to its file.
     dirty: bool,
     /// One line for the editor: what the last import or save did.
@@ -106,6 +135,7 @@ impl SizingState {
             inside: defaults.inside_max,
             panel_open: false,
             editor_open: false,
+            apply: None,
             dirty: false,
             notice: None,
         }
@@ -147,6 +177,21 @@ impl SizingState {
             inside_max: self.inside,
             ..SizingRequest::default()
         }
+    }
+
+    /// The plate these devices need, in the proportions of `current`; `None`
+    /// when `current` already holds them (or there are no devices).
+    pub(super) fn needed_plate(
+        &self,
+        devices: &[SizingDevice],
+        current: MountingPlate,
+    ) -> Option<MountingPlate> {
+        if devices.is_empty() {
+            return None;
+        }
+        let rec = recommend(devices, &self.catalog, &self.request());
+        let needed = plate_for_area(rec.required_plate_area, current);
+        (needed.width > current.width || needed.height > current.height).then_some(needed)
     }
 
     /// Merges a CSV file into the list: rows with a name already in the
@@ -260,6 +305,8 @@ pub(super) fn show_window(
     ctx: &egui::Context,
     state: &mut SizingState,
     devices: &[SizingDevice],
+    plate: Option<MountingPlate>,
+    fit: Option<MountingPlate>,
     chip: Option<&(String, String)>,
 ) -> Option<String> {
     if !state.panel_open {
@@ -271,7 +318,7 @@ pub(super) fn show_window(
         .open(&mut open)
         .show(ctx, |ui| {
             lesson = super::learn_ui::chip_button(ui, chip);
-            show_panel(ui, state, devices)
+            show_panel(ui, state, devices, plate, fit)
         });
     if let Some(w) = window {
         super::cabinet_bar::note_rect(
@@ -287,7 +334,13 @@ pub(super) fn show_window(
 }
 
 /// The content of the window. `devices` are the panel's devices from the project.
-fn show_panel(ui: &mut egui::Ui, state: &mut SizingState, devices: &[SizingDevice]) {
+fn show_panel(
+    ui: &mut egui::Ui,
+    state: &mut SizingState,
+    devices: &[SizingDevice],
+    plate: Option<MountingPlate>,
+    fit: Option<MountingPlate>,
+) {
     state.ensure_loaded();
     ui.weak("Planning values. The enclosure maker's own sizing wins.");
     ui.add_space(6.0);
@@ -341,6 +394,24 @@ fn show_panel(ui: &mut egui::Ui, state: &mut SizingState, devices: &[SizingDevic
         let rec = recommend(devices, &state.catalog, &state.request());
         for line in result_lines(&rec) {
             ui.label(line);
+        }
+        if let Some(plate) = plate {
+            ui.add_space(4.0);
+            // What Place all really needs wins over the area sum.
+            match fit.or_else(|| state.needed_plate(devices, plate)) {
+                Some(needed) => {
+                    let label = format!("Apply plate {} x {} mm", needed.width, needed.height);
+                    if novo_theme::widgets::ghost_button(ui, &label)
+                        .on_hover_text("Sets the plate of this panel to that size (one undo step)")
+                        .clicked()
+                    {
+                        state.apply = Some(needed);
+                    }
+                }
+                None => {
+                    ui.weak("The plate of this panel already holds them.");
+                }
+            }
         }
         if !rec.notes.is_empty() {
             ui.add_space(4.0);
@@ -532,6 +603,40 @@ mod tests {
         let lines = result_lines(&hot).join("\n");
         assert!(lines.contains("Needs about"), "{lines}");
         assert!(lines.contains("m3/h"), "{lines}");
+    }
+
+    #[test]
+    fn a_plate_for_an_area_keeps_proportions_margin_and_never_shrinks() {
+        let like = MountingPlate {
+            width: 600.0,
+            height: 800.0,
+            margin: 10.0,
+        };
+        // 558 600 mm2 usable at 3:4 is 647 x 863 mm, plus the margins, up to 50 mm.
+        let plate = plate_for_area(558_600.0, like);
+        assert_eq!(
+            (plate.width, plate.height, plate.margin),
+            (700.0, 900.0, 10.0)
+        );
+        // A small need leaves the plate as it is.
+        assert_eq!(plate_for_area(1_000.0, like), like);
+    }
+
+    #[test]
+    fn a_plate_is_offered_only_when_the_devices_do_not_fit() {
+        let state = SizingState::new();
+        let like = MountingPlate {
+            width: 600.0,
+            height: 800.0,
+            margin: 10.0,
+        };
+        let many: Vec<SizingDevice> = (0..65).map(|_| device(0.0)).collect();
+        let offer = state
+            .needed_plate(&many, like)
+            .expect("65 devices need more");
+        assert!(offer.width > like.width && offer.height > like.height);
+        assert!(state.needed_plate(&many[..3], like).is_none());
+        assert!(state.needed_plate(&[], like).is_none());
     }
 
     #[test]

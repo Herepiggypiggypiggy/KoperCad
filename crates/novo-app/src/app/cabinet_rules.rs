@@ -192,6 +192,60 @@ pub(super) fn plan(
     )
 }
 
+/// Largest side offered, mm.
+const MAX_PLATE_SIDE_MM: f64 = 2500.0;
+
+/// The smallest plate, in the proportions of the current one, on which
+/// `Place all` puts every device by the rules. Tried by planning on bigger
+/// and bigger copies of the layout, so it is what Place all will really do
+/// and not a sum of areas. `None` when the plate already holds everything or
+/// no plate up to 2.5 m a side does (a device the rules never place).
+pub(super) fn plate_that_holds(
+    project: &Project,
+    structure: StructureId,
+    layout: &CabinetLayout,
+    rules: &RuleSet,
+) -> Option<novo_core::MountingPlate> {
+    if plan(project, structure, layout, rules)
+        .0
+        .unplaced
+        .is_empty()
+    {
+        return None;
+    }
+    let round = |side: f64| (side / 50.0).ceil() * 50.0;
+    let mut trial = layout.clone();
+    let mut last = (layout.plate.width, layout.plate.height);
+    for step in 1..=40 {
+        let scale = 1.0 + 0.05 * f64::from(step);
+        let size = (
+            round(layout.plate.width * scale),
+            round(layout.plate.height * scale),
+        );
+        if size == last {
+            continue;
+        }
+        if size.0.max(size.1) > MAX_PLATE_SIDE_MM {
+            return None;
+        }
+        last = size;
+        trial.plate.width = size.0;
+        trial.plate.height = size.1;
+        if plan(project, structure, &trial, rules)
+            .0
+            .unplaced
+            .is_empty()
+        {
+            return Some(novo_core::MountingPlate {
+                width: size.0,
+                height: size.1,
+                margin: layout.plate.margin,
+            });
+        }
+    }
+    None
+}
+
 /// What the rules say about the devices on the plate, ready for the
 /// inspector.
 pub(super) struct Judgement {
