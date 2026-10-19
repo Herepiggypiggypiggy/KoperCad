@@ -21,8 +21,6 @@ use novo_symbols::{Library, Pack, Symbol};
 use super::read::{Plant, PlantPin, PlantSymbol};
 use crate::eplan::symbols::match_pins;
 
-/// The sheet height the file's y-up coordinates are flipped about (A3 landscape).
-const PAGE_HEIGHT: f64 = 297.0;
 const BOX_SYMBOL: &str = "import/box";
 const INTERRUPTION: &str = "iec/connectivity/interruption_point";
 /// How far beside a pin a page's interruption point sits.
@@ -107,10 +105,10 @@ struct Drawn {
     coil: bool,
 }
 
-fn design(sym: &PlantSymbol) -> Drawn {
+fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
     let lib = Library::shared(Pack::Iec);
     let (x, y) = sym.at;
-    let page_pos = |p: &PlantPin| Point::new(x + p.offset.0, PAGE_HEIGHT - (y + p.offset.1));
+    let page_pos = |p: &PlantPin| Point::new(x + p.offset.0, page_height - (y + p.offset.1));
     let names: Vec<String> = sym.pins.iter().map(|p| p.name.clone()).collect();
     let named = names.iter().all(|n| !n.is_empty());
     let terminal = sym.kind == "terminal";
@@ -200,7 +198,7 @@ fn design(sym: &PlantSymbol) -> Drawn {
     };
     Drawn {
         key: BOX_SYMBOL.to_string(),
-        origin: Point::new(x, PAGE_HEIGHT - y),
+        origin: Point::new(x, page_height - y),
         pins,
         bridges,
         pass_through: Vec::new(),
@@ -267,7 +265,12 @@ pub(super) fn draw(
             placed.push(None);
             continue;
         }
-        let d = design(sym);
+        // The file's y is up from the bottom of the sheet, whatever its size.
+        let page_height = tx
+            .project()
+            .page(page)
+            .map_or(297.0, |p| p.format.size_mm().1);
+        let d = design(sym, page_height);
         let role = match (&sym.terminal, sym.device, device) {
             (Some(name), Some(di), _) => match terminals.get(&(di, name.clone())) {
                 Some(&t) => SymbolRole::Terminal { terminals: vec![t] },

@@ -664,7 +664,13 @@ impl Reader {
             .filter_map(|c| c.attr("ID").map(str::to_string))
             .collect();
         if points.len() >= 2 {
-            self.net_points.push((name.to_string(), points));
+            // An unnamed net still needs a name to pair its interruption points by.
+            let name = if name.trim().is_empty() {
+                format!("N{}", self.net_points.len() + 1)
+            } else {
+                name.to_string()
+            };
+            self.net_points.push((name, points));
         }
     }
 

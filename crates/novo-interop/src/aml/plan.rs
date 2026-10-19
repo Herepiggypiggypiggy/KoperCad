@@ -28,6 +28,9 @@ pub struct AmlPlan {
     new_pages: Vec<usize>,
     /// Drawn symbols that would be placed (those of new devices).
     new_symbols: usize,
+    /// Nets that would get at least one wire (two or more pins on symbols
+    /// that would be placed).
+    new_nets: usize,
     /// Tags the file has that the project already holds.
     pub existing: Vec<String>,
     revision: u64,
@@ -99,6 +102,17 @@ pub fn plan_import(project: &Project, plant: &Plant) -> AmlPlan {
             None => new_page_names.contains(s.page.as_str()),
         })
         .count();
+    let placed = |s: usize| {
+        plant.symbols.get(s).is_some_and(|s| match s.device {
+            Some(d) => new_set.contains(&d),
+            None => new_page_names.contains(s.page.as_str()),
+        })
+    };
+    let new_nets = plant
+        .nets
+        .iter()
+        .filter(|n| n.pins.iter().filter(|(s, _)| placed(*s)).count() >= 2)
+        .count();
     AmlPlan {
         plant: plant.clone(),
         new_structures,
@@ -106,6 +120,7 @@ pub fn plan_import(project: &Project, plant: &Plant) -> AmlPlan {
         new_cables,
         new_pages,
         new_symbols,
+        new_nets,
         existing,
         revision: project.revision(),
     }
@@ -172,10 +187,10 @@ impl AmlPlan {
         );
         if self.new_symbols > 0 {
             text.push_str(&format!(
-                " Would draw {} symbols on {} pages and wire {} nets.",
+                " Would draw {} symbols on {} new pages and wire {} nets (plus interruption points for nets that cross pages).",
                 self.new_symbols,
                 self.new_pages.len(),
-                p.nets.len()
+                self.new_nets
             ));
         }
         text
@@ -279,7 +294,7 @@ impl AmlPlan {
             }
             // Pages, then what is drawn on them.
             let mut pages: BTreeMap<String, (usize, PageId)> = BTreeMap::new();
-            let existing: BTreeMap<String, PageId> = tx
+            let mut existing: BTreeMap<String, PageId> = tx
                 .project()
                 .pages()
                 .map(|p| (p.name.clone(), p.id))
@@ -290,7 +305,9 @@ impl AmlPlan {
                     Some(&id) => id,
                     None => {
                         created += 1;
-                        tx.add_page(name)?
+                        let id = tx.add_page(name.clone())?;
+                        existing.insert(name, id);
+                        id
                     }
                 };
                 pages.insert(p.name.clone(), (n, id));
@@ -307,7 +324,9 @@ impl AmlPlan {
                         Some(&id) => id,
                         None => {
                             created += 1;
-                            tx.add_page(s.page.clone())?
+                            let id = tx.add_page(s.page.clone())?;
+                            existing.insert(s.page.clone(), id);
+                            id
                         }
                     };
                     pages.insert(s.page.clone(), (extra, id));
