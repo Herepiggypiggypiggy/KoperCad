@@ -24,6 +24,8 @@ use novo_core::{
 };
 
 use super::draw::{Drawing, Role, draw};
+use super::graphics::{self, PageGraphics};
+use super::layout::{LayoutSheet, read_sheets};
 use super::model::*;
 use super::text::MlText;
 use crate::eplan::nets::{NetComparison, compare};
@@ -105,6 +107,10 @@ pub struct PxfPlan {
     drawing: Drawing,
     /// Free texts of the drawn pages.
     texts: Vec<NewText>,
+    /// Lines, boxes and arcs, as the background drawing of each page.
+    graphics: BTreeMap<usize, PageGraphics>,
+    /// Mounting plate sheets: the cabinet layout.
+    layouts: Vec<LayoutSheet>,
     devices: Vec<NewDevice>,
     cables: Vec<NewCable>,
     /// Tags the file has that the project already holds.
@@ -349,6 +355,19 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     } else {
         Vec::new()
     };
+    let (graphics, gstats) = if opts.draw {
+        graphics::build(&file.shapes, &created)
+    } else {
+        Default::default()
+    };
+    let layouts: Vec<LayoutSheet> = if opts.draw {
+        read_sheets(file)
+            .into_iter()
+            .filter(|l| created.contains(&l.page))
+            .collect()
+    } else {
+        Vec::new()
+    };
     report.moved("pages", pages.len());
     report.lost(
         "generated report pages",
@@ -381,6 +400,33 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             "the file's library does not explain them, so they are not placed",
         );
         report.moved("free texts", texts.len());
+        let shown: usize = graphics.values().map(|g| g.shapes).sum();
+        report.moved("lines, rectangles, arcs and location boxes", shown);
+        report.lost(
+            "lines outside the sheet",
+            gstats.outside,
+            "the height index marks at the sheet edge; KoperCAD draws its own frame",
+        );
+        report.lost(
+            "page drawings that are too large",
+            gstats.too_large.len(),
+            "more geometry than a page background can hold",
+        );
+        if shown > 0 {
+            report.note(format!(
+                "Lines, rectangles, arcs and {} location boxes sit in the background drawing of {} pages (View > Show or hide the DXF background), grey and thin: positions and sizes are exact, pen widths and dash patterns are not carried.",
+                gstats.location_boxes, gstats.pages
+            ));
+        }
+        for l in &layouts {
+            report.note(format!(
+                "Cabinet +{}: {} {:.0} x {:.0} mm plate from the mounting plate sheet, {} rails, {} ducts, {} devices placed. Sizes are the sheet's catalogue widths, not the parts' outlines; rails and ducts are read from the drawn rectangles.",
+                l.location, l.cabinet, l.width, l.height, l.rails.len(), l.ducts.len(), l.devices.len()
+            ));
+            for n in &l.notes {
+                report.note(n.clone());
+            }
+        }
         report.lost(
             "free texts",
             file.texts.len() - texts.len(),
@@ -501,6 +547,8 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         pages,
         drawing,
         texts,
+        graphics,
+        layouts,
         devices,
         cables,
         existing,
@@ -539,6 +587,8 @@ impl PxfPlan {
             + self.drawing.symbols.len()
             + self.drawing.wires.len()
             + self.texts.len()
+            + self.graphics.len()
+            + self.layouts.len()
             + self.drawing.junctions.len()
             + self.drawing.stats.box_symbols
             + self
@@ -609,8 +659,17 @@ impl PxfPlan {
             }
             let mut page_ids = BTreeMap::new();
             for p in &self.pages {
-                page_ids.insert(p.source, tx.add_page(p.name.clone())?);
+                let id = tx.add_page(p.name.clone())?;
+                page_ids.insert(p.source, id);
                 created += 1;
+                if let Some(g) = self.graphics.get(&p.source) {
+                    tx.update::<novo_core::Page>(id, |page| {
+                        for (k, v) in &g.properties {
+                            page.properties.insert((*k).to_string(), v.clone());
+                        }
+                    })?;
+                    created += g.shapes;
+                }
             }
             let mut device_ids: BTreeMap<String, DeviceId> = BTreeMap::new();
             let mut terminal_ids: BTreeMap<(String, String), TerminalId> = BTreeMap::new();
@@ -653,6 +712,7 @@ impl PxfPlan {
                 created += 1;
             }
             created += self.draw_pages(tx, &page_ids, &device_ids, &terminal_ids, &mut check)?;
+            created += super::layout_apply::place_sheets(tx, &self.layouts, &device_ids)?;
             Ok(created)
         })?;
         Ok(Some((created, changes, check)))

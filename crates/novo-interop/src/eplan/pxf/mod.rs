@@ -22,6 +22,9 @@
 
 mod dialect;
 mod draw;
+mod graphics;
+mod layout;
+mod layout_apply;
 mod library;
 mod model;
 mod plan;
@@ -38,6 +41,8 @@ use thiserror::Error;
 use crate::report::Report;
 
 pub use dialect::{Dialect, EPLAN_2024};
+pub use graphics::{GraphicsStats, PxfShape, ShapeKind};
+pub use layout::{LayoutDevice, LayoutDuct, LayoutRail, LayoutSheet};
 pub use library::{DOWN, LEFT, LibFunction, LibPort, LibSymbol, Match, PxfLibrary, RIGHT, UP};
 pub use model::{
     DeviceRole, ObjId, PageClass, PxfCore, PxfDevice, PxfFile, PxfHeader, PxfInterruption, PxfKind,
@@ -97,9 +102,10 @@ fn skipped_name(kind: u32) -> (&'static str, &'static str) {
             "EPLAN's symbol library is the user's own; symbols come in with the symbol mapping",
         ),
         26 => ("groups", "grouping is not carried"),
-        31 => ("lines", "drawing geometry follows with the net rebuild"),
-        32 => ("arcs", "drawing geometry follows with the net rebuild"),
-        88 | 89 => ("location boxes", "boxes are not carried"),
+        31 | 32 | 34 | 88 | 89 => (
+            "lines",
+            "drawing objects with no usable geometry in the file",
+        ),
         _ => ("other objects", "object type not known to this reader"),
     }
 }
