@@ -184,6 +184,9 @@ fn structure_el(name: &str, description: &str, enclosure: bool, plate: Option<(f
     }
     if enclosure {
         el.push(El::attribute("Enclosure", "xs:boolean", "true"));
+    } else if !function {
+        // Said outright: a reader takes a bare location for a panel.
+        el.push(El::attribute("Enclosure", "xs:boolean", "false"));
     }
     if let Some((w, h)) = plate {
         let n = crate::sheets::number_text;

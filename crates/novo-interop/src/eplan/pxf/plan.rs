@@ -58,6 +58,11 @@ struct NewPage {
     source: usize,
 }
 
+/// A location without a plant section: the panel the devices sit in.
+fn is_panel_tag(tag: &DeviceTag) -> bool {
+    !tag.location.is_empty() && tag.function.is_empty()
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NewStructure {
     tag: DeviceTag,
@@ -598,7 +603,8 @@ impl PxfPlan {
                 })?;
             }
             for s in &self.structures {
-                tx.add_structure(s.tag.clone(), "", false)?;
+                // A location that holds pages or devices is a panel.
+                tx.add_structure(s.tag.clone(), "", is_panel_tag(&s.tag))?;
                 created += 1;
             }
             let mut page_ids = BTreeMap::new();

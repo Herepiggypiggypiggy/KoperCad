@@ -94,3 +94,32 @@ fn dismissals_stick_and_go_with_their_subjects() {
     doc.undo().unwrap();
     assert!(doc.project().is_dismissed("connect.facing", &subjects));
 }
+
+#[test]
+fn a_plain_location_becomes_the_cabinet_without_a_second_node() {
+    let mut doc = Document::default();
+    let (id, _) = doc
+        .transact("Import", |tx| tx.add_structure(tag("+K1"), "", false))
+        .unwrap();
+    assert!(doc.project().enclosure_of(&tag("+K1-X1")).is_none());
+    doc.transact("Create cabinet", |tx| tx.set_enclosure(id, true))
+        .unwrap();
+    assert_eq!(doc.project().structures().count(), 1);
+    assert!(doc.project().enclosure_of(&tag("+K1-X1")).is_some());
+    // A plate keeps the node a cabinet.
+    doc.transact("Plate", |tx| {
+        tx.set_plate(
+            id,
+            Some(MountingPlate {
+                width: 600.0,
+                height: 800.0,
+                margin: 0.0,
+            }),
+        )
+    })
+    .unwrap();
+    assert!(
+        doc.transact("Off", |tx| tx.set_enclosure(id, false))
+            .is_err()
+    );
+}

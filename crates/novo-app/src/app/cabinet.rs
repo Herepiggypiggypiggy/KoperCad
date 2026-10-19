@@ -1885,7 +1885,9 @@ impl NovoApp {
                 ui.vertical_centered(|ui| {
                     ui.label(match (&location, structure) {
                         (None, _) => "No panel yet. Give a page a panel name (+K1) to lay it out.",
-                        (Some(_), None) => "This panel has no cabinet yet.",
+                        (Some(_), None) => {
+                            "This panel has no cabinet yet. Create one to set its plate and place devices."
+                        }
                         _ => "Set the size of the mounting plate to start placing devices.",
                     });
                     ui.add_space(8.0);
@@ -2358,12 +2360,22 @@ impl NovoApp {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));
             }
             Ask::CreateCabinet(tag) => {
-                let command = Command::AddStructure {
-                    tag,
-                    description: String::new(),
-                    enclosure: true,
-                };
-                self.cabinet_edit("Create cabinet", move |tx| tx.execute(command).map(|_| ()));
+                // An imported project already has the node, as a plain
+                // location: it becomes the cabinet instead of a second node.
+                let existing = self
+                    .backend
+                    .document()
+                    .and_then(|d| d.project().structure_by_tag(&tag).map(|s| s.id));
+                self.cabinet_edit("Create cabinet", move |tx| match existing {
+                    Some(id) => tx.set_enclosure(id, true),
+                    None => tx
+                        .execute(Command::AddStructure {
+                            tag,
+                            description: String::new(),
+                            enclosure: true,
+                        })
+                        .map(|_| ()),
+                });
             }
         }
     }
