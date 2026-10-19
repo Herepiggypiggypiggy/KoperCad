@@ -190,4 +190,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Formatting is platform independent and already checked on Linux.
       - run: cargo clippy --workspace --all-targets -- -D warnings
-      - run: cargo test --workspace
+      # novo-cfd's validation tests take over 35 minutes in a Windows debug build
+      # (run 39043670782 hit the timeout while still passing); Linux runs them in
+      # three shards, and the engine is pure Rust with no platform code.
+      - run: cargo test --workspace --exclude novo-cfd
