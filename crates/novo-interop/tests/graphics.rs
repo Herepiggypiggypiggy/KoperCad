@@ -63,6 +63,7 @@ fn the_mounting_plate_sheet_becomes_a_cabinet_with_rails_ducts_and_placements() 
     let mut doc = Document::default();
     let plan = plan_pxf(doc.project(), &f, &PxfOptions::default());
     assert!(plan.report().text().contains("Cabinet +CAB1"));
+    assert!(!plan.report().text().contains("could not be placed"));
     plan.apply(&mut doc).unwrap();
     let p = doc.project();
     let s = p.structure_by_tag(&tag("+CAB1")).expect("the location");
