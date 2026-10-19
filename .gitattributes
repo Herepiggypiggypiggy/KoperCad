@@ -10,3 +10,11 @@ crates/novo-storage/tests/fixtures/*.json text eol=lf
 # Source files that tests read with include_str!/read_to_string and match on "\n"
 # (tips_tests, languages_tests) stay LF in a Windows checkout.
 *.rs text eol=lf
+
+# Data files that tests compare byte for byte with generated output (golden
+# project JSON, shaders, SVG/XML/TOML fixtures) stay LF in a Windows checkout.
+*.json text eol=lf
+*.wgsl text eol=lf
+*.svg text eol=lf
+*.xml text eol=lf
+*.epj text eol=lf
