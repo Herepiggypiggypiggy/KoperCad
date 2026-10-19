@@ -359,6 +359,26 @@ waiting. Try a smaller file, or the STEP file alone.",
     }
 }
 
+/// Merges `parts` into the user catalog file at `path` (created when absent).
+/// Every writer of that file goes through here: an abandoned slow read can
+/// still finish while a retry or a pin save runs, so one load-modify-save at
+/// a time, and a rename so a half-written file never replaces the catalog.
+pub(crate) fn save_parts_to_user_catalog(path: &Path, parts: &[CatalogPart]) -> Result<(), String> {
+    static CATALOG_SAVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _guard = CATALOG_SAVE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut user = if path.exists() {
+        Catalog::load(path).map_err(|e| e.to_string())?
+    } else {
+        Catalog::new()
+    };
+    for p in parts {
+        user.upsert(p.clone());
+    }
+    let tmp = path.with_extension("json.tmp");
+    user.save(&tmp).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, path).map_err(|e| e.to_string())
+}
+
 /// Stores the file in the library and reads it. What the file adds to the
 /// part (parts from a BMEcat file, a size read from STEP) goes into the
 /// user's catalog at `catalog_path`; the changed parts come back so the
@@ -413,22 +433,7 @@ pub(crate) fn import_path(
         let Some(catalog_path) = catalog_path else {
             return Err("no profile folder to save the catalog in".into());
         };
-        // An abandoned slow read can still finish while a retry runs: one
-        // load-modify-save at a time, and a rename so a half-written file
-        // never replaces the catalog.
-        static CATALOG_SAVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
-        let _guard = CATALOG_SAVE.lock().unwrap_or_else(|e| e.into_inner());
-        let mut user = if catalog_path.exists() {
-            Catalog::load(catalog_path).map_err(|e| e.to_string())?
-        } else {
-            Catalog::new()
-        };
-        for p in &changed {
-            user.upsert(p.clone());
-        }
-        let tmp = catalog_path.with_extension("json.tmp");
-        user.save(&tmp).map_err(|e| e.to_string())?;
-        std::fs::rename(&tmp, catalog_path).map_err(|e| e.to_string())?;
+        save_parts_to_user_catalog(catalog_path, &changed)?;
     }
 
     let mut summary = Summary {

@@ -21,8 +21,8 @@ use crate::style::{Color, Stroke};
 use crate::text::{Anchor, Label};
 use glam::Vec2;
 use novo_core::{
-    AnyId, ChangeSet, Endpoint, JunctionId, PageId, PageKind, Point, Project, Rotation, SymbolId,
-    SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent, TextId, WireId,
+    AnyId, ChangeSet, DeviceTag, Endpoint, JunctionId, PageId, PageKind, Point, Project, Rotation,
+    SymbolId, SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent, TextId, WireId,
 };
 use std::collections::{BTreeSet, HashMap};
 use std::f32::consts::FRAC_PI_2;
@@ -1594,7 +1594,8 @@ impl PageScene {
                 .text(t)
                 .is_some_and(|t| t.content == TextContent::DeviceTag)
         });
-        let text = symbol_text(project, sym).filter(|_| !tag_text);
+        let text =
+            symbol_text(project, sym).filter(|_| !tag_text && !repeats_pin_tag(project, sym));
         let mut tag = None;
         if let Some(text) = text {
             // To the right of the placed symbol, vertically centred on its
@@ -2166,11 +2167,30 @@ fn frame_segments(shape: &Shape, out: &mut Vec<(Vec2, Vec2)>) {
     }
 }
 
+/// A device tag as drawn on `page`: the product part alone (`-XM1`) when the
+/// tag has the page's own structure, which the title block already names.
+/// Properties, reports and pages of another structure keep the full tag.
+fn drawn_tag(project: &Project, page: PageId, tag: &DeviceTag) -> String {
+    let same = project
+        .page(page)
+        .is_some_and(|p| !p.structure.is_empty() && p.structure.same_structure(tag));
+    if same && !tag.product.is_empty() {
+        let product = DeviceTag {
+            product: tag.product.clone(),
+            ..DeviceTag::default()
+        };
+        return product.to_string();
+    }
+    tag.to_string()
+}
+
 /// The text shown next to a symbol: its device tag, terminal designation,
 /// interruption point name or potential name.
 pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
     match &sym.role {
-        SymbolRole::Device { device, .. } => project.device(*device).map(|d| d.tag.to_string()),
+        SymbolRole::Device { device, .. } => project
+            .device(*device)
+            .map(|d| drawn_tag(project, sym.page, &d.tag)),
         // Terminals sit a few mm apart on a strip, so they show only their
         // own name (1, 2, ...); the full designation (-X1:2) would run over
         // the neighbours. One name per level; levels usually share it.
@@ -2191,6 +2211,27 @@ pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
         }
         SymbolRole::Unassigned => None,
     }
+}
+
+/// Whether `sym` is a plug or connector pin whose device already shows its tag
+/// on another pin of the same page: a plug of twenty pins names itself once,
+/// each pin keeps its own number.
+fn repeats_pin_tag(project: &Project, sym: &SymbolInstance) -> bool {
+    let SymbolRole::Device { device, .. } = &sym.role else {
+        return false;
+    };
+    // The pins of a plug and the boxes an import draws for the parts of one
+    // device: the tag stands once, not on each.
+    if !matches!(
+        novo_symbols::Pack::path_of(&sym.symbol.0),
+        "connectivity/device_pin" | "import/box"
+    ) {
+        return false;
+    }
+    project
+        .symbols_of_device(*device)
+        .into_iter()
+        .any(|o| o.id < sym.id && o.page == sym.page && o.symbol == sym.symbol)
 }
 
 /// Terminals of one strip further apart than this (mm, between symbol
@@ -2217,6 +2258,10 @@ const END_BRIDGED_SYMBOL: &str = "iec/terminals/terminal_end_bridged";
 #[cfg(test)]
 #[path = "nfpa_keys_test.rs"]
 mod nfpa_keys_test;
+
+#[cfg(test)]
+#[path = "tag_text_test.rs"]
+mod tag_text_test;
 
 /// Whether a symbol key is one of the two terminals that carry the bridge
 /// dot, in any pack.
@@ -2297,7 +2342,10 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
     }
     let mut heads = HashMap::new();
     for (strip, mut syms) in by_strip {
-        let Some(tag) = project.device(strip).map(|d| d.tag.to_string()) else {
+        let Some(tag) = project
+            .device(strip)
+            .map(|d| drawn_tag(project, page, &d.tag))
+        else {
             continue;
         };
         if tag.is_empty() {

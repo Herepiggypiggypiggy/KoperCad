@@ -77,6 +77,21 @@ pub struct PlantPage {
     pub title: String,
 }
 
+/// A free text of a page (role `Text`): a cross section, a note. Device tags
+/// are not among them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlantText {
+    /// Name of the page it sits on.
+    pub page: String,
+    pub value: String,
+    /// Millimetres on the page, origin bottom left, y up.
+    pub at: (f64, f64),
+    /// Character height in millimetres when the file says; else the default.
+    pub height: Option<f64>,
+    /// Turn in degrees counter-clockwise, 0 when the file has none.
+    pub rotation: f64,
+}
+
 /// A connection point of a drawn symbol.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlantPin {
@@ -145,6 +160,7 @@ pub struct Plant {
     /// The runs of the wires the file draws, by page name; empty when the
     /// file only lists nets.
     pub segments: Vec<PlantSegment>,
+    pub texts: Vec<PlantText>,
     pub report: Report,
 }
 
@@ -391,6 +407,7 @@ impl Reader {
             }
             "page" => {
                 self.page(node, &name, &attrs);
+                self.texts_of(node, &name);
                 self.symbols_of(node, None);
                 return;
             }
@@ -446,6 +463,12 @@ impl Reader {
                     }
                     _ => None,
                 };
+                // A location is a panel unless the file says it is not.
+                let enclosure = first(&attrs, &["Enclosure"]).map_or(
+                    role.contains("enclosure")
+                        || (!tag.location.is_empty() && tag.function.is_empty()),
+                    |v| v == "true",
+                );
                 self.plant.structures.push(PlantStructure {
                     tag: DeviceTag {
                         product: Vec::new(),
@@ -454,8 +477,7 @@ impl Reader {
                     description: first(&attrs, &["Description"])
                         .unwrap_or_default()
                         .to_string(),
-                    enclosure: first(&attrs, &["Enclosure"]).is_some_and(|v| v == "true")
-                        || role.contains("enclosure"),
+                    enclosure,
                     plate,
                 });
                 self.children(node, &inner);
@@ -614,6 +636,38 @@ impl Reader {
                 .unwrap_or_default()
                 .to_string(),
         });
+    }
+
+    /// The free texts on a page: `Text` children with a value and a place.
+    fn texts_of(&mut self, node: &Node, page: &str) {
+        for t in node
+            .children
+            .iter()
+            .filter(|c| c.name == "InternalElement" && role_of(c) == "text")
+        {
+            let a = attributes(t);
+            let coord = |k: &str| {
+                first(&a, &[k])
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .filter(|v| v.is_finite() && v.abs() <= MAX_PAGE_MM)
+            };
+            let value = first(&a, &["Value"]).unwrap_or_default().trim().to_string();
+            let (Some(x), Some(y)) = (coord("Frame.x"), coord("Frame.y")) else {
+                continue;
+            };
+            if !value.is_empty() {
+                self.plant.texts.push(PlantText {
+                    page: page.to_string(),
+                    value,
+                    at: (x, y),
+                    height: coord("Height").filter(|h| *h > 0.0 && *h <= 50.0),
+                    rotation: first(&a, &["Rotation", "Frame.rz"])
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .filter(|v| v.is_finite())
+                        .unwrap_or(0.0),
+                });
+            }
+        }
     }
 
     /// The `Symbol` children of a device or strip, or of a page (symbols of no device).

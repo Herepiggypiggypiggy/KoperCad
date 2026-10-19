@@ -17,7 +17,7 @@ use std::time::{Duration, Instant};
 
 use eframe::egui;
 use novo_interop::part3d::pins::{Fix, PinMapping, apply_to_part, map_terminals, scan_step};
-use novo_parts::{Catalog, CatalogPart, DataSource, POSITIONS_SOURCE_KEY, PartKey};
+use novo_parts::{CatalogPart, DataSource, POSITIONS_SOURCE_KEY, PartKey};
 
 /// Longest a scan may take before it is given up.
 const SCAN_LIMIT: Duration = Duration::from_secs(20);
@@ -112,13 +112,7 @@ pub(crate) fn apply(part: &mut CatalogPart, d: &Detection, with_estimates: bool)
 
 /// Saves `part` into the user catalog file at `path` (created when absent).
 pub(crate) fn save_to_user_catalog(path: &Path, part: &CatalogPart) -> Result<(), String> {
-    let mut user = if path.exists() {
-        Catalog::load(path).map_err(|e| e.to_string())?
-    } else {
-        Catalog::new()
-    };
-    user.upsert(part.clone());
-    user.save(path).map_err(|e| e.to_string())
+    super::parts_import::save_parts_to_user_catalog(path, std::slice::from_ref(part))
 }
 
 /// Writes hand-typed positions into `part`, kept inside the part's outline

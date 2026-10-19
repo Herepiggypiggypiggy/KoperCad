@@ -20,6 +20,6 @@ mod write;
 pub use plan::{AmlPlan, plan_import};
 pub use read::{
     AmlError, Plant, PlantCable, PlantCore, PlantDevice, PlantNet, PlantPage, PlantPin,
-    PlantSegment, PlantStructure, PlantSymbol, PlantTerminal, read_aml,
+    PlantSegment, PlantStructure, PlantSymbol, PlantTerminal, PlantText, read_aml,
 };
 pub use write::{AmlExport, AmlOptions, INTERFACE_LIB, ROLE_LIB, export_project};

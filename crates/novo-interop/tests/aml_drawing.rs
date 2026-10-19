@@ -303,3 +303,96 @@ fn the_preview_counts_only_nets_it_would_wire() {
             .contains("wire")
     );
 }
+
+#[test]
+fn a_long_net_name_is_not_printed_beside_its_interruption_points() {
+    let long = "=A1+CAB1/02 Outputs and a long page title.7";
+    let plant = read_aml(&file().replace("\"L1\"", &format!("\"{long}\""))).unwrap();
+    let mut doc = Document::new(Project::new("t"));
+    plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
+    let names: Vec<String> = doc
+        .project()
+        .symbols()
+        .filter_map(|s| match &s.role {
+            SymbolRole::Interruption { name } => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(names.len(), 2, "one point on each page");
+    assert_eq!(names[0], names[1], "both ends pair by the same name");
+    assert!(names[0].len() <= 8 && !names[0].contains(' '), "{names:?}");
+}
+
+#[test]
+fn a_page_label_splits_into_structure_and_name_with_its_title_apart() {
+    let p = imported();
+    let page = p.pages().find(|p| p.name == "02").expect("page 02");
+    assert_eq!(page.structure.to_string(), "=A1+CAB1");
+    assert_eq!(page.title, "Outputs");
+}
+
+#[test]
+fn free_texts_of_a_page_are_drawn_on_it() {
+    let text = r#"<InternalElement ID="t1" Name="Text1"><Attribute Name="Value" AttributeDataType="xs:string"><Value>6mm2</Value></Attribute><Attribute Name="Frame"><Attribute Name="x" AttributeDataType="xs:double"><Value>30</Value></Attribute><Attribute Name="y" AttributeDataType="xs:double"><Value>100</Value></Attribute></Attribute><RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Text"/></InternalElement>"#;
+    let with = file().replace(
+        "<RoleRequirements RefBaseRoleClassPath=\"KoperCADRoleClassLib/Page\"/></InternalElement>\n<InternalElement ID=\"pg2\"",
+        &format!("{text}<RoleRequirements RefBaseRoleClassPath=\"KoperCADRoleClassLib/Page\"/></InternalElement>\n<InternalElement ID=\"pg2\""),
+    );
+    let plant = read_aml(&with).unwrap();
+    assert_eq!(plant.texts.len(), 1);
+    let mut doc = Document::new(Project::new("t"));
+    plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
+    let p = doc.project();
+    let shown: Vec<String> = p.texts().filter_map(|t| p.text_string(t.id)).collect();
+    assert_eq!(shown, ["6mm2"]);
+}
+
+#[test]
+fn two_nets_of_one_name_stay_two_nets_across_pages() {
+    // Net 2 (pages 1 and 2) and a second net of the same name between the
+    // same two pages must not pair their points with each other.
+    let f = file().replace("\"N3\"", "\"L1\"");
+    let p = {
+        let plant = read_aml(&f).unwrap();
+        let mut doc = Document::new(Project::new("t"));
+        plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
+        doc.project().clone()
+    };
+    let mut names: Vec<String> = p
+        .symbols()
+        .filter_map(|s| match &s.role {
+            SymbolRole::Interruption { name } => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    let points = p
+        .symbols()
+        .filter(|s| matches!(s.role, SymbolRole::Interruption { .. }))
+        .count();
+    assert_eq!(
+        names.len() * 2,
+        points,
+        "{names:?}: each name has two points"
+    );
+}
+
+#[test]
+fn a_text_height_in_the_file_is_kept() {
+    let text = r#"<InternalElement ID="t1" Name="Text1"><Attribute Name="Value" AttributeDataType="xs:string"><Value>note</Value></Attribute><Attribute Name="Height" AttributeDataType="xs:double"><Value>1.8</Value></Attribute><Attribute Name="Rotation" AttributeDataType="xs:double"><Value>270</Value></Attribute><Attribute Name="Frame"><Attribute Name="x" AttributeDataType="xs:double"><Value>30</Value></Attribute><Attribute Name="y" AttributeDataType="xs:double"><Value>100</Value></Attribute></Attribute><RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Text"/></InternalElement>"#;
+    let with = file().replace(
+        "<RoleRequirements RefBaseRoleClassPath=\"KoperCADRoleClassLib/Page\"/></InternalElement>\n<InternalElement ID=\"pg2\"",
+        &format!("{text}<RoleRequirements RefBaseRoleClassPath=\"KoperCADRoleClassLib/Page\"/></InternalElement>\n<InternalElement ID=\"pg2\""),
+    );
+    let plant = read_aml(&with).unwrap();
+    let mut doc = Document::new(Project::new("t"));
+    plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
+    let heights: Vec<f64> = doc.project().texts().map(|t| t.height_mm).collect();
+    assert_eq!(heights, [1.8]);
+    assert!(
+        doc.project()
+            .texts()
+            .all(|t| t.placement.rotation == novo_core::Rotation::R270)
+    );
+}
