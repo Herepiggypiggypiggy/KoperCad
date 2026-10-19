@@ -69,8 +69,8 @@ pub(super) fn place_sheets(
         if plate.is_some() {
             continue;
         }
+        tx.set_enclosure(sid, true)?;
         tx.update::<Structure>(sid, |s| {
-            s.enclosure = true;
             if s.description.is_empty() {
                 s.description = sheet.cabinet.clone();
             }
