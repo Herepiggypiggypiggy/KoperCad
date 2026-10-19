@@ -355,11 +355,22 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     } else {
         Default::default()
     };
+    let mut layout_options = 0usize;
     let layouts: Vec<LayoutSheet> = if opts.draw {
-        read_sheets(file)
+        let mut seen = BTreeSet::new();
+        let mut out = Vec::new();
+        for l in read_sheets(file)
             .into_iter()
             .filter(|l| created.contains(&l.page))
-            .collect()
+        {
+            // Layout options A, B and C show the same cabinet: the first is placed.
+            if seen.insert(l.location.clone()) {
+                out.push(l);
+            } else {
+                layout_options += 1;
+            }
+        }
+        out
     } else {
         Vec::new()
     };
@@ -413,9 +424,14 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                 gstats.location_boxes, gstats.pages
             ));
         }
+        if layout_options > 0 {
+            report.note(format!(
+                "{layout_options} more mounting plate sheets show a cabinet that is already placed (layout options); they stay as drawings and are not placed a second time."
+            ));
+        }
         for l in &layouts {
             report.note(format!(
-                "Cabinet +{}: {} {:.0} x {:.0} mm plate from the mounting plate sheet, {} rails, {} ducts, {} devices placed. Sizes are the sheet's catalogue widths, not the parts' outlines; rails and ducts are read from the drawn rectangles.",
+                "Cabinet +{}: {} {:.0} x {:.0} mm plate from the mounting plate sheet, {} rails, {} ducts, {} devices placed. Footprints are the outlines drawn on the sheet, not the parts' own data; rails and ducts are read from the drawn rectangles.",
                 l.location, l.cabinet, l.width, l.height, l.rails.len(), l.ducts.len(), l.devices.len()
             ));
             for n in &l.notes {
