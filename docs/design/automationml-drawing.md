@@ -23,11 +23,11 @@ Under the project element (role `Project`):
 | Element | Role | Attributes |
 | --- | --- | --- |
 | `Pages` group | `PageGroup` | |
-| a page, named by its label (`=10D41+K1BG1/05`) | `Page` | `Title`, `Function`, `Location`, `Number` |
+| a page, named by its label (`=A1+CAB1/01`) | `Page` | `Title`, `Function`, `Location`, `Number` |
 | a symbol with no device (an earth symbol), child of its page | `Symbol` | as below |
-| a plant section or location (`=10D41`, `+K1BG1`) | `PlantSection`, `Location` | `Tag` |
-| a device, named by its designation (`=10D41+K1BG1-K045`) | `Device` | `Tag`, `Description`, `Manufacturer`, `OrderNumber` |
-| a terminal strip (`+K1BG1-X4`) | `TerminalStrip` | `Tag`; one `Terminal` interface per terminal |
+| a plant section or location (`=A1`, `+CAB1`) | `PlantSection`, `Location` | `Tag` |
+| a device, named by its designation (`=A1+CAB1-K1`) | `Device` | `Tag`, `Description`, `Manufacturer`, `OrderNumber` |
+| a terminal strip (`+CAB1-X1`) | `TerminalStrip` | `Tag`; one `Terminal` interface per terminal |
 | a symbol of a device or strip, child of it | `Symbol` | `Page` (a page name), `Kind`, `Terminal` (strip only), `Frame` (`x`, `y` in mm) |
 | a pin, `ExternalInterface` of a symbol | `Pin` interface | `Name`; `X`, `Y` offset from the symbol in mm; `Faces` (`up,down,left,right`) |
 | a cable and its cores | `Cable`, `CableCore` | `Tag`; cores by name |

@@ -72,7 +72,7 @@ pub struct PlantCable {
 /// A drawn page of the file's drawing profile (role `Page`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlantPage {
-    /// The page's name, usually its label (`=10D41+K1BG1/05`).
+    /// The page's name, usually its label (`=A1+CAB1/01`).
     pub name: String,
     pub title: String,
 }
