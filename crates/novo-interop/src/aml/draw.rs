@@ -571,10 +571,19 @@ pub(super) fn draw(
         else {
             continue;
         };
+        // The shapes are y up from the bottom of the sheet; flip with this page's own height.
+        let height = tx
+            .project()
+            .page(page)
+            .map_or(297.0, |p| p.format.size_mm().1);
         tx.update::<novo_core::Page>(page, |p| {
             for (k, v) in &props {
                 p.properties.insert((*k).to_string(), v.clone());
             }
+            p.properties.insert(
+                crate::underlay::KEY_HEIGHT.to_string(),
+                novo_core::Value::Float(height),
+            );
         })?;
         out.records += shapes.len();
     }
