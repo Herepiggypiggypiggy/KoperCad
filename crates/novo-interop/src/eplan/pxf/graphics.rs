@@ -47,7 +47,7 @@ pub enum ShapeKind {
     LocationBox {
         a: (f64, f64),
         b: (f64, f64),
-        /// `=10D41` and `+K1B` as EPLAN shows them, when the box has them.
+        /// `=A2` and `+CAB` as EPLAN shows them, when the box has them.
         function: String,
         location: String,
     },

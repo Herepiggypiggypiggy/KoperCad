@@ -58,7 +58,7 @@ pub struct LayoutDuct {
 pub struct LayoutDevice {
     /// `-Q011`, the device part of the tag.
     pub name: String,
-    /// The function code the sheet prints under the tag (`=10D10` without `=`).
+    /// The function code the sheet prints under the tag (`=A1` without `=`).
     pub function: String,
     /// Top left of the footprint, plate mm.
     pub x: f64,
@@ -73,9 +73,9 @@ pub struct LayoutDevice {
 pub struct LayoutSheet {
     /// Index into the file's pages.
     pub page: usize,
-    /// `K1BG1`, without the plus.
+    /// `CAB1`, without the plus.
     pub location: String,
-    /// The cabinet type from the title, e.g. `Rittal AE 1060`.
+    /// The cabinet type from the title, e.g. `Boxco BX 1060`.
     pub cabinet: String,
     pub width: f64,
     pub height: f64,
@@ -115,7 +115,7 @@ fn near(a: f64, b: f64) -> bool {
     (a - b).abs() <= EPS
 }
 
-/// `Kast +K1BG1: Rittal AE 1060 600x760x210 mm  (note)`.
+/// `Kast +CAB1: Boxco BX 1060 600x760x210 mm  (note)`.
 fn parse_title(t: &str) -> Option<(String, String, f64, f64)> {
     let rest = t.trim().strip_prefix("Kast")?.trim_start();
     let rest = rest.strip_prefix('+').unwrap_or(rest);

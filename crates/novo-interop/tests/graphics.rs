@@ -27,7 +27,7 @@ fn shapes_are_read_with_their_geometry() {
             _ => None,
         })
         .expect("a location box");
-    assert_eq!(b, ((40.0, 42.0), (212.0, 112.0), "+K1B".to_string()));
+    assert_eq!(b, ((40.0, 42.0), (212.0, 112.0), "+CAB".to_string()));
     assert!(f.shapes.iter().any(|s| s.dashed));
     assert!(!f.skipped.contains_key(&31));
 }
@@ -44,10 +44,10 @@ fn the_pages_get_their_lines_and_boxes_as_a_background_drawing() {
     let page = doc
         .project()
         .pages()
-        .find(|p| p.name.starts_with("=10D10+K1BG1/1"))
+        .find(|p| p.name.starts_with("=A1+CAB1/1"))
         .expect("the schematic page");
     let text = underlay::stored_text(&page.properties).expect("a background drawing");
-    assert!(text.contains("+K1B"), "the location box carries its name");
+    assert!(text.contains("+CAB"), "the location box carries its name");
     assert_eq!(
         page.properties.get(underlay::KEY_HEIGHT),
         Some(&Value::Float(297.0))
@@ -62,10 +62,10 @@ fn the_mounting_plate_sheet_becomes_a_cabinet_with_rails_ducts_and_placements() 
     let f = read_pxf_str(LAYOUT).unwrap();
     let mut doc = Document::default();
     let plan = plan_pxf(doc.project(), &f, &PxfOptions::default());
-    assert!(plan.report().text().contains("Cabinet +K1BG1"));
+    assert!(plan.report().text().contains("Cabinet +CAB1"));
     plan.apply(&mut doc).unwrap();
     let p = doc.project();
-    let s = p.structure_by_tag(&tag("+K1BG1")).expect("the location");
+    let s = p.structure_by_tag(&tag("+CAB1")).expect("the location");
     assert!(s.enclosure);
     let plate = s.plate.expect("a plate");
     assert_eq!((plate.width, plate.height), (600.0, 760.0));
@@ -86,7 +86,7 @@ fn the_mounting_plate_sheet_becomes_a_cabinet_with_rails_ducts_and_placements() 
     assert!((din[0].y - 160.0).abs() < 0.5, "{}", din[0].y);
     assert!((din[0].x - 15.0).abs() < 0.5 && (din[0].length - 570.0).abs() < 0.5);
     assert!((ducts[0].width - 25.0).abs() < 0.5);
-    let q = p.devices_by_tag(&tag("=10D10+K1BG1-Q011"))[0];
+    let q = p.devices_by_tag(&tag("=A1+CAB1-Q011"))[0];
     let placed = p
         .all::<novo_core::CabinetPlacement>()
         .find(|c| c.device == q)
@@ -97,7 +97,7 @@ fn the_mounting_plate_sheet_becomes_a_cabinet_with_rails_ducts_and_placements() 
     assert_eq!(placed.rail, Some(din[0].id));
     let w = p.device(q).unwrap().properties.get("width_mm").cloned();
     assert_eq!(w, Some(Value::Float(40.0)));
-    let x1 = p.devices_by_tag(&tag("=10D10+K1BG1-X1"))[0];
+    let x1 = p.devices_by_tag(&tag("=A1+CAB1-X1"))[0];
     assert!(
         p.all::<novo_core::CabinetPlacement>()
             .any(|c| c.device == x1)

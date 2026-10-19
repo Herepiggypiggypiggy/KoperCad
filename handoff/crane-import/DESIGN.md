@@ -25,7 +25,7 @@ newest `vNN` and the epj in it.
 
 ### 1.1 Inside the v95 epj (counts from the real file)
 
-- 65 pages (`O4`): 23 schematic pages with function code and location (=10D10 ... =19N14), 3 cover pages, 36 generated
+- 65 pages (`O4`): 23 schematic pages with function code and location (=A1 ... =A9), 3 cover pages, 36 generated
   report pages (=DOC: contents, lists, cable and terminal plans; made of `O52` report cells) and 3 layout pages.
 - 467 symbol placements (`O17`) of 203-odd repeated tags -> 98 devices after the configurator's own count; 417 connection
   nodes (`O42`); 198 interruption points (`O70`); 122 cable cores (`O59`); 11336 texts but most belong to the
@@ -44,7 +44,7 @@ newest `vNN` and the epj in it.
 | Configurator / PXF | KoperCAD | Quality |
 | --- | --- | --- |
 | project data (`O14`, `project.json`) | project info: order number, customer, title, revision, voltage | exact |
-| `O6` structure rows + page codes | sections `=10D41`, locations `+K1BG1` with titles | exact |
+| `O6` structure rows + page codes | sections `=A2`, locations `+CAB1` with titles | exact |
 | `O4` schematic page | page named `=fn+loc/nn title`, A3, page kind schematic | exact |
 | `O4` report (=DOC) page | not imported: KoperCAD generates its own reports | left out, counted |
 | `O17` tag (`P150`) | device `=fn+loc-X` ; repeated placements = one device with several drawings | exact |
