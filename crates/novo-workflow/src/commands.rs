@@ -490,7 +490,6 @@ pub const COMMANDS: &[CommandInfo] = &[
                 "kraan",
                 "configurator",
                 "demag",
-                "scherpel",
                 "migrate",
                 "other tool",
             ],

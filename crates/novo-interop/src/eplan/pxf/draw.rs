@@ -546,6 +546,9 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
 
 /// A minimum spanning tree over `pts` by right-angle distance. Pins that a
 /// symbol already joins inside (a terminal's two sides) start joined.
+/// Nets with more points than this are joined as a chain, not by every pair.
+const MAX_PAIRWISE: usize = 3000;
+
 fn spanning_wires(page: usize, pts: &[(usize, u16, Point)], placed: &[Placed]) -> Vec<DrawnWire> {
     let n = pts.len();
     let mut parent: Vec<usize> = (0..n).collect();
@@ -570,8 +573,29 @@ fn spanning_wires(page: usize, pts: &[(usize, u16, Point)], placed: &[Placed]) -
         }
     }
     let mut edges: Vec<(f64, usize, usize)> = Vec::new();
-    for i in 0..n {
-        for j in i + 1..n {
+    if n <= MAX_PAIRWISE {
+        for i in 0..n {
+            for j in i + 1..n {
+                if pts[i].0 == pts[j].0 && pts[i].1 == pts[j].1 {
+                    continue;
+                }
+                let d = (pts[i].2.x - pts[j].2.x).abs() + (pts[i].2.y - pts[j].2.y).abs();
+                edges.push((d, i, j));
+            }
+        }
+    } else {
+        // A net this big (a damaged or hostile file) would need n squared
+        // edges: chain the points in reading order instead.
+        let mut order: Vec<usize> = (0..n).collect();
+        order.sort_by(|&a, &b| {
+            pts[a]
+                .2
+                .x
+                .total_cmp(&pts[b].2.x)
+                .then(pts[a].2.y.total_cmp(&pts[b].2.y))
+        });
+        for w in order.windows(2) {
+            let (i, j) = (w[0], w[1]);
             if pts[i].0 == pts[j].0 && pts[i].1 == pts[j].1 {
                 continue;
             }

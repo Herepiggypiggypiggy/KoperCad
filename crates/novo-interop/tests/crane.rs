@@ -113,3 +113,35 @@ fn a_real_project_imports_with_its_cables_and_terminals() {
     assert!(r.count_of("terminals") > 0, "{}", r.text());
     assert!(r.count_of("cables") > 0, "{}", r.text());
 }
+
+#[test]
+fn non_finite_numbers_in_a_file_never_reach_the_model() {
+    use novo_interop::eplan::pxf::{plan_pxf, read_pxf_str};
+    let text = std::fs::read_to_string(fixture().join("custom/demo/v2/DEMO-1.epj")).unwrap();
+    // A position, a port offset, a text height and a text angle go bad.
+    let bad = text
+        .replace(r#"A762="50/240""#, r#"A762="NaN/240""#)
+        .replace(r#"A862="0/-8""#, r#"A862="0/inf""#)
+        .replace(r#"A762="80/260""#, r#"A762="1e999/260""#);
+    assert_ne!(bad, text);
+    let file = read_pxf_str(&bad).unwrap();
+    let plan = plan_pxf(&Project::new("x"), &file, &PxfOptions::default());
+    let mut doc = Document::new(Project::new("x"));
+    plan.apply(&mut doc).unwrap();
+    let finite = |p: novo_core::Point| p.x.is_finite() && p.y.is_finite();
+    for s in doc.project().symbols() {
+        assert!(finite(s.placement.origin), "{s:?}");
+        assert!(s.pins.iter().all(|p| finite(p.offset)), "{s:?}");
+    }
+    for w in doc.project().wires() {
+        assert!(w.route.iter().all(|p| finite(*p)));
+    }
+    for t in doc.project().texts() {
+        assert!(finite(t.placement.offset));
+    }
+    // The text with the overflowing position is not placed at all.
+    assert!(!doc.project().texts().any(|t| matches!(
+        &t.content,
+        novo_core::TextContent::Literal { text } if text == "Slewing drive"
+    )));
+}

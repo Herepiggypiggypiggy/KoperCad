@@ -174,10 +174,16 @@ impl PxfLibrary {
     }
 }
 
+/// A number as the file writes it. `NaN`, `inf` and values that overflow
+/// parse as `f64` in Rust but must never reach the model.
+pub(super) fn finite(s: &str) -> Option<f64> {
+    s.trim().parse::<f64>().ok().filter(|v| v.is_finite())
+}
+
 /// `x/y` as the file writes a point.
 pub(super) fn parse_point(s: &str) -> Option<(f64, f64)> {
     let (x, y) = s.split_once('/')?;
-    Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+    Some((finite(x)?, finite(y)?))
 }
 
 /// Splits a `;`-separated designation list, keeping empty entries so the

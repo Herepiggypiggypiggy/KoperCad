@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::io::BufRead;
 
 use super::PxfError;
-use super::library::{LibFunction, LibPort, LibSymbol, parse_point, split_pins};
+use super::library::{LibFunction, LibPort, LibSymbol, finite, parse_point, split_pins};
 use super::model::*;
 use super::stream::{Event, Tokens};
 use super::text::MlText;
@@ -84,7 +84,7 @@ impl Frame {
             .filter(|(n, _)| n.starts_with("S40x"))
             .find_map(|(_, a)| find(a, "A762"))?;
         let (x, y) = v.split_once('/')?;
-        Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+        Some((finite(x)?, finite(y)?))
     }
 
     fn matrix(&self) -> [f64; 4] {
@@ -92,7 +92,7 @@ impl Frame {
             self.props
                 .iter()
                 .find_map(|(e, a)| (e == "S39x761").then(|| find(a, n)).flatten())
-                .and_then(|v| v.trim().parse().ok())
+                .and_then(finite)
                 .unwrap_or(d)
         };
         [
@@ -450,15 +450,12 @@ fn finish(
                 })
                 .map(MlText::parse)
                 .unwrap_or_default();
-            let position = f.position().or_else(|| {
-                let (x, y) = f.own("A501")?.split_once('/')?;
-                Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
-            });
+            let position = f.position().or_else(|| parse_point(f.own("A501")?));
             let style = |n: &str| -> Option<f64> {
                 f.props
                     .iter()
                     .find_map(|(e, a)| (e == "S54x505").then(|| find(a, n)).flatten())
-                    .and_then(|v| v.trim().parse().ok())
+                    .and_then(finite)
             };
             out.texts.push(PxfText {
                 id,

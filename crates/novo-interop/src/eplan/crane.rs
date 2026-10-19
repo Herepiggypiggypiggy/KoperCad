@@ -44,7 +44,7 @@ pub struct CraneSource {
     pub dir: PathBuf,
     /// `95` for `v95`, when the folder is named so.
     pub version: Option<u32>,
-    /// `scherpel` in `output/custom/scherpel/v95`.
+    /// The project folder name in `output/custom/<name>/v95`.
     pub name: Option<String>,
     /// Other versions of the same project that were not picked.
     pub other_versions: Vec<u32>,
