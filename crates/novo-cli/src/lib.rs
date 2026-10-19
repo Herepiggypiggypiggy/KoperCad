@@ -816,6 +816,7 @@ fn import_eplan(
         &parsed,
         &PxfOptions {
             lang: lang.to_string(),
+            ..PxfOptions::default()
         },
     );
     finish_import(plan, base, json, output, out)
@@ -912,6 +913,7 @@ fn import_crane(
         path,
         &PxfOptions {
             lang: lang.to_string(),
+            ..PxfOptions::default()
         },
     )
     .map_err(|e| Failure::new(exit::READ, format!("cannot import {}: {e}", path.display())))?;

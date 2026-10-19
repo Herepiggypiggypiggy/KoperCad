@@ -49,88 +49,28 @@ fn the_reader_scopes_library_graphics_away_from_pages() {
     }
 }
 
+/// The drawn pages of a real project: nets agree with EPLAN's rules.
 #[test]
-fn probe_symbols() {
-    use novo_interop::eplan::symbols::{EplanSymbol, SymbolMapper};
-    use novo_symbols::Pack;
-    use std::collections::BTreeMap;
+fn the_drawn_pages_keep_the_nets_of_the_real_project() {
     let Some(path) = real_file() else { return };
-    let f = read_pxf(BufReader::new(std::fs::File::open(path).unwrap())).unwrap();
-    let mapper = SymbolMapper::new(Pack::Iec);
-    type Key = (i64, i64, (i64, i64, i64), i64);
-    let mut groups: BTreeMap<Key, Vec<usize>> = BTreeMap::new();
-    for (i, d) in f.devices.iter().enumerate() {
-        let Some(s) = d.symbol else { continue };
-        groups
-            .entry((
-                d.function_def,
-                d.library_id,
-                (s.number, s.variant, s.library),
-                d.variant,
-            ))
-            .or_default()
-            .push(i);
-    }
-    for (k, idx) in &groups {
-        let d = &f.devices[idx[0]];
-        let found = f.library.symbol(k.0, k.1, k.2, k.3, d.pins.len());
-        let func = f.library.function(k.2);
-        let fname = func
-            .map(|x| x.name.get("en_US").to_string())
-            .unwrap_or_default();
-        let sname = found
-            .map(|(s, q)| {
-                format!(
-                    "{:?} {} ports {}",
-                    q,
-                    s.name.get("en_US"),
-                    s.variants[&(k.3 as u32)].len()
-                )
-            })
-            .unwrap_or("NOT FOUND".into());
-        let es = EplanSymbol {
-            key: None,
-            function: Some(fname.clone()),
-            letters: Some(d.tag.letters.clone()),
-            pins: d.pins.clone(),
-        };
-        let r = mapper.map(&es);
-        eprintln!(
-            "{:?} x{} | fn '{}' | sym {} | letters {} pins {:?} => {:?} {:?} unmapped {:?}",
-            k,
-            idx.len(),
-            fname,
-            sname,
-            d.tag.letters,
-            d.pins,
-            r.symbol_id(),
-            r.basis,
-            r.pins.unmapped
-        );
-    }
-}
-
-#[test]
-fn probe_orphan_cores() {
-    let Some(path) = real_file() else { return };
-    let f = read_pxf(BufReader::new(std::fs::File::open(path).unwrap())).unwrap();
-    use std::collections::BTreeSet;
-    let cable_ids: BTreeSet<_> = f
-        .devices
-        .iter()
-        .filter(|d| d.role == novo_interop::eplan::pxf::DeviceRole::Cable)
-        .filter_map(|d| d.id)
-        .collect();
-    for c in &f.cores {
-        let ok = c.cable_ref.is_some_and(|r| cable_ids.contains(&r));
-        if !ok {
-            eprintln!(
-                "orphan core {:?} ref {:?} num {} page {:?}",
-                c.cable.full(),
-                c.cable_ref,
-                c.number,
-                c.page
-            );
-        }
-    }
+    let (plan, _, _) = novo_interop::eplan::crane::plan_crane(
+        &novo_core::Project::new("x"),
+        &path,
+        &novo_interop::eplan::pxf::PxfOptions::default(),
+    )
+    .unwrap();
+    let r = plan.report();
+    assert!(r.count_of("symbols drawn") > 100, "{}", r.text());
+    assert!(r.count_of("wires") > 100, "{}", r.text());
+    let mut doc = novo_core::Document::new(novo_core::Project::new("x"));
+    let (_, _, check) = plan.apply_checked(&mut doc).unwrap().unwrap();
+    let c = check.expect("pages are drawn");
+    assert!(c.compared > 500, "{c:?}");
+    assert!(
+        c.import_only.is_empty(),
+        "a net EPLAN's rules give is split in KoperCAD: {:?}",
+        c.import_only
+    );
+    // Only same-name terminals and names used more than twice may join more.
+    assert!(c.project_only.len() < 10, "{:?}", c.project_only);
 }

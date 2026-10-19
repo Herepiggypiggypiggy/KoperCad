@@ -21,6 +21,7 @@
 //! them.
 
 mod dialect;
+mod draw;
 mod library;
 mod model;
 mod plan;

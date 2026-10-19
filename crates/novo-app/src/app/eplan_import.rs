@@ -133,7 +133,14 @@ impl NovoApp {
                 } else {
                     langs[0].clone()
                 };
-                let plan = plan_pxf(doc.project(), &file, &PxfOptions { lang: lang.clone() });
+                let plan = plan_pxf(
+                    doc.project(),
+                    &file,
+                    &PxfOptions {
+                        lang: lang.clone(),
+                        ..PxfOptions::default()
+                    },
+                );
                 let (check, survey) = inspect(path);
                 self.wb.eplan_import = Some(EplanImport {
                     file: name,
@@ -184,7 +191,14 @@ impl NovoApp {
                     langs[0].clone()
                 };
                 let notes = crane_notes(&src, &summary);
-                let mut plan = plan_pxf(doc.project(), &file, &PxfOptions { lang: lang.clone() });
+                let mut plan = plan_pxf(
+                    doc.project(),
+                    &file,
+                    &PxfOptions {
+                        lang: lang.clone(),
+                        ..PxfOptions::default()
+                    },
+                );
                 for n in &notes {
                     plan.note(n.clone());
                 }
@@ -335,6 +349,7 @@ impl NovoApp {
                 &import.data,
                 &PxfOptions {
                     lang: import.lang.trim().to_owned(),
+                    ..PxfOptions::default()
                 },
             );
             for n in &import.notes {

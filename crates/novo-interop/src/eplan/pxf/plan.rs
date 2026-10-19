@@ -5,22 +5,28 @@
 //! until [`PxfPlan::apply`], which creates everything as one undo step. An
 //! import only adds: a device whose tag exists keeps what the project says.
 //!
-//! What is created: plant sections (`=A1`) and locations (`+CAB1`), one empty
-//! page per EPLAN page (named by its label and title), one device per tag
-//! (EPLAN draws a device many times; KoperCAD has one device with many
-//! drawings), terminal strips with their terminals, cables with their cores,
-//! and the parts behind part numbers. Symbols, wires and texts are not
-//! carried yet and are counted in the report.
+//! What is created: plant sections (`=A1`) and locations (`+CAB1`), one
+//! page per EPLAN page (named by its label and title; generated report
+//! pages are left out), one device per tag (EPLAN draws a device many times;
+//! KoperCAD has one device with many drawings), terminal strips with their
+//! terminals, cables with their cores, and the parts behind part numbers.
+//! When the file embeds its symbol library, the circuit-diagram pages are
+//! drawn too (see `draw`): symbols, interruption points and wires. Free
+//! texts are not carried yet and are counted in the report.
 
 use std::collections::btree_map::Entry;
 use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
-    Cable, CableCore, ChangeSet, DeviceKind, DeviceTag, Document, Part, PartId, Project,
+    Cable, CableCore, ChangeSet, DeviceId, DeviceKind, DeviceTag, Document, Endpoint, Part, PartId,
+    Placement, Project, SymbolInstance, SymbolRole, TerminalId, Wire,
 };
 
+use super::draw::{Drawing, Role, draw};
 use super::model::*;
 use super::text::MlText;
+use crate::eplan::nets::{NetComparison, compare};
+use crate::eplan::symbols::SymbolMapper;
 use crate::report::Report;
 use crate::sheets::ApplyError;
 
@@ -30,14 +36,25 @@ pub struct PxfOptions {
     /// Language of titles and type texts (`en_US`); another language is used
     /// when this one is missing.
     pub lang: String,
+    /// Draw the circuit-diagram pages (symbols and wires) as well as
+    /// creating the devices. On unless the person asks for the data only.
+    pub draw: bool,
 }
 
 impl Default for PxfOptions {
     fn default() -> Self {
         Self {
             lang: "en_US".to_string(),
+            draw: true,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct NewPage {
+    name: String,
+    /// Index in the file's pages.
+    source: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,7 +85,8 @@ struct NewCable {
 #[derive(Debug, Clone)]
 pub struct PxfPlan {
     structures: Vec<NewStructure>,
-    pages: Vec<String>,
+    pages: Vec<NewPage>,
+    drawing: Drawing,
     devices: Vec<NewDevice>,
     cables: Vec<NewCable>,
     /// Tags the file has that the project already holds.
@@ -133,7 +151,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     let mut page_names = BTreeSet::new();
     let mut pages_existing = 0usize;
     let mut report_pages = 0usize;
-    for p in &file.pages {
+    for (pi, p) in file.pages.iter().enumerate() {
         if p.class() == PageClass::Report {
             report_pages += 1;
             continue;
@@ -147,7 +165,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         if have_page.contains(&name) || !page_names.insert(name.clone()) {
             pages_existing += 1;
         } else {
-            pages.push(name);
+            pages.push(NewPage { name, source: pi });
         }
     }
 
@@ -276,7 +294,13 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         .filter(|d| d.kind == DeviceKind::TerminalStrip)
         .count();
     report.moved("sections and locations", structures.len());
-    report.moved("pages (empty)", pages.len());
+    let created: BTreeSet<usize> = pages.iter().map(|p| p.source).collect();
+    let drawing = if opts.draw {
+        draw(file, &SymbolMapper::new(novo_symbols::Pack::Iec), &created)
+    } else {
+        Drawing::default()
+    };
+    report.moved("pages", pages.len());
     report.lost(
         "generated report pages",
         report_pages,
@@ -298,21 +322,54 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             .filter(|l| l.what != "other objects")
             .cloned(),
     );
-    report.lost(
-        "symbol drawings",
-        placements,
-        "pages are created empty; symbols and wires follow with the symbol mapping and net rebuild",
-    );
-    report.lost(
-        "texts",
-        file.texts.len(),
-        "free texts need a place on a drawn page",
-    );
-    report.lost(
-        "interruption points",
-        file.interruptions.len(),
-        "they become cross references once the pages are drawn",
-    );
+    let st = &drawing.stats;
+    if opts.draw {
+        report.moved("symbols drawn", drawing.symbols.len());
+        report.moved("wires", st.wires);
+        report.lost(
+            "symbol drawings",
+            st.unplaced,
+            "the file's library does not explain them, so they are not placed",
+        );
+        report.lost("texts", file.texts.len(), "free texts are not placed yet");
+        report.note(format!(
+            "Drawn: {} circuit-diagram pages, {} symbols from KoperCAD's library, {} as labelled boxes, {} interruption points, {} nets joined by EPLAN's rules into {} wires. Symbol artwork is inferred (a box where no KoperCAD symbol fits); positions, pin counts, tags and which points are one net are read from the file. Wire routes are plain right-angle runs, not EPLAN's lines.",
+            st.pages, st.library_symbols, st.box_symbols, st.interruptions, st.nets, st.wires
+        ));
+        if !st.box_functions.is_empty() {
+            let list: Vec<String> = st
+                .box_functions
+                .iter()
+                .map(|(f, n)| format!("{f} x{n}"))
+                .collect();
+            report.note(format!("Drawn as boxes: {}.", list.join(", ")));
+        }
+        if st.loose > 0 {
+            report.note(format!(
+                "{} placements found their library symbol only loosely (same function, another variant); their connection points may be off.",
+                st.loose
+            ));
+        }
+        for (what, n) in &st.issues {
+            report.note(format!("Net check: {n} {what}."));
+        }
+    } else {
+        report.lost(
+            "symbol drawings",
+            placements,
+            "drawing was switched off; pages are created empty",
+        );
+        report.lost(
+            "texts",
+            file.texts.len(),
+            "free texts need a place on a drawn page",
+        );
+        report.lost(
+            "interruption points",
+            file.interruptions.len(),
+            "they become cross references once the pages are drawn",
+        );
+    }
     if let Some(l) = file_report.lossy.iter().find(|l| l.what == "other objects") {
         report.lossy.push(l.clone());
     }
@@ -379,16 +436,38 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         report.note(format!("Project name set from the file: {n}."));
     }
 
-    PxfPlan {
+    let mut plan = PxfPlan {
         structures,
         pages,
+        drawing,
         devices,
         cables,
         existing,
         project_info,
         report,
         revision: project.revision(),
+    };
+    if !plan.drawing.symbols.is_empty()
+        && let Ok(Some((_, _, Some(c)))) = plan.apply_checked(&mut Document::new(project.clone()))
+    {
+        let agree = c
+            .compared
+            .saturating_sub(c.import_only.len() + c.project_only.len());
+        plan.report.note(if c.agrees() {
+            format!(
+                "Net check: KoperCAD's own nets of the drawn pages equal the nets EPLAN's rules give, over {} connection points.",
+                c.compared
+            )
+        } else {
+            format!(
+                "Net check: KoperCAD's own nets agree with EPLAN's rules over {agree} of {} connection points; {} pairs EPLAN joins are apart and {} pairs KoperCAD joins (same-name terminals, names used more than twice) EPLAN keeps apart.",
+                c.compared,
+                c.import_only.len(),
+                c.project_only.len()
+            )
+        });
     }
+    plan
 }
 
 impl PxfPlan {
@@ -396,6 +475,8 @@ impl PxfPlan {
     pub fn creates(&self) -> usize {
         self.structures.len()
             + self.pages.len()
+            + self.drawing.symbols.len()
+            + self.drawing.wires.len()
             + self
                 .devices
                 .iter()
@@ -432,12 +513,23 @@ impl PxfPlan {
         &self,
         doc: &mut Document,
     ) -> Result<Option<(usize, ChangeSet)>, ApplyError> {
+        Ok(self.apply_checked(doc)?.map(|(n, c, _)| (n, c)))
+    }
+
+    /// Like [`apply_with_changes`](Self::apply_with_changes), and also says
+    /// whether KoperCAD's own nets of what was drawn agree with the nets
+    /// EPLAN's rules gave (`None` when nothing was drawn).
+    pub fn apply_checked(
+        &self,
+        doc: &mut Document,
+    ) -> Result<Option<(usize, ChangeSet, Option<NetComparison>)>, ApplyError> {
         if doc.project().revision() != self.revision {
             return Err(ApplyError::Outdated);
         }
         if self.is_empty() {
             return Ok(None);
         }
+        let mut check = None;
         let (created, changes) = doc.transact("Import EPLAN project", |tx| {
             let mut created = 0usize;
             if let Some((name, description)) = &self.project_info {
@@ -450,10 +542,13 @@ impl PxfPlan {
                 tx.add_structure(s.tag.clone(), "", false)?;
                 created += 1;
             }
-            for name in &self.pages {
-                tx.add_page(name.clone())?;
+            let mut page_ids = BTreeMap::new();
+            for p in &self.pages {
+                page_ids.insert(p.source, tx.add_page(p.name.clone())?);
                 created += 1;
             }
+            let mut device_ids: BTreeMap<String, DeviceId> = BTreeMap::new();
+            let mut terminal_ids: BTreeMap<(String, String), TerminalId> = BTreeMap::new();
             let mut parts: BTreeMap<(String, String), PartId> = tx
                 .project()
                 .parts()
@@ -461,6 +556,7 @@ impl PxfPlan {
                 .collect();
             for d in &self.devices {
                 let id = tx.add_device_of_kind(d.tag.clone(), d.description.clone(), d.kind)?;
+                device_ids.insert(d.tag.to_string(), id);
                 created += 1;
                 if !d.order_number.is_empty() {
                     let key = (d.manufacturer.clone(), d.order_number.clone());
@@ -480,7 +576,8 @@ impl PxfPlan {
                     tx.assign_part(id, part)?;
                 }
                 for name in &d.terminals {
-                    tx.add_terminal(id, name.clone())?;
+                    let t = tx.add_terminal(id, name.clone())?;
+                    terminal_ids.insert((d.tag.to_string(), name.clone()), t);
                     created += 1;
                 }
             }
@@ -490,8 +587,86 @@ impl PxfPlan {
                 tx.update::<Cable>(id, |x| x.description = c.description.clone())?;
                 created += 1;
             }
+            created += self.draw_pages(tx, &page_ids, &device_ids, &terminal_ids, &mut check)?;
             Ok(created)
         })?;
-        Ok(Some((created, changes)))
+        Ok(Some((created, changes, check)))
+    }
+
+    /// Places the drawn symbols and their wires; returns how many records.
+    fn draw_pages(
+        &self,
+        tx: &mut novo_core::Tx<'_>,
+        page_ids: &BTreeMap<usize, novo_core::PageId>,
+        device_ids: &BTreeMap<String, DeviceId>,
+        terminal_ids: &BTreeMap<(String, String), TerminalId>,
+        check: &mut Option<NetComparison>,
+    ) -> Result<usize, novo_core::ModelError> {
+        let mut created = 0usize;
+        let mut main_taken: BTreeSet<DeviceId> = BTreeSet::new();
+        let mut placed: Vec<Option<novo_core::SymbolId>> = Vec::new();
+        for s in &self.drawing.symbols {
+            let Some(&page) = page_ids.get(&s.page) else {
+                placed.push(None);
+                continue;
+            };
+            let role = match &s.role {
+                Role::Device { tag, coil } => {
+                    let tag = canonical(tag);
+                    let id = device_ids.get(&tag).copied().or_else(|| {
+                        let t = DeviceTag::parse(&tag).ok()?;
+                        tx.project().devices_by_tag(&t).first().copied()
+                    });
+                    match id {
+                        Some(device) => SymbolRole::Device {
+                            device,
+                            main: *coil && main_taken.insert(device),
+                        },
+                        None => SymbolRole::Unassigned,
+                    }
+                }
+                Role::Terminal { strip, name } => {
+                    match terminal_ids.get(&(canonical(strip), name.clone())) {
+                        Some(&t) => SymbolRole::Terminal { terminals: vec![t] },
+                        None => SymbolRole::Unassigned,
+                    }
+                }
+                Role::Interruption(name) => SymbolRole::Interruption { name: name.clone() },
+                Role::Plain => SymbolRole::Unassigned,
+            };
+            let id = tx.place_symbol(
+                page,
+                s.key.as_str(),
+                Placement::at(s.origin),
+                s.pins.clone(),
+                role,
+            )?;
+            if !s.bridges.is_empty() || !s.pass_through.is_empty() {
+                tx.update::<SymbolInstance>(id, |x| {
+                    x.bridges = s.bridges.clone();
+                    x.pass_through = s.pass_through.clone();
+                })?;
+            }
+            placed.push(Some(id));
+            created += 1;
+        }
+        for w in &self.drawing.wires {
+            let (Some(Some(a)), Some(Some(b))) = (placed.get(w.from.0), placed.get(w.to.0)) else {
+                continue;
+            };
+            let id = tx.connect(Endpoint::pin(*a, w.from.1), Endpoint::pin(*b, w.to.1))?;
+            if !w.route.is_empty() {
+                tx.update::<Wire>(id, |x| x.route = w.route.clone())?;
+            }
+            created += 1;
+        }
+        if !placed.is_empty() {
+            let netlist = tx.project().netlist();
+            *check = Some(compare(&self.drawing.recon, &netlist, |k| {
+                let &(si, pin) = self.drawing.keys.get(k)?;
+                Some(Endpoint::pin((*placed.get(si)?)?, pin))
+            }));
+        }
+        Ok(created)
     }
 }

@@ -969,7 +969,7 @@ fn import_eplan_previews_with_a_counted_not_carried_list_and_writes_nothing() {
     let pxf = pxf_fixture();
     let r = novo(&["import", "eplan", s(&pxf)]);
     assert_eq!(r.code, exit::OK, "{}", r.err);
-    assert!(r.out.contains("2 pages (empty)"), "{}", r.out);
+    assert!(r.out.contains("2 pages"), "{}", r.out);
     assert!(r.out.contains("symbol drawings"), "{}", r.out);
     let r = novo(&["import", "eplan", s(&pxf), "--json"]);
     assert!(r.out.contains("\"not_carried\""), "{}", r.out);
