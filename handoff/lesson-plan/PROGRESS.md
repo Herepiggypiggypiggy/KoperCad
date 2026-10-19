@@ -7,3 +7,4 @@
 2026-10-19 10:54 UTC #958 merged: Help menu Next lesson and Learning paths
 2026-10-19 10:56 UTC PR 4 started: paths.toml, paths section in the Learn window
 2026-10-19 11:58 UTC #1036 merged (Ctrl+K lessons). PR 5 started: Lesson chips on the Terminals and Cables drawers and the report view (wire list, other reports); cabinet drawers still open
+2026-10-19 12:14 UTC #1037 merged (chips on drawers and reports). Follow-up started: chips on Rails and ducts and Size the enclosure windows; hover text dropped

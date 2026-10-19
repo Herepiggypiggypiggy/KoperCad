@@ -1918,7 +1918,14 @@ impl NovoApp {
             }
         }
 
-        super::sizing::show_window(ui.ctx(), &mut self.sizing, &sizing_devices);
+        let sizing_chip = self.learn.chip("sizing");
+        let rails_chip = self.learn.chip("rails");
+        let sizing_lesson = super::sizing::show_window(
+            ui.ctx(),
+            &mut self.sizing,
+            &sizing_devices,
+            sizing_chip.as_ref(),
+        );
         super::sizing::show_editor(ui.ctx(), &mut self.sizing);
         cabinet_rules::show_rules_window(ui.ctx(), &mut self.cabinet.rules);
         let lists = if self.cabinet.rules.cut_open {
@@ -1937,6 +1944,7 @@ impl NovoApp {
             &mut self.cabinet.rails,
             project,
             structure,
+            rails_chip.as_ref(),
         );
 
         if let Some(id) = delete_rail {
@@ -1963,6 +1971,9 @@ impl NovoApp {
         }
         if let Some(rail_ask) = rail_ask {
             self.cabinet_rail_ask(structure, rail_ask);
+        }
+        if let Some(id) = sizing_lesson {
+            self.learn_run_command_lesson(&id);
         }
     }
 
