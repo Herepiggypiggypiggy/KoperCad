@@ -1,6 +1,6 @@
 # Crane configurator project import: design note (2026-10-19)
 
-Goal: File > Import > Crane configurator project reads what Tadjiro's crane configurator produced (the first real project, output v95) and creates a real KoperCAD project: pages with drawn symbols,
+Goal: File > Import > Crane configurator project reads what Tadjiro's crane configurator produced (a real project export) and creates a real KoperCAD project: pages with drawn symbols,
 devices, terminals, cables with cores, wires, parts. The import report says what is exact, what is inferred and what is
 left out. Knowledge only from the private repo: no EPLAN macros, symbol library, manual text or motor data enters the
 public repo, and the real v95 file stays on the private mount.
