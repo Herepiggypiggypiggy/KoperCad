@@ -55,6 +55,22 @@ impl Tags {
     }
 }
 
+/// How many devices the sheet shows that have no device of this import to
+/// stand for them (so they cannot be placed).
+pub(super) fn unmatched(sheet: &LayoutSheet, tags: &[DeviceTag]) -> usize {
+    let want_loc = format!("+{}-", sheet.location);
+    let texts: Vec<String> = tags
+        .iter()
+        .map(|t| t.to_string())
+        .filter(|s| s.contains(&want_loc))
+        .collect();
+    sheet
+        .devices
+        .iter()
+        .filter(|d| !texts.iter().any(|s| s.ends_with(&d.name)))
+        .count()
+}
+
 /// Returns how many records it created.
 pub(super) fn place_sheets(
     tx: &mut Tx<'_>,
@@ -133,4 +149,44 @@ pub(super) fn place_sheets(
         }
     }
     Ok(created)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn device(name: &str) -> LayoutDevice {
+        LayoutDevice {
+            name: name.to_string(),
+            function: String::new(),
+            x: 0.0,
+            y: 0.0,
+            w: 10.0,
+            h: 10.0,
+            strip: None,
+        }
+    }
+
+    #[test]
+    fn sheet_devices_without_a_device_in_the_import_are_counted() {
+        let sheet = LayoutSheet {
+            page: 0,
+            location: "CAB1".into(),
+            cabinet: String::new(),
+            width: 600.0,
+            height: 760.0,
+            margin: 15.0,
+            rails: Vec::new(),
+            ducts: Vec::new(),
+            devices: vec![device("-Q1"), device("-Q2"), device("-Q3")],
+            scale: 1.0,
+            notes: Vec::new(),
+        };
+        let tags = [
+            DeviceTag::parse("=A1+CAB1-Q1").unwrap(),
+            // Same name, other location: does not stand for -Q2 here.
+            DeviceTag::parse("=A1+CAB2-Q2").unwrap(),
+        ];
+        assert_eq!(unmatched(&sheet, &tags), 2);
+    }
 }

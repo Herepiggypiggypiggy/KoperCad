@@ -437,11 +437,19 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         for n in &layout_skipped {
             report.note(n.clone());
         }
+        let device_tags: Vec<DeviceTag> = devices.iter().map(|d| d.tag.clone()).collect();
         for l in &layouts {
+            let missing = super::layout_apply::unmatched(l, &device_tags);
             report.note(format!(
                 "Cabinet +{}: {} {:.0} x {:.0} mm plate from the mounting plate sheet, {} rails, {} ducts, {} devices placed. Footprints are the outlines drawn on the sheet, not the parts' own data; rails and ducts are read from the drawn rectangles.",
-                l.location, l.cabinet, l.width, l.height, l.rails.len(), l.ducts.len(), l.devices.len()
+                l.location, l.cabinet, l.width, l.height, l.rails.len(), l.ducts.len(), l.devices.len() - missing
             ));
+            if missing > 0 {
+                report.note(format!(
+                    "Cabinet +{}: {missing} devices drawn on the mounting plate sheet could not be placed because the project has no device with that name in this location.",
+                    l.location
+                ));
+            }
             for n in &l.notes {
                 report.note(n.clone());
             }
