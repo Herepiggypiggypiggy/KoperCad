@@ -64,6 +64,8 @@ mod heat_3d;
 #[cfg(test)]
 mod heat_3d_tests;
 mod heat_arrows;
+mod heat_carry;
+mod heat_cloud;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
