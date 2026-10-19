@@ -188,5 +188,8 @@ mod tests {
             DeviceTag::parse("=A1+CAB2-Q2").unwrap(),
         ];
         assert_eq!(unmatched(&sheet, &tags), 2);
+        // A device the project already holds stands for its sheet entry too.
+        let more = [tags[0].clone(), DeviceTag::parse("=A1+CAB1-Q3").unwrap()];
+        assert_eq!(unmatched(&sheet, &more), 1);
     }
 }

@@ -437,7 +437,12 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         for n in &layout_skipped {
             report.note(n.clone());
         }
-        let device_tags: Vec<DeviceTag> = devices.iter().map(|d| d.tag.clone()).collect();
+        // Devices the project already holds are placed too (see layout_apply).
+        let device_tags: Vec<DeviceTag> = devices
+            .iter()
+            .map(|d| d.tag.clone())
+            .chain(project.devices().map(|d| d.tag.clone()))
+            .collect();
         for l in &layouts {
             let missing = super::layout_apply::unmatched(l, &device_tags);
             report.note(format!(
@@ -446,8 +451,9 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             ));
             if missing > 0 {
                 report.note(format!(
-                    "Cabinet +{}: {missing} devices drawn on the mounting plate sheet could not be placed because the project has no device with that name in this location.",
-                    l.location
+                    "Cabinet +{}: {missing} {} drawn on the mounting plate sheet could not be placed because the project has no device with that name in this location.",
+                    l.location,
+                    if missing == 1 { "device" } else { "devices" }
                 ));
             }
             for n in &l.notes {
