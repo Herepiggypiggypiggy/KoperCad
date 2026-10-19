@@ -393,6 +393,12 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                 .collect();
             report.note(format!("Drawn as boxes: {}.", list.join(", ")));
         }
+        for ((function, letters, pins, ports), n) in &st.box_kinds {
+            report.note(format!(
+                "Box kind: function \"{function}\"; tag letters \"{letters}\"; pins [{}]; {ports} connection points in the library symbol; x{n}.",
+                pins.join("|")
+            ));
+        }
         if st.loose > 0 {
             report.note(format!(
                 "{} placements found their library symbol only loosely (same function, another variant); their connection points may be off.",

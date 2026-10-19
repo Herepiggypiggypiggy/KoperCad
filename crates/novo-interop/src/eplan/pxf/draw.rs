@@ -89,6 +89,8 @@ pub struct DrawStats {
     pub wires: usize,
     /// Function names drawn as boxes, with counts.
     pub box_functions: BTreeMap<String, usize>,
+    /// The same, told apart by tag letters and pin designations in order.
+    pub box_kinds: BTreeMap<(String, String, Vec<String>, usize), usize>,
     /// What the net rebuild found questionable, by kind.
     pub issues: BTreeMap<&'static str, usize>,
 }
@@ -356,6 +358,15 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                 };
                 *out.stats.box_functions.entry(label).or_default() += 1;
                 box_label = function.clone();
+                *out.stats
+                    .box_kinds
+                    .entry((
+                        function.clone(),
+                        d.tag.letters.clone(),
+                        d.pins.clone(),
+                        ports.len(),
+                    ))
+                    .or_default() += 1;
                 (
                     BOX_SYMBOL.to_string(),
                     origin,
