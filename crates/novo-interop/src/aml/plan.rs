@@ -8,10 +8,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
-    Cable, CableCore, ChangeSet, Document, MountingPlate, Part, PartId, Project, Terminal,
+    Cable, CableCore, ChangeSet, DeviceId, Document, MountingPlate, PageId, Part, PartId, Project,
+    Terminal, TerminalId,
 };
 
-use super::read::Plant;
+use super::draw::draw;
+use super::read::{Plant, PlantPage};
 use crate::report::Report;
 use crate::sheets::ApplyError;
 
@@ -22,6 +24,10 @@ pub struct AmlPlan {
     new_structures: Vec<usize>,
     new_devices: Vec<usize>,
     new_cables: Vec<usize>,
+    /// Pages of the file's drawing profile that the project does not have.
+    new_pages: Vec<usize>,
+    /// Drawn symbols that would be placed (those of new devices).
+    new_symbols: usize,
     /// Tags the file has that the project already holds.
     pub existing: Vec<String>,
     revision: u64,
@@ -44,7 +50,7 @@ pub fn plan_import(project: &Project, plant: &Plant) -> AmlPlan {
         .filter(|(_, s)| !have_structure.contains(&s.tag.to_string()))
         .map(|(i, _)| i)
         .collect();
-    let new_devices = plant
+    let new_devices: Vec<usize> = plant
         .devices
         .iter()
         .enumerate()
@@ -72,13 +78,49 @@ pub fn plan_import(project: &Project, plant: &Plant) -> AmlPlan {
         })
         .map(|(i, _)| i)
         .collect();
+    let have_page: BTreeSet<String> = project.pages().map(|p| p.name.clone()).collect();
+    let new_pages: Vec<usize> = plant
+        .pages
+        .iter()
+        .enumerate()
+        .filter(|(_, p)| !have_page.contains(&page_name(p)))
+        .map(|(i, _)| i)
+        .collect();
+    let new_set: BTreeSet<usize> = new_devices_set(&new_devices);
+    let new_page_names: BTreeSet<&str> = new_pages
+        .iter()
+        .map(|&i| plant.pages[i].name.as_str())
+        .collect();
+    let new_symbols = plant
+        .symbols
+        .iter()
+        .filter(|s| match s.device {
+            Some(d) => new_set.contains(&d),
+            None => new_page_names.contains(s.page.as_str()),
+        })
+        .count();
     AmlPlan {
         plant: plant.clone(),
         new_structures,
         new_devices,
         new_cables,
+        new_pages,
+        new_symbols,
         existing,
         revision: project.revision(),
+    }
+}
+
+fn new_devices_set(v: &[usize]) -> BTreeSet<usize> {
+    v.iter().copied().collect()
+}
+
+/// The project page name for a page of the file: its label and title.
+fn page_name(p: &PlantPage) -> String {
+    if p.title.is_empty() {
+        p.name.clone()
+    } else {
+        format!("{} {}", p.name, p.title)
     }
 }
 
@@ -87,6 +129,8 @@ impl AmlPlan {
     pub fn creates(&self) -> usize {
         self.new_structures.len()
             + self.new_cables.len()
+            + self.new_pages.len()
+            + self.new_symbols
             + self
                 .new_devices
                 .iter()
@@ -118,14 +162,23 @@ impl AmlPlan {
             .iter()
             .map(|&i| p.devices[i].terminals.len())
             .sum();
-        format!(
+        let mut text = format!(
             "Would add {} devices ({} terminals), {} cables and {} sections or locations; {} already exist.",
             self.new_devices.len(),
             terminals,
             self.new_cables.len(),
             self.new_structures.len(),
             self.existing.len()
-        )
+        );
+        if self.new_symbols > 0 {
+            text.push_str(&format!(
+                " Would draw {} symbols on {} pages and wire {} nets.",
+                self.new_symbols,
+                self.new_pages.len(),
+                p.nets.len()
+            ));
+        }
+        text
     }
 
     /// Creates everything as one undo step; returns how many records.
@@ -169,9 +222,12 @@ impl AmlPlan {
                 .parts()
                 .map(|p| ((p.manufacturer.clone(), p.order_number.clone()), p.id))
                 .collect();
+            let mut device_ids: BTreeMap<usize, DeviceId> = BTreeMap::new();
+            let mut terminal_ids: BTreeMap<(usize, String), TerminalId> = BTreeMap::new();
             for &i in &self.new_devices {
                 let d = &plant.devices[i];
                 let id = tx.add_device_of_kind(d.tag.clone(), d.description.clone(), d.kind)?;
+                device_ids.insert(i, id);
                 created += 1;
                 if !d.order_number.is_empty() {
                     let key = (d.manufacturer.clone(), d.order_number.clone());
@@ -199,6 +255,7 @@ impl AmlPlan {
                         x.level = t.level;
                         x.jumper = t.jumper;
                     })?;
+                    terminal_ids.insert((i, t.name.clone()), tid);
                     created += 1;
                 }
             }
@@ -220,6 +277,57 @@ impl AmlPlan {
                 })?;
                 created += 1;
             }
+            // Pages, then what is drawn on them.
+            let mut pages: BTreeMap<String, (usize, PageId)> = BTreeMap::new();
+            let existing: BTreeMap<String, PageId> = tx
+                .project()
+                .pages()
+                .map(|p| (p.name.clone(), p.id))
+                .collect();
+            for (n, p) in plant.pages.iter().enumerate() {
+                let name = page_name(p);
+                let id = match existing.get(&name) {
+                    Some(&id) => id,
+                    None => {
+                        created += 1;
+                        tx.add_page(name)?
+                    }
+                };
+                pages.insert(p.name.clone(), (n, id));
+            }
+            // A symbol may name a page the file does not describe.
+            let mut extra = plant.pages.len();
+            for s in plant
+                .symbols
+                .iter()
+                .filter(|s| s.device.is_none_or(|d| device_ids.contains_key(&d)))
+            {
+                if !pages.contains_key(&s.page) {
+                    let id = match existing.get(&s.page) {
+                        Some(&id) => id,
+                        None => {
+                            created += 1;
+                            tx.add_page(s.page.clone())?
+                        }
+                    };
+                    pages.insert(s.page.clone(), (extra, id));
+                    extra += 1;
+                }
+            }
+            let new_page_names: BTreeSet<String> = self
+                .new_pages
+                .iter()
+                .map(|&i| plant.pages[i].name.clone())
+                .collect();
+            created += draw(
+                tx,
+                plant,
+                &device_ids,
+                &terminal_ids,
+                &pages,
+                &new_page_names,
+            )?
+            .records;
             Ok(created)
         })?;
         Ok(Some((created, changes)))
