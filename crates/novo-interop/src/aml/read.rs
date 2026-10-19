@@ -86,6 +86,10 @@ pub struct PlantText {
     pub value: String,
     /// Millimetres on the page, origin bottom left, y up.
     pub at: (f64, f64),
+    /// Character height in millimetres when the file says; else the default.
+    pub height: Option<f64>,
+    /// Turn in degrees counter-clockwise, 0 when the file has none.
+    pub rotation: f64,
 }
 
 /// A connection point of a drawn symbol.
@@ -635,6 +639,11 @@ impl Reader {
                     page: page.to_string(),
                     value,
                     at: (x, y),
+                    height: coord("Height").filter(|h| *h > 0.0 && *h <= 50.0),
+                    rotation: first(&a, &["Rotation", "Frame.rz"])
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .filter(|v| v.is_finite())
+                        .unwrap_or(0.0),
                 });
             }
         }
