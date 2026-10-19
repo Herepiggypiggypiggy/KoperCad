@@ -428,3 +428,44 @@ fn a_download_that_does_not_name_the_part_is_listed_not_ignored() {
         Phase::Failed(_) | Phase::Done(_)
     ));
 }
+
+/// Two reads finishing at once (an abandoned slow one and its retry) both
+/// land in the catalog file: nothing is lost and no temp file is left.
+#[test]
+fn overlapping_reads_do_not_lose_each_others_catalog_changes() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path().join("lib"));
+    let cat = dir.path().join("parts.json");
+    let files = tempfile::tempdir().unwrap();
+    let handles: Vec<_> = (0..6)
+        .map(|i| {
+            let (lib, cat) = (lib.clone(), cat.clone());
+            let f = files.path().join(format!("p{i}.stp"));
+            fs::write(&f, step(10.0, 20.0, 30.0 + f64::from(i))).unwrap();
+            std::thread::spawn(move || {
+                let part = novo_parts::CatalogPart::new("Acme", format!("A-{i}"));
+                super::super::parts_import::import_path(
+                    &part,
+                    &f,
+                    ImportFlow::Manual,
+                    &lib,
+                    &SourceTable::builtin(),
+                    Some(&cat),
+                    "2026-10-19",
+                )
+                .unwrap();
+            })
+        })
+        .collect();
+    for h in handles {
+        h.join().unwrap();
+    }
+    let saved = Catalog::load(&cat).unwrap();
+    for i in 0..6 {
+        assert!(
+            saved.get(&key("Acme", &format!("A-{i}"))).is_some(),
+            "A-{i} lost"
+        );
+    }
+    assert!(!cat.with_extension("json.tmp").exists());
+}

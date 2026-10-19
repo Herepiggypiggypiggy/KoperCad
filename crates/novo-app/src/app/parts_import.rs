@@ -413,6 +413,11 @@ pub(crate) fn import_path(
         let Some(catalog_path) = catalog_path else {
             return Err("no profile folder to save the catalog in".into());
         };
+        // An abandoned slow read can still finish while a retry runs: one
+        // load-modify-save at a time, and a rename so a half-written file
+        // never replaces the catalog.
+        static CATALOG_SAVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = CATALOG_SAVE.lock().unwrap_or_else(|e| e.into_inner());
         let mut user = if catalog_path.exists() {
             Catalog::load(catalog_path).map_err(|e| e.to_string())?
         } else {
@@ -421,7 +426,9 @@ pub(crate) fn import_path(
         for p in &changed {
             user.upsert(p.clone());
         }
-        user.save(catalog_path).map_err(|e| e.to_string())?;
+        let tmp = catalog_path.with_extension("json.tmp");
+        user.save(&tmp).map_err(|e| e.to_string())?;
+        std::fs::rename(&tmp, catalog_path).map_err(|e| e.to_string())?;
     }
 
     let mut summary = Summary {
