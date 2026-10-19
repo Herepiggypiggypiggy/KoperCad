@@ -1808,6 +1808,15 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["tour", "tutorial", "walkthrough", "help"],
         Needs::Nothing,
     ),
+    cmd(
+        "help.next_lesson",
+        "Next lesson",
+        "View",
+        &[
+            "lesson", "tutorial", "training", "learn", "continue", "next",
+        ],
+        Needs::Nothing,
+    ),
     verb(
         cmd(
             "help.learn",
