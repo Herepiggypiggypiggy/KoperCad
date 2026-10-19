@@ -1,0 +1,37 @@
+format = 1
+id = "iec/terminals/socket_3p_pe"
+name = "Power socket, 3P+PE"
+description = "Female power receptacle with 3 contacts and protective earth (three phases). Poles in a row, one wire each."
+standard = "IEC 60617"
+category = "terminals"
+function = "connector.female"
+keywords = ["socket", "receptacle", "female", "cee", "iec 60309", "power connector", "3p", "pe"]
+aliases = ["xs4"]
+
+connections = [
+  { id = "L1", at = [0, 0], dir = "up" },
+  { id = "L2", at = [8, 0], dir = "up" },
+  { id = "L3", at = [16, 0], dir = "up" },
+  { id = "PE", at = [24, 0], dir = "up", role = "pe" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 7], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "arc", center = [0, 6], r = 2, start = 180, end = 360 },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "arc", center = [8, 6], r = 2, start = 180, end = 360 },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "arc", center = [16, 6], r = 2, start = 180, end = 360 },
+  { kind = "line", from = [24, 0], to = [24, 4] },
+  { kind = "arc", center = [24, 6], r = 2, start = 180, end = 360 },
+  { kind = "rect", at = [-3, 3], size = [30, 8], stroke = "dashed" },
+  { kind = "line", from = [22, 9], to = [26, 9] },
+  { kind = "line", from = [23, 10.4], to = [25, 10.4] },
+]
+
+[behavior]
+kind = "none"
