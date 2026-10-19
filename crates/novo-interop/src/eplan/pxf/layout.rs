@@ -13,7 +13,9 @@
 //! title). Inferred: which rectangle is a rail (a pair of rectangles with the
 //! same span and centre, 35 and 20 mm high), which is a duct (any other thin
 //! rectangle drawn with the thin pen), which device a tag text belongs to (the
-//! text starting nearest inside or just above the rectangle), the duct's
+//! text starting nearest inside or just above the rectangle, the biggest of
+//! the nested outlines), the scale when the title has no size (from the
+//! 35 mm rails), the duct's
 //! cross-section (the length across what is drawn, 75 mm deep), and a margin
 //! of 15 mm for the plate's free edge. The device sizes are the sheet's
 //! catalogue widths, not the parts' outlines (the generator says so on the
@@ -26,7 +28,6 @@ use super::model::{PxfFile, PxfText};
 /// pen of device rectangles, as the generator writes them.
 const PEN_PLATE: f64 = 0.35;
 const PEN_THIN: f64 = 0.13;
-const PEN_DEVICE: f64 = 0.25;
 /// The sheet drawing area the generator fits the plate into.
 const SHEET_X: (f64, f64) = (0.0, 420.0);
 const RAIL_OUTER: f64 = 35.0;
@@ -169,14 +170,54 @@ fn texts(file: &PxfFile, page: usize) -> Vec<(&PxfText, String, (f64, f64))> {
         .collect()
 }
 
+/// Rail pairs: two nested thin rectangles with the same span and centre
+/// whose heights are as 35 to 20. Indexes into `rs`.
+fn rail_pairs(rs: &[R]) -> Vec<(usize, usize)> {
+    let mut out = Vec::new();
+    let mut used = vec![false; rs.len()];
+    for (i, r) in rs.iter().enumerate() {
+        if used[i] || !pen_is(r.pen, PEN_THIN) || r.w() < 4.0 * r.h() {
+            continue;
+        }
+        let yc = (r.y0 + r.y1) / 2.0;
+        let tol = (r.h() * 0.02).max(0.02);
+        let inner = rs.iter().enumerate().find(|(j, q)| {
+            *j != i
+                && !used[*j]
+                && pen_is(q.pen, PEN_THIN)
+                && (q.x0 - r.x0).abs() <= tol * 20.0
+                && (q.x1 - r.x1).abs() <= tol * 20.0
+                && (((q.y0 + q.y1) / 2.0) - yc).abs() <= tol * 5.0
+                && ((r.h() / q.h()) - RAIL_OUTER / RAIL_INNER).abs() < 0.06
+        });
+        if let Some((j, _)) = inner {
+            used[i] = true;
+            used[j] = true;
+            out.push((i, j));
+        }
+    }
+    out
+}
+
+fn median(mut v: Vec<f64>) -> Option<f64> {
+    v.sort_by(f64::total_cmp);
+    v.get(v.len() / 2).copied()
+}
+
 /// Reads every mounting plate sheet in the file.
 pub(super) fn read_sheets(file: &PxfFile) -> Vec<LayoutSheet> {
     let mut out = Vec::new();
-    for (pi, _) in file.pages.iter().enumerate() {
+    for (pi, page) in file.pages.iter().enumerate() {
         let ts = texts(file, pi);
-        let Some((loc, cabinet, cw, ch)) = ts.iter().find_map(|(_, s, _)| parse_title(s)) else {
+        let titled = ts.iter().find_map(|(_, s, _)| parse_title(s));
+        let named = page
+            .title
+            .get("en_US")
+            .to_lowercase()
+            .contains("montageplaat");
+        if titled.is_none() && !named {
             continue;
-        };
+        }
         let rs = rects(file, pi);
         // The plate: the biggest rectangle drawn with the plate pen.
         let Some(plate) = rs
@@ -187,51 +228,75 @@ pub(super) fn read_sheets(file: &PxfFile) -> Vec<LayoutSheet> {
         else {
             continue;
         };
-        if plate.w() <= 0.0 || cw <= 0.0 {
+        let mut notes = Vec::new();
+        let inside_idx: Vec<usize> = (0..rs.len())
+            .filter(|&i| {
+                let r = &rs[i];
+                r.x0 >= plate.x0 - EPS
+                    && r.x1 <= plate.x1 + EPS
+                    && r.y0 >= plate.y0 - EPS
+                    && r.y1 <= plate.y1 + EPS
+                    && !(near(r.x0, plate.x0) && near(r.x1, plate.x1) && near(r.y0, plate.y0))
+            })
+            .collect();
+        let inside: Vec<R> = inside_idx.iter().map(|&i| rs[i]).collect();
+        let pairs = rail_pairs(&inside);
+        // The scale: from the size in the title when there is one, else from
+        // the rails, which are 35 mm high.
+        let (location, cabinet, s, width, height) = match &titled {
+            Some((loc, cab, cw, ch)) if plate.w() > 0.0 && *cw > 0.0 => {
+                let s = plate.w() / cw;
+                let drawn_h = plate.h() / s;
+                if (drawn_h - ch).abs() > 1.0 {
+                    notes.push(format!(
+                        "The title says {ch:.0} mm high; the drawn plate is {drawn_h:.0} mm at the scale of its width. The drawing is used."
+                    ));
+                }
+                (loc.clone(), cab.clone(), s, *cw, drawn_h)
+            }
+            _ => {
+                let Some(s) = median(
+                    pairs
+                        .iter()
+                        .map(|(o, _)| inside[*o].h() / RAIL_OUTER)
+                        .collect(),
+                ) else {
+                    continue;
+                };
+                notes.push(format!(
+                    "Sheet {}: no cabinet size in the title; the scale ({:.4}) comes from the 35 mm DIN rails, so the plate size ({:.0} x {:.0} mm) is derived, not stated.",
+                    page.label(),
+                    s,
+                    (plate.w() / s).round(),
+                    (plate.h() / s).round()
+                ));
+                (
+                    page.location.clone(),
+                    String::new(),
+                    s,
+                    (plate.w() / s).round(),
+                    (plate.h() / s).round(),
+                )
+            }
+        };
+        let location = location.trim_start_matches('+').to_string();
+        if location.is_empty() || s <= 0.0 {
             continue;
         }
-        let s = plate.w() / cw;
-        let mut notes = Vec::new();
-        let drawn_h = plate.h() / s;
-        if (drawn_h - ch).abs() > 1.0 {
-            notes.push(format!(
-                "The title says {ch:.0} mm high; the drawn plate is {drawn_h:.0} mm at the scale of its width. The drawing is used."
-            ));
-        }
-        let (width, height) = (cw, drawn_h);
         // Page to plate: x right, y down from the plate's top left.
         let px = |x: f64| (x - plate.x0) / s;
         let py = |y: f64| (plate.y1 - y) / s;
-        let inside: Vec<R> = rs
-            .iter()
-            .filter(|r| r.x0 >= plate.x0 - EPS && r.x1 <= plate.x1 + EPS && r.y0 >= plate.y0 - EPS)
-            .filter(|r| r.y1 <= plate.y1 + EPS)
-            .copied()
-            .collect();
-        let mut rails = Vec::new();
         let mut used = vec![false; inside.len()];
-        for (i, r) in inside.iter().enumerate() {
-            if used[i] || !pen_is(r.pen, PEN_THIN) || !near(r.h() / s, RAIL_OUTER) {
-                continue;
-            }
-            let yc = (r.y0 + r.y1) / 2.0;
-            let inner = inside.iter().enumerate().find(|(j, q)| {
-                *j != i
-                    && !used[*j]
-                    && near(q.x0, r.x0)
-                    && near(q.x1, r.x1)
-                    && near((q.y0 + q.y1) / 2.0, yc)
-                    && near(q.h() / s, RAIL_INNER)
+        let mut rails = Vec::new();
+        for (o, i) in &pairs {
+            used[*o] = true;
+            used[*i] = true;
+            let r = &inside[*o];
+            rails.push(LayoutRail {
+                x: px(r.x0),
+                y: py((r.y0 + r.y1) / 2.0),
+                length: r.w() / s,
             });
-            if let Some((j, _)) = inner {
-                used[i] = true;
-                used[j] = true;
-                rails.push(LayoutRail {
-                    x: px(r.x0),
-                    y: py(yc),
-                    length: r.w() / s,
-                });
-            }
         }
         let mut ducts = Vec::new();
         for (i, r) in inside.iter().enumerate() {
@@ -241,9 +306,10 @@ pub(super) fn read_sheets(file: &PxfFile) -> Vec<LayoutSheet> {
             let (w, h) = (r.w() / s, r.h() / s);
             let vertical = h > w;
             let (len, across) = if vertical { (h, w) } else { (w, h) };
-            if across > 60.0 || len < 50.0 {
+            if !(15.0..=60.0).contains(&across) || len < 150.0 || len < 2.5 * across {
                 continue;
             }
+            used[i] = true;
             ducts.push(if vertical {
                 LayoutDuct {
                     x: px((r.x0 + r.x1) / 2.0),
@@ -262,19 +328,29 @@ pub(super) fn read_sheets(file: &PxfFile) -> Vec<LayoutSheet> {
                 }
             });
         }
-        // Devices: the rectangles drawn with the device pen.
+        // Devices: for each tag text, the biggest rectangle that starts just
+        // left of the text (the outline, not the parts drawn inside it).
+        let plate_area = plate.w() * plate.h();
         let mut taken = vec![false; ts.len()];
         let mut devices = Vec::new();
-        let mut devs: Vec<&R> = inside
-            .iter()
-            .filter(|r| pen_is(r.pen, PEN_DEVICE))
-            .collect();
-        devs.sort_by(|a, b| (b.y1, a.x0).partial_cmp(&(a.y1, b.x0)).unwrap());
-        for r in devs {
+        let mut order: Vec<usize> = (0..ts.len()).collect();
+        order.sort_by(|&a, &b| {
+            ts[b]
+                .2
+                .1
+                .total_cmp(&ts[a].2.1)
+                .then(ts[a].2.0.total_cmp(&ts[b].2.0))
+        });
+        let mut claimed = vec![false; inside.len()];
+        for ti in order {
+            let (_, label, at) = &ts[ti];
+            if !label.starts_with('-') || taken[ti] {
+                continue;
+            }
             let reach = 22.0 * s;
             let mut best: Option<(usize, f64)> = None;
-            for (i, (_, text, at)) in ts.iter().enumerate() {
-                if taken[i] || !text.starts_with('-') {
+            for (i, r) in inside.iter().enumerate() {
+                if used[i] || claimed[i] || r.w() * r.h() > 0.25 * plate_area {
                     continue;
                 }
                 if at.0 < r.x0 - EPS || at.0 > r.x0 + 3.0 * s + EPS {
@@ -283,15 +359,20 @@ pub(super) fn read_sheets(file: &PxfFile) -> Vec<LayoutSheet> {
                 if at.1 < r.y0 - EPS || at.1 > r.y1 + reach {
                     continue;
                 }
-                // Inside the rectangle beats above it.
+                if r.w() < 4.0 * s || r.h() < 4.0 * s {
+                    continue;
+                }
+                // Inside the rectangle beats above it; then the biggest.
                 let d = if at.1 <= r.y1 { 0.0 } else { at.1 - r.y1 };
-                if best.is_none_or(|(_, bd)| d < bd) {
-                    best = Some((i, d));
+                let score = d * 1000.0 - r.w() * r.h();
+                if best.is_none_or(|(_, bs)| score < bs) {
+                    best = Some((i, score));
                 }
             }
-            let Some((ti, _)) = best else { continue };
+            let Some((ri, _)) = best else { continue };
+            let r = &inside[ri];
+            claimed[ri] = true;
             taken[ti] = true;
-            let label = ts[ti].1.clone();
             let (name, strip) = match label.split_once("  (") {
                 Some((n, rest)) => (
                     n.trim().to_string(),
@@ -331,7 +412,7 @@ pub(super) fn read_sheets(file: &PxfFile) -> Vec<LayoutSheet> {
         }
         out.push(LayoutSheet {
             page: pi,
-            location: loc.trim_start_matches('+').to_string(),
+            location,
             cabinet,
             width,
             height,
