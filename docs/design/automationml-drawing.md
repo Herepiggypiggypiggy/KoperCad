@@ -34,6 +34,8 @@ Under the project element (role `Project`):
 | `Nets` group, one element per net | `NetGroup`, `Net` | `Potential` |
 | net point, `ExternalInterface` of a net | `NetPoint` interface | |
 | link from a net point to a symbol pin | `InternalLink` | `RefPartnerSideA` pin id, `RefPartnerSideB` net point id |
+| a straight run of a net's wire, child of the net | `Wire` | `Page`; `X1`, `Y1`, `X2`, `Y2` in mm |
+| an interruption point (a `Symbol` with `Kind` `interruption`), child of its page | `Symbol` | `Net`: the name its pair carries; one pin at offset 0,0 |
 
 A device has one element and one `Symbol` child per place it is drawn (a coil on one page, its contacts on
 others). Positions are millimetres on the page, origin bottom left, y up. `Kind` is a plain device word:
@@ -45,19 +47,27 @@ others). Positions are millimetres on the page, origin bottom left, y up. `Kind`
 - Pages: one project page per `Page`, named by label and title. A page that already exists is reused and its
   device-less symbols are not drawn again.
 - Symbols: a KoperCAD library symbol when the kind has one and the pin names match (coil, NO and NC contact,
-  changeover, terminal, lamp, earth, device pin); otherwise a plain box with the file's pins. Pin names are
-  the file's. No text is added.
-- Nets: each net becomes right-angle wires between exactly its pins, chained in reading order. A net that
-  reaches pins on several pages gets an interruption point named like the net on each page, which KoperCAD
-  pairs by name. Nothing is guessed from where pins face each other.
+  changeover, terminal, lamp, earth, device pin, interruption point); otherwise a labelled box. Either way the
+  pins are exactly where the file has them: the library symbol is turned to face the way the file's pins face
+  and scaled to the file's pin pitch (EPLAN's 8 mm contact on KoperCAD's 16 mm symbol is drawn at half size,
+  and a lead covers any pin the scaling does not reach). A box has each pin on the side it faces, so rows of
+  poles give a flat box between the rows. Pin names are the file's. No text is added here.
+- Wires, when the net has `Wire` runs: the runs are joined where they meet. Two runs meeting where no pin sits
+  are one wire with a bend; three or more make a junction; a run end on a pin is that pin; two pins on one spot
+  are wired to each other. Every wire starts and ends exactly on its pin or junction and follows the file's
+  route, so none is chained by reading order or cuts through a symbol.
+- Wires, when the net has no runs (an older file): each net becomes right-angle wires between exactly its
+  pins, chained in reading order. A net that reaches pins on several pages gets an interruption point named like
+  the net on each page, which KoperCAD pairs by name.
 - One undo step; it only adds (a device whose tag exists is left as it is, with its symbols).
 - Counted and named in the preview: links that end on no drawn pin, symbols of a skipped device, elements
   without a usable tag, repeated tags.
 
 ## 4. Exact and approximated
 
-Exact: pages, positions, pins, nets, tags, part numbers. Approximated: the symbol artwork (the library
-symbol's pins land where it has them, the first pin is placed on the file's first pin) and the wire routes.
+Exact: pages, positions, pins, nets, tags, part numbers, and (with `Wire` runs) the wire routes. Approximated:
+the symbol artwork (a library symbol or a labelled box, fitted to the file's pins) and, for a file without runs,
+the wire routes.
 
 ## 5. Where the crane configurator writes it
 
@@ -66,4 +76,7 @@ also be exported on its own with `scripts/kopercad_export.py`. In KoperCAD: File
 AutomationML. The EPLAN route stays as it is.
 
 Tests: `crates/novo-interop/tests/aml_drawing.rs` (a hand-written file; an opt-in test reads a real export
-named by `KOPERCAD_CRANE_AML`).
+named by `KOPERCAD_CRANE_AML`) and `crates/novo-cli/tests/aml_geometry.rs`, which looks at the result as
+geometry: pins on the file's spots, wires between their pins on their routes, no wire across a symbol it does
+not connect to (invented page `tests/fixtures/aml/hoist-feeder.aml`; the same checks run on a real export).
+To look at an import: `cargo run -p novo-cli --example aml_pages -- file.aml out_dir` writes every page as SVG.

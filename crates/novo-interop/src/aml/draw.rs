@@ -13,8 +13,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
-    DeviceId, Direction, Endpoint, PageId, Pin, Placement, Point, SymbolId, SymbolRole, TerminalId,
-    TextAnchor, TextContent, TextPlacement, Tx, Wire,
+    DeviceId, Direction, Endpoint, JunctionId, PageId, Pin, Placement, Point, Rotation, SymbolId,
+    SymbolRole, TerminalId, TextAnchor, TextContent, TextPlacement, Tx, Wire,
 };
 use novo_symbols::{Library, Pack, Symbol};
 
@@ -23,6 +23,7 @@ use crate::eplan::symbols::match_pins;
 
 const BOX_SYMBOL: &str = "import/box";
 const INTERRUPTION: &str = "iec/connectivity/interruption_point";
+const INTERRUPTION_ID: &str = "connectivity/interruption_point";
 /// How far beside a pin a page's interruption point sits.
 const IP_GAP: f64 = 10.0;
 
@@ -87,7 +88,8 @@ fn candidates(kind: &str, pins: &[PlantPin]) -> Vec<&'static str> {
         ("terminal", 2) => vec!["terminals/terminal"],
         ("lamp", 2) => vec!["signalling/lamp"],
         ("earth", 1) => vec!["earth/protective_earth"],
-        ("pin", 1) => vec!["connectivity/device_pin"],
+        ("pin" | "plug" | "generic" | "enclosure", 1) => vec!["connectivity/device_pin"],
+        ("interruption", 1) => vec![INTERRUPTION_ID],
         _ => Vec::new(),
     }
 }
@@ -95,26 +97,112 @@ fn candidates(kind: &str, pins: &[PlantPin]) -> Vec<&'static str> {
 /// What one placed symbol looks like in the project.
 struct Drawn {
     key: String,
-    origin: Point,
+    placement: Placement,
     pins: Vec<Pin>,
     bridges: Vec<Vec<u16>>,
     pass_through: Vec<Vec<u16>>,
     /// KoperCAD pin of each pin of the file's symbol.
     pin_of: Vec<u16>,
+    /// Page position of each pin of the file's symbol: where the file has it.
+    pos: Vec<Point>,
     label: String,
     coil: bool,
+}
+
+/// How a library symbol sits on the file's pins: orientation and scale.
+struct Fit {
+    rotation: Rotation,
+    mirrored: bool,
+    scale: f64,
+}
+
+/// The inverse of mirroring then rotating, for an offset.
+fn unplace(rotation: Rotation, mirrored: bool, v: Point) -> Point {
+    let back = match rotation {
+        Rotation::R0 => Rotation::R0,
+        Rotation::R90 => Rotation::R270,
+        Rotation::R180 => Rotation::R180,
+        Rotation::R270 => Rotation::R90,
+    };
+    let w = back.apply(v);
+    if mirrored { Point::new(-w.x, w.y) } else { w }
+}
+
+/// The orientation and scale that lay the library pins `lib` (offsets from
+/// the first pin, with their directions) closest to the file's `file`
+/// offsets, or `None` when no orientation faces the way the file's pins do
+/// or the shapes differ too much to be the same symbol.
+fn fit_pins(
+    lib: &[(Point, Direction)],
+    file: &[Point],
+    faces: &[Option<Direction>],
+) -> Option<Fit> {
+    let span = file.iter().map(|p| p.x.hypot(p.y)).fold(0.0, f64::max);
+    let mut best: Option<(usize, f64, Fit)> = None;
+    for rotation in [Rotation::R0, Rotation::R90, Rotation::R180, Rotation::R270] {
+        for mirrored in [false, true] {
+            let turn = Placement {
+                origin: Point::new(0.0, 0.0),
+                rotation,
+                mirrored,
+            };
+            let at: Vec<Point> = lib.iter().map(|(p, _)| turn.apply(*p)).collect();
+            let (mut dot, mut norm) = (0.0, 0.0);
+            for (a, f) in at.iter().zip(file) {
+                dot += a.x * f.x + a.y * f.y;
+                norm += a.x * a.x + a.y * a.y;
+            }
+            let scale = if norm > 1e-9 {
+                (dot / norm).clamp(0.25, 4.0)
+            } else {
+                1.0
+            };
+            let err = at
+                .iter()
+                .zip(file)
+                .map(|(a, f)| (f.x - a.x * scale).hypot(f.y - a.y * scale))
+                .fold(0.0, f64::max);
+            let miss = lib
+                .iter()
+                .zip(faces)
+                .filter(|((_, d), want)| want.is_some_and(|w| turn.apply_direction(*d) != w))
+                .count();
+            let better = best
+                .as_ref()
+                .is_none_or(|(m, e, _)| (miss, err) < (*m, *e - 1e-6));
+            if better {
+                best = Some((
+                    miss,
+                    err,
+                    Fit {
+                        rotation,
+                        mirrored,
+                        scale,
+                    },
+                ));
+            }
+        }
+    }
+    let (miss, err, fit) = best?;
+    (miss == 0 && err <= 0.5 * span + 0.5).then_some(fit)
 }
 
 fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
     let lib = Library::shared(Pack::Iec);
     let (x, y) = sym.at;
     let page_pos = |p: &PlantPin| Point::new(x + p.offset.0, page_height - (y + p.offset.1));
+    let spots: Vec<Point> = sym.pins.iter().map(page_pos).collect();
     let names: Vec<String> = sym.pins.iter().map(|p| p.name.clone()).collect();
     let named = names.iter().all(|n| !n.is_empty());
     let terminal = sym.kind == "terminal";
     // Where order is the only meaning: a terminal's two sides, a lamp, a
     // single-pin symbol.
-    let positional_ok = terminal || matches!(sym.kind.as_str(), "lamp" | "earth" | "pin");
+    let positional_ok = terminal
+        || matches!(
+            sym.kind.as_str(),
+            "lamp" | "earth" | "pin" | "plug" | "generic" | "enclosure" | "interruption"
+        );
+    let faces: Vec<Option<Direction>> = sym.pins.iter().map(|p| direction(&p.faces)).collect();
     for id in candidates(&sym.kind, &sym.pins) {
         let Some(s) = lib.get(&format!("iec/{id}")) else {
             continue;
@@ -153,27 +241,74 @@ fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
         }
         let mut pins = model_pins(s);
         let (bridges, pass_through) = model_groups(s);
-        let first = &sym.pins[0];
-        let at = page_pos(first);
-        let c0 = conns[0];
-        let origin = Point::new(at.x - pins[c0].offset.x, at.y - pins[c0].offset.y);
-        for (j, p) in sym.pins.iter().enumerate() {
-            if !p.name.is_empty() {
-                pins[conns[j]].name = p.name.clone();
+        // The library symbol on the file's pins: turned and scaled to lie on
+        // them, so its pins are where the file has them.
+        let lib_offsets: Vec<Point> = pins.iter().map(|p| p.offset).collect();
+        let lib_at = |j: usize| lib_offsets[conns[j]];
+        let lib_rel: Vec<(Point, Direction)> = (0..conns.len())
+            .map(|j| {
+                let (p, q) = (lib_at(j), lib_at(0));
+                (
+                    Point::new(p.x - q.x, p.y - q.y),
+                    pins[conns[j]].direction.unwrap_or(Direction::Up),
+                )
+            })
+            .collect();
+        let file_rel: Vec<Point> = spots
+            .iter()
+            .map(|p| Point::new(p.x - spots[0].x, p.y - spots[0].y))
+            .collect();
+        let Some(fit) = fit_pins(&lib_rel, &file_rel, &faces) else {
+            continue;
+        };
+        let turn = Placement {
+            origin: Point::new(0.0, 0.0),
+            rotation: fit.rotation,
+            mirrored: fit.mirrored,
+        };
+        let base = lib_at(0);
+        let scaled0 = Point::new(base.x * fit.scale, base.y * fit.scale);
+        let moved = turn.apply(scaled0);
+        let origin = Point::new(spots[0].x - moved.x, spots[0].y - moved.y);
+        for j in 0..conns.len() {
+            let l = lib_at(j);
+            // The pin lies where the scaled artwork has it, plus what the
+            // file's spacing does not explain (the artwork gets a lead).
+            let want = turn.apply(Point::new(l.x * fit.scale, l.y * fit.scale));
+            let at = Point::new(origin.x + want.x, origin.y + want.y);
+            let off = unplace(
+                fit.rotation,
+                fit.mirrored,
+                Point::new(spots[j].x - at.x, spots[j].y - at.y),
+            );
+            pins[conns[j]].offset = Point::new(l.x * fit.scale + off.x, l.y * fit.scale + off.y);
+            if !sym.pins[j].name.is_empty() {
+                pins[conns[j]].name = sym.pins[j].name.clone();
             }
         }
         return Drawn {
             key: format!("iec/{id}"),
-            origin,
+            placement: Placement {
+                origin,
+                rotation: fit.rotation,
+                mirrored: fit.mirrored,
+            },
             pins,
             bridges,
             pass_through,
             pin_of: conns.iter().map(|&c| c as u16).collect(),
+            pos: spots,
             label: String::new(),
             coil: id.starts_with("coils/"),
         };
     }
-    // A box with the pins where the file has them.
+    // A box around the pins, with the pins where the file has them.
+    let (mut lo, mut hi) = (spots[0], spots[0]);
+    for p in &spots {
+        lo = Point::new(lo.x.min(p.x), lo.y.min(p.y));
+        hi = Point::new(hi.x.max(p.x), hi.y.max(p.y));
+    }
+    let origin = Point::new((lo.x + hi.x) / 2.0, (lo.y + hi.y) / 2.0);
     let pins: Vec<Pin> = sym
         .pins
         .iter()
@@ -184,7 +319,7 @@ fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
             } else {
                 p.name.clone()
             };
-            let pin = Pin::new(name, p.offset.0, -p.offset.1);
+            let pin = Pin::new(name, spots[j].x - origin.x, spots[j].y - origin.y);
             match direction(&p.faces) {
                 Some(d) => pin.with_direction(d),
                 None => pin,
@@ -198,11 +333,12 @@ fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
     };
     Drawn {
         key: BOX_SYMBOL.to_string(),
-        origin: Point::new(x, page_height - y),
+        placement: Placement::at(origin),
         pins,
         bridges,
         pass_through: Vec::new(),
         pin_of: (0..sym.pins.len() as u16).collect(),
+        pos: spots,
         label: String::new(),
         coil: false,
     }
@@ -272,6 +408,9 @@ pub(super) fn draw(
             .map_or(297.0, |p| p.format.size_mm().1);
         let d = design(sym, page_height);
         let role = match (&sym.terminal, sym.device, device) {
+            _ if sym.kind == "interruption" => SymbolRole::Interruption {
+                name: sym.net.clone().unwrap_or_default(),
+            },
             (Some(name), Some(di), _) => match terminals.get(&(di, name.clone())) {
                 Some(&t) => SymbolRole::Terminal { terminals: vec![t] },
                 None => SymbolRole::Unassigned,
@@ -282,13 +421,7 @@ pub(super) fn draw(
             },
             _ => SymbolRole::Unassigned,
         };
-        let id = tx.place_symbol(
-            page,
-            d.key.as_str(),
-            Placement::at(d.origin),
-            d.pins.clone(),
-            role,
-        )?;
+        let id = tx.place_symbol(page, d.key.as_str(), d.placement, d.pins.clone(), role)?;
         if !d.bridges.is_empty() || !d.pass_through.is_empty() {
             tx.update::<novo_core::SymbolInstance>(id, |x| {
                 x.bridges = d.bridges.clone();
@@ -309,15 +442,15 @@ pub(super) fn draw(
             )?;
             out.records += 1;
         }
-        let pos = sym
-            .pins
+        let pos = d
+            .pos
             .iter()
             .enumerate()
-            .map(|(j, _)| {
+            .map(|(j, at)| {
                 let kp = &d.pins[usize::from(d.pin_of[j])];
                 (
-                    Point::new(d.origin.x + kp.offset.x, d.origin.y + kp.offset.y),
-                    kp.direction,
+                    *at,
+                    kp.direction.map(|dir| d.placement.apply_direction(dir)),
                 )
             })
             .collect();
@@ -331,8 +464,11 @@ pub(super) fn draw(
         out.records += 1;
     }
 
+    out.wires += draw_runs(tx, plant, &placed, pages, new_pages, &mut out.records)?;
+
     let lib = Library::shared(Pack::Iec);
     let ip_symbol = lib.get(INTERRUPTION);
+    let file_has_points = plant.symbols.iter().any(|s| s.kind == "interruption");
     for net in &plant.nets {
         // The net's pins by page, only those that were placed.
         let mut by_page: BTreeMap<usize, Vec<(&Placed, usize)>> = BTreeMap::new();
@@ -349,7 +485,7 @@ pub(super) fn draw(
                 let (pa, pb) = (a.0.pos[a.1].0, b.0.pos[b.1].0);
                 pa.x.total_cmp(&pb.x).then(pa.y.total_cmp(&pb.y))
             });
-            for w in members.windows(2) {
+            for w in members.windows(2).filter(|_| !net.drawn) {
                 let ((a, ai), (b, bi)) = (w[0], w[1]);
                 if a.id == b.id && a.pin_of[ai] == b.pin_of[bi] {
                     continue;
@@ -366,7 +502,10 @@ pub(super) fn draw(
                 out.records += 1;
             }
             // A net on several pages is tied together by name.
-            if several_pages && let Some(&(m, mi)) = members.last() {
+            if several_pages
+                && !(net.drawn && file_has_points)
+                && let Some(&(m, mi)) = members.last()
+            {
                 let page = m.page_id;
                 let at = m.pos[mi].0;
                 let (key, pins) = match ip_symbol {
@@ -392,4 +531,172 @@ pub(super) fn draw(
         }
     }
     Ok(out)
+}
+
+/// A point on a page to a hundredth of a millimetre, to match run ends.
+type Key = (i64, i64);
+
+fn key(p: Point) -> Key {
+    ((p.x * 100.0).round() as i64, (p.y * 100.0).round() as i64)
+}
+
+/// Draws the wires the file gives as runs: each run's ends are exact pins,
+/// corners or junctions, so a wire starts and ends where the file has it and
+/// runs where the file has it. Runs that meet at a corner (a point where
+/// exactly two runs meet and no pin sits) are one wire with a bend; three
+/// or more make a junction.
+fn draw_runs(
+    tx: &mut Tx<'_>,
+    plant: &Plant,
+    placed: &[Option<Placed>],
+    pages: &BTreeMap<String, (usize, PageId)>,
+    new_pages: &BTreeSet<String>,
+    records: &mut usize,
+) -> Result<usize, novo_core::ModelError> {
+    // Where every placed pin is, by page.
+    let mut pins_at: BTreeMap<usize, BTreeMap<Key, Vec<(SymbolId, u16)>>> = BTreeMap::new();
+    for pl in placed.iter().flatten() {
+        for (pi, (at, _)) in pl.pos.iter().enumerate() {
+            pins_at
+                .entry(pl.page)
+                .or_default()
+                .entry(key(*at))
+                .or_default()
+                .push((pl.id, pl.pin_of[pi]));
+        }
+    }
+    let mut count = 0usize;
+    let mut by_page: BTreeMap<&str, Vec<&super::read::PlantSegment>> = BTreeMap::new();
+    for s in &plant.segments {
+        by_page.entry(s.page.as_str()).or_default().push(s);
+    }
+    for (name, segments) in by_page {
+        let Some(&(page_index, page)) = pages.get(name) else {
+            continue;
+        };
+        if !new_pages.contains(name) {
+            continue;
+        }
+        let height = tx
+            .project()
+            .page(page)
+            .map_or(297.0, |p| p.format.size_mm().1);
+        let at = |p: (f64, f64)| Point::new(p.0, height - p.1);
+        let here = pins_at.get(&page_index);
+        let mut adj: BTreeMap<Key, BTreeSet<Key>> = BTreeMap::new();
+        let mut pos: BTreeMap<Key, Point> = BTreeMap::new();
+        for s in segments {
+            let (a, b) = (at(s.from), at(s.to));
+            let (ka, kb) = (key(a), key(b));
+            if ka == kb {
+                continue;
+            }
+            pos.entry(ka).or_insert(a);
+            pos.entry(kb).or_insert(b);
+            adj.entry(ka).or_default().insert(kb);
+            adj.entry(kb).or_default().insert(ka);
+        }
+        let pins_of = |k: &Key| -> &[(SymbolId, u16)] {
+            here.and_then(|m| m.get(k)).map_or(&[], Vec::as_slice)
+        };
+        let mut junctions: BTreeMap<Key, JunctionId> = BTreeMap::new();
+        let made = std::cell::Cell::new(0usize);
+        let mut end =
+            |tx: &mut Tx<'_>, k: Key, n: usize| -> Result<Endpoint, novo_core::ModelError> {
+                Ok(match pins_of(&k).first() {
+                    Some(&(id, pin)) => Endpoint::pin(id, pin),
+                    None if n >= 3 => {
+                        let id = match junctions.get(&k) {
+                            Some(&id) => id,
+                            None => {
+                                let id = tx.add_junction(page, pos[&k])?;
+                                junctions.insert(k, id);
+                                made.set(made.get() + 1);
+                                id
+                            }
+                        };
+                        Endpoint::Junction { junction: id }
+                    }
+                    None => Endpoint::Free { at: pos[&k] },
+                })
+            };
+        let bend = |k: &Key| pins_of(k).is_empty() && adj.get(k).is_some_and(|n| n.len() == 2);
+        let mut used: BTreeSet<(Key, Key)> = BTreeSet::new();
+        let edge = |a: Key, b: Key| if a < b { (a, b) } else { (b, a) };
+        let starts: Vec<Key> = adj.keys().copied().filter(|k| !bend(k)).collect();
+        for t in starts {
+            for first in adj[&t].clone() {
+                if !used.insert(edge(t, first)) {
+                    continue;
+                }
+                let mut route = Vec::new();
+                let (mut prev, mut cur) = (t, first);
+                let mut closed = false;
+                while bend(&cur) {
+                    route.push(pos[&cur]);
+                    let next = adj[&cur].iter().copied().find(|k| *k != prev);
+                    let Some(next) = next else { break };
+                    if !used.insert(edge(cur, next)) {
+                        closed = true;
+                        break;
+                    }
+                    prev = cur;
+                    cur = next;
+                }
+                if closed || bend(&cur) {
+                    continue;
+                }
+                let a = end(tx, t, adj[&t].len())?;
+                let b = end(tx, cur, adj[&cur].len())?;
+                if a == b {
+                    continue;
+                }
+                let id = tx.connect_on(page, a, b)?;
+                let route = simplify(pos[&t], route, pos[&cur]);
+                if !route.is_empty() {
+                    tx.update::<Wire>(id, |x| x.route = route)?;
+                }
+                count += 1;
+                *records += 1;
+            }
+        }
+        *records += made.get();
+        // Pins that touch (two pins at one point, wired to the first).
+        if let Some(m) = here {
+            for list in m.values().filter(|l| l.len() > 1) {
+                for other in &list[1..] {
+                    if *other != list[0] && other.0 != list[0].0 {
+                        tx.connect_on(
+                            page,
+                            Endpoint::pin(list[0].0, list[0].1),
+                            Endpoint::pin(other.0, other.1),
+                        )?;
+                        count += 1;
+                        *records += 1;
+                    }
+                }
+            }
+        }
+    }
+    Ok(count)
+}
+
+/// The bends of a run from `from` to `to`: points on the straight line
+/// between their neighbours are not bends.
+fn simplify(from: Point, interior: Vec<Point>, to: Point) -> Vec<Point> {
+    let mut all = vec![from];
+    all.extend(interior);
+    all.push(to);
+    let mut i = 1;
+    while i + 1 < all.len() {
+        let (a, b, c) = (all[i - 1], all[i], all[i + 1]);
+        let cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
+        let along = (b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y);
+        if cross.abs() < 1e-6 && along >= 0.0 {
+            all.remove(i);
+        } else {
+            i += 1;
+        }
+    }
+    all[1..all.len() - 1].to_vec()
 }

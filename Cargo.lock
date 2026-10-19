@@ -1983,6 +1983,7 @@ version = "0.1.0"
 dependencies = [
  "calamine",
  "clap",
+ "novo-canvas",
  "novo-checks",
  "novo-commissioning",
  "novo-core",
