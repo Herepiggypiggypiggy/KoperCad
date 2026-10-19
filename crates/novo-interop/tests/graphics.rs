@@ -108,3 +108,20 @@ fn the_mounting_plate_sheet_becomes_a_cabinet_with_rails_ducts_and_placements() 
         0
     );
 }
+
+#[test]
+fn other_readers_can_ask_for_a_background_from_plain_shapes() {
+    use novo_interop::eplan::pxf::{PxfShape, background_properties};
+    let line = PxfShape {
+        page: None,
+        kind: ShapeKind::Line {
+            a: (10.0, 10.0),
+            b: (50.0, 10.0),
+        },
+        pen: None,
+        dashed: false,
+    };
+    let props = background_properties(&[line]).expect("a drawing");
+    assert!(props.iter().any(|(k, _)| *k == underlay::KEY_DXF));
+    assert!(background_properties(&[]).is_none());
+}

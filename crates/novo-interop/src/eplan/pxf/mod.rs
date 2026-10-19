@@ -41,7 +41,7 @@ use thiserror::Error;
 use crate::report::Report;
 
 pub use dialect::{Dialect, EPLAN_2024};
-pub use graphics::{GraphicsStats, PxfShape, ShapeKind};
+pub use graphics::{GraphicsStats, PxfShape, ShapeKind, background_properties};
 pub use layout::{LayoutDevice, LayoutDuct, LayoutRail, LayoutSheet};
 pub use library::{DOWN, LEFT, LibFunction, LibPort, LibSymbol, Match, PxfLibrary, RIGHT, UP};
 pub use model::{
