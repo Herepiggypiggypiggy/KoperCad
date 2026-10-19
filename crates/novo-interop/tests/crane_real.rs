@@ -74,3 +74,54 @@ fn the_drawn_pages_keep_the_nets_of_the_real_project() {
     // Only same-name terminals and names used more than twice may join more.
     assert!(c.project_only.len() < 10, "{:?}", c.project_only);
 }
+
+/// Lines, rectangles, arcs and location boxes of the real project reach the
+/// pages as background drawings.
+#[test]
+fn the_real_project_keeps_its_lines_and_location_boxes() {
+    let Some(path) = real_file() else { return };
+    let (plan, _, _) = novo_interop::eplan::crane::plan_crane(
+        &novo_core::Project::new("x"),
+        &path,
+        &novo_interop::eplan::pxf::PxfOptions::default(),
+    )
+    .unwrap();
+    let r = plan.report();
+    eprintln!("{}", r.text());
+    let mut doc = novo_core::Document::new(novo_core::Project::new("x"));
+    plan.apply(&mut doc).unwrap();
+    let with_bg = doc
+        .project()
+        .pages()
+        .filter(|p| novo_interop::underlay::stored_text(&p.properties).is_some())
+        .count();
+    assert!(with_bg >= 15, "{with_bg} pages with a background drawing");
+}
+
+/// The mounting plate sheets of the full export become cabinets.
+#[test]
+fn the_real_project_layout_sheets_become_cabinets() {
+    let Some(path) = real_file() else { return };
+    let (plan, _, _) = novo_interop::eplan::crane::plan_crane(
+        &novo_core::Project::new("x"),
+        &path,
+        &novo_interop::eplan::pxf::PxfOptions::default(),
+    )
+    .unwrap();
+    let r = plan.report();
+    let cabinets: Vec<_> = r
+        .text()
+        .lines()
+        .filter(|l| l.contains("Cabinet +"))
+        .map(str::to_owned)
+        .collect();
+    eprintln!("{}", cabinets.join("\n"));
+    let mut doc = novo_core::Document::new(novo_core::Project::new("x"));
+    plan.apply(&mut doc).unwrap();
+    let placed = doc.project().all::<novo_core::CabinetPlacement>().count();
+    eprintln!("placements {placed}");
+    if path.to_string_lossy().contains("full") {
+        assert!(!cabinets.is_empty(), "no mounting plate sheet found");
+        assert!(placed > 10);
+    }
+}

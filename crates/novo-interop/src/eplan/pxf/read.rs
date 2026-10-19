@@ -4,6 +4,7 @@ use std::collections::{BTreeMap, HashSet};
 use std::io::BufRead;
 
 use super::PxfError;
+use super::graphics::{PxfShape, ShapeKind, point, points};
 use super::library::{LibFunction, LibPort, LibSymbol, finite, parse_point, split_pins};
 use super::model::*;
 use super::stream::{Event, Tokens};
@@ -18,6 +19,11 @@ const KIND_PROJECT: u32 = 14;
 const KIND_SYMBOL: u32 = 17;
 const KIND_LIB_SYMBOL: u32 = 20;
 const KIND_TEXT: u32 = 30;
+const KIND_LINE: u32 = 31;
+const KIND_ARC: u32 = 32;
+const KIND_POLYGON: u32 = 34;
+const KIND_LOCATION_BOX: u32 = 88;
+const KIND_RECT: u32 = 89;
 const KIND_NODE: u32 = 42;
 const KIND_LIB_VARIANT: u32 = 45;
 const KIND_REPORT_CELL: u32 = 52;
@@ -165,6 +171,7 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
         cores: Vec::new(),
         interruptions: Vec::new(),
         texts: Vec::new(),
+        shapes: Vec::new(),
         nodes: Vec::new(),
         project: PxfProjectData::default(),
         structures: Vec::new(),
@@ -235,6 +242,7 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
                         || name.starts_with("S40x")
                         || name.starts_with("S39x")
                         || name.starts_with("S48x")
+                        || name.starts_with("S89x")
                     {
                         top.props.push((name, attrs));
                     }
@@ -383,6 +391,19 @@ fn finish(
                 pins: rows("A1045"),
             });
         }
+        KIND_LINE | KIND_RECT | KIND_ARC | KIND_POLYGON | KIND_LOCATION_BOX => {
+            if let Some(kind) = shape_kind(&f) {
+                let numeric = finite;
+                out.shapes.push(PxfShape {
+                    page: f.page,
+                    kind,
+                    pen: f.own("A414").and_then(numeric),
+                    dashed: f.own("A412").and_then(numeric).is_some_and(|t| t > 1.5),
+                });
+            } else {
+                *out.skipped.entry(f.kind).or_default() += 1;
+            }
+        }
         KIND_NODE => out.nodes.push(PxfNode {
             id,
             page: f.page,
@@ -499,6 +520,55 @@ fn finish(
                 matrix: f.matrix(),
             });
         }
+    }
+}
+
+/// The geometry of a line, rectangle, arc, polygon or location box.
+fn shape_kind(f: &Frame) -> Option<ShapeKind> {
+    let at = |name: &str| f.own(name).and_then(point);
+    match f.kind {
+        KIND_LINE => Some(ShapeKind::Line {
+            a: at("A531")?,
+            b: at("A532")?,
+        }),
+        KIND_RECT => Some(ShapeKind::Rect {
+            a: at("A1651")?,
+            b: at("A1652")?,
+        }),
+        KIND_ARC => {
+            let num = |n: &str| f.own(n).and_then(finite);
+            Some(ShapeKind::Arc {
+                center: at("A555")?,
+                radius: at("A556")?.0,
+                start: num("A553")?,
+                end: num("A554")?,
+            })
+        }
+        KIND_POLYGON => {
+            let pts = points(f.own("A621")?);
+            (pts.len() >= 3).then_some(ShapeKind::Polygon {
+                points: pts,
+                filled: f.own("A623").is_some_and(|v| v.trim() != "0"),
+            })
+        }
+        KIND_LOCATION_BOX => {
+            let (ox, oy) = f.position()?;
+            let (a, b) = (at("A1631")?, at("A1632")?);
+            let sign = |prefix: char, v: &str| {
+                if v.is_empty() {
+                    String::new()
+                } else {
+                    format!("{prefix}{}", v.trim_start_matches(prefix))
+                }
+            };
+            Some(ShapeKind::LocationBox {
+                a: (ox + a.0, oy + a.1),
+                b: (ox + b.0, oy + b.1),
+                function: sign('=', f.prop("P150", "P1100")),
+                location: sign('+', f.prop("P150", "P1200")),
+            })
+        }
+        _ => None,
     }
 }
 
