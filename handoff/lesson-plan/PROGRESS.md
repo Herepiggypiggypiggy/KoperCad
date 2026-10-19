@@ -3,3 +3,4 @@
 2026-10-16 11:20 UTC #670 (replay gate known-broken) superseded by #671, closed
 2026-10-16 11:42 UTC #674 READY (R4): Continue card, track progress, Do first links; merged by lead A later
 2026-10-17 09:40 UTC PR 3 started: Help menu Next lesson and Learning paths
+2026-10-19 11:45 UTC #1035 READY (R4); PR 6 started: Ctrl+K finds lessons

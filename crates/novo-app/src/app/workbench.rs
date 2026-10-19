@@ -20,7 +20,7 @@ use novo_plc::link::LinkFormat;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
-use novo_workflow::palette::{Mode, Sources, Target};
+use novo_workflow::palette::{LessonEntry, Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
 use novo_view3d::camera::ViewPreset;
@@ -1413,6 +1413,7 @@ impl NovoApp {
                     );
                 }
             }
+            Target::Lesson(id) => self.learn_run_command_lesson(&id),
             Target::Cable(cable) => self.show_cable(cable),
             Target::Wire(wire) => self.go_to_wire(wire),
             Target::Symbol(symbol) => self.begin_place(&symbol, None),
@@ -1502,8 +1503,9 @@ impl NovoApp {
         f: impl FnOnce(&mut CommandField, &Sources<'_>) -> R,
     ) -> R {
         let mut field = std::mem::take(&mut self.wb.field);
+        let lessons = self.learn.palette_entries();
         let result = {
-            let sources = sources(self);
+            let sources = sources(self, &lessons);
             f(&mut field, &sources)
         };
         self.wb.field = field;
@@ -1667,8 +1669,9 @@ impl NovoApp {
 }
 
 /// What the command field searches, from the app's parts.
-fn sources(app: &NovoApp) -> Sources<'_> {
+fn sources<'a>(app: &'a NovoApp, lessons: &'a [LessonEntry]) -> Sources<'a> {
     Sources {
+        lessons,
         project: app.backend.document().map(Document::project),
         library: app.library(),
         keymap: &app.wb.keymap,

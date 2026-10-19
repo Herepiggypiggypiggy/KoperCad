@@ -827,3 +827,19 @@ fn help_next_lesson_names_and_starts_the_lesson_on_offer() {
     assert!(d.app.learn.card_on(), "it brings the card back");
     assert_eq!(step(&d), "hello", "and does not start over");
 }
+
+#[test]
+fn the_command_field_finds_and_starts_a_lesson() {
+    let (_dir, mut d) = drive();
+    let entries = d.app.learn.palette_entries();
+    assert_eq!(entries[0].id, "tiny");
+    assert_eq!(entries[0].title, "Tiny lesson");
+    let ctx = d.ctx.clone();
+    d.app
+        .run_target(&ctx, novo_workflow::palette::Target::Lesson("tiny".into()));
+    d.frame();
+    assert_eq!(step(&d), "hello", "picking the row starts the lesson");
+    d.app
+        .run_target(&ctx, novo_workflow::palette::Target::Lesson("tiny".into()));
+    assert_eq!(step(&d), "hello", "picking it again resumes, not restarts");
+}
