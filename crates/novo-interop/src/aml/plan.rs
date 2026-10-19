@@ -8,8 +8,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
-    Cable, CableCore, ChangeSet, DeviceId, Document, MountingPlate, PageId, Part, PartId, Project,
-    Terminal, TerminalId,
+    Cable, CableCore, ChangeSet, DeviceId, DeviceTag, Document, MountingPlate, PageId, Part,
+    PartId, Project, Terminal, TerminalId,
 };
 
 use super::draw::draw;
@@ -81,12 +81,18 @@ pub fn plan_import(project: &Project, plant: &Plant) -> AmlPlan {
         })
         .map(|(i, _)| i)
         .collect();
-    let have_page: BTreeSet<String> = project.pages().map(|p| p.name.clone()).collect();
+    let have_page: BTreeSet<String> = project
+        .pages()
+        .map(|p| page_key(&p.structure, &p.name))
+        .collect();
     let new_pages: Vec<usize> = plant
         .pages
         .iter()
         .enumerate()
-        .filter(|(_, p)| !have_page.contains(&page_name(p)))
+        .filter(|(_, p)| {
+            let (structure, name) = page_parts(p);
+            !have_page.contains(&page_key(&structure, &name))
+        })
         .map(|(i, _)| i)
         .collect();
     let new_set: BTreeSet<usize> = new_devices_set(&new_devices);
@@ -130,13 +136,26 @@ fn new_devices_set(v: &[usize]) -> BTreeSet<usize> {
     v.iter().copied().collect()
 }
 
-/// The project page name for a page of the file: its label and title.
-fn page_name(p: &PlantPage) -> String {
-    if p.title.is_empty() {
-        p.name.clone()
-    } else {
-        format!("{} {}", p.name, p.title)
+/// A page of the file as the project names it: the structure the label
+/// starts with (`=A1+CAB1`) and the page name after the last `/` (`05`), so
+/// a cross reference reads `/05.5` on its own structure and `=A1+CAB1/05.5`
+/// from another. A label that is not of that shape stays whole, structure
+/// empty. The title is the page title, never part of the name.
+fn page_parts(p: &PlantPage) -> (DeviceTag, String) {
+    if let Some((head, tail)) = p.name.rsplit_once('/')
+        && !tail.trim().is_empty()
+        && head.starts_with(['=', '+'])
+        && let Ok(structure) = DeviceTag::parse(head)
+        && structure.product.is_empty()
+    {
+        return (structure, tail.trim().to_string());
     }
+    (DeviceTag::default(), p.name.clone())
+}
+
+/// What identifies a project page across imports: structure and name.
+fn page_key(structure: &DeviceTag, name: &str) -> String {
+    format!("{structure}/{name}")
 }
 
 impl AmlPlan {
@@ -297,16 +316,22 @@ impl AmlPlan {
             let mut existing: BTreeMap<String, PageId> = tx
                 .project()
                 .pages()
-                .map(|p| (p.name.clone(), p.id))
+                .map(|p| (page_key(&p.structure, &p.name), p.id))
                 .collect();
             for (n, p) in plant.pages.iter().enumerate() {
-                let name = page_name(p);
-                let id = match existing.get(&name) {
+                let (structure, name) = page_parts(p);
+                let key = page_key(&structure, &name);
+                let id = match existing.get(&key) {
                     Some(&id) => id,
                     None => {
                         created += 1;
-                        let id = tx.add_page(name.clone())?;
-                        existing.insert(name, id);
+                        let id = tx.add_page(name)?;
+                        let title = p.title.clone();
+                        tx.update::<novo_core::Page>(id, |x| {
+                            x.structure = structure;
+                            x.title = title;
+                        })?;
+                        existing.insert(key, id);
                         id
                     }
                 };
@@ -320,12 +345,12 @@ impl AmlPlan {
                 .filter(|s| s.device.is_none_or(|d| device_ids.contains_key(&d)))
             {
                 if !pages.contains_key(&s.page) {
-                    let id = match existing.get(&s.page) {
+                    let id = match existing.get(&page_key(&DeviceTag::default(), &s.page)) {
                         Some(&id) => id,
                         None => {
                             created += 1;
                             let id = tx.add_page(s.page.clone())?;
-                            existing.insert(s.page.clone(), id);
+                            existing.insert(page_key(&DeviceTag::default(), &s.page), id);
                             id
                         }
                     };

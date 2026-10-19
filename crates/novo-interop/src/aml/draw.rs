@@ -25,6 +25,8 @@ const BOX_SYMBOL: &str = "import/box";
 const INTERRUPTION: &str = "iec/connectivity/interruption_point";
 /// How far beside a pin a page's interruption point sits.
 const IP_GAP: f64 = 10.0;
+/// How far a second point on the same pin sits from the first.
+const IP_STACK: f64 = 8.0;
 
 fn direction(faces: &[String]) -> Option<Direction> {
     faces.first().and_then(|f| match f.as_str() {
@@ -208,6 +210,49 @@ fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
     }
 }
 
+/// Longest interruption point name drawn as the file gives it.
+const SHORT_NAME: usize = 8;
+
+/// Short, unique names for the interruption points of a file's nets, in net
+/// order. The file's own name is kept when it is short; a long one (the
+/// configurator writes a page path and title) would be printed beside every
+/// point and over its neighbours, so the net gets a plain `N<number>` and
+/// pairs by that.
+fn point_names(nets: &[super::read::PlantNet]) -> Vec<String> {
+    let short = |n: &str| n.chars().count() <= SHORT_NAME && !n.chars().any(char::is_whitespace);
+    let mut taken: BTreeSet<String> = BTreeSet::new();
+    let mut next = 1usize;
+    // Two nets of one name stay two nets: a point pairs by its name alone,
+    // so the second gets `name-2`, and so on.
+    let mut fresh = |base: Option<&str>, taken: &mut BTreeSet<String>| match base {
+        Some(b) if taken.insert(b.to_string()) => b.to_string(),
+        Some(b) => (2..)
+            .map(|k| format!("{b}-{k}"))
+            .find(|n| taken.insert(n.clone()))
+            .unwrap_or_default(),
+        None => loop {
+            let name = format!("N{next}");
+            next += 1;
+            if taken.insert(name.clone()) {
+                break name;
+            }
+        },
+    };
+    // Short names first, so a generated `N7` never takes a name a net has.
+    let mut names: Vec<Option<String>> = vec![None; nets.len()];
+    for (i, n) in nets.iter().enumerate() {
+        if short(&n.name) {
+            names[i] = Some(fresh(Some(&n.name), &mut taken));
+        }
+    }
+    for (i, n) in nets.iter().enumerate() {
+        if !short(&n.name) {
+            names[i] = Some(fresh(None, &mut taken));
+        }
+    }
+    names.into_iter().map(Option::unwrap_or_default).collect()
+}
+
 /// A right-angle run from `a` to `b`, leaving `a` along its pin direction.
 fn route(a: Point, b: Point, leave: Option<Direction>) -> Vec<Point> {
     if (a.x - b.x).abs() < 1e-6 || (a.y - b.y).abs() < 1e-6 {
@@ -331,9 +376,34 @@ pub(super) fn draw(
         out.records += 1;
     }
 
+    // The free texts of the pages this import creates.
+    for t in &plant.texts {
+        let Some(&(_, page)) = pages.get(&t.page).filter(|_| new_pages.contains(&t.page)) else {
+            continue;
+        };
+        let height = tx
+            .project()
+            .page(page)
+            .map_or(297.0, |p| p.format.size_mm().1);
+        tx.add_text(
+            page,
+            TextContent::Literal {
+                text: t.value.clone(),
+            },
+            TextPlacement {
+                offset: Point::new(t.at.0, height - t.at.1),
+                anchor: TextAnchor::BottomLeft,
+                ..Default::default()
+            },
+            None,
+        )?;
+        out.records += 1;
+    }
+
     let lib = Library::shared(Pack::Iec);
     let ip_symbol = lib.get(INTERRUPTION);
-    for net in &plant.nets {
+    let names = point_names(&plant.nets);
+    for (net, point_name) in plant.nets.iter().zip(names) {
         // The net's pins by page, only those that were placed.
         let mut by_page: BTreeMap<usize, Vec<(&Placed, usize)>> = BTreeMap::new();
         for &(si, pi) in &net.pins {
@@ -343,8 +413,8 @@ pub(super) fn draw(
                 by_page.entry(p.page).or_default().push((p, pi));
             }
         }
-        let several_pages = by_page.len() > 1;
-        for members in by_page.values_mut() {
+        let pages_of_net = by_page.len();
+        for (rank, members) in by_page.values_mut().enumerate() {
             members.sort_by(|a, b| {
                 let (pa, pb) = (a.0.pos[a.1].0, b.0.pos[b.1].0);
                 pa.x.total_cmp(&pb.x).then(pa.y.total_cmp(&pb.y))
@@ -365,8 +435,27 @@ pub(super) fn draw(
                 out.wires += 1;
                 out.records += 1;
             }
-            // A net on several pages is tied together by name.
-            if several_pages && let Some(&(m, mi)) = members.last() {
+            // A net on several pages continues from page to page: each page
+            // has a point towards the previous and one towards the next, a
+            // pair by name, so a point names one partner and not every page.
+            let Some(&(m, mi)) = members.last().filter(|_| pages_of_net > 1) else {
+                continue;
+            };
+            let link = |between: usize| {
+                if pages_of_net == 2 {
+                    point_name.clone()
+                } else {
+                    format!("{point_name}.{between}")
+                }
+            };
+            let mut names = Vec::new();
+            if rank > 0 {
+                names.push(link(rank));
+            }
+            if rank + 1 < pages_of_net {
+                names.push(link(rank + 1));
+            }
+            for (k, name) in names.into_iter().enumerate() {
                 let page = m.page_id;
                 let at = m.pos[mi].0;
                 let (key, pins) = match ip_symbol {
@@ -374,15 +463,13 @@ pub(super) fn draw(
                     None => (BOX_SYMBOL.to_string(), vec![Pin::new("1", 0.0, 0.0)]),
                 };
                 let off = pins.first().map_or(Point::new(0.0, 0.0), |p| p.offset);
-                let origin = Point::new(at.x + IP_GAP - off.x, at.y - off.y);
+                let origin = Point::new(at.x + IP_GAP - off.x, at.y - off.y + IP_STACK * k as f64);
                 let ip = tx.place_symbol(
                     page,
                     key.as_str(),
                     Placement::at(origin),
                     pins,
-                    SymbolRole::Interruption {
-                        name: net.name.clone(),
-                    },
+                    SymbolRole::Interruption { name },
                 )?;
                 tx.connect(Endpoint::pin(m.id, m.pin_of[mi]), Endpoint::pin(ip, 0))?;
                 out.interruptions += 1;
