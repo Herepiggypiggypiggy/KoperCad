@@ -157,6 +157,8 @@ pub(crate) struct LearnState {
     pub(super) filter: String,
     /// The Learn window lists only this track (Help > Learning paths).
     pub(super) only_track: Option<String>,
+    /// The Learn window lists only this learning path, in its order.
+    pub(super) only_path: Option<String>,
     pub(super) show_drafts: bool,
     pub(super) confirm_restart: bool,
     /// Lessons whose lint has errors, so they are not offered yet.
@@ -205,6 +207,7 @@ impl LearnState {
             window: false,
             filter: String::new(),
             only_track: None,
+            only_path: None,
             show_drafts: false,
             confirm_restart: false,
             coming: None,
@@ -415,8 +418,10 @@ fn add_folder(files: &mut Files, notes: &mut Vec<String>, dir: &Path) {
             notes.extend(skipped);
             for (key, text) in found {
                 match key.split_once('/') {
-                    None if matches!(key.as_str(), "tracks.toml" | "glossary.toml" | "ui.toml") => {
-                    }
+                    None if matches!(
+                        key.as_str(),
+                        "tracks.toml" | "glossary.toml" | "paths.toml" | "ui.toml"
+                    ) => {}
                     None => notes.push(format!("{key}: ignored, lessons live in folders")),
                     Some((folder, _)) if shipped.contains(folder) => {
                         notes.push(format!(
@@ -1004,6 +1009,7 @@ impl NovoApp {
                 None => {
                     self.learn.window = !self.learn.window;
                     self.learn.only_track = None;
+                    self.learn.only_path = None;
                 }
             },
             "help.next_lesson" => match self.learn.offered() {

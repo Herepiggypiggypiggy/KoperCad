@@ -1,7 +1,7 @@
 # Lesson plan and learning menus: handoff
 
-State (2026-10-17): PRs 1 to 3 of the plan are merged or in review; see PROGRESS.md for SHAs.
-Pure logic lives in `novo-learn` (`Catalog::next_lesson`, `unmet_needs`, `track_summary`); the app only
+State (2026-10-19): PRs 1 to 3 of the plan are merged (#583, #674, #958); PR 4 (paths) is in review on branch `claude/learning-paths`; see PROGRESS.md.
+Pure logic lives in `novo-learn` (`Catalog::next_lesson`, `unmet_needs`, `track_summary`, `path_lessons`, `path_summary`, `path_next`; paths come from `assets/lessons/paths.toml`); the app only
 draws it (`learn_ui.rs`, `menu_bar.rs` `paths_menu` and `command_label`).
 
 Resume: branch from main, `cargo fmt --all`, `cargo clippy --workspace --all-targets -- -D warnings`,

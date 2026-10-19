@@ -70,7 +70,7 @@ fn the_report_counts_what_is_not_carried() {
     assert_eq!(r.count_of("cable cores"), 1);
     let left = |w: &str| r.lossy.iter().find(|l| l.what == w).map(|l| l.count);
     assert_eq!(left("lines"), Some(2));
-    assert_eq!(left("connection nodes"), Some(1));
+    assert_eq!(r.count_of("connection nodes"), 1);
     assert_eq!(left("other objects"), Some(1));
     assert!(r.text().contains("no partner"));
     // the declared count (2) matches the pages found: no note about it
