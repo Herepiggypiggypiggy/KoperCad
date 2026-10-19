@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Synthetic test fixture written for KoperCAD, shaped like a crane configurator output. Not exported from EPLAN; every name and number is made up. -->
+<EplanPxfRoot Type="Project" Version="2024.0" PxfVersion="1.23" SchemaVersion="1.0" NumMainObjects="3">
+  <O14 A1="14/1">
+    <P11 P10013="DEMO-1" P10011="en_US@Demo slewing crane;"/>
+  </O14>
+  <O4 A1="4/1" A1101="1">
+    <P49 P1100="A1" P1200="CAB1" P11012="1" P11013=""/>
+    <P11 P11011="en_US@Main supply;"/>
+    <O17 A1="17/10" A1381="5" A1382="0" A1383="1">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="Q" P20014="1" P20015=""/>
+      <P11 P20027="en_US@Breaker 3P;" P20100_1="DEMO.BRK3P16"/>
+      <S40x1201 A762="42.5/200"/>
+    </O17>
+    <O17 A1="17/12">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="W" P20014="1" P20015=""/>
+      <P11 P20011="en_US@Motor cable;" P20100_1="DEMO.CAB4G15"/>
+    </O17>
+    <O17 A1="17/13">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="W" P20014="2" P20015=""/>
+    </O17>
+    <O59 A1="59/20" R1031="17/12">
+      <P150 P1100="A1" P1200="CAB1" P20012="-" P20013="W" P20014="1"/>
+      <P11 P31004="1"/>
+    </O59>
+    <O59 A1="59/21" R1031="17/13">
+      <P11 P31004="2"/>
+    </O59>
+  </O4>
+  <O4 A1="4/2" A1101="2">
+    <P49 P1100="A1" P1200="CAB1" P11012="2" P11013=""/>
+    <P11 P11011="en_US@Parts list;"/>
+    <O52 A1="52/30"/>
+    <O53 A1="53/31"/>
+  </O4>
+</EplanPxfRoot>

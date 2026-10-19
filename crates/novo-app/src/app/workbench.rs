@@ -504,6 +504,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.aml",
     "export.eplan",
     "file.import_aml",
+    "file.import_crane",
     "file.import_eplan",
     "file.import_dwg",
     "file.choose_dwg_converter",
@@ -1268,6 +1269,7 @@ impl NovoApp {
                 self.export_aml();
             }
             "file.import_aml" => self.import_aml(),
+            "file.import_crane" => self.import_crane(),
             "file.import_eplan" => self.import_eplan(),
             "file.import_dwg" => self.import_dwg(),
             "file.choose_dwg_converter" => self.choose_dwg_converter(),

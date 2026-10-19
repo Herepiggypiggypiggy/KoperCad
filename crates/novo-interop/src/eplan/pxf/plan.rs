@@ -73,6 +73,8 @@ pub struct PxfPlan {
     cables: Vec<NewCable>,
     /// Tags the file has that the project already holds.
     pub existing: Vec<String>,
+    /// Name and description for a project that is still empty.
+    project_info: Option<(String, String)>,
     report: Report,
     revision: u64,
 }
@@ -130,7 +132,12 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     let mut pages = Vec::new();
     let mut page_names = BTreeSet::new();
     let mut pages_existing = 0usize;
+    let mut report_pages = 0usize;
     for p in &file.pages {
+        if p.class() == PageClass::Report {
+            report_pages += 1;
+            continue;
+        }
         let title = p.title.get(&opts.lang);
         let name = if title.is_empty() {
             p.label()
@@ -149,6 +156,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     let mut strip_at: BTreeMap<String, usize> = BTreeMap::new();
     let mut device_at: BTreeMap<String, usize> = BTreeMap::new();
     let mut cable_at: BTreeMap<String, usize> = BTreeMap::new();
+    let mut cable_of_id: BTreeMap<ObjId, usize> = BTreeMap::new();
     let mut cables: Vec<NewCable> = Vec::new();
     let mut seen_existing: BTreeSet<String> = BTreeSet::new();
     let mut placements = 0usize;
@@ -191,6 +199,9 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             DeviceRole::Cable => {
                 if let Entry::Vacant(slot) = cable_at.entry(text) {
                     slot.insert(cables.len());
+                    if let Some(id) = d.id {
+                        cable_of_id.insert(id, cables.len());
+                    }
                     cables.push(NewCable {
                         tag,
                         description: MlText::parse(&d.cable_text).get(&opts.lang).to_string(),
@@ -228,9 +239,17 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     let mut orphan_cores = 0usize;
     let mut cores_of_existing = 0usize;
     let mut core_numbers: BTreeMap<usize, Vec<String>> = BTreeMap::new();
+    let mut cores_by_id = 0usize;
     for c in &file.cores {
-        match cable_at.get(&canonical(&c.cable.full())) {
-            Some(&i) => {
+        // The core's own reference to its cable beats the tag, which a core
+        // may carry without the function level.
+        let by_id = c.cable_ref.and_then(|r| cable_of_id.get(&r)).copied();
+        let found = by_id.or_else(|| cable_at.get(&canonical(&c.cable.full())).copied());
+        if by_id.is_some() {
+            cores_by_id += 1;
+        }
+        match found {
+            Some(i) => {
                 let n = c.number.trim().to_string();
                 let list = core_numbers.entry(i).or_default();
                 if !n.is_empty() && !list.contains(&n) {
@@ -258,6 +277,11 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         .count();
     report.moved("sections and locations", structures.len());
     report.moved("pages (empty)", pages.len());
+    report.lost(
+        "generated report pages",
+        report_pages,
+        "contents, parts and terminal lists EPLAN generated; KoperCAD generates its own from the data",
+    );
     report.moved("devices", devices.len() - strips);
     report.moved("terminal strips", strips);
     report.moved("terminals", terminals);
@@ -302,6 +326,11 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         orphan_cores,
         "the core names a cable that is not in the file",
     );
+    if cores_by_id > 0 {
+        report.note(format!(
+            "{cores_by_id} cable cores were tied to their cable by the reference the file stores (exact), not by tag."
+        ));
+    }
     if cores_of_existing > 0 {
         report.note(format!(
             "{cores_of_existing} cable cores belong to cables that already exist and were skipped."
@@ -330,12 +359,33 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         report.note("A page macro: its pages are added to the project like a project's.");
     }
 
+    let project_info = project
+        .devices()
+        .next()
+        .is_none()
+        .then(|| {
+            let t = file.project.title.get(&opts.lang);
+            let n = file.project.number.trim();
+            let name = match (n.is_empty(), t.is_empty()) {
+                (false, false) => format!("{n} {t}"),
+                (false, true) => n.to_string(),
+                (true, false) => t.to_string(),
+                (true, true) => String::new(),
+            };
+            (name, t.to_string())
+        })
+        .filter(|(n, _)| !n.is_empty());
+    if let Some((n, _)) = &project_info {
+        report.note(format!("Project name set from the file: {n}."));
+    }
+
     PxfPlan {
         structures,
         pages,
         devices,
         cables,
         existing,
+        project_info,
         report,
         revision: project.revision(),
     }
@@ -366,6 +416,11 @@ impl PxfPlan {
         self.report.summary()
     }
 
+    /// Adds a note to the report the person reads before applying.
+    pub fn note(&mut self, text: impl Into<String>) {
+        self.report.note(text);
+    }
+
     /// Creates everything as one undo step; returns how many records.
     pub fn apply(&self, doc: &mut Document) -> Result<usize, ApplyError> {
         Ok(self.apply_with_changes(doc)?.map_or(0, |(n, _)| n))
@@ -385,6 +440,12 @@ impl PxfPlan {
         }
         let (created, changes) = doc.transact("Import EPLAN project", |tx| {
             let mut created = 0usize;
+            if let Some((name, description)) = &self.project_info {
+                tx.set_info(|i| {
+                    i.name = name.clone();
+                    i.description = description.clone();
+                })?;
+            }
             for s in &self.structures {
                 tx.add_structure(s.tag.clone(), "", false)?;
                 created += 1;

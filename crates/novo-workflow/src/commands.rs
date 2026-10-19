@@ -482,6 +482,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "file.import_crane",
+            "Import crane configurator project",
+            "Project",
+            &[
+                "crane",
+                "kraan",
+                "configurator",
+                "demag",
+                "scherpel",
+                "migrate",
+                "other tool",
+            ],
+            Needs::Project,
+        ),
+        &["import crane", "import crane configurator"],
+    ),
+    verb(
+        cmd(
             "file.import_eplan",
             "Import EPLAN project (PXF)",
             "Project",

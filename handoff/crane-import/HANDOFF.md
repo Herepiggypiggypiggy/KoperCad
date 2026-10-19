@@ -1,0 +1,8 @@
+# CRANE-IMPORT handoff
+Branch claude/project-thread-rz9tfx (kopercad). Slice 1 built: File > Import > Crane configurator project and `kopercad-cli import crane <path>`.
+Done: reader extended (embedded library ports/names, nodes, project data, structures, core-to-cable refs, page classes); plan skips generated report pages (65 -> 29 pages on v95), ties cores by reference, names the project; crane source layer `eplan/crane.rs` (newest vNN, Projectcontrole verdict, hernoemen summary, project.json); report says exact vs inferred.
+NOT done (slice 2, drawn pages): map O60 function names to KoperCAD symbols (extend eplan/symbols/table.toml in our own words; terminals/motors/lamps/brake/rectifier/plugs/device connection points currently unmapped, transformer and rotary switch map wrongly), build ConnGraph per page from library ports + nodes + interruption points, rebuild_nets, create symbols/junctions/wires/texts with y = H - y, compare with nets::compare.
+Real data: staged from the PC to /mnt/user-data/uploads/EPLAN_Configurator_Trial/output/custom/scherpel/v95/. Opt-in real tests: KOPERCAD_CRANE_EPJ=<epj> cargo test -p novo-interop --test crane_real --test crane. Trimmed private epj: /mnt/project-files/interop/private/crane/scherpel-v95-trimmed.epj.
+Crane repo clone: /home/claude/eplan-crane-configurator (private, knowledge only).
+Rules: no customer data or EPLAN library in git (fixture crates/novo-interop/tests/fixtures/crane is synthetic); draft PRs until rc1 tagged; odd PR to lead B, even to lead A.
+Disk: cargo target fills the session allowance; use CARGO_INCREMENTAL=0 and delete target/debug/incremental when linking dies with a Bus error.

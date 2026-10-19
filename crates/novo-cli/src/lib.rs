@@ -390,6 +390,29 @@ enum Import {
         #[arg(long, default_value = "en_US")]
         lang: String,
     },
+    /// Preview a crane configurator project as a KoperCAD import. Give the
+    /// `.epj`, a version folder (`v95`), the project folder (the newest
+    /// version is read) or the configurator's `output` folder. Same report
+    /// as `eplan`, plus the configurator's own project check and what is
+    /// exact and what is inferred. Nothing is written unless `--output`
+    /// names a new project file.
+    Crane {
+        /// The configurator output folder or its `.epj`.
+        path: PathBuf,
+        /// Add to this project; a new project named from the file when left out.
+        #[arg(long)]
+        project: Option<PathBuf>,
+        /// Print JSON instead of text.
+        #[arg(long)]
+        json: bool,
+        /// Write the project with the import applied (one undo step) to
+        /// this new `.novo` file. It must not exist yet.
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+        /// Language of titles and type texts, e.g. `en_US`.
+        #[arg(long, default_value = "en_US")]
+        lang: String,
+    },
 }
 
 /// Which side wins a conflict.
@@ -721,6 +744,20 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             &lang,
             out,
         ),
+        Cmd::Import(Import::Crane {
+            path,
+            project,
+            json,
+            output,
+            lang,
+        }) => import_crane(
+            &path,
+            project.as_deref(),
+            json,
+            output.as_deref(),
+            &lang,
+            out,
+        ),
         Cmd::Calc {
             file,
             tables,
@@ -761,19 +798,7 @@ fn import_eplan(
 ) -> Result<i32, Failure> {
     use novo_interop::eplan::pxf::{PxfOptions, plan_pxf, read_pxf};
 
-    if let Some(path) = output
-        && (!novo_py::is_project_path(path) || path.exists())
-    {
-        let why = if path.exists() {
-            "already exists; import never replaces a project file"
-        } else {
-            "is not a .novo project file name"
-        };
-        return Err(Failure::new(
-            exit::WRITE,
-            format!("cannot write {}: it {why}", path.display()),
-        ));
-    }
+    check_import_output(output)?;
     let base = match project {
         Some(path) => read(path)?,
         None => Project::new(
@@ -793,6 +818,36 @@ fn import_eplan(
             lang: lang.to_string(),
         },
     );
+    finish_import(plan, base, json, output, out)
+}
+
+/// An import never replaces a project file: the output must be a new
+/// `.novo` name.
+fn check_import_output(output: Option<&Path>) -> Result<(), Failure> {
+    if let Some(path) = output
+        && (!novo_py::is_project_path(path) || path.exists())
+    {
+        let why = if path.exists() {
+            "already exists; import never replaces a project file"
+        } else {
+            "is not a .novo project file name"
+        };
+        return Err(Failure::new(
+            exit::WRITE,
+            format!("cannot write {}: it {why}", path.display()),
+        ));
+    }
+    Ok(())
+}
+
+/// Prints the plan's report and, with `output`, writes the project.
+fn finish_import(
+    plan: novo_interop::eplan::pxf::PxfPlan,
+    base: Project,
+    json: bool,
+    output: Option<&Path>,
+    out: &mut dyn Write,
+) -> Result<i32, Failure> {
     let report = plan.report();
     let mut written = false;
     if let Some(path) = output {
@@ -832,6 +887,35 @@ fn import_eplan(
         }
     }
     Ok(exit::OK)
+}
+
+/// `kopercad-cli import crane`: previews a crane configurator output as an
+/// import, and with `output` writes the imported project to a new file.
+fn import_crane(
+    path: &Path,
+    project: Option<&Path>,
+    json: bool,
+    output: Option<&Path>,
+    lang: &str,
+    out: &mut dyn Write,
+) -> Result<i32, Failure> {
+    use novo_interop::eplan::crane::plan_crane;
+    use novo_interop::eplan::pxf::PxfOptions;
+
+    check_import_output(output)?;
+    let base = match project {
+        Some(p) => read(p)?,
+        None => Project::new("Crane import"),
+    };
+    let (plan, _, _) = plan_crane(
+        &base,
+        path,
+        &PxfOptions {
+            lang: lang.to_string(),
+        },
+    )
+    .map_err(|e| Failure::new(exit::READ, format!("cannot import {}: {e}", path.display())))?;
+    finish_import(plan, base, json, output, out)
 }
 
 /// `kopercad-cli import sheet`: previews the sheet, and with `output`
