@@ -255,14 +255,24 @@ pub(super) fn result_lines(rec: &Recommendation) -> Vec<String> {
 
 /// The floating "Size the enclosure" window; the right side of the Cabinet
 /// view belongs to the inspector.
-pub(super) fn show_window(ctx: &egui::Context, state: &mut SizingState, devices: &[SizingDevice]) {
+/// Returns the lesson id when the lesson chip was clicked.
+pub(super) fn show_window(
+    ctx: &egui::Context,
+    state: &mut SizingState,
+    devices: &[SizingDevice],
+    chip: Option<&(String, String)>,
+) -> Option<String> {
     if !state.panel_open {
-        return;
+        return None;
     }
     let mut open = true;
+    let mut lesson = None;
     let window = super::panel::dialog(ctx, "Size the enclosure", [380.0, 0.0])
         .open(&mut open)
-        .show(ctx, |ui| show_panel(ui, state, devices));
+        .show(ctx, |ui| {
+            lesson = super::learn_ui::chip_button(ui, chip);
+            show_panel(ui, state, devices)
+        });
     if let Some(w) = window {
         super::cabinet_bar::note_rect(
             ctx,
@@ -273,6 +283,7 @@ pub(super) fn show_window(ctx: &egui::Context, state: &mut SizingState, devices:
         );
     }
     state.panel_open = open;
+    lesson
 }
 
 /// The content of the window. `devices` are the panel's devices from the project.

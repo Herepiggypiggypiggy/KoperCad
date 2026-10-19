@@ -868,8 +868,5 @@ impl NovoApp {
 /// when it is clicked.
 pub(super) fn chip_button(ui: &mut egui::Ui, chip: Option<&(String, String)>) -> Option<String> {
     let (id, label) = chip?;
-    ui.small_button(label)
-        .on_hover_text("Start or continue this lesson")
-        .clicked()
-        .then(|| id.clone())
+    ui.small_button(label).clicked().then(|| id.clone())
 }

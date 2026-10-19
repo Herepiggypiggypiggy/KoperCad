@@ -21,4 +21,4 @@ Traps and decisions:
 - Lesson chips: `LearnState::chip(topic)` gives (id, label) and `learn_ui::chip_button` draws it; a panel
   computes the chip before its closure and runs `learn_run_command_lesson` after. To add one, pick a topic a
   lesson already lists. Wired: Terminals drawer ("terminals"), Cables drawer ("cables"), report view
-  ("wire list" for wire reports, else "reports"). Not yet: cabinet drawers/plate view ("cabinet").
+  ("wire list" for wire reports, else "reports"). Also: Rails and ducts window ("rails"), Size the enclosure window ("sizing"). Not yet: door/enclosure inspector, plate export, 3D view, heat view.
