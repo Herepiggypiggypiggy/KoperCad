@@ -18,3 +18,7 @@ Traps and decisions:
 - A new command needs: `commands.rs`, `language.rs` (NL), `menus.rs` placement, `APP_COMMANDS` in
   `workbench.rs`, and a handler in `run_command`.
 - Lessons that name UI not on main stay `draft` or `early`; the runner lints free-text button names.
+- Lesson chips: `LearnState::chip(topic)` gives (id, label) and `learn_ui::chip_button` draws it; a panel
+  computes the chip before its closure and runs `learn_run_command_lesson` after. To add one, pick a topic a
+  lesson already lists. Wired: Terminals drawer ("terminals"), Cables drawer ("cables"), report view
+  ("wire list" for wire reports, else "reports"). Not yet: cabinet drawers/plate view ("cabinet").

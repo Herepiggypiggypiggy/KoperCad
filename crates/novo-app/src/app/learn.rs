@@ -395,6 +395,24 @@ impl LearnState {
             .collect()
     }
 
+    /// The "Lesson: <title>" chip a panel shows for a topic it knows: the
+    /// lesson id and the label. `None` when no lesson carries the topic or
+    /// that lesson is the one on the card already.
+    pub(super) fn chip(&self, topic: &str) -> Option<(String, String)> {
+        let entry = self
+            .catalog
+            .visible(self.show_drafts)
+            .find(|e| e.lesson.topics.iter().any(|t| t == topic))?;
+        let l = &entry.lesson;
+        if self.running() == Some(l.id.as_str()) {
+            return None;
+        }
+        Some((
+            l.id.clone(),
+            self.say_with("lesson_chip", &[("title", l.title(self.lang))]),
+        ))
+    }
+
     /// The id of the lesson being done.
     pub(super) fn running(&self) -> Option<&str> {
         self.run.as_ref().map(|r| r.lesson().id.as_str())

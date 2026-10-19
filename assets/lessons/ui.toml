@@ -248,3 +248,7 @@ text_nl = "{done}/{total} klaar · {minutes} min"
 [do_first]
 text = "Do first:"
 text_nl = "Doe eerst:"
+
+[lesson_chip]
+text = "Lesson: {title}"
+text_nl = "Les: {title}"

@@ -866,3 +866,26 @@ fn the_command_field_finds_and_starts_a_lesson() {
         .run_target(&ctx, novo_workflow::palette::Target::Lesson("tiny".into()));
     assert_eq!(step(&d), "hello", "picking it again resumes, not restarts");
 }
+
+#[test]
+fn a_panel_chip_names_the_lesson_for_its_topic_and_steps_aside_when_it_runs() {
+    let (_dir, mut d) = drive();
+    let mut files = files();
+    files.insert(
+        "tiny/lesson.toml".into(),
+        LESSON.replace(
+            "project = \"@blank\"",
+            "project = \"@blank\"\ntopics = [\"terminals\"]",
+        ),
+    );
+    d.app.learn.use_files(files);
+    assert!(d.app.learn.chip("cables").is_none(), "no lesson for it");
+    let (id, label) = d.app.learn.chip("terminals").expect("a chip");
+    assert_eq!(
+        (id.as_str(), label.as_str()),
+        ("tiny", "Lesson: Tiny lesson")
+    );
+    d.app.learn_run_command_lesson(&id);
+    d.frame();
+    assert!(d.app.learn.chip("terminals").is_none(), "the card is on it");
+}
