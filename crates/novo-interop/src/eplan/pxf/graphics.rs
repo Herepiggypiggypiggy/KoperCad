@@ -287,3 +287,20 @@ pub(super) fn build(
     stats.pages = out.len();
     (out, stats)
 }
+
+/// The page properties (`underlay.*`) that show `shapes` as a page's
+/// background drawing, in sheet millimetres (y up from the lower left, A3).
+/// The shapes' `page` is ignored; `None` when nothing is left to draw or the
+/// drawing is too big for a page background. For other readers (the AML
+/// import) that have their own lines and rectangles.
+pub fn background_properties(shapes: &[PxfShape]) -> Option<Vec<(&'static str, Value)>> {
+    let flat: Vec<PxfShape> = shapes
+        .iter()
+        .map(|s| PxfShape {
+            page: Some(0),
+            ..s.clone()
+        })
+        .collect();
+    let (mut pages, _) = build(&flat, &BTreeSet::from([0]));
+    pages.remove(&0).map(|g| g.properties)
+}
