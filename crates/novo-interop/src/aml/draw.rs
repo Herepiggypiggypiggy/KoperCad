@@ -19,6 +19,7 @@ use novo_core::{
 use novo_symbols::{Library, Pack, Symbol};
 
 use super::read::{Plant, PlantPin, PlantSymbol};
+use crate::eplan::pxf::{PxfShape, ShapeKind, background_properties};
 use crate::eplan::symbols::match_pins;
 
 const BOX_SYMBOL: &str = "import/box";
@@ -412,6 +413,35 @@ pub(super) fn draw(
             tx.set_text(id, None, Some(h))?;
         }
         out.records += 1;
+    }
+
+    // The lines and rectangles are each page's background drawing.
+    let mut by_page: BTreeMap<&str, Vec<PxfShape>> = BTreeMap::new();
+    for sh in &plant.shapes {
+        if new_pages.contains(&sh.page) && pages.contains_key(&sh.page) {
+            by_page.entry(sh.page.as_str()).or_default().push(PxfShape {
+                page: None,
+                kind: if sh.rect {
+                    ShapeKind::Rect { a: sh.a, b: sh.b }
+                } else {
+                    ShapeKind::Line { a: sh.a, b: sh.b }
+                },
+                pen: None,
+                dashed: false,
+            });
+        }
+    }
+    for (name, shapes) in by_page {
+        let (Some(&(_, page)), Some(props)) = (pages.get(name), background_properties(&shapes))
+        else {
+            continue;
+        };
+        tx.update::<novo_core::Page>(page, |p| {
+            for (k, v) in &props {
+                p.properties.insert((*k).to_string(), v.clone());
+            }
+        })?;
+        out.records += shapes.len();
     }
 
     let lib = Library::shared(Pack::Iec);

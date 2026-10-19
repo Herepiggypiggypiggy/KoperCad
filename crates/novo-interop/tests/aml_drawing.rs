@@ -396,3 +396,24 @@ fn a_text_height_in_the_file_is_kept() {
             .all(|t| t.placement.rotation == novo_core::Rotation::R270)
     );
 }
+
+#[test]
+fn lines_and_rectangles_become_the_pages_background() {
+    let shapes = r#"<InternalElement ID="l1" Name="Line1"><Attribute Name="X1" AttributeDataType="xs:double"><Value>20</Value></Attribute><Attribute Name="Y1" AttributeDataType="xs:double"><Value>40</Value></Attribute><Attribute Name="X2" AttributeDataType="xs:double"><Value>80</Value></Attribute><Attribute Name="Y2" AttributeDataType="xs:double"><Value>40</Value></Attribute><RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Line"/></InternalElement><InternalElement ID="r1" Name="Rectangle1"><Attribute Name="X1" AttributeDataType="xs:double"><Value>30</Value></Attribute><Attribute Name="Y1" AttributeDataType="xs:double"><Value>60</Value></Attribute><Attribute Name="X2" AttributeDataType="xs:double"><Value>50</Value></Attribute><Attribute Name="Y2" AttributeDataType="xs:double"><Value>90</Value></Attribute><RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Rectangle"/></InternalElement>"#;
+    let with = file().replace(
+        "<RoleRequirements RefBaseRoleClassPath=\"KoperCADRoleClassLib/Page\"/></InternalElement>\n<InternalElement ID=\"pg2\"",
+        &format!("{shapes}<RoleRequirements RefBaseRoleClassPath=\"KoperCADRoleClassLib/Page\"/></InternalElement>\n<InternalElement ID=\"pg2\""),
+    );
+    let plant = read_aml(&with).unwrap();
+    assert_eq!(plant.shapes.len(), 2);
+    let mut doc = Document::new(Project::new("t"));
+    plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
+    let p = doc.project();
+    let with_drawing = |name: &str| {
+        p.pages()
+            .find(|g| g.name == name)
+            .is_some_and(|g| g.properties.keys().any(|k| k.starts_with("underlay.")))
+    };
+    assert!(with_drawing("01"));
+    assert!(!with_drawing("02"));
+}

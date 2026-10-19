@@ -92,6 +92,17 @@ pub struct PlantText {
     pub rotation: f64,
 }
 
+/// A line or rectangle drawn on a page (roles `Line` and `Rectangle`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlantShape {
+    /// Name of the page it sits on.
+    pub page: String,
+    /// A rectangle between the two corners; else a line from one to the other.
+    pub rect: bool,
+    pub a: (f64, f64),
+    pub b: (f64, f64),
+}
+
 /// A connection point of a drawn symbol.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlantPin {
@@ -141,6 +152,7 @@ pub struct Plant {
     pub symbols: Vec<PlantSymbol>,
     pub nets: Vec<PlantNet>,
     pub texts: Vec<PlantText>,
+    pub shapes: Vec<PlantShape>,
     pub report: Report,
 }
 
@@ -387,6 +399,7 @@ impl Reader {
             "page" => {
                 self.page(node, &name, &attrs);
                 self.texts_of(node, &name);
+                self.shapes_of(node, &name);
                 self.symbols_of(node, None);
                 return;
             }
@@ -615,6 +628,33 @@ impl Reader {
                 .unwrap_or_default()
                 .to_string(),
         });
+    }
+
+    /// The lines and rectangles on a page.
+    fn shapes_of(&mut self, node: &Node, page: &str) {
+        for c in node.children.iter().filter(|c| c.name == "InternalElement") {
+            let rect = match role_of(c).as_str() {
+                "line" => false,
+                "rectangle" => true,
+                _ => continue,
+            };
+            let a = attributes(c);
+            let coord = |k: &str| {
+                first(&a, &[k])
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .filter(|v| v.is_finite() && v.abs() <= MAX_PAGE_MM)
+            };
+            if let (Some(x1), Some(y1), Some(x2), Some(y2)) =
+                (coord("X1"), coord("Y1"), coord("X2"), coord("Y2"))
+            {
+                self.plant.shapes.push(PlantShape {
+                    page: page.to_string(),
+                    rect,
+                    a: (x1, y1),
+                    b: (x2, y2),
+                });
+            }
+        }
     }
 
     /// The free texts on a page: `Text` children with a value and a place.
