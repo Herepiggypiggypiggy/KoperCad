@@ -19,8 +19,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
     Cable, CableCore, ChangeSet, DeviceId, DeviceKind, DeviceTag, Document, Endpoint, Part, PartId,
-    Placement, Point, Project, SymbolInstance, SymbolRole, TerminalId, TextAnchor, TextContent,
-    TextPlacement, Wire,
+    Placement, Point, Project, Rotation, SymbolInstance, SymbolRole, TerminalId, TextAnchor,
+    TextContent, TextPlacement, Wire,
 };
 
 use super::draw::{Drawing, Role, draw};
@@ -88,6 +88,8 @@ struct NewText {
     page: usize,
     text: String,
     at: Point,
+    height: Option<f64>,
+    rotation: Rotation,
 }
 
 /// What an import would do.
@@ -106,6 +108,19 @@ pub struct PxfPlan {
     project_info: Option<(String, String)>,
     report: Report,
     revision: u64,
+}
+
+/// EPLAN's text angle (radians, counter-clockwise) as the nearest quarter turn.
+fn quarter_turns(angle: f64) -> Rotation {
+    match (angle / std::f64::consts::FRAC_PI_2)
+        .round()
+        .rem_euclid(4.0) as u8
+    {
+        1 => Rotation::R90,
+        2 => Rotation::R180,
+        3 => Rotation::R270,
+        _ => Rotation::R0,
+    }
 }
 
 fn parse_tag(s: &str) -> Option<DeviceTag> {
@@ -321,6 +336,8 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                     page,
                     text,
                     at: Point::new(x, super::draw::PAGE_HEIGHT - y),
+                    height: t.height,
+                    rotation: quarter_turns(t.angle),
                 })
             })
             .collect()
@@ -713,17 +730,21 @@ impl PxfPlan {
             let Some(&page) = page_ids.get(&t.page) else {
                 continue;
             };
-            tx.add_text(
+            let id = tx.add_text(
                 page,
                 TextContent::Literal {
                     text: t.text.clone(),
                 },
                 TextPlacement {
                     offset: t.at,
+                    rotation: t.rotation,
                     ..Default::default()
                 },
                 None,
             )?;
+            if let Some(h) = t.height {
+                tx.set_text(id, None, Some(h))?;
+            }
             created += 1;
         }
         for w in &self.drawing.wires {

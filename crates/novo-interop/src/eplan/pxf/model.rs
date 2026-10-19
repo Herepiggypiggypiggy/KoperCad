@@ -281,6 +281,10 @@ pub struct PxfText {
     pub page: Option<usize>,
     pub text: MlText,
     pub position: Option<(f64, f64)>,
+    /// Character height in millimetres, when the file gives one.
+    pub height: Option<f64>,
+    /// Angle in radians, counter-clockwise, y up.
+    pub angle: f64,
 }
 
 /// Everything read from one PXF file.

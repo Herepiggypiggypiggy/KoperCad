@@ -434,22 +434,39 @@ fn finish(
             variant: f.int("A1263"),
         }),
         KIND_TEXT => {
-            // The property that holds the text is not pinned down by the
-            // material this reader was written from: take the first value
-            // with the multi-language shape.
+            // The text is the object's own `A511` and its position `A501`;
+            // the height and angle (radians, counter-clockwise) are on the
+            // `S54x505` element. Older material kept the text in a property:
+            // then take the first value with the multi-language shape.
             let text = f
-                .props
-                .iter()
-                .flat_map(|(_, a)| a.iter())
-                .map(|(_, v)| v.as_str())
-                .find(|v| MlText::looks_like(v))
+                .own("A511")
+                .filter(|v| MlText::looks_like(v))
+                .or_else(|| {
+                    f.props
+                        .iter()
+                        .flat_map(|(_, a)| a.iter())
+                        .map(|(_, v)| v.as_str())
+                        .find(|v| MlText::looks_like(v))
+                })
                 .map(MlText::parse)
                 .unwrap_or_default();
+            let position = f.position().or_else(|| {
+                let (x, y) = f.own("A501")?.split_once('/')?;
+                Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+            });
+            let style = |n: &str| -> Option<f64> {
+                f.props
+                    .iter()
+                    .find_map(|(e, a)| (e == "S54x505").then(|| find(a, n)).flatten())
+                    .and_then(|v| v.trim().parse().ok())
+            };
             out.texts.push(PxfText {
                 id,
                 page: f.page,
                 text,
-                position: f.position(),
+                position,
+                height: style("A961").filter(|h| *h > 0.0),
+                angle: style("A962").unwrap_or(0.0),
             });
         }
         kind => {
