@@ -410,6 +410,10 @@ fn the_variable_motor_resolves_by_its_pin_names_or_by_how_many_points_it_has() {
         assert_eq!(r.symbol_id(), Some(symbol), "{points} points");
     }
     assert!(mapper.map_fitting(&bare, 5).is_none());
+    // Plain map() on the shared name takes a motor, never a box.
+    let plain = mapper.map(&bare);
+    assert_eq!(plain.basis, Basis::Name);
+    assert!(plain.symbol_id().unwrap().starts_with("iec/motors/"));
 }
 
 #[test]

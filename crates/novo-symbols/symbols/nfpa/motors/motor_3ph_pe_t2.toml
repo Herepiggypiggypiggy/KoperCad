@@ -1,11 +1,11 @@
 format = 1
 id = "nfpa/motors/motor_3ph_pe_t2"
 name = "Three-phase motor, 2 extra terminals"
-description = "Three-phase motor with U1, V1, W1 and PE plus two auxiliary terminals T1 and T2 (thermistor, thermal contact or brake supply), drawn dashed because they are not part of the winding."
+description = "Three-phase motor with U1, V1, W1 and PE plus two auxiliary terminals T1 and T2, drawn dashed because they are not part of the winding. Their function is not documented in the source this symbol was drawn from."
 standard = "NFPA 79 / ANSI Y32.2"
 category = "motors"
 function = "motor.ac3"
-keywords = ["motor", "3 phase", "thermistor", "ptc", "thermal contact", "auxiliary terminals", "6 terminals", "nfpa", "ansi"]
+keywords = ["motor", "3 phase", "auxiliary terminals", "6 terminals", "nfpa", "ansi"]
 
 connections = [
   { id = "U1", at = [0, 0], dir = "up" },

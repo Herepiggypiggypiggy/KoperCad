@@ -330,7 +330,7 @@ pins = "motor"
 [[entry]]
 symbol = "motors/motor_3ph_pe_t2"
 letters = ["M"]
-names = ["motor with pe variable", "motor with thermistor", "motor with two extra terminals", "motor 2 extra terminals", "motor met thermistor", "motor met twee extra klemmen", "motor mit thermistor", "motor mit zwei zusatzklemmen"]
+names = ["motor with pe variable", "motor with two extra terminals", "motor 2 extra terminals", "motor met twee extra klemmen", "motor mit zwei zusatzklemmen"]
 pins = "motor"
 [[entry]]
 symbol = "motors/motor_3ph_dahlander"
