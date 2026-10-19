@@ -819,6 +819,74 @@ fn place_all_names_many_left_out_devices_in_one_line() {
 }
 
 #[test]
+fn place_every_panel_sets_plates_places_all_and_skips_empty_panels() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Three panels", |tx| {
+            for tag in ["+CAB1", "+CAB2", "+CAB3"] {
+                tx.add_structure(DeviceTag::parse(tag).unwrap(), "", true)?;
+            }
+            let big = tx.add_part("ACME", "Big")?;
+            tx.set_property(big, "width_mm", Some(Value::Float(200.0)))?;
+            tx.set_property(big, "height_mm", Some(Value::Float(300.0)))?;
+            let small = tx.add_part("ACME", "Small")?;
+            tx.set_property(small, "width_mm", Some(Value::Float(45.0)))?;
+            tx.set_property(small, "height_mm", Some(Value::Float(90.0)))?;
+            for n in 1..=30 {
+                let device =
+                    tx.add_device(DeviceTag::parse(&format!("+CAB1-K{n}")).unwrap(), "")?;
+                tx.assign_part(device, big)?;
+            }
+            for n in 1..=3 {
+                let device =
+                    tx.add_device(DeviceTag::parse(&format!("+CAB2-Q{n}")).unwrap(), "")?;
+                tx.assign_part(device, small)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app
+        .cabinet_ask(Ask::PlaceEveryPanel, Some(cab), None, &[]);
+    d.frame();
+
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 33);
+    let plates: Vec<_> = project(&d)
+        .structures()
+        .map(|s| (s.tag.to_string(), s.plate.is_some()))
+        .collect();
+    assert_eq!(
+        plates,
+        vec![
+            ("+CAB1".into(), true),
+            ("+CAB2".into(), true),
+            ("+CAB3".into(), false)
+        ]
+    );
+    let texts: Vec<_> = d.app.messages().iter().map(|m| m.text.clone()).collect();
+    assert!(
+        texts.iter().any(
+            |t| t.starts_with("Placed 33 devices on 2 panels.") && t.contains("+CAB3, skipped")
+        ),
+        "{texts:?}"
+    );
+
+    // One undo step takes all of it back.
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
+}
+
+#[test]
 fn place_all_command_shows_the_preview_from_any_workspace() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));

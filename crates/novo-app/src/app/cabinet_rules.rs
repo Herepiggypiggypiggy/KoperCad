@@ -193,7 +193,7 @@ pub(super) fn plan(
 }
 
 /// Largest side offered, mm.
-const MAX_PLATE_SIDE_MM: f64 = 2500.0;
+pub(super) const MAX_PLATE_SIDE_MM: f64 = 2500.0;
 
 /// The smallest plate, in the proportions of the current one, on which
 /// `Place all` puts every device by the rules. Tried by planning on bigger

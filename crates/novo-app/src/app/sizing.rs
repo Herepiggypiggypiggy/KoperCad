@@ -49,8 +49,9 @@ const PLATE_STEP_MM: f64 = 50.0;
 
 /// A plate whose usable area (inside its margin) holds `required` mm2, with
 /// the proportions and margin of `like`. Never smaller than `like` in either
-/// direction, sides rounded up to 50 mm.
-pub fn plate_for_area(required: f64, like: MountingPlate) -> MountingPlate {
+/// direction, sides rounded up to 50 mm. `None` when a side would pass the
+/// largest plate offered (a part of an absurd size).
+pub fn plate_for_area(required: f64, like: MountingPlate) -> Option<MountingPlate> {
     let aspect = if like.width > 0.0 && like.height > 0.0 {
         like.width / like.height
     } else {
@@ -63,11 +64,12 @@ pub fn plate_for_area(required: f64, like: MountingPlate) -> MountingPlate {
         0.0
     };
     let round = |side: f64| (side / PLATE_STEP_MM).ceil() * PLATE_STEP_MM;
-    MountingPlate {
+    let plate = MountingPlate {
         width: round(inner_w + 2.0 * like.margin).max(like.width),
         height: round(inner_h + 2.0 * like.margin).max(like.height),
         margin: like.margin,
-    }
+    };
+    (plate.width.max(plate.height) <= super::cabinet_rules::MAX_PLATE_SIDE_MM).then_some(plate)
 }
 
 /// How the enclosure stands; the choices of the panel.
@@ -190,7 +192,7 @@ impl SizingState {
             return None;
         }
         let rec = recommend(devices, &self.catalog, &self.request());
-        let needed = plate_for_area(rec.required_plate_area, current);
+        let needed = plate_for_area(rec.required_plate_area, current)?;
         (needed.width > current.width || needed.height > current.height).then_some(needed)
     }
 
@@ -613,13 +615,14 @@ mod tests {
             margin: 10.0,
         };
         // 558 600 mm2 usable at 3:4 is 647 x 863 mm, plus the margins, up to 50 mm.
-        let plate = plate_for_area(558_600.0, like);
+        let plate = plate_for_area(558_600.0, like).unwrap();
         assert_eq!(
             (plate.width, plate.height, plate.margin),
             (700.0, 900.0, 10.0)
         );
         // A small need leaves the plate as it is.
-        assert_eq!(plate_for_area(1_000.0, like), like);
+        assert_eq!(plate_for_area(1_000.0, like), Some(like));
+        assert_eq!(plate_for_area(1.0e9, like), None);
     }
 
     #[test]
