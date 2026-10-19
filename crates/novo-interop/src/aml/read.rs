@@ -425,6 +425,12 @@ impl Reader {
                     }
                     _ => None,
                 };
+                // A location is a panel unless the file says it is not.
+                let enclosure = first(&attrs, &["Enclosure"]).map_or(
+                    role.contains("enclosure")
+                        || (!tag.location.is_empty() && tag.function.is_empty()),
+                    |v| v == "true",
+                );
                 self.plant.structures.push(PlantStructure {
                     tag: DeviceTag {
                         product: Vec::new(),
@@ -433,8 +439,7 @@ impl Reader {
                     description: first(&attrs, &["Description"])
                         .unwrap_or_default()
                         .to_string(),
-                    enclosure: first(&attrs, &["Enclosure"]).is_some_and(|v| v == "true")
-                        || role.contains("enclosure"),
+                    enclosure,
                     plate,
                 });
                 self.children(node, &inner);

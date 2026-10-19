@@ -173,6 +173,8 @@ fn importing_into_an_empty_project_recreates_it_in_one_undo_step() {
     assert_eq!(p.terminals().count(), 3);
     assert_eq!(p.cables().count(), 1);
     assert_eq!(p.structures().count(), 2);
+    // Imported locations are panels the Cabinet screen can open.
+    assert!(p.structure_by_tag(&tag("+CAB1")).unwrap().enclosure);
     let k1 = p.devices_by_tag(&tag("=A1+CAB1-K1"));
     assert_eq!(k1.len(), 1);
     assert_eq!(
