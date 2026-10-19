@@ -122,11 +122,13 @@ fn dirs_of(bits: u8) -> Vec<Dir> {
     v
 }
 
-/// KoperCAD's y axis points down, so up and down swap.
+/// The way a wire leaves a point, as seen on the page. EPLAN's bits name the
+/// side a wire attaches from, and up is up in both programs: only the
+/// coordinates flip (EPLAN y up, KoperCAD y down), the words do not.
 fn direction_of(bits: u8) -> Option<Direction> {
     dirs_of(bits).first().map(|d| match d {
-        Dir::Up => Direction::Down,
-        Dir::Down => Direction::Up,
+        Dir::Up => Direction::Up,
+        Dir::Down => Direction::Down,
         Dir::Left => Direction::Left,
         Dir::Right => Direction::Right,
     })
