@@ -131,6 +131,8 @@ pub(crate) struct Workbench {
     /// An item to select and centre once its page is shown (a row of the
     /// Changes list).
     pub(super) pending_item: Option<(PageId, AnyId)>,
+    /// The person's symbol folder as last loaded into the catalog.
+    pub(super) custom_symbols: super::symbol_folder::CustomSymbols,
     /// Several items to select together on a page, once it is shown (a
     /// cable's core wires from the outline).
     pub(super) pending_items: Option<(PageId, Vec<AnyId>)>,
@@ -285,6 +287,7 @@ impl Default for Workbench {
             nav: Navigator::default(),
             pending: None,
             pending_item: None,
+            custom_symbols: Default::default(),
             pending_items: None,
             canvas_area: None,
             occurrences: None,
