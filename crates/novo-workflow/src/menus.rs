@@ -69,6 +69,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.import_dxf_background", under("File", "Import")),
     ("file.remove_background", under("File", "Import")),
     ("file.import_aml", under("File", "Import")),
+    ("file.import_crane", under("File", "Import")),
     ("file.import_eplan", under("File", "Import")),
     ("parts.import_eplan", under("File", "Import")),
     ("file.import_dwg", under("File", "Import")),
