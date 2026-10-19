@@ -251,3 +251,55 @@ fn a_real_crane_export_imports_with_every_net_connected() {
     assert!(p.pages().count() >= plant.pages.len());
     assert!(p.wires().count() > 0);
 }
+
+fn net_of_pins(p: &Project, a: &str, b: &str) -> bool {
+    let find = |name: &str| {
+        p.symbols()
+            .flat_map(|s| {
+                s.pins
+                    .iter()
+                    .position(|x| x.name == name)
+                    .map(|i| Endpoint::pin(s.id, i as u16))
+            })
+            .collect::<Vec<_>>()
+    };
+    let (ea, eb) = (find(a), find(b));
+    p.netlist().nets().iter().any(|n| {
+        ea.iter().any(|e| n.endpoints.contains(e)) && eb.iter().any(|e| n.endpoints.contains(e))
+    })
+}
+
+#[test]
+fn an_unnamed_net_across_pages_still_connects() {
+    let text = file().replace("Name=\"L1\"", "Name=\"\"");
+    let plant = read_aml(&text).unwrap();
+    let mut doc = Document::new(Project::new("t"));
+    plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
+    assert!(net_of_pins(doc.project(), "A2", "13"));
+}
+
+#[test]
+fn a_repeated_page_entry_makes_one_page() {
+    let whole = r#"<InternalElement ID="pg1" Name="=A1+CAB1/01"><Attribute Name="Title" AttributeDataType="xs:string"><Value>Control</Value></Attribute><RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Page"/></InternalElement>"#;
+    let text = file().replacen(whole, &format!("{whole}{whole}"), 1);
+    let plant = read_aml(&text).unwrap();
+    assert_eq!(plant.pages.len(), 3, "the file lists the page twice");
+    let mut doc = Document::new(Project::new("t"));
+    plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
+    assert_eq!(doc.project().pages().count(), 2);
+}
+
+#[test]
+fn the_preview_counts_only_nets_it_would_wire() {
+    let plant = read_aml(&file()).unwrap();
+    let mut doc = Document::new(Project::new("t"));
+    let plan = plan_import(doc.project(), &plant);
+    assert!(plan.summary().contains("wire 3 nets"), "{}", plan.summary());
+    plan.apply(&mut doc).unwrap();
+    // Everything exists now: nothing to draw, nothing to promise.
+    assert!(
+        !plan_import(doc.project(), &plant)
+            .summary()
+            .contains("wire")
+    );
+}
