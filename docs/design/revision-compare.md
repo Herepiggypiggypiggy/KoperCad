@@ -66,7 +66,7 @@ Group       = Page | Device | Terminal | Cable | Wire | Text | Part | Project | 
   the existing `diff` and `changed_sheets`, then builds `entries`. It reads
   only; it never touches the document, the undo history or autosave.
 - `label` is what a designer calls the thing: the device tag with its type
-  (`=10D41+K1B1G1-K1 contactor`), the terminal `X1:3`, the cable tag, the
+  (`=20D41+BAY1G1-K1 contactor`), the terminal `X1:3`, the cable tag, the
   wire's number or its two ends, the page name, the text's first words.
   Removed objects are labelled from the older state.
 - `FieldChange` values are display strings built from the JSON fields that

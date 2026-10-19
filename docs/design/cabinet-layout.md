@@ -20,7 +20,7 @@ a device with no part has no size so overlaps go unseen, and clearances
 
 | Thing | In the model | Stored | Derived |
 | --- | --- | --- | --- |
-| Panel | The enclosure `Structure` (`+K1B1G1`), one layout for all page groups (DESIGN §Pages) | its mounting plate size | contents, free area |
+| Panel | The enclosure `Structure` (`+BAY1G1`), one layout for all page groups (DESIGN §Pages) | its mounting plate size | contents, free area |
 | Mounting plate | Property of the panel: width x height in mm, origin top left | size, margins | usable area |
 | Rail / duct | Line object on the plate: DIN rail, wiring duct | position, length, kind | slots, fill |
 | Placement | A device placed on the plate | x, y, rotation (0/90), optional rail | footprint, neighbours |
