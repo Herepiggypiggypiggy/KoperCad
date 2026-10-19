@@ -156,6 +156,9 @@ pub(super) enum Ask {
     /// Set the plate to new dimensions from the inspector.
     SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
+    /// Set a plate where a panel has none or too small a one, and place every
+    /// device of every panel, as one undo step.
+    PlaceEveryPanel,
     /// Export the plate drawing PDF of the shown enclosure.
     ExportPlate,
     ExportPlateDxf,
@@ -820,6 +823,16 @@ impl NovoApp {
                         cabinet_bar::note(&mut anchors, "cabinet.place_all", "Place all", &r);
                         if r.clicked() {
                             ask = Some(Ask::PlaceAll);
+                        }
+                        if locations.len() > 1 {
+                            let all = cabinet_bar::button(ui, icons::SQUARES_FOUR, "All panels", false)
+                                .on_hover_text(
+                                    "Set a plate where a panel has none or too small a one, and place \
+                                     every device of every panel (one undo step). Empty panels are skipped.",
+                                );
+                            if all.clicked() {
+                                ask = Some(Ask::PlaceEveryPanel);
+                            }
                         }
                         if !fold.has(Foldable::Rules) {
                             let rules =
@@ -1993,6 +2006,22 @@ impl NovoApp {
                             }
                             ui.add_space(4.0);
                             ui.weak("You can change the size later under Plate setup.");
+                            if locations.len() > 1 {
+                                ui.add_space(10.0);
+                                if ui
+                                    .button(format!(
+                                        "{}  Set plates and place every panel",
+                                        icons::SQUARES_FOUR
+                                    ))
+                                    .on_hover_text(
+                                        "Gives each panel with devices a plate that holds them and \
+                                         places them by the rules (one undo step). Empty panels are skipped.",
+                                    )
+                                    .clicked()
+                                {
+                                    ask = Some(Ask::PlaceEveryPanel);
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -2302,6 +2331,7 @@ impl NovoApp {
                     novo_canvas::selection::SelectOp::Replace,
                 );
             }
+            Ask::PlaceEveryPanel => self.place_every_panel(),
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
                     self.cabinet.rules.ensure_loaded();
@@ -2504,6 +2534,84 @@ impl NovoApp {
 
     /// Runs an edit of the model from the Cabinet canvas as one undo step.
     /// True when the edit was made.
+    /// Gives every panel with devices a plate that holds them (the default
+    /// where it has none, a bigger one found by planning where it is too
+    /// small; a plate that is big enough stays) and places the devices by the
+    /// rules, as one undo step. Empty panels are skipped and named.
+    fn place_every_panel(&mut self) {
+        self.cabinet.rules.ensure_loaded();
+        let rules = self.cabinet.rules.rules.clone();
+        let mut placed = 0;
+        let mut panels = 0;
+        let mut left_out = 0;
+        let mut empty: Vec<String> = Vec::new();
+        let done = self.cabinet_edit("Place all panels", |tx| {
+            let all: Vec<_> = tx
+                .project()
+                .structures()
+                .filter(|s| s.enclosure)
+                .map(|s| (s.id, s.tag.to_string()))
+                .collect();
+            for (id, tag) in all {
+                if novo_layout::model::candidates(tx.project(), id).is_empty() {
+                    empty.push(tag);
+                    continue;
+                }
+                if load(tx.project(), id).is_none() {
+                    set_plate(tx, id, DEFAULT_PLATE)?;
+                }
+                let Some(layout) = load(tx.project(), id) else {
+                    continue;
+                };
+                let mut plan = cabinet_rules::plan(tx.project(), id, &layout, &rules).0;
+                if !plan.unplaced.is_empty()
+                    && let Some(bigger) =
+                        cabinet_rules::plate_that_holds(tx.project(), id, &layout, &rules)
+                {
+                    set_plate(tx, id, bigger)?;
+                    if let Some(layout) = load(tx.project(), id) {
+                        plan = cabinet_rules::plan(tx.project(), id, &layout, &rules).0;
+                    }
+                }
+                if !plan.placements.is_empty() {
+                    panels += 1;
+                    placed += plan.placements.len();
+                    apply_plan(tx, id, &plan)?;
+                }
+                left_out += plan.unplaced.len();
+            }
+            Ok(())
+        });
+        if !done {
+            return;
+        }
+        self.cabinet.preview = None;
+        self.cabinet.surface_preview.clear();
+        let mut text = if placed == 0 {
+            "Nothing to place: every panel with devices is already placed.".to_owned()
+        } else {
+            format!(
+                "Placed {placed} {} on {panels} {}.",
+                if placed == 1 { "device" } else { "devices" },
+                if panels == 1 { "panel" } else { "panels" }
+            )
+        };
+        if !empty.is_empty() {
+            text.push_str(&format!(" No devices on {}, skipped.", empty.join(", ")));
+        }
+        if left_out > 0 {
+            text.push_str(&format!(
+                " {left_out} could not be placed; open the panel and press Place all for the reasons."
+            ));
+        }
+        let level = if left_out > 0 {
+            Level::Warning
+        } else {
+            Level::Info
+        };
+        self.message(level, text);
+    }
+
     pub(super) fn cabinet_edit(
         &mut self,
         label: &str,
