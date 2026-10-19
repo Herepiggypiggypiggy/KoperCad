@@ -25,6 +25,14 @@ pub(crate) struct Heat3d {
     pub arrows: bool,
     /// Colour the device bodies by the air temperature in front of them.
     pub devices: bool,
+    /// The whole volume as see-through slices coloured by temperature.
+    pub cloud: bool,
+    /// Opacity of the cloud, 0 to 1.
+    pub cloud_opacity: f32,
+    /// Which way the cloud is cut, following the camera (not a user choice).
+    pub cloud_view: super::heat_cloud::CloudView,
+    /// Lines and dashes along the flow of heat (see `heat_carry`).
+    pub carry: bool,
 }
 
 impl Default for Heat3d {
@@ -38,6 +46,10 @@ impl Default for Heat3d {
             lines: false,
             arrows: false,
             devices: false,
+            cloud: false,
+            cloud_opacity: 0.6,
+            cloud_view: super::heat_cloud::CloudView::default(),
+            carry: false,
         }
     }
 }
@@ -126,6 +138,18 @@ pub(crate) fn overlays(
     }
     let range = range(snap, ambient);
     let mut out = Vec::new();
+    if settings.cloud
+        && let Some(m) = super::heat_cloud::mesh(
+            snap,
+            place,
+            range,
+            settings.cloud_view,
+            settings.cloud_opacity,
+            super::heat_cloud::LAYERS,
+        )
+    {
+        out.push(Overlay::Mesh(m));
+    }
     if settings.slice
         && let Some(m) = slice_mesh(snap, place, range, settings.axis, settings.slice_at)
     {
@@ -329,10 +353,15 @@ pub(crate) fn flow(snap: &CfdSnapshot, place: Place) -> Flow {
 
 /// The streamlines as polylines; faster air is more opaque.
 pub(crate) fn stream_lines(flow: &Flow) -> OverlayLines {
+    stream_lines_in(flow, [110, 200, 255], 2)
+}
+
+/// Lines in `rgb`, more opaque where the value on the line is higher.
+pub(crate) fn stream_lines_in(flow: &Flow, rgb: [u8; 3], order: i32) -> OverlayLines {
     let top = flow.top.max(1e-9);
     let mut out = OverlayLines {
         width_px: 1.8,
-        order: 2,
+        order,
         ..Default::default()
     };
     for line in &flow.lines {
@@ -340,7 +369,7 @@ pub(crate) fn stream_lines(flow: &Flow) -> OverlayLines {
         for (p, v) in line.points.iter().zip(&line.speed) {
             let a = (60.0 + 195.0 * v / top).clamp(60.0, 255.0) as u8;
             out.positions.push(*p);
-            out.colors.push([110, 200, 255, a]);
+            out.colors.push([rgb[0], rgb[1], rgb[2], a]);
         }
     }
     out
@@ -377,9 +406,14 @@ fn at(line: &FlowLine, s: f32) -> Vec3 {
 
 /// Bright dashes moving downwind along the streamlines at `time` seconds.
 pub(crate) fn tracers(flow: &Flow, time: f64) -> OverlayLines {
+    tracers_in(flow, time, [235, 250, 255], 3)
+}
+
+/// Dashes in `rgb` moving along the lines of `flow`.
+pub(crate) fn tracers_in(flow: &Flow, time: f64, rgb: [u8; 3], order: i32) -> OverlayLines {
     let mut out = OverlayLines {
         width_px: 3.6,
-        order: 3,
+        order,
         ..Default::default()
     };
     for line in &flow.lines {
@@ -406,7 +440,7 @@ pub(crate) fn tracers(flow: &Flow, time: f64) -> OverlayLines {
                 // Fades towards the tail.
                 let a = (255.0 * (i + 1) as f32 / n as f32) as u8;
                 out.positions.push(p);
-                out.colors.push([235, 250, 255, a]);
+                out.colors.push([rgb[0], rgb[1], rgb[2], a]);
             }
         }
     }
