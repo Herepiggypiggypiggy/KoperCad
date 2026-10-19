@@ -827,3 +827,26 @@ fn help_next_lesson_names_and_starts_the_lesson_on_offer() {
     assert!(d.app.learn.card_on(), "it brings the card back");
     assert_eq!(step(&d), "hello", "and does not start over");
 }
+
+#[test]
+fn the_window_lists_a_chosen_path_in_its_order() {
+    let (_dir, mut d) = drive();
+    let mut files = files();
+    files.insert(
+        "paths.toml".into(),
+        "[[path]]\nid = \"only\"\ntitle = \"Only path\"\nlessons = [\"tiny\"]\n".into(),
+    );
+    d.app.learn.use_files(files);
+    let entries: Vec<_> = d.app.learn.catalog.visible(false).cloned().collect();
+    let groups = d.app.lesson_groups(&entries);
+    assert_eq!(groups[0].0, "Basics", "tracks by default");
+    d.app.learn.only_path = Some("only".into());
+    let groups = d.app.lesson_groups(&entries);
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].0, "Only path");
+    assert_eq!(groups[0].2[0].lesson.id, "tiny");
+    d.app.learn.window = true;
+    d.frame();
+    d.app.run_command(&d.ctx.clone(), "help.learn", None);
+    assert!(d.app.learn.only_path.is_none(), "opening plainly clears it");
+}

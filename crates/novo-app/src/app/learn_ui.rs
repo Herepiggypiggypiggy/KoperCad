@@ -494,6 +494,7 @@ impl NovoApp {
         if !open {
             self.learn.window = false;
             self.learn.only_track = None;
+            self.learn.only_path = None;
         }
         if reload {
             self.learn.reload();
@@ -527,10 +528,11 @@ impl NovoApp {
                 .hint_text(search)
                 .desired_width(f32::INFINITY),
         );
-        if self.learn.only_track.is_some()
+        if (self.learn.only_track.is_some() || self.learn.only_path.is_some())
             && ui.small_button(self.learn.say("all_tracks")).clicked()
         {
             self.learn.only_track = None;
+            self.learn.only_path = None;
         }
         ui.add_space(6.0);
         let lang = self.learn.lang;
@@ -538,23 +540,20 @@ impl NovoApp {
         let words: Vec<&str> = filter.split_whitespace().collect();
         let drafts = self.learn.show_drafts;
         let entries: Vec<Entry> = self.learn.catalog.visible(drafts).cloned().collect();
-        let tracks = self.learn.catalog.tracks.clone();
+        let groups = self.lesson_groups(&entries);
         let mut shown = 0;
         egui::ScrollArea::vertical()
             .max_height(ui.available_height() - 40.0)
             .show(ui, |ui| {
-                for track in &tracks {
-                    if self
-                        .learn
-                        .only_track
-                        .as_ref()
-                        .is_some_and(|only| *only != track.id)
-                    {
-                        continue;
-                    }
-                    let rows: Vec<&Entry> = entries
+                if self.learn.only_track.is_none()
+                    && self.learn.only_path.is_none()
+                    && words.is_empty()
+                {
+                    self.paths_section(ui, start);
+                }
+                for (title, sum, members) in &groups {
+                    let rows: Vec<&Entry> = members
                         .iter()
-                        .filter(|e| e.lesson.track == track.id)
                         .filter(|e| {
                             let l = &e.lesson;
                             let hay = format!(
@@ -571,11 +570,7 @@ impl NovoApp {
                         continue;
                     }
                     ui.add_space(6.0);
-                    section_label(ui, track.title(lang));
-                    let sum =
-                        self.learn
-                            .catalog
-                            .track_summary(self.learn.progress(), &track.id, drafts);
+                    section_label(ui, title);
                     ui.small(self.learn.say_with(
                         "track_progress",
                         &[
@@ -625,6 +620,112 @@ impl NovoApp {
             let drafts_label = self.learn.say("show_drafts");
             ui.checkbox(&mut self.learn.show_drafts, drafts_label);
         });
+    }
+
+    /// What the window lists: the chosen path's lessons in its order, else
+    /// the tracks (or the one track Help > Learning paths opened).
+    pub(super) fn lesson_groups(
+        &self,
+        entries: &[Entry],
+    ) -> Vec<(String, novo_learn::TrackSummary, Vec<Entry>)> {
+        let lang = self.learn.lang;
+        let drafts = self.learn.show_drafts;
+        let catalog = &self.learn.catalog;
+        let progress = self.learn.progress();
+        if let Some(path) = self
+            .learn
+            .only_path
+            .as_ref()
+            .and_then(|id| catalog.paths.iter().find(|p| p.id == *id))
+        {
+            let members = catalog.path_lessons(path, drafts).cloned().collect();
+            return vec![(
+                path.title(lang).to_owned(),
+                catalog.path_summary(progress, path, drafts),
+                members,
+            )];
+        }
+        catalog
+            .tracks
+            .iter()
+            .filter(|t| {
+                self.learn
+                    .only_track
+                    .as_ref()
+                    .is_none_or(|only| *only == t.id)
+            })
+            .map(|t| {
+                let members = entries
+                    .iter()
+                    .filter(|e| e.lesson.track == t.id)
+                    .cloned()
+                    .collect();
+                (
+                    t.title(lang).to_owned(),
+                    catalog.track_summary(progress, &t.id, drafts),
+                    members,
+                )
+            })
+            .collect()
+    }
+
+    /// The learning paths above the tracks: what each is for, how far the
+    /// person is, a button for the lesson to do next, and one to list it.
+    fn paths_section(&mut self, ui: &mut egui::Ui, start: &mut Option<(String, bool)>) {
+        let lang = self.learn.lang;
+        let drafts = self.learn.show_drafts;
+        let paths = self.learn.catalog.paths.clone();
+        let mut shown = false;
+        for path in &paths {
+            let sum = self
+                .learn
+                .catalog
+                .path_summary(self.learn.progress(), path, drafts);
+            if sum.total == 0 {
+                continue;
+            }
+            if !shown {
+                ui.add_space(6.0);
+                section_label(ui, &self.learn.say("paths"));
+                shown = true;
+            }
+            let next = self
+                .learn
+                .catalog
+                .path_next(self.learn.progress(), path, drafts)
+                .map(|e| e.lesson.id.clone());
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    ui.label(egui::RichText::new(path.title(lang)).strong());
+                    ui.weak(path.summary(lang));
+                    ui.small(self.learn.say_with(
+                        "track_progress",
+                        &[
+                            ("done", &sum.done.to_string()),
+                            ("total", &sum.total.to_string()),
+                            ("minutes", &sum.minutes.to_string()),
+                        ],
+                    ));
+                });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.small_button(self.learn.say("path_show")).clicked() {
+                        self.learn.only_path = Some(path.id.clone());
+                    }
+                    if let Some(id) = &next {
+                        let running = self.learn.running() == Some(id.as_str());
+                        let label = if running || sum.done > 0 {
+                            self.learn.say("continue")
+                        } else {
+                            self.learn.say("start")
+                        };
+                        if ui.button(label).clicked() {
+                            *start = Some((id.clone(), running));
+                        }
+                    }
+                });
+            });
+        }
     }
 
     fn lesson_row(&mut self, ui: &mut egui::Ui, entry: &Entry, start: &mut Option<(String, bool)>) {
