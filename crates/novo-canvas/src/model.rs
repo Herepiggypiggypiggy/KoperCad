@@ -2259,6 +2259,10 @@ const END_BRIDGED_SYMBOL: &str = "iec/terminals/terminal_end_bridged";
 #[path = "nfpa_keys_test.rs"]
 mod nfpa_keys_test;
 
+#[cfg(test)]
+#[path = "tag_text_test.rs"]
+mod tag_text_test;
+
 /// Whether a symbol key is one of the two terminals that carry the bridge
 /// dot, in any pack.
 fn is_bridged(key: &str) -> bool {

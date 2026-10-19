@@ -385,7 +385,7 @@ pub(super) fn draw(
             .project()
             .page(page)
             .map_or(297.0, |p| p.format.size_mm().1);
-        tx.add_text(
+        let id = tx.add_text(
             page,
             TextContent::Literal {
                 text: t.value.clone(),
@@ -397,12 +397,17 @@ pub(super) fn draw(
             },
             None,
         )?;
+        if let Some(h) = t.height {
+            tx.set_text(id, None, Some(h))?;
+        }
         out.records += 1;
     }
 
     let lib = Library::shared(Pack::Iec);
     let ip_symbol = lib.get(INTERRUPTION);
     let names = point_names(&plant.nets);
+    // Every name a point has, so a chain name never equals another net's.
+    let mut used: BTreeSet<String> = names.iter().cloned().collect();
     for (net, point_name) in plant.nets.iter().zip(names) {
         // The net's pins by page, only those that were placed.
         let mut by_page: BTreeMap<usize, Vec<(&Placed, usize)>> = BTreeMap::new();
@@ -414,6 +419,19 @@ pub(super) fn draw(
             }
         }
         let pages_of_net = by_page.len();
+        // The name of the link between page `between - 1` and `between`.
+        let link_names: Vec<String> = (1..pages_of_net)
+            .map(|between| {
+                if pages_of_net == 2 {
+                    return point_name.clone();
+                }
+                let mut name = format!("{point_name}.{between}");
+                while !used.insert(name.clone()) {
+                    name.push('\'');
+                }
+                name
+            })
+            .collect();
         for (rank, members) in by_page.values_mut().enumerate() {
             members.sort_by(|a, b| {
                 let (pa, pb) = (a.0.pos[a.1].0, b.0.pos[b.1].0);
@@ -441,13 +459,7 @@ pub(super) fn draw(
             let Some(&(m, mi)) = members.last().filter(|_| pages_of_net > 1) else {
                 continue;
             };
-            let link = |between: usize| {
-                if pages_of_net == 2 {
-                    point_name.clone()
-                } else {
-                    format!("{point_name}.{between}")
-                }
-            };
+            let link = |between: usize| link_names[between - 1].clone();
             let mut names = Vec::new();
             if rank > 0 {
                 names.push(link(rank));
