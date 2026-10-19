@@ -3,16 +3,16 @@
 Goal: File > Import > Crane configurator project reads what Tadjiro's crane configurator produced (a real project export) and creates a real KoperCAD project: pages with drawn symbols,
 devices, terminals, cables with cores, wires, parts. The import report says what is exact, what is inferred and what is
 left out. Knowledge only from the private repo: no EPLAN macros, symbol library, manual text or motor data enters the
-public repo, and the real v95 file stays on the private mount.
+public repo, and the real export file stays on the private mount.
 
-## 1. What a configurator project is (checked on the real v95 files, 2026-10-19)
+## 1. What a configurator project is (checked on the real export files, 2026-10-19)
 
 The configurator is Python that assembles an EPLAN project and lets EPLAN export it. One order per version folder,
 `output/custom/<name>/<vNN>/`:
 
 | File | What it is | Used as |
 | --- | --- | --- |
-| `<order>.epj` (206 MB for v95) | EPLAN 2024 PXF project export, PxfVersion 1.23, Build 21667 | the drawing truth: pages, symbols, nodes, texts, cores, interruption points |
+| `<order>.epj` (about 200 MB) | EPLAN 2024 PXF project export, PxfVersion 1.23, Build 21667 | the drawing truth: pages, symbols, nodes, texts, cores, interruption points |
 | `<order>_Projectcontrole.md / .xlsx` | the configurator's own 72 automatic checks, verdict and open points | shown in the report as "the source says" (not recomputed) |
 | `hernoemen.json / .md` | tag renames the configurator applied (was, becomes, sheet, column) | provenance only: the epj already holds the new names |
 | `<order>_ontwerp.txt` | design report with open points (S-numbers) | open points go into the report notes |
@@ -23,7 +23,7 @@ The configurator is Python that assembles an EPLAN project and lets EPLAN export
 So "configurator project" = the version folder (or just the `.epj` inside it). A folder given instead of a file picks the
 newest `vNN` and the epj in it.
 
-### 1.1 Inside the v95 epj (counts from the real file)
+### 1.1 Inside the export epj (counts from the real file)
 
 - 65 pages (`O4`): 23 schematic pages with function code and location (=A1 ... =A9), 3 cover pages, 36 generated
   report pages (=DOC: contents, lists, cable and terminal plans; made of `O52` report cells) and 3 layout pages.
@@ -67,9 +67,9 @@ newest `vNN` and the epj in it.
 3. Symbol mapping is by name: many EPLAN names have no KoperCAD twin yet. The generic box keeps pins so nets still hold.
 4. Net rebuild quality on real symbols depends on pin offsets from `O20` (`S48x823` rows); verify against the checker's own
    result (122 cores, 198 interruption points, "C03 blocked run" warnings listed in `_Projectcontrole.md`).
-5. Customer data: fixtures in the repo are synthetic or anonymised and tiny; the real v95 test is opt-in with
+5. Customer data: fixtures in the repo are synthetic or anonymised and tiny; the real export test is opt-in with
    `KOPERCAD_CRANE_EPJ=/path/to.epj` and skips silently otherwise (same rule as `KOPERCAD_PRIVATE_SAMPLES`).
-6. Other versions: v96 scripts exist; the reader must not depend on v95 (version folders, missing optional files).
+6. Other versions: the reader must not depend on one version (version folders, missing optional files).
 
 ## 4. Slices (one draft PR each, no stacking)
 

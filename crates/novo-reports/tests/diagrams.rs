@@ -433,7 +433,7 @@ fn oversized_cells_are_cut_to_excels_limit() {
 fn the_contents_list_splits_group_and_panel_and_lists_panels() {
     use novo_core::{Command, DeviceTag};
     let mut doc = starter();
-    for (name, structure) in [("5", "=10D41+K1"), ("6", "=11D21+K1")] {
+    for (name, structure) in [("5", "=20D41+K1"), ("6", "=21D21+K1")] {
         doc.execute(Command::AddPage {
             name: name.into(),
             title: String::new(),
@@ -451,11 +451,11 @@ fn the_contents_list_splits_group_and_panel_and_lists_panels() {
     let row = |name: &str| rows.iter().find(|r| r[0] == name).unwrap().clone();
     assert_eq!(
         (row("5")[2].as_str(), row("5")[3].as_str()),
-        ("=10D41", "+K1")
+        ("=20D41", "+K1")
     );
     // One panel, two groups, two pages.
     let panels = toc.sections[1].text_rows();
-    assert_eq!(panels, [["+K1", "=10D41, =11D21", "2"]]);
+    assert_eq!(panels, [["+K1", "=20D41, =21D21", "2"]]);
 }
 
 #[test]

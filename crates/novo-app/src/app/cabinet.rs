@@ -47,7 +47,7 @@ type FitKey = (
 pub(super) struct CabinetState {
     pub(super) view: CanvasView,
     pub(super) scene: CabinetScene,
-    /// The panel shown, by its location (`+K1B1G1`).
+    /// The panel shown, by its location (`+BAY1G1`).
     pub(super) location: Option<DeviceTag>,
     /// A `Place all` plan waiting for Enter.
     pub(super) preview: Option<Plan>,

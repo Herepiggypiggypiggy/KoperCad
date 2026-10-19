@@ -440,7 +440,7 @@ impl Default for Naming {
     }
 }
 
-/// `(prefix, number, width)` of a name: `K1B1G2` is `("K1B1G", 2, 1)`, a
+/// `(prefix, number, width)` of a name: `BAY1G2` is `("BAY1G", 2, 1)`, a
 /// name without digits counts as number 1 (`CAB` is the first `CAB`).
 fn split_number(name: &str) -> (String, u64, usize) {
     let digits = name.chars().rev().take_while(char::is_ascii_digit).count();
@@ -1359,8 +1359,8 @@ mod tests {
     fn names_continue_the_pattern_of_the_project() {
         assert_eq!(next_name(&[], "A"), "A1");
         assert_eq!(next_name(&names(&["A1", "A2"]), "G"), "A3");
-        assert_eq!(next_name(&names(&["10D41"]), "A"), "10D42");
-        assert_eq!(next_name(&names(&["K1B1G1", "K1B1G2"]), "A"), "K1B1G3");
+        assert_eq!(next_name(&names(&["20D41"]), "A"), "20D42");
+        assert_eq!(next_name(&names(&["BAY1G1", "BAY1G2"]), "A"), "BAY1G3");
         // A name without a number is the first of its kind.
         assert_eq!(next_name(&names(&["CAB"]), "A"), "CAB2");
         // The widest habit wins: 01, 02 -> 03.

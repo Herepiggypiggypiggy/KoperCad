@@ -1,6 +1,6 @@
 //! The pages navigator's creation form: new pages, page groups and panels
-//! (a page group is the function level of a page's structure, `=10D41`; a
-//! panel is its location level, `+K1B1G1`). Pages with the same panel name
+//! (a page group is the function level of a page's structure, `=20D41`; a
+//! panel is its location level, `+BAY1G1`). Pages with the same panel name
 //! under different page groups share one panel, hence one cabinet layout.
 
 use eframe::egui;
@@ -11,9 +11,9 @@ use super::{Level, NovoApp};
 /// How the outline files the pages.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum PageView {
-    /// By page group (`=10D41`), then panel.
+    /// By page group (`=20D41`), then panel.
     Function,
-    /// By panel (`+K1B1G1`), then group: a panel shows the pages of every
+    /// By panel (`+BAY1G1`), then group: a panel shows the pages of every
     /// group that uses it.
     Location,
 }
@@ -327,7 +327,7 @@ impl NovoApp {
                 ui.label("Page group");
                 let group = ui.add(
                     egui::TextEdit::singleline(&mut form.group)
-                        .hint_text("10D41")
+                        .hint_text("20D41")
                         .desired_width(200.0),
                 );
                 if !form.focused {
@@ -349,7 +349,7 @@ impl NovoApp {
                 ui
                     .add(
                         egui::TextEdit::singleline(&mut form.panels)
-                            .hint_text("K1B1G1, K2")
+                            .hint_text("BAY1G1, K2")
                             .desired_width(200.0),
                     )
                     .on_hover_text("Pages with the same panel name in different page groups share one cabinet layout");
@@ -417,8 +417,8 @@ mod tests {
     #[test]
     fn two_pages_in_a_panel_under_two_groups_make_one_panel() {
         let mut doc = Document::default();
-        for group in ["10D41", "=11D21"] {
-            let mut form = PageForm::new(group, "K1B1G1");
+        for group in ["20D41", "=21D21"] {
+            let mut form = PageForm::new(group, "BAY1G1");
             form.count = 2;
             run(&mut doc, &form).unwrap();
         }
@@ -430,7 +430,7 @@ mod tests {
         let nodes: Vec<_> = doc.project().structures().collect();
         assert_eq!(nodes.iter().filter(|s| s.enclosure).count(), 1);
         // More pages carry on numbering.
-        let mut more = PageForm::new("10D41", "K1B1G1");
+        let mut more = PageForm::new("20D41", "BAY1G1");
         more.count = 1;
         run(&mut doc, &more).unwrap();
         assert!(doc.project().pages().any(|p| p.name == "3"));
@@ -441,12 +441,12 @@ mod tests {
     #[test]
     fn a_panel_renames_from_the_outline_text() {
         let mut doc = Document::default();
-        let mut form = PageForm::new("10D41", "K1B1G1");
+        let mut form = PageForm::new("20D41", "BAY1G1");
         form.count = 2;
         run(&mut doc, &form).unwrap();
-        let panel = DeviceTag::parse("+K1B1G1").unwrap();
+        let panel = DeviceTag::parse("+BAY1G1").unwrap();
 
-        let same = rename_level_command(Aspect::Location, &panel, "+K1B1G1").unwrap();
+        let same = rename_level_command(Aspect::Location, &panel, "+BAY1G1").unwrap();
         assert!(same.is_none());
         assert!(rename_level_command(Aspect::Location, &panel, "  ").is_err());
         assert!(rename_level_command(Aspect::Location, &panel, "a/b").is_err());
@@ -462,13 +462,13 @@ mod tests {
         assert_eq!(panels[0].location.to_string(), "+K2");
         assert_eq!(panels[0].pages.len(), 2);
         doc.undo().unwrap();
-        assert_eq!(doc.project().panels()[0].location.to_string(), "+K1B1G1");
+        assert_eq!(doc.project().panels()[0].location.to_string(), "+BAY1G1");
     }
 
     #[test]
     fn a_drop_or_step_moves_one_page_and_nothing_else() {
         let mut doc = Document::default();
-        let mut form = PageForm::new("10D41", "K1B1G1");
+        let mut form = PageForm::new("20D41", "BAY1G1");
         form.count = 4;
         run(&mut doc, &form).unwrap();
         let first = doc.project().pages_in_order()[0].id;
@@ -481,7 +481,7 @@ mod tests {
         assert_eq!(order_after_drop(&ids, b, a, true), None);
         assert_eq!(order_after_drop(&ids, b, b, true), None);
         // A page of another group and panel is not a sibling.
-        run(&mut doc, &PageForm::new("11D21", "K9")).unwrap();
+        run(&mut doc, &PageForm::new("21D21", "K9")).unwrap();
         let other = doc.project().pages_in_order().last().unwrap().id;
         assert_eq!(order_after_drop(&ids, b, other, true), None);
         assert_eq!(order_after_step(&ids, a, false), None);
@@ -499,7 +499,7 @@ mod tests {
     fn a_rename_onto_a_name_in_use_is_a_merge() {
         let mut doc = Document::default();
         for panel in ["K1", "K2"] {
-            run(&mut doc, &PageForm::new("10D41", panel)).unwrap();
+            run(&mut doc, &PageForm::new("20D41", panel)).unwrap();
         }
         let k1 = DeviceTag::parse("+K1").unwrap();
         assert!(merges_with_existing(
@@ -525,10 +525,10 @@ mod tests {
     #[test]
     fn a_panel_gets_one_contents_page_that_lists_its_pages() {
         let mut doc = Document::default();
-        let mut form = PageForm::new("10D41", "K1B1G1");
+        let mut form = PageForm::new("20D41", "BAY1G1");
         form.count = 2;
         run(&mut doc, &form).unwrap();
-        let panel = DeviceTag::parse("+K1B1G1").unwrap();
+        let panel = DeviceTag::parse("+BAY1G1").unwrap();
         assert!(!has_panel_contents(doc.project(), &panel));
         let command = panel_contents_command(doc.project(), &panel).unwrap();
         doc.execute(command).unwrap();
@@ -538,12 +538,12 @@ mod tests {
         // It reads first, ahead of the drawn pages, shows in the outline with
         // the panel's pages in it, and follows a rename.
         let first = doc.project().pages_in_order()[0];
-        assert_eq!(first.title, "Contents +K1B1G1");
+        assert_eq!(first.title, "Contents +BAY1G1");
         let mut reports = novo_reports::LiveReports::standard();
         let rows = crate::backend::page_rows(doc.project(), &mut reports);
         assert!(rows.iter().any(|r| r.page == first.id), "{rows:?}");
         assert_eq!(
-            reports.get(doc.project(), "toc@+K1B1G1").unwrap().sections[0]
+            reports.get(doc.project(), "toc@+BAY1G1").unwrap().sections[0]
                 .rows
                 .len(),
             3
