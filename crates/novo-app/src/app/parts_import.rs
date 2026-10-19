@@ -4,7 +4,9 @@
 //! it holds. No network code: every file is the user's own download.
 //! Design: `docs/PARTS-LIBRARY-DESIGN.md` sections 3a to 3d.
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::time::SystemTime;
 
 use novo_parts::{
@@ -14,6 +16,16 @@ use novo_parts::{
 
 /// Seconds between looks at the Downloads folder.
 pub(crate) const POLL_SECONDS: f64 = 1.0;
+
+/// How long the hand-off waits for a download before it says nothing came.
+/// A person signing in on a maker's site and finding the file needs minutes,
+/// not an hour; past this the strip stops spinning and offers Try again.
+pub(crate) const WAIT_LIMIT_SECONDS: f64 = 600.0;
+
+/// How long reading one file (copy, unpack, parse) may take before the
+/// window stops waiting for it. The work runs on its own thread, so the
+/// window stays usable meanwhile.
+pub(crate) const READ_LIMIT_SECONDS: f64 = 120.0;
 
 /// No maker has a verified fetch source yet, so nothing is ever fetched
 /// from here; every click falls back to the hand-off flow. A maker's
@@ -37,6 +49,8 @@ pub(crate) enum Phase {
     /// A finished file arrived that does not name the part (catalog XML or
     /// EDZ, matched by type alone): ask before importing it.
     Confirm(PathBuf),
+    /// A file is being stored and read on a worker thread.
+    Reading,
     Done(Summary),
     Failed(String),
 }
@@ -63,6 +77,28 @@ pub(crate) struct Import {
     /// Files the user said no to, so the watch does not ask again.
     declined: Vec<PathBuf>,
     pub last_poll: f64,
+    /// When the wait began, in the window's clock; set by the first frame.
+    waiting_since: Option<f64>,
+    /// The window's clock at the last frame.
+    now: f64,
+    /// The read in progress, while the phase is [`Phase::Reading`].
+    read: Option<ReadJob>,
+}
+
+/// The result a read thread sends back.
+type ReadResult = Result<(Summary, Vec<CatalogPart>), String>;
+
+/// One file being read on its own thread.
+struct ReadJob {
+    rx: Receiver<ReadResult>,
+    file: String,
+    /// When the read began, in the window's clock; set by the first frame.
+    since: Option<f64>,
+}
+
+/// What a finished read changed, for the window to merge into its catalog.
+pub(crate) struct ReadDone {
+    pub changed: Vec<CatalogPart>,
 }
 
 impl Import {
@@ -128,7 +164,156 @@ impl Import {
                 )
             }),
             last_poll: f64::NEG_INFINITY,
+            waiting_since: None,
+            now: 0.0,
+            read: None,
         }
+    }
+
+    /// Starts reading `path` for `part` on a worker thread; the window
+    /// calls [`Import::tick`] each frame to collect the result. `wake`
+    /// repaints the window when the thread is done.
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn begin_read(
+        &mut self,
+        part: CatalogPart,
+        path: &Path,
+        flow: ImportFlow,
+        library: LocalLibrary,
+        sources: SourceTable,
+        catalog_path: Option<PathBuf>,
+        today: String,
+        wake: impl Fn() + Send + 'static,
+    ) {
+        let (tx, rx) = channel();
+        let file = path.to_path_buf();
+        let spawned = std::thread::Builder::new()
+            .name("parts-import".into())
+            .spawn(move || {
+                // A panic in a reader must end as an error on screen, not
+                // as a spinner that never stops.
+                let result = catch_unwind(AssertUnwindSafe(|| {
+                    import_path(
+                        &part,
+                        &file,
+                        flow,
+                        &library,
+                        &sources,
+                        catalog_path.as_deref(),
+                        &today,
+                    )
+                }))
+                .unwrap_or_else(|_| Err("the file reader stopped unexpectedly".into()));
+                let _ = tx.send(result);
+                wake();
+            });
+        self.read = None;
+        match spawned {
+            Ok(_) => {
+                self.read = Some(ReadJob {
+                    rx,
+                    file: path
+                        .file_name()
+                        .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
+                    since: None,
+                });
+                self.phase = Phase::Reading;
+            }
+            Err(e) => self.phase = Phase::Failed(format!("could not start reading: {e}")),
+        }
+    }
+
+    /// Advances the clocks: collects a finished read, ends a read or a wait
+    /// that ran too long. Returns what a finished read changed.
+    pub(crate) fn tick(&mut self, now: f64) -> Option<ReadDone> {
+        self.now = now;
+        match self.phase {
+            Phase::Waiting => {
+                let since = *self.waiting_since.get_or_insert(now);
+                if now - since > WAIT_LIMIT_SECONDS {
+                    self.phase = Phase::Failed(format!(
+                        "No file arrived within {} minutes. Nothing was imported.",
+                        (WAIT_LIMIT_SECONDS / 60.0).round()
+                    ));
+                }
+                None
+            }
+            Phase::Reading => {
+                let job = self.read.as_mut()?;
+                let since = *job.since.get_or_insert(now);
+                match job.rx.try_recv() {
+                    Ok(Ok((summary, changed))) => {
+                        self.read = None;
+                        self.phase = Phase::Done(summary);
+                        Some(ReadDone { changed })
+                    }
+                    Ok(Err(e)) => {
+                        self.read = None;
+                        self.phase = Phase::Failed(e);
+                        None
+                    }
+                    Err(TryRecvError::Disconnected) => {
+                        self.read = None;
+                        self.phase = Phase::Failed("the file reader stopped unexpectedly".into());
+                        None
+                    }
+                    Err(TryRecvError::Empty) if now - since > READ_LIMIT_SECONDS => {
+                        let file = std::mem::take(&mut job.file);
+                        self.read = None;
+                        self.phase = Phase::Failed(format!(
+                            "Reading {file} took longer than {} seconds, so KoperCAD stopped \
+waiting. Try a smaller file, or the STEP file alone.",
+                            READ_LIMIT_SECONDS.round()
+                        ));
+                        None
+                    }
+                    Err(TryRecvError::Empty) => None,
+                }
+            }
+            _ => None,
+        }
+    }
+
+    /// Puts the import into a read whose result comes over `rx`.
+    #[cfg(test)]
+    pub(crate) fn install_read_for_test(&mut self, rx: Receiver<ReadResult>, file: &str) {
+        self.read = Some(ReadJob {
+            rx,
+            file: file.into(),
+            since: None,
+        });
+        self.phase = Phase::Reading;
+    }
+
+    /// Blocks until a started read has finished (tests, and shutdown paths
+    /// that must not leave a half-written library).
+    #[cfg(test)]
+    pub(crate) fn wait_read(&mut self, limit: std::time::Duration) -> Option<ReadDone> {
+        let job = self.read.as_ref()?;
+        let outcome = match job.rx.recv_timeout(limit) {
+            Ok(r) => r,
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err("read timed out".into()),
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Err("the file reader stopped".into())
+            }
+        };
+        self.read = None;
+        match outcome {
+            Ok((summary, changed)) => {
+                self.phase = Phase::Done(summary);
+                Some(ReadDone { changed })
+            }
+            Err(e) => {
+                self.phase = Phase::Failed(e);
+                None
+            }
+        }
+    }
+
+    /// How long the hand-off has been waiting, as `m:ss`.
+    pub(crate) fn waited_text(&self) -> String {
+        let secs = self.waiting_since.map_or(0.0, |s| (self.now - s).max(0.0)) as u64;
+        format!("{}:{:02}", secs / 60, secs % 60)
     }
 
     /// The user said no to this file.
@@ -144,11 +329,29 @@ impl Import {
         }
         self.last_poll = now;
         let declined = &self.declined;
-        self.watcher
+        // A file that names the part wins over one that merely looks like a
+        // download: the first is imported at once, the second is asked about.
+        let mut fresh: Vec<Arrival> = self
+            .watcher
             .as_mut()?
             .poll()
             .into_iter()
-            .find(|a| !declined.contains(&a.path))
+            .filter(|a| !declined.contains(&a.path))
+            .collect();
+        fresh.sort_by_key(|a| !a.names_the_part);
+        fresh.into_iter().next()
+    }
+
+    /// Names of new downloads the watch passed over because they do not
+    /// mention the part, at most three.
+    pub(crate) fn passed_over(&self) -> Vec<String> {
+        self.watcher.as_ref().map_or_else(Vec::new, |w| {
+            w.skipped()
+                .iter()
+                .take(3)
+                .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .collect()
+        })
     }
 
     pub(crate) fn watching(&self) -> bool {
