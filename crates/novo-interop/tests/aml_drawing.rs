@@ -380,7 +380,7 @@ fn two_nets_of_one_name_stay_two_nets_across_pages() {
 
 #[test]
 fn a_text_height_in_the_file_is_kept() {
-    let text = r#"<InternalElement ID="t1" Name="Text1"><Attribute Name="Value" AttributeDataType="xs:string"><Value>note</Value></Attribute><Attribute Name="Height" AttributeDataType="xs:double"><Value>1.8</Value></Attribute><Attribute Name="Frame"><Attribute Name="x" AttributeDataType="xs:double"><Value>30</Value></Attribute><Attribute Name="y" AttributeDataType="xs:double"><Value>100</Value></Attribute></Attribute><RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Text"/></InternalElement>"#;
+    let text = r#"<InternalElement ID="t1" Name="Text1"><Attribute Name="Value" AttributeDataType="xs:string"><Value>note</Value></Attribute><Attribute Name="Height" AttributeDataType="xs:double"><Value>1.8</Value></Attribute><Attribute Name="Rotation" AttributeDataType="xs:double"><Value>270</Value></Attribute><Attribute Name="Frame"><Attribute Name="x" AttributeDataType="xs:double"><Value>30</Value></Attribute><Attribute Name="y" AttributeDataType="xs:double"><Value>100</Value></Attribute></Attribute><RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Text"/></InternalElement>"#;
     let with = file().replace(
         "<RoleRequirements RefBaseRoleClassPath=\"KoperCADRoleClassLib/Page\"/></InternalElement>\n<InternalElement ID=\"pg2\"",
         &format!("{text}<RoleRequirements RefBaseRoleClassPath=\"KoperCADRoleClassLib/Page\"/></InternalElement>\n<InternalElement ID=\"pg2\""),
@@ -390,4 +390,9 @@ fn a_text_height_in_the_file_is_kept() {
     plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
     let heights: Vec<f64> = doc.project().texts().map(|t| t.height_mm).collect();
     assert_eq!(heights, [1.8]);
+    assert!(
+        doc.project()
+            .texts()
+            .all(|t| t.placement.rotation == novo_core::Rotation::R270)
+    );
 }

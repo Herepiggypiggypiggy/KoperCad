@@ -253,6 +253,17 @@ fn point_names(nets: &[super::read::PlantNet]) -> Vec<String> {
     names.into_iter().map(Option::unwrap_or_default).collect()
 }
 
+/// The nearest quarter turn of an angle in degrees.
+fn quarter_turns(degrees: f64) -> novo_core::Rotation {
+    use novo_core::Rotation;
+    match (degrees / 90.0).round().rem_euclid(4.0) as u8 {
+        1 => Rotation::R90,
+        2 => Rotation::R180,
+        3 => Rotation::R270,
+        _ => Rotation::R0,
+    }
+}
+
 /// A right-angle run from `a` to `b`, leaving `a` along its pin direction.
 fn route(a: Point, b: Point, leave: Option<Direction>) -> Vec<Point> {
     if (a.x - b.x).abs() < 1e-6 || (a.y - b.y).abs() < 1e-6 {
@@ -393,7 +404,7 @@ pub(super) fn draw(
             TextPlacement {
                 offset: Point::new(t.at.0, height - t.at.1),
                 anchor: TextAnchor::BottomLeft,
-                ..Default::default()
+                rotation: quarter_turns(t.rotation),
             },
             None,
         )?;
