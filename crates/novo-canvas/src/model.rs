@@ -21,8 +21,8 @@ use crate::style::{Color, Stroke};
 use crate::text::{Anchor, Label};
 use glam::Vec2;
 use novo_core::{
-    AnyId, ChangeSet, Endpoint, JunctionId, PageId, PageKind, Point, Project, Rotation, SymbolId,
-    SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent, TextId, WireId,
+    AnyId, ChangeSet, DeviceTag, Endpoint, JunctionId, PageId, PageKind, Point, Project, Rotation,
+    SymbolId, SymbolInstance, SymbolKey, SymbolRole, TextAnchor, TextContent, TextId, WireId,
 };
 use std::collections::{BTreeSet, HashMap};
 use std::f32::consts::FRAC_PI_2;
@@ -2167,11 +2167,30 @@ fn frame_segments(shape: &Shape, out: &mut Vec<(Vec2, Vec2)>) {
     }
 }
 
+/// A device tag as drawn on `page`: the product part alone (`-XM1`) when the
+/// tag has the page's own structure, which the title block already names.
+/// Properties, reports and pages of another structure keep the full tag.
+fn drawn_tag(project: &Project, page: PageId, tag: &DeviceTag) -> String {
+    let same = project
+        .page(page)
+        .is_some_and(|p| !p.structure.is_empty() && p.structure.same_structure(tag));
+    if same && !tag.product.is_empty() {
+        let product = DeviceTag {
+            product: tag.product.clone(),
+            ..DeviceTag::default()
+        };
+        return product.to_string();
+    }
+    tag.to_string()
+}
+
 /// The text shown next to a symbol: its device tag, terminal designation,
 /// interruption point name or potential name.
 pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
     match &sym.role {
-        SymbolRole::Device { device, .. } => project.device(*device).map(|d| d.tag.to_string()),
+        SymbolRole::Device { device, .. } => project
+            .device(*device)
+            .map(|d| drawn_tag(project, sym.page, &d.tag)),
         // Terminals sit a few mm apart on a strip, so they show only their
         // own name (1, 2, ...); the full designation (-X1:2) would run over
         // the neighbours. One name per level; levels usually share it.
@@ -2314,7 +2333,10 @@ fn strip_heads(project: &Project, page: PageId) -> HashMap<SymbolId, String> {
     }
     let mut heads = HashMap::new();
     for (strip, mut syms) in by_strip {
-        let Some(tag) = project.device(strip).map(|d| d.tag.to_string()) else {
+        let Some(tag) = project
+            .device(strip)
+            .map(|d| drawn_tag(project, page, &d.tag))
+        else {
             continue;
         };
         if tag.is_empty() {
