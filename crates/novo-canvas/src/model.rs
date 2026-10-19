@@ -2220,7 +2220,12 @@ fn repeats_pin_tag(project: &Project, sym: &SymbolInstance) -> bool {
     let SymbolRole::Device { device, .. } = &sym.role else {
         return false;
     };
-    if novo_symbols::Pack::path_of(&sym.symbol.0) != "connectivity/device_pin" {
+    // The pins of a plug and the boxes an import draws for the parts of one
+    // device: the tag stands once, not on each.
+    if !matches!(
+        novo_symbols::Pack::path_of(&sym.symbol.0),
+        "connectivity/device_pin" | "import/box"
+    ) {
         return false;
     }
     project

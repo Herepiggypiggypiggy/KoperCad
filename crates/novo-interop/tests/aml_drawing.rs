@@ -330,3 +330,50 @@ fn a_page_label_splits_into_structure_and_name_with_its_title_apart() {
     assert_eq!(page.structure.to_string(), "=A1+CAB1");
     assert_eq!(page.title, "Outputs");
 }
+
+#[test]
+fn free_texts_of_a_page_are_drawn_on_it() {
+    let text = r#"<InternalElement ID="t1" Name="Text1"><Attribute Name="Value" AttributeDataType="xs:string"><Value>6mm2</Value></Attribute><Attribute Name="Frame"><Attribute Name="x" AttributeDataType="xs:double"><Value>30</Value></Attribute><Attribute Name="y" AttributeDataType="xs:double"><Value>100</Value></Attribute></Attribute><RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Text"/></InternalElement>"#;
+    let with = file().replace(
+        "<RoleRequirements RefBaseRoleClassPath=\"KoperCADRoleClassLib/Page\"/></InternalElement>\n<InternalElement ID=\"pg2\"",
+        &format!("{text}<RoleRequirements RefBaseRoleClassPath=\"KoperCADRoleClassLib/Page\"/></InternalElement>\n<InternalElement ID=\"pg2\""),
+    );
+    let plant = read_aml(&with).unwrap();
+    assert_eq!(plant.texts.len(), 1);
+    let mut doc = Document::new(Project::new("t"));
+    plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
+    let p = doc.project();
+    let shown: Vec<String> = p.texts().filter_map(|t| p.text_string(t.id)).collect();
+    assert_eq!(shown, ["6mm2"]);
+}
+
+#[test]
+fn two_nets_of_one_name_stay_two_nets_across_pages() {
+    // Net 2 (pages 1 and 2) and a second net of the same name between the
+    // same two pages must not pair their points with each other.
+    let f = file().replace("\"N3\"", "\"L1\"");
+    let p = {
+        let plant = read_aml(&f).unwrap();
+        let mut doc = Document::new(Project::new("t"));
+        plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
+        doc.project().clone()
+    };
+    let mut names: Vec<String> = p
+        .symbols()
+        .filter_map(|s| match &s.role {
+            SymbolRole::Interruption { name } => Some(name.clone()),
+            _ => None,
+        })
+        .collect();
+    names.sort();
+    names.dedup();
+    let points = p
+        .symbols()
+        .filter(|s| matches!(s.role, SymbolRole::Interruption { .. }))
+        .count();
+    assert_eq!(
+        names.len() * 2,
+        points,
+        "{names:?}: each name has two points"
+    );
+}
