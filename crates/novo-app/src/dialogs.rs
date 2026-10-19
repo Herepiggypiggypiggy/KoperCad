@@ -43,6 +43,13 @@ pub fn take_log() -> (Vec<String>, usize) {
     }
 }
 
+/// True where a native dialog must never open: in unit tests (on Windows a
+/// modal dialog blocks the test run for ever, and no timeout can stop an OS
+/// dialog) and when `KOPERCAD_NO_DIALOGS` is set. Such a dialog is cancelled.
+fn no_native_dialogs() -> bool {
+    cfg!(test) || std::env::var_os("KOPERCAD_NO_DIALOGS").is_some()
+}
+
 /// `Some(answer)` when the harness handles this dialog.
 fn harness(
     kind: &str,
@@ -51,7 +58,9 @@ fn harness(
     name: &Option<String>,
 ) -> Option<Vec<PathBuf>> {
     let mut guard = HARNESS.lock().ok()?;
-    let h = guard.as_mut()?;
+    let Some(h) = guard.as_mut() else {
+        return no_native_dialogs().then(Vec::new);
+    };
     let answer = h.answers.pop_front();
     let mut line = format!("{kind} \"{title}\"");
     if let Some(n) = name {
@@ -137,5 +146,25 @@ impl FileDialog {
             Some(a) => a.into_iter().next(),
             None => self.inner.save_file(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FileDialog;
+
+    /// Every dialog path is cancelled in tests; a native dialog would hang
+    /// the Windows test run, where nothing can click it away.
+    #[test]
+    fn dialogs_are_cancelled_without_opening_in_tests() {
+        assert!(FileDialog::new().pick_file().is_none());
+        assert!(FileDialog::new().pick_files().is_none());
+        assert!(FileDialog::new().pick_folder().is_none());
+        assert!(
+            FileDialog::new()
+                .set_file_name("x.pdf")
+                .save_file()
+                .is_none()
+        );
     }
 }

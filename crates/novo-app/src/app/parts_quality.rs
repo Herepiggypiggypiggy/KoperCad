@@ -6,9 +6,14 @@
 //! changes the catalog; the score only reports what is recorded.
 
 use eframe::egui;
+use std::path::Path;
+
 use novo_parts::{
     Catalog, Criterion, DuplicateGroup, Fill, Grade, PartKey, PartQuality, QualityReport,
+    QueueItem, ReviewLedger, assess,
 };
+
+use super::revisions::today;
 
 /// Which side of the Parts window is showing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -17,6 +22,7 @@ enum Side {
     Parts,
     Quality,
     Duplicates,
+    Review,
 }
 
 /// State of the Quality tab.
@@ -34,6 +40,55 @@ pub(crate) struct QualityTab {
     group: Option<usize>,
     /// Result of the last export, shown beside the button.
     note: Option<String>,
+    review: ReviewState,
+}
+
+/// State of the Review tab.
+#[derive(Default)]
+struct ReviewState {
+    /// Decisions read from the file next to the catalog; loaded on first use.
+    ledger: Option<ReviewLedger>,
+    /// Why the file could not be read; decisions are blocked meanwhile, so a
+    /// broken file is never overwritten.
+    error: Option<String>,
+    /// The queue and the catalog size it was built for.
+    queue: Option<(usize, Vec<QueueItem>)>,
+    picked: Option<PartKey>,
+    /// Reason typed for a rejection.
+    reject_note: String,
+    /// Source file whose Approve all awaits a second click.
+    confirm_file: Option<String>,
+    /// Result of the last save.
+    note: Option<String>,
+}
+
+impl ReviewState {
+    fn load(&mut self, path: Option<&Path>) {
+        if self.ledger.is_some() || self.error.is_some() {
+            return;
+        }
+        match path.map(ReviewLedger::load) {
+            Some(Err(e)) => self.error = Some(e.to_string()),
+            Some(Ok(ledger)) => self.ledger = Some(ledger),
+            None => self.ledger = Some(ReviewLedger::new()),
+        }
+    }
+
+    fn ensure(&mut self, catalog: &Catalog, path: Option<&Path>) {
+        self.load(path);
+        let stale = self
+            .queue
+            .as_ref()
+            .is_none_or(|(len, _)| *len != catalog.len());
+        if stale {
+            let ledger = self.ledger.clone().unwrap_or_default();
+            self.queue = Some((catalog.len(), ledger.queue(catalog)));
+        }
+    }
+
+    fn waiting(&self) -> usize {
+        self.queue.as_ref().map_or(0, |(_, q)| q.len())
+    }
 }
 
 impl QualityTab {
@@ -56,19 +111,31 @@ pub(crate) fn tab(
     ui: &mut egui::Ui,
     state: &mut QualityTab,
     catalog: &Catalog,
+    review_path: Option<&Path>,
 ) -> Option<Option<PartKey>> {
     let mut at = match state.side {
         Side::Parts => 0,
         Side::Quality => 1,
         Side::Duplicates => 2,
+        Side::Review => 3,
     };
-    novo_theme::widgets::tabs(ui, &mut at, &["Parts", "Quality", "Duplicates"]);
-    state.side = [Side::Parts, Side::Quality, Side::Duplicates][at];
+    state.review.ensure(catalog, review_path);
+    let review_label = match state.review.waiting() {
+        0 => "Review".to_owned(),
+        n => format!("Review ({n})"),
+    };
+    novo_theme::widgets::tabs(
+        ui,
+        &mut at,
+        &["Parts", "Quality", "Duplicates", &review_label],
+    );
+    state.side = [Side::Parts, Side::Quality, Side::Duplicates, Side::Review][at];
     ui.add_space(4.0);
     let jump = match state.side {
         Side::Parts => return None,
         Side::Quality => quality_ui(ui, state, catalog),
         Side::Duplicates => duplicates_ui(ui, state, catalog),
+        Side::Review => review_ui(ui, &mut state.review, catalog, review_path),
     };
     if jump.is_some() {
         state.side = Side::Parts;
@@ -172,6 +239,210 @@ fn duplicates_ui(ui: &mut egui::Ui, state: &mut QualityTab, catalog: &Catalog) -
         state.dupes = None;
     }
     jump
+}
+
+/// The Review tab: imported parts nobody has looked at. Imported data stays
+/// untrusted until a person approves exactly what is in the catalog now.
+/// Returns the part to open in the list.
+fn review_ui(
+    ui: &mut egui::Ui,
+    state: &mut ReviewState,
+    catalog: &Catalog,
+    path: Option<&Path>,
+) -> Option<PartKey> {
+    let mut jump = None;
+    let mut refresh = false;
+    let mut decide: Option<(Vec<PartKey>, bool)> = None;
+    let blocked = state.error.clone();
+    // Taken out for the frame so the list is not copied; put back below.
+    let held = state.queue.take();
+    let queue: &[QueueItem] = held.as_ref().map_or(&[], |(_, q)| q.as_slice());
+    let picked = state
+        .picked
+        .clone()
+        .filter(|k| queue.iter().any(|q| &q.key == k));
+
+    ui.horizontal_wrapped(|ui| {
+        if queue.is_empty() {
+            ui.weak(
+                "Nothing waits for review. Imported parts show up here until you approve them.",
+            );
+        } else {
+            ui.strong(format!("{} imported parts not reviewed yet", queue.len()));
+            ui.weak("Review is a record, not a gate: nothing else in KoperCAD reads it yet.");
+        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            refresh = ui
+                .small_button("Refresh")
+                .on_hover_text("Build the queue again after editing parts")
+                .clicked();
+        });
+    });
+    if let Some(e) = &blocked {
+        ui.colored_label(
+            crate::theme::ui_palette().error,
+            format!("{e}. Decisions are switched off so the file is not overwritten."),
+        );
+    }
+    // One button per source file, for approving a whole import after a spot check.
+    let mut files: Vec<(String, Vec<PartKey>)> = Vec::new();
+    for item in queue {
+        match files.iter_mut().find(|(f, _)| *f == item.file) {
+            Some((_, keys)) => keys.push(item.key.clone()),
+            None => files.push((item.file.clone(), vec![item.key.clone()])),
+        }
+    }
+    if files.len() > 1 || files.first().is_some_and(|(_, k)| k.len() > 1) {
+        ui.horizontal_wrapped(|ui| {
+            ui.weak("By file:");
+            for (file, keys) in &files {
+                let name = if file.is_empty() {
+                    "unknown file"
+                } else {
+                    file
+                };
+                let confirming = state.confirm_file.as_deref() == Some(file.as_str());
+                let text = if confirming {
+                    format!("Approve all {} from {name}?", keys.len())
+                } else {
+                    format!("{name} ({})", keys.len())
+                };
+                let click = ui.add_enabled(blocked.is_none(), egui::Button::new(text));
+                if click.clicked() {
+                    if confirming {
+                        decide = Some((keys.clone(), true));
+                        state.confirm_file = None;
+                    } else {
+                        state.confirm_file = Some(file.clone());
+                    }
+                }
+            }
+        });
+    }
+    ui.separator();
+
+    egui::Panel::right("parts_review_detail")
+        .exact_size(320.0)
+        .resizable(false)
+        .show(ui, |ui| {
+            let Some(item) = picked
+                .as_ref()
+                .and_then(|k| queue.iter().find(|q| &q.key == k))
+            else {
+                ui.weak("Pick a part to look at what was imported.");
+                return;
+            };
+            ui.heading(&item.order_number);
+            ui.label(&item.manufacturer);
+            if !item.description.is_empty() {
+                ui.weak(&item.description);
+            }
+            ui.add_space(4.0);
+            ui.colored_label(crate::theme::ui_palette().warning, item.trust.label());
+            if let Some(part) = catalog.get(&item.key) {
+                if let Some(p) = &part.provenance {
+                    ui.weak(format!("From {} {}", p.source, p.file));
+                    if !p.imported.is_empty() {
+                        ui.weak(format!("Imported {}", p.imported));
+                    }
+                }
+                ui.add_space(4.0);
+                let done = assess(part);
+                ui.label(format!("{} % complete", done.percent));
+                for f in done.gaps() {
+                    ui.weak(format!("{}: {}", f.criterion.label(), f.note));
+                }
+            }
+            ui.add_space(8.0);
+            ui.add_enabled_ui(blocked.is_none(), |ui| {
+                if ui.button("Approve").clicked() {
+                    decide = Some((vec![item.key.clone()], true));
+                }
+                ui.add(
+                    egui::TextEdit::singleline(&mut state.reject_note)
+                        .hint_text("Why not (optional)")
+                        .desired_width(f32::INFINITY),
+                );
+                if ui.button("Reject").clicked() {
+                    decide = Some((vec![item.key.clone()], false));
+                }
+            });
+            if ui.button("Show in Parts").clicked() {
+                jump = Some(item.key.clone());
+            }
+        });
+    let mut pick = None;
+    egui::CentralPanel::default().show(ui, |ui| {
+        egui::ScrollArea::vertical().show_rows(ui, 24.0, queue.len(), |ui, range| {
+            for item in &queue[range] {
+                let text = format!(
+                    "{:>3} %  {}  {}  {}",
+                    item.percent, item.manufacturer, item.order_number, item.description
+                );
+                let marker = if item.trust == novo_parts::Trust::ChangedSinceReview {
+                    " (changed)"
+                } else {
+                    ""
+                };
+                let on = picked.as_ref() == Some(&item.key);
+                if ui
+                    .add(egui::Button::selectable(on, format!("{text}{marker}")).truncate())
+                    .clicked()
+                {
+                    pick = Some(item.key.clone());
+                }
+            }
+        });
+    });
+    state.queue = held;
+    if let Some(k) = pick {
+        state.picked = Some(k);
+    }
+    if let Some((keys, approve)) = decide {
+        apply_decision(state, catalog, path, &keys, approve);
+    }
+    if refresh {
+        state.queue = None;
+    }
+    if let Some(note) = &state.note {
+        ui.weak(note);
+    }
+    jump
+}
+
+/// Records the decision, saves the ledger and rebuilds the queue.
+fn apply_decision(
+    state: &mut ReviewState,
+    catalog: &Catalog,
+    path: Option<&Path>,
+    keys: &[PartKey],
+    approve: bool,
+) {
+    let Some(ledger) = state.ledger.as_mut() else {
+        return;
+    };
+    let date = today();
+    if approve {
+        let n = ledger.approve_all(catalog, keys, &date);
+        state.note = Some(format!(
+            "Approved {n} part{}",
+            if n == 1 { "" } else { "s" }
+        ));
+    } else {
+        for part in keys.iter().filter_map(|k| catalog.get(k)) {
+            ledger.reject(part, &date, state.reject_note.trim());
+        }
+        state.reject_note.clear();
+        state.note = Some(
+            "Rejected. Recorded in parts-review.json; parts are not blocked anywhere yet.".into(),
+        );
+    }
+    if let Some(path) = path
+        && let Err(e) = ledger.save(path)
+    {
+        state.note = Some(e.to_string());
+    }
+    state.queue = None;
 }
 
 fn grade_color(grade: Grade) -> egui::Color32 {
@@ -376,5 +647,49 @@ mod tests {
         catalog.upsert(CatalogPart::new("ABB", "S201-B16"));
         tab.ensure(&catalog);
         assert_eq!(tab.report.as_ref().unwrap().1.len(), 1);
+    }
+
+    fn imported_catalog() -> Catalog {
+        let mut c = Catalog::new();
+        let mut p = CatalogPart::new("WAGO", "2002-1201");
+        p.provenance = Some(novo_parts::Provenance {
+            source: "import:bmecat".into(),
+            file: "wago.xml".into(),
+            ..Default::default()
+        });
+        c.upsert(p);
+        c
+    }
+
+    #[test]
+    fn approving_saves_the_ledger_and_empties_the_queue() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("parts-review.json");
+        let catalog = imported_catalog();
+        let mut state = ReviewState::default();
+        state.ensure(&catalog, Some(&path));
+        assert_eq!(state.waiting(), 1);
+        let keys = vec![catalog.parts()[0].key()];
+        apply_decision(&mut state, &catalog, Some(&path), &keys, true);
+        state.ensure(&catalog, Some(&path));
+        assert_eq!(state.waiting(), 0);
+        // A fresh start reads the decision back.
+        let mut again = ReviewState::default();
+        again.ensure(&catalog, Some(&path));
+        assert_eq!(again.waiting(), 0);
+    }
+
+    #[test]
+    fn a_broken_review_file_blocks_decisions_and_is_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("parts-review.json");
+        std::fs::write(&path, "garbage").unwrap();
+        let catalog = imported_catalog();
+        let mut state = ReviewState::default();
+        state.ensure(&catalog, Some(&path));
+        assert!(state.error.is_some());
+        let keys = vec![catalog.parts()[0].key()];
+        apply_decision(&mut state, &catalog, Some(&path), &keys, true);
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "garbage");
     }
 }

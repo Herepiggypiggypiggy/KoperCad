@@ -131,6 +131,11 @@ pub(crate) struct Workbench {
     /// An item to select and centre once its page is shown (a row of the
     /// Changes list).
     pub(super) pending_item: Option<(PageId, AnyId)>,
+    /// The person's symbol folder as last loaded into the catalog.
+    pub(super) custom_symbols: super::symbol_folder::CustomSymbols,
+    /// Several items to select together on a page, once it is shown (a
+    /// cable's core wires from the outline).
+    pub(super) pending_items: Option<(PageId, Vec<AnyId>)>,
     /// The drawing's layer and rect last frame: a focused widget there is
     /// the canvas, anywhere else a panel.
     pub(super) canvas_area: Option<(egui::LayerId, egui::Rect)>,
@@ -282,6 +287,8 @@ impl Default for Workbench {
             nav: Navigator::default(),
             pending: None,
             pending_item: None,
+            custom_symbols: Default::default(),
+            pending_items: None,
             canvas_area: None,
             occurrences: None,
             drawer: None,
@@ -519,6 +526,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "app.preferences",
     "view.shortcuts",
     "help.show_hints",
+    "help.next_lesson",
     "help.whats_new",
     "help.numbers",
     "view.reset_panels",
@@ -1297,6 +1305,7 @@ impl NovoApp {
             "view.shortcuts" => self.toggle_shortcuts(),
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,
+            "help.next_lesson" => self.learn_run_command(id, None),
             "help.numbers" => self.show_numbers = true,
             "view.reset_panels" => super::panel::reset_layout(ctx),
             "layout.draw" | "layout.cabinet" | "layout.3d" | "layout.review" | "layout.reports"
@@ -1552,6 +1561,19 @@ impl NovoApp {
                 view.canvas.selection.apply([item], SelectOp::Replace);
                 view.canvas.reveal([item]);
             }
+        }
+        if let Some((_, ids)) = self
+            .wb
+            .pending_items
+            .take_if(|(p, _)| Some(*p) == self.current_page)
+            && let Some(view) = self.canvas.schematic()
+        {
+            let items: Vec<_> = ids.iter().map(|&id| item_id(id)).collect();
+            view.canvas.selection.clear();
+            view.canvas
+                .selection
+                .apply(items.iter().copied(), SelectOp::Replace);
+            view.canvas.reveal(items);
         }
         self.highlight_related();
     }

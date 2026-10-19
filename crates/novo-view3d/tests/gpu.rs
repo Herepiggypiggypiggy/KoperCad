@@ -11,6 +11,7 @@ use novo_view3d::{
 struct Gpu {
     device: wgpu::Device,
     queue: wgpu::Queue,
+    adapter_name: String,
 }
 
 fn gpu() -> Option<Gpu> {
@@ -23,8 +24,29 @@ fn gpu() -> Option<Gpu> {
     .ok()?;
     let (device, queue) =
         pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor::default())).ok()?;
-    println!("adapter: {}", adapter.get_info().name);
-    Some(Gpu { device, queue })
+    let adapter_name = adapter.get_info().name;
+    println!("adapter: {adapter_name}");
+    Some(Gpu {
+        device,
+        queue,
+        adapter_name,
+    })
+}
+
+/// The adapter for the wire colour checks. Windows' software fallback
+/// ("Microsoft Basic Render Driver", all a GitHub Windows runner has) draws the
+/// translucent door and the wire tubes differently, so the pixel counts below
+/// do not hold there; these checks run on every real GPU and on Linux.
+fn colour_gpu() -> Option<Gpu> {
+    let gpu = gpu()?;
+    if gpu.adapter_name.contains("Basic Render Driver") {
+        println!(
+            "software adapter {}, wire colours skipped",
+            gpu.adapter_name
+        );
+        return None;
+    }
+    Some(gpu)
 }
 
 const SIZE: (u32, u32) = (256, 192);
@@ -520,7 +542,7 @@ fn bluish(r: i32, g: i32, b: i32) -> bool {
 #[test]
 fn a_coloured_wire_shows_through_the_closed_door() {
     use novo_view3d::build::WireColour;
-    let Some(gpu) = gpu() else {
+    let Some(gpu) = colour_gpu() else {
         println!("no adapter, skipped");
         return;
     };
@@ -548,7 +570,7 @@ fn a_coloured_wire_shows_through_the_closed_door() {
 #[test]
 fn a_bi_colour_wire_shows_both_its_colours() {
     use novo_view3d::build::WireColour;
-    let Some(gpu) = gpu() else {
+    let Some(gpu) = colour_gpu() else {
         println!("no adapter, skipped");
         return;
     };

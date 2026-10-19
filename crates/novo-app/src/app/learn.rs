@@ -130,6 +130,9 @@ pub(crate) const ANCHORS: &[&str] = &[
     "cabinet.plate_drawing",
     "cabinet.more",
     "issues.list",
+    "issues.waive_reason",
+    "issues.waive",
+    "issues.restore",
     "macro.place",
     "macros.window",
 ];
@@ -152,6 +155,8 @@ pub(crate) struct LearnState {
     /// The Learn window is open.
     pub(super) window: bool,
     pub(super) filter: String,
+    /// The Learn window lists only this track (Help > Learning paths).
+    pub(super) only_track: Option<String>,
     pub(super) show_drafts: bool,
     pub(super) confirm_restart: bool,
     /// Lessons whose lint has errors, so they are not offered yet.
@@ -159,6 +164,10 @@ pub(crate) struct LearnState {
     /// Controls registered so far this frame, and last frame.
     pub(super) anchors: BTreeMap<String, egui::Rect>,
     seen: BTreeMap<String, egui::Rect>,
+    /// Rows of lists and entries of their menus, by list anchor and text,
+    /// registered this frame and last frame (`list_row` in a `solve`).
+    rows: BTreeMap<(String, String), egui::Rect>,
+    rows_seen: BTreeMap<(String, String), egui::Rect>,
     /// The visible name of a control, for `{ui:...}` in step text.
     pub(super) labels: BTreeMap<String, String>,
     /// The step whose target was last revealed: lesson and step id.
@@ -195,10 +204,13 @@ impl LearnState {
             hidden: false,
             window: false,
             filter: String::new(),
+            only_track: None,
             show_drafts: false,
             confirm_restart: false,
             coming: None,
             anchors: BTreeMap::new(),
+            rows: BTreeMap::new(),
+            rows_seen: BTreeMap::new(),
             seen: BTreeMap::new(),
             labels: BTreeMap::new(),
             revealed: None,
@@ -346,6 +358,15 @@ impl LearnState {
         self.files.get(path).map(String::as_str)
     }
 
+    /// The lesson Help and the Learn window offer: the one on the card,
+    /// else the next one the person can do.
+    pub(super) fn offered(&self) -> Option<Entry> {
+        let running = self.running().and_then(|id| self.catalog.get(id));
+        running
+            .or_else(|| self.catalog.next_lesson(&self.progress, self.show_drafts))
+            .cloned()
+    }
+
     /// The id of the lesson being done.
     pub(super) fn running(&self) -> Option<&str> {
         self.run.as_ref().map(|r| r.lesson().id.as_str())
@@ -480,6 +501,44 @@ impl NovoApp {
         self.learn.anchors.insert(id.to_owned(), rect);
         if !self.learn.labels.contains_key(id) {
             self.learn.labels.insert(id.to_owned(), label.to_owned());
+        }
+    }
+
+    /// A row of the list `list`, or an entry of a menu that belongs to it,
+    /// by its text: what a `list_row` in a `solve` clicks.
+    pub(super) fn learn_row(&mut self, list: &str, text: &str, rect: egui::Rect) {
+        self.learn
+            .rows
+            .insert((list.to_owned(), text.to_owned()), rect);
+    }
+
+    /// Where a row or menu entry of `list` whose text holds `text` is drawn.
+    #[cfg(test)]
+    pub(super) fn learn_row_rect(&self, list: &str, text: &str) -> Option<egui::Rect> {
+        let find = |rows: &BTreeMap<(String, String), egui::Rect>| {
+            rows.iter()
+                .find(|((l, t), _)| l == list && t.contains(text))
+                .map(|(_, r)| *r)
+        };
+        find(&self.learn.rows).or_else(|| find(&self.learn.rows_seen))
+    }
+
+    /// The rows of `list` drawn lately, for a failure message.
+    #[cfg(test)]
+    pub(super) fn learn_rows_drawn(&self, list: &str) -> String {
+        let mut names: Vec<&str> = self
+            .learn
+            .rows
+            .keys()
+            .chain(self.learn.rows_seen.keys())
+            .filter(|(l, _)| l == list)
+            .map(|(_, t)| t.as_str())
+            .collect();
+        names.dedup();
+        if names.is_empty() {
+            "none".into()
+        } else {
+            names.join(", ")
         }
     }
 
@@ -907,7 +966,17 @@ impl NovoApp {
                         self.learn.window = true;
                     }
                 },
-                None => self.learn.window = !self.learn.window,
+                None => {
+                    self.learn.window = !self.learn.window;
+                    self.learn.only_track = None;
+                }
+            },
+            "help.next_lesson" => match self.learn.offered() {
+                Some(entry) if self.learn.running() == Some(entry.lesson.id.as_str()) => {
+                    self.continue_lesson();
+                }
+                Some(entry) => self.start_lesson(&entry.lesson.id),
+                None => self.learn.window = true,
             },
             "learn.next" => self.learn_move(Move::Next),
             "learn.back" => self.learn_move(Move::Back),
@@ -956,6 +1025,7 @@ impl NovoApp {
             }
         }
         learn.seen = std::mem::take(&mut learn.anchors);
+        learn.rows_seen = std::mem::take(&mut learn.rows);
     }
 
     /// The person's key for a command; a command with no key reads as its

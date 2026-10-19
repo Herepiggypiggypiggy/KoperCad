@@ -33,9 +33,9 @@ pub const FIXED_SECTION_TITLES: &[&str] = &[
 pub const FIXED_SECTION_TITLE_PATTERNS: &[&str] = &[
     "What to pull · {estimated} of {total} lengths are estimates (~): measure on the plate",
     "{n} connections between device pins (supply and PE leads: see Wire production)",
-    "Summary · {n} wires between device pins (supply and PE leads: see Wire production)",
+    "Summary · {n} wires (device pin to device pin, plus supply and PE leads)",
     "Wires to cut · {n} (device pin to device pin, plus supply and PE leads)",
-    "Wire labels · {n} (one per wire end: two for each wire-list connection)",
+    "Wire labels · {n} (one per wire end: two for each wire to cut)",
 ];
 
 fn matches_pattern(pattern: &str, text: &str) -> bool {
@@ -118,6 +118,7 @@ pub const FIXED_CELL_PATTERNS: &[&str] = &[
     "Cut-out dia {d}",
     "Cut-out {w} x {h}",
     "Fit drill dia {d}: {count} holes",
+    "{potential} (feed)",
     "Hole dia {d}",
     "Mounting plate {w} x {h} mm, margin {m} mm",
     "guessed size: {list}",

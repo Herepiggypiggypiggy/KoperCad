@@ -32,6 +32,9 @@ pub struct CableItem {
     pub text: String,
     /// The wire of its first assigned core: where a click goes.
     pub first_wire: Option<WireId>,
+    /// The wires of all its assigned cores that still exist, in core order:
+    /// a click selects them together.
+    pub wires: Vec<WireId>,
 }
 
 fn end_text(project: &Project, end: &Endpoint) -> String {
@@ -114,6 +117,12 @@ pub fn cable_items(project: &Project, filter: &str) -> Vec<CableItem> {
                 .iter()
                 .filter_map(|core| core.wire)
                 .find(|&w| project.wire(w).is_some());
+            let wires: Vec<WireId> = c
+                .cores
+                .iter()
+                .filter_map(|core| core.wire)
+                .filter(|&w| project.wire(w).is_some())
+                .collect();
             let mut text = c.tag.to_string();
             if !c.description.is_empty() {
                 text += &format!("  {}", c.description);
@@ -123,6 +132,7 @@ pub fn cable_items(project: &Project, filter: &str) -> Vec<CableItem> {
                 id: c.id,
                 text,
                 first_wire,
+                wires,
             }
         })
         .filter(|i| matches(&i.text, &filter))

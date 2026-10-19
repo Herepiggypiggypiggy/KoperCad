@@ -15,7 +15,7 @@ const TICK_PAD: f32 = 12.0;
 const STEPS: usize = 48;
 
 /// The lines of text under the scale, one per layer that needs explaining.
-pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32) -> Vec<String> {
+pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) -> Vec<String> {
     let mut out = Vec::new();
     if h.iso {
         let level = range.lo + f64::from(h.iso_at) * (range.hi - range.lo);
@@ -26,6 +26,16 @@ pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32) -> Vec<String> {
             "Streamlines: brighter is faster, up to {top_speed:.2} m/s"
         ));
     }
+    if h.cloud {
+        out.push(String::from(
+            "Cloud: air near ambient is clear, hotter is more opaque",
+        ));
+    }
+    if h.carry {
+        out.push(format!(
+            "Heat flow (orange): brighter is more heat, up to {top_flux:.0} W/m², no radiation"
+        ));
+    }
     if h.devices {
         out.push(String::from("Device bodies: air in front, same scale"));
     }
@@ -34,16 +44,23 @@ pub(crate) fn notes(h: &Heat3d, range: Range, top_speed: f32) -> Vec<String> {
 
 /// Is there anything coloured by temperature on screen.
 pub(crate) fn wanted(h: &Heat3d) -> bool {
-    h.slice || h.iso || h.devices
+    h.slice || h.iso || h.devices || h.cloud
 }
 
 /// Draws the key inside the Heat strip above the view: a colour bar with
 /// degree ticks, then one note per active layer. It sits in the strip's own
 /// row (wrapping with it), so it can never cover a panel.
-pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32) {
-    if !wanted(h) {
-        return;
+pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) {
+    if wanted(h) {
+        scale(ui, range);
     }
+    for line in notes(h, range, top_speed, top_flux) {
+        ui.label(egui::RichText::new(line).small());
+    }
+}
+
+/// The colour bar with degree ticks.
+fn scale(ui: &mut egui::Ui, range: Range) {
     let (rect, response) = ui.allocate_exact_size(
         egui::vec2(BAR_LEN + 2.0 * TICK_PAD, BAR_H + LABEL_H),
         egui::Sense::hover(),
@@ -82,9 +99,6 @@ pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32)
         );
     }
     ui.label(egui::RichText::new("°C").small());
-    for line in notes(h, range, top_speed) {
-        ui.label(egui::RichText::new(line).small());
-    }
 }
 
 /// The ticks of the scale as (position 0 to 1 along the bar, degrees), only
@@ -111,7 +125,7 @@ mod tests {
             devices: false,
             ..Heat3d::default()
         };
-        assert!(notes(&off, range, 0.4).is_empty());
+        assert!(notes(&off, range, 0.4, 0.0).is_empty());
         let all = Heat3d {
             iso: true,
             iso_at: 0.5,
@@ -119,10 +133,25 @@ mod tests {
             devices: true,
             ..off
         };
-        let n = notes(&all, range, 0.4);
+        let n = notes(&all, range, 0.4, 0.0);
         assert_eq!(n.len(), 3);
         assert!(n[0].contains("40 °C"));
         assert!(n[1].contains("0.40 m/s"));
+    }
+
+    #[test]
+    fn cloud_and_heat_flow_each_get_a_note_that_says_what_they_leave_out() {
+        let h = Heat3d {
+            slice: false,
+            cloud: true,
+            carry: true,
+            ..Heat3d::default()
+        };
+        let n = notes(&h, Range { lo: 20.0, hi: 60.0 }, 0.0, 850.0);
+        assert_eq!(n.len(), 2);
+        assert!(n[0].contains("Cloud"));
+        assert!(n[1].contains("850 W/m²") && n[1].contains("no radiation"));
+        assert!(wanted(&h));
     }
 
     #[test]

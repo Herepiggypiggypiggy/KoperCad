@@ -810,3 +810,20 @@ fn menu_rows_are_anchors_that_fall_back_to_their_menu() {
             .unwrap()
     )));
 }
+
+#[test]
+fn help_next_lesson_names_and_starts_the_lesson_on_offer() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    let info = novo_workflow::commands::get("help.next_lesson").expect("registered");
+    assert_eq!(d.app.command_label(info), "Next lesson: Tiny lesson");
+    assert!(crate::app::app_runs("help.next_lesson"));
+    d.app.run_command(&ctx, "help.next_lesson", None);
+    d.frame();
+    assert_eq!(step(&d), "hello", "it starts the lesson");
+    assert_eq!(d.app.command_label(info), "Continue lesson: Tiny lesson");
+    d.app.run_command(&ctx, "learn.close", None);
+    d.app.run_command(&ctx, "help.next_lesson", None);
+    assert!(d.app.learn.card_on(), "it brings the card back");
+    assert_eq!(step(&d), "hello", "and does not start over");
+}

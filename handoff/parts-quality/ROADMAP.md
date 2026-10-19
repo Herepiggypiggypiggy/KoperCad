@@ -4,7 +4,7 @@ Scope (spawn table lane PARTS-Q): completeness score per part, missing-data repo
 
 1. PR 1: score, report, CSV, Quality tab. MERGED (#568).
 2. PR 2: duplicate groups and conflict finder (Duplicates tab). In review.
-3. PR 3: review queue. Sidecar `parts-review.json` next to the catalog (fingerprint per part, so a changed part needs review again). Imported (`import:*`) parts without a matching review are untrusted; authored parts are trusted. Approve and Reject in the Quality tab.
+3. PR 3: review queue, Review tab. In review.
 4. Later: untrusted badge in the Parts list (needs a second hook line in parts.rs, ask the Parts library lane), CLI `kopercad-cli parts quality`.
 
 Open: where the Parts list should show the untrusted badge.

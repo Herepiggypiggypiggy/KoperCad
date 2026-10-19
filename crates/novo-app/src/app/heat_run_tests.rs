@@ -41,7 +41,7 @@ impl Solver for Panics {
     }
 }
 
-fn scenario() -> Scenario {
+pub(super) fn scenario() -> Scenario {
     use novo_layout::Rect;
     use novo_layout::sizing::{Installation, Material};
     use novo_thermal::{Enclosure, Params};

@@ -231,9 +231,7 @@ pub fn plan_import(project: &Project, index: &PlcIndex, file: &TagFile) -> Impor
         let name = tag.name.trim();
         let new_tag = (!name.is_empty()
             && !name.eq_ignore_ascii_case(&old_name)
-            && !old_name
-                .to_ascii_lowercase()
-                .starts_with(&name.to_ascii_lowercase())
+            && !cut_to_a_limit(&old_name, name)
             && Some(name) != old_stored.as_deref()
             && !(old_stored.is_none() && name.eq_ignore_ascii_case(&derived_after)))
         .then(|| name.to_owned());
@@ -325,4 +323,14 @@ pub fn apply_import(tx: &mut Tx, plan: &ImportPlan) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// `name` is `old` cut to a tool's length limit (Studio 5000 allows 40), not
+/// a rename that happens to begin the same way.
+fn cut_to_a_limit(old: &str, name: &str) -> bool {
+    old.len() > 40
+        && name.len() <= 40
+        && old
+            .to_ascii_lowercase()
+            .starts_with(&name.to_ascii_lowercase())
 }

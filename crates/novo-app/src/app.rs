@@ -64,6 +64,8 @@ mod heat_3d;
 #[cfg(test)]
 mod heat_3d_tests;
 mod heat_arrows;
+mod heat_carry;
+mod heat_cloud;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
@@ -80,6 +82,9 @@ mod heat_run;
 mod heat_run_tests;
 mod heat_settings;
 mod heat_spots;
+mod heat_time;
+#[cfg(test)]
+mod heat_time_tests;
 mod inspector;
 mod interop;
 mod languages;
@@ -157,6 +162,7 @@ mod standards_report;
 #[cfg(test)]
 mod standards_report_tests;
 mod status_bar;
+mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;
 mod terminals;
@@ -530,6 +536,8 @@ impl NovoApp {
         settings: Settings,
     ) -> Self {
         let wb = Workbench::with_recent(&settings.recent_actions);
+        let mut backend = backend;
+        backend.set_autosave_interval(settings.autosave_interval());
         let mut app = Self {
             backend,
             canvas,
@@ -1947,9 +1955,16 @@ impl NovoApp {
         let on_pill = ctx
             .pointer_interact_pos()
             .is_some_and(|p| self.wb.pill_rect.contains(p));
+        // A menu opened from a row of the list (right-click) sits in a layer
+        // of its own; choosing from it is not a click elsewhere.
+        let on_popup = ctx.pointer_interact_pos().is_some_and(|p| {
+            ctx.layer_id_at(p)
+                .is_some_and(|l| l != area.response.layer_id && l.order >= egui::Order::Foreground)
+        });
         let elsewhere = area.response.clicked_elsewhere()
             && !opener(&toggle)
             && !on_pill
+            && !on_popup
             && !self.breadcrumb_link.as_ref().is_some_and(opener);
         if escape || elsewhere {
             self.outline_open = false;
@@ -2238,7 +2253,11 @@ impl NovoApp {
                 ui.add_space(novo_theme::space::L);
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                 ui.weak(format!("Model API v{}", novo_core::MODEL_VERSION));
-                ui.weak(format!("Build {}", crate::diag::BUILD_COMMIT));
+                ui.weak(format!(
+                    "Build {}, built {}",
+                    crate::diag::BUILD_COMMIT,
+                    crate::diag::BUILD_TIME
+                ));
                 ui.add_space(novo_theme::space::L);
                 ui.button("Close").clicked()
             })

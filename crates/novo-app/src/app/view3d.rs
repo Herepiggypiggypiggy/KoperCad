@@ -37,6 +37,7 @@ use super::view3d_rail;
 use super::view3d_stats::{Build, Stats};
 use super::view3d_views::{self, ViewsAction};
 use super::view3d_wires::{self, WireFacts};
+use super::{heat_carry, heat_cloud};
 
 /// The one view of the app.
 const VIEW_ID: u64 = 1;
@@ -93,6 +94,8 @@ pub(crate) struct View3dMode {
     /// Overlays without the moving tracers, and the lines the tracers follow.
     heat_base: Vec<novo_view3d::Overlay>,
     heat_flow: heat_3d::Flow,
+    /// The heat-flow layer: lines the heat follows and conduction arrows.
+    heat_carry: super::heat_carry::Carry,
     /// Scene with devices coloured by temperature, for the key (scene
     /// revision, result id).
     heat_scene: Option<((u64, u64), Arc<novo_view3d::Scene>)>,
@@ -149,6 +152,7 @@ impl Default for View3dMode {
             heat_shown: None,
             heat_base: Vec::new(),
             heat_flow: heat_3d::Flow::default(),
+            heat_carry: super::heat_carry::Carry::default(),
             heat_scene: None,
             built_layers: Layers::default(),
             built_hidden: BTreeSet::new(),
@@ -395,6 +399,7 @@ impl NovoApp {
                 &mut mode.probe,
                 sol,
                 mode.heat_flow.top,
+                mode.heat_carry.top_air,
                 &tag_of,
             ) {
                 // Jump to the device: select it and bring it into view.
@@ -406,6 +411,12 @@ impl NovoApp {
                 }
             }
         }
+        // The cloud is cut across the axis the camera looks along most.
+        mode.heat.cloud_view = if mode.heat.cloud {
+            heat_cloud::CloudView::from_eye(mode.view.camera.dir(), mode.heat.cloud_view)
+        } else {
+            heat_cloud::CloudView::default()
+        };
         let wanted = solution.as_ref().map(|s| (s.id, mode.heat));
         // The landing box of a dragged device, rail or duct.
         let mut landings = mode.mv.landings();
@@ -507,7 +518,9 @@ impl NovoApp {
                 at,
             )
         };
-        let tracing = solution.is_some() && mode.heat.lines && !self.settings.reduce_motion;
+        let tracing = solution.is_some()
+            && (mode.heat.lines || mode.heat.carry)
+            && !self.settings.reduce_motion;
         if wanted != mode.heat_shown {
             let place = |sol: &super::heat_run::Solution| Place {
                 plate_x: sol.plate[0],
@@ -518,6 +531,12 @@ impl NovoApp {
                 Some(sol) if mode.heat.lines => heat_3d::flow(&sol.snapshot, place(sol)),
                 _ => heat_3d::Flow::default(),
             };
+            mode.heat_carry = match &solution {
+                Some(sol) if mode.heat.carry => {
+                    heat_carry::carry(&sol.snapshot, sol.ambient, place(sol))
+                }
+                _ => heat_carry::Carry::default(),
+            };
             mode.heat_base = solution.as_ref().map_or_else(Vec::new, |sol| {
                 heat_3d::overlays(
                     &sol.snapshot,
@@ -527,6 +546,17 @@ impl NovoApp {
                     &mode.heat_flow,
                 )
             });
+            if mode.heat.carry {
+                let lines = heat_3d::stream_lines_in(&mode.heat_carry.flow, heat_carry::RGB, 5);
+                if !lines.positions.is_empty() {
+                    mode.heat_base.push(novo_view3d::Overlay::Lines(lines));
+                }
+                if !mode.heat_carry.conduction.positions.is_empty() {
+                    mode.heat_base.push(novo_view3d::Overlay::Lines(
+                        mode.heat_carry.conduction.clone(),
+                    ));
+                }
+            }
             mode.heat_shown = wanted;
             heat_changed = true;
         }
@@ -548,9 +578,16 @@ impl NovoApp {
             all.extend(mode.pin_marks.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
-            let t = heat_3d::tracers(&mode.heat_flow, ui.input(|i| i.time));
+            let time = ui.input(|i| i.time);
+            let t = heat_3d::tracers(&mode.heat_flow, time);
             if !t.positions.is_empty() {
                 all.push(novo_view3d::Overlay::Lines(t));
+            }
+            if mode.heat.carry {
+                let t = heat_3d::tracers_in(&mode.heat_carry.flow, time, heat_carry::TRACER_RGB, 6);
+                if !t.positions.is_empty() {
+                    all.push(novo_view3d::Overlay::Lines(t));
+                }
             }
             mode.view.set_overlays(all);
             ui.ctx().request_repaint();
@@ -1149,6 +1186,7 @@ fn heat_controls(
     probe: &mut ProbeState,
     sol: &super::heat_run::Solution,
     top_speed: f32,
+    top_flux: f32,
     tag_of: &dyn Fn(u64) -> String,
 ) -> Option<u64> {
     use novo_heatview::cfd::Axis;
@@ -1180,6 +1218,19 @@ fn heat_controls(
         } else {
             0.0
         };
+        ui.checkbox(&mut h.cloud, "Cloud").on_hover_text(
+            "The whole cabinet volume as see-through layers coloured by air temperature; air near ambient is invisible, hotter air is more opaque. Layers are cut across the direction you look along, so turning the view across the cabinet re-cuts them",
+        );
+        if h.cloud {
+            ui.add(
+                egui::Slider::new(&mut h.cloud_opacity, 0.1..=1.0)
+                    .show_value(false),
+            )
+            .on_hover_text("How solid the cloud looks");
+        }
+        ui.checkbox(&mut h.carry, "Heat flow").on_hover_text(
+            "Where the heat goes: orange lines and moving dashes follow the heat the air carries away from hot parts (brighter is more heat per area); arrows inside plate, rails and devices show heat conducted through them. Derived from the solved temperature and air speed; surface radiation is not included. Air colder than ambient takes heat in, so its lines point against the air",
+        );
         ui.checkbox(&mut h.arrows, "Arrows").on_hover_text(format!(
             "Arrows on the slice plane point where the air goes. Length is relative to the fastest air on this plane (now {top:.2} m/s), so two planes cannot be compared by length; air under 2 % of that is not drawn"
         ));
@@ -1195,7 +1246,7 @@ fn heat_controls(
         if probe.on && !probe.text.is_empty() {
             ui.label(egui::RichText::new(&probe.text).small());
         }
-        heat_legend::strip(ui, h, range, top_speed);
+        heat_legend::strip(ui, h, range, top_speed, top_flux);
         jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
     });
     jump

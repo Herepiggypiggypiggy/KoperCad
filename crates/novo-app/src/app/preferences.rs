@@ -4,6 +4,8 @@ use eframe::egui;
 use novo_canvas::model::NoteDensity;
 use novo_editor::tool::ConnectMode;
 
+use std::time::Instant;
+
 use super::NovoApp;
 
 impl NovoApp {
@@ -15,9 +17,12 @@ impl NovoApp {
         let mut carries = !self.settings.move_leaves_wires;
         let mut calm = self.settings.reduce_motion;
         let mut company = self.settings.company_macros.clone();
+        let mut symbols = self.settings.symbol_folder.clone();
+        let mut reload_symbols = false;
         let mut density = self.settings.xref_density();
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
+        let mut autosave = self.settings.autosave_interval().as_secs() as u32;
         let mut dock_labels = self.settings.dock_labels();
         let mut ui_scale = self.settings.ui_scale_factor().to_bits();
         let modal = egui::Modal::new(egui::Id::new("preferences")).show(ctx, |ui| {
@@ -78,6 +83,20 @@ impl NovoApp {
                             (2.0_f32.to_bits(), "200%"),
                         ],
                     );
+                    section(ui, "Saving", false);
+                    choice(
+                        ui,
+                        "Autosave every",
+                        "How often changes are written to the project file and its recovery file. Shorter loses less after a crash.",
+                        &mut autosave,
+                        &[
+                            (10, "10 s"),
+                            (30, "30 s"),
+                            (60, "1 min"),
+                            (120, "2 min"),
+                            (300, "5 min"),
+                        ],
+                    );
                     section(ui, "Connections", false);
                     choice(
                         ui,
@@ -135,6 +154,45 @@ impl NovoApp {
                             .truncate(),
                         );
                     });
+                    section(ui, "Symbols", false);
+                    row_title(
+                        ui,
+                        "My symbol folder",
+                        "Your own symbols, one .toml file each; the id inside must be the file's path below this folder without .toml (my/pump for my/pump.toml) and category is the folder it sits in (my). They appear in the insert search next to the built-in ones. A symbol placed from here is not drawn on a computer without the folder.",
+                    );
+                    ui.horizontal(|ui| {
+                        if ui.button("Choose...").clicked()
+                            && let Some(dir) = rfd::FileDialog::new()
+                                .set_title("My symbol folder")
+                                .pick_folder()
+                        {
+                            symbols = Some(dir);
+                        }
+                        if symbols.is_some() && ui.button("Clear").clicked() {
+                            symbols = None;
+                        }
+                        if symbols.is_some() && ui.button("Reload").clicked() {
+                            reload_symbols = true;
+                        }
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(
+                                    symbols
+                                        .as_ref()
+                                        .map(|p| p.display().to_string())
+                                        .unwrap_or_else(|| "None".into()),
+                                )
+                                .weak(),
+                            )
+                            .truncate(),
+                        );
+                    });
+                    if let Some(line) = self.wb.custom_symbols.summary() {
+                        hint(ui, &line);
+                    }
+                    for problem in self.wb.custom_symbols.problems.iter().take(5) {
+                        ui.colored_label(crate::theme::ui_palette().warning, problem);
+                    }
                     section(ui, "Simulation", false);
                     ui.checkbox(&mut calm, "Reduce motion");
                     hint(
@@ -158,7 +216,18 @@ impl NovoApp {
         if density != self.settings.xref_density() {
             self.settings.xref_density = density.id().into();
         }
+        if autosave != self.settings.autosave_interval().as_secs() as u32 {
+            self.settings.autosave_seconds = autosave;
+            self.backend
+                .set_autosave_interval(self.settings.autosave_interval());
+            // A shorter wait takes effect now, not after the old one.
+            self.next_tick = Instant::now();
+        }
         self.settings.company_macros = company;
+        if symbols != self.settings.symbol_folder || reload_symbols {
+            self.settings.symbol_folder = symbols;
+            self.wb.custom_symbols.key = None;
+        }
         self.settings.move_leaves_wires = !carries;
         self.settings.reduce_motion = calm;
         if modal.inner || modal.should_close() {

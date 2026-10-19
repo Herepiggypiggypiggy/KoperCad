@@ -212,6 +212,38 @@ impl Library {
         (Library { symbols, aliases }, problems)
     }
 
+    /// This library with the symbols of `extra` added (a user or company
+    /// folder over a built-in pack). A symbol whose id or alias is already
+    /// taken is left out and reported; the built-in symbols always win.
+    pub fn layered(mut self, extra: &Library) -> (Library, Vec<LoadError>) {
+        let mut problems = Vec::new();
+        for symbol in extra.iter() {
+            if self.symbols.contains_key(&symbol.id) {
+                problems.push(LoadError::Duplicate {
+                    id: symbol.id.clone(),
+                });
+                continue;
+            }
+            if let Some((alias, other)) = symbol
+                .aliases
+                .iter()
+                .find_map(|a| self.aliases.get(a).map(|other| (a, other)))
+            {
+                problems.push(LoadError::DuplicateAlias {
+                    alias: alias.clone(),
+                    id: symbol.id.clone(),
+                    other: other.clone(),
+                });
+                continue;
+            }
+            for alias in &symbol.aliases {
+                self.aliases.insert(alias.clone(), symbol.id.clone());
+            }
+            self.symbols.insert(symbol.id.clone(), symbol.clone());
+        }
+        (self, problems)
+    }
+
     /// Looks up a symbol by id.
     pub fn get(&self, id: &str) -> Option<&Symbol> {
         self.symbols.get(id)

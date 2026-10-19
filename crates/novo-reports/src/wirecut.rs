@@ -127,7 +127,7 @@ fn number_text(v: f64) -> String {
 
 /// Where a wire end goes: `=A1+CAB-K1:13`, or the potential's name with
 /// `(feed)` for the supply side of a potential feed.
-fn end_designation(project: &Project, pin: PinRef) -> String {
+pub(crate) fn end_designation(project: &Project, pin: PinRef) -> String {
     if let Some(SymbolRole::PotentialFeed { potential }) =
         project.symbol(pin.symbol).map(|s| &s.role)
         && let Some(p) = project.potential(*potential)
