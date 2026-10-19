@@ -55,6 +55,8 @@ pub enum Target {
     Symbol(String),
     /// Start placing a symbol as a function of an existing device.
     Child { symbol: String, device: DeviceId },
+    /// Start or resume a lesson, by its id.
+    Lesson(String),
 }
 
 /// What kind of thing a row is, shown as a label in front of it.
@@ -67,6 +69,7 @@ pub enum Kind {
     Cable,
     Wire,
     Symbol,
+    Lesson,
 }
 
 impl Kind {
@@ -79,6 +82,7 @@ impl Kind {
             Kind::Cable => "Cable",
             Kind::Wire => "Wire",
             Kind::Symbol => "Symbol",
+            Kind::Lesson => "Lesson",
         }
     }
 }
@@ -122,6 +126,21 @@ pub struct Sources<'a> {
     pub library: Option<&'a Library>,
     pub keymap: &'a Keymap,
     pub context: Context,
+    /// The lessons on offer, for `lesson wheel` and a bare topic word.
+    pub lessons: &'a [LessonEntry],
+}
+
+/// A lesson as the field searches it. The app builds these from its
+/// catalog, so this crate needs no lesson engine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LessonEntry {
+    pub id: String,
+    pub title: String,
+    /// What the row says after the title (the summary).
+    pub detail: String,
+    /// Everything else a person may type: summary and topics in both
+    /// languages, lower case.
+    pub words: String,
 }
 
 /// The field's memory: recent picks, newest first, and the symbol
@@ -248,6 +267,7 @@ impl Palette {
                     })
             });
             command_rows(query, wants_next, names_part, sources, &mut rows);
+            lesson_rows(query, sources.lessons, &mut rows);
         }
         if let Some(library) = sources.library {
             for hit in self.symbols.search(library, query).into_iter().take(10) {
@@ -593,6 +613,48 @@ fn project_rows(project: &Project, query: &str, rows: &mut Vec<Row>) {
         }
     }
     wire_rows(project, query, rows);
+}
+
+/// The words that say a query is about lessons (`lesson wheel`).
+const LESSON_WORDS: [&str; 4] = ["lesson", "learn", "les", "leren"];
+
+/// Lessons by title, or by a topic word: `wheel`, `lesson wheel`, `les
+/// klemmen`. With the word `lesson` the lessons come first; without it
+/// they come after the commands and symbols that match as well.
+fn lesson_rows(query: &str, lessons: &[LessonEntry], rows: &mut Vec<Row>) {
+    let lower = query.to_lowercase();
+    let mut words: Vec<&str> = lower.split_whitespace().collect();
+    let explicit = words.first().is_some_and(|w| LESSON_WORDS.contains(w));
+    if explicit {
+        words.remove(0);
+    }
+    if words.is_empty() {
+        return;
+    }
+    let text = words.join(" ");
+    for lesson in lessons {
+        let title = fuzzy::score(&text, &lesson.title)
+            .filter(|s| *s >= RECENT_MIN_MATCH)
+            .map(|s| s - 100);
+        let by_words = words
+            .iter()
+            .all(|w| lesson.words.contains(w) || lesson.title.to_lowercase().contains(w))
+            .then_some(150);
+        let Some(score) = title.or(by_words) else {
+            continue;
+        };
+        rows.push(Row {
+            target: Target::Lesson(lesson.id.clone()),
+            kind: Kind::Lesson,
+            label: lesson.title.clone(),
+            detail: lesson.detail.clone(),
+            group: "",
+            completion: None,
+            shortcut: None,
+            disabled: None,
+            score: if explicit { 50_000 + score } else { score },
+        });
+    }
 }
 
 /// Wires by number: `105` or `wire 105`. An exact number comes after an

@@ -370,6 +370,31 @@ impl LearnState {
             .cloned()
     }
 
+    /// The lessons the command field searches: title, and the summary and
+    /// topics in both languages as the words a person may type.
+    pub(super) fn palette_entries(&self) -> Vec<novo_workflow::palette::LessonEntry> {
+        self.catalog
+            .visible(self.show_drafts)
+            .map(|e| {
+                let l = &e.lesson;
+                let words = [
+                    l.summary(Lang::En),
+                    l.summary(Lang::Nl),
+                    l.title(Lang::Nl),
+                    &l.topics.join(" "),
+                ]
+                .join(" ")
+                .to_lowercase();
+                novo_workflow::palette::LessonEntry {
+                    id: l.id.clone(),
+                    title: l.title(self.lang).to_owned(),
+                    detail: l.summary(self.lang).to_owned(),
+                    words,
+                }
+            })
+            .collect()
+    }
+
     /// The id of the lesson being done.
     pub(super) fn running(&self) -> Option<&str> {
         self.run.as_ref().map(|r| r.lesson().id.as_str())
@@ -957,6 +982,16 @@ impl NovoApp {
         self.learn.flash_until = Some(Instant::now() + Duration::from_millis(2500));
         self.learn.revealed = None;
         self.learn_start_demo();
+    }
+
+    /// A lesson picked in the command field: resume it when it is the one
+    /// on the card, else start it.
+    pub(super) fn learn_run_command_lesson(&mut self, id: &str) {
+        if self.learn.running() == Some(id) {
+            self.continue_lesson();
+        } else {
+            self.start_lesson(id);
+        }
     }
 
     /// `help.learn`, with or without a word to look for, and the

@@ -850,3 +850,19 @@ fn the_window_lists_a_chosen_path_in_its_order() {
     d.app.run_command(&d.ctx.clone(), "help.learn", None);
     assert!(d.app.learn.only_path.is_none(), "opening plainly clears it");
 }
+
+#[test]
+fn the_command_field_finds_and_starts_a_lesson() {
+    let (_dir, mut d) = drive();
+    let entries = d.app.learn.palette_entries();
+    assert_eq!(entries[0].id, "tiny");
+    assert_eq!(entries[0].title, "Tiny lesson");
+    let ctx = d.ctx.clone();
+    d.app
+        .run_target(&ctx, novo_workflow::palette::Target::Lesson("tiny".into()));
+    d.frame();
+    assert_eq!(step(&d), "hello", "picking the row starts the lesson");
+    d.app
+        .run_target(&ctx, novo_workflow::palette::Target::Lesson("tiny".into()));
+    assert_eq!(step(&d), "hello", "picking it again resumes, not restarts");
+}

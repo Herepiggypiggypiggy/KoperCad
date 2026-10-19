@@ -14,7 +14,7 @@ thread and the reviewers. Design: `docs/design/lesson-plan.md` (section 5 lists 
 ## Next, in order
 1. PR 4 Paths (`paths.toml`) at the top of the Learn window: in review (PR 958 is merged)
 2. PR 5 "Lesson:" chips on panels (terminals, cables, wire list, cabinet drawers)
-3. PR 6 Ctrl+K finds lessons by title and topic
+3. PR 6 Ctrl+K finds lessons by title and topic (`Target::Lesson`, `LessonEntry`): in review
 4. Start panel line "Start with: First hour" / "Continue: <lesson>"
 5. Promote lessons from `early` to `ready` as their authors close the GAPs
 
