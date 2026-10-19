@@ -19,7 +19,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
     Cable, CableCore, ChangeSet, DeviceId, DeviceKind, DeviceTag, Document, Endpoint, Part, PartId,
-    Placement, Project, SymbolInstance, SymbolRole, TerminalId, Wire,
+    Placement, Point, Project, SymbolInstance, SymbolRole, TerminalId, TextContent, TextPlacement,
+    Wire,
 };
 
 use super::draw::{Drawing, Role, draw};
@@ -81,12 +82,22 @@ struct NewCable {
     cores: Vec<String>,
 }
 
+/// A free text on a drawn page.
+#[derive(Debug, Clone)]
+struct NewText {
+    page: usize,
+    text: String,
+    at: Point,
+}
+
 /// What an import would do.
 #[derive(Debug, Clone)]
 pub struct PxfPlan {
     structures: Vec<NewStructure>,
     pages: Vec<NewPage>,
     drawing: Drawing,
+    /// Free texts of the drawn pages.
+    texts: Vec<NewText>,
     devices: Vec<NewDevice>,
     cables: Vec<NewCable>,
     /// Tags the file has that the project already holds.
@@ -300,6 +311,22 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
     } else {
         Drawing::default()
     };
+    let texts: Vec<NewText> = if opts.draw {
+        file.texts
+            .iter()
+            .filter_map(|t| {
+                let (page, (x, y)) = (t.page?, t.position?);
+                let text = t.text.get(&opts.lang).trim().to_string();
+                (created.contains(&page) && !text.is_empty()).then(|| NewText {
+                    page,
+                    text,
+                    at: Point::new(x, super::draw::PAGE_HEIGHT - y),
+                })
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     report.moved("pages", pages.len());
     report.lost(
         "generated report pages",
@@ -331,7 +358,12 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             st.unplaced,
             "the file's library does not explain them, so they are not placed",
         );
-        report.lost("texts", file.texts.len(), "free texts are not placed yet");
+        report.moved("free texts", texts.len());
+        report.lost(
+            "free texts",
+            file.texts.len() - texts.len(),
+            "empty, or on a page that is not drawn",
+        );
         report.note(format!(
             "Drawn: {} circuit-diagram pages, {} symbols from KoperCAD's library, {} as labelled boxes, {} interruption points, {} nets joined by EPLAN's rules into {} wires. Symbol artwork is inferred (a box where no KoperCAD symbol fits); positions, pin counts, tags and which points are one net are read from the file. Wire routes are plain right-angle runs, not EPLAN's lines.",
             st.pages, st.library_symbols, st.box_symbols, st.interruptions, st.nets, st.wires
@@ -440,6 +472,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         structures,
         pages,
         drawing,
+        texts,
         devices,
         cables,
         existing,
@@ -477,6 +510,8 @@ impl PxfPlan {
             + self.pages.len()
             + self.drawing.symbols.len()
             + self.drawing.wires.len()
+            + self.texts.len()
+            + self.drawing.stats.box_symbols
             + self
                 .devices
                 .iter()
@@ -647,7 +682,39 @@ impl PxfPlan {
                     x.pass_through = s.pass_through.clone();
                 })?;
             }
+            if !s.label.is_empty() {
+                // Boxes carry no artwork of their own: name the function.
+                tx.add_text(
+                    page,
+                    TextContent::Literal {
+                        text: s.label.clone(),
+                    },
+                    TextPlacement {
+                        offset: Point::new(0.0, -2.5),
+                        ..Default::default()
+                    },
+                    Some(id.into()),
+                )?;
+                created += 1;
+            }
             placed.push(Some(id));
+            created += 1;
+        }
+        for t in &self.texts {
+            let Some(&page) = page_ids.get(&t.page) else {
+                continue;
+            };
+            tx.add_text(
+                page,
+                TextContent::Literal {
+                    text: t.text.clone(),
+                },
+                TextPlacement {
+                    offset: t.at,
+                    ..Default::default()
+                },
+                None,
+            )?;
             created += 1;
         }
         for w in &self.drawing.wires {

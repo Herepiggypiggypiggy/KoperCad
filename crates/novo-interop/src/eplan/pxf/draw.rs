@@ -61,6 +61,9 @@ pub(super) struct DrawnSymbol {
     pub bridges: Vec<Vec<u16>>,
     pub pass_through: Vec<Vec<u16>>,
     pub role: Role,
+    /// Text shown beside a labelled box: the function the placement stands
+    /// for. Empty for library symbols, which carry their own artwork.
+    pub label: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -292,6 +295,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             y: 0.0,
             dirs: 0,
         });
+        let mut box_label = String::new();
         let (key, origin, pins, bridges, pass_through, pin_of_port) = match lib_symbol {
             Some(sym) => {
                 let pins = model_pins(sym);
@@ -349,6 +353,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                     function.clone()
                 };
                 *out.stats.box_functions.entry(label).or_default() += 1;
+                box_label = function.clone();
                 (
                     BOX_SYMBOL.to_string(),
                     origin,
@@ -393,6 +398,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                 bridges,
                 pass_through,
                 role,
+                label: box_label,
             },
             page_pos,
         });
@@ -471,6 +477,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                 bridges,
                 pass_through: pass,
                 role: Role::Interruption(name),
+                label: String::new(),
             },
             page_pos: BTreeMap::from([(0, Point::new(x, PAGE_HEIGHT - y))]),
         });

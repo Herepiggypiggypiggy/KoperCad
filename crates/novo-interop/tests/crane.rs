@@ -68,6 +68,16 @@ fn applying_names_the_project_and_is_one_undo_step() {
     assert_eq!(p.cables().count(), 2);
     assert_eq!(p.symbols().count(), 6);
     assert_eq!(p.wires().count(), 4);
+    // The free text of the page is placed, flipped to KoperCAD's y down.
+    let texts: Vec<_> = p.texts().collect();
+    assert_eq!(texts.len(), 1);
+    assert_eq!(
+        texts[0].content,
+        novo_core::TextContent::Literal {
+            text: "Slewing drive".into()
+        }
+    );
+    assert_eq!(texts[0].placement.offset, novo_core::Point::new(80.0, 37.0));
     // The drawn terminals are the strip's terminals, the coil is a device.
     use novo_core::SymbolRole;
     let roles = |f: fn(&SymbolRole) -> bool| p.symbols().filter(|s| f(&s.role)).count();
