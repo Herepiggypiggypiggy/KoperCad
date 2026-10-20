@@ -298,3 +298,26 @@ fn a_device_takes_its_body_colour_from_its_family() {
     // No class known: the kind's own colour applies.
     assert_eq!(build().get(id(ItemKind::Device, 5)).unwrap().tint, None);
 }
+
+#[test]
+fn a_device_of_a_known_family_gets_its_typical_shape_at_its_own_size() {
+    let mut inp = inputs();
+    inp.classes.insert(5, DeviceClass::Protection);
+    let s = from_layout(&layout(), &inp, &Options::default());
+    let dev = s.get(id(ItemKind::Device, 5)).unwrap();
+    let Shape::Part(k) = dev.shape else {
+        panic!("a typical shape")
+    };
+    assert_eq!(
+        crate::device_shape::spec(k),
+        Some((DeviceClass::Protection, dev.size))
+    );
+    // A generic or unknown device stays a box.
+    inp.classes.insert(5, DeviceClass::Generic);
+    let s = from_layout(&layout(), &inp, &Options::default());
+    assert_eq!(s.get(id(ItemKind::Device, 5)).unwrap().shape, Shape::Box);
+    assert_eq!(
+        build().get(id(ItemKind::Device, 5)).unwrap().shape,
+        Shape::Box
+    );
+}

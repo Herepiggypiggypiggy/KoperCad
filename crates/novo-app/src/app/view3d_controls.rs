@@ -147,6 +147,7 @@ pub(super) fn toolbar(
                 controls.layers.shell,
                 controls.layers.door,
                 controls.layers.wires,
+                controls.layers.shapes,
                 controls.shadows,
                 controls.ssao && controls.ssao_available,
                 controls.missing_data,
@@ -167,6 +168,14 @@ pub(super) fn toolbar(
                     changed.layers |= toggle(ui, &mut layers.door, "Door", "Show the door");
                     changed.layers |=
                         toggle(ui, &mut layers.wires, "Wires", "Show the routed wires");
+                    changed.layers |= toggle(
+                        ui,
+                        &mut layers.shapes,
+                        "Device shapes",
+                        "Draw each device with the typical form of its family (breaker, contactor, \
+                         terminal block, PLC, drive, power supply) at the part's real width, height \
+                         and depth. The details are typical, not the maker's. Off draws plain boxes.",
+                    );
                     toggle(
                         ui,
                         &mut controls.surfaces,
