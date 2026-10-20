@@ -537,6 +537,7 @@ pub const DUTCH: &[Aliases] = &[
             "kortsluitvastheid",
         ],
     ),
+    nl("ai.assistant", &["vraag claude"], &["assistent", "chat"]),
     nl(
         "simulate.motor-start",
         &[],
