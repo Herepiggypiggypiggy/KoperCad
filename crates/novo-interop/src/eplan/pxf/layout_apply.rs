@@ -55,9 +55,8 @@ impl Tags {
     }
 }
 
-/// How many devices the sheet shows that have no device to stand for them,
-/// neither in this import nor already in the project (so they cannot be
-/// placed). `tags` holds both.
+/// How many devices the sheet shows that have no device of this import to
+/// stand for them (so they cannot be placed).
 pub(super) fn unmatched(sheet: &LayoutSheet, tags: &[DeviceTag]) -> usize {
     let want_loc = format!("+{}-", sheet.location);
     let texts: Vec<String> = tags
@@ -169,29 +168,6 @@ mod tests {
     }
 
     #[test]
-    fn a_device_the_project_already_holds_is_not_counted_as_unplaced() {
-        let sheet = LayoutSheet {
-            page: 0,
-            location: "CAB1".into(),
-            cabinet: String::new(),
-            width: 600.0,
-            height: 760.0,
-            margin: 15.0,
-            rails: Vec::new(),
-            ducts: Vec::new(),
-            devices: vec![device("-Q1"), device("-Q2")],
-            scale: 1.0,
-            notes: Vec::new(),
-        };
-        // -Q1 comes with the import, -Q2 is already in the project.
-        let tags = [
-            DeviceTag::parse("=A1+CAB1-Q1").unwrap(),
-            DeviceTag::parse("=A1+CAB1-Q2").unwrap(),
-        ];
-        assert_eq!(unmatched(&sheet, &tags), 0);
-    }
-
-    #[test]
     fn sheet_devices_without_a_device_in_the_import_are_counted() {
         let sheet = LayoutSheet {
             page: 0,
@@ -212,5 +188,8 @@ mod tests {
             DeviceTag::parse("=A1+CAB2-Q2").unwrap(),
         ];
         assert_eq!(unmatched(&sheet, &tags), 2);
+        // A device the project already holds stands for its sheet entry too.
+        let more = [tags[0].clone(), DeviceTag::parse("=A1+CAB1-Q3").unwrap()];
+        assert_eq!(unmatched(&sheet, &more), 1);
     }
 }
