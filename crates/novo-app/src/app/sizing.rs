@@ -316,11 +316,16 @@ pub(super) fn show_window(
     }
     let mut open = true;
     let mut lesson = None;
-    let window = super::panel::dialog(ctx, "Size the enclosure", [380.0, 0.0])
+    // Tall by default: the result and notes sit below the inputs, and a
+    // window sized to its first frame cut them off.
+    let window = super::panel::dialog(ctx, "Size the enclosure", [380.0, 620.0])
         .open(&mut open)
         .show(ctx, |ui| {
+            show_panel(ui, state, devices, plate, fit);
+            // The lesson link comes last, so the result is the first thing
+            // the window shows.
+            ui.add_space(8.0);
             lesson = super::learn_ui::chip_button(ui, chip);
-            show_panel(ui, state, devices, plate, fit)
         });
     if let Some(w) = window {
         super::cabinet_bar::note_rect(

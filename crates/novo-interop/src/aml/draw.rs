@@ -465,8 +465,12 @@ pub(super) fn draw(
             .map_or(297.0, |p| p.format.size_mm().1);
         let d = design(sym, page_height);
         let role = match (&sym.terminal, sym.device, device) {
-            _ if sym.kind == "interruption" => SymbolRole::Interruption {
-                name: sym.net.clone().unwrap_or_default(),
+            // Two unnamed points would pair by the empty name.
+            _ if sym.kind == "interruption" => match sym.net.as_deref().map(str::trim) {
+                Some(name) if !name.is_empty() => SymbolRole::Interruption {
+                    name: name.to_string(),
+                },
+                _ => SymbolRole::Unassigned,
             },
             (Some(name), Some(di), _) => match terminals.get(&(di, name.clone())) {
                 Some(&t) => SymbolRole::Terminal { terminals: vec![t] },
@@ -833,19 +837,33 @@ fn draw_runs(
 /// The bends of a run from `from` to `to`: points on the straight line
 /// between their neighbours are not bends.
 fn simplify(from: Point, interior: Vec<Point>, to: Point) -> Vec<Point> {
-    let mut all = vec![from];
-    all.extend(interior);
-    all.push(to);
-    let mut i = 1;
-    while i + 1 < all.len() {
-        let (a, b, c) = (all[i - 1], all[i], all[i + 1]);
+    // One pass: a point is dropped when it continues the line from the last kept one.
+    let mut kept = vec![from];
+    for (k, b) in interior.iter().copied().enumerate() {
+        let c = interior.get(k + 1).copied().unwrap_or(to);
+        let a = kept[kept.len() - 1];
         let cross = (b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x);
         let along = (b.x - a.x) * (c.x - b.x) + (b.y - a.y) * (c.y - b.y);
-        if cross.abs() < 1e-6 && along >= 0.0 {
-            all.remove(i);
-        } else {
-            i += 1;
+        if !(cross.abs() < 1e-6 && along >= 0.0) {
+            kept.push(b);
         }
     }
-    all[1..all.len() - 1].to_vec()
+    kept.remove(0);
+    kept
+}
+
+#[cfg(test)]
+mod simplify_tests {
+    use super::*;
+
+    #[test]
+    fn a_long_collinear_run_keeps_only_its_bends() {
+        let line: Vec<Point> = (1..50_000).map(|i| Point::new(i as f64, 0.0)).collect();
+        let end = Point::new(50_000.0, 0.0);
+        assert!(simplify(Point::new(0.0, 0.0), line.clone(), end).is_empty());
+        let mut bent = line;
+        bent.push(end);
+        let kept = simplify(Point::new(0.0, 0.0), bent, Point::new(50_000.0, 7.0));
+        assert_eq!(kept, vec![end]);
+    }
 }

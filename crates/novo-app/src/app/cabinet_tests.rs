@@ -875,15 +875,121 @@ fn place_every_panel_sets_plates_places_all_and_skips_empty_panels() {
     let texts: Vec<_> = d.app.messages().iter().map(|m| m.text.clone()).collect();
     assert!(
         texts.iter().any(
-            |t| t.starts_with("Placed 33 devices on 2 panels.") && t.contains("+CAB3, skipped")
+            |t| t.starts_with("Placed 33 devices on 2 panels. 1 plate enlarged.")
+                && t.contains("+CAB3, skipped")
         ),
         "{texts:?}"
+    );
+
+    // The view lands on the panel with the most devices, and the result stays
+    // on screen as a banner until closed.
+    assert_eq!(
+        d.app.cabinet.location.as_ref().unwrap().to_string(),
+        "+CAB1"
+    );
+    assert!(
+        d.app
+            .cabinet
+            .result
+            .as_ref()
+            .is_some_and(|(t, _)| t.starts_with("Placed 33 devices on 2 panels"))
     );
 
     // One undo step takes all of it back.
     d.app.run(&ctx, Action::Undo);
     d.frame();
     assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
+}
+
+/// Timing of the plate search on a crowded panel, run by hand:
+/// `cargo test -p novo-app plate_search_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "timing probe"]
+fn plate_search_timing_on_a_crowded_panel() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Crowded", |tx| {
+            tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "", true)?;
+            let part = tx.add_part("ACME", "P")?;
+            tx.set_property(part, "width_mm", Some(Value::Float(45.0)))?;
+            tx.set_property(part, "height_mm", Some(Value::Float(90.0)))?;
+            for n in 1..=400 {
+                let device =
+                    tx.add_device(DeviceTag::parse(&format!("+CAB1-K{n}")).unwrap(), "")?;
+                tx.assign_part(device, part)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let layout = layout_of(&d, cab).unwrap();
+    let rules = novo_layout::rules::RuleSet::standard();
+    let t = std::time::Instant::now();
+    let plate = super::cabinet_rules::plate_that_holds(project(&d), cab, &layout, &rules);
+    println!(
+        "plate_that_holds, 400 devices: {:?} in {:?}",
+        plate,
+        t.elapsed()
+    );
+}
+
+#[test]
+fn place_every_panel_says_when_it_used_guessed_sizes() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Two panels, no sizes", |tx| {
+            tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "", true)?;
+            tx.add_structure(DeviceTag::parse("+CAB2").unwrap(), "", true)?;
+            for tag in ["+CAB1-K1", "+CAB2-K1", "+CAB2-K2"] {
+                tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app
+        .cabinet_ask(Ask::PlaceEveryPanel, Some(cab), None, &[]);
+    d.frame();
+    let (text, warn) = d.app.cabinet.result.clone().expect("a result banner");
+    assert!(warn, "{text}");
+    assert_eq!(
+        text,
+        "Placed 3 devices on 2 panels, 3 at a guessed 45 x 90 mm."
+    );
+    let texts: Vec<_> = d.app.messages().iter().map(|m| m.text.clone()).collect();
+    assert!(
+        texts
+            .iter()
+            .any(|t| t.contains("3 devices have no size in their part")
+                && t.contains("guessed 45 x 90 mm")),
+        "{texts:?}"
+    );
+    // The panel with the most devices is shown.
+    assert_eq!(
+        d.app.cabinet.location.as_ref().unwrap().to_string(),
+        "+CAB2"
+    );
+    // The banner belongs to the project it was raised on.
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.cabinet.result.is_none());
 }
 
 #[test]
@@ -1550,4 +1656,15 @@ fn a_non_text_surface_rules_property_is_a_sentence() {
     let (rules, problems) = novo_layout::rules::model::surface_rules(&p, cab);
     assert!(rules.rules.is_empty());
     assert_eq!(problems.len(), 1);
+}
+
+#[test]
+fn the_landing_panel_prefers_left_out_devices_then_the_most_placed() {
+    use super::cabinet::lands_before;
+    assert!(lands_before(None, false, 1));
+    assert!(lands_before(Some((false, 5)), true, 1));
+    assert!(!lands_before(Some((true, 1)), false, 9));
+    assert!(lands_before(Some((false, 2)), false, 3));
+    assert!(!lands_before(Some((false, 3)), false, 3));
+    assert!(!lands_before(Some((true, 1)), true, 9));
 }

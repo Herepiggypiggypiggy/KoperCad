@@ -1020,6 +1020,7 @@ impl NovoApp {
         self.wb.field.close();
         self.wb.commissioning = None;
         self.wb.sheet = 0;
+        self.cabinet.result = None;
         self.add_generated_pages();
         // Nothing to commission in a closed project.
         if !self.is_open() && self.workspace() == workspace::Workspace::Commissioning {

@@ -187,8 +187,12 @@ impl Models {
                     *outcome = Outcome::Drawn(k);
                     arrived = true;
                 }
-                GeometryState::Ready(_) | GeometryState::Failed(_) => *outcome = Outcome::Unusable,
-                GeometryState::None | GeometryState::Pending => {}
+                // `None` after a request means the service forgot the key (a
+                // Retry elsewhere): not waiting for it forever.
+                GeometryState::Ready(_) | GeometryState::Failed(_) | GeometryState::None => {
+                    *outcome = Outcome::Unusable;
+                }
+                GeometryState::Pending => {}
             }
         }
         if arrived {

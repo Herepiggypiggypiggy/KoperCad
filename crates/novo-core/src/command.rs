@@ -40,7 +40,7 @@ pub enum Command {
         page: PageId,
         name: String,
     },
-    /// Renames a group (`=10D41`) or panel (`+K1B1G1`) everywhere its name
+    /// Renames a group (`=20D41`) or panel (`+BAY1G1`) everywhere its name
     /// is copied; see [`Tx::rename_level`].
     RenameLevel {
         aspect: crate::tag::Aspect,
@@ -60,7 +60,7 @@ pub enum Command {
         kind: PageKind,
         #[serde(default)]
         format: PageFormat,
-        /// Page group (`=10D41`) and panel (`+K1B1G1`); see [`Page::structure`].
+        /// Page group (`=20D41`) and panel (`+BAY1G1`); see [`Page::structure`].
         #[serde(default)]
         structure: DeviceTag,
     },

@@ -13,6 +13,7 @@ pub mod camera;
 pub mod cube;
 pub mod cull;
 pub mod demo;
+pub mod device_shape;
 pub mod dimension;
 pub mod door;
 pub mod drag_plane;

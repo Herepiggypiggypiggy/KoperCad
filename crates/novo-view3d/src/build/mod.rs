@@ -311,6 +311,11 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
         }
         item.label = inputs.labels.get(&p.id).cloned();
         item.tint = inputs.classes.get(&p.id).map(|c| c.tint());
+        if let Some(class) = inputs.classes.get(&p.id)
+            && let Some(k) = crate::device_shape::key(*class, item.size)
+        {
+            item.shape = Shape::Part(k);
+        }
         scene.push(item);
     }
 
