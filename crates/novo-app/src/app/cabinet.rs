@@ -34,6 +34,19 @@ const DEFAULT_PLATE: MountingPlate = MountingPlate {
     margin: 10.0,
 };
 
+/// Whether a panel with `left` devices left out and `count` placed is the one
+/// to show after All panels, over the best so far (`(left, count)`): a panel
+/// with devices left out wins over one without, and among panels of the same
+/// kind the first with the most placed devices wins.
+pub(super) fn lands_before(best: Option<(bool, usize)>, left: bool, count: usize) -> bool {
+    match best {
+        None => true,
+        Some((best_left, _)) if left != best_left => left,
+        Some((true, _)) => false,
+        Some((false, best_count)) => count > best_count,
+    }
+}
+
 /// What the plate Place all would need was worked out for: the panel, its
 /// plate, how many devices are placed and not, and the rules.
 type FitKey = (
@@ -47,7 +60,7 @@ type FitKey = (
 pub(super) struct CabinetState {
     pub(super) view: CanvasView,
     pub(super) scene: CabinetScene,
-    /// The panel shown, by its location (`+K1B1G1`).
+    /// The panel shown, by its location (`+BAY1G1`).
     pub(super) location: Option<DeviceTag>,
     /// A `Place all` plan waiting for Enter.
     pub(super) preview: Option<Plan>,
@@ -491,6 +504,7 @@ impl NovoApp {
             .is_none_or(|l| !locations.contains(l))
         {
             self.cabinet.location = locations.first().cloned();
+            self.cabinet.result = None;
             self.cabinet.preview = None;
             self.cabinet.surface_preview.clear();
         }
@@ -2286,6 +2300,7 @@ impl NovoApp {
                 || matches!(
                     ask,
                     Ask::PlaceAll
+                        | Ask::PlaceEveryPanel
                         | Ask::SetRailLengths(_)
                         | Ask::SetPlate(_)
                         | Ask::SetPlateSize(..)
@@ -2550,8 +2565,6 @@ impl NovoApp {
         self.cabinet.routes = true;
     }
 
-    /// Runs an edit of the model from the Cabinet canvas as one undo step.
-    /// True when the edit was made.
     /// Gives every panel with devices a plate that holds them (the default
     /// where it has none, a bigger one found by planning where it is too
     /// small; a plate that is big enough stays) and places the devices by the
@@ -2566,6 +2579,7 @@ impl NovoApp {
         // The panel to show afterwards: the first with devices left out, else
         // the one with the most devices.
         let mut land: Option<(bool, usize, DeviceTag)> = None;
+        let mut enlarged = 0;
         let mut empty: Vec<String> = Vec::new();
         let done = self.cabinet_edit("Place all panels", |tx| {
             let all: Vec<_> = tx
@@ -2594,6 +2608,7 @@ impl NovoApp {
                         cabinet_rules::plate_that_holds(tx.project(), id, &layout, &rules)
                 {
                     set_plate(tx, id, bigger)?;
+                    enlarged += 1;
                     if let Some(layout) = load(tx.project(), id) {
                         plan = cabinet_rules::plan(tx.project(), id, &layout, &rules).0;
                     }
@@ -2604,12 +2619,9 @@ impl NovoApp {
                     apply_plan(tx, id, &plan)?;
                 }
                 left_out += plan.unplaced.len();
-                let key = (!plan.unplaced.is_empty(), plan.placements.len());
-                if land
-                    .as_ref()
-                    .is_none_or(|(l, n, _)| (key.0 && !l) || (key.0 == *l && !key.0 && key.1 > *n))
-                {
-                    land = Some((key.0, key.1, panel));
+                let (left, count) = (!plan.unplaced.is_empty(), plan.placements.len());
+                if lands_before(land.as_ref().map(|&(l, n, _)| (l, n)), left, count) {
+                    land = Some((left, count, panel));
                 }
             }
             Ok(())
@@ -2631,6 +2643,12 @@ impl NovoApp {
                 if panels == 1 { "panel" } else { "panels" }
             )
         };
+        if enlarged > 0 {
+            text.push_str(&format!(
+                " {enlarged} {} enlarged.",
+                if enlarged == 1 { "plate" } else { "plates" }
+            ));
+        }
         if !empty.is_empty() {
             text.push_str(&format!(" No devices on {}, skipped.", empty.join(", ")));
         }
@@ -2680,6 +2698,8 @@ impl NovoApp {
         self.message(level, text);
     }
 
+    /// Runs an edit of the model from the Cabinet canvas as one undo step.
+    /// True when the edit was made.
     pub(super) fn cabinet_edit(
         &mut self,
         label: &str,

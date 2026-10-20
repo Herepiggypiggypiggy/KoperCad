@@ -114,11 +114,11 @@ pub struct PageContents {
     pub wires: Vec<WireId>,
 }
 
-/// A panel: every page with the same location (`+K1B1G1`), whatever page
-/// group (`=10D41`) it is filed under. Those pages are one cabinet layout.
+/// A panel: every page with the same location (`+BAY1G1`), whatever page
+/// group (`=20D41`) it is filed under. Those pages are one cabinet layout.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Panel {
-    /// The location levels only, e.g. `+K1B1G1`.
+    /// The location levels only, e.g. `+BAY1G1`.
     pub location: DeviceTag,
     /// The page groups holding pages of the panel, in order; the empty
     /// tag stands for pages in no group.
@@ -131,7 +131,7 @@ pub struct Panel {
 /// opens the set rather than following the drawing.
 pub const CONTENTS_GENERATOR: &str = "toc";
 
-/// The generator id of the contents list of one panel: `toc@+K1B1G1`. The
+/// The generator id of the contents list of one panel: `toc@+BAY1G1`. The
 /// part after the `@` is the panel's location levels, so the list follows
 /// the panel when it is renamed ([`Tx::rename_level`](crate::Tx::rename_level)).
 pub fn panel_contents_generator(location: &[String]) -> String {
@@ -143,7 +143,7 @@ pub fn panel_contents_generator(location: &[String]) -> String {
 }
 
 /// The panel (location levels only) a generator id lists, for
-/// `toc@+K1B1G1`; `None` for the project's contents list and for any other
+/// `toc@+BAY1G1`; `None` for the project's contents list and for any other
 /// generator.
 pub fn contents_scope(generator: &str) -> Option<DeviceTag> {
     let scope = generator
@@ -1319,7 +1319,7 @@ impl Project {
             .collect()
     }
 
-    /// The page groups (`=10D41`): the function levels of drawn pages and
+    /// The page groups (`=20D41`): the function levels of drawn pages and
     /// of structure nodes, in natural order. Pages in no group are not
     /// listed.
     pub fn page_groups(&self) -> Vec<DeviceTag> {
@@ -1342,7 +1342,7 @@ impl Project {
     /// The panels (locations) of the project, in natural order. A panel
     /// exists once a page or a structure node has its location, so pages
     /// in different page groups under the same location share one panel:
-    /// `=10D41+K1B1G1` and `=11D21+K1B1G1` are the same cabinet layout.
+    /// `=20D41+BAY1G1` and `=21D21+BAY1G1` are the same cabinet layout.
     pub fn panels(&self) -> Vec<Panel> {
         let mut locations: Vec<DeviceTag> = self
             .pages
