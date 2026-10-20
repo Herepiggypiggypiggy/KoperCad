@@ -51,11 +51,19 @@ pub(crate) fn wanted(h: &Heat3d) -> bool {
 /// degree ticks, then one note per active layer. It sits in the strip's own
 /// row (wrapping with it), so it can never cover a panel.
 pub(crate) fn strip(ui: &mut egui::Ui, h: &Heat3d, range: Range, top_speed: f32, top_flux: f32) {
+    let notes = notes(h, range, top_speed, top_flux);
+    if !wanted(h) && notes.is_empty() {
+        return;
+    }
+    // Own rows under the controls: a note that wrapped beside the bar broke
+    // off at the strip's left edge on a 1366 px screen.
+    ui.end_row();
     if wanted(h) {
         scale(ui, range);
+        ui.end_row();
     }
-    for line in notes(h, range, top_speed, top_flux) {
-        ui.label(egui::RichText::new(line).small());
+    if !notes.is_empty() {
+        ui.label(egui::RichText::new(notes.join("   ·   ")).small());
     }
 }
 
