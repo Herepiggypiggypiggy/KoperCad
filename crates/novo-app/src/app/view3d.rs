@@ -339,6 +339,7 @@ impl NovoApp {
                     shown = current;
                 }
                 novo_view3d::device_shape::ensure(Arc::make_mut(&mut mode.library), &shown);
+                mode.models.prune(&mut mode.library, &shown);
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
                 mode.built_hidden = mode.controls.hidden.clone();
