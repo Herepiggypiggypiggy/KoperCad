@@ -51,8 +51,8 @@ impl DataScope {
                 "Only the messages you type are sent. Claude cannot look at your drawing."
             }
             Self::Outline => {
-                "Counts, page names and device tags are sent when Claude asks for them. \
-                 No part numbers, notes or positions."
+                "The project name, page names and titles, device tags and counts are sent \
+                 when Claude asks for them. No part numbers, notes, wires or positions."
             }
             Self::Selection => {
                 "The outline, plus the full details of what you have selected at the moment \
@@ -121,7 +121,8 @@ impl Consent {
 pub const NOTICE: &str = "Your messages, and the project data allowed above, are sent over the \
 internet to Anthropic's Claude API using your own API key. Anthropic's terms and your account's \
 data settings apply to them. Claude can be wrong: check what it says, especially about \
-electrical safety, ratings and standards. Nothing is sent while this feature is off.";
+electrical safety, ratings and standards. While this feature is off, the only thing ever sent \
+is your key, when you press Check key.";
 
 #[cfg(test)]
 mod tests {

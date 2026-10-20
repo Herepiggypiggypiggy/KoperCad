@@ -69,6 +69,14 @@ pub(super) struct State {
     ledger: Ledger,
     ledger_path: Option<PathBuf>,
     session_cost: f64,
+    /// The widest scope any answer in the running conversation was given
+    /// under. If the scope later narrows, the conversation is dropped: what
+    /// Claude already read must not keep informing answers the person
+    /// restricted.
+    conv_scope: DataScope,
+    /// A wider scope the person picked while Claude is on, waiting for a
+    /// second, explicit agreement.
+    pending_scope: Option<DataScope>,
     next_proposal: u32,
     store: Option<KeyStore>,
     transport: TransportFactory,
@@ -108,6 +116,8 @@ impl State {
             ledger,
             ledger_path,
             session_cost: 0.0,
+            conv_scope: DataScope::None,
+            pending_scope: None,
             next_proposal: 1,
             store,
             transport,
@@ -123,6 +133,11 @@ impl State {
             transport,
             Arc::new(|| 1_792_000_000),
         )
+    }
+
+    #[cfg(test)]
+    pub(super) fn conversation_len(&self) -> usize {
+        self.conversation.messages.len()
     }
 
     #[cfg(test)]
@@ -174,6 +189,21 @@ impl State {
 
     fn key(&self) -> Option<(ApiKey, KeySource)> {
         self.store.as_ref().and_then(KeyStore::load)
+    }
+
+    /// Called before each message with the scope now in force. Narrower than
+    /// the conversation's scope: forget the conversation and say so.
+    fn enforce_scope(&mut self, scope: DataScope) {
+        if scope < self.conv_scope {
+            self.conversation.clear();
+            self.notes.clear();
+            self.transcript.push(Entry::Problem(
+                "Scope narrowed, so the earlier chat was cleared. Claude no longer has what it \
+                 read before."
+                    .into(),
+            ));
+        }
+        self.conv_scope = scope;
     }
 
     fn clear_chat(&mut self) {
@@ -416,6 +446,7 @@ impl NovoApp {
             None => (Snapshot::default(), Known::default()),
         };
         let st = &mut self.wb.assistant;
+        st.enforce_scope(scope);
         let mut message = String::new();
         for n in st.notes.drain(..) {
             message.push_str(&format!("[{n}]\n"));
@@ -740,23 +771,56 @@ impl NovoApp {
         }
         ui.weak(
             "The key is saved as a file in your user profile (not encrypted, not in the \
-             project file, never shown again). Anyone who can read your profile can read it. \
-             Remove it here when you stop using Claude.",
+             project file; only its last four characters are ever shown). Anyone who can read \
+             your profile can read it. Remove it here when you stop using Claude.",
         );
         ui.add_space(6.0);
 
         // 2. What Claude may see.
         ui.strong("2. What Claude may read");
-        let mut scope = self.settings.ai.consent.effective();
+        let mut scope = self
+            .wb
+            .assistant
+            .pending_scope
+            .unwrap_or_else(|| self.settings.ai.consent.effective());
         for s in DataScope::ALL {
             ui.radio_value(&mut scope, s, s.label());
             ui.indent(("scope", s.id()), |ui| {
                 ui.weak(s.describes());
             });
         }
-        if scope != self.settings.ai.consent.effective() {
-            let now = (self.wb.assistant.now)();
-            self.settings.ai.consent = Consent::give(scope, now);
+        let current = self.settings.ai.consent.effective();
+        if scope != self.wb.assistant.pending_scope.unwrap_or(current) {
+            if enabled && scope > current {
+                // Reading more needs its own yes.
+                self.wb.assistant.pending_scope = Some(scope);
+            } else {
+                self.wb.assistant.pending_scope = None;
+                let now = (self.wb.assistant.now)();
+                self.settings.ai.consent = Consent::give(scope, now);
+            }
+        }
+        if let Some(wider) = self.wb.assistant.pending_scope {
+            ui.horizontal_wrapped(|ui| {
+                ui.colored_label(
+                    pal.warning,
+                    format!(
+                        "Claude is on. Allow it to read more: \"{}\"? {}",
+                        wider.label(),
+                        wider.describes()
+                    ),
+                );
+            });
+            ui.horizontal(|ui| {
+                if ui.button("Allow").clicked() {
+                    let now = (self.wb.assistant.now)();
+                    self.settings.ai.consent = Consent::give(wider, now);
+                    self.wb.assistant.pending_scope = None;
+                }
+                if ui.button("Keep the narrower scope").clicked() {
+                    self.wb.assistant.pending_scope = None;
+                }
+            });
         }
         ui.add_space(6.0);
 
@@ -777,7 +841,8 @@ impl NovoApp {
         ui.horizontal(|ui| {
             ui.label("Thinking");
             for e in novo_ai::config::EFFORTS {
-                ui.selectable_value(&mut self.settings.ai.effort, e.to_string(), e)
+                let shown = format!("{}{}", e[..1].to_uppercase(), &e[1..]);
+                ui.selectable_value(&mut self.settings.ai.effort, e.to_string(), shown)
                     .on_hover_text("More thinking is slower and costs more.");
             }
         });
@@ -813,6 +878,10 @@ impl NovoApp {
         if enabled {
             if ui.button("Turn Claude off").clicked() {
                 self.settings.ai.enabled = false;
+                // A fresh start when it is turned on again.
+                self.wb.assistant.clear_chat();
+                self.wb.assistant.conv_scope = DataScope::None;
+                self.wb.assistant.pending_scope = None;
             }
         } else {
             ui.checkbox(&mut self.wb.assistant.agreed, "I have read this and agree");

@@ -129,14 +129,16 @@ impl KeyStore {
 #[cfg(unix)]
 fn write_private(path: &Path, text: &str) -> io::Result<()> {
     use std::io::Write;
-    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
     let mut f = fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .mode(0o600)
         .open(path)?;
-    f.write_all(text.as_bytes())
+    f.write_all(text.as_bytes())?;
+    // `mode` applies only when the file is created; tighten one that existed.
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))
 }
 
 #[cfg(not(unix))]
@@ -186,10 +188,12 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn the_key_file_is_owner_only() {
+    fn the_key_file_is_owner_only_even_when_it_existed_with_looser_rights() {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
         let store = KeyStore::new(dir.path());
+        fs::write(store.path(), "old").unwrap();
+        fs::set_permissions(store.path(), fs::Permissions::from_mode(0o644)).unwrap();
         store.save(&ApiKey::parse(KEY).unwrap()).unwrap();
         let mode = fs::metadata(store.path()).unwrap().permissions().mode();
         assert_eq!(mode & 0o077, 0);

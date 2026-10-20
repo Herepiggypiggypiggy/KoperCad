@@ -296,3 +296,63 @@ fn snapshots_grow_with_the_scope() {
     let all = snapshot_of(p, &[], DataScope::Project);
     assert!(all.project["wires"].is_array());
 }
+
+#[test]
+fn narrowing_the_scope_drops_the_chat_so_old_reads_are_not_sent_again() {
+    let mut s = setup(DataScope::Project);
+    s.script.replies.lock().unwrap().extend([
+        tool("t1", "read_project", json!({"section": "devices"})),
+        text("First answer."),
+    ]);
+    ask(&mut s, "List the devices");
+    let first_tool_result = {
+        let seen = s.script.seen.lock().unwrap();
+        let second: Value = serde_json::from_str(&seen[1].body).unwrap();
+        second["messages"][2]["content"][0]["content"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    assert!(first_tool_result.contains("tag"));
+    // The person narrows the scope, then asks again.
+    s.d.app.settings.ai.consent = Consent::give(DataScope::None, 1_792_000_100);
+    s.script
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(text("Second answer."));
+    ask(&mut s, "What did you see before?");
+    let seen = s.script.seen.lock().unwrap();
+    let last = &seen.last().unwrap().body;
+    assert!(
+        !last.contains(&first_tool_result[..40]),
+        "old tool result was resent"
+    );
+    let body: Value = serde_json::from_str(last).unwrap();
+    assert_eq!(body["messages"].as_array().unwrap().len(), 1);
+    assert!(
+        s.d.app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("Scope narrowed")
+    );
+}
+
+#[test]
+fn widening_the_scope_keeps_the_chat() {
+    let mut s = setup(DataScope::Outline);
+    s.script.replies.lock().unwrap().push_back(text("One."));
+    ask(&mut s, "hi");
+    s.d.app.settings.ai.consent = Consent::give(DataScope::Project, 1_792_000_100);
+    s.script.replies.lock().unwrap().push_back(text("Two."));
+    ask(&mut s, "again");
+    assert_eq!(s.d.app.wb.assistant.conversation_len(), 4);
+    assert!(
+        !s.d.app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("Scope narrowed")
+    );
+}
