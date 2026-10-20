@@ -1193,7 +1193,10 @@ fn heat_controls(
     use novo_heatview::cfd::Axis;
     let range = heat_3d::range(&sol.snapshot, sol.ambient);
     let mut jump = None;
-    ui.horizontal_wrapped(|ui| {
+    egui::Frame::new()
+        .inner_margin(egui::Margin::symmetric(10, 4))
+        .show(ui, |ui| {
+            ui.horizontal_wrapped(|ui| {
         ui.label("Heat");
         ui.checkbox(&mut h.slice, "Slice").on_hover_text(
             "A plane through the cabinet coloured by temperature (X across, Y up, Z out of the plate)",
@@ -1244,12 +1247,21 @@ fn heat_controls(
         ui.checkbox(&mut probe.on, "Probe").on_hover_text(
             "Click the air to read its temperature and speed there (Esc clears the point)",
         );
-        if probe.on && !probe.text.is_empty() {
-            ui.label(egui::RichText::new(&probe.text).small());
+        jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
+        if probe.on {
+            // Its own row, always there while the probe is on, so the strip
+            // does not change height when a point is picked.
+            ui.end_row();
+            let text = if probe.text.is_empty() {
+                "Probe: click the air to read its temperature and speed"
+            } else {
+                probe.text.as_str()
+            };
+            ui.label(egui::RichText::new(text).small());
         }
         heat_legend::strip(ui, h, range, top_speed, top_flux);
-        jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
-    });
+            });
+        });
     jump
 }
 
