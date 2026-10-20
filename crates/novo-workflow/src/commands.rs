@@ -1539,6 +1539,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "ai.assistant",
+        "Ask Claude",
+        "View",
+        &["claude", "ai", "assistant", "chat", "anthropic", "ask"],
+        Needs::Nothing,
+    ),
+    cmd(
         "simulate.motor-start",
         "Simulate motor start",
         "View",

@@ -68,6 +68,8 @@ dirs = "6"
 zip = { version = "8", default-features = false, features = ["deflate"] }
 # Reads BMEcat catalogs (novo-parts).
 quick-xml = "0.41"
+# HTTPS client for the optional Claude integration (novo-ai); rustls, no system TLS or admin rights.
+ureq = "3"
 # Hashes imported maker files for their source record (novo-parts).
 sha2 = "0.11"
 # Decodes punch item photos for the viewer (novo-app): PNG and JPEG only.

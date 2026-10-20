@@ -199,6 +199,8 @@ pub(crate) struct Workbench {
     /// The DXF background panel, while open; inside, the values being
     /// edited before they are committed.
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
+    /// The Claude assistant window and its conversation.
+    pub(super) assistant: super::assistant::State,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
     /// The PDF options dialog (File > Export drawings > Export PDF...), while open.
@@ -318,6 +320,7 @@ impl Default for Workbench {
             changes: None,
             changes_closed: false,
             background_panel: None,
+            assistant: super::assistant::State::new(),
             bench: None,
             pdf_options: None,
             designer: None,
@@ -499,6 +502,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
+    "ai.assistant",
     "file.remove_background",
     "export.dxf_page",
     "export.dxf_all",
@@ -1257,6 +1261,7 @@ impl NovoApp {
             "file.import_dxf_background" => self.import_dxf_background(),
             "view.background" => self.toggle_background(),
             "view.background_place" => self.open_background_panel(),
+            "ai.assistant" => self.open_assistant(),
             "file.remove_background" => self.remove_background(),
             "export.dxf_page" => {
                 self.export_dxf(super::dxf::DxfScope::CurrentPage);
