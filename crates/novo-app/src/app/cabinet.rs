@@ -2268,6 +2268,7 @@ impl NovoApp {
                 || matches!(
                     ask,
                     Ask::PlaceAll
+                        | Ask::PlaceEveryPanel
                         | Ask::SetRailLengths(_)
                         | Ask::SetPlate(_)
                         | Ask::SetPlateSize(..)
@@ -2532,8 +2533,6 @@ impl NovoApp {
         self.cabinet.routes = true;
     }
 
-    /// Runs an edit of the model from the Cabinet canvas as one undo step.
-    /// True when the edit was made.
     /// Gives every panel with devices a plate that holds them (the default
     /// where it has none, a bigger one found by planning where it is too
     /// small; a plate that is big enough stays) and places the devices by the
@@ -2544,6 +2543,7 @@ impl NovoApp {
         let mut placed = 0;
         let mut panels = 0;
         let mut left_out = 0;
+        let mut enlarged = 0;
         let mut empty: Vec<String> = Vec::new();
         let done = self.cabinet_edit("Place all panels", |tx| {
             let all: Vec<_> = tx
@@ -2569,6 +2569,7 @@ impl NovoApp {
                         cabinet_rules::plate_that_holds(tx.project(), id, &layout, &rules)
                 {
                     set_plate(tx, id, bigger)?;
+                    enlarged += 1;
                     if let Some(layout) = load(tx.project(), id) {
                         plan = cabinet_rules::plan(tx.project(), id, &layout, &rules).0;
                     }
@@ -2596,6 +2597,12 @@ impl NovoApp {
                 if panels == 1 { "panel" } else { "panels" }
             )
         };
+        if enlarged > 0 {
+            text.push_str(&format!(
+                " {enlarged} {} enlarged.",
+                if enlarged == 1 { "plate" } else { "plates" }
+            ));
+        }
         if !empty.is_empty() {
             text.push_str(&format!(" No devices on {}, skipped.", empty.join(", ")));
         }
@@ -2612,6 +2619,8 @@ impl NovoApp {
         self.message(level, text);
     }
 
+    /// Runs an edit of the model from the Cabinet canvas as one undo step.
+    /// True when the edit was made.
     pub(super) fn cabinet_edit(
         &mut self,
         label: &str,

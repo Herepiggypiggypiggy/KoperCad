@@ -875,7 +875,8 @@ fn place_every_panel_sets_plates_places_all_and_skips_empty_panels() {
     let texts: Vec<_> = d.app.messages().iter().map(|m| m.text.clone()).collect();
     assert!(
         texts.iter().any(
-            |t| t.starts_with("Placed 33 devices on 2 panels.") && t.contains("+CAB3, skipped")
+            |t| t.starts_with("Placed 33 devices on 2 panels. 1 plate enlarged.")
+                && t.contains("+CAB3, skipped")
         ),
         "{texts:?}"
     );
@@ -884,6 +885,46 @@ fn place_every_panel_sets_plates_places_all_and_skips_empty_panels() {
     d.app.run(&ctx, Action::Undo);
     d.frame();
     assert_eq!(project(&d).all::<CabinetPlacement>().count(), 0);
+}
+
+/// Timing of the plate search on a crowded panel, run by hand:
+/// `cargo test -p novo-app plate_search_timing -- --ignored --nocapture`.
+#[test]
+#[ignore = "timing probe"]
+fn plate_search_timing_on_a_crowded_panel() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Crowded", |tx| {
+            tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "", true)?;
+            let part = tx.add_part("ACME", "P")?;
+            tx.set_property(part, "width_mm", Some(Value::Float(45.0)))?;
+            tx.set_property(part, "height_mm", Some(Value::Float(90.0)))?;
+            for n in 1..=400 {
+                let device =
+                    tx.add_device(DeviceTag::parse(&format!("+CAB1-K{n}")).unwrap(), "")?;
+                tx.assign_part(device, part)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let layout = layout_of(&d, cab).unwrap();
+    let rules = novo_layout::rules::RuleSet::standard();
+    let t = std::time::Instant::now();
+    let plate = super::cabinet_rules::plate_that_holds(project(&d), cab, &layout, &rules);
+    println!(
+        "plate_that_holds, 400 devices: {:?} in {:?}",
+        plate,
+        t.elapsed()
+    );
 }
 
 #[test]
