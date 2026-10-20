@@ -178,6 +178,7 @@ mod view3d_duplicate;
 mod view3d_heat;
 mod view3d_hints;
 mod view3d_measure;
+mod view3d_models;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
