@@ -52,6 +52,9 @@ pub struct PlantDevice {
     pub type_number: String,
     pub terminals: Vec<PlantTerminal>,
     pub properties: BTreeMap<String, Value>,
+    /// The part's width, height and depth in millimetres, when the file
+    /// gives them (`Width`, `Height`, `Depth` with an optional `Unit`).
+    pub size_mm: [Option<f64>; 3],
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -248,6 +251,45 @@ fn dimension(text: &str, max: f64) -> Option<f64> {
         .parse::<f64>()
         .ok()
         .filter(|v| v.is_finite() && *v > 0.0 && *v <= max)
+}
+
+/// Largest part size taken from a file, in millimetres: a cabinet door.
+const MAX_PART_MM: f64 = 3_000.0;
+
+/// The width, height and depth a device element states, in millimetres.
+/// The `Unit` of an attribute (`mm`, `cm`, `m`, `in`) is honoured; without
+/// one the value is millimetres. A value that is not a plausible part size
+/// counts as missing.
+fn size_of(node: &Node) -> [Option<f64>; 3] {
+    let read = |names: &[&str]| {
+        node.children
+            .iter()
+            .filter(|c| c.name == "Attribute")
+            .find(|a| {
+                let n = a.attr("Name").unwrap_or_default();
+                names.iter().any(|w| n.eq_ignore_ascii_case(w))
+            })
+            .and_then(|a| {
+                let text = &a.children.iter().find(|c| c.name == "Value")?.text;
+                let factor = match a.attr("Unit").map(|u| u.trim().to_ascii_lowercase()) {
+                    None => 1.0,
+                    Some(u) => match u.as_str() {
+                        "" | "mm" | "millimetre" | "millimeter" => 1.0,
+                        "cm" => 10.0,
+                        "m" => 1000.0,
+                        "in" | "inch" => 25.4,
+                        _ => return None,
+                    },
+                };
+                dimension(text, f64::MAX).map(|v| v * factor)
+            })
+            .filter(|v| *v <= MAX_PART_MM)
+    };
+    [
+        read(&["Width", "Breite", "Breedte"]),
+        read(&["Height", "Hoehe", "Höhe", "Hoogte"]),
+        read(&["Depth", "Tiefe", "Diepte"]),
+    ]
 }
 
 fn value_of(text: &str, data_type: &str) -> Value {
@@ -581,6 +623,9 @@ impl Reader {
             "OrderNumber",
             "TypeNumber",
             "ArticleDescription",
+            "Width",
+            "Height",
+            "Depth",
         ];
         for (k, (v, ty)) in &attrs {
             let flat = !k.contains('.');
@@ -620,6 +665,7 @@ impl Reader {
                 .to_string(),
             terminals,
             properties,
+            size_mm: size_of(node),
         });
         let device_index = self.plant.devices.len() - 1;
         self.symbols_of(node, Some(device_index));

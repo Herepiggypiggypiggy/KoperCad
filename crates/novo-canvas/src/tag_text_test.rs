@@ -109,3 +109,36 @@ fn other_symbols_of_a_device_keep_their_tag_each() {
             .all(|&s| !repeats_pin_tag(p, p.symbol(s).unwrap()))
     );
 }
+
+#[test]
+fn the_single_poles_of_one_device_in_a_row_show_its_tag_once() {
+    let mut doc = Document::default();
+    let (near, far) = doc
+        .transact("setup", |tx| {
+            let page = tx.add_page("1")?;
+            let d = tx.add_device(DeviceTag::parse("-Q1")?, "Contactor")?;
+            let near = pins(tx, page, d, "iec/contactors/main_1p", 3);
+            // A second set of poles a page away from the first.
+            let role = SymbolRole::Device {
+                device: d,
+                main: false,
+            };
+            let far = tx.place_symbol(
+                page,
+                "iec/contactors/main_1p",
+                Placement::at(Point::new(200.0, 0.0)),
+                vec![Pin::new("1", 0.0, 0.0)],
+                role,
+            )?;
+            Ok((near, far))
+        })
+        .unwrap()
+        .0;
+    let p = doc.project();
+    let repeats = |s: SymbolId| repeats_pin_tag(p, p.symbol(s).unwrap());
+    assert_eq!(
+        near.iter().map(|&s| repeats(s)).collect::<Vec<_>>(),
+        [false, true, true]
+    );
+    assert!(!repeats(far), "poles far apart keep a tag each");
+}

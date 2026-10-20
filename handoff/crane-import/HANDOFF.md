@@ -7,3 +7,7 @@ Real data: a real project, staged from the user's PC (private; path kept in the 
 Crane repo clone: /home/claude/eplan-crane-configurator (private, knowledge only).
 Rules: no customer data or EPLAN library in git (fixture crates/novo-interop/tests/fixtures/crane is synthetic); draft PRs until rc1 tagged; odd PR to lead B, even to lead A.
 Disk: cargo target fills the session allowance; use CARGO_INCREMENTAL=0 and delete target/debug/incremental when linking dies with a Bus error.
+
+## Fidelity lane (2026-10-20)
+Done: epj draw uses `SymbolMapper::map_fitting` (pxf/draw.rs `pick_library_symbol`); AML `candidates()` knows power_poles, motor, thermal_switch, tap terminal, plug by pin count (tests/aml_kinds.rs); part size from the sheet outline (layout_apply.rs) and from AML `Width/Height/Depth` (read.rs `size_of`, plan.rs); pole tags once (novo-canvas `repeats_pin_tag`).
+Still open: the 5-point transformer with named pins stays a box (its order against the library symbol is unknown); 13 "Black box" functions stay boxes on purpose; free-text anchors wait on an EPLAN preview screenshot; devices off the layout sheet and without AML sizes still get the guessed 45x90 until the parts import (Parts > Import) brings real data. The configurator's own `layout_vormen.json` (private, on the PC) holds footprints per part number: a private CSV from it can feed the parts import; it must never go into git.

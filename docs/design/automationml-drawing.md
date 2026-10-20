@@ -26,7 +26,7 @@ Under the project element (role `Project`):
 | a page, named by its label (`=A1+CAB1/01`) | `Page` | `Title`, `Function`, `Location`, `Number` |
 | a symbol with no device (an earth symbol), child of its page | `Symbol` | as below |
 | a plant section or location (`=A1`, `+CAB1`) | `PlantSection`, `Location` | `Tag` |
-| a device, named by its designation (`=A1+CAB1-K1`) | `Device` | `Tag`, `Description`, `Manufacturer`, `OrderNumber` |
+| a device, named by its designation (`=A1+CAB1-K1`) | `Device` | `Tag`, `Description`, `Manufacturer`, `OrderNumber`; optional `Width`, `Height`, `Depth` (also `Breite`/`Hoehe`/`Tiefe`, `Breedte`/`Hoogte`/`Diepte`; the part's size, `Unit` `mm` when absent, also `cm`, `m`, `in`) |
 | a terminal strip (`+CAB1-X1`) | `TerminalStrip` | `Tag`; one `Terminal` interface per terminal |
 | a symbol of a device or strip, child of it | `Symbol` | `Page` (a page name), `Kind`, `Terminal` (strip only), `Frame` (`x`, `y` in mm) |
 | a pin, `ExternalInterface` of a symbol | `Pin` interface | `Name`; `X`, `Y` offset from the symbol in mm; `Faces` (`up,down,left,right`) |
@@ -47,7 +47,10 @@ others). Positions are millimetres on the page, origin bottom left, y up. `Kind`
 - Pages: one project page per `Page`, named by label and title. A page that already exists is reused and its
   device-less symbols are not drawn again.
 - Symbols: a KoperCAD library symbol when the kind has one and the pin names match (coil, NO and NC contact,
-  changeover, terminal, lamp, earth, device pin, interruption point); otherwise a labelled box. Either way the
+  changeover, terminal and tap terminal (3 pins), lamp, earth, device pin, interruption point, power poles
+  (2, 4, 6 or 8 pins: a contactor with 1 to 4 poles), overload trip contact, motor (2, 3, 4, 6 or 7 pins:
+  DC, single phase, three phase, with thermistor contacts, six ends) and a plug (2, 4 or 5 pins), the pin
+  names deciding which pin is which); otherwise a labelled box. Either way the
   pins are exactly where the file has them: the library symbol is turned to face the way the file's pins face
   and scaled to the file's pin pitch (EPLAN's 8 mm contact on KoperCAD's 16 mm symbol is drawn at half size,
   and a lead covers any pin the scaling does not reach). A box has each pin on the side it faces, so rows of
@@ -65,7 +68,8 @@ others). Positions are millimetres on the page, origin bottom left, y up. `Kind`
 
 ## 4. Exact and approximated
 
-Exact: pages, positions, pins, nets, tags, part numbers, and (with `Wire` runs) the wire routes. Approximated:
+Exact: pages, positions, pins, nets, tags, part numbers, the part's `Width`, `Height` and `Depth` when the file
+gives them (they become the part's `width_mm`, `height_mm`, `depth_mm`; a size the catalog already has stays), and (with `Wire` runs) the wire routes. Approximated:
 the symbol artwork (a library symbol or a labelled box, fitted to the file's pins) and, for a file without runs,
 the wire routes.
 

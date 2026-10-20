@@ -2213,25 +2213,37 @@ pub fn symbol_text(project: &Project, sym: &SymbolInstance) -> Option<String> {
     }
 }
 
-/// Whether `sym` is a plug or connector pin whose device already shows its tag
-/// on another pin of the same page: a plug of twenty pins names itself once,
-/// each pin keeps its own number.
+/// Poles of one device drawn side by side (the three single-pole symbols of
+/// a power contactor, 8 mm apart): a pole this close to an earlier pole of
+/// the same device and kind shares that pole's tag. Millimetres, between
+/// symbol origins.
+const POLE_TAG_DX: f64 = 24.0;
+const POLE_TAG_DY: f64 = 10.0;
+
+/// Whether `sym` is a symbol whose device already shows its tag beside it.
+/// The pins of a plug and the boxes an import draws for the parts of one
+/// device name themselves once on a page (a plug of twenty pins, each pin
+/// keeping its own number); the poles of one device drawn in a row do the
+/// same, so the single-pole symbols (`*_1p`) of a three-pole contactor or
+/// breaker do not print their tag three times over each other. Two contacts of a device far apart keep a tag each.
 fn repeats_pin_tag(project: &Project, sym: &SymbolInstance) -> bool {
     let SymbolRole::Device { device, .. } = &sym.role else {
         return false;
     };
-    // The pins of a plug and the boxes an import draws for the parts of one
-    // device: the tag stands once, not on each.
-    if !matches!(
+    let pin_like = matches!(
         novo_symbols::Pack::path_of(&sym.symbol.0),
         "connectivity/device_pin" | "import/box"
-    ) {
-        return false;
-    }
-    project
-        .symbols_of_device(*device)
-        .into_iter()
-        .any(|o| o.id < sym.id && o.page == sym.page && o.symbol == sym.symbol)
+    );
+    let pole = novo_symbols::Pack::path_of(&sym.symbol.0).ends_with("_1p");
+    project.symbols_of_device(*device).into_iter().any(|o| {
+        o.id < sym.id
+            && o.page == sym.page
+            && o.symbol == sym.symbol
+            && (pin_like
+                || (pole
+                    && (o.placement.origin.x - sym.placement.origin.x).abs() <= POLE_TAG_DX
+                    && (o.placement.origin.y - sym.placement.origin.y).abs() <= POLE_TAG_DY))
+    })
 }
 
 /// Terminals of one strip further apart than this (mm, between symbol

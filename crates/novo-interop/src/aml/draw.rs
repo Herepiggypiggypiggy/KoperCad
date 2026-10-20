@@ -89,6 +89,28 @@ fn candidates(kind: &str, pins: &[PlantPin]) -> Vec<&'static str> {
         },
         ("contact", 3) => vec!["contacts/changeover"],
         ("terminal", 2) => vec!["terminals/terminal"],
+        // A tap terminal: one feed side, two tap points.
+        ("terminal", 3) => vec!["terminals/terminal_tap"],
+        // The power poles of a contactor: a pair of pins per pole.
+        ("power_poles", 2) => vec!["contactors/main_1p"],
+        ("power_poles", 4) => vec!["contactors/main_2p"],
+        ("power_poles", 6) => vec!["contactors/main_3p"],
+        ("power_poles", 8) => vec!["contactors/main_4p"],
+        // An overload relay's trip contact: 95/96 opens, 97/98 closes.
+        ("thermal_switch", 2) => match last_digit {
+            Some(7 | 8) => vec!["contacts/thermal_no"],
+            _ => vec!["contacts/thermal_nc"],
+        },
+        ("motor", 2) => vec!["motors/motor_dc"],
+        ("motor", 3) => vec!["motors/motor_1ph"],
+        ("motor", 4) => vec!["motors/motor_3ph"],
+        // With thermistor contacts T1 and T2.
+        ("motor", 6) => vec!["motors/motor_3ph_pe_t2"],
+        // Six windings ends and earth.
+        ("motor", 7) => vec!["motors/motor_3ph_6t"],
+        ("plug", 2) => vec!["terminals/plug"],
+        ("plug", 4) => vec!["terminals/plug_3p_pe", "terminals/socket_3p_pe"],
+        ("plug", 5) => vec!["terminals/plug_3p_n_pe", "terminals/socket_3p_n_pe"],
         ("lamp", 2) => vec!["signalling/lamp"],
         ("earth", 1) => vec!["earth/protective_earth"],
         ("pin" | "plug" | "generic" | "enclosure", 1) => vec!["connectivity/device_pin"],
