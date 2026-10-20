@@ -157,6 +157,26 @@ impl MeshLibrary {
         self.parts.get(&key)
     }
 
+    pub fn len(&self) -> usize {
+        self.parts.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.parts.is_empty()
+    }
+
+    /// Keeps the parts `keep` accepts. Returns how many it dropped; the
+    /// revision moves only then.
+    pub fn retain(&mut self, mut keep: impl FnMut(GeometryKey) -> bool) -> usize {
+        let before = self.parts.len();
+        self.parts.retain(|k, _| keep(*k));
+        let dropped = before - self.parts.len();
+        if dropped > 0 {
+            self.revision += 1;
+        }
+        dropped
+    }
+
     /// Bumped on every insert, so a view can tell the library changed.
     pub fn revision(&self) -> u64 {
         self.revision
@@ -227,6 +247,26 @@ pub fn profile_mesh(profile: Profile, width: f32, height: f32) -> MeshData {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn retain_drops_what_is_not_kept_and_moves_the_revision_only_then() {
+        let mut lib = MeshLibrary::new();
+        for k in [1, 2, 3] {
+            lib.insert(
+                GeometryKey(k),
+                PartGeometry {
+                    lods: vec![unit_box()],
+                },
+            );
+        }
+        let rev = lib.revision();
+        assert_eq!(lib.retain(|_| true), 0);
+        assert_eq!(lib.revision(), rev);
+        assert_eq!(lib.retain(|k| k.0 != 2), 1);
+        assert_eq!(lib.len(), 2);
+        assert!(lib.get(GeometryKey(2)).is_none());
+        assert!(lib.revision() > rev);
+    }
+
     use super::*;
 
     #[test]

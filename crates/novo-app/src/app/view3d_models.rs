@@ -17,6 +17,9 @@ use novo_parts::{FileKind, LocalLibrary, PartKey, SourceRecord};
 use novo_view3d::scene::{ItemKind, Shape};
 use novo_view3d::{Aabb, GeometryKey, MeshData, MeshLibrary, PartGeometry, Scene};
 
+/// How many unused meshes the library may hold before it is pruned.
+const PRUNE_SLACK: usize = 16;
+
 /// What became of one device's model request.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Outcome {
@@ -36,6 +39,12 @@ pub(super) struct Models {
     jobs: BTreeMap<u64, (u64, Outcome)>,
     /// Bumped whenever a model arrives, so the scene is built again.
     pub(super) revision: u64,
+    /// The STEP records as last read, and the records file's modified time
+    /// they were read at, so a rebuild does not read the library again.
+    records: Option<(
+        Option<std::time::SystemTime>,
+        BTreeMap<PartKey, SourceRecord>,
+    )>,
 }
 
 /// How many devices have a model drawn, wait for one, or have a file that
@@ -126,7 +135,18 @@ impl Models {
         let Some(library) = LocalLibrary::open_default() else {
             return;
         };
-        let records = step_records(&library);
+        let stamp = std::fs::metadata(library.root().join("records.json"))
+            .and_then(|m| m.modified())
+            .ok();
+        if !matches!(&self.records, Some((at, _)) if *at == stamp && stamp.is_some()) {
+            self.records = Some((stamp, step_records(&library)));
+        }
+        let records = self
+            .records
+            .as_ref()
+            .map(|r| &r.1)
+            .cloned()
+            .unwrap_or_default();
         if records.is_empty() {
             self.jobs.clear();
             return;
@@ -218,6 +238,29 @@ impl Models {
         }
     }
 
+    /// The meshes the models in use need, to keep when the library is pruned.
+    pub(super) fn drawn_keys(&self) -> impl Iterator<Item = GeometryKey> + '_ {
+        self.jobs.values().filter_map(|(_, o)| match o {
+            Outcome::Drawn(k) => Some(*k),
+            _ => None,
+        })
+    }
+
+    /// Drops meshes no item of `scene` and no model in use needs, once the
+    /// library holds `PRUNE_SLACK` more than that (so hiding and showing a
+    /// part does not rebuild its mesh each time). Returns how many it dropped.
+    pub(super) fn prune(&self, library: &mut Arc<MeshLibrary>, scene: &Scene) -> usize {
+        let mut keep: std::collections::HashSet<GeometryKey> = self.drawn_keys().collect();
+        keep.extend(scene.items.iter().filter_map(|i| match i.shape {
+            Shape::Part(k) => Some(k),
+            _ => None,
+        }));
+        if library.len() <= keep.len() + PRUNE_SLACK {
+            return 0;
+        }
+        Arc::make_mut(library).retain(|k| keep.contains(&k))
+    }
+
     pub(super) fn counts(&self) -> Counts {
         let mut c = Counts::default();
         for (_, o) in self.jobs.values() {
@@ -263,6 +306,31 @@ mod tests {
         assert_eq!(s.items[0].shape, Shape::Part(GeometryKey(7)));
         assert_eq!(s.items[1].shape, Shape::Box);
         assert!(s.revision > before);
+    }
+
+    #[test]
+    fn the_library_is_pruned_to_what_is_in_use_once_it_has_slack() {
+        let part = || PartGeometry {
+            lods: vec![novo_view3d::mesh::unit_box()],
+        };
+        let mut m = Models::default();
+        m.jobs.insert(9, (900, Outcome::Drawn(GeometryKey(900))));
+        let mut s = scene();
+        s.items[0].shape = Shape::Part(GeometryKey(100));
+        let mut lib = MeshLibrary::new();
+        for k in [100, 900] {
+            lib.insert(GeometryKey(k), part());
+        }
+        let mut lib = Arc::new(lib);
+        for k in 0..PRUNE_SLACK as u64 {
+            Arc::make_mut(&mut lib).insert(GeometryKey(1000 + k), part());
+        }
+        assert_eq!(m.prune(&mut lib, &s), 0, "within the slack");
+        Arc::make_mut(&mut lib).insert(GeometryKey(5000), part());
+        assert_eq!(m.prune(&mut lib, &s), PRUNE_SLACK + 1);
+        assert!(lib.get(GeometryKey(100)).is_some(), "an item's mesh stays");
+        assert!(lib.get(GeometryKey(900)).is_some(), "a drawn model stays");
+        assert_eq!(lib.len(), 2);
     }
 
     #[test]
