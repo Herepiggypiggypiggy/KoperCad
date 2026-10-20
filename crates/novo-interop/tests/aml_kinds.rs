@@ -86,7 +86,12 @@ fn keys(p: &Project) -> Vec<String> {
 #[test]
 fn power_poles_motors_tap_terminals_and_plugs_get_their_own_symbols() {
     let p = import(&[
-        device(1, "power_poles", 20.0, &poles(&["1", "2", "3", "4", "5", "6"])),
+        device(
+            1,
+            "power_poles",
+            20.0,
+            &poles(&["1", "2", "3", "4", "5", "6"]),
+        ),
         device(2, "motor", 60.0, &row(&["U1", "V1", "W1", "PE"])),
         device(
             3,
@@ -122,4 +127,57 @@ fn power_poles_motors_tap_terminals_and_plugs_get_their_own_symbols() {
 fn a_symbol_of_a_kind_without_one_stays_a_box() {
     let p = import(&[device(1, "motor", 20.0, &row(&["A", "B", "C"]))]);
     assert_eq!(keys(&p), ["import/box"]);
+}
+
+/// A device with a part number and the size attributes given.
+fn sized(n: usize, order: &str, size: &str) -> String {
+    format!(
+        r#"<InternalElement ID="q{n}" Name="=A1+CAB1-Q{n}"><Attribute Name="Tag" AttributeDataType="xs:string"><Value>=A1+CAB1-Q{n}</Value></Attribute>
+<Attribute Name="Manufacturer" AttributeDataType="xs:string"><Value>Maker</Value></Attribute>
+<Attribute Name="OrderNumber" AttributeDataType="xs:string"><Value>{order}</Value></Attribute>
+{size}<RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Device"/></InternalElement>
+"#
+    )
+}
+
+fn attr(name: &str, value: &str, unit: &str) -> String {
+    format!(
+        "<Attribute Name=\"{name}\" AttributeDataType=\"xs:double\" Unit=\"{unit}\"><Value>{value}</Value></Attribute>"
+    )
+}
+
+#[test]
+fn a_part_size_in_the_file_becomes_the_parts_footprint() {
+    let size = [
+        attr("Width", "45", "mm"),
+        attr("Height", "8.9", "cm"),
+        attr("Depth", "0.07", "m"),
+    ]
+    .concat();
+    let p = import(&[sized(1, "GV2-14", &size), sized(2, "NO-SIZE", "")]);
+    let part = |order: &str| {
+        p.parts()
+            .find(|x| x.order_number == order)
+            .unwrap_or_else(|| panic!("part {order}"))
+            .properties
+            .clone()
+    };
+    let sized_part = part("GV2-14");
+    let get = |k: &str| sized_part.get(k).cloned();
+    assert_eq!(get("width_mm"), Some(novo_core::Value::Float(45.0)));
+    assert_eq!(get("height_mm"), Some(novo_core::Value::Float(89.0)));
+    assert_eq!(get("depth_mm"), Some(novo_core::Value::Float(70.0)));
+    // No size in the file: nothing is invented.
+    assert!(!part("NO-SIZE").contains_key("width_mm"));
+    // The size is not also kept as a loose `aml.` property of the device.
+    assert!(p.devices().all(|d| !d.properties.contains_key("aml.Width")));
+}
+
+#[test]
+fn an_unreadable_part_size_is_ignored() {
+    let size = [attr("Width", "-5", "mm"), attr("Height", "9", "furlong")].concat();
+    let p = import(&[sized(1, "BAD", &size)]);
+    let part = p.parts().find(|x| x.order_number == "BAD").unwrap();
+    assert!(!part.properties.contains_key("width_mm"));
+    assert!(!part.properties.contains_key("height_mm"));
 }

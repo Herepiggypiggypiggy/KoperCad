@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
     Cable, CableCore, ChangeSet, DeviceId, DeviceTag, Document, MountingPlate, PageId, Part,
-    PartId, Project, Terminal, TerminalId,
+    PartId, Project, Terminal, TerminalId, Value,
 };
 
 use super::draw::draw;
@@ -278,6 +278,21 @@ impl AmlPlan {
                             p
                         }
                     };
+                    // The file's size for the part, unless the catalog already
+                    // has one (a user's own data wins over the file's).
+                    let [w, h, depth] = d.size_mm;
+                    if w.is_some() || h.is_some() || depth.is_some() {
+                        tx.update::<Part>(part, |p| {
+                            for (key, v) in [("width_mm", w), ("height_mm", h), ("depth_mm", depth)]
+                            {
+                                if let Some(v) = v {
+                                    p.properties
+                                        .entry(key.to_string())
+                                        .or_insert(Value::Float((v * 100.0).round() / 100.0));
+                                }
+                            }
+                        })?;
+                    }
                     tx.assign_part(id, part)?;
                 }
                 for (k, v) in &d.properties {

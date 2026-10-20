@@ -215,6 +215,57 @@ fn by_name(function: &str) -> Option<&'static str> {
         .map(|r| r.2)
 }
 
+/// Longest interruption point name drawn as the file gives it.
+const SHORT_POINT_NAME: usize = 8;
+
+/// The name an interruption point carries in the file: its tag, else its text.
+fn point_name(ip: &crate::eplan::pxf::PxfInterruption) -> String {
+    if ip.tag.is_empty() {
+        ip.text.clone()
+    } else {
+        ip.tag.full()
+    }
+}
+
+/// The name each interruption point of the drawn pages is shown with. EPLAN
+/// names a point after its whole destination path, and a name that long is
+/// printed beside every point, over its neighbours; a long name (or one with
+/// spaces) gets a plain `N<number>` instead. The mapping is one to one, so
+/// KoperCAD pairs the points exactly as the file's own names do. Short names
+/// are kept and never taken by a generated one.
+fn shown_point_names(file: &PxfFile, drawn: &BTreeSet<usize>) -> BTreeMap<String, String> {
+    let mut names: Vec<String> = Vec::new();
+    for ip in &file.interruptions {
+        if !ip.page.is_some_and(|p| drawn.contains(&p)) {
+            continue;
+        }
+        let name = point_name(ip);
+        if !names.contains(&name) {
+            names.push(name);
+        }
+    }
+    let short =
+        |n: &str| n.chars().count() <= SHORT_POINT_NAME && !n.chars().any(char::is_whitespace);
+    let mut out: BTreeMap<String, String> = names
+        .iter()
+        .filter(|n| short(n))
+        .map(|n| (n.clone(), n.clone()))
+        .collect();
+    let mut taken: BTreeSet<String> = out.values().cloned().collect();
+    let mut next = 1usize;
+    for n in names.iter().filter(|n| !short(n)) {
+        let fresh = loop {
+            let c = format!("N{next}");
+            next += 1;
+            if taken.insert(c.clone()) {
+                break c;
+            }
+        };
+        out.insert(n.clone(), fresh);
+    }
+    out
+}
+
 struct Placed {
     symbol: DrawnSymbol,
     /// Where each KoperCAD pin sits on the page.
@@ -450,6 +501,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
     // Interruption points: one connection that faces any way, so whatever
     // faces it joins it.
     let lib_ip = lib.get(INTERRUPTION);
+    let shown = shown_point_names(file, &drawn_pages);
     for (ii, ip) in file.interruptions.iter().enumerate() {
         let (Some(page), Some((x, y))) = (ip.page, ip.position) else {
             continue;
@@ -457,10 +509,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
         if !drawn_pages.contains(&page) {
             continue;
         }
-        let name = {
-            let t = ip.tag.full();
-            if t.is_empty() { ip.text.clone() } else { t }
-        };
+        let name = point_name(ip);
         let pk = PinKey(format!("i{ii}"));
         let mut cp = ConnPoint::pin(&pk.0, page as u32, x, y, Dir::Up);
         cp.facing = vec![Dir::Up, Dir::Right, Dir::Down, Dir::Left];
@@ -495,7 +544,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                 pins,
                 bridges,
                 pass_through: pass,
-                role: Role::Interruption(name),
+                role: Role::Interruption(shown.get(&name).cloned().unwrap_or(name)),
                 label: String::new(),
             },
             page_pos: BTreeMap::from([(0, Point::new(x, PAGE_HEIGHT - y))]),
@@ -662,8 +711,8 @@ fn pick_library_symbol(
     {
         candidates.push(s);
     }
-    if candidates.is_empty() && !terminal && !function.is_empty() {
-        let r = mapper.map(&EplanSymbol {
+    if candidates.is_empty() && !function.is_empty() {
+        let source = EplanSymbol {
             key: None,
             function: Some(function.to_string()),
             letters: Some(letters.to_string()),
@@ -672,8 +721,14 @@ fn pick_library_symbol(
             } else {
                 Vec::new()
             },
+        };
+        // The point count tells the members of a family apart (the variable
+        // motor, the terminal with 3 points), then the plain name.
+        let resolved = mapper.map_fitting(&source, ports.len()).or_else(|| {
+            Some(mapper.map(&source)).filter(|r| r.basis == crate::eplan::symbols::Basis::Name)
         });
-        if let (Target::Library(id), crate::eplan::symbols::Basis::Name) = (&r.target, r.basis)
+        if let Some(r) = resolved
+            && let Target::Library(id) = &r.target
             && let Some(s) = lib.get(id)
         {
             candidates.push(s);
@@ -710,4 +765,56 @@ fn pick_library_symbol(
         }
     }
     (None, Vec::new())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::eplan::pxf::PxfInterruption;
+
+    fn point(page: usize, text: &str) -> PxfInterruption {
+        PxfInterruption {
+            id: None,
+            page: Some(page),
+            tag: Default::default(),
+            text: text.to_string(),
+            position: Some((10.0, 10.0)),
+            variant: 0,
+        }
+    }
+
+    #[test]
+    fn a_long_point_name_is_shown_short_and_pairs_one_to_one() {
+        let long = "=11D31+K1BG1/14 Hijsmotoren Fijn / Grof.7";
+        let mut file = crate::eplan::pxf::read_pxf_str(include_str!(
+            "../../../tests/fixtures/pxf/synthetic-small.epj"
+        ))
+        .unwrap();
+        file.interruptions = vec![
+            point(0, long),
+            point(1, long),
+            point(0, "L1"),
+            point(0, "N1"),
+            point(0, "=10D11+K1BG1+W1M02_W2/PE"),
+            // On a page that is not drawn: not named at all.
+            point(5, "=99X99+Z/Y"),
+        ];
+        let drawn: BTreeSet<usize> = [0, 1].into();
+        let shown = shown_point_names(&file, &drawn);
+        // Short names stay, and no generated name takes one of them.
+        assert_eq!(shown["L1"], "L1");
+        assert_eq!(shown["N1"], "N1");
+        assert_eq!(
+            shown[long], "N2",
+            "N1 is a real name, so the first free one"
+        );
+        assert_eq!(shown["=10D11+K1BG1+W1M02_W2/PE"], "N3");
+        assert_eq!(shown.len(), 4);
+        // Both ends of the long name show the same short one.
+        let ends: BTreeSet<&String> = file.interruptions[..2]
+            .iter()
+            .map(|p| &shown[&p.text])
+            .collect();
+        assert_eq!(ends.len(), 1);
+    }
 }
