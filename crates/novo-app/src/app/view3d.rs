@@ -67,6 +67,9 @@ pub(crate) struct View3dMode {
     /// A device on a wall, roof, floor or extra plate being dragged.
     pub(super) surface_drag: Option<super::view3d_surface_devices::SurfaceDrag>,
     library: Arc<MeshLibrary>,
+    /// Maker models of the devices, and the arrival count the scene was built with.
+    pub(super) models: super::view3d_models::Models,
+    built_models: u64,
     /// The enclosure and project revision the scene was built for.
     pub(super) built: Option<(StructureId, u64, Arc<Scene>)>,
     /// A standard view or a fit asked for by a command, run on the next frame
@@ -140,6 +143,8 @@ impl Default for View3dMode {
             pin_marks: Vec::new(),
             surface_drag: None,
             library: Arc::new(MeshLibrary::new()),
+            models: Default::default(),
+            built_models: 0,
             built: None,
             pending: None,
             save_view: false,
@@ -275,7 +280,9 @@ impl NovoApp {
         let empty_hint = super::tips::empty_3d_hint(&self.settings, &self.wb.keymap, project, id);
         let mode = &mut self.view3d;
         let layers = mode.controls.layers;
-        let stale = !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
+        mode.models.collect(&mut mode.library);
+        let stale = mode.built_models != mode.models.revision
+            || !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
             || mode.built_layers != layers
             || mode.built_hidden != mode.controls.hidden;
         if stale {
@@ -304,6 +311,9 @@ impl NovoApp {
                 wires,
             };
             if let Some(mut built) = model::scene(project, id, &options) {
+                mode.models.plan(ui.ctx(), project, id, &built);
+                mode.models.apply(&mut built);
+                mode.built_models = mode.models.revision;
                 // Devices on walls, roof, floor and extra plates.
                 if let (Some(sum), Some(lay)) = (
                     super::cabinet_surfaces::summarize(project, id),
@@ -611,6 +621,7 @@ impl NovoApp {
         let limit = model::door_limit_deg(project, id);
         let view_rect = ui.available_rect_before_wrap();
         mode.controls.ssao_available = mode.view.occlusion_available();
+        mode.controls.models_text = mode.models.counts().text();
         mode.controls.reduced = mode.view.stepped_down().is_some() || mode.view.occlusion_paused();
         let was_measuring = mode.measure.on;
         let (changed, asked) = view3d_controls::toolbar(

@@ -47,6 +47,8 @@ pub(crate) struct Controls {
     /// A marker where each terminal of a part is (Parts window > Connection
     /// points finds or edits them).
     pub(super) pins: bool,
+    /// How many devices are drawn with a maker model, set by the host each frame.
+    pub(super) models_text: Option<String>,
 }
 
 impl Default for Controls {
@@ -67,6 +69,7 @@ impl Default for Controls {
             heat_panel: false,
             surfaces: false,
             pins: false,
+            models_text: None,
         }
     }
 }
@@ -176,6 +179,9 @@ pub(super) fn toolbar(
                          terminal block, PLC, drive, power supply) at the part's real width, height \
                          and depth. The details are typical, not the maker's. Off draws plain boxes.",
                     );
+                    if let Some(text) = &controls.models_text {
+                        ui.label(egui::RichText::new(text).weak().small());
+                    }
                     toggle(
                         ui,
                         &mut controls.surfaces,
