@@ -831,11 +831,14 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
         match &state.progress {
             Some(p) => {
                 let frac = heat_progress::fraction(levels, p);
+                // The level, iteration and time sit beside the bar: inside it
+                // they were cut off at the bar's end.
                 ui.add(
                     egui::ProgressBar::new(frac)
-                        .desired_width(150.0)
-                        .text(egui::RichText::new(heat_progress::label(p, secs)).small()),
+                        .desired_width(80.0)
+                        .show_percentage(),
                 );
+                ui.label(egui::RichText::new(heat_progress::label(p, secs)).small());
                 heat_progress::sparkline(ui, &state.history);
             }
             None => {
