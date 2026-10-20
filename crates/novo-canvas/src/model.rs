@@ -2224,8 +2224,8 @@ const POLE_TAG_DY: f64 = 10.0;
 /// The pins of a plug and the boxes an import draws for the parts of one
 /// device name themselves once on a page (a plug of twenty pins, each pin
 /// keeping its own number); the poles of one device drawn in a row do the
-/// same, so a three-pole contactor does not print its tag three times over
-/// itself. Two contacts of a device far apart keep a tag each.
+/// same, so the single-pole symbols (`*_1p`) of a three-pole contactor or
+/// breaker do not print their tag three times over each other. Two contacts of a device far apart keep a tag each.
 fn repeats_pin_tag(project: &Project, sym: &SymbolInstance) -> bool {
     let SymbolRole::Device { device, .. } = &sym.role else {
         return false;

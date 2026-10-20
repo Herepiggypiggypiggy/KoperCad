@@ -785,7 +785,7 @@ mod tests {
 
     #[test]
     fn a_long_point_name_is_shown_short_and_pairs_one_to_one() {
-        let long = "=11D31+K1BG1/14 Hijsmotoren Fijn / Grof.7";
+        let long = "=A1+CAB1/14 Hoist motors slow / fast.7";
         let mut file = crate::eplan::pxf::read_pxf_str(include_str!(
             "../../../tests/fixtures/pxf/synthetic-small.epj"
         ))
@@ -795,7 +795,7 @@ mod tests {
             point(1, long),
             point(0, "L1"),
             point(0, "N1"),
-            point(0, "=10D11+K1BG1+W1M02_W2/PE"),
+            point(0, "=B2+CAB2+W9_W2/PE"),
             // On a page that is not drawn: not named at all.
             point(5, "=99X99+Z/Y"),
         ];
@@ -808,7 +808,7 @@ mod tests {
             shown[long], "N2",
             "N1 is a real name, so the first free one"
         );
-        assert_eq!(shown["=10D11+K1BG1+W1M02_W2/PE"], "N3");
+        assert_eq!(shown["=B2+CAB2+W9_W2/PE"], "N3");
         assert_eq!(shown.len(), 4);
         // Both ends of the long name show the same short one.
         let ends: BTreeSet<&String> = file.interruptions[..2]
