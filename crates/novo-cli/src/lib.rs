@@ -391,7 +391,7 @@ enum Import {
         lang: String,
     },
     /// Preview a crane configurator project as a KoperCAD import. Give the
-    /// `.epj`, a version folder (`v95`), the project folder (the newest
+    /// `.epj`, a version folder (`v3`), the project folder (the newest
     /// version is read) or the configurator's `output` folder. Same report
     /// as `eplan`, plus the configurator's own project check and what is
     /// exact and what is inferred. Nothing is written unless `--output`

@@ -80,7 +80,7 @@ fn standalone_outputs(project: &Project) -> Vec<ReportOutput> {
     outputs
 }
 
-/// The contents list of one panel (`toc@+K1B1G1`): the pages of that panel
+/// The contents list of one panel (`toc@+BAY1G1`): the pages of that panel
 /// only, in the same order and with the same columns as the project's
 /// [`TableOfContents`]. Pages of the panel under several page groups are
 /// all listed. It is created for a generated page whose generator id names
@@ -269,7 +269,7 @@ fn contents(
     }
 }
 
-/// The page group of a page (`=10D41`), empty for a page in none.
+/// The page group of a page (`=20D41`), empty for a page in none.
 fn group_of(page: &Page) -> String {
     DeviceTag {
         function: page.structure.function.clone(),
@@ -278,7 +278,7 @@ fn group_of(page: &Page) -> String {
     .to_string()
 }
 
-/// The panel of a page (`+K1B1G1`), empty for a page in none.
+/// The panel of a page (`+BAY1G1`), empty for a page in none.
 fn panel_of(page: &Page) -> String {
     DeviceTag {
         location: page.structure.location.clone(),

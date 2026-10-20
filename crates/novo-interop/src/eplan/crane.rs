@@ -40,11 +40,11 @@ pub enum CraneError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CraneSource {
     pub epj: PathBuf,
-    /// The folder holding the `.epj` (`.../v95`).
+    /// The folder holding the `.epj` (`.../v3`).
     pub dir: PathBuf,
-    /// `95` for `v95`, when the folder is named so.
+    /// `3` for `v3`, when the folder is named so.
     pub version: Option<u32>,
-    /// The project folder name in `output/custom/<name>/v95`.
+    /// The project folder name in `output/custom/<name>/v3`.
     pub name: Option<String>,
     /// Other versions of the same project that were not picked.
     pub other_versions: Vec<u32>,
