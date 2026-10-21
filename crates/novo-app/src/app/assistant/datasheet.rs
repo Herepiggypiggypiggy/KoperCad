@@ -106,6 +106,17 @@ fn review_of(file: String, draft: Draft) -> Review {
     }
 }
 
+/// Equal ignoring case, spaces and dashes, so "ab-100" matches "AB 100".
+fn same_text(a: &str, b: &str) -> bool {
+    let key = |s: &str| -> String {
+        s.chars()
+            .filter(|c| !c.is_whitespace() && *c != '-')
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+    key(a) == key(b)
+}
+
 impl Review {
     fn text_of(&self, key: &str) -> String {
         self.rows
@@ -293,6 +304,15 @@ impl NovoApp {
         Ok(format!("Added part {maker} {order}"))
     }
 
+    /// Drops a running reading. The request may already be billed; its answer
+    /// is discarded unread.
+    pub(super) fn datasheet_stop(&mut self) {
+        self.wb.assistant.sheet.stage = Stage::Note(
+            "Stopped. Anthropic may still bill the request, and its cost is not counted here."
+                .into(),
+        );
+    }
+
     /// Whether the part being reviewed is already in the project.
     pub(super) fn datasheet_duplicate(&self) -> bool {
         let Stage::Review(review) = &self.wb.assistant.sheet.stage else {
@@ -308,7 +328,7 @@ impl NovoApp {
         self.document().is_some_and(|d| {
             d.project()
                 .parts()
-                .any(|p| p.manufacturer == maker && p.order_number == order)
+                .any(|p| same_text(&p.manufacturer, &maker) && same_text(&p.order_number, &order))
         })
     }
 
@@ -353,7 +373,8 @@ impl NovoApp {
                     );
                     ui.weak(format!(
                         "A PDF is billed per page, as text and as pictures, so a long \
-                         datasheet can cost a few dollars. Spent this month: ${spent:.2}."
+                         datasheet costs more than a short one. Counted by KoperCAD this \
+                         month: ${spent:.2}."
                     ));
                     ui.horizontal(|ui| {
                         send = ui.button("Send datasheet").clicked();
@@ -423,11 +444,7 @@ impl NovoApp {
             self.datasheet_start(&ctx);
         }
         if stop {
-            // The request may already be billed; its answer is dropped unread.
-            self.wb.assistant.sheet.stage = Stage::Note(
-                "Stopped. Anthropic may still bill the request, and its cost is not counted here."
-                    .into(),
-            );
+            self.datasheet_stop();
         }
         if cancel || note_clear {
             self.wb.assistant.sheet.stage = Stage::Idle;
