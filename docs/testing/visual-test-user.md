@@ -7,6 +7,9 @@ person does: look at it, read its labels, click, drag, scroll and type.
 Where to find it: `kopercad --control` (app), `kopercad-cli test-user` (MCP
 server), `scripts/test-user-mcp.sh` (launcher, also what `.mcp.json` runs).
 
+For scripted runs, screenshots at fixed sizes and audit reports see `docs/testing/qa-suite.md`
+(`scripts/qa.sh`), which is built on this harness.
+
 ## Parts
 
 1. **Control mode** (`crates/novo-app/src/control.rs`). `kopercad --control[=PORT]`
@@ -32,7 +35,8 @@ server), `scripts/test-user-mcp.sh` (launcher, also what `.mcp.json` runs).
 the page, devices, wires, nets and cabinets), `answer_dialog path|paths` and
 `dialogs` (native file dialogs are answered by the harness, queue the answer
 first), `restart [project] [fresh]` (kills the app, `fresh=false` keeps the
-profile to test crash recovery), `quit`. Coordinates are window points. The schematic
+profile to test crash recovery), `check_layout` (cheap layout check of the screen),
+`finding` and `report` (file findings, write the audit report; see qa-suite.md), `quit`. Coordinates are window points. The schematic
 canvas and the 3D view are painted, not widgets, so they are not in `ui_tree`:
 use screenshots and coordinates there. Icon-only buttons have an empty label
 in the tree (a finding in itself); hover them and take a screenshot to see the

@@ -25,6 +25,10 @@ pub struct Report {
     pub moved: Vec<(String, usize)>,
     /// What stayed behind.
     pub lossy: Vec<Lossy>,
+    /// What came across with a value the file did not state: a box where no
+    /// library symbol fits, a default size, a route the importer drew.
+    /// Nothing is missing, but it is not exact either.
+    pub guessed: Vec<Lossy>,
     /// Things worth knowing that lose nothing.
     pub notes: Vec<String>,
 }
@@ -40,6 +44,18 @@ impl Report {
     pub fn lost(&mut self, what: impl Into<String>, count: usize, why: impl Into<String>) {
         if count > 0 {
             self.lossy.push(Lossy {
+                what: what.into(),
+                count,
+                why: why.into(),
+            });
+        }
+    }
+
+    /// Records something kept with a guessed or defaulted value; a count of
+    /// zero records nothing.
+    pub fn guess(&mut self, what: impl Into<String>, count: usize, why: impl Into<String>) {
+        if count > 0 {
+            self.guessed.push(Lossy {
                 what: what.into(),
                 count,
                 why: why.into(),
@@ -64,6 +80,11 @@ impl Report {
         self.lossy.is_empty()
     }
 
+    /// Nothing left out and nothing guessed.
+    pub fn is_exact(&self) -> bool {
+        self.lossy.is_empty() && self.guessed.is_empty()
+    }
+
     /// One line: `12 devices, 40 terminals. Left out: 6 wires.`
     pub fn summary(&self) -> String {
         let mut s = if self.moved.is_empty() {
@@ -81,6 +102,14 @@ impl Report {
                 .collect();
             let _ = write!(s, " Left out: {}.", parts.join(", "));
         }
+        if !self.guessed.is_empty() {
+            let parts: Vec<String> = self
+                .guessed
+                .iter()
+                .map(|l| format!("{} {}", l.count, l.what))
+                .collect();
+            let _ = write!(s, " Guessed: {}.", parts.join(", "));
+        }
         s
     }
 
@@ -89,6 +118,9 @@ impl Report {
         let mut s = self.summary();
         for l in &self.lossy {
             let _ = write!(s, "\n- {} {}: {}", l.count, l.what, l.why);
+        }
+        for l in &self.guessed {
+            let _ = write!(s, "\n- {} {} (guessed): {}", l.count, l.what, l.why);
         }
         for n in &self.notes {
             let _ = write!(s, "\n- {n}");
@@ -110,6 +142,26 @@ mod tests {
         assert_eq!(r.summary(), "12 devices. Left out: 6 wires.");
         assert!(r.text().contains("- 6 wires: a STEP file has no wires"));
         assert!(!r.is_lossless());
+    }
+
+    #[test]
+    fn guesses_are_listed_apart_from_what_was_left_out() {
+        let mut r = Report::default();
+        r.moved("symbols", 10);
+        r.guess(
+            "symbols as boxes",
+            3,
+            "no library symbol has that pin count",
+        );
+        r.guess("sizes", 0, "never shown");
+        assert_eq!(r.summary(), "10 symbols. Guessed: 3 symbols as boxes.");
+        assert!(
+            r.text()
+                .contains("- 3 symbols as boxes (guessed): no library")
+        );
+        assert!(r.is_lossless(), "a guess loses nothing");
+        assert!(!r.is_exact());
+        assert!(Report::default().is_exact());
     }
 
     #[test]

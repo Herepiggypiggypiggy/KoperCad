@@ -973,6 +973,7 @@ fn import_eplan_previews_with_a_counted_not_carried_list_and_writes_nothing() {
     assert!(r.out.contains("symbol drawings"), "{}", r.out);
     let r = novo(&["import", "eplan", s(&pxf), "--json"]);
     assert!(r.out.contains("\"not_carried\""), "{}", r.out);
+    assert!(r.out.contains("\"guessed\""), "{}", r.out);
 }
 
 fn crane_fixture() -> PathBuf {

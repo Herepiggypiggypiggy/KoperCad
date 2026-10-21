@@ -1,0 +1,1 @@
+- 2026-10-21 gap clearance verdict on dimensions, tests green

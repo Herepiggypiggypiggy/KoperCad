@@ -106,6 +106,10 @@ pub(crate) struct View3dMode {
     built_layers: Layers,
     /// The hidden items the scene was built with.
     built_hidden: BTreeSet<ItemId>,
+    /// Whether the scene was built with the duct fill tints, and the fill of
+    /// each duct at a project revision.
+    built_duct_fill: bool,
+    duct_fill: Option<(StructureId, u64, Vec<super::cabinet_routes::DuctFill>)>,
     /// The routed wires of an enclosure at a project revision.
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
     /// What each routed wire comes to, for the hover card and the list.
@@ -161,6 +165,8 @@ impl Default for View3dMode {
             heat_scene: None,
             built_layers: Layers::default(),
             built_hidden: BTreeSet::new(),
+            built_duct_fill: false,
+            duct_fill: None,
             wires: None,
             wire_facts: None,
             wire_runs: false,
@@ -284,14 +290,28 @@ impl NovoApp {
         let stale = mode.built_models != mode.models.revision
             || !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
             || mode.built_layers != layers
-            || mode.built_hidden != mode.controls.hidden;
+            || mode.built_hidden != mode.controls.hidden
+            || mode.built_duct_fill != mode.controls.duct_fill;
         if stale {
             let started = Instant::now();
             let mut routing_ms = None;
             // Routing is the slow part: it is redone only for a new revision.
-            let wires = if layers.wires {
-                if !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision) {
-                    let routed = novo_routing::model::route_project(project);
+            let want_fill = mode.controls.duct_fill;
+            let fill_stale =
+                !matches!(&mode.duct_fill, Some((s, r, _)) if *s == id && *r == revision);
+            let wires_stale = !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision);
+            if (layers.wires && wires_stale) || (want_fill && fill_stale) {
+                let routed = novo_routing::model::route_project(project);
+                if want_fill {
+                    let fills = routed
+                        .plans
+                        .iter()
+                        .find(|(s, _)| *s == id)
+                        .map(|(_, plan)| super::cabinet_routes::duct_fills(project, id, plan))
+                        .unwrap_or_default();
+                    mode.duct_fill = Some((id, revision, fills));
+                }
+                if layers.wires && wires_stale {
                     let inputs = model::wires_with(project, id, &routed);
                     let on_plate = inputs.iter().map(|w| w.id).collect();
                     mode.wire_facts = Some((
@@ -300,8 +320,10 @@ impl NovoApp {
                         view3d_wires::facts(project, &routed, &on_plate),
                     ));
                     mode.wires = Some((id, revision, inputs));
-                    routing_ms = Some(started.elapsed().as_secs_f32() * 1000.0);
                 }
+                routing_ms = Some(started.elapsed().as_secs_f32() * 1000.0);
+            }
+            let wires = if layers.wires {
                 mode.wires.as_ref().map(|w| w.2.clone()).unwrap_or_default()
             } else {
                 Vec::new()
@@ -326,6 +348,9 @@ impl NovoApp {
                         &model::inputs(project, id),
                     );
                 }
+                if want_fill && let Some((_, _, fills)) = &mode.duct_fill {
+                    super::view3d_duct_fill::tint(&mut built, fills);
+                }
                 // Items deleted from the project are no longer hidden.
                 mode.controls.hidden.retain(|i| built.get(*i).is_some());
                 // The renderer redraws on a new scene revision only: `refresh`
@@ -343,6 +368,7 @@ impl NovoApp {
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
                 mode.built_hidden = mode.controls.hidden.clone();
+                mode.built_duct_fill = want_fill;
                 let total = started.elapsed().as_secs_f32() * 1000.0;
                 mode.stats.build = Build {
                     scene_ms: total - routing_ms.unwrap_or(0.0),
@@ -1229,11 +1255,9 @@ fn heat_controls(
         }
         ui.checkbox(&mut h.lines, "Airflow")
             .on_hover_text("Streamlines from in front of the devices; faster air is brighter");
-        let top = if h.arrows {
-            super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at)
-        } else {
-            0.0
-        };
+        let top = h
+            .arrows
+            .then(|| super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at));
         ui.checkbox(&mut h.cloud, "Cloud").on_hover_text(
             "The whole cabinet volume as see-through layers coloured by air temperature; air near ambient is invisible, hotter air is more opaque. Layers are cut across the direction you look along, so turning the view across the cabinet re-cuts them",
         );
@@ -1243,14 +1267,21 @@ fn heat_controls(
                     .show_value(false),
             )
             .on_hover_text("How solid the cloud looks");
+            ui.add(
+                egui::DragValue::new(&mut h.cloud_layers)
+                    .range(heat_cloud::LAYERS_RANGE)
+                    .suffix(" layers"),
+            )
+            .on_hover_text(
+                "Slices through the cabinet: fewer is lighter on a slow graphics card, more is smoother",
+            );
         }
         ui.checkbox(&mut h.carry, "Heat flow").on_hover_text(
             "Where the heat goes: orange lines and moving dashes follow the heat the air carries away from hot parts (brighter is more heat per area); arrows inside plate, rails and devices show heat conducted through them. Derived from the solved temperature and air speed; surface radiation is not included. Air colder than ambient takes heat in, so its lines point against the air",
         );
-        ui.checkbox(&mut h.arrows, "Arrows").on_hover_text(format!(
-            "Arrows on the slice plane point where the air goes. Length is relative to the fastest air on this plane (now {top:.2} m/s), so two planes cannot be compared by length; air under 2 % of that is not drawn"
-        ));
-        if h.arrows {
+        ui.checkbox(&mut h.arrows, "Arrows")
+            .on_hover_text(super::heat_arrows::hover_text(top));
+        if let Some(top) = top.filter(|_| h.arrows) {
             ui.label(egui::RichText::new(format!("longest {top:.2} m/s")).small());
         }
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(

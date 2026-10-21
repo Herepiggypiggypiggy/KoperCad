@@ -1,38 +1,21 @@
 //! The Claude assistant window, driven with a scripted transport: no network.
 
-use std::collections::VecDeque;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use eframe::egui;
-use novo_ai::api::{HttpRequest, HttpResponse, Transport};
+use novo_ai::api::testing::Script;
 use novo_ai::consent::{Consent, DataScope};
 use novo_ai::key::{ApiKey, KeyStore};
+use novo_ai::tools::Proposal;
 use serde_json::{Value, json};
 
 use super::assistant::*;
 use super::gate1_tests::Drive;
 use crate::actions::Action;
 
-#[derive(Clone, Default)]
-struct Script {
-    replies: Arc<Mutex<VecDeque<Value>>>,
-    seen: Arc<Mutex<Vec<HttpRequest>>>,
-}
-
-impl Transport for Script {
-    fn send(&mut self, req: &HttpRequest) -> Result<HttpResponse, String> {
-        self.seen.lock().unwrap().push(req.clone());
-        let body = self
-            .replies
-            .lock()
-            .unwrap()
-            .pop_front()
-            .ok_or("script ran out")?;
-        Ok(HttpResponse {
-            status: 200,
-            headers: vec![],
-            body: body.to_string(),
-        })
+fn queue<const N: usize>(script: &Script, replies: [Value; N]) {
+    for r in replies {
+        script.push(200, r);
     }
 }
 
@@ -108,10 +91,13 @@ fn it_is_off_by_default_and_the_command_opens_the_window() {
 #[test]
 fn a_question_with_a_lookup_answers_and_counts_the_cost() {
     let mut s = setup(DataScope::Project);
-    s.script.replies.lock().unwrap().extend([
-        tool("t1", "project_outline", json!({})),
-        text("Your project has devices."),
-    ]);
+    queue(
+        &s.script,
+        [
+            tool("t1", "project_outline", json!({})),
+            text("Your project has devices."),
+        ],
+    );
     ask(&mut s, "What is in my project?");
     let st = &s.d.app.wb.assistant;
     assert!(st.transcript_text().contains("Your project has devices."));
@@ -136,10 +122,13 @@ fn a_question_with_a_lookup_answers_and_counts_the_cost() {
 #[test]
 fn with_no_data_scope_no_project_text_reaches_the_request() {
     let mut s = setup(DataScope::None);
-    s.script.replies.lock().unwrap().extend([
-        tool("t1", "read_project", json!({"section": "devices"})),
-        text("I may not look."),
-    ]);
+    queue(
+        &s.script,
+        [
+            tool("t1", "read_project", json!({"section": "devices"})),
+            text("I may not look."),
+        ],
+    );
     ask(&mut s, "List devices");
     let seen = s.script.seen.lock().unwrap();
     let second: Value = serde_json::from_str(&seen[1].body).unwrap();
@@ -157,14 +146,17 @@ fn a_proposal_applies_as_one_undo_step() {
         let dev = doc.project().devices().next().unwrap();
         (dev.id.raw(), dev.tag.to_string())
     };
-    s.script.replies.lock().unwrap().extend([
-        tool(
-            "t1",
-            "propose_edit",
-            json!({"action": "rename_device", "args": {"device_id": id, "tag": "-K99"}}),
-        ),
-        text("I suggest renaming it."),
-    ]);
+    queue(
+        &s.script,
+        [
+            tool(
+                "t1",
+                "propose_edit",
+                json!({"action": "rename_device", "args": {"device_id": id, "tag": "-K99"}}),
+            ),
+            text("I suggest renaming it."),
+        ],
+    );
     ask(&mut s, "Rename the first device to -K99");
     // Nothing changed yet.
     let tag_now = |s: &Setup| {
@@ -188,7 +180,7 @@ fn a_proposal_applies_as_one_undo_step() {
     s.d.app.assistant_test_decide(idx, true);
     assert_eq!(tag_now(&s), "-K99");
     // The decision is told to Claude with the next message.
-    s.script.replies.lock().unwrap().push_back(text("Good."));
+    queue(&s.script, [text("Good.")]);
     ask(&mut s, "ok");
     let seen = s.script.seen.lock().unwrap();
     let last: Value = serde_json::from_str(&seen.last().unwrap().body).unwrap();
@@ -209,14 +201,17 @@ fn a_rejected_proposal_changes_nothing() {
         let dev = doc.project().devices().next().unwrap();
         (dev.id.raw(), dev.tag.to_string())
     };
-    s.script.replies.lock().unwrap().extend([
-        tool(
-            "t1",
-            "propose_edit",
-            json!({"action": "rename_device", "args": {"device_id": id, "tag": "-K99"}}),
-        ),
-        text("Suggested."),
-    ]);
+    queue(
+        &s.script,
+        [
+            tool(
+                "t1",
+                "propose_edit",
+                json!({"action": "rename_device", "args": {"device_id": id, "tag": "-K99"}}),
+            ),
+            text("Suggested."),
+        ],
+    );
     ask(&mut s, "rename");
     let idx = s.d.app.wb.assistant.first_proposal_index().unwrap();
     s.d.app.assistant_test_decide(idx, false);
@@ -235,16 +230,10 @@ fn a_rejected_proposal_changes_nothing() {
 fn the_monthly_limit_blocks_a_message_without_sending_it() {
     let mut s = setup(DataScope::Outline);
     s.d.app.settings.ai.monthly_cap_usd = 1.0;
-    s.script
-        .replies
-        .lock()
-        .unwrap()
-        .push_back(text("expensive"));
     // Spend the cap with one answer that costs more than $1 (400k output tokens on Opus).
     let mut big = text("expensive");
     big["usage"] = json!({"input_tokens": 0, "output_tokens": 400_000});
-    s.script.replies.lock().unwrap().clear();
-    s.script.replies.lock().unwrap().push_back(big);
+    queue(&s.script, [big]);
     ask(&mut s, "first");
     let before = s.script.seen.lock().unwrap().len();
     ask(&mut s, "second");
@@ -301,10 +290,13 @@ fn snapshots_grow_with_the_scope() {
 #[test]
 fn narrowing_the_scope_drops_the_chat_so_old_reads_are_not_sent_again() {
     let mut s = setup(DataScope::Project);
-    s.script.replies.lock().unwrap().extend([
-        tool("t1", "read_project", json!({"section": "devices"})),
-        text("First answer."),
-    ]);
+    queue(
+        &s.script,
+        [
+            tool("t1", "read_project", json!({"section": "devices"})),
+            text("First answer."),
+        ],
+    );
     ask(&mut s, "List the devices");
     let first_tool_result = {
         let seen = s.script.seen.lock().unwrap();
@@ -317,11 +309,7 @@ fn narrowing_the_scope_drops_the_chat_so_old_reads_are_not_sent_again() {
     assert!(first_tool_result.contains("tag"));
     // The person narrows the scope, then asks again.
     s.d.app.settings.ai.consent = Consent::give(DataScope::None, 1_792_000_100);
-    s.script
-        .replies
-        .lock()
-        .unwrap()
-        .push_back(text("Second answer."));
+    queue(&s.script, [text("Second answer.")]);
     ask(&mut s, "What did you see before?");
     let seen = s.script.seen.lock().unwrap();
     let last = &seen.last().unwrap().body;
@@ -343,10 +331,10 @@ fn narrowing_the_scope_drops_the_chat_so_old_reads_are_not_sent_again() {
 #[test]
 fn widening_the_scope_keeps_the_chat() {
     let mut s = setup(DataScope::Outline);
-    s.script.replies.lock().unwrap().push_back(text("One."));
+    queue(&s.script, [text("One.")]);
     ask(&mut s, "hi");
     s.d.app.settings.ai.consent = Consent::give(DataScope::Project, 1_792_000_100);
-    s.script.replies.lock().unwrap().push_back(text("Two."));
+    queue(&s.script, [text("Two.")]);
     ask(&mut s, "again");
     assert_eq!(s.d.app.wb.assistant.conversation_len(), 4);
     assert!(
@@ -359,13 +347,168 @@ fn widening_the_scope_keeps_the_chat() {
 }
 
 #[test]
+fn the_other_edits_apply_and_undo() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    let (dev, tag) = {
+        let p = d.app.document().unwrap().project();
+        let dv = p.devices().next().unwrap();
+        (dv.id.raw(), dv.tag.to_string())
+    };
+    let known = known_of(d.app.document().unwrap().project());
+    let (cmd, summary) = proposal_command(
+        &known,
+        "set_property",
+        &json!({"device_id": dev, "key": "note", "value": "check"}),
+    )
+    .unwrap();
+    assert!(summary.contains(&tag) && summary.contains("note"));
+    assert!(d.app.execute(cmd).unwrap().is_ok());
+    let prop = |d: &Drive| {
+        d.app
+            .document()
+            .unwrap()
+            .project()
+            .device(dev.into())
+            .unwrap()
+            .properties
+            .get("note")
+            .cloned()
+    };
+    assert!(prop(&d).is_some());
+    // The card says what the next change replaces.
+    let again = Proposal {
+        id: 1,
+        action: "set_property".into(),
+        args: json!({"device_id": dev, "key": "note", "value": "other"}),
+        summary: String::new(),
+    };
+    let note = proposal_note(d.app.document().unwrap().project(), &again).unwrap();
+    assert!(note.contains("check"), "{note}");
+    d.app.run(&ctx, Action::Undo);
+    assert!(prop(&d).is_none(), "one undo removes the property");
+    // Long keys and values are refused.
+    let long = "x".repeat(MAX_VALUE_CHARS + 1);
+    assert!(
+        proposal_command(
+            &known,
+            "set_property",
+            &json!({"device_id": dev, "key": "note", "value": long}),
+        )
+        .is_err()
+    );
+    let (cmd, summary) = proposal_command(
+        &known,
+        "add_page",
+        &json!({"name": "ZZ1", "title": "Added"}),
+    )
+    .unwrap();
+    assert_eq!(summary, "Add page ZZ1 (Added)");
+    let pages = d.app.document().unwrap().project().pages().count();
+    assert!(d.app.execute(cmd).unwrap().is_ok());
+    assert_eq!(
+        d.app.document().unwrap().project().pages().count(),
+        pages + 1
+    );
+    // A part that is not there is refused with the section to look in.
+    let e = proposal_command(
+        &known,
+        "assign_part",
+        &json!({"device_id": dev, "part_id": 999_999}),
+    )
+    .unwrap_err();
+    assert!(e.contains("parts"));
+    // An existing part assigns and undoes.
+    let parts_of = |d: &Drive| {
+        d.app
+            .document()
+            .unwrap()
+            .project()
+            .device(dev.into())
+            .unwrap()
+            .parts
+            .clone()
+    };
+    let before = parts_of(&d);
+    let part = d
+        .app
+        .document()
+        .unwrap()
+        .project()
+        .parts()
+        .map(|x| x.id)
+        .find(|id| !before.contains(id))
+        .expect("the example has a part not on the first device");
+    let (cmd, summary) = proposal_command(
+        &known,
+        "assign_part",
+        &json!({"device_id": dev, "part_id": part.raw()}),
+    )
+    .unwrap();
+    assert!(summary.starts_with("Assign part"));
+    assert!(d.app.execute(cmd).unwrap().is_ok());
+    assert!(parts_of(&d).contains(&part));
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(parts_of(&d), before);
+}
+
+#[test]
+fn assign_part_gives_nothing_away_below_the_whole_project() {
+    let mut s = setup(DataScope::Outline);
+    let (dev, part) = {
+        let p = s.d.app.document().unwrap().project();
+        (
+            p.devices().next().unwrap().id.raw(),
+            p.parts().next().map(|x| x.id.raw()).unwrap_or(1),
+        )
+    };
+    queue(
+        &s.script,
+        [
+            tool(
+                "t1",
+                "propose_edit",
+                json!({"action": "assign_part", "args": {"device_id": dev, "part_id": part}}),
+            ),
+            tool(
+                "t2",
+                "propose_edit",
+                json!({"action": "assign_part", "args": {"device_id": dev, "part_id": 999_999}}),
+            ),
+            text("done"),
+        ],
+    );
+    ask(&mut s, "Assign a part");
+    let seen = s.script.seen.lock().unwrap();
+    let last: Value = serde_json::from_str(&seen.last().unwrap().body).unwrap();
+    let results = last["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|m| m["content"].as_array())
+        .flatten()
+        .filter(|c| c["type"] == "tool_result")
+        .map(|c| c["content"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(results.len(), 2);
+    assert_eq!(
+        results[0], results[1],
+        "same answer for a real and a missing part"
+    );
+    assert!(results[0].contains("not allowed"), "{}", results[0]);
+    drop(seen);
+    assert!(
+        s.d.app.wb.assistant.first_proposal_index().is_none(),
+        "no card was made"
+    );
+}
+
+#[test]
 fn ctrl_k_offers_to_ask_claude_when_nothing_matches_and_only_when_it_is_on() {
     let mut s = setup(DataScope::Outline);
-    s.script
-        .replies
-        .lock()
-        .unwrap()
-        .push_back(text("Because of the load."));
+    s.script.push(200, text("Because of the load."));
     let ctx = s.d.ctx.clone();
     s.d.app
         .wb
@@ -419,7 +562,7 @@ fn ctrl_k_offers_to_ask_claude_when_nothing_matches_and_only_when_it_is_on() {
 #[test]
 fn a_ctrl_k_question_while_claude_answers_is_refused_not_doubled() {
     let mut s = setup(DataScope::Outline);
-    s.script.replies.lock().unwrap().push_back(text("First."));
+    s.script.push(200, text("First."));
     s.d.app.wb.assistant.set_draft("first question");
     let ctx = s.d.ctx.clone();
     s.d.app.assistant_test_send(&ctx);

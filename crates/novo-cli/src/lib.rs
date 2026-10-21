@@ -26,6 +26,7 @@ use serde_json::{Value, json};
 mod eplan;
 mod macros;
 mod parts;
+mod qa;
 mod testuser;
 
 /// Process exit codes.
@@ -78,6 +79,10 @@ enum Cmd {
     /// (screenshots, mouse, keyboard) as a first-time user. See
     /// docs/testing/visual-test-user.md.
     TestUser(testuser::TestUser),
+    /// The test and screenshot suite: run scenario files against the real
+    /// app, save screenshots, write an audit report. See docs/testing/qa-suite.md.
+    #[command(subcommand)]
+    Qa(qa::Qa),
     /// Show a summary of a project file.
     Info {
         file: PathBuf,
@@ -472,6 +477,7 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         Cmd::Macros(cmd) => macros::run(cmd, out),
         Cmd::Eplan(cmd) => eplan::run(cmd, out),
         Cmd::TestUser(opts) => testuser::run(opts, out),
+        Cmd::Qa(cmd) => qa::run(cmd, out),
         Cmd::Parts(cmd) => parts::run(cmd, out),
         Cmd::Info { file, json } => {
             let project = read(&file)?;
@@ -871,12 +877,18 @@ fn finish_import(
             .iter()
             .map(|l| json!({"what": l.what, "count": l.count, "why": l.why}))
             .collect();
+        let guessed: Vec<Value> = report
+            .guessed
+            .iter()
+            .map(|l| json!({"what": l.what, "count": l.count, "why": l.why}))
+            .collect();
         let doc = json!({
             "summary": plan.summary(),
             "creates": plan.creates(),
             "existing": plan.existing,
             "carried": moved,
             "not_carried": not_carried,
+            "guessed": guessed,
             "notes": report.notes,
             "written": written,
         });
