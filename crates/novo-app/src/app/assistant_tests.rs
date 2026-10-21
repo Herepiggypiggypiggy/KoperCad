@@ -713,3 +713,38 @@ fn narrowing_the_scope_drops_an_attached_picture() {
             .contains("attached picture")
     );
 }
+
+#[test]
+fn a_panel_can_leave_a_question_and_only_when_claude_is_on() {
+    let mut s = setup(DataScope::Outline);
+    s.script.push(200, text("The cabinet stays cool."));
+    s.d.frame();
+    let ctx = s.d.ctx.clone();
+    assert!(super::assistant::claude_is_on(&ctx));
+    super::assistant::ask_claude_later(&ctx, "Describe this heat result".into());
+    for _ in 0..400 {
+        s.d.frame();
+        if s.d
+            .app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("stays cool")
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(s.script.seen.lock().unwrap().len(), 1);
+    // Off: the button is not offered and a left question is dropped.
+    let mut s = setup(DataScope::Outline);
+    s.d.app.settings.ai.enabled = false;
+    s.d.frame();
+    let ctx = s.d.ctx.clone();
+    assert!(!super::assistant::claude_is_on(&ctx));
+    super::assistant::ask_claude_later(&ctx, "Describe this heat result".into());
+    for _ in 0..20 {
+        s.d.frame();
+    }
+    assert!(s.script.seen.lock().unwrap().is_empty());
+}

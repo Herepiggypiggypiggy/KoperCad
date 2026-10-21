@@ -129,6 +129,14 @@ text_nl = "Nog geen lessen."
 text = "Open finished version"
 text_nl = "Afgeronde versie openen"
 
+[open_finished_confirm]
+text = "Replace this drawing with the finished version? Press Ctrl+S first to keep yours."
+text_nl = "Deze tekening vervangen door de afgeronde versie? Druk eerst op Ctrl+S om de jouwe te bewaren."
+
+[finished_project]
+text = "Finished: {title}"
+text_nl = "Af: {title}"
+
 [continue_line]
 text = "Continue: {lesson} (step {n} of {total})"
 text_nl = "Doorgaan: {lesson} (stap {n} van {total})"

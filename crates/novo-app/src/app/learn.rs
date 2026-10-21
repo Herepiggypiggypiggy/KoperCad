@@ -164,6 +164,9 @@ pub(crate) struct LearnState {
     pub(super) confirm_restart: bool,
     /// The Reset progress button was pressed and waits for a second click.
     pub(super) confirm_reset: bool,
+
+    /// "Open finished version" is waiting for a yes: it replaces the drawing.
+    pub(super) confirm_finished: bool,
     /// Lessons whose lint has errors, so they are not offered yet.
     coming: Option<BTreeSet<String>>,
     /// Controls registered so far this frame, and last frame.
@@ -214,6 +217,8 @@ impl LearnState {
             show_drafts: false,
             confirm_restart: false,
             confirm_reset: false,
+
+            confirm_finished: false,
             coming: None,
             anchors: BTreeMap::new(),
             rows: BTreeMap::new(),
@@ -971,6 +976,7 @@ impl NovoApp {
         self.learn.run = None;
         self.learn.hidden = false;
         self.learn.confirm_restart = false;
+        self.learn.confirm_finished = false;
         self.learn.revealed = None;
         self.learn.ticked_at = None;
     }
@@ -989,6 +995,63 @@ impl NovoApp {
             self.learn.ticked_at = None;
             self.learn.record();
         }
+    }
+
+    /// "Open finished version": the lesson's finished drawing opens as a
+    /// project of its own, as a lesson's sample project does. The lesson is
+    /// done when it was on its last step. Returns whether it opened.
+    pub(super) fn learn_open_finished(&mut self) -> bool {
+        self.learn.confirm_finished = false;
+        let Some(run) = self.learn.run.as_mut() else {
+            return false;
+        };
+        let lesson = run.lesson().clone();
+        let Some(path) = self
+            .learn
+            .catalog
+            .get(&lesson.id)
+            .and_then(|e| e.finished.clone())
+        else {
+            return false;
+        };
+        let last = run.index() + 1 >= run.progress().1;
+        if last && run.can_advance() {
+            run.advance();
+        }
+        let title = self.learn.say_with(
+            "finished_project",
+            &[("title", lesson.title(self.learn.lang))],
+        );
+        let opened = (|| -> Result<(), String> {
+            let text = self
+                .learn
+                .file(&path)
+                .ok_or_else(|| format!("{path} is missing"))?;
+            let mut project = Project::from_json(text).map_err(|e| format!("{path}: {e}"))?;
+            project
+                .transact("Lesson", |tx| tx.set_info(|info| info.name = title.clone()))
+                .map_err(|e| e.to_string())?;
+            self.backend
+                .new_project_from(project)
+                .map_err(|e| e.to_string())?;
+            self.project_path = None;
+            self.current_page = None;
+            self.document_replaced();
+            self.fix_current_page();
+            if let Some(doc) = self.backend.document_mut() {
+                doc.mark_saved();
+            }
+            Ok(())
+        })();
+        if let Err(why) = opened {
+            self.message(
+                Level::Error,
+                format!("Could not open the finished version: {why}"),
+            );
+            return false;
+        }
+        self.learn_end();
+        true
     }
 
     /// Restart lesson: a fresh copy of the sample project and no progress.

@@ -2300,7 +2300,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "export.pdf_options",
-            "Export PDF...",
+            "Export PDF with options...",
             "Export",
             &[
                 "pdf options",
