@@ -150,19 +150,63 @@ pub(super) struct State {
 /// used in order. Nothing is sent anywhere while it is set, and the window says so.
 pub(super) const REPLAY_VAR: &str = "KOPERCAD_AI_REPLAY";
 
-fn replay_script() -> Option<novo_ai::api::testing::Script> {
-    let path = std::env::var_os(REPLAY_VAR)?;
-    let list: Vec<Value> = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+/// The replay file read once: the script, or why it could not be read.
+/// While the variable is set the network is never used, even when this fails.
+fn replay() -> Option<&'static Result<novo_ai::api::testing::Script, String>> {
+    static REPLAY: std::sync::OnceLock<Option<Result<novo_ai::api::testing::Script, String>>> =
+        std::sync::OnceLock::new();
+    REPLAY
+        .get_or_init(|| {
+            let path = std::env::var_os(REPLAY_VAR)?;
+            Some(load_replay(&path))
+        })
+        .as_ref()
+}
+
+pub(super) fn load_replay(path: &std::ffi::OsStr) -> Result<novo_ai::api::testing::Script, String> {
+    let shown = path.to_string_lossy();
+    let bytes = std::fs::read(path).map_err(|e| format!("cannot read {shown}: {e}"))?;
+    let list: Vec<Value> = serde_json::from_slice(&bytes)
+        .map_err(|e| format!("{shown} is not a JSON list of replies: {e}"))?;
     let script = novo_ai::api::testing::Script::default();
     for reply in list {
         script.push(200, reply);
     }
-    Some(script)
+    Ok(script)
+}
+
+/// The line the window shows while the variable is set.
+fn replay_notice() -> Option<(String, bool)> {
+    Some(match replay()? {
+        Ok(_) => (
+            "Test replay: answers come from a file, nothing is sent".to_string(),
+            true,
+        ),
+        Err(why) => (
+            format!("Test replay failed ({why}). Nothing is sent and no answers will come"),
+            false,
+        ),
+    })
 }
 
 fn default_transport() -> TransportFactory {
-    match replay_script() {
-        Some(script) => Arc::new(move || Box::new(script.clone())),
+    transport_for(replay())
+}
+
+pub(super) fn transport_for(
+    replay: Option<&Result<novo_ai::api::testing::Script, String>>,
+) -> TransportFactory {
+    match replay {
+        // A readable file answers from it; an unreadable one gives an empty
+        // script, so every request fails here instead of reaching the network.
+        Some(Ok(script)) => {
+            let script = script.clone();
+            Arc::new(move || Box::new(script.clone()))
+        }
+        Some(Err(_)) => {
+            let empty = novo_ai::api::testing::Script::default();
+            Arc::new(move || Box::new(empty.clone()))
+        }
         None => Arc::new(|| Box::new(UreqTransport::new())),
     }
 }
@@ -274,7 +318,6 @@ impl State {
     }
 
     #[cfg(test)]
-    #[cfg(test)]
     pub(super) fn proposal_state(&self, index: usize) -> Option<ProposalState> {
         match self.transcript.get(index) {
             Some(Entry::Proposal(_, state)) => Some(state.clone()),
@@ -282,6 +325,7 @@ impl State {
         }
     }
 
+    #[cfg(test)]
     pub(super) fn transcript_text(&self) -> String {
         self.transcript
             .iter()
@@ -1287,11 +1331,8 @@ impl NovoApp {
         let spent = self.wb.assistant.spent();
         let cap = self.settings.ai.monthly_cap_usd;
         let model = models::resolve(&self.settings.ai.model);
-        if std::env::var_os(REPLAY_VAR).is_some() {
-            ui.label(
-                egui::RichText::new("Test replay: answers come from a file, nothing is sent")
-                    .color(pal.warning),
-            );
+        if let Some((line, loaded)) = replay_notice() {
+            ui.label(egui::RichText::new(line).color(if loaded { pal.warning } else { pal.error }));
         }
         ui.horizontal(|ui| {
             if enabled {

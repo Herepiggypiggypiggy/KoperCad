@@ -1173,3 +1173,35 @@ fn a_number_another_net_has_is_refused_with_a_reason_on_the_card() {
         other => panic!("the card should show the refusal, not {other:?}"),
     }
 }
+
+#[test]
+fn an_unreadable_replay_file_never_reaches_the_network() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = load_replay(dir.path().join("nope.json").as_os_str());
+    assert!(missing.err().unwrap().contains("cannot read"));
+    let bad = dir.path().join("bad.json");
+    std::fs::write(&bad, "not json").unwrap();
+    assert!(
+        load_replay(bad.as_os_str())
+            .err()
+            .unwrap()
+            .contains("not a JSON list")
+    );
+    let good = dir.path().join("good.json");
+    std::fs::write(&good, "[{\"id\":\"m\"}]").unwrap();
+    let script = load_replay(good.as_os_str()).unwrap();
+    assert_eq!(script.replies.lock().unwrap().len(), 1);
+
+    // With the variable set but the file unusable, a request fails inside the
+    // app: it is never handed to the real HTTP transport.
+    let failed: Result<novo_ai::api::testing::Script, String> = Err("broken".into());
+    let factory = transport_for(Some(&failed));
+    let request = novo_ai::api::HttpRequest {
+        method: novo_ai::api::Method::Post,
+        url: "https://api.anthropic.com/v1/messages".into(),
+        headers: vec![],
+        body: "{}".into(),
+    };
+    let reply = factory().send(&request);
+    assert!(reply.unwrap_err().contains("script ran out"), "no network");
+}
