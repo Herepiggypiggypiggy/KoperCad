@@ -1137,9 +1137,8 @@ impl NovoApp {
                         .on_hover_text(
                             "Sends a picture of this whole KoperCAD window with your next \
                              message: everything visible in it, whatever the data scope. \
-                             The picture stays in this chat and is sent again with each later \
-                             question until you press Clear chat. This window steps aside for \
-                             a moment.",
+                             It goes with that one question only; Claude is not shown it again. \
+                             This window steps aside for a moment.",
                         )
                         .clicked()
                     {

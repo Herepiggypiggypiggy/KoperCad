@@ -83,6 +83,34 @@ impl Conversation {
         user_text: &str,
         on_event: &mut dyn FnMut(Event),
     ) -> Result<TurnResult, ApiError> {
+        let result = self.run_turn_inner(client, host, settings, spent_before, user_text, on_event);
+        self.drop_pictures();
+        result
+    }
+
+    /// A picture goes with one question only: later requests carry a note in
+    /// its place, so it is neither re-sent (cost, privacy) nor kept in memory.
+    fn drop_pictures(&mut self) {
+        for m in &mut self.messages {
+            if let Some(blocks) = m["content"].as_array_mut() {
+                for b in blocks.iter_mut() {
+                    if b["type"] == "image" {
+                        *b = json!({"type": "text", "text": "[a picture of the window was attached to this question]"});
+                    }
+                }
+            }
+        }
+    }
+
+    fn run_turn_inner<T: Transport>(
+        &mut self,
+        client: &mut Client<T>,
+        host: &mut dyn ToolHost,
+        settings: &AiSettings,
+        spent_before: f64,
+        user_text: &str,
+        on_event: &mut dyn FnMut(Event),
+    ) -> Result<TurnResult, ApiError> {
         let start = self.messages.len();
         let result = self.turn(client, host, settings, spent_before, user_text, on_event);
         if result.is_err() {
@@ -475,5 +503,14 @@ mod tests {
         let later: Value = serde_json::from_str(&s.requests()[1].body).unwrap();
         assert_eq!(later["messages"][2]["content"], "and now?");
         assert!(conv.images.is_empty());
+        assert!(
+            !later["messages"][0].to_string().contains("\"image\""),
+            "the picture is not sent again"
+        );
+        assert!(
+            !serde_json::to_string(&conv.messages)
+                .unwrap()
+                .contains("iVBOR")
+        );
     }
 }
