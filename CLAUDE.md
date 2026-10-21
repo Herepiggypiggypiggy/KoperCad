@@ -21,6 +21,10 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
+Cloud sessions have a fixed disk allowance. Before the full workspace test run, and whenever a
+write fails with "no space left", run `scripts/free-disk.sh` (`--deep` removes `target/`). Use one
+shared `CARGO_TARGET_DIR` per session and test only the crates you changed while iterating.
+
 CI runs fmt, clippy (warnings are errors) and tests on Linux for every pull
 request, and on Windows for main and nightly.
 
