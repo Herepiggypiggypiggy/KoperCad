@@ -162,8 +162,9 @@ fn build_card(
         )?;
         if item.is_some() {
             built.channels += 1;
-            address_label(tx, page, channel, has_up, has_down)?;
         }
+        // A spare shows its address too: the card's free channels are the ones to find.
+        address_label(tx, page, channel, has_up, has_down)?;
         for (pin_index, pin) in pins.iter().enumerate() {
             let above = pin.direction == Some(Direction::Up);
             let pin_at = Point::new(x + pin.offset.x, y0 + pin.offset.y);
@@ -232,6 +233,11 @@ fn place_channel(
         // Marked, not keyed: the index keeps counting this channel as a spare.
         tx.set_property(id, SPARE, Some(Value::Bool(true)))?;
         tx.set_property(id, SIGNAL, Some(Value::from("Spare".to_owned())))?;
+        // The channel it stands for, so the address text can follow the card.
+        let number = u16::try_from(number)
+            .map_err(|_| refused("import I/O list", "too many channels".into()))?;
+        tx.set_property(id, CHANNEL, Some(Value::from(channel_key(kind, number))))?;
+        tx.set_property(id, ADDRESS_TEXT, Some(Value::from(String::new())))?;
         return Ok(id);
     };
     let number = u16::try_from(number)

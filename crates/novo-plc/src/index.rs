@@ -240,8 +240,36 @@ pub fn stale_address_texts(
     project: &Project,
     functions: &dyn Functions,
 ) -> Vec<(SymbolId, String)> {
+    // Most projects carry no address text at all: skip the index for them.
+    if !project
+        .symbols()
+        .any(|s| s.properties.contains_key(ADDRESS_TEXT))
+    {
+        return Vec::new();
+    }
     let index = PlcIndex::build(project, functions);
     let mut stale = Vec::new();
+    // A spare channel is not in the index; it names its channel for this.
+    for card in &index.cards {
+        for symbol in project.symbols_of_device(card.device) {
+            let (Some(Value::Text(shown)), Some(Value::Text(key))) = (
+                symbol.properties.get(ADDRESS_TEXT),
+                symbol.properties.get(CHANNEL),
+            ) else {
+                continue;
+            };
+            if !symbol.properties.contains_key(SPARE) {
+                continue;
+            }
+            let text = parse_channel(key)
+                .and_then(|(kind, number)| card.address_in(kind, number, index.style))
+                .map(|a| a.format(index.style))
+                .unwrap_or_default();
+            if *shown != text {
+                stale.push((symbol.id, text));
+            }
+        }
+    }
     for ch in &index.channels {
         let Some(symbol) = project.symbol(ch.symbol) else {
             continue;
