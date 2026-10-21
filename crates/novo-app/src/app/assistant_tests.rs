@@ -3,6 +3,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use eframe::egui;
 use novo_ai::api::{HttpRequest, HttpResponse, Transport};
 use novo_ai::consent::{Consent, DataScope};
 use novo_ai::key::{ApiKey, KeyStore};
@@ -355,4 +356,62 @@ fn widening_the_scope_keeps_the_chat() {
             .transcript_text()
             .contains("Scope narrowed")
     );
+}
+
+#[test]
+fn ctrl_k_offers_to_ask_claude_when_nothing_matches_and_only_when_it_is_on() {
+    let mut s = setup(DataScope::Outline);
+    s.script
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(text("Because of the load."));
+    let ctx = s.d.ctx.clone();
+    s.d.app
+        .wb
+        .field
+        .open(novo_workflow::palette::Mode::All, None);
+    s.d.app.wb.field.type_text("why does my motor trip qqzzxx");
+    s.d.frame();
+    s.d.frame_with(vec![egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }]);
+    for _ in 0..400 {
+        s.d.frame();
+        if !s.d.app.wb.assistant.is_running()
+            && s.d.app.wb.assistant.transcript_text().contains("load")
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let text_now = s.d.app.wb.assistant.transcript_text();
+    assert!(
+        text_now.contains("why does my motor trip qqzzxx"),
+        "{text_now}"
+    );
+    assert!(text_now.contains("Because of the load."));
+    assert!(s.d.app.wb.assistant.open);
+    let _ = ctx;
+    // Claude off: the same search runs nothing and sends nothing.
+    let mut s = setup(DataScope::Outline);
+    s.d.app.settings.ai.enabled = false;
+    s.d.app
+        .wb
+        .field
+        .open(novo_workflow::palette::Mode::All, None);
+    s.d.app.wb.field.type_text("why does my motor trip qqzzxx");
+    s.d.frame();
+    s.d.frame_with(vec![egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }]);
+    assert!(s.script.seen.lock().unwrap().is_empty());
 }

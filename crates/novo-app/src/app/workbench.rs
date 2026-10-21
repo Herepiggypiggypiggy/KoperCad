@@ -1479,9 +1479,13 @@ impl NovoApp {
         if !self.wb.field.is_open() {
             return;
         }
+        self.wb.field.ask_enabled = self.settings.ai.enabled;
         let picked = self.with_field(|field, sources| field.show(ctx, canvas, sources));
         if let Some(rect) = self.wb.field.rect() {
             self.anchor("palette.field", rect, "Command field");
+        }
+        if let Some(question) = self.wb.field.asked.take() {
+            self.ask_claude(ctx, question);
         }
         if let Some(target) = picked {
             self.run_target(ctx, target);
