@@ -24,7 +24,8 @@ pub(super) const PACKET_FILE: &str = "0 Bench packet.pdf";
 
 /// What the numbers of each part are, as the cover prints them.
 const DRAWING: &str = "Read from the drawing";
-const ROUTED: &str = "Wires from the drawing; lengths routed (exact to the model) or ~ estimates";
+const ROUTED: &str =
+    "Wires from the drawing; lengths routed along the ducts of the model, or ~ estimates";
 const TABLE: &str = "Planning values you can edit";
 
 /// Row height of the tick tables, mm.

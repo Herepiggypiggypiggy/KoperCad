@@ -126,13 +126,16 @@ impl NovoApp {
             }
         }
         // Files of the first version of this pack, now inside the packet.
+        let mut replaced: Vec<&str> = Vec::new();
         for old in [
             "2 Cut list.pdf",
             "3 Ferrules.pdf",
             "4 Labels.pdf",
             "5 Assembly checklist.pdf",
         ] {
-            let _ = std::fs::remove_file(folder.join(old));
+            if std::fs::remove_file(folder.join(old)).is_ok() {
+                replaced.push(old);
+            }
         }
         let mut separate: Vec<CoverLine> = templates
             .iter()
@@ -174,6 +177,12 @@ impl NovoApp {
             text.push_str(&format!(
                 ". Left out, nothing to print yet: {}",
                 skipped.join(", ")
+            ));
+        }
+        if !replaced.is_empty() {
+            text.push_str(&format!(
+                ". Replaced by the packet and removed: {}",
+                replaced.join(", ")
             ));
         }
         if !no_single_sheet.is_empty() {

@@ -136,9 +136,13 @@ pub fn circuit_sheets(project: &Project, jobs: &[WireCutJob]) -> ReportOutput {
         };
         let estimates = list.iter().filter(|j| is_estimate(&j.basis)).count();
         let mut title = format!(
-            "{name} · {} devices to fit, {} wires",
-            devices.len(),
-            list.len()
+            "{name} · {}, {}",
+            if devices.len() == 1 {
+                "1 device to fit".to_owned()
+            } else {
+                format!("{} devices to fit", devices.len())
+            },
+            crate::count_text(list.len(), "wires")
         );
         if estimates > 0 {
             title.push_str(&format!(" ({estimates} lengths are estimates ~)"));
@@ -182,8 +186,13 @@ pub fn circuit_sheets(project: &Project, jobs: &[WireCutJob]) -> ReportOutput {
                     Cell::text(if j.number.is_empty() { "-" } else { &j.number }),
                     Cell::text(j.end_a.designation.clone()),
                     Cell::text(j.end_b.designation.clone()),
-                    j.cross_section_mm2.into(),
-                    Cell::text(j.colour.clone()),
+                    j.cross_section_mm2
+                        .map_or_else(|| Cell::text("not set"), Cell::from),
+                    Cell::text(if j.colour.is_empty() {
+                        "not set"
+                    } else {
+                        &j.colour
+                    }),
                     Cell::text(length_text(j)),
                     Cell::text(ferrule_text(j)),
                 ],
@@ -192,7 +201,12 @@ pub fn circuit_sheets(project: &Project, jobs: &[WireCutJob]) -> ReportOutput {
         }
         for test in TESTS {
             section.push(
-                vec![Cell::text(TICK_BOX), Cell::text("Test"), Cell::text(test)],
+                vec![
+                    Cell::text(TICK_BOX),
+                    Cell::text("Test"),
+                    Cell::Empty,
+                    Cell::text(test),
+                ],
                 Vec::new(),
             );
         }
@@ -200,6 +214,7 @@ pub fn circuit_sheets(project: &Project, jobs: &[WireCutJob]) -> ReportOutput {
             vec![
                 Cell::Empty,
                 Cell::text("Signed"),
+                Cell::Empty,
                 Cell::text("Name and date:"),
             ],
             Vec::new(),
@@ -238,28 +253,72 @@ impl CoverLine {
     }
 }
 
+/// How the wire lengths were found, counted by basis, so the cover never
+/// says more than the data does.
+fn length_note(jobs: &[WireCutJob]) -> String {
+    let count = |f: &dyn Fn(&str) -> bool| jobs.iter().filter(|j| f(&j.basis)).count();
+    let routed = count(&|b| b == "routed");
+    let flat = count(&|b| b == "routed, no depth");
+    let cable = count(&|b| b == "cable length");
+    let stated = count(&|b| b == "to entry + stated outside");
+    let estimates = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
+    let mut parts: Vec<String> = Vec::new();
+    if routed > 0 {
+        parts.push(format!("{routed} routed along the ducts of the model"));
+    }
+    if flat > 0 {
+        parts.push(format!(
+            "{flat} routed without duct depth (flat: check the height)"
+        ));
+    }
+    if cable > 0 {
+        parts.push(format!("{cable} from a stated cable length"));
+    }
+    if stated > 0 {
+        parts.push(format!(
+            "{stated} with the outside part stated by the designer"
+        ));
+    }
+    if estimates > 0 {
+        parts.push(format!(
+            "{estimates} {} (~, from the schematic distance: measure on the plate before you cut)",
+            if estimates == 1 {
+                "estimate"
+            } else {
+                "estimates"
+            }
+        ));
+    }
+    format!(
+        "Wire lengths, {} in all: {}. Routed is as good as the cabinet layout; wiring done differently from the drawing needs your own margin.",
+        jobs.len(),
+        parts.join("; ")
+    )
+}
+
 /// The honest notes of the packet, printed on the cover. `jobs` are the wire
 /// jobs the packet was made from.
 pub fn cover_notes(jobs: &[WireCutJob]) -> Vec<String> {
-    let estimates = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
     let mut notes = vec![
         "Sheets marked \"print at 100 %\" are true size: print them at 100 % or actual size, never fit to page, and check the 100 mm ruler on each with a rule before you drill or cut.".to_owned(),
         "Hole and rail positions come from the cabinet layout; accuracy on paper is about 0.5 mm and was not measured on a real printer.".to_owned(),
         "Ferrule colours and lengths are a default table you can edit (Reports > Bench output). Makers differ above 16 mm²; it is not a claim of compliance with a standard.".to_owned(),
         "The test lines are a workshop routine, not an inspection record: use your own checks for a handover or a standard.".to_owned(),
     ];
-    if estimates > 0 {
+    if !jobs.is_empty() {
+        notes.insert(0, length_note(jobs));
+    }
+    let no_size = jobs
+        .iter()
+        .filter(|j| j.cross_section_mm2.is_none())
+        .count();
+    if no_size > 0 {
         notes.insert(
             0,
             format!(
-                "{estimates} of {} wire lengths are estimates (shown with ~): they come from the schematic distance, not from routing in the cabinet. Measure them on the plate before you cut.",
+                "{no_size} of {} wires have no cross-section: no ferrule is listed for them and they sit in one group. Set the size (Reports > Bench output > Cut list, or Autopilot), then print again.",
                 jobs.len()
             ),
-        );
-    } else if !jobs.is_empty() {
-        notes.insert(
-            0,
-            "Every wire length is routed through the cabinet's ducts. Add your own margin if the wiring is not done as drawn.".to_owned(),
         );
     }
     notes

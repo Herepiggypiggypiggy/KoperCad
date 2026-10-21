@@ -130,6 +130,21 @@ fn the_workshop_pack_holds_the_packet_and_the_labels_and_no_longer_the_loose_fil
     assert!(folder.join("0 Bench packet.pdf").exists());
     assert!(folder.join("2 Labels.pdf").exists());
     assert!(!folder.join("2 Cut list.pdf").exists());
-    let cover = &page_texts(&folder.join("0 Bench packet.pdf"))[0];
-    assert!(cover.contains("2 Labels.pdf"), "{cover}");
+    let pages = page_texts(&folder.join("0 Bench packet.pdf"));
+    assert!(pages[0].contains("2 Labels.pdf"), "{}", pages[0]);
+    let last = &d.app.messages().last().unwrap().text;
+    assert!(
+        last.contains("2 Cut list.pdf") && last.contains("removed"),
+        "{last}"
+    );
+    // No printed cell is cut off with an ellipsis (the tick lines are read at the bench).
+    for (n, p) in pages.iter().enumerate() {
+        assert!(!p.contains("..."), "page {} is cut off: {p}", n + 1);
+    }
+    assert!(
+        pages
+            .iter()
+            .any(|p| p.contains("ferrules compared with the")),
+        "the test lines are on a circuit sheet"
+    );
 }

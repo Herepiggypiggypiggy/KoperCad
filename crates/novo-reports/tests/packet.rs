@@ -114,7 +114,7 @@ fn estimated_lengths_carry_a_tilde_and_the_title_counts_them() {
     assert!(cuts.iter().any(|c| c == "~480"), "{cuts:?}");
     assert!(out.sections.iter().any(|s| s.title.contains("estimates ~")));
     let notes = cover_notes(&jobs);
-    assert!(notes[0].contains("1 of") && notes[0].contains("estimates"));
+    assert!(notes[0].contains("1 estimate (~"), "{}", notes[0]);
 }
 
 #[test]
@@ -152,4 +152,79 @@ fn the_cover_lists_what_it_is_given_and_never_claims_exactness_by_itself() {
     );
     let read = out.section("read-first").expect("notes");
     assert!(read.rows.len() >= 4);
+}
+
+#[test]
+fn wires_without_a_size_are_named_on_the_cover_with_the_count() {
+    let doc = cabinet();
+    let mut jobs = bench_jobs(doc.project());
+    let n = jobs.len();
+    jobs[0].cross_section_mm2 = None;
+    let notes = cover_notes(&jobs);
+    assert!(
+        notes[0].starts_with(&format!(
+            "1 of {n} wires have no cross-section: no ferrule is listed"
+        )),
+        "{}",
+        notes[0]
+    );
+    for j in &mut jobs {
+        j.cross_section_mm2 = Some(1.5);
+    }
+    assert!(
+        cover_notes(&jobs)
+            .iter()
+            .all(|t| !t.contains("no cross-section"))
+    );
+}
+
+#[test]
+fn the_cover_counts_each_length_basis_and_never_says_every_length_is_routed() {
+    let doc = cabinet();
+    let mut jobs = bench_jobs(doc.project());
+    assert!(jobs.len() >= 5);
+    for j in &mut jobs {
+        j.basis = "routed".into();
+    }
+    jobs[0].basis = "cable length".into();
+    jobs[1].basis = "routed, no depth".into();
+    jobs[2].basis = "to entry + stated outside".into();
+    jobs[3].basis = "free air".into();
+    let n = jobs.len();
+    let note = &cover_notes(&jobs)[0];
+    assert!(note.contains(&format!("{n} in all")), "{note}");
+    assert!(
+        note.contains(&format!("{} routed along the ducts", n - 4)),
+        "{note}"
+    );
+    assert!(note.contains("1 routed without duct depth"), "{note}");
+    assert!(note.contains("1 from a stated cable length"), "{note}");
+    assert!(note.contains("1 with the outside part stated"), "{note}");
+    assert!(note.contains("1 estimate (~"), "{note}");
+    assert!(!note.contains("Every wire length"), "{note}");
+    assert!(!note.contains("exact"), "{note}");
+    // Only a stated cable length: no estimate is claimed, and no routing either.
+    for j in &mut jobs {
+        j.basis = "cable length".into();
+    }
+    let note = &cover_notes(&jobs)[0];
+    assert!(note.contains("from a stated cable length") && !note.contains("estimate"));
+    assert!(!note.contains("routed along"), "{note}");
+}
+
+#[test]
+fn unset_size_and_colour_print_as_not_set() {
+    let doc = cabinet();
+    let mut jobs = bench_jobs(doc.project());
+    jobs[0].cross_section_mm2 = None;
+    jobs[0].colour = String::new();
+    let out = circuit_sheets(doc.project(), &jobs);
+    let wire = out
+        .sections
+        .iter()
+        .flat_map(|s| s.rows.iter())
+        .filter(|r| r.cells[1].to_string() == "Wire")
+        .find(|r| r.cells[5].to_string() == "not set")
+        .expect("a row with no size");
+    assert_eq!(wire.cells[6].to_string(), "not set");
 }
