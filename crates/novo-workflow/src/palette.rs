@@ -57,6 +57,8 @@ pub enum Target {
     Child { symbol: String, device: DeviceId },
     /// Start or resume a lesson, by its id.
     Lesson(String),
+    /// Place a macro (a ready-made circuit), by its name.
+    Macro(String),
 }
 
 /// What kind of thing a row is, shown as a label in front of it.
@@ -70,6 +72,7 @@ pub enum Kind {
     Wire,
     Symbol,
     Lesson,
+    Macro,
 }
 
 impl Kind {
@@ -83,6 +86,7 @@ impl Kind {
             Kind::Wire => "Wire",
             Kind::Symbol => "Symbol",
             Kind::Lesson => "Lesson",
+            Kind::Macro => "Circuit",
         }
     }
 }
@@ -128,6 +132,19 @@ pub struct Sources<'a> {
     pub context: Context,
     /// The lessons on offer, for `lesson wheel` and a bare topic word.
     pub lessons: &'a [LessonEntry],
+    /// The macros (ready-made circuits) on offer.
+    pub macros: &'a [MacroEntry],
+}
+
+/// A macro as the field searches it. The app builds these from its macro
+/// library, so this crate needs no macro engine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MacroEntry {
+    pub name: String,
+    /// What the row says after the name (the description).
+    pub detail: String,
+    /// Tags and description, lower case.
+    pub words: String,
 }
 
 /// A lesson as the field searches it. The app builds these from its
@@ -178,6 +195,8 @@ const LABEL_BONUS: i32 = 50;
 /// "Simulate heat of the cabinet") outranks a part that only starts with it
 /// ("Heating element"); a part named exactly by the word still leads.
 const WHOLE_WORD_BONUS: i32 = 120;
+/// What a macro row gets for being found by name or by all its words.
+const MACRO_BONUS: i32 = 450;
 /// How far a row that cannot run now drops below one that can.
 const DISABLED_PENALTY: i32 = 400;
 
@@ -274,6 +293,7 @@ impl Palette {
             });
             command_rows(query, wants_next, names_part, sources, &mut rows);
             lesson_rows(query, sources.lessons, &mut rows);
+            macro_rows(query, sources.macros, MACRO_BONUS, &mut rows);
         }
         if let Some(library) = sources.library {
             for hit in self.symbols.search(library, query).into_iter().take(10) {
@@ -313,6 +333,13 @@ impl Palette {
                     });
                 }
             }
+        }
+
+        // Q places things and a whole circuit is one of them, but only when
+        // no part matches: `lamp green` places the lamp, `motor starter`
+        // the circuit.
+        if mode == Mode::Place && !rows.iter().any(|r| r.kind == Kind::Symbol) {
+            macro_rows(query, sources.macros, MACRO_BONUS, &mut rows);
         }
 
         // Recent picks first for a short query.
@@ -666,6 +693,41 @@ fn lesson_rows(query: &str, lessons: &[LessonEntry], rows: &mut Vec<Row>) {
             shortcut: None,
             disabled: None,
             score: if explicit { 50_000 + score } else { score },
+        });
+    }
+}
+
+/// Macros by name, tag or a word of the description: `motor starter`,
+/// `soft starter`, `reversing`. Every word of the query has to be found; a
+/// whole name leads the commands and parts that merely contain the words.
+fn macro_rows(query: &str, macros: &[MacroEntry], bonus: i32, rows: &mut Vec<Row>) {
+    let lower = query.to_lowercase();
+    let words: Vec<&str> = lower.split_whitespace().collect();
+    if words.is_empty() || lower.chars().count() < 3 {
+        return;
+    }
+    for m in macros {
+        let name = m.name.to_lowercase();
+        let by_name = fuzzy::score(&lower, &m.name)
+            .filter(|s| *s >= RECENT_MIN_MATCH)
+            .map(|s| s + bonus);
+        let by_words = words
+            .iter()
+            .all(|w| m.words.contains(w) || name.contains(w))
+            .then_some(bonus.max(100));
+        let Some(score) = by_name.or(by_words) else {
+            continue;
+        };
+        rows.push(Row {
+            target: Target::Macro(m.name.clone()),
+            kind: Kind::Macro,
+            label: m.name.clone(),
+            detail: m.detail.clone(),
+            group: "",
+            completion: None,
+            shortcut: None,
+            disabled: None,
+            score,
         });
     }
 }

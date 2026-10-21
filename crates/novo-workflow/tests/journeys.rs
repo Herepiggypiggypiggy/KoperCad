@@ -24,6 +24,7 @@ fn sources<'a>(project: &'a Project, library: &'a Library, keymap: &'a Keymap) -
             ..Context::default()
         },
         lessons: &[],
+        macros: &[],
     }
 }
 
