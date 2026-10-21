@@ -355,26 +355,29 @@ pub fn cover(
         },
     );
     let on_cable = jobs.iter().filter(|j| j.cable.is_some()).count();
+    let set = crate::WireSet::of(project);
+    // One line each: the cover rows are one or two lines tall in the PDF.
     fact(
         &mut facts,
         "Wires to cut",
-        if on_cable > 0 {
-            format!("{} ({on_cable} are cores of a cable)", jobs.len())
-        } else {
-            jobs.len().to_string()
-        },
-    );
-    let set = crate::WireSet::of(project);
-    fact(
-        &mut facts,
-        "Wires as drawn",
         format!(
-            "{} (pieces on the sheets, supply feeds included; the standards report counts these). This packet counts the {} wires to cut: {} between pins plus {}",
-            set.drawn,
-            set.to_cut,
+            "{} ({} between pins + {})",
+            jobs.len(),
             set.connections,
             crate::count_text(set.leads(), "supply and PE leads")
         ),
+    );
+    if on_cable > 0 {
+        fact(
+            &mut facts,
+            "Cable cores",
+            format!("{on_cable} of the wires to cut are cores of a cable"),
+        );
+    }
+    fact(
+        &mut facts,
+        "Wires as drawn",
+        format!("{} pieces on the sheets (supply feeds included)", set.drawn),
     );
     let drawn = project
         .devices()

@@ -267,7 +267,15 @@ fn the_cover_names_what_each_wire_count_counts() {
         .unwrap();
     assert!(drawn.contains(&set.drawn.to_string()), "{drawn}");
     assert!(
-        drawn.contains(&format!("{} wires to cut", set.to_cut)),
-        "{drawn}"
+        to_cut.contains(&format!("{} between pins", set.connections)),
+        "{to_cut}"
+    );
+    assert!(
+        facts.iter().all(|f| f.chars().count() < 80),
+        "a cover fact is longer than one line: {facts:?}"
+    );
+    assert!(
+        facts.iter().all(|f| !f.contains("1 supply and PE leads")),
+        "{facts:?}"
     );
 }
