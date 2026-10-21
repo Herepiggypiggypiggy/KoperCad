@@ -984,6 +984,8 @@ impl NovoApp {
         self.learn.confirm_finished = false;
         self.learn.revealed = None;
         self.learn.ticked_at = None;
+        self.learn.hints_for.clear();
+        self.learn.hints_shown = 0;
     }
 
     /// The card's Hint: opens the next hint of the open step.

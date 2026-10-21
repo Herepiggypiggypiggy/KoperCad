@@ -13,4 +13,9 @@
 2026-10-17 12:50 UTC #986 merged. Fourth runner PR (draft, held for freeze): 10 click-only manual steps now replay; tab clicks tick; replay state no longer leaks between lessons.
 - Challenge lessons: `kind = "challenge"` (card header "FIX IT"), per-step `hints`/`hints_nl` opened one at a time with a Hint button, the skip button reads "Show me the fix". First challenge `motor-wont-hold` (cross-references/finished.json without the hold-in wire; goal = live view, start held in, then stop). Replay test proves it is solvable and that start alone drops out. Next challenges from the proposal: motor will not stop (stop as NO), coil never pulls in (A2 not connected), double tag, PE missing, wrong potential.
 - Second challenge `coil-wont-pull-in` (wire to the coil A1 removed); test shows start alone does nothing until the wire is drawn.
+
+## 2026-10-21 Learning fixer
+- Inspector (and other right-hand panels) now stay above the lesson card while it sits in its corner (`panel::reserve_bottom_right`); test at 1366x768.
+- Learning paths reordered so every `needs` is taught first and all 33 lessons are in a path; `lint::path_notes` + `repo_lessons` test keep it so.
+- Next: Skip step applies `solve`; replay test must not rely on a leftover Place rules window; Open finished version; quiet design checks in lessons; challenge lessons.
 - "Open finished version" now exists on the lesson card (last step and finished card), with a confirm because it replaces the drawing; opens `finished.json` as "Finished: <lesson>", ends the lesson as done.

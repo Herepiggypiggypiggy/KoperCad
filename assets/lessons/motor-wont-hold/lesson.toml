@@ -7,8 +7,8 @@ id = "motor-wont-hold"
 version = 1
 status = "early"
 kind = "challenge"
-title = "Fix it: the motor will not hold in"
-title_nl = "Repareer het: de motor blijft niet aan"
+title = "The motor will not hold in"
+title_nl = "De motor blijft niet aan"
 summary = "The pump starter drops out the moment you let go of start. Find the fault and fix it."
 summary_nl = "De pompstarter valt af zodra je start loslaat. Zoek de fout en herstel hem."
 track = "circuits"
@@ -84,5 +84,5 @@ hints_nl = [
   "Klik op de knop van stop -S1 en kijk naar de spoel.",
 ]
 point = { at = { device = "-S1" } }
-expect = { not = { coil_on = "-K1" } }
+expect = { all = [ { wire = { from = "-K1:13", to = "-S2:13" } }, { not = { coil_on = "-K1" } } ] }
 solve = [ { live_pole = { device = "-S1" } } ]
