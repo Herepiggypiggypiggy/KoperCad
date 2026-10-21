@@ -720,3 +720,20 @@ fn open_wire_ends_are_flagged_one_per_end() {
     assert_eq!(open[0].severity, Severity::Warning);
     assert!(open.iter().any(|p| p.message.contains("20.0, 30.0")));
 }
+
+#[test]
+fn a_plc_card_needs_no_coil() {
+    let (project, _) = build(|tx| {
+        let card = tx.add_device_of_kind(DeviceTag::parse("-K1")?, "PLC card", DeviceKind::Plc)?;
+        let page = tx.add_page("1")?;
+        tx.place_symbol(
+            page,
+            "iec/contacts/no",
+            Placement::at(Point::new(0.0, 0.0)),
+            two_pin("1", "2"),
+            device_role(card, false),
+        )
+    });
+    let problems = check(&project);
+    assert!(of_kind(&problems, ProblemKind::NoMainFunction).is_empty());
+}

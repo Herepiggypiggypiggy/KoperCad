@@ -25,6 +25,15 @@ and some credit on that account. A Claude.ai chat subscription is not an API key
 10. Compare "This month" in the window with Usage on console.anthropic.com. They should be close
     (ours is an estimate from list prices). Tell us if they differ by more than about 20 percent.
 
+11. Failure paths (these are tested offline with a scripted transport, so this only confirms the
+    real API says the same). Save a wrong key such as `sk-ant-api03-wrong` and press Check key or
+    ask anything. Expect "Anthropic did not accept the API key. Check it in Settings > Claude."
+    and nothing counted under "This month". Then turn the network off and ask: expect "No internet
+    connection to Anthropic" after about six seconds (three tries). Restore both.
+12. Datasheet: Help > Ask Claude > Part from a datasheet. Choose a small PDF datasheet. Expect the
+    confirmation naming the file and its size, then the review table with a page and the quoted
+    words under each value. Untick one, press Add part to project, then Ctrl+Z.
+
 Remove the key afterwards with Remove key if you do not want it kept. It lives in
 `%LOCALAPPDATA%\KoperCAD\ai\api-key` (not encrypted).
 

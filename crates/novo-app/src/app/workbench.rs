@@ -68,6 +68,8 @@ pub(crate) struct Workbench {
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// The PLC tag import preview (file name and plan), waiting for Enter or Esc.
     pub(super) plc_import: Option<(String, novo_plc::link::ImportPlan)>,
+    /// The I/O list review (file name, plan), waiting for Enter or Esc.
+    pub(super) plc_list: Option<super::plc_list::ListImport>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
     /// The shortcut sheet (`?`).
@@ -269,6 +271,7 @@ impl Default for Workbench {
             queued: Vec::new(),
             renumber: None,
             plc_import: None,
+            plc_list: None,
             preferences: false,
             shortcuts: Default::default(),
             macros: Default::default(),
@@ -455,7 +458,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.report_pdf",
     "report.add_page",
     "export.assembly",
+    "export.handover",
     "export.workshop",
+    "export.safety_sheets",
     "export.sheets",
     "export.sheets_csv",
     "export.wirecut",
@@ -546,6 +551,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "plc.to_plc",
     "plc.renumber_io",
     "plc.import_tags",
+    "plc.import_list",
     "export.plc_csv",
     "export.plc_plcopen",
     "export.plc_tia",
@@ -1261,6 +1267,12 @@ impl NovoApp {
             "export.assembly" => {
                 self.export_assembly();
             }
+            "export.safety_sheets" => {
+                self.export_safety_sheets();
+            }
+            "export.handover" => {
+                self.export_handover();
+            }
             "export.workshop" => {
                 self.export_workshop();
             }
@@ -1341,6 +1353,7 @@ impl NovoApp {
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
             "plc.import_tags" => self.plc_import_tags(),
+            "plc.import_list" => self.plc_import_list(),
             "export.plc_csv" => {
                 self.export_plc(LinkFormat::Csv);
             }

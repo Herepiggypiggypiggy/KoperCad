@@ -545,7 +545,7 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
         d.app.view3d.controls.heat_panel,
         "the panel with progress and stop opens with the run"
     );
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         d.frame();
         if d.app.cabinet.heat.solution().is_some() && !d.app.cabinet.heat.running() {
             break;
@@ -556,6 +556,48 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
         d.app.cabinet.heat.solution().is_some(),
         "the run published a result to the 3D view"
     );
+}
+
+/// The Heat panel is open before the first result; when the result adds the
+/// Heat strip above the view, the panel moves down with the view cube instead
+/// of staying where it was (egui keeps the position of a window that exists).
+#[test]
+fn an_open_heat_panel_follows_the_view_cube_down_when_the_heat_strip_appears() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.3d", None);
+    d.app.view3d.controls.heat_panel = true;
+    let size = egui::vec2(1366.0, 768.0);
+    for _ in 0..4 {
+        d.frame_sized(size, Vec::new());
+    }
+    d.app.run_command(&ctx, "heat.simulate", None);
+    let mut strip_seen = false;
+    for frame in super::test_wait::patient() {
+        d.frame_sized(size, Vec::new());
+        let (Some(heat), Some(canvas)) = (
+            ctx.memory(|m| m.area_rect(super::panel::id("view3d_heat_panel"))),
+            d.app.learn_anchor("workspace.view3d"),
+        ) else {
+            continue;
+        };
+        // The canvas starts lower than the panel's first position once the strip shows.
+        strip_seen |= canvas.top() > 100.0;
+        let cube = egui::Rect::from_min_size(
+            egui::pos2(canvas.right() - 12.0 - 88.0, canvas.top() + 12.0),
+            egui::Vec2::splat(88.0),
+        );
+        assert!(
+            !heat.intersects(cube),
+            "frame {frame}: heat panel {heat:?} covers the view cube {cube:?} (canvas {canvas:?})"
+        );
+        if strip_seen && frame > 30 && !d.app.cabinet.heat.running() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(strip_seen, "needs the Heat strip above the view");
 }
 
 /// With a heat result the Heat strip sits above the view; the Heat panel must
@@ -569,7 +611,7 @@ fn the_heat_panel_starts_under_the_view_cube_when_a_result_shows_the_heat_strip(
     d.app.run_command(&ctx, "heat.simulate", None);
     let size = egui::vec2(1366.0, 768.0);
     let mut seen_result = false;
-    for frame in 0..400 {
+    for frame in super::test_wait::patient() {
         d.frame_sized(size, Vec::new());
         seen_result |= d.app.cabinet.heat.solution().is_some();
         // Every frame, while the run is still improving as well as after it.

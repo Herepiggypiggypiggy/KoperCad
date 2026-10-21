@@ -29,6 +29,14 @@ text_nl = "Terug"
 text = "Show me how"
 text_nl = "Laat zien"
 
+[challenge_solved]
+text = "Solved"
+text_nl = "Opgelost"
+
+[challenge_shown]
+text = "Shown, not solved. Try it again from the start to do it yourself."
+text_nl = "Getoond, niet zelf opgelost. Probeer het opnieuw om het zelf te doen."
+
 [hint]
 text = "Hint"
 text_nl = "Hint"

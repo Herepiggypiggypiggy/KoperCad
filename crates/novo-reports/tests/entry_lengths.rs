@@ -198,3 +198,42 @@ fn a_cable_shorter_than_the_route_to_the_entry_stays_an_estimate() {
     assert_eq!(job.basis, "estimate", "{job:?}");
     assert!(is_estimate(&job.basis));
 }
+
+#[test]
+fn cable_lines_say_when_the_length_is_estimated_and_the_cut_list_leaves_cores_out() {
+    use novo_reports::{CutList, Report, cable_runs};
+    let (mut doc, h, _cab) = cabinet();
+    set_run(&mut doc, &h, None);
+    let jobs = wire_cut_jobs(doc.project());
+    let runs = cable_runs(doc.project(), &jobs);
+    assert_eq!(runs.len(), 1);
+    assert!(!runs[0].stated);
+    assert_eq!(runs[0].basis(), "estimated");
+    // Cores are counted once each, never more than the jobs on the cable.
+    assert!(runs[0].cores <= jobs.iter().filter(|j| j.cable.is_some()).count());
+    assert_eq!(runs[0].metres(), (runs[0].length_mm / 100.0).ceil() / 10.0);
+
+    set_run(&mut doc, &h, Some(12.12));
+    let runs = cable_runs(doc.project(), &wire_cut_jobs(doc.project()));
+    assert!(runs[0].stated);
+    assert_eq!(runs[0].basis(), "stated");
+    assert_eq!(runs[0].metres(), 12.2);
+
+    // Reports > Cut list: the group totals are hookup wire only.
+    let out = CutList::default().generate(doc.project());
+    let summary = out.sections.iter().find(|s| s.key == "summary").unwrap();
+    let total_m: f64 = summary
+        .rows
+        .iter()
+        .map(|r| match &r.cells[2] {
+            novo_reports::Cell::Number(m) => *m,
+            other => panic!("{other:?}"),
+        })
+        .sum();
+    let jobs = wire_cut_jobs(doc.project());
+    let hookup = novo_reports::hookup_cut_mm(&jobs) / 1000.0;
+    assert!(
+        (total_m - hookup).abs() < 0.01 * summary.rows.len() as f64 + 0.001,
+        "{total_m} vs {hookup}"
+    );
+}

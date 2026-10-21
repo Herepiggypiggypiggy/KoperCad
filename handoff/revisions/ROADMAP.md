@@ -12,7 +12,7 @@ Done in this thread:
 - App: "Lock the released pages" box in Issue revision, File > Revisions > Lock page / Unlock page / Restore page to revision, Restore buttons in the Compare window.
 
 Next, in order:
-1. Lock indicator in the outline and on the page tab.
+1. (done) Lock icon in the outline, "Page locked (A)" chip in the status bar, Issued and Locked columns in the contents list.
 2. CLI `kopercad-cli revisions restore` and `lock`; Python calls.
 3. Lock edits to project info (name, description) once a sheet is locked; today SetInfo is not guarded.
 4. Per-page "released" selection (lock only some pages at issue).

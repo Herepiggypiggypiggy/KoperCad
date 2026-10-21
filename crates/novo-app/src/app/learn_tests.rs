@@ -1107,3 +1107,76 @@ fn a_lesson_about_something_else_keeps_the_design_checks_quiet() {
         "the lesson about the checks shows them"
     );
 }
+
+#[test]
+fn a_challenge_keeps_its_ring_back_until_the_hints_are_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "hold");
+    assert!(d.app.learn_point_hidden(), "no ring before any hint");
+    d.app.learn_open_hint();
+    assert!(
+        d.app.learn_point_hidden(),
+        "one hint of three is not enough"
+    );
+    d.app.learn_show_me();
+    assert!(!d.app.learn_point_hidden(), "Show me asks for the ring");
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    assert!(!d.app.learn_point_hidden(), "the live step has no hints");
+}
+
+#[test]
+fn doing_a_challenge_for_the_learner_ends_with_shown_not_solved() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    let ctx = d.ctx.clone();
+    assert!(!d.app.learn.helped);
+    for _ in 0..6 {
+        d.app.learn_skip(&ctx);
+        for _ in 0..3 {
+            d.frame();
+        }
+        if d.app.card().is_some_and(|c| c.finished) {
+            break;
+        }
+    }
+    let card = d.app.card().unwrap();
+    assert!(card.finished, "the lesson ran to its end");
+    assert!(card.helped, "the card knows the repair was shown");
+    assert!(card.explain.contains("holding contact"), "{}", card.explain);
+    assert_eq!(card.next_lessons.len(), 1, "a next challenge is offered");
+}
+
+#[test]
+fn a_challenge_that_was_shown_or_skipped_never_ends_on_solved() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    assert!(!d.app.card().unwrap().helped);
+    d.app.learn_show_me();
+    assert!(d.app.card().unwrap().helped, "Show me counts as shown");
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    assert!(!d.app.card().unwrap().helped, "a new run starts clean");
+    d.app.learn_move(super::learn::Move::Skip);
+    assert!(d.app.card().unwrap().helped, "a plain skip counts as shown");
+}

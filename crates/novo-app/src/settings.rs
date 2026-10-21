@@ -235,6 +235,8 @@ pub struct PlotSetChoice {
     pub print: PrintChoice,
     /// `"black"` or `"colour"`, as in the PDF options.
     pub look: String,
+    /// The design checks page at the end.
+    pub checks: bool,
 }
 
 impl Default for PlotSetChoice {
@@ -244,6 +246,7 @@ impl Default for PlotSetChoice {
             pages: Vec::new(),
             print: PrintChoice::default(),
             look: "black".into(),
+            checks: false,
         }
     }
 }

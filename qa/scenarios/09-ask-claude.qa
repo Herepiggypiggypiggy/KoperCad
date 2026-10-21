@@ -1,0 +1,27 @@
+@title Ask Claude is off by default and says so
+@area Assistant
+# No key, no network: the window opens on its settings and must explain what is off, what is sent (nothing) and where to start.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text ask claude
+wait 8
+key Enter
+wait 10
+expect "Claude is off"
+expect "nothing is sent"
+expect "Uses your own Anthropic API key"
+expect "1. Your API key"
+expect "No key yet"
+expect "2. What Claude may read"
+expect "3. Model and budget"
+expect "4. Agree"
+shot ask-claude-settings
+check_layout
+check_blank ask-claude-settings
+click_text "Hide settings" Button
+wait 6
+expect "Turn Claude on above"
+shot ask-claude-closed
+check_layout

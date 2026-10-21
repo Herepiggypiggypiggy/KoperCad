@@ -123,7 +123,8 @@ impl Consent {
 pub const NOTICE: &str = "Your messages, and the project data allowed above, are sent over the \
 internet to Anthropic's Claude API using your own API key. Anthropic's terms and your account's \
 data settings apply to them. Claude can be wrong: check what it says, especially about \
-electrical safety, ratings and standards. While this feature is off, the only thing ever sent \
+electrical safety, ratings and standards. Claude can suggest changes to your project; each one \
+waits for you to press Apply and is one Undo step. While this feature is off, the only thing ever sent \
 is your key, when you press Check key.";
 
 #[cfg(test)]

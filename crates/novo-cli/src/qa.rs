@@ -107,6 +107,8 @@ pub(crate) struct Scenario {
     sizes: Vec<String>,
     /// Long scenarios (the sweeps) run only with `--slow`.
     slow: bool,
+    /// Environment the app starts with (`@env NAME=VALUE`).
+    env: Vec<(String, String)>,
     steps: Vec<StepLine>,
 }
 
@@ -160,7 +162,7 @@ fn load_all(paths: &[PathBuf], only: Option<&str>) -> Result<Vec<Scenario>, Stri
     Ok(out)
 }
 
-/// Header lines `@title`, `@area`, `@sizes`; every other non-blank, non-`#`
+/// Header lines `@title`, `@area`, `@sizes`, `@slow`, `@env`; every other non-blank, non-`#`
 /// line is one step: a verb followed by words (quotes group words).
 pub(crate) fn parse_scenario(file: &str, text: &str) -> Result<Scenario, String> {
     let mut s = Scenario {
@@ -169,6 +171,7 @@ pub(crate) fn parse_scenario(file: &str, text: &str) -> Result<Scenario, String>
         area: "General".into(),
         sizes: Vec::new(),
         slow: false,
+        env: Vec::new(),
         steps: Vec::new(),
     };
     for (i, raw) in text.lines().enumerate() {
@@ -184,6 +187,13 @@ pub(crate) fn parse_scenario(file: &str, text: &str) -> Result<Scenario, String>
                 "area" => s.area = rest,
                 "sizes" => s.sizes = words[1..].to_vec(),
                 "slow" => s.slow = true,
+                "env" => {
+                    let (name, value) = rest
+                        .split_once('=')
+                        .filter(|(n, _)| !n.is_empty())
+                        .ok_or_else(|| format!("line {}: @env wants NAME=VALUE", i + 1))?;
+                    s.env.push((name.to_owned(), value.to_owned()));
+                }
                 other => return Err(format!("line {}: unknown header @{other}", i + 1)),
             }
             continue;
@@ -1201,7 +1211,7 @@ fn run_scenarios(r: Run, out: &mut dyn Write) -> Result<i32, Failure> {
         };
         for size in these {
             let started = Instant::now();
-            let opts = TestUser::for_qa(r.app.clone(), size, out_dir.join("shots"));
+            let opts = TestUser::for_qa(r.app.clone(), size, out_dir.join("shots"), sc.env.clone());
             let mut ctx = Ctx {
                 srv: Server::new(opts),
                 out: &out_dir,
@@ -1718,6 +1728,10 @@ mod tests {
         assert!(parse_scenario("x", "frobnicate\n").is_err());
         assert!(parse_scenario("x", "key \"ctrl+k\n").is_err());
         assert!(parse_scenario("x", "@bogus 1\n").is_err());
+        let s = parse_scenario("x", "@env A=b=c\nshot a\n").unwrap();
+        assert_eq!(s.env, vec![("A".to_string(), "b=c".to_string())]);
+        assert!(parse_scenario("x", "@env nonsense\n").is_err());
+        assert!(parse_scenario("x", "@env =x\n").is_err());
     }
 
     #[test]

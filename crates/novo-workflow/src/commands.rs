@@ -2352,7 +2352,7 @@ pub const COMMANDS: &[CommandInfo] = &[
             "export.pdf",
             "Export PDF",
             "Export",
-            &["print"],
+            &["pdf all pages"],
             Needs::Project,
         ),
         &["export pdf", "pdf"],
@@ -2641,6 +2641,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.handover",
+            "Export handover package (folder)",
+            "Export",
+            &[
+                "handover",
+                "customer",
+                "as built",
+                "documentation",
+                "delivery",
+                "package",
+                "oplevering",
+            ],
+            Needs::Project,
+        ),
+        &["export handover", "handover package", "customer package"],
+    ),
+    verb(
+        cmd(
             "export.workshop",
             "Export workshop pack (folder)",
             "Export",
@@ -2656,6 +2674,22 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export workshop", "workshop pack", "drilling template"],
+    ),
+    verb(
+        cmd(
+            "export.safety_sheets",
+            "Export safety function sheets (PDF)",
+            "Export",
+            &[
+                "safety function",
+                "technical file",
+                "performance level",
+                "pfhd",
+                "iso 13849",
+            ],
+            Needs::Project,
+        ),
+        &["export safety sheets", "safety sheets"],
     ),
     verb(
         cmd(
@@ -2686,6 +2720,28 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export csv", "csv"],
+    ),
+    verb(
+        cmd(
+            "plc.import_list",
+            "Import I/O list (pages from a signal list)",
+            "Export",
+            &[
+                "plc",
+                "i/o",
+                "excel",
+                "csv",
+                "signal list",
+                "sensor",
+                "actuator",
+                "generate",
+                "pages",
+                "cards",
+                "terminals",
+            ],
+            Needs::Project,
+        ),
+        &["import io", "import io list", "import signals"],
     ),
     verb(
         cmd(

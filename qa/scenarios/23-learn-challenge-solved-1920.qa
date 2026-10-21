@@ -1,0 +1,30 @@
+@title Challenge lesson repaired by hand ends on Solved (1920x1080)
+@area Learn
+@sizes 1920x1080
+# Pin positions are for 1920x1080 (the page panel is open there); the 1366x768 run is scenario 22.
+key ctrl+k
+wait 4
+text hold in
+wait 6
+click_text "The motor will not hold in"
+wait 40
+key shift+l
+wait 40
+click_text Connect
+wait 6
+click 786 575
+wait 4
+move 740 575
+wait 4
+click 700 575
+wait 10
+shot repaired
+click_text "Hold to press" #2
+wait 20
+shot after-start
+click_text "Hold to press" #1
+wait 40
+shot end-solved
+expect "Solved"
+expect_not "Shown, not solved"
+check_layout

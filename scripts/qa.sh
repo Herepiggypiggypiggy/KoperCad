@@ -24,8 +24,17 @@ if [ "$(uname -s)" = Linux ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY
     exit 3
   fi
 fi
-if [ ! -x "$bin/kopercad" ] || [ ! -x "$bin/kopercad-cli" ]; then
+# Own build: always bring it up to date (incremental, cheap), so a run never tests an old binary.
+# The lessons are embedded at build time and cargo can miss a changed lesson file: force the embed
+# to rebuild when any lesson is newer than the program.
+if [ -z "${KOPERCAD_BIN_DIR:-}" ]; then
+  if [ -x "$bin/kopercad" ] && [ -n "$(find assets/lessons -type f -newer "$bin/kopercad" -print -quit)" ]; then
+    touch crates/novo-app/build.rs
+  fi
   cargo build -p novo-app -p novo-cli >&2
+elif [ ! -x "$bin/kopercad" ] || [ ! -x "$bin/kopercad-cli" ]; then
+  echo "qa.sh: no kopercad and kopercad-cli in $bin" >&2
+  exit 3
 fi
 case ${1:-run} in
   list) shift; exec "$bin/kopercad-cli" qa list "$@" ;;
