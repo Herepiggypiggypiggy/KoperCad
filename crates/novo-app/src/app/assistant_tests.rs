@@ -463,19 +463,22 @@ fn assign_part_gives_nothing_away_below_the_whole_project() {
             p.parts().next().map(|x| x.id.raw()).unwrap_or(1),
         )
     };
-    s.script.replies.lock().unwrap().extend([
-        tool(
-            "t1",
-            "propose_edit",
-            json!({"action": "assign_part", "args": {"device_id": dev, "part_id": part}}),
-        ),
-        tool(
-            "t2",
-            "propose_edit",
-            json!({"action": "assign_part", "args": {"device_id": dev, "part_id": 999_999}}),
-        ),
-        text("done"),
-    ]);
+    queue(
+        &s.script,
+        [
+            tool(
+                "t1",
+                "propose_edit",
+                json!({"action": "assign_part", "args": {"device_id": dev, "part_id": part}}),
+            ),
+            tool(
+                "t2",
+                "propose_edit",
+                json!({"action": "assign_part", "args": {"device_id": dev, "part_id": 999_999}}),
+            ),
+            text("done"),
+        ],
+    );
     ask(&mut s, "Assign a part");
     let seen = s.script.seen.lock().unwrap();
     let last: Value = serde_json::from_str(&seen.last().unwrap().body).unwrap();
