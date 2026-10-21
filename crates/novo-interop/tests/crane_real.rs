@@ -62,6 +62,13 @@ fn the_drawn_pages_keep_the_nets_of_the_real_project() {
     let r = plan.report();
     assert!(r.count_of("symbols drawn") > 100, "{}", r.text());
     assert!(r.count_of("wires") > 100, "{}", r.text());
+    // Most wires turn at the file's own nodes; the rest keep a guessed route.
+    assert!(
+        r.text()
+            .contains("wires follow the runs and nodes the file implies"),
+        "{}",
+        r.text()
+    );
     // Only the black boxes (no pin names, no function the library knows) stay
     // boxes: the transformer with PE is fitted by where its points sit.
     let text = r.text();

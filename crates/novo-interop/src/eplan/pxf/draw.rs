@@ -72,6 +72,8 @@ pub(super) struct DrawnWire {
     pub from: (usize, u16),
     pub to: (usize, u16),
     pub route: Vec<Point>,
+    /// The route is EPLAN's: its runs and nodes, not a guess between the pins.
+    pub followed: bool,
 }
 
 /// What the drawing step did, for the report.
@@ -89,6 +91,8 @@ pub struct DrawStats {
     pub interruptions: usize,
     pub nets: usize,
     pub wires: usize,
+    /// Wires drawn along EPLAN's own runs and nodes, not a guessed route.
+    pub wires_followed: usize,
     /// Function names drawn as boxes, with counts.
     pub box_functions: BTreeMap<String, usize>,
     /// The same, told apart by tag letters and pin designations in order.
@@ -591,7 +595,9 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             out.wires.extend(spanning_wires(page, &pts, &placed));
         }
     }
+    follow_runs(&mut out.wires, &nets, &graph, &by_key);
     out.stats.wires = out.wires.len();
+    out.stats.wires_followed = out.wires.iter().filter(|w| w.followed).count();
     out.keys = by_key
         .iter()
         .map(|(k, &(si, pin, _))| (k.clone(), (si, pin)))
@@ -677,9 +683,91 @@ fn spanning_wires(page: usize, pts: &[(usize, u16, Point)], placed: &[Placed]) -
                 pts[j].2,
                 placed[pts[i].0].symbol.pins[pts[i].1 as usize].direction,
             ),
+            followed: false,
         });
     }
     wires
+}
+
+/// Replaces the guessed route of each wire by the one EPLAN implies: the
+/// straight runs between the two pins through nodes only (a run never passes
+/// through another symbol's pin). Wires with no such path keep their guess.
+fn follow_runs(
+    wires: &mut [DrawnWire],
+    nets: &ReconNets,
+    graph: &ConnGraph,
+    by_key: &BTreeMap<PinKey, (usize, u16, usize)>,
+) {
+    let at: BTreeMap<&PinKey, (bool, Point)> = graph
+        .points
+        .iter()
+        .map(|p| (&p.key, (p.node, Point::new(p.at.x, PAGE_HEIGHT - p.at.y))))
+        .collect();
+    let mut next: BTreeMap<&PinKey, Vec<&PinKey>> = BTreeMap::new();
+    for (a, b) in &nets.runs {
+        next.entry(a).or_default().push(b);
+        next.entry(b).or_default().push(a);
+    }
+    let key_of: BTreeMap<(usize, u16), &PinKey> = by_key
+        .iter()
+        .rev()
+        .map(|(k, &(si, pin, _))| ((si, pin), k))
+        .collect();
+    for w in wires.iter_mut() {
+        let (Some(&from), Some(&to)) = (key_of.get(&w.from), key_of.get(&w.to)) else {
+            continue;
+        };
+        // Breadth first, so the fewest corners win; only nodes are passed.
+        let mut came: BTreeMap<&PinKey, &PinKey> = BTreeMap::new();
+        let mut queue = std::collections::VecDeque::from([from]);
+        let mut seen: BTreeSet<&PinKey> = BTreeSet::from([from]);
+        let mut found = false;
+        while let Some(k) = queue.pop_front() {
+            if k == to {
+                found = true;
+                break;
+            }
+            if k != from && !at.get(k).is_some_and(|(node, _)| *node) {
+                continue;
+            }
+            for &m in next.get(k).into_iter().flatten() {
+                if seen.insert(m) {
+                    came.insert(m, k);
+                    queue.push_back(m);
+                }
+            }
+        }
+        if !found {
+            continue;
+        }
+        let mut path = vec![to];
+        while let Some(&prev) = came.get(path[path.len() - 1]) {
+            path.push(prev);
+        }
+        path.reverse();
+        let mut pts: Vec<Point> = Vec::new();
+        for k in &path {
+            if let Some(&(_, p)) = at.get(k)
+                && pts
+                    .last()
+                    .is_none_or(|l| (l.x - p.x).abs() > 1e-6 || (l.y - p.y).abs() > 1e-6)
+            {
+                pts.push(p);
+            }
+        }
+        // Keep only the corners; the ends are the pins themselves.
+        let mut corners: Vec<Point> = Vec::new();
+        for i in 1..pts.len().saturating_sub(1) {
+            let (a, b, c) = (pts[i - 1], pts[i], pts[i + 1]);
+            let straight = ((a.x - b.x).abs() < 1e-6 && (b.x - c.x).abs() < 1e-6)
+                || ((a.y - b.y).abs() < 1e-6 && (b.y - c.y).abs() < 1e-6);
+            if !straight {
+                corners.push(b);
+            }
+        }
+        w.route = corners;
+        w.followed = true;
+    }
 }
 
 /// A right-angle run from `a` to `b`, leaving `a` along its pin direction.
@@ -831,6 +919,47 @@ mod tests {
             position: Some((10.0, 10.0)),
             variant: 0,
         }
+    }
+
+    #[test]
+    fn a_wire_follows_the_runs_through_the_nodes_of_the_file() {
+        // A pin facing right, a corner node, a pin facing down (y up in the
+        // file): the wire turns at the node, not at a guessed corner.
+        let mut graph = ConnGraph::default();
+        graph
+            .points
+            .push(ConnPoint::pin("a", 0, 0.0, 0.0, Dir::Right));
+        graph
+            .points
+            .push(ConnPoint::node("n", 0, 10.0, 0.0, &[Dir::Left, Dir::Up]));
+        graph
+            .points
+            .push(ConnPoint::pin("b", 0, 10.0, 20.0, Dir::Down));
+        let nets = rebuild_nets(&graph);
+        // each run is seen from both of its ends
+        assert!(nets.runs.len() >= 2);
+        let by_key: BTreeMap<PinKey, (usize, u16, usize)> = [
+            (PinKey("a".into()), (0, 0, 0)),
+            (PinKey("b".into()), (1, 0, 0)),
+        ]
+        .into();
+        let mut wires = vec![DrawnWire {
+            page: 0,
+            from: (0, 0),
+            to: (1, 0),
+            route: vec![Point::new(0.0, 0.0)],
+            followed: false,
+        }];
+        follow_runs(&mut wires, &nets, &graph, &by_key);
+        assert!(wires[0].followed);
+        assert_eq!(wires[0].route, vec![Point::new(10.0, PAGE_HEIGHT)]);
+        // No path through nodes: the guess stays.
+        wires[0].followed = false;
+        wires[0].route = vec![Point::new(1.0, 1.0)];
+        let none = ReconNets::default();
+        follow_runs(&mut wires, &none, &graph, &by_key);
+        assert!(!wires[0].followed);
+        assert_eq!(wires[0].route, vec![Point::new(1.0, 1.0)]);
     }
 
     #[test]
