@@ -132,7 +132,7 @@ impl CommissioningMode {
             signing: None,
             viewer: Default::default(),
             plan: None,
-            scope: WalkScope::All,
+            scope: WalkScope::Wires,
             reveal_wire: None,
             show_3d: None,
             finished: false,
@@ -1457,7 +1457,7 @@ fn walk_card(
         end(ui, "TO  ", &step.to, &step.ferrule_to);
         let mut facts = Vec::new();
         if let Some(mm) = step.length_mm {
-            facts.push(format!("{mm:.0} mm"));
+            facts.push(format!("cut length {mm:.0} mm"));
         }
         if let Some(s) = step.cross_section_mm2 {
             facts.push(format!("{s} mm\u{b2}"));
@@ -1508,8 +1508,23 @@ fn walk_card(
         .stroke(egui::Stroke::NONE)
         .min_size(egui::vec2(ui.available_width(), 52.0)),
     );
+    let vouch = info
+        .target
+        .checks()
+        .iter()
+        .filter(|&&c| mode.store.state(info.target, c) == CheckState::Pending)
+        .map(|c| c.label())
+        .collect::<Vec<_>>()
+        .join(" and ");
     if tick
-        .on_hover_text("Pass what is open here and go to the next one")
+        .on_hover_text(format!(
+            "Records {vouch} as passed by {} and goes to the next one",
+            if mode.who.trim().is_empty() {
+                "you"
+            } else {
+                mode.who.trim()
+            }
+        ))
         .clicked()
     {
         let finished = mode.tick(project, current, go);
