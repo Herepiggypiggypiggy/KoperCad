@@ -330,6 +330,7 @@ impl NovoApp {
                     return;
                 };
                 ui.add_space(8.0);
+                ui.weak(shown.plan.scope_note());
                 let conflicts = shown.plan.conflicts.len();
                 let mut tab = match win.tab {
                     Tab::Numbers => 0,
