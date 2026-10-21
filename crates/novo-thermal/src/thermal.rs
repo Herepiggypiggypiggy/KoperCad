@@ -37,6 +37,10 @@ impl State {
     }
 }
 
+/// Iterations over which a change that stays within ten times the tolerance
+/// and does not fall by a fifth counts as settled.
+const STALL_WINDOW: usize = 8;
+
 const SIGMA: f64 = 5.670_374e-8;
 const PR: f64 = 0.71;
 
@@ -288,6 +292,13 @@ pub fn steady_from(s: &Setup, load: f64, init: Option<&State>) -> State {
     // the change stops falling.
     let mut alpha = if warm { 0.3 } else { 0.5 };
     let mut previous = f64::INFINITY;
+    // The change can stop falling a little above the tolerance (the plume
+    // and the relaxed flow trade places by a few hundredths of a kelvin). A
+    // run whose change is within a factor of ten of the tolerance and has
+    // not fallen by a fifth over the last `STALL_WINDOW` iterations is
+    // settled: more iterations only repeat the same wobble (60 of them took
+    // 25 s on a 60-device cabinet).
+    let mut history: Vec<f64> = Vec::new();
     for it in 0..s.params.max_iterations {
         let relax = if it == 0 && !warm { 1.0 } else { alpha };
         for i in 0..st.t_buoy.len() {
@@ -301,6 +312,14 @@ pub fn steady_from(s: &Setup, load: f64, init: Option<&State>) -> State {
         if change < s.params.tolerance_k && it >= 2 {
             st.converged = true;
             break;
+        }
+        history.push(change);
+        if history.len() > STALL_WINDOW {
+            let old = history[history.len() - 1 - STALL_WINDOW];
+            if change < 10.0 * s.params.tolerance_k && change > 0.8 * old {
+                st.converged = true;
+                break;
+            }
         }
         if it >= 2 && change > 0.7 * previous {
             alpha = (alpha * 0.6).max(0.03);
