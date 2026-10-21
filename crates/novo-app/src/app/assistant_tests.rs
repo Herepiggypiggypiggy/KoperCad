@@ -356,3 +356,27 @@ fn widening_the_scope_keeps_the_chat() {
             .contains("Scope narrowed")
     );
 }
+
+#[test]
+fn a_question_queued_from_elsewhere_opens_the_window_and_is_sent_once() {
+    let mut s = setup(DataScope::Outline);
+    s.d.app.wb.assistant.open = false;
+    s.script
+        .replies
+        .lock()
+        .unwrap()
+        .push_back(text("It means the wire has no end."));
+    s.d.app
+        .wb
+        .assistant
+        .ask_later("Explain this problem".into());
+    for _ in 0..400 {
+        s.d.frame();
+        if s.d.app.wb.assistant.transcript_text().contains("no end") {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(s.d.app.wb.assistant.open);
+    assert_eq!(s.script.seen.lock().unwrap().len(), 1);
+}
