@@ -316,7 +316,7 @@ pub fn cover_notes(jobs: &[WireCutJob]) -> Vec<String> {
         notes.insert(
             0,
             format!(
-                "{no_size} of {} wires have no cross-section: no ferrule is listed for them and they sit in one group. Set the size (Reports > Bench output > Cut list, or Autopilot), then print again.",
+                "{no_size} of {} wires to cut have no cross-section: no ferrule is listed for them and they sit in one group. Set the size (Reports > Bench output > Cut list, or Autopilot), then print again.",
                 jobs.len()
             ),
         );
@@ -363,6 +363,18 @@ pub fn cover(
         } else {
             jobs.len().to_string()
         },
+    );
+    let set = crate::WireSet::of(project);
+    fact(
+        &mut facts,
+        "Wires as drawn",
+        format!(
+            "{} (pieces on the sheets, supply feeds included; the standards report counts these). This packet counts the {} wires to cut: {} between pins plus {}",
+            set.drawn,
+            set.to_cut,
+            set.connections,
+            crate::count_text(set.leads(), "supply and PE leads")
+        ),
     );
     let drawn = project
         .devices()
