@@ -107,6 +107,9 @@ mod learn_ui;
 mod link;
 mod live;
 mod live_anim;
+mod machine;
+#[cfg(test)]
+mod machine_tests;
 mod macro_actions;
 #[cfg(test)]
 mod macro_actions_tests;
@@ -2039,10 +2042,17 @@ impl NovoApp {
                 for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
                     self.action_button(ui, a, picked);
                 }
+                // Ways to learn, named as such and each with what it is, so the
+                // two are not read as copies of each other.
+                ui.add_space(12.0);
+                ui.small("LEARN");
                 if !self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
+                    ui.weak("Two minutes: place, wire, cable, live view");
+                    ui.add_space(4.0);
                 }
                 self.learn_start_entry(ui);
+                ui.weak("Lessons for every part of the program");
                 let unsaved = self.backend.unsaved_projects();
                 if !unsaved.is_empty() {
                     ui.add_space(16.0);

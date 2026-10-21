@@ -1,0 +1,19 @@
+@title 3D view: Place a device list opens under the toolbar
+@area 3D
+@sizes 1366x768
+# From the command field; the list must not sit over the toolbar. Fixed 1366x768 points for the cube.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click 1296 108
+wait 40
+key ctrl+k
+wait 4
+text Place a device in 3D
+wait 6
+key Enter
+wait 20
+expect "Pick one, then click on the plate"
+shot place-list
+check_layout
