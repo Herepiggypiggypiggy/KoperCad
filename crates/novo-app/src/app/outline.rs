@@ -296,13 +296,16 @@ impl NovoApp {
                     self.ol.empty_space = Some(rect);
                 }
                 if tree_rows.len() < 4 {
-                    ui.painter().text(
-                        rect.center_top() + egui::vec2(0.0, 12.0),
-                        egui::Align2::CENTER_TOP,
-                        "Right click for New page, New page group or New cabinet",
+                    // Wrapped: a narrow panel cut the one-line text at its left edge.
+                    let colour = crate::theme::ui_palette().text_tertiary;
+                    let galley = ui.painter().layout(
+                        "Right click for New page, New page group or New cabinet".to_owned(),
                         egui::FontId::proportional(tokens::FONT_SMALL),
-                        crate::theme::ui_palette().text_tertiary,
+                        colour,
+                        (rect.width() - 16.0).max(40.0),
                     );
+                    let at = egui::pos2(rect.center().x - galley.size().x / 2.0, rect.top() + 12.0);
+                    ui.painter().galley(at, galley, colour);
                 }
                 if bg.secondary_clicked() || bg.clicked() {
                     self.ol.focused = true;

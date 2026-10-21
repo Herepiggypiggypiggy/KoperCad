@@ -715,6 +715,14 @@ pub const DUTCH: &[Aliases] = &[
         &["automationml", "installatie", "overnemen", "migreren"],
     ),
     nl(
+        "parts.import_table",
+        &[
+            "importeer onderdelen uit tabel",
+            "importeer excel onderdelen",
+        ],
+        &["tabel", "excel", "xlsx", "kolommen", "prijslijst", "csv"],
+    ),
+    nl(
         "parts.import_eplan",
         &["importeer eplan onderdelen"],
         &["eplan artikelen", "eplan onderdelen", "artikelexport"],
@@ -1030,6 +1038,16 @@ pub const DUTCH: &[Aliases] = &[
         "export.workshop",
         &["exporteer werkplaatspakket", "werkplaatspakket"],
         &["werkplaats", "boormal", "snijlijst"],
+    ),
+    nl(
+        "export.scale_check",
+        &["exporteer printschaalcontrole", "printschaalcontrole"],
+        &["schaal", "printer", "boormal", "controle"],
+    ),
+    nl(
+        "export.bench_packet",
+        &["exporteer werkbankpakket", "werkbankpakket"],
+        &["werkbank", "snijlijst", "aderhulzen"],
     ),
     nl(
         "export.safety_sheets",

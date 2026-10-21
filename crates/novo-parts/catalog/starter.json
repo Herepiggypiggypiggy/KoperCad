@@ -6,7 +6,7 @@
       "description": "Contactor S00, 3 pole, AC-3 9 A / 4 kW at 400 V, coil 24 V DC, 1 NO",
       "letter_codes": ["K", "Q"], "keywords": ["contactor", "coil 24vdc", "s00"],
       "dimensions": { "width_mm": 45.0, "height_mm": 57.5, "depth_mm": 73.0 },
-      "data": { "power_loss_w": 2.5, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" },
+      "data": { "ac3_current_a": 9.0, "power_loss_w": 2.5, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" },
       "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
@@ -14,7 +14,7 @@
       "description": "Contactor S00, 3 pole, AC-3 9 A / 4 kW at 400 V, coil 230 V AC, 1 NO",
       "letter_codes": ["K", "Q"], "keywords": ["contactor", "coil 230vac", "s00"],
       "dimensions": { "width_mm": 45.0, "height_mm": 57.5, "depth_mm": 73.0 },
-      "data": { "power_loss_w": 2.3, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "230 V AC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" },
+      "data": { "ac3_current_a": 9.0, "power_loss_w": 2.3, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "230 V AC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" },
       "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
@@ -22,7 +22,7 @@
       "description": "Contactor S00, 3 pole, AC-3 12 A / 5.5 kW at 400 V, coil 24 V DC, 1 NO",
       "letter_codes": ["K", "Q"], "keywords": ["contactor", "coil 24vdc", "s00"],
       "dimensions": { "width_mm": 45.0, "height_mm": 57.5, "depth_mm": 73.0 },
-      "data": { "power_loss_w": 2.7, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 12.0, "rated_power_kw": 5.5, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" },
+      "data": { "ac3_current_a": 12.0, "power_loss_w": 2.7, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 12.0, "rated_power_kw": 5.5, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO", "mounting": "DIN rail 35 mm" },
       "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
@@ -180,7 +180,7 @@
       "description": "TeSys D contactor, 3 pole, AC-3 9 A / 4 kW at 400 V, coil 24 V DC, 1 NO + 1 NC",
       "letter_codes": ["K", "Q"], "keywords": ["contactor", "coil 24vdc", "tesys"],
       "dimensions": { "width_mm": 45.0, "height_mm": 77.0, "depth_mm": 93.0 },
-      "data": { "power_loss_w": 3.0, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO + 1 NC", "mounting": "DIN rail 35 mm" },
+      "data": { "ac3_current_a": 9.0, "power_loss_w": 3.0, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "24 V DC", "auxiliary_contacts": "1 NO + 1 NC", "mounting": "DIN rail 35 mm" },
       "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {
@@ -188,7 +188,7 @@
       "description": "TeSys D contactor, 3 pole, AC-3 9 A / 4 kW at 400 V, coil 230 V AC, 1 NO + 1 NC",
       "letter_codes": ["K", "Q"], "keywords": ["contactor", "coil 230vac", "tesys"],
       "dimensions": { "width_mm": 45.0, "height_mm": 77.0, "depth_mm": 86.0 },
-      "data": { "power_loss_w": 2.8, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "230 V AC", "auxiliary_contacts": "1 NO + 1 NC", "mounting": "DIN rail 35 mm" },
+      "data": { "ac3_current_a": 9.0, "power_loss_w": 2.8, "max_ambient_c": 60.0, "poles": 3, "rated_current_a": 9.0, "rated_power_kw": 4.0, "coil_voltage": "230 V AC", "auxiliary_contacts": "1 NO + 1 NC", "mounting": "DIN rail 35 mm" },
       "sources": { "power_loss_w": "estimated", "max_ambient_c": "estimated" }
     },
     {

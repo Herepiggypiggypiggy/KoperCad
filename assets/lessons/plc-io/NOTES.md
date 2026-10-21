@@ -6,9 +6,9 @@ Headless proof: `crates/novo-app/src/app/lesson_verify_cables.rs` (`plc_io_each_
 
 | Step | Instruction and verified path (file:line) |
 | --- | --- |
-| add-card | Ctrl+K `add card DI16 DQ8` (`commands.rs:457`) -> `plc.rs:34`; toast "Added card =A1+CAB-K2 (DI16 DQ8)"; nothing drawn (page keeps 4 symbols) |
+| add-card | Ctrl+K `add card DI16 DQ8` (`commands.rs:457`) -> `plc.rs:34`; toast "Added card =A1+CAB-A1 (DI16 DQ8)"; nothing drawn (page keeps 4 symbols) |
 | select-button | click the symbol (hit region found by hovering) |
-| button-to-plc, lamp-to-plc | `to plc` (`commands.rs:466`) -> `plc.rs:72-148`; DI at (90,44), DQ at (170,48); toasts "Sent to =A1+CAB-K2: next free DI/DQ channel"; page 4 -> 5 -> 6 symbols |
+| button-to-plc, lamp-to-plc | `to plc` (`commands.rs:466`) -> `plc.rs:72-148`; DI at (90,44), DQ at (170,48); toasts "Sent to =A1+CAB-A1: next free DI/DQ channel"; page 4 -> 5 -> 6 symbols |
 | io-list | `page 30`; rows %IX12.0 DI "Pump start button", %QX0.0 DQ "Pump running lamp" |
 | renumber | `renumber io` (`commands.rs:588`) -> `plc.rs:155`, dialog `plc.rs:190` "Renumber (Enter)"/"Cancel (Esc)"; moves (4 -> 0), (12 -> 8); toast "Renumbered I/O: 2 start address(es) moved"; list then reads %IX8.0 |
 | back-to-drawing | `page 1` |

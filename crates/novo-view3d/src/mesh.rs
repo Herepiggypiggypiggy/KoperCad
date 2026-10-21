@@ -227,8 +227,9 @@ pub fn profile_boxes(profile: Profile, width: f32, height: f32) -> Vec<(Vec3, Ve
                 b(x0, x1, 12.5, 17.5, 0.0, t),
             ]
         }
-        Profile::Channel => {
-            let (w, h, t) = (width.max(6.0), height.max(6.0), 2.0);
+        // Unit length has no slots to show; `slotted_boxes` makes the real one.
+        Profile::Channel | Profile::SlottedChannel => {
+            let (w, h, t) = (width.max(6.0), height.max(6.0), DUCT_WALL_MM);
             vec![
                 // Floor and two walls.
                 b(x0, x1, -w * 0.5, w * 0.5, 0.0, t),
@@ -237,6 +238,120 @@ pub fn profile_boxes(profile: Profile, width: f32, height: f32) -> Vec<(Vec3, Ve
             ]
         }
     }
+}
+
+/// Wall and floor thickness of a duct, mm.
+pub const DUCT_WALL_MM: f32 = 2.0;
+/// Width of a slot in a duct wall, mm. Typical of commercial slotted duct
+/// (about 5 mm slots between 4 mm fingers), not the figures of one maker.
+pub const SLOT_WIDTH_MM: f32 = 5.0;
+/// Width of a finger between two slots, mm.
+pub const FINGER_WIDTH_MM: f32 = 4.0;
+/// Pitch of the mounting slots in the duct floor, mm.
+pub const MOUNT_PITCH_MM: f32 = 60.0;
+/// Length and width of a floor mounting slot, mm.
+pub const MOUNT_SLOT_MM: (f32, f32) = (12.0, 5.0);
+
+/// The solid band at the foot of a slotted wall, mm: slots start above it, so
+/// the wall keeps its stiffness. `None` when the duct is too low to slot.
+fn slot_base(height: f32) -> Option<f32> {
+    let base = ((height - DUCT_WALL_MM) * 0.18).clamp(2.0, 6.0);
+    (height - DUCT_WALL_MM - base >= 8.0).then_some(base)
+}
+
+/// Number of fingers on a wall of length `len` that starts and ends with a
+/// finger, and the width each gets so the slots keep their width.
+fn finger_layout(len: f32) -> Option<(usize, f32)> {
+    let n = ((len + SLOT_WIDTH_MM) / (FINGER_WIDTH_MM + SLOT_WIDTH_MM)).round() as usize;
+    // Fewer than three fingers is a stub, not a slotted duct.
+    if n < 3 {
+        return None;
+    }
+    let finger = (len - (n - 1) as f32 * SLOT_WIDTH_MM) / n as f32;
+    (finger >= 1.0).then_some((n, finger))
+}
+
+/// The boxes of a slotted duct of real length `len`: x from `-len / 2` to
+/// `len / 2`, real millimetres in y and z. Both walls are cut into fingers
+/// from the rim down to a solid base band, and the floor has a row of
+/// mounting slots. Falls back to the solid section when the duct is too short
+/// or too low to carry slots. Not a maker's drawing: the proportions are the
+/// typical ones above.
+pub fn slotted_boxes(len: f32, width: f32, height: f32) -> Vec<(Vec3, Vec3)> {
+    let solid = || {
+        profile_boxes(Profile::Channel, width, height)
+            .into_iter()
+            .map(|(a, b)| {
+                (
+                    Vec3::new(a.x * len, a.y, a.z),
+                    Vec3::new(b.x * len, b.y, b.z),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let (w, h, t) = (width.max(6.0), height.max(6.0), DUCT_WALL_MM);
+    let (Some(base), Some((n, finger))) = (slot_base(h), finger_layout(len)) else {
+        return solid();
+    };
+    let b = |x0: f32, x1: f32, y0: f32, y1: f32, z0: f32, z1: f32| {
+        (Vec3::new(x0, y0, z0), Vec3::new(x1, y1, z1))
+    };
+    let (x0, x1) = (-len * 0.5, len * 0.5);
+    let mut boxes = Vec::new();
+
+    // Floor: two side strips along the whole length, and bars across the
+    // middle between the mounting slots.
+    let (slot_len, slot_w) = MOUNT_SLOT_MM;
+    let slot_w = slot_w.min((w - 2.0 * t) * 0.4);
+    if slot_w >= 2.0 && len >= slot_len + 2.0 * t {
+        let half = slot_w * 0.5;
+        boxes.push(b(x0, x1, -w * 0.5, -half, 0.0, t));
+        boxes.push(b(x0, x1, half, w * 0.5, 0.0, t));
+        let count = ((len - slot_len) / MOUNT_PITCH_MM).floor() as usize + 1;
+        let span = (count - 1) as f32 * MOUNT_PITCH_MM;
+        let first = -span * 0.5;
+        let mut edge = x0;
+        for k in 0..count {
+            let cx = first + k as f32 * MOUNT_PITCH_MM;
+            // No bar when a slot starts right at the end of the last one.
+            if cx - slot_len * 0.5 > edge + 1e-3 {
+                boxes.push(b(edge, cx - slot_len * 0.5, -half, half, 0.0, t));
+            }
+            edge = cx + slot_len * 0.5;
+        }
+        if x1 > edge + 1e-3 {
+            boxes.push(b(edge, x1, -half, half, 0.0, t));
+        }
+    } else {
+        boxes.push(b(x0, x1, -w * 0.5, w * 0.5, 0.0, t));
+    }
+
+    // Walls: a solid base band, then the fingers.
+    for (y0, y1) in [(-w * 0.5, -w * 0.5 + t), (w * 0.5 - t, w * 0.5)] {
+        boxes.push(b(x0, x1, y0, y1, t, t + base));
+        for k in 0..n {
+            let fx = x0 + k as f32 * (finger + SLOT_WIDTH_MM);
+            boxes.push(b(fx, fx + finger, y0, y1, t + base, h));
+        }
+    }
+    boxes
+}
+
+/// A slotted duct of real length `len` as one mesh. See [`slotted_boxes`].
+pub fn slotted_mesh(len: f32, width: f32, height: f32) -> MeshData {
+    MeshData::from_boxes(&slotted_boxes(len, width, height))
+}
+
+/// Share of a slotted wall's area that is open, 0 to 1: the part of the wall
+/// above the base band that is slot rather than finger, taken over the whole
+/// wall. 0 for a duct too short or low to slot. A drawing figure only: the
+/// heat model describes a duct by one blockage number and does not read this.
+pub fn slotted_open_fraction(len: f32, height: f32) -> f32 {
+    let h = height.max(6.0);
+    let (Some(base), Some((n, _))) = (slot_base(h), finger_layout(len)) else {
+        return 0.0;
+    };
+    (n - 1) as f32 * SLOT_WIDTH_MM * (h - DUCT_WALL_MM - base) / (len * h)
 }
 
 /// A rail or duct section of length 1 along X, at real millimetres in y and
@@ -268,6 +383,84 @@ mod tests {
     }
 
     use super::*;
+
+    fn tris(boxes: &[(Vec3, Vec3)]) -> usize {
+        MeshData::from_boxes(boxes).triangles()
+    }
+
+    #[test]
+    fn a_slotted_duct_has_the_extent_of_the_solid_one() {
+        let a = MeshData::from_boxes(&slotted_boxes(600.0, 40.0, 60.0)).bounds;
+        let b = MeshData::from_boxes(&profile_boxes(Profile::Channel, 40.0, 60.0)).bounds;
+        assert!((a.size().y - b.size().y).abs() < 1e-4 && (a.size().z - b.size().z).abs() < 1e-4);
+        assert!((a.size().x - 600.0).abs() < 1e-3, "{}", a.size().x);
+        assert!((a.min.x + 300.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn slots_keep_their_width_and_the_pitch_does_not_depend_on_the_length() {
+        for len in [100.0_f32, 250.0, 600.0, 1000.0, 2000.0] {
+            let (n, finger) = finger_layout(len).expect("long enough");
+            let pitch = finger + SLOT_WIDTH_MM;
+            assert!((pitch - 9.0).abs() < 1.0, "{len}: pitch {pitch}");
+            let total = n as f32 * finger + (n - 1) as f32 * SLOT_WIDTH_MM;
+            assert!(
+                (total - len).abs() < 1e-3,
+                "{len}: fingers and slots fill the length"
+            );
+        }
+    }
+
+    #[test]
+    fn a_wall_starts_and_ends_with_a_finger() {
+        let boxes = slotted_boxes(500.0, 40.0, 60.0);
+        let xs: Vec<f32> = boxes
+            .iter()
+            .filter(|(a, b)| a.z > 7.0 && b.z > 59.0 && a.y < 0.0)
+            .map(|(a, _)| a.x)
+            .collect();
+        assert!((xs.iter().cloned().fold(f32::MAX, f32::min) + 250.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn no_floor_bar_has_zero_length() {
+        // 12 + 60 k: the first and last slot reach the ends of the duct.
+        for len in [72.0_f32, 132.0, 252.0, 12.0 + 60.0 * 7.0] {
+            for (lo, hi) in slotted_boxes(len, 40.0, 60.0)
+                .iter()
+                .map(|(a, b)| (a.x, b.x))
+            {
+                assert!(hi - lo > 1e-3, "{len}: box from {lo} to {hi}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_short_or_low_duct_stays_solid() {
+        let solid = profile_boxes(Profile::Channel, 40.0, 60.0).len();
+        assert_eq!(slotted_boxes(12.0, 40.0, 60.0).len(), solid, "too short");
+        assert_eq!(slotted_boxes(500.0, 40.0, 10.0).len(), solid, "too low");
+        assert_eq!(slotted_open_fraction(12.0, 60.0), 0.0);
+    }
+
+    #[test]
+    fn about_half_the_wall_of_a_tall_duct_is_open() {
+        let f = slotted_open_fraction(1000.0, 60.0);
+        assert!((0.35..0.6).contains(&f), "{f}");
+        let low = slotted_open_fraction(1000.0, 25.0);
+        assert!(
+            low < f,
+            "a low duct has less above its base band: {low} vs {f}"
+        );
+    }
+
+    #[test]
+    fn a_metre_of_duct_stays_cheap_to_draw() {
+        let t = tris(&slotted_boxes(1000.0, 40.0, 60.0));
+        assert!(t < 3500, "{t} triangles");
+        let t2 = tris(&slotted_boxes(2000.0, 80.0, 80.0));
+        assert!(t2 < 7000, "{t2} triangles");
+    }
 
     #[test]
     fn a_box_has_twelve_triangles_and_twelve_edges() {

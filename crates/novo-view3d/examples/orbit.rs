@@ -3,7 +3,7 @@
 //!   cargo run --release -p novo-view3d --features gpu --example orbit -- \
 //!       [--items 1000] [--wires 300] [--frames 300] [--size 1920x1080] [--msaa] [--scale 0.75] \
 //!       [--png out.png] [--tier discrete|integrated|software] [--shadows] [--no-edges] \
-//!       [--heat N]
+//!       [--heat N] [--slotted]
 //!
 //! Renders a scripted 360 degree orbit of the demo cabinet into an offscreen
 //! target and prints CPU time per frame (cull, instances, encode) and wall time
@@ -127,6 +127,7 @@ fn main() {
     let mut shadows = false;
     let mut edges = true;
     let mut heat = 0usize;
+    let mut slotted = false;
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
@@ -152,6 +153,7 @@ fn main() {
             }
             "--shadows" => shadows = true,
             "--no-edges" => edges = false,
+            "--slotted" => slotted = true,
             "--heat" => heat = args.next().unwrap().parse().unwrap(),
             other => panic!("unknown argument {other}"),
         }
@@ -176,12 +178,21 @@ fn main() {
     let (scene, library) = demo::cabinet(&DemoOptions {
         devices: items,
         wires,
+        slotted_ducts: slotted,
         ..DemoOptions::default()
     });
+    let duct_m: f32 = scene
+        .items
+        .iter()
+        .filter(|i| i.id.kind == novo_view3d::ItemKind::Duct)
+        .map(|i| i.size.x)
+        .sum::<f32>()
+        / 1000.0;
     println!(
-        "scene: {} items ({} devices requested), {} wires, {}x{}",
+        "scene: {} items ({} devices requested, {duct_m:.0} m of duct, {}), {} wires, {}x{}",
         scene.items.len(),
         items,
+        if slotted { "slotted" } else { "solid" },
         scene.wires.len(),
         size.0,
         size.1

@@ -1,0 +1,25 @@
+@title 3D view: ducts are drawn slotted, zoomed to one duct, and the Layers toggle makes them solid
+@area 3D
+@sizes 1920x1080
+# Fixed 1366x768 window point: a horizontal duct of the example is at (1050,440) in the default 3D view. F zooms to the selected duct so the fingers show.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+shot ducts-default
+click 1050 440
+wait 40
+key f
+wait 300
+shot duct-zoomed
+click_text Layers
+wait 20
+expect "Slotted ducts"
+shot layers-menu
+click_text "Slotted ducts"
+wait 40
+shot duct-solid
+click_text "Slotted ducts"
+wait 40
+shot duct-slotted-again
+check_layout

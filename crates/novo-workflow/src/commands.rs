@@ -326,6 +326,28 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.import_table",
+            "Import parts from a table (CSV or Excel)",
+            "Project",
+            &[
+                "spreadsheet",
+                "excel",
+                "xlsx",
+                "csv",
+                "columns",
+                "mapping",
+                "price list",
+                "parts",
+                "catalog",
+                "datasheet",
+                "maker data",
+            ],
+            Needs::Nothing,
+        ),
+        &["import parts table", "import excel parts"],
+    ),
+    verb(
+        cmd(
             "parts.import_eplan",
             "Import parts from a CAD parts export",
             "Project",
@@ -2515,6 +2537,9 @@ pub const COMMANDS: &[CommandInfo] = &[
                 "compliance",
                 "customer",
                 "checklist",
+                "design checks",
+                "verification",
+                "what was checked",
             ],
             Needs::Project,
         ),
@@ -2734,6 +2759,41 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export workshop", "workshop pack", "drilling template"],
+    ),
+    verb(
+        cmd(
+            "export.scale_check",
+            "Export print scale check (PDF)",
+            "Export",
+            &[
+                "print", "scale", "check", "1:1", "template", "square", "printer",
+            ],
+            Needs::Project,
+        ),
+        &[
+            "export scale check",
+            "print scale check",
+            "check printer scale",
+        ],
+    ),
+    verb(
+        cmd(
+            "export.bench_packet",
+            "Export bench packet (PDF)",
+            "Export",
+            &[
+                "bench",
+                "packet",
+                "cut list",
+                "ferrules",
+                "checklist",
+                "workshop",
+                "circuit",
+                "terminal plan",
+            ],
+            Needs::Project,
+        ),
+        &["export bench packet", "bench packet", "build packet"],
     ),
     verb(
         cmd(

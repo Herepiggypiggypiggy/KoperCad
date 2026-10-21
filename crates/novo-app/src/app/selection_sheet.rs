@@ -23,6 +23,9 @@ use super::part_picker::{
 };
 use super::{Level, NovoApp};
 
+/// Height of the menu bar the card keeps clear of, in points.
+const MENU_BAR_HEIGHT: f32 = 48.0;
+
 /// The text shown in a field whose devices differ.
 pub(crate) const MIXED_HINT: &str = "multiple values";
 
@@ -326,7 +329,8 @@ impl NovoApp {
         // Below the menu bar, inside the window: the default place is the
         // top left corner, which is the menu bar.
         let content = ctx.content_rect();
-        let area = egui::Rect::from_min_max(content.min + egui::vec2(0.0, 48.0), content.max);
+        let area =
+            egui::Rect::from_min_max(content.min + egui::vec2(0.0, MENU_BAR_HEIGHT), content.max);
         egui::Window::new("Properties of the selection")
             .open(&mut open)
             .default_size([340.0, 420.0])

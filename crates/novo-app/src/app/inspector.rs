@@ -45,7 +45,16 @@ pub(super) struct DeviceInfo {
     /// The calculation inputs ([`DEVICE_INPUTS`]) as the checks read them:
     /// the device's own value, else its part's. `(value, from the part)`.
     pub calc_inputs: Vec<(String, bool)>,
+    /// A symbol of the device is a protective device (the symbol library's
+    /// `/protection/` group, how the protection study tells them apart),
+    /// whatever its tag letter is.
+    pub protective: bool,
 }
+
+/// One entry of [`DEVICE_INPUTS`]: key, label, unit, typical entry.
+type DeviceInput = (&'static str, &'static str, &'static str, &'static str);
+/// What an input shows: the value and whether it comes from the part.
+type InputValue = (String, bool);
 
 /// The numbers a device states for the calculations: property key, label,
 /// unit and what a typical entry looks like. `trip_curve` is a letter.
@@ -64,6 +73,54 @@ pub(super) const DEVICE_INPUTS: [(&str, &str, &str, &str); 8] = [
     ("setting_max_a", "Relay setting max", "A", "10"),
     ("ac3_current_a", "AC-3 current", "A", "25"),
 ];
+
+/// Whether a calculation input makes sense for a device with this letter
+/// code. Only a contactor or relay (IEC 81346 class K: `K`, `KM`, `KA`) with
+/// no protective symbol (an overload relay tagged `-K3` has one) has rows hidden, the ones that belong to protective devices: it has no trip
+/// curve, breaking capacity, let-through energy or overload setting. Every
+/// other code, a two-letter one like `QF` or `FR` and an unknown one
+/// included, shows everything, so a value can always be typed. A hidden row
+/// that holds a value is shown anyway, see [`visible_inputs`].
+pub(super) fn input_applies(key: &str, letter: &str, protective: bool) -> bool {
+    let contactor = letter.starts_with('K') && !protective;
+    match key {
+        "breaking_capacity_ka"
+        | "trip_curve"
+        | "let_through_i2t"
+        | "setting_min_a"
+        | "setting_max_a" => !contactor,
+        _ => true,
+    }
+}
+
+/// The input rows to show for a device: those that apply to its letter
+/// code, and any other that holds a value, whether the device's own or its
+/// part's. A value the checks read is therefore never hidden: the person can
+/// see it, and clear it when it is their own. A contactor with nothing
+/// entered simply has no empty protective rows.
+fn visible_inputs<'a>(
+    info: &'a DeviceInfo,
+    letter: &str,
+) -> Vec<(&'static DeviceInput, &'a InputValue)> {
+    DEVICE_INPUTS
+        .iter()
+        .zip(&info.calc_inputs)
+        .filter(|((key, ..), (shown, _))| {
+            input_applies(key, letter, info.protective) || !shown.is_empty()
+        })
+        .collect()
+}
+
+/// The grey text of an empty input row. A typical entry is marked "e.g." so
+/// it is not read as the device's value (audit C-49: "25" beside a 9 A
+/// contactor looked like a stored AC-3 current).
+fn input_hint(key: &str, typical: &str) -> String {
+    if key == "trip_curve" {
+        typical.to_owned()
+    } else {
+        format!("e.g. {typical}")
+    }
+}
 
 /// Reads an entry for a calculation input: empty clears it, `trip_curve`
 /// takes B, C or D, every other input a positive number.
@@ -272,6 +329,10 @@ pub(super) fn device_info(
             _ => String::new(),
         }),
         calc_inputs,
+        protective: project
+            .symbols()
+            .filter(|s| s.device() == Some(device))
+            .any(|s| s.symbol.0.contains("/protection/")),
     })
 }
 
@@ -1033,11 +1094,11 @@ pub(super) fn committed(ui: &egui::Ui, response: &egui::Response) -> bool {
 /// starter calculations read from the device. A value the part supplies is
 /// shown dimmed with a hint; typing overrides it on this device only.
 fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
-    let set = info
-        .calc_inputs
-        .iter()
-        .filter(|(v, _)| !v.is_empty())
-        .count();
+    let letter = DeviceTag::parse(&info.tag)
+        .map(|t| t.letter_code().to_owned())
+        .unwrap_or_default();
+    let rows = visible_inputs(info, &letter);
+    let set = rows.iter().filter(|(_, (v, _))| !v.is_empty()).count();
     let summary = if set == 0 {
         String::new()
     } else {
@@ -1050,9 +1111,7 @@ fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
         &summary,
         set > 0,
         |ui| {
-            for ((key, label, unit, hint), (shown, from_part)) in
-                DEVICE_INPUTS.iter().zip(&info.calc_inputs)
-            {
+            for ((key, label, unit, hint), (shown, from_part)) in rows.iter().copied() {
                 let id = egui::Id::new(("inspector_input", *key));
                 let focused = ui.memory(|m| m.has_focus(id));
                 let mut text = if focused {
@@ -1065,7 +1124,7 @@ fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
                     ui.add(
                         egui::TextEdit::singleline(&mut text)
                             .id(id)
-                            .hint_text(*hint)
+                            .hint_text(input_hint(key, hint))
                             .desired_width(f32::INFINITY),
                     )
                     .on_hover_text(if *from_part {
@@ -1102,6 +1161,79 @@ fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
 mod tests {
     use super::*;
     use novo_core::DeviceTag;
+
+    #[test]
+    fn a_hidden_row_that_holds_a_value_is_still_shown() {
+        let mut project = Project::new("Plant");
+        let (device, _) = project
+            .transact("Add", |tx| {
+                tx.add_device(DeviceTag::parse("=A1-KM1").unwrap(), "")
+            })
+            .unwrap();
+        let mut info = DeviceInfo {
+            device,
+            tag: "=A1-KM1".into(),
+            description: String::new(),
+            part: String::new(),
+            relations: Vec::new(),
+            properties: Vec::new(),
+            part_values: Vec::new(),
+            delay: None,
+            mate: None,
+            calc_inputs: DEVICE_INPUTS
+                .iter()
+                .map(|_| (String::new(), false))
+                .collect(),
+            protective: false,
+        };
+        let keys = |info: &DeviceInfo| -> Vec<&str> {
+            visible_inputs(info, "KM")
+                .iter()
+                .map(|((k, ..), _)| *k)
+                .collect()
+        };
+        assert!(!keys(&info).contains(&"breaking_capacity_ka"));
+        assert!(!keys(&info).contains(&"trip_curve"));
+        // A part supplies a breaking capacity: the checks read it, so the
+        // row is shown.
+        let at = DEVICE_INPUTS
+            .iter()
+            .position(|(k, ..)| *k == "breaking_capacity_ka")
+            .unwrap();
+        info.calc_inputs[at] = ("6".into(), true);
+        assert!(keys(&info).contains(&"breaking_capacity_ka"));
+        assert!(!keys(&info).contains(&"trip_curve"));
+    }
+
+    #[test]
+    fn a_contactor_has_no_protective_rows_but_other_codes_keep_every_row() {
+        let protective = [
+            "trip_curve",
+            "breaking_capacity_ka",
+            "let_through_i2t",
+            "setting_min_a",
+            "setting_max_a",
+        ];
+        for key in protective {
+            assert!(!input_applies(key, "K", false), "{key} on a contactor");
+            assert!(
+                !input_applies(key, "KM", false),
+                "{key} on a motor contactor"
+            );
+            for code in ["Q", "QF", "F", "FU", "FR", "M", "X", "S", ""] {
+                assert!(input_applies(key, code, false), "{key} on {code:?}");
+            }
+        }
+        // An overload relay drawn with a K tag is still a protective device.
+        for key in protective {
+            assert!(input_applies(key, "K", true), "{key} on a K-tagged relay");
+        }
+        for code in ["K", "KM", "QF", "M"] {
+            assert!(input_applies("rated_current_a", code, false));
+            assert!(input_applies("ac3_current_a", code, false));
+            assert!(input_applies("sccr_ka", code, false));
+        }
+    }
 
     #[test]
     fn one_device_however_many_of_its_symbols() {
@@ -1197,6 +1329,53 @@ mod tests {
         let info = device_info(&project, None, None, k1).unwrap();
         assert!(info.part_values.is_empty());
         assert!(project.part(part).is_some());
+    }
+
+    /// The class is the tag's, but the checks tell protective devices by
+    /// their symbol: an overload relay drawn as `-K3` keeps its rows.
+    #[test]
+    fn a_k_tagged_overload_relay_keeps_its_protective_rows() {
+        use novo_core::{Document, Pin, Placement, Point};
+        let mut doc = Document::default();
+        let (relay, contactor) = doc
+            .transact("Draw", |tx| {
+                let page = tx.add_page("1")?;
+                let mut place = |tag: &str, symbol: &str| -> novo_core::Result<DeviceId> {
+                    let device = tx.add_device(DeviceTag::parse(tag)?, "")?;
+                    tx.place_symbol(
+                        page,
+                        symbol,
+                        Placement::at(Point::new(40.0, 40.0)),
+                        vec![Pin::new("1", 0.0, -8.0), Pin::new("2", 0.0, 8.0)],
+                        SymbolRole::Device { device, main: true },
+                    )?;
+                    Ok(device)
+                };
+                Ok((
+                    place("-K3", "iec/protection/overload_relay")?,
+                    place("-K1", "iec/contactors/main_3p")?,
+                ))
+            })
+            .unwrap()
+            .0;
+        let info = |device| device_info(doc.project(), None, None, device).unwrap();
+        let keys = |info: &DeviceInfo, letter: &str| -> Vec<&str> {
+            visible_inputs(info, letter)
+                .iter()
+                .map(|((k, ..), _)| *k)
+                .collect()
+        };
+        let relay = info(relay);
+        assert!(relay.protective);
+        let relay_rows = keys(&relay, "K");
+        for key in ["setting_min_a", "setting_max_a", "trip_curve"] {
+            assert!(relay_rows.contains(&key), "{key} on a K-tagged relay");
+        }
+        let contactor = info(contactor);
+        assert!(!contactor.protective);
+        let contactor_rows = keys(&contactor, "K");
+        assert!(!contactor_rows.contains(&"trip_curve"));
+        assert!(contactor_rows.contains(&"ac3_current_a"));
     }
 
     #[test]

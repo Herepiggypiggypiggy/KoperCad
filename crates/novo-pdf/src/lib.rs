@@ -34,6 +34,7 @@ pub mod plate;
 pub mod print;
 mod report;
 pub mod template;
+pub mod template_cards;
 
 use novo_canvas::model::{
     ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,
@@ -52,6 +53,7 @@ pub use novo_canvas::model::{NoteAnchor, NoteDensity, NoteGlyph, NoteRow, Symbol
 pub use print::{Orientation, Placement, PrintPaper, PrintScale, PrintSetup};
 pub use report::{
     ReportFileFormat, ReportPdfOptions, export_layouts_pdf, export_report_pdf, report_bytes,
+    report_outline,
 };
 
 /// Which pages to export.

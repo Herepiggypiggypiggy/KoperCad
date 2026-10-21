@@ -1,0 +1,32 @@
+@title Handover gate: open problems listed with Show links, Fix these first, Hand over anyway
+@area Reports
+# The question before the folder is written lists the blocking problems; a row jumps to
+# the symbol it is about (or opens the Issues list when nothing of it is drawn).
+click_text "New project"
+wait 20
+key ctrl+k
+text "motor starter dol"
+wait 5
+key Enter
+wait 10
+click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button #2
+wait 20
+expect_scene "-K1"
+key ctrl+k
+wait 6
+text handover
+wait 8
+key Enter
+wait 20
+expect "The design still has open problems"
+expect "Fix these first"
+expect "Hand over anyway"
+shot gate
+check_layout
+click_text Show
+wait 20
+expect_not "The design still has open problems"
+shot after-show
+check_layout

@@ -649,7 +649,7 @@ struct Draft {
     price_date: Option<String>,
 }
 
-fn connection_kind(text: &str) -> ConnectionKind {
+pub(crate) fn connection_kind(text: &str) -> ConnectionKind {
     let t = text.to_lowercase();
     let any = |ws: &[&str]| ws.iter().any(|w| t.contains(w));
     if any(&["push-in", "push in", "pushin", "push‑in"]) {
@@ -680,7 +680,7 @@ fn connection_kind(text: &str) -> ConnectionKind {
     }
 }
 
-fn lifecycle_of(text: &str) -> Lifecycle {
+pub(crate) fn lifecycle_of(text: &str) -> Lifecycle {
     let t = text.trim().to_lowercase();
     let any = |ws: &[&str]| ws.iter().any(|w| t.contains(w));
     if any(&[
@@ -725,7 +725,7 @@ fn lifecycle_of(text: &str) -> Lifecycle {
     }
 }
 
-fn currency_of(text: &str) -> Option<String> {
+pub(crate) fn currency_of(text: &str) -> Option<String> {
     const CODES: [&str; 12] = [
         "EUR", "USD", "GBP", "CHF", "SEK", "DKK", "NOK", "PLN", "CZK", "JPY", "CNY", "HUF",
     ];

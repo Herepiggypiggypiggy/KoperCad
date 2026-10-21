@@ -123,8 +123,9 @@ pub(crate) fn routing(cx: &Context<'_>, out: &mut Vec<Problem>) {
             ProblemKind::GuessedWire,
             guessed,
             format!(
-                "{n} wire{} no cross-section: routed with a default size, so duct fill is approximate",
-                if n == 1 { " has" } else { "s have" }
+                "{n} wire{} between placed devices {} no cross-section: routed with a default size, so duct fill is approximate",
+                if n == 1 { "" } else { "s" },
+                if n == 1 { "has" } else { "have" }
             ),
         ));
     }

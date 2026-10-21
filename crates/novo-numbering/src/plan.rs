@@ -55,6 +55,9 @@ pub enum Reason {
     Renumbered,
     /// Could not be given a number (the one it needs is taken).
     Blocked,
+    /// Needs a number change but a page of the net is locked with a
+    /// revision: left alone until the page is unlocked.
+    PageLocked,
 }
 
 /// One group of wires in a plan.
@@ -68,6 +71,12 @@ pub struct GroupPlan {
     pub old: Vec<String>,
     pub new: Option<String>,
     pub reason: Reason,
+    /// Name of the page the net starts on.
+    pub page: String,
+    /// The number is hand-typed (fixed).
+    pub fixed: bool,
+    /// Revision a page of the net is locked with.
+    pub page_lock: Option<String>,
 }
 
 /// One wire whose number changes.
@@ -101,11 +110,46 @@ impl Plan {
     pub fn changed_groups(&self) -> impl Iterator<Item = &GroupPlan> {
         self.groups
             .iter()
-            .filter(|g| !matches!(g.reason, Reason::Kept | Reason::Locked))
+            .filter(|g| !matches!(g.reason, Reason::Kept | Reason::Locked | Reason::PageLocked))
     }
 
-    /// One line: "12 wires numbered, 3 settled, 40 unchanged".
+    /// Why the number of numbers differs from the number of wires drawn: a number belongs to a
+    /// potential, and wires joined at a terminal, junction or shared pin are one potential.
+    pub fn scope_note(&self) -> String {
+        let wires: usize = self.groups.iter().map(|g| g.wires.len()).sum();
+        let numbers = self.groups.len();
+        if wires == numbers {
+            return format!(
+                "{numbers} {}, one number each.",
+                if numbers == 1 { "wire" } else { "wires" }
+            );
+        }
+        format!(
+            "{numbers} numbers for {wires} wires: wires joined at a terminal, junction or shared pin share one number."
+        )
+    }
+
+    /// One line, past tense: "12 numbered, 3 settled, 40 unchanged".
     pub fn summary(&self) -> String {
+        self.describe(false)
+    }
+
+    /// The same line for a preview, before anything is applied:
+    /// "12 would be numbered, 3 would be settled, 40 unchanged".
+    pub fn preview_summary(&self) -> String {
+        self.describe(true)
+    }
+
+    fn describe(&self, preview: bool) -> String {
+        let (numbered, renumbered, settled) = if preview {
+            (
+                "would be numbered",
+                "would be renumbered",
+                "would be settled",
+            )
+        } else {
+            ("numbered", "renumbered", "settled")
+        };
         let count = |r: Reason| self.groups.iter().filter(|g| g.reason == r).count();
         let (n, h, r) = (
             count(Reason::New),
@@ -115,17 +159,21 @@ impl Plan {
         let kept = count(Reason::Kept) + count(Reason::Locked);
         let mut parts = Vec::new();
         if n > 0 {
-            parts.push(format!("{n} numbered"));
+            parts.push(format!("{n} {numbered}"));
         }
         if r > 0 {
-            parts.push(format!("{r} renumbered"));
+            parts.push(format!("{r} {renumbered}"));
         }
         if h > 0 {
-            parts.push(format!("{h} settled"));
+            parts.push(format!("{h} {settled}"));
         }
         let blocked = count(Reason::Blocked);
         if blocked > 0 {
             parts.push(format!("{blocked} blocked"));
+        }
+        let held = count(Reason::PageLocked);
+        if held > 0 {
+            parts.push(format!("{held} on locked pages left alone"));
         }
         if parts.is_empty() {
             return format!("Nothing to change, {kept} unchanged");
@@ -232,7 +280,7 @@ pub fn plan(project: &Project, scheme: &Scheme, mode: Mode, scope: &Scope) -> Pl
             let Some(cur) = g.current.as_deref() else {
                 continue;
             };
-            let keep_always = !in_scope[i] || g.locked;
+            let keep_always = !in_scope[i] || g.locked || g.page_lock.is_some();
             if keep_always != firm {
                 continue;
             }
@@ -249,6 +297,8 @@ pub fn plan(project: &Project, scheme: &Scheme, mode: Mode, scope: &Scope) -> Pl
                 st.reserve(i, cur, &targets[i]);
                 let reason = if g.locked {
                     Reason::Locked
+                } else if in_scope[i] && g.page_lock.is_some() && g.needs_settling() {
+                    Reason::PageLocked
                 } else if !in_scope[i] || (g.unnumbered == 0 && g.numbers.len() == 1) {
                     Reason::Kept
                 } else {
@@ -267,8 +317,14 @@ pub fn plan(project: &Project, scheme: &Scheme, mode: Mode, scope: &Scope) -> Pl
         if result[i].is_some() {
             continue;
         }
-        if !in_scope[i] || g.locked {
-            result[i] = Some((g.current.clone(), Reason::Kept));
+        if !in_scope[i] || g.locked || g.page_lock.is_some() {
+            let held = in_scope[i] && !g.locked && g.page_lock.is_some();
+            let reason = if held {
+                Reason::PageLocked
+            } else {
+                Reason::Kept
+            };
+            result[i] = Some((g.current.clone(), reason));
             continue;
         }
         let reason = match (&g.current, mode) {
@@ -307,6 +363,9 @@ pub fn plan(project: &Project, scheme: &Scheme, mode: Mode, scope: &Scope) -> Pl
             old: g.numbers.iter().map(|n| n.0.clone()).collect(),
             new,
             reason,
+            page: g.page_name.clone(),
+            fixed: g.locked,
+            page_lock: g.page_lock.clone(),
         });
     }
     let conflicts = conflicts_of(project, &all, scheme, Some(&after));

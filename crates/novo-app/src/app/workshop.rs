@@ -4,12 +4,16 @@
 //! 1. the 1:1 drilling template of every mounting plate (and any door or
 //!    wall that has holes), tiled on A4 or A3 with cross hairs, hole sizes
 //!    and a scale-check ruler (`novo_layout::template`, `novo_pdf::template`),
-//! 2. the bench cut list, 3. the ferrule counts, 4. the labels, and
-//! 5. the assembly print pack with its tick boxes.
+//!    plus a print-scale check page and, for doors and walls with cut-outs,
+//!    one A4 card per cut-out shape (`novo_pdf::template_cards`),
+//! 2. the labels, and
+//! 3. the bench packet, `0 Bench packet.pdf`: one PDF with a cover, the
+//!    cabinet build order, the cut list, the ferrules, a tick sheet per
+//!    schematic page and the terminal strip plans (`bench_packet`).
 //!
-//! The last four are the Bench output exports; they are written under the
-//! settings of the Bench output window. A step that has nothing to print
-//! (no wires, no plate) is skipped and the summary says so.
+//! The labels and the packet are written under the settings of the Bench
+//! output window. A step that has nothing to print (no wires, no plate) is
+//! skipped and the summary says so.
 
 use std::path::{Path, PathBuf};
 
@@ -17,11 +21,17 @@ use novo_core::Project;
 use novo_layout::model::template_documents;
 use novo_layout::template::Paper;
 
+use novo_reports::packet::CoverLine;
+
+use super::bench_packet::PACKET_FILE;
 use super::{Level, NovoApp};
 
 /// Most pages one template PDF may take. A plate this large is a data entry
 /// slip (metres typed as millimetres); printing it would not be.
 const MAX_TEMPLATE_PAGES: usize = 300;
+
+/// The print-scale check page in the pack.
+const SCALE_CHECK_FILE: &str = "0 Print scale check.pdf";
 
 /// One cabinet's template files.
 pub(super) struct TemplatePdfs {
@@ -32,6 +42,8 @@ pub(super) struct TemplatePdfs {
     /// plate, for a print shop; `None` when the plate is too small or too
     /// large for one page.
     pub plate: Option<Vec<u8>>,
+    /// One A4 card per cut-out shape (doors, walls), when there are cut-outs.
+    pub cards: Option<novo_pdf::template_cards::CutoutCards>,
 }
 
 /// The enclosures that have a mounting plate and the PDFs of each one's
@@ -64,6 +76,7 @@ pub(super) fn template_pdfs(
             plate: sheets
                 .first()
                 .and_then(|plate| novo_pdf::template::export_plate_pdf(plate, name)),
+            cards: novo_pdf::template_cards::export_cutout_cards_pdf(&sheets, name),
         });
     }
     (pdfs, too_big)
@@ -100,6 +113,13 @@ impl NovoApp {
                 "drilling template {tag}, over {MAX_TEMPLATE_PAGES} pages: check the plate size"
             ));
         }
+        if !templates.is_empty() {
+            let file = folder.join(SCALE_CHECK_FILE);
+            let bytes = novo_pdf::template_cards::export_scale_check_pdf(&name);
+            if self.workshop_write(&file, &bytes) {
+                done.push("print scale check".to_owned());
+            }
+        }
         for t in &templates {
             let tag = &t.tag;
             let file = folder.join(format!(
@@ -109,6 +129,20 @@ impl NovoApp {
             ));
             if self.workshop_write(&file, &t.tiled) {
                 done.push(format!("drilling template {tag} ({})", paper.name()));
+            }
+            if let Some(cards) = &t.cards {
+                let file = folder.join(format!("1 Cut-out cards {}.pdf", clean(tag)));
+                if self.workshop_write(&file, &cards.pdf) {
+                    done.push(format!(
+                        "cut-out cards {tag} ({} cut-outs, {} pages)",
+                        cards.cutouts, cards.pages
+                    ));
+                }
+                for big in &cards.too_large {
+                    skipped.push(format!(
+                        "cut-out card for {big} (too large for A4, it is on the tiled template)"
+                    ));
+                }
             }
             match &t.plate {
                 Some(bytes) => {
@@ -120,24 +154,59 @@ impl NovoApp {
                 None => no_single_sheet.push(tag.clone()),
             }
         }
-        let steps: [(&str, &str); 4] = [
-            ("2 Cut list.pdf", "cut list"),
-            ("3 Ferrules.pdf", "ferrules"),
-            ("4 Labels.pdf", "labels"),
-            ("5 Assembly checklist.pdf", "assembly checklist"),
-        ];
-        for (file, what) in steps {
-            let path = folder.join(file);
-            let written = match what {
-                "cut list" => self.export_bench_cut_to(&path),
-                "ferrules" => self.export_ferrules_to(&path),
-                "labels" => self.export_labels_to(&path),
-                _ => self.export_assembly_to(&path),
-            };
-            match written {
-                Some(_) => done.push(what.to_owned()),
-                None => skipped.push(what.to_owned()),
+        // Files of the first version of this pack, now inside the packet.
+        let mut replaced: Vec<&str> = Vec::new();
+        for old in [
+            "2 Cut list.pdf",
+            "3 Ferrules.pdf",
+            "4 Labels.pdf",
+            "5 Assembly checklist.pdf",
+        ] {
+            if std::fs::remove_file(folder.join(old)).is_ok() {
+                replaced.push(old);
             }
+        }
+        let mut separate: Vec<CoverLine> = Vec::new();
+        if !templates.is_empty() {
+            separate.push(CoverLine::new(
+                "Print scale check",
+                SCALE_CHECK_FILE,
+                "Print first, at 100 % (actual size); the square must measure 100 mm",
+                "A check of your printer, not of the drawing; printed accuracy depends on the printer",
+            ));
+        }
+        for t in &templates {
+            separate.push(CoverLine::new(
+                &format!("Drilling template {}", t.tag),
+                &format!("1 Drilling template {} {}.pdf", clean(&t.tag), paper.name()),
+                "Print at 100 % (actual size), then check the 100 mm ruler",
+                "Hole positions from the cabinet layout; about 0.5 mm if the check square is 100 mm, else up to 0.2 % (not measured)",
+            ));
+            if t.cards.is_some() {
+                separate.push(CoverLine::new(
+                    &format!("Cut-out cards {}", t.tag),
+                    &format!("1 Cut-out cards {}.pdf", clean(&t.tag)),
+                    "Print at 100 % (actual size), then check the 50 mm square",
+                    "Sizes and positions from the part data and layout; about 0.5 mm if the check square is 100 mm, else up to 0.2 % (not measured)",
+                ));
+            }
+        }
+        let labels = folder.join("2 Labels.pdf");
+        match self.export_labels_to(&labels) {
+            Some(_) => {
+                done.push("labels".to_owned());
+                separate.push(CoverLine::new(
+                    "Labels",
+                    "2 Labels.pdf",
+                    "Print at 100 % on the label stock",
+                    "Texts from the drawing; sheet pitch from published data, never printed here",
+                ));
+            }
+            None => skipped.push("labels".to_owned()),
+        }
+        match self.export_bench_packet_to(&folder.join(PACKET_FILE), &separate) {
+            Some(_) => done.push("bench packet".to_owned()),
+            None => skipped.push("bench packet".to_owned()),
         }
         if done.is_empty() {
             self.message(
@@ -153,6 +222,12 @@ impl NovoApp {
                 skipped.join(", ")
             ));
         }
+        if !replaced.is_empty() {
+            text.push_str(&format!(
+                ". Replaced by the packet and removed: {}",
+                replaced.join(", ")
+            ));
+        }
         if !no_single_sheet.is_empty() {
             text.push_str(&format!(
                 ". No one-sheet plate for {}: the plate is under 150 x 40 mm or over 5080 mm, use the tiled template",
@@ -162,6 +237,30 @@ impl NovoApp {
         self.message_file(text, folder);
         self.wb.last_export = Some(folder.to_owned());
         Some(folder.to_owned())
+    }
+
+    /// Reports > Bench output > Print scale check: the one-page check next to
+    /// the project, replacing an earlier one.
+    pub(super) fn export_scale_check(&mut self) -> Option<PathBuf> {
+        let (dir, stem) = self.export_base()?;
+        let path = dir.join(format!("{} print scale check.pdf", clean(&stem)));
+        let name = self.machine_title().unwrap_or_default();
+        let bytes = novo_pdf::template_cards::export_scale_check_pdf(&name);
+        let replaced = path.exists();
+        if self.workshop_write(&path, &bytes) {
+            let verb = if replaced { "Replaced" } else { "Exported" };
+            self.message_file(
+                format!(
+                    "{verb} {}. Print it at 100 % and measure the square: it must be 100 mm",
+                    path.display()
+                ),
+                &path,
+            );
+            self.wb.last_export = Some(path.clone());
+            Some(path)
+        } else {
+            None
+        }
     }
 
     fn workshop_write(&mut self, path: &Path, bytes: &[u8]) -> bool {

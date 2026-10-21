@@ -1,0 +1,26 @@
+@title Parts table import (mapping, preview, add)
+@area Parts
+# A made-up German price list (Windows-1252, semicolons, units in headers); the native file dialog is answered by the harness.
+click_text "Open example"
+wait 20
+answer_dialog qa/fixtures/parts/price-list-de.csv
+click_text File
+wait 4
+click_text "Import parts"
+wait 4
+click_text "Import parts from a table (CSV or Excel)"
+wait 20
+shot columns
+check_layout
+check_blank columns
+expect "Import parts from price-list-de.csv"
+expect "Nennstrom [A]"
+click_text Rows Button
+wait 10
+shot rows
+check_layout
+expect "Not imported"
+expect "not a possible size"
+click_text "Add 4 parts to the catalog"
+wait 20
+shot added

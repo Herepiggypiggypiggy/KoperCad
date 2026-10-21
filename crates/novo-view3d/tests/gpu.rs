@@ -5,7 +5,7 @@ use glam::Vec3;
 use novo_view3d::render::{Frame, Mode, Quality, Renderer, Tier, ViewTarget, read_rgba};
 use novo_view3d::{
     Camera, Item, ItemId, ItemKind, Look, MeshLibrary, Overlay, OverlayLines, OverlayMesh,
-    PlateFrame, Pose, Scene, Shape, ViewPreset, ViewState,
+    PlateFrame, Pose, Profile, Scene, Shape, ViewPreset, ViewState,
 };
 
 struct Gpu {
@@ -932,4 +932,78 @@ fn a_section_plane_cuts_the_depth_the_occlusion_reads() {
         darker > 20,
         "the plate inside the cut box is occluded by its lower walls ({darker} px)"
     );
+}
+
+/// Triangles drawn for a scene, with the outlines on.
+fn triangles_drawn(gpu: &Gpu, scene: &Scene, camera: &Camera) -> u64 {
+    let library = MeshLibrary::new();
+    let mut renderer = Renderer::new(&gpu.device);
+    let mut target = ViewTarget::new(&renderer, &gpu.device);
+    let mut quality = Quality::new(Mode::Interactive, Tier::Discrete);
+    quality.scale = 1.0;
+    let mut state = ViewState::default();
+    state.display.edges = true;
+    let mut encoder = gpu.device.create_command_encoder(&Default::default());
+    let stats = renderer.render(
+        &gpu.device,
+        &gpu.queue,
+        &mut encoder,
+        &mut target,
+        &Frame {
+            scene,
+            state: &state,
+            camera,
+            library: &library,
+            look: &Look::dark(),
+            size_px: SIZE,
+            quality,
+            overlays: &[],
+            overlay_revision: 1,
+        },
+    );
+    gpu.queue.submit([encoder.finish()]);
+    stats.triangles
+}
+
+/// A 120 mm slotted duct in a scene `spread` times as wide.
+fn duct_scene(spread: f32) -> Scene {
+    let mut scene = Scene::new(PlateFrame {
+        width: 120.0 * spread,
+        height: 100.0,
+    });
+    scene.push(Item::new(
+        ItemId::new(ItemKind::Duct, 1),
+        Shape::Profile(Profile::SlottedChannel),
+        Pose::at(Vec3::new(60.0, 50.0, 0.0)),
+        Vec3::new(120.0, 40.0, 60.0),
+    ));
+    if spread > 1.0 {
+        // Widens the scene so the duct is a small part of the view.
+        scene.push(boxed(
+            2,
+            Vec3::new(120.0 * spread - 5.0, 50.0, 0.0),
+            Vec3::new(10.0, 10.0, 10.0),
+            [40, 40, 40],
+        ));
+    }
+    scene
+}
+
+#[test]
+fn a_slotted_duct_draws_near_with_outlines_further_out_without_and_far_as_solid() {
+    let Some(gpu) = gpu() else {
+        println!("no adapter, skipped");
+        return;
+    };
+    // At 256 px these views give a finger-and-slot pitch of about 17 px (slots
+    // with outlines), about 9 px (slots, no outline buffer to bind) and 1 px
+    // (the solid section stands in).
+    let mut counts = Vec::new();
+    for spread in [1.0_f32, 3.0, 10.0] {
+        let scene = duct_scene(spread);
+        counts.push(triangles_drawn(&gpu, &scene, &front_camera(&scene)));
+    }
+    assert!(counts[0] > 300, "near: {counts:?}");
+    assert!(counts[1] > 300, "middle: {counts:?}");
+    assert!(counts[2] < 100, "far: {counts:?}");
 }

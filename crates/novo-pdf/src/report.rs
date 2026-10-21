@@ -220,6 +220,31 @@ struct Footer<'a> {
 /// footer and a bookmark per section. An empty list gives one blank page,
 /// so the result always opens in a reader. Output is deterministic.
 pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) -> Vec<u8> {
+    let sheets = build_sheets(reports, options);
+    let footer = Footer {
+        title: &options.title,
+        right: &options.footer_right,
+    };
+    write_sheets(sheets, options.format, &options.title, Some(&footer))
+}
+
+/// Where every section of `reports` starts in the PDF
+/// [`export_report_pdf`] writes with the same `options`: the section's
+/// bookmark title and its 1-based page number, in order. A section that
+/// flows under the previous one reports that page. This is what a contents
+/// page prints, so it can never disagree with the bookmarks.
+pub fn report_outline(
+    reports: &[&ReportOutput],
+    options: &ReportPdfOptions,
+) -> Vec<(String, usize)> {
+    build_sheets(reports, options)
+        .iter()
+        .enumerate()
+        .flat_map(|(n, sheet)| sheet.bookmarks.iter().map(move |b| (b.clone(), n + 1)))
+        .collect()
+}
+
+fn build_sheets(reports: &[&ReportOutput], options: &ReportPdfOptions) -> Vec<Sheet> {
     let mut sheets: Vec<Sheet> = Vec::new();
     let translated: Vec<ReportOutput> = reports
         .iter()
@@ -315,11 +340,7 @@ pub fn export_report_pdf(reports: &[&ReportOutput], options: &ReportPdfOptions) 
             }
         }
     }
-    let footer = Footer {
-        title: &options.title,
-        right: &options.footer_right,
-    };
-    write_sheets(sheets, options.format, &options.title, Some(&footer))
+    sheets
 }
 
 /// Writes pages laid out by the documentation designer
@@ -534,5 +555,48 @@ pub fn report_bytes(
             Ok(to_csv(&translate_output(report, &options.language), &csv).into_bytes())
         }
         ReportFileFormat::Xlsx => xlsx_bytes(&[&translate_output(report, &options.language)]),
+    }
+}
+
+#[cfg(test)]
+mod outline_tests {
+    use super::*;
+    use novo_reports::{Cell, Column, Section};
+
+    fn report(sections: usize, rows: usize) -> ReportOutput {
+        ReportOutput {
+            report: "t".into(),
+            title: "T".into(),
+            revision: 0,
+            sections: (0..sections)
+                .map(|n| {
+                    let mut s = Section::new(
+                        &format!("s{n}"),
+                        &format!("Part {n}"),
+                        vec![Column::new("a", "A", 20.0)],
+                    );
+                    for r in 0..rows {
+                        s.push(vec![Cell::Int(r as i64)], Vec::new());
+                    }
+                    s
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn the_outline_gives_the_page_each_section_starts_on() {
+        let long = report(1, 60);
+        let short = report(2, 2);
+        let options = ReportPdfOptions::default();
+        let outline = report_outline(&[&long, &short], &options);
+        assert_eq!(outline.len(), 3);
+        assert_eq!(outline[0].1, 1);
+        let first_pages = outline[1].1 - 1;
+        assert!(first_pages >= 2, "60 rows take several pages: {outline:?}");
+        assert_eq!(outline[2].1, outline[1].1 + 1, "each section starts a page");
+        let pdf = export_report_pdf(&[&long, &short], &options);
+        let doc = lopdf::Document::load_mem(&pdf).unwrap();
+        assert_eq!(doc.get_pages().len(), outline[2].1);
     }
 }

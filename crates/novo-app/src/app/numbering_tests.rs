@@ -148,3 +148,51 @@ fn the_window_previews_and_applies_a_renumber_as_one_step() {
     d.frame();
     assert!(d.app.wb.numbering.is_some());
 }
+
+#[test]
+fn numbers_tab_types_and_unlocks_per_net_and_skips_locked_pages() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let wires = two_wires(&mut d);
+    d.app.run_command(&ctx, "wires.number", None);
+    d.frame();
+    // The menu command opens the window on the Numbers tab.
+    d.app.run_command(&ctx, "wires.numbering", None);
+    d.frame();
+    assert_eq!(
+        d.app.wb.numbering.as_ref().unwrap().tab,
+        super::numbering::Tab::Numbers
+    );
+    // A row edit types the number, fixes it, and is one undo step.
+    d.app.set_wire_number_of(wires[0], "105");
+    d.frame();
+    assert_eq!(numbers(&d, &wires)[0].as_deref(), Some("105"));
+    assert!(novo_numbering::is_locked(d.doc().project(), wires[0]));
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(numbers(&d, &wires)[0].as_deref(), Some("1"));
+    // A revision-locked page: runs leave it alone and say so.
+    let page = d.doc().project().wire(wires[0]).unwrap().page;
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Lock", |tx| tx.lock_page(page, "A"))
+        .unwrap();
+    let scheme = novo_numbering::Scheme::load(d.doc().project());
+    let plan = novo_numbering::plan(
+        d.doc().project(),
+        &scheme,
+        novo_numbering::Mode::Renumber,
+        &novo_numbering::Scope::Project,
+    );
+    assert!(plan.is_empty());
+    assert!(
+        plan.groups
+            .iter()
+            .all(|g| g.page_lock.as_deref() == Some("A"))
+    );
+}

@@ -15,13 +15,57 @@ fn example() -> (tempfile::TempDir, Drive) {
 }
 
 #[test]
-fn the_command_is_known_and_needs_a_selected_standard() {
-    let (_dir, mut d) = example();
-    let ctx = d.ctx.clone();
+fn the_command_is_known_and_writes_the_design_checks_without_a_standard() {
+    let (dir, mut d) = example();
     assert!(novo_workflow::commands::get("export.standards_report").is_some());
-    d.app.run_command(&ctx, "export.standards_report", None);
-    d.frame();
-    assert!(d.app.wb.last_export.is_none());
+    let html = dir.path().join("Plant standards.html");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Html, &html)
+        .expect("written with no standard selected");
+    let text = std::fs::read_to_string(html).unwrap();
+    assert!(text.contains("Design checks"));
+    assert!(text.contains("No standard is selected"));
+    assert!(text.contains("unverified"));
+}
+
+#[test]
+fn the_report_lists_every_check_family_with_its_basis_and_never_claims_compliance() {
+    let (dir, mut d) = example();
+    assert!(d.app.edit_project("Select standards", |tx| {
+        standards::select(tx, &[StandardSet::Iec60204])
+    }));
+    let html = dir.path().join("Plant standards.html");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Html, &html)
+        .unwrap();
+    let text = std::fs::read_to_string(&html).unwrap();
+    for f in novo_checks::standards::design::FAMILIES {
+        assert!(text.contains(f.title), "{} missing", f.title);
+        assert!(
+            text.contains(f.assumptions.split('.').next().unwrap()),
+            "{}",
+            f.id
+        );
+    }
+    // No Heat result is held in this session: the report says so instead of
+    // saying the cabinet is fine.
+    assert!(text.contains("No Heat result is held"));
+    assert!(!text.to_lowercase().contains("project complies"));
+    // A pass on planning values or a model carries the caveat in its word.
+    assert!(text.contains("Met (estimate)"));
+    assert!(!text.contains("can be trusted"));
+    let project = d.app.backend.document().unwrap().project();
+    let doc = standards::document::build(project, &standards::compliance(project));
+    let out = super::standards_report::report_output(&doc);
+    for id in ["limits", "design_summary", "design_detail"] {
+        assert!(out.section(id).is_some(), "{id}");
+    }
+    let heat = doc.design.iter().find(|r| r.family.id == "heat").unwrap();
+    assert_ne!(heat.verdict, standards::document::Verdict::Pass);
+    let pdf = dir.path().join("Plant standards.pdf");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Pdf, &pdf)
+        .expect("pdf");
 }
 
 #[test]
@@ -105,4 +149,105 @@ fn simulate_commands_live_in_the_simulate_menu_and_leave_cabinet_for_the_schemat
         crate::app::workspace::Workspace::Schematic
     );
     assert!(d.app.wb.live.on);
+}
+
+#[test]
+fn colours_are_not_checkable_when_no_wire_states_one() {
+    let (_dir, d) = example();
+    let project = d.app.backend.document().unwrap().project();
+    assert!(project.wires().count() > 0);
+    let unstated = project.wires().filter(|w| w.color.is_none()).count();
+    let doc = standards::document::build(project, &standards::compliance(project));
+    let row = doc
+        .design
+        .iter()
+        .find(|r| r.family.id == "colours")
+        .unwrap();
+    if unstated == project.wires().count() {
+        assert_eq!(row.verdict, standards::document::Verdict::NotCheckable);
+    } else if unstated > 0 {
+        assert_eq!(row.verdict, standards::document::Verdict::Partial);
+    }
+    assert_ne!(row.verdict, standards::document::Verdict::Pass);
+}
+
+#[test]
+fn selecting_a_standard_adds_findings_and_the_pill_and_list_say_so() {
+    let (_dir, mut d) = example();
+    let none = d.app.problems().to_vec();
+    assert_eq!(super::checks::standards_findings(&none), 0);
+    assert!(super::checks::standards_note(0, 4).is_none());
+    assert!(d.app.edit_project("Select standards", |tx| {
+        standards::select(tx, &StandardSet::ALL)
+    }));
+    d.frame();
+    let all = d.app.problems().to_vec();
+    let n = super::checks::standards_findings(&all);
+    assert!(
+        n > 0,
+        "the example has standards findings with every set on"
+    );
+    let note = super::checks::standards_note(n, n + 1).unwrap();
+    assert!(note.contains("standards you selected"), "{note}");
+    assert!(
+        note.starts_with(&format!("{n} of the {} errors", n + 1)),
+        "{note}"
+    );
+    assert!(
+        super::checks::standards_note(1, 6)
+            .unwrap()
+            .contains("comes")
+    );
+}
+
+#[test]
+fn wire_counts_name_what_they_count_and_agree_with_the_bench_packet() {
+    let (dir, mut d) = example();
+    let html = dir.path().join("Plant standards.html");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Html, &html)
+        .unwrap();
+    let text = std::fs::read_to_string(&html).unwrap();
+    let project = d.app.backend.document().unwrap().project();
+    let set = novo_reports::WireSet::of(project);
+    assert_eq!(set.drawn, project.wires().count());
+    let jobs = novo_reports::wire_cut_jobs(project);
+    assert_eq!(set.to_cut, jobs.len(), "WireSet and the bench jobs agree");
+    assert!(
+        text.contains(&format!("{} drawn wires", set.drawn)),
+        "drawn count named"
+    );
+    let sized = jobs
+        .iter()
+        .filter(|j| j.cross_section_mm2.is_some())
+        .count();
+    assert!(
+        text.contains(&format!(
+            "{sized} of {} wires to cut have a cross-section",
+            set.to_cut
+        )),
+        "the bench count is quoted as the bench counts it"
+    );
+    if set.to_cut != set.drawn {
+        assert!(text.contains(&format!("make {} wires to cut", set.to_cut)));
+    }
+}
+
+#[test]
+fn no_standard_selected_opens_with_the_design_checks_not_an_empty_table() {
+    let (dir, mut d) = example();
+    let project = d.app.backend.document().unwrap().project();
+    let doc = standards::document::build(project, &standards::compliance(project));
+    assert!(doc.sections.is_empty());
+    let out = super::standards_report::report_output(&doc);
+    assert!(out.section("summary").is_none(), "no empty standards table");
+    assert_eq!(out.sections[0].key, "notice");
+    assert!(out.section("design_summary").is_some());
+    let html = dir.path().join("Plant standards.html");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Html, &html)
+        .unwrap();
+    let text = std::fs::read_to_string(&html).unwrap();
+    assert!(!text.contains("<th>Standard</th>"));
+    assert!(text.contains("Design checks"));
 }

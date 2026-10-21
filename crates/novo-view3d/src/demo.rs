@@ -33,6 +33,8 @@ pub struct DemoOptions {
     /// row, along it and down to another device, in one of six colours; one in
     /// six is the green-yellow protective wire with its stripe.
     pub wires: usize,
+    /// Draw the ducts as slotted duct.
+    pub slotted_ducts: bool,
 }
 
 impl Default for DemoOptions {
@@ -42,6 +44,7 @@ impl Default for DemoOptions {
             shaped_parts: true,
             door: true,
             wires: 0,
+            slotted_ducts: false,
         }
     }
 }
@@ -107,7 +110,11 @@ pub fn cabinet(opts: &DemoOptions) -> (Scene, Arc<MeshLibrary>) {
         let rail_y = top + 80.0;
         scene.push(Item::new(
             ItemId::new(ItemKind::Duct, 100 + row as u64),
-            Shape::Profile(Profile::Channel),
+            Shape::Profile(if opts.slotted_ducts {
+                Profile::SlottedChannel
+            } else {
+                Profile::Channel
+            }),
             Pose::at(frame.world(w as f64 * 0.5, duct_y as f64, 0.0)),
             Vec3::new(w - 2.0 * margin, 30.0, 40.0),
         ));

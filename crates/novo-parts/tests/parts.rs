@@ -1447,3 +1447,29 @@ fn a_mixed_field_becomes_shared_after_one_edit_and_mixed_again_on_undo() {
     let sheet = PropertySheet::build(doc.project(), &selection);
     assert_eq!(sheet.row(&key).unwrap().value, RowValue::Mixed(2));
 }
+
+/// A part whose text states an AC-3 current has the same number as its AC-3
+/// current data, so the label and the input the calculations read agree
+/// (audit C-49).
+#[test]
+fn starter_catalog_ac3_text_and_data_agree() {
+    let catalog = Catalog::starter();
+    let mut checked = 0;
+    for part in catalog.parts() {
+        let Some(rest) = part.description.split("AC-3 ").nth(1) else {
+            continue;
+        };
+        let stated: f64 = rest
+            .split_whitespace()
+            .next()
+            .and_then(|n| n.parse().ok())
+            .unwrap_or_else(|| panic!("{}: no AC-3 number in the text", part.order_number));
+        let data = match part.data.get("ac3_current_a") {
+            Some(Value::Float(v)) => *v,
+            other => panic!("{}: ac3_current_a is {other:?}", part.order_number),
+        };
+        assert_eq!(data, stated, "{}", part.order_number);
+        checked += 1;
+    }
+    assert!(checked >= 5, "the starter catalog has AC-3 contactors");
+}

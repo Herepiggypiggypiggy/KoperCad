@@ -1,0 +1,16 @@
+@title Wire numbering window says numbers are per potential (B-07)
+@area Schematic
+@sizes 1366x768 1920x1080
+# The window states how many numbers cover how many wires, so "13 numbered for 17 wires" is not a surprise.
+click_text "Open example"
+wait 20
+key ctrl+k
+text "wire numbering"
+wait 5
+key Enter
+wait 10
+expect "Numbers ("
+expect "wires"
+expect "share one number"
+shot numbering-scope
+check_layout

@@ -248,7 +248,7 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
         };
         let mut item = line_item(
             ItemId::new(ItemKind::Duct, d.id),
-            Profile::Channel,
+            Profile::SlottedChannel,
             (d.x, d.y),
             d.length,
             d.vertical,

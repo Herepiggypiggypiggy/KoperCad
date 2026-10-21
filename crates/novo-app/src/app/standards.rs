@@ -62,6 +62,7 @@ impl NovoApp {
                         }
                     }
                 });
+                ui.weak("Each standard you tick adds its findings to the Issues list and to the count in the top bar.");
                 ui.add_space(6.0);
                 novo_theme::widgets::section_label(ui, "Assumptions");
                 ui.horizontal(|ui| {
@@ -105,8 +106,7 @@ impl NovoApp {
                     }
                 });
                 if report.sets.is_empty() {
-                    ui.label("Choose at least one standard to see the report.");
-                    return;
+                    ui.label("Choose a standard to add its clause rules. The saved report lists the design checks (wire sizing, protection, colours, safety functions, heat) either way.");
                 }
                 ui.horizontal(|ui| {
                     if novo_theme::widgets::primary_button(ui, "Save report as PDF").clicked() {
@@ -120,7 +120,7 @@ impl NovoApp {
                     }
                 });
 ui.weak(
-                    "The report assists the engineer: the rules are a subset of the standard, not a certification. Verdicts marked planning value rest on numbers not yet checked against your licensed standard.",
+                    "The report assists the engineer: the rules are a subset of the standard, not a certification. IEC 60204-1 clause numbers are unverified (no licensed copy was used) and verdicts marked planning value rest on numbers not yet checked against your licensed standard.",
                 );
                 ui.add_space(6.0);
                 egui::ScrollArea::vertical().show(ui, |ui| {

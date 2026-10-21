@@ -1,0 +1,16 @@
+@title Added PLC card is named -A, not -K (B-11)
+@area Schematic
+@sizes 1366x768 1920x1080
+# Add card puts a PLC card with the automation letter A, like an imported I/O list, never the relay letter K.
+click_text "New project"
+wait 20
+key ctrl+k
+text "add card DI16 DQ8"
+wait 5
+key Enter
+wait 10
+expect "Added card"
+expect "-A1"
+expect_not "-K1 (DI16"
+shot plc-card-tag
+check_layout

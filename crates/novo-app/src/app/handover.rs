@@ -22,12 +22,13 @@ use std::path::{Path, PathBuf};
 
 use novo_checks::Summary;
 use novo_commissioning::Scope;
-use novo_core::Project;
+use novo_core::{AnyId, Project};
 use novo_pdf::ReportPdfOptions;
 use novo_reports::ReportOutput;
 use novo_reports::handover::{
     CommissioningFacts, FileStatus, HandoverFile, HandoverInput, handover_summary, revision_table,
 };
+use novo_xref::Place;
 
 use eframe::egui;
 
@@ -102,13 +103,30 @@ fn existing_own_files(folder: &Path) -> std::collections::BTreeSet<String> {
         .collect()
 }
 
+/// The Notes line of a package handed over while the checks still have an
+/// error or warning, so a reader knows it went out that way.
+pub(super) fn open_problems_note(summary: &Summary) -> Option<String> {
+    (summary.errors + summary.warnings > 0).then(|| {
+        format!(
+            "Handed over with open problems: {}. They are listed in the checks appendix of the drawing set.",
+            summary.pill_text()
+        )
+    })
+}
+
+/// One open problem in the question before writing.
+pub(super) struct AskLine {
+    pub(super) error: bool,
+    pub(super) message: String,
+    /// Where it is drawn; `None` when nothing of it is on a page.
+    pub(super) place: Option<Place>,
+}
+
 /// What the question before writing shows: the open problems.
 pub(crate) struct HandoverAsk {
     summary: Summary,
-    /// Errors and warnings in all, of which `lines` shows the first few.
-    shown_of: usize,
-    /// The first few problems in words.
-    lines: Vec<String>,
+    /// Every error, then every warning.
+    pub(super) lines: Vec<AskLine>,
 }
 
 impl NovoApp {
@@ -122,16 +140,24 @@ impl NovoApp {
             self.export_handover();
             return;
         }
-        let open = problems
+        let line = |p: &novo_checks::Problem| AskLine {
+            error: p.severity == novo_checks::Severity::Error,
+            message: p.message.clone(),
+            place: p.page.map(|page| Place {
+                page,
+                symbol: p.at.iter().find_map(|id| match id {
+                    AnyId::Symbol(s) => Some(*s),
+                    _ => None,
+                }),
+            }),
+        };
+        let mut lines: Vec<AskLine> = problems
             .iter()
-            .filter(|p| p.severity != novo_checks::Severity::Info);
-        let shown_of = open.clone().count();
-        let lines = open.take(4).map(|p| p.message.clone()).collect();
-        self.wb.handover_ask = Some(HandoverAsk {
-            summary,
-            shown_of,
-            lines,
-        });
+            .filter(|p| p.severity != novo_checks::Severity::Info)
+            .map(line)
+            .collect();
+        lines.sort_by_key(|l| !l.error);
+        self.wb.handover_ask = Some(HandoverAsk { summary, lines });
     }
 
     pub(super) fn handover_ask_dialog(&mut self, ctx: &egui::Context) {
@@ -139,22 +165,36 @@ impl NovoApp {
             return;
         };
         let (mut fix, mut anyway) = (false, false);
+        let mut go: Option<Option<Place>> = None;
         let modal = egui::Modal::new(egui::Id::new("handover_ask")).show(ctx, |ui| {
-            ui.set_width(420.0);
+            ui.set_width(460.0);
             ui.heading("The design still has open problems");
             ui.add_space(4.0);
-            let verb = if ask.shown_of == 1 { "remains" } else { "remain" };
+            let verb = if ask.lines.len() == 1 { "remains" } else { "remain" };
             ui.label(format!(
-                "{} {verb}. The package lists them on the contents page and in the drawing set, so the customer would see them.",
+                "{} {verb}. Handing over anyway lists them on the contents page and in the drawing set, so the customer would see them.",
                 ask.summary.pill_text()
             ));
             ui.add_space(4.0);
-            for line in &ask.lines {
-                ui.weak(format!("• {line}"));
-            }
-            if ask.shown_of > ask.lines.len() {
-                ui.weak(format!("and {} more", ask.shown_of - ask.lines.len()));
-            }
+            egui::ScrollArea::vertical()
+                .max_height(220.0)
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    for line in &ask.lines {
+                        ui.horizontal(|ui| {
+                            ui.weak(if line.error { "Error" } else { "Warning" });
+                            ui.label(&line.message);
+                            let label = if line.place.is_some() {
+                                "Show"
+                            } else {
+                                "In Issues"
+                            };
+                            if ui.link(label).clicked() {
+                                go = Some(line.place);
+                            }
+                        });
+                    }
+                });
             ui.add_space(8.0);
             ui.horizontal(|ui| {
                 if ui.button("Fix these first").clicked() {
@@ -166,7 +206,14 @@ impl NovoApp {
                 ui.weak("Esc cancels");
             });
         });
-        if fix {
+        if let Some(place) = go {
+            // Leave the question so the page can be worked on; the Issues
+            // list stays open for the rest.
+            self.show_issues(false);
+            if let Some(place) = place {
+                self.jump(place, true);
+            }
+        } else if fix {
             self.show_issues(false);
         } else if anyway {
             self.export_handover();
@@ -341,6 +388,7 @@ impl NovoApp {
         let changed_pages = self.pages_changed_since_latest().len();
         let problems = Some(Summary::of(self.problems()));
         let mut notes = Vec::new();
+        notes.extend(problems.as_ref().and_then(open_problems_note));
         let workshop_left = files
             .iter()
             .any(|f| f.name == "Workshop (folder)" && matches!(f.status, FileStatus::Left(_)));

@@ -457,3 +457,62 @@ fn a_wire_into_and_out_of_a_bridged_device_get_different_numbers() {
     assert!(again.is_empty());
     assert!(check(doc.project(), &scheme).is_empty());
 }
+
+#[test]
+fn a_net_on_a_revision_locked_page_is_left_alone_and_reported() {
+    let mut doc = Document::default();
+    let (s, _) = doc.transact("Draw", scene).unwrap();
+    let scheme = Scheme::new(SchemeKind::Sequential);
+    let page = doc.project().wire(s.wires[0]).unwrap().page;
+    doc.transact("Lock", |tx| tx.lock_page(page, "A")).unwrap();
+    let p = plan(doc.project(), &scheme, Mode::Fill, &Scope::Project);
+    assert!(p.is_empty(), "nothing may change on a locked page");
+    assert!(p.groups.iter().all(|g| g.reason == Reason::PageLocked));
+    assert!(p.groups.iter().all(|g| g.page_lock.as_deref() == Some("A")));
+    assert_eq!(p.changed_groups().count(), 0);
+    assert!(p.summary().contains("3 on locked pages left alone"));
+    // Applying the empty plan is harmless; the model would refuse real edits.
+    doc.transact("Number", |tx| p.apply(tx)).unwrap();
+    assert_eq!(numbers(&doc, &s.wires), [None, None, None]);
+    // Unnumbered nets still show up as conflicts so they are not forgotten.
+    assert!(!p.conflicts.is_empty());
+}
+
+#[test]
+fn scope_note_explains_fewer_numbers_than_wires() {
+    let mut doc = Document::default();
+    let (s, _) = doc.transact("Draw", scene).unwrap();
+    let scheme = Scheme::new(SchemeKind::Sequential);
+    let plain = plan(doc.project(), &scheme, Mode::Fill, &Scope::Project);
+    assert_eq!(plain.scope_note(), "3 wires, one number each.");
+    doc.transact("Bridge", |tx| {
+        tx.connect(Endpoint::pin(s.k1, 0), Endpoint::pin(s.k1, 1))
+    })
+    .unwrap();
+    let joined = plan(doc.project(), &scheme, Mode::Fill, &Scope::Project);
+    assert_eq!(
+        joined.scope_note(),
+        "2 numbers for 4 wires: wires joined at a terminal, junction or shared pin share one number."
+    );
+}
+
+#[test]
+fn scope_note_is_singular_for_one_wire() {
+    let mut doc = Document::default();
+    doc.transact("Draw", |tx| {
+        let page = tx.add_page("1")?;
+        let k = tx.add_device(tag("-K1"), "Contactor")?;
+        let m = tx.add_device(tag("-M1"), "Motor")?;
+        let a = block(tx, page, k, 40.0, 20.0)?;
+        let b = block(tx, page, m, 40.0, 100.0)?;
+        tx.connect(Endpoint::pin(a, 0), Endpoint::pin(b, 0))
+    })
+    .unwrap();
+    let p = plan(
+        doc.project(),
+        &Scheme::new(SchemeKind::Sequential),
+        Mode::Fill,
+        &Scope::Project,
+    );
+    assert_eq!(p.scope_note(), "1 wire, one number each.");
+}
