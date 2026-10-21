@@ -42,7 +42,7 @@ fn the_plan_previews_then_applies_as_one_undo_step() {
     assert_eq!(q1.parts.len(), 1);
     let part = p.part(q1.parts[0]).unwrap();
     assert_eq!(part.manufacturer, "DEMO");
-    assert_eq!(part.order_number, "DEMO.BRK3P16");
+    assert_eq!(part.order_number, "BRK3P16");
     assert_eq!(part.type_number, "BRK3P16");
     assert!(p.devices_by_tag(&tag("=A1+CAB1-X1")).len() == 1);
     assert!(p.devices_by_tag(&tag("=A1+CAB1-M1.2")).len() == 1);
