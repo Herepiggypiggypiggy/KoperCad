@@ -95,6 +95,7 @@ pub(crate) struct Workbench {
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
     pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
+    pub(super) handover_ask: Option<super::handover::HandoverAsk>,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
@@ -285,6 +286,7 @@ impl Default for Workbench {
             project_settings: false,
             issue: None,
             restore_ask: None,
+            handover_ask: None,
             compare: None,
             faults: None,
             add_fault: None,
@@ -1276,9 +1278,7 @@ impl NovoApp {
             "export.safety_sheets" => {
                 self.export_safety_sheets();
             }
-            "export.handover" => {
-                self.export_handover();
-            }
+            "export.handover" => self.ask_handover(),
             "export.workshop" => {
                 self.export_workshop();
             }

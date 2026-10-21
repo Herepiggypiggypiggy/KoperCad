@@ -164,7 +164,7 @@ fn importing_into_an_empty_project_recreates_it_in_one_undo_step() {
     let plan = plan_import(doc.project(), &plant);
     assert!(
         plan.summary()
-            .starts_with("Would add 2 devices (3 terminals), 1 cables and 2 sections")
+            .starts_with("Would add 2 devices (3 terminals), 1 cable and 2 sections")
     );
     let n = plan.apply(&mut doc).unwrap();
     let p = doc.project();

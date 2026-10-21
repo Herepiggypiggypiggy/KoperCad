@@ -1231,3 +1231,47 @@ fn the_bypassed_stop_button_only_stops_the_motor_once_the_jumper_is_gone() {
         "the repaired circuit stops, the lesson is done"
     );
 }
+
+#[test]
+fn a_prediction_step_waits_for_an_answer_and_says_whether_it_was_right() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("predict-the-starter");
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "guess-hold", "the question is open");
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "guess-hold", "nothing ticks it but an answer");
+    let card = d.app.card().unwrap();
+    let predict = card.predict.as_ref().expect("the card shows the question");
+    assert_eq!(predict.options.len(), 3);
+    assert_eq!(predict.chosen, None);
+    // A wrong guess still moves on, and the card says so.
+    d.app.learn_predict(0).unwrap();
+    let card = d.app.card().unwrap();
+    let predict = card.predict.as_ref().unwrap();
+    assert_eq!(predict.chosen, Some(0));
+    assert_ne!(predict.chosen, Some(predict.answer), "that guess was wrong");
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(
+        step(&d),
+        "guess-hold",
+        "the answer stays on show until Next"
+    );
+    d.app.learn_move(super::learn::Move::Next);
+    d.frame();
+    assert_eq!(step(&d), "see-hold", "an answer ticks the question");
+    assert!(d.app.card().unwrap().predict.is_none(), "no question here");
+    assert!(d.app.learn_predict(1).is_err(), "no question to answer");
+}

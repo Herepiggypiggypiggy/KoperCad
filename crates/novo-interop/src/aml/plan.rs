@@ -260,20 +260,26 @@ impl AmlPlan {
             .iter()
             .map(|&i| p.devices[i].terminals.len())
             .sum();
+        use crate::report::counted;
         let mut text = format!(
-            "Would add {} devices ({} terminals), {} cables and {} sections or locations; {} already exist.",
-            self.new_devices.len(),
-            terminals,
-            self.new_cables.len(),
-            self.new_structures.len(),
-            self.existing.len()
+            "Would add {} ({}), {} and {}; {} already {}.",
+            counted(self.new_devices.len(), "devices"),
+            counted(terminals, "terminals"),
+            counted(self.new_cables.len(), "cables"),
+            counted(self.new_structures.len(), "sections or locations"),
+            self.existing.len(),
+            if self.existing.len() == 1 {
+                "exists"
+            } else {
+                "exist"
+            },
         );
         if self.new_symbols > 0 {
             text.push_str(&format!(
-                " Would draw {} symbols on {} new pages and wire {} nets (plus interruption points for nets that cross pages).",
-                self.new_symbols,
-                self.new_pages.len(),
-                self.new_nets
+                " Would draw {} on {} and wire {} (plus interruption points for nets that cross pages).",
+                counted(self.new_symbols, "symbols"),
+                counted(self.new_pages.len(), "new pages"),
+                counted(self.new_nets, "nets"),
             ));
         }
         text

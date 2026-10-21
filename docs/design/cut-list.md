@@ -4,7 +4,7 @@ How the wire list gets a length per wire and how the cut list turns those into
 what the workshop cuts. Code: `crates/novo-reports` (`lengths.rs`, `wires.rs`,
 `cutlist.rs`). Routing itself is `docs/design/wire-routing.md`.
 
-## Wire list: Cut length mm and Length basis
+## Wire list: Route length mm and Length basis
 
 Two columns at the end of the wire list. Each connection (pin to pin) is
 measured one of three ways, shown in *Length basis*:

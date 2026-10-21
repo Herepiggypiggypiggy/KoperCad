@@ -1,0 +1,184 @@
+@title Place each starter macro from the command field
+@area Macros
+# Ctrl+K, the macro's whole name, Enter chooses it, the Place button puts it on the page.
+# The pictures show the routing: every wire is horizontal or vertical.
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Motor starter DOL"
+wait 10
+key Return
+wait 20
+shot 01-picked
+click_text Place #2
+wait 20
+shot 01-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Star-delta starter"
+wait 10
+key Return
+wait 20
+shot 02-picked
+click_text Place #2
+wait 20
+shot 02-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "E-stop chain"
+wait 10
+key Return
+wait 20
+shot 03-picked
+click_text Place #2
+wait 20
+shot 03-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Power supply 24 V"
+wait 10
+key Return
+wait 20
+shot 04-picked
+click_text Place #2
+wait 20
+shot 04-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Motor starter reversing"
+wait 10
+key Return
+wait 20
+shot 05-picked
+click_text Place #2
+wait 20
+shot 05-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Start/stop latch"
+wait 10
+key Return
+wait 20
+shot 06-picked
+click_text Place #2
+wait 20
+shot 06-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "PLC input card"
+wait 10
+key Return
+wait 20
+shot 07-picked
+click_text Place #2
+wait 20
+shot 07-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Frequency converter drive"
+wait 10
+key Return
+wait 20
+shot 08-picked
+click_text Place #2
+wait 20
+shot 08-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Soft starter with bypass"
+wait 10
+key Return
+wait 20
+shot 09-picked
+click_text Place #2
+wait 20
+shot 09-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Single-phase supply with 24 V"
+wait 10
+key Return
+wait 20
+shot 10-picked
+click_text Place #2
+wait 20
+shot 10-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Motor with brake"
+wait 10
+key Return
+wait 20
+shot 11-picked
+click_text Place #2
+wait 20
+shot 11-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Contactor with indication"
+wait 10
+key Return
+wait 20
+shot 12-picked
+click_text Place #2
+wait 20
+shot 12-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Crane hoist up/down"
+wait 10
+key Return
+wait 20
+shot 13-picked
+click_text Place #2
+wait 20
+shot 13-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Pump with float switch"
+wait 10
+key Return
+wait 20
+shot 14-picked
+click_text Place #2
+wait 20
+shot 14-placed
+fresh
+click_text "New project"
+wait 20
+key ctrl+k
+text "Heater with thermostat"
+wait 10
+key Return
+wait 20
+shot 15-picked
+click_text Place #2
+wait 20
+shot 15-placed

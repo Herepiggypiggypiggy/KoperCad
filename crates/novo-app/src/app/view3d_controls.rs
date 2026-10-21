@@ -325,7 +325,13 @@ pub(super) fn toolbar(
             if let Some(limit) = limit
                 && controls.layers.door
             {
-                ui.separator();
+                // The slider does not wrap by itself: in a narrow window the door
+                // gets its own row instead of running under the view cube.
+                if width < TOOLBAR_WIDTH {
+                    ui.end_row();
+                } else {
+                    ui.separator();
+                }
                 let label = if controls.door_deg > 0.0 {
                     "Close door"
                 } else {
