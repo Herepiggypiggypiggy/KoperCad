@@ -12,7 +12,7 @@ use glam::Vec3;
 use novo_core::{CabinetPlacement, Device, Part, Project, StructureId};
 use novo_interop::part3d::cache::MeshCache;
 use novo_interop::part3d::service::{GeometryJob, GeometryService, GeometryState, TIME_LIMIT};
-use novo_interop::part3d::{self, MeshOrigin, Quality};
+use novo_interop::part3d::{self, MeshOrigin, PartRotation, Quality};
 use novo_parts::{FileKind, LocalLibrary, PartKey, SourceRecord};
 use novo_view3d::scene::{ItemKind, Shape};
 use novo_view3d::{Aabb, GeometryKey, MeshData, MeshLibrary, PartGeometry, Scene};
@@ -31,20 +31,64 @@ enum Outcome {
     Unusable,
 }
 
+/// A quarter turn the person asks for on a maker model that arrived lying on
+/// its side or facing the wrong way. The turns are about the model's own
+/// axes (x width, y height, z depth towards the door) and are kept with the
+/// part in the library, so every device of the part and every project use them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Turn {
+    /// About the width axis: tips the top towards or away from the door.
+    Tip,
+    /// About the height axis: turns the front round to the side or back.
+    Spin,
+    /// About the depth axis: lays the model on its side or stands it up.
+    Roll,
+    /// Back to the way the file came.
+    Reset,
+}
+
+/// The quarter turns after `how`, each 0 to 3.
+pub(super) fn turned(now: [u8; 3], how: Turn) -> [u8; 3] {
+    let mut t = now.map(|q| q % 4);
+    match how {
+        Turn::Tip => t[0] = (t[0] + 1) % 4,
+        Turn::Spin => t[1] = (t[1] + 1) % 4,
+        Turn::Roll => t[2] = (t[2] + 1) % 4,
+        Turn::Reset => t = [0; 3],
+    }
+    t
+}
+
+/// What the Position box shows about the selected device's maker model.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) struct ModelRow {
+    /// Quarter turns kept for the part, about x, y, z.
+    pub turns: [u8; 3],
+    /// A line for the person: drawn, still building, or not usable.
+    pub status: &'static str,
+}
+
+/// The library as read: the records file's modified time, the STEP record of
+/// each part and the quarter turns kept for each part (by their library key).
+type LibraryRead = (
+    Option<std::time::SystemTime>,
+    BTreeMap<PartKey, SourceRecord>,
+    BTreeMap<String, [u8; 3]>,
+);
+
 /// The models the open enclosure's devices ask for.
 #[derive(Default)]
 pub(super) struct Models {
     service: Option<GeometryService>,
     /// Service key per device (raw id) and what became of it.
     jobs: BTreeMap<u64, (u64, Outcome)>,
+    /// The part of each device that has a model, and its stored turns.
+    parts: BTreeMap<u64, (PartKey, [u8; 3])>,
     /// Bumped whenever a model arrives, so the scene is built again.
     pub(super) revision: u64,
     /// The STEP records as last read, and the records file's modified time
     /// they were read at, so a rebuild does not read the library again.
-    records: Option<(
-        Option<std::time::SystemTime>,
-        BTreeMap<PartKey, SourceRecord>,
-    )>,
+    records: Option<LibraryRead>,
 }
 
 /// How many devices have a model drawn, wait for one, or have a file that
@@ -138,8 +182,12 @@ impl Models {
         let stamp = std::fs::metadata(library.root().join("records.json"))
             .and_then(|m| m.modified())
             .ok();
-        if !matches!(&self.records, Some((at, _)) if *at == stamp && stamp.is_some()) {
-            self.records = Some((stamp, step_records(&library)));
+        if !matches!(&self.records, Some((at, _, _)) if *at == stamp && stamp.is_some()) {
+            self.records = Some((
+                stamp,
+                step_records(&library),
+                library.turns().unwrap_or_default(),
+            ));
         }
         let records = self
             .records
@@ -160,12 +208,27 @@ impl Models {
                 move || wake.request_repaint(),
             )
         });
+        let turns = self
+            .records
+            .as_ref()
+            .map(|r| r.2.clone())
+            .unwrap_or_default();
         let mut wanted = BTreeMap::new();
+        let mut parts = BTreeMap::new();
         for (raw, part) in device_parts(project, id) {
-            let Some(record) = records.get(&PartKey::new(&part.manufacturer, &part.order_number))
-            else {
+            let part_key = PartKey::new(&part.manufacturer, &part.order_number);
+            let Some(record) = records.get(&part_key) else {
                 continue;
             };
+            let kept = turns
+                .get(&format!(
+                    "{}|{}",
+                    part_key.manufacturer(),
+                    part_key.order_number()
+                ))
+                .copied()
+                .unwrap_or([0; 3]);
+            parts.insert(raw, (part_key, kept));
             let Some(item) = scene.get(novo_view3d::ItemId::new(ItemKind::Device, raw)) else {
                 continue;
             };
@@ -179,7 +242,7 @@ impl Models {
                     f64::from(item.size.z),
                 ]),
             };
-            let key = service.request(job);
+            let key = service.request_rotated(job, PartRotation::new(kept[0], kept[1], kept[2]));
             let outcome = match self.jobs.get(&raw) {
                 Some((k, o)) if *k == key => *o,
                 _ => Outcome::Waiting,
@@ -187,6 +250,38 @@ impl Models {
             wanted.insert(raw, (key, outcome));
         }
         self.jobs = wanted;
+        self.parts = parts;
+    }
+
+    /// The model of `device` for the Position box: `None` when its part has
+    /// no STEP file.
+    pub(super) fn row(&self, device: u64) -> Option<ModelRow> {
+        let (_, turns) = self.parts.get(&device)?;
+        let status = match self.jobs.get(&device)?.1 {
+            Outcome::Waiting => "Building the maker model",
+            Outcome::Drawn(_) => "Maker model",
+            Outcome::Unusable => "Maker model not usable (see the Parts window)",
+        };
+        Some(ModelRow {
+            turns: *turns,
+            status,
+        })
+    }
+
+    /// Turns the model of `device`'s part and keeps the turns in the library.
+    /// The next scene build asks for the turned model. Returns the message
+    /// to show when the turns could not be kept.
+    pub(super) fn turn(&mut self, device: u64, how: Turn) -> Option<String> {
+        let (key, now) = self.parts.get(&device)?.clone();
+        let library = LocalLibrary::open_default()?;
+        let to = turned(now, how);
+        if let Err(e) = library.set_turns(&key, to) {
+            return Some(format!("Could not keep the model's turns: {e}"));
+        }
+        // Read again, and build the scene again with the turned model asked for.
+        self.records = None;
+        self.revision += 1;
+        None
     }
 
     /// Moves finished requests into the mesh library. Returns whether a model
@@ -347,6 +442,42 @@ mod tests {
             )
         );
         assert_eq!(m.counts().waiting, 1);
+    }
+
+    #[test]
+    fn each_turn_adds_a_quarter_about_its_own_axis_and_reset_clears_them() {
+        let mut t = [0; 3];
+        t = turned(t, Turn::Tip);
+        assert_eq!(t, [1, 0, 0]);
+        t = turned(t, Turn::Roll);
+        t = turned(t, Turn::Roll);
+        assert_eq!(t, [1, 0, 2]);
+        t = turned(t, Turn::Spin);
+        assert_eq!(t, [1, 1, 2]);
+        // Four quarters are a full turn: back to none about that axis.
+        for _ in 0..3 {
+            t = turned(t, Turn::Tip);
+        }
+        assert_eq!(t, [0, 1, 2]);
+        assert_eq!(turned(t, Turn::Reset), [0; 3]);
+        // Stored counts past 3 are taken modulo 4.
+        assert_eq!(turned([5, 0, 0], Turn::Tip), [2, 0, 0]);
+    }
+
+    #[test]
+    fn the_row_names_what_became_of_the_model_and_hides_for_a_part_without_one() {
+        let mut m = Models::default();
+        assert_eq!(m.row(1), None);
+        m.parts.insert(1, (PartKey::new("A", "1"), [0, 1, 0]));
+        // No job yet: nothing to say.
+        assert_eq!(m.row(1), None);
+        m.jobs.insert(1, (1, Outcome::Waiting));
+        assert_eq!(m.row(1).unwrap().status, "Building the maker model");
+        assert_eq!(m.row(1).unwrap().turns, [0, 1, 0]);
+        m.jobs.insert(1, (1, Outcome::Drawn(GeometryKey(1))));
+        assert_eq!(m.row(1).unwrap().status, "Maker model");
+        m.jobs.insert(1, (1, Outcome::Unusable));
+        assert!(m.row(1).unwrap().status.contains("not usable"));
     }
 
     #[test]
