@@ -134,3 +134,64 @@ fn open_problems_are_asked_about_before_anything_is_written() {
     );
     assert!(d.app.wb.last_export.is_none());
 }
+
+#[test]
+fn the_question_lists_errors_first_and_a_row_jumps_to_its_page() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    // A lone contactor: its pins are open, so the checks warn about a symbol
+    // that is drawn on the page.
+    let symbol = d.place("contactor", 100.0, 100.0);
+    d.frame();
+    d.app.ask_handover();
+    let ask = d.app.wb.handover_ask.as_ref().expect("asked");
+    assert!(!ask.lines.is_empty());
+    let first_warning = ask.lines.iter().position(|l| !l.error);
+    let last_error = ask.lines.iter().rposition(|l| l.error);
+    if let (Some(w), Some(e)) = (first_warning, last_error) {
+        assert!(e < w, "errors come before warnings");
+    }
+    let place = ask.lines.iter().find_map(|l| l.place).unwrap_or_else(|| {
+        let all: Vec<_> = ask.lines.iter().map(|l| l.message.clone()).collect();
+        panic!("no problem is drawn: {all:?}")
+    });
+    assert_eq!(place.symbol, Some(symbol));
+    // A frame with the question open must not write anything or lose it.
+    d.frame();
+    assert!(d.app.wb.handover_ask.is_some());
+    assert!(d.app.wb.last_export.is_none());
+    d.app.jump(place, true);
+    d.frame();
+    assert_eq!(d.app.current_page, Some(place.page));
+}
+
+#[test]
+fn a_problem_that_is_not_drawn_has_no_place_to_jump_to() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    d.app.ask_handover();
+    let ask = d.app.wb.handover_ask.as_ref().expect("asked");
+    // The example's one warning is the cabinet door: it is on no page, so
+    // its row offers the Issues list instead of a jump.
+    assert!(ask.lines.iter().all(|l| l.place.is_none()));
+}
+
+#[test]
+fn a_package_handed_over_with_open_problems_says_so_in_its_notes() {
+    use super::handover::open_problems_note;
+    let s = |errors, warnings| novo_checks::Summary {
+        errors,
+        warnings,
+        infos: 3,
+    };
+    assert_eq!(open_problems_note(&s(0, 0)), None);
+    let note = open_problems_note(&s(1, 2)).unwrap();
+    assert!(note.contains("1 error · 2 warnings"), "{note}");
+    assert!(note.starts_with("Handed over with open problems"));
+}

@@ -16,5 +16,5 @@ Engine, command, menu entry and tests are in the PR. Tests: `cargo test -p novo-
 - Drawing set uses `settings.print_choice` (plain when default) and writes one PDF per plot set (`write_plot_set`, `plot_sets_with_pages` in print_preview.rs); Workshop pack goes to `Workshop/` via `export_workshop_to`.
 - A rerun removes package-numbered files it no longer writes (names in `OWN_FILES`, `1 Plot set *`); other files stay.
 - Files of an earlier package in the same dated folder are replaced.
-- Ask before writing: `ask_handover` opens `HandoverAsk` when the checks have an error or warning; `export_handover_to` stays unconditional for tests.
+- Ask before writing: `ask_handover` opens `HandoverAsk` when the checks have an error or warning (rows: errors first, each with a Show link via `jump`, or In Issues when not drawn); `export_handover_to` stays unconditional for tests and adds the 'Handed over with open problems' note itself.
 - Parts list is "Unverified" (project parts have no review ledger link); wire list column is "Route length mm", the bench cut list adds the ferrule allowance.
