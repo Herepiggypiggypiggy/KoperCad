@@ -481,6 +481,9 @@ pub struct View3d {
     /// Where the last Alt + click landed and how many times in a row.
     alt_cycle: Option<(Pos2, usize)>,
     last_aspect: f32,
+    /// The top of the view, as a fraction of its height, that a floating
+    /// toolbar covers: a fit frames the model below it.
+    pub top_inset: f32,
     label_fades: HashMap<ItemId, Fade>,
     overlays: Arc<Vec<Overlay>>,
     overlay_revision: u64,
@@ -512,6 +515,7 @@ impl View3d {
             item_grab: None,
             alt_cycle: None,
             last_aspect: 1.0,
+            top_inset: 0.0,
             label_fades: HashMap::new(),
             overlays: Arc::new(Vec::new()),
             overlay_revision: 0,
@@ -665,7 +669,11 @@ impl View3d {
     pub fn go_to(&mut self, preset: ViewPreset, scene: &Scene, now: f64, reduced: bool) {
         let mut to = self.camera;
         feel::enter_standard(&mut to, preset);
-        to.fit(&self.framing_bounds(scene), self.last_aspect);
+        to.fit_below(
+            &self.framing_bounds(scene),
+            self.last_aspect,
+            self.top_inset,
+        );
         self.auto_ortho = to.projection == Projection::Orthographic;
         self.animate_to(to, now, reduced);
     }
@@ -680,7 +688,7 @@ impl View3d {
     pub fn fit(&mut self, scene: &Scene, now: f64, reduced: bool) {
         let b = self.framing_bounds(scene);
         let mut to = self.camera;
-        to.fit(&b, self.last_aspect);
+        to.fit_below(&b, self.last_aspect, self.top_inset);
         self.animate_to(to, now, reduced);
     }
 
@@ -793,7 +801,7 @@ impl View3d {
         let bounds = scene.bounds();
 
         if self.needs_fit && !bounds.is_empty() {
-            self.camera.fit(&bounds, aspect);
+            self.camera.fit_below(&bounds, aspect, self.top_inset);
             self.needs_fit = false;
             self.transition = None;
             self.last_activity = now;

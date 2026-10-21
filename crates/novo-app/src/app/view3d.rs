@@ -679,6 +679,7 @@ impl NovoApp {
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
         );
         self.settings.trackpad_pans = mode.controls.trackpad_pans;
+        mode.view.top_inset = view3d_controls::toolbar_inset(ui.ctx(), view_rect);
         if let Some(command) = asked {
             self.wb.queued.push(command);
         }
