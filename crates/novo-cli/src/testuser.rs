@@ -290,6 +290,8 @@ impl Server {
                 let shot = a["screenshot"]
                     .as_str()
                     .map(PathBuf::from)
+                    // Only a picture from the shots folder can be attached.
+                    .filter(|p| p.starts_with(&self.shots) && !has_parent_dir(p))
                     .or_else(|| self.last_shot.clone())
                     .map(|p| p.to_string_lossy().into_owned());
                 self.findings.push(json!({
@@ -310,6 +312,24 @@ impl Server {
                 let dir = a["out"]
                     .as_str()
                     .map_or_else(|| self.shots.join("audit"), PathBuf::from);
+                // Reports go to the shots folder, the temp folder, the shared
+                // project folder or below the current folder, never elsewhere.
+                let allowed = [
+                    self.shots.clone(),
+                    std::env::temp_dir(),
+                    PathBuf::from("/mnt/project-files"),
+                    std::env::current_dir().unwrap_or_default(),
+                ];
+                if has_parent_dir(&dir)
+                    || !allowed
+                        .iter()
+                        .any(|root| dir.starts_with(root) || dir.is_relative())
+                {
+                    return Err(format!(
+                        "report out must be below the shots folder, the temp folder, /mnt/project-files or the current folder: {}",
+                        dir.display()
+                    ));
+                }
                 let md = self.write_report(&dir)?;
                 text(format!(
                     "wrote {} ({} findings)",
@@ -652,6 +672,11 @@ impl Server {
         let _ = work;
         Ok(())
     }
+}
+
+fn has_parent_dir(p: &Path) -> bool {
+    p.components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
 }
 
 fn default_app() -> PathBuf {

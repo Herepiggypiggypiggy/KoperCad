@@ -127,6 +127,21 @@ No customer data goes into a scenario in this public repository; customer-derive
 projects stay in the private repository and are opened by absolute path from a
 local scenario that is not committed.
 
+## Where it writes
+
+Everything goes under `--out` (screenshots, logs, reports) and the temporary profile
+folder of the run (`kopercad-test-user-<pid>` in the temp folder); `--slow` sweeps
+included. Nothing is written beside the fixtures in the repository. The MCP `report`
+tool accepts `out` only below the shots folder, the temp folder, `/mnt/project-files`
+or the current folder, and `finding` attaches only pictures from the shots folder.
+
+## Windows
+
+`scripts/qa.sh` is a bash script: run it from Git Bash (no admin rights needed).
+`KOPERCAD_BIN_DIR` can point at the folder holding `kopercad.exe` and
+`kopercad-cli.exe` (for example the unzipped portable build) instead of `target/debug`.
+Not verified on Windows yet.
+
 ## Gaps, said plainly
 
 * Linux headless (Xvfb, lavapipe software Vulkan, debug build) is what is verified.
