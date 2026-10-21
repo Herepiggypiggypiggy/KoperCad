@@ -498,10 +498,18 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             st.box_symbols,
             "no KoperCAD symbol has that function and pin count; the pins are where EPLAN has them",
         );
+        let loose: Vec<String> = st
+            .loose_functions
+            .iter()
+            .map(|(f, n)| format!("{f} x{n}"))
+            .collect();
         report.guess(
             "symbols matched loosely",
             st.loose,
-            "same function, another variant of the library symbol, so the connection points may be off",
+            format!(
+                "same function, another variant of the library symbol, so the connection points may be off: {}",
+                loose.join(", ")
+            ),
         );
         report.guess(
             "wire routes",
