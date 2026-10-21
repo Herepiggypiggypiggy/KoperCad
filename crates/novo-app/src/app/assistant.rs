@@ -25,6 +25,8 @@ use novo_ai::usage::{Ledger, format_usd, month_of};
 use novo_core::{Command, DeviceTag, Project};
 use serde_json::{Value, json};
 
+mod datasheet;
+
 use super::{Level, NovoApp};
 use crate::theme::ui_palette;
 
@@ -113,6 +115,9 @@ pub(super) struct State {
     cancel: Arc<AtomicBool>,
     shot: Shot,
     picture: Option<Picture>,
+    sheet: datasheet::State,
+    /// The datasheet being read, for the review heading.
+    datasheet_name: String,
     /// The scope that was agreed when the picture was taken.
     picture_scope: DataScope,
     /// What the person decided about proposals since their last message;
@@ -172,6 +177,8 @@ impl State {
             cancel: Arc::new(AtomicBool::new(false)),
             shot: Shot::Idle,
             picture: None,
+            sheet: datasheet::State::default(),
+            datasheet_name: String::new(),
             picture_scope: DataScope::None,
             notes: Vec::new(),
             ledger,
@@ -800,6 +807,7 @@ impl NovoApp {
 
     /// Takes what the background thread has to say; called every frame.
     fn assistant_poll(&mut self) {
+        self.datasheet_poll();
         let st = &mut self.wb.assistant;
         if let Some(rx) = &st.key_check {
             match rx.try_recv() {
@@ -954,6 +962,40 @@ impl NovoApp {
     pub(super) fn assistant_test_send(&mut self, ctx: &egui::Context) {
         let text = std::mem::take(&mut self.wb.assistant.draft);
         self.assistant_send(ctx, text);
+    }
+
+    #[cfg(test)]
+    pub(super) fn datasheet_test_choose(&mut self, name: &str, bytes: Vec<u8>) {
+        self.wb.assistant.sheet.stage = datasheet::Stage::Confirm {
+            name: name.into(),
+            bytes: Arc::new(bytes),
+        };
+    }
+
+    #[cfg(test)]
+    pub(super) fn datasheet_test_send(&mut self, ctx: &egui::Context) {
+        self.datasheet_start(ctx);
+    }
+
+    #[cfg(test)]
+    pub(super) fn datasheet_test_stage(&self) -> &'static str {
+        match self.wb.assistant.sheet.stage {
+            datasheet::Stage::Idle => "idle",
+            datasheet::Stage::Confirm { .. } => "confirm",
+            datasheet::Stage::Reading(_) => "reading",
+            datasheet::Stage::Review(_) => "review",
+            datasheet::Stage::Note(_) => "note",
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn datasheet_test_add(&mut self) -> Result<String, String> {
+        self.datasheet_add()
+    }
+
+    #[cfg(test)]
+    pub(super) fn datasheet_test_duplicate(&self) -> bool {
+        self.datasheet_duplicate()
     }
 
     #[cfg(test)]
@@ -1311,7 +1353,7 @@ impl NovoApp {
     ) -> Option<String> {
         let pal = ui_palette();
         let running = self.wb.assistant.running.is_some();
-        let height = (ui.available_height() - 110.0).max(120.0);
+        let height = (ui.available_height() - 140.0).max(120.0);
         egui::ScrollArea::vertical()
             .max_height(height)
             .min_scrolled_height(height)
@@ -1404,6 +1446,8 @@ impl NovoApp {
                     });
                 }
             });
+        ui.add_space(4.0);
+        self.datasheet_ui(ui);
         ui.add_space(4.0);
         let mut send = None;
         let st = &mut self.wb.assistant;

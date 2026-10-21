@@ -580,7 +580,7 @@ impl BenchCut {
                 (&*format!("{} of", cores.len()), "are cores of cables")
             };
             notes.push(format!(
-                "{n} {} wires {verb}. A cable is bought by its own length (see the BOM), not cut from a reel, so cores are left out of Metres and Longest reel mm; strip and ferrule each core end as listed.",
+                "{n} {} wires {verb}. A cable is bought by its own length (the BOM lists it when the cable has a stated length), not cut from a reel, so cores are left out of Metres and Longest reel mm; strip and ferrule each core end as listed.",
                 jobs.len()
             ));
         }

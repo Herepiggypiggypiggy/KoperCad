@@ -777,6 +777,83 @@ fn the_design_checks_are_a_project_section_only() {
     assert!(result_for(DataScope::Outline).starts_with("Not allowed"));
 }
 
+fn report(fields: Value) -> Value {
+    tool("t1", "report_part", json!({"fields": fields}))
+}
+
+fn read_sheet(s: &mut Setup, reply: Value) {
+    s.script.push(200, reply);
+    let ctx = s.d.ctx.clone();
+    let sent_before = s.script.seen.lock().unwrap().len();
+    s.d.app
+        .datasheet_test_choose("a.pdf", b"%PDF-1.4 test".to_vec());
+    assert_eq!(s.d.app.datasheet_test_stage(), "confirm");
+    assert!(
+        s.script.seen.lock().unwrap().len() == sent_before,
+        "nothing is sent before the person agrees"
+    );
+    s.d.app.datasheet_test_send(&ctx);
+    for _ in 0..400 {
+        s.d.frame();
+        if s.d.app.datasheet_test_stage() != "reading" {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    panic!("the datasheet was never read");
+}
+
+#[test]
+fn a_datasheet_is_sent_only_after_agreeing_and_the_part_is_one_undo_step() {
+    let mut s = setup(DataScope::None);
+    read_sheet(
+        &mut s,
+        report(json!({
+            "manufacturer": {"value": "Acme", "page": 1, "quote": "Acme GmbH"},
+            "order_number": {"value": "ZZ-9000", "page": 1, "quote": "Order ZZ-9000"},
+            "width_mm": {"value": 45.0, "page": 2, "quote": "W 45"}
+        })),
+    );
+    assert_eq!(s.d.app.datasheet_test_stage(), "review");
+    // The request holds the PDF and no project data, even at scope None.
+    let body = s.script.seen.lock().unwrap()[0].body.clone();
+    assert!(body.contains("application/pdf") && !body.contains("\"devices\""));
+    let parts = |s: &Setup| s.d.app.document().unwrap().project().parts().count();
+    let before = parts(&s);
+    assert_eq!(
+        s.d.app.datasheet_test_add().unwrap(),
+        "Added part Acme ZZ-9000"
+    );
+    assert_eq!(parts(&s), before + 1);
+    let width =
+        s.d.app
+            .document()
+            .unwrap()
+            .project()
+            .parts()
+            .find(|p| p.order_number == "ZZ-9000")
+            .and_then(|p| p.properties.get("width_mm").cloned());
+    assert_eq!(width, Some(novo_core::Value::Float(45.0)));
+    let ctx = s.d.ctx.clone();
+    s.d.app.run(&ctx, Action::Undo);
+    assert_eq!(parts(&s), before, "one undo takes the whole part back");
+}
+
+#[test]
+fn a_part_without_manufacturer_and_order_number_cannot_be_added() {
+    let mut s = setup(DataScope::None);
+    read_sheet(
+        &mut s,
+        report(json!({"width_mm": {"value": 45.0, "quote": "W 45"}})),
+    );
+    let before = s.d.app.document().unwrap().project().parts().count();
+    assert!(s.d.app.datasheet_test_add().is_err());
+    assert_eq!(
+        s.d.app.document().unwrap().project().parts().count(),
+        before
+    );
+}
+
 #[test]
 fn wire_number_conflicts_are_a_project_section_only() {
     let result_for = |scope: DataScope| {
@@ -802,4 +879,20 @@ fn wire_number_conflicts_are_a_project_section_only() {
         "{whole}"
     );
     assert!(result_for(DataScope::Outline).starts_with("Not allowed"));
+}
+
+#[test]
+fn reading_the_same_datasheet_twice_is_flagged_as_a_duplicate() {
+    let mut s = setup(DataScope::None);
+    let sheet = || {
+        report(json!({
+            "manufacturer": {"value": "Acme", "quote": "Acme GmbH"},
+            "order_number": {"value": "DUP-1", "quote": "Order DUP-1"}
+        }))
+    };
+    read_sheet(&mut s, sheet());
+    assert!(!s.d.app.datasheet_test_duplicate());
+    s.d.app.datasheet_test_add().unwrap();
+    read_sheet(&mut s, sheet());
+    assert!(s.d.app.datasheet_test_duplicate());
 }

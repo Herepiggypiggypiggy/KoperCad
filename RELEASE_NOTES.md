@@ -24,7 +24,7 @@ This is the first beta for test users. Start with [`docs/TESTER-README.md`](docs
 - Terminal strips with connection screens, cables with cores and shields, PLC cards and I/O lists.
 - Design checks with severity and location, a standards check (IEC 60204-1, NFPA 79, UL 508A rules),
   protection curves and selectivity, cable and wire sizing, functional-safety functions.
-- Revisions: issue a revision, freeze pages, compare two revisions.
+- Revisions: issue a revision (optionally locking the pages), freeze pages, compare two revisions, restore a page or the project. Scripts and imports that write into a locked page are refused until it is unlocked.
 
 **Parts and reports**
 - A part catalogue that you fill by importing maker data, with part assignment, quality checks and bulk edit.

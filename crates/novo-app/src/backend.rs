@@ -29,6 +29,8 @@ pub enum BackendError {
     NoNextIndex,
     /// The project is open read-only; saving over its file is refused.
     ReadOnly,
+    /// The revision was issued but its pages could not be locked.
+    IssuedNotLocked(Box<ModelError>, Box<novo_core::ChangeSet>),
 }
 
 impl fmt::Display for BackendError {
@@ -37,6 +39,10 @@ impl fmt::Display for BackendError {
             BackendError::Unavailable(what) => write!(f, "{what} is not available yet"),
             BackendError::Model(e) => write!(f, "{e}"),
             BackendError::Storage(e) => write!(f, "{e}"),
+            BackendError::IssuedNotLocked(e, _) => write!(
+                f,
+                "the revision was issued, but locking the pages failed ({e}); lock them from File > Revisions"
+            ),
             BackendError::NoNextIndex => {
                 write!(f, "no index follows the latest revision, type one")
             }
@@ -68,6 +74,9 @@ impl From<novo_revisions::IssueError> for BackendError {
             novo_revisions::IssueError::NoIndex => BackendError::NoNextIndex,
             novo_revisions::IssueError::Model(e) => BackendError::Model(e),
             novo_revisions::IssueError::Storage(e) => BackendError::Storage(e),
+            novo_revisions::IssueError::LockFailed { reason, issued } => {
+                BackendError::IssuedNotLocked(Box::new(reason), Box::new(issued.changes))
+            }
         }
     }
 }
@@ -197,6 +206,21 @@ pub trait ProjectBackend {
         _note: &str,
     ) -> Result<novo_revisions::Issued, BackendError> {
         Err(BackendError::Unavailable("Issuing revisions"))
+    }
+
+    /// [`Self::issue_revision_noted`], and locks every page with the new
+    /// revision when `lock` is set.
+    fn issue_revision_locking(
+        &mut self,
+        index: Option<String>,
+        date: &str,
+        author: &str,
+        description: &str,
+        note: &str,
+        lock: bool,
+    ) -> Result<novo_revisions::Issued, BackendError> {
+        let _ = lock;
+        self.issue_revision_noted(index, date, author, description, note)
     }
 
     /// Restores (`true`) or throws away (`false`) the offered recovery.
@@ -552,6 +576,18 @@ impl ProjectBackend for StorageBackend {
         description: &str,
         note: &str,
     ) -> Result<novo_revisions::Issued, BackendError> {
+        self.issue_revision_locking(index, date, author, description, note, false)
+    }
+
+    fn issue_revision_locking(
+        &mut self,
+        index: Option<String>,
+        date: &str,
+        author: &str,
+        description: &str,
+        note: &str,
+        lock: bool,
+    ) -> Result<novo_revisions::Issued, BackendError> {
         let (Some(session), Some(document)) = (self.session.as_mut(), self.document.as_mut())
         else {
             return Err(BackendError::Unavailable("Issuing revisions"));
@@ -562,7 +598,12 @@ impl ProjectBackend for StorageBackend {
                 .next(document.project())
                 .ok_or(novo_revisions::IssueError::NoIndex)?,
         };
-        let issued = novo_revisions::issue_revision_noted(
+        let issue = if lock {
+            novo_revisions::issue_revision_locked
+        } else {
+            novo_revisions::issue_revision_noted
+        };
+        Ok(issue(
             document,
             session,
             index,
@@ -570,8 +611,7 @@ impl ProjectBackend for StorageBackend {
             author,
             description,
             note,
-        )?;
-        Ok(issued)
+        )?)
     }
 
     fn record(&mut self, changes: &ChangeSet) {

@@ -269,9 +269,18 @@ impl Project {
         label: impl Into<String>,
         edit: impl FnOnce(&mut Tx<'_>) -> Result<R>,
     ) -> Result<(R, Transaction)> {
+        let locked: BTreeSet<PageId> = self
+            .pages
+            .values()
+            .filter(|p| p.locked.is_some())
+            .map(|p| p.id)
+            .collect();
         let mut tx = Tx::new(self);
         let result = edit(&mut tx).and_then(|value| {
             tx.detach_enclosed_devices()?;
+            if !locked.is_empty() && !tx.allow_locked {
+                tx.refuse_locked(&locked)?;
+            }
             Ok(value)
         });
         let ops = tx.finish(result.is_ok());
