@@ -594,8 +594,8 @@ impl BenchCut {
                 vec![
                     Column::new("done", "", 5.0),
                     Column::new("cable", "Cable", 14.0),
-                    Column::new("cores", "Cores", 8.0).right(),
-                    Column::new("metres", "Metres", 10.0).right(),
+                    Column::new("cores", "Cores used", 10.0).right(),
+                    Column::new("metres", "Metres to buy", 12.0).right(),
                     Column::new("basis", "Length basis", 12.0),
                 ],
             );

@@ -664,7 +664,7 @@ fn cut_tab(
     ));
     for run in &cache.cables {
         ui.label(format!(
-            "Cable {}: {:.1} m{}, once ({} cut from it)",
+            "Cable {}: {:.1} m to buy{}; {} cut from it",
             run.tag,
             run.metres(),
             if run.stated {

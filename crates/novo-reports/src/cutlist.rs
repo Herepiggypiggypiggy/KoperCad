@@ -204,7 +204,7 @@ impl Report for CutList {
             vec![
                 Column::new("group", "Wire", 30.0),
                 Column::new("wires", "Wires", 10.0).right(),
-                Column::new("total_m", "Hookup m", 12.0).right(),
+                Column::new("total_m", "Total m (cable cores left out)", 22.0).right(),
             ],
         );
         let mut tables: Vec<Section> = Vec::new();

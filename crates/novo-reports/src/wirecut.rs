@@ -668,8 +668,8 @@ impl Report for WireCut {
                         "Cables",
                         vec![
                             Column::new("cable", "Cable", 14.0),
-                            Column::new("cores", "Cores", 12.0).right(),
-                            Column::new("metres", "Metres", 12.0).right(),
+                            Column::new("cores", "Cores used", 12.0).right(),
+                            Column::new("metres", "Metres to buy", 14.0).right(),
                             Column::new("basis", "Length basis", 12.0),
                         ],
                     );
