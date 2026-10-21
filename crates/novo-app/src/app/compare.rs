@@ -256,7 +256,7 @@ impl NovoApp {
         let mut open = true;
         let mut jump: Option<PageId> = None;
         super::panel::dialog(ctx, "Compare revisions", [520.0, 480.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     ui.label("From");

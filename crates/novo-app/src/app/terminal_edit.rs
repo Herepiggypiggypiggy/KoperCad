@@ -426,7 +426,7 @@ impl NovoApp {
             super::panel::dialog(ctx, format!("{title} {tag}"), [420.0, 0.0])
                 .id(egui::Id::new(id))
                 .collapsible(false)
-                .open(&mut keep)
+                .open(super::panel::esc(ctx, &mut keep))
                 .show(ctx, |ui| match &mut window {
                     EditWindow::Rename { find, replace } => {
                         ui.horizontal(|ui| {

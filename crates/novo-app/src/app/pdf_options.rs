@@ -167,7 +167,7 @@ impl NovoApp {
         let mut export = false;
         let mut defaults = false;
         super::panel::dialog(ctx, "Export PDF", [440.0, 470.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 let c = &mut state.choice;
                 ui.strong("Pages");

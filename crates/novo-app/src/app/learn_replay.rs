@@ -701,6 +701,9 @@ impl Drive {
         self.app.wb.numbering = None;
         self.app.wb.wheel = None;
         // And so would a dialog (settings, shortcuts): Escape closes each.
+        // The dialogs that lessons leave open stay, as they did before
+        // Escape closed dialogs.
+        super::panel::set_esc_closes(&self.ctx, false);
         for _ in 0..4 {
             self.frame_with(vec![egui::Event::Key {
                 key: egui::Key::Escape,
@@ -711,6 +714,7 @@ impl Drive {
             }]);
             self.frame();
         }
+        super::panel::set_esc_closes(&self.ctx, true);
         self.app.start_lesson(id);
         self.frame();
         self.frame();

@@ -30,6 +30,8 @@ const MIN_WIDTH: f32 = 260.0;
 const MIN_HEIGHT: f32 = 120.0;
 /// A panel the person opens starts at least this wide.
 const DIALOG_MIN_WIDTH: f32 = 380.0;
+/// How far each further open dialog starts from the one before.
+const CASCADE: f32 = 28.0;
 
 /// Which end of the canvas a panel starts at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -244,13 +246,27 @@ pub(super) fn dialog<'a>(
     title: impl Into<egui::WidgetText>,
     size: [f32; 2],
 ) -> egui::Window<'a> {
+    let title = title.into();
+    // egui derives the window's id from `Some(title text)`; `esc` reads it
+    // back. The test `escape_closes_the_dialog_on_top` catches a change.
+    ctx.data_mut(|d| d.insert_temp(pending_id(), egui::Id::new(Some(title.text()))));
     let screen = ctx.content_rect().shrink(MARGIN);
     let size = [
         size[0] * grow(screen.width()),
         size[1] * grow(screen.width()),
     ];
     let width = size[0].max(DIALOG_MIN_WIDTH).min(screen.width());
+    // Dialogs opened together start a step apart, not on top of each other.
+    let nr = ctx.cumulative_pass_nr();
+    let before = ctx.data_mut(|d| {
+        let (seen_nr, count) = d.get_temp::<(u64, usize)>(count_id()).unwrap_or((nr, 0));
+        let count = if seen_nr == nr { count } else { 0 };
+        d.insert_temp(count_id(), (nr, count + 1));
+        count
+    });
+    let step = CASCADE * (before % 6) as f32;
     let window = egui::Window::new(title)
+        .default_pos(screen.min + egui::vec2(DIALOG_MIN_WIDTH / 2.0 + step, TOP + step))
         .resizable(true)
         .collapsible(true)
         .min_width(MIN_WIDTH.min(width))
@@ -263,6 +279,44 @@ pub(super) fn dialog<'a>(
     } else {
         window.default_width(width)
     }
+}
+
+fn count_id() -> egui::Id {
+    egui::Id::new("panel_dialog_count")
+}
+
+fn esc_off_id() -> egui::Id {
+    egui::Id::new("panel_dialog_esc_off")
+}
+
+/// Turns [`esc`] off or on. The lesson replay presses Escape between
+/// lessons to clear the canvas and must not close the dialogs the lessons
+/// leave open (the enclosure lesson's ring check depends on one of them).
+#[cfg(test)]
+pub(super) fn set_esc_closes(ctx: &egui::Context, on: bool) {
+    ctx.data_mut(|d| d.insert_temp(esc_off_id(), !on));
+}
+
+fn pending_id() -> egui::Id {
+    egui::Id::new("panel_dialog_pending")
+}
+
+/// Escape closes the dialog on top: wrap the `open` flag handed to
+/// `.open(..)` right after [`dialog`]. Does nothing while a text field has
+/// the keyboard (Escape is theirs then) or when another floating window is on
+/// top of the dialog.
+pub(super) fn esc<'a>(ctx: &egui::Context, open: &'a mut bool) -> &'a mut bool {
+    let id = ctx.data(|d| d.get_temp::<egui::Id>(pending_id()));
+    if let Some(id) = id
+        && !ctx.data(|d| d.get_temp::<bool>(esc_off_id()).unwrap_or(false))
+        && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+        && !ctx.egui_wants_keyboard_input()
+        && ctx.memory(|m| m.areas().top_layer_id(egui::Order::Middle))
+            == Some(egui::LayerId::new(egui::Order::Middle, id))
+    {
+        *open = false;
+    }
+    open
 }
 
 /// "Reset panel layout": every panel goes back to its default place and
@@ -502,6 +556,49 @@ mod tests {
             pressed,
             modifiers: egui::Modifiers::NONE,
         }
+    }
+
+    /// One frame of a dialog opened with `open`; `escape` presses Escape.
+    fn dialog_frame(ctx: &egui::Context, open: &mut bool, escape: bool) {
+        let events = if escape {
+            vec![egui::Event::Key {
+                key: egui::Key::Escape,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }]
+        } else {
+            Vec::new()
+        };
+        let mut out = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(canvas()),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                if *open {
+                    dialog(ctx, "Escape test", [400.0, 0.0])
+                        .open(esc(ctx, open))
+                        .show(ctx, |ui| {
+                            ui.label("content");
+                        });
+                }
+            },
+        );
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn escape_closes_the_dialog_on_top() {
+        let ctx = egui::Context::default();
+        let mut open = true;
+        dialog_frame(&ctx, &mut open, false);
+        dialog_frame(&ctx, &mut open, false);
+        assert!(open, "stays open without a key");
+        dialog_frame(&ctx, &mut open, true);
+        assert!(!open, "Escape closes it");
     }
 
     #[test]

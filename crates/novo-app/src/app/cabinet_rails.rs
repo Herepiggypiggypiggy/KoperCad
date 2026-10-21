@@ -302,7 +302,7 @@ pub(super) fn show_window(
     let mut open = true;
     let mut ask = None;
     let window = super::panel::dialog(ctx, "Rails and ducts", [560.0, 0.0])
-        .open(&mut open)
+        .open(super::panel::esc(ctx, &mut open))
         .show(ctx, |ui| {
             let Some(structure) = structure else {
                 ui.weak("This panel has no cabinet yet.");
