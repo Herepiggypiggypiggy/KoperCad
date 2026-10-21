@@ -1,0 +1,36 @@
+@title Wire numbering: nets on a revision-locked page are left alone
+@area Schematic
+# Place a circuit (its wires have no number yet), issue a revision with the default page lock,
+# then open Wire numbering: the Numbers tab marks the nets "page locked (A)" and the preview
+# says they are left alone.
+click_text "New project"
+wait 20
+key ctrl+k
+text "motor starter dol"
+wait 5
+key Enter
+wait 10
+click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button #2
+wait 20
+key ctrl+k
+wait 4
+text issue First issue
+wait 4
+key Enter
+wait 10
+click_text "Issue A" Button
+wait 20
+expect "Page locked (A)"
+key ctrl+k
+text "wire numbering"
+wait 5
+key Enter
+wait 10
+expect "page locked (A)"
+shot numbers-locked
+click_text Preview Button
+wait 5
+expect "locked pages left alone"
+shot preview-locked

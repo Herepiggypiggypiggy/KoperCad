@@ -63,3 +63,9 @@ Cut list and label printer columns already read `Wire.number`. Design checks sho
 `novo_numbering::check` as `wire.number.*` problems (owner: checks thread). A "keep numbers on page
 move" option and per-page schemes (e.g. power pages by potential, control pages by page) are open
 questions.
+
+## Revision-locked pages
+
+A net with a wire on a page locked by an issued revision is never changed by a plan: its group reports
+`Reason::PageLocked` (summary "n on locked pages left alone"), the Numbers tab shows "page locked (rev)",
+and Autopilot proposes nothing for it. Unlock the page first.
