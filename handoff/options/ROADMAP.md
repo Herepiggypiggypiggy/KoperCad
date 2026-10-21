@@ -9,7 +9,7 @@ Scope: options as a switch on the drawing. Engine (`novo_workflow::options`) and
 - Status-bar chip `Options: ...` in every workspace; Reports header "Machine: ... Left out of the documents: ...".
 - Ctrl+K `option <name> [value]`, `tie <option> [value]`, `untie`; tie buttons and cabinet heat sum in Project options.
 - Engine helpers: `condition_for`, `tie_to`, `describe_condition`, `summary`, `machine_project`.
-- QA fixture `qa/fixtures/machine-options.novo` + scenario `qa/scenarios/40-machine-options.qa`.
+- QA fixture `qa/fixtures/machine-options.novo` + scenario `qa/scenarios/43-machine-options.qa`.
 
 ## Next
 - Cabinet workspace and Commissioning mode apply the choice (today they edit/read the full working project).

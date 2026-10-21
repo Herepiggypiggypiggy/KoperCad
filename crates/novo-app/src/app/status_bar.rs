@@ -331,7 +331,7 @@ impl NovoApp {
             chips.push(ModeChip {
                 label: format!("{} Page locked ({locked})", novo_theme::icons::LOCK_SIMPLE),
                 command: "revision.unlock_page",
-                hover: "This page is locked with the issued revision. Click to unlock it",
+                hover: "This page is locked with the issued revision. Click to unlock it".into(),
             });
         }
         if self.wb.changes.is_some() {

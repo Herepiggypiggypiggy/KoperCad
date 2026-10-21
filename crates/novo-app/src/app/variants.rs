@@ -239,7 +239,13 @@ impl NovoApp {
         let mut tie: Option<(OptionDef, Value)> = None;
         let mut untie = false;
         let targets = self.tie_targets();
+        let nothing_selected = self.selection().is_empty();
         let tie_words = self.targets_words(&targets);
+        let tie_words = if nothing_selected && !tie_words.is_empty() {
+            format!("Nothing is selected, so this acts on {tie_words}")
+        } else {
+            tie_words
+        };
         let tie_state = targets
             .first()
             .and_then(|t| options::describe_condition(&project, *t))
@@ -253,7 +259,8 @@ impl NovoApp {
                     novo_theme::widgets::section_label(ui, "Options");
                     ui.weak(
                         "What this machine can have. Pages and devices tied to an option appear in \
-the documents only when it is on; the working project always keeps everything.",
+the documents only when it is on; the working project always keeps everything, and the \
+Schematic and Cabinet always show everything.",
                     );
                     if defs.is_empty() {
                         ui.add_space(4.0);
