@@ -41,7 +41,20 @@ pub struct Dimension {
     pub mm: f32,
     /// The text drawn on the line, for example `W 54 mm`.
     pub text: String,
+    /// For a gap between two devices: the clear distance the two parts ask
+    /// for on the facing sides, mm.
+    pub required: Option<f32>,
 }
+
+impl Dimension {
+    /// `Some(false)` when a gap is smaller than the parts ask for.
+    pub fn clearance_ok(&self) -> Option<bool> {
+        self.required.map(|r| self.mm + CLEARANCE_EPS_MM >= r)
+    }
+}
+
+/// Rounding slack when comparing a measured gap with the required one.
+const CLEARANCE_EPS_MM: f32 = 0.05;
 
 /// Millimetres as written on a line: one decimal, none when it is whole.
 pub fn format_mm(mm: f32) -> String {
@@ -66,6 +79,7 @@ fn line(a: Vec3, b: Vec3, role: Role, prefix: &str) -> Dimension {
         role,
         mm,
         text,
+        required: None,
     }
 }
 
@@ -156,7 +170,7 @@ fn part_lines(scene: &Scene, id: ItemId, b: &Aabb, plate: Option<&Aabb>, out: &m
     }
 
     // Neighbours: what stands wholly beside the part and overlaps it across.
-    let others: Vec<Aabb> = scene
+    let others: Vec<(Aabb, Option<[f32; 4]>)> = scene
         .items
         .iter()
         .filter(|i| i.id != id)
@@ -166,54 +180,65 @@ fn part_lines(scene: &Scene, id: ItemId, b: &Aabb, plate: Option<&Aabb>, out: &m
                 ItemKind::Device | ItemKind::Duct | ItemKind::Rail | ItemKind::Other
             )
         })
-        .map(|i| scene.world_bounds(i))
+        .map(|i| (scene.world_bounds(i), i.needs))
         .collect();
+    let own = scene.get(id).and_then(|i| i.needs);
     let overlap_y = |o: &Aabb| o.min.y < b.max.y && o.max.y > b.min.y;
     let overlap_x = |o: &Aabb| o.min.x < b.max.x && o.max.x > b.min.x;
 
     // (nearest neighbour edge, or the plate edge) on each side.
-    let left = others
+    // Each side gives (edge position, is a neighbour, the neighbour's needs).
+    type Near = (f32, bool, Option<[f32; 4]>);
+    let left: Option<Near> = others
         .iter()
-        .filter(|o| overlap_y(o) && o.max.x <= b.min.x)
-        .map(|o| (o.max.x, true))
+        .filter(|(o, _)| overlap_y(o) && o.max.x <= b.min.x)
+        .map(|(o, n)| (o.max.x, true, *n))
         .max_by(|a, c| a.0.total_cmp(&c.0))
-        .or_else(|| plate.map(|p| (p.min.x, false)));
-    let right = others
+        .or_else(|| plate.map(|p| (p.min.x, false, None)));
+    let right: Option<Near> = others
         .iter()
-        .filter(|o| overlap_y(o) && o.min.x >= b.max.x)
-        .map(|o| (o.min.x, true))
+        .filter(|(o, _)| overlap_y(o) && o.min.x >= b.max.x)
+        .map(|(o, n)| (o.min.x, true, *n))
         .min_by(|a, c| a.0.total_cmp(&c.0))
-        .or_else(|| plate.map(|p| (p.max.x, false)));
-    let below = others
+        .or_else(|| plate.map(|p| (p.max.x, false, None)));
+    let below: Option<Near> = others
         .iter()
-        .filter(|o| overlap_x(o) && o.max.y <= b.min.y)
-        .map(|o| (o.max.y, true))
+        .filter(|(o, _)| overlap_x(o) && o.max.y <= b.min.y)
+        .map(|(o, n)| (o.max.y, true, *n))
         .max_by(|a, c| a.0.total_cmp(&c.0))
-        .or_else(|| plate.map(|p| (p.min.y, false)));
-    let above = others
+        .or_else(|| plate.map(|p| (p.min.y, false, None)));
+    let above: Option<Near> = others
         .iter()
-        .filter(|o| overlap_x(o) && o.min.y >= b.max.y)
-        .map(|o| (o.min.y, true))
+        .filter(|(o, _)| overlap_x(o) && o.min.y >= b.max.y)
+        .map(|(o, n)| (o.min.y, true, *n))
         .min_by(|a, c| a.0.total_cmp(&c.0))
-        .or_else(|| plate.map(|p| (p.max.y, false)));
+        .or_else(|| plate.map(|p| (p.max.y, false, None)));
 
     let role = |neighbour: bool| if neighbour { Role::Gap } else { Role::Edge };
-    let mut gap = |from: Vec3, to: Vec3, neighbour: bool| {
+    // `side`/`facing` index `Item::needs` (left, right, above, below): the
+    // part's own need on that side and the neighbour's on the side facing it.
+    let mut gap = |from: Vec3, to: Vec3, near: Near, side: usize, facing: usize| {
         if (to - from).length() >= MIN_GAP_MM {
-            out.push(line(from, to, role(neighbour), ""));
+            let mut d = line(from, to, role(near.1), "");
+            if let (Some(own), Some(other)) = (own, near.2) {
+                let need = own[side].max(other[facing]);
+                d.required = Some(need);
+                d.text = format!("{} (min {})", d.text, format_mm(need));
+            }
+            out.push(d);
         }
     };
-    if let Some((x, n)) = left.filter(|(x, _)| *x <= b.min.x) {
-        gap(Vec3::new(x, cy, z), Vec3::new(b.min.x, cy, z), n);
+    if let Some(n) = left.filter(|n| n.0 <= b.min.x) {
+        gap(Vec3::new(n.0, cy, z), Vec3::new(b.min.x, cy, z), n, 0, 1);
     }
-    if let Some((x, n)) = right.filter(|(x, _)| *x >= b.max.x) {
-        gap(Vec3::new(b.max.x, cy, z), Vec3::new(x, cy, z), n);
+    if let Some(n) = right.filter(|n| n.0 >= b.max.x) {
+        gap(Vec3::new(b.max.x, cy, z), Vec3::new(n.0, cy, z), n, 1, 0);
     }
-    if let Some((y, n)) = below.filter(|(y, _)| *y <= b.min.y) {
-        gap(Vec3::new(cx, y, z), Vec3::new(cx, b.min.y, z), n);
+    if let Some(n) = below.filter(|n| n.0 <= b.min.y) {
+        gap(Vec3::new(cx, n.0, z), Vec3::new(cx, b.min.y, z), n, 3, 2);
     }
-    if let Some((y, n)) = above.filter(|(y, _)| *y >= b.max.y) {
-        gap(Vec3::new(cx, b.max.y, z), Vec3::new(cx, y, z), n);
+    if let Some(n) = above.filter(|n| n.0 >= b.max.y) {
+        gap(Vec3::new(cx, b.max.y, z), Vec3::new(cx, n.0, z), n, 2, 3);
     }
 }
 
@@ -363,5 +388,28 @@ mod tests {
             height: 10.0,
         });
         assert!(dimensions(&s, &BTreeSet::new()).is_empty());
+    }
+
+    #[test]
+    fn gaps_between_devices_say_whether_they_keep_the_asked_clearance() {
+        let mut s = scene();
+        for it in &mut s.items {
+            if it.id.kind == ItemKind::Device {
+                // 60 mm asked on the left and right of every device.
+                it.needs = Some([60.0, 60.0, 0.0, 0.0]);
+            }
+        }
+        let d = dimensions(&s, &pick(&s, 11));
+        // Left neighbour 50 mm away: too close. Right neighbour 80 mm: fine.
+        let left = find(&d, Role::Gap, "50 mm (min 60 mm)").expect("left gap");
+        assert_eq!(left.clearance_ok(), Some(false));
+        let right = find(&d, Role::Gap, "80 mm (min 60 mm)").expect("right gap");
+        assert_eq!(right.clearance_ok(), Some(true));
+        // Edges and gaps to parts that state no need carry no verdict.
+        assert!(
+            d.iter()
+                .filter(|m| m.role != Role::Gap)
+                .all(|m| m.clearance_ok().is_none())
+        );
     }
 }
