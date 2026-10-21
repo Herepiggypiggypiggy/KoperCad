@@ -1820,7 +1820,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "help.walkthrough",
-        "Fast keys walk-through",
+        "Fast keys card on this project",
         "View",
         &["tour", "tutorial", "walkthrough", "help"],
         Needs::Nothing,
