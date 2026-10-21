@@ -76,7 +76,7 @@ impl TilePlan {
     }
 
     pub fn count(&self) -> usize {
-        self.cols * self.rows
+        self.cols.saturating_mul(self.rows)
     }
 
     /// Distance between the origins of neighbouring tiles.
