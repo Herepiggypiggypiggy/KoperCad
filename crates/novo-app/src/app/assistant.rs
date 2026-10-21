@@ -17,7 +17,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use eframe::egui;
 use novo_ai::agent::{Conversation, Event, TurnResult};
 use novo_ai::api::{ApiError, Client, Transport, UreqTransport};
-use novo_ai::consent::{Consent, DataScope, NOTICE};
+use novo_ai::consent::{CONSENT_VERSION, Consent, DataScope, NOTICE};
 use novo_ai::key::{ApiKey, KeySource, KeyStore};
 use novo_ai::models::{self, MODELS};
 use novo_ai::tools::{EditAction, Proposal, Snapshot, SnapshotHost};
@@ -99,6 +99,13 @@ pub(super) struct State {
     pub open: bool,
     proposal_notes: HashMap<u32, String>,
     show_settings: bool,
+    /// The `CONSENT_VERSION` whose notice has been on screen in full: the box
+    /// to agree stays off until it has been, whatever the window height.
+    notice_seen: Option<u32>,
+    /// Where the notice was drawn this frame, to tell whether it was in view.
+    notice_rect: Option<egui::Rect>,
+    /// Tests only: whether "Turn Claude on" could be pressed in the last frame.
+    turn_on_ready: bool,
     /// Tests only: retries do not wait.
     instant_retries: bool,
     agreed: bool,
@@ -232,6 +239,9 @@ impl State {
             open: false,
             proposal_notes: HashMap::new(),
             show_settings: false,
+            notice_seen: None,
+            notice_rect: None,
+            turn_on_ready: false,
             instant_retries: false,
             agreed: false,
             key_input: String::new(),
@@ -315,6 +325,21 @@ impl State {
         self.transcript
             .iter()
             .position(|e| matches!(e, Entry::Proposal(..)))
+    }
+
+    #[cfg(test)]
+    pub(super) fn turn_on_ready(&self) -> bool {
+        self.turn_on_ready
+    }
+
+    #[cfg(test)]
+    pub(super) fn notice_seen(&self) -> bool {
+        self.notice_seen == Some(CONSENT_VERSION)
+    }
+
+    #[cfg(test)]
+    pub(super) fn agree_for_test(&mut self) {
+        self.agreed = true;
     }
 
     #[cfg(test)]
@@ -1326,17 +1351,26 @@ impl NovoApp {
                     } else {
                         room
                     };
-                    egui::ScrollArea::vertical()
+                    let scrolled = egui::ScrollArea::vertical()
                         .id_salt("ask_claude_settings")
-                        .scroll_bar_visibility(
-                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                        )
                         .scroll_bar_visibility(
                             egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                         )
                         .max_height(settings_max)
                         .auto_shrink([false, true])
-                        .show(ui, |ui| self.assistant_settings_ui(ui, ctx));
+                        .show(ui, |ui| {
+                            self.assistant_settings_ui(ui, ctx);
+                            if self.wb.assistant.show_settings {
+                                self.assistant_notice_ui(ui);
+                            }
+                        });
+                    // The notice counts as read once its last line has been in view.
+                    if let Some(r) = self.wb.assistant.notice_rect.take()
+                        && r.max.y <= scrolled.inner_rect.max.y + 1.0
+                        && r.max.y >= scrolled.inner_rect.min.y
+                    {
+                        self.wb.assistant.notice_seen = Some(CONSENT_VERSION);
+                    }
                     ui.separator();
                     if self.settings.ai.enabled {
                         send = self.assistant_chat_ui(ui, &mut decide);
@@ -1578,10 +1612,19 @@ impl NovoApp {
         ui.add_space(6.0);
     }
 
-    /// Section 4 of the settings, pinned under the scrolling sections 1 to 3
-    /// so the box and the button are reachable on a small window.
-    fn assistant_agree_ui(&mut self, ui: &mut egui::Ui) {
+    /// Section 4: the notice, at the end of the scrolling settings so it is
+    /// read in full whatever the window height.
+    fn assistant_notice_ui(&mut self, ui: &mut egui::Ui) {
         let pal = ui_palette();
+        ui.add_space(6.0);
+        ui.strong("4. Agree");
+        let text = ui.label(egui::RichText::new(NOTICE).color(pal.text_secondary));
+        self.wb.assistant.notice_rect = Some(text.rect);
+    }
+
+    /// The box and the button, pinned under the scrolling settings so they are
+    /// reachable on a small window; the notice they refer to is above.
+    fn assistant_agree_ui(&mut self, ui: &mut egui::Ui) {
         let enabled = self.settings.ai.enabled;
         let key = self.wb.assistant.key();
         // Sections 1 to 3 have already stored a change of scope.
@@ -1590,8 +1633,10 @@ impl NovoApp {
             .assistant
             .pending_scope
             .unwrap_or_else(|| self.settings.ai.consent.effective());
-        ui.strong("4. Agree");
-        ui.label(egui::RichText::new(NOTICE).color(pal.text_secondary));
+        let seen = self.wb.assistant.notice_seen == Some(CONSENT_VERSION);
+        if !seen && !enabled {
+            ui.weak("Scroll down and read “4. Agree” to be able to agree.");
+        }
         if enabled {
             if ui.button("Turn Claude off").clicked() {
                 self.settings.ai.enabled = false;
@@ -1599,13 +1644,19 @@ impl NovoApp {
                 self.wb.assistant.clear_chat();
                 self.wb.assistant.conv_scope = DataScope::None;
                 self.wb.assistant.pending_scope = None;
+                self.wb.assistant.notice_seen = None;
             }
         } else {
-            ui.checkbox(&mut self.wb.assistant.agreed, "I have read this and agree");
-            let ready = self.wb.assistant.agreed && key.is_some();
+            ui.add_enabled(
+                seen,
+                egui::Checkbox::new(&mut self.wb.assistant.agreed, "I have read this and agree"),
+            )
+            .on_disabled_hover_text("Scroll down and read “4. Agree” first.");
+            let ready = seen && self.wb.assistant.agreed && key.is_some();
+            self.wb.assistant.turn_on_ready = ready;
             if ui
                 .add_enabled(ready, egui::Button::new("Turn Claude on"))
-                .on_disabled_hover_text("Add a key and tick the box first.")
+                .on_disabled_hover_text("Read “4. Agree”, add a key and tick the box first.")
                 .clicked()
             {
                 let now = (self.wb.assistant.now)();

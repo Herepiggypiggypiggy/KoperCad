@@ -532,7 +532,7 @@ impl ProblemKind {
             ProblemKind::DuplicatePage => "Duplicate page",
             ProblemKind::DanglingJunction => "Dangling junction",
             ProblemKind::UnwiredTerminal => "Unwired terminal",
-            ProblemKind::WireRule => "Wire breaks project rule",
+            ProblemKind::WireRule => "Wire breaks a rule",
             ProblemKind::StrayWireEnd => "Wire end on something",
             ProblemKind::ContactType => "Contact numbering",
             ProblemKind::ContactPosition => "Contact beyond relay",

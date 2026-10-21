@@ -30,7 +30,7 @@ wait 60
 shot run-card-entry
 expect "Run 4"
 expect "Drawn to the cabinet entry"
-expect "Not checked: cable bend radius"
+expect "Not checked: how stiff this cable is"
 click_text "Select all cores of the cable"
 wait 60
 shot cable-cores

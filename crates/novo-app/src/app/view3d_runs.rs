@@ -317,6 +317,47 @@ pub(super) fn picked<'a>(
         .collect()
 }
 
+/// The ducts of the selection (rail ids).
+pub(super) fn ducts_picked(selection: &BTreeSet<ItemId>) -> Vec<u64> {
+    selection
+        .iter()
+        .filter(|i| i.kind == ItemKind::Duct)
+        .map(|i| i.raw)
+        .collect()
+}
+
+/// A picked duct and the runs that lie in it: the reverse of the Run card.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct DuctRuns<'a> {
+    pub rail: u64,
+    /// How full it is; `None` when no drawn wire lies in it (its place and
+    /// fill are read from the wires that do).
+    pub fill: Option<&'a super::view3d_wires::DuctUse>,
+    /// The wires in it, in list order.
+    pub wires: Vec<&'a WireFacts>,
+}
+
+/// The picked ducts with their runs, from the facts of the plate.
+pub(super) fn duct_runs<'a>(
+    facts: &'a BTreeMap<u64, WireFacts>,
+    selection: &BTreeSet<ItemId>,
+) -> Vec<DuctRuns<'a>> {
+    ducts_picked(selection)
+        .into_iter()
+        .map(|rail| {
+            let wires: Vec<&WireFacts> = super::view3d_wires::sorted(facts)
+                .into_iter()
+                .filter(|f| f.duct_use.iter().any(|d| d.rail == rail))
+                .collect();
+            let fill = wires
+                .iter()
+                .flat_map(|f| f.duct_use.iter())
+                .find(|d| d.rail == rail);
+            DuctRuns { rail, fill, wires }
+        })
+        .collect()
+}
+
 /// The cable every picked wire is a core of, when they are all of one.
 pub(super) fn common_cable<'a>(picked: &[&'a WireFacts]) -> Option<&'a CableFacts> {
     let first = picked.first()?.basis.as_ref()?.cable.as_ref()?;
@@ -363,7 +404,16 @@ pub(super) fn overlays(
     if let Some(p) = entry {
         out.push(Overlay::Lines(entry_marker(scene, p)));
     }
-    let chosen = picked(facts, selection);
+    let mut chosen = picked(facts, selection);
+    // A picked duct lights every run in it and outlines itself by its fill.
+    let in_ducts = duct_runs(facts, selection);
+    for d in &in_ducts {
+        for w in &d.wires {
+            if !chosen.iter().any(|c| c.id == w.id) {
+                chosen.push(w);
+            }
+        }
+    }
     if chosen.is_empty() {
         return out;
     }
@@ -405,6 +455,14 @@ pub(super) fn overlays(
     }
     if !ducts.positions.is_empty() {
         out.push(Overlay::Lines(ducts));
+    }
+    let tight: Vec<(Point, f64)> = chosen
+        .iter()
+        .filter_map(|f| f.checks.as_ref())
+        .flat_map(|c| c.corners.iter().map(|k| (k.at, k.top_mm)))
+        .collect();
+    if !tight.is_empty() {
+        out.push(Overlay::Lines(corner_marks(scene, &tight)));
     }
     if !path.positions.is_empty() {
         out.push(Overlay::Lines(path));
@@ -458,6 +516,32 @@ fn entry_marker(scene: &Scene, at: Point) -> OverlayLines {
     poly(&[c - dx, c + dx]);
     poly(&[c - dy, c + dy]);
     poly(&[c, c + Vec3::Z * 40.0]);
+    lines
+}
+
+/// A red cross over each corner the wire cannot take, held above the ducts
+/// that meet there (a mark on the plate would sit inside them, out of sight).
+fn corner_marks(scene: &Scene, at: &[(Point, f64)]) -> OverlayLines {
+    let r = 16.0;
+    let red = tone_colour(Tone::Over);
+    let mut lines = OverlayLines {
+        width_px: 3.0,
+        order: 23,
+        ..OverlayLines::default()
+    };
+    for (p, top) in at {
+        let c = scene.frame.world(p.x, p.y, *top + 4.0);
+        for (a, b) in [
+            (Vec3::X + Vec3::Y, -Vec3::X - Vec3::Y),
+            (Vec3::X - Vec3::Y, Vec3::Y - Vec3::X),
+        ] {
+            lines.starts.push(lines.positions.len() as u32);
+            for q in [c + a * r, c + b * r] {
+                lines.positions.push(q);
+                lines.colors.push(red);
+            }
+        }
+    }
     lines
 }
 
@@ -545,10 +629,13 @@ pub(super) fn card_lines(f: &WireFacts) -> Vec<(Tone, String)> {
             "A device depth is unknown: the length is a little short".to_owned(),
         ));
     }
-    out.push((
-        Tone::Idle,
-        "Not checked: cable bend radius, clearance to hot parts".to_owned(),
-    ));
+    match &f.checks {
+        Some(c) => out.extend(c.lines()),
+        None => out.push((
+            Tone::Idle,
+            "Not checked: cable bend radius, clearance to hot parts".to_owned(),
+        )),
+    }
     out
 }
 
@@ -617,6 +704,72 @@ fn card_body(ui: &mut egui::Ui, chosen: &[&WireFacts]) -> Asked {
     asked
 }
 
+/// The card of a picked duct: how full it is and the runs in it, each one
+/// click from its own Run card.
+fn duct_body(ui: &mut egui::Ui, d: &DuctRuns<'_>) -> Asked {
+    let mut asked = Asked::default();
+    ui.horizontal(|ui| {
+        ui.strong(match d.fill {
+            Some(u) => u.place.clone(),
+            None => format!("Duct {}", d.rail),
+        });
+        if ui
+            .small_button("Unpick")
+            .on_hover_text("Let go of this duct")
+            .clicked()
+        {
+            asked.clear = true;
+        }
+    });
+    match d.fill {
+        Some(u) => {
+            // The place is the heading already.
+            let text = u.text();
+            let text = text
+                .strip_prefix(&format!("{}: ", u.place))
+                .unwrap_or(&text)
+                .to_owned();
+            ui.colored_label(tone_text(u.tone), text);
+        }
+        None => {
+            ui.weak("No drawn wire lies in this duct");
+        }
+    }
+    if d.wires.is_empty() {
+        return asked;
+    }
+    let total: f64 = d.wires.iter().map(|f| f.length_mm).sum();
+    ui.weak(format!(
+        "{} runs, {} inside the cabinet",
+        d.wires.len(),
+        super::view3d_wires::metres(total)
+    ));
+    if ui
+        .small_button(format!("Select its {} runs", d.wires.len()))
+        .on_hover_text("Pick every run in this duct to read them together")
+        .clicked()
+    {
+        asked.select_cores = Some(d.wires.iter().map(|f| f.id).collect());
+    }
+    egui::ScrollArea::vertical()
+        .id_salt(("view3d_duct_runs", d.rail))
+        .auto_shrink([false, true])
+        .max_height(140.0)
+        .show(ui, |ui| {
+            for f in &d.wires {
+                let text = format!("{}   {:.0} mm", f.name(), f.length_mm);
+                if ui
+                    .selectable_label(false, text)
+                    .on_hover_text(f.lines().join("\n"))
+                    .clicked()
+                {
+                    asked.select_cores = Some(vec![f.id]);
+                }
+            }
+        });
+    asked
+}
+
 /// What the Wire runs panel asked for this frame.
 #[derive(Debug, Default, PartialEq)]
 pub(super) struct PanelAsked {
@@ -662,14 +815,16 @@ pub(super) fn panel(
     heat_open: bool,
     list: Option<ListInput<'_>>,
     chosen: &[&WireFacts],
+    ducts: &[DuctRuns<'_>],
     selection: &BTreeSet<ItemId>,
 ) -> Option<PanelAsked> {
-    if list.is_none() && chosen.is_empty() {
+    if list.is_none() && chosen.is_empty() && ducts.is_empty() {
         return None;
     }
-    let title = match (&list, chosen) {
-        (Some(_), _) => "Wire runs".to_owned(),
-        (None, [one]) => format!("Run {}", one.name()),
+    let title = match (&list, chosen, ducts) {
+        (Some(_), _, _) => "Wire runs".to_owned(),
+        (None, [one], _) => format!("Run {}", one.name()),
+        (None, [], [_, ..]) => "Duct runs".to_owned(),
         _ => "Runs".to_owned(),
     };
     let mut asked = PanelAsked::default();
@@ -680,7 +835,7 @@ pub(super) fn panel(
     let room = (height - top - BELOW_PANEL).max(120.0);
     super::panel::Panel::new("view3d_wire_runs", title, view, side, PANEL_WIDTH)
         .top(top)
-        .height(room.min(560.0))
+        .height(room.min(760.0))
         .above_card()
         .show(ctx, |ui| {
             // The list on top so another run is always one click away; the card of
@@ -695,12 +850,24 @@ pub(super) fn panel(
                     l.undrawn,
                     selection,
                 );
-                if !chosen.is_empty() {
+                if !chosen.is_empty() || !ducts.is_empty() {
                     ui.separator();
                 }
             }
+            for d in ducts {
+                let a = duct_body(ui, d);
+                if a.select_cores.is_some() {
+                    asked.card.select_cores = a.select_cores;
+                }
+                asked.card.clear |= a.clear;
+                ui.separator();
+            }
             if !chosen.is_empty() {
-                asked.card = card_body(ui, chosen);
+                let a = card_body(ui, chosen);
+                if a.select_cores.is_some() {
+                    asked.card.select_cores = a.select_cores;
+                }
+                asked.card.clear |= a.clear;
             }
         });
     Some(asked)
@@ -750,6 +917,7 @@ mod tests {
             )],
             entry: None,
             basis: None,
+            checks: None,
         }
     }
 

@@ -1,5 +1,6 @@
 @title Ask Claude is off by default and says so
 @area Assistant
+@sizes 1366x768 1920x1080 1366x600
 # No key, no network: the window opens on its settings and must explain what is off, what is sent (nothing) and where to start.
 click_text "Open example"
 wait 20
@@ -20,6 +21,14 @@ expect "4. Agree"
 shot ask-claude-settings
 check_layout
 check_blank ask-claude-settings
+scroll 250 300 -3000
+wait 4
+expect "Monthly limit"
+expect "Claude can suggest changes"
+shot ask-claude-settings-end
+check_layout
+scroll 250 300 3000
+wait 4
 click_text "Hide settings" Button
 wait 6
 expect "Turn Claude on above"

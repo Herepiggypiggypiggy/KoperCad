@@ -31,6 +31,15 @@ pub const ESTIMATE_MIN_MM: &str = "wire.estimate_min_mm";
 /// Estimated wire between pins on different pages, before the slack, mm.
 pub const ESTIMATE_ACROSS_PAGES_MM: &str = "wire.estimate_across_pages_mm";
 
+/// Smallest bend radius of a wire or cable, as a multiple of its outer
+/// diameter. A planning value (cables differ; fixed laying allows less than
+/// moving cables).
+pub const BEND_FACTOR: &str = "wire.bend_factor";
+/// Closest a wire should run to a device that gives off heat, mm.
+pub const HOT_GAP_MM: &str = "wire.hot_gap_mm";
+/// Power loss from which a device counts as hot for [`HOT_GAP_MM`], W.
+pub const HOT_LOSS_W: &str = "wire.hot_loss_w";
+
 /// One rule: key, label, unit, default and the range it accepts.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct RuleInfo {
@@ -61,7 +70,7 @@ const fn info(
 }
 
 /// Every rule, in the order a settings panel lists them.
-pub const RULES: [RuleInfo; 9] = [
+pub const RULES: [RuleInfo; 12] = [
     info(SLACK_MM, "Service loop per end", "mm", 50.0, 0.0, 500.0),
     info(
         MAX_STUB_MM,
@@ -92,6 +101,9 @@ pub const RULES: [RuleInfo; 9] = [
         0.0,
         20000.0,
     ),
+    info(BEND_FACTOR, "Bend radius", "x diameter", 6.0, 1.0, 30.0),
+    info(HOT_GAP_MM, "Gap to hot devices", "mm", 20.0, 0.0, 500.0),
+    info(HOT_LOSS_W, "Hot from", "W", 5.0, 0.0, 10000.0),
 ];
 
 /// The rule for `key`.
@@ -109,6 +121,9 @@ pub struct WireRules {
     pub lug_from_mm2: f64,
     pub estimate_min_mm: f64,
     pub estimate_across_pages_mm: f64,
+    pub bend_factor: f64,
+    pub hot_gap_mm: f64,
+    pub hot_loss_w: f64,
     /// Keys present in the project but not usable (wrong type or out of
     /// range); their defaults were used.
     pub ignored: Vec<&'static str>,
@@ -123,6 +138,9 @@ impl Default for WireRules {
             lug_from_mm2: 25.0,
             estimate_min_mm: 100.0,
             estimate_across_pages_mm: 500.0,
+            bend_factor: 6.0,
+            hot_gap_mm: 20.0,
+            hot_loss_w: 5.0,
             ignored: Vec::new(),
         }
     }
@@ -165,6 +183,9 @@ impl WireRules {
             lug_from,
             est_min,
             est_pages,
+            bend_factor,
+            hot_gap,
+            hot_loss,
         ] = RULES;
         let routing = Rules {
             slack_mm: get(&slack),
@@ -174,8 +195,13 @@ impl WireRules {
         };
         let (ferrule_mm, lug_mm, lug_from_mm2) = (get(&ferrule), get(&lug), get(&lug_from));
         let (estimate_min_mm, estimate_across_pages_mm) = (get(&est_min), get(&est_pages));
+        let (bend_factor, hot_gap_mm, hot_loss_w) =
+            (get(&bend_factor), get(&hot_gap), get(&hot_loss));
         WireRules {
             routing,
+            bend_factor,
+            hot_gap_mm,
+            hot_loss_w,
             ferrule_mm,
             lug_mm,
             lug_from_mm2,
@@ -197,6 +223,9 @@ impl WireRules {
             LUG_FROM_MM2 => self.lug_from_mm2,
             ESTIMATE_MIN_MM => self.estimate_min_mm,
             ESTIMATE_ACROSS_PAGES_MM => self.estimate_across_pages_mm,
+            BEND_FACTOR => self.bend_factor,
+            HOT_GAP_MM => self.hot_gap_mm,
+            HOT_LOSS_W => self.hot_loss_w,
             _ => return None,
         })
     }
