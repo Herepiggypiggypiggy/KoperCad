@@ -962,7 +962,7 @@ fn legend(sl: &SingleLine) -> Vec<String> {
         if note.starts_with("Iz assumes")
             || note.contains("times the diversity factor")
             || note.starts_with("A diversity factor is stated")
-            || note.starts_with("Ignored: the diversity factor")
+            || note.starts_with("Ignored, no factor applied")
             || note.starts_with("ΔU is calculated at power factor 1")
             || note.starts_with("Ik is")
             || note.starts_with("Short-circuit current is not carried")

@@ -1525,7 +1525,11 @@ pub fn single_line(
         let factor = match diversity(raw_factor) {
             Ok(f) => f,
             Err(()) => {
-                diversity_invalid.push(nodes[id].tag.clone());
+                diversity_invalid.push(format!(
+                    "the factor at {} is {}",
+                    nodes[id].tag,
+                    raw_factor.map_or_else(|| "not a number".to_owned(), fmt)
+                ));
                 None
             }
         };
@@ -1674,10 +1678,14 @@ pub fn single_line(
                 None => without += nodes[k].loads_without_current.max(1),
             }
         }
-        let supply_factor = match diversity(number(props, SUPPLY_DIVERSITY_FACTOR)) {
+        let raw_supply = number(props, SUPPLY_DIVERSITY_FACTOR);
+        let supply_factor = match diversity(raw_supply) {
             Ok(f) => f,
             Err(()) => {
-                diversity_invalid.push("the supply".to_owned());
+                diversity_invalid.push(format!(
+                    "the factor at the supply is {}",
+                    raw_supply.map_or_else(|| "not a number".to_owned(), fmt)
+                ));
                 None
             }
         };
@@ -1865,7 +1873,7 @@ pub fn single_line(
     }
     if !diversity_invalid.is_empty() {
         notes.push(format!(
-            "Ignored: the diversity factor at {} is not a number from 0.1 to 1.",
+            "Ignored, no factor applied: {}; a diversity factor must be a number from 0.1 to 1.",
             diversity_invalid.join(", ")
         ));
     }

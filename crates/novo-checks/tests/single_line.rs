@@ -930,7 +930,7 @@ fn a_factor_outside_zero_point_one_to_one_is_ignored_and_said() {
     assert!(
         sl.notes
             .iter()
-            .any(|n| n.starts_with("Ignored: the diversity factor at"))
+            .any(|n| n.starts_with("Ignored, no factor applied") && n.contains("is 8"))
     );
 }
 
