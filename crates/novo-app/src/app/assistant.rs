@@ -77,6 +77,8 @@ pub(super) struct State {
     ledger: Ledger,
     ledger_path: Option<PathBuf>,
     session_cost: f64,
+    /// A question to send as soon as the window can (from a button elsewhere).
+    pending_question: Option<String>,
     /// The widest scope any answer in the running conversation was given
     /// under. If the scope later narrows, the conversation is dropped: what
     /// Claude already read must not keep informing answers the person
@@ -128,6 +130,7 @@ impl State {
             ledger,
             ledger_path,
             session_cost: 0.0,
+            pending_question: None,
             conv_scope: DataScope::None,
             pending_scope: None,
             next_proposal: 1,
@@ -189,6 +192,12 @@ impl State {
             })
             .collect::<Vec<_>>()
             .join("\n")
+    }
+
+    /// Opens the window and sends `question` when no answer is in progress.
+    pub(super) fn ask_later(&mut self, question: String) {
+        self.open = true;
+        self.pending_question = Some(question);
     }
 
     fn month(&self) -> String {
@@ -844,6 +853,18 @@ impl NovoApp {
             return;
         }
         self.assistant_poll();
+        if self.wb.assistant.running.is_none()
+            && let Some(q) = self.wb.assistant.pending_question.take()
+        {
+            if self.settings.ai.enabled {
+                self.assistant_send(ctx, q);
+            } else {
+                self.wb
+                    .assistant
+                    .transcript
+                    .push(Entry::Problem("Claude is off, so nothing was sent.".into()));
+            }
+        }
         if self.wb.assistant.running.is_some() || self.wb.assistant.key_check.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(120));
         }
@@ -1003,6 +1024,9 @@ impl NovoApp {
                 ui.weak(s.describes());
             });
         }
+        ui.weak(
+            "Buttons that say “with Claude” send the text shown on screen, whatever you chose here.",
+        );
         let current = self.settings.ai.consent.effective();
         if scope != self.wb.assistant.pending_scope.unwrap_or(current) {
             if enabled && scope > current {
