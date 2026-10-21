@@ -323,9 +323,15 @@ impl NovoApp {
         let mut state = std::mem::take(&mut self.wb.selection_sheet);
         let mut actions = Vec::new();
         let mut open = true;
+        // Below the menu bar, inside the window: the default place is the
+        // top left corner, which is the menu bar.
+        let content = ctx.content_rect();
+        let area = egui::Rect::from_min_max(content.min + egui::vec2(0.0, 48.0), content.max);
         egui::Window::new("Properties of the selection")
             .open(&mut open)
             .default_size([340.0, 420.0])
+            .default_pos(area.min + egui::vec2(16.0, 16.0))
+            .constrain_to(area)
             .show(ctx, |ui| {
                 ui.label(egui::RichText::new(sheet.title()).strong());
                 ui.weak("Typing a value sets it on every selected object");

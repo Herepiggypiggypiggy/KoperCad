@@ -298,6 +298,13 @@ pub struct CanvasView {
     /// Screen points at the bottom of the canvas that something floats
     /// over (the tool dock); a fit leaves them clear.
     pub fit_reserve_bottom: f32,
+    /// Screen points on the left and right of the canvas that a card
+    /// (the Inspector) floats over. While the whole sheet is in view the
+    /// view is panned so the sheet is not covered, and panned back when the
+    /// card goes.
+    pub card_room: [f32; 2],
+    /// The pan made for the card: the view it left and the points moved.
+    card_shift: Option<CardShift>,
     /// The last fit, until the person moves the view or a few frames pass:
     /// panels that open or resize after the first frame change the canvas
     /// size, and the fit is redone for the new size.
@@ -305,6 +312,16 @@ pub struct CanvasView {
     /// What to bring into view; see [`Self::reveal`].
     reveal_pending: Option<PendingReveal>,
     stats: FrameStats,
+}
+
+/// A pan that kept the sheet clear of a card, so it can be undone.
+#[derive(Debug, Clone, Copy)]
+struct CardShift {
+    room: [f32; 2],
+    /// The view (centre, zoom) the card found.
+    before: (Vec2, f32),
+    /// The view after: a different one means the person moved it.
+    after: (Vec2, f32),
 }
 
 /// Numbers for a status bar or a performance overlay.
@@ -469,6 +486,8 @@ impl CanvasView {
             right_drag: None,
             fit_pending: Some(Fit::Content),
             fit_reserve_bottom: 0.0,
+            card_room: [0.0; 2],
+            card_shift: None,
             fit_settle: None,
             reveal_pending: None,
             reveal_zoom: 4.0,
@@ -575,6 +594,66 @@ impl CanvasView {
     /// Brings the scene into view: the whole of it, or on a page the
     /// drawing alone (never closer than [`FIT_CONTENT_MAX_ZOOM`], so a lone
     /// symbol is not blown up to fill the screen).
+    /// Keeps the sheet clear of the card over the canvas edge: when the whole
+    /// sheet is in view and the card covers part of it, the view is fitted
+    /// into the free part beside the card (never closer than before). The
+    /// earlier view comes back when the card goes, unless the person moved
+    /// the view in between.
+    fn make_room_for_card(&mut self, scene: &Scene) {
+        const EDGE: f32 = 44.0;
+        if let Some(shift) = self.card_shift {
+            let untouched = (self.viewport.center - shift.after.0).abs().max_element()
+                * self.viewport.zoom
+                <= 1.0
+                && self.viewport.zoom == shift.after.1;
+            if untouched && shift.room != self.card_room {
+                (self.viewport.center, self.viewport.zoom) = shift.before;
+            }
+            if !untouched || shift.room != self.card_room {
+                self.card_shift = None;
+            } else {
+                return;
+            }
+        }
+        let [left, right] = self.card_room;
+        let Some(sheet) = scene.sheet().map(|s| s.rect) else {
+            return;
+        };
+        if (left <= 0.0 && right <= 0.0) || sheet.is_empty() {
+            return;
+        }
+        let size = self.viewport.size;
+        let lo = self.viewport.world_to_screen(sheet.min);
+        let hi = self.viewport.world_to_screen(sheet.max);
+        // Only a view that shows the whole sheet is arranged around the card.
+        if lo.x < 0.0 || hi.x > size.x || lo.y < 0.0 || hi.y > size.y {
+            return;
+        }
+        let covered = if right > 0.0 {
+            hi.x > size.x - right
+        } else {
+            lo.x < left
+        };
+        if !covered {
+            return;
+        }
+        let before = (self.viewport.center, self.viewport.zoom);
+        let free = (size.x - left - right - 2.0 * EDGE).max(1.0);
+        let sheet_w = (sheet.max.x - sheet.min.x).max(f32::EPSILON);
+        let zoom = self.viewport.zoom.min(free / sheet_w);
+        // The sheet's centre goes to the middle of the free strip.
+        let strip_mid = left + (size.x - left - right) * 0.5;
+        let sheet_mid = (sheet.min + sheet.max) * 0.5;
+        self.viewport.zoom = zoom;
+        self.viewport.center.x = sheet_mid.x - (strip_mid - size.x * 0.5) / zoom;
+        self.viewport.center.y = sheet_mid.y;
+        self.card_shift = Some(CardShift {
+            room: self.card_room,
+            before,
+            after: (self.viewport.center, zoom),
+        });
+    }
+
     fn fit_scene(&mut self, scene: &Scene, kind: Fit) {
         let reserve = self
             .fit_reserve_bottom
@@ -673,6 +752,7 @@ impl CanvasView {
         if rect.width() > 1.0
             && let Some(kind) = self.fit_pending.take()
         {
+            self.card_shift = None;
             self.fit_scene(scene, kind);
             self.fit_settle = Some(FitSettle::of(kind, &self.viewport, self.fit_reserve_bottom));
         } else {
@@ -681,6 +761,7 @@ impl CanvasView {
                 || ui.input(|i| i.smooth_scroll_delta != egui::Vec2::ZERO || i.zoom_delta() != 1.0);
             self.settle_fit(scene, moved);
         }
+        self.make_room_for_card(scene);
         if rect.width() > 1.0
             && let Some(mut pending) = self.reveal_pending.take()
         {
@@ -1938,6 +2019,44 @@ mod tests {
         assert!(bottom <= 600.0 - 80.0 + 0.5, "sheet bottom at {bottom}");
         let top = view.viewport.world_to_screen(Vec2::ZERO).y;
         assert!(top >= 0.0);
+    }
+
+    #[test]
+    fn a_card_over_the_edge_gets_the_sheet_panned_clear_and_back() {
+        let scene = page_scene();
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(1000.0, 700.0);
+        view.viewport.zoom = 2.0;
+        // The whole sheet (840 x 594 points) in view, centred.
+        view.viewport.center = Vec2::new(210.0, 148.5);
+        let before = view.viewport.center;
+        view.card_room = [0.0, 344.0];
+        view.make_room_for_card(&scene);
+        let right = view.viewport.world_to_screen(Vec2::new(420.0, 0.0)).x;
+        let left = view.viewport.world_to_screen(Vec2::ZERO).x;
+        assert!(right <= 1000.0 - 344.0 + 0.5, "sheet right edge at {right}");
+        assert!(left >= 0.0, "sheet kept in view, left edge at {left}");
+        assert!(view.viewport.zoom <= 2.0);
+        view.card_room = [0.0, 0.0];
+        view.make_room_for_card(&scene);
+        assert!((view.viewport.center - before).length() < 0.01);
+        assert!(view.card_shift.is_none());
+    }
+
+    #[test]
+    fn a_view_the_person_moved_is_not_panned_back() {
+        let scene = page_scene();
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(1000.0, 700.0);
+        view.viewport.zoom = 2.0;
+        view.viewport.center = Vec2::new(210.0, 148.5);
+        view.card_room = [0.0, 344.0];
+        view.make_room_for_card(&scene);
+        view.viewport.center.x += 50.0;
+        let moved = view.viewport.center;
+        view.card_room = [0.0, 0.0];
+        view.make_room_for_card(&scene);
+        assert_eq!(view.viewport.center, moved);
     }
 
     #[test]
