@@ -111,16 +111,34 @@ pub struct WireCutJob {
 pub struct CableRun {
     pub cable: CableId,
     pub tag: String,
-    /// Cores of this cable that are wires to cut.
+    /// Cores of this cable that are wires to cut (a core drawn in several
+    /// pieces counts once).
     pub cores: usize,
     /// The cable as bought, in millimetres: its stated length, else the
     /// longest core's length.
     pub length_mm: f64,
+    /// Whether the cable states its length (Length (m) in its properties);
+    /// otherwise `length_mm` is an estimate from the longest core.
+    pub stated: bool,
+}
+
+impl CableRun {
+    /// Metres to buy, rounded up to 0.1 m (as in the bench cut list and the
+    /// wire production workbook).
+    pub fn metres(&self) -> f64 {
+        (self.length_mm / 1000.0 * 10.0).ceil() / 10.0
+    }
+
+    /// `stated` or `estimated`, for the Length basis column.
+    pub fn basis(&self) -> &'static str {
+        if self.stated { "stated" } else { "estimated" }
+    }
 }
 
 /// The cables the jobs are cores of, one entry each, in tag order.
 pub fn cable_runs(project: &Project, jobs: &[WireCutJob]) -> Vec<CableRun> {
     let mut runs: BTreeMap<CableId, CableRun> = BTreeMap::new();
+    let mut cores: BTreeMap<CableId, std::collections::BTreeSet<usize>> = BTreeMap::new();
     for j in jobs {
         let Some(id) = j.cable else { continue };
         let Some(cable) = project.cable(id) else {
@@ -135,8 +153,25 @@ pub fn cable_runs(project: &Project, jobs: &[WireCutJob]) -> Vec<CableRun> {
             tag: cable.tag.to_string(),
             cores: 0,
             length_mm: stated.unwrap_or(0.0),
+            stated: stated.is_some(),
         });
-        run.cores += 1;
+        // Distinct cores; a connection with no core index counts as one.
+        let seen = cores.entry(id).or_default();
+        let indexes: Vec<usize> = j
+            .wires
+            .iter()
+            .filter_map(|w| project.core_of_wire(*w))
+            .filter(|(c, _)| *c == id)
+            .map(|(_, i)| i)
+            .collect();
+        if indexes.is_empty() {
+            run.cores += 1;
+        }
+        for i in indexes {
+            if seen.insert(i) {
+                run.cores += 1;
+            }
+        }
         if stated.is_none() {
             run.length_mm = run.length_mm.max(j.length_mm);
         }
@@ -318,13 +353,14 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
 }
 
 /// The cable a connection's wires are cores of: the one with the longest
-/// stated length, else the first. A connection is a core of a cable when any
+/// stated length, else the first one found. A connection is a core of a cable when any
 /// of its wires is; this is the one definition of "is a cable core".
 fn cable_of(project: &Project, wires: &[&novo_core::Wire]) -> Option<CableId> {
     let len = |c: &CableId| project.cable(*c).and_then(|c| c.length_m).unwrap_or(0.0);
     wires
         .iter()
         .filter_map(|w| project.cable_of_wire(w.id))
+        .rev()
         .max_by(|a, b| len(a).total_cmp(&len(b)))
 }
 
@@ -632,16 +668,18 @@ impl Report for WireCut {
                         "Cables",
                         vec![
                             Column::new("cable", "Cable", 14.0),
-                            Column::new("cores", "Cores to cut", 12.0).right(),
-                            Column::new("metres", "Metres", 12.0).right(),
+                            Column::new("cores", "Cores used", 12.0).right(),
+                            Column::new("metres", "Metres to buy", 14.0).right(),
+                            Column::new("basis", "Length basis", 12.0),
                         ],
                     );
                     for r in runs {
                         cables.push(
                             vec![
-                                Cell::text(r.tag),
+                                Cell::text(r.tag.clone()),
                                 Cell::Int(r.cores as i64),
-                                Cell::Number((r.length_mm / 1000.0 * 100.0).ceil() / 100.0),
+                                Cell::Number(r.metres()),
+                                Cell::text(r.basis()),
                             ],
                             vec![r.cable.into()],
                         );

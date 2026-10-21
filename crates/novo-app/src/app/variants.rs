@@ -77,6 +77,37 @@ struct Shown {
     configuration: Configuration,
     difference: Option<Difference>,
     findings: Vec<Finding>,
+    /// Heat inside the cabinets with the current choice, and with the
+    /// variant it is compared with.
+    heat: Option<CabinetHeat>,
+    heat_other: Option<CabinetHeat>,
+}
+
+/// The sum of the device losses inside the cabinets of one choice.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct CabinetHeat {
+    /// Watts at the load factors the parts and devices carry.
+    pub watts: f64,
+    /// Cabinet devices with no loss figure (counted as 0 W).
+    pub without_figure: usize,
+}
+
+/// Heat inside the cabinets when the machine is built as `assignment`: the
+/// sum of the losses the parts carry (`power_loss_w`), as the Cabinet
+/// sizing reads them. A model of the heat the devices put in, not of the
+/// temperature; the Heat view does that.
+pub(super) fn cabinet_heat(project: &Project, assignment: &Assignment) -> Option<CabinetHeat> {
+    let made = options::variant_project(project, assignment).ok()?;
+    let (mut watts, mut without_figure) = (0.0, 0);
+    for structure in made.structures().filter(|s| s.enclosure) {
+        let devices = novo_layout::sizing_model::sizing_devices(&made, structure.id);
+        watts += novo_layout::sizing::total_loss(&devices);
+        without_figure += devices.iter().filter(|d| d.power_loss <= 0.0).count();
+    }
+    Some(CabinetHeat {
+        watts,
+        without_figure,
+    })
 }
 
 /// The Generate window while it is open.
@@ -182,6 +213,11 @@ impl NovoApp {
                 configuration: options::configuration(&project, &current),
                 difference,
                 findings: options::lint(&project),
+                heat: cabinet_heat(&project, &current),
+                heat_other: (!win.compare.is_empty())
+                    .then(|| options::variant_assignment(&project, &win.compare).ok())
+                    .flatten()
+                    .and_then(|other| cabinet_heat(&project, &other)),
             });
         }
         if win.page_condition_for != page {
@@ -200,6 +236,20 @@ impl NovoApp {
         let mut page_condition: Option<Option<String>> = None;
         let mut device_condition: Option<Option<String>> = None;
         let mut export_variant = false;
+        let mut tie: Option<(OptionDef, Value)> = None;
+        let mut untie = false;
+        let targets = self.tie_targets();
+        let nothing_selected = self.selection().is_empty();
+        let tie_words = self.targets_words(&targets);
+        let tie_words = if nothing_selected && !tie_words.is_empty() {
+            format!("Nothing is selected, so this acts on {tie_words}")
+        } else {
+            tie_words
+        };
+        let tie_state = targets
+            .first()
+            .and_then(|t| options::describe_condition(&project, *t))
+            .unwrap_or_else(|| "always appears".to_owned());
         let mut open = true;
 
         super::panel::dialog(ctx, "Project options and variants", [560.0, 640.0])
@@ -209,7 +259,8 @@ impl NovoApp {
                     novo_theme::widgets::section_label(ui, "Options");
                     ui.weak(
                         "What this machine can have. Pages and devices tied to an option appear in \
-the documents only when it is on; the working project always keeps everything.",
+the documents only when it is on; the working project always keeps everything, and the \
+Schematic and Cabinet always show everything.",
                     );
                     if defs.is_empty() {
                         ui.add_space(4.0);
@@ -341,6 +392,34 @@ opt.conveyor, or opt.supply == '480V' && !opt.compact. Empty means always.",
                         ui.weak("Select a device on the drawing to give it a condition too.");
                     }
 
+                    ui.add_space(6.0);
+                    ui.strong("Tie the selection");
+                    ui.weak(format!(
+                        "{} now: {}. Pick the answer the selection needs; the selected \
+devices and wires (or the page, when nothing is selected) then appear only with it.",
+                        tie_words, tie_state
+                    ));
+                    ui.horizontal_wrapped(|ui| {
+                        for def in &defs {
+                            for (label, value) in tie_choices(def) {
+                                if ui
+                                    .small_button(label)
+                                    .on_hover_text(format!("Only while {} is this", def.label()))
+                                    .clicked()
+                                {
+                                    tie = Some((def.clone(), value));
+                                }
+                            }
+                        }
+                        if ui
+                            .small_button("Always")
+                            .on_hover_text("Remove the condition: it appears in every variant")
+                            .clicked()
+                        {
+                            untie = true;
+                        }
+                    });
+
                     if let Some(shown) = &win.shown {
                         ui.separator();
                         configuration_section(ui, shown, &win.compare);
@@ -418,6 +497,12 @@ opt.conveyor, or opt.supply == '480V' && !opt.compact. Empty means always.",
                 options::set_condition(tx, device, change.as_deref())
             });
         }
+        if let Some((def, value)) = tie {
+            self.tie_selection(&def, &value);
+        }
+        if untie {
+            self.untie_command();
+        }
         if export_variant {
             self.export_variant_pdf(None);
         }
@@ -462,7 +547,7 @@ opt.conveyor, or opt.supply == '480V' && !opt.compact. Empty means always.",
             },
             None => (options::current(&project), "current".to_owned()),
         };
-        let made = match options::variant_project(&project, &assignment) {
+        let made = match options::machine_project(&project, &assignment) {
             Ok(p) => p,
             Err(e) => {
                 self.message(Level::Error, format!("Export variant: {e}"));
@@ -1011,6 +1096,29 @@ fn configuration_section(ui: &mut egui::Ui, shown: &Shown, compare: &str) {
             |_| {},
         );
     }
+    if let Some(h) = shown.heat {
+        let mut text = format!(
+            "Heat inside the cabinets: {:.0} W of device losses",
+            h.watts
+        );
+        if let Some(other) = shown.heat_other {
+            text.push_str(&format!(
+                " ({:+.0} W against {compare})",
+                h.watts - other.watts
+            ));
+        }
+        ui.label(text).on_hover_text(
+            "The sum of the loss figures of the parts in the cabinets, as the Cabinet sizing \
+             reads them. It is what the devices put in, not a temperature: the Heat view \
+             works that out.",
+        );
+        if h.without_figure > 0 {
+            ui.weak(format!(
+                "{} cabinet devices have no loss figure and count as 0 W",
+                h.without_figure
+            ));
+        }
+    }
     ui.collapsing("Pages", |ui| {
         for p in &c.pages {
             let mark = if p.active { "●" } else { "○" };
@@ -1041,6 +1149,24 @@ fn configuration_section(ui: &mut egui::Ui, shown: &Shown, compare: &str) {
         for ((maker, order), before, after) in &d.bom_changes {
             ui.label(format!("{maker} {order}: {before} → {after}"));
         }
+    }
+}
+
+/// The answers an object can be tied to: both answers of a yes/no option
+/// and every choice; a number is typed as a condition.
+fn tie_choices(def: &OptionDef) -> Vec<(String, Value)> {
+    match def.spec.kind {
+        ParamKind::Bool => vec![
+            (def.label().to_owned(), Value::Bool(true)),
+            (format!("no {}", def.label()), Value::Bool(false)),
+        ],
+        ParamKind::Choice => def
+            .spec
+            .choices
+            .iter()
+            .map(|c| (format!("{} {c}", def.label()), Value::Text(c.clone())))
+            .collect(),
+        _ => Vec::new(),
     }
 }
 

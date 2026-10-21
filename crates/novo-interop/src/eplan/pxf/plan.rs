@@ -55,7 +55,11 @@ impl Default for PxfOptions {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct NewPage {
+    /// The page number with its suffix (`1`, `12a`); the structure and the
+    /// title are kept apart from it.
     name: String,
+    title: String,
+    structure: DeviceTag,
     /// Index in the file's pages.
     source: usize,
 }
@@ -153,7 +157,10 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         .map(|d| d.tag.to_string())
         .chain(project.cables().map(|c| c.tag.to_string()))
         .collect();
-    let have_page: BTreeSet<String> = project.pages().map(|p| p.name.clone()).collect();
+    let have_page: BTreeSet<(String, String)> = project
+        .pages()
+        .map(|p| (p.structure.to_string(), p.name.clone()))
+        .collect();
 
     let mut existing = Vec::new();
     let mut unreadable = 0usize;
@@ -185,7 +192,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
 
     // Pages: one empty page per EPLAN page.
     let mut pages = Vec::new();
-    let mut page_names = BTreeSet::new();
+    let mut page_names: BTreeSet<(String, String)> = BTreeSet::new();
     let mut pages_existing = 0usize;
     let mut report_pages = 0usize;
     for (pi, p) in file.pages.iter().enumerate() {
@@ -193,16 +200,29 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             report_pages += 1;
             continue;
         }
-        let title = p.title.get(&opts.lang);
-        let name = if title.is_empty() {
-            p.label()
-        } else {
-            format!("{} {title}", p.label())
-        };
-        if have_page.contains(&name) || !page_names.insert(name.clone()) {
+        let function = p.function.trim_start_matches('=');
+        let location = p.location.trim_start_matches('+');
+        let mut structure = String::new();
+        if !function.is_empty() {
+            structure.push('=');
+            structure.push_str(function);
+        }
+        if !location.is_empty() {
+            structure.push('+');
+            structure.push_str(location);
+        }
+        let structure = DeviceTag::parse(&structure).unwrap_or_default();
+        let name = format!("{}{}", p.number, p.suffix);
+        let key = (structure.to_string(), name.clone());
+        if have_page.contains(&key) || !page_names.insert(key) {
             pages_existing += 1;
         } else {
-            pages.push(NewPage { name, source: pi });
+            pages.push(NewPage {
+                name,
+                title: p.title.get(&opts.lang).to_string(),
+                structure,
+                source: pi,
+            });
         }
     }
 
@@ -275,11 +295,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                         description: d.type_text.get(&opts.lang).to_string(),
                         kind: DeviceKind::General,
                         manufacturer: manufacturer.to_string(),
-                        order_number: if d.part_number.is_empty() {
-                            String::new()
-                        } else {
-                            d.part_number.clone()
-                        },
+                        order_number: type_number.to_string(),
                         type_number: type_number.to_string(),
                         terminals: Vec::new(),
                     });
@@ -475,9 +491,23 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             file.texts.len() - texts.len(),
             "empty, or on a page that is not drawn",
         );
+        let mut drawn = vec![format!("{} circuit-diagram pages", st.pages)];
+        for (n, what) in [
+            (st.library_symbols, "symbols from KoperCAD's library"),
+            (st.box_symbols, "devices drawn as labelled boxes"),
+            (
+                st.interruptions,
+                "interruption points (links between pages)",
+            ),
+            (st.wires, "wires"),
+        ] {
+            if n > 0 {
+                drawn.push(format!("{n} {what}"));
+            }
+        }
         report.note(format!(
-            "Drawn: {} circuit-diagram pages, {} symbols from KoperCAD's library, {} as labelled boxes, {} interruption points, {} nets joined by EPLAN's rules into {} wires. Symbol artwork is inferred (a box where no KoperCAD symbol fits); positions, pin counts, tags and which points are one net are read from the file. Wires follow the runs and nodes the file implies where it has them; the rest are plain right-angle runs.",
-            st.pages, st.library_symbols, st.box_symbols, st.interruptions, st.nets, st.wires
+            "Drawn: {}. The picture of each symbol is KoperCAD's nearest match (a box where none fits); positions, pin counts, tags and which points are one net come from the file, so the nets are the ones EPLAN has. Wire corners follow the file where it has them; other wires are plain right-angle runs.",
+            drawn.join(", ")
         ));
         if !st.box_functions.is_empty() {
             let list: Vec<String> = st
@@ -726,6 +756,10 @@ impl PxfPlan {
             let mut page_ids = BTreeMap::new();
             for p in &self.pages {
                 let id = tx.add_page(p.name.clone())?;
+                tx.update::<novo_core::Page>(id, |page| {
+                    page.title = p.title.clone();
+                    page.structure = p.structure.clone();
+                })?;
                 page_ids.insert(p.source, id);
                 created += 1;
                 if let Some(g) = self.graphics.get(&p.source) {

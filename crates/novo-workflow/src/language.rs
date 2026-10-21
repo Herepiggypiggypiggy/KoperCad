@@ -213,6 +213,21 @@ pub const DUTCH: &[Aliases] = &[
         &["uitvoering", "configuratie"],
     ),
     nl(
+        "project.option",
+        &["optie"],
+        &["optie schakelen", "met zonder", "machineoptie"],
+    ),
+    nl(
+        "project.tie",
+        &["koppel"],
+        &["koppel aan optie", "alleen met"],
+    ),
+    nl(
+        "project.untie",
+        &["ontkoppel"],
+        &["altijd tonen", "voorwaarde weg"],
+    ),
+    nl(
         "project.generate",
         &["genereer"],
         &["genereren", "specificatielijst", "uit excel"],
@@ -1016,6 +1031,11 @@ pub const DUTCH: &[Aliases] = &[
         &["exporteer werkplaatspakket", "werkplaatspakket"],
         &["werkplaats", "boormal", "snijlijst"],
     ),
+    nl(
+        "export.safety_sheets",
+        &["exporteer veiligheidsfuncties", "veiligheidsfunctiebladen"],
+        &["veiligheidsfunctie", "technisch dossier"],
+    ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
     nl(
         "cabinet.place-all",
@@ -1119,6 +1139,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.spec",
         &["exporteer specificatie"],
         &["specificatielijst exporteren"],
+    ),
+    nl(
+        "plc.import_list",
+        &["importeer io lijst", "importeer signaallijst"],
+        &["io lijst", "signaallijst", "plc kaarten", "pagina's"],
     ),
     nl(
         "plc.import_tags",

@@ -69,6 +69,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `expect "text"`, `expect_not "text"` | a label or value containing the text is (not) in the widget tree; a miss is a finding (S3) |
 | `expect_enabled "Label"`, `expect_disabled "Label"` | the control with this label (icon glyphs ignored) is enabled / disabled; a miss is a finding |
 | `expect_scene "text"` | the project data dump (`scene`) contains the text: checks the canvas without reading pixels |
+| `@env NAME=VALUE` (header) | start the app with this environment variable; Ask Claude scenarios use `KOPERCAD_AI_REPLAY=qa/replay/<file>.json` (a JSON list of Messages API replies used in order, nothing is sent) with a dummy `ANTHROPIC_API_KEY` |
 | `check_layout` | cheap layout checks, see below |
 | `check_blank [label]` | takes a screenshot; finding S2 when the window is one flat colour |
 | `tree [filter]` | write the labelled widgets to `logs/` (for authors: find the right label) |

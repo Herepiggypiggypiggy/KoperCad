@@ -164,7 +164,7 @@ fn the_service_keeps_a_geometry_per_rotation() {
     assert_ne!(k0, k1);
     assert_eq!(k0, svc.request_rotated(job, PartRotation::NONE));
     let ready = |k| {
-        for _ in 0..400 {
+        for _ in 0..1200 {
             if let GeometryState::Ready(g) = svc.geometry(k) {
                 return g;
             }

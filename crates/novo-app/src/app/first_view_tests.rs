@@ -6,7 +6,7 @@ use super::gate1_tests::Drive;
 use crate::actions::Action;
 
 #[test]
-fn the_example_opens_with_the_whole_width_of_its_sheet_in_view_at_1366() {
+fn the_example_opens_with_the_whole_sheet_in_view_at_1366() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
@@ -24,6 +24,14 @@ fn the_example_opens_with_the_whole_width_of_its_sheet_in_view_at_1366() {
         lo.x,
         hi.x,
         vp.size.x
+    );
+    // The foot too: the title block and the revision row are in it.
+    assert!(
+        lo.y >= 0.0 && hi.y <= vp.size.y,
+        "the sheet spans {}..{} of {} down",
+        lo.y,
+        hi.y,
+        vp.size.y
     );
 }
 

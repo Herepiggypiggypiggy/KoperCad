@@ -155,10 +155,12 @@ impl NovoApp {
         let Some(page) = self.current_page else {
             return;
         };
-        let Some(doc) = self.backend.document() else {
-            return;
+        let sheet = self.wb.sheet;
+        // The generated pages show the current choice of the machine.
+        let content = match self.machine_reports() {
+            Some((reports, project)) => reports.content(&project, page, sheet),
+            None => return,
         };
-        let content = self.wb.reports.content(doc.project(), page, self.wb.sheet);
         if let Some(view) = self.canvas.schematic() {
             view.set_sheet(content);
         }

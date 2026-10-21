@@ -55,6 +55,8 @@ pub(crate) struct Workbench {
     pub(super) preview_art: Option<novo_editor::art::LibraryArt>,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
+    /// The machine as the current choice of options (copy and its reports).
+    pub(super) machine: super::machine::Machine,
     /// The place wheel, when open.
     pub(super) wheel: Option<super::wheel::Wheel>,
     /// A key that opens the wheel went down at this time (egui seconds),
@@ -68,6 +70,8 @@ pub(crate) struct Workbench {
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// The PLC tag import preview (file name and plan), waiting for Enter or Esc.
     pub(super) plc_import: Option<(String, novo_plc::link::ImportPlan)>,
+    /// The I/O list review (file name, plan), waiting for Enter or Esc.
+    pub(super) plc_list: Option<super::plc_list::ListImport>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
     /// The shortcut sheet (`?`).
@@ -264,12 +268,14 @@ impl Default for Workbench {
             xref: LiveXref::default(),
             preview_art: None,
             reports: Default::default(),
+            machine: Default::default(),
             wheel: None,
             place_hold: None,
             place_latch: None,
             queued: Vec::new(),
             renumber: None,
             plc_import: None,
+            plc_list: None,
             preferences: false,
             shortcuts: Default::default(),
             macros: Default::default(),
@@ -459,6 +465,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.assembly",
     "export.handover",
     "export.workshop",
+    "export.safety_sheets",
     "export.sheets",
     "export.sheets_csv",
     "export.wirecut",
@@ -549,6 +556,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "plc.to_plc",
     "plc.renumber_io",
     "plc.import_tags",
+    "plc.import_list",
     "export.plc_csv",
     "export.plc_plcopen",
     "export.plc_tia",
@@ -585,6 +593,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "macro.export_pack",
     "project.options",
     "project.variant",
+    "project.option",
+    "project.tie",
+    "project.untie",
     "project.generate",
     "export.variant_pdf",
     "export.spec",
@@ -1264,6 +1275,9 @@ impl NovoApp {
             "export.assembly" => {
                 self.export_assembly();
             }
+            "export.safety_sheets" => {
+                self.export_safety_sheets();
+            }
             "export.handover" => self.ask_handover(),
             "export.workshop" => {
                 self.export_workshop();
@@ -1345,6 +1359,7 @@ impl NovoApp {
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
             "plc.import_tags" => self.plc_import_tags(),
+            "plc.import_list" => self.plc_import_list(),
             "export.plc_csv" => {
                 self.export_plc(LinkFormat::Csv);
             }
@@ -1395,6 +1410,9 @@ impl NovoApp {
             "macro.export_pack" => self.macro_export_pack(),
             "project.options" => self.open_options(),
             "project.variant" => self.switch_variant(argument),
+            "project.option" => self.option_command(argument),
+            "project.tie" => self.tie_command(argument),
+            "project.untie" => self.untie_command(),
             "project.generate" => self.open_generate(),
             "export.variant_pdf" => {
                 self.export_variant_pdf(argument);

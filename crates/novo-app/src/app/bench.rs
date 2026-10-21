@@ -201,14 +201,14 @@ impl NovoApp {
             );
             return None;
         }
-        let name = self.project_name().unwrap_or_default();
-        let project = self.backend.document()?.project();
-        let jobs = wire_cut_jobs_with(project, &inputs.standard);
+        let name = self.machine_title().unwrap_or_default();
+        let project = self.machine()?;
+        let jobs = wire_cut_jobs_with(&project, &inputs.standard);
         if jobs.is_empty() {
             self.message(Level::Info, "No wires to cut yet: connect two device pins");
             return None;
         }
-        let report = BenchCut::build(project, &jobs);
+        let report = BenchCut::build(&project, &jobs);
         let options = pdf_options(
             format!("{name}  Bench cut list"),
             report.sections.iter().map(|s| s.key.clone()),
@@ -244,8 +244,8 @@ impl NovoApp {
             );
             return None;
         }
-        let project = self.backend.document()?.project();
-        let jobs = wire_cut_jobs_with(project, &inputs.standard);
+        let project = self.machine()?;
+        let jobs = wire_cut_jobs_with(&project, &inputs.standard);
         if jobs.is_empty() {
             self.message(Level::Info, "No wires to cut yet: connect two device pins");
             return None;
@@ -273,10 +273,10 @@ impl NovoApp {
             );
             return None;
         }
-        let name = self.project_name().unwrap_or_default();
-        let project = self.backend.document()?.project();
-        let jobs = wire_cut_jobs_with(project, &inputs.standard);
-        let report = FerruleTable::build(project, &jobs, &inputs.standard);
+        let name = self.machine_title().unwrap_or_default();
+        let project = self.machine()?;
+        let jobs = wire_cut_jobs_with(&project, &inputs.standard);
+        let report = FerruleTable::build(&project, &jobs, &inputs.standard);
         if report.section("ferrules").is_none() {
             let (unknown, off) = novo_reports::ends_without_ferrule(&jobs);
             let why = if jobs.is_empty() {
@@ -304,8 +304,8 @@ impl NovoApp {
 
     /// The label run for the current settings.
     fn label_run(&self, inputs: &Inputs) -> Option<(LabelRun, usize)> {
-        let project = self.backend.document()?.project();
-        let report = Labels.generate(project);
+        let project = self.machine()?;
+        let report = Labels.generate(&project);
         let items = label_items(&report, &inputs.labels.kinds);
         let count = items.len();
         Some((layout_labels(&items, &inputs.labels), count))
@@ -331,7 +331,7 @@ impl NovoApp {
             self.message(Level::Info, "No labels to print for the chosen kinds yet");
             return None;
         }
-        let name = self.project_name().unwrap_or_default();
+        let name = self.machine_title().unwrap_or_default();
         let bytes = novo_pdf::export_layouts_pdf(&run.pages, &format!("{name}  Labels"), &[]);
         let mut what = format!("{} labels on {} {}", run.labels, run.pages.len(), {
             if run.per_page > 1 {
@@ -369,10 +369,10 @@ impl NovoApp {
         let Some(inputs) = self.bench_inputs() else {
             return Vec::new();
         };
-        let Some(project) = self.backend.document().map(|d| d.project()) else {
+        let Some(project) = self.machine() else {
             return Vec::new();
         };
-        let report = Labels.generate(project);
+        let report = Labels.generate(&project);
         let kinds: Vec<String> = if inputs.labels.kinds.is_empty() {
             Labels::KINDS.iter().map(|k| (*k).to_owned()).collect()
         } else {
@@ -410,10 +410,13 @@ impl NovoApp {
         let Some(mut state) = self.wb.bench.take() else {
             return;
         };
-        let Some(project) = self.backend.document().map(|d| d.project()) else {
+        // The bench pack describes the machine of the current choice.
+        let generation = self.machine_generation();
+        let Some(machine) = self.machine() else {
             return;
         };
-        let revision = project.revision();
+        let project: &novo_core::Project = &machine;
+        let revision = project.revision() ^ (generation << 40);
         let stale = state
             .cache
             .as_ref()
@@ -678,10 +681,15 @@ fn cut_tab(
     ));
     for run in &cache.cables {
         ui.label(format!(
-            "Cable {}: {:.1} m, once ({} cores cut from it)",
+            "Cable {}: {:.1} m to buy{}; {} cut from it",
             run.tag,
-            run.length_mm / 1000.0,
-            run.cores
+            run.metres(),
+            if run.stated {
+                ""
+            } else {
+                " (estimated: no length stated)"
+            },
+            novo_reports::count_text(run.cores, "cores")
         ));
     }
     if estimates > 0 {

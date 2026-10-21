@@ -323,6 +323,8 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
                 el.push(string("Net", name));
                 None
             }
+            // A free symbol (an earth, a lamp) has no owner but is drawn.
+            SymbolRole::Unassigned => None,
             _ => {
                 undrawn += 1;
                 continue;
@@ -381,6 +383,7 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
         let mut members: BTreeSet<(String, String)> = BTreeSet::new();
         // The drawn pins each member stands for.
         let mut drawn_of: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        let mut interruptions: BTreeSet<(String, String)> = BTreeSet::new();
         for end in &net.endpoints {
             let Endpoint::Pin { symbol, pin } = *end else {
                 continue;
@@ -419,11 +422,22 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
                         unresolved += 1;
                     }
                 }
+                // An interruption point is a drawn pin of its own: the net
+                // point links to it so a reader sees the page-to-page
+                // continuation as drawn and adds none of its own.
+                SymbolRole::Interruption { name } => {
+                    if let Some(d) = on_page {
+                        interruptions.insert((d, name.clone()));
+                    }
+                }
                 _ => unresolved += 1,
             }
         }
         if members.len() < 2 {
             continue;
+        }
+        for (d, name) in interruptions {
+            members.insert((d, name));
         }
         let potential = net
             .potential()
