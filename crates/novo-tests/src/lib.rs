@@ -7,10 +7,12 @@
 //! fixtures as a dev-dependency.
 
 pub mod big;
+pub mod distribution;
 pub mod motor_starter;
 pub mod stress;
 
 pub use big::{Big, BigSpec, big_project};
+pub use distribution::{Board, distribution_board, distribution_board_in, distribution_board_wide};
 pub use motor_starter::{
     MotorStarter, motor_starter, motor_starter_in, motor_starter_with_changes,
 };

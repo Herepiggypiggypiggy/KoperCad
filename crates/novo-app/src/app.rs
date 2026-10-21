@@ -176,6 +176,9 @@ mod sheet_import;
 mod sheets;
 mod shortcuts_sheet;
 mod simulate;
+mod single_line_view;
+#[cfg(test)]
+mod single_line_view_tests;
 mod sizing;
 mod standards;
 mod standards_report;
@@ -514,6 +517,7 @@ pub struct NovoApp {
     panel_pending: Option<std::collections::BTreeMap<String, [i32; 2]>>,
     cabinet: cabinet::CabinetState,
     reports_view: reports_view::ReportsView,
+    single_line_view: single_line_view::SingleLineView,
     view3d: view3d::View3dMode,
     /// The "Size the enclosure" panel and the Enclosures list.
     sizing: sizing::SizingState,
@@ -619,6 +623,7 @@ impl NovoApp {
             panel_pending: None,
             cabinet: cabinet::CabinetState::new(),
             reports_view: Default::default(),
+            single_line_view: Default::default(),
             view3d: Default::default(),
             sizing: sizing::SizingState::new(),
             protection: protection::ProtectionState::new(),

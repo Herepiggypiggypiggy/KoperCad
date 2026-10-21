@@ -113,6 +113,7 @@ mod more_rules;
 mod physical;
 pub mod protection;
 pub mod safety;
+pub mod single_line;
 pub mod standards;
 mod waiver;
 

@@ -975,6 +975,11 @@ pub const DUTCH: &[Aliases] = &[
         &["stekkers", "stekkerlijst"],
     ),
     nl(
+        "report.singleline",
+        &["eenlijnschema", "enkelpolig schema"],
+        &["verdeling", "stroomverdeling", "spanningsval"],
+    ),
+    nl(
         "report.add_page",
         &["rapport als pagina toevoegen"],
         &["pagina toevoegen", "tekeningpagina"],

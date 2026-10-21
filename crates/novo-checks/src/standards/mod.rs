@@ -38,14 +38,14 @@ mod ampacity;
 pub mod design;
 pub mod document;
 mod iec60204;
-mod netclass;
+pub(crate) mod netclass;
 mod nfpa79;
 pub mod provenance;
 mod report;
 pub mod rules;
 mod sccr;
 mod shared;
-mod symbols;
+pub(crate) mod symbols;
 mod ul508a;
 
 use std::collections::HashMap;

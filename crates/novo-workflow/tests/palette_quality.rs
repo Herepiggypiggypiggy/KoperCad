@@ -422,3 +422,16 @@ fn live_view_finds_the_live_view_before_any_lesson_about_it() {
         );
     }
 }
+
+#[test]
+fn the_single_line_diagram_is_found_by_what_people_call_it() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in ["single line", "one-line diagram", "voltage drop overview"] {
+        let rows = search(&palette, &keymap, query);
+        let at = position(&rows, "report.singleline");
+        assert!(
+            at.is_some_and(|i| i < 5),
+            "{query:?} does not find the single-line diagram near the top"
+        );
+    }
+}

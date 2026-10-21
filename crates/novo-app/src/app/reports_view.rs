@@ -95,6 +95,7 @@ pub(crate) const REPORT_COMMANDS: &[(&str, &str)] = &[
     ("report.io", "io"),
     ("report.cable_schedule", "cableschedule"),
     ("report.plugs", "plugs"),
+    ("report.singleline", "singleline"),
 ];
 
 impl NovoApp {
@@ -106,7 +107,7 @@ impl NovoApp {
     }
 
     /// The report the workspace shows: the chosen one, else the first.
-    fn report_selected(&mut self) -> Option<String> {
+    pub(super) fn report_selected(&mut self) -> Option<String> {
         let ids: Vec<String> = {
             let (reports, project) = self.machine_reports()?;
             let live = reports.live(&project);
@@ -313,23 +314,30 @@ impl NovoApp {
             ui.weak(set.explanation());
         }
         ui.separator();
+        // The single-line diagram shows its drawing first; its schedule tab
+        // falls through to the table.
+        let drawn = id == novo_reports::SingleLineDiagram::ID && self.single_line_view(ui);
         let lit = self.lit_sources();
-        let clicked = egui::ScrollArea::both()
-            .auto_shrink(false)
-            .show(ui, |ui| {
-                let mut jump = None;
-                for (section, order) in output.sections.iter().zip(&orders) {
-                    if let Some(source) = self.section_table(ui, section, order, &lit) {
-                        jump = Some(source);
+        let clicked = if drawn {
+            None
+        } else {
+            egui::ScrollArea::both()
+                .auto_shrink(false)
+                .show(ui, |ui| {
+                    let mut jump = None;
+                    for (section, order) in output.sections.iter().zip(&orders) {
+                        if let Some(source) = self.section_table(ui, section, order, &lit) {
+                            jump = Some(source);
+                        }
+                        ui.add_space(12.0);
                     }
-                    ui.add_space(12.0);
-                }
-                if output.sections.iter().all(|s| s.rows.is_empty()) {
-                    ui.weak("Nothing to list yet");
-                }
-                jump
-            })
-            .inner;
+                    if output.sections.iter().all(|s| s.rows.is_empty()) {
+                        ui.weak("Nothing to list yet");
+                    }
+                    jump
+                })
+                .inner
+        };
         self.reports_view.reveal = false;
         jump = jump.or(clicked);
         if let Some(format) = export {
@@ -810,6 +818,11 @@ impl NovoApp {
     fn report_pdf_bytes(&mut self, outputs: &[&ReportOutput]) -> Option<Vec<u8>> {
         let output = outputs.first()?;
         let name = self.project_name().unwrap_or_default();
+        if output.report == novo_reports::SingleLineDiagram::ID
+            && self.reports_view.template.is_none()
+        {
+            return self.single_line_pdf(output);
+        }
         let Some(chosen) = self.reports_view.template.clone() else {
             let options = novo_pdf::ReportPdfOptions {
                 title: match outputs {
@@ -1113,6 +1126,7 @@ mod tests {
                 "I/O list",
                 "Cable schedule",
                 "Plug connection list",
+                "Single-line diagram",
             ]
         );
         // The palette still finds a report by the name it used to have.
