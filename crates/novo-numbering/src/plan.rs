@@ -113,8 +113,27 @@ impl Plan {
             .filter(|g| !matches!(g.reason, Reason::Kept | Reason::Locked | Reason::PageLocked))
     }
 
-    /// One line: "12 wires numbered, 3 settled, 40 unchanged".
+    /// One line, past tense: "12 numbered, 3 settled, 40 unchanged".
     pub fn summary(&self) -> String {
+        self.describe(false)
+    }
+
+    /// The same line for a preview, before anything is applied:
+    /// "12 would be numbered, 3 would be settled, 40 unchanged".
+    pub fn preview_summary(&self) -> String {
+        self.describe(true)
+    }
+
+    fn describe(&self, preview: bool) -> String {
+        let (numbered, renumbered, settled) = if preview {
+            (
+                "would be numbered",
+                "would be renumbered",
+                "would be settled",
+            )
+        } else {
+            ("numbered", "renumbered", "settled")
+        };
         let count = |r: Reason| self.groups.iter().filter(|g| g.reason == r).count();
         let (n, h, r) = (
             count(Reason::New),
@@ -124,13 +143,13 @@ impl Plan {
         let kept = count(Reason::Kept) + count(Reason::Locked);
         let mut parts = Vec::new();
         if n > 0 {
-            parts.push(format!("{n} numbered"));
+            parts.push(format!("{n} {numbered}"));
         }
         if r > 0 {
-            parts.push(format!("{r} renumbered"));
+            parts.push(format!("{r} {renumbered}"));
         }
         if h > 0 {
-            parts.push(format!("{h} settled"));
+            parts.push(format!("{h} {settled}"));
         }
         let blocked = count(Reason::Blocked);
         if blocked > 0 {

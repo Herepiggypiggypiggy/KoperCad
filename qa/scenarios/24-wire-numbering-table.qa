@@ -1,4 +1,4 @@
-@title Wire numbering: the Numbers tab lists every net
+@title Wire numbering: the Numbers tab lists every net, type, fix, unlock
 @area Schematic
 # Where it is: Ctrl+K "wire numbering" (Edit > Wires). The Numbers tab shows each net with its
 # number, potential and page; click a number to type another (fixed), Unlock releases it.
@@ -20,7 +20,41 @@ key Enter
 wait 10
 expect "Numbers ("
 expect "Click a number to type another"
+expect "Page.col"
+expect "no number yet"
 shot numbers-tab
+click_text Problems Button
+wait 5
+shot problems-filter
+click_text All Button
+wait 3
+click_text Preview Button
+wait 5
+expect "would be numbered"
+shot preview-tab
 click_text Conflicts Button
 wait 5
+expect "would be numbered"
 shot conflicts-tab
+# Number the wires, then type one number by hand: it is fixed and offers Unlock.
+click_text Numbers Button
+wait 5
+click_text Project Button
+wait 3
+click_text Number Button #2
+wait 15
+shot numbered
+click_text 2 Button
+wait 5
+text 105
+key Enter
+wait 8
+expect "Unlock"
+shot typed-fixed
+click_text Fixed Button
+wait 5
+shot fixed-filter
+click_text Unlock Button
+wait 8
+expect "Wire number unlocked"
+shot unlocked

@@ -61,7 +61,7 @@ pub(crate) struct NumberingWindow {
     filter: Filter,
     order: Order,
     /// The net whose number is being typed, with the text so far.
-    editing: Option<(WireId, String)>,
+    editing: Option<(WireId, String, bool)>,
     scheme: Scheme,
     mode: Mode,
     scope: ScopeChoice,
@@ -350,7 +350,7 @@ impl NovoApp {
                 if win.tab == Tab::Numbers {
                     numbers_ui(ui, &mut win, &shown.plan, &mut reveal, &mut row_edit);
                 } else {
-                    ui.weak(shown.plan.summary());
+                    ui.weak(shown.plan.preview_summary());
                     egui::ScrollArea::vertical()
                         .max_height(200.0)
                         .auto_shrink([false, true])
@@ -529,7 +529,7 @@ fn numbers_ui(
         Order::Potential => rows.sort_by(|a, b| a.potential.cmp(&b.potential)),
     }
     ui.weak(format!(
-        "{} of {} nets. Click a number to type another; it is then fixed.",
+        "{} of {} nets (scope: runs only). Click a number to type another.",
         rows.len(),
         plan.groups.len()
     ));
@@ -538,8 +538,22 @@ fn numbers_ui(
         return;
     }
     let height = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
+    ui.horizontal(|ui| {
+        ui.set_min_height(height);
+        ui.add_sized(
+            [52.0, height],
+            egui::Label::new(egui::RichText::new("Page.col").weak()),
+        )
+        .on_hover_text("Page and column where the net starts; click a row's link to open it");
+        ui.add_sized(
+            [52.0, height],
+            egui::Label::new(egui::RichText::new("Potential").weak()),
+        )
+        .on_hover_text("The potential the net carries (L1, N, PE, ...)");
+        ui.weak("Number");
+    });
     // Leave room for the scheme above and the buttons below on small screens.
-    let room = (ui.ctx().content_rect().height() - 560.0).clamp(90.0, 280.0);
+    let room = (ui.ctx().content_rect().height() - 640.0).clamp(90.0, 280.0);
     egui::ScrollArea::vertical()
         .max_height(room)
         .auto_shrink([false, true])
@@ -555,21 +569,40 @@ fn numbers_ui(
                         *reveal = Some(first);
                     }
                     ui.add_sized(
-                        [44.0, height],
+                        [52.0, height],
                         egui::Label::new(g.potential.as_deref().unwrap_or("")).truncate(),
                     );
                     let shown = if g.old.is_empty() {
-                        "(none)".to_owned()
+                        "no number yet".to_owned()
                     } else {
                         g.old.join(" / ")
                     };
-                    let editing_here = win.editing.as_ref().is_some_and(|(w, _)| *w == first);
+                    let editing_here = win.editing.as_ref().is_some_and(|(w, ..)| *w == first);
                     if editing_here {
-                        let (_, text) = win.editing.as_mut().expect("checked");
-                        let r = ui.add(egui::TextEdit::singleline(text).desired_width(90.0));
-                        r.request_focus();
-                        if r.lost_focus() {
-                            if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                        let (_, text, fresh) = win.editing.as_mut().expect("checked");
+                        let mut out = egui::TextEdit::singleline(text)
+                            .desired_width(90.0)
+                            .show(ui);
+                        let r = out.response.clone();
+                        if std::mem::take(fresh) {
+                            r.request_focus();
+                            // The first frame selects the old number: typing replaces it.
+                            let end = egui::text::CCursor::new(text.chars().count());
+                            out.state
+                                .cursor
+                                .set_char_range(Some(egui::text::CCursorRange::two(
+                                    egui::text::CCursor::new(0),
+                                    end,
+                                )));
+                            out.state.store(ui.ctx(), r.id);
+                        }
+                        let enter = r.has_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                        if r.lost_focus() || enter {
+                            let same = g.old.first().is_some_and(|o| o == text.trim());
+                            if (enter
+                                || r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)))
+                                && !same
+                            {
                                 *edit = Some(RowEdit::Type(first, text.clone()));
                             }
                             win.editing = None;
@@ -578,7 +611,7 @@ fn numbers_ui(
                         ui.label(shown);
                     } else if ui.selectable_label(false, shown.clone()).clicked() {
                         let seed = g.old.first().cloned().unwrap_or_default();
-                        win.editing = Some((first, seed));
+                        win.editing = Some((first, seed, true));
                     }
                     if let Some(rev) = &g.page_lock {
                         ui.weak(format!("page locked ({rev})"));
@@ -639,7 +672,7 @@ fn preview_ui(ui: &mut egui::Ui, plan: &Plan, reveal: &mut Option<WireId>) {
                 }
                 ui.weak(g.potential.as_deref().unwrap_or(""));
                 let old = if g.old.is_empty() {
-                    "(none)".to_owned()
+                    "no number yet".to_owned()
                 } else {
                     g.old.join(" / ")
                 };
