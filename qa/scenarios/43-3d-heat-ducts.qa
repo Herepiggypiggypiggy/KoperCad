@@ -1,0 +1,102 @@
+@title 3D view: Z slice past the cabinet ducts after a finished Quick run
+@area 3D
+@slow
+# Finished-run picture of the example cabinet (horizontal wire ducts, 60 mm high) with the Z slice at 62.5 mm, just past the duct tops: the slice must show no holes where the ducts stand. The picture is for a human; the hole count itself is tested in heat_duct_slice_tests. Needs a release build to finish in minutes.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+expect "Fine. Hottest"
+expect_not "Preliminary"
+move 700 650
+wait 10
+shot heat-finished-slice
+check_blank heat-finished-slice
+check_layout

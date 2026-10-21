@@ -486,9 +486,9 @@ fn duct_note(scn: &Scenario) -> Option<String> {
     Some(format!(
         "{} wire duct{} modelled as slotted, porous block{} {height} high (about half of each \
          side wall open, planning values, not a maker's data): air and heat pass through, the \
-         slice shows them. Slotted against closed ducts changes the device housing temperature \
-         by about 0.1 K in the reference study (tests/duct_compare.rs), a duct against none by \
-         about 1.5 K of 60 K. The heat of the wires inside the ducts is not modelled yet.",
+         slice shows them. In one coarse reference cabinet study (4000 cells, one vented 50 W \
+         cabinet) a duct changed the device housing by about 1.5 K of a 60 K rise and slotted \
+         against closed by about 0.1 K: not a general figure. The heat of the wires inside the ducts is not modelled yet.",
         ducts.len(),
         if ducts.len() == 1 { "" } else { "s" },
         if ducts.len() == 1 { "" } else { "s" },
