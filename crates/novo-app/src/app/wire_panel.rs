@@ -259,6 +259,7 @@ impl NovoApp {
             super::panel::Side::Right,
             INSPECTOR_WIDTH,
         )
+        .above_card()
         .fixed_open()
         .show(ctx, |ui| {
                     ui.heading(if wires.len() > 1 {
