@@ -180,14 +180,14 @@ impl NovoApp {
                 &format!("Drilling template {}", t.tag),
                 &format!("1 Drilling template {} {}.pdf", clean(&t.tag), paper.name()),
                 "Print at 100 % (actual size), then check the 100 mm ruler",
-                "Hole positions from the cabinet layout; about 0.5 mm on paper (not measured)",
+                "Hole positions from the cabinet layout; about 0.5 mm if the check square is 100 mm, else up to 0.2 % (not measured)",
             ));
             if t.cards.is_some() {
                 separate.push(CoverLine::new(
                     &format!("Cut-out cards {}", t.tag),
                     &format!("1 Cut-out cards {}.pdf", clean(&t.tag)),
                     "Print at 100 % (actual size), then check the 50 mm square",
-                    "Sizes and positions from the part data and layout; about 0.5 mm on paper (not measured)",
+                    "Sizes and positions from the part data and layout; about 0.5 mm if the check square is 100 mm, else up to 0.2 % (not measured)",
                 ));
             }
         }

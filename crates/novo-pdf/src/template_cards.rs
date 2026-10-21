@@ -191,7 +191,7 @@ fn scale_check_page() -> Page<'static> {
             A4.0 - 2.0 * PAGE_MARGIN_MM - 24.0,
             2.8,
             &format!(
-                "Good enough: both sides within {} mm of 100 mm (0.2 %: about 1.2 mm over a 600 mm door). Set the percentage in the print dialog as a custom scale, print again and measure again. If width and height differ by more than 0.3 mm the printer stretches one way: print from another program or printer, a percentage cannot repair that.",
+                "Good enough: both sides within {} mm of 100 mm (0.2 %: about 1.2 mm over a 600 mm door). Set the percentage in the print dialog as a custom scale, print again and measure again. If a side is outside that and width and height differ by more than 0.3 mm the printer stretches one way: print from another program or printer, a percentage cannot repair that.",
                 mm(SCALE_TOLERANCE_MM)
             ),
         ) + 2.0;

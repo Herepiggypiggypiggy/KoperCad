@@ -20,7 +20,7 @@ pub const CHECK_SQUARE_MM: f64 = 100.0;
 /// The print is accepted when both sides of the square are within this of
 /// 100 mm (0.2 %: a 1 m door template is then off by 2 mm at most).
 pub const SCALE_TOLERANCE_MM: f64 = 0.2;
-/// Two sides that differ by more than this are a printer that stretches one
+/// Two sides outside the tolerance that differ by more than this are a printer that stretches one
 /// way only; a single scale percentage cannot repair that.
 pub const STRETCH_LIMIT_MM: f64 = 0.3;
 /// Space a card keeps around the outline for the centre-line ticks, mm.
@@ -77,14 +77,14 @@ impl ScaleAdvice {
 /// Judges the measured sides of the printed check square.
 pub fn scale_advice(width_mm: f64, height_mm: f64) -> ScaleAdvice {
     let valid = |v: f64| v.is_finite() && v > 0.0;
+    let within = |v: f64| (v - CHECK_SQUARE_MM).abs() <= SCALE_TOLERANCE_MM + 1e-9;
     let verdict = if !valid(width_mm) || !valid(height_mm) {
         ScaleVerdict::Invalid
+    } else if within(width_mm) && within(height_mm) {
+        // Inside the tolerance is good, whatever the difference between sides.
+        ScaleVerdict::Good
     } else if (width_mm - height_mm).abs() > STRETCH_LIMIT_MM {
         ScaleVerdict::Stretched
-    } else if (width_mm - CHECK_SQUARE_MM).abs() <= SCALE_TOLERANCE_MM
-        && (height_mm - CHECK_SQUARE_MM).abs() <= SCALE_TOLERANCE_MM
-    {
-        ScaleVerdict::Good
     } else {
         let mean = (width_mm + height_mm) / 2.0;
         ScaleVerdict::Rescale {
@@ -228,6 +228,8 @@ mod tests {
     fn exact_square_is_good() {
         assert_eq!(scale_advice(100.0, 100.0).verdict, ScaleVerdict::Good);
         assert_eq!(scale_advice(100.15, 99.9).verdict, ScaleVerdict::Good);
+        // Both sides inside the tolerance but 0.4 apart: still good.
+        assert_eq!(scale_advice(100.2, 99.8).verdict, ScaleVerdict::Good);
     }
 
     #[test]
