@@ -77,6 +77,11 @@ impl Live {
         self.stale
     }
 
+    /// The project revision the last Cabinet or 3D frame handed over, if any.
+    pub(super) fn synced_revision(&self) -> Option<u64> {
+        self.current.as_ref().map(|c| c.key.1)
+    }
+
     /// True once after a run was cancelled for the edited cabinet.
     pub(super) fn take_superseded(&mut self) -> bool {
         std::mem::take(&mut self.superseded)

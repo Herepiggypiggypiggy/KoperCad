@@ -15,13 +15,57 @@ fn example() -> (tempfile::TempDir, Drive) {
 }
 
 #[test]
-fn the_command_is_known_and_needs_a_selected_standard() {
-    let (_dir, mut d) = example();
-    let ctx = d.ctx.clone();
+fn the_command_is_known_and_writes_the_design_checks_without_a_standard() {
+    let (dir, mut d) = example();
     assert!(novo_workflow::commands::get("export.standards_report").is_some());
-    d.app.run_command(&ctx, "export.standards_report", None);
-    d.frame();
-    assert!(d.app.wb.last_export.is_none());
+    let html = dir.path().join("Plant standards.html");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Html, &html)
+        .expect("written with no standard selected");
+    let text = std::fs::read_to_string(html).unwrap();
+    assert!(text.contains("Design checks"));
+    assert!(text.contains("No standard is selected"));
+    assert!(text.contains("unverified"));
+}
+
+#[test]
+fn the_report_lists_every_check_family_with_its_basis_and_never_claims_compliance() {
+    let (dir, mut d) = example();
+    assert!(d.app.edit_project("Select standards", |tx| {
+        standards::select(tx, &[StandardSet::Iec60204])
+    }));
+    let html = dir.path().join("Plant standards.html");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Html, &html)
+        .unwrap();
+    let text = std::fs::read_to_string(&html).unwrap();
+    for f in novo_checks::standards::design::FAMILIES {
+        assert!(text.contains(f.title), "{} missing", f.title);
+        assert!(
+            text.contains(f.assumptions.split('.').next().unwrap()),
+            "{}",
+            f.id
+        );
+    }
+    // No Heat result is held in this session: the report says so instead of
+    // saying the cabinet is fine.
+    assert!(text.contains("No Heat result is held"));
+    assert!(!text.to_lowercase().contains("project complies"));
+    // A pass on planning values or a model carries the caveat in its word.
+    assert!(text.contains("Met (estimate)"));
+    assert!(!text.contains("can be trusted"));
+    let project = d.app.backend.document().unwrap().project();
+    let doc = standards::document::build(project, &standards::compliance(project));
+    let out = super::standards_report::report_output(&doc);
+    for id in ["limits", "design_summary", "design_detail"] {
+        assert!(out.section(id).is_some(), "{id}");
+    }
+    let heat = doc.design.iter().find(|r| r.family.id == "heat").unwrap();
+    assert_ne!(heat.verdict, standards::document::Verdict::Pass);
+    let pdf = dir.path().join("Plant standards.pdf");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Pdf, &pdf)
+        .expect("pdf");
 }
 
 #[test]
@@ -105,4 +149,24 @@ fn simulate_commands_live_in_the_simulate_menu_and_leave_cabinet_for_the_schemat
         crate::app::workspace::Workspace::Schematic
     );
     assert!(d.app.wb.live.on);
+}
+
+#[test]
+fn colours_are_not_checkable_when_no_wire_states_one() {
+    let (_dir, d) = example();
+    let project = d.app.backend.document().unwrap().project();
+    assert!(project.wires().count() > 0);
+    let unstated = project.wires().filter(|w| w.color.is_none()).count();
+    let doc = standards::document::build(project, &standards::compliance(project));
+    let row = doc
+        .design
+        .iter()
+        .find(|r| r.family.id == "colours")
+        .unwrap();
+    if unstated == project.wires().count() {
+        assert_eq!(row.verdict, standards::document::Verdict::NotCheckable);
+    } else if unstated > 0 {
+        assert_eq!(row.verdict, standards::document::Verdict::Partial);
+    }
+    assert_ne!(row.verdict, standards::document::Verdict::Pass);
 }
