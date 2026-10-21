@@ -596,15 +596,17 @@ impl BenchCut {
                     Column::new("cable", "Cable", 14.0),
                     Column::new("cores", "Cores", 8.0).right(),
                     Column::new("metres", "Metres", 10.0).right(),
+                    Column::new("basis", "Length basis", 12.0),
                 ],
             );
             for r in runs {
                 cables.push(
                     vec![
                         Cell::text(TICK_BOX),
-                        Cell::text(r.tag),
+                        Cell::text(r.tag.clone()),
                         Cell::Int(r.cores as i64),
-                        Cell::Number((r.length_mm / 1000.0 * 10.0).ceil() / 10.0),
+                        Cell::Number(r.metres()),
+                        Cell::text(r.basis()),
                     ],
                     vec![r.cable.into()],
                 );
