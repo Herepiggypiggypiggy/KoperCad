@@ -19,7 +19,7 @@ pub mod ui;
 pub use catalog::{Catalog, Entry, Files, LearningPath, ProjectRef, Track, TrackSummary};
 pub use check::{Check, Event, Facts};
 pub use demo::{Demo, DemoOp};
-pub use lesson::{Lang, Lesson, LessonError, Status, Step, Target};
+pub use lesson::{Kind, Lang, Lesson, LessonError, Status, Step, Target};
 pub use lint::{Finding, Registry, Report, Severity, lint};
 pub use markup::{Span, parse_markup};
 pub use progress::{Progress, Standing};

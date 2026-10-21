@@ -29,6 +29,18 @@ text_nl = "Terug"
 text = "Show me how"
 text_nl = "Laat zien"
 
+[hint]
+text = "Hint"
+text_nl = "Hint"
+
+[show_fix]
+text = "Show me the fix"
+text_nl = "Laat de oplossing zien"
+
+[fix_it]
+text = "Fix it"
+text_nl = "Repareer het"
+
 [skip_step]
 text = "Skip step"
 text_nl = "Stap overslaan"

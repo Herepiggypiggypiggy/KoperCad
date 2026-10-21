@@ -162,6 +162,9 @@ pub(crate) struct LearnState {
     pub(super) only_path: Option<String>,
     pub(super) show_drafts: bool,
     pub(super) confirm_restart: bool,
+    /// The step whose hints are being shown and how many are open.
+    pub(super) hints_for: String,
+    pub(super) hints_shown: usize,
     /// Lessons whose lint has errors, so they are not offered yet.
     coming: Option<BTreeSet<String>>,
     /// Controls registered so far this frame, and last frame.
@@ -211,6 +214,8 @@ impl LearnState {
             only_path: None,
             show_drafts: false,
             confirm_restart: false,
+            hints_for: String::new(),
+            hints_shown: 0,
             coming: None,
             anchors: BTreeMap::new(),
             rows: BTreeMap::new(),
@@ -969,6 +974,19 @@ impl NovoApp {
         self.learn.confirm_restart = false;
         self.learn.revealed = None;
         self.learn.ticked_at = None;
+    }
+
+    /// The card's Hint: opens the next hint of the open step.
+    pub(super) fn learn_open_hint(&mut self) {
+        let Some(step) = self.learn.run.as_ref().and_then(|r| r.step()) else {
+            return;
+        };
+        let (id, total) = (step.id.clone(), step.hints(self.learn.lang).len());
+        if self.learn.hints_for != id {
+            self.learn.hints_for = id;
+            self.learn.hints_shown = 0;
+        }
+        self.learn.hints_shown = (self.learn.hints_shown + 1).min(total);
     }
 
     /// Back, Skip, Next and Restart, from the card or the commands.
