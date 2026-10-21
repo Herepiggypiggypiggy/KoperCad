@@ -35,6 +35,7 @@
 //! is missing when a rule cannot be evaluated.
 
 mod ampacity;
+pub mod design;
 pub mod document;
 mod iec60204;
 mod netclass;

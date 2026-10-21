@@ -13,6 +13,7 @@
 
 use novo_core::Project;
 
+use super::design::{self, DesignInput};
 use super::provenance::{self, BasisItem, BasisKind};
 use super::{ComplianceReport, NOTICE, RuleResult, RuleStatus, StandardSet, page_name};
 
@@ -53,7 +54,7 @@ impl Verdict {
         }
     }
 
-    fn class(self) -> &'static str {
+    pub(super) fn class(self) -> &'static str {
         match self {
             Verdict::Pass => "pass",
             Verdict::Fail => "fail",
@@ -126,11 +127,59 @@ impl Section {
 pub struct ComplianceDocument {
     pub project_name: String,
     pub notice: &'static str,
+    /// What to know before relying on anything below.
+    pub limits: Vec<&'static str>,
+    /// The design checks beyond the clause rules: wire sizing, protection,
+    /// safety functions, heat, ...
+    pub design: Vec<design::Row>,
     pub sections: Vec<Section>,
     /// Planning values and models used by the selected sets' rules.
     pub basis: Vec<&'static BasisItem>,
     /// What the check does not cover at all.
     pub not_covered: Vec<&'static str>,
+}
+
+/// Stated at the top of every document, in a box of their own.
+pub const LIMITS: &[&str] = &[
+    "IEC 60204-1 clause numbers in this report are pointers written without a licensed copy of the standard. They are unverified: read each clause in your own copy before relying on a verdict.",
+    "Ampacity tables, protective conductor sizes, colours, voltage limits and motor protection percentages are planning values, not read from the licensed standards. Verdicts that use them are marked.",
+    "Functional safety figures are a calculation aid: PFHd for categories 2 to 4 is a closed-form estimate, not ISO 13849-1 Table K.1.",
+    "Heat, short-circuit and selectivity results are models and estimates, not measurements.",
+    "Nothing here is a certification, a CE marking or a declaration of conformity. The engineer remains responsible for the design.",
+];
+
+/// The counts of a design row as one short line.
+pub fn found_text(r: &design::Row) -> String {
+    let mut parts = Vec::new();
+    if r.errors > 0 {
+        parts.push(format!(
+            "{} error{}",
+            r.errors,
+            if r.errors == 1 { "" } else { "s" }
+        ));
+    }
+    if r.warnings > 0 {
+        parts.push(format!(
+            "{} warning{}",
+            r.warnings,
+            if r.warnings == 1 { "" } else { "s" }
+        ));
+    }
+    if r.waived > 0 {
+        parts.push(format!("{} waived", r.waived));
+    }
+    if !r.not_checkable.is_empty() {
+        parts.push(format!("{} not checked", r.not_checkable.len()));
+    }
+    if parts.is_empty() {
+        match r.verdict {
+            Verdict::NotApplicable => "Nothing to check".to_owned(),
+            Verdict::Pass => "Nothing found".to_owned(),
+            _ => "-".to_owned(),
+        }
+    } else {
+        parts.join(", ")
+    }
 }
 
 /// What no rule here looks at. Printed so a reader does not assume it was.
@@ -260,6 +309,16 @@ fn requirement(project: &Project, r: &RuleResult) -> Requirement {
 
 /// Arranges a compliance report as a document.
 pub fn build(project: &Project, report: &ComplianceReport) -> ComplianceDocument {
+    build_with(project, report, &DesignInput::from_project(project))
+}
+
+/// The document with the design checks the caller ran (the application adds
+/// the house-rule problems and its Heat result to `input`).
+pub fn build_with(
+    project: &Project,
+    report: &ComplianceReport,
+    input: &DesignInput,
+) -> ComplianceDocument {
     let sections: Vec<Section> = report
         .sets
         .iter()
@@ -282,6 +341,8 @@ pub fn build(project: &Project, report: &ComplianceReport) -> ComplianceDocument
     ComplianceDocument {
         project_name: report.project_name.clone(),
         notice: NOTICE,
+        limits: LIMITS.to_vec(),
+        design: design::rows(project, input),
         sections,
         basis,
         not_covered: NOT_COVERED.to_vec(),
@@ -316,6 +377,88 @@ pub fn to_html(doc: &ComplianceDocument, date: &str) -> String {
         }
     ));
     h.push_str(&format!("<div class=\"notice\">{}</div>", esc(doc.notice)));
+    h.push_str("<div class=\"notice\"><b>Read this first</b><ul>");
+    for l in &doc.limits {
+        h.push_str(&format!("<li>{}</li>", esc(l)));
+    }
+    h.push_str("</ul></div>");
+    h.push_str("<h2>Design checks</h2><p>What the design checks looked at, beyond the clause rules, how each came out, and what the verdict rests on.</p><table class=\"sum\"><tr><th>Check</th><th>Result</th><th>Found</th><th>Rests on</th></tr>");
+    for r in &doc.design {
+        h.push_str(&format!(
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
+            esc(r.family.title),
+            r.verdict.label(),
+            esc(&found_text(r)),
+            esc(r.family.reliance.label())
+        ));
+    }
+    h.push_str("</table>");
+    for r in &doc.design {
+        h.push_str(&format!(
+            "<div class=\"req {}\"><div class=\"head\"><h3>{}</h3><span class=\"v\">{}</span></div><p class=\"clause\">{}</p><p>{}</p>",
+            r.verdict.class(),
+            esc(r.family.title),
+            r.verdict.label(),
+            esc(r.family.reliance.label()),
+            esc(r.family.what)
+        ));
+        h.push_str(&format!(
+            "<p><span class=\"lbl\">Data from</span> {}</p><p><span class=\"lbl\">Assumes</span> {}</p>",
+            esc(r.family.source),
+            esc(r.family.assumptions)
+        ));
+        if !r.evidence.is_empty() {
+            h.push_str("<p><span class=\"lbl\">Evidence</span></p><ul>");
+            for e in &r.evidence {
+                h.push_str(&format!("<li>{}</li>", esc(e)));
+            }
+            h.push_str("</ul>");
+        }
+        if !r.findings.is_empty() {
+            h.push_str("<p><span class=\"lbl\">Findings</span></p><ul>");
+            for f in &r.findings {
+                h.push_str(&format!(
+                    "<li>{}{}{}</li>",
+                    esc(&f.text),
+                    f.page
+                        .as_ref()
+                        .map(|p| format!(" (page {})", esc(p)))
+                        .unwrap_or_default(),
+                    f.reason
+                        .as_ref()
+                        .map(|x| format!(" <b>Waived</b>, reason: {}", esc(x)))
+                        .unwrap_or_default()
+                ));
+            }
+            if r.more > 0 {
+                h.push_str(&format!(
+                    "<li>and {} more: see the Issues list</li>",
+                    r.more
+                ));
+            }
+            h.push_str("</ul>");
+        }
+        if !r.not_checkable.is_empty() {
+            h.push_str("<p><span class=\"lbl\">Not checked</span></p><ul>");
+            for u in &r.not_checkable {
+                h.push_str(&format!("<li>{}</li>", esc(u)));
+            }
+            h.push_str("</ul>");
+        }
+        if matches!(
+            r.verdict,
+            Verdict::Fail | Verdict::Partial | Verdict::NotCheckable
+        ) {
+            h.push_str(&format!(
+                "<p><span class=\"lbl\">Where to fix</span> {}</p>",
+                esc(r.family.fix)
+            ));
+        }
+        h.push_str("</div>");
+    }
+    if doc.sections.is_empty() {
+        h.push_str("<h2>Standards</h2><p>No standard is selected, so no clause rules were evaluated. Choose standards in Check > Standards check to add them.</p>");
+    }
     h.push_str("<h2>Summary</h2><table class=\"sum\"><tr><th>Standard</th><th>Pass</th><th>Fail</th><th>Partly</th><th>Not checkable</th><th>Waived</th><th>n/a</th></tr>");
     for s in &doc.sections {
         h.push_str(&format!(

@@ -5,6 +5,7 @@
 
 use std::path::{Path, PathBuf};
 
+use novo_checks::standards::design::{DesignInput, HeatFact, HeatTone};
 use novo_checks::standards::document::{self, ComplianceDocument, Verdict};
 use novo_reports::{Cell, Column, ReportOutput, Section};
 
@@ -91,6 +92,123 @@ fn evidence_lines(r: &document::Requirement) -> Vec<String> {
     out
 }
 
+/// Characters per line of the design detail column.
+const W_DETAIL: usize = 112;
+
+/// The design checks: one summary table, then one block per check with what
+/// it asks, where its data comes from, what it assumes and what it found.
+fn design_sections(doc: &ComplianceDocument) -> Vec<Section> {
+    let mut summary = Section::new(
+        "design_summary",
+        "Design checks",
+        vec![
+            Column::new("check", "Check", 26.0),
+            Column::new("result", "Result", 14.0),
+            Column::new("found", "Found", 34.0),
+            Column::new("rests", "Rests on", 40.0),
+        ],
+    );
+    for r in &doc.design {
+        let found = wrap(&document::found_text(r), 56);
+        let rests = wrap(r.family.reliance.label(), 64);
+        for i in 0..found.len().max(rests.len()).max(1) {
+            summary.push(
+                vec![
+                    if i == 0 {
+                        Cell::text(r.family.title)
+                    } else {
+                        Cell::Empty
+                    },
+                    if i == 0 {
+                        Cell::text(r.verdict.label())
+                    } else {
+                        Cell::Empty
+                    },
+                    found.get(i).cloned().map_or(Cell::Empty, Cell::text),
+                    rests.get(i).cloned().map_or(Cell::Empty, Cell::text),
+                ],
+                Vec::new(),
+            );
+        }
+    }
+    let mut detail = Section::new(
+        "design_detail",
+        "Design checks in detail",
+        vec![
+            Column::new("check", "Check", 22.0),
+            Column::new("result", "Result", 14.0),
+            Column::new("what", "", 14.0),
+            Column::new("text", "", 80.0),
+        ],
+    );
+    for r in &doc.design {
+        let mut lines: Vec<(&str, String)> = vec![
+            ("Asks", r.family.what.to_owned()),
+            ("Data from", r.family.source.to_owned()),
+            ("Assumes", r.family.assumptions.to_owned()),
+        ];
+        for e in &r.evidence {
+            lines.push(("Evidence", e.clone()));
+        }
+        for f in &r.findings {
+            let page = f
+                .page
+                .as_ref()
+                .map(|p| format!(" (page {p})"))
+                .unwrap_or_default();
+            let waived = f
+                .reason
+                .as_ref()
+                .map(|x| format!(" WAIVED, reason: {x}"))
+                .unwrap_or_default();
+            lines.push(("Finding", format!("{}{page}{waived}", f.text)));
+        }
+        if r.more > 0 {
+            lines.push((
+                "Finding",
+                format!("and {} more: see the Issues list", r.more),
+            ));
+        }
+        for u in &r.not_checkable {
+            lines.push(("Not checked", u.clone()));
+        }
+        if matches!(
+            r.verdict,
+            Verdict::Fail | Verdict::Partial | Verdict::NotCheckable
+        ) {
+            lines.push(("Where to fix", r.family.fix.to_owned()));
+        }
+        let mut first = true;
+        for (label, text) in lines {
+            for (i, line) in wrap(&text, W_DETAIL).into_iter().enumerate() {
+                detail.push(
+                    vec![
+                        if first {
+                            Cell::text(r.family.title)
+                        } else {
+                            Cell::Empty
+                        },
+                        if first {
+                            Cell::text(r.verdict.label())
+                        } else {
+                            Cell::Empty
+                        },
+                        if i == 0 {
+                            Cell::text(label)
+                        } else {
+                            Cell::Empty
+                        },
+                        Cell::text(line),
+                    ],
+                    Vec::new(),
+                );
+                first = false;
+            }
+        }
+    }
+    vec![summary, detail]
+}
+
 /// The document as a report: a summary, one table per standard, the basis
 /// of the numbers, what is not covered, and a review block.
 pub(super) fn report_output(doc: &ComplianceDocument) -> ReportOutput {
@@ -140,6 +258,25 @@ pub(super) fn report_output(doc: &ComplianceDocument) -> ReportOutput {
         notice.push(vec![Cell::text(line)], Vec::new());
     }
     sections.push(notice);
+    let mut limits = Section::new(
+        "limits",
+        "Read this first",
+        vec![Column::new("text", "Limits of this report", 1.0)],
+    );
+    for l in &doc.limits {
+        for (i, line) in wrap(l, 146).into_iter().enumerate() {
+            limits.push(
+                vec![Cell::text(if i == 0 {
+                    format!("- {line}")
+                } else {
+                    format!("  {line}")
+                })],
+                Vec::new(),
+            );
+        }
+    }
+    sections.push(limits);
+    sections.extend(design_sections(doc));
     for s in &doc.sections {
         let mut t = Section::new(
             s.set.id(),
@@ -296,6 +433,36 @@ fn report_path(file: Option<&Path>, dir: Option<&Path>, name: &str, ext: &str) -
 }
 
 impl NovoApp {
+    /// The Heat result the 3D view holds, as the report states it. `None`
+    /// when no run has finished in this session.
+    fn heat_fact(&self) -> Option<HeatFact> {
+        use super::heat_verdict::{Tone, verdict};
+        let sol = self.cabinet.heat.solution()?;
+        let project = self.backend.document()?.project();
+        let tag = |raw: u64| {
+            project
+                .get::<novo_core::Device>(novo_core::DeviceId::from(raw))
+                .and_then(|d| d.tag.device_code().map(str::to_owned))
+                .unwrap_or_else(|| format!("device {raw}"))
+        };
+        let v = verdict(&sol.snapshot, &tag)?;
+        let tone = match v.tone {
+            Tone::Fine => HeatTone::Fine,
+            Tone::Tight => HeatTone::Tight,
+            Tone::TooHot => HeatTone::TooHot,
+            Tone::Unknown => HeatTone::Unknown,
+        };
+        let sentence = match &v.device {
+            Some((_, device)) => format!("{}{device}{}", v.lead, v.tail),
+            None => format!("{}{}", v.lead, v.tail),
+        };
+        Some(HeatFact {
+            tone,
+            sentence,
+            out_of_date: self.cabinet.heat.live.is_stale(),
+        })
+    }
+
     /// Writes the compliance report next to the project and says where it
     /// went. A PDF KoperCAD wrote is replaced; an HTML page is always ours.
     pub(super) fn export_standards_report(&mut self, format: StandardsFormat) -> Option<PathBuf> {
@@ -321,16 +488,15 @@ impl NovoApp {
     ) -> Option<PathBuf> {
         let name = self.project_name()?;
         let doc = {
+            let heat = self.heat_fact();
             let project = self.backend.document()?.project();
             let report = novo_checks::standards::compliance(project);
-            if report.sets.is_empty() {
-                self.message(
-                    Level::Info,
-                    "Choose a standard in Standards check first: the report covers the standards you select",
-                );
-                return None;
-            }
-            document::build(project, &report)
+            let input = DesignInput {
+                open: novo_reports::issues::open(project),
+                waived: novo_reports::issues::waived(project),
+                heat,
+            };
+            document::build_with(project, &report, &input)
         };
         let bytes = match format {
             StandardsFormat::Pdf => {
