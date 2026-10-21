@@ -15,11 +15,54 @@ use super::{Level, NovoApp, TOAST_INFO};
 /// Height of the bar.
 pub(super) const STATUS_BAR: f32 = 22.0;
 
+/// A refusal longer than this is also shown in full, wrapped, above the bar:
+/// the bar cuts its text to half its width.
+const REFUSAL_CARD_FROM: usize = 60;
+
+/// The widest the refusal card gets.
+const REFUSAL_CARD_WIDTH: f32 = 520.0;
+
+/// Id of the card that carries a long refusal in full.
+pub(super) fn refusal_card_id() -> egui::Id {
+    egui::Id::new("refusal_card")
+}
+
+/// The card sits at the top left of the canvas: the toasts keep the bottom
+/// left, the tool dock the bottom centre, the cursor readout the top right.
+fn refusal_card(ctx: &egui::Context, canvas: egui::Rect, text: &str) {
+    let palette = crate::theme::ui_palette();
+    egui::Area::new(refusal_card_id())
+        .order(egui::Order::Foreground)
+        .interactable(false)
+        .pivot(egui::Align2::LEFT_TOP)
+        .fixed_pos(canvas.left_top() + egui::vec2(12.0, 12.0))
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.set_max_width(REFUSAL_CARD_WIDTH.min((canvas.width() * 0.6).max(160.0)));
+                ui.label(
+                    egui::RichText::new(format!("{} {text}", novo_theme::icons::status::WARNING))
+                        .color(palette.error),
+                );
+            });
+        });
+}
+
+/// The chip text for the machine's choice, cut to a length the bar can keep.
+fn machine_chip_label(summary: &str) -> String {
+    const MOST: usize = 36;
+    let text = format!("Options: {summary}");
+    if text.chars().count() <= MOST {
+        return text;
+    }
+    let cut: String = text.chars().take(MOST - 1).collect();
+    format!("{}…", cut.trim_end())
+}
+
 /// A mode that is on, with the command that turns it off.
 struct ModeChip {
-    label: &'static str,
+    label: String,
     command: &'static str,
-    hover: &'static str,
+    hover: String,
 }
 
 impl NovoApp {
@@ -41,7 +84,16 @@ impl NovoApp {
             super::dock::ToolHint::default()
         };
         let selection = self.selection_summary();
-        let values = self.status_values();
+        let values = self.status_values().map(|v| {
+            // The cursor readout carries the key that brings the drawing
+            // back into view, so a lost view is one key away.
+            match self.command_shortcut_text(ui.ctx(), "view.fit") {
+                Some(key) if self.workspace() == Workspace::Schematic => {
+                    format!("{v}   {key} zoom to fit")
+                }
+                _ => v,
+            }
+        });
         let chips = self.mode_chips();
         let saved = self.saved_state();
         let path = self.project_path.clone();
@@ -144,12 +196,12 @@ impl NovoApp {
                         }
                         for chip in &chips {
                             let button = egui::Button::new(
-                                egui::RichText::new(chip.label)
+                                egui::RichText::new(&chip.label)
                                     .color(crate::theme::ui_palette().text_primary),
                             )
                             .fill(crate::theme::ui_palette().control)
                             .small();
-                            if ui.add(button).on_hover_text(chip.hover).clicked() {
+                            if ui.add(button).on_hover_text(&chip.hover).clicked() {
                                 run = Some(chip.command);
                             }
                         }
@@ -158,6 +210,12 @@ impl NovoApp {
             });
         for (id, rect, label) in spots {
             self.anchor(id, rect, label);
+        }
+        if tool.refused
+            && tool.text.chars().count() > REFUSAL_CARD_FROM
+            && let Some((_, canvas)) = self.wb.canvas_area
+        {
+            refusal_card(ui.ctx(), canvas, &tool.text);
         }
         if let Some(command) = run {
             self.wb.queued.push(command);
@@ -246,28 +304,50 @@ impl NovoApp {
     /// The modes that are on, each with the command that switches it off.
     fn mode_chips(&self) -> Vec<ModeChip> {
         let mut chips = Vec::new();
+        // The machine's choice is shown wherever the documents come from.
+        if let Some(info) = self.machine_info() {
+            chips.push(ModeChip {
+                label: machine_chip_label(&info.summary),
+                command: "project.options",
+                hover: format!(
+                    "Machine options: {}\n{}\nClick to change them",
+                    info.summary,
+                    info.left_out()
+                ),
+            });
+        }
         if self.workspace() != Workspace::Schematic {
             return chips;
         }
         if !self.wb.marks {
             chips.push(ModeChip {
-                label: "Marks hidden",
+                label: "Marks hidden".into(),
                 command: "view.toggle_marks",
-                hover: "Show the marks again",
+                hover: "Show the marks again".into(),
             });
         }
         if self.wb.live.on {
             chips.push(ModeChip {
-                label: "Live",
+                label: "Live".into(),
                 command: "sim.live",
-                hover: "Switch live potentials off",
+                hover: "Switch live potentials off".into(),
+            });
+        }
+        if let Some(locked) = self
+            .current_page
+            .and_then(|p| self.backend.document()?.project().page(p)?.locked.clone())
+        {
+            chips.push(ModeChip {
+                label: format!("{} Page locked ({locked})", novo_theme::icons::LOCK_SIMPLE),
+                command: "revision.unlock_page",
+                hover: "This page is locked with the issued revision. Click to unlock it".into(),
             });
         }
         if self.wb.changes.is_some() {
             chips.push(ModeChip {
-                label: "Changes",
+                label: "Changes".into(),
                 command: "view.changes",
-                hover: "Leave Changes mode",
+                hover: "Leave Changes mode".into(),
             });
         }
         chips
@@ -326,5 +406,75 @@ mod tests {
         assert_eq!(chips[0].command, "view.toggle_marks");
         // Every chip's command is a registered command.
         assert!(novo_workflow::commands::is_known(chips[0].command));
+    }
+
+    #[test]
+    fn a_locked_page_shows_a_chip_that_unlocks_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        let page = d.app.current_page.expect("a page is shown");
+        d.app
+            .backend
+            .document_mut()
+            .unwrap()
+            .execute(novo_core::Command::LockPage {
+                page,
+                revision: "A".into(),
+            })
+            .unwrap();
+        let chips = d.app.mode_chips();
+        assert_eq!(chips.len(), 1);
+        assert!(chips[0].label.contains("Page locked (A)"));
+        assert_eq!(chips[0].command, "revision.unlock_page");
+        d.app.run_command(&ctx, chips[0].command, None);
+        assert!(d.app.mode_chips().is_empty());
+    }
+}
+
+#[cfg(test)]
+mod refusal_tests {
+    use super::super::gate1_tests::Drive;
+    use crate::actions::Action;
+    use eframe::egui;
+
+    #[test]
+    fn a_long_refusal_is_read_in_full_above_the_status_bar() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        let size = egui::vec2(1366.0, 768.0);
+        d.frame_sized(size, Vec::new());
+        let layer = egui::LayerId::new(egui::Order::Foreground, super::refusal_card_id());
+        let shown = |ctx: &egui::Context| ctx.memory(|m| m.areas().visible_last_frame(&layer));
+        d.frame_sized(size, Vec::new());
+        assert!(!shown(&ctx), "no refusal, no card");
+        // A toast is up too: the card must keep clear of it.
+        d.app
+            .message(crate::app::Level::Error, "Could not save the project");
+        let long = "x".repeat(90);
+        let view = d.app.canvas.schematic().unwrap();
+        assert!(!view.editor.begin_place(&long, None));
+        for _ in 0..3 {
+            d.frame_sized(size, Vec::new());
+        }
+        assert!(
+            shown(&ctx),
+            "a long refusal gets a card with the whole text"
+        );
+        let rect = |name: &str| ctx.memory(|m| m.area_rect(egui::Id::new(name)));
+        let card = ctx
+            .memory(|m| m.area_rect(super::refusal_card_id()))
+            .expect("the card has a place");
+        let canvas = d.app.wb.canvas_area.unwrap().1;
+        assert!(canvas.contains_rect(card), "{card:?} inside {canvas:?}");
+        for other in ["tool_dock", "toasts", "hud"] {
+            if let Some(r) = rect(other) {
+                assert!(!card.intersects(r), "{other} {r:?} under the card {card:?}");
+            }
+        }
     }
 }

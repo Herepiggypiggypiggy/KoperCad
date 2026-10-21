@@ -8,6 +8,9 @@ mod assembly;
 mod assistant;
 #[cfg(test)]
 mod assistant_tests;
+mod autopilot;
+#[cfg(test)]
+mod autopilot_tests;
 mod background_panel;
 mod bench;
 mod cabinet;
@@ -62,6 +65,7 @@ mod eplan_parts;
 mod error_words;
 mod example;
 mod faults;
+mod handover;
 mod heat;
 mod heat_3d;
 #[cfg(test)]
@@ -88,6 +92,7 @@ mod heat_spots;
 mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
+mod heat_verdict;
 mod inspector;
 mod interop;
 mod languages;
@@ -97,10 +102,14 @@ mod layout_presets;
 mod learn;
 mod learn_demo;
 mod learn_labels;
+mod learn_solve;
 mod learn_ui;
 mod link;
 mod live;
 mod live_anim;
+mod machine;
+#[cfg(test)]
+mod machine_tests;
 mod macro_actions;
 #[cfg(test)]
 mod macro_actions_tests;
@@ -137,9 +146,13 @@ mod plate_export;
 mod plc;
 mod plc_card;
 mod plc_link;
+mod plc_list;
+#[cfg(test)]
+mod plc_list_tests;
 mod plc_run;
 mod potentials;
 mod preferences;
+mod print_preview;
 mod probe;
 mod project_rules;
 mod project_settings;
@@ -169,6 +182,8 @@ mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;
 mod terminals;
+#[cfg(test)]
+mod test_wait;
 mod tidy;
 mod tips;
 mod title_revisions;
@@ -177,8 +192,11 @@ mod variants;
 mod view3d;
 mod view3d_align;
 mod view3d_controls;
+mod view3d_drag_gaps;
+mod view3d_duct_fill;
 mod view3d_duplicate;
 mod view3d_heat;
+mod view3d_heat_labels;
 mod view3d_hints;
 mod view3d_measure;
 mod view3d_models;
@@ -193,6 +211,9 @@ mod view3d_place;
 mod view3d_rail;
 #[cfg(test)]
 mod view3d_rail_tests;
+mod view3d_runs;
+#[cfg(test)]
+mod view3d_runs_tests;
 mod view3d_stats;
 mod view3d_surface_devices;
 #[cfg(test)]
@@ -210,6 +231,7 @@ mod wire_panel;
 mod wire_panel_tests;
 mod wire_production;
 mod workbench;
+mod workshop;
 mod workspace;
 mod xref;
 
@@ -246,6 +268,8 @@ mod commissioning_photos_tests;
 #[cfg(test)]
 mod commissioning_tests;
 #[cfg(test)]
+mod commissioning_walk_tests;
+#[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
 mod context_menu_tests;
@@ -260,9 +284,13 @@ mod example_tests;
 #[cfg(test)]
 mod faults_tests;
 #[cfg(test)]
+mod first_view_tests;
+#[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
 mod greyed_commands_tests;
+#[cfg(test)]
+mod handover_tests;
 #[cfg(test)]
 mod learn_replay;
 #[cfg(test)]
@@ -284,6 +312,8 @@ mod page_commands_tests;
 #[cfg(test)]
 mod pdf_options_tests;
 #[cfg(test)]
+mod print_preview_tests;
+#[cfg(test)]
 mod protection_tests;
 #[cfg(test)]
 mod read_only_tests;
@@ -301,6 +331,10 @@ mod ui_gaps_tests;
 mod variants_tests;
 #[cfg(test)]
 mod whats_new_tests;
+#[cfg(test)]
+mod wire_set_tests;
+#[cfg(test)]
+mod workshop_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -310,6 +344,8 @@ use eframe::egui;
 use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
+const HANDOVER_HINT: &str = "One folder for the customer: the drawing set, revisions, parts, wire, terminal and cable lists, the commissioning record, safety functions, an Excel workbook, and a contents page that says what is exact and what is an estimate.";
+const WORKSHOP_HINT: &str = "One folder for the hand workshop: a 1:1 drilling template of each mounting plate (tiled on A4 or A3, with cross hairs, hole sizes and a 100 mm check ruler), the cut list, ferrules, labels and the assembly checklist with tick boxes.";
 const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Edit the file in Excel and bring it back with File > Import spreadsheet. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};
@@ -1326,6 +1362,7 @@ impl NovoApp {
             self.sync_menu_keys();
             self.sync_catalog();
             self.tool_dock(&ctx, canvas_rect);
+            self.empty_sheet_ghost(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
             self.plc_window(&ctx);
@@ -1352,6 +1389,7 @@ impl NovoApp {
         self.eplan_parts_dialog(&ctx);
         self.eplan_export_dialog(&ctx);
         self.plc_import_dialog(&ctx);
+        self.plc_list_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
         self.whats_new_window(&ctx);
@@ -1359,7 +1397,9 @@ impl NovoApp {
         self.background_panel(&ctx);
         self.assistant_window(&ctx);
         self.bench_window(&ctx);
+        self.autopilot_window(&ctx);
         self.pdf_options_window(&ctx);
+        self.print_preview_window(&ctx);
         self.designer_window(&ctx);
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);
@@ -1375,6 +1415,8 @@ impl NovoApp {
         self.options_window(&ctx);
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
+        self.restore_ask_dialog(&ctx);
+        self.handover_ask_dialog(&ctx);
         self.compare_window(&ctx);
         self.aml_import_dialog(&ctx);
         self.eplan_import_dialog(&ctx);
@@ -2001,10 +2043,17 @@ impl NovoApp {
                 for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
                     self.action_button(ui, a, picked);
                 }
+                // Ways to learn, named as such and each with what it is, so the
+                // two are not read as copies of each other.
+                ui.add_space(12.0);
+                ui.small("LEARN");
                 if !self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
+                    ui.weak("Two minutes: place, wire, cable, live view");
+                    ui.add_space(4.0);
                 }
                 self.learn_start_entry(ui);
+                ui.weak("Lessons for every part of the program");
                 let unsaved = self.backend.unsaved_projects();
                 if !unsaved.is_empty() {
                     ui.add_space(16.0);
@@ -3002,6 +3051,66 @@ mod tests {
         frame(&ctx, &mut app, sized(1366.0));
         app.run_command(&ctx, "sim.live", None);
         assert!(!app.wb.live.on);
+    }
+
+    #[test]
+    fn escape_steps_back_out_of_the_live_view_and_other_simulate_commands_leave_it() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        app.run_command(&ctx, "sim.live", None);
+        frame(&ctx, &mut app, sized(1366.0));
+        // Escape first drops the Why? click mode, then leaves Live.
+        app.wb.live.why_mode = true;
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(app.wb.live.on && !app.wb.live.why_mode);
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(!app.wb.live.on);
+        // Another Simulate command does not leave Live switched on.
+        app.run_command(&ctx, "sim.live", None);
+        assert!(app.wb.live.on);
+        app.run_command(&ctx, "simulate.motor-start", None);
+        assert!(!app.wb.live.on);
+        // Nor does a workspace change.
+        app.run_command(&ctx, "sim.live", None);
+        app.switch_workspace(crate::app::workspace::Workspace::Cabinet);
+        assert!(!app.wb.live.on);
+    }
+
+    #[test]
+    fn escape_closing_the_plc_window_leaves_live_on() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        app.run_command(&ctx, "sim.plc_program", None);
+        for _ in 0..3 {
+            frame(&ctx, &mut app, sized(1366.0));
+        }
+        assert!(app.wb.live.on && app.wb.live.plc.window);
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(!app.wb.live.plc.window, "Escape closes the window");
+        assert!(app.wb.live.on, "and the live view stays");
+        for _ in 0..3 {
+            frame(&ctx, &mut app, sized(1366.0));
+        }
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(!app.wb.live.on, "the next Escape leaves Live");
     }
 
     #[test]

@@ -98,6 +98,9 @@ pub fn lint(
     for note in &catalog.notes {
         push(Severity::Error, "catalog", None, note.clone());
     }
+    for note in path_notes(catalog) {
+        push(Severity::Error, "paths", None, note);
+    }
     let mut missing_nl = 0;
     let lesson_ids: BTreeSet<&str> = catalog
         .entries
@@ -120,6 +123,42 @@ pub fn lint(
     report.findings.extend(found);
     report.missing_nl = missing_nl;
     report
+}
+
+/// A path is a safe reading order: every lesson a lesson `needs` comes
+/// earlier in the same path or in a path listed before it, and every listed
+/// lesson is in some path (so a path counter can reach "all done").
+pub fn path_notes(catalog: &Catalog) -> Vec<String> {
+    let mut notes = Vec::new();
+    let mut before: BTreeSet<&str> = BTreeSet::new();
+    for path in &catalog.paths {
+        let mut earlier = before.clone();
+        for id in &path.lessons {
+            if let Some(entry) = catalog.get(id) {
+                for need in &entry.lesson.needs {
+                    if !earlier.contains(need.as_str()) {
+                        notes.push(format!(
+                            "path `{}`: `{id}` needs `{need}`, which the path does not teach before it",
+                            path.id
+                        ));
+                    }
+                }
+            }
+            earlier.insert(id.as_str());
+        }
+        before.extend(path.lessons.iter().map(String::as_str));
+    }
+    if !catalog.paths.is_empty() {
+        for entry in catalog.visible(false) {
+            if !before.contains(entry.lesson.id.as_str()) {
+                notes.push(format!(
+                    "lesson `{}` is in no learning path",
+                    entry.lesson.id
+                ));
+            }
+        }
+    }
+    notes
 }
 
 struct Sink<'a> {
@@ -322,6 +361,40 @@ fn lint_lesson(
         } else if step.pause {
             sink.warn(Some(step), "`pause` on a reading step does nothing".into());
         }
+        if let Some(predict) = &step.predict {
+            if predict.options.len() < 2 || predict.answer >= predict.options.len() {
+                sink.error(
+                    Some(step),
+                    "`predict` needs two or more options and an `answer` that is one of them"
+                        .into(),
+                );
+            }
+            if !predict.options_nl.is_empty() && predict.options_nl.len() != predict.options.len() {
+                sink.warn(
+                    Some(step),
+                    "`options_nl` has a different count from `options`".into(),
+                );
+            }
+            if !matches!(step.expect, Some(Check::Predicted(true))) {
+                sink.error(
+                    Some(step),
+                    "a `predict` step is ticked by `expect = { predicted = true }`".into(),
+                );
+            }
+        }
+        for op in &step.solve {
+            if let SolveOp::Choose(c) = op
+                && step
+                    .predict
+                    .as_ref()
+                    .is_none_or(|p| c.choose >= p.options.len())
+            {
+                sink.error(
+                    Some(step),
+                    "`choose` needs a `predict` step and one of its options".into(),
+                );
+            }
+        }
         if step.manual.is_some() && !step.solve.is_empty() {
             sink.error(
                 Some(step),
@@ -393,6 +466,16 @@ fn lint_lesson(
                             sink.warn(
                                 Some(step),
                                 format!("pin `{pin}` is not in the sample project"),
+                            );
+                        }
+                    }
+                }
+                SolveOp::Select(s) if s.select.contains('~') => {
+                    for pin in s.select.split('~') {
+                        if project.is_some_and(|p| pins_named(p, pin.trim()).is_empty()) {
+                            sink.warn(
+                                Some(step),
+                                format!("pin `{}` is not in the sample project", pin.trim()),
                             );
                         }
                     }

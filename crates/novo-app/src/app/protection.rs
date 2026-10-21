@@ -257,7 +257,7 @@ impl NovoApp {
         let rows = limiter_rows(project, &study);
         let mut open = true;
         super::panel::dialog(ctx, "Protection", [920.0, 600.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| show(ui, state, &study, &rows));
         state.open = open;
         let edits = std::mem::take(&mut state.pending);

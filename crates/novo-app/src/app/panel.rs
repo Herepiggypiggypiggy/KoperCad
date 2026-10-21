@@ -61,6 +61,7 @@ pub(super) struct Panel {
     height: Option<f32>,
     fit: bool,
     title_bar: bool,
+    above_card: bool,
 }
 
 impl Panel {
@@ -84,6 +85,7 @@ impl Panel {
             height: None,
             fit: false,
             title_bar: true,
+            above_card: false,
         }
     }
 
@@ -117,6 +119,13 @@ impl Panel {
     /// No title bar: the panel has its own header and is dragged by its body.
     pub(super) fn bare(mut self) -> Self {
         self.title_bar = false;
+        self
+    }
+
+    /// Starts clear of a card in the bottom right corner (the lesson card)
+    /// instead of under it: for the panels that open on every selection.
+    pub(super) fn above_card(mut self) -> Self {
+        self.above_card = true;
         self
     }
 
@@ -173,7 +182,15 @@ impl Panel {
         };
         let moved = is_moved(ctx, id);
         let (pivot, start) = self.start();
-        let max_height = (self.canvas.height() - self.top - BOTTOM - self.bottom).max(MIN_HEIGHT);
+        // A panel hanging from the right edge stays clear of a card in the
+        // bottom right corner, unless the person has moved it.
+        let corner = if self.above_card && self.side == Side::Right && !moved {
+            reserved_bottom_right(ctx)
+        } else {
+            0.0
+        };
+        let max_height =
+            (self.canvas.height() - self.top - BOTTOM - self.bottom - corner).max(MIN_HEIGHT);
         let mut window = egui::Window::new(&self.title)
             .id(id)
             .order(egui::Order::Middle)
@@ -203,10 +220,18 @@ impl Panel {
         } else {
             window.constrain(false).pivot(pivot).current_pos(start)
         };
-        if taken.is_some() {
-            // A window dragged by its title bar keeps the position it had
-            // before the frame and ignores the one given here; for the one
-            // frame that a layout places it, it may be dragged from anywhere.
+        // A window dragged by its title bar keeps the position it had before
+        // the frame and ignores the one given here. For the one frame that a
+        // layout places it, or that its side of the canvas has moved (a strip
+        // appeared above the view), it may be dragged from anywhere, which
+        // makes the position given here count (not while a button is down: that may
+        // be the person dragging it).
+        let drifted = !moved
+            && !ctx.input(|i| i.pointer.any_down())
+            && ctx
+                .memory(|m| m.area_rect(id))
+                .is_some_and(|r| corner_of(r, pivot).distance(start) > 1.0);
+        if taken.is_some() || drifted {
             window = window.drag_area(egui::containers::WindowDrag::Anywhere);
         }
         // The window's own scroll area has no bar setting, so a solid
@@ -219,13 +244,39 @@ impl Panel {
         if let Some(scroll) = before {
             ctx.global_style_mut(|st| st.spacing.scroll = scroll);
         }
-        if let Some(r) = &shown
-            && r.response.drag_started()
+        // Only a drag in which the pointer moved counts: a click on a button
+        // inside it presses on the window too, and that must not pin it
+        // where it was (it would stop following its side of the canvas).
+        // With a title bar, egui moves a window by the response of its title
+        // (the id `__title_click` under the window's id, an egui internal that
+        // 0.36 does not export), not by the area's own response; the
+        // `a_dragged_panel_stays_until_the_layout_is_reset` test fails if an
+        // egui update renames it.
+        let grabbed = shown.as_ref().is_some_and(|r| r.response.dragged())
+            || ctx
+                .read_response(id.with("__title_click"))
+                .is_some_and(|r| r.dragged());
+        if shown.is_some()
+            && grabbed
+            && ctx.input(|i| {
+                i.pointer
+                    .press_origin()
+                    .zip(i.pointer.latest_pos())
+                    .is_some_and(|(from, to)| from.distance(to) > 1.0)
+            })
         {
             mark_moved(ctx, id);
         }
         shown
     }
+}
+
+/// The point of `rect` that `pivot` names: the corner a panel hangs from.
+fn corner_of(rect: egui::Rect, pivot: egui::Align2) -> egui::Pos2 {
+    egui::pos2(
+        rect.min.x + pivot.x().to_factor() * rect.width(),
+        rect.min.y + pivot.y().to_factor() * rect.height(),
+    )
 }
 
 /// How much a dialog's default size grows on a screen wider than the 1366
@@ -244,6 +295,10 @@ pub(super) fn dialog<'a>(
     title: impl Into<egui::WidgetText>,
     size: [f32; 2],
 ) -> egui::Window<'a> {
+    let title = title.into();
+    // egui derives the window's id from `Some(title text)`; `esc` reads it
+    // back. The test `escape_closes_the_dialog_on_top` catches a change.
+    ctx.data_mut(|d| d.insert_temp(pending_id(), egui::Id::new(Some(title.text()))));
     let screen = ctx.content_rect().shrink(MARGIN);
     let size = [
         size[0] * grow(screen.width()),
@@ -265,6 +320,70 @@ pub(super) fn dialog<'a>(
     }
 }
 
+/// For a dialog that sets its own window id: pass the id through here so
+/// [`esc`] finds the window.
+pub(super) fn keep_id(ctx: &egui::Context, id: egui::Id) -> egui::Id {
+    ctx.data_mut(|d| d.insert_temp(pending_id(), id));
+    id
+}
+
+fn esc_off_id() -> egui::Id {
+    egui::Id::new("panel_dialog_esc_off")
+}
+
+/// Turns [`esc`] off or on. The lesson replay presses Escape between
+/// lessons to clear the canvas and must not close the dialogs the lessons
+/// leave open (the enclosure lesson's ring check depends on one of them).
+#[cfg(test)]
+pub(super) fn set_esc_closes(ctx: &egui::Context, on: bool) {
+    ctx.data_mut(|d| d.insert_temp(esc_off_id(), !on));
+}
+
+fn pending_id() -> egui::Id {
+    egui::Id::new("panel_dialog_pending")
+}
+
+/// Whether a dialog window is on top, which is then the one Escape belongs
+/// to ([`esc`] closes it on the same key press).
+pub(super) fn dialog_on_top(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<egui::Id>(pending_id()))
+        .is_some_and(|id| {
+            let layer = egui::LayerId::new(egui::Order::Middle, id);
+            top_middle_layer(ctx) == Some(layer)
+        })
+}
+
+/// The floating window on top that was drawn last frame. A window that was
+/// closed keeps its remembered layer (and its place on top of the others),
+/// so the area order alone would leave Escape
+/// with nothing to close once the top one is gone.
+fn top_middle_layer(ctx: &egui::Context) -> Option<egui::LayerId> {
+    ctx.memory(|m| {
+        let layers: Vec<_> = m.layer_ids().collect();
+        layers
+            .into_iter()
+            .rev()
+            .find(|layer| layer.order == egui::Order::Middle && m.areas().visible_last_frame(layer))
+    })
+}
+
+/// Escape closes the dialog on top: wrap the `open` flag handed to
+/// `.open(..)` right after [`dialog`]. Does nothing while a text field has
+/// the keyboard (Escape is theirs then) or when another floating window is on
+/// top of the dialog.
+pub(super) fn esc<'a>(ctx: &egui::Context, open: &'a mut bool) -> &'a mut bool {
+    let id = ctx.data(|d| d.get_temp::<egui::Id>(pending_id()));
+    if let Some(id) = id
+        && !ctx.data(|d| d.get_temp::<bool>(esc_off_id()).unwrap_or(false))
+        && ctx.input(|i| i.key_pressed(egui::Key::Escape))
+        && !ctx.egui_wants_keyboard_input()
+        && top_middle_layer(ctx) == Some(egui::LayerId::new(egui::Order::Middle, id))
+    {
+        *open = false;
+    }
+    open
+}
+
 /// "Reset panel layout": every panel goes back to its default place and
 /// size.
 pub(super) fn reset_layout(ctx: &egui::Context) {
@@ -273,6 +392,21 @@ pub(super) fn reset_layout(ctx: &egui::Context) {
         let epoch: u32 = d.get_persisted(epoch_id()).unwrap_or(0);
         d.insert_persisted(epoch_id(), epoch.wrapping_add(1));
     });
+}
+
+fn corner_id() -> egui::Id {
+    egui::Id::new("panel_corner_reserved")
+}
+
+/// The bottom right corner is taken by a card (the lesson card) this tall:
+/// panels that start at the right side stay above it instead of drawing
+/// under it. 0 gives the corner back. Read on the next frame.
+pub(super) fn reserve_bottom_right(ctx: &egui::Context, height: f32) {
+    ctx.data_mut(|d| d.insert_temp(corner_id(), height));
+}
+
+fn reserved_bottom_right(ctx: &egui::Context) -> f32 {
+    ctx.data(|d| d.get_temp::<f32>(corner_id())).unwrap_or(0.0)
 }
 
 fn epoch_id() -> egui::Id {
@@ -434,6 +568,40 @@ mod tests {
     }
 
     #[test]
+    fn an_unmoved_panel_follows_its_canvas_when_the_canvas_moves_down() {
+        let ctx = egui::Context::default();
+        let top_with = |ctx: &egui::Context, canvas_top: f32| {
+            let area = egui::Rect::from_min_max(egui::pos2(0.0, canvas_top), canvas().max);
+            let mut top = 0.0;
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(canvas()),
+                    ..Default::default()
+                },
+                |ctx| {
+                    let panel = Panel::new("test", "Test", area, Side::Right, 300.0);
+                    if let Some(r) = panel.show(ctx, |ui| {
+                        ui.label("content");
+                    }) {
+                        top = r.response.rect.top();
+                    }
+                },
+            );
+            out.textures_delta.clear();
+            top
+        };
+        for _ in 0..3 {
+            top_with(&ctx, 0.0);
+        }
+        let first = top_with(&ctx, 0.0);
+        let mut later = first;
+        for _ in 0..3 {
+            later = top_with(&ctx, 66.0);
+        }
+        assert!((later - first - 66.0).abs() < 1.5, "{first} -> {later}");
+    }
+
+    #[test]
     fn a_panel_starts_against_its_side_inside_the_canvas() {
         let ctx = egui::Context::default();
         let left = frame(&ctx, Side::Left);
@@ -502,6 +670,68 @@ mod tests {
             pressed,
             modifiers: egui::Modifiers::NONE,
         }
+    }
+
+    /// One frame of a dialog opened with `open`; `escape` presses Escape.
+    fn dialog_frame(ctx: &egui::Context, open: &mut bool, escape: bool) {
+        dialog_frame_with(ctx, open, escape, false);
+    }
+
+    /// As `dialog_frame`; `own_id` gives the window an id of its own.
+    fn dialog_frame_with(ctx: &egui::Context, open: &mut bool, escape: bool, own_id: bool) {
+        let events = if escape {
+            vec![egui::Event::Key {
+                key: egui::Key::Escape,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: egui::Modifiers::NONE,
+            }]
+        } else {
+            Vec::new()
+        };
+        let mut out = ctx.run_ui(
+            egui::RawInput {
+                screen_rect: Some(canvas()),
+                events,
+                ..Default::default()
+            },
+            |ctx| {
+                if *open {
+                    let window = dialog(ctx, "Escape test", [400.0, 0.0]);
+                    let window = if own_id {
+                        window.id(keep_id(ctx, egui::Id::new("own_id_dialog")))
+                    } else {
+                        window
+                    };
+                    window.open(esc(ctx, open)).show(ctx, |ui| {
+                        ui.label("content");
+                    });
+                }
+            },
+        );
+        out.textures_delta.clear();
+    }
+
+    #[test]
+    fn escape_closes_the_dialog_on_top() {
+        let ctx = egui::Context::default();
+        let mut open = true;
+        dialog_frame(&ctx, &mut open, false);
+        dialog_frame(&ctx, &mut open, false);
+        assert!(open, "stays open without a key");
+        dialog_frame(&ctx, &mut open, true);
+        assert!(!open, "Escape closes it");
+    }
+
+    #[test]
+    fn escape_closes_a_dialog_with_its_own_window_id() {
+        let ctx = egui::Context::default();
+        let mut open = true;
+        dialog_frame_with(&ctx, &mut open, false, true);
+        dialog_frame_with(&ctx, &mut open, false, true);
+        dialog_frame_with(&ctx, &mut open, true, true);
+        assert!(!open);
     }
 
     #[test]

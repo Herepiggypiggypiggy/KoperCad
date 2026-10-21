@@ -1,0 +1,45 @@
+@title Journey: new project, place parts by keyboard, check, save, reopen
+@area Journeys
+# Q search places a part at the next click; Ctrl+S on an untitled project asks for a file (answered by the harness).
+fresh
+key ctrl+n
+wait 20
+shot new-project
+key q
+wait 4
+text circuit breaker
+wait 6
+click_text "Miniature circuit breaker, 3-pole" Button
+wait 6
+click 450 200
+wait 6
+key Escape
+key q
+wait 4
+text contactor
+wait 6
+click_text "Contactor main contacts, 3-pole" Button
+wait 6
+click 450 350
+wait 6
+key Escape
+shot placed
+expect_scene F1
+expect_scene K1
+check_layout
+check_blank placed
+click_text Check #1
+wait 6
+shot check-menu
+key Escape
+answer_dialog ~/Documents/KoperCAD/new-project.novo
+key ctrl+s
+wait 20
+shot saved
+expect_file ~/Documents/KoperCAD/new-project.novo 4000
+check_layout
+open ~/Documents/KoperCAD/new-project.novo
+wait 20
+expect_scene K1
+shot reopened
+check_layout

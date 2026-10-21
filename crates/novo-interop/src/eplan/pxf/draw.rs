@@ -17,7 +17,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use novo_core::{Direction, Pin, Point};
+use novo_core::{Direction, Pin, Point, Rotation};
 use novo_symbols::{Library, Pack, Symbol};
 
 use super::library::{DOWN, LEFT, LibPort, Match, RIGHT, UP};
@@ -25,7 +25,7 @@ use super::model::{DeviceRole, PageClass, PxfFile};
 use crate::eplan::nets::{
     ConnGraph, ConnPoint, Dir, Interruption, NetIssue, PinKey, ReconNets, rebuild_nets,
 };
-use crate::eplan::symbols::{EplanSymbol, SymbolMapper, Target};
+use crate::eplan::symbols::{EplanSymbol, Port, SymbolMapper, Target, fit_geometry};
 
 /// EPLAN is y up from the bottom of the sheet; KoperCAD is y down from the
 /// top of an A3 landscape page.
@@ -72,6 +72,8 @@ pub(super) struct DrawnWire {
     pub from: (usize, u16),
     pub to: (usize, u16),
     pub route: Vec<Point>,
+    /// The route is EPLAN's: its runs and nodes, not a guess between the pins.
+    pub followed: bool,
 }
 
 /// What the drawing step did, for the report.
@@ -84,9 +86,13 @@ pub struct DrawStats {
     pub unplaced: usize,
     /// Placements drawn although the library only loosely matched.
     pub loose: usize,
+    /// Function names of the loosely matched placements, with counts.
+    pub loose_functions: BTreeMap<String, usize>,
     pub interruptions: usize,
     pub nets: usize,
     pub wires: usize,
+    /// Wires drawn along EPLAN's own runs and nodes, not a guessed route.
+    pub wires_followed: usize,
     /// Function names drawn as boxes, with counts.
     pub box_functions: BTreeMap<String, usize>,
     /// The same, told apart by tag letters and pin designations in order.
@@ -307,14 +313,18 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             out.stats.unplaced += 1;
             continue;
         };
-        if quality > Match::SameFamily {
-            out.stats.loose += 1;
-        }
         let function = file
             .library
             .function(key3)
             .map(|f| f.name.get("en_US").to_string())
             .unwrap_or_default();
+        if quality > Match::SameFamily {
+            out.stats.loose += 1;
+            *out.stats
+                .loose_functions
+                .entry(function.clone())
+                .or_default() += 1;
+        }
         let owner = format!("d{di}");
         let role = match d.role {
             DeviceRole::Terminal => Role::Terminal {
@@ -410,7 +420,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                     function.clone()
                 };
                 *out.stats.box_functions.entry(label).or_default() += 1;
-                box_label = function.clone();
+                box_label = box_caption(&function, d.type_text.get("en_US"), &d.part_number);
                 *out.stats
                     .box_kinds
                     .entry((
@@ -585,7 +595,9 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             out.wires.extend(spanning_wires(page, &pts, &placed));
         }
     }
+    follow_runs(&mut out.wires, &nets, &graph, &by_key, &placed);
     out.stats.wires = out.wires.len();
+    out.stats.wires_followed = out.wires.iter().filter(|w| w.followed).count();
     out.keys = by_key
         .iter()
         .map(|(k, &(si, pin, _))| (k.clone(), (si, pin)))
@@ -671,9 +683,112 @@ fn spanning_wires(page: usize, pts: &[(usize, u16, Point)], placed: &[Placed]) -
                 pts[j].2,
                 placed[pts[i].0].symbol.pins[pts[i].1 as usize].direction,
             ),
+            followed: false,
         });
     }
     wires
+}
+
+/// Points one wire's search may reach before it keeps its guessed route.
+const MAX_SEARCH: usize = 5000;
+
+/// Replaces the guessed route of each wire by the one EPLAN implies: the
+/// straight runs between the two pins through nodes only (a run never passes
+/// through another symbol's pin). Wires with no such path keep their guess.
+fn follow_runs(
+    wires: &mut [DrawnWire],
+    nets: &ReconNets,
+    graph: &ConnGraph,
+    by_key: &BTreeMap<PinKey, (usize, u16, usize)>,
+    placed: &[Placed],
+) {
+    let at: BTreeMap<&PinKey, (bool, Point)> = graph
+        .points
+        .iter()
+        .map(|p| (&p.key, (p.node, Point::new(p.at.x, PAGE_HEIGHT - p.at.y))))
+        .collect();
+    let mut next: BTreeMap<&PinKey, Vec<&PinKey>> = BTreeMap::new();
+    for (a, b) in &nets.runs {
+        next.entry(a).or_default().push(b);
+        next.entry(b).or_default().push(a);
+    }
+    let key_of: BTreeMap<(usize, u16), &PinKey> = by_key
+        .iter()
+        .rev()
+        .map(|(k, &(si, pin, _))| ((si, pin), k))
+        .collect();
+    for w in wires.iter_mut() {
+        let (Some(&from), Some(&to)) = (key_of.get(&w.from), key_of.get(&w.to)) else {
+            continue;
+        };
+        // Breadth first, so the fewest corners win; only nodes are passed.
+        let mut came: BTreeMap<&PinKey, &PinKey> = BTreeMap::new();
+        let mut queue = std::collections::VecDeque::from([from]);
+        let mut seen: BTreeSet<&PinKey> = BTreeSet::from([from]);
+        let mut found = false;
+        while let Some(k) = queue.pop_front() {
+            // A bound per wire keeps the import time in check on a huge net.
+            if seen.len() > MAX_SEARCH {
+                break;
+            }
+            if k == to {
+                found = true;
+                break;
+            }
+            if k != from && !at.get(k).is_some_and(|(node, _)| *node) {
+                continue;
+            }
+            for &m in next.get(k).into_iter().flatten() {
+                if seen.insert(m) {
+                    came.insert(m, k);
+                    queue.push_back(m);
+                }
+            }
+        }
+        if !found {
+            continue;
+        }
+        let mut path = vec![to];
+        while let Some(&prev) = came.get(path[path.len() - 1]) {
+            path.push(prev);
+        }
+        path.reverse();
+        // The pins sit where the drawn symbol has them, which can be off from
+        // where the file has the port (a loosely matched symbol): an end that
+        // is not in line with its first node gets a right-angle leg.
+        let end = |(si, pin): (usize, u16)| placed[si].page_pos.get(&pin).copied();
+        let (Some(a), Some(b)) = (end(w.from), end(w.to)) else {
+            continue;
+        };
+        let mut pts: Vec<Point> = vec![a];
+        let interior = path.len().saturating_sub(2);
+        for k in path.iter().skip(1).take(interior) {
+            if let Some(&(_, p)) = at.get(k) {
+                pts.push(p);
+            }
+        }
+        pts.push(b);
+        let mut full: Vec<Point> = vec![a];
+        for i in 1..pts.len() {
+            let (p, q) = (pts[i - 1], pts[i]);
+            let dir = (i == 1).then(|| placed[w.from.0].symbol.pins[w.from.1 as usize].direction);
+            full.extend(route(p, q, dir.flatten()));
+            full.push(q);
+        }
+        full.dedup_by(|x, y| (x.x - y.x).abs() < 1e-6 && (x.y - y.y).abs() < 1e-6);
+        // Keep only the corners; the ends are the pins themselves.
+        let mut corners: Vec<Point> = Vec::new();
+        for i in 1..full.len().saturating_sub(1) {
+            let (a, b, c) = (full[i - 1], full[i], full[i + 1]);
+            let straight = ((a.x - b.x).abs() < 1e-6 && (b.x - c.x).abs() < 1e-6)
+                || ((a.y - b.y).abs() < 1e-6 && (b.y - c.y).abs() < 1e-6);
+            if !straight {
+                corners.push(b);
+            }
+        }
+        w.route = corners;
+        w.followed = true;
+    }
 }
 
 /// A right-angle run from `a` to `b`, leaving `a` along its pin direction.
@@ -711,7 +826,7 @@ fn pick_library_symbol(
     {
         candidates.push(s);
     }
-    if candidates.is_empty() && !function.is_empty() {
+    if !function.is_empty() {
         let source = EplanSymbol {
             key: None,
             function: Some(function.to_string()),
@@ -738,6 +853,29 @@ fn pick_library_symbol(
         if s.connections.len() != ports.len() {
             continue;
         }
+        // Where the pin names say nothing in KoperCAD (`48Vac`, `0V48`), the
+        // arrangement of the points does: the primary of a transformer is on
+        // one side, the secondary on the other. Only an unturned, unmirrored
+        // fit is used, since the symbol is placed as it is.
+        let by_position = || -> Vec<usize> {
+            if ports.len() >= 3 {
+                let points: Vec<Port> = ports
+                    .iter()
+                    .map(|p| Port {
+                        // EPLAN's y is up; the fit's is down.
+                        at: Point::new(p.x, -p.y),
+                        dir: direction_of(p.dirs),
+                    })
+                    .collect();
+                if let Some(f) = fit_geometry(&points, s)
+                    && f.rotation == Rotation::R0
+                    && !f.mirrored
+                {
+                    return f.connection;
+                }
+            }
+            (0..ports.len()).collect()
+        };
         let conns: Vec<usize> = if named {
             let map = crate::eplan::symbols::match_pins(pin_names, s, None);
             if map.is_complete() && !map.positional {
@@ -751,13 +889,13 @@ fn pick_library_symbol(
                 if by_id.iter().all(Option::is_some) {
                     by_id.into_iter().flatten().collect()
                 } else {
-                    (0..ports.len()).collect()
+                    by_position()
                 }
             } else {
-                (0..ports.len()).collect()
+                by_position()
             }
         } else {
-            (0..ports.len()).collect()
+            by_position()
         };
         let distinct: BTreeSet<usize> = conns.iter().copied().collect();
         if distinct.len() == ports.len() {
@@ -767,10 +905,31 @@ fn pick_library_symbol(
     (None, Vec::new())
 }
 
+/// The text beside a labelled box. A black box has no function worth showing,
+/// so the placement's own words come first: the first line of its type text,
+/// then its part number; the function name is the last resort.
+fn box_caption(function: &str, type_text: &str, part_number: &str) -> String {
+    let type_line = type_text
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or_default();
+    if !type_line.is_empty() {
+        type_line.to_string()
+    } else if !part_number.is_empty() {
+        part_number.to_string()
+    } else {
+        function.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use super::super::library::{DOWN, UP};
     use super::*;
     use crate::eplan::pxf::PxfInterruption;
+    use crate::eplan::symbols::SymbolMapper;
+    use novo_symbols::{Library, Pack};
 
     fn point(page: usize, text: &str) -> PxfInterruption {
         PxfInterruption {
@@ -781,6 +940,111 @@ mod tests {
             position: Some((10.0, 10.0)),
             variant: 0,
         }
+    }
+
+    #[test]
+    fn a_wire_follows_the_runs_through_the_nodes_of_the_file() {
+        // A pin facing right, a corner node, a pin facing down (y up in the
+        // file): the wire turns at the node, not at a guessed corner.
+        let mut graph = ConnGraph::default();
+        graph
+            .points
+            .push(ConnPoint::pin("a", 0, 0.0, 0.0, Dir::Right));
+        graph
+            .points
+            .push(ConnPoint::node("n", 0, 10.0, 0.0, &[Dir::Left, Dir::Up]));
+        graph
+            .points
+            .push(ConnPoint::pin("b", 0, 10.0, 20.0, Dir::Down));
+        let nets = rebuild_nets(&graph);
+        // each run is seen from both of its ends
+        assert!(nets.runs.len() >= 2);
+        let by_key: BTreeMap<PinKey, (usize, u16, usize)> = [
+            (PinKey("a".into()), (0, 0, 0)),
+            (PinKey("b".into()), (1, 0, 0)),
+        ]
+        .into();
+        let sym = |x: f64, y: f64| Placed {
+            symbol: DrawnSymbol {
+                page: 0,
+                key: BOX_SYMBOL.to_string(),
+                origin: Point::new(x, y),
+                pins: vec![Pin::new("1", 0.0, 0.0)],
+                bridges: Vec::new(),
+                pass_through: Vec::new(),
+                role: Role::Plain,
+                label: String::new(),
+            },
+            page_pos: BTreeMap::from([(0, Point::new(x, y))]),
+        };
+        let placed = [sym(0.0, PAGE_HEIGHT), sym(10.0, PAGE_HEIGHT - 20.0)];
+        let mut wires = vec![DrawnWire {
+            page: 0,
+            from: (0, 0),
+            to: (1, 0),
+            route: vec![Point::new(0.0, 0.0)],
+            followed: false,
+        }];
+        follow_runs(&mut wires, &nets, &graph, &by_key, &placed);
+        assert!(wires[0].followed);
+        assert_eq!(wires[0].route, vec![Point::new(10.0, PAGE_HEIGHT)]);
+        // No path through nodes: the guess stays.
+        wires[0].followed = false;
+        wires[0].route = vec![Point::new(1.0, 1.0)];
+        let none = ReconNets::default();
+        follow_runs(&mut wires, &none, &graph, &by_key, &placed);
+        assert!(!wires[0].followed);
+        assert_eq!(wires[0].route, vec![Point::new(1.0, 1.0)]);
+    }
+
+    #[test]
+    fn a_box_is_captioned_by_the_placements_own_words_first() {
+        assert_eq!(
+            box_caption("Black box", "\n Safety relay\n230 V", "MAKER.RELAY"),
+            "Safety relay"
+        );
+        assert_eq!(box_caption("Black box", "", "MAKER.RELAY"), "MAKER.RELAY");
+        assert_eq!(box_caption("Black box", " ", ""), "Black box");
+    }
+
+    fn port(index: u32, x: f64, y: f64, dirs: u8) -> LibPort {
+        LibPort { index, x, y, dirs }
+    }
+
+    #[test]
+    fn a_transformer_with_pe_is_fitted_by_where_its_points_sit() {
+        // Listed secondary, primary, secondary, primary, earth, as a
+        // crane drawing has them (y up: the secondary and the earth point at
+        // the bottom, leaving downward); the designations (`48Vac`, `0V48`)
+        // mean nothing in KoperCAD, the arrangement does.
+        let lib = Library::shared(Pack::Iec);
+        let mapper = SymbolMapper::new(Pack::Iec);
+        let ports = [
+            port(0, 0.0, -8.0, DOWN),
+            port(1, 0.0, 8.0, UP),
+            port(2, 16.0, -8.0, DOWN),
+            port(3, 16.0, 8.0, UP),
+            port(4, 24.0, -8.0, DOWN),
+        ];
+        let pins: Vec<String> = ["48Vac", "L1", "0V48", "L2", "PE"]
+            .map(String::from)
+            .to_vec();
+        let (symbol, conns) = pick_library_symbol(
+            lib,
+            &mapper,
+            "Transformer, 5 connection points with PE",
+            "T",
+            &pins,
+            &ports,
+            false,
+        );
+        let symbol = symbol.expect("the library has a transformer with PE");
+        assert_eq!(symbol.id, "iec/transformers/transformer_1ph_pe");
+        let ids: Vec<&str> = conns
+            .iter()
+            .map(|&j| symbol.connections[j].id.as_str())
+            .collect();
+        assert_eq!(ids, ["2.1", "1.1", "2.2", "1.2", "PE"]);
     }
 
     #[test]

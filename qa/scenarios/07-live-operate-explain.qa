@@ -1,0 +1,21 @@
+@title Live view: operate and explain
+@area Schematic
+@sizes 1366x768
+# Shift+L opens the live view. The main page has nothing to operate and points
+# to the page that has the buttons; there the Operate rows are whole.
+click_text "Open example"
+wait 20
+key shift+l
+wait 20
+shot live-main-page
+expect "Why?"
+check_layout
+tree Go
+try click_text "Go to page 2 Control circuit"
+wait 20
+shot live-control-page
+expect "Operate"
+check_layout
+click_text "Why?"
+wait 10
+expect "Click a wire or a device"

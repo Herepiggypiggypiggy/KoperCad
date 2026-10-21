@@ -76,15 +76,18 @@
 //! [`PageSetup::title_block_mm`] to match that frame.
 
 mod assembly;
+pub mod autopilot;
 pub(crate) mod bench;
 mod bom;
 pub mod commissioning;
+mod counts;
 mod cutlist;
 mod defaults;
 pub mod designer;
 mod devices;
 mod diagrams;
 mod export;
+pub mod handover;
 pub mod i18n;
 mod io;
 mod label_sheet;
@@ -101,6 +104,7 @@ mod strip_diagram;
 mod table;
 mod toc;
 mod wire_defaults;
+pub mod wire_rules;
 mod wirecut;
 mod wires;
 
@@ -110,6 +114,7 @@ pub use bench::{
     bench_jobs, ends_without_ferrule, ferrule_counts, is_estimate, with_spares,
 };
 pub use bom::BillOfMaterials;
+pub use counts::{WireSet, count_text, headline_count, wire_set_mismatch};
 pub use cutlist::CutList;
 pub use defaults::{
     GeneratedPageSpec, add_generated_pages, default_generated_pages, default_generated_pages_with,
@@ -138,8 +143,8 @@ pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::{PanelContents, TableOfContents};
 pub use wire_defaults::{SIZES_MM2, UnsetWires, WireDefaults, apply_wire_defaults, unset_wires};
 pub use wirecut::{
-    FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut, WireCutJob, WireEnd,
-    typical_strip_mm, wire_cut_csv, wire_cut_jobs, wire_cut_jobs_with,
+    CableRun, FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut, WireCutJob, WireEnd,
+    cable_runs, hookup_cut_mm, typical_strip_mm, wire_cut_csv, wire_cut_jobs, wire_cut_jobs_with,
 };
 pub use wires::WireList;
 

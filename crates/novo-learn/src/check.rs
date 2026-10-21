@@ -52,6 +52,8 @@ pub struct Facts {
     pub live_pins: BTreeSet<String>,
     /// Tags of the devices with a pole closed in the live view.
     pub live_closed: BTreeSet<String>,
+    /// The learner has answered the open step's prediction question.
+    pub predicted: bool,
 }
 
 /// A check, as written in a lesson file (`expect = { ... }`).
@@ -70,6 +72,8 @@ pub enum Check {
     WiringMode(String),
     Live(bool),
     CoilOn(String),
+    /// The open step's prediction question has an answer (`predict`).
+    Predicted(bool),
     Lit(String),
     PoleClosed(String),
     Potential(PotentialCheck),
@@ -255,6 +259,7 @@ impl Check {
             Check::ZoomAtLeast(z) => cx.facts.zoom >= *z,
             Check::WiringMode(mode) => cx.facts.wiring_mode == *mode,
             Check::Live(on) => cx.facts.live == *on,
+            Check::Predicted(want) => cx.facts.predicted == *want,
             Check::CoilOn(tag) => cx
                 .facts
                 .live_coils
@@ -287,7 +292,11 @@ impl Check {
     /// does (it reads latched events), so it is false when a step opens.
     pub fn reads_events(&self) -> bool {
         match self {
-            Check::Command(_) | Check::Clicked(_) | Check::Opened(_) | Check::Signal(_) => true,
+            Check::Command(_)
+            | Check::Clicked(_)
+            | Check::Opened(_)
+            | Check::Signal(_)
+            | Check::Predicted(_) => true,
             Check::All(v) | Check::Any(v) => v.iter().any(Check::reads_events),
             Check::Not(c) => c.reads_events(),
             _ => false,

@@ -47,6 +47,8 @@ pub(crate) struct Controls {
     /// A marker where each terminal of a part is (Parts window > Connection
     /// points finds or edits them).
     pub(super) pins: bool,
+    /// Ducts tinted by how full the routed wires leave them.
+    pub(super) duct_fill: bool,
     /// How many devices are drawn with a maker model, set by the host each frame.
     pub(super) models_text: Option<String>,
 }
@@ -69,6 +71,7 @@ impl Default for Controls {
             heat_panel: false,
             surfaces: false,
             pins: false,
+            duct_fill: false,
             models_text: None,
         }
     }
@@ -109,10 +112,20 @@ impl Controls {
 }
 
 /// Wide enough for every toggle and the door slider on one row.
-const TOOLBAR_WIDTH: f32 = 900.0;
+const TOOLBAR_WIDTH: f32 = 980.0;
 
 /// Where a panel under the toolbar starts, from the top of the view.
 pub(super) const BELOW: f32 = 140.0;
+
+/// How much of the view's height the toolbar covers at the top, as a
+/// fraction: a fit frames the model below it. Before the toolbar has been
+/// drawn once it is [`BELOW`].
+pub(super) fn toolbar_inset(ctx: &egui::Context, view: egui::Rect) -> f32 {
+    let covered = ctx
+        .memory(|m| m.area_rect(super::panel::id("view3d_toolbar")))
+        .map_or(BELOW, |r| r.bottom() - view.top());
+    (covered / view.height().max(1.0)).clamp(0.0, 0.4)
+}
 
 /// The toolbar, top left of the view. `limit` is how far the enclosure's door
 /// opens, `None` when it has none.
@@ -156,6 +169,7 @@ pub(super) fn toolbar(
                 controls.missing_data,
                 controls.surfaces,
                 controls.pins,
+                controls.duct_fill,
             ]
             .iter()
             .filter(|b| **b)
@@ -191,18 +205,20 @@ pub(super) fn toolbar(
                     );
                     toggle(
                         ui,
+                        &mut controls.duct_fill,
+                        "Duct fill",
+                        "Tint each duct by how full the routed wires leave it: green up to 80 % \
+                         of the allowed fill, amber above, red over the limit. A duct nothing runs in \
+                         keeps its normal colour; grey means the duct has no cross-section yet. The figure is the routing \
+                         engine's (wire section and the project's fill limit).",
+                    );
+                    toggle(
+                        ui,
                         &mut controls.pins,
                         "Connection points",
                         "Mark where each terminal of a part is: green when measured or \
                          typed, amber when estimated. Set them in the Parts window > \
                          Connection points.",
-                    );
-                    toggle(
-                        ui,
-                        measure,
-                        "Measure",
-                        "Click two points to read the distance, and the gap between two \
-                         devices (View > 3D > Measure)",
                     );
                     toggle(
                         ui,
@@ -277,8 +293,17 @@ pub(super) fn toolbar(
                 &mut controls.dimensions,
                 "Dimensions",
                 "Measuring lines in mm: the enclosure, and for one selected part its \
-                 size and its distances to neighbours and the plate edge (View > 3D > \
+                 size and its distances to neighbours and the plate edge, and a dashed \
+                 rectangle around it: the free space it asks for (View > 3D > \
                  Dimensions)",
+            );
+            // A tool, not a layer: next to the other measuring control.
+            toggle(
+                ui,
+                measure,
+                "Measure",
+                "Click two points to read the distance, and the gap between two \
+                 devices (View > 3D > Measure)",
             );
             if controls.reduced {
                 ui.label(
@@ -300,7 +325,13 @@ pub(super) fn toolbar(
             if let Some(limit) = limit
                 && controls.layers.door
             {
-                ui.separator();
+                // The slider does not wrap by itself: in a narrow window the door
+                // gets its own row instead of running under the view cube.
+                if width < TOOLBAR_WIDTH {
+                    ui.end_row();
+                } else {
+                    ui.separator();
+                }
                 let label = if controls.door_deg > 0.0 {
                     "Close door"
                 } else {

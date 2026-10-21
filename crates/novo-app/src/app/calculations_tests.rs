@@ -337,6 +337,52 @@ fn the_safety_report_is_written_and_says_not_met() {
 }
 
 #[test]
+fn the_safety_sheets_are_one_page_per_function_with_drawing_locations() {
+    use novo_checks::safety::SafetyFunction;
+    let (dir, mut d, _) = open();
+    assert!(
+        d.app
+            .store_safety_functions(&[SafetyFunction::new("Guard"), SafetyFunction::new("E-stop")])
+    );
+    let input =
+        super::safety_report::report_input(d.app.backend.document().unwrap().project(), "T");
+    let sheets = novo_reports::safety::safety_sheets(&input);
+    assert_eq!(sheets.sections.len(), 2);
+    assert_eq!(sheets.sections[1].title, "Safety function 2: E-stop");
+    let rows = sheets.sections[0].text_rows();
+    assert!(
+        rows.iter()
+            .any(|r| r[0] == "Required" && r[3] == "S2 F1 P1")
+    );
+    let path = dir.path().join("sheets.pdf");
+    assert_eq!(
+        d.app.write_safety_pdf(&path, true).as_deref(),
+        Some(path.as_path())
+    );
+    assert!(std::fs::metadata(&path).unwrap().len() > 500);
+}
+
+#[test]
+fn the_example_has_a_rated_safety_function_and_the_command_exports_its_sheet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let list = novo_checks::safety::functions(project);
+    assert_eq!(list.len(), 1);
+    let rating = novo_checks::safety::rate(project, &list[0]);
+    assert_eq!(rating.met(), Some(true), "{rating:?}");
+    assert!(novo_workflow::commands::get("export.safety_sheets").is_some());
+    d.app.run_command(&ctx, "export.safety_sheets", None);
+    d.frame();
+    let out = d.app.wb.last_export.clone().expect("exported");
+    assert!(out.to_string_lossy().contains("safety sheets"));
+    assert!(std::fs::metadata(out).unwrap().len() > 500);
+}
+
+#[test]
 fn the_safety_calculator_survives_save_close_and_reopen() {
     use novo_safety::{Category, Severity};
     let dir = tempfile::tempdir().unwrap();

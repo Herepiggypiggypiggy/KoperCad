@@ -115,7 +115,7 @@ impl Drive {
         self.frame();
     }
 
-    fn editor_leave(&mut self) {
+    pub(super) fn editor_leave(&mut self) {
         if let Some(view) = self.app.canvas.schematic() {
             view.editor.leave_tool();
         }
@@ -152,7 +152,7 @@ impl Drive {
         *p.expect("the symbol has pins")
     }
 
-    fn select(&mut self, symbol: SymbolId) {
+    pub(super) fn select(&mut self, symbol: SymbolId) {
         let view = self.app.canvas.schematic().expect("editor");
         view.canvas.selection.clear();
         view.canvas.selection.apply(
@@ -707,8 +707,16 @@ fn marks_keys_and_export_follow_the_design() {
     assert_eq!(rules.disabled, None);
     d.app.wb.field.close();
 
-    // A saved project's PDF goes next to its file, named after it; a second
-    // export says it replaced the first.
+    // A saved project's PDF is named after its file and goes to the PDF
+    // folder (Documents\KoperCAD unless a profile folder moves it; not beside
+    // the project); a second export says it replaced the first.
+    let default_dir = d.app.pdf_base().expect("a PDF folder").0;
+    assert_ne!(default_dir, dir.path());
+    assert!(
+        default_dir.ends_with("KoperCAD") || default_dir.ends_with("NovoElectric"),
+        "{default_dir:?}"
+    );
+    d.app.wb.pdf_dir = Some(dir.path().to_owned());
     let pdf = d.app.export_pdf().expect("exported");
     assert_eq!(pdf, dir.path().join("Plant 2.pdf"));
     assert!(pdf.is_file());
@@ -1907,8 +1915,8 @@ fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
         let zoom = view.canvas.viewport.zoom;
         // The tolerance the canvas itself picks with.
         let tol = view.canvas.viewport.screen_to_world_len(5.0);
-        let mut found = None;
-        'scan: for dy in -80..=80 {
+        let mut hits = Vec::new();
+        for dy in -80..=80 {
             for dx in -80..=80 {
                 let w = novo_canvas::Vec2::new(
                     origin.x as f32 + dx as f32 * 0.5,
@@ -1924,11 +1932,13 @@ fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
                             | LabelKind::Potential
                     )
                 {
-                    found = Some(w);
-                    break 'scan;
+                    hits.push(w);
                 }
             }
         }
+        // The middle of the label, not the first point that touches it: the
+        // edge can belong to a neighbour at some zoom levels.
+        let found = hits.get(hits.len() / 2).copied();
         let Some(w) = found else { return false };
         let at = view.canvas.viewport.world_to_screen(w);
         let pos = rect.min + egui::vec2(at.x, at.y);
@@ -2046,6 +2056,23 @@ fn the_issue_revision_window_proposes_everything_and_issues_in_one_step() {
         project
             .pages()
             .all(|p| p.frozen.as_ref().is_some_and(|f| f.revision == "A"))
+    );
+    // Later: an empty description is refused unless "No description" is ticked.
+    d.app.run_command(&ctx, "revision.issue", None);
+    let mut blank = d.app.wb.issue.take().unwrap();
+    blank.description = "  ".into();
+    d.app.submit_issue(blank);
+    let kept = d.app.wb.issue.take().expect("the window stays open");
+    assert!(kept.error.as_deref().unwrap().contains("what changed"));
+    assert_eq!(
+        d.app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .revisions()
+            .count(),
+        1
     );
     // The next proposal follows, and a taken index is refused in place.
     d.app.run_command(&ctx, "revision.issue", None);

@@ -108,10 +108,17 @@ pub struct Settings {
     /// A swipe in wheel lines pans the 3D view instead of zooming (Windows
     /// touchpads); the 3D toolbar's Layers > Trackpad pans.
     pub trackpad_pans: bool,
-    /// What the person last chose in File > Export drawings > Export PDF...
+    /// What the person last chose in File > Export drawings > Export PDF with options...
     /// (`app/pdf_options.rs`): a per-user preference, kept in the settings
     /// file under the user's profile.
     pub pdf_choice: PdfChoice,
+    /// Paper, scale, margins and page numbers last chosen in the print
+    /// preview (`app/print_preview.rs`), per user.
+    pub print_choice: PrintChoice,
+    /// Saved plot sets (`app/print_preview.rs`), by project: the tag of the
+    /// project file's path (`pdf::owner_tag`), so two projects keep their
+    /// own sets. Per user, not in the project file.
+    pub plot_sets: BTreeMap<String, Vec<PlotSetChoice>>,
     /// A folder of the person's own symbols (`*.toml`, ids relative to the
     /// folder), offered beside the built-in pack. Per user, not in the
     /// project.
@@ -179,6 +186,67 @@ impl Default for PdfChoice {
             checks_appendix: true,
             look: "black".into(),
             title: String::new(),
+        }
+    }
+}
+
+/// How the print preview places sheets on paper (`novo_pdf::PrintSetup`).
+/// Whole numbers only, so settings compare exactly.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PrintChoice {
+    /// `PrintPaper::key`: `"sheet"`, `"a4"`, `"a3"`, ...
+    pub paper: String,
+    /// `Orientation::key`: `"auto"`, `"landscape"` or `"portrait"`.
+    pub orientation: String,
+    /// Fit the sheet to the paper; otherwise print at `percent`.
+    pub fit: bool,
+    /// The fixed scale in percent (100 is true size).
+    pub percent: u32,
+    /// Empty paper on every side, in millimetres.
+    pub margin_mm: u32,
+    pub centre: bool,
+    /// `Page n of N` and the sheet name under every sheet.
+    pub page_numbers: bool,
+}
+
+impl Default for PrintChoice {
+    fn default() -> Self {
+        Self {
+            paper: "a4".into(),
+            orientation: "auto".into(),
+            fit: true,
+            percent: 100,
+            margin_mm: 8,
+            centre: true,
+            page_numbers: true,
+        }
+    }
+}
+
+/// A saved set of pages with the way to print them: one PDF.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PlotSetChoice {
+    pub name: String,
+    /// The page names in the set, in the project's order. Names, not ids:
+    /// a set survives a project reopened from a copy.
+    pub pages: Vec<String>,
+    pub print: PrintChoice,
+    /// `"black"` or `"colour"`, as in the PDF options.
+    pub look: String,
+    /// The design checks page at the end.
+    pub checks: bool,
+}
+
+impl Default for PlotSetChoice {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            pages: Vec::new(),
+            print: PrintChoice::default(),
+            look: "black".into(),
+            checks: false,
         }
     }
 }

@@ -4,17 +4,35 @@
 use eframe::egui;
 use novo_canvas::model::item_id;
 use novo_canvas::{Mark, MarkKind};
-use novo_checks::{Problem, Severity, Summary};
-use novo_core::{AnyId, PageId};
+use novo_checks::{Problem, ProblemKind, Severity, Summary};
+use novo_core::{AnyId, PageId, Project};
 use novo_xref::Place;
 
 use super::{Level, NovoApp};
+
+/// The open design-check problems plus the wires that break the project's
+/// house wire rules (those rules live in the reports crate, so the checks
+/// crate cannot see them). A waiver of "Wire breaks project rule" covers them.
+pub(super) fn open_problems(project: &Project) -> Vec<Problem> {
+    let mut problems = novo_checks::check_open(project);
+    for b in novo_reports::autopilot::rule_breaks(project) {
+        let mut problem = Problem::new(ProblemKind::WireRule, vec![AnyId::Wire(b.wire)], b.message);
+        problem.page = project.wire(b.wire).map(|w| w.page);
+        if novo_checks::waiver_of(project, &problem).is_none() {
+            problems.push(problem);
+        }
+    }
+    problems
+}
 
 impl NovoApp {
     /// Problems marked where they are (DESIGN.md §5, principle 7): a
     /// warning or error glyph on each drawn object of each problem on
     /// `page`, its message on hover. Infos are listed, not marked.
     pub(super) fn problem_marks(&mut self, page: PageId) -> Vec<Mark> {
+        if self.learn.quiet_checks() {
+            return Vec::new();
+        }
         let Some(doc) = self.backend.document() else {
             return Vec::new();
         };
@@ -26,7 +44,7 @@ impl NovoApp {
         };
         let problems = match &self.wb.problems {
             Some((revision, problems)) if *revision == project.revision() => problems.clone(),
-            _ => novo_checks::check_open(project),
+            _ => open_problems(project),
         };
         let mut marks = Vec::new();
         for p in &problems {
@@ -42,6 +60,16 @@ impl NovoApp {
         marks
     }
 
+    /// The problems the person is shown: none while a lesson about something
+    /// else runs, because its sample project's own warnings are not theirs
+    /// to fix. Exports and reports read [`Self::problems`] instead.
+    pub(super) fn shown_problems(&mut self) -> &[Problem] {
+        if self.learn.quiet_checks() {
+            return &[];
+        }
+        self.problems()
+    }
+
     /// The design-check problems of the current revision.
     pub(super) fn problems(&mut self) -> &[Problem] {
         let Some(doc) = self.backend.document() else {
@@ -55,7 +83,7 @@ impl NovoApp {
             .as_ref()
             .is_none_or(|(r, _)| *r != revision)
         {
-            self.wb.problems = Some((revision, novo_checks::check_open(project)));
+            self.wb.problems = Some((revision, open_problems(project)));
         }
         self.wb.problems.as_ref().map_or(&[], |(_, p)| p.as_slice())
     }
@@ -65,7 +93,7 @@ impl NovoApp {
         if !self.is_open() {
             return;
         }
-        let summary = Summary::of(self.problems());
+        let summary = Summary::of(self.shown_problems());
         let response = novo_theme::widgets::issue_pill(ui, summary.errors, summary.warnings);
         self.wb.pill_rect = response.rect;
         self.anchor_response("issue.pill", &response, "Issues");
@@ -90,7 +118,7 @@ impl NovoApp {
     }
 
     fn issues_list_rows(&mut self, ui: &mut egui::Ui) -> bool {
-        let summary = Summary::of(self.problems());
+        let summary = Summary::of(self.shown_problems());
         let counts = [summary.errors, summary.warnings, summary.infos];
         ui.horizontal_wrapped(|ui| {
             for (i, name) in ["errors", "warnings", "infos"].into_iter().enumerate() {
@@ -105,7 +133,7 @@ impl NovoApp {
         let filter = self.wb.issue_filter;
         // Errors first, then warnings, then infos, each in check order.
         let mut problems: Vec<(usize, Problem)> = self
-            .problems()
+            .shown_problems()
             .iter()
             .cloned()
             .enumerate()
@@ -179,6 +207,18 @@ impl NovoApp {
                             self.wb.waiving = Some((*i, String::new()));
                             ui.close();
                         }
+                        if self.settings.ai.enabled {
+                            let explain = ui.button("Explain with Claude").on_hover_text(format!(
+                                "Sends this problem's text (tags and names as shown) to \
+                                 Claude, with your own API key, whatever data scope you chose \
+                                 (now: {}). Its reading appears in Ask Claude.",
+                                self.settings.ai.consent.effective().label()
+                            ));
+                            if explain.clicked() {
+                                self.wb.assistant.ask_later(explain_question(p));
+                                ui.close();
+                            }
+                        }
                         let copy = ui.button("Copy message");
                         self.learn_row("issues.list", "Copy message", copy.rect);
                         if copy.clicked() {
@@ -230,7 +270,7 @@ impl NovoApp {
         let Some((index, mut reason)) = self.wb.waiving.take() else {
             return;
         };
-        let Some(problem) = self.problems().get(index).cloned() else {
+        let Some(problem) = self.shown_problems().get(index).cloned() else {
             return;
         };
         ui.group(|ui| {
@@ -326,7 +366,11 @@ impl NovoApp {
     }
 
     pub(super) fn step_problem(&mut self, forward: bool) {
-        let n = self.problems().iter().filter(|p| p.page.is_some()).count();
+        let n = self
+            .shown_problems()
+            .iter()
+            .filter(|p| p.page.is_some())
+            .count();
         if n == 0 {
             self.message(Level::Info, "No problems on the drawing");
             return;
@@ -339,7 +383,7 @@ impl NovoApp {
         };
         self.wb.problem_at = Some(at);
         let index = self
-            .problems()
+            .shown_problems()
             .iter()
             .enumerate()
             .filter(|(_, p)| p.page.is_some())
@@ -351,7 +395,7 @@ impl NovoApp {
     }
 
     pub(super) fn go_problem(&mut self, index: usize) {
-        let Some(problem) = self.problems().get(index).cloned() else {
+        let Some(problem) = self.shown_problems().get(index).cloned() else {
             return;
         };
         self.message(Level::Info, problem.message.clone());
@@ -373,4 +417,18 @@ fn severity_rank(severity: Severity) -> usize {
         Severity::Warning => 1,
         Severity::Info => 2,
     }
+}
+
+/// The question "Explain with Claude" sends for one design-check problem.
+fn explain_question(p: &Problem) -> String {
+    let rule = p
+        .rule
+        .map(|r| format!(" (standards rule {r})"))
+        .unwrap_or_default();
+    format!(
+        "KoperCAD's design check reports this {:?}{rule}: \"{}\"\n\nExplain in plain words why \
+         it matters, how serious it really is, and what I would do about it. Look at the devices \
+         it names if you are allowed to. This is your reading, not the program's verdict.",
+        p.severity, p.message
+    )
 }

@@ -12,7 +12,7 @@ use crate::door::DoorAnim;
 use crate::feel::{self, Inertia, Transition};
 use crate::governor::FrameGovernor;
 use crate::labels::{self, Fade, LabelCandidate};
-use crate::look::{self, Glyph, Look};
+use crate::look::{self, Glyph, Look, MARK_ERROR, MARK_OK};
 use crate::math::Ray;
 use crate::mesh::MeshLibrary;
 use crate::overlay::Overlay;
@@ -481,6 +481,9 @@ pub struct View3d {
     /// Where the last Alt + click landed and how many times in a row.
     alt_cycle: Option<(Pos2, usize)>,
     last_aspect: f32,
+    /// The top of the view, as a fraction of its height, that a floating
+    /// toolbar covers: a fit frames the model below it.
+    pub top_inset: f32,
     label_fades: HashMap<ItemId, Fade>,
     overlays: Arc<Vec<Overlay>>,
     overlay_revision: u64,
@@ -512,6 +515,7 @@ impl View3d {
             item_grab: None,
             alt_cycle: None,
             last_aspect: 1.0,
+            top_inset: 0.0,
             label_fades: HashMap::new(),
             overlays: Arc::new(Vec::new()),
             overlay_revision: 0,
@@ -612,6 +616,36 @@ impl View3d {
         }
     }
 
+    /// Eases to a view that frames the cabinet with the hinge `group` turned
+    /// to `angle` (radians, as `open_angle` gives it): for the moment the
+    /// door is first opened, so the open leaf is not cut off by the view; a
+    /// view that already shows it all stays as it is.
+    pub fn fit_with_door(
+        &mut self,
+        scene: &Scene,
+        group: GroupId,
+        angle: f32,
+        now: f64,
+        reduced: bool,
+    ) {
+        let open = scene.bounds_with_group_angle(group, angle);
+        // Left alone while the open door is already in view, below the toolbar.
+        let bounds = scene.bounds();
+        let inside = open.corners().iter().all(|c| {
+            self.camera
+                .project(*c, self.last_aspect, &bounds)
+                .is_some_and(|(ndc, _)| {
+                    ndc.x.abs() <= 1.0 && ndc.y >= -1.0 && ndc.y <= 1.0 - 2.0 * self.top_inset
+                })
+        });
+        if inside {
+            return;
+        }
+        let mut to = self.camera;
+        to.fit_below(&open, self.last_aspect, self.top_inset);
+        self.animate_to(to, now, reduced);
+    }
+
     /// The door angle being shown (radians), if the view drives one.
     pub fn door_angle(&self, now: f64) -> Option<f32> {
         self.door.as_ref().map(|d| d.angle(now))
@@ -665,7 +699,11 @@ impl View3d {
     pub fn go_to(&mut self, preset: ViewPreset, scene: &Scene, now: f64, reduced: bool) {
         let mut to = self.camera;
         feel::enter_standard(&mut to, preset);
-        to.fit(&self.framing_bounds(scene), self.last_aspect);
+        to.fit_below(
+            &self.framing_bounds(scene),
+            self.last_aspect,
+            self.top_inset,
+        );
         self.auto_ortho = to.projection == Projection::Orthographic;
         self.animate_to(to, now, reduced);
     }
@@ -680,7 +718,7 @@ impl View3d {
     pub fn fit(&mut self, scene: &Scene, now: f64, reduced: bool) {
         let b = self.framing_bounds(scene);
         let mut to = self.camera;
-        to.fit(&b, self.last_aspect);
+        to.fit_below(&b, self.last_aspect, self.top_inset);
         self.animate_to(to, now, reduced);
     }
 
@@ -793,7 +831,7 @@ impl View3d {
         let bounds = scene.bounds();
 
         if self.needs_fit && !bounds.is_empty() {
-            self.camera.fit(&bounds, aspect);
+            self.camera.fit_below(&bounds, aspect, self.top_inset);
             self.needs_fit = false;
             self.transition = None;
             self.last_activity = now;
@@ -1307,9 +1345,32 @@ impl View3d {
         }
     }
 
+    /// The space a selected device asks for around it, as a dashed outline on
+    /// the surface it stands on: anything inside it is too close.
+    fn paint_clearance_zones(
+        &self,
+        painter: &egui::Painter,
+        rect: Rect,
+        scene: &Scene,
+        bounds: &crate::math::Aabb,
+        look: &Look,
+    ) {
+        let stroke = Stroke::new(1.5, color3(look.selection.edge, 230));
+        for zone in dimension::clearance_zones(scene, &self.state.selection) {
+            let pts: Option<Vec<Pos2>> = zone
+                .iter()
+                .map(|c| self.project_in(rect, bounds, *c))
+                .collect();
+            let Some(mut pts) = pts else { continue };
+            pts.push(pts[0]);
+            painter.extend(egui::Shape::dashed_line(&pts, stroke, 5.0, 4.0));
+        }
+    }
+
     /// Measuring lines with end ticks and the length on a chip (see
     /// `dimension`). Lines too short on screen to carry their text are left
-    /// out; zoom in and they appear.
+    /// out; zoom in and they appear. Gaps with a clearance verdict are the
+    /// exception: they are always drawn.
     fn paint_dimensions(
         &self,
         painter: &egui::Painter,
@@ -1318,6 +1379,7 @@ impl View3d {
         bounds: &crate::math::Aabb,
         look: &Look,
     ) {
+        self.paint_clearance_zones(painter, rect, scene, bounds, look);
         let font = FontId::monospace(11.0);
         for d in dimension::dimensions(scene, &self.state.selection) {
             let (Some(a), Some(b)) = (
@@ -1330,13 +1392,19 @@ impl View3d {
             let chip = galley.size() + Vec2::new(8.0, 4.0);
             let along = b - a;
             let len = along.length();
-            if len < chip.x.max(MIN_DIMENSION_PX) {
+            // A gap with a clearance verdict is drawn however short: a part
+            // that is too close is exactly the one whose line is short.
+            if len <= f32::EPSILON || (d.required.is_none() && len < chip.x.max(MIN_DIMENSION_PX)) {
                 continue;
             }
             let col = match d.role {
                 Role::Overall => color(look.overlay.chip_text, 0.7),
                 Role::Size => color(look.overlay.chip_text, 1.0),
-                Role::Gap | Role::Edge => color3(look.selection.edge, 255),
+                Role::Gap | Role::Edge => match d.clearance_ok() {
+                    Some(false) => color3(MARK_ERROR, 255),
+                    Some(true) => color3(MARK_OK, 255),
+                    None => color3(look.selection.edge, 255),
+                },
             };
             let stroke = Stroke::new(1.0, col);
             painter.line_segment([a, b], stroke);

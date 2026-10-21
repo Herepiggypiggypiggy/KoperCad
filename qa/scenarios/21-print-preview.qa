@@ -1,0 +1,18 @@
+@title Print preview: actions in view, thumbnails drawn, print opens the preview
+@area Reports
+# C-31 and C-32: Save PDF stays visible, thumbnails show the sheets, Ctrl+K print opens the preview.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 5
+text print
+wait 10
+shot print-palette
+key enter
+wait 30
+expect "Print preview and plot sets"
+expect "Save PDF"
+expect "Save every plot set"
+expect "Design checks as a last page"
+shot print-preview
+check_layout

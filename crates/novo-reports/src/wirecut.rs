@@ -5,7 +5,8 @@
 use std::collections::BTreeMap;
 
 use novo_core::{
-    AnyId, Device, DeviceId, EntityKind, PinRef, Project, Rail, StructureId, SymbolRole, WireId,
+    AnyId, CableId, Device, DeviceId, EntityKind, PinRef, Project, Rail, StructureId, SymbolRole,
+    WireId,
 };
 use novo_core::{Value, natural_cmp};
 
@@ -98,6 +99,94 @@ pub struct WireCutJob {
     pub end_b: WireEnd,
     /// The ducts the wire lies in, in order; empty when it is not routed.
     pub ducts: Vec<u64>,
+    /// The cable this wire is a core of (the longest, when its wires lie in
+    /// several). Cores are cut from the cable, not from hookup wire stock,
+    /// so they do not add to the metres of wire to pull: see [`cable_runs`].
+    pub cable: Option<CableId>,
+}
+
+/// A cable to buy once: its cores are jobs in the list, but the cable counts
+/// one time.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CableRun {
+    pub cable: CableId,
+    pub tag: String,
+    /// Cores of this cable that are wires to cut (a core drawn in several
+    /// pieces counts once).
+    pub cores: usize,
+    /// The cable as bought, in millimetres: its stated length, else the
+    /// longest core's length.
+    pub length_mm: f64,
+    /// Whether the cable states its length (Length (m) in its properties);
+    /// otherwise `length_mm` is an estimate from the longest core.
+    pub stated: bool,
+}
+
+impl CableRun {
+    /// Metres to buy, rounded up to 0.1 m (as in the bench cut list and the
+    /// wire production workbook).
+    pub fn metres(&self) -> f64 {
+        (self.length_mm / 1000.0 * 10.0).ceil() / 10.0
+    }
+
+    /// `stated` or `estimated`, for the Length basis column.
+    pub fn basis(&self) -> &'static str {
+        if self.stated { "stated" } else { "estimated" }
+    }
+}
+
+/// The cables the jobs are cores of, one entry each, in tag order.
+pub fn cable_runs(project: &Project, jobs: &[WireCutJob]) -> Vec<CableRun> {
+    let mut runs: BTreeMap<CableId, CableRun> = BTreeMap::new();
+    let mut cores: BTreeMap<CableId, std::collections::BTreeSet<usize>> = BTreeMap::new();
+    for j in jobs {
+        let Some(id) = j.cable else { continue };
+        let Some(cable) = project.cable(id) else {
+            continue;
+        };
+        let stated = cable
+            .length_m
+            .filter(|m| m.is_finite() && *m > 0.0)
+            .map(|m| m * 1000.0);
+        let run = runs.entry(id).or_insert_with(|| CableRun {
+            cable: id,
+            tag: cable.tag.to_string(),
+            cores: 0,
+            length_mm: stated.unwrap_or(0.0),
+            stated: stated.is_some(),
+        });
+        // Distinct cores; a connection with no core index counts as one.
+        let seen = cores.entry(id).or_default();
+        let indexes: Vec<usize> = j
+            .wires
+            .iter()
+            .filter_map(|w| project.core_of_wire(*w))
+            .filter(|(c, _)| *c == id)
+            .map(|(_, i)| i)
+            .collect();
+        if indexes.is_empty() {
+            run.cores += 1;
+        }
+        for i in indexes {
+            if seen.insert(i) {
+                run.cores += 1;
+            }
+        }
+        if stated.is_none() {
+            run.length_mm = run.length_mm.max(j.length_mm);
+        }
+    }
+    let mut out: Vec<CableRun> = runs.into_values().collect();
+    out.sort_by(|a, b| natural_cmp(&a.tag, &b.tag));
+    out
+}
+
+/// Metres of hookup wire to pull: the jobs that are not cable cores.
+pub fn hookup_cut_mm(jobs: &[WireCutJob]) -> f64 {
+    jobs.iter()
+        .filter(|j| j.cable.is_none())
+        .map(|j| j.cut_mm)
+        .sum()
 }
 
 fn device_of(project: &Project, pin: PinRef) -> Option<&Device> {
@@ -204,6 +293,7 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
             from: i.from,
             to: i.to,
             cross_section_mm2: sections(project, &i.wires).last().copied(),
+            cable_mm: crate::lengths::cable_mm(project, &i.wires),
         })
         .collect();
     let lengths::Measurement { lengths, plans } = lengths::measure(project, &measured);
@@ -246,6 +336,7 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
                     project, item.to, item.from, section, ferrule, &number, standard,
                 ),
                 ducts: length.ducts,
+                cable: cable_of(project, &item.wires),
                 number,
             }
         })
@@ -259,6 +350,18 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
             .then_with(|| natural_cmp(&a.number, &b.number))
     });
     (jobs, plans)
+}
+
+/// The cable a connection's wires are cores of: the one with the longest
+/// stated length, else the first one found. A connection is a core of a cable when any
+/// of its wires is; this is the one definition of "is a cable core".
+fn cable_of(project: &Project, wires: &[&novo_core::Wire]) -> Option<CableId> {
+    let len = |c: &CableId| project.cable(*c).and_then(|c| c.length_m).unwrap_or(0.0);
+    wires
+        .iter()
+        .filter_map(|w| project.cable_of_wire(w.id))
+        .rev()
+        .max_by(|a, b| len(a).total_cmp(&len(b)))
 }
 
 /// The cross-sections of a connection's wires: the wire's own, else its
@@ -436,7 +539,7 @@ impl Report for WireCut {
 
         // Stock per cross-section and colour: pieces and metres, as cut.
         let mut stock: BTreeMap<(u64, String), (usize, f64)> = BTreeMap::new();
-        for j in &jobs {
+        for j in jobs.iter().filter(|j| j.cable.is_none()) {
             let key = (
                 j.cross_section_mm2.map_or(u64::MAX, |s| s.to_bits()),
                 j.colour.clone(),
@@ -556,7 +659,35 @@ impl Report for WireCut {
             report: Self::ID.into(),
             title: self.title(),
             revision: project.revision(),
-            sections: vec![cuts, stock_section, ferrule_section, ducts],
+            sections: {
+                let mut sections = vec![cuts, stock_section, ferrule_section, ducts];
+                let runs = cable_runs(project, &jobs);
+                if !runs.is_empty() {
+                    let mut cables = Section::new(
+                        "cables",
+                        "Cables",
+                        vec![
+                            Column::new("cable", "Cable", 14.0),
+                            Column::new("cores", "Cores used", 12.0).right(),
+                            Column::new("metres", "Metres to buy", 14.0).right(),
+                            Column::new("basis", "Length basis", 12.0),
+                        ],
+                    );
+                    for r in runs {
+                        cables.push(
+                            vec![
+                                Cell::text(r.tag.clone()),
+                                Cell::Int(r.cores as i64),
+                                Cell::Number(r.metres()),
+                                Cell::text(r.basis()),
+                            ],
+                            vec![r.cable.into()],
+                        );
+                    }
+                    sections.push(cables);
+                }
+                sections
+            },
         }
     }
 }

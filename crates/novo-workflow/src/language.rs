@@ -213,6 +213,21 @@ pub const DUTCH: &[Aliases] = &[
         &["uitvoering", "configuratie"],
     ),
     nl(
+        "project.option",
+        &["optie"],
+        &["optie schakelen", "met zonder", "machineoptie"],
+    ),
+    nl(
+        "project.tie",
+        &["koppel"],
+        &["koppel aan optie", "alleen met"],
+    ),
+    nl(
+        "project.untie",
+        &["ontkoppel"],
+        &["altijd tonen", "voorwaarde weg"],
+    ),
+    nl(
         "project.generate",
         &["genereer"],
         &["genereren", "specificatielijst", "uit excel"],
@@ -227,6 +242,21 @@ pub const DUTCH: &[Aliases] = &[
         "revision.compare",
         &["vergelijk"],
         &["verschil", "revisies vergelijken"],
+    ),
+    nl(
+        "revision.lock_page",
+        &["vergrendel"],
+        &["blad vergrendelen", "beveiligen"],
+    ),
+    nl(
+        "revision.unlock_page",
+        &["ontgrendel"],
+        &["blad ontgrendelen"],
+    ),
+    nl(
+        "revision.restore_page",
+        &["herstel"],
+        &["terugzetten", "oude versie"],
     ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     nl("help.about", &[], &["over", "versie"]),
@@ -565,6 +595,11 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.why",
+        &["waarom"],
+        &["waarom brandt dit", "waarom dood", "uitleg", "pad volgen"],
+    ),
+    nl(
         "sim.plc_program",
         &["plc programma"],
         &["ladder", "programma draaien", "plc simuleren"],
@@ -730,6 +765,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.commissioning",
         &["exporteer inbedrijfstelling", "inbedrijfstellingsrapport"],
         &["restpuntenlijst", "oplevering"],
+    ),
+    nl(
+        "export.punch_list",
+        &["exporteer restpuntenlijst", "restpuntenlijst exporteren"],
+        &["restpunten pdf", "open punten"],
     ),
     nl(
         "export.standards_report",
@@ -937,6 +977,17 @@ pub const DUTCH: &[Aliases] = &[
         &["rapport pdf", "rapport afdrukken"],
     ),
     nl(
+        "export.print_preview",
+        &["afdrukvoorbeeld", "afdrukvoorbeeld en plotsets"],
+        &[
+            "plotset",
+            "papierformaat",
+            "schaal",
+            "marges",
+            "paginanummers",
+        ],
+    ),
+    nl(
         "export.pdf_options",
         &["pdf opties", "exporteer pdf opties"],
         &[
@@ -969,6 +1020,21 @@ pub const DUTCH: &[Aliases] = &[
         "export.assembly",
         &["exporteer montagelijst", "montagelijst"],
         &["werkplaats", "boren"],
+    ),
+    nl(
+        "export.handover",
+        &["exporteer opleverpakket", "opleverpakket"],
+        &["oplevering", "klant", "dossier"],
+    ),
+    nl(
+        "export.workshop",
+        &["exporteer werkplaatspakket", "werkplaatspakket"],
+        &["werkplaats", "boormal", "snijlijst"],
+    ),
+    nl(
+        "export.safety_sheets",
+        &["exporteer veiligheidsfuncties", "veiligheidsfunctiebladen"],
+        &["veiligheidsfunctie", "technisch dossier"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
     nl(
@@ -1030,6 +1096,11 @@ pub const DUTCH: &[Aliases] = &[
         &["pdf", "afdrukken", "draadsnijden"],
     ),
     nl(
+        "wires.autopilot",
+        &["autopilot", "vul de bedrading aan"],
+        &["draaddikte", "kleur", "doorsnede", "klaar om te bouwen"],
+    ),
+    nl(
         "view.bench",
         &["werkbank uitvoer", "open werkbank"],
         &["werkbank", "adereindhulzen", "etiketten", "draadsnijlijst"],
@@ -1068,6 +1139,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.spec",
         &["exporteer specificatie"],
         &["specificatielijst exporteren"],
+    ),
+    nl(
+        "plc.import_list",
+        &["importeer io lijst", "importeer signaallijst"],
+        &["io lijst", "signaallijst", "plc kaarten", "pagina's"],
     ),
     nl(
         "plc.import_tags",

@@ -72,7 +72,7 @@ id = "find-wire"
 title = "Find wire 4"
 title_nl = "Zoek draad 4"
 # verified: columns Wire no., From, To, Potential, Colour, mm2, Cable,
-# Location, Cut length mm, Length basis (novo-reports wires.rs). Wire 4 runs
+# Location, Route length mm, Length basis (novo-reports wires.rs). Wire 4 runs
 # from =A1+CAB-X1:1 to =A1+FLD-M1:U1 in core BK of =A1-W1; the wire numbers
 # of the sample project are set by documents.rs. Filter rows (Ctrl+F) keeps
 # only the rows that contain the text (reports_view.rs).

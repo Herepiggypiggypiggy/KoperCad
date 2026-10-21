@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -24,6 +25,8 @@ use novo_ai::usage::{Ledger, format_usd, month_of};
 use novo_core::{Command, DeviceTag, Project};
 use serde_json::{Value, json};
 
+mod datasheet;
+
 use super::{Level, NovoApp};
 use crate::theme::ui_palette;
 
@@ -35,6 +38,46 @@ pub(super) enum ProposalState {
     Applied,
     Rejected,
     Failed(String),
+}
+
+/// Where taking a picture of the window has got to.
+#[derive(Clone, Copy, PartialEq)]
+enum Shot {
+    Idle,
+    /// The assistant window steps out of the way for one frame.
+    Hide,
+    /// Waiting for the picture to come back (frames waited).
+    Waiting(u32),
+}
+
+/// Longest side of a picture sent, in pixels.
+const PICTURE_MAX_SIDE: u32 = 1400;
+
+struct Picture {
+    image: novo_ai::image::Image,
+    size: [u32; 2],
+}
+
+/// The window's pixels as a PNG, shrunk to a size that reads well and costs little.
+fn picture_of(img: &egui::ColorImage) -> Result<Picture, String> {
+    let (w, h) = (img.size[0] as u32, img.size[1] as u32);
+    let rgba: Vec<u8> = img.pixels.iter().flat_map(|c| c.to_array()).collect();
+    let mut buf = image::RgbaImage::from_raw(w, h, rgba).ok_or("the picture has the wrong size")?;
+    if w.max(h) > PICTURE_MAX_SIDE {
+        let f = f64::from(PICTURE_MAX_SIDE) / f64::from(w.max(h));
+        let (nw, nh) = (
+            ((f64::from(w) * f) as u32).max(1),
+            ((f64::from(h) * f) as u32).max(1),
+        );
+        buf = image::imageops::resize(&buf, nw, nh, image::imageops::FilterType::Triangle);
+    }
+    let mut png = std::io::Cursor::new(Vec::new());
+    buf.write_to(&mut png, image::ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+    Ok(Picture {
+        size: [buf.width(), buf.height()],
+        image: novo_ai::image::Image::png(&png.into_inner()),
+    })
 }
 
 pub(super) enum Entry {
@@ -54,7 +97,10 @@ enum Msg {
 /// Everything the window remembers while the app runs.
 pub(super) struct State {
     pub open: bool,
+    proposal_notes: HashMap<u32, String>,
     show_settings: bool,
+    /// Tests only: retries do not wait.
+    instant_retries: bool,
     agreed: bool,
     key_input: String,
     key_note: Option<(bool, String)>,
@@ -63,12 +109,27 @@ pub(super) struct State {
     transcript: Vec<Entry>,
     conversation: Conversation,
     running: Option<Receiver<Msg>>,
+    /// Answer text that has arrived for the turn in progress.
+    live: String,
+    /// Claude is reasoning before it writes.
+    thinking: bool,
+    /// Set by the Stop button; the background thread reads it.
+    cancel: Arc<AtomicBool>,
+    shot: Shot,
+    picture: Option<Picture>,
+    sheet: datasheet::State,
+    /// The datasheet being read, for the review heading.
+    datasheet_name: String,
+    /// The scope that was agreed when the picture was taken.
+    picture_scope: DataScope,
     /// What the person decided about proposals since their last message;
     /// sent along with the next one so Claude knows.
     notes: Vec<String>,
     ledger: Ledger,
     ledger_path: Option<PathBuf>,
     session_cost: f64,
+    /// A question to send as soon as the window can (from a button elsewhere).
+    pending_question: Option<String>,
     /// The widest scope any answer in the running conversation was given
     /// under. If the scope later narrows, the conversation is dropped: what
     /// Claude already read must not keep informing answers the person
@@ -84,12 +145,78 @@ pub(super) struct State {
     now: Arc<dyn Fn() -> u64 + Send + Sync>,
 }
 
+/// Name of the variable that makes the assistant answer from a file instead of the
+/// network, for the QA harness: the file holds a JSON list of Messages API replies,
+/// used in order. Nothing is sent anywhere while it is set, and the window says so.
+pub(super) const REPLAY_VAR: &str = "KOPERCAD_AI_REPLAY";
+
+/// The replay file read once: the script, or why it could not be read.
+/// While the variable is set the network is never used, even when this fails.
+fn replay() -> Option<&'static Result<novo_ai::api::testing::Script, String>> {
+    static REPLAY: std::sync::OnceLock<Option<Result<novo_ai::api::testing::Script, String>>> =
+        std::sync::OnceLock::new();
+    REPLAY
+        .get_or_init(|| {
+            let path = std::env::var_os(REPLAY_VAR)?;
+            Some(load_replay(&path))
+        })
+        .as_ref()
+}
+
+pub(super) fn load_replay(path: &std::ffi::OsStr) -> Result<novo_ai::api::testing::Script, String> {
+    let shown = path.to_string_lossy();
+    let bytes = std::fs::read(path).map_err(|e| format!("cannot read {shown}: {e}"))?;
+    let list: Vec<Value> = serde_json::from_slice(&bytes)
+        .map_err(|e| format!("{shown} is not a JSON list of replies: {e}"))?;
+    let script = novo_ai::api::testing::Script::default();
+    for reply in list {
+        script.push(200, reply);
+    }
+    Ok(script)
+}
+
+/// The line the window shows while the variable is set.
+fn replay_notice() -> Option<(String, bool)> {
+    Some(match replay()? {
+        Ok(_) => (
+            "Test replay: answers come from a file, nothing is sent".to_string(),
+            true,
+        ),
+        Err(why) => (
+            format!("Test replay failed ({why}). Nothing is sent and no answers will come"),
+            false,
+        ),
+    })
+}
+
+fn default_transport() -> TransportFactory {
+    transport_for(replay())
+}
+
+pub(super) fn transport_for(
+    replay: Option<&Result<novo_ai::api::testing::Script, String>>,
+) -> TransportFactory {
+    match replay {
+        // A readable file answers from it; an unreadable one gives an empty
+        // script, so every request fails here instead of reaching the network.
+        Some(Ok(script)) => {
+            let script = script.clone();
+            Arc::new(move || Box::new(script.clone()))
+        }
+        Some(Err(_)) => {
+            let empty = novo_ai::api::testing::Script::default();
+            Arc::new(move || Box::new(empty.clone()))
+        }
+        None => Arc::new(|| Box::new(UreqTransport::new())),
+    }
+}
+
 impl State {
     pub fn new() -> Self {
         Self::with(
             KeyStore::in_profile(),
             novo_ai::key::default_dir().map(|d| d.join("usage.json")),
-            Arc::new(|| Box::new(UreqTransport::new())),
+            default_transport(),
             Arc::new(unix_now),
         )
     }
@@ -103,7 +230,9 @@ impl State {
         let ledger = ledger_path.as_deref().map(Ledger::load).unwrap_or_default();
         Self {
             open: false,
+            proposal_notes: HashMap::new(),
             show_settings: false,
+            instant_retries: false,
             agreed: false,
             key_input: String::new(),
             key_note: None,
@@ -112,10 +241,19 @@ impl State {
             transcript: Vec::new(),
             conversation: Conversation::default(),
             running: None,
+            live: String::new(),
+            thinking: false,
+            cancel: Arc::new(AtomicBool::new(false)),
+            shot: Shot::Idle,
+            picture: None,
+            sheet: datasheet::State::default(),
+            datasheet_name: String::new(),
+            picture_scope: DataScope::None,
             notes: Vec::new(),
             ledger,
             ledger_path,
             session_cost: 0.0,
+            pending_question: None,
             conv_scope: DataScope::None,
             pending_scope: None,
             next_proposal: 1,
@@ -127,12 +265,24 @@ impl State {
 
     #[cfg(test)]
     pub(super) fn for_test(store: KeyStore, ledger: PathBuf, transport: TransportFactory) -> Self {
-        Self::with(
+        let mut state = Self::with(
             Some(store),
             Some(ledger),
             transport,
             Arc::new(|| 1_792_000_000),
-        )
+        );
+        state.instant_retries = true;
+        state
+    }
+
+    #[cfg(test)]
+    pub(super) fn attach_picture_requested(&mut self) {
+        self.shot = Shot::Hide;
+    }
+
+    #[cfg(test)]
+    pub(super) fn has_picture(&self) -> bool {
+        self.picture.is_some()
     }
 
     #[cfg(test)]
@@ -168,6 +318,14 @@ impl State {
     }
 
     #[cfg(test)]
+    pub(super) fn proposal_state(&self, index: usize) -> Option<ProposalState> {
+        match self.transcript.get(index) {
+            Some(Entry::Proposal(_, state)) => Some(state.clone()),
+            _ => None,
+        }
+    }
+
+    #[cfg(test)]
     pub(super) fn transcript_text(&self) -> String {
         self.transcript
             .iter()
@@ -179,11 +337,17 @@ impl State {
             .join("\n")
     }
 
+    /// Opens the window and sends `question` when no answer is in progress.
+    pub(super) fn ask_later(&mut self, question: String) {
+        self.open = true;
+        self.pending_question = Some(question);
+    }
+
     fn month(&self) -> String {
         month_of((self.now)())
     }
 
-    fn spent(&self) -> f64 {
+    pub(super) fn spent(&self) -> f64 {
         self.ledger.spent_in(&self.month())
     }
 
@@ -194,22 +358,46 @@ impl State {
     /// Called before each message with the scope now in force. Narrower than
     /// the conversation's scope: forget the conversation and say so.
     fn enforce_scope(&mut self, scope: DataScope) {
+        if self.picture.is_some() && scope < self.picture_scope {
+            self.picture = None;
+            self.shot = Shot::Idle;
+            self.transcript.push(Entry::Problem(
+                "Scope narrowed, so the attached picture was dropped.".into(),
+            ));
+        }
         if scope < self.conv_scope {
             self.conversation.clear();
             self.notes.clear();
-            self.transcript.push(Entry::Problem(
+            let had_picture = self.picture.take().is_some();
+            self.shot = Shot::Idle;
+            self.transcript.push(Entry::Problem(if had_picture {
+                "Scope narrowed, so the earlier chat and the attached picture were cleared. \
+                 Claude no longer has what it read or saw before."
+                    .into()
+            } else {
                 "Scope narrowed, so the earlier chat was cleared. Claude no longer has what it \
                  read before."
-                    .into(),
-            ));
+                    .into()
+            }));
         }
         self.conv_scope = scope;
     }
 
-    fn clear_chat(&mut self) {
+    /// Moves the text streamed so far into the transcript.
+    fn flush_live(&mut self) {
+        if !self.live.is_empty() {
+            self.transcript
+                .push(Entry::Claude(std::mem::take(&mut self.live)));
+        }
+    }
+
+    pub(super) fn clear_chat(&mut self) {
         self.transcript.clear();
         self.conversation.clear();
         self.notes.clear();
+        self.proposal_notes.clear();
+        self.picture = None;
+        self.shot = Shot::Idle;
         self.session_cost = 0.0;
     }
 }
@@ -218,6 +406,21 @@ fn unix_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
+}
+
+const ON_ID: &str = "kopercad_ai_on";
+const ASK_ID: &str = "kopercad_ai_ask";
+
+/// True when Claude is turned on, so a panel may offer an "… with Claude" button.
+pub(super) fn claude_is_on(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(egui::Id::new(ON_ID)))
+        .unwrap_or(false)
+}
+
+/// Leaves a question for the Ask Claude window; it is sent on the next frame
+/// when Claude is on and no answer is in progress.
+pub(super) fn ask_claude_later(ctx: &egui::Context, question: String) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(ASK_ID), question));
 }
 
 /// The edits Claude may suggest. Each maps to one model command.
@@ -239,6 +442,40 @@ fn edit_actions() -> Vec<EditAction> {
                 "required": ["page_id", "name"]}),
         },
         EditAction {
+            name: "assign_part",
+            description: "Assigns a part from the project's parts (section \"parts\") to a device. \
+                          Only available when the person agreed to share the whole project.",
+            schema: json!({"type": "object", "properties": {
+                "device_id": {"type": "integer"}, "part_id": {"type": "integer"}},
+                "required": ["device_id", "part_id"]}),
+        },
+        EditAction {
+            name: "set_property",
+            description: "Sets one named property of a device (text, number or true/false).",
+            schema: json!({"type": "object", "properties": {
+                "device_id": {"type": "integer"},
+                "key": {"type": "string"},
+                "value": {"type": ["string", "number", "boolean"]}},
+                "required": ["device_id", "key", "value"]}),
+        },
+        EditAction {
+            name: "set_wire_number",
+            description: "Sets the number printed on a wire, or clears it with an empty \
+                          number. Use it to resolve wire-number conflicts (section wire_numbers).",
+            schema: json!({"type": "object", "properties": {
+                "wire_id": {"type": "integer", "description": "id from section wires"},
+                "number": {"type": "string",
+                           "description": "the new wire number; empty clears it"}},
+                "required": ["wire_id", "number"]}),
+        },
+        EditAction {
+            name: "add_page",
+            description: "Adds an empty schematic page at the end.",
+            schema: json!({"type": "object", "properties": {
+                "name": {"type": "string"}, "title": {"type": "string"}},
+                "required": ["name"]}),
+        },
+        EditAction {
             name: "add_device",
             description: "Adds a device with a tag and description (not drawn on a page yet).",
             schema: json!({"type": "object", "properties": {
@@ -248,13 +485,70 @@ fn edit_actions() -> Vec<EditAction> {
     ]
 }
 
+const MAX_KEY_CHARS: usize = 60;
+pub(super) const MAX_VALUE_CHARS: usize = 500;
+
+/// What a proposal would replace, for the card only. It is never sent back to
+/// the model: old values and part names can be above the agreed scope.
+pub(super) fn proposal_note(project: &Project, p: &Proposal) -> Option<String> {
+    if p.action == "set_wire_number" {
+        let wire = project.wire(p.args["wire_id"].as_u64()?.into())?;
+        let name = wire_description(project, wire);
+        return Some(match &wire.number {
+            Some(old) => format!("Replaces the current number of {name}: {old}"),
+            None => format!("{} has no number yet.", capitalised(&name)),
+        });
+    }
+    let device = project.device(p.args["device_id"].as_u64()?.into())?;
+    match p.action.as_str() {
+        "set_property" => {
+            let key = p.args["key"].as_str()?.trim();
+            Some(match device.properties.get(key) {
+                Some(old) => format!("Replaces the current value: {old}"),
+                None => "There is no value yet.".into(),
+            })
+        }
+        "assign_part" if !device.parts.is_empty() => Some(format!(
+            "This device already has {} part(s) assigned.",
+            device.parts.len()
+        )),
+        _ => None,
+    }
+}
+
 /// What a proposal changes in the open project, by id, so the summary can
 /// name the current tag and the check can refuse an id that is not there.
 #[derive(Clone, Default)]
 pub(super) struct Known {
     devices: HashMap<u64, String>,
     pages: HashMap<u64, String>,
+    parts: HashMap<u64, String>,
+    /// Wire id to how the wire is named for the person: its two ends and page.
+    wires: HashMap<u64, String>,
 }
+
+/// The wire as the person sees it, without the internal id: "the wire from
+/// -K1:2 to -F2:3 (page Main circuit)".
+fn wire_description(p: &Project, w: &novo_core::Wire) -> String {
+    let end = |e| novo_cables::ends::designation(p, e).unwrap_or_else(|| "an open end".into());
+    let page = p.page(w.page).map_or("?", |g| g.name.as_str());
+    format!(
+        "the wire from {} to {} (page {page})",
+        end(w.from),
+        end(w.to)
+    )
+}
+
+fn capitalised(text: &str) -> String {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}
+
+/// Longest wire number accepted.
+const MAX_WIRE_NUMBER_CHARS: usize = 40;
 
 pub(super) fn known_of(p: &Project) -> Known {
     Known {
@@ -263,11 +557,98 @@ pub(super) fn known_of(p: &Project) -> Known {
             .map(|d| (d.id.raw(), d.tag.to_string()))
             .collect(),
         pages: p.pages().map(|g| (g.id.raw(), g.name.clone())).collect(),
+        wires: p
+            .wires()
+            .map(|w| (w.id.raw(), wire_description(p, w)))
+            .collect(),
+        parts: p
+            .parts()
+            .map(|x| {
+                (
+                    x.id.raw(),
+                    format!("{} {}", x.manufacturer, x.order_number)
+                        .trim()
+                        .to_string(),
+                )
+            })
+            .collect(),
     }
 }
 
+/// What applying a proposal does.
+pub(super) enum Plan {
+    Command(Box<Command>),
+    /// The person's own "Set wire number": the whole net, fixed against
+    /// numbering runs, refused when another net has the number.
+    WireNumber {
+        wire: novo_core::WireId,
+        number: String,
+    },
+}
+
 /// Turns a proposal into the model command, and its one-line summary.
+#[cfg(test)]
 pub(super) fn proposal_command(
+    known: &Known,
+    action: &str,
+    args: &Value,
+) -> Result<(Command, String), String> {
+    match proposal_plan(known, action, args)? {
+        (Plan::Command(command), summary) => Ok((*command, summary)),
+        (Plan::WireNumber { .. }, _) => Err(format!("{action} is not a plain command")),
+    }
+}
+
+/// Turns a proposal into what applying it does, and its one-line summary.
+pub(super) fn proposal_plan(
+    known: &Known,
+    action: &str,
+    args: &Value,
+) -> Result<(Plan, String), String> {
+    if action == "set_wire_number" {
+        return wire_number_plan(known, args);
+    }
+    let (command, summary) = proposal_command_inner(known, action, args)?;
+    Ok((Plan::Command(Box::new(command)), summary))
+}
+
+fn wire_number_plan(known: &Known, args: &Value) -> Result<(Plan, String), String> {
+    let wire = args["wire_id"]
+        .as_u64()
+        .ok_or("wire_id must be a whole number id from the project data")?;
+    let name = known
+        .wires
+        .get(&wire)
+        .ok_or_else(|| format!("there is no wire with id {wire} (see section wires)"))?;
+    let number = args["number"]
+        .as_str()
+        .ok_or("number must be text; use an empty text to clear it")?
+        .trim();
+    if number.chars().count() > MAX_WIRE_NUMBER_CHARS {
+        return Err(format!(
+            "number is longer than {MAX_WIRE_NUMBER_CHARS} characters"
+        ));
+    }
+    if number.chars().any(char::is_control) {
+        return Err("number must not contain control characters or line breaks".into());
+    }
+    let summary = if number.is_empty() {
+        format!("Clear the number of {name} and its net")
+    } else {
+        format!(
+            "Number {name} and its net {number}. The number is fixed: numbering runs leave it alone"
+        )
+    };
+    Ok((
+        Plan::WireNumber {
+            wire: wire.into(),
+            number: number.to_string(),
+        },
+        summary,
+    ))
+}
+
+fn proposal_command_inner(
     known: &Known,
     action: &str,
     args: &Value,
@@ -314,6 +695,85 @@ pub(super) fn proposal_command(
                     name: name.to_string(),
                 },
                 format!("Rename page {old} to {name}"),
+            ))
+        }
+        "assign_part" => {
+            let device = id("device_id")?;
+            let part = id("part_id")?;
+            let tag = known
+                .devices
+                .get(&device)
+                .ok_or_else(|| format!("there is no device with id {device}"))?;
+            let name = known
+                .parts
+                .get(&part)
+                .ok_or_else(|| format!("there is no part with id {part} (see section parts)"))?;
+            Ok((
+                Command::AssignPart {
+                    device: device.into(),
+                    part: part.into(),
+                },
+                format!("Assign part {name} to {tag}"),
+            ))
+        }
+        "set_property" => {
+            let device = id("device_id")?;
+            let tag = known
+                .devices
+                .get(&device)
+                .ok_or_else(|| format!("there is no device with id {device}"))?;
+            let key = text("key")?;
+            if key.chars().count() > MAX_KEY_CHARS {
+                return Err(format!("key is longer than {MAX_KEY_CHARS} characters"));
+            }
+            let (value, shown) = match &args["value"] {
+                Value::String(s) if s.chars().count() > MAX_VALUE_CHARS => {
+                    return Err(format!("value is longer than {MAX_VALUE_CHARS} characters"));
+                }
+                Value::String(s) => (novo_core::Value::Text(s.clone()), format!("{s:?}")),
+                Value::Bool(b) => (novo_core::Value::Bool(*b), b.to_string()),
+                Value::Number(n) => match n.as_i64() {
+                    Some(i) => (novo_core::Value::Int(i), i.to_string()),
+                    None => {
+                        let f = n.as_f64().unwrap_or_default();
+                        (novo_core::Value::Float(f), f.to_string())
+                    }
+                },
+                _ => return Err("value must be text, a number or true/false".into()),
+            };
+            Ok((
+                Command::SetProperty {
+                    target: novo_core::AnyId::Device(device.into()),
+                    key: key.to_string(),
+                    value: Some(value),
+                },
+                format!("Set {key} of {tag} to {shown}"),
+            ))
+        }
+        "add_page" => {
+            let name = text("name")?;
+            if known.pages.values().any(|n| n == name) {
+                return Err(format!("a page {name} already exists"));
+            }
+            let title = args["title"]
+                .as_str()
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            let shown = if title.is_empty() {
+                format!("Add page {name}")
+            } else {
+                format!("Add page {name} ({title})")
+            };
+            Ok((
+                Command::AddPage {
+                    name: name.to_string(),
+                    title,
+                    kind: Default::default(),
+                    format: Default::default(),
+                    structure: Default::default(),
+                },
+                shown,
             ))
         }
         "add_device" => {
@@ -368,7 +828,7 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
         },
         "pages": novo_py::pages_json(p),
         "devices": tags,
-        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals"],
+        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals", "parts", "problems", "wire_numbers"],
     });
     if scope >= DataScope::Selection {
         let items: Vec<Value> = p
@@ -409,6 +869,28 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
             "nets": novo_py::nets_json(p),
             "potentials": novo_py::potentials_json(p),
             "terminals": terminals,
+            "parts": p.parts().map(|x| json!({
+                "id": x.id.raw(), "manufacturer": x.manufacturer,
+                "order_number": x.order_number, "type_number": x.type_number,
+                "description": x.description})).collect::<Vec<_>>(),
+            // The design checks, read-only: what the Issues list would show.
+            "problems": novo_checks::check(p).iter().map(|q| json!({
+                "kind": format!("{:?}", q.kind),
+                "severity": format!("{:?}", q.severity),
+                "message": q.message,
+                "page_id": q.page.map(|g| g.raw()),
+                "objects": q.at.len(),
+                "rule": q.rule})).collect::<Vec<_>>(),
+            // Wire-number conflicts against the project's own scheme, read only.
+            "wire_numbers": novo_numbering::check(p, &novo_numbering::Scheme::load(p))
+                .iter()
+                .map(|c| json!({
+                    "kind": format!("{:?}", c.kind),
+                    "severity": format!("{:?}", c.severity),
+                    "number": c.number,
+                    "wires": c.wires.iter().map(|w| w.raw()).collect::<Vec<_>>(),
+                    "message": c.message}))
+                .collect::<Vec<_>>(),
         });
     }
     snap
@@ -421,6 +903,18 @@ impl NovoApp {
         if !self.settings.ai.enabled {
             self.wb.assistant.show_settings = true;
         }
+    }
+
+    /// Ctrl+K found no command: open the window and ask the question.
+    pub(super) fn ask_claude(&mut self, ctx: &egui::Context, question: String) {
+        self.wb.assistant.open = true;
+        if self.wb.assistant.running.is_some() {
+            self.wb.assistant.transcript.push(Entry::Problem(
+                "Claude is still answering. Ask again when it has finished.".into(),
+            ));
+            return;
+        }
+        self.assistant_send(ctx, question);
     }
 
     fn selected_ids(&self) -> Vec<u64> {
@@ -447,29 +941,52 @@ impl NovoApp {
         };
         let st = &mut self.wb.assistant;
         st.enforce_scope(scope);
+        st.live.clear();
+        st.thinking = true;
+        st.cancel.store(false, Ordering::Relaxed);
+        let cancel = Arc::clone(&st.cancel);
+        let picture = st.picture.take();
         let mut message = String::new();
         for n in st.notes.drain(..) {
             message.push_str(&format!("[{n}]\n"));
         }
         message.push_str(&text);
-        st.transcript.push(Entry::User(text));
+        st.transcript.push(Entry::User(if picture.is_some() {
+            format!("{text}\n[a picture of the window is attached]")
+        } else {
+            text
+        }));
         let settings = self.settings.ai.clone();
         let spent = st.spent();
         let mut conversation = std::mem::take(&mut st.conversation);
+        if let Some(p) = picture {
+            conversation.images.push(p.image);
+        }
         let factory = Arc::clone(&st.transport);
+        let instant = st.instant_retries;
         let first = st.next_proposal;
         let (tx, rx) = channel();
         st.running = Some(rx);
         let ctx = ctx.clone();
         std::thread::spawn(move || {
             let mut client = Client::new(factory(), key);
+            if instant {
+                client = client.with_sleep(|_| {});
+            }
             let validator_known = known;
             let mut host = SnapshotHost::new(
                 snapshot,
                 scope,
                 edit_actions(),
                 Box::new(move |action, args| {
-                    proposal_command(&validator_known, action, args).map(|(_, summary)| summary)
+                    // The answer goes back to the model, so it must not reveal
+                    // more than the agreed scope (part names are Whole project).
+                    if matches!(action, "assign_part" | "set_wire_number")
+                        && scope != DataScope::Project
+                    {
+                        return Err(format!("{action} is not allowed above the agreed scope"));
+                    }
+                    proposal_plan(&validator_known, action, args).map(|(_, summary)| summary)
                 }),
             )
             .starting_at(first);
@@ -485,6 +1002,7 @@ impl NovoApp {
                     let _ = events.send(Msg::Event(e));
                     events_ctx.request_repaint();
                 },
+                &cancel,
             );
             let _ = tx.send(Msg::Done(result, conversation));
             ctx.request_repaint();
@@ -493,6 +1011,7 @@ impl NovoApp {
 
     /// Takes what the background thread has to say; called every frame.
     fn assistant_poll(&mut self) {
+        self.datasheet_poll();
         let st = &mut self.wb.assistant;
         if let Some(rx) = &st.key_check {
             match rx.try_recv() {
@@ -510,7 +1029,13 @@ impl NovoApp {
         }
         while let Some(rx) = &st.running {
             match rx.try_recv() {
+                Ok(Msg::Event(Event::Text(t))) => {
+                    st.thinking = false;
+                    st.live.push_str(&t);
+                }
+                Ok(Msg::Event(Event::Thinking)) => st.thinking = true,
                 Ok(Msg::Event(Event::Tool { name, .. })) => {
+                    st.flush_live();
                     st.transcript.push(Entry::Tool(tool_phrase(&name).into()));
                 }
                 Ok(Msg::Event(Event::Request {
@@ -529,10 +1054,15 @@ impl NovoApp {
                 Ok(Msg::Done(result, conversation)) => {
                     st.conversation = conversation;
                     st.running = None;
+                    st.thinking = false;
                     match result {
                         Ok(turn) => {
-                            if !turn.text.is_empty() {
-                                st.transcript.push(Entry::Claude(turn.text));
+                            if st.live.is_empty() {
+                                if !turn.text.is_empty() {
+                                    st.transcript.push(Entry::Claude(turn.text));
+                                }
+                            } else {
+                                st.flush_live();
                             }
                             if turn.truncated {
                                 st.transcript.push(Entry::Problem(
@@ -549,22 +1079,56 @@ impl NovoApp {
                             }
                             for p in turn.proposals {
                                 st.next_proposal = st.next_proposal.max(p.id + 1);
+                                if let Some(doc) = self.backend.document()
+                                    && let Some(note) = proposal_note(doc.project(), &p)
+                                {
+                                    st.proposal_notes.insert(p.id, note);
+                                }
                                 st.transcript
                                     .push(Entry::Proposal(p, ProposalState::Pending));
                             }
                         }
-                        Err(e) => st.transcript.push(Entry::Problem(e.to_string())),
+                        Err(ApiError::Cancelled(_)) => {
+                            st.flush_live();
+                            st.transcript.push(Entry::Tool("Stopped".into()));
+                        }
+                        Err(e) => {
+                            st.flush_live();
+                            st.transcript.push(Entry::Problem(e.to_string()));
+                        }
                     }
                     break;
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     st.running = None;
+                    st.thinking = false;
+                    // Keep what was streamed so far instead of dropping it.
+                    let partial = std::mem::take(&mut st.live);
+                    if !partial.trim().is_empty() {
+                        st.transcript.push(Entry::Claude(partial));
+                    }
                     st.transcript
                         .push(Entry::Problem("The assistant stopped unexpectedly.".into()));
                     break;
                 }
             }
+        }
+    }
+
+    /// The same path as Edit > Set wire number: one undo step, the whole net.
+    fn apply_wire_number(&mut self, wire: novo_core::WireId, number: &str) -> ProposalState {
+        let Some(doc) = self.backend.document_mut() else {
+            return ProposalState::Failed("No project is open.".into());
+        };
+        match doc.transact("Set wire number", |tx| {
+            novo_numbering::set_number(tx, wire, number)
+        }) {
+            Ok((_, changes)) => {
+                self.changed_outside_canvas(&changes);
+                ProposalState::Applied
+            }
+            Err(e) => ProposalState::Failed(format!("Wire number: {e}")),
         }
     }
 
@@ -583,13 +1147,14 @@ impl NovoApp {
         } else if self.backend.is_read_only() || self.commissioning_locks_edits() {
             ProposalState::Failed("The project is read-only right now.".into())
         } else {
-            match proposal_command(&known, &p.action, &p.args) {
+            match proposal_plan(&known, &p.action, &p.args) {
                 Err(why) => ProposalState::Failed(why),
-                Ok((command, _)) => match self.execute(command) {
+                Ok((Plan::Command(command), _)) => match self.execute(*command) {
                     Some(Ok(_)) => ProposalState::Applied,
                     Some(Err(e)) => ProposalState::Failed(e.to_string()),
                     None => ProposalState::Failed("No project is open.".into()),
                 },
+                Ok((Plan::WireNumber { wire, number }, _)) => self.apply_wire_number(wire, &number),
             }
         };
         let st = &mut self.wb.assistant;
@@ -621,31 +1186,164 @@ impl NovoApp {
     }
 
     #[cfg(test)]
+    pub(super) fn datasheet_test_choose(&mut self, name: &str, bytes: Vec<u8>) {
+        self.wb.assistant.sheet.stage = datasheet::Stage::Confirm {
+            name: name.into(),
+            bytes: Arc::new(bytes),
+        };
+    }
+
+    #[cfg(test)]
+    pub(super) fn datasheet_test_send(&mut self, ctx: &egui::Context) {
+        self.datasheet_start(ctx);
+    }
+
+    #[cfg(test)]
+    pub(super) fn datasheet_test_stage(&self) -> &'static str {
+        match self.wb.assistant.sheet.stage {
+            datasheet::Stage::Idle => "idle",
+            datasheet::Stage::Confirm { .. } => "confirm",
+            datasheet::Stage::Reading(_) => "reading",
+            datasheet::Stage::Review(_) => "review",
+            datasheet::Stage::Note(_) => "note",
+        }
+    }
+
+    #[cfg(test)]
+    pub(super) fn datasheet_test_add(&mut self) -> Result<String, String> {
+        self.datasheet_add()
+    }
+
+    #[cfg(test)]
+    pub(super) fn datasheet_test_stop(&mut self) {
+        self.datasheet_stop();
+    }
+
+    #[cfg(test)]
+    pub(super) fn datasheet_test_duplicate(&self) -> bool {
+        self.datasheet_duplicate()
+    }
+
+    #[cfg(test)]
     pub(super) fn assistant_test_decide(&mut self, index: usize, apply: bool) {
         self.assistant_decide(index, apply);
     }
 
     pub(super) fn assistant_window(&mut self, ctx: &egui::Context) {
+        // Panels elsewhere (the Heat panel) cannot reach this state; they read
+        // whether Claude is on and leave a question here for the next frame.
+        let on = self.settings.ai.enabled;
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(ON_ID), on));
+        if let Some(q) = ctx.data_mut(|d| d.remove_temp::<String>(egui::Id::new(ASK_ID)))
+            && on
+        {
+            self.wb.assistant.ask_later(q);
+        }
         if !self.wb.assistant.open {
             return;
         }
         self.assistant_poll();
+        match self.wb.assistant.shot {
+            Shot::Idle => {}
+            Shot::Hide => {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                self.wb.assistant.shot = Shot::Waiting(0);
+                ctx.request_repaint();
+                return;
+            }
+            Shot::Waiting(n) => {
+                let got = ctx.input(|i| {
+                    i.events.iter().find_map(|e| match e {
+                        egui::Event::Screenshot { image, .. } => Some(Arc::clone(image)),
+                        _ => None,
+                    })
+                });
+                let scope_now = self.settings.ai.consent.effective();
+                let st = &mut self.wb.assistant;
+                match got {
+                    Some(img) => {
+                        match picture_of(&img) {
+                            Ok(p) => {
+                                st.picture = Some(p);
+                                st.picture_scope = scope_now;
+                            }
+                            Err(e) => st
+                                .transcript
+                                .push(Entry::Problem(format!("Could not take the picture: {e}"))),
+                        }
+                        st.shot = Shot::Idle;
+                    }
+                    None if n > 180 => {
+                        st.shot = Shot::Idle;
+                        st.transcript.push(Entry::Problem(
+                            "This computer's graphics did not give a picture of the window.".into(),
+                        ));
+                    }
+                    None => {
+                        st.shot = Shot::Waiting(n + 1);
+                        ctx.request_repaint();
+                        return;
+                    }
+                }
+            }
+        }
+        if self.wb.assistant.running.is_none()
+            && let Some(q) = self.wb.assistant.pending_question.take()
+        {
+            if self.settings.ai.enabled {
+                self.assistant_send(ctx, q);
+            } else {
+                self.wb
+                    .assistant
+                    .transcript
+                    .push(Entry::Problem("Claude is off, so nothing was sent.".into()));
+            }
+        }
         if self.wb.assistant.running.is_some() || self.wb.assistant.key_check.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(120));
         }
         let mut open = true;
         let mut decide: Option<(usize, bool)> = None;
         let mut send: Option<String> = None;
-        super::panel::dialog(ctx, "Ask Claude", [460.0, 620.0])
-            .open(&mut open)
+        super::panel::dialog(ctx, "Ask Claude", [460.0, 700.0])
+            .open(super::panel::esc(ctx, &mut open))
+            // The agree controls are pinned below; the rest scrolls above them.
+            .scroll([false, false])
             .show(ctx, |ui| {
-                self.assistant_settings_ui(ui, ctx);
-                ui.separator();
-                if self.settings.ai.enabled {
-                    send = self.assistant_chat_ui(ui, &mut decide);
-                } else {
-                    ui.weak("Turn Claude on above to start a conversation.");
+                if self.wb.assistant.show_settings {
+                    egui::Panel::bottom("ask_claude_agree")
+                        .resizable(false)
+                        .show(ui, |ui| self.assistant_agree_ui(ui));
                 }
+                egui::CentralPanel::default().show(ui, |ui| {
+                    // Settings scroll in their own area, at most half the
+                    // dialog while a chat sits below; the chat is outside it
+                    // (inside a scroll area its height would be unbounded and
+                    // the message box would leave the window).
+                    let room = ui.available_height();
+                    let settings_max = if self.settings.ai.enabled {
+                        (room * 0.5).max(160.0)
+                    } else {
+                        room
+                    };
+                    egui::ScrollArea::vertical()
+                        .id_salt("ask_claude_settings")
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .max_height(settings_max)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| self.assistant_settings_ui(ui, ctx));
+                    ui.separator();
+                    if self.settings.ai.enabled {
+                        send = self.assistant_chat_ui(ui, &mut decide);
+                    } else {
+                        ui.weak("Turn Claude on above to start a conversation.");
+                    }
+                });
             });
         self.wb.assistant.open = open;
         if let Some((i, apply)) = decide {
@@ -662,6 +1360,9 @@ impl NovoApp {
         let spent = self.wb.assistant.spent();
         let cap = self.settings.ai.monthly_cap_usd;
         let model = models::resolve(&self.settings.ai.model);
+        if let Some((line, loaded)) = replay_notice() {
+            ui.label(egui::RichText::new(line).color(if loaded { pal.warning } else { pal.error }));
+        }
         ui.horizontal(|ui| {
             if enabled {
                 ui.label(egui::RichText::new("Claude is on").color(pal.success));
@@ -789,6 +1490,10 @@ impl NovoApp {
                 ui.weak(s.describes());
             });
         }
+        ui.weak(
+            "Buttons that say “with Claude” send the text shown on screen, whatever you chose here.",
+        );
+        ui.weak("A picture you attach shows everything on screen at that moment, whatever you chose here.");
         let current = self.settings.ai.consent.effective();
         if scope != self.wb.assistant.pending_scope.unwrap_or(current) {
             if enabled && scope > current {
@@ -871,8 +1576,20 @@ impl NovoApp {
              the real bill.",
         );
         ui.add_space(6.0);
+    }
 
-        // 4. Agree and switch on.
+    /// Section 4 of the settings, pinned under the scrolling sections 1 to 3
+    /// so the box and the button are reachable on a small window.
+    fn assistant_agree_ui(&mut self, ui: &mut egui::Ui) {
+        let pal = ui_palette();
+        let enabled = self.settings.ai.enabled;
+        let key = self.wb.assistant.key();
+        // Sections 1 to 3 have already stored a change of scope.
+        let scope = self
+            .wb
+            .assistant
+            .pending_scope
+            .unwrap_or_else(|| self.settings.ai.consent.effective());
         ui.strong("4. Agree");
         ui.label(egui::RichText::new(NOTICE).color(pal.text_secondary));
         if enabled {
@@ -906,7 +1623,7 @@ impl NovoApp {
     ) -> Option<String> {
         let pal = ui_palette();
         let running = self.wb.assistant.running.is_some();
-        let height = (ui.available_height() - 110.0).max(120.0);
+        let height = (ui.available_height() - 140.0).max(120.0);
         egui::ScrollArea::vertical()
             .max_height(height)
             .min_scrolled_height(height)
@@ -929,7 +1646,16 @@ impl NovoApp {
                         }
                         Entry::Claude(t) => {
                             ui.add_space(4.0);
-                            ui.label(egui::RichText::new("Claude").strong());
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Claude").strong());
+                                if ui
+                                    .small_button("Copy")
+                                    .on_hover_text("Copy this answer")
+                                    .clicked()
+                                {
+                                    ui.ctx().copy_text(t.clone());
+                                }
+                            });
                             ui.label(t);
                         }
                         Entry::Tool(t) => {
@@ -942,6 +1668,9 @@ impl NovoApp {
                             egui::Frame::group(ui.style()).show(ui, |ui| {
                                 ui.label(egui::RichText::new("Suggested change").strong());
                                 ui.label(&p.summary);
+                                if let Some(note) = self.wb.assistant.proposal_notes.get(&p.id) {
+                                    ui.weak(note);
+                                }
                                 match state {
                                     ProposalState::Pending => {
                                         ui.horizontal(|ui| {
@@ -968,12 +1697,27 @@ impl NovoApp {
                     }
                 }
                 if running {
+                    let st = &self.wb.assistant;
+                    if !st.live.is_empty() {
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new("Claude").strong());
+                        ui.label(&st.live);
+                    }
                     ui.horizontal(|ui| {
                         ui.spinner();
-                        ui.weak("Claude is working…");
+                        ui.weak(if st.thinking || st.live.is_empty() {
+                            "Claude is thinking…"
+                        } else {
+                            "Claude is writing…"
+                        });
+                        if ui.small_button("Stop").clicked() {
+                            st.cancel.store(true, Ordering::Relaxed);
+                        }
                     });
                 }
             });
+        ui.add_space(4.0);
+        self.datasheet_ui(ui);
         ui.add_space(4.0);
         let mut send = None;
         let st = &mut self.wb.assistant;
@@ -995,6 +1739,31 @@ impl NovoApp {
             }
             if ui.small_button("Clear chat").clicked() && !running {
                 st.clear_chat();
+            }
+            match &st.picture {
+                Some(p) => {
+                    ui.weak(format!("Picture attached ({}×{})", p.size[0], p.size[1]));
+                    if ui.small_button("Remove picture").clicked() {
+                        st.picture = None;
+                    }
+                }
+                None => {
+                    if ui
+                        .add_enabled(
+                            !running && st.shot == Shot::Idle,
+                            egui::Button::new("Attach picture").small(),
+                        )
+                        .on_hover_text(
+                            "Sends a picture of this whole KoperCAD window with your next \
+                             message: everything visible in it, whatever the data scope. \
+                             It goes with that one question only; Claude is not shown it again. \
+                             This window steps aside for a moment.",
+                        )
+                        .clicked()
+                    {
+                        st.shot = Shot::Hide;
+                    }
+                }
             }
             ui.weak(format!(
                 "Chat so far {} · month {}",

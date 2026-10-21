@@ -352,7 +352,7 @@ fn export_wires_and_cut_list_carry_cut_lengths() {
     let run = novo(&["export", "wires", s(&path)]);
     assert_eq!(run.code, exit::OK, "{}", run.err);
     assert!(
-        run.out.contains("Cut length mm,Length basis"),
+        run.out.contains("Route length mm,Length basis"),
         "{}",
         run.out
     );
@@ -830,6 +830,21 @@ fn export_step_needs_a_mounting_plate() {
 }
 
 #[test]
+fn compare_says_when_two_projects_match_and_where_they_differ() {
+    let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let one = project(a.path(), false);
+    let same = project(b.path(), false);
+    let run = novo(&["compare", s(&one), s(&same)]);
+    assert_eq!(run.code, exit::OK, "{}{}", run.out, run.err);
+    assert!(run.out.contains("Nothing differs"), "{}", run.out);
+    let c = tempfile::tempdir().unwrap();
+    let other = project(c.path(), true);
+    let run = novo(&["compare", s(&one), s(&other)]);
+    assert_eq!(run.code, exit::PROBLEMS, "{}{}", run.out, run.err);
+    assert!(run.out.contains("device"), "{}", run.out);
+}
+
+#[test]
 fn export_aml_writes_caex_and_lists_what_the_format_cannot_carry() {
     let dir = tempfile::tempdir().unwrap();
     let path = project(dir.path(), false);
@@ -839,8 +854,9 @@ fn export_aml_writes_caex_and_lists_what_the_format_cannot_carry() {
     let text = std::fs::read_to_string(&out).unwrap();
     assert!(text.contains("<CAEXFile"));
     assert!(text.contains("Name=\"-K1\""));
-    assert!(run.out.contains("1 devices"), "{}", run.out);
-    assert!(run.out.contains("pages and drawings"), "{}", run.out);
+    assert!(run.out.contains("1 device"), "{}", run.out);
+    assert!(run.out.contains("2 pages"), "{}", run.out);
+    assert!(run.out.contains("page graphics"), "{}", run.out);
 }
 
 /// An edited export of `project`: the first device's description set to
@@ -973,6 +989,7 @@ fn import_eplan_previews_with_a_counted_not_carried_list_and_writes_nothing() {
     assert!(r.out.contains("symbol drawings"), "{}", r.out);
     let r = novo(&["import", "eplan", s(&pxf), "--json"]);
     assert!(r.out.contains("\"not_carried\""), "{}", r.out);
+    assert!(r.out.contains("\"guessed\""), "{}", r.out);
 }
 
 fn crane_fixture() -> PathBuf {

@@ -304,14 +304,22 @@ impl NovoApp {
             }
             ui.add_space(6.0);
             ui.weak("An import only adds. Anything that exists keeps what the project says.");
-            if !report.lossy.is_empty() || !report.notes.is_empty() {
+            if !report.lossy.is_empty() || !report.guessed.is_empty() || !report.notes.is_empty() {
                 ui.add_space(8.0);
-                ui.strong("Not carried over");
+                if !report.lossy.is_empty() {
+                    ui.strong("Not carried over");
+                }
                 egui::ScrollArea::vertical()
                     .max_height(260.0)
                     .show(ui, |ui| {
                         for l in &report.lossy {
-                            ui.label(format!("{} {}: {}", l.count, l.what, l.why));
+                            ui.label(l.line());
+                        }
+                        if !report.guessed.is_empty() {
+                            ui.strong("Guessed, not exact");
+                        }
+                        for l in &report.guessed {
+                            ui.label(l.line());
                         }
                         for n in &report.notes {
                             ui.weak(n);

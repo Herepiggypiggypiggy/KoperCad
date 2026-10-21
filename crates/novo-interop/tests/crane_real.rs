@@ -62,6 +62,20 @@ fn the_drawn_pages_keep_the_nets_of_the_real_project() {
     let r = plan.report();
     assert!(r.count_of("symbols drawn") > 100, "{}", r.text());
     assert!(r.count_of("wires") > 100, "{}", r.text());
+    // Most wires turn at the file's own nodes; the rest keep a guessed route.
+    assert!(
+        r.text()
+            .contains("wires follow the runs and nodes the file implies"),
+        "{}",
+        r.text()
+    );
+    // Only the black boxes (no pin names, no function the library knows) stay
+    // boxes: the transformer with PE is fitted by where its points sit.
+    let text = r.text();
+    assert!(
+        !text.contains("Transformer, 5 connection points with PE x"),
+        "{text}"
+    );
     let mut doc = novo_core::Document::new(novo_core::Project::new("x"));
     let (_, _, check) = plan.apply_checked(&mut doc).unwrap().unwrap();
     let c = check.expect("pages are drawn");
@@ -88,6 +102,10 @@ fn the_real_project_keeps_its_lines_and_location_boxes() {
     .unwrap();
     let r = plan.report();
     eprintln!("{}", r.text());
+    // The generated report pages' cells are named; what is really unknown
+    // stays a short list.
+    assert!(r.text().contains("report table cells and texts"));
+    assert!(r.count_of("other objects") < 100, "{}", r.text());
     let mut doc = novo_core::Document::new(novo_core::Project::new("x"));
     plan.apply(&mut doc).unwrap();
     let with_bg = doc

@@ -29,6 +29,33 @@ text_nl = "Terug"
 text = "Show me how"
 text_nl = "Laat zien"
 
+[challenge_solved]
+text = "Solved"
+text_nl = "Opgelost"
+
+[challenge_shown]
+text = "Shown, not solved. Try it again from the start to do it yourself."
+text_nl = "Getoond, niet zelf opgelost. Probeer het opnieuw om het zelf te doen."
+
+[predict_right]
+text = "Right."
+text_nl = "Juist."
+
+[predict_wrong]
+text = "Not quite."
+text_nl = "Niet helemaal."
+
+[hint]
+text = "Hint"
+text_nl = "Hint"
+
+[fix_it]
+text = "Fix it"
+text_nl = "Repareer het"
+[do_it_for_me]
+text = "Do it for me"
+text_nl = "Doe het voor mij"
+
 [skip_step]
 text = "Skip step"
 text_nl = "Stap overslaan"
@@ -113,6 +140,14 @@ text_nl = "Opnieuw laden"
 text = "Reset progress"
 text_nl = "Voortgang wissen"
 
+[reset_confirm]
+text = "Clear the progress of every lesson?"
+text_nl = "De voortgang van alle lessen wissen?"
+
+[yes_reset]
+text = "Clear it"
+text_nl = "Wissen"
+
 [no_lessons]
 text = "No lessons yet."
 text_nl = "Nog geen lessen."
@@ -120,6 +155,14 @@ text_nl = "Nog geen lessen."
 [open_finished]
 text = "Open finished version"
 text_nl = "Afgeronde versie openen"
+
+[open_finished_confirm]
+text = "Replace this drawing with the finished version? Press Ctrl+S first to keep yours."
+text_nl = "Deze tekening vervangen door de afgeronde versie? Druk eerst op Ctrl+S om de jouwe te bewaren."
+
+[finished_project]
+text = "Finished: {title}"
+text_nl = "Af: {title}"
 
 [continue_line]
 text = "Continue: {lesson} (step {n} of {total})"

@@ -188,7 +188,17 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
     assert_eq!(out.sections[0].key, "summary");
     // The estimates note shares the summary page instead of taking one.
     assert!(out.sections.iter().all(|s| s.key != "estimates"));
-    assert_eq!(out.sections[1].key, BenchCut::group_key(Some(1.5), "BK"));
+    // The motor cable's four cores are not pulled from a reel: a note says so
+    // and their metres are left out of the totals.
+    assert_eq!(out.sections[1].key, "check");
+    assert!(
+        out.sections[1]
+            .text_rows()
+            .iter()
+            .any(|r| r[0].contains("4 of 25 wires are cores of cables")),
+        "{:?}",
+        out.sections[1].text_rows()
+    );
     let group = out
         .section(&BenchCut::group_key(Some(1.5), "BK"))
         // Nineteen device-to-device wires and six that end at a supply feed.
@@ -203,13 +213,14 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
         let n = |t: &str| t.trim_start_matches('~').parse::<f64>().expect("number");
         assert_eq!(n(&cut), n(&route) + 20.0);
     }
-    // The routed wires are exact, the rest are estimates.
+    // The routed wires and the four cores of the motor cable (its stated
+    // 12 m) count as stated, the rest are estimates.
     let exact = group
         .rows
         .iter()
         .filter(|r| !text(&r.cells[2]).starts_with('~'))
         .count();
-    assert_eq!(exact, 3);
+    assert_eq!(exact, 7);
     // Longest first within the group.
     let cuts: Vec<f64> = group
         .rows
@@ -217,7 +228,26 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
         .map(|r| text(&r.cells[2]).trim_start_matches('~').parse().unwrap())
         .collect();
     assert!(cuts.windows(2).all(|w| w[0] >= w[1]));
-    assert!(out.sections[0].title.contains("22 of 25"));
+    // Metres and Longest leave the cores out: the group's rows hold them.
+    let cut = |r: &novo_reports::Row| -> f64 {
+        text(&r.cells[2]).trim_start_matches('~').parse().unwrap()
+    };
+    let all: f64 = group.rows.iter().map(cut).sum();
+    let cores: f64 = group.rows.iter().map(cut).filter(|c| *c > 10_000.0).sum();
+    assert!(cores > 40_000.0, "four 12 m cores");
+    let summary = &out.sections[0].rows[0];
+    let metres = match &summary.cells[4] {
+        Cell::Number(n) => *n,
+        other => panic!("{other:?}"),
+    };
+    assert!((metres - (all - cores) / 1000.0).abs() < 0.11, "{metres}");
+    let longest = match &summary.cells[5] {
+        Cell::Number(n) => *n,
+        other => panic!("{other:?}"),
+    };
+    assert!(longest < 10_000.0, "{longest}");
+    assert!(group_title(&out).contains("+4 cable cores"));
+    assert!(out.sections[0].title.contains("18 of 25"));
     let estimated: i64 = out.sections[0]
         .rows
         .iter()
@@ -226,7 +256,7 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
             other => panic!("{other:?}"),
         })
         .sum();
-    assert_eq!(estimated, 22);
+    assert_eq!(estimated, 18);
 }
 
 #[test]
@@ -504,4 +534,11 @@ fn the_cut_list_says_when_wires_have_no_number() {
     );
     set(&mut doc, Some("W"));
     assert!(notes(&doc).iter().all(|n| !n.contains("no wire number")));
+}
+
+fn group_title(out: &novo_reports::ReportOutput) -> String {
+    out.section(&BenchCut::group_key(Some(1.5), "BK"))
+        .expect("group")
+        .title
+        .clone()
 }

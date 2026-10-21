@@ -12,7 +12,7 @@ use novo_core::{
     PartId, Project, Terminal, TerminalId, Value,
 };
 
-use super::draw::draw;
+use super::draw::{draw, is_box};
 use super::read::{Plant, PlantPage};
 use crate::report::Report;
 use crate::sheets::ApplyError;
@@ -31,6 +31,11 @@ pub struct AmlPlan {
     /// Nets that would get at least one wire (two or more pins on symbols
     /// that would be placed).
     new_nets: usize,
+    /// Symbols that would be drawn as boxes, counted by kind.
+    box_kinds: BTreeMap<String, usize>,
+    /// New devices whose footprint neither the file nor the project's
+    /// catalog gives.
+    no_footprint: usize,
     /// Tags the file has that the project already holds.
     pub existing: Vec<String>,
     revision: u64,
@@ -119,6 +124,35 @@ pub fn plan_import(project: &Project, plant: &Plant) -> AmlPlan {
         .iter()
         .filter(|n| n.pins.iter().filter(|(s, _)| placed(*s)).count() >= 2)
         .count();
+    let mut box_kinds: BTreeMap<String, usize> = BTreeMap::new();
+    for s in plant.symbols.iter().filter(|s| match s.device {
+        Some(d) => new_set.contains(&d),
+        None => new_page_names.contains(s.page.as_str()),
+    }) {
+        if !s.pins.is_empty() && is_box(s) {
+            *box_kinds
+                .entry(format!("{} ({} pins)", s.kind, s.pins.len()))
+                .or_default() += 1;
+        }
+    }
+    let catalog_size: BTreeSet<(String, String)> = project
+        .parts()
+        .filter(|p| {
+            ["width_mm", "height_mm"]
+                .iter()
+                .all(|k| p.properties.contains_key(*k))
+        })
+        .map(|p| (p.manufacturer.clone(), p.order_number.clone()))
+        .collect();
+    let no_footprint = new_devices
+        .iter()
+        .filter(|&&i| {
+            let d = &plant.devices[i];
+            let [w, h, _] = d.size_mm;
+            !(w.is_some() && h.is_some())
+                && !catalog_size.contains(&(d.manufacturer.clone(), d.order_number.clone()))
+        })
+        .count();
     AmlPlan {
         plant: plant.clone(),
         new_structures,
@@ -127,6 +161,8 @@ pub fn plan_import(project: &Project, plant: &Plant) -> AmlPlan {
         new_pages,
         new_symbols,
         new_nets,
+        box_kinds,
+        no_footprint,
         existing,
         revision: project.revision(),
     }
@@ -180,6 +216,34 @@ impl AmlPlan {
     pub fn report(&self) -> Report {
         let mut r = self.plant.report.clone();
         r.notes.retain(|n| !n.starts_with("Already"));
+        let boxes: usize = self.box_kinds.values().sum();
+        if boxes > 0 {
+            let kinds: Vec<String> = self
+                .box_kinds
+                .iter()
+                .map(|(k, n)| format!("{k} x{n}"))
+                .collect();
+            r.guess(
+                "symbols drawn as labelled boxes",
+                boxes,
+                format!(
+                    "no library symbol of that kind and pin count fits ({}); the pins are where the file has them",
+                    kinds.join(", ")
+                ),
+            );
+        }
+        if self.new_nets > 0 && self.plant.segments.is_empty() {
+            r.guess(
+                "wire routes",
+                self.new_nets,
+                "the file lists the nets but not how the wires run, so they are drawn as plain right-angle runs between the pins",
+            );
+        }
+        r.guess(
+            "devices without a footprint",
+            self.no_footprint,
+            "neither the file nor the catalog gives a size, so the cabinet view uses its default footprint until a parts import fills it in",
+        );
         if !self.existing.is_empty() {
             r.note(format!(
                 "Already in the project and left as they are: {}.",
@@ -196,20 +260,26 @@ impl AmlPlan {
             .iter()
             .map(|&i| p.devices[i].terminals.len())
             .sum();
+        use crate::report::counted;
         let mut text = format!(
-            "Would add {} devices ({} terminals), {} cables and {} sections or locations; {} already exist.",
-            self.new_devices.len(),
-            terminals,
-            self.new_cables.len(),
-            self.new_structures.len(),
-            self.existing.len()
+            "Would add {} ({}), {} and {}; {} already {}.",
+            counted(self.new_devices.len(), "devices"),
+            counted(terminals, "terminals"),
+            counted(self.new_cables.len(), "cables"),
+            counted(self.new_structures.len(), "sections or locations"),
+            self.existing.len(),
+            if self.existing.len() == 1 {
+                "exists"
+            } else {
+                "exist"
+            },
         );
         if self.new_symbols > 0 {
             text.push_str(&format!(
-                " Would draw {} symbols on {} new pages and wire {} nets (plus interruption points for nets that cross pages).",
-                self.new_symbols,
-                self.new_pages.len(),
-                self.new_nets
+                " Would draw {} on {} and wire {} (plus interruption points for nets that cross pages).",
+                counted(self.new_symbols, "symbols"),
+                counted(self.new_pages.len(), "new pages"),
+                counted(self.new_nets, "nets"),
             ));
         }
         text

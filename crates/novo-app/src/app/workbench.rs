@@ -20,7 +20,7 @@ use novo_plc::link::LinkFormat;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
-use novo_workflow::palette::{LessonEntry, Mode, Sources, Target};
+use novo_workflow::palette::{LessonEntry, MacroEntry, Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
 use novo_view3d::camera::ViewPreset;
@@ -55,6 +55,8 @@ pub(crate) struct Workbench {
     pub(super) preview_art: Option<novo_editor::art::LibraryArt>,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
+    /// The machine as the current choice of options (copy and its reports).
+    pub(super) machine: super::machine::Machine,
     /// The place wheel, when open.
     pub(super) wheel: Option<super::wheel::Wheel>,
     /// A key that opens the wheel went down at this time (egui seconds),
@@ -68,6 +70,8 @@ pub(crate) struct Workbench {
     pub(super) renumber: Option<Vec<novo_plc::commands::RenumberPlan>>,
     /// The PLC tag import preview (file name and plan), waiting for Enter or Esc.
     pub(super) plc_import: Option<(String, novo_plc::link::ImportPlan)>,
+    /// The I/O list review (file name, plan), waiting for Enter or Esc.
+    pub(super) plc_list: Option<super::plc_list::ListImport>,
     /// The Preferences window is open.
     pub(super) preferences: bool,
     /// The shortcut sheet (`?`).
@@ -90,6 +94,8 @@ pub(crate) struct Workbench {
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
+    pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
+    pub(super) handover_ask: Option<super::handover::HandoverAsk>,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
@@ -203,8 +209,17 @@ pub(crate) struct Workbench {
     pub(super) assistant: super::assistant::State,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
-    /// The PDF options dialog (File > Export drawings > Export PDF...), while open.
+    /// The Autopilot review list, while open.
+    pub(super) autopilot: Option<super::autopilot::AutopilotState>,
+    /// Paper of the workshop pack's drilling template.
+    pub(super) workshop_paper: novo_layout::template::Paper,
+    /// The PDF options dialog (File > Export print > Export PDF with options...), while open.
     pub(super) pdf_options: Option<super::pdf_options::PdfOptionsState>,
+    /// The print preview and plot sets window (File > Export print > Print preview and plot sets...), while open.
+    pub(super) print_preview: Option<Box<super::print_preview::PrintPreview>>,
+    /// Test hook: the folder PDFs go to instead of `<Documents>\KoperCAD`.
+    #[cfg(test)]
+    pub(super) pdf_dir: Option<std::path::PathBuf>,
     /// The Report designer window, while open.
     pub(super) designer: Option<super::designer::DesignerState>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
@@ -253,12 +268,14 @@ impl Default for Workbench {
             xref: LiveXref::default(),
             preview_art: None,
             reports: Default::default(),
+            machine: Default::default(),
             wheel: None,
             place_hold: None,
             place_latch: None,
             queued: Vec::new(),
             renumber: None,
             plc_import: None,
+            plc_list: None,
             preferences: false,
             shortcuts: Default::default(),
             macros: Default::default(),
@@ -268,6 +285,8 @@ impl Default for Workbench {
             macro_editor: Default::default(),
             project_settings: false,
             issue: None,
+            restore_ask: None,
+            handover_ask: None,
             compare: None,
             faults: None,
             add_fault: None,
@@ -322,7 +341,12 @@ impl Default for Workbench {
             background_panel: None,
             assistant: super::assistant::State::new(),
             bench: None,
+            autopilot: None,
+            workshop_paper: novo_layout::template::Paper::A4,
             pdf_options: None,
+            print_preview: None,
+            #[cfg(test)]
+            pdf_dir: None,
             designer: None,
             commissioning: None,
             underlay_seen: None,
@@ -393,6 +417,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "page.delete",
     "page.move_up",
     "page.move_down",
+    "learn.next",
+    "learn.back",
+    "learn.restart",
+    "learn.close",
     "nav.partner",
     "nav.show_schematic",
     "nav.show_cabinet",
@@ -408,6 +436,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.devices_drawer",
     "view.toggle_marks",
     "sim.live",
+    "sim.why",
     "sim.plc_program",
     "sim.faults",
     "sim.add_fault",
@@ -421,9 +450,11 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.print_preview",
     "export.pdf_options",
     "export.change_report",
     "export.commissioning",
+    "export.punch_list",
     "export.standards_report",
     "export.standards_xlsx",
     "export.plate",
@@ -432,6 +463,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.report_pdf",
     "report.add_page",
     "export.assembly",
+    "export.handover",
+    "export.workshop",
+    "export.safety_sheets",
     "export.sheets",
     "export.sheets_csv",
     "export.wirecut",
@@ -522,6 +556,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "plc.to_plc",
     "plc.renumber_io",
     "plc.import_tags",
+    "plc.import_list",
     "export.plc_csv",
     "export.plc_plcopen",
     "export.plc_tia",
@@ -558,16 +593,23 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "macro.export_pack",
     "project.options",
     "project.variant",
+    "project.option",
+    "project.tie",
+    "project.untie",
     "project.generate",
     "export.variant_pdf",
     "export.spec",
     "revision.issue",
     "revision.compare",
+    "revision.lock_page",
+    "revision.unlock_page",
+    "revision.restore_page",
     "terminal.toggle_pe",
     "terminal.reset_pe",
     "wire.mode",
     "edit.reset_note",
     "interruption.renumber",
+    "wires.autopilot",
     "wires.number",
     "wires.numbering",
     "wires.renumber",
@@ -631,6 +673,14 @@ impl NovoApp {
         }
     }
 
+    /// How many symbols are selected (a link needs a contact and a coil).
+    pub(super) fn selected_symbol_count(&self) -> usize {
+        self.selection()
+            .iter()
+            .filter(|id| matches!(id, AnyId::Symbol(_)))
+            .count()
+    }
+
     pub(super) fn here(&self) -> Option<Place> {
         Some(Place {
             page: self.current_page?,
@@ -658,7 +708,9 @@ impl NovoApp {
             has_device: devices == 1,
             can_undo: doc.is_some_and(Document::can_undo),
             can_redo: doc.is_some_and(Document::can_redo),
-            clipboard: true,
+            // Paste from the menu and the command field uses the last copy made
+            // here (a key press reads the system clipboard itself).
+            clipboard: self.wb.clip.last.is_some(),
             can_go_back: self.wb.nav.history.can_go_back(),
             can_go_forward: self.wb.nav.history.can_go_forward(),
         }
@@ -776,6 +828,12 @@ impl NovoApp {
                 self.outline_open = false;
             }
         }
+        // Escape belongs to a window floating on top, not the drawing, even
+        // with the pointer over it (the drawing would take the key first).
+        let window_on_top = super::panel::dialog_on_top(ctx);
+        if let Some(view) = self.canvas.schematic() {
+            view.yield_escape = window_on_top;
+        }
     }
 
     /// The commands this frame's key presses run, taken out of the input.
@@ -811,6 +869,14 @@ impl NovoApp {
     pub(super) fn run_command(&mut self, ctx: &egui::Context, id: &str, argument: Option<&str>) {
         crate::diag::note_command(id);
         self.learn_command(id);
+        // The other Simulate commands open their own views: the live view
+        // does not stay switched on behind them.
+        if matches!(
+            id,
+            "simulate.motor-start" | "view.protection" | "heat.simulate"
+        ) {
+            self.wb.live.leave();
+        }
         if id == "help.learn" || id.starts_with("learn.") {
             self.learn_run_command(id, argument);
             return;
@@ -978,6 +1044,7 @@ impl NovoApp {
             | "terminal.style"
             | "terminal.restore_declined" => self.terminal_edit_command(id, argument),
             "interruption.renumber" => self.renumber_interruptions(),
+            "wires.autopilot" => self.open_autopilot(),
             "wires.number" => self.number_wires(),
             "wires.numbering" => {
                 self.open_numbering(novo_numbering::Mode::Fill, super::numbering::Tab::Preview)
@@ -1109,7 +1176,7 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" | "sim.plc_program" => {
+            "sim.live" | "sim.why" | "sim.plc_program" => {
                 // The live view and the PLC window draw only over the
                 // schematic: go there first so the command is not silent.
                 if self.workspace() != Workspace::Schematic && self.is_open() {
@@ -1121,6 +1188,8 @@ impl NovoApp {
                 }
                 if id == "sim.live" {
                     self.toggle_live();
+                } else if id == "sim.why" {
+                    self.ask_why();
                 } else {
                     self.open_plc_program();
                 }
@@ -1183,11 +1252,13 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.print_preview" => self.open_print_preview(),
             "export.pdf_options" => self.open_pdf_options(),
             "export.change_report" => {
                 self.export_change_report();
             }
             "export.commissioning" => self.export_commissioning_pdf(),
+            "export.punch_list" => self.export_punch_list_pdf(),
             "export.standards_report" => {
                 self.export_standards_report(StandardsFormat::Pdf);
             }
@@ -1209,6 +1280,13 @@ impl NovoApp {
             "report.add_page" => self.add_report_page_command(argument),
             "export.assembly" => {
                 self.export_assembly();
+            }
+            "export.safety_sheets" => {
+                self.export_safety_sheets();
+            }
+            "export.handover" => self.ask_handover(),
+            "export.workshop" => {
+                self.export_workshop();
             }
             "export.sheets" => {
                 self.export_spreadsheet();
@@ -1287,6 +1365,7 @@ impl NovoApp {
             "plc.to_plc" => self.plc_to_plc(),
             "plc.renumber_io" => self.plc_renumber_io(),
             "plc.import_tags" => self.plc_import_tags(),
+            "plc.import_list" => self.plc_import_list(),
             "export.plc_csv" => {
                 self.export_plc(LinkFormat::Csv);
             }
@@ -1337,6 +1416,9 @@ impl NovoApp {
             "macro.export_pack" => self.macro_export_pack(),
             "project.options" => self.open_options(),
             "project.variant" => self.switch_variant(argument),
+            "project.option" => self.option_command(argument),
+            "project.tie" => self.tie_command(argument),
+            "project.untie" => self.untie_command(),
             "project.generate" => self.open_generate(),
             "export.variant_pdf" => {
                 self.export_variant_pdf(argument);
@@ -1346,6 +1428,9 @@ impl NovoApp {
             }
             "revision.issue" => self.open_issue_revision(argument),
             "revision.compare" => self.open_compare(argument),
+            "revision.lock_page" => self.set_page_lock(true),
+            "revision.unlock_page" => self.set_page_lock(false),
+            "revision.restore_page" => self.restore_page_command(argument),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));
@@ -1421,6 +1506,8 @@ impl NovoApp {
                 }
             }
             Target::Lesson(id) => self.learn_run_command_lesson(&id),
+            // The place window opens on the macro, to be confirmed there.
+            Target::Macro(name) => self.open_macro_place(Some(&name)),
             Target::Cable(cable) => self.show_cable(cable),
             Target::Wire(wire) => self.go_to_wire(wire),
             Target::Symbol(symbol) => self.begin_place(&symbol, None),
@@ -1479,9 +1566,13 @@ impl NovoApp {
         if !self.wb.field.is_open() {
             return;
         }
+        self.wb.field.ask_enabled = self.settings.ai.enabled;
         let picked = self.with_field(|field, sources| field.show(ctx, canvas, sources));
         if let Some(rect) = self.wb.field.rect() {
             self.anchor("palette.field", rect, "Command field");
+        }
+        if let Some(question) = self.wb.field.asked.take() {
+            self.ask_claude(ctx, question);
         }
         if let Some(target) = picked {
             self.run_target(ctx, target);
@@ -1511,8 +1602,9 @@ impl NovoApp {
     ) -> R {
         let mut field = std::mem::take(&mut self.wb.field);
         let lessons = self.learn.palette_entries();
+        let macros = self.wb.macro_place.palette_entries();
         let result = {
-            let sources = sources(self, &lessons);
+            let sources = sources(self, &lessons, &macros);
             f(&mut field, &sources)
         };
         self.wb.field = field;
@@ -1670,15 +1762,23 @@ impl NovoApp {
         let panned = self.wb.space_pan.take().is_some();
         let moved = pointer.map_or(0.0, |p| p.distance(down));
         if released && !panned && moved <= 4.0 {
-            self.wb.field.open(Mode::All, pointer.or(Some(down)));
+            // At the cabinet a tap of Space ticks the wire in front of you.
+            if !self.commissioning_space() {
+                self.wb.field.open(Mode::All, pointer.or(Some(down)));
+            }
         }
     }
 }
 
 /// What the command field searches, from the app's parts.
-fn sources<'a>(app: &'a NovoApp, lessons: &'a [LessonEntry]) -> Sources<'a> {
+fn sources<'a>(
+    app: &'a NovoApp,
+    lessons: &'a [LessonEntry],
+    macros: &'a [MacroEntry],
+) -> Sources<'a> {
     Sources {
         lessons,
+        macros,
         project: app.backend.document().map(Document::project),
         library: app.library(),
         keymap: &app.wb.keymap,

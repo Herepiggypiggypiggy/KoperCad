@@ -23,17 +23,22 @@ enum CardAction {
     CancelRestart,
     Close,
     Open(String),
+    Hint,
+    Predict(usize),
+    OpenFinished,
+    ConfirmFinished,
+    CancelFinished,
 }
 
 /// The card's words for one frame, copied out so drawing needs no borrow.
-struct Card {
+pub(super) struct Card {
     header: String,
     step_title: String,
     text: String,
     /// The author's numbered instructions (`how`), with markup.
     steps: Vec<String>,
     ticked: bool,
-    finished: bool,
+    pub(super) finished: bool,
     can_next: bool,
     first: bool,
     show_me: bool,
@@ -41,8 +46,34 @@ struct Card {
     how: Vec<(String, bool)>,
     /// A demonstration is on show (playing, or settled on its markers).
     demo_on: bool,
-    next_lessons: Vec<(String, String)>,
+    pub(super) next_lessons: Vec<(String, String)>,
+    /// A challenge: the goal is stated, the way is not.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(super) challenge: bool,
+    /// The hints the learner has opened, and how many there are.
+    pub(super) hints_open: Vec<String>,
+    pub(super) hints_total: usize,
+    /// A prediction question: the options, the one chosen, the right one and
+    /// the reason, shown once chosen.
+    pub(super) predict: Option<PredictView>,
+    /// What was wrong, for the end of a challenge, and whether "Do it for
+    /// me" did the repair.
+    pub(super) explain: String,
+    pub(super) helped: bool,
+    /// Skip does the step for the learner (it has a `solve`).
+    skip_does_it: bool,
+    /// The lesson ships a finished drawing and the learner is at its end.
+    pub(super) can_open_finished: bool,
+    confirm_finished: bool,
     words: Words,
+}
+
+/// The prediction question of a step as the card shows it.
+pub(super) struct PredictView {
+    pub(super) options: Vec<String>,
+    pub(super) chosen: Option<usize>,
+    pub(super) answer: usize,
+    pub(super) why: String,
 }
 
 #[derive(Default)]
@@ -53,6 +84,7 @@ struct Words {
     replay: String,
     stop: String,
     skip: String,
+    do_it: String,
     next: String,
     restart: String,
     restart_confirm: String,
@@ -62,12 +94,20 @@ struct Words {
     done: String,
     done_text: String,
     next_lessons: String,
+    hint: String,
+    solved: String,
+    predict_right: String,
+    predict_wrong: String,
+    shown: String,
+    open_finished: String,
+    finished_confirm: String,
 }
 
 impl NovoApp {
     /// The lesson card, the pointer and the notes, late in the frame.
     pub(super) fn learn_overlay(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         if !self.learn.card_on() {
+            super::panel::reserve_bottom_right(ctx, 0.0);
             return;
         }
         self.pointer(ctx, canvas);
@@ -92,7 +132,20 @@ impl NovoApp {
         })
         .map_or(egui::Rect::NOTHING, |r| r.response.rect);
         self.learn.card_pos = Some(card_rect.center());
+        // The inspector and the other right-hand panels keep above the card
+        // while it sits in its corner.
+        let parked =
+            card_rect.is_finite() && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
+        super::panel::reserve_bottom_right(
+            ctx,
+            if parked {
+                card_rect.height() + super::panel::MARGIN
+            } else {
+                0.0
+            },
+        );
         match action {
+            Some(CardAction::Move(Move::Skip)) => self.learn_skip(ctx),
             Some(CardAction::Move(how)) => self.learn_move(how),
             Some(CardAction::ShowMe) => self.learn_show_me(),
             Some(CardAction::StopDemo) => self.learn_stop_demo(),
@@ -104,11 +157,20 @@ impl NovoApp {
             Some(CardAction::CancelRestart) => self.learn.confirm_restart = false,
             Some(CardAction::Close) => self.learn.hidden = true,
             Some(CardAction::Open(id)) => self.start_lesson(&id),
+            Some(CardAction::Hint) => self.learn_open_hint(),
+            Some(CardAction::Predict(choice)) => {
+                let _ = self.learn_predict(choice);
+            }
+            Some(CardAction::OpenFinished) => self.learn.confirm_finished = true,
+            Some(CardAction::ConfirmFinished) => {
+                self.learn_open_finished();
+            }
+            Some(CardAction::CancelFinished) => self.learn.confirm_finished = false,
             None => {}
         }
     }
 
-    fn card(&self) -> Option<Card> {
+    pub(super) fn card(&self) -> Option<Card> {
         let run = self.learn.run.as_ref()?;
         let lang = self.learn.lang;
         let lesson = run.lesson();
@@ -121,6 +183,7 @@ impl NovoApp {
             replay: say("demo_replay"),
             stop: say("demo_stop"),
             skip: say("skip_step"),
+            do_it: say("do_it_for_me"),
             next: say("next"),
             restart: say("restart_lesson"),
             restart_confirm: say("restart_confirm"),
@@ -130,11 +193,24 @@ impl NovoApp {
             done: say("done"),
             done_text: say("done_text"),
             next_lessons: say("next_lessons"),
+            hint: say("hint"),
+            solved: say("challenge_solved"),
+            predict_right: say("predict_right"),
+            predict_wrong: say("predict_wrong"),
+            shown: say("challenge_shown"),
+            open_finished: say("open_finished"),
+            finished_confirm: say("open_finished_confirm"),
         };
         let n = (run.index() + 1).min(total).to_string();
+        let challenge = lesson.kind == novo_learn::Kind::Challenge;
+        let title = if challenge {
+            format!("{} · {}", say("fix_it"), lesson.title(lang))
+        } else {
+            lesson.title(lang).to_owned()
+        };
         let header = format!(
             "{} · {}",
-            lesson.title(lang),
+            title,
             self.learn
                 .say_with("step_of", &[("n", &n), ("total", &total.to_string())])
         );
@@ -173,7 +249,35 @@ impl NovoApp {
             }),
             how: self.learn_how_lines(),
             demo_on: self.learn.demo.is_some(),
+            challenge,
+            hints_open: step
+                .map(|s| {
+                    let shown = if self.learn.hints_for == s.id {
+                        self.learn.hints_shown
+                    } else {
+                        0
+                    };
+                    s.hints(lang).iter().take(shown).cloned().collect()
+                })
+                .unwrap_or_default(),
+            hints_total: step.map_or(0, |s| s.hints(lang).len()),
+            predict: step.and_then(|s| s.predict.as_ref()).map(|p| PredictView {
+                options: p.options(lang).to_vec(),
+                chosen: self.learn_predicted(),
+                answer: p.answer,
+                why: p.why(lang).to_owned(),
+            }),
+            explain: lesson.explain(lang).to_owned(),
+            helped: self.learn.helped || !run.skipped().is_empty(),
             next_lessons,
+            skip_does_it: step.is_some_and(|s| !s.solve.is_empty() && s.manual.is_none()),
+            can_open_finished: (finished || run.index() + 1 >= total)
+                && self
+                    .learn
+                    .catalog
+                    .get(&lesson.id)
+                    .is_some_and(|e| e.finished.is_some()),
+            confirm_finished: self.learn.confirm_finished,
             words,
         })
     }
@@ -181,7 +285,6 @@ impl NovoApp {
     fn draw_card(&self, ui: &mut egui::Ui, card: &Card, confirm: bool) -> Option<CardAction> {
         let mut action = None;
         ui.horizontal(|ui| {
-            section_label(ui, &card.header);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .small_button("✕")
@@ -190,12 +293,29 @@ impl NovoApp {
                 {
                     action = Some(CardAction::Close);
                 }
+                // The title gives way to the button, not the other way round.
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    section_label(ui, &card.header).on_hover_text(&card.header);
+                });
             });
         });
         ui.add_space(2.0);
         if card.finished {
             ui.label(egui::RichText::new(format!("✓ {}", card.words.done)).strong());
-            ui.label(&card.words.done_text);
+            if card.explain.is_empty() {
+                ui.label(&card.words.done_text);
+            } else {
+                ui.label(
+                    egui::RichText::new(if card.helped {
+                        &card.words.shown
+                    } else {
+                        &card.words.solved
+                    })
+                    .strong(),
+                );
+                self.markup(ui, &card.explain);
+            }
             if !card.next_lessons.is_empty() {
                 ui.add_space(4.0);
                 ui.weak(&card.words.next_lessons);
@@ -242,6 +362,58 @@ impl NovoApp {
                     });
                 }
             }
+            if let Some(predict) = &card.predict {
+                ui.add_space(4.0);
+                for (i, option) in predict.options.iter().enumerate() {
+                    let label = if predict.chosen == Some(i) {
+                        format!("● {option}")
+                    } else {
+                        option.clone()
+                    };
+                    if ui
+                        .add_enabled(predict.chosen.is_none(), egui::Button::new(label))
+                        .clicked()
+                    {
+                        action = Some(CardAction::Predict(i));
+                    }
+                }
+                if let Some(chosen) = predict.chosen {
+                    ui.add_space(2.0);
+                    let right = chosen == predict.answer;
+                    let ui_palette = crate::theme::ui_palette();
+                    ui.label(
+                        egui::RichText::new(if right {
+                            &card.words.predict_right
+                        } else {
+                            &card.words.predict_wrong
+                        })
+                        .strong()
+                        .color(if right {
+                            ui_palette.success
+                        } else {
+                            ui_palette.warning
+                        }),
+                    );
+                    self.markup(ui, &predict.why);
+                }
+            }
+            for (i, hint) in card.hints_open.iter().enumerate() {
+                ui.add_space(4.0);
+                section_label(ui, &format!("{} {}", card.words.hint, i + 1));
+                self.markup(ui, hint);
+            }
+            if card.hints_open.len() < card.hints_total {
+                ui.add_space(4.0);
+                let label = format!(
+                    "{} ({} / {})",
+                    card.words.hint,
+                    card.hints_open.len() + 1,
+                    card.hints_total
+                );
+                if ui.button(label).clicked() {
+                    action = Some(CardAction::Hint);
+                }
+            }
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
                 if ui
@@ -267,7 +439,14 @@ impl NovoApp {
                     if novo_theme::widgets::primary_button(ui, &card.words.next).clicked() {
                         action = Some(CardAction::Move(Move::Next));
                     }
-                } else if ui.button(&card.words.skip).clicked() {
+                } else if ui
+                    .button(if card.skip_does_it {
+                        &card.words.do_it
+                    } else {
+                        &card.words.skip
+                    })
+                    .clicked()
+                {
                     action = Some(CardAction::Move(Move::Skip));
                 }
             });
@@ -287,6 +466,25 @@ impl NovoApp {
                 .clicked()
             {
                 action = Some(CardAction::Restart);
+            }
+        }
+        if card.can_open_finished {
+            ui.add_space(2.0);
+            if card.confirm_finished {
+                ui.label(&card.words.finished_confirm);
+                ui.horizontal(|ui| {
+                    if ui.button(&card.words.open_finished).clicked() {
+                        action = Some(CardAction::ConfirmFinished);
+                    }
+                    if ui.button(&card.words.cancel).clicked() {
+                        action = Some(CardAction::CancelFinished);
+                    }
+                });
+            } else {
+                let button = ui.small_button(&card.words.open_finished);
+                if button.clicked() {
+                    action = Some(CardAction::OpenFinished);
+                }
             }
         }
         action
@@ -364,7 +562,9 @@ impl NovoApp {
         }
         let lang = self.learn.lang;
         let mut targets: Vec<(Option<usize>, Target, Option<String>)> = Vec::new();
-        if let Some(point) = &step.point {
+        if let Some(point) = &step.point
+            && !self.learn_point_hidden()
+        {
             targets.push((None, point.clone(), None));
         }
         for (i, note) in step.note.iter().enumerate() {
@@ -483,8 +683,8 @@ impl NovoApp {
         let mut reload = false;
         let mut reset = false;
         super::panel::dialog(ctx, title, [560.0, 560.0])
-            .id(egui::Id::new("learn_window"))
-            .open(&mut open)
+            .id(super::panel::keep_id(ctx, egui::Id::new("learn_window")))
+            .open(super::panel::esc(ctx, &mut open))
             .pivot(egui::Align2::CENTER_CENTER)
             .default_pos(ctx.content_rect().center())
             .collapsible(false)
@@ -614,8 +814,16 @@ impl NovoApp {
             if ui.small_button(self.learn.say("reload")).clicked() {
                 *reload = true;
             }
-            if ui.small_button(self.learn.say("reset_progress")).clicked() {
-                *reset = true;
+            if self.learn.confirm_reset {
+                ui.label(self.learn.say("reset_confirm"));
+                if ui.small_button(self.learn.say("yes_reset")).clicked() {
+                    *reset = true;
+                }
+                if ui.small_button(self.learn.say("cancel")).clicked() {
+                    self.learn.confirm_reset = false;
+                }
+            } else if ui.small_button(self.learn.say("reset_progress")).clicked() {
+                self.learn.confirm_reset = true;
             }
             let drafts_label = self.learn.say("show_drafts");
             ui.checkbox(&mut self.learn.show_drafts, drafts_label);

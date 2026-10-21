@@ -1,8 +1,13 @@
 //! PDF export in the app (novo-pdf, WS-09), never blocked by problems.
-//! A saved project's PDF goes next to its file and takes its name
-//! (`Plant 2.novo` gives `Plant 2.pdf`), so projects with the same title
-//! never share a PDF; a project with no file yet exports to
-//! `<Documents>\KoperCAD\<name>.pdf` under a name not used yet.
+//! Every PDF goes to `<Documents>\KoperCAD` (the profile's Documents folder
+//! under `--profile-dir`), wherever the project file is. A saved project's
+//! PDF takes its file name (`Plant 2.novo` gives `Plant 2.pdf`). Two
+//! projects with the same file name in different folders (`D:\A\Pump.novo`,
+//! `D:\B\Pump.novo`) would share it, so every PDF ends with a comment line
+//! holding a short hash of the project file's path (never the path, which
+//! would leak folder and user names) and a project only replaces its
+//! own: the other takes `Pump 2.pdf`. A project with no file yet gets
+//! `<name>.pdf` under a name not used yet.
 //!
 //! Only a PDF KoperCAD wrote (its `/Producer`) is ever replaced: a
 //! user's own `<stem>.pdf` stays, and the export takes `<stem> 2.pdf`.
@@ -23,25 +28,42 @@ impl NovoApp {
         self.export_pdf_to(&path)
     }
 
-    /// Where the PDF of every page goes (see the module notes).
-    pub(super) fn pdf_path(&mut self) -> Option<PathBuf> {
-        let name = self.project_name()?;
-        // An untitled project's file is a temporary one; it has no name yet.
-        let file = self.backend.file().filter(|_| !self.backend.is_untitled());
-        match file {
-            Some(file) => Some(replaceable_path(&file.with_extension("pdf"))),
-            None => {
-                let Some(dir) = projects_dir() else {
-                    self.message(Level::Error, "Could not find the Documents folder");
-                    return None;
-                };
-                Some(free_path(&dir, &name))
-            }
+    /// Folder and file stem of this project's PDFs: always the default
+    /// Documents folder (`<Documents>\KoperCAD`, which follows
+    /// `--profile-dir`), named after the saved project.
+    pub(super) fn pdf_base(&mut self) -> Option<(PathBuf, String)> {
+        let (_, stem) = self.export_base()?;
+        #[cfg(test)]
+        if let Some(dir) = self.wb.pdf_dir.clone() {
+            return Some((dir, stem));
         }
+        let Some(dir) = projects_dir() else {
+            self.message(Level::Error, "Could not find the Documents folder");
+            return None;
+        };
+        Some((dir, stem))
     }
 
-    /// Exports only the page on screen, to `<project> page <name>.pdf` next
-    /// to the project (a project with no file yet: in Documents).
+    /// Where the PDF of every page goes (see the module notes).
+    pub(super) fn pdf_path(&mut self) -> Option<PathBuf> {
+        let (dir, stem) = self.pdf_base()?;
+        let saved = self.backend.file().is_some() && !self.backend.is_untitled();
+        Some(if saved {
+            self.own_pdf_path(&dir.join(format!("{stem}.pdf")))
+        } else {
+            free_path(&dir, &stem)
+        })
+    }
+
+    /// `path` (or its numbered neighbour) as the saved project may write it:
+    /// free, or a PDF of ours that came from this same project file.
+    pub(super) fn own_pdf_path(&self, path: &Path) -> PathBuf {
+        let owner = self.backend.file();
+        replaceable_path_for(path, owner.as_deref())
+    }
+
+    /// Exports only the page on screen, to `<project> page <name>.pdf` in
+    /// the PDF folder.
     pub(super) fn export_pdf_page(&mut self) -> Option<PathBuf> {
         let page = self.current_page?;
         let page_name = self
@@ -50,16 +72,16 @@ impl NovoApp {
             .project()
             .page(page)
             .map(|p| p.name.to_string())?;
-        let (dir, stem) = self.export_base()?;
+        let (dir, stem) = self.pdf_base()?;
         let file = format!("{stem} page {page_name}.pdf").replace(['/', '\\', ':'], "-");
-        let path = replaceable_path(&dir.join(file));
+        let path = self.own_pdf_path(&dir.join(file));
         self.export_pdf_pages_to(&path, novo_pdf::PageSet::Pages(vec![page]))
     }
 
     /// The design checks as report pages after the drawing. A clean
     /// project prints none, so its PDF is the drawing alone.
     fn checks_appendix(&self) -> Option<novo_pdf::Appendix> {
-        let lines = novo_checks::report_lines(self.backend.document()?.project());
+        let lines = novo_checks::report_lines(&*self.machine()?);
         // Headline and summary only: nothing to report.
         (lines.len() > 2).then(|| novo_pdf::Appendix {
             title: "Design checks".into(),
@@ -84,17 +106,15 @@ impl NovoApp {
         self.export_pdf_choice_to(path, pages, &PdfChoice::default())
     }
 
-    /// Exports `pages` to `path` the way `choice` says (everything but its
-    /// page selection, which the caller has turned into `pages`).
-    pub fn export_pdf_choice_to(
+    /// The PDF options for `pages` the way `choice` says, with `print` (the
+    /// print preview's paper, scale and page numbers) when given.
+    pub(super) fn pdf_options_for(
         &mut self,
-        path: &Path,
         pages: novo_pdf::PageSet,
         choice: &PdfChoice,
-    ) -> Option<PathBuf> {
-        let summary = Summary::of(self.problems());
-        let replaced = path.exists();
-        let options = novo_pdf::PdfOptions {
+        print: Option<novo_pdf::PrintSetup>,
+    ) -> novo_pdf::PdfOptions {
+        novo_pdf::PdfOptions {
             pages,
             style: super::pdf_options::style_of(choice),
             bookmarks: choice.bookmarks,
@@ -120,20 +140,53 @@ impl NovoApp {
             } else {
                 None
             },
-        };
-        let doc = self.backend.document()?;
+            print,
+        }
+    }
+
+    /// Exports `pages` to `path` the way `choice` says (everything but its
+    /// page selection, which the caller has turned into `pages`).
+    pub fn export_pdf_choice_to(
+        &mut self,
+        path: &Path,
+        pages: novo_pdf::PageSet,
+        choice: &PdfChoice,
+    ) -> Option<PathBuf> {
+        let options = self.pdf_options_for(pages, choice, None);
+        self.export_options_to(path, &options)
+    }
+
+    /// Writes the PDF `options` describe to `path`, with the same checks,
+    /// naming and message as every export.
+    pub(super) fn export_options_to(
+        &mut self,
+        path: &Path,
+        options: &novo_pdf::PdfOptions,
+    ) -> Option<PathBuf> {
+        let summary = Summary::of(self.problems());
+        let replaced = path.exists();
+        // The PDF is the machine of the current choice (the working project
+        // keeps every option's pages).
+        let project = self.machine()?;
         let art = self
             .library()
             .map(|lib| novo_editor::art::LibraryArt::new(lib, options.style.symbol));
         let result = match &art {
-            Some(art) => novo_pdf::export_pdf_with_art(doc.project(), &options, art),
+            Some(art) => novo_pdf::export_pdf_with_art(&project, options, art),
             None => novo_pdf::export_pdf_with_art(
-                doc.project(),
-                &options,
+                &project,
+                options,
                 &novo_canvas::model::PlaceholderArt,
             ),
         }
-        .and_then(|bytes| write_replacing(path, &bytes).map_err(novo_pdf::PdfError::from));
+        .and_then(|mut bytes| {
+            if let Some(owner) = self.backend.file()
+                && !self.backend.is_untitled()
+            {
+                bytes.extend_from_slice(&owner_line(&owner));
+            }
+            write_replacing(path, &bytes).map_err(novo_pdf::PdfError::from)
+        });
         match result {
             Ok(()) => {
                 let remaining = if summary.is_clean() {
@@ -143,7 +196,15 @@ impl NovoApp {
                 };
                 // Overwriting is never silent.
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message_file(format!("{verb} {}{remaining}", path.display()), path);
+                let checks = if options.appendix.is_some() {
+                    ", with a Design checks page at the end"
+                } else {
+                    ""
+                };
+                self.message_file(
+                    format!("{verb} {}{checks}{remaining}", path.display()),
+                    path,
+                );
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }
@@ -175,9 +236,59 @@ fn is_ours(path: &Path) -> bool {
     })
 }
 
+const OWNER_MARK: &[u8] = b"\n%KoperCAD-project: ";
+
+/// A short stable tag of a project file's path (FNV-1a, 64 bit). The PDF
+/// carries this and never the path itself, which would hand the sender's
+/// user name and folders to whoever receives the PDF.
+pub(super) fn owner_tag(project: &Path) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in project.to_string_lossy().bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
+/// The comment line after `%%EOF` that tags the project file a PDF came from.
+fn owner_line(project: &Path) -> Vec<u8> {
+    let mut line = OWNER_MARK.to_vec();
+    line.extend_from_slice(owner_tag(project).as_bytes());
+    line.push(b'\n');
+    line
+}
+
+/// The project tag in `path`, when it is one of our PDFs that carries one.
+fn owner_of(path: &Path) -> Option<Vec<u8>> {
+    let bytes = std::fs::read(path).ok()?;
+    let at = bytes
+        .windows(OWNER_MARK.len())
+        .rposition(|w| w == OWNER_MARK)?;
+    let rest = &bytes[at + OWNER_MARK.len()..];
+    let end = rest.iter().position(|b| *b == b'\n').unwrap_or(rest.len());
+    Some(rest[..end].to_vec())
+}
+
+/// [`replaceable_path`] for a saved project: a PDF tagged with another
+/// project file is not ours to replace. One with no tag (written before
+/// this) is claimed.
+pub(super) fn replaceable_path_for(path: &Path, owner: Option<&Path>) -> PathBuf {
+    let Some(owner) = owner else {
+        return replaceable_path(path);
+    };
+    let tag = owner_tag(owner).into_bytes();
+    first_free(path, |candidate| {
+        is_ours(candidate) && owner_of(candidate).is_none_or(|o| o == tag)
+    })
+}
+
 /// `path` itself when it is free or ours to replace, else the first free or
 /// ours of `<stem> 2.pdf`, `<stem> 3.pdf`...
 pub(super) fn replaceable_path(path: &Path) -> PathBuf {
+    first_free(path, is_ours)
+}
+
+fn first_free(path: &Path, replaceable: impl Fn(&Path) -> bool) -> PathBuf {
     let stem = path
         .file_stem()
         .map(|s| s.to_string_lossy().into_owned())
@@ -189,7 +300,7 @@ pub(super) fn replaceable_path(path: &Path) -> PathBuf {
         } else {
             path.with_file_name(format!("{stem} {n}.pdf"))
         };
-        if !candidate.exists() || is_ours(&candidate) {
+        if !candidate.exists() || replaceable(&candidate) {
             return candidate;
         }
         n += 1;
@@ -268,6 +379,39 @@ mod tests {
             std::fs::read(&path).unwrap(),
             b"%PDF-1.7 the user's own drawing"
         );
+    }
+
+    #[test]
+    fn two_projects_with_one_file_name_keep_their_own_pdfs() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("Pump.pdf");
+        let project = novo_core::Project::new("Pump");
+        let mut bytes = novo_pdf::export_pdf_with_art(
+            &project,
+            &Default::default(),
+            &novo_canvas::model::PlaceholderArt,
+        )
+        .unwrap();
+        let a = Path::new("D:\\A\\Pump.novo");
+        let b = Path::new("D:\\B\\Pump.novo");
+        assert_eq!(replaceable_path_for(&path, Some(a)), path, "free");
+        bytes.extend_from_slice(&owner_line(a));
+        write_replacing(&path, &bytes).unwrap();
+        assert!(is_ours(&path), "the owner line keeps it ours");
+        assert_eq!(replaceable_path_for(&path, Some(a)), path, "A again");
+        let second = dir.path().join("Pump 2.pdf");
+        assert_eq!(
+            replaceable_path_for(&path, Some(b)),
+            second,
+            "B steps aside"
+        );
+        let mut for_b = bytes.clone();
+        let cut = for_b.len() - owner_line(a).len();
+        for_b.truncate(cut);
+        for_b.extend_from_slice(&owner_line(b));
+        write_replacing(&second, &for_b).unwrap();
+        assert_eq!(replaceable_path_for(&path, Some(b)), second, "B again");
+        assert_eq!(replaceable_path_for(&path, Some(a)), path, "A unchanged");
     }
 
     #[test]

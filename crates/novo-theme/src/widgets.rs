@@ -623,8 +623,19 @@ pub fn progress_bar(ui: &mut Ui, caption: &str, detail: &str, done: f32, failed:
 /// selected looks (the selected row has the copper wash and a copper bar on
 /// its left). `add_contents` lays out the row's content from left to right.
 pub fn row(ui: &mut Ui, selected: bool, add_contents: impl FnOnce(&mut Ui)) -> Response {
-    let p = Palette::of(ui);
     let height = control_height(ui) + 2.0;
+    row_of_height(ui, selected, height, add_contents)
+}
+
+/// [`row`] with a height of its own, for a row that carries a second line
+/// (a finger-sized list at the cabinet).
+pub fn row_of_height(
+    ui: &mut Ui,
+    selected: bool,
+    height: f32,
+    add_contents: impl FnOnce(&mut Ui),
+) -> Response {
+    let p = Palette::of(ui);
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), height), Sense::click());
     paint_row_background(ui, p, rect, selected, response.hovered());
@@ -634,6 +645,9 @@ pub fn row(ui: &mut Ui, selected: bool, add_contents: impl FnOnce(&mut Ui)) -> R
             .max_rect(inner)
             .layout(Layout::left_to_right(Align::Center)),
     );
+    // A selectable label would take the press for its own text selection and the
+    // row would never see the click.
+    child.style_mut().interaction.selectable_labels = false;
     add_contents(&mut child);
     response
 }
@@ -734,6 +748,24 @@ pub fn banner(
                 ui.label(RichText::new(level.icon()).color(level.color(p)));
                 ui.label(RichText::new(text).color(p.text_primary));
                 ui.with_layout(Layout::right_to_left(Align::Center), add_actions);
+            });
+        })
+        .response
+}
+
+/// [`banner`] with no actions, whose text wraps to the width it is given (a long
+/// sentence in `banner` stays on one line and runs off the window).
+pub fn banner_wrapped(ui: &mut Ui, level: Level, text: &str) -> Response {
+    let p = Palette::of(ui);
+    Frame::new()
+        .fill(level.wash(p))
+        .corner_radius(radius::CONTROL)
+        .inner_margin(Margin::symmetric(space::M as i8, 6))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal_top(|ui| {
+                ui.label(RichText::new(level.icon()).color(level.color(p)));
+                ui.add(egui::Label::new(RichText::new(text).color(p.text_primary)).wrap());
             });
         })
         .response

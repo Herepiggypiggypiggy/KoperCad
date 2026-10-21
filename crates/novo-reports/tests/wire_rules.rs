@@ -176,16 +176,30 @@ fn a_bad_value_is_refused_and_a_bad_file_value_reads_as_the_default() {
 fn the_estimate_constants_are_rules_for_unplaced_devices() {
     let mut doc = Document::default();
     motor_starter(&mut doc).expect("fixture builds");
-    // Nothing is placed on a plate: every length is an estimate.
+    // Nothing is placed on a plate: every length is an estimate, except the
+    // cores of the motor cable, which is as long as its stated 12 m.
     let before = wire_cut_jobs(doc.project());
-    assert!(before.iter().all(|j| j.basis == "estimate"));
+    let cabled: std::collections::BTreeSet<_> = before
+        .iter()
+        .filter(|j| doc.project().cable_of_wire(j.wires[0]).is_some())
+        .map(|j| j.wires[0])
+        .collect();
+    let on_cable = |j: &novo_reports::WireCutJob| cabled.contains(&j.wires[0]);
+    assert!(!cabled.is_empty());
+    assert!(before.iter().all(|j| j.basis
+        == if on_cable(j) {
+            "cable length"
+        } else {
+            "estimate"
+        }));
     set(&mut doc, SLACK_MM, Some(0.0));
     set(&mut doc, ESTIMATE_MIN_MM, Some(300.0));
     let after = wire_cut_jobs(doc.project());
     assert_eq!(before.len(), after.len());
     // Short schematic distances are lifted to the new minimum, with no loop.
-    assert!(after.iter().all(|j| j.length_mm >= 300.0), "{after:?}");
-    assert!(after.iter().any(|j| j.length_mm == 300.0), "{after:?}");
+    let estimates: Vec<_> = after.iter().filter(|j| !on_cable(j)).collect();
+    assert!(estimates.iter().all(|j| j.length_mm >= 300.0), "{after:?}");
+    assert!(estimates.iter().any(|j| j.length_mm == 300.0), "{after:?}");
     assert!(before.iter().all(|j| j.length_mm >= 200.0));
 }
 

@@ -23,6 +23,16 @@ const EXAMPLE_DESCRIPTION: &str = "Direct-on-line starter for a pump motor: main
 /// Draws the example into a project that has only its empty first page, as
 /// one undo step.
 pub(crate) fn build_example(doc: &mut Document) -> ModelResult<novo_core::ChangeSet> {
+    build_example_with(doc, |_| Ok(()))
+}
+
+/// [`build_example`] with `extra` run after the starter is drawn and before
+/// the cabinet is planned, so devices it adds are placed on the plate too
+/// (the QA fixture with machine options).
+pub(crate) fn build_example_with(
+    doc: &mut Document,
+    extra: impl FnOnce(&mut Tx<'_>) -> ModelResult<()>,
+) -> ModelResult<novo_core::ChangeSet> {
     let ((), changes) = doc.transact("Open example", |tx: &mut Tx<'_>| {
         let empty: Vec<_> = tx.project().pages().map(|p| p.id).collect();
         for page in empty {
@@ -35,8 +45,10 @@ pub(crate) fn build_example(doc: &mut Document) -> ModelResult<novo_core::Change
         // Numbered with the project's scheme, so the wire list, the labels and
         // the commissioning list name wires by number and not by id.
         novo_numbering::number_new_wires(tx)?;
+        extra(tx)?;
         give_parts_their_data(tx)?;
         add_cabinet(tx)?;
+        add_safety_function(tx)?;
         tx.set_info(|info| {
             info.name = EXAMPLE_NAME.into();
             info.description = EXAMPLE_DESCRIPTION.into();
@@ -179,10 +191,45 @@ impl NovoApp {
         self.fix_current_page();
         if let Some(doc) = self.backend.document_mut() {
             doc.mark_saved();
+            // Opening starts with an empty history, like a fresh project:
+            // Ctrl+Z must not silently undo the example's own drawing.
+            doc.clear_history();
         }
         self.message(
             Level::Info,
             "This is an example. Edit freely; Ctrl+S keeps your own copy.",
         );
     }
+}
+
+/// One illustrative safety function so Check > Safety functions and the
+/// sheets export have something to show: the stop button and the motor
+/// contactor of the starter. The reliability values are typed in as
+/// illustrative numbers, not taken from a datasheet, and the function says so.
+fn add_safety_function(tx: &mut Tx<'_>) -> ModelResult<()> {
+    use novo_checks::safety::{Basis, Block, PartRef, Role, SafetyFunction, encode};
+    let part = |name: &str, device: &str, b10d: f64| PartRef {
+        name: name.into(),
+        device: Some(device.into()),
+        basis: Basis::B10d,
+        value: Some(b10d),
+    };
+    let mut f = SafetyFunction::new("Motor stop, ordinary stop not e-stop (illustrative values)");
+    f.blocks = vec![
+        Block {
+            category: "1".into(),
+            dc_percent: 0.0,
+            ccf: 0,
+            channel1: vec![part("Stop button", "=A1+CAB-S0", 150_000.0)],
+            ..Block::new(Role::Sensor, "Stop")
+        },
+        Block {
+            category: "1".into(),
+            dc_percent: 0.0,
+            ccf: 0,
+            channel1: vec![part("Motor contactor", "=A1+CAB-K1", 1_300_000.0)],
+            ..Block::new(Role::Actuator, "Motor contactor")
+        },
+    ];
+    novo_checks::standards::set_info_property(tx, novo_checks::safety::FUNCTIONS_KEY, encode(&[f]))
 }

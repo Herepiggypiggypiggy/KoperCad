@@ -303,6 +303,10 @@ mod tests {
         assert_eq!(code("iec/signalling/lamp"), Some("P"));
         assert_eq!(code("iec/motors/motor_3ph"), Some("M"));
         assert_eq!(code("iec/protection/motor_protection_breaker"), Some("Q"));
+        assert_eq!(
+            code("iec/protection/motor_protection_breaker_1p"),
+            Some("Q")
+        );
         assert_eq!(code("iec/protection/mcb_1p"), Some("F"));
         assert_eq!(code("iec/coils/relay"), Some("K"));
         assert_eq!(code("iec/operators/pushbutton_no"), Some("S"));

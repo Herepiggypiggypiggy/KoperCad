@@ -45,7 +45,8 @@ pub(super) struct RouteRow {
     pub(super) ends: String,
     /// The cut length, rounded up to a whole millimetre.
     pub(super) length_mm: f64,
-    /// `routed`, `routed, no depth` or `free air`.
+    /// `routed`, `routed, no depth`, `free air`, `door, no gap` or
+    /// `to entry, outside not included`.
     pub(super) basis: &'static str,
     pub(super) ducts: usize,
 }
@@ -61,6 +62,14 @@ pub(super) struct Overlay {
     pub(super) notes: Vec<String>,
     /// The project's wire production rules the lengths were made with.
     pub(super) rules: WireRules,
+    /// The plate's size and its entry point (where outside wires arrive).
+    pub(super) plate: Option<(f64, f64)>,
+    pub(super) entry: Option<(f64, f64)>,
+    /// A point is stored but cannot be used (outside a smaller plate, or
+    /// only one number).
+    pub(super) entry_hidden: bool,
+    /// Stated wire length outside the entry for wires without a cable, mm.
+    pub(super) outside_mm: Option<f64>,
 }
 
 impl Overlay {
@@ -97,9 +106,20 @@ impl Overlay {
 pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
     let routed = route_project(project);
     let rules = WireRules::of(project);
+    let plate = project
+        .get::<novo_core::Structure>(structure)
+        .and_then(|s| s.plate)
+        .map(|p| (p.width, p.height));
+    let entry = novo_routing::entry::entry_point(project, structure).map(|p| (p.x, p.y));
+    let outside_mm = novo_routing::entry::outside_mm(project, structure);
+    let entry_hidden = entry.is_none() && novo_routing::entry::has_stored_point(project, structure);
     let Some((_, plan)) = routed.plans.iter().find(|(s, _)| *s == structure) else {
         return Overlay {
             rules,
+            plate,
+            entry,
+            entry_hidden,
+            outside_mm,
             ..Overlay::default()
         };
     };
@@ -115,7 +135,27 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
             length_mm: r.length_mm,
         })
         .collect();
-    let ducts = project
+    let ducts = duct_fills(project, structure, plan);
+    Overlay {
+        routes,
+        ducts,
+        rows,
+        notes,
+        rules,
+        plate,
+        entry,
+        entry_hidden,
+        outside_mm,
+    }
+}
+
+/// Every duct of `structure` with how full the plan leaves it.
+pub(super) fn duct_fills(
+    project: &Project,
+    structure: StructureId,
+    plan: &novo_routing::Plan,
+) -> Vec<DuctFill> {
+    project
         .all::<Rail>()
         .filter(|r| r.structure == structure && r.kind == RailKind::Duct)
         .map(|r| {
@@ -139,14 +179,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
                 wires: fill.map_or(0, |f| f.jobs.len()),
             }
         })
-        .collect();
-    Overlay {
-        routes,
-        ducts,
-        rows,
-        notes,
-        rules,
-    }
+        .collect()
 }
 
 /// The route table: longest wire first, then by wire id.
@@ -181,6 +214,7 @@ fn rows(
                 .is_some_and(|leg| leg.opening.is_some());
             let basis = match r.kind {
                 _ if to_door => "door, no gap",
+                _ if routed.entry_legs.contains_key(&r.job) => "to entry, outside not included",
                 Kind::FreeAir => "free air",
                 Kind::Ducted if routed.unknown_height.contains(&r.job) => "routed, no depth",
                 Kind::Ducted => "routed",
@@ -353,6 +387,9 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
             if let Some(a) = rules_section(ui, &overlay.rules) {
                 ask = Some(a);
             }
+            if let Some(a) = entry_section(ui, overlay, plate) {
+                ask = Some(a);
+            }
             if overlay.rows.is_empty() {
                 ui.weak("No wire has both ends placed on this plate");
                 return;
@@ -430,6 +467,110 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
         "Routes",
         panel.response.rect,
         false,
+    );
+    ask
+}
+
+/// The cabinet entry: the point on the plate where wires from outside (a
+/// supply feed, a cable to the field) will come in. It is kept in the
+/// project, but no length uses it yet. Unset shows "not set" and a button, so
+/// no default looks like a choice; both numbers are kept together.
+fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Option<Ask> {
+    let (width, height) = overlay.plate?;
+    let mut ask = None;
+    ui.horizontal(|ui| {
+        ui.label("Cabinet entry");
+        let Some(set) = overlay.entry else {
+            ui.weak("not set");
+            if ui
+                .small_button("Set")
+                .on_hover_text("Start at the bottom middle of the plate")
+                .clicked()
+            {
+                ask = Some(Ask::SetEntryPoint(plate, Some((width / 2.0, height))));
+            }
+            return;
+        };
+        let id = egui::Id::new(("cabinet_entry", plate));
+        let (mut x, mut y) = ui.data(|d| d.get_temp::<(f64, f64)>(id)).unwrap_or(set);
+        let rx = ui.add(
+            egui::DragValue::new(&mut x)
+                .range(0.0..=width)
+                .prefix("x ")
+                .suffix(" mm"),
+        );
+        let ry = ui.add(
+            egui::DragValue::new(&mut y)
+                .range(0.0..=height)
+                .prefix("y ")
+                .suffix(" mm"),
+        );
+        if rx.changed() || ry.changed() {
+            ui.data_mut(|d| d.insert_temp(id, (x, y)));
+        }
+        let done = rx.drag_stopped() || rx.lost_focus() || ry.drag_stopped() || ry.lost_focus();
+        if done && ui.data(|d| d.get_temp::<(f64, f64)>(id)).is_some() {
+            ui.data_mut(|d| d.remove_temp::<(f64, f64)>(id));
+            if (x, y) != set {
+                ask = Some(Ask::SetEntryPoint(plate, Some((x, y))));
+            }
+        }
+        if ui
+            .small_button("\u{21ba}")
+            .on_hover_text("Remove the entry point")
+            .clicked()
+        {
+            ask = Some(Ask::SetEntryPoint(plate, None));
+        }
+    });
+    if overlay.entry.is_some() {
+        ui.horizontal(|ui| {
+            ui.label("Wire outside the entry");
+            let id = egui::Id::new(("cabinet_entry_outside", plate));
+            let set = overlay.outside_mm;
+            let mut value = ui
+                .data(|d| d.get_temp::<f64>(id))
+                .unwrap_or(set.unwrap_or(0.0));
+            let r = ui.add(
+                egui::DragValue::new(&mut value)
+                    .range(0.0..=100_000.0)
+                    .speed(10.0)
+                    .custom_formatter(|v, _| {
+                        if set.is_none() && v == 0.0 {
+                            "—".to_owned()
+                        } else {
+                            format!("{v:.0} mm")
+                        }
+                    }),
+            );
+            if r.changed() {
+                ui.data_mut(|d| d.insert_temp(id, value));
+            }
+            if (r.drag_stopped() || r.lost_focus()) && ui.data(|d| d.get_temp::<f64>(id)).is_some()
+            {
+                ui.data_mut(|d| d.remove_temp::<f64>(id));
+                let new = (value > 0.0).then_some(value);
+                if new != set {
+                    ask = Some(Ask::SetEntryOutside(plate, new));
+                }
+            }
+            if set.is_none() {
+                ui.weak("not stated");
+            }
+        })
+        .response
+        .on_hover_text(
+            "How much wire lies outside the entry, loops included, for wires without a cable (a supply lead). This one figure applies to every such lead of this enclosure. Stated: those lengths use your figure and are no longer estimates. Not stated: they stay estimates. Wires on a cable use the cable's length.",
+        );
+    }
+    if overlay.entry_hidden {
+        ui.colored_label(
+            crate::theme::ui_palette().warning,
+            "A stored entry point is incomplete or outside the plate and cannot be used. Set a new one.",
+        );
+    }
+    ui.weak(
+        "Where wires from outside come in (origin top left). Wires to the outside are routed to it.",
     );
     ask
 }

@@ -212,6 +212,12 @@ fn fit_pins(
     (miss == 0 && err <= 0.5 * span + 0.5).then_some(fit)
 }
 
+/// Whether `sym` would be drawn as a labelled box, because no library symbol
+/// of its kind and pin count fits.
+pub(super) fn is_box(sym: &PlantSymbol) -> bool {
+    design(sym, 297.0).key == BOX_SYMBOL
+}
+
 fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
     let lib = Library::shared(Pack::Iec);
     let (x, y) = sym.at;
@@ -228,17 +234,34 @@ fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
             "lamp" | "earth" | "pin" | "plug" | "generic" | "enclosure" | "interruption"
         );
     let faces: Vec<Option<Direction>> = sym.pins.iter().map(|p| direction(&p.faces)).collect();
-    for id in candidates(&sym.kind, &sym.pins) {
+    // KoperCAD's own key first: that symbol, its pins in order.
+    let own = sym
+        .library
+        .as_deref()
+        .map(|k| k.trim_start_matches("iec/").to_string());
+    let ids: Vec<String> = own
+        .iter()
+        .cloned()
+        .chain(
+            candidates(&sym.kind, &sym.pins)
+                .into_iter()
+                .map(String::from),
+        )
+        .collect();
+    for id in &ids {
         let Some(s) = lib.get(&format!("iec/{id}")) else {
             continue;
         };
         if s.connections.len() != sym.pins.len() {
             continue;
         }
+        let exact = own.as_deref() == Some(id.as_str());
         // Pin names decide which pin is which; a symbol whose pins are
         // all positional is accepted only where order is the only meaning
         // (a terminal's two sides, a lamp).
-        let conns: Vec<usize> = if named {
+        let conns: Vec<usize> = if exact {
+            (0..sym.pins.len()).collect()
+        } else if named {
             let map = match_pins(&names, s, None);
             let by_name: Vec<Option<usize>> = names
                 .iter()
@@ -631,6 +654,14 @@ pub(super) fn draw(
             }
         }
         let pages_of_net = by_page.len();
+        // The file drew its own interruption points on this net: it already
+        // continues from page to page, so none are added.
+        let has_own_points = net.pins.iter().any(|&(si, _)| {
+            plant
+                .symbols
+                .get(si)
+                .is_some_and(|s| s.kind == "interruption")
+        });
         // The name of the link between page `between - 1` and `between`.
         let link_names: Vec<String> = (1..pages_of_net)
             .map(|between| {
@@ -670,7 +701,7 @@ pub(super) fn draw(
             // pair by name, so a point names one partner and not every page.
             let Some(&(m, mi)) = members
                 .last()
-                .filter(|_| pages_of_net > 1 && !(net.drawn && file_has_points))
+                .filter(|_| pages_of_net > 1 && !(net.drawn && file_has_points) && !has_own_points)
             else {
                 continue;
             };

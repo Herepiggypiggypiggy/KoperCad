@@ -26,7 +26,15 @@ pub struct PageWriter<'a> {
     inter: &'a mut Inter,
     uses_inter: bool,
     uses_bold: bool,
+    /// Thinnest stroke on paper, in paper mm, while a placed sheet is
+    /// drawn (a sheet printed small keeps readable lines).
+    min_width: f32,
+    /// Paper mm per sheet mm while a placed sheet is drawn.
+    scale: f32,
 }
+
+/// Thinnest line a scaled-down sheet prints, in paper millimetres.
+const MIN_PEN_MM: f32 = 0.15;
 
 impl<'a> PageWriter<'a> {
     /// A new page of `height_mm`, with the millimetre transform set.
@@ -44,7 +52,38 @@ impl<'a> PageWriter<'a> {
             inter,
             uses_inter: false,
             uses_bold: false,
+            min_width: 0.0,
+            scale: 1.0,
         }
+    }
+
+    /// Places the sheet drawn next on the paper (see `crate::print`): its
+    /// millimetres become paper millimetres times the scale, offset by the
+    /// placement, and a sheet that does not fit is cut at the printable box.
+    /// Ends with [`PageWriter::end_placed`].
+    pub fn begin_placed(&mut self, p: &crate::print::Placement) {
+        self.content.save_state();
+        if p.cut_off {
+            let (x, y, w, h) = p.printable;
+            self.content.rect(x, y, w, h);
+            self.content.clip_nonzero();
+            self.content.end_path();
+        }
+        self.content
+            .transform([p.scale, 0.0, 0.0, p.scale, p.offset.0, p.offset.1]);
+        self.min_width = MIN_PEN_MM;
+        self.scale = p.scale;
+        self.stroke = None;
+        self.fill = None;
+    }
+
+    /// Ends [`PageWriter::begin_placed`].
+    pub fn end_placed(&mut self) {
+        self.content.restore_state();
+        self.min_width = 0.0;
+        self.scale = 1.0;
+        self.stroke = None;
+        self.fill = None;
     }
 
     /// Whether the page set any text in Inter (its resources then need the
@@ -58,6 +97,23 @@ impl<'a> PageWriter<'a> {
         self.uses_bold
     }
 
+    /// Restricts everything drawn until [`PageWriter::end_clip`] to the
+    /// rectangle (page millimetres).
+    pub fn begin_clip(&mut self, x: f32, y: f32, w: f32, h: f32) {
+        self.content.save_state();
+        self.content.rect(x, y, w, h);
+        self.content.clip_nonzero();
+        self.content.end_path();
+    }
+
+    /// Ends the clip of [`PageWriter::begin_clip`].
+    pub fn end_clip(&mut self) {
+        self.content.restore_state();
+        // The restore also undid the colours and widths set inside the clip.
+        self.stroke = None;
+        self.fill = None;
+    }
+
     pub fn finish(self) -> Vec<u8> {
         self.content.finish().to_vec()
     }
@@ -66,7 +122,8 @@ impl<'a> PageWriter<'a> {
         let width = match stroke.unit {
             WidthUnit::World => stroke.width,
             WidthUnit::Screen => stroke.width * MM_PER_PT,
-        };
+        }
+        .max(self.min_width / self.scale);
         if self.stroke == Some((stroke.color, width)) {
             return;
         }

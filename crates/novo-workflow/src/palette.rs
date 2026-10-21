@@ -57,6 +57,8 @@ pub enum Target {
     Child { symbol: String, device: DeviceId },
     /// Start or resume a lesson, by its id.
     Lesson(String),
+    /// Place a macro (a ready-made circuit), by its name.
+    Macro(String),
 }
 
 /// What kind of thing a row is, shown as a label in front of it.
@@ -70,6 +72,7 @@ pub enum Kind {
     Wire,
     Symbol,
     Lesson,
+    Macro,
 }
 
 impl Kind {
@@ -83,6 +86,7 @@ impl Kind {
             Kind::Wire => "Wire",
             Kind::Symbol => "Symbol",
             Kind::Lesson => "Lesson",
+            Kind::Macro => "Circuit",
         }
     }
 }
@@ -128,6 +132,19 @@ pub struct Sources<'a> {
     pub context: Context,
     /// The lessons on offer, for `lesson wheel` and a bare topic word.
     pub lessons: &'a [LessonEntry],
+    /// The macros (ready-made circuits) on offer.
+    pub macros: &'a [MacroEntry],
+}
+
+/// A macro as the field searches it. The app builds these from its macro
+/// library, so this crate needs no macro engine.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MacroEntry {
+    pub name: String,
+    /// What the row says after the name (the description).
+    pub detail: String,
+    /// Tags and description, lower case.
+    pub words: String,
 }
 
 /// A lesson as the field searches it. The app builds these from its
@@ -174,10 +191,21 @@ pub const RECENT_SHOWN: usize = 5;
 const EXACT: i32 = 100_000;
 /// Added to a command's match on its own label.
 const LABEL_BONUS: i32 = 50;
+/// A command whose label has the typed word as a whole word (`heat` in
+/// "Simulate heat of the cabinet") outranks a part that only starts with it
+/// ("Heating element"); a part named exactly by the word still leads.
+const WHOLE_WORD_BONUS: i32 = 120;
+/// What a macro row gets for being found by name or by all its words.
+const MACRO_BONUS: i32 = 450;
+/// How far a row that cannot run now drops below one that can.
+const DISABLED_PENALTY: i32 = 400;
 
 /// The most a command's keyword (not its label or verb) can score, kept
 /// below a symbol's name so a part-like word finds the part first.
 const KEYWORD_CAP: i32 = 400;
+/// The most a keyword-only match can score when another command's label has
+/// the typed word as a whole word: below every such label match.
+const KEYWORD_BELOW_LABELS: i32 = 100;
 /// The lowest score (a whole word prefix) a recent pick is lifted from.
 const RECENT_MIN_MATCH: i32 = 250;
 
@@ -268,6 +296,7 @@ impl Palette {
             });
             command_rows(query, wants_next, names_part, sources, &mut rows);
             lesson_rows(query, sources.lessons, &mut rows);
+            macro_rows(query, sources.macros, MACRO_BONUS, &mut rows);
         }
         if let Some(library) = sources.library {
             for hit in self.symbols.search(library, query).into_iter().take(10) {
@@ -309,6 +338,13 @@ impl Palette {
             }
         }
 
+        // Q places things and a whole circuit is one of them, but only when
+        // no part matches: `lamp green` places the lamp, `motor starter`
+        // the circuit.
+        if mode == Mode::Place && !rows.iter().any(|r| r.kind == Kind::Symbol) {
+            macro_rows(query, sources.macros, MACRO_BONUS, &mut rows);
+        }
+
         // Recent picks first for a short query.
         if query.chars().count() <= 3 {
             for row in &mut rows {
@@ -322,6 +358,13 @@ impl Palette {
             }
         }
 
+        // A command that cannot run now sorts below one that can, unless it
+        // is a much better match; Enter acts on the first row.
+        for row in &mut rows {
+            if row.disabled.is_some() {
+                row.score -= DISABLED_PENALTY;
+            }
+        }
         // One row per target, keeping the best.
         rows.sort_by_key(|r| std::cmp::Reverse(r.score));
         let mut seen = Vec::new();
@@ -657,6 +700,41 @@ fn lesson_rows(query: &str, lessons: &[LessonEntry], rows: &mut Vec<Row>) {
     }
 }
 
+/// Macros by name, tag or a word of the description: `motor starter`,
+/// `soft starter`, `reversing`. Every word of the query has to be found; a
+/// whole name leads the commands and parts that merely contain the words.
+fn macro_rows(query: &str, macros: &[MacroEntry], bonus: i32, rows: &mut Vec<Row>) {
+    let lower = query.to_lowercase();
+    let words: Vec<&str> = lower.split_whitespace().collect();
+    if words.is_empty() || lower.chars().count() < 3 {
+        return;
+    }
+    for m in macros {
+        let name = m.name.to_lowercase();
+        let by_name = fuzzy::score(&lower, &m.name)
+            .filter(|s| *s >= RECENT_MIN_MATCH)
+            .map(|s| s + bonus);
+        let by_words = words
+            .iter()
+            .all(|w| m.words.contains(w) || name.contains(w))
+            .then_some(bonus.max(100));
+        let Some(score) = by_name.or(by_words) else {
+            continue;
+        };
+        rows.push(Row {
+            target: Target::Macro(m.name.clone()),
+            kind: Kind::Macro,
+            label: m.name.clone(),
+            detail: m.detail.clone(),
+            group: "",
+            completion: None,
+            shortcut: None,
+            disabled: None,
+            score,
+        });
+    }
+}
+
 /// Wires by number: `105` or `wire 105`. An exact number comes after an
 /// exact page or device (a bare `12` opens page 12 first), unless the
 /// query says `wire`.
@@ -838,6 +916,12 @@ fn verbs_of(info: &CommandInfo) -> impl Iterator<Item = &'static str> {
 /// what follows it. Verbs are ASCII, so folding ASCII case keeps the byte
 /// offset valid in the typed text.
 fn split_verb<'q>(info: &CommandInfo, query: &'q str) -> Option<(&'static str, &'q str)> {
+    // The command's own name typed in full is the bare command, not its first
+    // verb with the rest as the argument (`issue revision` is not a revision
+    // whose description is "revision").
+    if verbs_of(info).next().is_some() && query.trim().eq_ignore_ascii_case(info.label) {
+        return verbs_of(info).next().map(|v| (v, ""));
+    }
     verbs_of(info)
         .filter_map(|v| {
             let head = query.get(..v.len())?;
@@ -862,6 +946,16 @@ fn command_rows(
         .filter_map(|info| split_verb(info, query))
         .map(|(verb, _)| verb.len())
         .max();
+    // When some command's label contains the typed word as a whole word, a
+    // command that only lists it as a keyword ranks below all of those: the
+    // word the user typed names the command that says it on its face
+    // (`handover` is the handover package, not the commissioning report).
+    let label_owns_word = query.chars().count() >= 3
+        && COMMANDS.iter().any(|info| {
+            info.label
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|w| w.eq_ignore_ascii_case(query))
+        });
     for info in COMMANDS {
         // A verb: bare it runs, with words after it it runs on them.
         if let Some((verb, argument)) = split_verb(info, query)
@@ -899,9 +993,21 @@ fn command_rows(
         // The label itself counts for more than a keyword or a Dutch
         // word: `ro` lists Rotate before the commands with a keyword
         // like `route`.
-        let by_label = fuzzy::score(query, info.label).map(|s| s + LABEL_BONUS);
-        let by_hint = fuzzy::best_score(query, hints)
-            .map(|s| if names_part { s.min(KEYWORD_CAP) } else { s });
+        let whole_word = query.len() >= 3
+            && info
+                .label
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|w| w.eq_ignore_ascii_case(query));
+        let by_label = fuzzy::score(query, info.label)
+            .map(|s| s + LABEL_BONUS + if whole_word { WHOLE_WORD_BONUS } else { 0 });
+        let by_hint = fuzzy::best_score(query, hints).map(|s| {
+            let s = if names_part { s.min(KEYWORD_CAP) } else { s };
+            if label_owns_word && !whole_word {
+                s.min(KEYWORD_BELOW_LABELS)
+            } else {
+                s
+            }
+        });
         let score = fuzzy::score(query, &full)
             .max(fuzzy::best_score(query, direct))
             .max(by_label)

@@ -1,0 +1,13 @@
+@title Sheet fit: the whole sheet, title block included, after opening a project and after Zoom to fit
+@area Schematic
+click_text "Open example"
+wait 20
+shot opened
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 20
+shot after-fit
+check_layout

@@ -1,0 +1,3 @@
+2026-10-21 05:55 UTC Template engine, PDF writer, folder export and Bench output button written; tests added.
+2026-10-21 06:50 UTC #1106 and #1114 (300 page cap) merged.
+2026-10-21 11:00 UTC Creative audit round 6: clip-on devices no longer listed as missing hole data; `1 Plate full size <tag>.pdf` (one page the size of the plate, 1:1, 100 mm ruler; skipped under 150 x 40 mm or over 5080 mm); build order grouped by circuit (power, control, PE; a model from colour and size, not the schematic) with a Circuit column and the After column as ranges. Not done: heading rows between circuits (a column was used instead); the auditor's Q1 (cut list double-counting cable cores) is a separate question.

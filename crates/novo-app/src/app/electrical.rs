@@ -175,7 +175,7 @@ impl NovoApp {
         let mut open = true;
         let mut to_calc = false;
         super::panel::dialog(ctx, "Electrical inputs", [560.0, 560.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.label("The numbers the standards rules and the calculations read. A blank box is unknown: the rule says so and the calculation stays silent, nothing is guessed.");
                 ui.add_space(4.0);

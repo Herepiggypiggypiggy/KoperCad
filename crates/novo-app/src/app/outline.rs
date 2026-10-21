@@ -843,7 +843,13 @@ impl NovoApp {
             RowKind::Page { drawn: false, .. } => crate::theme::ui_palette().text_secondary,
             _ => crate::theme::ui_palette().text_primary,
         };
-        let right_w = if right.is_empty() { 0.0 } else { 56.0 };
+        let locked = matches!(&row.kind, RowKind::Page { page, .. } if self
+            .backend
+            .document()
+            .and_then(|d| d.project().page(*page))
+            .is_some_and(|p| p.locked.is_some()));
+        // Room for the padlock, so a long title ends before it.
+        let right_w = if right.is_empty() { 0.0 } else { 56.0 } + if locked { 18.0 } else { 0.0 };
         let right_edge = rect.right() - 8.0;
         if !right.is_empty() {
             painter.text(
@@ -902,6 +908,15 @@ impl NovoApp {
                 room,
             );
         }
+        if locked {
+            ui.painter_at(rect).text(
+                egui::pos2(rect.right() - 16.0, mid),
+                egui::Align2::RIGHT_CENTER,
+                novo_theme::icons::LOCK_SIMPLE,
+                egui::FontId::proportional(tokens::FONT_SMALL),
+                crate::theme::ui_palette().text_tertiary,
+            );
+        }
         if let RowKind::Page { page, .. } = &row.kind
             && self.page_has_changes(*page)
         {
@@ -957,9 +972,31 @@ impl NovoApp {
         // Drops
         self.row_drop(ui, &resp, row, &mut out);
 
-        // Tooltip and menu
-        if let Some(tip) = self.row_tip(row) {
+        // Tooltip and menu. The padlock has its own tip, so the row's waits.
+        let lock_rect = egui::Rect::from_center_size(
+            egui::pos2(rect.right() - 24.0, rect.center().y),
+            egui::vec2(18.0, rect.height()),
+        );
+        let over_lock = locked
+            && ui
+                .input(|i| i.pointer.hover_pos())
+                .is_some_and(|p| lock_rect.contains(p));
+        if !over_lock && let Some(tip) = self.row_tip(row) {
             resp.clone().on_hover_text(tip);
+        }
+        if locked {
+            let generated = matches!(&row.kind, RowKind::Page { page, .. } if self
+                .backend
+                .document()
+                .and_then(|d| d.project().page(*page))
+                .is_some_and(|p| matches!(p.kind, PageKind::Generated { .. })));
+            let tip = if generated {
+                "Locked with the issue. The content still regenerates from the drawings; the lock only stops edits to the page itself."
+            } else {
+                "Locked with the issue. Open the page, then click Page locked in the status bar to unlock it."
+            };
+            ui.interact(lock_rect, resp.id.with("lock"), egui::Sense::hover())
+                .on_hover_text(tip);
         }
         if let Some(doc) = self.backend.document()
             && let Some(target) = target_of(row)

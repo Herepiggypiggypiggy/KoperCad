@@ -1,0 +1,16 @@
+@title Start screen, open the example
+@area Start
+# First-run look, then the bundled example opens as an untitled copy.
+shot start
+check_blank start
+check_layout
+expect "Open example"
+# Regression: a missing words key shows raw on the start screen (seen as "learn_menu" on main d3a90d4).
+expect_not learn_menu
+click_text "Open example"
+wait 20
+expect "Main circuit"
+expect "Schematic"
+shot example-schematic
+check_blank example-schematic
+check_layout

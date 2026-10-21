@@ -76,3 +76,53 @@ fn every_lesson_parses_and_names_files_that_exist() {
         }
     }
 }
+
+#[test]
+fn paths_teach_prerequisites_first_and_cover_every_lesson() {
+    let (catalog, _) = catalog();
+    let notes = novo_learn::lint::path_notes(&catalog);
+    assert!(notes.is_empty(), "{notes:#?}");
+}
+
+#[test]
+fn every_ui_key_the_program_asks_for_has_words() {
+    use novo_learn::lesson::Lang;
+    let text = std::fs::read_to_string(lessons_dir().join("ui.toml")).unwrap();
+    let ui = novo_learn::UiStrings::parse(&text).expect("ui.toml parses");
+    // A missing key would show on screen as the key itself ("learn_menu").
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../novo-app/src");
+    let mut missing = Vec::new();
+    let mut seen = 0;
+    let mut stack = vec![src];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().is_some_and(|e| e == "rs")
+                && !path.to_string_lossy().contains("_tests")
+            {
+                let code = std::fs::read_to_string(&path).unwrap();
+                for call in ["say(\"", "say_with(\""] {
+                    for part in code.split(call).skip(1) {
+                        let key: String = part
+                            .chars()
+                            .take_while(|c| {
+                                c.is_ascii_lowercase() || c.is_ascii_digit() || *c == '_'
+                            })
+                            .collect();
+                        if part[key.len()..].starts_with('"') {
+                            seen += 1;
+                            if ui.get(&key, Lang::En) == key {
+                                missing.push(format!("{}: {key}", path.display()));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(seen > 20, "the scan found the program's keys ({seen})");
+    assert!(missing.is_empty(), "ui keys without words: {missing:#?}");
+    assert_eq!(ui.get("learn_menu", Lang::En), "Learn…");
+}

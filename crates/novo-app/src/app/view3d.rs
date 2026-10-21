@@ -28,12 +28,14 @@ use super::heat_spots;
 use super::view3d_align;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
+use super::view3d_heat_labels;
 use super::view3d_hints::Hints;
 use super::view3d_measure::{self, Measure};
 use super::view3d_move::{self, MoveState};
 use super::view3d_nudge::{self, Fields, Step};
 use super::view3d_place::{self, PlaceList};
 use super::view3d_rail;
+use super::view3d_runs::{self, Undrawn};
 use super::view3d_stats::{Build, Stats};
 use super::view3d_views::{self, ViewsAction};
 use super::view3d_wires::{self, WireFacts};
@@ -94,6 +96,9 @@ pub(crate) struct View3dMode {
     /// The probe tool and the point it reads.
     probe: ProbeState,
     heat_shown: Option<(u64, Heat3d)>,
+    /// Whether the door was open on the last frame: opening it from closed
+    /// reframes the cabinet once so the leaf is not cut off.
+    door_was_open: bool,
     /// Overlays without the moving tracers, and the lines the tracers follow.
     heat_base: Vec<novo_view3d::Overlay>,
     heat_flow: heat_3d::Flow,
@@ -106,10 +111,21 @@ pub(crate) struct View3dMode {
     built_layers: Layers,
     /// The hidden items the scene was built with.
     built_hidden: BTreeSet<ItemId>,
+    /// Whether the scene was built with the duct fill tints, and the fill of
+    /// each duct at a project revision.
+    built_duct_fill: bool,
+    duct_fill: Option<(StructureId, u64, Vec<super::cabinet_routes::DuctFill>)>,
     /// The routed wires of an enclosure at a project revision.
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
     /// What each routed wire comes to, for the hover card and the list.
     pub(super) wire_facts: Option<(StructureId, u64, std::collections::BTreeMap<u64, WireFacts>)>,
+    /// The wires with no path in the picture, and the revision their length
+    /// basis was read at (read when a card or the list needs it).
+    pub(super) undrawn: Option<(StructureId, u64, Vec<Undrawn>)>,
+    /// The lit path, outlined ducts and entry marker, and what they were
+    /// built for (enclosure, project revision, pose revision, selection).
+    runs_shown: Option<(StructureId, u64, u64, BTreeSet<ItemId>)>,
+    pub(super) run_marks: Vec<novo_view3d::Overlay>,
     /// The Wire runs list is open.
     pub(super) wire_runs: bool,
     /// The toolbar's layers and door.
@@ -159,14 +175,20 @@ impl Default for View3dMode {
             heat: Heat3d::default(),
             probe: ProbeState::default(),
             heat_shown: None,
+            door_was_open: false,
             heat_base: Vec::new(),
             heat_flow: heat_3d::Flow::default(),
             heat_carry: super::heat_carry::Carry::default(),
             heat_scene: None,
             built_layers: Layers::default(),
             built_hidden: BTreeSet::new(),
+            built_duct_fill: false,
+            duct_fill: None,
             wires: None,
             wire_facts: None,
+            undrawn: None,
+            runs_shown: None,
+            run_marks: Vec::new(),
             wire_runs: false,
             controls: Controls::default(),
             hints: Hints::default(),
@@ -269,17 +291,32 @@ impl NovoApp {
         if let Some(text) = self.view3d.notice.take() {
             self.message(super::Level::Info, text);
         }
+        // The 3D view shows the machine of the current choice of options;
+        // the Cabinet keeps editing the full working project.
+        let choice = self.machine_variant();
+        let generation = self.machine_generation();
         let Some(document) = self.backend.document() else {
             return;
         };
-        let project = document.project();
+        let project: &novo_core::Project = match &choice {
+            Some(copy) => copy,
+            None => document.project(),
+        };
         let Some(id) = enclosure(project, self.cabinet.location.as_ref()) else {
-            ui.centered_and_justified(|ui| {
+            let mut open_cabinet = false;
+            ui.vertical_centered(|ui| {
+                ui.add_space((ui.available_height() * 0.4).max(0.0));
                 ui.weak("Set a mounting plate in the Cabinet to see it in 3D");
+                ui.add_space(8.0);
+                open_cabinet = ui.button("Set up the cabinet").clicked();
             });
+            if open_cabinet {
+                self.wb.queued.push("view.cabinet");
+            }
             return;
         };
-        let revision = project.revision();
+        // A copy for a choice has revisions of its own.
+        let revision = project.revision() ^ (generation << 40);
         let ambient = self.sizing.request().ambient_max;
         let empty_hint = super::tips::empty_3d_hint(&self.settings, &self.wb.keymap, project, id);
         let mode = &mut self.view3d;
@@ -288,24 +325,40 @@ impl NovoApp {
         let stale = mode.built_models != mode.models.revision
             || !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
             || mode.built_layers != layers
-            || mode.built_hidden != mode.controls.hidden;
+            || mode.built_hidden != mode.controls.hidden
+            || mode.built_duct_fill != mode.controls.duct_fill;
         if stale {
             let started = Instant::now();
             let mut routing_ms = None;
             // Routing is the slow part: it is redone only for a new revision.
-            let wires = if layers.wires {
-                if !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision) {
-                    let routed = novo_routing::model::route_project(project);
+            let want_fill = mode.controls.duct_fill;
+            let fill_stale =
+                !matches!(&mode.duct_fill, Some((s, r, _)) if *s == id && *r == revision);
+            let wires_stale = !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision);
+            if (layers.wires && wires_stale) || (want_fill && fill_stale) {
+                let routed = novo_routing::model::route_project(project);
+                if want_fill {
+                    let fills = routed
+                        .plans
+                        .iter()
+                        .find(|(s, _)| *s == id)
+                        .map(|(_, plan)| super::cabinet_routes::duct_fills(project, id, plan))
+                        .unwrap_or_default();
+                    mode.duct_fill = Some((id, revision, fills));
+                }
+                if layers.wires && wires_stale {
                     let inputs = model::wires_with(project, id, &routed);
                     let on_plate = inputs.iter().map(|w| w.id).collect();
                     mode.wire_facts = Some((
                         id,
                         revision,
-                        view3d_wires::facts(project, &routed, &on_plate),
+                        view3d_wires::facts(project, id, &routed, &on_plate),
                     ));
                     mode.wires = Some((id, revision, inputs));
-                    routing_ms = Some(started.elapsed().as_secs_f32() * 1000.0);
                 }
+                routing_ms = Some(started.elapsed().as_secs_f32() * 1000.0);
+            }
+            let wires = if layers.wires {
                 mode.wires.as_ref().map(|w| w.2.clone()).unwrap_or_default()
             } else {
                 Vec::new()
@@ -330,6 +383,9 @@ impl NovoApp {
                         &model::inputs(project, id),
                     );
                 }
+                if want_fill && let Some((_, _, fills)) = &mode.duct_fill {
+                    super::view3d_duct_fill::tint(&mut built, fills);
+                }
                 // Items deleted from the project are no longer hidden.
                 mode.controls.hidden.retain(|i| built.get(*i).is_some());
                 // The renderer redraws on a new scene revision only: `refresh`
@@ -347,6 +403,7 @@ impl NovoApp {
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
                 mode.built_hidden = mode.controls.hidden.clone();
+                mode.built_duct_fill = want_fill;
                 let total = started.elapsed().as_secs_f32() * 1000.0;
                 mode.stats.build = Build {
                     scene_ms: total - routing_ms.unwrap_or(0.0),
@@ -487,6 +544,51 @@ impl NovoApp {
             mode.pins_shown = Some(pins_key);
             ghost_changed = true;
         }
+        // Runs: read how the picked wires were measured, then light their
+        // path and outline their ducts.
+        let want_runs = mode.controls.layers.wires;
+        if want_runs
+            && (mode.wire_runs
+                || mode
+                    .view
+                    .state
+                    .selection
+                    .iter()
+                    .any(|i| i.kind == ItemKind::Wire))
+        {
+            view3d_runs::ensure(
+                &mut mode.wire_facts,
+                &mut mode.undrawn,
+                project,
+                id,
+                revision,
+            );
+        }
+        let runs_key = (
+            id,
+            revision,
+            scene.pose_revision,
+            if want_runs {
+                mode.view.state.selection.clone()
+            } else {
+                BTreeSet::new()
+            },
+        );
+        if mode.runs_shown.as_ref() != Some(&runs_key) {
+            mode.run_marks = match &mode.wire_facts {
+                Some((s, r, facts)) if want_runs && *s == id && *r == revision => {
+                    view3d_runs::overlays(
+                        scene,
+                        facts,
+                        &mode.view.state.selection,
+                        novo_routing::entry::entry_point(project, id),
+                    )
+                }
+                _ => Vec::new(),
+            };
+            mode.runs_shown = Some(runs_key);
+            ghost_changed = true;
+        }
         let stored = load(project, id);
         if let Some(lay) = &stored {
             let tag_of = |d: u64| {
@@ -497,6 +599,10 @@ impl NovoApp {
             };
             if let Some(text) = view3d_move::warning(lay, &landings, &tag_of) {
                 view3d_move::show_warning(ui.ctx(), &text);
+            } else if let [one] = landings.as_slice() {
+                // One device in the hand: its distances to the neighbours.
+                let gaps = super::view3d_drag_gaps::gaps(lay, one);
+                super::view3d_drag_gaps::show(ui.ctx(), one, &gaps);
             }
         }
         let mut ghost: Vec<_> = landings
@@ -584,6 +690,7 @@ impl NovoApp {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
             all.extend(mode.pin_marks.iter().cloned());
+            all.extend(mode.run_marks.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker.clone());
             mode.view.set_overlays(all);
@@ -592,6 +699,7 @@ impl NovoApp {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
             all.extend(mode.pin_marks.iter().cloned());
+            all.extend(mode.run_marks.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
             let time = ui.input(|i| i.time);
@@ -641,6 +749,7 @@ impl NovoApp {
             &|| mode.built.as_ref().map(|(_, _, scene)| scene.bounds()),
         );
         self.settings.trackpad_pans = mode.controls.trackpad_pans;
+        mode.view.top_inset = view3d_controls::toolbar_inset(ui.ctx(), view_rect);
         if let Some(command) = asked {
             self.wb.queued.push(command);
         }
@@ -677,7 +786,22 @@ impl NovoApp {
             ambient,
         );
         if mode.controls.heat_panel {
-            view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            if let Some(raw) =
+                view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale, &tag_of)
+            {
+                let item = ItemId::new(ItemKind::Device, raw);
+                if scene.get(item).is_some() {
+                    mode.view.state.selection = BTreeSet::from([item]);
+                    mode.view
+                        .fit(scene, ui.input(|i| i.time), options.reduced_motion);
+                }
+            }
         }
         if let Some(text) = empty_hint {
             ui.painter().text(
@@ -696,6 +820,17 @@ impl NovoApp {
             mode.view
                 .set_door(DOOR_HINGE, angle, now, options.reduced_motion);
         }
+        // Opening the door from closed frames the cabinet with the door as far
+        // open as it goes, once; the slider after that moves nothing else.
+        let door_open = target > 0.0;
+        if door_open
+            && !mode.door_was_open
+            && let Some(max) = limit.and_then(|l| open_angle(scene, DOOR_HINGE, l as f32))
+        {
+            mode.view
+                .fit_with_door(scene, DOOR_HINGE, max, now, options.reduced_motion);
+        }
+        mode.door_was_open = door_open;
         let shown = match &solution {
             Some(sol) if mode.heat.devices => {
                 let key = (
@@ -769,6 +904,25 @@ impl NovoApp {
                 ui.painter()
                     .galley(chip.min + egui::vec2(6.0, 3.0), galley, pal.sunken);
             }
+            if mode.heat.labels
+                && let Some(sol) = &solution
+            {
+                let tag_of = |raw: u64| {
+                    project
+                        .get::<Device>(DeviceId::from(raw))
+                        .and_then(|d| d.tag.device_code().map(str::to_owned))
+                        .unwrap_or_else(|| format!("device {raw}"))
+                };
+                let labels = view3d_heat_labels::labels(&sol.snapshot, &tag_of);
+                view3d_heat_labels::paint(
+                    ui,
+                    &mode.view,
+                    out.rect,
+                    scene,
+                    &labels,
+                    stale || self.cabinet.heat.running(),
+                );
+            }
             if view3d_measure::readout(ui.ctx(), out.rect, &mode.measure, reading) {
                 mode.measure.clear();
             }
@@ -797,7 +951,17 @@ impl NovoApp {
                 super::view3d_tip::show(ui.ctx(), &tip);
             }
         }
-        // Wire runs: a card for the wire under the pointer, and the list.
+        // Wire runs: a card for the wire under the pointer, the Run card for
+        // the picked wires, and the list.
+        if mode.controls.layers.wires && out.hover.is_some_and(|h| h.kind == ItemKind::Wire) {
+            view3d_runs::ensure(
+                &mut mode.wire_facts,
+                &mut mode.undrawn,
+                project,
+                id,
+                revision,
+            );
+        }
         let wire_facts = mode
             .wire_facts
             .as_ref()
@@ -812,10 +976,37 @@ impl NovoApp {
         {
             view3d_wires::hover_card(ui.ctx(), at, f);
         }
+        if let Some(facts) = wire_facts {
+            let chosen = view3d_runs::picked(facts, &mode.view.state.selection);
+            let asked = view3d_runs::card(ui.ctx(), out.rect, &chosen, mode.wire_runs);
+            if let Some(cores) = asked.select_cores {
+                let cores: BTreeSet<ItemId> = cores
+                    .into_iter()
+                    .filter(|w| facts.contains_key(w))
+                    .map(|w| ItemId::new(ItemKind::Wire, w))
+                    .collect();
+                if !cores.is_empty() {
+                    mode.view.state.selection = cores;
+                }
+            } else if asked.clear {
+                mode.view.state.selection.clear();
+            }
+        }
         if mode.wire_runs
             && let Some(facts) = wire_facts
         {
-            let asked = view3d_wires::list(ui.ctx(), out.rect, facts, &mode.view.state.selection);
+            let undrawn = mode
+                .undrawn
+                .as_ref()
+                .filter(|(s, r, _)| *s == id && *r == revision)
+                .map_or(&[][..], |(_, _, u)| u.as_slice());
+            let asked = view3d_wires::list(
+                ui.ctx(),
+                out.rect,
+                facts,
+                undrawn,
+                &mode.view.state.selection,
+            );
             if let Some(w) = asked.select {
                 mode.view.state.selection = BTreeSet::from([ItemId::new(ItemKind::Wire, w)]);
             }
@@ -1243,11 +1434,9 @@ fn heat_controls(
         }
         ui.checkbox(&mut h.lines, "Airflow")
             .on_hover_text("Streamlines from in front of the devices; faster air is brighter");
-        let top = if h.arrows {
-            super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at)
-        } else {
-            0.0
-        };
+        let top = h
+            .arrows
+            .then(|| super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at));
         ui.checkbox(&mut h.cloud, "Cloud").on_hover_text(
             "The whole cabinet volume as see-through layers coloured by air temperature; air near ambient is invisible, hotter air is more opaque. Layers are cut across the direction you look along, so turning the view across the cabinet re-cuts them",
         );
@@ -1257,18 +1446,28 @@ fn heat_controls(
                     .show_value(false),
             )
             .on_hover_text("How solid the cloud looks");
+            ui.add(
+                egui::DragValue::new(&mut h.cloud_layers)
+                    .range(heat_cloud::LAYERS_RANGE)
+                    .suffix(" layers"),
+            )
+            .on_hover_text(
+                "Slices through the cabinet: fewer is lighter on a slow graphics card, more is smoother",
+            );
         }
         ui.checkbox(&mut h.carry, "Heat flow").on_hover_text(
             "Where the heat goes: orange lines and moving dashes follow the heat the air carries away from hot parts (brighter is more heat per area); arrows inside plate, rails and devices show heat conducted through them. Derived from the solved temperature and air speed; surface radiation is not included. Air colder than ambient takes heat in, so its lines point against the air",
         );
-        ui.checkbox(&mut h.arrows, "Arrows").on_hover_text(format!(
-            "Arrows on the slice plane point where the air goes. Length is relative to the fastest air on this plane (now {top:.2} m/s), so two planes cannot be compared by length; air under 2 % of that is not drawn"
-        ));
-        if h.arrows {
+        ui.checkbox(&mut h.arrows, "Arrows")
+            .on_hover_text(super::heat_arrows::hover_text(top));
+        if let Some(top) = top.filter(|_| h.arrows) {
             ui.label(egui::RichText::new(format!("longest {top:.2} m/s")).small());
         }
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
             "Colour each device by the air temperature in front of it, on the same scale as the slice",
+        );
+        ui.checkbox(&mut h.labels, "Labels").on_hover_text(
+            "Pin the tag, surface temperature and margin to the limit on the six devices closest to theirs (model values from the solver, not measurements)",
         );
         ui.checkbox(&mut probe.on, "Probe").on_hover_text(
             "Click the air to read its temperature and speed there (Esc clears the point)",
@@ -1366,5 +1565,43 @@ fn slice_position(ui: &mut egui::Ui, h: &mut Heat3d, snap: &novo_cfd::CfdSnapsho
     }
     if back || forward || drag.changed() {
         h.slice_at = (((mm - lo) / (hi - lo).max(1e-9)) as f32).clamp(0.0, 1.0);
+    }
+}
+
+#[cfg(test)]
+mod empty_tests {
+    use super::super::gate1_tests::Drive;
+    use super::super::workspace::Workspace;
+    use crate::actions::Action;
+    use eframe::egui;
+
+    #[test]
+    fn the_3d_view_of_a_new_project_offers_a_way_to_the_cabinet() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        // How a project reopens when it was last left in 3D.
+        d.app.workspace = Workspace::View3d;
+        d.frame();
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::View3d);
+        // The button sits in the middle column, a little above halfway.
+        for y in (200..800).step_by(6) {
+            let at = egui::pos2(800.0, y as f32);
+            let button = |down| egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: down,
+                modifiers: Default::default(),
+            };
+            d.frame_with(vec![egui::Event::PointerMoved(at), button(true)]);
+            d.frame_with(vec![button(false)]);
+            d.frame();
+            if d.app.workspace() == Workspace::Cabinet {
+                return;
+            }
+        }
+        panic!("no button on the empty 3D view reached the Cabinet");
     }
 }

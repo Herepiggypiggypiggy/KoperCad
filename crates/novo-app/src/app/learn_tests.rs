@@ -889,3 +889,389 @@ fn a_panel_chip_names_the_lesson_for_its_topic_and_steps_aside_when_it_runs() {
     d.frame();
     assert!(d.app.learn.chip("terminals").is_none(), "the card is on it");
 }
+
+#[test]
+fn reset_progress_waits_for_the_second_click() {
+    let (_dir, mut d) = drive();
+    d.app.learn.window = true;
+    d.app.start_lesson("tiny");
+    d.frame();
+    d.app.learn_move(super::learn::Move::Next);
+    d.app.learn.confirm_reset = true;
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert!(
+        d.app.learn.progress().of("tiny").is_some(),
+        "drawing the question changes nothing"
+    );
+    d.app.learn.reset_progress();
+    assert!(d.app.learn.progress().of("tiny").is_none());
+    assert!(!d.app.learn.confirm_reset, "the question closes");
+}
+
+#[test]
+fn open_finished_version_opens_the_finished_drawing_on_the_last_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("placing-parts");
+    d.frame();
+    assert!(
+        !d.app.card().unwrap().can_open_finished,
+        "not offered on the first step"
+    );
+    let steps = d.app.learn.run.as_ref().unwrap().progress().1;
+    for _ in 1..steps {
+        d.app.learn_move(super::learn::Move::Skip);
+    }
+    d.frame();
+    assert!(
+        d.app.card().unwrap().can_open_finished,
+        "offered at the end"
+    );
+    assert!(d.app.learn_open_finished());
+    d.frame();
+    assert!(d.app.learn.run.is_none(), "the lesson ends");
+    assert!(
+        d.doc().project().info().name.starts_with("Finished:"),
+        "{}",
+        d.doc().project().info().name
+    );
+    assert!(d.doc().project().symbols().count() > 0);
+}
+
+#[test]
+fn the_inspector_keeps_above_the_lesson_card_at_1366() {
+    let (_dir, mut d) = drive();
+    d.app.start_lesson("tiny");
+    let size = eframe::egui::vec2(1366.0, 768.0);
+    for _ in 0..3 {
+        d.frame_sized(size, Vec::new());
+    }
+    let k = d.place("km3", 80.0, 96.0);
+    d.editor_leave();
+    d.select(k);
+    for _ in 0..6 {
+        d.frame_sized(size, Vec::new());
+    }
+    let rect = |name: &str| {
+        d.ctx
+            .memory(|m| m.area_rect(super::panel::id(name)))
+            .unwrap_or_else(|| panic!("{name} is not shown"))
+    };
+    let (card, inspector) = (rect("lesson_card"), rect("inspector"));
+    assert!(
+        inspector.max.y <= card.min.y || inspector.max.x <= card.min.x,
+        "the inspector {inspector:?} covers the lesson card {card:?}"
+    );
+}
+
+#[test]
+fn skip_does_the_step_so_the_steps_after_it_find_their_parts() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("placing-parts");
+    d.frame();
+    let ctx = d.ctx.clone();
+    let placed = |d: &Drive| d.doc().project().symbols().count();
+    let before = placed(&d);
+    // Skip each step in turn: the ones with a solve place the parts the
+    // later steps point at.
+    for _ in 0..12 {
+        if d.app.learn.run.is_none() {
+            break;
+        }
+        d.app.learn_skip(&ctx);
+        d.frame();
+    }
+    assert!(
+        placed(&d) > before,
+        "skipping did the steps: {before} -> {}",
+        placed(&d)
+    );
+}
+
+#[test]
+fn a_challenge_gives_its_hints_one_at_a_time_and_is_solved_by_the_fix() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "hold", "the goal step is open");
+    let card = d.app.card().unwrap();
+    assert!(card.challenge);
+    assert_eq!((card.hints_open.len(), card.hints_total), (0, 3));
+    d.app.learn_open_hint();
+    d.app.learn_open_hint();
+    let card = d.app.card().unwrap();
+    assert_eq!(card.hints_open.len(), 2, "two of three hints are open");
+    for _ in 0..5 {
+        d.app.learn_open_hint();
+    }
+    assert_eq!(d.app.card().unwrap().hints_open.len(), 3);
+    // The fault is real: pressing start without repairing anything does not
+    // satisfy the goal; with the repair (the step's whole solve) it does.
+    let solve = d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .unwrap()
+        .step()
+        .unwrap()
+        .solve
+        .clone();
+    d.replay_op(&solve[1]).unwrap();
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "hold", "start alone drops out again");
+    d.replay_op(&solve[0]).unwrap();
+    d.replay_op(&solve[1]).unwrap();
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "stop", "the repaired holding contact holds");
+}
+
+#[test]
+fn the_broken_contactor_challenge_only_ticks_after_the_wire_is_drawn() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("coil-wont-pull-in");
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "pull-in");
+    let solve = d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .unwrap()
+        .step()
+        .unwrap()
+        .solve
+        .clone();
+    d.replay_op(&solve[1]).unwrap();
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(
+        step(&d),
+        "pull-in",
+        "start does nothing while the wire is missing"
+    );
+    d.replay_op(&solve[0]).unwrap();
+    d.replay_op(&solve[1]).unwrap();
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_ne!(step(&d), "pull-in", "with the wire the coil pulls in");
+}
+
+#[test]
+fn a_lesson_about_something_else_keeps_the_design_checks_quiet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("motor-starter");
+    d.frame();
+    assert!(
+        d.app.shown_problems().is_empty(),
+        "the motor starter's sample warnings are not shown"
+    );
+    d.app.start_lesson("design-checks");
+    d.frame();
+    assert!(
+        !d.app.shown_problems().is_empty(),
+        "the lesson about the checks shows them"
+    );
+}
+
+#[test]
+fn a_challenge_keeps_its_ring_back_until_the_hints_are_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "hold");
+    assert!(d.app.learn_point_hidden(), "no ring before any hint");
+    d.app.learn_open_hint();
+    assert!(
+        d.app.learn_point_hidden(),
+        "one hint of three is not enough"
+    );
+    d.app.learn_show_me();
+    assert!(!d.app.learn_point_hidden(), "Show me asks for the ring");
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    assert!(!d.app.learn_point_hidden(), "the live step has no hints");
+}
+
+#[test]
+fn doing_a_challenge_for_the_learner_ends_with_shown_not_solved() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    let ctx = d.ctx.clone();
+    assert!(!d.app.learn.helped);
+    for _ in 0..6 {
+        d.app.learn_skip(&ctx);
+        for _ in 0..3 {
+            d.frame();
+        }
+        if d.app.card().is_some_and(|c| c.finished) {
+            break;
+        }
+    }
+    let card = d.app.card().unwrap();
+    assert!(card.finished, "the lesson ran to its end");
+    assert!(card.helped, "the card knows the repair was shown");
+    assert!(card.explain.contains("holding contact"), "{}", card.explain);
+    assert_eq!(card.next_lessons.len(), 1, "a next challenge is offered");
+}
+
+#[test]
+fn a_challenge_that_was_shown_or_skipped_never_ends_on_solved() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    assert!(!d.app.card().unwrap().helped);
+    d.app.learn_show_me();
+    assert!(d.app.card().unwrap().helped, "Show me counts as shown");
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    assert!(!d.app.card().unwrap().helped, "a new run starts clean");
+    d.app.learn_move(super::learn::Move::Skip);
+    assert!(d.app.card().unwrap().helped, "a plain skip counts as shown");
+}
+
+#[test]
+fn the_bypassed_stop_button_only_stops_the_motor_once_the_jumper_is_gone() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("motor-wont-stop");
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "run");
+    let solve = |d: &Drive| {
+        d.app
+            .learn
+            .run
+            .as_ref()
+            .unwrap()
+            .step()
+            .unwrap()
+            .solve
+            .clone()
+    };
+    d.replay_op(&solve(&d)[0]).unwrap();
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "stop", "start holds the contactor in");
+    let ops = solve(&d);
+    // Stop with the jumper still there: the coil stays on, the step stays open.
+    d.replay_op(&ops[2]).unwrap();
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "stop", "a bypassed stop button stops nothing");
+    // Remove the jumper (select it, Delete) and press stop again.
+    d.replay_op(&ops[0]).unwrap();
+    d.replay_op(&ops[1]).unwrap();
+    d.replay_op(&ops[2]).unwrap();
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert!(
+        d.app.card().is_some_and(|c| c.finished),
+        "the repaired circuit stops, the lesson is done"
+    );
+}
+
+#[test]
+fn a_prediction_step_waits_for_an_answer_and_says_whether_it_was_right() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("predict-the-starter");
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "guess-hold", "the question is open");
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "guess-hold", "nothing ticks it but an answer");
+    let card = d.app.card().unwrap();
+    let predict = card.predict.as_ref().expect("the card shows the question");
+    assert_eq!(predict.options.len(), 3);
+    assert_eq!(predict.chosen, None);
+    // A wrong guess still moves on, and the card says so.
+    d.app.learn_predict(0).unwrap();
+    let card = d.app.card().unwrap();
+    let predict = card.predict.as_ref().unwrap();
+    assert_eq!(predict.chosen, Some(0));
+    assert_ne!(predict.chosen, Some(predict.answer), "that guess was wrong");
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(
+        step(&d),
+        "guess-hold",
+        "the answer stays on show until Next"
+    );
+    d.app.learn_move(super::learn::Move::Next);
+    d.frame();
+    assert_eq!(step(&d), "see-hold", "an answer ticks the question");
+    assert!(d.app.card().unwrap().predict.is_none(), "no question here");
+    assert!(d.app.learn_predict(1).is_err(), "no question to answer");
+}

@@ -187,6 +187,10 @@ pub(super) enum Ask {
     ExportWireCut,
     /// Set a wire production rule of the project (`None` back to its default).
     SetWireRule(&'static str, Option<f64>),
+    /// Set or clear the cabinet entry point of a plate (mm, plate coordinates).
+    SetEntryPoint(StructureId, Option<(f64, f64)>),
+    /// Set or clear the stated wire length outside the entry (mm).
+    SetEntryOutside(StructureId, Option<f64>),
     ExportWireProduction,
     OpenBench,
     ExportWiringDxf(StructureId),
@@ -347,6 +351,42 @@ pub(super) fn problem_lines(
         if p.size.guessed {
             lines.push("Size is a guess: the part has none".to_owned());
         }
+    }
+    lines
+}
+
+/// What is wrong with the panel as a whole, in words: the problems the count
+/// in the status bar includes that belong to no single device (the wiring
+/// openings, the room for the door, the door's sweep, tight depth). Without
+/// these the problems pill opened an empty list.
+pub(super) fn panel_problem_lines(
+    layout: &CabinetLayout,
+    tag_of: &impl Fn(u64) -> String,
+) -> Vec<String> {
+    let mut lines: Vec<String> = layout.opening_problems.clone();
+    if let Some(door) = layout.door_report() {
+        for &(id, gap) in &door.tight {
+            lines.push(format!(
+                "{} leaves only {gap:.0} mm in front of it: the door nearly touches",
+                tag_of(id)
+            ));
+        }
+        if door.plate_too_big {
+            lines.push("The mounting plate is bigger than the inside of the enclosure".to_owned());
+        }
+        if let Some(short) = door.front_short {
+            lines.push(format!(
+                "The open door needs {short:.0} mm more free room in front of the enclosure"
+            ));
+        }
+        if let Some(short) = door.hinge_side_short {
+            lines.push(format!(
+                "The open door needs {short:.0} mm more free room beside the hinge side"
+            ));
+        }
+    }
+    if let Some(swing) = layout.swing_report() {
+        lines.extend(swing.hits.iter().map(|h| h.message(tag_of)));
     }
     lines
 }
@@ -1330,7 +1370,10 @@ impl NovoApp {
                                 ui.close();
                             }
                         }
-                        for line in rail_duct_lines(shown) {
+                        for line in rail_duct_lines(shown)
+                            .into_iter()
+                            .chain(panel_problem_lines(shown, &tag_of))
+                        {
                             ui.label(line);
                         }
                     });
@@ -2345,6 +2388,20 @@ impl NovoApp {
             Ask::SetWireRule(key, value) => {
                 self.cabinet_edit("Wire rule", move |tx| {
                     novo_routing::project_rules::set_rule(tx, key, value)
+                });
+            }
+            Ask::SetEntryPoint(plate, point) => {
+                self.cabinet_edit("Cabinet entry point", move |tx| {
+                    novo_routing::entry::set_entry_point(
+                        tx,
+                        plate,
+                        point.map(|(x, y)| novo_routing::Point::new(x, y)),
+                    )
+                });
+            }
+            Ask::SetEntryOutside(plate, mm) => {
+                self.cabinet_edit("Wire outside the cabinet entry", move |tx| {
+                    novo_routing::entry::set_outside_mm(tx, plate, mm)
                 });
             }
             Ask::ExportWireCut => {

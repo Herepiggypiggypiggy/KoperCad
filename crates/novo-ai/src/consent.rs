@@ -48,7 +48,9 @@ impl DataScope {
     pub fn describes(self) -> &'static str {
         match self {
             Self::None => {
-                "Only the messages you type are sent. Claude cannot look at your drawing."
+                "Only the messages you type are sent, a picture of the window or a datasheet \
+                 PDF if you choose to send one, and the text of a button that says “with \
+                 Claude” when you press it. Claude cannot look at your drawing on its own."
             }
             Self::Outline => {
                 "The project name, page names and titles, device tags and counts are sent \
@@ -60,8 +62,8 @@ impl DataScope {
             }
             Self::Project => {
                 "Everything in the open project can be sent when Claude asks: devices, \
-                 parts, wires, terminals, cabinet layout and notes. Use this only for \
-                 projects you are allowed to share with Anthropic."
+                 parts, wires, terminals, cabinet layout, notes, the design-check problems and wire-number conflicts. Use \
+                 this only for projects you are allowed to share with Anthropic."
             }
         }
     }
@@ -80,7 +82,7 @@ impl DataScope {
 }
 
 /// Bump when the wording of what is sent changes, so people agree again.
-pub const CONSENT_VERSION: u32 = 1;
+pub const CONSENT_VERSION: u32 = 4;
 
 /// What the person agreed to.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -121,7 +123,8 @@ impl Consent {
 pub const NOTICE: &str = "Your messages, and the project data allowed above, are sent over the \
 internet to Anthropic's Claude API using your own API key. Anthropic's terms and your account's \
 data settings apply to them. Claude can be wrong: check what it says, especially about \
-electrical safety, ratings and standards. While this feature is off, the only thing ever sent \
+electrical safety, ratings and standards. Claude can suggest changes to your project; each one \
+waits for you to press Apply and is one Undo step. While this feature is off, the only thing ever sent \
 is your key, when you press Check key.";
 
 #[cfg(test)]

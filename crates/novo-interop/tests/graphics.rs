@@ -44,7 +44,7 @@ fn the_pages_get_their_lines_and_boxes_as_a_background_drawing() {
     let page = doc
         .project()
         .pages()
-        .find(|p| p.name.starts_with("=A1+CAB1/1"))
+        .find(|p| p.name == "1" && p.structure.to_string() == "=A1+CAB1")
         .expect("the schematic page");
     let text = underlay::stored_text(&page.properties).expect("a background drawing");
     assert!(text.contains("+CAB"), "the location box carries its name");
@@ -64,6 +64,23 @@ fn the_mounting_plate_sheet_becomes_a_cabinet_with_rails_ducts_and_placements() 
     let plan = plan_pxf(doc.project(), &f, &PxfOptions::default());
     assert!(plan.report().text().contains("Cabinet +CAB1"));
     assert!(!plan.report().text().contains("could not be placed"));
+    // The footprints and rails come from drawn outlines: said so, not exact.
+    let report = plan.report();
+    assert!(
+        report
+            .guessed
+            .iter()
+            .any(|g| g.what == "device footprints on +CAB1" && g.count > 0),
+        "{}",
+        report.text()
+    );
+    assert!(
+        report
+            .guessed
+            .iter()
+            .any(|g| g.what == "rails and ducts on +CAB1")
+    );
+    assert!(!report.is_exact());
     plan.apply(&mut doc).unwrap();
     let p = doc.project();
     let s = p.structure_by_tag(&tag("+CAB1")).expect("the location");

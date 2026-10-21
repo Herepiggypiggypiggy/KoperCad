@@ -167,7 +167,13 @@ fn the_report_adds_up_stock_ferrules_and_duct_fill() {
         .iter()
         .map(|r| r[2].parse::<i64>().unwrap())
         .sum();
-    assert_eq!(pieces as usize, jobs.len());
+    // The stock is hookup wire; the cores of a cable are counted with it.
+    let cores: i64 = by("cables")
+        .text_rows()
+        .iter()
+        .map(|r| r[1].parse::<i64>().unwrap())
+        .sum();
+    assert_eq!((pieces + cores) as usize, jobs.len());
     let ferrules: i64 = by("ferrules")
         .text_rows()
         .iter()

@@ -16,8 +16,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use novo_core::{
-    CabinetPlacement, Device, DeviceId, DeviceKind, DeviceTag, Endpoint, Project, SymbolRole,
-    TerminalId, Value,
+    CabinetPlacement, Device, DeviceId, DeviceKind, DeviceTag, Direction, Endpoint, PageId,
+    Project, SymbolId, SymbolRole, TerminalId, Value,
 };
 
 use super::caex::{El, guid, write};
@@ -203,6 +203,44 @@ fn structure_el(name: &str, description: &str, enclosure: bool, plate: Option<(f
     el
 }
 
+/// The device word the drawing profile gives a library symbol, for tools
+/// that do not know KoperCAD's own `Symbol` key.
+fn kind_of(key: &str) -> &'static str {
+    let id = key.trim_start_matches("iec/");
+    match id.split('/').next().unwrap_or_default() {
+        "coils" => "coil",
+        "contacts" if id.contains("thermal") => "thermal_switch",
+        "contacts" => "contact",
+        "contactors" => "power_poles",
+        "motors" => "motor",
+        "signalling" => "lamp",
+        "earth" => "earth",
+        "terminals" if id.contains("plug") || id.contains("socket") => "plug",
+        "terminals" => "terminal",
+        "connectivity" if id.ends_with("interruption_point") => "interruption",
+        "connectivity" => "pin",
+        _ => "generic",
+    }
+}
+
+fn face(d: Direction) -> &'static str {
+    match d {
+        Direction::Up => "up",
+        Direction::Down => "down",
+        Direction::Left => "left",
+        Direction::Right => "right",
+    }
+}
+
+/// The label a page goes by in the file: its structure and name.
+fn page_label(page: &novo_core::Page) -> String {
+    if page.structure.is_empty() {
+        page.name.clone()
+    } else {
+        format!("{}/{}", page.structure, page.name)
+    }
+}
+
 /// The AutomationML file of a project.
 pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
     let mut report = Report::default();
@@ -244,6 +282,97 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
         report.moved("terminals", project.terminals_of_strip(strip.id).len());
     }
 
+    // Drawn symbols: one element per symbol under its device or strip (an
+    // interruption point under its page), with the pins where they sit on the
+    // page. The file's y runs up from the bottom of the sheet.
+    let mut symbol_els: BTreeMap<DeviceId, Vec<El>> = BTreeMap::new();
+    let mut page_symbols: BTreeMap<PageId, Vec<El>> = BTreeMap::new();
+    let mut drawn_pin: BTreeMap<(SymbolId, u16), String> = BTreeMap::new();
+    let (mut drawn, mut multi_level, mut undrawn) = (0usize, 0usize, 0usize);
+    for sym in project.symbols() {
+        let Some(page) = project.page(sym.page) else {
+            continue;
+        };
+        let height = page.format.size_mm().1;
+        let sid = guid("symbol", &sym.id.raw().to_string());
+        let mut el = El::new("InternalElement")
+            .attr("ID", sid.clone())
+            .attr("Name", sym.symbol.0.clone());
+        el.push(string("Page", &page_label(page)));
+        el.push(string("Kind", kind_of(sym.symbol.0.as_str())));
+        el.push(string("Symbol", sym.symbol.0.as_str()));
+        el.push(frame(
+            sym.placement.origin.x,
+            height - sym.placement.origin.y,
+            0.0,
+            0.0,
+        ));
+        let owner = match &sym.role {
+            SymbolRole::Device { device, .. } => Some(*device),
+            SymbolRole::Terminal { terminals } => {
+                if terminals.len() > 1 {
+                    multi_level += 1;
+                }
+                let first = terminals.first().and_then(|t| project.terminal(*t));
+                if let Some(t) = first {
+                    el.push(string("Terminal", &t.name));
+                }
+                first.map(|t| t.strip)
+            }
+            SymbolRole::Interruption { name } => {
+                el.push(string("Net", name));
+                None
+            }
+            // A free symbol (an earth, a lamp) has no owner but is drawn.
+            SymbolRole::Unassigned => None,
+            _ => {
+                undrawn += 1;
+                continue;
+            }
+        };
+        for (i, pin) in sym.pins.iter().enumerate() {
+            let at = sym.pin_position(i as u16).unwrap_or(sym.placement.origin);
+            let id = guid("symbolpin", &format!("{}:{i}", sym.id.raw()));
+            drawn_pin.insert((sym.id, i as u16), id.clone());
+            let n = crate::sheets::number_text;
+            let mut pe = El::new("ExternalInterface")
+                .attr("ID", id)
+                .attr("Name", pin.name.clone());
+            pe.push(El::attribute(
+                "X",
+                "xs:double",
+                n(at.x - sym.placement.origin.x),
+            ));
+            // Page y runs down, the file's up.
+            pe.push(El::attribute(
+                "Y",
+                "xs:double",
+                n(-(at.y - sym.placement.origin.y)),
+            ));
+            if let Some(d) = pin.direction {
+                pe.push(string("Faces", face(sym.placement.apply_direction(d))));
+            }
+            el.push(pe);
+        }
+        el.push(role("Symbol"));
+        drawn += 1;
+        match owner {
+            Some(d) => symbol_els.entry(d).or_default().push(el),
+            None => page_symbols.entry(sym.page).or_default().push(el),
+        }
+    }
+    report.moved("drawn symbols", drawn);
+    report.lost(
+        "drawn symbols without a device or strip",
+        undrawn,
+        "a symbol assigned to nothing has no element to hang under",
+    );
+    report.lost(
+        "terminal levels",
+        multi_level,
+        "a multi-level terminal symbol is written with its first terminal",
+    );
+
     // Nets: member pins, resolved to device pins and terminals.
     let netlist = project.netlist();
     let mut pin_ids: BTreeMap<(DeviceId, String), String> = BTreeMap::new();
@@ -252,6 +381,9 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
     let mut unresolved = 0usize;
     for net in netlist.nets() {
         let mut members: BTreeSet<(String, String)> = BTreeSet::new();
+        // The drawn pins each member stands for.
+        let mut drawn_of: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        let mut interruptions: BTreeSet<(String, String)> = BTreeSet::new();
         for end in &net.endpoints {
             let Endpoint::Pin { symbol, pin } = *end else {
                 continue;
@@ -262,6 +394,7 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
             let Some(name) = sym.pins.get(usize::from(pin)).map(|p| p.name.clone()) else {
                 continue;
             };
+            let on_page = drawn_pin.get(&(symbol, pin)).cloned();
             match &sym.role {
                 SymbolRole::Device { device, .. } => {
                     let id = pin_ids
@@ -271,6 +404,9 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
                     let label = project
                         .pin_designation(novo_core::PinRef::new(symbol, pin))
                         .unwrap_or_else(|| name.clone());
+                    if let Some(d) = on_page {
+                        drawn_of.entry(id.clone()).or_default().insert(d);
+                    }
                     members.insert((id, label));
                 }
                 SymbolRole::Terminal { .. } => {
@@ -278,9 +414,20 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
                         && let Some(id) = terminal_ids.get(&t)
                     {
                         let label = project.terminal_designation(t).unwrap_or_default();
+                        if let Some(d) = on_page {
+                            drawn_of.entry(id.clone()).or_default().insert(d);
+                        }
                         members.insert((id.clone(), label));
                     } else {
                         unresolved += 1;
+                    }
+                }
+                // An interruption point is a drawn pin of its own: the net
+                // point links to it so a reader sees the page-to-page
+                // continuation as drawn and adds none of its own.
+                SymbolRole::Interruption { name } => {
+                    if let Some(d) = on_page {
+                        interruptions.insert((d, name.clone()));
                     }
                 }
                 _ => unresolved += 1,
@@ -288,6 +435,9 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
         }
         if members.len() < 2 {
             continue;
+        }
+        for (d, name) in interruptions {
+            members.insert((d, name));
         }
         let potential = net
             .potential()
@@ -324,8 +474,16 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
                 El::new("InternalLink")
                     .attr("Name", label.clone())
                     .attr("RefPartnerSideA", member.clone())
-                    .attr("RefPartnerSideB", point),
+                    .attr("RefPartnerSideB", point.clone()),
             );
+            for d in drawn_of.get(member).into_iter().flatten() {
+                links.push(
+                    El::new("InternalLink")
+                        .attr("Name", label.clone())
+                        .attr("RefPartnerSideA", d.clone())
+                        .attr("RefPartnerSideB", point.clone()),
+                );
+            }
         }
         net_els.push(el);
     }
@@ -356,6 +514,9 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
         }
         for i in interfaces.remove(&d.id).unwrap_or_default() {
             el.push(i);
+        }
+        for sy in symbol_els.remove(&d.id).unwrap_or_default() {
+            el.push(sy);
         }
         tree.add(&d.tag, el);
         devices += 1;
@@ -431,6 +592,29 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
     for c in tree.into_children() {
         root.push(c);
     }
+    let mut page_group = El::new("InternalElement")
+        .attr("ID", guid("pages", &name))
+        .attr("Name", "Pages");
+    page_group.push(role("PageGroup"));
+    let mut pages = 0usize;
+    for page in project.pages() {
+        let mut el = El::new("InternalElement")
+            .attr("ID", guid("page", &page.id.raw().to_string()))
+            .attr("Name", page_label(page));
+        if !page.title.is_empty() {
+            el.push(string("Title", &page.title));
+        }
+        el.push(role("Page"));
+        for sy in page_symbols.remove(&page.id).unwrap_or_default() {
+            el.push(sy);
+        }
+        page_group.push(el);
+        pages += 1;
+    }
+    if pages > 0 {
+        root.push(page_group);
+    }
+    report.moved("pages", pages);
     if !net_els.is_empty() {
         let mut group = El::new("InternalElement")
             .attr("ID", guid("nets", &name))
@@ -446,9 +630,9 @@ pub fn export_project(project: &Project, options: &AmlOptions) -> AmlExport {
     }
 
     report.lost(
-        "pages and drawings",
+        "page graphics",
         project.pages().count(),
-        "AutomationML carries the plant structure and connections, not the drawn pages",
+        "pages, their titles and the placed symbols are written; texts, lines and frames are not yet",
     );
     report.lost(
         "wire routes",

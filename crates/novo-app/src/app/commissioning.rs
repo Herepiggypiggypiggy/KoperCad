@@ -10,6 +10,7 @@
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use eframe::egui;
@@ -17,9 +18,10 @@ use novo_canvas::marks::{Mark, MarkKind};
 use novo_canvas::model::item_id;
 use novo_commissioning::{
     CheckKind, CheckRecord, CheckState, CommissioningStore, FieldPackage, Progress, PunchItem,
-    PunchState, RedlineState, Scope, Severity, Signature, Target, TargetInfo, progress, targets,
+    PunchState, RedlineState, Scope, Severity, Signature, Target, TargetInfo, WalkOrder, WalkScope,
+    WireKind, WirePlan, WireStep, next_open, next_open_with, progress, targets, walk_order_with,
 };
-use novo_core::{PageId, Project};
+use novo_core::{PageId, Project, WireId};
 use novo_pdf::{ReportFileFormat, ReportPdfOptions};
 use novo_reports::CsvOptions;
 use novo_theme::{Density, Palette, icons, space, widgets};
@@ -48,6 +50,7 @@ pub(super) const TABLET_PANEL_WIDTH: f32 = 380.0;
 enum FieldAction {
     Export,
     Import,
+    PunchPdf,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -66,7 +69,7 @@ pub(crate) struct CommissioningMode {
     pub(super) selected: Option<Target>,
     /// The measured value and note for the next decision.
     value: String,
-    note: String,
+    pub(super) note: String,
     punch_title: String,
     punch_severity: Severity,
     show_closed: bool,
@@ -88,6 +91,25 @@ pub(crate) struct CommissioningMode {
     pub(super) signing: Option<SignDraft>,
     /// The pictures of the punch items, shown small and large.
     pub(super) viewer: PhotoViewer,
+    /// The wire figures of the walk (ends, ferrules, length), kept until the
+    /// project changes: computing them routes every wire.
+    plan: Option<(u64, Rc<WirePlan>)>,
+    /// What "Next open" and Space visit: everything, or the wires only.
+    pub(super) scope: WalkScope,
+    /// The order the wires are walked in.
+    pub(super) order: WalkOrder,
+    /// A Fail waiting for its reason: the note is open for typing.
+    fail_pending: Option<(Target, CheckKind)>,
+    /// Put the cursor in the Note field on the next frame.
+    focus_note: bool,
+    /// A wire the walk moved to; the drawing selects it after the panel.
+    pub(super) reveal_wire: Option<(PageId, WireId)>,
+    /// A wire to show in the 3D view, asked for on the walk card.
+    show_3d: Option<WireId>,
+    /// The last big tick ended the walk; the panel says so.
+    pub(super) finished: bool,
+    /// What each big tick passed, so Back can take it back.
+    walked: Vec<(Target, Vec<CheckKind>)>,
 }
 
 impl CommissioningMode {
@@ -115,7 +137,135 @@ impl CommissioningMode {
             photo_for: None,
             signing: None,
             viewer: Default::default(),
+            plan: None,
+            scope: WalkScope::Wires,
+            order: WalkOrder::Number,
+            fail_pending: None,
+            focus_note: false,
+            reveal_wire: None,
+            show_3d: None,
+            finished: false,
+            walked: Vec::new(),
         }
+    }
+
+    /// The walk's wire figures for the project as it is now.
+    fn plan(&mut self, project: &Project) -> Rc<WirePlan> {
+        let revision = project.revision();
+        match &self.plan {
+            Some((r, plan)) if *r == revision => Rc::clone(plan),
+            _ => {
+                let plan = Rc::new(WirePlan::of(project));
+                self.plan = Some((revision, Rc::clone(&plan)));
+                plan
+            }
+        }
+    }
+
+    /// The next open target after `from` in the chosen walking order.
+    fn next(
+        &mut self,
+        project: &Project,
+        from: Option<Target>,
+        current: Option<PageId>,
+    ) -> Option<TargetInfo> {
+        let plan = self.plan(project);
+        next_open_with(
+            project,
+            &plan,
+            &self.store,
+            from,
+            current,
+            self.scope,
+            self.order,
+        )
+    }
+
+    /// Fail for a check: the first press opens the Note with the wire's ends
+    /// in it so the reason can be typed, the second (or Enter) records it.
+    /// A note typed beforehand records at once.
+    fn fail(&mut self, target: Target, check: CheckKind, hint: &str) {
+        if self.fail_pending == Some((target, check)) || !self.note.trim().is_empty() {
+            self.fail_pending = None;
+            self.decide(target, check, CheckState::Failed);
+        } else {
+            self.note = format!("{hint}: ");
+            self.fail_pending = Some((target, check));
+            self.focus_note = true;
+        }
+    }
+
+    /// Moves the walk to `info`: selects it and asks the drawing to show it
+    /// (a wire is selected there, so it is lit on its page).
+    fn walk_to(
+        &mut self,
+        project: &Project,
+        info: &TargetInfo,
+        current: Option<PageId>,
+        go: &mut Option<Place>,
+    ) {
+        self.selected = Some(info.target);
+        *go = place_of(project, info, current);
+        if let (Target::Wire(w), Some(place)) = (info.target, *go) {
+            self.reveal_wire = Some((place.page, w));
+        }
+    }
+
+    /// The big tick: passes every open check of the selected target and
+    /// moves to the next open one. With nothing selected it starts the walk.
+    /// Returns whether the walk is finished: everything in its scope is
+    /// decided.
+    pub(super) fn tick(
+        &mut self,
+        project: &Project,
+        current: Option<PageId>,
+        go: &mut Option<Place>,
+    ) -> bool {
+        let from = self.selected;
+        if let Some(target) = from {
+            let mut passed = Vec::new();
+            for &check in target.checks() {
+                if self.store.state(target, check) == CheckState::Pending {
+                    self.decide(target, check, CheckState::Passed);
+                    passed.push(check);
+                }
+            }
+            if !passed.is_empty() {
+                self.walked.push((target, passed));
+            }
+        }
+        match self.next(project, from, current) {
+            Some(info) => {
+                self.walk_to(project, &info, current, go);
+                false
+            }
+            None => {
+                self.selected = None;
+                true
+            }
+        }
+    }
+
+    /// Takes back the last big tick: its checks are pending again and the
+    /// walk is on that target. Returns whether there was one.
+    pub(super) fn back(
+        &mut self,
+        project: &Project,
+        current: Option<PageId>,
+        go: &mut Option<Place>,
+    ) -> bool {
+        let Some((target, checks)) = self.walked.pop() else {
+            return false;
+        };
+        for check in checks {
+            self.store.clear_check(target, check);
+        }
+        self.dirty = true;
+        self.finished = false;
+        if let Some(info) = targets(project).into_iter().find(|i| i.target == target) {
+            self.walk_to(project, &info, current, go);
+        }
+        true
     }
 
     /// Decides one check for the person set, with the value and note typed.
@@ -446,14 +596,14 @@ impl NovoApp {
                     "commissioning.punch",
                     "Punch tab",
                     part(1.0),
-                    false,
+                    row.inner && tab == 1,
                 );
                 note_rect(
                     ui.ctx(),
                     "commissioning.redlines",
                     "Redlines tab",
                     part(2.0),
-                    false,
+                    row.inner && tab == 2,
                 );
             });
             // The menu sits on its own row: beside the tabs it took their
@@ -475,7 +625,11 @@ impl NovoApp {
                 "Project",
                 progress(project, &mode.store, Scope::Project),
             );
-            if let Some(page) = current {
+            // On a tablet the walk card needs the height: one bar is enough.
+            let walking_on_tablet = tablet && mode.selected.is_some() && mode.tab == Tab::Checks;
+            if let Some(page) = current
+                && !walking_on_tablet
+            {
                 ui.add_space(space::S);
                 progress_bar(
                     ui,
@@ -509,6 +663,7 @@ impl NovoApp {
         if let Some(place) = go {
             self.jump(place, true);
         }
+        self.apply_walk_requests();
         if let Some(id) = self
             .wb
             .commissioning
@@ -528,6 +683,7 @@ impl NovoApp {
         match field {
             Some(FieldAction::Export) => self.export_field_results(),
             Some(FieldAction::Import) => self.import_field_results(),
+            Some(FieldAction::PunchPdf) => self.export_punch_list_pdf(),
             None => {}
         }
         false
@@ -615,6 +771,121 @@ impl NovoApp {
             report.summary()
         );
         self.message(Level::Info, text);
+    }
+
+    /// Does what the walk asked of the drawing and the views: selects the
+    /// wire it moved to, or shows a wire in 3D.
+    fn apply_walk_requests(&mut self) {
+        let Some(mode) = self.wb.commissioning.as_mut() else {
+            return;
+        };
+        let reveal = mode.reveal_wire.take();
+        let show_3d = mode.show_3d.take();
+        if let Some((page, wire)) = reveal {
+            self.wb.pending_item = Some((page, novo_core::AnyId::Wire(wire)));
+        }
+        if let Some(wire) = show_3d {
+            self.show_wire_in_3d(wire);
+        }
+    }
+
+    /// Opens the 3D view with `wire` selected. The commissioning data is
+    /// kept in the project in the frame it changes, so leaving is safe.
+    fn show_wire_in_3d(&mut self, wire: WireId) {
+        if let Some(mode) = self.wb.commissioning.as_mut()
+            && mode.dirty
+        {
+            mode.dirty = false;
+            let json = mode.store.to_json();
+            self.backend.set_commissioning_json(&json);
+        }
+        self.switch_workspace(Workspace::View3d);
+        if self.workspace() == Workspace::View3d {
+            self.view3d.view.state.selection =
+                std::collections::BTreeSet::from([novo_view3d::ItemId::new(
+                    novo_view3d::ItemKind::Wire,
+                    wire.raw(),
+                )]);
+        }
+    }
+
+    /// A tap of Space in the Commissioning workspace: the big tick, or the
+    /// start of the walk when nothing is selected yet. Returns whether it
+    /// was taken (otherwise Space opens the command field as everywhere).
+    pub(super) fn commissioning_space(&mut self) -> bool {
+        if !self.commissioning_pins_panel() {
+            return false;
+        }
+        self.load_commissioning();
+        let current = self.current_page;
+        let mut go = None;
+        let finished = {
+            let (Some(mode), Some(doc)) = (self.wb.commissioning.as_mut(), self.backend.document())
+            else {
+                return false;
+            };
+            let finished = mode.tick(doc.project(), current, &mut go);
+            mode.finished = finished;
+            finished
+        };
+        if let Some(place) = go {
+            self.jump(place, true);
+        }
+        self.apply_walk_requests();
+        if finished {
+            self.message(Level::Info, "Everything in the walk is decided");
+        }
+        true
+    }
+
+    /// The `export.punch_list` command: the open punch items as a PDF.
+    pub(super) fn export_punch_list_pdf(&mut self) {
+        let Some(name) = self.project_name() else {
+            return;
+        };
+        self.load_commissioning();
+        let file = self.backend.file().filter(|_| !self.backend.is_untitled());
+        let Some(path) = report_path_for(
+            "punch list",
+            file.as_deref(),
+            projects_dir().as_deref(),
+            &name,
+            "pdf",
+        ) else {
+            self.message(Level::Error, "Could not find the Documents folder");
+            return;
+        };
+        let Some(mode) = self.wb.commissioning.as_ref() else {
+            return;
+        };
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        let input = novo_commissioning::to_report_input(
+            project,
+            &mode.store,
+            novo_reports::commissioning::default_sign_offs(&mode.who),
+        );
+        let report = novo_reports::commissioning::punch_list_report(&input);
+        let options = ReportPdfOptions {
+            title: format!("{name}, punch list"),
+            footer_right: now().chars().take(10).collect(),
+            language: self.report_translator(),
+            ..ReportPdfOptions::default()
+        };
+        let result = novo_pdf::report_bytes(&report, ReportFileFormat::Pdf, &options)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| write_replacing(&path, &bytes).map_err(|e| e.to_string()));
+        match result {
+            Ok(()) => {
+                self.message_file(format!("Exported {}", path.display()), &path);
+                self.wb.last_export = Some(path);
+            }
+            Err(e) => self.message(
+                Level::Error,
+                format!("Could not export the punch list: {e}"),
+            ),
+        }
     }
 
     /// The `export.commissioning` command: the report as a PDF.
@@ -745,7 +1016,7 @@ fn header_menu(
     let mut export = None;
     let mut field = None;
     let name = if mode.who.trim().is_empty() {
-        "By".to_owned()
+        "Your name".to_owned()
     } else {
         format!("By {}", mode.who.trim())
     };
@@ -777,6 +1048,18 @@ fn header_menu(
                 export = Some(format);
                 ui.close();
             }
+        }
+        let punch = widgets::menu_item(
+            ui,
+            Some(icons::FILE_TEXT),
+            "Write punch list PDF",
+            None,
+            true,
+        )
+        .on_hover_text("Only the open punch items, to carry round the cabinet");
+        if punch.clicked() {
+            field = Some(FieldAction::PunchPdf);
+            ui.close();
         }
         ui.add_space(space::S);
         widgets::section_label(ui, "Field results");
@@ -840,126 +1123,192 @@ fn checks_tab(
     current: Option<PageId>,
     go: &mut Option<Place>,
 ) {
+    if let Some((target, _)) = mode.fail_pending
+        && Some(target) != mode.selected
+    {
+        // The walk moved on before the reason was given.
+        mode.fail_pending = None;
+        mode.note.clear();
+    }
     let all = targets(project);
     let pages = project.pages_in_order();
-    // The next open target: the current page first, then the others in page order.
-    let is_open = |mode: &CommissioningMode, i: &TargetInfo| {
-        i.target
-            .checks()
-            .iter()
-            .any(|&c| mode.store.state(i.target, c) == CheckState::Pending)
-    };
-    let next = all
-        .iter()
-        .find(|i| current.is_some_and(|p| i.pages.contains(&p)) && is_open(mode, i))
-        .or_else(|| {
-            pages.iter().find_map(|page| {
-                all.iter()
-                    .find(|i| i.pages.contains(&page.id) && is_open(mode, i))
-            })
-        })
-        .cloned();
-    ui.horizontal(|ui| {
-        let next_open = widgets::primary_button(ui, "Next open")
-            .on_hover_text("Select the next wire, terminal or device with an open check");
+    let plan = mode.plan(project);
+    let next = mode.next(project, mode.selected, current);
+    ui.horizontal_wrapped(|ui| {
+        let next_open_button = widgets::primary_button(ui, "Next open")
+            .on_hover_text("Go to the next wire, terminal or device with an open check");
         note_ctx(
             ui.ctx(),
             "commissioning.next_open",
             "Next open button",
-            &next_open,
+            &next_open_button,
         );
-        if next_open.clicked() {
+        if next_open_button.clicked() {
             match &next {
-                Some(info) => {
-                    mode.selected = Some(info.target);
-                    *go = place_of(project, info, current);
-                }
+                Some(info) => mode.walk_to(project, info, current, go),
                 None => mode.selected = None,
             }
         }
-        if next.is_none() {
-            ui.weak("Everything is decided");
+        let mut wires_only = mode.scope == WalkScope::Wires;
+        if ui
+            .checkbox(&mut wires_only, "Wires only")
+            .on_hover_text("Walk the wires one by one; leave terminals and devices for later")
+            .changed()
+        {
+            mode.scope = if wires_only {
+                WalkScope::Wires
+            } else {
+                WalkScope::All
+            };
+        }
+        let mut by_place = mode.order == WalkOrder::Place;
+        if ui
+            .checkbox(&mut by_place, "By place")
+            .on_hover_text("Walk the wires by the device or strip they start on, the way the hand moves at the cabinet")
+            .changed()
+        {
+            mode.order = if by_place {
+                WalkOrder::Place
+            } else {
+                WalkOrder::Number
+            };
+        }
+        if next.is_none() || mode.finished {
+            let wires_done = mode.scope == WalkScope::Wires
+                && next_open(project, &mode.store, None, None, WalkScope::All).is_some();
+            ui.weak(if wires_done {
+                "Wires done. Untick Wires only for terminals and devices"
+            } else if all.is_empty() {
+                "Nothing to check yet: draw wires, devices or terminals first"
+            } else {
+                "Everything is decided. Check the Punch list"
+            });
         }
     });
     let p = Palette::of(ui);
 
     if let Some(info) = all.iter().find(|i| Some(i.target) == mode.selected) {
         ui.separator();
-        ui.strong(&info.label);
-        ui.horizontal(|ui| {
-            ui.add(
-                egui::TextEdit::singleline(&mut mode.value)
-                    .hint_text("Value (2.5 Nm, 0.2 ohm)")
-                    .desired_width(130.0),
-            );
-            ui.add(
-                egui::TextEdit::singleline(&mut mode.note)
-                    .hint_text("Note")
-                    .desired_width(f32::INFINITY),
-            );
-        });
-        let first_check = info.target.checks().first().copied();
-        for &check in info.target.checks() {
-            let first = Some(check) == first_check;
-            let state = mode.store.state(info.target, check);
-            ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing.x = space::S;
-                let (icon, color) = state_icon(p, state);
-                ui.label(egui::RichText::new(icon).color(color));
-                ui.label(check.label());
-                let pass = ui.button("Pass");
-                let fail = ui.button("Fail");
-                if first {
-                    note_ctx(ui.ctx(), "commissioning.pass", "Pass button", &pass);
-                    note_ctx(ui.ctx(), "commissioning.fail", "Fail button", &fail);
+        let step = match info.target {
+            Target::Wire(w) => plan.step(w),
+            _ => None,
+        };
+        // The card keeps to part of the panel and scrolls inside itself, so
+        // the list below always has room (on a tablet it filled the column).
+        let card_height = (ui.available_height() - 70.0).max(200.0);
+        egui::ScrollArea::vertical()
+            .id_salt("walk_card")
+            .max_height(card_height)
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                walk_card(ui, mode, project, info, step, current, go);
+                ui.add_space(space::S);
+                ui.horizontal(|ui| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut mode.value)
+                            .hint_text("Value")
+                            .desired_width(80.0),
+                    );
+                    let note = ui.add(
+                        egui::TextEdit::singleline(&mut mode.note)
+                            .hint_text("Note")
+                            .desired_width(f32::INFINITY),
+                    );
+                    if std::mem::take(&mut mode.focus_note) {
+                        note.request_focus();
+                        // Cursor after the prefilled ends, ready to type the reason.
+                        if let Some(mut state) = egui::TextEdit::load_state(ui.ctx(), note.id) {
+                            let end = egui::text::CCursor::new(mode.note.chars().count());
+                            state
+                                .cursor
+                                .set_char_range(Some(egui::text::CCursorRange::one(end)));
+                            state.store(ui.ctx(), note.id);
+                        }
+                    }
+                    if note.lost_focus()
+                        && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                        && let Some((target, check)) = mode.fail_pending
+                    {
+                        mode.fail_pending = None;
+                        mode.decide(target, check, CheckState::Failed);
+                    }
+                });
+                if let Some((_, check)) = mode.fail_pending {
+                    ui.weak(format!(
+                        "Type why {} failed, then Enter or Fail again",
+                        check.label().to_lowercase()
+                    ));
                 }
-                if pass.clicked() {
-                    mode.decide(info.target, check, CheckState::Passed);
-                }
-                if fail.clicked() {
-                    mode.decide(info.target, check, CheckState::Failed);
-                }
-                if ui.button("N/A").clicked() {
-                    mode.decide(info.target, check, CheckState::NotApplicable);
-                }
-                if state != CheckState::Pending && ui.button("Reset").clicked() {
-                    mode.store.clear_check(info.target, check);
-                    mode.dirty = true;
-                }
-            });
-            // A failure raises a punch item by itself; say so and link to it.
-            if state == CheckState::Failed {
-                let item = mode
-                    .store
-                    .punch_items()
-                    .find(|p| {
-                        p.target == Some(info.target)
-                            && p.check == Some(check)
-                            && !p.state.is_closed()
-                    })
-                    .map(|p| (p.title.clone(), severity_label(p.severity)));
-                if let Some((title, severity)) = item {
+                let fail_hint = match step {
+                    Some(s) if !s.from.is_empty() || !s.to.is_empty() => {
+                        format!("{} to {}", s.from, s.to)
+                    }
+                    _ => info.label.clone(),
+                };
+                walk_keys(ui.ctx(), mode, project, info, &fail_hint, current, go);
+                let first_check = info.target.checks().first().copied();
+                for &check in info.target.checks() {
+                    let first = Some(check) == first_check;
+                    let state = mode.store.state(info.target, check);
                     ui.horizontal_wrapped(|ui| {
-                        ui.weak(format!("Punch item raised: {title} ({severity})"));
-                        if ui.small_button("Open punch list").clicked() {
-                            mode.tab = Tab::Punch;
+                        ui.spacing_mut().item_spacing.x = space::S;
+                        let (icon, color) = state_icon(p, state);
+                        ui.label(egui::RichText::new(icon).color(color));
+                        ui.label(check.label());
+                        let pass = ui.button("Pass");
+                        let fail = ui.button("Fail");
+                        if first {
+                            note_ctx(ui.ctx(), "commissioning.pass", "Pass button", &pass);
+                            note_ctx(ui.ctx(), "commissioning.fail", "Fail button", &fail);
+                        }
+                        if pass.clicked() {
+                            mode.decide(info.target, check, CheckState::Passed);
+                        }
+                        if fail.clicked() {
+                            mode.fail(info.target, check, &fail_hint);
+                        }
+                        if ui.button("N/A").clicked() {
+                            mode.decide(info.target, check, CheckState::NotApplicable);
+                        }
+                        if state != CheckState::Pending && ui.button("Reset").clicked() {
+                            mode.store.clear_check(info.target, check);
+                            mode.dirty = true;
                         }
                     });
+                    // A failure raises a punch item by itself; say so and link to it.
+                    if state == CheckState::Failed {
+                        let item = mode
+                            .store
+                            .punch_items()
+                            .find(|p| {
+                                p.target == Some(info.target)
+                                    && p.check == Some(check)
+                                    && !p.state.is_closed()
+                            })
+                            .map(|p| (p.title.clone(), severity_label(p.severity)));
+                        if let Some((title, severity)) = item {
+                            ui.horizontal_wrapped(|ui| {
+                                ui.weak(format!("Punch item raised: {title} ({severity})"));
+                                if ui.small_button("Open punch list").clicked() {
+                                    mode.tab = Tab::Punch;
+                                }
+                            });
+                        }
+                    }
+                    if let Some(r) = mode.store.record(info.target, check)
+                        && !r.by.is_empty()
+                    {
+                        let detail = [r.value.as_str(), r.note.as_str()]
+                            .iter()
+                            .filter(|t| !t.is_empty())
+                            .copied()
+                            .collect::<Vec<_>>()
+                            .join(" · ");
+                        ui.weak(format!("{}, {} {detail}", r.by, r.at));
+                    }
                 }
-            }
-            if let Some(r) = mode.store.record(info.target, check)
-                && !r.by.is_empty()
-            {
-                let detail = [r.value.as_str(), r.note.as_str()]
-                    .iter()
-                    .filter(|t| !t.is_empty())
-                    .copied()
-                    .collect::<Vec<_>>()
-                    .join(" · ");
-                ui.weak(format!("{}, {} {detail}", r.by, r.at));
-            }
-        }
-        pass_all_open(ui, mode, info.target);
+                pass_all_open(ui, mode, info.target);
+            });
         ui.separator();
     }
 
@@ -1017,14 +1366,31 @@ fn checks_tab(
                 if !open {
                     continue;
                 }
+                let mut on_page = on_page;
+                // Plain wires, then cable cores, each by number, then the
+                // terminals and devices: a number drawn as both a wire and
+                // a core sits in two groups instead of looking like a repeat.
+                on_page.sort_by(|a, b| {
+                    let (ga, gb) = (target_group(a.target, &plan), target_group(b.target, &plan));
+                    ga.cmp(&gb).then_with(|| match (a.target, b.target) {
+                        (Target::Wire(_), Target::Wire(_)) => {
+                            novo_core::natural_cmp(&a.label, &b.label)
+                        }
+                        _ => std::cmp::Ordering::Equal,
+                    })
+                });
                 let mut group = None;
                 for info in on_page {
-                    let kind = target_group(info.target);
+                    let kind = target_group(info.target, &plan);
                     if group != Some(kind) {
                         group = Some(kind);
                         ui.horizontal(|ui| {
                             ui.add_space(space::XL);
-                            ui.label(egui::RichText::new(kind).small().color(p.text_tertiary));
+                            ui.label(
+                                egui::RichText::new(kind.heading())
+                                    .small()
+                                    .color(p.text_tertiary),
+                            );
                         });
                     }
                     let state = target_state(&mode.store, info.target);
@@ -1034,41 +1400,353 @@ fn checks_tab(
                         .iter()
                         .filter(|&&c| mode.store.state(info.target, c) != CheckState::Pending)
                         .count();
-                    let row = widgets::row(ui, mode.selected == Some(info.target), |ui| {
-                        ui.add_space(space::XL);
-                        let (icon, color) = state_icon(p, state);
-                        ui.label(egui::RichText::new(icon).color(color));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            ui.label(
-                                egui::RichText::new(format!(
-                                    "{decided}/{}",
-                                    info.target.checks().len()
-                                ))
-                                .monospace()
-                                .color(p.text_tertiary),
-                            );
+                    let step = match info.target {
+                        Target::Wire(w) => plan.step(w),
+                        _ => None,
+                    };
+                    let height = ui.spacing().interact_size.y + 2.0;
+                    // On a tablet a wire row has a second line with its ends and
+                    // is tall enough for a finger; at the desk it stays one
+                    // line so the list shows as many wires as it can.
+                    let two_lines = step.is_some() && mode.large;
+                    let height = if two_lines { height + 24.0 } else { height };
+                    let row = widgets::row_of_height(
+                        ui,
+                        mode.selected == Some(info.target),
+                        height,
+                        |ui| {
+                            ui.add_space(space::XL);
+                            let (icon, color) = state_icon(p, state);
+                            ui.label(egui::RichText::new(icon).color(color));
                             ui.with_layout(
-                                egui::Layout::left_to_right(egui::Align::Center),
-                                |ui| ui.add(egui::Label::new(&info.label).truncate()),
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    ui.label(
+                                        egui::RichText::new(format!(
+                                            "{decided}/{}",
+                                            info.target.checks().len()
+                                        ))
+                                        .monospace()
+                                        .color(p.text_tertiary),
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::left_to_right(egui::Align::Center),
+                                        |ui| match step {
+                                            Some(step) => wire_row_text(ui, p, step, two_lines),
+                                            None => {
+                                                ui.add(egui::Label::new(&info.label).truncate());
+                                            }
+                                        },
+                                    );
+                                },
                             );
-                        });
-                    });
+                        },
+                    );
                     if row.clicked() {
-                        mode.selected = Some(info.target);
-                        *go = place_of(project, info, current);
+                        mode.walk_to(project, info, current, go);
                     }
                 }
             }
         });
 }
 
+/// The text of a wire's row: the number and what the wire is, and under it
+/// where it goes.
+fn wire_row_text(ui: &mut egui::Ui, p: &Palette, step: &WireStep, two_lines: bool) {
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = 0.0;
+        ui.horizontal(|ui| {
+            let number = if step.number.is_empty() {
+                "no number"
+            } else {
+                &step.number
+            };
+            ui.add(egui::Label::new(egui::RichText::new(number).strong()).truncate());
+            ui.label(
+                egui::RichText::new(step.kind.short())
+                    .small()
+                    .color(p.text_tertiary),
+            );
+        });
+        if !two_lines {
+            return;
+        }
+        let ends = if step.from.is_empty() && step.to.is_empty() {
+            "open ends".to_owned()
+        } else {
+            format!("{}  \u{2192}  {}", step.from, step.to)
+        };
+        ui.add(
+            egui::Label::new(egui::RichText::new(ends).small().color(p.text_secondary)).truncate(),
+        );
+    });
+}
+
+/// The big card of the walk: what the selected target is and where it goes,
+/// and the tick. A wire shows its number, what it is (wire or cable core),
+/// both ends, the ferrule text, length, size and colour; a terminal or
+/// device shows its tag. Space does the same as the big button.
+fn walk_card(
+    ui: &mut egui::Ui,
+    mode: &mut CommissioningMode,
+    project: &Project,
+    info: &TargetInfo,
+    step: Option<&WireStep>,
+    current: Option<PageId>,
+    go: &mut Option<Place>,
+) {
+    let p = Palette::of(ui);
+    let open = info
+        .target
+        .checks()
+        .iter()
+        .filter(|&&c| mode.store.state(info.target, c) == CheckState::Pending)
+        .count();
+    let plan = mode.plan(project);
+    let order = walk_order_with(project, &plan, mode.scope, mode.order);
+    if let Some(at) = order.iter().position(|i| i.target == info.target) {
+        ui.label(
+            egui::RichText::new(format!("{} of {}", at + 1, order.len()))
+                .small()
+                .color(p.text_tertiary),
+        );
+    }
+    ui.horizontal(|ui| {
+        ui.label(
+            egui::RichText::new(if let Some(s) = step.filter(|s| !s.number.is_empty()) {
+                s.number.clone()
+            } else {
+                info.label.clone()
+            })
+            .size(26.0)
+            .strong()
+            .color(p.text_strong),
+        );
+        if let Some(step) = step {
+            let (text, color) = match &step.kind {
+                WireKind::Plain => ("wire".to_owned(), p.text_secondary),
+                WireKind::Core { .. } => (step.kind.short(), p.accent_hover),
+            };
+            ui.label(egui::RichText::new(text).color(color));
+        } else {
+            ui.label(egui::RichText::new(target_group_name(info.target)).color(p.text_secondary));
+        }
+    });
+    if let Some(step) = step {
+        let end =
+            |ui: &mut egui::Ui, caption: &str, designation: &str, ferrule: &Option<String>| {
+                ui.horizontal_wrapped(|ui| {
+                    ui.label(egui::RichText::new(caption).small().color(p.text_tertiary));
+                    let text = if designation.is_empty() {
+                        "open end"
+                    } else {
+                        designation
+                    };
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(text)
+                                .size(17.0)
+                                .monospace()
+                                .color(p.text_primary),
+                        )
+                        .truncate(),
+                    );
+                    let (text, color) = match ferrule {
+                        Some(f) => (format!("ferrule {f}"), p.text_secondary),
+                        None => ("ferrule: not set".to_owned(), p.text_tertiary),
+                    };
+                    ui.label(egui::RichText::new(text).small().color(color));
+                });
+            };
+        end(ui, "FROM", &step.from, &step.ferrule_from);
+        end(ui, "TO  ", &step.to, &step.ferrule_to);
+        let mut facts = Vec::new();
+        if let Some(mm) = step.length_mm {
+            facts.push(format!("cut length {mm:.0} mm"));
+        }
+        if let Some(s) = step.cross_section_mm2 {
+            facts.push(format!("{s} mm\u{b2}"));
+        }
+        if !step.colour.is_empty() {
+            facts.push(step.colour.clone());
+        }
+        if !facts.is_empty() {
+            ui.label(egui::RichText::new(facts.join("  ·  ")).color(p.text_secondary));
+        }
+        let hint = step.same_number_hint();
+        if !hint.is_empty() {
+            ui.label(egui::RichText::new(hint).small().color(p.text_tertiary));
+        }
+    } else {
+        let pages = info
+            .pages
+            .iter()
+            .filter_map(|&pg| project.page(pg).map(|pg| pg.name.clone()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        if !pages.is_empty() {
+            ui.label(egui::RichText::new(format!("Page {pages}")).color(p.text_secondary));
+        }
+    }
+    ui.add_space(space::S);
+    let label = if open == 0 {
+        "All decided".to_owned()
+    } else {
+        let names: Vec<&str> = info
+            .target
+            .checks()
+            .iter()
+            .filter(|&&c| mode.store.state(info.target, c) == CheckState::Pending)
+            .map(|c| c.label())
+            .collect();
+        format!("Pass {} (Space)", names.join(" + ").to_lowercase())
+    };
+    let tick = ui.add_enabled(
+        open > 0,
+        egui::Button::new(
+            egui::RichText::new(label)
+                .size(18.0)
+                .strong()
+                .color(p.on_accent),
+        )
+        .fill(p.accent)
+        .stroke(egui::Stroke::NONE)
+        .min_size(egui::vec2(ui.available_width(), 52.0)),
+    );
+    let vouch = info
+        .target
+        .checks()
+        .iter()
+        .filter(|&&c| mode.store.state(info.target, c) == CheckState::Pending)
+        .map(|c| c.label())
+        .collect::<Vec<_>>()
+        .join(" and ");
+    if tick
+        .on_hover_text(format!(
+            "Records {vouch} as passed by {} and goes to the next one",
+            if mode.who.trim().is_empty() {
+                "you"
+            } else {
+                mode.who.trim()
+            }
+        ))
+        .clicked()
+    {
+        let finished = mode.tick(project, current, go);
+        mode.finished = finished;
+    }
+    ui.horizontal(|ui| {
+        if ui
+            .add_enabled(
+                !mode.walked.is_empty(),
+                egui::Button::new("Back").min_size(egui::vec2(0.0, 40.0)),
+            )
+            .on_hover_text("Take back the last pass")
+            .clicked()
+        {
+            mode.back(project, current, go);
+        }
+        if ui
+            .add(egui::Button::new("Skip").min_size(egui::vec2(0.0, 40.0)))
+            .on_hover_text("Go to the next one without deciding this one")
+            .clicked()
+            && let Some(next) = mode.next(project, mode.selected, current)
+        {
+            mode.walk_to(project, &next, current, go);
+        }
+        if let Target::Wire(w) = info.target
+            && ui
+                .add(
+                    egui::Button::new(format!("{} 3D", icons::canvas::VIEW_3D))
+                        .min_size(egui::vec2(0.0, 40.0)),
+                )
+                .on_hover_text("Show this wire in the 3D view")
+                .clicked()
+        {
+            mode.show_3d = Some(w);
+        }
+    });
+    ui.weak("F fail · N n/a · Backspace back");
+}
+
+/// F fails, N marks not applicable (the first open check of the target in
+/// the card) and Backspace takes back the last pass. Only while no text
+/// field has the keyboard.
+fn walk_keys(
+    ctx: &egui::Context,
+    mode: &mut CommissioningMode,
+    project: &Project,
+    info: &TargetInfo,
+    fail_hint: &str,
+    current: Option<PageId>,
+    go: &mut Option<Place>,
+) {
+    if ctx.egui_wants_keyboard_input() {
+        return;
+    }
+    let open = info
+        .target
+        .checks()
+        .iter()
+        .copied()
+        .find(|&c| mode.store.state(info.target, c) == CheckState::Pending);
+    let (fail, na, back) = ctx.input_mut(|i| {
+        (
+            i.consume_key(egui::Modifiers::NONE, egui::Key::F),
+            i.consume_key(egui::Modifiers::NONE, egui::Key::N),
+            i.consume_key(egui::Modifiers::NONE, egui::Key::Backspace),
+        )
+    });
+    if let Some(check) = open {
+        if fail {
+            mode.fail(info.target, check, fail_hint);
+        } else if na {
+            mode.decide(info.target, check, CheckState::NotApplicable);
+        }
+    }
+    if back {
+        mode.back(project, current, go);
+    }
+}
+
 /// The sub-heading a target sits under in the checks list, so a bare wire
-/// number reads as a wire.
-fn target_group(target: Target) -> &'static str {
+/// number reads as a wire, and a core of a cable is not mistaken for a
+/// repeat of the wire with the same number.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Group {
+    Wires,
+    CableCores,
+    Terminals,
+    Devices,
+}
+
+impl Group {
+    fn heading(self) -> &'static str {
+        match self {
+            Group::Wires => "Wires",
+            Group::CableCores => "Cable cores",
+            Group::Terminals => "Terminals",
+            Group::Devices => "Devices",
+        }
+    }
+}
+
+fn target_group(target: Target, plan: &WirePlan) -> Group {
     match target {
-        Target::Wire(_) => "Wires",
-        Target::Terminal(_) => "Terminals",
-        Target::Device(_) => "Devices",
+        Target::Wire(w) => match plan.step(w).map(|s| &s.kind) {
+            Some(WireKind::Core { .. }) => Group::CableCores,
+            _ => Group::Wires,
+        },
+        Target::Terminal(_) => Group::Terminals,
+        Target::Device(_) => Group::Devices,
+    }
+}
+
+fn target_group_name(target: Target) -> &'static str {
+    match target {
+        Target::Wire(_) => "wire",
+        Target::Terminal(_) => "terminal",
+        Target::Device(_) => "device",
     }
 }
 

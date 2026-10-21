@@ -48,6 +48,7 @@
 //! | [`DuplicatePage`](ProblemKind::DuplicatePage) | warning | Two pages with one name in one structure |
 //! | [`DanglingJunction`](ProblemKind::DanglingJunction) | warning | A junction no wire ends on |
 //! | [`UnwiredTerminal`](ProblemKind::UnwiredTerminal) | warning | A terminal or plug pin with no wire on any side |
+//! | [`WireRule`](ProblemKind::WireRule) | warning | A wire whose colour or size breaks the project's house wire rules (added by the application, which reads the rules) |
 //! | [`StrayWireEnd`](ProblemKind::StrayWireEnd) | warning | An open wire end that lies on a pin, junction or wire without joining it |
 //! | [`ContactType`](ProblemKind::ContactType) | warning | A contact whose pin numbers do not match NO, NC or changeover |
 //! | [`ContactPosition`](ProblemKind::ContactPosition) | warning | A contact position beyond the contacts the device has |
@@ -100,6 +101,7 @@
 //! ```
 
 pub mod calc;
+pub mod calc_basis;
 mod calc_checks;
 pub mod calc_view;
 mod checks;
@@ -237,6 +239,9 @@ pub enum ProblemKind {
     DanglingJunction,
     /// A terminal or plug pin no wire reaches (findings C02).
     UnwiredTerminal,
+    /// A wire whose colour or size breaks the project's house wire rules.
+    /// Found by the application (the rules live in the reports crate).
+    WireRule,
     /// An open wire end lying on a pin, junction or wire without being connected (C03).
     StrayWireEnd,
     /// A contact whose pin numbers do not suit its type: NO ends in 3, 4, 7 or 8, NC in 1, 2, 5 or 6 (C05).
@@ -327,7 +332,7 @@ pub enum ProblemKind {
 
 impl ProblemKind {
     /// Every kind, in the order the table in the crate docs lists them.
-    pub const ALL: [ProblemKind; 67] = [
+    pub const ALL: [ProblemKind; 68] = [
         ProblemKind::DuplicateTag,
         ProblemKind::TooManyContacts,
         ProblemKind::PotentialConflict,
@@ -378,6 +383,7 @@ impl ProblemKind {
         ProblemKind::DuplicatePage,
         ProblemKind::DanglingJunction,
         ProblemKind::UnwiredTerminal,
+        ProblemKind::WireRule,
         ProblemKind::StrayWireEnd,
         ProblemKind::ContactType,
         ProblemKind::ContactPosition,
@@ -441,6 +447,7 @@ impl ProblemKind {
             | ProblemKind::DuplicatePage
             | ProblemKind::DanglingJunction
             | ProblemKind::UnwiredTerminal
+            | ProblemKind::WireRule
             | ProblemKind::StrayWireEnd
             | ProblemKind::ContactType
             | ProblemKind::ContactPosition
@@ -522,6 +529,7 @@ impl ProblemKind {
             ProblemKind::DuplicatePage => "Duplicate page",
             ProblemKind::DanglingJunction => "Dangling junction",
             ProblemKind::UnwiredTerminal => "Unwired terminal",
+            ProblemKind::WireRule => "Wire breaks project rule",
             ProblemKind::StrayWireEnd => "Wire end on something",
             ProblemKind::ContactType => "Contact numbering",
             ProblemKind::ContactPosition => "Contact beyond relay",
@@ -595,6 +603,7 @@ impl ProblemKind {
             ProblemKind::DuplicatePage => "check.duplicate_page",
             ProblemKind::DanglingJunction => "check.dangling_junction",
             ProblemKind::UnwiredTerminal => "check.unwired_terminal",
+            ProblemKind::WireRule => "check.wire_rule",
             ProblemKind::StrayWireEnd => "check.stray_wire_end",
             ProblemKind::ContactType => "check.contact_type",
             ProblemKind::ContactPosition => "check.contact_position",
@@ -639,7 +648,9 @@ pub struct Problem {
 }
 
 impl Problem {
-    pub(crate) fn new(kind: ProblemKind, at: Vec<AnyId>, message: String) -> Problem {
+    /// A problem of `kind` at `at`; the severity is the kind's. For checks the
+    /// application runs itself because their input lives outside this crate.
+    pub fn new(kind: ProblemKind, at: Vec<AnyId>, message: String) -> Problem {
         Problem {
             kind,
             severity: kind.severity(),

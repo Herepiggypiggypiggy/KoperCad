@@ -122,6 +122,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "cabinet.inspector",
     "cabinet.door",
     "cabinet.surface",
+    "cabinet.door.depth",
     "cabinet.door.apply",
     "cabinet.routes_panel",
     "cabinet.wire_rules",
@@ -136,6 +137,10 @@ pub(crate) const ANCHORS: &[&str] = &[
     "macro.place",
     "macros.window",
 ];
+
+/// A frame the replay gate draws between two editor calls.
+#[cfg(test)]
+pub(super) type Settle = std::rc::Rc<dyn Fn(&mut NovoApp)>;
 
 /// What the shell keeps about learning.
 pub(crate) struct LearnState {
@@ -161,6 +166,24 @@ pub(crate) struct LearnState {
     pub(super) only_path: Option<String>,
     pub(super) show_drafts: bool,
     pub(super) confirm_restart: bool,
+    /// The step whose hints are being shown and how many are open.
+    pub(super) hints_for: String,
+    pub(super) hints_shown: usize,
+    /// The step whose pointer ring a challenge learner asked for (Show me).
+    pub(super) point_asked: Option<(String, String)>,
+    /// "Do it for me" did a step of this run.
+    pub(super) helped: bool,
+    /// The answer given to a prediction step: lesson, step, option index.
+    pub(super) predicted: Option<(String, String, usize)>,
+    /// Set by the replay gate: draws one frame, so a page shown by a solve
+    /// op has its canvas before the op goes on (a person's next frame).
+    #[cfg(test)]
+    pub(super) settle: Option<Settle>,
+    /// The Reset progress button was pressed and waits for a second click.
+    pub(super) confirm_reset: bool,
+
+    /// "Open finished version" is waiting for a yes: it replaces the drawing.
+    pub(super) confirm_finished: bool,
     /// Lessons whose lint has errors, so they are not offered yet.
     coming: Option<BTreeSet<String>>,
     /// Controls registered so far this frame, and last frame.
@@ -210,6 +233,16 @@ impl LearnState {
             only_path: None,
             show_drafts: false,
             confirm_restart: false,
+            hints_for: String::new(),
+            hints_shown: 0,
+            point_asked: None,
+            helped: false,
+            predicted: None,
+            #[cfg(test)]
+            settle: None,
+            confirm_reset: false,
+
+            confirm_finished: false,
             coming: None,
             anchors: BTreeMap::new(),
             rows: BTreeMap::new(),
@@ -293,6 +326,7 @@ impl LearnState {
     }
 
     pub(super) fn reset_progress(&mut self) {
+        self.confirm_reset = false;
         self.progress.reset_all();
         self.save();
     }
@@ -416,6 +450,11 @@ impl LearnState {
     /// The id of the lesson being done.
     pub(super) fn running(&self) -> Option<&str> {
         self.run.as_ref().map(|r| r.lesson().id.as_str())
+    }
+
+    /// A lesson is running that is not about the design checks.
+    pub(crate) fn quiet_checks(&self) -> bool {
+        self.run.as_ref().is_some_and(|r| !r.lesson().show_problems)
     }
 
     /// Whether a card should be on show.
@@ -635,6 +674,7 @@ impl NovoApp {
             .to_owned(),
             live: self.wb.live.on,
             zoom: 1.0,
+            predicted: self.learn_predicted().is_some(),
             ..Facts::default()
         };
         let Some(doc) = self.backend.document() else {
@@ -750,6 +790,54 @@ impl NovoApp {
         self.learn_reveal();
     }
 
+    /// The option chosen for the open step's prediction question.
+    pub(super) fn learn_predicted(&self) -> Option<usize> {
+        let run = self.learn.run.as_ref()?;
+        let step = run.step()?;
+        self.learn
+            .predicted
+            .as_ref()
+            .filter(|(lesson, id, _)| *lesson == run.lesson().id && *id == step.id)
+            .map(|(_, _, choice)| *choice)
+    }
+
+    /// The card's answer to a prediction question.
+    pub(super) fn learn_predict(&mut self, choice: usize) -> Result<(), String> {
+        let run = self.learn.run.as_ref().ok_or("no lesson is open")?;
+        let step = run.step().ok_or("no step is open")?;
+        let predict = step.predict.as_ref().ok_or("this step asks no question")?;
+        if choice >= predict.options.len() {
+            return Err("there is no such option".into());
+        }
+        self.learn.predicted = Some((run.lesson().id.clone(), step.id.clone(), choice));
+        Ok(())
+    }
+
+    /// A challenge keeps its pointer ring back until the learner has opened
+    /// every hint or asked to be shown, so the ring does not give the answer.
+    pub(super) fn learn_point_hidden(&self) -> bool {
+        let Some(run) = self.learn.run.as_ref() else {
+            return false;
+        };
+        let Some(step) = run.step() else {
+            return false;
+        };
+        let total = step.hints(self.learn.lang).len();
+        if run.lesson().kind != novo_learn::Kind::Challenge || total == 0 {
+            return false;
+        }
+        let key = (run.lesson().id.clone(), step.id.clone());
+        if self.learn.point_asked.as_ref() == Some(&key) {
+            return false;
+        }
+        let opened = if self.learn.hints_for == step.id {
+            self.learn.hints_shown
+        } else {
+            0
+        };
+        opened < total
+    }
+
     /// When a step opens, brings its canvas target into view and switches
     /// to its page (a target says `view = "keep"` to stay put).
     fn learn_reveal(&mut self) {
@@ -768,6 +856,9 @@ impl NovoApp {
         let Some(target) = step.point.clone() else {
             return;
         };
+        if self.learn_point_hidden() {
+            return;
+        }
         // The door form sits below the plate fields: scroll to what the step
         // points at, so the ring is not drawn around a clipped control.
         if let Some(ui) = &target.ui {
@@ -896,6 +987,11 @@ impl NovoApp {
             self.show_page(page);
         }
         self.learn.run = Some(Run::new(entry.lesson.clone()));
+        self.learn.point_asked = None;
+        self.learn.helped = false;
+        self.learn.predicted = None;
+        self.learn.hints_for.clear();
+        self.learn.hints_shown = 0;
         self.learn.hidden = false;
         self.learn.window = false;
         self.learn.confirm_restart = false;
@@ -966,8 +1062,68 @@ impl NovoApp {
         self.learn.run = None;
         self.learn.hidden = false;
         self.learn.confirm_restart = false;
+        self.learn.confirm_finished = false;
         self.learn.revealed = None;
         self.learn.ticked_at = None;
+        self.learn.hints_for.clear();
+        self.learn.hints_shown = 0;
+        self.learn.point_asked = None;
+        self.learn.helped = false;
+        self.learn.predicted = None;
+    }
+
+    /// The card's Hint: opens the next hint of the open step.
+    pub(super) fn learn_open_hint(&mut self) {
+        let Some(step) = self.learn.run.as_ref().and_then(|r| r.step()) else {
+            return;
+        };
+        let (id, total) = (step.id.clone(), step.hints(self.learn.lang).len());
+        if self.learn.hints_for != id {
+            self.learn.hints_for = id;
+            self.learn.hints_shown = 0;
+        }
+        self.learn.hints_shown = (self.learn.hints_shown + 1).min(total);
+    }
+
+    /// The card's Skip: does the step for the learner when its `solve` is
+    /// something the editor can carry out, so the steps after it still find
+    /// their parts, then moves on. A step that cannot be done for them is
+    /// skipped as before.
+    pub(super) fn learn_skip(&mut self, ctx: &egui::Context) {
+        let ops = self
+            .learn
+            .run
+            .as_ref()
+            .and_then(|r| r.step())
+            .filter(|s| s.manual.is_none())
+            .map(|s| s.solve.clone())
+            .unwrap_or_default();
+        let mut applied = false;
+        for op in &ops {
+            match self.solve_op(ctx, op) {
+                Some(Ok(())) => applied = true,
+                Some(Err(why)) => {
+                    let said = if applied {
+                        "Did part of this step"
+                    } else {
+                        "Could not do this step"
+                    };
+                    self.message(Level::Warning, format!("{said}: {why}"));
+                    break;
+                }
+                None => break,
+            }
+        }
+        if applied {
+            self.learn.helped = true;
+            self.learn_step(ctx);
+        }
+        let ticked = self
+            .learn
+            .run
+            .as_ref()
+            .is_some_and(|r| r.phase() == Phase::Ticked);
+        self.learn_move(if ticked { Move::Next } else { Move::Skip });
     }
 
     /// Back, Skip, Next and Restart, from the card or the commands.
@@ -986,6 +1142,63 @@ impl NovoApp {
         }
     }
 
+    /// "Open finished version": the lesson's finished drawing opens as a
+    /// project of its own, as a lesson's sample project does. The lesson is
+    /// done when it was on its last step. Returns whether it opened.
+    pub(super) fn learn_open_finished(&mut self) -> bool {
+        self.learn.confirm_finished = false;
+        let Some(run) = self.learn.run.as_mut() else {
+            return false;
+        };
+        let lesson = run.lesson().clone();
+        let Some(path) = self
+            .learn
+            .catalog
+            .get(&lesson.id)
+            .and_then(|e| e.finished.clone())
+        else {
+            return false;
+        };
+        let last = run.index() + 1 >= run.progress().1;
+        if last && run.can_advance() {
+            run.advance();
+        }
+        let title = self.learn.say_with(
+            "finished_project",
+            &[("title", lesson.title(self.learn.lang))],
+        );
+        let opened = (|| -> Result<(), String> {
+            let text = self
+                .learn
+                .file(&path)
+                .ok_or_else(|| format!("{path} is missing"))?;
+            let mut project = Project::from_json(text).map_err(|e| format!("{path}: {e}"))?;
+            project
+                .transact("Lesson", |tx| tx.set_info(|info| info.name = title.clone()))
+                .map_err(|e| e.to_string())?;
+            self.backend
+                .new_project_from(project)
+                .map_err(|e| e.to_string())?;
+            self.project_path = None;
+            self.current_page = None;
+            self.document_replaced();
+            self.fix_current_page();
+            if let Some(doc) = self.backend.document_mut() {
+                doc.mark_saved();
+            }
+            Ok(())
+        })();
+        if let Err(why) = opened {
+            self.message(
+                Level::Error,
+                format!("Could not open the finished version: {why}"),
+            );
+            return false;
+        }
+        self.learn_end();
+        true
+    }
+
     /// Restart lesson: a fresh copy of the sample project and no progress.
     pub(super) fn learn_restart(&mut self) {
         let Some(id) = self.learn.running().map(str::to_owned) else {
@@ -997,6 +1210,20 @@ impl NovoApp {
 
     /// The pointer flashes again.
     pub(super) fn learn_show_me(&mut self) {
+        // Being shown where it is, in a challenge, means it was not found.
+        if self
+            .learn
+            .run
+            .as_ref()
+            .is_some_and(|r| r.lesson().kind == novo_learn::Kind::Challenge)
+        {
+            self.learn.helped = true;
+        }
+        self.learn.point_asked = self
+            .learn
+            .run
+            .as_ref()
+            .and_then(|r| r.step().map(|s| (r.lesson().id.clone(), s.id.clone())));
         self.learn.flash_until = Some(Instant::now() + Duration::from_millis(2500));
         self.learn.revealed = None;
         self.learn_start_demo();
@@ -1099,20 +1326,23 @@ impl NovoApp {
         })
     }
 
+    /// Where `id` is drawn itself, with no fallback to the control that
+    /// opens it.
+    pub(super) fn learn_drawn(&self, id: &str) -> Option<egui::Rect> {
+        self.learn
+            .anchors
+            .get(id)
+            .or_else(|| self.learn.seen.get(id))
+            .copied()
+    }
+
     /// Where a control was last drawn.
     pub(super) fn learn_anchor(&self, id: &str) -> Option<egui::Rect> {
-        let drawn = |id: &str| {
-            self.learn
-                .anchors
-                .get(id)
-                .or_else(|| self.learn.seen.get(id))
-                .copied()
-        };
         // A control that is folded away or inside a closed menu is pointed
         // at through the one that opens it.
         let mut id = id.to_owned();
         for _ in 0..3 {
-            if let Some(rect) = drawn(&id) {
+            if let Some(rect) = self.learn_drawn(&id) {
                 return Some(rect);
             }
             id = super::learn_labels::anchor_fallback(&id)?;

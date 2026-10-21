@@ -1,0 +1,91 @@
+# Challenge: the pump starter drops out as soon as start is released. The
+# holding contact of -K1 (13-14, parallel to start) lost its top wire.
+# Sample project: cross-references/finished.json without wire 45
+# (-K1:13 to the start button's upper pin). Goal checks use the live view.
+format = 1
+id = "motor-wont-hold"
+version = 1
+status = "early"
+kind = "challenge"
+title = "The motor will not hold in"
+title_nl = "De motor blijft niet aan"
+explain = "The holding contact of **-K1** (13-14) was not wired to the start button. When you let go of start, nothing fed the coil any more, so the contactor dropped out. A wire from **-K1** pin 13 to the start button gives the coil a path that holds itself in."
+explain_nl = "Het houdcontact van **-K1** (13-14) was niet met de startknop verbonden. Bij het loslaten van start voedde niets de spoel meer, dus viel de contactor af. Een draad van pen 13 van **-K1** naar de startknop geeft de spoel een route die zichzelf vasthoudt."
+summary = "The pump starter drops out the moment you let go of start. Find the fault and fix it."
+summary_nl = "De pompstarter valt af zodra je start loslaat. Zoek de fout en herstel hem."
+track = "circuits"
+order = 40
+level = "intermediate"
+minutes = 5
+topics = ["simulation", "live", "troubleshooting"]
+needs = ["live-view"]
+next = ["coil-wont-pull-in"]
+project = "project.json"
+finished = "finished.json"
+page = "Control circuit"
+
+[[step]]
+id = "live"
+title = "Switch the live view on"
+title_nl = "Zet de live-weergave aan"
+text = """
+This pump starter has a fault. You will find it by trying it, like a technician on site. The live view lets you press the buttons without changing the drawing.
+"""
+text_nl = """
+Deze pompstarter heeft een fout. Je vindt hem door te proberen, zoals een monteur ter plaatse. Met de live-weergave druk je op de knoppen zonder de tekening te veranderen.
+"""
+how = [
+  "Press {key:sim.live}.",
+]
+how_nl = [
+  "Druk op {key:sim.live}.",
+]
+expect = { live = true }
+solve = [ { command = "sim.live" } ]
+
+[[step]]
+id = "hold"
+title = "Goal: start must hold in"
+title_nl = "Doel: start moet blijven aanhouden"
+text = """
+**Goal:** press start (**-S2**), let go, and the contactor **-K1** stays pulled in. Right now it drops out as soon as the button springs back. Find out why and repair the drawing.
+"""
+text_nl = """
+**Doel:** druk op start (**-S2**), laat los, en de contactor **-K1** blijft aangetrokken. Nu valt hij af zodra de knop terugveert. Zoek uit waarom en herstel de tekening.
+"""
+hints = [
+  "Press start and watch the coil -K1 as you let go. Something should keep feeding it once the start button is open again. What does that in a motor starter?",
+  "The holding contact of -K1 (pins 13 and 14) sits in parallel with the start button. Look at its two pins: is each one connected to the start circuit?",
+  "-K1 pin 13 is connected to nothing. Draw a wire from -K1 pin 13 to the upper pin (13) of the start button -S2.",
+]
+hints_nl = [
+  "Druk op start en kijk naar de spoel -K1 als je loslaat. Er moet iets zijn dat hem blijft voeden zodra de startknop weer open is. Wat doet dat in een motorstarter?",
+  "Het houdcontact van -K1 (pennen 13 en 14) staat parallel aan de startknop. Kijk naar de twee pennen: is elk met het startcircuit verbonden?",
+  "-K1 pen 13 is met niets verbonden. Trek een draad van -K1 pen 13 naar de bovenste pen (13) van startknop -S2.",
+]
+point = { at = { device = "-K1", pin = "13" } }
+expect = { all = [ { coil_on = "-K1" }, { not = { pole_closed = "-S2" } } ] }
+solve = [
+  { wire = ["-K1:13", "-S2:13"] },
+  { live_pole = { device = "-S2" } },
+]
+
+[[step]]
+id = "stop"
+title = "Now it must also stop"
+title_nl = "Nu moet hij ook stoppen"
+text = """
+**Goal:** a starter that holds in must also let go. Press stop (**-S1**): the contactor drops out and stays out when stop springs back.
+"""
+text_nl = """
+**Doel:** een starter die aanhoudt, moet ook loslaten. Druk op stop (**-S1**): de contactor valt af en blijft af als stop terugveert.
+"""
+hints = [
+  "Click the badge on the stop button -S1 and watch the coil.",
+]
+hints_nl = [
+  "Klik op de knop van stop -S1 en kijk naar de spoel.",
+]
+point = { at = { device = "-S1" } }
+expect = { all = [ { wire = { from = "-K1:13", to = "-S2:13" } }, { not = { coil_on = "-K1" } } ] }
+solve = [ { live_pole = { device = "-S1" } } ]

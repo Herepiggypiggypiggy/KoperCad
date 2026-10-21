@@ -16,7 +16,7 @@ use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
 use eframe::egui;
-use novo_core::{AnyId, natural_cmp};
+use novo_core::{AnyId, Project, natural_cmp};
 use novo_reports::{Align, Cell, CsvOptions, ReportOutput, Section};
 use novo_theme::table::{
     ROW_HEIGHT, RowState, TableAlign, TableCell, TableColumn, column_widths_min, header_min_widths,
@@ -47,6 +47,8 @@ pub(crate) struct ReportsView {
     sort: Option<(String, usize, bool)>,
     /// The shown report's output, kept while the project is unchanged.
     cache: Option<(String, u64, ReportOutput)>,
+    /// The wire counts at a project revision, so a repaint does not rebuild them.
+    wire_set: Option<(u64, novo_reports::WireSet)>,
     /// The row the keys act on: its section key and index in the section.
     cursor: Option<(String, usize)>,
     /// Put the cursor row in view on the next frame.
@@ -105,31 +107,33 @@ impl NovoApp {
 
     /// The report the workspace shows: the chosen one, else the first.
     fn report_selected(&mut self) -> Option<String> {
-        let doc = self.backend.document()?;
-        let live = self.wb.reports.live(doc.project());
-        let ids = live.ids();
+        let ids: Vec<String> = {
+            let (reports, project) = self.machine_reports()?;
+            let live = reports.live(&project);
+            live.ids().into_iter().map(str::to_owned).collect()
+        };
         match &self.reports_view.selected {
-            Some(id) if ids.contains(&id.as_str()) => Some(id.clone()),
-            _ => ids.first().map(|s| (*s).to_owned()),
+            Some(id) if ids.contains(id) => Some(id.clone()),
+            _ => ids.first().cloned(),
         }
     }
 
     /// The selected report's output at the project's current state.
     fn report_output(&mut self, id: &str) -> Option<ReportOutput> {
-        let doc = self.backend.document()?;
-        let revision = doc.project().revision();
+        // A copy for the current choice has revisions of its own, so the
+        // generation of the copy is part of the key.
+        let generation = self.machine_generation();
+        let revision = self.backend.document()?.project().revision() ^ (generation << 40);
         if let Some((cached, at, output)) = &self.reports_view.cache
             && cached == id
             && *at == revision
         {
             return Some(output.clone());
         }
-        let output = self
-            .wb
-            .reports
-            .live(doc.project())
-            .get(doc.project(), id)?
-            .clone();
+        let output = {
+            let (reports, project) = self.machine_reports()?;
+            reports.live(&project).get(&project, id)?.clone()
+        };
         self.reports_view.cache = Some((id.to_owned(), revision, output.clone()));
         Some(output)
     }
@@ -139,23 +143,26 @@ impl NovoApp {
         let Some(selected) = self.report_selected() else {
             return;
         };
-        let Some(doc) = self.backend.document() else {
-            return;
+        let rows: Vec<(String, String, usize)> = {
+            let Some((reports, project)) = self.machine_reports() else {
+                return;
+            };
+            let project: &Project = &project;
+            let live = reports.live(project);
+            live.ids()
+                .into_iter()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .filter_map(|id| {
+                    let title = live.report(&id)?.title();
+                    let count = live
+                        .get(project, &id)
+                        .map_or(0, |o| novo_reports::headline_count(&id, o).0);
+                    Some((id, title, count))
+                })
+                .collect()
         };
-        let project = doc.project();
-        let live = self.wb.reports.live(project);
-        let rows: Vec<(String, String, usize)> = live
-            .ids()
-            .into_iter()
-            .map(str::to_owned)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .filter_map(|id| {
-                let title = live.report(&id)?.title();
-                let count = live.get(project, &id).map_or(0, ReportOutput::row_count);
-                Some((id, title, count))
-            })
-            .collect();
         section_label(ui, "Reports");
         let mut chosen = None;
         for (id, title, count) in &rows {
@@ -175,6 +182,17 @@ impl NovoApp {
         }
     }
 
+    /// The project's wire counts, kept while the project is unchanged.
+    fn wire_set(&mut self) -> Option<novo_reports::WireSet> {
+        let generation = self.machine_generation();
+        let revision = self.backend.document()?.project().revision() ^ (generation << 40);
+        if self.reports_view.wire_set.as_ref().map(|(r, _)| *r) != Some(revision) {
+            let set = novo_reports::WireSet::of(&*self.machine()?);
+            self.reports_view.wire_set = Some((revision, set));
+        }
+        self.reports_view.wire_set.as_ref().map(|(_, s)| s.clone())
+    }
+
     /// The centre: header, filter and the report's tables.
     pub(super) fn reports_central(&mut self, ui: &mut egui::Ui) {
         let Some(id) = self.report_selected() else {
@@ -190,6 +208,7 @@ impl NovoApp {
         let mut jump = self.report_keys(ui, &output, &orders, filter_id);
         let mut export = None;
         let mut add_page = false;
+        let mut preview = false;
         let mut lesson = None;
         let topic = if id == "report.wires" || id == "report.wirecut" {
             "wire list"
@@ -197,9 +216,28 @@ impl NovoApp {
             "reports"
         };
         let chip = self.learn.chip(topic);
+        // Which machine these lists describe.
+        let mut change_options = false;
+        if let Some(info) = self.machine_info() {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(format!("Machine: {}", info.summary)).strong());
+                ui.weak(info.left_out());
+                if ui
+                    .small_button("Change options")
+                    .on_hover_text("Open Project options and variants")
+                    .clicked()
+                {
+                    change_options = true;
+                }
+            });
+        }
+        if change_options {
+            self.open_options();
+        }
         ui.horizontal(|ui| {
             ui.heading(&output.title);
-            ui.weak(format!("{} rows", output.row_count()));
+            let (n, noun) = novo_reports::headline_count(&id, &output);
+            ui.weak(novo_reports::count_text(n, noun));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
                 lesson = chip_button(ui, chip.as_ref());
@@ -238,6 +276,17 @@ impl NovoApp {
                     }
                     ui.separator();
                     if ui
+                        .button("Print preview...")
+                        .on_hover_text(
+                            "See the report's sheets on paper (size, scale, margins, page \
+                             numbers) before a PDF is written",
+                        )
+                        .clicked()
+                    {
+                        preview = true;
+                        ui.close();
+                    }
+                    if ui
                         .button("Add as page")
                         .on_hover_text(
                             "Add this report to the drawing as a generated page, so the project \
@@ -258,6 +307,11 @@ impl NovoApp {
                 );
             });
         });
+        if matches!(id.as_str(), "wires" | "cutlist" | "wirecut" | "labels")
+            && let Some(set) = self.wire_set()
+        {
+            ui.weak(set.explanation());
+        }
         ui.separator();
         let lit = self.lit_sources();
         let clicked = egui::ScrollArea::both()
@@ -283,6 +337,9 @@ impl NovoApp {
         }
         if add_page {
             self.add_report_page(&id);
+        }
+        if preview {
+            self.open_print_preview();
         }
         if let Some(lesson) = lesson {
             self.learn_run_command_lesson(&lesson);
@@ -662,16 +719,15 @@ impl NovoApp {
 
     /// Writes every report to one Excel file, a sheet each.
     pub(crate) fn export_all_reports(&mut self) -> Option<PathBuf> {
-        let doc = self.backend.document()?;
-        let project = doc.project();
-        let outputs: Vec<ReportOutput> = self
-            .wb
-            .reports
-            .live(project)
-            .all(project)
-            .into_iter()
-            .cloned()
-            .collect();
+        let outputs: Vec<ReportOutput> = {
+            let (reports, project) = self.machine_reports()?;
+            reports
+                .live(&project)
+                .all(&project)
+                .into_iter()
+                .cloned()
+                .collect()
+        };
         let refs: Vec<&ReportOutput> = outputs.iter().collect();
         let path = self.export_path("Reports", ReportFormat::Excel)?;
         self.write_report(&refs, &path, ReportFormat::Excel)
@@ -997,6 +1053,7 @@ mod tests {
         d.app.run(&ctx, Action::OpenExample);
         d.frame();
         assert!(d.app.save_to(&dir.join("Plant.novo")));
+        d.app.wb.pdf_dir = Some(dir.to_owned());
         d
     }
 
@@ -1018,6 +1075,58 @@ mod tests {
         assert!(name.ends_with(" - Bill of materials.pdf"), "{name}");
         assert!(std::fs::read(&pdf).unwrap().starts_with(b"%PDF"));
         assert_eq!(ReportFormat::Pdf.extension(), "pdf");
+    }
+
+    /// One name per report: the menu, the palette, the workspace list and the
+    /// header all say the same words, so a person who saw it in one place
+    /// finds it in the others.
+    #[test]
+    fn a_report_has_one_name_in_the_menu_the_palette_and_the_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = saved_example(dir.path());
+        let doc = d.app.backend.document().unwrap();
+        let live = d.app.wb.reports.live(doc.project());
+        let mut names = Vec::new();
+        for (command, report) in REPORT_COMMANDS {
+            let title = live.report(report).expect("the report exists").title();
+            let label = novo_workflow::commands::get(command)
+                .expect("the command exists")
+                .label;
+            assert_eq!(
+                label, title,
+                "{command} is called {label:?} in the menu but {title:?} in the workspace"
+            );
+            names.push(title);
+        }
+        assert_eq!(
+            names,
+            [
+                "Table of contents",
+                "Bill of materials",
+                "Device list",
+                "Wire list",
+                "Terminal diagram",
+                "Cable diagram",
+                "Cut list",
+                "Labels",
+                "Wire production",
+                "I/O list",
+                "Cable schedule",
+                "Plug connection list",
+            ]
+        );
+        // The palette still finds a report by the name it used to have.
+        for (old, command) in [
+            ("contents", "report.toc"),
+            ("plug list", "report.plugs"),
+            ("wire cut list", "report.wirecut"),
+        ] {
+            let hit = novo_workflow::commands::get(command).unwrap();
+            assert!(
+                hit.keywords.contains(&old) || hit.verbs.contains(&old),
+                "{command} lost {old:?}"
+            );
+        }
     }
 
     #[test]

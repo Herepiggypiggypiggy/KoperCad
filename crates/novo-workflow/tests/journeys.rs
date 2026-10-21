@@ -24,6 +24,7 @@ fn sources<'a>(project: &'a Project, library: &'a Library, keymap: &'a Keymap) -
             ..Context::default()
         },
         lessons: &[],
+        macros: &[],
     }
 }
 
@@ -110,9 +111,16 @@ fn commands_show_shortcuts_and_reasons() {
     assert_eq!(rows[0].shortcut.as_deref(), Some("Ctrl+Z"));
     assert_eq!(rows[0].disabled, Some("Nothing to undo"));
 
+    // Duplicate needs a selection, so Duplicate page, which can run, leads.
     let rows = palette.search("dup", &src);
-    assert_eq!(rows[0].target, Target::Command("edit.duplicate"));
-    assert_eq!(rows[0].shortcut.as_deref(), Some("Ctrl+D"));
+    assert_eq!(rows[0].target, Target::Command("page.duplicate"));
+    assert_eq!(rows[0].disabled, None);
+    let at = rows
+        .iter()
+        .position(|r| r.target == Target::Command("edit.duplicate"))
+        .expect("Duplicate is listed");
+    assert_eq!(rows[at].shortcut.as_deref(), Some("Ctrl+D"));
+    assert!(rows[at].disabled.is_some());
 
     // Symbols are in the same list.
     let rows = palette.search("mpcb", &src);
@@ -307,6 +315,30 @@ fn accept_all_is_one_command_not_accept_with_an_argument() {
     assert_eq!(
         palette.search("accept", &src)[0].target,
         Target::Command("proposal.accept")
+    );
+}
+
+#[test]
+fn a_command_typed_by_its_full_name_runs_bare() {
+    // Acceptance A-02: `issue revision` opened the dialog with "revision" as the
+    // description (verb `issue` plus the argument `revision`).
+    let mut doc = Document::default();
+    motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+    for query in ["issue revision", "Issue Revision"] {
+        let rows = palette.search(query, &src);
+        assert_eq!(rows[0].target, Target::Command("revision.issue"), "{query}");
+    }
+    // Words after the verb are still the argument.
+    assert_eq!(
+        palette.search("issue Motor M3 added", &src)[0].target,
+        Target::Run {
+            command: "revision.issue",
+            argument: "Motor M3 added".into()
+        }
     );
 }
 
@@ -784,15 +816,17 @@ fn wiring_mode_is_one_key_and_findable_by_its_names() {
         Some("Shift+W")
     );
 
-    // Typed "mode", "lines" and the names of the two programs find it.
+    // Typed "mode", "lines" and the names of the two programs find it. A
+    // command that says the word in its label ("Import EPLAN project") ranks
+    // before one that only lists it as a keyword, so give it room.
     for query in ["mode", "lines", "eplan", "autocad", "modus", "lijnen"] {
         let rows = palette.search(query, &src);
         assert!(
             rows.iter()
-                .take(3)
+                .take(5)
                 .any(|r| r.target == Target::Command("wire.mode")),
             "{query}: {:?}",
-            rows.iter().take(3).map(|r| &r.label).collect::<Vec<_>>()
+            rows.iter().take(5).map(|r| &r.label).collect::<Vec<_>>()
         );
     }
     // The verb with a mode runs that mode, in either language.

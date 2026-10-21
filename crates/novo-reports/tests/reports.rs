@@ -43,8 +43,8 @@ fn table_of_contents_lists_pages_in_order() {
     assert_eq!(
         rows(&toc, "pages"),
         strings(&[
-            &["1", "Main circuit", "", "", "Schematic"],
-            &["2", "Control circuit", "", "", "Schematic"],
+            &["1", "Main circuit", "", "", "Schematic", "", ""],
+            &["2", "Control circuit", "", "", "Schematic", "", ""],
         ])
     );
 }
@@ -647,7 +647,7 @@ fn csv_quotes_and_localises() {
     assert!(csv.starts_with("Wire no.;From;To;"));
     assert!(csv.contains(";1,5;=A1-W1 BK;"));
     let toc = to_csv(&report(&doc, "toc"), &semicolon);
-    assert!(toc.contains("1;\"Main; power\";;;Schematic\r\n"));
+    assert!(toc.contains("1;\"Main; power\";;;Schematic;;\r\n"));
 }
 
 #[test]
@@ -763,8 +763,14 @@ fn wire_list_estimates_lengths_until_devices_are_placed() {
         .iter()
         .map(|c| c.header.as_str())
         .collect();
-    assert_eq!(headers, ["Cut length mm", "Length basis"]);
+    assert_eq!(headers, ["Route length mm", "Length basis"]);
     for row in rows(&wires, "wires") {
+        if row[6].starts_with("=A1-W1") {
+            // The motor cable states 12 m: its cores run the whole cable.
+            assert_eq!(row[9], "cable length", "{row:?}");
+            assert_eq!(row[8], "12000", "{row:?}");
+            continue;
+        }
         assert_eq!(row[9], "estimate", "{row:?}");
         // At least the minimum run plus a service loop at each end.
         assert!(row[8].parse::<f64>().unwrap() >= 200.0, "{row:?}");
@@ -903,7 +909,7 @@ fn wire_list_csv_carries_the_cut_length() {
     let csv = to_csv(&report(&doc, "wires"), &CsvOptions::default());
     let header = csv.lines().next().expect("header");
     assert!(
-        header.ends_with("Location,Cut length mm,Length basis"),
+        header.ends_with("Location,Route length mm,Length basis"),
         "{header}"
     );
     assert!(csv.contains(",estimate\r\n"));
@@ -1076,7 +1082,7 @@ fn a_page_without_a_title_is_listed_as_untitled() {
     let toc = report(&doc, "toc");
     assert_eq!(
         rows(&toc, "pages"),
-        strings(&[&["7", "(untitled)", "", "", "Schematic"]])
+        strings(&[&["7", "(untitled)", "", "", "Schematic", "", ""]])
     );
 }
 
@@ -1153,4 +1159,27 @@ fn the_workshop_reports_list_the_same_wires_and_each_title_says_what_it_counts()
     for title in [&production.title, &summary.title] {
         assert!(title.contains("supply and PE leads"), "{title}");
     }
+}
+
+#[test]
+fn a_locked_page_does_not_freeze_the_reports_built_from_the_project() {
+    let (mut doc, _) = starter();
+    let pages: Vec<_> = doc.project().pages().map(|p| p.id).collect();
+    for page in pages {
+        doc.execute(novo_core::Command::LockPage {
+            page,
+            revision: "A".into(),
+        })
+        .expect("lock");
+    }
+    doc.transact("New device", |tx| {
+        tx.add_device(DeviceTag::parse("=A1+CAB-K77")?, "Late addition")
+    })
+    .expect("a device is not on a locked page");
+    let devices = report(&doc, "devices");
+    assert!(
+        rows(&devices, "devices")
+            .iter()
+            .any(|r| r.iter().any(|c| c.contains("K77")))
+    );
 }

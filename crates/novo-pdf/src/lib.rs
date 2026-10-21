@@ -31,13 +31,15 @@ mod draw;
 mod font;
 mod inter;
 pub mod plate;
+pub mod print;
 mod report;
+pub mod template;
 
 use novo_canvas::model::{
     ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,
     TitleRevisions,
 };
-use novo_canvas::{Anchor, Color, ItemId, Primitive, Shape, Stroke, Vec2};
+use novo_canvas::{Aabb, Anchor, Color, ItemId, Label, Primitive, Shape, Stroke, Vec2};
 use novo_core::{AnyId, Page, PageId, PageKind, Project, SymbolId, SymbolRole, TextContent};
 use novo_reports::{Align, GeneratedSheet, LiveReports, PageLayout};
 use pdf_writer::types::{ActionType, AnnotationType, PageMode};
@@ -47,6 +49,7 @@ use std::path::Path;
 
 pub use draw::PT_PER_MM;
 pub use novo_canvas::model::{NoteAnchor, NoteDensity, NoteGlyph, NoteRow, SymbolNote};
+pub use print::{Orientation, Placement, PrintPaper, PrintScale, PrintSetup};
 pub use report::{
     ReportFileFormat, ReportPdfOptions, export_layouts_pdf, export_report_pdf, report_bytes,
 };
@@ -86,6 +89,9 @@ pub struct PdfOptions {
     pub changed_pages: BTreeSet<PageId>,
     /// Plain text pages printed after the drawing (design checks report).
     pub appendix: Option<Appendix>,
+    /// Paper, scale, margins and page numbers. `None` prints every sheet on
+    /// a page of its own size at 100 %.
+    pub print: Option<PrintSetup>,
 }
 
 /// Text printed on A4 pages after the drawing: a title, then lines, wrapped
@@ -162,6 +168,7 @@ impl Default for PdfOptions {
             title_revisions: BTreeMap::new(),
             changed_pages: BTreeSet::new(),
             appendix: None,
+            print: None,
         }
     }
 }
@@ -200,7 +207,7 @@ pub enum PdfError {
 
 /// Size of the page shown when there is nothing to export (an empty
 /// project or page set): A3 landscape, in mm.
-const BLANK_PAGE_MM: (f64, f64) = (420.0, 297.0);
+const BLANK_PAGE_MM: (f32, f32) = (420.0, 297.0);
 
 /// Exports the project to PDF bytes, drawing symbols with placeholder art.
 /// Use [`export_pdf_with_art`] to pass the symbol library.
@@ -289,6 +296,189 @@ fn sheets_of<'a>(project: &Project, page: &'a Page, reports: &mut LiveReports) -
         .collect()
 }
 
+/// One thing drawn on a sheet, in the order it is drawn.
+#[derive(Clone, Debug)]
+pub enum DrawOp {
+    Primitive(Primitive),
+    Label(Label),
+}
+
+/// A clickable area of a sheet and where it leads.
+#[derive(Clone, Debug)]
+struct DrawnLink {
+    /// The area on the sheet (mm).
+    bounds: Aabb,
+    /// Index of the target sheet and the point on it (mm).
+    target: (usize, (f32, f32)),
+}
+
+/// One page of the PDF as drawn from the model, before it is placed on
+/// paper: what the preview shows and what the writer prints.
+#[derive(Clone, Debug)]
+pub struct DrawnSheet {
+    /// Page label: the page name, or the sheet name of a generated page,
+    /// or the appendix title.
+    pub name: String,
+    /// The bookmark text, with the change dot when the page has changed.
+    pub bookmark: String,
+    /// Size of the sheet in mm, before any print setup.
+    pub size_mm: (f32, f32),
+    /// Everything on the sheet, in drawing order.
+    pub ops: Vec<DrawOp>,
+    links: Vec<DrawnLink>,
+}
+
+/// Draws every page `options` selects (and the appendix pages) from the
+/// model, ready to be placed on paper by [`print::place`] and written by
+/// [`export_pdf_with_reports`]. The preview window shows exactly this.
+pub fn draw_sheets(
+    project: &Project,
+    options: &PdfOptions,
+    art: &dyn SymbolArt,
+    reports: &mut LiveReports,
+) -> Result<Vec<DrawnSheet>, PdfError> {
+    let selected = select_pages(project, &options.pages)?;
+    let pages: Vec<Sheet> = selected
+        .iter()
+        .flat_map(|page| sheets_of(project, page, reports))
+        .collect();
+    // A link to a generated page lands on its first sheet.
+    let mut index_of: HashMap<PageId, usize> = HashMap::new();
+    for (i, sheet) in pages.iter().enumerate() {
+        index_of.entry(sheet.page.id).or_insert(i);
+    }
+    let mut out: Vec<DrawnSheet> = Vec::new();
+    for sheet in &pages {
+        let page = sheet.page;
+        let mut scene = PageScene::new(project, page.id, art);
+        scene.set_style(options.style, project, art);
+        if let Some(notes) = options.notes.get(&page.id) {
+            scene.set_notes(project, notes.iter().cloned(), art);
+        }
+        if let Some(revisions) = options.title_revisions.get(&page.id) {
+            scene.set_revisions(project, Some(revisions.clone()));
+        }
+        if let Some(number) = sheet.number {
+            let layout = sheet
+                .generated
+                .as_ref()
+                .and_then(|g| reports.layout_sheet(project, g))
+                .unwrap_or_default();
+            scene.set_sheet(project, Some(sheet_content(&sheet.name, number, &layout)));
+        }
+        let s = scene.scene();
+        // A report sheet shows its frame and table only: anything drawn on
+        // a generated page by accident would repeat on every sheet.
+        let frame = scene.layers().frame;
+        let mut items: Vec<_> = s
+            .iter()
+            .filter(|(_, it)| s.layer(it.layer).is_none_or(|l| l.visible))
+            .filter(|(_, it)| sheet.generated.is_none() || it.layer == frame)
+            .collect();
+        // Layer order, then id: independent of how the scene stores its
+        // items, so exports are reproducible.
+        items.sort_by_key(|(id, it)| (s.layer(it.layer).map_or(0, |l| l.order), *id));
+        let mut ops = Vec::new();
+        for (_, item) in &items {
+            ops.extend(item.primitives.iter().cloned().map(DrawOp::Primitive));
+            // Open-end rings are screen-size handles on the canvas; on
+            // paper they print at the style's world radius.
+            for h in item.handles.iter().filter(|h| h.ring) {
+                ops.push(DrawOp::Primitive(Primitive::stroked(
+                    Shape::circle(h.at, options.style.wire_end_radius),
+                    Stroke::world(0.3, h.color),
+                )));
+            }
+            ops.extend(item.labels.iter().cloned().map(DrawOp::Label));
+        }
+        let mut links = Vec::new();
+        if options.links {
+            for (item, _) in &items {
+                let Some(target) = link_target(project, &scene, *item, &index_of) else {
+                    continue;
+                };
+                let Some(bounds) = s.item_bounds(*item).filter(|b| !b.is_empty()) else {
+                    continue;
+                };
+                links.push(DrawnLink { bounds, target });
+            }
+        }
+        let (w, h) = page.format.size_mm();
+        out.push(DrawnSheet {
+            name: sheet.name.clone(),
+            bookmark: bookmark_text(sheet, options),
+            size_mm: (w as f32, h as f32),
+            ops,
+            links,
+        });
+    }
+    if let Some(appendix) = &options.appendix {
+        for lines in appendix_pages(appendix) {
+            let ops = lines
+                .iter()
+                .enumerate()
+                .map(|(k, (text, bold))| {
+                    DrawOp::Label(Label {
+                        pos: Vec2::new(
+                            APPENDIX_MARGIN_MM,
+                            APPENDIX_MARGIN_MM + k as f32 * APPENDIX_LEADING_MM,
+                        ),
+                        text: text.clone(),
+                        height: APPENDIX_TEXT_MM,
+                        color: Color::BLACK,
+                        anchor: Anchor::TopLeft,
+                        rotation: 0.0,
+                        keep_color: false,
+                        bold: *bold,
+                        priority: Default::default(),
+                    })
+                })
+                .collect();
+            out.push(DrawnSheet {
+                name: appendix.title.clone(),
+                bookmark: appendix.title.clone(),
+                size_mm: APPENDIX_PAGE_MM,
+                ops,
+                links: Vec::new(),
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// The labels of the strip under a placed sheet (name, scale, `Page n of
+/// N`), in paper millimetres. Empty when the setup has no page numbers.
+pub fn footer_labels(
+    setup: &PrintSetup,
+    name: &str,
+    placement: &Placement,
+    number: usize,
+    total: usize,
+) -> Vec<Label> {
+    if !setup.page_numbers {
+        return Vec::new();
+    }
+    let (left, middle, right) = print::footer_text(name, placement, number, total);
+    let (x, _, w, _) = placement.printable;
+    let y = placement.paper.1 - print::FOOTER_STRIP_MM / 2.0;
+    let label = |text: String, x: f32, anchor: Anchor| Label {
+        pos: Vec2::new(x, y),
+        text,
+        height: print::FOOTER_TEXT_MM,
+        color: Color::BLACK,
+        anchor,
+        rotation: 0.0,
+        keep_color: false,
+        bold: false,
+        priority: Default::default(),
+    };
+    vec![
+        label(left, x, Anchor::CenterLeft),
+        label(middle, x + w / 2.0, Anchor::Center),
+        label(right, x + w, Anchor::CenterRight),
+    ]
+}
+
 /// Exports the project to PDF bytes, filling generated pages from
 /// `reports` (the app's one [`LiveReports`] per document, kept current
 /// with every change set).
@@ -298,22 +488,15 @@ pub fn export_pdf_with_reports(
     art: &dyn SymbolArt,
     reports: &mut LiveReports,
 ) -> Result<Vec<u8>, PdfError> {
-    let selected = select_pages(project, &options.pages)?;
-    let pages: Vec<Sheet> = selected
+    let sheets = draw_sheets(project, options, art, reports)?;
+    let total = sheets.len();
+    let places: Vec<Placement> = sheets
         .iter()
-        .flat_map(|page| sheets_of(project, page, reports))
+        .map(|s| match &options.print {
+            Some(setup) => print::place(s.size_mm, setup),
+            None => Placement::identity(s.size_mm),
+        })
         .collect();
-
-    let app: Vec<Vec<(String, bool)>> = options
-        .appendix
-        .as_ref()
-        .map(appendix_pages)
-        .unwrap_or_default();
-    let app_title = options
-        .appendix
-        .as_ref()
-        .map(|a| a.title.clone())
-        .unwrap_or_default();
 
     let mut next = 1;
     let mut alloc = || {
@@ -330,46 +513,24 @@ pub fn export_pdf_with_reports(
     struct Out {
         page: Ref,
         content: Ref,
-        size_mm: (f32, f32),
     }
-    let count = (pages.len() + app.len()).max(1);
-    let out: Vec<Out> = (0..count)
-        .map(|i| {
-            let (w, h) = pages.get(i).map_or_else(
-                || {
-                    if i < pages.len() + app.len() {
-                        APPENDIX_PAGE_MM
-                    } else {
-                        (BLANK_PAGE_MM.0 as f32, BLANK_PAGE_MM.1 as f32)
-                    }
-                },
-                |p| {
-                    let (w, h) = p.page.format.size_mm();
-                    (w as f32, h as f32)
-                },
-            );
-            Out {
-                page: alloc(),
-                content: alloc(),
-                size_mm: (w, h),
-            }
+    // An empty selection still gives one blank page, so the result opens.
+    let out: Vec<Out> = (0..total.max(1))
+        .map(|_| Out {
+            page: alloc(),
+            content: alloc(),
         })
         .collect();
-    // A link to a generated page lands on its first sheet.
-    let mut index_of: HashMap<PageId, usize> = HashMap::new();
-    for (i, sheet) in pages.iter().enumerate() {
-        index_of.entry(sheet.page.id).or_insert(i);
-    }
 
     let mut pdf = Pdf::new();
 
     let mut catalog = pdf.catalog(catalog_id);
     catalog.pages(tree_id);
-    if options.bookmarks && pages.len() + app.len() > 0 {
+    if options.bookmarks && total > 0 {
         catalog.outlines(outline_id);
         catalog.page_mode(PageMode::UseOutlines);
     }
-    let label_ids: Vec<Ref> = (0..pages.len() + app.len()).map(|_| alloc()).collect();
+    let label_ids: Vec<Ref> = (0..total).map(|_| alloc()).collect();
     if !label_ids.is_empty() {
         let mut labels = catalog.page_labels();
         let mut nums = labels.nums();
@@ -379,10 +540,9 @@ pub fn export_pdf_with_reports(
     }
     catalog.finish();
     for (i, id) in label_ids.iter().enumerate() {
-        let name = pages.get(i).map_or(app_title.as_str(), |p| p.name.as_str());
         pdf.indirect(*id)
             .start::<pdf_writer::writers::PageLabel>()
-            .prefix(TextStr(name));
+            .prefix(TextStr(&sheets[i].name));
     }
 
     pdf.pages(tree_id)
@@ -410,105 +570,58 @@ pub fn export_pdf_with_reports(
     // Helvetica-Bold, written only when a page uses it.
     let mut bold_id: Option<Ref> = None;
     for (i, o) in out.iter().enumerate() {
-        let (w, h) = o.size_mm;
+        let (paper, placement) = match places.get(i) {
+            Some(p) => (p.paper, Some(*p)),
+            None => (BLANK_PAGE_MM, None),
+        };
+        let (w, h) = paper;
         let mut writer = draw::PageWriter::new(h, &mut inter);
         let mut annotations = Vec::new();
-        if let Some(lines) = i.checked_sub(pages.len()).and_then(|k| app.get(k)) {
-            let x = APPENDIX_MARGIN_MM;
-            for (k, (text, bold)) in lines.iter().enumerate() {
-                writer.label(&novo_canvas::Label {
-                    pos: Vec2::new(x, APPENDIX_MARGIN_MM + k as f32 * APPENDIX_LEADING_MM),
-                    text: text.clone(),
-                    height: APPENDIX_TEXT_MM,
-                    color: Color::BLACK,
-                    anchor: Anchor::TopLeft,
-                    rotation: 0.0,
-                    keep_color: false,
-                    bold: *bold,
-                    priority: Default::default(),
-                });
+        if let (Some(sheet), Some(place)) = (sheets.get(i), placement) {
+            let printing = options.print.is_some();
+            if printing {
+                writer.begin_placed(&place);
             }
-        }
-        if let Some(sheet) = pages.get(i) {
-            let page = sheet.page;
-            let mut scene = PageScene::new(project, page.id, art);
-            scene.set_style(options.style, project, art);
-            if let Some(notes) = options.notes.get(&page.id) {
-                scene.set_notes(project, notes.iter().cloned(), art);
-            }
-            if let Some(revisions) = options.title_revisions.get(&page.id) {
-                scene.set_revisions(project, Some(revisions.clone()));
-            }
-            if let Some(number) = sheet.number {
-                let layout = sheet
-                    .generated
-                    .as_ref()
-                    .and_then(|g| reports.layout_sheet(project, g))
-                    .unwrap_or_default();
-                scene.set_sheet(project, Some(sheet_content(&sheet.name, number, &layout)));
-            }
-            let s = scene.scene();
-            // A report sheet shows its frame and table only: anything
-            // drawn on a generated page by accident would repeat on every
-            // sheet.
-            let frame = scene.layers().frame;
-            let mut items: Vec<_> = s
-                .iter()
-                .filter(|(_, it)| s.layer(it.layer).is_none_or(|l| l.visible))
-                .filter(|(_, it)| sheet.generated.is_none() || it.layer == frame)
-                .collect();
-            // Layer order, then id: independent of how the scene stores its
-            // items, so exports are reproducible.
-            items.sort_by_key(|(id, it)| (s.layer(it.layer).map_or(0, |l| l.order), *id));
-            for (_, item) in &items {
-                for p in &item.primitives {
-                    writer.primitive(p);
-                }
-                // Open-end rings are screen-size handles on the canvas; on
-                // paper they print at the style's world radius.
-                for h in item.handles.iter().filter(|h| h.ring) {
-                    writer.primitive(&Primitive::stroked(
-                        Shape::circle(h.at, options.style.wire_end_radius),
-                        Stroke::world(0.3, h.color),
-                    ));
-                }
-                for l in &item.labels {
-                    writer.label(l);
+            for op in &sheet.ops {
+                match op {
+                    DrawOp::Primitive(p) => writer.primitive(p),
+                    DrawOp::Label(l) => writer.label(l),
                 }
             }
-            if options.links {
-                for (item, _) in &items {
-                    let Some(target) = link_target(project, &scene, *item, &index_of) else {
-                        continue;
-                    };
-                    let Some(b) = s.item_bounds(*item).filter(|b| !b.is_empty()) else {
-                        continue;
-                    };
-                    let (ti, to) = target;
-                    let id = alloc();
-                    let th = out[ti].size_mm.1;
-                    let mut a = pdf.annotation(id);
-                    a.subtype(AnnotationType::Link)
-                        .rect(Rect::new(
-                            b.min.x * PT_PER_MM,
-                            (h - b.max.y) * PT_PER_MM,
-                            b.max.x * PT_PER_MM,
-                            (h - b.min.y) * PT_PER_MM,
-                        ))
-                        .border(0.0, 0.0, 0.0, None)
-                        .contents(TextStr(&format!("Go to page {}", pages[ti].name)));
-                    a.action()
-                        .action_type(ActionType::GoTo)
-                        .destination()
-                        .page(out[ti].page)
-                        .xyz(
-                            (to.0 - 40.0).max(0.0) * PT_PER_MM,
-                            (th - (to.1 - 40.0).max(0.0)) * PT_PER_MM,
-                            None,
-                        );
-                    a.finish();
-                    annotations.push(id);
+            if printing {
+                writer.end_placed();
+            }
+            if let Some(setup) = &options.print {
+                for l in footer_labels(setup, &sheet.name, &place, i + 1, total) {
+                    writer.label(&l);
                 }
+            }
+            for link in &sheet.links {
+                let (ti, to) = link.target;
+                let (min, max) = (
+                    place.to_paper((link.bounds.min.x, link.bounds.min.y)),
+                    place.to_paper((link.bounds.max.x, link.bounds.max.y)),
+                );
+                let target = places[ti];
+                let at = target.to_paper(((to.0 - 40.0).max(0.0), (to.1 - 40.0).max(0.0)));
+                let id = alloc();
+                let mut a = pdf.annotation(id);
+                a.subtype(AnnotationType::Link)
+                    .rect(Rect::new(
+                        min.0 * PT_PER_MM,
+                        (h - max.1) * PT_PER_MM,
+                        max.0 * PT_PER_MM,
+                        (h - min.1) * PT_PER_MM,
+                    ))
+                    .border(0.0, 0.0, 0.0, None)
+                    .contents(TextStr(&format!("Go to page {}", sheets[ti].name)));
+                a.action()
+                    .action_type(ActionType::GoTo)
+                    .destination()
+                    .page(out[ti].page)
+                    .xyz(at.0 * PT_PER_MM, (target.paper.1 - at.1) * PT_PER_MM, None);
+                a.finish();
+                annotations.push(id);
             }
         }
         let mut page = pdf.page(o.page);
@@ -553,10 +666,7 @@ pub fn export_pdf_with_reports(
             .count(items.len() as i32);
         for i in 0..items.len() {
             let mut item = pdf.outline_item(items[i]);
-            let title = pages
-                .get(i)
-                .map_or_else(|| app_title.clone(), |sheet| bookmark_text(sheet, options));
-            item.parent(outline_id).title(TextStr(&title));
+            item.parent(outline_id).title(TextStr(&sheets[i].bookmark));
             if i > 0 {
                 item.prev(items[i - 1]);
             }

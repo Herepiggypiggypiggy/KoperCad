@@ -25,10 +25,14 @@ pub(crate) struct Heat3d {
     pub arrows: bool,
     /// Colour the device bodies by the air temperature in front of them.
     pub devices: bool,
+    /// Pinned labels (tag, temperature, margin) on the hottest devices.
+    pub labels: bool,
     /// The whole volume as see-through slices coloured by temperature.
     pub cloud: bool,
     /// Opacity of the cloud, 0 to 1.
     pub cloud_opacity: f32,
+    /// Slices in the cloud: more is smoother and costs more to draw.
+    pub cloud_layers: u8,
     /// Which way the cloud is cut, following the camera (not a user choice).
     pub cloud_view: super::heat_cloud::CloudView,
     /// Lines and dashes along the flow of heat (see `heat_carry`).
@@ -49,8 +53,10 @@ impl Default for Heat3d {
             lines: false,
             arrows: false,
             devices: false,
+            labels: true,
             cloud: false,
             cloud_opacity: 0.6,
+            cloud_layers: super::heat_cloud::LAYERS as u8,
             cloud_view: super::heat_cloud::CloudView::default(),
             carry: false,
             scale: None,
@@ -159,7 +165,7 @@ pub(crate) fn overlays(
             range,
             settings.cloud_view,
             settings.cloud_opacity,
-            super::heat_cloud::LAYERS,
+            usize::from(settings.cloud_layers),
         )
     {
         out.push(Overlay::Mesh(m));

@@ -1,4 +1,4 @@
-//! The PDF options dialog: File > Export drawings > Export PDF... asks which
+//! The PDF options dialog: File > Export print > Export PDF with options... asks which
 //! pages, bookmarks, links and extras go into the PDF, remembers the answer
 //! per user (the settings file under the user's profile) and exports.
 //! Export PDF and Export this page as PDF stay one-click with the defaults.
@@ -137,10 +137,10 @@ impl NovoApp {
                 } else {
                     format!("pages {}", choice.ranges.trim().replace(' ', ""))
                 };
-                let (dir, stem) = self.export_base()?;
+                let (dir, stem) = self.pdf_base()?;
                 let file = format!("{stem} {tail}.pdf")
                     .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "-");
-                super::pdf::replaceable_path(&dir.join(file))
+                self.own_pdf_path(&dir.join(file))
             }
         };
         self.export_pdf_choice_to(&path, set, choice)
@@ -166,8 +166,9 @@ impl NovoApp {
         let mut open = true;
         let mut export = false;
         let mut defaults = false;
+        let mut preview = false;
         super::panel::dialog(ctx, "Export PDF", [440.0, 470.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 let c = &mut state.choice;
                 ui.strong("Pages");
@@ -228,11 +229,25 @@ impl NovoApp {
                     if ui.button("Use the defaults").clicked() {
                         defaults = true;
                     }
+                    if ui
+                        .button("Paper and scale...")
+                        .on_hover_text(
+                            "Print preview and plot sets: choose the paper, scale, margins and \
+                             page numbers and see every sheet before it is written",
+                        )
+                        .clicked()
+                    {
+                        preview = true;
+                    }
                 });
                 ui.weak("Your choice is remembered for next time.");
             });
         if defaults {
             state.choice = PdfChoice::default();
+        }
+        if preview {
+            self.settings.pdf_choice = state.choice.clone();
+            self.open_print_preview();
         }
         if export {
             let choice = state.choice.clone();
