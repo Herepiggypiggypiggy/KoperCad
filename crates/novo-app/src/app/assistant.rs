@@ -1330,7 +1330,9 @@ impl NovoApp {
         let mut open = true;
         let mut decide: Option<(usize, bool)> = None;
         let mut send: Option<String> = None;
-        super::panel::dialog(ctx, "Ask Claude", [460.0, 700.0])
+        // The default height is "as tall as the screen allows" (the dialog caps
+        // it): settings and chat are long, so a big screen shows more of them.
+        super::panel::dialog(ctx, "Ask Claude", [600.0, 4000.0])
             .open(super::panel::esc(ctx, &mut open))
             // The agree controls are pinned below; the rest scrolls above them.
             .scroll([false, false])
