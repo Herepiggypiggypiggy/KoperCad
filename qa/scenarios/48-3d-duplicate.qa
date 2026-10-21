@@ -12,8 +12,10 @@ click 522 436
 wait 20
 key ctrl+d
 wait 30
+expect "CAB-K2"
 shot duplicated
 key ctrl+z
 wait 30
+expect_not "CAB-K2"
 shot undone
 check_layout
