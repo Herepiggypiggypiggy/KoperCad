@@ -356,7 +356,7 @@ impl NovoApp {
         let mut jump = None;
         ui.add_space(6.0);
         let wires = items::wire_count(project);
-        egui::CollapsingHeader::new(format!("Wires ({wires})"))
+        egui::CollapsingHeader::new(format!("Drawn wires ({wires})"))
             .id_salt("outline_wires")
             .open(force)
             .show(ui, |ui| {

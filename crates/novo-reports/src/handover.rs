@@ -116,6 +116,44 @@ fn row(item: &str, truth: Truth, detail: impl Into<String>) -> TruthRow {
     }
 }
 
+/// `text` broken at spaces into lines of at most `max` characters (a longer
+/// word stays whole on its own line). Always at least one line.
+pub(crate) fn wrap_words(text: &str, max: usize) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match lines.last_mut() {
+            Some(line) if line.chars().count() + 1 + word.chars().count() <= max => {
+                line.push(' ');
+                line.push_str(word);
+            }
+            _ => lines.push(word.to_owned()),
+        }
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
+}
+
+/// Adds a row whose cells run on over further rows where they are too long
+/// for `limits` (characters per column), so the printed page shows all of
+/// it instead of cutting it with "...". Only the first row carries `sources`.
+fn push_wrapped(section: &mut Section, cells: &[String], limits: &[usize]) {
+    let lines: Vec<Vec<String>> = cells
+        .iter()
+        .zip(limits)
+        .map(|(c, &max)| wrap_words(c, max))
+        .collect();
+    let height = lines.iter().map(Vec::len).max().unwrap_or(1);
+    for n in 0..height {
+        let row = lines
+            .iter()
+            .map(|l| Cell::text(l.get(n).map_or("", String::as_str)))
+            .collect();
+        section.push(row, Vec::new());
+    }
+}
+
 fn plural(n: usize, one: &str, many: &str) -> String {
     format!("{n} {}", if n == 1 { one } else { many })
 }
@@ -186,13 +224,18 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
         if bases.contains_key("door, no gap") {
             notes.push_str(" Door wires leave out the gap to the door and the hinge loop.");
         }
+        let counts = format!(
+            " A wire to cut is one connection between device pins, as in the wire list, plus the supply \
+             and PE leads. The drawing holds {} drawn wire pieces, which join into these.",
+            project.wires().count()
+        );
         rows.push(if guessed == 0 {
             row(
                 "Wire lengths",
                 Truth::Calculated,
                 format!(
-                    "{} by basis: {present}. Routed through the model's ducts or taken from a stated \
-                     cable length: calculated, not measured on the plate.{notes}",
+                    "{} to cut, by basis: {present}. Routed through the model's ducts or taken from a stated \
+                     cable length: calculated, not measured on the plate.{notes}{counts}",
                     plural(jobs.len(), "wire", "wires")
                 ),
             )
@@ -201,8 +244,8 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
                 "Wire lengths",
                 Truth::Estimate,
                 format!(
-                    "{guessed} of {} are estimates. By basis: {present}. See the Basis column of the wire \
-                     list. Check the estimated ones on the plate.{notes}",
+                    "{guessed} of {} to cut are estimates. By basis: {present}. See the Basis column of the wire \
+                     list. Check the estimated ones on the plate.{notes}{counts}",
                     plural(jobs.len(), "wire", "wires")
                 ),
             )
@@ -224,7 +267,7 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
             "Design checks",
             Truth::Incomplete,
             format!(
-                "{} remain open. The drawing set carries a Design checks page with them.",
+                "{} open. The drawing set carries a Design checks page with them.",
                 s.pill_text()
             ),
         ),
@@ -240,10 +283,11 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
             "Safety functions",
             Truth::Estimate,
             format!(
-                "{} of {} meet the required level in the calculation aid. PFHd for categories 2 to 4 is a \
+                "{} of {} {} the required level in the calculation aid. PFHd for categories 2 to 4 is a \
                  closed-form model, not the standard's table: not a certification.",
                 rated,
-                plural(functions.len(), "function", "functions")
+                plural(functions.len(), "function", "functions"),
+                if functions.len() == 1 { "meets" } else { "meet" }
             ),
         ));
     }
@@ -325,6 +369,13 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
     rows
 }
 
+/// Characters that fit a printed column of the contents page, a little under
+/// what A4 landscape holds so a wider translation still fits: File, What it
+/// is and State; Item, Standing and Detail; the note.
+const FILES_CHARS: [usize; 3] = [34, 85, 32];
+const TRUTH_CHARS: [usize; 3] = [34, 20, 100];
+const NOTE_CHARS: usize = 150;
+
 /// The contents page: what is in the package, then what to rely on.
 pub fn handover_summary(project: &Project, input: &HandoverInput) -> ReportOutput {
     let name = project.info().name.clone();
@@ -346,9 +397,10 @@ pub fn handover_summary(project: &Project, input: &HandoverInput) -> ReportOutpu
             FileStatus::Written => "Included".to_owned(),
             FileStatus::Left(why) => format!("Left out: {why}"),
         };
-        files.push(
-            vec![Cell::text(&f.name), Cell::text(&f.what), Cell::text(state)],
-            Vec::new(),
+        push_wrapped(
+            &mut files,
+            &[f.name.clone(), f.what.clone(), state],
+            &FILES_CHARS,
         );
     }
     let mut truth = Section::new(
@@ -361,20 +413,17 @@ pub fn handover_summary(project: &Project, input: &HandoverInput) -> ReportOutpu
         ],
     );
     for r in truth_rows(project, input) {
-        truth.push(
-            vec![
-                Cell::text(r.item),
-                Cell::text(r.truth.text()),
-                Cell::text(r.detail),
-            ],
-            Vec::new(),
+        push_wrapped(
+            &mut truth,
+            &[r.item, r.truth.text().to_owned(), r.detail],
+            &TRUTH_CHARS,
         );
     }
     let mut sections = vec![files, truth];
     if !input.notes.is_empty() {
         let mut notes = Section::new("notes", "Notes", vec![Column::new("note", "Note", 100.0)]);
         for n in &input.notes {
-            notes.push(vec![Cell::text(n)], Vec::new());
+            push_wrapped(&mut notes, std::slice::from_ref(n), &[NOTE_CHARS]);
         }
         sections.push(notes);
     }
@@ -438,6 +487,50 @@ pub fn revision_table(project: &Project) -> ReportOutput {
 mod tests {
     use super::*;
     use novo_core::Document;
+
+    #[test]
+    fn long_contents_text_runs_over_rows_and_nothing_is_lost() {
+        let mut input = HandoverInput::default();
+        input.files.push(HandoverFile {
+            name: "Workshop (folder)".into(),
+            what: "Everything the bench needs to cut wires and drill the plate, in the order to build it, \
+                   with the labels to print and the lists to tick off"
+                .into(),
+            status: FileStatus::Written,
+        });
+        let doc = Document::default();
+        let out = handover_summary(doc.project(), &input);
+        for (section, limits) in out
+            .sections
+            .iter()
+            .zip([&FILES_CHARS[..], &TRUTH_CHARS[..]])
+        {
+            for row in section.text_rows() {
+                for (cell, max) in row.iter().zip(limits) {
+                    assert!(cell.chars().count() <= *max, "{cell}");
+                }
+            }
+        }
+        let what: Vec<String> = out.sections[0]
+            .text_rows()
+            .iter()
+            .map(|r| r[1].clone())
+            .collect();
+        assert!(what.len() > 1);
+        assert!(
+            what.join(" ")
+                .contains("labels to print and the lists to tick off")
+        );
+    }
+
+    #[test]
+    fn counts_agree_with_their_grammar() {
+        let doc = Document::default();
+        let rows = truth_rows(doc.project(), &HandoverInput::default());
+        assert!(rows.iter().all(|r| !r.detail.contains("remain open")));
+        let wrapped = wrap_words("one two three", 7);
+        assert_eq!(wrapped, ["one two", "three"]);
+    }
 
     #[test]
     fn an_empty_project_says_so_and_does_not_claim_exact_wires() {
