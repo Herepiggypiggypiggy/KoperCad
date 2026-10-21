@@ -30,3 +30,8 @@ Unresolved after the full crane import (2026-10-21, report on the full crane exp
 Next PRs, in order
 1. Kind 17 and 91 objects: identify, or keep named.
 2. The remaining 118 guessed wire routes.
+
+Round-trip check (2026-10-21)
+- `novo_interop::compare::compare_projects(before, after)` and `kopercad-cli compare a.novo b.novo` say where two projects differ: devices, terminals, cables, parts, pages, drawn symbols (to 0.1 mm), nets by designation. Exit 1 when they differ.
+- `crates/novo-interop/tests/compare.rs` pins the known PXF round-trip differences by name: the EPLAN part number comes back whole as the order number (`ACME.C-100`), the page title is part of the page name, and without an EPLAN symbol table nothing is drawn (no symbols, no nets). Decide later whether the first two should be split on import (they affect catalog matching).
+- Next: AML must compare equal after #1148 (add that test), then texts, lines and wire runs in AML.
