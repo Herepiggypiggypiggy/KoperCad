@@ -808,6 +808,36 @@ fn a_device_that_cannot_break_the_fault_current_there_fails() {
 }
 
 #[test]
+fn icu_between_the_run_level_and_the_supply_level_does_not_fail_the_verdict() {
+    const BREAKING_CAPACITY_KA: &str = "breaking_capacity_ka";
+    let (mut doc, b) = board();
+    let probe = build(&doc);
+    let supply = probe.supply_ik_ka.value.unwrap();
+    let run = node(&probe, doc.project(), b.q1).ik_ka.value.unwrap();
+    assert!(run < supply);
+    let icu = (run + supply) / 2.0;
+    doc.transact("Icu", |tx| {
+        tx.set_property(b.q1, BREAKING_CAPACITY_KA, Some(icu.into()))
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let q1 = node(&sl, doc.project(), b.q1);
+    assert_eq!(q1.icu_status, Status::Pass);
+    let v = q1.verdict.as_ref().expect("a verdict");
+    assert!(!v.failing.iter().any(|t| t == "Breaking capacity"), "{v:?}");
+    assert!(!q1.fails(), "{v:?}");
+    assert!(
+        v.breaking_row_failed,
+        "the sheet compares with the supply level"
+    );
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("Icu is checked against Ik along the run"))
+    );
+}
+
+#[test]
 fn ik_is_not_carried_through_a_power_supply() {
     let (mut doc, b, psu, load) = board_with_psu();
     let (q4s, psus) = {
