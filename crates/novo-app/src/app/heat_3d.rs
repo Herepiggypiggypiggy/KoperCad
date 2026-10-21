@@ -33,6 +33,9 @@ pub(crate) struct Heat3d {
     pub cloud_view: super::heat_cloud::CloudView,
     /// Lines and dashes along the flow of heat (see `heat_carry`).
     pub carry: bool,
+    /// The temperature scale the person set, °C (from, to); `None` is the
+    /// automatic scale, ambient to the hottest cell.
+    pub scale: Option<(f64, f64)>,
 }
 
 impl Default for Heat3d {
@@ -50,6 +53,7 @@ impl Default for Heat3d {
             cloud_opacity: 0.6,
             cloud_view: super::heat_cloud::CloudView::default(),
             carry: false,
+            scale: None,
         }
     }
 }
@@ -88,9 +92,10 @@ pub(crate) fn tint_devices(
     snap: &CfdSnapshot,
     ambient: f64,
     place: Place,
+    scale: Option<(f64, f64)>,
     salt: u64,
 ) -> novo_view3d::Scene {
-    let range = range(snap, ambient);
+    let range = range_for(snap, ambient, scale);
     let mut out = scene.clone();
     out.revision = scene
         .revision
@@ -125,6 +130,15 @@ pub(crate) fn range(snap: &CfdSnapshot, ambient: f64) -> Range {
     Range { lo: ambient, hi }
 }
 
+/// The scale in use: the person's when it is a usable span (finite, at least
+/// 1 K wide), else the automatic one.
+pub(crate) fn range_for(snap: &CfdSnapshot, ambient: f64, scale: Option<(f64, f64)>) -> Range {
+    match scale {
+        Some((lo, hi)) if lo.is_finite() && hi.is_finite() && hi >= lo + 1.0 => Range { lo, hi },
+        _ => range(snap, ambient),
+    }
+}
+
 /// All overlays for `settings`; empty when the result cannot be sliced.
 pub(crate) fn overlays(
     snap: &CfdSnapshot,
@@ -136,7 +150,7 @@ pub(crate) fn overlays(
     if !snap.is_consistent() {
         return Vec::new();
     }
-    let range = range(snap, ambient);
+    let range = range_for(snap, ambient, settings.scale);
     let mut out = Vec::new();
     if settings.cloud
         && let Some(m) = super::heat_cloud::mesh(

@@ -6,11 +6,11 @@ use novo_cfd::{
 };
 use novo_heatview::cfd::Axis;
 use novo_heatview::range::Range;
-use novo_view3d::{Overlay, PlateFrame};
+use novo_view3d::{Item, ItemId, ItemKind, Overlay, PlateFrame, Pose, Shape};
 
 use super::heat_3d::{
-    Flow, Heat3d, Place, flow, overlays, shell_mesh, slice_mesh, stream_lines, tint_devices,
-    tracers,
+    Flow, Heat3d, Place, flow, overlays, range_for, shell_mesh, slice_mesh, stream_lines,
+    tint_devices, tracers,
 };
 
 /// 100 x 80 x 60 mm; `T = 20 + x / 10` (20 to 30 C); a wind of 1 m/s along
@@ -291,7 +291,7 @@ fn devices_are_coloured_by_the_air_in_front_of_them() {
             glam::Vec3::new(10.0, 10.0, 20.0),
         ));
     }
-    let tinted = tint_devices(&scene, &snapshot(), 20.0, place, 7);
+    let tinted = tint_devices(&scene, &snapshot(), 20.0, place, None, 7);
     assert_ne!(tinted.revision, scene.revision);
     let (a, b) = (tinted.items[0].tint, tinted.items[1].tint);
     assert!(a.is_some() && b.is_some() && a != b, "{a:?} {b:?}");
@@ -321,4 +321,50 @@ fn stepping_goes_to_the_neighbouring_cell_centre_on_a_graded_axis() {
     // Ends hold.
     assert_eq!(step_cell(&edges, 0.5, -1), 0.5);
     assert_eq!(step_cell(&edges, 31.0, 1), 23.0);
+}
+
+#[test]
+fn a_set_scale_replaces_the_automatic_one_only_when_it_is_usable() {
+    let snap = snapshot();
+    let auto = range_for(&snap, 20.0, None);
+    assert_eq!(
+        range_for(&snap, 20.0, Some((30.0, 50.0))),
+        Range { lo: 30.0, hi: 50.0 }
+    );
+    for bad in [
+        (50.0, 30.0),
+        (30.0, 30.5),
+        (f64::NAN, 40.0),
+        (20.0, f64::INFINITY),
+    ] {
+        assert_eq!(range_for(&snap, 20.0, Some(bad)), auto, "{bad:?}");
+    }
+}
+
+#[test]
+fn raising_the_scale_floor_changes_how_a_device_is_coloured() {
+    let (frame, place) = (
+        PlateFrame {
+            width: 100.0,
+            height: 100.0,
+        },
+        Place {
+            plate_x: 0.0,
+            plate_y: 0.0,
+            frame: PlateFrame {
+                width: 100.0,
+                height: 100.0,
+            },
+        },
+    );
+    let mut scene = novo_view3d::Scene::new(frame);
+    scene.push(Item::new(
+        ItemId::new(ItemKind::Device, 1),
+        Shape::Box,
+        Pose::at(frame.world(90.0, 40.0, 0.0)),
+        glam::Vec3::new(10.0, 10.0, 20.0),
+    ));
+    let a = tint_devices(&scene, &snapshot(), 20.0, place, None, 1).items[0].tint;
+    let b = tint_devices(&scene, &snapshot(), 20.0, place, Some((30.0, 40.0)), 1).items[0].tint;
+    assert!(a.is_some() && b.is_some() && a != b);
 }
