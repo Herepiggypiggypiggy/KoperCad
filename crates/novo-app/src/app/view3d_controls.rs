@@ -47,6 +47,8 @@ pub(crate) struct Controls {
     /// A marker where each terminal of a part is (Parts window > Connection
     /// points finds or edits them).
     pub(super) pins: bool,
+    /// Ducts tinted by how full the routed wires leave them.
+    pub(super) duct_fill: bool,
     /// How many devices are drawn with a maker model, set by the host each frame.
     pub(super) models_text: Option<String>,
 }
@@ -69,6 +71,7 @@ impl Default for Controls {
             heat_panel: false,
             surfaces: false,
             pins: false,
+            duct_fill: false,
             models_text: None,
         }
     }
@@ -156,6 +159,7 @@ pub(super) fn toolbar(
                 controls.missing_data,
                 controls.surfaces,
                 controls.pins,
+                controls.duct_fill,
             ]
             .iter()
             .filter(|b| **b)
@@ -188,6 +192,15 @@ pub(super) fn toolbar(
                         "Surfaces",
                         "Show the door, walls, roof, floor and extra plates as faint panes. \
                          The surface picked in the Cabinet header is highlighted.",
+                    );
+                    toggle(
+                        ui,
+                        &mut controls.duct_fill,
+                        "Duct fill",
+                        "Tint each duct by how full the routed wires leave it: green up to 80 % \
+                         of the allowed fill, amber above, red over the limit, grey for a duct \
+                         nothing runs in or without a cross-section. The figure is the routing \
+                         engine's (wire section and the project's fill limit).",
                     );
                     toggle(
                         ui,
