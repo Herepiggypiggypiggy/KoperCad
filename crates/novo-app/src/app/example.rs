@@ -209,7 +209,7 @@ fn add_safety_function(tx: &mut Tx<'_>) -> ModelResult<()> {
             category: "1".into(),
             dc_percent: 0.0,
             ccf: 0,
-            channel1: vec![part("Stop button", "=A1+CAB-S0", 100_000.0)],
+            channel1: vec![part("Stop button", "=A1+CAB-S0", 200_000.0)],
             ..Block::new(Role::Sensor, "Stop")
         },
         Block {
