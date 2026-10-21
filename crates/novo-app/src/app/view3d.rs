@@ -101,7 +101,7 @@ pub(crate) struct View3dMode {
     heat_carry: super::heat_carry::Carry,
     /// Scene with devices coloured by temperature, for the key (scene
     /// revision, result id).
-    heat_scene: Option<((u64, u64), Arc<novo_view3d::Scene>)>,
+    heat_scene: Option<(HeatSceneKey, Arc<novo_view3d::Scene>)>,
     /// The layers the scene was built with.
     built_layers: Layers,
     /// The hidden items the scene was built with.
@@ -123,6 +123,10 @@ pub(crate) struct View3dMode {
     /// The frame statistics panel and the cost of the last scene rebuild.
     pub(super) stats: Stats,
 }
+
+/// What the tinted scene was built for: scene revision, result id and the
+/// set temperature scale (as bits).
+type HeatSceneKey = (u64, u64, Option<(u64, u64)>);
 
 /// What a `view.*` command asks of the 3D view.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -724,15 +728,25 @@ impl NovoApp {
         }
         let shown = match &solution {
             Some(sol) if mode.heat.devices => {
-                let key = (scene.revision, sol.id);
+                let key = (
+                    scene.revision,
+                    sol.id,
+                    mode.heat.scale.map(|(a, b)| (a.to_bits(), b.to_bits())),
+                );
                 if !matches!(&mode.heat_scene, Some((k, _)) if *k == key) {
                     let place = Place {
                         plate_x: sol.plate[0],
                         plate_y: sol.plate[1],
                         frame: scene.frame,
                     };
-                    let tinted =
-                        heat_3d::tint_devices(scene, &sol.snapshot, sol.ambient, place, sol.id);
+                    let tinted = heat_3d::tint_devices(
+                        scene,
+                        &sol.snapshot,
+                        sol.ambient,
+                        place,
+                        mode.heat.scale,
+                        sol.id,
+                    );
                     mode.heat_scene = Some((key, Arc::new(tinted)));
                 }
                 mode.heat_scene.as_ref().map(|(_, s)| s)
@@ -1233,7 +1247,7 @@ fn heat_controls(
     tag_of: &dyn Fn(u64) -> String,
 ) -> Option<u64> {
     use novo_heatview::cfd::Axis;
-    let range = heat_3d::range(&sol.snapshot, sol.ambient);
+    let range = heat_3d::range_for(&sol.snapshot, sol.ambient, h.scale);
     let mut jump = None;
     egui::Frame::new()
         .inner_margin(egui::Margin::symmetric(10, 4))
@@ -1295,6 +1309,7 @@ fn heat_controls(
             "Click the air to read its temperature and speed there (Esc clears the point)",
         );
         jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
+        scale_menu(ui, h, heat_3d::range(&sol.snapshot, sol.ambient));
         if probe.on {
             // Its own row, always there while the probe is on, so the strip
             // does not change height when a point is picked.
@@ -1310,6 +1325,50 @@ fn heat_controls(
             });
         });
     jump
+}
+
+/// The Scale menu: the temperature range the colours, the cloud and the
+/// shell use. Raising the lower end makes air below it clear in the cloud and
+/// spreads the colours over the hot part, which finds a hot spot in a mostly
+/// warm cabinet; Auto goes back to ambient to the hottest cell.
+fn scale_menu(ui: &mut egui::Ui, h: &mut Heat3d, auto: novo_heatview::range::Range) {
+    let label = if h.scale.is_some() {
+        "Scale: set"
+    } else {
+        "Scale"
+    };
+    let config = egui::containers::menu::MenuConfig::new()
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+    egui::containers::menu::MenuButton::new(label).config(config).ui(ui, |ui| {
+        let (mut lo, mut hi) = h.scale.unwrap_or((auto.lo, auto.hi));
+        let mut changed = false;
+        ui.horizontal(|ui| {
+            ui.label("From");
+            changed |= ui
+                .add(egui::DragValue::new(&mut lo).range(-50.0..=300.0).max_decimals(1).suffix(" °C"))
+                .changed();
+            ui.label("to");
+            changed |= ui
+                .add(egui::DragValue::new(&mut hi).range(-50.0..=300.0).max_decimals(1).suffix(" °C"))
+                .changed();
+        });
+        if changed {
+            h.scale = Some((lo, hi.max(lo + 1.0)));
+        }
+        ui.label(
+            egui::RichText::new(
+                "Colours, cloud and shell use this range. Air below the lower end is clear in the cloud.",
+            )
+            .small(),
+        );
+        if ui
+            .add_enabled(h.scale.is_some(), egui::Button::new("Auto"))
+            .on_hover_text("Ambient to the hottest cell")
+            .clicked()
+        {
+            h.scale = None;
+        }
+    });
 }
 
 /// The slice plane's position in millimetres along its axis, with a step to
