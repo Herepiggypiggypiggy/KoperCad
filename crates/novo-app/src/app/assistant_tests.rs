@@ -994,7 +994,7 @@ fn a_key_without_access_and_a_bad_request_give_a_reason_not_a_crash() {
 
 #[test]
 fn no_network_and_a_rate_limit_end_in_a_plain_message_after_the_retries() {
-    // Each waits through the two back-off pauses (about six seconds).
+    // The test client does not wait between retries.
     let mut s = setup(DataScope::Outline);
     ask(&mut s, "offline"); // the script has no reply: the transport fails
     let shown = s.d.app.wb.assistant.transcript_text();
