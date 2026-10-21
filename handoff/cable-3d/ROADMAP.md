@@ -11,7 +11,7 @@ Scope: draw cable and wire runs in the 3D cabinet view along the routed paths to
 - QA scenario `qa/scenarios/31-cable-runs-3d.qa`; app tests `view3d_runs_tests.rs`.
 
 ## Next, in order
-1. Outside part of a run: a drawn stub from the entry along the gland's wall once the model knows which wall the entry is on (today the entry is a plate point; the outside part stays a stated length, never drawn).
+1. ~~Outside part of a run~~ done in PR 5 (see below).
 2. ~~Bend radius and clearance checks~~ done in PR 3 (see below).
 3. Pick a duct in 3D and list the runs in it (reverse of the card).
 4. Cable runs between two cabinets (two plates) once the model routes across enclosures.
@@ -27,6 +27,13 @@ Scope: draw cable and wire runs in the 3D cabinet view along the routed paths to
 ## Still open
 - Heat panel and Wire runs panel both hang under the cube: with Heat open on a short window the Wire runs panel starts beside it (draggable).
 - "option" in Ctrl+K returns scattered letter matches (round 11): fuzzy ranking in `novo-workflow`, the UX thread's.
+
+## Done in PR 5 (branch claude/cable-entry-stub)
+- Property `entry.wall` (top, bottom, left, right) on the enclosure, no `novo-core` change: `novo_routing::entry::{Wall, entry_wall, set_wall, nearest_wall, edge_point}`. Not stated reads as the nearest plate edge, flagged as a guess.
+- Cabinet > Routes panel: "Gland in the" selector (Nearest edge, Top, Bottom, Left, Right), one undo step.
+- 3D: the entry marker gets a line from the top of its post to the plate edge of the wall and an arrow beyond it, solid when the wall is stated and dashed when it is the nearest edge by default. The outside part is a stated length, not a path, so the arrow is not to scale (the Run card says so).
+- QA scenarios 39 (1366x768) and 39-1920 (1920x1080).
+- No length uses the wall; it only decides where the way out is drawn.
 
 ## Done in PR 4 (branch claude/cable-duct-runs)
 - Click a duct in 3D: the Wire runs panel ("Duct runs") shows the duct's place and fill, the runs in it (rows, click one for its Run card), "Select its n runs", and lights the paths of those runs. A duct no drawn wire lies in says so. Needs the wires layer on (the runs come from the routed wires).

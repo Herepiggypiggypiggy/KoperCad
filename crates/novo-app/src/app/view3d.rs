@@ -587,7 +587,7 @@ impl NovoApp {
                         scene,
                         facts,
                         &mode.view.state.selection,
-                        novo_routing::entry::entry_point(project, id),
+                        view3d_runs::entry_draw(project, id),
                     )
                 }
                 _ => Vec::new(),

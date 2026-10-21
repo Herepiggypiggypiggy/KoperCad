@@ -191,6 +191,8 @@ pub(super) enum Ask {
     SetEntryPoint(StructureId, Option<(f64, f64)>),
     /// Set or clear the stated wire length outside the entry (mm).
     SetEntryOutside(StructureId, Option<f64>),
+    /// Set or clear the wall the gland is in (the way out is drawn through it).
+    SetEntryWall(StructureId, Option<novo_routing::entry::Wall>),
     ExportWireProduction,
     OpenBench,
     ExportWiringDxf(StructureId),
@@ -2402,6 +2404,11 @@ impl NovoApp {
             Ask::SetEntryOutside(plate, mm) => {
                 self.cabinet_edit("Wire outside the cabinet entry", move |tx| {
                     novo_routing::entry::set_outside_mm(tx, plate, mm)
+                });
+            }
+            Ask::SetEntryWall(plate, wall) => {
+                self.cabinet_edit("Wall of the cabinet entry", move |tx| {
+                    novo_routing::entry::set_wall(tx, plate, wall)
                 });
             }
             Ask::ExportWireCut => {

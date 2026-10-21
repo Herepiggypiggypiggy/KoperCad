@@ -7,6 +7,10 @@ seen once they open the list. Add an entry when a feature PR merges. -->
 Where: 3D workspace, click a wire that ends in another cabinet.
 When both cabinets have an entry point, each cabinet draws its own part of the wire to its entry, and the Run card names the other cabinet. The run between the two entries is not drawn, and no length is invented for it. Each leg counts toward the duct fill of its own cabinet.
 
+## 2026-10-21-e · Which wall the cabinet entry is in
+Where: Cabinet workspace, Routes panel, "Gland in the" (and the 3D view).
+State the wall the gland is in; the 3D view draws the way out from the entry through that edge of the plate. Not stated, the nearest edge is drawn dashed as a guess.
+
 ## 2026-10-21-d · Bend radius and heat checks on the Run card
 Where: 3D workspace, click a wire; Settings rules "Bend radius", "Gap to hot devices", "Hot from".
 The card says whether the wire or cable can take the duct corners of its path (a red cross marks a tight one) and which devices losing heat it passes close to. Both are models, and the card says what they do not know.
