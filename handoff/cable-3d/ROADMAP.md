@@ -18,3 +18,12 @@ Scope: draw cable and wire runs in the 3D cabinet view along the routed paths to
 
 ## Open questions
 - Duct names: the card says "Duct at y 415 mm" because rails have no tag. A duct tag in the model would read better.
+
+## Done in PR 2 (branch claude/cable-runs-panels)
+- One Wire runs panel (list when open, Run card of the picked wire below) on the right under the view cube, via `panel::Panel`: follows the canvas, draggable, no overlap with the Inspector (left) at 1366x768, 1920x1080 and 1366x600; starts under the Heat panel when that is open.
+- Review follow-ups of #1205: cable shorter than the inside route has its own sentence; stale `fill_basis` comment fixed; the basis is read only after the project has been unchanged 0.25 s (no re-route per drag frame); "cable length" is neutral, not green; the card says fill is a planning value.
+- Ctrl+K: "cable run", "cable runs", "run card", "route", "cabinet entry" find View > 3D > Wire runs.
+
+## Still open
+- Heat panel and Wire runs panel both hang under the cube: with Heat open on a short window the Wire runs panel starts beside it (draggable).
+- "option" in Ctrl+K returns scattered letter matches (round 11): fuzzy ranking in `novo-workflow`, the UX thread's.
