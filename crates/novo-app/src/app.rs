@@ -65,6 +65,7 @@ mod eplan_parts;
 mod error_words;
 mod example;
 mod faults;
+mod handover;
 mod heat;
 mod heat_3d;
 #[cfg(test)]
@@ -278,6 +279,8 @@ mod gate1_tests;
 #[cfg(test)]
 mod greyed_commands_tests;
 #[cfg(test)]
+mod handover_tests;
+#[cfg(test)]
 mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
@@ -330,6 +333,7 @@ use eframe::egui;
 use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
+const HANDOVER_HINT: &str = "One folder for the customer: the drawing set, revisions, parts, wire, terminal and cable lists, the commissioning record, safety functions, an Excel workbook, and a contents page that says what is exact and what is an estimate.";
 const WORKSHOP_HINT: &str = "One folder for the hand workshop: a 1:1 drilling template of each mounting plate (tiled on A4 or A3, with cross hairs, hole sizes and a 100 mm check ruler), the cut list, ferrules, labels and the assembly checklist with tick boxes.";
 const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Edit the file in Excel and bring it back with File > Import spreadsheet. The generated reports are under Export all reports to Excel.";
