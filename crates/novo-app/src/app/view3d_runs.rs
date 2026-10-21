@@ -342,11 +342,13 @@ pub(super) fn duct_runs<'a>(
     facts: &'a BTreeMap<u64, WireFacts>,
     selection: &BTreeSet<ItemId>,
 ) -> Vec<DuctRuns<'a>> {
+    let ordered = super::view3d_wires::sorted(facts);
     ducts_picked(selection)
         .into_iter()
         .map(|rail| {
-            let wires: Vec<&WireFacts> = super::view3d_wires::sorted(facts)
-                .into_iter()
+            let wires: Vec<&WireFacts> = ordered
+                .iter()
+                .copied()
                 .filter(|f| f.duct_use.iter().any(|d| d.rail == rail))
                 .collect();
             let fill = wires
@@ -740,12 +742,17 @@ fn duct_body(ui: &mut egui::Ui, d: &DuctRuns<'_>) -> Asked {
     }
     let total: f64 = d.wires.iter().map(|f| f.length_mm).sum();
     ui.weak(format!(
-        "{} runs, {} inside the cabinet",
+        "{} {}, together {} long, whole runs",
         d.wires.len(),
+        if d.wires.len() == 1 { "run" } else { "runs" },
         super::view3d_wires::metres(total)
     ));
     if ui
-        .small_button(format!("Select its {} runs", d.wires.len()))
+        .small_button(if d.wires.len() == 1 {
+            "Select its run".to_owned()
+        } else {
+            format!("Select its {} runs", d.wires.len())
+        })
         .on_hover_text("Pick every run in this duct to read them together")
         .clicked()
     {
