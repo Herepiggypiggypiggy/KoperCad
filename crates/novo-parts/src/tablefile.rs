@@ -139,13 +139,13 @@ fn utf16_text(bytes: &[u8]) -> Option<String> {
         [0xFE, 0xFF, rest @ ..] => (rest, true),
         _ => return None,
     };
-    let units: Vec<u16> = rest
-        .chunks_exact(2)
-        .map(|p| {
+    let units: Vec<u16> = (0..rest.len() / 2)
+        .map(|i| {
+            let pair = [rest[2 * i], rest[2 * i + 1]];
             if big {
-                u16::from_be_bytes([p[0], p[1]])
+                u16::from_be_bytes(pair)
             } else {
-                u16::from_le_bytes([p[0], p[1]])
+                u16::from_le_bytes(pair)
             }
         })
         .collect();
