@@ -321,3 +321,29 @@ fn a_device_of_a_known_family_gets_its_typical_shape_at_its_own_size() {
         Shape::Box
     );
 }
+
+#[test]
+fn a_turned_device_hands_the_scene_its_needs_on_the_sides_of_the_plate() {
+    use novo_layout::Margins;
+    let mut l = layout();
+    l.placements[0].rotated = true;
+    l.placements[0].margins = Margins {
+        above: Some(30.0),
+        below: Some(40.0),
+        left: Some(10.0),
+        right: Some(20.0),
+    };
+    let s = from_layout(&l, &inputs(), &Options::default());
+    let item = s.get(id(ItemKind::Device, 5)).unwrap();
+    // The data sheet's sides turn with the part, 90 degrees clockwise: what it
+    // calls below is now on the left, above on the right, left above, right below.
+    assert_eq!(item.needs, Some([40.0, 30.0, 10.0, 20.0]));
+    // The zone then grows the turned footprint by those, in world sides.
+    let b = s.world_bounds(item);
+    let sel = std::collections::BTreeSet::from([item.id]);
+    let zone = crate::dimension::clearance_zones(&s, &sel);
+    assert!((zone[0][0].x - (b.min.x - 40.0)).abs() < 0.01);
+    assert!((zone[0][2].x - (b.max.x + 30.0)).abs() < 0.01);
+    assert!((zone[0][0].y - (b.min.y - 20.0)).abs() < 0.01);
+    assert!((zone[0][2].y - (b.max.y + 10.0)).abs() < 0.01);
+}

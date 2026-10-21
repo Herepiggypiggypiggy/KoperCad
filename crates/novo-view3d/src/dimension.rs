@@ -434,6 +434,32 @@ mod tests {
     }
 
     #[test]
+    fn a_turned_device_asks_for_its_space_on_the_sides_of_the_plate() {
+        let mut s = scene();
+        for it in &mut s.items {
+            if it.id == ItemId::new(ItemKind::Device, 11) {
+                // R: a quarter turn clockwise seen from the door. The part is
+                // 50 x 100 upright, so 100 wide and 50 tall on the plate.
+                it.pose.rotation = glam::Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2);
+                // Plate sides, as the build fills them in.
+                it.needs = Some([10.0, 20.0, 30.0, 40.0]);
+            }
+        }
+        let b = s.world_bounds(s.get(ItemId::new(ItemKind::Device, 11)).unwrap());
+        assert!(
+            (b.max.x - b.min.x - 100.0).abs() < 0.01 && (b.max.y - b.min.y - 50.0).abs() < 0.01
+        );
+        let z = clearance_zones(&s, &pick(&s, 11));
+        assert_eq!(z.len(), 1);
+        // Left 10 and right 20 grow the wide side, above 30 and below 40 the tall one:
+        // the needs are not turned a second time.
+        assert!((z[0][0].x - (b.min.x - 10.0)).abs() < 0.01);
+        assert!((z[0][0].y - (b.min.y - 40.0)).abs() < 0.01);
+        assert!((z[0][2].x - (b.max.x + 20.0)).abs() < 0.01);
+        assert!((z[0][2].y - (b.max.y + 30.0)).abs() < 0.01);
+    }
+
+    #[test]
     fn gaps_between_devices_say_whether_they_keep_the_asked_clearance() {
         let mut s = scene();
         for it in &mut s.items {

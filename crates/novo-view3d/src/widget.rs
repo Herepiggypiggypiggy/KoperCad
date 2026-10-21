@@ -1317,7 +1317,7 @@ impl View3d {
         bounds: &crate::math::Aabb,
         look: &Look,
     ) {
-        let stroke = Stroke::new(1.0, color3(look.selection.edge, 200));
+        let stroke = Stroke::new(1.5, color3(look.selection.edge, 230));
         for zone in dimension::clearance_zones(scene, &self.state.selection) {
             let pts: Option<Vec<Pos2>> = zone
                 .iter()
