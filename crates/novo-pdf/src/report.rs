@@ -87,6 +87,9 @@ fn width_mm(text: &str, size: f32, bold: bool) -> f32 {
     }
 }
 
+/// Line pitch of wrapped cell text, as a multiple of the text height.
+const LINE_PITCH: f32 = 1.15;
+
 /// `text` cut with an ellipsis to fit `width` mm.
 fn fit(text: &str, width: f32, size: f32, bold: bool) -> String {
     let line = text.lines().next().unwrap_or_default();
@@ -102,6 +105,32 @@ fn fit(text: &str, width: f32, size: f32, bold: bool) -> String {
         }
     }
     String::new()
+}
+
+/// `text` broken at spaces into at most `max_lines` lines that fit `width`
+/// mm; the last line is cut with an ellipsis only when the text still does
+/// not fit (a single word wider than the cell, or too many lines).
+fn wrap_to_fit(text: &str, width: f32, size: f32, bold: bool, max_lines: usize) -> Vec<String> {
+    let text = text.lines().next().unwrap_or_default();
+    if width_mm(text, size, bold) <= width || max_lines < 2 {
+        return vec![fit(text, width, size, bold)];
+    }
+    let mut lines: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        if let Some(line) = lines.last_mut() {
+            let joined = format!("{line} {word}");
+            if width_mm(&joined, size, bold) <= width {
+                *line = joined;
+                continue;
+            }
+        }
+        lines.push(word.to_owned());
+    }
+    if lines.len() > max_lines {
+        let rest = lines.split_off(max_lines - 1).join(" ");
+        lines.push(rest);
+    }
+    lines.iter().map(|l| fit(l, width, size, bold)).collect()
 }
 
 fn draw_layout(w: &mut draw::PageWriter, layout: &PageLayout) {
@@ -120,23 +149,27 @@ fn draw_layout(w: &mut draw::PageWriter, layout: &PageLayout) {
             continue;
         }
         let size = t.text_mm as f32;
-        let text = fit(&t.text, t.width as f32, size, t.bold);
-        if text.is_empty() {
-            continue;
-        }
+        // A cell too narrow for its text runs onto a second line when the
+        // box is tall enough, so a printed header or sentence is not cut.
+        let pitch = size * LINE_PITCH;
+        let max_lines = ((t.height as f32 / pitch).floor() as usize).max(1);
+        let lines = wrap_to_fit(&t.text, t.width as f32, size, t.bold, max_lines);
         let (x, anchor) = match t.align {
             Align::Left => (t.x, Anchor::CenterLeft),
             Align::Center => (t.x + t.width / 2.0, Anchor::Center),
             Align::Right => (t.x + t.width, Anchor::CenterRight),
         };
-        let mut label = Label::new(
-            Vec2::new(x as f32, (t.y + t.height / 2.0) as f32),
-            text,
-            size,
-        );
-        label.anchor = anchor;
-        label.bold = t.bold;
-        w.label(&label);
+        let top = t.y as f32 + (t.height as f32 - pitch * lines.len() as f32) / 2.0;
+        for (n, text) in lines.into_iter().enumerate() {
+            if text.is_empty() {
+                continue;
+            }
+            let y = top + pitch * (n as f32 + 0.5);
+            let mut label = Label::new(Vec2::new(x as f32, y), text, size);
+            label.anchor = anchor;
+            label.bold = t.bold;
+            w.label(&label);
+        }
     }
     for l in &layout.lines {
         let width = if l.heavy { 0.35 } else { 0.15 };

@@ -369,15 +369,142 @@ fn a_condition_that_is_not_a_tie_is_shown_as_typed() {
     let mut doc = machine();
     let page = doc.project().pages().next().unwrap().id;
     doc.transact("Cond", |tx| {
-        set_condition(tx, page, Some("opt.conveyor && opt.supply == '480V'"))
+        set_condition(tx, page, Some("opt.conveyor || opt.supply == '480V'"))
     })
     .unwrap();
     assert_eq!(
         describe_condition(doc.project(), page).as_deref(),
-        Some("opt.conveyor && opt.supply == '480V'")
+        Some("opt.conveyor || opt.supply == '480V'")
     );
     assert_eq!(
         describe_condition(doc.project(), doc.project().devices().next().unwrap().id),
         None
+    );
+}
+
+fn picker_defs() -> Vec<OptionDef> {
+    vec![
+        OptionDef::yes_no("conveyor", "Conveyor", false),
+        OptionDef::yes_no("compact", "Compact", false),
+        OptionDef::choice("supply", "Supply", &["400V", "480V"], "400V"),
+        OptionDef::number("motors", "Motors", 1.0, 8.0, 2.0),
+    ]
+}
+
+fn line(option: &str, test: Test, value: Value) -> Clause {
+    Clause {
+        option: option.into(),
+        test,
+        value,
+    }
+}
+
+#[test]
+fn picked_lines_make_the_condition_a_user_would_have_typed() {
+    let defs = picker_defs();
+    let lines = vec![
+        line("supply", Test::Is, Value::Text("480V".into())),
+        line("compact", Test::Is, Value::Bool(false)),
+    ];
+    let text = condition_from_clauses(&defs, &lines).unwrap().unwrap();
+    assert_eq!(text, "opt.supply == '480V' && !opt.compact");
+    assert_eq!(clauses_of(&defs, &text), Some(lines));
+    assert_eq!(condition_from_clauses(&defs, &[]).unwrap(), None);
+}
+
+#[test]
+fn is_not_and_number_tests_round_trip() {
+    let defs = picker_defs();
+    for (lines, text) in [
+        (
+            vec![line("supply", Test::IsNot, Value::Text("480V".into()))],
+            "opt.supply != '480V'",
+        ),
+        (
+            vec![line("motors", Test::AtLeast, Value::Int(3))],
+            "opt.motors >= 3",
+        ),
+        (
+            vec![line("motors", Test::AtMost, Value::Int(4))],
+            "opt.motors <= 4",
+        ),
+    ] {
+        assert_eq!(
+            condition_from_clauses(&defs, &lines).unwrap().as_deref(),
+            Some(text)
+        );
+        assert_eq!(clauses_of(&defs, text), Some(lines));
+    }
+}
+
+#[test]
+fn a_hand_written_expression_is_left_to_the_text_box() {
+    let defs = picker_defs();
+    for text in [
+        "opt.conveyor || opt.compact",
+        "!(opt.conveyor)",
+        "opt.supply == '480V' || true",
+        "opt.unknown",
+        "opt.supply",
+        "opt.conveyor == 1",
+        "opt.motors > 2",
+    ] {
+        assert_eq!(clauses_of(&defs, text), None, "{text}");
+    }
+}
+
+#[test]
+fn a_line_that_cannot_hold_is_refused() {
+    let defs = picker_defs();
+    // A yes/no has no "is not"; a choice has no "at least"; a value must be one of the choices.
+    for bad in [
+        line("conveyor", Test::AtLeast, Value::Bool(true)),
+        line("supply", Test::AtLeast, Value::Text("400V".into())),
+        line("supply", Test::Is, Value::Text("24V".into())),
+        line("nothing", Test::Is, Value::Bool(true)),
+    ] {
+        assert!(
+            condition_from_clauses(&defs, std::slice::from_ref(&bad)).is_err(),
+            "{bad:?}"
+        );
+    }
+}
+
+#[test]
+fn a_picked_condition_decides_what_is_in_the_machine() {
+    let mut doc = machine();
+    let defs = options(doc.project());
+    let lines = vec![line("conveyor", Test::Is, Value::Bool(true))];
+    let text = condition_from_clauses(&defs, &lines).unwrap().unwrap();
+    let page = doc.project().pages().last().unwrap().id;
+    doc.transact("Condition", |tx| set_condition(tx, page, Some(&text)))
+        .unwrap();
+    assert_eq!(
+        condition_of(doc.project(), page).as_deref(),
+        Some(text.as_str())
+    );
+    assert_eq!(clauses_of(&options(doc.project()), &text).unwrap(), lines);
+}
+
+#[test]
+fn a_new_line_starts_with_the_answer_that_changes_the_machine() {
+    let defs = picker_defs();
+    let first = |id: &str| Clause::first_for(defs.iter().find(|d| d.id == id).unwrap());
+    assert_eq!(first("conveyor").value, Value::Bool(true));
+    assert_eq!(first("supply").value, Value::Text("480V".into()));
+    assert_eq!(first("motors").value, Value::Int(2));
+}
+
+#[test]
+fn picked_lines_are_described_in_words() {
+    let mut doc = machine();
+    let page = doc.project().pages().next().unwrap().id;
+    doc.transact("Cond", |tx| {
+        set_condition(tx, page, Some("opt.conveyor && opt.supply != '480V'"))
+    })
+    .unwrap();
+    assert_eq!(
+        describe_condition(doc.project(), page).as_deref(),
+        Some("Conveyor and Supply is not 480V")
     );
 }

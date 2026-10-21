@@ -220,14 +220,7 @@ impl Models {
             let Some(record) = records.get(&part_key) else {
                 continue;
             };
-            let kept = turns
-                .get(&format!(
-                    "{}|{}",
-                    part_key.manufacturer(),
-                    part_key.order_number()
-                ))
-                .copied()
-                .unwrap_or([0; 3]);
+            let kept = LocalLibrary::turns_in(&turns, &part_key);
             parts.insert(raw, (part_key, kept));
             let Some(item) = scene.get(novo_view3d::ItemId::new(ItemKind::Device, raw)) else {
                 continue;
@@ -273,7 +266,9 @@ impl Models {
     /// to show when the turns could not be kept.
     pub(super) fn turn(&mut self, device: u64, how: Turn) -> Option<String> {
         let (key, now) = self.parts.get(&device)?.clone();
-        let library = LocalLibrary::open_default()?;
+        let Some(library) = LocalLibrary::open_default() else {
+            return Some("Could not open the parts library to keep the model's turns".into());
+        };
         let to = turned(now, how);
         if let Err(e) = library.set_turns(&key, to) {
             return Some(format!("Could not keep the model's turns: {e}"));

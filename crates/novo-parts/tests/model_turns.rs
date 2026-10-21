@@ -53,3 +53,18 @@ fn a_records_file_from_before_turns_still_reads() {
     assert!(lib.notice_accepted("Example Maker"));
     assert_eq!(lib.turn_of(&key()), [0; 3]);
 }
+
+#[test]
+fn a_hand_edited_count_is_folded_not_fatal() {
+    let dir = tempfile::tempdir().unwrap();
+    let lib = LocalLibrary::at(dir.path());
+    lib.set_turns(&key(), [1, 2, 3]).unwrap();
+    let path = dir.path().join("records.json");
+    let mut json: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    let table = json["turns"].as_object_mut().unwrap();
+    let name = table.keys().next().unwrap().clone();
+    table.insert(name, serde_json::json!([301, 2, 3]));
+    std::fs::write(&path, json.to_string()).unwrap();
+    assert_eq!(lib.turn_of(&key()), [1, 2, 3]);
+}

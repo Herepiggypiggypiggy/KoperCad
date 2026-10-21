@@ -4,25 +4,15 @@
 use eframe::egui;
 use novo_canvas::model::item_id;
 use novo_canvas::{Mark, MarkKind};
-use novo_checks::{Problem, ProblemKind, Severity, Summary};
+use novo_checks::{Problem, Severity, Summary};
 use novo_core::{AnyId, PageId, Project};
 use novo_xref::Place;
 
 use super::{Level, NovoApp};
 
-/// The open design-check problems plus the wires that break the project's
-/// house wire rules (those rules live in the reports crate, so the checks
-/// crate cannot see them). A waiver of "Wire breaks project rule" covers them.
+/// The open problems: the design checks plus the house-rule wire breaks.
 pub(super) fn open_problems(project: &Project) -> Vec<Problem> {
-    let mut problems = novo_checks::check_open(project);
-    for b in novo_reports::autopilot::rule_breaks(project) {
-        let mut problem = Problem::new(ProblemKind::WireRule, vec![AnyId::Wire(b.wire)], b.message);
-        problem.page = project.wire(b.wire).map(|w| w.page);
-        if novo_checks::waiver_of(project, &problem).is_none() {
-            problems.push(problem);
-        }
-    }
-    problems
+    novo_reports::issues::open(project)
 }
 
 impl NovoApp {
@@ -318,7 +308,7 @@ impl NovoApp {
         let Some(doc) = self.backend.document() else {
             return;
         };
-        let waived = novo_checks::waived_problems(doc.project());
+        let waived = novo_reports::issues::waived(doc.project());
         if waived.is_empty() {
             return;
         }

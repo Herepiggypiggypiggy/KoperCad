@@ -38,8 +38,10 @@ pub fn waive(tx: &mut Tx<'_>, problem: &Problem, reason: &str) -> Result<Dismiss
     Ok(id)
 }
 
-/// Splits checked problems into the open ones and the waived ones.
-fn split(project: &Project, problems: Vec<Problem>) -> (Vec<Problem>, Vec<Waived>) {
+/// Splits checked problems into the open ones and the waived ones. For an
+/// application that adds problems found outside this crate (their input lives
+/// elsewhere) to the list from [`check`](crate::check).
+pub fn split_waived(project: &Project, problems: Vec<Problem>) -> (Vec<Problem>, Vec<Waived>) {
     let mut open = Vec::new();
     let mut waived = Vec::new();
     for problem in problems {
@@ -62,12 +64,12 @@ fn split(project: &Project, problems: Vec<Problem>) -> (Vec<Problem>, Vec<Waived
 
 /// The problems that have not been waived.
 pub fn check_open(project: &Project) -> Vec<Problem> {
-    split(project, check(project)).0
+    split_waived(project, check(project)).0
 }
 
 /// The waived problems with their reasons, in reading order.
 pub fn waived_problems(project: &Project) -> Vec<Waived> {
-    split(project, check(project)).1
+    split_waived(project, check(project)).1
 }
 
 /// The design checks as lines of text for a printed report: a headline, the
@@ -75,13 +77,18 @@ pub fn waived_problems(project: &Project) -> Vec<Waived> {
 /// their reasons. `(bold, text)` per line. Always says something, so a
 /// clean project prints "No issues".
 pub fn report_lines(project: &Project) -> Vec<(bool, String)> {
+    report_lines_of(project, check(project))
+}
+
+/// [`report_lines`] for an already checked list of problems.
+pub fn report_lines_of(project: &Project, problems: Vec<Problem>) -> Vec<(bool, String)> {
     let page_of = |p: &Problem| {
         p.page
             .and_then(|id| project.page(id))
             .map(|page| format!("  (page {})", page.name))
             .unwrap_or_default()
     };
-    let (open, waived) = split(project, check(project));
+    let (open, waived) = split_waived(project, problems);
     let mut lines = vec![
         (true, "Design checks".to_owned()),
         (false, crate::Summary::of(&open).pill_text()),

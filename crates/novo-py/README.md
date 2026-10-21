@@ -49,7 +49,7 @@ with ne.Project.create("dol.novo", name="DOL starter", overwrite=True) as p:
 ```
 
 - Queries: `info()`, `pages()`, `devices()`, `symbols()`, `wires()`,
-  `potentials()`, `terminals()`, `nets()`, `device(tag)`, `to_json()`;
+  `potentials()`, `problems()` (the open design-check problems, as `kopercad-cli check --json`), `terminals()`, `nets()`, `device(tag)`, `to_json()`;
   `kopercad.symbols()` lists the symbol library.
 - Parts and reports: `add_part(manufacturer, order_number, ...)`,
   `assign_part(device, part)`, `report("bom")` (also `toc`, `devices`,
