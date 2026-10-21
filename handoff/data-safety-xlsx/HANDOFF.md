@@ -8,3 +8,4 @@ Limits: 200,000 rows, 8,000,000 cells in the used rectangle, 256 MiB unzipped; t
 2026-10-21 21:50 UTC guard added, wired into five readers, tests pass.
 2026-10-21 21:40 UTC Reviewer A: guard now parses with quick-xml (local_name, attribute iterator); tests for prefix, single quotes, spaced =.
 2026-10-21 21:50 UTC Review round 2: real decompressed bytes counted (header lies refused), saturating sums and rows, fail closed on unreadable parts, all .xml parts scanned.
+2026-10-21 22:00 UTC Review round 3: parts judged by content (starts with <), not name; reader options as calamine; doc fix.

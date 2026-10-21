@@ -14,11 +14,11 @@
 //!
 //! Honest limits: the scan reads the unzipped sheet XML once (at most the
 //! unzipped-size limit, 256 MiB), which takes a moment on a huge file but
-//! allocates only a small buffer. It looks at `<dimension>`, `<row>` and
+//! is bounded by the unzipped limit (one huge text node is buffered whole). It looks at `<dimension>`, `<row>` and
 //! `<c>` tags, not at what the cells hold, so a workbook within the limits
 //! can still be large; the limits are sized so that stays near 300 MiB.
 
-use std::io::{Cursor, Read};
+use std::io::{BufRead, Cursor, Read};
 
 use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
@@ -79,17 +79,26 @@ pub fn check_xlsx_with(bytes: &[u8], limits: XlsxLimits) -> Result<(), XlsxTooLa
             .by_index(i)
             .map_err(|e| XlsxTooLarge(format!("the workbook cannot be read: {e}")))?;
         let name = file.name().to_owned();
-        // Any XML part can be a sheet (the workbook names it by a relation),
-        // so none is skipped by its folder.
-        if !name.ends_with(".xml") || name == "[Content_Types].xml" {
+        if name == "[Content_Types].xml" {
             continue;
         }
-        let counted = Counting {
+        // The library takes a sheet's path from the workbook relation and
+        // opens it by name, ignoring case and with no need for an `.xml`
+        // extension, so a part is judged by its content: whatever starts
+        // like XML is scanned. Binary parts (images, printer settings) are
+        // not sheets and are skipped.
+        let mut part = std::io::BufReader::new(Counting {
             inner: file,
             read: &read,
             limit: limits.max_unzipped_bytes,
-        };
-        scan_sheet(counted, limits).map_err(|why| {
+        });
+        let head = part
+            .fill_buf()
+            .map_err(|e| XlsxTooLarge(format!("the workbook cannot be read: {e}")))?;
+        if !looks_like_xml(head) {
+            continue;
+        }
+        scan_sheet(part, limits).map_err(|why| {
             XlsxTooLarge(format!(
                 "{} is too large to import ({why}); export the table you need as CSV",
                 name.trim_start_matches("xl/worksheets/")
@@ -129,8 +138,11 @@ impl<R: Read> Read for Counting<'_, R> {
 /// counts, and attributes through the attribute iterator, so single quotes
 /// and spaces around `=` count), so no spelling the library accepts slips
 /// past. An XML error ends the scan: the library fails on it too.
-fn scan_sheet(xml: impl Read, limits: XlsxLimits) -> Result<(), String> {
-    let mut reader = quick_xml::Reader::from_reader(std::io::BufReader::new(xml));
+fn scan_sheet(xml: impl BufRead, limits: XlsxLimits) -> Result<(), String> {
+    let mut reader = quick_xml::Reader::from_reader(xml);
+    // As the library: a lenient file that opens today keeps opening.
+    reader.config_mut().check_end_names = false;
+    reader.config_mut().check_comments = false;
     let mut bbox = Bbox::default();
     let mut cells = 0u64;
     let (mut row, mut col) = (0u64, 0u64);
@@ -180,6 +192,19 @@ fn scan_sheet(xml: impl Read, limits: XlsxLimits) -> Result<(), String> {
         }
         buf.clear();
     }
+}
+
+/// Whether the first bytes of a part are XML: after an optional byte order
+/// mark and white space, a `<` (a UTF-16 mark counts, so that it is
+/// scanned and refused rather than skipped).
+fn looks_like_xml(head: &[u8]) -> bool {
+    if head.starts_with(&[0xFF, 0xFE]) || head.starts_with(&[0xFE, 0xFF]) {
+        return true;
+    }
+    let head = head.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(head);
+    head.iter()
+        .find(|b| !b.is_ascii_whitespace())
+        .is_some_and(|b| *b == b'<')
 }
 
 /// The raw value of attribute `name` (matched by local name).
@@ -312,7 +337,7 @@ mod tests {
 
     #[test]
     fn a_part_that_is_not_xml_is_refused() {
-        assert!(sheet("<sheetData><row r=\"1\"><c r=\"A1\"></row>").is_err());
+        assert!(sheet("<sheetData><row r=\"1\"><c r=\"A1\" ").is_err());
     }
 
     #[test]
@@ -363,6 +388,51 @@ mod tests {
         );
     }
 
+    /// The same huge sheet stored under names the library also opens.
+    #[test]
+    fn a_sheet_is_found_by_its_content_not_its_name() {
+        use std::io::Write as _;
+        let huge = br#"<worksheet><dimension ref="A1:XFD1048576"/></worksheet>"#;
+        for name in [
+            "xl/worksheets/sheet1.xml",
+            "xl/worksheets/sheet1.XML",
+            "xl/worksheets/sheet1.dat",
+            "xl/worksheets/sheet1",
+            "sheet1.xml ",
+        ] {
+            let mut bytes = Vec::new();
+            {
+                let mut zip = zip::ZipWriter::new(Cursor::new(&mut bytes));
+                zip.start_file(name, zip::write::SimpleFileOptions::default())
+                    .unwrap();
+                zip.write_all(b"\xEF\xBB\xBF\n").unwrap();
+                zip.write_all(huge).unwrap();
+                zip.finish().unwrap();
+            }
+            assert!(check_xlsx(&bytes).is_err(), "{name}");
+        }
+        // A binary part is not a sheet.
+        let mut bytes = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(Cursor::new(&mut bytes));
+            zip.start_file(
+                "xl/media/image1.png",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(&[0x89, b'P', b'N', b'G', 0, 1, 2, 3])
+                .unwrap();
+            zip.finish().unwrap();
+        }
+        assert!(check_xlsx(&bytes).is_ok());
+    }
+
+    #[test]
+    fn a_sheet_with_a_mismatched_end_tag_that_the_library_reads_is_not_refused() {
+        sheet(r#"<worksheet><sheetData><row r="1"><c r="A1"></x></row></sheetData></worksheet>"#)
+            .unwrap();
+    }
+
     #[test]
     fn a_dribbling_reader_is_still_checked() {
         struct Dribble<'a>(&'a [u8]);
@@ -375,6 +445,6 @@ mod tests {
             }
         }
         let xml = br#"<sheetData><row r="1"><c r="A1"/></row><row r="1048576"><c r="XFD1048576"/></row></sheetData>"#;
-        assert!(scan_sheet(Dribble(xml), XlsxLimits::TABLES).is_err());
+        assert!(scan_sheet(std::io::BufReader::new(Dribble(xml)), XlsxLimits::TABLES).is_err());
     }
 }
