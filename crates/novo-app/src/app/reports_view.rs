@@ -152,7 +152,9 @@ impl NovoApp {
             .into_iter()
             .filter_map(|id| {
                 let title = live.report(&id)?.title();
-                let count = live.get(project, &id).map_or(0, ReportOutput::row_count);
+                let count = live
+                    .get(project, &id)
+                    .map_or(0, |o| novo_reports::headline_count(&id, o).0);
                 Some((id, title, count))
             })
             .collect();
@@ -199,7 +201,8 @@ impl NovoApp {
         let chip = self.learn.chip(topic);
         ui.horizontal(|ui| {
             ui.heading(&output.title);
-            ui.weak(format!("{} rows", output.row_count()));
+            let (n, noun) = novo_reports::headline_count(&id, &output);
+            ui.weak(format!("{n} {noun}"));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
                 lesson = chip_button(ui, chip.as_ref());
@@ -258,6 +261,11 @@ impl NovoApp {
                 );
             });
         });
+        if matches!(id.as_str(), "wires" | "cutlist" | "wirecut" | "labels")
+            && let Some(doc) = self.backend.document()
+        {
+            ui.weak(novo_reports::WireSet::of(doc.project()).explanation());
+        }
         ui.separator();
         let lit = self.lit_sources();
         let clicked = egui::ScrollArea::both()

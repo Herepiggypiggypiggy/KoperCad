@@ -315,6 +315,8 @@ mod variants_tests;
 #[cfg(test)]
 mod whats_new_tests;
 #[cfg(test)]
+mod wire_set_tests;
+#[cfg(test)]
 mod workshop_tests;
 
 use std::path::{Path, PathBuf};
