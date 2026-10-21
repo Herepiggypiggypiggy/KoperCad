@@ -176,6 +176,8 @@ mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;
 mod terminals;
+#[cfg(test)]
+mod test_wait;
 mod tidy;
 mod tips;
 mod title_revisions;
