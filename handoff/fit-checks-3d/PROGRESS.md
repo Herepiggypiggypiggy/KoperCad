@@ -1,0 +1,2 @@
+- 2026-10-21 gap clearance verdict on dimensions, tests green
+- 2026-10-21 gap lines with a verdict are always drawn, however short (own PR after #1097 merged)

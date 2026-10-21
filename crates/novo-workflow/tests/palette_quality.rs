@@ -185,3 +185,21 @@ fn a_lesson_is_found_by_title_topic_or_the_word_lesson() {
     // A word that matches no lesson shows none.
     assert!(lesson(&search_lessons("lesson zzzz")).is_none());
 }
+
+#[test]
+fn a_command_with_the_word_in_its_label_beats_a_part_that_only_starts_with_it() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    let rows = search(&palette, &keymap, "heat");
+    assert_eq!(
+        rows[0].kind,
+        novo_workflow::palette::Kind::Command,
+        "`heat` starts with a command, not {:?}",
+        rows[0].label
+    );
+    let simulate = position(&rows, "heat.simulate").expect("listed");
+    let element = rows
+        .iter()
+        .position(|r| r.label == "Heating element")
+        .expect("the part is still listed");
+    assert!(simulate < element);
+}

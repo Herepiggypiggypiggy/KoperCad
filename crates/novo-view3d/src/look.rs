@@ -78,6 +78,8 @@ pub struct Look {
 pub const MARK_ERROR: Rgb = [0xE0, 0x76, 0x6C];
 pub const MARK_WARNING: Rgb = [0xD6, 0xA5, 0x5C];
 pub const MARK_MUTED: Rgb = [0x98, 0x96, 0x91];
+/// Copy of `SUCCESS`: a gap that keeps the clearance the parts ask for.
+pub const MARK_OK: Rgb = [0x7F, 0xB0, 0x86];
 
 fn rgb3(c: crate::palette::Rgba) -> Rgb {
     [c[0], c[1], c[2]]
@@ -307,6 +309,7 @@ mod tests {
         assert_eq!(MARK_ERROR, rgb(t::ERROR));
         assert_eq!(MARK_WARNING, rgb(t::WARNING));
         assert_eq!(MARK_MUTED, rgb(t::TEXT_MUTED));
+        assert_eq!(MARK_OK, rgb(t::SUCCESS));
         let look = Look::dark();
         assert_eq!(look.selection.edge, rgb(t::ACCENT));
         assert_eq!(look.hover.edge, rgb(t::INFO));

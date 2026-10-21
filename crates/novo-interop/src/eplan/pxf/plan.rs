@@ -446,9 +446,19 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         for l in &layouts {
             let missing = super::layout_apply::unmatched(l, &device_tags);
             report.note(format!(
-                "Cabinet +{}: {} {:.0} x {:.0} mm plate from the mounting plate sheet, {} rails, {} ducts, {} devices placed. Footprints are the outlines drawn on the sheet, not the parts' own data; rails and ducts are read from the drawn rectangles.",
+                "Cabinet +{}: {} {:.0} x {:.0} mm plate from the mounting plate sheet, {} rails, {} ducts, {} devices placed.",
                 l.location, l.cabinet, l.width, l.height, l.rails.len(), l.ducts.len(), l.devices.len() - missing
             ));
+            report.guess(
+                format!("device footprints on +{}", l.location),
+                l.devices.len() - missing,
+                "the outlines drawn on the mounting plate sheet, not the parts' own data",
+            );
+            report.guess(
+                format!("rails and ducts on +{}", l.location),
+                l.rails.len() + l.ducts.len(),
+                "read from the rectangles drawn on the sheet",
+            );
             if missing > 0 {
                 report.note(format!(
                     "Cabinet +{}: {missing} {} drawn on the mounting plate sheet could not be placed because the project has no device with that name in this location.",
@@ -483,12 +493,29 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
                 pins.join("|")
             ));
         }
-        if st.loose > 0 {
-            report.note(format!(
-                "{} placements found their library symbol only loosely (same function, another variant); their connection points may be off.",
-                st.loose
-            ));
-        }
+        report.guess(
+            "symbols drawn as labelled boxes",
+            st.box_symbols,
+            "no KoperCAD symbol has that function and pin count; the pins are where EPLAN has them",
+        );
+        let loose: Vec<String> = st
+            .loose_functions
+            .iter()
+            .map(|(f, n)| format!("{f} x{n}"))
+            .collect();
+        report.guess(
+            "symbols matched loosely",
+            st.loose,
+            format!(
+                "same function, another variant of the library symbol, so the connection points may be off: {}",
+                loose.join(", ")
+            ),
+        );
+        report.guess(
+            "wire routes",
+            st.wires,
+            "plain right-angle runs between the pins, not EPLAN's lines; which pins are one net is read from the file",
+        );
         for (what, n) in &st.issues {
             report.note(format!("Net check: {n} {what}."));
         }

@@ -1,0 +1,41 @@
+name: Windows build check
+
+# A cheap Windows check for pull requests that touch the CI file or build
+# inputs: it compiles and links the test binaries (no test run), which is where
+# Windows-only failures like the LNK1104 on main 125412fa show up. Full Windows
+# tests still run on main pushes, nightly and manual starts (ci.yml).
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/windows-pr.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "rust-toolchain*"
+      - ".cargo/**"
+      - ".gitattributes"
+      - "crates/*/Cargo.toml"
+      - "crates/*/build.rs"
+
+concurrency:
+  group: windows-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_PROFILE_DEV_DEBUG: line-tables-only
+
+jobs:
+  windows-build:
+    name: windows build (no tests)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # Same target selection as the Windows test step in ci.yml.
+      - run: cargo test --workspace --exclude novo-cfd --lib --bins --tests --no-run

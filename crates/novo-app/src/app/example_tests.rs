@@ -246,3 +246,102 @@ fn the_example_wires_are_numbered_and_commissioning_names_them_by_number() {
         assert_ne!(label, id.to_string(), "commissioning names a wire by id");
     }
 }
+
+/// Round trip: the example project written as PXF and read back into an
+/// empty project keeps its devices, terminals, cables and pages, and says
+/// what it did not keep. Passing proves the file agrees with this reader,
+/// not that EPLAN accepts it.
+#[test]
+fn the_example_survives_a_pxf_round_trip() {
+    use novo_core::Document;
+    use novo_interop::eplan::pxf::{
+        PxfOptions, PxfWriteOptions, plan_pxf, read_pxf_str, write_pxf,
+    };
+
+    let mut doc = Document::default();
+    super::example::build_example(&mut doc).unwrap();
+    let before = doc.project();
+    let out = write_pxf(before, &PxfWriteOptions::default());
+    let file = read_pxf_str(&out.text).unwrap();
+    let mut again = Document::default();
+    let plan = plan_pxf(again.project(), &file, &PxfOptions::default());
+    plan.apply(&mut again).unwrap();
+    let after = again.project();
+
+    let tags = |p: &novo_core::Project| {
+        let mut v: Vec<String> = p.devices().map(|d| d.tag.to_string()).collect();
+        v.sort();
+        v
+    };
+    let drawn_devices = |p: &novo_core::Project| {
+        p.devices()
+            .filter(|d| {
+                p.symbols().any(|s| {
+                    matches!(&s.role, novo_core::SymbolRole::Device { device, .. } if *device == d.id)
+                })
+            })
+            .count()
+    };
+    // Devices that carry a symbol come back; the rest are only in the report.
+    let missing: Vec<String> = tags(before)
+        .into_iter()
+        .filter(|t| !tags(after).contains(t))
+        .collect();
+    assert!(missing.is_empty(), "devices not back: {missing:?}");
+    assert_eq!(before.cables().count(), after.cables().count());
+    assert_eq!(
+        before.pages().count(),
+        after.pages().count(),
+        "{}",
+        out.report.text()
+    );
+    // No EPLAN symbol table was given, so the symbols are written without a
+    // reference and nothing is drawn on the way back: the report says so.
+    assert!(drawn_devices(before) > 0);
+    assert_eq!(drawn_devices(after), 0);
+    let text = out.report.text();
+    assert!(text.contains("without a symbol reference"), "{text}");
+    assert!(
+        before.wires().count() == 0 || text.contains("wires"),
+        "{text}"
+    );
+    let cores = |p: &novo_core::Project| p.cables().map(|c| c.cores.len()).sum::<usize>();
+    assert_eq!(cores(before), cores(after));
+    assert_eq!(before.terminals().count(), after.terminals().count());
+}
+
+#[test]
+fn the_example_cabinet_problems_pill_can_say_what_it_counts() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let p = d.doc().project();
+    let cab = p
+        .structures()
+        .find(|s| s.tag.to_string() == "+CAB")
+        .unwrap();
+    let l = novo_layout::model::load(p, cab.id).unwrap();
+    let name = |id: u64| format!("#{id}");
+    let lines = super::cabinet::panel_problem_lines(&l, &name);
+    assert!(
+        lines.iter().any(|t| t.contains("free room in front")),
+        "{lines:?}"
+    );
+}
+
+#[test]
+fn open_example_starts_with_an_empty_undo_history() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    assert!(!d.app.is_enabled(Action::Undo), "nothing to undo yet");
+    assert!(!d.app.is_enabled(Action::Redo));
+    assert!(!d.doc().is_dirty());
+    let before = tags(&d);
+    d.app.run(&ctx, Action::Undo);
+    d.frame();
+    assert_eq!(tags(&d), before);
+    assert!(!d.doc().is_dirty(), "Ctrl+Z must not dirty a fresh example");
+}

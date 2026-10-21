@@ -1,0 +1,17 @@
+@title Command search (Ctrl+K)
+@area Search
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text cabinet
+wait 8
+shot search-cabinet
+check_layout
+key Escape
+key ctrl+k
+wait 6
+text wire numbers
+wait 8
+shot search-wire-numbers
+key Escape

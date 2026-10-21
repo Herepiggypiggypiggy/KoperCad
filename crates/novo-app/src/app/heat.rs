@@ -838,7 +838,10 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
                         .desired_width(80.0)
                         .show_percentage(),
                 );
-                ui.label(egui::RichText::new(heat_progress::label(p, secs)).small());
+                ui.add(
+                    egui::Label::new(egui::RichText::new(heat_progress::label(p, secs)).small())
+                        .wrap_mode(egui::TextWrapMode::Extend),
+                );
                 heat_progress::sparkline(ui, &state.history);
             }
             None => {
