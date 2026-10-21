@@ -18,6 +18,7 @@ use novo_routing::{Kind, Problem};
 use novo_view3d::scene::{ItemId, ItemKind};
 
 use super::cabinet_routes::{DuctFill, Tone, duct_fills, tone};
+use super::view3d_run_checks::{HotDevice, RunChecks, run_checks};
 use super::view3d_runs::{Basis, EntryFacts, Undrawn};
 
 /// What one routed wire comes to.
@@ -50,6 +51,8 @@ pub(super) struct WireFacts {
     /// How the length was found; read when a card needs it
     /// (`view3d_runs::ensure`).
     pub basis: Option<Basis>,
+    /// The bend radius and heat neighbour checks (models, labelled so).
+    pub checks: Option<RunChecks>,
 }
 
 /// One duct a wire lies in.
@@ -154,13 +157,16 @@ pub(super) fn facts(
     structure: StructureId,
     routed: &Routed,
     on_plate: &BTreeSet<u64>,
+    hot: &[HotDevice],
 ) -> BTreeMap<u64, WireFacts> {
     let plan = routed
         .plans
         .iter()
         .find(|(s, _)| *s == structure)
         .map(|(_, p)| p);
-    let limit_pct = novo_routing::WireRules::of(project).routing.fill_limit * 100.0;
+    let rules = novo_routing::WireRules::of(project);
+    let limit_pct = rules.routing.fill_limit * 100.0;
+    let ducts = novo_routing::model::ducts(project, structure);
     let fills: Vec<DuctFill> = plan
         .map(|p| duct_fills(project, structure, p))
         .unwrap_or_default();
@@ -239,6 +245,7 @@ pub(super) fn facts(
                         outside_mm: novo_routing::entry::outside_mm(project, structure),
                     }),
                     basis: None,
+                    checks: Some(run_checks(project, wire, route, &ducts, hot, &rules)),
                 },
             ))
         })
@@ -410,6 +417,7 @@ mod tests {
             problems: Vec::new(),
             entry: None,
             basis: None,
+            checks: None,
         }
     }
 

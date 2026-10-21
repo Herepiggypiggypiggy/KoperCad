@@ -435,3 +435,64 @@ fn the_wire_runs_panel_keeps_clear_of_the_heat_panel_even_before_there_is_a_resu
         "starts under the cube, not low: {runs:?}"
     );
 }
+
+#[test]
+fn the_card_labels_the_bend_and_heat_checks_as_models() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.frame();
+    let ids = drawn(&d);
+    pick(&mut d, &ids[..1]);
+    let facts = d.app.view3d.wire_facts.as_ref().expect("facts").2.clone();
+    let f = &facts[&ids[0]];
+    let lines = super::view3d_runs::card_lines(f);
+    assert!(
+        lines.iter().any(|(_, s)| s.starts_with("Bend radius")),
+        "{lines:?}"
+    );
+    assert!(
+        lines
+            .last()
+            .unwrap()
+            .1
+            .starts_with("Not checked: how stiff this cable is"),
+        "{lines:?}"
+    );
+}
+
+#[test]
+fn the_devices_a_wire_ends_at_are_not_close_hot_neighbours() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.frame();
+    let id = cabinet(&d);
+    let doc = d.app.backend.document_mut().unwrap();
+    // Every device loses 40 W and any distance counts as close.
+    let devices: Vec<_> = doc
+        .project()
+        .all::<novo_core::CabinetPlacement>()
+        .filter(|p| p.structure == id)
+        .map(|p| p.device)
+        .collect();
+    doc.transact("Hot devices", |tx| {
+        for dev in &devices {
+            tx.set_property(*dev, "power_loss_w", Some(novo_core::Value::Float(40.0)))?;
+        }
+        novo_routing::project_rules::set_rule(
+            tx,
+            novo_routing::project_rules::HOT_GAP_MM,
+            Some(500.0),
+        )
+    })
+    .unwrap();
+    d.frame();
+    let ids = drawn(&d);
+    pick(&mut d, &ids);
+    let facts = d.app.view3d.wire_facts.as_ref().expect("facts").2.clone();
+    for f in facts.values() {
+        let c = f.checks.as_ref().expect("checks");
+        assert_eq!(c.hot_devices, devices.len(), "both devices are hot");
+        // The fixture has two devices and every wire joins them.
+        assert!(c.neighbours.is_empty(), "{:?}", c.neighbours);
+    }
+}
