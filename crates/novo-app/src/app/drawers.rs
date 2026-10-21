@@ -80,7 +80,7 @@ impl NovoApp {
             0
         };
         let proposed = match tab {
-            Drawer::Terminals => novo_terminals::suggest_terminals(project).len(),
+            Drawer::Terminals => super::terminals::all_proposals(project).0.len(),
             Drawer::Cables => cable_proposals.len(),
             Drawer::Devices => 0,
         };

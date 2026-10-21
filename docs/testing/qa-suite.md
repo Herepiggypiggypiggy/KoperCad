@@ -66,6 +66,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `key ctrl+k Escape`, `text some words` | keyboard |
 | `answer_dialog FILE` | the next native file dialog gets this path (queue it first) |
 | `wait N`, `resize W H` | run N frames; resize the window |
+| `frame_stats [pan\|zoom\|none] [frames]` | run frames (default 120) while the page pans, zooms or stands still, and report UI pass and whole-frame times (mean, median, p95, worst, in ms); they appear under "Measurements" in `report.md`. On a box without a GPU the whole-frame time includes software rasterising: read the UI pass as the program's own cost |
 | `shot label` | labelled screenshot |
 | `expect "text"`, `expect_not "text"` | a label or value containing the text is (not) in the widget tree; a miss is a finding (S3) |
 | `expect_enabled "Label"`, `expect_disabled "Label"` | the control with this label (icon glyphs ignored) is enabled / disabled; a miss is a finding |

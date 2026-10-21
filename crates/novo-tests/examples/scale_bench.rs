@@ -115,6 +115,14 @@ fn main() {
     let pages = project.pages().count();
     let wires = project.wires().count();
 
+    // `--save-project FILE`: keep the generated project to open in the app (the
+    // QA scenario `qa/scenarios/40-scale-frames.qa` opens it).
+    if let Some(out) = arg(&args, "--save-project") {
+        let _ = std::fs::remove_file(&out);
+        novo_storage::ProjectFile::create(std::path::Path::new(&out), project).expect("save");
+        eprintln!("saved the generated project to {out}");
+    }
+
     // ---- file ---------------------------------------------------------
     b.time("save full", || {
         novo_storage::ProjectFile::create(&path, project).expect("create");
@@ -237,6 +245,56 @@ fn main() {
         ((), String::new())
     });
     let project = doc.project();
+
+    // ---- machine options (a copy of the project, so later steps are untouched)
+    if b.wanted("options") {
+        use novo_core::AnyId;
+        use novo_workflow::options::{self, OptionDef};
+        let mut tied = project.clone();
+        let defs = [
+            OptionDef::yes_no("conveyor", "Conveyor", true),
+            OptionDef::yes_no("fan", "Fan", false),
+            OptionDef::choice("voltage", "Voltage", &["400 V", "480 V"], "400 V"),
+            OptionDef::yes_no("export", "Export pack", false),
+        ];
+        let pages: Vec<_> = tied.pages_in_order().iter().map(|p| p.id).collect();
+        let devices: Vec<_> = tied.devices().map(|d| d.id).collect();
+        tied.transact("Options", |tx| {
+            for def in &defs {
+                options::define_option(tx, def.clone())?;
+            }
+            for (i, page) in pages.iter().enumerate().filter(|(i, _)| i % 15 == 0) {
+                let cond = [
+                    "opt.conveyor",
+                    "opt.fan",
+                    "opt.voltage == \"480 V\"",
+                    "opt.export",
+                ][i / 15 % 4];
+                options::set_condition(tx, AnyId::Page(*page), Some(cond))?;
+            }
+            for (i, device) in devices.iter().enumerate().filter(|(i, _)| i % 40 == 0) {
+                let cond = ["opt.fan", "opt.export", "opt.conveyor"][i / 40 % 3];
+                options::set_condition(tx, AnyId::Device(*device), Some(cond))?;
+            }
+            Ok(())
+        })
+        .expect("tie options");
+        let assignment = options::current(&tied);
+        b.time("options: evaluate (status chip, once per edit)", || {
+            let e = options::evaluate(&tied, &assignment);
+            let note = format!("{} objects left out", e.inactive.len());
+            ((), note)
+        });
+        b.time("options: machine copy (documents, once per edit)", || {
+            let copy = options::machine_project(&tied, &assignment).expect("copy");
+            let note = format!(
+                "{} pages, {} devices kept",
+                copy.pages().count(),
+                copy.devices().count()
+            );
+            ((), note)
+        });
+    }
 
     // ---- engines --------------------------------------------------------
     b.time("number wires (plan, fill)", || {

@@ -441,3 +441,93 @@ fn nets_name_what_defines_each_potential() {
         }]
     );
 }
+
+#[test]
+fn the_netlist_is_built_once_per_revision_and_follows_edits() {
+    let mut doc = Document::default();
+    let (_, wires, _) = wires(&mut doc, 3);
+    let first = doc.project().netlist();
+    let again = doc.project().netlist();
+    // Same revision: the very same netlist, not a rebuilt copy.
+    assert!(std::sync::Arc::ptr_eq(&first, &again));
+    // A clone shares the valid netlist but diverges on its own edits.
+    let mut copy = doc.project().clone();
+    assert!(std::sync::Arc::ptr_eq(&first, &copy.netlist()));
+    copy.transact("Remove", |tx| tx.remove(wires[0])).unwrap();
+    assert!(first.is_current(doc.project()));
+    assert!(!first.is_current(&copy));
+    let rebuilt = copy.netlist();
+    assert!(!std::sync::Arc::ptr_eq(&first, &rebuilt));
+    assert!(rebuilt.is_current(&copy));
+    let w0 = doc.project().wire(wires[0]).unwrap().clone();
+    assert!(!rebuilt.connected(w0.from, w0.to));
+    assert!(first.connected(w0.from, w0.to));
+    // Edit then undo: a new revision, so a fresh build with the old answer.
+    let w1 = doc.project().wire(wires[1]).unwrap().clone();
+    doc.transact("Remove", |tx| tx.remove(wires[1])).unwrap();
+    let after_edit = doc.project().netlist();
+    assert!(!after_edit.connected(w1.from, w1.to));
+    doc.undo().unwrap();
+    let after_undo = doc.project().netlist();
+    assert!(after_undo.is_current(doc.project()));
+    assert!(after_undo.connected(w1.from, w1.to));
+}
+
+#[test]
+fn a_derived_result_is_worked_out_once_per_revision() {
+    struct Count(usize);
+    let mut doc = Document::default();
+    let (_, wires, _) = wires(&mut doc, 2);
+    let runs = std::cell::Cell::new(0);
+    let count = |p: &Project| {
+        runs.set(runs.get() + 1);
+        Count(p.wires().count())
+    };
+    let first = doc.project().derived(count);
+    let again = doc.project().derived(count);
+    assert!(std::sync::Arc::ptr_eq(&first, &again));
+    assert_eq!((runs.get(), first.0), (1, 2));
+    // Another type has its own slot; an edit makes a new revision.
+    struct Other(usize);
+    assert_eq!(doc.project().derived(|_| Other(7)).0, 7);
+    doc.transact("Remove", |tx| tx.remove(wires[0])).unwrap();
+    assert_eq!(doc.project().derived(count).0, 1);
+    assert_eq!(runs.get(), 2);
+    doc.undo().unwrap();
+    assert_eq!(doc.project().derived(count).0, 2);
+    assert_eq!(runs.get(), 3);
+}
+
+#[test]
+fn caches_do_not_go_stale_inside_a_transaction_or_survive_a_rollback() {
+    struct Wires(usize);
+    let mut doc = Document::default();
+    let (_, wires, _) = wires(&mut doc, 3);
+    let probe = doc.project().wire(wires[0]).unwrap().clone();
+    // Inside one transaction the revision has not moved yet: each look at the
+    // project must still see the edits made so far.
+    doc.transact("Remove two", |tx| {
+        assert!(tx.project().netlist().connected(probe.from, probe.to));
+        assert_eq!(tx.project().derived(|p| Wires(p.wires().count())).0, 3);
+        tx.remove(wires[0])?;
+        assert!(!tx.project().netlist().connected(probe.from, probe.to));
+        assert_eq!(tx.project().derived(|p| Wires(p.wires().count())).0, 2);
+        tx.remove(wires[1])?;
+        assert_eq!(tx.project().derived(|p| Wires(p.wires().count())).0, 1);
+        Ok(())
+    })
+    .unwrap();
+    doc.undo().unwrap();
+    // An aborted transaction must not leave its half-edited answer cached.
+    let before = doc.project().revision();
+    let mut copy = doc.project().clone();
+    let _ = copy.transact("Abort", |tx| -> Result<()> {
+        tx.remove(wires[0])?;
+        let _ = tx.project().netlist();
+        let _ = tx.project().derived(|p| Wires(p.wires().count()));
+        Err(ModelError::InvalidId(0))
+    });
+    assert_eq!(copy.revision(), before);
+    assert!(copy.netlist().connected(probe.from, probe.to));
+    assert_eq!(copy.derived(|p| Wires(p.wires().count())).0, 3);
+}

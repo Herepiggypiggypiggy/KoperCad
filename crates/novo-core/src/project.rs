@@ -54,6 +54,61 @@ pub struct Project {
     pub(crate) cables: BTreeMap<CableId, Cable>,
     pub(crate) parts: BTreeMap<PartId, Part>,
     index: Index,
+    netlist_cache: NetlistCache,
+    derived_cache: DerivedCache,
+}
+
+/// The last netlist built, keyed by the revision it was built from. Cloning a
+/// project clones the handle, so the clone shares the same (still valid) netlist.
+#[derive(Debug, Default)]
+struct NetlistCache(std::sync::Mutex<Option<std::sync::Arc<Netlist>>>);
+
+/// Results other crates derive from the project (see [`Project::derived`]),
+/// one per result type, each with the revision it was worked out for.
+#[derive(Default)]
+struct DerivedCache(std::sync::Mutex<DerivedEntries>);
+
+type DerivedEntries = std::collections::HashMap<
+    std::any::TypeId,
+    (u64, std::sync::Arc<dyn std::any::Any + Send + Sync>),
+>;
+
+impl NetlistCache {
+    fn clear(&mut self) {
+        if let Ok(slot) = self.0.get_mut() {
+            *slot = None;
+        }
+    }
+}
+
+impl DerivedCache {
+    fn clear(&mut self) {
+        if let Ok(entries) = self.0.get_mut() {
+            entries.clear();
+        }
+    }
+}
+
+impl std::fmt::Debug for DerivedCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("DerivedCache")
+    }
+}
+
+impl Clone for DerivedCache {
+    fn clone(&self) -> Self {
+        Self(std::sync::Mutex::new(
+            self.0.lock().map(|m| m.clone()).unwrap_or_default(),
+        ))
+    }
+}
+
+impl Clone for NetlistCache {
+    fn clone(&self) -> Self {
+        Self(std::sync::Mutex::new(
+            self.0.lock().ok().and_then(|slot| slot.clone()),
+        ))
+    }
 }
 
 /// Reverse lookups kept in step with every op.
@@ -329,6 +384,11 @@ impl Project {
 
     /// Applies one primitive op after checking every integrity rule.
     pub(crate) fn apply_op(&mut self, op: &Op) -> Result<()> {
+        // The revision moves only when a whole transaction ends, so a netlist
+        // or derived result kept for it would go stale (or survive a rollback)
+        // after the first op inside one. Every op forgets them.
+        self.netlist_cache.clear();
+        self.derived_cache.clear();
         match op {
             Op::Insert { record } => {
                 let id = record.id();
@@ -1635,9 +1695,45 @@ impl Project {
         })
     }
 
-    /// Builds the connectivity graph of the current state.
-    pub fn netlist(&self) -> Netlist {
-        Netlist::build(self)
+    /// A result derived from the project, worked out once per
+    /// [`revision`](Self::revision) and shared. `T` names the result (give each
+    /// derived result its own type, a newtype if need be); `build` runs only
+    /// when no result of that type exists for this revision. Meant for what the
+    /// window asks for every frame and an edit changes: proposals, summaries.
+    pub fn derived<T: Send + Sync + 'static>(
+        &self,
+        build: impl FnOnce(&Project) -> T,
+    ) -> std::sync::Arc<T> {
+        let key = std::any::TypeId::of::<T>();
+        let hit = self.derived_cache.0.lock().ok().and_then(|m| {
+            m.get(&key)
+                .filter(|(revision, _)| *revision == self.revision)
+                .map(|(_, value)| value.clone())
+        });
+        if let Some(value) = hit.and_then(|v| v.downcast::<T>().ok()) {
+            return value;
+        }
+        // Built outside the lock: `build` may ask for another derived result.
+        let value = std::sync::Arc::new(build(self));
+        if let Ok(mut m) = self.derived_cache.0.lock() {
+            m.insert(key, (self.revision, value.clone()));
+        }
+        value
+    }
+
+    /// The connectivity graph of the current state. Built once per
+    /// [`revision`](Self::revision) and shared, so calling it in a loop or from
+    /// every report costs one build, not one per call.
+    pub fn netlist(&self) -> std::sync::Arc<Netlist> {
+        let Ok(mut slot) = self.netlist_cache.0.lock() else {
+            return std::sync::Arc::new(Netlist::build(self));
+        };
+        if let Some(cached) = slot.as_ref().filter(|n| n.revision() == self.revision) {
+            return cached.clone();
+        }
+        let built = std::sync::Arc::new(Netlist::build(self));
+        *slot = Some(built.clone());
+        built
     }
 }
 

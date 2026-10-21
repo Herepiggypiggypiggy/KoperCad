@@ -113,7 +113,7 @@ RUNG "Contactor K1" { [start] | [k1] } -- [stop_ok] -- (k1);
 struct Run<'a> {
     plant: &'a Plant,
     sim: ClosedLoop,
-    netlist: novo_core::Netlist,
+    netlist: std::sync::Arc<novo_core::Netlist>,
     hand: PoleState,
 }
 

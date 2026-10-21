@@ -15,6 +15,15 @@ pub(super) fn open_problems(project: &Project) -> Vec<Problem> {
     novo_reports::issues::open(project)
 }
 
+/// Symbols plus wires above which the design check runs on a worker thread.
+const BACKGROUND_FROM: usize = 1500;
+
+/// A design check running for one project revision.
+pub(super) struct CheckJob {
+    pub(super) revision: u64,
+    pub(super) rx: std::sync::mpsc::Receiver<Vec<Problem>>,
+}
+
 impl NovoApp {
     /// Problems marked where they are (DESIGN.md §5, principle 7): a
     /// warning or error glyph on each drawn object of each problem on
@@ -23,6 +32,7 @@ impl NovoApp {
         if self.learn.quiet_checks() {
             return Vec::new();
         }
+        self.refresh_problems(true);
         let Some(doc) = self.backend.document() else {
             return Vec::new();
         };
@@ -32,12 +42,11 @@ impl NovoApp {
             AnyId::Wire(w) => project.wire(*w).is_some_and(|w| w.page == page),
             _ => false,
         };
-        let problems = match &self.wb.problems {
-            Some((revision, problems)) if *revision == project.revision() => problems.clone(),
-            _ => open_problems(project),
-        };
+        // While a background run is catching up, the marks of the last
+        // finished one stay (they may be a revision old).
+        let problems = self.wb.problems.as_ref().map_or(&[][..], |(_, p)| p);
         let mut marks = Vec::new();
-        for p in &problems {
+        for p in problems {
             let kind = match p.severity {
                 Severity::Error => MarkKind::Error,
                 Severity::Warning => MarkKind::Warning,
@@ -57,24 +66,88 @@ impl NovoApp {
         if self.learn.quiet_checks() {
             return &[];
         }
-        self.problems()
+        self.refresh_problems(true);
+        self.wb.problems.as_ref().map_or(&[], |(_, p)| p.as_slice())
     }
 
-    /// The design-check problems of the current revision.
-    pub(super) fn problems(&mut self) -> &[Problem] {
+    /// True while the shown problems belong to an older revision than the
+    /// drawing, because a background run has not finished yet.
+    pub(super) fn checks_pending(&self) -> bool {
         let Some(doc) = self.backend.document() else {
-            return &[];
+            return false;
+        };
+        self.wb
+            .problems
+            .as_ref()
+            .is_none_or(|(r, _)| *r != doc.project().revision())
+    }
+
+    /// Brings `wb.problems` up to the current revision. Small projects check
+    /// right here (a few milliseconds). On a big one the check (about a
+    /// second at 600 pages) runs on a worker thread when `background` is set,
+    /// and the last finished result stays in place until the new one lands,
+    /// so an edit never freezes the window. Exports and reports pass
+    /// `false`: they need the current answer and wait for it.
+    fn refresh_problems(&mut self, background: bool) {
+        let Some(doc) = self.backend.document() else {
+            return;
         };
         let project = doc.project();
         let revision = project.revision();
+        if let Some(job) = &self.wb.check_job {
+            match job.rx.try_recv() {
+                Ok(problems) => {
+                    let done = job.revision;
+                    self.wb.check_job = None;
+                    if self.wb.problems.as_ref().is_none_or(|(r, _)| *r < done) {
+                        self.wb.problems = Some((done, problems));
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    // The worker died (a panic in a check): do not start it
+                    // again for this revision every frame.
+                    self.wb.check_failed = Some(job.revision);
+                    self.wb.check_job = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
+        }
         if self
             .wb
             .problems
             .as_ref()
-            .is_none_or(|(r, _)| *r != revision)
+            .is_some_and(|(r, _)| *r == revision)
         {
-            self.wb.problems = Some((revision, open_problems(project)));
+            return;
         }
+        let big = project.symbols().count() + project.wires().count() > BACKGROUND_FROM;
+        // A revision whose worker died is checked right here instead: the pill
+        // must not pulse forever over old counts.
+        let failed = self.wb.check_failed == Some(revision);
+        if !(background && big) || failed {
+            // A worker still running for an older revision is left to finish;
+            // its answer is not used once a newer one is stored.
+            self.wb.problems = Some((revision, open_problems(project)));
+            return;
+        }
+        // One worker at a time. While it runs for an older revision nothing
+        // else starts; its answer is stored when it lands, and the next frame
+        // starts one run for the current revision. A burst of edits therefore
+        // costs one run in flight, not one per edit.
+        if self.wb.check_job.is_none() {
+            let snapshot = project.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(open_problems(&snapshot));
+            });
+            self.wb.check_started += 1;
+            self.wb.check_job = Some(CheckJob { revision, rx });
+        }
+    }
+
+    /// The design-check problems of the current revision.
+    pub(super) fn problems(&mut self) -> &[Problem] {
+        self.refresh_problems(false);
         self.wb.problems.as_ref().map_or(&[], |(_, p)| p.as_slice())
     }
 
@@ -84,7 +157,34 @@ impl NovoApp {
             return;
         }
         let summary = Summary::of(self.shown_problems());
-        let response = novo_theme::widgets::issue_pill(ui, summary.errors, summary.warnings);
+        let pending = self.checks_pending();
+        if pending {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(100));
+        }
+        let response = if pending && self.wb.problems.is_none() {
+            // Nothing finished yet: "No issues" would be a claim not yet checked.
+            ui.weak("Checking…")
+        } else {
+            let response = novo_theme::widgets::issue_pill(ui, summary.errors, summary.warnings);
+            if pending {
+                // The counts are from before the last edit: a pulsing dot in
+                // the gap before the pill says so without moving the breadcrumb.
+                let t = ui.input(|i| i.time);
+                let alpha = 0.55 + 0.45 * (t * 6.0).sin() as f32;
+                let at = egui::pos2(response.rect.left() - 5.0, response.rect.center().y);
+                ui.painter().circle_filled(
+                    at,
+                    2.5,
+                    crate::theme::ui_palette()
+                        .text_secondary
+                        .gamma_multiply(alpha),
+                );
+                response.on_hover_text("Updating after your last edit; the counts may change")
+            } else {
+                response
+            }
+        };
         self.wb.pill_rect = response.rect;
         self.anchor_response("issue.pill", &response, "Issues");
         if response.clicked() {

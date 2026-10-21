@@ -1,0 +1,35 @@
+@title 600-page project: frame times while panning and zooming
+@area Scale
+@slow
+# Needs the generated project (not committed):
+#   scripts/scale-bench.sh --size large --only generate --save-project target/scale600.novo
+# Run with the release build for numbers worth reading:
+#   KOPERCAD_BIN_DIR=target/release scripts/qa.sh --slow --only scale-frames
+# The frame_stats lines in the step list are the result. On a box without a GPU
+# (software Vulkan) the whole-frame figure is the CPU rasteriser, not a graphics
+# card: read the "UI pass" figure as the program's own cost.
+open target/scale600.novo
+# Straight after opening: the first design check is still running, the pill says so.
+shot checking
+wait 120
+shot opened
+check_blank opened
+# An edit on a big project: the old counts stay and the pill says it is updating.
+key ctrl+a
+key Delete
+shot updating
+wait 200
+shot updated
+# Undo the delete: the file is edited in place by autosave.
+key ctrl+z
+wait 100
+# The design check of this size runs on a worker thread: the window stays
+# usable and the pill says it is still checking until the answer lands.
+frame_stats none 60
+wait 200
+shot after-check
+frame_stats pan 120
+shot panned
+frame_stats zoom 120
+shot zoomed
+check_layout

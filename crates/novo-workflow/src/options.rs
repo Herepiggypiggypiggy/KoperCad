@@ -28,9 +28,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use novo_core::{
-    AnyId, Endpoint, ModelError, PageId, Project, Record, Result, SymbolRole, Tx, Value,
-};
+use novo_core::{AnyId, Endpoint, ModelError, PageId, Project, Result, SymbolRole, Tx, Value};
 use serde::{Deserialize, Serialize};
 
 use crate::expr::{Expr, ExprError, Val, Vars};
@@ -658,9 +656,11 @@ impl Evaluation {
 pub fn evaluate(project: &Project, assignment: &Assignment) -> Evaluation {
     let vars = vars(assignment);
     let mut out = Evaluation::default();
-    for record in project.records() {
-        let Some(Value::Text(cond)) = record.properties().get(CONDITION_KEY) else {
-            continue;
+    // Borrowed walks over the tables, in the order `Project::records` gives
+    // (cloning every record twice per pass cost 30 ms at 23,000 records).
+    let mut judge = |id: AnyId, properties: &novo_core::Properties| {
+        let Some(Value::Text(cond)) = properties.get(CONDITION_KEY) else {
+            return;
         };
         match Expr::parse(cond)
             .and_then(|e| e.eval(&vars))
@@ -668,56 +668,85 @@ pub fn evaluate(project: &Project, assignment: &Assignment) -> Evaluation {
         {
             Ok(true) => {}
             Ok(false) => {
-                out.inactive.insert(record.id());
+                out.inactive.insert(id);
             }
-            Err(e) => out.errors.push((record.id(), e)),
+            Err(e) => out.errors.push((id, e)),
         }
+    };
+    macro_rules! judge_all {
+        ($($ty:ty),*) => {$(
+            for e in project.all::<$ty>() {
+                judge(e.id.into(), &e.properties);
+            }
+        )*};
+    }
+    {
+        use novo_core::*;
+        judge_all!(
+            Part,
+            Structure,
+            Potential,
+            Page,
+            Device,
+            Terminal,
+            SymbolInstance,
+            Wire,
+            Cable,
+            Text,
+            PotentialSystem,
+            Dismissal,
+            BlockDefinition,
+            BlockInstance,
+            Revision,
+            Rail,
+            CabinetPlacement
+        );
+    }
+    if out.inactive.is_empty() {
+        // Nothing is switched off, so nothing spreads.
+        return out;
     }
     // Spread: a page takes what is on it, a device its symbols, a symbol the
     // wires and texts on it, until nothing changes.
     loop {
         let before = out.inactive.len();
         let off = out.inactive.clone();
-        for record in project.records() {
-            match &record {
-                Record::Symbol(s) => {
-                    let page_off = off.contains(&AnyId::from(s.page));
-                    let device_off = matches!(&s.role, SymbolRole::Device { device, .. } if off.contains(&AnyId::from(*device)));
-                    if page_off || device_off {
-                        out.inactive.insert(s.id.into());
-                    }
-                }
-                Record::Junction(j) => {
-                    if off.contains(&AnyId::from(j.page)) {
-                        out.inactive.insert(j.id.into());
-                    }
-                }
-                Record::Wire(w) => {
-                    let end_off = |e: &Endpoint| match e {
-                        Endpoint::Pin { symbol, .. } => off.contains(&AnyId::from(*symbol)),
-                        Endpoint::Junction { junction } => off.contains(&AnyId::from(*junction)),
-                        Endpoint::Free { .. } => false,
-                    };
-                    if off.contains(&AnyId::from(w.page)) || end_off(&w.from) || end_off(&w.to) {
-                        out.inactive.insert(w.id.into());
-                    }
-                }
-                Record::Text(t) => {
-                    if off.contains(&AnyId::from(t.page))
-                        || t.attached_to.is_some_and(|a| off.contains(&a))
-                    {
-                        out.inactive.insert(t.id.into());
-                    }
-                }
-                Record::Terminal(t) => {
-                    if off.contains(&AnyId::from(t.strip)) {
-                        out.inactive.insert(t.id.into());
-                    }
-                }
-                Record::CabinetPlacement(c) if off.contains(&AnyId::from(c.device)) => {
-                    out.inactive.insert(c.id.into());
-                }
-                _ => {}
+        for s in project.symbols() {
+            let page_off = off.contains(&AnyId::from(s.page));
+            let device_off = matches!(&s.role, SymbolRole::Device { device, .. } if off.contains(&AnyId::from(*device)));
+            if page_off || device_off {
+                out.inactive.insert(s.id.into());
+            }
+        }
+        for j in project.junctions() {
+            if off.contains(&AnyId::from(j.page)) {
+                out.inactive.insert(j.id.into());
+            }
+        }
+        for w in project.wires() {
+            let end_off = |e: &Endpoint| match e {
+                Endpoint::Pin { symbol, .. } => off.contains(&AnyId::from(*symbol)),
+                Endpoint::Junction { junction } => off.contains(&AnyId::from(*junction)),
+                Endpoint::Free { .. } => false,
+            };
+            if off.contains(&AnyId::from(w.page)) || end_off(&w.from) || end_off(&w.to) {
+                out.inactive.insert(w.id.into());
+            }
+        }
+        for t in project.texts() {
+            if off.contains(&AnyId::from(t.page)) || t.attached_to.is_some_and(|a| off.contains(&a))
+            {
+                out.inactive.insert(t.id.into());
+            }
+        }
+        for t in project.all::<novo_core::Terminal>() {
+            if off.contains(&AnyId::from(t.strip)) {
+                out.inactive.insert(t.id.into());
+            }
+        }
+        for c in project.all::<novo_core::CabinetPlacement>() {
+            if off.contains(&AnyId::from(c.device)) {
+                out.inactive.insert(c.id.into());
             }
         }
         // A device drawn only on inactive symbols is inactive too, and a

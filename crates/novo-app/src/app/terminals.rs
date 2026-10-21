@@ -12,6 +12,14 @@ use novo_terminals::{Occurrence, Suggestion};
 use super::workbench::Drawer;
 use super::{Level, NovoApp};
 
+/// The terminal proposals of the whole project, worked out once per revision:
+/// the window asks several times a frame, and at 600 pages one pass took 50 ms.
+pub(super) struct Proposals(pub(super) Vec<Suggestion>);
+
+pub(super) fn all_proposals(project: &novo_core::Project) -> std::sync::Arc<Proposals> {
+    project.derived(|p| Proposals(novo_terminals::suggest_terminals(p)))
+}
+
 impl NovoApp {
     /// Terminal proposals on the shown page, in suggestion order.
     pub(super) fn page_proposals(&self) -> Vec<Suggestion> {
@@ -19,9 +27,11 @@ impl NovoApp {
             return Vec::new();
         };
         let project = doc.project();
-        novo_terminals::suggest_terminals(project)
-            .into_iter()
+        all_proposals(project)
+            .0
+            .iter()
             .filter(|s| project.wire(s.wire).is_some_and(|w| w.page == page))
+            .cloned()
             .collect()
     }
 
@@ -29,7 +39,7 @@ impl NovoApp {
     pub(super) fn all_proposals_empty(&self) -> bool {
         self.backend
             .document()
-            .is_none_or(|d| novo_terminals::suggest_terminals(d.project()).is_empty())
+            .is_none_or(|d| all_proposals(d.project()).0.is_empty())
     }
 
     /// Enter: accepts the highlighted proposal, but only while it is on

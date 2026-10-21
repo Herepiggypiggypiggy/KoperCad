@@ -80,6 +80,7 @@ KoperCAD tells you which is which. Please read the labels.
 - 3D view: the section plane is a slider (no mouse drag), heat arrows show no value on hover. The autosave interval
   is fixed, there is no custom symbol folder, terminal jumper numbers are automatic only.
 - STEP import approximates some curved surfaces.
+- Big projects (about 1,500 symbols and wires or more): the design check runs in the background, so the issue counts and the Issues list can update a moment after an edit (a small pulsing dot by the issue counts shows while they catch up). Reports and exports always wait for the current answer. Measured on one synthetic 600-page project without a graphics card, a still page took about 8 ms of program time per frame; that is a measurement on one machine, not a promise.
 - The program is not code-signed, so Windows SmartScreen warns on first start: choose "More info", "Run anyway".
 
 ## Install

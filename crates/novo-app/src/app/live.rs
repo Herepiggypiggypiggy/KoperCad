@@ -52,6 +52,9 @@ pub(crate) struct LiveView {
     /// Easing state of the device animation (lamps, motors, coils).
     anim: Anim,
     solved: Option<Solved>,
+    /// The Operate list and the "buttons are on page ..." pointer, kept per
+    /// project revision so a frame does not scan every page again.
+    operate: OperateCache,
     /// Click mode of "Why?": the next click on a wire or device asks why it
     /// is lit or dead (Alt+click does the same without the mode).
     pub(super) why_mode: bool,
@@ -62,6 +65,49 @@ pub(crate) struct LiveView {
     why: Option<Target>,
     /// The PLC program window and the program running in it.
     pub(super) plc: super::plc_run::PlcRun,
+}
+
+/// A page and the name to show for it.
+type PageName = Option<(PageId, String)>;
+
+/// What the Operate card shows, remembered against the revision and page it
+/// was worked out for (the list also against the poles, since it shows state).
+#[derive(Default)]
+struct OperateCache {
+    list: Option<(u64, PageId, PoleState, std::rc::Rc<Vec<Operator>>)>,
+    elsewhere: Option<(u64, PageId, PageName)>,
+}
+
+impl OperateCache {
+    fn list(
+        &mut self,
+        project: &Project,
+        page: PageId,
+        poles: &PoleState,
+    ) -> std::rc::Rc<Vec<Operator>> {
+        if let Some((rev, p, ps, list)) = &self.list
+            && *rev == project.revision()
+            && *p == page
+            && ps == poles
+        {
+            return list.clone();
+        }
+        let list = std::rc::Rc::new(operators(project, page, poles));
+        self.list = Some((project.revision(), page, poles.clone(), list.clone()));
+        list
+    }
+
+    fn elsewhere(&mut self, project: &Project, page: PageId) -> PageName {
+        if let Some((rev, p, found)) = &self.elsewhere
+            && *rev == project.revision()
+            && *p == page
+        {
+            return found.clone();
+        }
+        let found = operator_page(project, page);
+        self.elsewhere = Some((project.revision(), page, found.clone()));
+        found
+    }
 }
 
 /// What "Why?" was asked about. A wire is named by its id and a device by its
@@ -77,7 +123,7 @@ struct Solved {
     revision: u64,
     poles: PoleState,
     forced: BTreeSet<SymbolId>,
-    netlist: Netlist,
+    netlist: std::sync::Arc<Netlist>,
     settled: Settled,
     /// Output channels a running PLC program has on.
     plc_on: BTreeSet<SymbolId>,
@@ -418,8 +464,18 @@ pub(super) struct Operator {
 /// The push buttons, selectors, emergency stops and breakers of the page that
 /// no coil drives, one row per device, in tag order.
 pub(super) fn operators(project: &Project, page: PageId, poles: &PoleState) -> Vec<Operator> {
+    operators_against(project, page, poles, &novo_sim::rest_state(project))
+}
+
+/// [`operators`] with the rest state worked out by the caller, so a scan over
+/// many pages computes it once.
+fn operators_against(
+    project: &Project,
+    page: PageId,
+    poles: &PoleState,
+    rest: &PoleState,
+) -> Vec<Operator> {
     use novo_sim::explain::{HandKind, hand_kind};
-    let rest = novo_sim::rest_state(project);
     let mut seen = BTreeSet::new();
     let mut out = Vec::new();
     for s in project.symbols().filter(|s| s.page == page) {
@@ -479,7 +535,11 @@ pub(super) fn operator_page(project: &Project, current: PageId) -> Option<(PageI
         .pages_in_order()
         .into_iter()
         .filter(|p| p.id != current)
-        .find(|p| operators(project, p.id, &rest).iter().any(|o| o.momentary))
+        .find(|p| {
+            operators_against(project, p.id, &rest, &rest)
+                .iter()
+                .any(|o| o.momentary)
+        })
         .map(|p| {
             let name = if p.title.is_empty() {
                 p.name.clone()
@@ -1136,11 +1196,11 @@ impl NovoApp {
         let mut clear_why = false;
         let mut follow: Option<SymbolId> = None;
         let why_mode = self.wb.live.why_mode;
-        let operators = operators(project, page, &poles);
+        let operators = self.wb.live.operate.list(project, page, &poles);
         let mut go_to: Option<PageId> = None;
         let has_buttons = operators.iter().any(|o| o.momentary);
         let elsewhere = if story.is_none() && !has_buttons {
-            operator_page(project, page)
+            self.wb.live.operate.elsewhere(project, page)
         } else {
             None
         };
@@ -1201,7 +1261,7 @@ impl NovoApp {
                     .auto_shrink([false, true])
                     .id_salt("live_operate")
                     .show(ui, |ui| {
-                        for op in &operators {
+                        for op in operators.iter() {
                             ui.horizontal_wrapped(|ui| {
                                 ui.label(&op.label);
                                 ui.weak(format!("{} · {}", op.kind, op.state));

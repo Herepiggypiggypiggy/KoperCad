@@ -263,6 +263,8 @@ mod cabinet_tests;
 #[cfg(test)]
 mod changes_tests;
 #[cfg(test)]
+mod checks_background_tests;
+#[cfg(test)]
 mod clipboard_tests;
 #[cfg(test)]
 mod commissioning_photos_tests;

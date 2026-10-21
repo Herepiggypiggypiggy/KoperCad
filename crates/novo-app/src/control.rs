@@ -24,6 +24,13 @@
 //! - `dialog_answer` `{path|paths}`: the next native file dialog (open, save
 //!   as, folder) gets this answer; `dialogs`: the requests so far. Without an
 //!   answer a dialog is cancelled.
+//! - `frame_stats` `{frames?, motion?, x?, y?}`: runs `frames` (default 120)
+//!   frames while panning (`motion` "pan", the default) or zooming ("zoom")
+//!   the page under the pointer, or standing still ("none"), and replies with
+//!   how long each took: `pass_ms` (egui layout, drawing and tessellation on
+//!   the UI thread) and `period_ms` (start of one frame to the start of the
+//!   next, so with the GPU submit and present). Mean, median, 95th percentile
+//!   and worst, after 5 warm-up frames.
 //! - `wait` `{frames?}`, `resize` `{w,h}`, `quit`.
 //!
 //! Every input command ends with a few settle frames before it replies, so a
@@ -224,8 +231,42 @@ enum Step {
     Tree(bool),
     Scene(bool),
     Resize(f32, f32),
+    Measure(Box<Measure>),
     Quit,
     Done(Value),
+}
+
+/// Frames in a `frame_stats` run that are not counted (first paint, uploads).
+const WARM_UP: u32 = 5;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Motion {
+    Pan,
+    Zoom,
+    None,
+}
+
+/// A `frame_stats` run in progress.
+struct Measure {
+    frames: u32,
+    motion: Motion,
+    at: Pos2,
+    tick: u32,
+    last_start: Option<std::time::Instant>,
+    periods: Vec<f64>,
+    passes: Vec<f64>,
+}
+
+/// Mean, median, 95th percentile and worst of `v`, in the unit it holds.
+fn spread(v: &[f64]) -> Value {
+    if v.is_empty() {
+        return json!({});
+    }
+    let mut sorted = v.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    let at = |q: f64| sorted[((sorted.len() - 1) as f64 * q).round() as usize];
+    let mean = v.iter().sum::<f64>() / v.len() as f64;
+    json!({"mean": mean, "median": at(0.5), "p95": at(0.95), "max": at(1.0)})
 }
 
 struct Active {
@@ -245,6 +286,9 @@ struct Control {
     size: [f32; 2],
     ppp: f32,
     focused_sent: bool,
+    /// When the egui pass of this frame began, and how long the last one took.
+    pass_start: Option<std::time::Instant>,
+    last_pass: Option<f64>,
 }
 
 impl Control {
@@ -263,6 +307,7 @@ impl egui::Plugin for Control {
 
     fn input_hook(&mut self, ctx: &Context, input: &mut RawInput) {
         self.frame += 1;
+        self.pass_start = Some(std::time::Instant::now());
         self.ppp = ctx.pixels_per_point();
         let r = input.screen_rect.unwrap_or(ctx.content_rect());
         self.size = [r.width(), r.height()];
@@ -368,6 +413,55 @@ impl egui::Plugin for Control {
                     ctx.request_repaint();
                     return;
                 }
+                Step::Measure(mut m) => {
+                    let now = std::time::Instant::now();
+                    if let (Some(last), true) = (m.last_start, m.tick > WARM_UP) {
+                        m.periods.push((now - last).as_secs_f64() * 1000.0);
+                        if let Some(pass) = self.last_pass.take() {
+                            m.passes.push(pass);
+                        }
+                    }
+                    self.last_pass = None;
+                    m.last_start = Some(now);
+                    if m.tick >= m.frames + WARM_UP {
+                        active.result["frame_stats"] = json!({
+                            "frames": m.periods.len(),
+                            "motion": match m.motion {
+                                Motion::Pan => "pan",
+                                Motion::Zoom => "zoom",
+                                Motion::None => "none",
+                            },
+                            "pass_ms": spread(&m.passes),
+                            "period_ms": spread(&m.periods),
+                        });
+                        continue;
+                    }
+                    // Alternate direction so the page stays in view.
+                    let sign = if (m.tick / 20) % 2 == 0 { 1.0 } else { -1.0 };
+                    let wheel = match m.motion {
+                        Motion::Pan => Some((
+                            egui::MouseWheelUnit::Point,
+                            egui::vec2(6.0 * sign, 4.0 * sign),
+                        )),
+                        Motion::Zoom => {
+                            Some((egui::MouseWheelUnit::Line, egui::vec2(0.0, 0.25 * sign)))
+                        }
+                        Motion::None => None,
+                    };
+                    input.events.push(Event::PointerMoved(m.at));
+                    if let Some((unit, delta)) = wheel {
+                        input.events.push(Event::MouseWheel {
+                            unit,
+                            delta,
+                            phase: egui::TouchPhase::Move,
+                            modifiers: Modifiers::NONE,
+                        });
+                    }
+                    m.tick += 1;
+                    active.steps.push_front(Step::Measure(m));
+                    ctx.request_repaint();
+                    return;
+                }
                 Step::Resize(w, h) => {
                     ctx.send_viewport_cmd(ViewportCommand::InnerSize(egui::vec2(w, h)));
                     ctx.request_repaint();
@@ -399,6 +493,9 @@ impl egui::Plugin for Control {
     }
 
     fn output_hook(&mut self, _ctx: &Context, output: &mut FullOutput) {
+        if let Some(start) = self.pass_start.take() {
+            self.last_pass = Some(start.elapsed().as_secs_f64() * 1000.0);
+        }
         if self.want_tree
             && let Some(update) = output.platform_output.accesskit_update.clone()
         {
@@ -552,6 +649,30 @@ impl Control {
                 }]));
                 self.pointer = to;
                 steps.push_back(Step::Idle(SETTLE_FRAMES));
+            }
+            "frame_stats" => {
+                let p = match (num("x"), num("y")) {
+                    (Some(x), Some(y)) => Pos2::new(x, y),
+                    _ => Pos2::new(self.size[0] * 0.5, self.size[1] * 0.5),
+                };
+                let motion = match req.get("motion").and_then(Value::as_str) {
+                    Some("zoom") => Motion::Zoom,
+                    Some("none") => Motion::None,
+                    _ => Motion::Pan,
+                };
+                let frames = req
+                    .get("frames")
+                    .and_then(Value::as_f64)
+                    .map_or(120, |n| n.clamp(10.0, 2000.0) as u32);
+                steps.push_back(Step::Measure(Box::new(Measure {
+                    frames,
+                    motion,
+                    at: p,
+                    tick: 0,
+                    last_start: None,
+                    periods: Vec::new(),
+                    passes: Vec::new(),
+                })));
             }
             "scroll" => {
                 let p = at(self);
