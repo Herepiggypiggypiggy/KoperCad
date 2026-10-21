@@ -11,6 +11,11 @@ key Enter
 wait 10
 shot standards-no-set
 check_layout
+# No standard selected: the report is still written, with the design checks.
+click_text "Save as web page" #1
+wait 15
+shot standards-saved-no-set
+check_layout
 click_text "IEC 60204-1" #1
 wait 10
 shot standards-iec-selected

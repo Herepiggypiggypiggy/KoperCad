@@ -273,9 +273,24 @@ pub struct HeatFact {
     pub out_of_date: bool,
 }
 
+/// How many wires there are, by the definition each part of the package
+/// uses. The bench packet counts wires to make (a connection through a
+/// terminal or plug is one wire to cut, however many segments are drawn);
+/// the drawing has more segments than that.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WireFacts {
+    /// Wires to cut, as the Bench output counts them.
+    pub to_cut: usize,
+    /// Of those, wires with a cross-section on the wire or its cable core.
+    pub to_cut_sized: usize,
+}
+
 /// What the document is built from.
 #[derive(Debug, Clone, Default)]
 pub struct DesignInput {
+    /// The bench definition of a wire; `None` when the caller did not
+    /// work it out.
+    pub wires: Option<WireFacts>,
     pub open: Vec<Problem>,
     pub waived: Vec<Waived>,
     pub heat: Option<HeatFact>,
@@ -288,6 +303,7 @@ impl DesignInput {
     pub fn from_project(project: &Project) -> DesignInput {
         let (open, waived) = crate::split_waived(project, crate::check(project));
         DesignInput {
+            wires: None,
             open,
             waived,
             heat: None,
@@ -367,7 +383,7 @@ fn missing(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String> 
             let limited = basis.values().filter(|b| b.protecting.is_some()).count();
             if wires > 0 && limited < wires {
                 out.push(format!(
-                    "{} of {} wires: no protective device with a rated current limits it, so its size is not compared with one",
+                    "{} of {} drawn wires: no protective device with a rated current limits it, so its size is not compared with one",
                     wires - limited,
                     wires
                 ));
@@ -388,7 +404,7 @@ fn missing(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String> 
             let none = project.wires().filter(|w| w.color.is_none()).count();
             if none > 0 {
                 out.push(format!(
-                    "{none} of {wires} wires state no colour, so they were not judged"
+                    "{none} of {wires} drawn wires state no colour, so they were not judged"
                 ));
             }
         }
@@ -427,15 +443,36 @@ fn missing(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String> 
     out
 }
 
+/// The line that says what a wire count counts, shared by the families that
+/// quote one, so every figure names its denominator.
+fn wire_definition(project: &Project, facts: Option<WireFacts>) -> String {
+    let drawn = project.wires().count();
+    match facts {
+        Some(f) if f.to_cut != drawn => format!(
+            "{drawn} drawn wires (every segment on the pages) make {} wires to cut: a connection through a terminal, plug or junction is drawn as several wires and cut as one. The Bench output packet counts those {}",
+            f.to_cut, f.to_cut
+        ),
+        _ => format!("{drawn} drawn wires (every segment on the pages)"),
+    }
+}
+
 /// Evidence lines for the families that have numbers to show.
-fn evidence(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String> {
+fn evidence(
+    project: &Project,
+    id: &str,
+    heat: Option<&HeatFact>,
+    facts: Option<WireFacts>,
+) -> Vec<String> {
     let mut out = Vec::new();
     match id {
         "colours" => {
             let wires = project.wires().count();
             let coloured = project.wires().filter(|w| w.color.is_some()).count();
             if wires > 0 {
-                out.push(format!("{coloured} of {wires} wires state a colour"));
+                out.push(wire_definition(project, facts));
+                out.push(format!(
+                    "{coloured} of {wires} drawn wires state a colour on the wire itself"
+                ));
             }
         }
         "wire-sizing" => {
@@ -445,7 +482,16 @@ fn evidence(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String>
                 .filter(|w| w.cross_section_mm2.is_some())
                 .count();
             if wires > 0 {
-                out.push(format!("{sized} of {wires} wires state a cross-section"));
+                out.push(wire_definition(project, facts));
+                out.push(format!(
+                    "{sized} of {wires} drawn wires state a cross-section on the wire itself"
+                ));
+                if let Some(f) = facts {
+                    out.push(format!(
+                        "{} of {} wires to cut have a cross-section, counting the size of the cable core they run on (the Bench output count)",
+                        f.to_cut_sized, f.to_cut
+                    ));
+                }
             }
         }
         "safety-functions" => {
@@ -555,8 +601,11 @@ pub fn rows(project: &Project, input: &DesignInput) -> Vec<Row> {
 
         let verdict = if let Some(v) = heat_verdict {
             if n == 0 { Verdict::NotApplicable } else { v }
-        } else if errors + warnings > 0 {
+        } else if errors > 0 {
             Verdict::Fail
+        } else if warnings > 0 {
+            // The app shows these as warnings: probably wrong or unfinished.
+            Verdict::Warning
         } else if family.id == "standards" && n == 0 && total == 0 {
             // Reported in the standards sections, or not selected at all.
             Verdict::NotApplicable
@@ -586,7 +635,7 @@ pub fn rows(project: &Project, input: &DesignInput) -> Vec<Row> {
             examined: n,
             findings,
             more: total.saturating_sub(MAX_FINDINGS),
-            evidence: evidence(project, family.id, input.heat.as_ref()),
+            evidence: evidence(project, family.id, input.heat.as_ref(), input.wires),
             not_checkable,
         });
     }
@@ -701,6 +750,35 @@ mod tests {
                 Reliance::Model => assert_eq!(text, "Met (estimate)"),
             }
         }
+    }
+
+    #[test]
+    fn warnings_alone_are_not_a_fail() {
+        let project = Project::new("P");
+        let input = DesignInput {
+            open: vec![problem(
+                ProblemKind::DoorSwing,
+                "the door needs 100 mm more room",
+            )],
+            ..DesignInput::default()
+        };
+        let rows = rows(&project, &input);
+        let c = rows.iter().find(|r| r.family.id == "cabinet").unwrap();
+        assert_eq!(c.warnings, 1);
+        assert_eq!(c.verdict, Verdict::Warning);
+        assert_eq!(c.result_text(), "Warnings only");
+        let err = DesignInput {
+            open: vec![problem(ProblemKind::DeviceCollision, "two devices overlap")],
+            ..DesignInput::default()
+        };
+        let rows = super::rows(&project, &err);
+        assert_eq!(
+            rows.iter()
+                .find(|r| r.family.id == "cabinet")
+                .unwrap()
+                .verdict,
+            Verdict::Fail
+        );
     }
 
     #[test]

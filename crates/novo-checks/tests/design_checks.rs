@@ -223,7 +223,11 @@ fn wires_without_a_cross_section_are_one_aggregated_info() {
     assert_eq!(found.len(), 1, "{problems:#?}");
     assert_eq!(found[0].at, vec![AnyId::Wire(wire)]);
     assert_eq!(found[0].kind.severity(), novo_checks::Severity::Info);
-    assert!(found[0].message.starts_with("1 wire has no cross-section"));
+    assert!(
+        found[0]
+            .message
+            .starts_with("1 wire between placed devices has no cross-section")
+    );
 
     project
         .transact("size", |tx| {

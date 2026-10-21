@@ -192,3 +192,55 @@ fn selecting_a_standard_adds_findings_and_the_pill_and_list_say_so() {
     assert!(note.starts_with(&n.to_string()), "{note}");
     assert!(super::checks::standards_note(1).unwrap().contains("comes"));
 }
+
+#[test]
+fn wire_counts_name_what_they_count_and_agree_with_the_bench_packet() {
+    let (dir, mut d) = example();
+    let html = dir.path().join("Plant standards.html");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Html, &html)
+        .unwrap();
+    let text = std::fs::read_to_string(&html).unwrap();
+    let project = d.app.backend.document().unwrap().project();
+    let set = novo_reports::WireSet::of(project);
+    assert_eq!(set.drawn, project.wires().count());
+    let jobs = novo_reports::wire_cut_jobs(project);
+    assert_eq!(set.to_cut, jobs.len(), "WireSet and the bench jobs agree");
+    assert!(
+        text.contains(&format!("{} drawn wires", set.drawn)),
+        "drawn count named"
+    );
+    let sized = jobs
+        .iter()
+        .filter(|j| j.cross_section_mm2.is_some())
+        .count();
+    assert!(
+        text.contains(&format!(
+            "{sized} of {} wires to cut have a cross-section",
+            set.to_cut
+        )),
+        "the bench count is quoted as the bench counts it"
+    );
+    if set.to_cut != set.drawn {
+        assert!(text.contains(&format!("make {} wires to cut", set.to_cut)));
+    }
+}
+
+#[test]
+fn no_standard_selected_opens_with_the_design_checks_not_an_empty_table() {
+    let (dir, mut d) = example();
+    let project = d.app.backend.document().unwrap().project();
+    let doc = standards::document::build(project, &standards::compliance(project));
+    assert!(doc.sections.is_empty());
+    let out = super::standards_report::report_output(&doc);
+    assert!(out.section("summary").is_none(), "no empty standards table");
+    assert_eq!(out.sections[0].key, "notice");
+    assert!(out.section("design_summary").is_some());
+    let html = dir.path().join("Plant standards.html");
+    d.app
+        .write_standards_report(super::standards_report::StandardsFormat::Html, &html)
+        .unwrap();
+    let text = std::fs::read_to_string(&html).unwrap();
+    assert!(!text.contains("<th>Standard</th>"));
+    assert!(text.contains("Design checks"));
+}
