@@ -7,7 +7,7 @@ use novo_core::{
 };
 
 use crate::address::{Address, AddressStyle};
-use crate::card::{CHANNEL, Card, LayoutSource, address_style, cards};
+use crate::card::{ADDRESS_TEXT, CHANNEL, Card, LayoutSource, SPARE, address_style, cards};
 use crate::layout::{ChannelType, LayoutError, Space};
 
 /// Looks up a symbol's function type (`plc.input.digital`).
@@ -234,6 +234,37 @@ pub struct PlcIndex {
     issues: Vec<Issue>,
 }
 
+/// Sets the address text of every channel symbol that carries one to the
+/// address its card gives that channel. Returns how many changed. Symbols
+/// without the property (drawn by hand) are left alone.
+pub fn sync_address_texts(
+    tx: &mut novo_core::Tx<'_>,
+    functions: &dyn Functions,
+) -> novo_core::Result<usize> {
+    let index = PlcIndex::build(tx.project(), functions);
+    let mut changes = Vec::new();
+    for ch in &index.channels {
+        let Some(symbol) = tx.project().symbol(ch.symbol) else {
+            continue;
+        };
+        if !symbol.properties.contains_key(ADDRESS_TEXT) {
+            continue;
+        }
+        let text = ch
+            .address
+            .map(|a| a.format(index.style))
+            .unwrap_or_default();
+        if symbol.properties.get(ADDRESS_TEXT) != Some(&Value::from(text.clone())) {
+            changes.push((ch.symbol, text));
+        }
+    }
+    let n = changes.len();
+    for (symbol, text) in changes {
+        tx.set_property(symbol, ADDRESS_TEXT, Some(Value::from(text)))?;
+    }
+    Ok(n)
+}
+
 impl PlcIndex {
     pub fn build(project: &Project, functions: &dyn Functions) -> PlcIndex {
         let cards = cards(project);
@@ -242,6 +273,9 @@ impl PlcIndex {
         for card in &cards {
             for symbol in project.symbols_of_device(card.device) {
                 if let SymbolRole::Device { main: true, .. } = symbol.role {
+                    continue;
+                }
+                if symbol.properties.contains_key(SPARE) {
                     continue;
                 }
                 let Some(kind) = functions

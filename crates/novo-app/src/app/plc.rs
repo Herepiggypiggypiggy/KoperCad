@@ -218,8 +218,17 @@ impl NovoApp {
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
+        let library = self
+            .canvas
+            .schematic_ref()
+            .map(|view| view.editor.catalog.library());
         let result = doc.transact("Renumber I/O", |tx| {
-            plans.iter().try_for_each(|plan| apply_renumber(tx, plan))
+            plans.iter().try_for_each(|plan| apply_renumber(tx, plan))?;
+            // The address texts drawn by the I/O list import follow the cards.
+            if let Some(library) = library {
+                novo_plc::sync_address_texts(tx, library)?;
+            }
+            Ok(())
         });
         match result {
             Ok(((), changes)) => {

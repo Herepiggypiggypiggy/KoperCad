@@ -32,7 +32,7 @@ pub struct Options {
 impl Default for Options {
     fn default() -> Self {
         Options {
-            card_letter: "K".into(),
+            card_letter: "A".into(),
             digital_per_card: 16,
             analog_per_card: 4,
             keep_addresses: true,
@@ -269,18 +269,35 @@ pub fn plan(project: &Project, list: &IoList, options: &Options) -> Plan {
     // takes a range the list's addresses need.
     plan.cards = explicit_cards;
     plan.cards.extend(sequential_cards);
-    for (n, card) in plan.cards.iter_mut().enumerate() {
-        card.tag = DeviceTag::parse(&format!(
-            "-{}{}",
-            options.card_letter,
-            letter_number + n as u32
-        ))
-        .unwrap_or_default();
+    // A card never takes a tag the list itself uses (a contactor `K1` beside a card `-K1`).
+    let in_list: std::collections::BTreeSet<String> = list
+        .items
+        .iter()
+        .map(|i| i.tag.trim().trim_start_matches('-').to_ascii_uppercase())
+        .collect();
+    let letter = options.card_letter.to_ascii_uppercase();
+    let mut number = letter_number;
+    for card in plan.cards.iter_mut() {
+        while in_list.contains(&format!("{letter}{number}")) {
+            number += 1;
+        }
+        card.tag =
+            DeviceTag::parse(&format!("-{}{number}", options.card_letter)).unwrap_or_default();
+        number += 1;
         let slot = next_slot.entry(card.station.clone()).or_insert(1);
         card.slot = Some(*slot);
         *slot += 1;
     }
     plan
+}
+
+/// How a row is called in a message: its tag, else its description.
+fn name_of(item: &super::list::IoItem) -> &str {
+    if item.tag.is_empty() {
+        &item.description
+    } else {
+        &item.tag
+    }
 }
 
 fn round_up(n: usize, unit: usize) -> usize {
@@ -337,10 +354,13 @@ fn by_address(
             notes.push(Note {
                 line: Some(list.items[i].line),
                 text: format!(
-                    "{} has the same address as {}; the addresses of the {} signals are \
-                     assigned by the project",
+                    "{} ({}) has the same address as {} ({}, row {}); the addresses of \
+                     the {} signals are assigned by the project",
                     list.items[i].address_text,
+                    name_of(&list.items[i]),
                     list.items[first].address_text,
+                    name_of(&list.items[first]),
+                    list.items[first].line,
                     kind.code()
                 ),
             });

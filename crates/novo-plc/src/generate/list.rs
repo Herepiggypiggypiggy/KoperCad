@@ -19,7 +19,7 @@ use crate::link::csvio;
 /// One signal of the list.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IoItem {
-    /// Row of the file, from 1, counting only rows that are not empty.
+    /// Line of the file, from 1, blank lines counted.
     pub line: usize,
     /// The sensor or actuator (`B1`, `-Y3`): what the signal belongs to.
     pub tag: String,
