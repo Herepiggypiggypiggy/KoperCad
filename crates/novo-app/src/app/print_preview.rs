@@ -1068,10 +1068,16 @@ fn workshop_tab(ui: &mut egui::Ui, plates: &[WorkshopPlate], paper: &mut Paper, 
                 .iter()
                 .map(|s| novo_pdf::template::page_count(&s.sheet, *paper))
                 .sum();
+            let tiles: usize = plate
+                .sheets
+                .iter()
+                .map(|s| novo_pdf::template::tile_plan(&s.sheet, *paper).count())
+                .sum();
             ui.strong(format!(
-                "{}: {pages} page{}",
+                "{}: {pages} page{} ({tiles} tile{} and an overview)",
                 plate.tag,
-                if pages == 1 { "" } else { "s" }
+                if pages == 1 { "" } else { "s" },
+                if tiles == 1 { "" } else { "s" }
             ));
             ui.horizontal_wrapped(|ui| {
                 for s in &plate.sheets {

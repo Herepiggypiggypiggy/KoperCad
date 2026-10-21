@@ -319,6 +319,30 @@ fn accept_all_is_one_command_not_accept_with_an_argument() {
 }
 
 #[test]
+fn a_command_typed_by_its_full_name_runs_bare() {
+    // Acceptance A-02: `issue revision` opened the dialog with "revision" as the
+    // description (verb `issue` plus the argument `revision`).
+    let mut doc = Document::default();
+    motor_starter(&mut doc).unwrap();
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let src = sources(doc.project(), &library, &keymap);
+    for query in ["issue revision", "Issue Revision"] {
+        let rows = palette.search(query, &src);
+        assert_eq!(rows[0].target, Target::Command("revision.issue"), "{query}");
+    }
+    // Words after the verb are still the argument.
+    assert_eq!(
+        palette.search("issue Motor M3 added", &src)[0].target,
+        Target::Run {
+            command: "revision.issue",
+            argument: "Motor M3 added".into()
+        }
+    );
+}
+
+#[test]
 fn the_device_list_after_a_contact_is_in_natural_tag_order() {
     let mut doc = Document::default();
     doc.transact("Devices", |tx| {
