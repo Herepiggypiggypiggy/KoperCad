@@ -998,7 +998,7 @@ impl NovoApp {
             let asked = view3d_runs::panel(
                 ui.ctx(),
                 out.rect,
-                solution.is_some(),
+                mode.controls.heat_panel,
                 list,
                 &chosen,
                 &mode.view.state.selection,

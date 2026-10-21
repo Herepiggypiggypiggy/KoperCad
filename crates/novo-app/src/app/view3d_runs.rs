@@ -564,7 +564,11 @@ fn card_body(ui: &mut egui::Ui, chosen: &[&WireFacts]) -> Asked {
         } else {
             format!("{} runs", chosen.len())
         });
-        if ui.small_button("Close").clicked() {
+        if ui
+            .small_button("Unpick")
+            .on_hover_text("Let go of this run; the list stays")
+            .clicked()
+        {
             asked.clear = true;
         }
     });
@@ -633,18 +637,18 @@ const BELOW_PANEL: f32 = 100.0;
 /// Width of the panel, in points.
 const PANEL_WIDTH: f32 = 300.0;
 
-/// Where the panel starts, from the top of the view: under the view cube, and
-/// under the Heat panel when that is open (it hangs from the same corner).
-fn start_below(ctx: &egui::Context, view: egui::Rect, heat_open: bool) -> f32 {
+/// Where the panel starts: under the view cube on the right, under the Heat
+/// panel when that is open (it hangs from the same corner); on a window too
+/// short for both, on the left under the toolbar, where the Heat panel is not.
+fn placement(ctx: &egui::Context, view: egui::Rect, heat_open: bool) -> (super::panel::Side, f32) {
     let heat = heat_open
         .then(|| ctx.memory(|m| m.area_rect(super::panel::id("view3d_heat_panel"))))
         .flatten()
         .map(|r| r.bottom() - view.top() + 8.0);
     match heat {
-        // Keep room for a usable list: on a short window the Heat panel wins
-        // the corner and this one starts beside it, where it can be dragged.
-        Some(b) if view.height() - b > 220.0 => b.max(UNDER_CUBE),
-        _ => UNDER_CUBE,
+        Some(b) if view.height() - b > 220.0 => (super::panel::Side::Right, b.max(UNDER_CUBE)),
+        Some(_) => (super::panel::Side::Left, super::view3d_controls::BELOW),
+        None => (super::panel::Side::Right, UNDER_CUBE),
     }
 }
 
@@ -670,41 +674,35 @@ pub(super) fn panel(
     };
     let mut asked = PanelAsked::default();
     let height = view.height();
-    let top = start_below(ctx, view, heat_open);
+    let (side, top) = placement(ctx, view, heat_open);
     // What is left of the canvas under the panel's title bar; the body scrolls
     // when the list and the card together are taller.
     let room = (height - top - BELOW_PANEL).max(120.0);
-    super::panel::Panel::new(
-        "view3d_wire_runs",
-        title,
-        view,
-        super::panel::Side::Right,
-        PANEL_WIDTH,
-    )
-    .top(top)
-    .height(room.min(560.0))
-    .above_card()
-    .show(ctx, |ui| {
-        // The list on top so another run is always one click away; the card of
-        // the picked run below it. The panel's own scroll bar takes over when
-        // together they are taller than the room.
-        if let Some(l) = &list {
-            asked.list = super::view3d_wires::list_body(
-                ui,
-                height,
-                !chosen.is_empty(),
-                l.all,
-                l.undrawn,
-                selection,
-            );
-            if !chosen.is_empty() {
-                ui.separator();
+    super::panel::Panel::new("view3d_wire_runs", title, view, side, PANEL_WIDTH)
+        .top(top)
+        .height(room.min(560.0))
+        .above_card()
+        .show(ctx, |ui| {
+            // The list on top so another run is always one click away; the card of
+            // the picked run below it. The panel's own scroll bar takes over when
+            // together they are taller than the room.
+            if let Some(l) = &list {
+                asked.list = super::view3d_wires::list_body(
+                    ui,
+                    height,
+                    !chosen.is_empty(),
+                    l.all,
+                    l.undrawn,
+                    selection,
+                );
+                if !chosen.is_empty() {
+                    ui.separator();
+                }
             }
-        }
-        if !chosen.is_empty() {
-            asked.card = card_body(ui, chosen);
-        }
-    });
+            if !chosen.is_empty() {
+                asked.card = card_body(ui, chosen);
+            }
+        });
     Some(asked)
 }
 

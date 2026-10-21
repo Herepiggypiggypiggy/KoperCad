@@ -173,6 +173,8 @@ pub(crate) struct LearnState {
     pub(super) point_asked: Option<(String, String)>,
     /// "Do it for me" did a step of this run.
     pub(super) helped: bool,
+    /// The answer given to a prediction step: lesson, step, option index.
+    pub(super) predicted: Option<(String, String, usize)>,
     /// Set by the replay gate: draws one frame, so a page shown by a solve
     /// op has its canvas before the op goes on (a person's next frame).
     #[cfg(test)]
@@ -235,6 +237,7 @@ impl LearnState {
             hints_shown: 0,
             point_asked: None,
             helped: false,
+            predicted: None,
             #[cfg(test)]
             settle: None,
             confirm_reset: false,
@@ -671,6 +674,7 @@ impl NovoApp {
             .to_owned(),
             live: self.wb.live.on,
             zoom: 1.0,
+            predicted: self.learn_predicted().is_some(),
             ..Facts::default()
         };
         let Some(doc) = self.backend.document() else {
@@ -784,6 +788,29 @@ impl NovoApp {
             self.learn.record();
         }
         self.learn_reveal();
+    }
+
+    /// The option chosen for the open step's prediction question.
+    pub(super) fn learn_predicted(&self) -> Option<usize> {
+        let run = self.learn.run.as_ref()?;
+        let step = run.step()?;
+        self.learn
+            .predicted
+            .as_ref()
+            .filter(|(lesson, id, _)| *lesson == run.lesson().id && *id == step.id)
+            .map(|(_, _, choice)| *choice)
+    }
+
+    /// The card's answer to a prediction question.
+    pub(super) fn learn_predict(&mut self, choice: usize) -> Result<(), String> {
+        let run = self.learn.run.as_ref().ok_or("no lesson is open")?;
+        let step = run.step().ok_or("no step is open")?;
+        let predict = step.predict.as_ref().ok_or("this step asks no question")?;
+        if choice >= predict.options.len() {
+            return Err("there is no such option".into());
+        }
+        self.learn.predicted = Some((run.lesson().id.clone(), step.id.clone(), choice));
+        Ok(())
     }
 
     /// A challenge keeps its pointer ring back until the learner has opened
@@ -962,6 +989,7 @@ impl NovoApp {
         self.learn.run = Some(Run::new(entry.lesson.clone()));
         self.learn.point_asked = None;
         self.learn.helped = false;
+        self.learn.predicted = None;
         self.learn.hints_for.clear();
         self.learn.hints_shown = 0;
         self.learn.hidden = false;
@@ -1041,6 +1069,7 @@ impl NovoApp {
         self.learn.hints_shown = 0;
         self.learn.point_asked = None;
         self.learn.helped = false;
+        self.learn.predicted = None;
     }
 
     /// The card's Hint: opens the next hint of the open step.

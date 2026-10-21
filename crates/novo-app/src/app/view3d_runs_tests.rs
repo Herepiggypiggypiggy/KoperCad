@@ -399,3 +399,39 @@ fn the_wire_runs_panel_and_the_inspector_never_share_screen_space() {
         assert!(runs.left() > size.x / 2.0, "the list hangs on the right");
     }
 }
+
+#[test]
+fn the_wire_runs_panel_keeps_clear_of_the_heat_panel_even_before_there_is_a_result() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.view3d.controls.heat_panel = true;
+    d.app.run_command(&ctx, "view.3d_wire_runs", None);
+    for size in [egui::vec2(1366.0, 768.0), egui::vec2(1920.0, 1080.0)] {
+        for _ in 0..4 {
+            d.frame_sized(size, Vec::new());
+        }
+        let area = |name: &str| {
+            ctx.memory(|m| m.area_rect(super::panel::id(name)))
+                .unwrap_or_else(|| panic!("{name} is open at {size:?}"))
+        };
+        let (runs, heat) = (area("view3d_wire_runs"), area("view3d_heat_panel"));
+        assert!(
+            !runs.intersects(heat),
+            "{size:?}: runs {runs:?} meets heat {heat:?}"
+        );
+    }
+    // With the Heat panel closed, the stale rectangle it left is not used:
+    // the panel starts under the view cube again.
+    d.app.view3d.controls.heat_panel = false;
+    for _ in 0..4 {
+        d.frame_sized(egui::vec2(1366.0, 768.0), Vec::new());
+    }
+    let runs = ctx
+        .memory(|m| m.area_rect(super::panel::id("view3d_wire_runs")))
+        .unwrap();
+    assert!(
+        runs.top() < 200.0,
+        "starts under the cube, not low: {runs:?}"
+    );
+}

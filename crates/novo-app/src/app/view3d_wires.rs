@@ -335,8 +335,23 @@ pub(super) fn list_body(
     if all.is_empty() {
         ui.weak("No wire is routed on this plate yet");
     }
+    let total: f64 = all.values().map(|f| f.length_mm).sum();
+    ui.weak(format!("{} wires, {} in all", all.len(), metres(total)));
+    if !chosen.is_empty() {
+        let sum: f64 = chosen.iter().map(|f| f.length_mm).sum();
+        ui.label(format!("Selected {}: {}", chosen.len(), metres(sum)));
+    }
+    if ui
+        .small_button("Open the cut list")
+        .on_hover_text("The Cut list report: every wire to cut, by size and colour")
+        .clicked()
+    {
+        asked.cut_list = true;
+    }
+    ui.separator();
     egui::ScrollArea::vertical()
         .id_salt("view3d_wire_runs_rows")
+        .auto_shrink([false, true])
         .max_height(if compact {
             100.0
         } else {
@@ -370,20 +385,6 @@ pub(super) fn list_body(
                         }
                     });
             });
-    }
-    ui.separator();
-    let total: f64 = all.values().map(|f| f.length_mm).sum();
-    ui.weak(format!("{} wires, {} in all", all.len(), metres(total)));
-    if !chosen.is_empty() {
-        let sum: f64 = chosen.iter().map(|f| f.length_mm).sum();
-        ui.label(format!("Selected {}: {}", chosen.len(), metres(sum)));
-    }
-    if ui
-        .small_button("Open the cut list")
-        .on_hover_text("The Cut list report: every wire to cut, by size and colour")
-        .clicked()
-    {
-        asked.cut_list = true;
     }
     asked
 }

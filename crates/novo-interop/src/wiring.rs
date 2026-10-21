@@ -211,7 +211,7 @@ pub fn wiring_dxf(project: &Project, structure: StructureId) -> Option<Drawing> 
         x,
         0.0,
         TEXT_MM * 1.25,
-        "Wire        From > To        Cut length mm   Basis".into(),
+        "Wire        From > To        Route length mm   Basis".into(),
         HAlign::Left,
         VAlign::Top,
     ));

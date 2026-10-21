@@ -20,3 +20,7 @@ wait 8
 click_text "Select all devices"
 wait 30
 shot inspector-open
+key Escape
+click_text Heat
+wait 30
+shot heat-and-runs

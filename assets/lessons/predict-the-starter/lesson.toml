@@ -1,0 +1,142 @@
+# Predict, then see: each question is answered before the live view shows
+# the result. Sample project: cross-references/finished.json (a working starter).
+format = 1
+id = "predict-the-starter"
+version = 1
+status = "early"
+title = "Predict the starter, then see"
+title_nl = "Voorspel de starter en kijk dan"
+summary = "Guess what the pump starter will do, then try it in the live view and see whether you were right."
+summary_nl = "Raad wat de pompstarter gaat doen, probeer het dan in de live-weergave en kijk of je gelijk had."
+track = "circuits"
+order = 30
+level = "beginner"
+minutes = 6
+topics = ["simulation", "live", "prediction"]
+needs = ["live-view"]
+next = ["motor-wont-hold"]
+project = "project.json"
+finished = "finished.json"
+page = "Control circuit"
+
+[[step]]
+id = "live"
+title = "Switch the live view on"
+title_nl = "Zet de live-weergave aan"
+text = """
+You will predict what a working pump starter does, then check it. The live view lets you press the buttons without changing the drawing.
+"""
+text_nl = """
+Je voorspelt wat een werkende pompstarter doet en controleert het dan. Met de live-weergave druk je op de knoppen zonder de tekening te veranderen.
+"""
+how = [
+  "Press {key:sim.live}.",
+]
+how_nl = [
+  "Druk op {key:sim.live}.",
+]
+expect = { live = true }
+solve = [ { command = "sim.live" } ]
+
+[[step]]
+id = "guess-hold"
+title = "Predict: let go of start"
+title_nl = "Voorspel: start loslaten"
+text = """
+Look at the drawing: start (**-S2**) is a push button, and the contact **-K1** (13-14) sits in parallel with it. You will press start and then let go. What does the contactor **-K1** do?
+"""
+text_nl = """
+Kijk naar de tekening: start (**-S2**) is een drukknop en het contact **-K1** (13-14) staat er parallel aan. Je drukt op start en laat dan los. Wat doet de contactor **-K1**?
+"""
+expect = { predicted = true }
+pause = true
+solve = [ { choose = 1 } ]
+[step.predict]
+options = ["It drops out as soon as I let go", "It stays pulled in", "It never pulls in"]
+options_nl = ["Hij valt af zodra ik loslaat", "Hij blijft aangetrokken", "Hij trekt nooit aan"]
+answer = 1
+why = "The holding contact **-K1** (13-14) closes when the coil pulls in and keeps feeding the coil after start is released. That is what makes a starter hold itself in."
+why_nl = "Het houdcontact **-K1** (13-14) sluit als de spoel aantrekt en blijft de spoel voeden nadat start is losgelaten. Zo houdt een starter zichzelf vast."
+
+[[step]]
+id = "see-hold"
+title = "See: press start"
+title_nl = "Kijk: druk op start"
+text = """
+Now try it. Press start (**-S2**) in the live panel, let go, and watch the coil.
+"""
+text_nl = """
+Probeer het nu. Druk op start (**-S2**) in het live-paneel, laat los en kijk naar de spoel.
+"""
+point = { at = { device = "-S2" } }
+expect = { all = [ { coil_on = "-K1" }, { not = { pole_closed = "-S2" } } ] }
+solve = [ { live_pole = { device = "-S2" } } ]
+
+[[step]]
+id = "guess-lamp"
+title = "Predict: the green lamp"
+title_nl = "Voorspel: de groene lamp"
+text = """
+The pump is running. Does the green lamp **-P1** light?
+"""
+text_nl = """
+De pomp draait. Brandt de groene lamp **-P1**?
+"""
+expect = { predicted = true }
+pause = true
+solve = [ { choose = 0 } ]
+[step.predict]
+options = ["Yes, it lights while the contactor is pulled in", "No, it stays dark"]
+options_nl = ["Ja, hij brandt zolang de contactor aangetrokken is", "Nee, hij blijft donker"]
+answer = 0
+why = "The lamp is fed through a contact of **-K1**, so it lights whenever the contactor is pulled in. Look at the lamp in the drawing now."
+why_nl = "De lamp wordt gevoed via een contact van **-K1**, dus hij brandt zolang de contactor aangetrokken is. Kijk nu naar de lamp in de tekening."
+
+[[step]]
+id = "see-lamp"
+title = "See: the lamp"
+title_nl = "Kijk: de lamp"
+text = """
+Look at the drawing: the lamp **-P1** glows while **-K1** is pulled in. Press next when you have seen it.
+"""
+text_nl = """
+Kijk naar de tekening: de lamp **-P1** gloeit zolang **-K1** aangetrokken is. Druk op volgende als je het gezien hebt.
+"""
+point = { at = { device = "-P1" } }
+expect = { lit = "-P1" }
+solve = []
+pause = true
+
+[[step]]
+id = "guess-stop"
+title = "Predict: press stop"
+title_nl = "Voorspel: stop indrukken"
+text = """
+The pump runs and holds itself in. You press stop (**-S1**) and let go. What happens?
+"""
+text_nl = """
+De pomp draait en houdt zichzelf vast. Je drukt op stop (**-S1**) en laat los. Wat gebeurt er?
+"""
+expect = { predicted = true }
+pause = true
+solve = [ { choose = 1 } ]
+[step.predict]
+options = ["Nothing, it keeps running", "The contactor drops out and stays out", "It drops out but pulls in again when I let go"]
+options_nl = ["Niets, hij blijft draaien", "De contactor valt af en blijft af", "Hij valt af maar trekt weer aan als ik loslaat"]
+answer = 1
+why = "Stop is a normally closed contact in series with everything: pressing it cuts the coil, the holding contact opens with it, and nothing feeds the coil again when stop springs back."
+why_nl = "Stop is een verbreekcontact in serie met alles: indrukken schakelt de spoel uit, het houdcontact opent mee en niets voedt de spoel weer als stop terugveert."
+
+[[step]]
+id = "see-stop"
+title = "See: press stop"
+title_nl = "Kijk: druk op stop"
+text = """
+Press stop (**-S1**) in the live panel and let go. Was your guess right?
+"""
+text_nl = """
+Druk op stop (**-S1**) in het live-paneel en laat los. Had je gelijk?
+"""
+point = { at = { device = "-S1" } }
+expect = { not = { coil_on = "-K1" } }
+solve = [ { live_pole = { device = "-S1" } } ]

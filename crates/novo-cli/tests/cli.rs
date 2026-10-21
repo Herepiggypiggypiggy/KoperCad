@@ -352,7 +352,7 @@ fn export_wires_and_cut_list_carry_cut_lengths() {
     let run = novo(&["export", "wires", s(&path)]);
     assert_eq!(run.code, exit::OK, "{}", run.err);
     assert!(
-        run.out.contains("Cut length mm,Length basis"),
+        run.out.contains("Route length mm,Length basis"),
         "{}",
         run.out
     );
@@ -841,7 +841,7 @@ fn compare_says_when_two_projects_match_and_where_they_differ() {
     let other = project(c.path(), true);
     let run = novo(&["compare", s(&one), s(&other)]);
     assert_eq!(run.code, exit::PROBLEMS, "{}{}", run.out, run.err);
-    assert!(run.out.contains("devices"), "{}", run.out);
+    assert!(run.out.contains("device"), "{}", run.out);
 }
 
 #[test]
@@ -854,7 +854,7 @@ fn export_aml_writes_caex_and_lists_what_the_format_cannot_carry() {
     let text = std::fs::read_to_string(&out).unwrap();
     assert!(text.contains("<CAEXFile"));
     assert!(text.contains("Name=\"-K1\""));
-    assert!(run.out.contains("1 devices"), "{}", run.out);
+    assert!(run.out.contains("1 device"), "{}", run.out);
     assert!(run.out.contains("2 pages"), "{}", run.out);
     assert!(run.out.contains("page graphics"), "{}", run.out);
 }
