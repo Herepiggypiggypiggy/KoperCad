@@ -2158,8 +2158,8 @@ impl NovoApp {
             });
     }
 
-    /// The latest messages, bottom left over the canvas. Info fades on its
-    /// own; warnings and errors stay until clicked.
+    /// The latest messages, bottom left over the canvas, above the tool dock
+    /// where the two would meet. Info fades on its own; warnings and errors stay until clicked.
     fn toasts(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         let now = Instant::now();
         let mut fade_in: Option<Duration> = None;
@@ -2195,13 +2195,23 @@ impl NovoApp {
         }
         let mut dismiss = Vec::new();
         let mut open = None;
+        // Never wider than the canvas: a 683 point window has less room than
+        // the usual 420.
+        let width = 420.0_f32.min((canvas.width() - 24.0).max(160.0));
+        // The tool dock sits bottom centre; where the stack would reach it
+        // (1366 wide and under), the stack stands on top of the dock instead.
+        let mut bottom = canvas.bottom() - 12.0;
+        if let Some(dock) = ctx.memory(|m| m.area_rect(egui::Id::new("tool_dock")))
+            && dock.left() < canvas.left() + 12.0 + width + 8.0
+            && dock.bottom() > bottom - 8.0
+        {
+            bottom = bottom.min(dock.top() - 8.0);
+        }
         egui::Area::new(egui::Id::new("toasts"))
             .pivot(egui::Align2::LEFT_BOTTOM)
-            .fixed_pos(canvas.left_bottom() + egui::vec2(12.0, -12.0))
+            .fixed_pos(egui::pos2(canvas.left() + 12.0, bottom))
             .show(ctx, |ui| {
-                // Never wider than the canvas: a 683 point window has less
-                // room than the usual 420.
-                ui.set_max_width(420.0_f32.min((canvas.width() - 24.0).max(160.0)));
+                ui.set_max_width(width);
                 for &i in shown.iter().rev() {
                     let m = &self.messages[i];
                     let color = match m.level {

@@ -478,3 +478,37 @@ mod refusal_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod toast_dock_tests {
+    use super::super::gate1_tests::Drive;
+    use crate::actions::Action;
+    use eframe::egui;
+
+    /// Toasts never cover a tool dock button, at the sizes the dock and the
+    /// toast column would otherwise meet (1366 wide) and at a wide window.
+    #[test]
+    fn a_toast_stands_above_the_tool_dock_not_on_it() {
+        for size in [egui::vec2(1366.0, 768.0), egui::vec2(1920.0, 1080.0)] {
+            let dir = tempfile::tempdir().unwrap();
+            let mut d = Drive::new(&dir.path().join("untitled"));
+            let ctx = d.ctx.clone();
+            d.app.run(&ctx, Action::NewProject);
+            d.frame_sized(size, Vec::new());
+            d.app.message(
+                crate::app::Level::Error,
+                "Could not save the project: the disk is full and the file is on a share",
+            );
+            for _ in 0..3 {
+                d.frame_sized(size, Vec::new());
+            }
+            let rect = |name: &str| ctx.memory(|m| m.area_rect(egui::Id::new(name)));
+            let toasts = rect("toasts").expect("the toast is shown");
+            let dock = rect("tool_dock").expect("the dock is shown");
+            assert!(
+                !toasts.intersects(dock),
+                "{size:?}: toast {toasts:?} over dock {dock:?}"
+            );
+        }
+    }
+}
