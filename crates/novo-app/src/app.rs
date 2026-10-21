@@ -271,6 +271,8 @@ mod example_tests;
 #[cfg(test)]
 mod faults_tests;
 #[cfg(test)]
+mod first_view_tests;
+#[cfg(test)]
 mod gate1_tests;
 #[cfg(test)]
 mod greyed_commands_tests;

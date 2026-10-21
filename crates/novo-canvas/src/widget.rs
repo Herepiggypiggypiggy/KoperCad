@@ -583,6 +583,31 @@ impl CanvasView {
         self.viewport.center.y += reserve * 0.5 / self.viewport.zoom;
     }
 
+    /// A close fit on the drawing must not leave a stretch of empty canvas
+    /// beside the sheet while the sheet's far columns are cut off: on an
+    /// axis where the whole sheet fits, the sheet is centred; where it does
+    /// not, the view stays inside the sheet.
+    fn keep_sheet_in_view(&mut self, sheet: &Aabb) {
+        let zoom = self.viewport.zoom;
+        let margin = 24.0 / zoom;
+        let half = self.viewport.size / zoom * 0.5;
+        let (lo, hi) = (
+            sheet.min - Vec2::splat(margin),
+            sheet.max + Vec2::splat(margin),
+        );
+        let pick = |c: f32, half: f32, lo: f32, hi: f32| {
+            if hi - lo <= 2.0 * half {
+                (lo + hi) * 0.5
+            } else {
+                c.clamp(lo + half, hi - half)
+            }
+        };
+        self.viewport.center = Vec2::new(
+            pick(self.viewport.center.x, half.x, lo.x, hi.x),
+            pick(self.viewport.center.y, half.y, lo.y, hi.y),
+        );
+    }
+
     fn fit_clear(&mut self, scene: &Scene, kind: Fit) {
         let content = scene.content_bounds();
         if kind == Fit::Content && scene.sheet().is_some() && !content.is_empty() {
@@ -602,6 +627,7 @@ impl CanvasView {
                     self.viewport.zoom = FIT_CONTENT_MAX_ZOOM;
                     self.viewport.center = content.center();
                 }
+                self.keep_sheet_in_view(&scene.bounds());
             }
         } else {
             self.viewport.fit(&scene.bounds(), 24.0);

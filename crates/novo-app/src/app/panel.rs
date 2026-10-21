@@ -315,13 +315,22 @@ pub(super) fn dialog_on_top(ctx: &egui::Context) -> bool {
     ctx.data(|d| d.get_temp::<egui::Id>(pending_id()))
         .is_some_and(|id| {
             let layer = egui::LayerId::new(egui::Order::Middle, id);
-            // A dialog that was closed keeps its remembered layer; only one
-            // that was drawn last frame counts.
-            ctx.memory(|m| {
-                m.areas().top_layer_id(egui::Order::Middle) == Some(layer)
-                    && m.areas().visible_last_frame(&layer)
-            })
+            top_middle_layer(ctx) == Some(layer)
         })
+}
+
+/// The floating window on top that was drawn last frame. A window that was
+/// closed keeps its remembered layer (and its place on top of the others),
+/// so the area order alone would leave Escape
+/// with nothing to close once the top one is gone.
+fn top_middle_layer(ctx: &egui::Context) -> Option<egui::LayerId> {
+    ctx.memory(|m| {
+        let layers: Vec<_> = m.layer_ids().collect();
+        layers
+            .into_iter()
+            .rev()
+            .find(|layer| layer.order == egui::Order::Middle && m.areas().visible_last_frame(layer))
+    })
 }
 
 /// Escape closes the dialog on top: wrap the `open` flag handed to
@@ -334,8 +343,7 @@ pub(super) fn esc<'a>(ctx: &egui::Context, open: &'a mut bool) -> &'a mut bool {
         && !ctx.data(|d| d.get_temp::<bool>(esc_off_id()).unwrap_or(false))
         && ctx.input(|i| i.key_pressed(egui::Key::Escape))
         && !ctx.egui_wants_keyboard_input()
-        && ctx.memory(|m| m.areas().top_layer_id(egui::Order::Middle))
-            == Some(egui::LayerId::new(egui::Order::Middle, id))
+        && top_middle_layer(ctx) == Some(egui::LayerId::new(egui::Order::Middle, id))
     {
         *open = false;
     }
