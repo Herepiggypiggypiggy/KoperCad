@@ -252,7 +252,7 @@ fn numbers_survive_save_and_reopen_bit_for_bit() {
 #[test]
 fn salvage_says_when_only_the_project_information_was_lost() {
     let (_dir, path) = temp();
-    let mut doc = saved(&path, 3);
+    let doc = saved(&path, 3);
     {
         let conn = Connection::open(&path).unwrap();
         conn.execute("UPDATE meta SET value = '{broken' WHERE key = 'info'", [])
