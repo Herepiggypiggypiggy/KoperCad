@@ -6,6 +6,7 @@
 
 use crate::key::ApiKey;
 use crate::models::ModelInfo;
+use crate::stream::{Assembler, Delta};
 use crate::usage::Usage;
 use serde_json::{Value, json};
 use std::time::Duration;
@@ -51,11 +52,38 @@ impl HttpResponse {
 /// come back as a response.
 pub trait Transport: Send {
     fn send(&mut self, req: &HttpRequest) -> Result<HttpResponse, String>;
+
+    /// Like [`send`](Transport::send), but a successful body is handed over
+    /// line by line as it arrives (`on_line` returns false to stop reading)
+    /// and the returned `body` is empty. An error status returns its whole
+    /// body, as `send` does.
+    fn send_stream(
+        &mut self,
+        req: &HttpRequest,
+        on_line: &mut dyn FnMut(&str) -> bool,
+    ) -> Result<HttpResponse, String> {
+        let mut r = self.send(req)?;
+        if (200..300).contains(&r.status) {
+            for line in std::mem::take(&mut r.body).lines() {
+                if !on_line(line) {
+                    break;
+                }
+            }
+        }
+        Ok(r)
+    }
 }
 
 impl<T: Transport + ?Sized> Transport for Box<T> {
     fn send(&mut self, req: &HttpRequest) -> Result<HttpResponse, String> {
         (**self).send(req)
+    }
+    fn send_stream(
+        &mut self,
+        req: &HttpRequest,
+        on_line: &mut dyn FnMut(&str) -> bool,
+    ) -> Result<HttpResponse, String> {
+        (**self).send_stream(req, on_line)
     }
 }
 
@@ -83,8 +111,8 @@ impl UreqTransport {
     }
 }
 
-impl Transport for UreqTransport {
-    fn send(&mut self, req: &HttpRequest) -> Result<HttpResponse, String> {
+impl UreqTransport {
+    fn call(&self, req: &HttpRequest) -> Result<ureq::http::Response<ureq::Body>, String> {
         let result = match req.method {
             Method::Get => {
                 let mut r = self.agent.get(&req.url);
@@ -101,13 +129,23 @@ impl Transport for UreqTransport {
                 r.send(req.body.as_bytes())
             }
         };
-        let mut resp = result.map_err(|e| e.to_string())?;
-        let status = resp.status().as_u16();
-        let headers = resp
-            .headers()
-            .iter()
-            .filter_map(|(k, v)| Some((k.as_str().to_string(), v.to_str().ok()?.to_string())))
-            .collect();
+        result.map_err(|e| e.to_string())
+    }
+}
+
+fn head_of(resp: &ureq::http::Response<ureq::Body>) -> (u16, Vec<(String, String)>) {
+    let headers = resp
+        .headers()
+        .iter()
+        .filter_map(|(k, v)| Some((k.as_str().to_string(), v.to_str().ok()?.to_string())))
+        .collect();
+    (resp.status().as_u16(), headers)
+}
+
+impl Transport for UreqTransport {
+    fn send(&mut self, req: &HttpRequest) -> Result<HttpResponse, String> {
+        let mut resp = self.call(req)?;
+        let (status, headers) = head_of(&resp);
         let body = resp
             .body_mut()
             .read_to_string()
@@ -116,6 +154,37 @@ impl Transport for UreqTransport {
             status,
             headers,
             body,
+        })
+    }
+
+    fn send_stream(
+        &mut self,
+        req: &HttpRequest,
+        on_line: &mut dyn FnMut(&str) -> bool,
+    ) -> Result<HttpResponse, String> {
+        use std::io::{BufRead, BufReader};
+        let mut resp = self.call(req)?;
+        let (status, headers) = head_of(&resp);
+        if !(200..300).contains(&status) {
+            let body = resp
+                .body_mut()
+                .read_to_string()
+                .map_err(|e| e.to_string())?;
+            return Ok(HttpResponse {
+                status,
+                headers,
+                body,
+            });
+        }
+        for line in BufReader::new(resp.body_mut().as_reader()).lines() {
+            if !on_line(&line.map_err(|e| e.to_string())?) {
+                break;
+            }
+        }
+        Ok(HttpResponse {
+            status,
+            headers,
+            body: String::new(),
         })
     }
 }
@@ -140,6 +209,8 @@ pub enum ApiError {
     Parse(String),
     #[error("Claude declined this request{0}.")]
     Refused(String),
+    #[error("Stopped.")]
+    Cancelled(Usage),
     #[error("The monthly budget you set is used up. Raise it in Settings > Claude to continue.")]
     BudgetReached,
 }
@@ -269,10 +340,21 @@ impl<T: Transport> Client<T> {
     }
 
     fn send_checked(&mut self, req: &HttpRequest) -> Result<HttpResponse, ApiError> {
+        self.send_with(req, &|| false, &mut |t, r| t.send(r))
+    }
+
+    /// Sends with retries. `go` performs one attempt. `no_retry` is asked
+    /// before a retry: after output started streaming a retry would repeat it.
+    fn send_with(
+        &mut self,
+        req: &HttpRequest,
+        no_retry: &dyn Fn() -> bool,
+        go: &mut dyn FnMut(&mut T, &HttpRequest) -> Result<HttpResponse, String>,
+    ) -> Result<HttpResponse, ApiError> {
         let mut attempt = 0;
         loop {
             attempt += 1;
-            let result: Result<HttpResponse, ApiError> = match self.transport.send(req) {
+            let result: Result<HttpResponse, ApiError> = match go(&mut self.transport, req) {
                 Err(e) => Err(ApiError::Network(e)),
                 Ok(r) => match r.status {
                     200..=299 => return Ok(r),
@@ -285,12 +367,48 @@ impl<T: Transport> Client<T> {
                 },
             };
             let Err(err) = result else { unreachable!() };
-            if attempt >= MAX_ATTEMPTS || !(err.retryable() || matches!(err, ApiError::Network(_)))
+            if attempt >= MAX_ATTEMPTS
+                || no_retry()
+                || !(err.retryable() || matches!(err, ApiError::Network(_)))
             {
                 return Err(err);
             }
             (self.sleep)(Duration::from_secs(2u64.pow(attempt)));
         }
+    }
+
+    /// One Messages API call, streamed: `on_delta` hears the answer as it is
+    /// written. `cancel` set to true stops reading; the error then carries
+    /// the tokens counted so far.
+    pub fn messages_stream(
+        &mut self,
+        spec: &RequestSpec,
+        cancel: &std::sync::atomic::AtomicBool,
+        on_delta: &mut dyn FnMut(Delta),
+    ) -> Result<Reply, ApiError> {
+        use std::cell::Cell;
+        use std::sync::atomic::Ordering;
+        let mut body = spec.body();
+        body["stream"] = Value::Bool(true);
+        let req = HttpRequest {
+            method: Method::Post,
+            url: format!("{}/v1/messages", self.base_url),
+            headers: self.headers(spec.model.refusal_fallback),
+            body: body.to_string(),
+        };
+        let mut asm = Assembler::default();
+        let started = Cell::new(false);
+        self.send_with(&req, &|| started.get(), &mut |t, r| {
+            t.send_stream(r, &mut |line| {
+                started.set(true);
+                asm.feed_line(line, on_delta);
+                !cancel.load(Ordering::Relaxed)
+            })
+        })?;
+        if cancel.load(Ordering::Relaxed) {
+            return Err(ApiError::Cancelled(asm.usage()));
+        }
+        asm.finish()
     }
 
     /// Checks the key without spending anything: lists one model.
@@ -341,9 +459,9 @@ pub fn parse_reply(body: &str) -> Result<Reply, ApiError> {
     })
 }
 
-#[cfg(test)]
+/// A scripted transport for the tests of this crate and the crates that use it.
+#[doc(hidden)]
 pub mod testing {
-    //! A scripted transport for tests in this crate and its users.
     use super::*;
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
@@ -376,6 +494,106 @@ pub mod testing {
                 .pop_front()
                 .unwrap_or_else(|| Err("script ran out of replies".into()))
         }
+
+        /// Streams a scripted complete message as the events the API would send.
+        fn send_stream(
+            &mut self,
+            req: &HttpRequest,
+            on_line: &mut dyn FnMut(&str) -> bool,
+        ) -> Result<HttpResponse, String> {
+            let mut r = self.send(req)?;
+            if (200..300).contains(&r.status) {
+                let body = std::mem::take(&mut r.body);
+                let sse = match serde_json::from_str::<Value>(&body) {
+                    Ok(m) if m["content"].is_array() => to_sse(&m),
+                    _ => body,
+                };
+                for line in sse.lines() {
+                    if !on_line(line) {
+                        break;
+                    }
+                }
+            }
+            Ok(r)
+        }
+    }
+
+    /// A complete message as server-sent events, text and tool input split
+    /// in two pieces each so a reader has to join them.
+    pub fn to_sse(m: &Value) -> String {
+        fn ev(out: &mut String, v: Value) {
+            out.push_str(&format!(
+                "event: {}\ndata: {}\n\n",
+                v["type"].as_str().unwrap(),
+                v
+            ));
+        }
+        fn halves(s: &str) -> (String, String) {
+            let mid = s
+                .char_indices()
+                .nth(s.chars().count() / 2)
+                .map_or(s.len(), |(i, _)| i);
+            (s[..mid].to_string(), s[mid..].to_string())
+        }
+        let mut out = String::new();
+        let usage = &m["usage"];
+        ev(
+            &mut out,
+            json!({"type": "message_start", "message": {
+            "id": "msg_1", "type": "message", "role": "assistant", "content": [],
+            "model": m["model"],
+            "usage": {"input_tokens": usage["input_tokens"].as_u64().unwrap_or(0),
+                      "output_tokens": 1,
+                      "cache_read_input_tokens": usage["cache_read_input_tokens"].as_u64().unwrap_or(0),
+                      "cache_creation_input_tokens": usage["cache_creation_input_tokens"].as_u64().unwrap_or(0)}}}),
+        );
+        for (i, b) in m["content"].as_array().unwrap().iter().enumerate() {
+            let kind = b["type"].as_str().unwrap();
+            let start = match kind {
+                "text" => json!({"type": "text", "text": ""}),
+                "thinking" => json!({"type": "thinking", "thinking": "", "signature": ""}),
+                _ => json!({"type": "tool_use", "id": b["id"], "name": b["name"], "input": {}}),
+            };
+            ev(
+                &mut out,
+                json!({"type": "content_block_start", "index": i, "content_block": start}),
+            );
+            let mut delta = |d: Value| {
+                ev(
+                    &mut out,
+                    json!({"type": "content_block_delta", "index": i, "delta": d}),
+                );
+            };
+            match kind {
+                "text" => {
+                    let (a, c) = halves(b["text"].as_str().unwrap());
+                    delta(json!({"type": "text_delta", "text": a}));
+                    delta(json!({"type": "text_delta", "text": c}));
+                }
+                "thinking" => {
+                    let t = b["thinking"].as_str().unwrap_or_default();
+                    if !t.is_empty() {
+                        delta(json!({"type": "thinking_delta", "thinking": t}));
+                    }
+                    delta(json!({"type": "signature_delta", "signature": b["signature"]}));
+                }
+                _ => {
+                    let (a, c) = halves(&b["input"].to_string());
+                    delta(json!({"type": "input_json_delta", "partial_json": a}));
+                    delta(json!({"type": "input_json_delta", "partial_json": c}));
+                }
+            }
+            ev(&mut out, json!({"type": "content_block_stop", "index": i}));
+        }
+        let mut md = json!({"type": "message_delta",
+            "delta": {"stop_reason": m["stop_reason"]},
+            "usage": {"output_tokens": usage["output_tokens"].as_u64().unwrap_or(0)}});
+        if !m["stop_details"].is_null() {
+            md["delta"]["stop_details"] = m["stop_details"].clone();
+        }
+        ev(&mut out, md);
+        ev(&mut out, json!({"type": "message_stop"}));
+        out
     }
 
     pub fn key() -> ApiKey {
@@ -556,5 +774,29 @@ mod tests {
         );
         assert_eq!(r.content[0]["type"], "thinking");
         assert_eq!(r.content[0]["signature"], "sig");
+    }
+
+    #[test]
+    fn a_streamed_request_sets_stream_and_retries_only_before_output_starts() {
+        let s = Script::default();
+        s.push(529, json!({"error": {"message": "busy"}}));
+        s.push(200, text_reply("claude-opus-5-5", "late but whole", 1, 1));
+        let msgs = [json!({"role":"user","content":"x"})];
+        let mut got = String::new();
+        let r = client(&s)
+            .messages_stream(
+                &spec(&msgs, &[], models::resolve("")),
+                &std::sync::atomic::AtomicBool::new(false),
+                &mut |d| {
+                    if let crate::stream::Delta::Text(t) = d {
+                        got.push_str(&t)
+                    }
+                },
+            )
+            .unwrap();
+        assert_eq!(r.text(), "late but whole");
+        assert_eq!(got, "late but whole");
+        assert_eq!(s.requests().len(), 2);
+        assert!(s.requests()[1].body.contains("\"stream\":true"));
     }
 }

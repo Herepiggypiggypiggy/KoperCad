@@ -10,6 +10,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -63,6 +64,12 @@ pub(super) struct State {
     transcript: Vec<Entry>,
     conversation: Conversation,
     running: Option<Receiver<Msg>>,
+    /// Answer text that has arrived for the turn in progress.
+    live: String,
+    /// Claude is reasoning before it writes.
+    thinking: bool,
+    /// Set by the Stop button; the background thread reads it.
+    cancel: Arc<AtomicBool>,
     /// What the person decided about proposals since their last message;
     /// sent along with the next one so Claude knows.
     notes: Vec<String>,
@@ -112,6 +119,9 @@ impl State {
             transcript: Vec::new(),
             conversation: Conversation::default(),
             running: None,
+            live: String::new(),
+            thinking: false,
+            cancel: Arc::new(AtomicBool::new(false)),
             notes: Vec::new(),
             ledger,
             ledger_path,
@@ -204,6 +214,14 @@ impl State {
             ));
         }
         self.conv_scope = scope;
+    }
+
+    /// Moves the text streamed so far into the transcript.
+    fn flush_live(&mut self) {
+        if !self.live.is_empty() {
+            self.transcript
+                .push(Entry::Claude(std::mem::take(&mut self.live)));
+        }
     }
 
     fn clear_chat(&mut self) {
@@ -447,6 +465,10 @@ impl NovoApp {
         };
         let st = &mut self.wb.assistant;
         st.enforce_scope(scope);
+        st.live.clear();
+        st.thinking = true;
+        st.cancel.store(false, Ordering::Relaxed);
+        let cancel = Arc::clone(&st.cancel);
         let mut message = String::new();
         for n in st.notes.drain(..) {
             message.push_str(&format!("[{n}]\n"));
@@ -485,6 +507,7 @@ impl NovoApp {
                     let _ = events.send(Msg::Event(e));
                     events_ctx.request_repaint();
                 },
+                &cancel,
             );
             let _ = tx.send(Msg::Done(result, conversation));
             ctx.request_repaint();
@@ -510,7 +533,13 @@ impl NovoApp {
         }
         while let Some(rx) = &st.running {
             match rx.try_recv() {
+                Ok(Msg::Event(Event::Text(t))) => {
+                    st.thinking = false;
+                    st.live.push_str(&t);
+                }
+                Ok(Msg::Event(Event::Thinking)) => st.thinking = true,
                 Ok(Msg::Event(Event::Tool { name, .. })) => {
+                    st.flush_live();
                     st.transcript.push(Entry::Tool(tool_phrase(&name).into()));
                 }
                 Ok(Msg::Event(Event::Request {
@@ -529,10 +558,15 @@ impl NovoApp {
                 Ok(Msg::Done(result, conversation)) => {
                     st.conversation = conversation;
                     st.running = None;
+                    st.thinking = false;
                     match result {
                         Ok(turn) => {
-                            if !turn.text.is_empty() {
-                                st.transcript.push(Entry::Claude(turn.text));
+                            if st.live.is_empty() {
+                                if !turn.text.is_empty() {
+                                    st.transcript.push(Entry::Claude(turn.text));
+                                }
+                            } else {
+                                st.flush_live();
                             }
                             if turn.truncated {
                                 st.transcript.push(Entry::Problem(
@@ -553,7 +587,14 @@ impl NovoApp {
                                     .push(Entry::Proposal(p, ProposalState::Pending));
                             }
                         }
-                        Err(e) => st.transcript.push(Entry::Problem(e.to_string())),
+                        Err(ApiError::Cancelled(_)) => {
+                            st.flush_live();
+                            st.transcript.push(Entry::Tool("Stopped".into()));
+                        }
+                        Err(e) => {
+                            st.flush_live();
+                            st.transcript.push(Entry::Problem(e.to_string()));
+                        }
                     }
                     break;
                 }
@@ -968,9 +1009,22 @@ impl NovoApp {
                     }
                 }
                 if running {
+                    let st = &self.wb.assistant;
+                    if !st.live.is_empty() {
+                        ui.add_space(4.0);
+                        ui.label(egui::RichText::new("Claude").strong());
+                        ui.label(&st.live);
+                    }
                     ui.horizontal(|ui| {
                         ui.spinner();
-                        ui.weak("Claude is working…");
+                        ui.weak(if st.thinking || st.live.is_empty() {
+                            "Claude is thinking…"
+                        } else {
+                            "Claude is writing…"
+                        });
+                        if ui.small_button("Stop").clicked() {
+                            st.cancel.store(true, Ordering::Relaxed);
+                        }
                     });
                 }
             });
