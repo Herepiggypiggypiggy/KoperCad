@@ -333,3 +333,24 @@ fn print_opens_the_preview_and_does_not_export_at_once() {
     let rows = search(&palette, &keymap, "print");
     assert_eq!(rows[0].target, Target::Command("export.print_preview"));
 }
+
+#[test]
+fn a_report_is_found_first_by_its_own_name_and_by_its_old_one() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for (query, command) in [
+        ("cut list", "report.cutlist"),
+        ("table of contents", "report.toc"),
+        ("contents", "report.toc"),
+        ("wire production", "report.wirecut"),
+        ("plug connection list", "report.plugs"),
+        ("plug list", "report.plugs"),
+    ] {
+        let rows = search(&palette, &keymap, query);
+        assert_eq!(
+            rows[0].target,
+            Target::Command(command),
+            "{query:?} ranks {:?} first",
+            rows[0].label
+        );
+    }
+}
