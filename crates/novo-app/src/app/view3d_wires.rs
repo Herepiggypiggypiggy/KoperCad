@@ -165,9 +165,16 @@ pub(super) fn facts(
         .map(|p| duct_fills(project, structure, p))
         .unwrap_or_default();
     let entry = novo_routing::entry::entry_point(project, structure);
+    // The wires of the plate: routed on it, or the leg of a wire to a second
+    // cabinet that lies on it.
+    let legs = routed
+        .cross_routes
+        .iter()
+        .filter_map(|((id, s), route)| (*s == structure).then_some((id, route)));
     routed
         .routes
         .iter()
+        .chain(legs)
         .filter(|(id, _)| on_plate.contains(id))
         .filter_map(|(id, route)| {
             let wire = project.wire(WireId::from(*id))?;
@@ -217,7 +224,12 @@ pub(super) fn facts(
                     _ => {}
                 }
             }
-            let to_entry = routed.entry_legs.contains_key(id);
+            let across = routed.cross_legs.get(id).and_then(|plates| {
+                let other = plates.iter().copied().find(|p| *p != structure)?;
+                let s = project.get::<novo_core::Structure>(other)?;
+                Some(s.tag.to_string())
+            });
+            let to_entry = routed.entry_legs.contains_key(id) || across.is_some();
             Some((
                 *id,
                 WireFacts {
@@ -237,6 +249,7 @@ pub(super) fn facts(
                     entry: to_entry.then(|| EntryFacts {
                         at: entry,
                         outside_mm: novo_routing::entry::outside_mm(project, structure),
+                        across,
                     }),
                     basis: None,
                 },

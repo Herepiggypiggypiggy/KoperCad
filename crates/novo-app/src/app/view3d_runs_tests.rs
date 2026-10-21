@@ -480,3 +480,120 @@ fn a_duct_without_wires_says_so() {
     assert_eq!(runs.len(), 1);
     assert!(runs[0].wires.is_empty() && runs[0].fill.is_none());
 }
+
+#[test]
+fn a_wire_to_a_second_cabinet_is_drawn_to_the_entry_and_says_where_the_rest_is() {
+    use novo_core::{MountingPlate, Point};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let cab = cabinet(&d);
+    let doc = d.app.backend.document_mut().unwrap();
+    let (x1, m1) = {
+        let p = doc.project();
+        let by = |name: &str| {
+            p.devices()
+                .find(|dv| dv.tag.product.last().is_some_and(|t| t == name))
+                .map(|dv| dv.id)
+                .expect(name)
+        };
+        (by("X1"), by("M1"))
+    };
+    doc.transact("Second cabinet", |tx| {
+        let fld = tx.add_structure(DeviceTag::parse("+FLD")?, "Field", true)?;
+        tx.set_plate(
+            fld,
+            Some(MountingPlate {
+                width: 400.0,
+                height: 300.0,
+                margin: 10.0,
+            }),
+        )?;
+        tx.place_device(m1, fld, Point::new(150.0, 100.0), false, None)?;
+        tx.place_device(x1, cab, Point::new(300.0, 400.0), false, None)?;
+        novo_routing::entry::set_entry_point(
+            tx,
+            cab,
+            Some(novo_routing::Point::new(400.0, 560.0)),
+        )?;
+        novo_routing::entry::set_entry_point(tx, fld, Some(novo_routing::Point::new(200.0, 280.0)))
+    })
+    .unwrap();
+    d.frame();
+    d.frame();
+    let ids = drawn(&d);
+    let facts = d.app.view3d.wire_facts.as_ref().expect("facts").2.clone();
+    let crossing: Vec<_> = ids
+        .iter()
+        .filter_map(|id| facts.get(id))
+        .filter(|f| f.entry.as_ref().is_some_and(|e| e.across.is_some()))
+        .collect();
+    assert!(!crossing.is_empty(), "the motor wires leave for +FLD");
+    let line = crossing[0].entry.as_ref().unwrap().line();
+    assert!(
+        line.contains("+FLD") && line.contains("where the rest is drawn"),
+        "{line}"
+    );
+    assert!(line.contains("is not drawn"), "{line}");
+}
+
+/// The example plus a second enclosure +FLD with the motor on its plate and
+/// an entry point on both enclosures, so the motor wires cross between them.
+fn build_cross_fixture(doc: &mut novo_core::Document) {
+    use novo_core::{MountingPlate, Point};
+    super::example::build_example(doc).unwrap();
+    let cab = doc
+        .project()
+        .all::<novo_core::Structure>()
+        .find(|s| s.plate.is_some())
+        .map(|s| (s.id, s.plate.expect("a plate")))
+        .expect("the example cabinet");
+    let (cab, plate) = cab;
+    let by = |tag: &str| {
+        doc.project()
+            .devices()
+            .find(|d| d.tag.to_string().ends_with(tag))
+            .map(|d| d.id)
+            .unwrap_or_else(|| panic!("no device {tag}"))
+    };
+    let (x1, m1) = (by("-X1"), by("-M1"));
+    doc.transact("Second cabinet", |tx| {
+        let fld = tx.add_structure(DeviceTag::parse("+FLD")?, "Field box", true)?;
+        tx.set_plate(
+            fld,
+            Some(MountingPlate {
+                width: 400.0,
+                height: 300.0,
+                margin: 10.0,
+            }),
+        )?;
+        tx.place_device(x1, cab, Point::new(300.0, 400.0), false, None)?;
+        tx.place_device(m1, fld, Point::new(150.0, 100.0), false, None)?;
+        novo_routing::entry::set_entry_point(
+            tx,
+            cab,
+            Some(novo_routing::Point::new(
+                plate.width / 2.0,
+                plate.height - 40.0,
+            )),
+        )?;
+        novo_routing::entry::set_entry_point(tx, fld, Some(novo_routing::Point::new(200.0, 280.0)))
+    })
+    .unwrap();
+}
+
+/// Rewrites the fixture: `cargo test -p novo-app write_cross_fixture -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/cable-cross.novo"]
+fn write_cross_fixture() {
+    use crate::backend::ProjectBackend;
+    let mut backend = crate::backend::StorageBackend::default();
+    backend
+        .new_project("Cable cross cabinet (example)")
+        .unwrap();
+    build_cross_fixture(backend.document_mut().unwrap());
+    let path =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qa/fixtures/cable-cross.novo");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let _ = std::fs::remove_file(&path);
+    backend.save(&path).unwrap();
+}

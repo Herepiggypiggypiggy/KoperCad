@@ -3,6 +3,10 @@
 The id is a date and a letter; the top entry is the newest one a person has
 seen once they open the list. Add an entry when a feature PR merges. -->
 
+## 2026-10-21-e · Wires between two cabinets are drawn to each entry
+Where: 3D workspace, click a wire that ends in another cabinet.
+When both cabinets have an entry point, each cabinet draws its own part of the wire to its entry, and the Run card names the other cabinet. The run between the two entries is not drawn, and no length is invented for it.
+
 ## 2026-10-21-c · Pick a duct to list its runs
 Where: 3D workspace, click a duct.
 The Wire runs panel shows how full the duct is and every run in it; click a run for its Run card, or "Select its runs" to read them together.

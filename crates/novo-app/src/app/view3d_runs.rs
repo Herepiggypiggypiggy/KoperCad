@@ -89,6 +89,9 @@ pub(super) struct EntryFacts {
     pub at: Option<Point>,
     /// The wire outside the entry the designer stated, mm.
     pub outside_mm: Option<f64>,
+    /// The tag of the other cabinet when the wire ends in a second cabinet:
+    /// this is its leg inside this one, the other leg is drawn there.
+    pub across: Option<String>,
 }
 
 impl EntryFacts {
@@ -97,6 +100,12 @@ impl EntryFacts {
             .at
             .map(|p| format!(" at x {:.0}, y {:.0} mm", p.x, p.y))
             .unwrap_or_default();
+        if let Some(other) = &self.across {
+            return format!(
+                "Drawn to the cabinet entry{at}; the other end is in {other}, where the rest is \
+                 drawn. The run between the two entries is not drawn"
+            );
+        }
         match self.outside_mm {
             Some(m) => format!(
                 "Drawn to the cabinet entry{at}; outside it {:.2} m as stated, not drawn",
@@ -201,7 +210,7 @@ pub(super) fn bases(
                 Gap::CableTooShort
             } else if is_drawn
                 .and_then(|f| f.entry.as_ref())
-                .is_some_and(|e| e.outside_mm.is_none())
+                .is_some_and(|e| e.outside_mm.is_none() && e.across.is_none())
             {
                 Gap::OutsideNotStated
             } else {
@@ -955,6 +964,7 @@ mod tests {
         let e = EntryFacts {
             at: Some(Point::new(400.0, 560.0)),
             outside_mm: None,
+            across: None,
         };
         assert_eq!(
             e.line(),
@@ -962,11 +972,19 @@ mod tests {
         );
         let e = EntryFacts {
             outside_mm: Some(3000.0),
+            across: None,
             ..e
         };
         assert!(e.line().contains("outside it 3.00 m as stated, not drawn"));
         assert!(why("estimate", Gap::OutsideNotStated).contains("State it in Cabinet > Routes"));
         assert!(!why("estimate", Gap::None).contains("State it"));
+        let across = EntryFacts {
+            across: Some("+FLD".into()),
+            ..e
+        };
+        let line = across.line();
+        assert!(line.contains("other end is in +FLD"), "{line}");
+        assert!(!line.contains("not stated"), "{line}");
     }
 
     #[test]
