@@ -153,7 +153,7 @@ impl WirePlan {
                         let page = project
                             .wire(*o)
                             .and_then(|w| project.page(w.page))
-                            .map(|p| format!(" on {}", p.name))
+                            .map(|p| format!(" on page {}", p.name))
                             .unwrap_or_default();
                         format!("{}{page}", s.kind.short())
                     })

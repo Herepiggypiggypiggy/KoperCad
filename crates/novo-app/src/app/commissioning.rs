@@ -1390,20 +1390,26 @@ fn walk_card(
                     } else {
                         designation
                     };
-                    ui.label(
-                        egui::RichText::new(text)
-                            .size(17.0)
-                            .monospace()
-                            .color(p.text_primary),
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(text)
+                                .size(17.0)
+                                .monospace()
+                                .color(p.text_primary),
+                        )
+                        .truncate(),
                     );
-                    if let Some(f) = ferrule {
+                });
+                if let Some(f) = ferrule {
+                    ui.horizontal(|ui| {
+                        ui.add_space(space::XL + space::S);
                         ui.label(
                             egui::RichText::new(format!("ferrule {f}"))
                                 .small()
                                 .color(p.text_secondary),
                         );
-                    }
-                });
+                    });
+                }
             };
         end(ui, "FROM", &step.from, &step.ferrule_from);
         end(ui, "TO  ", &step.to, &step.ferrule_to);
@@ -1436,33 +1442,33 @@ fn walk_card(
         }
     }
     ui.add_space(space::S);
+    let label = if open == 0 {
+        "All decided".to_owned()
+    } else {
+        format!("Pass {open} open   Space")
+    };
+    let tick = ui.add_enabled(
+        open > 0,
+        egui::Button::new(
+            egui::RichText::new(label)
+                .size(18.0)
+                .strong()
+                .color(p.on_accent),
+        )
+        .fill(p.accent)
+        .stroke(egui::Stroke::NONE)
+        .min_size(egui::vec2(ui.available_width(), 52.0)),
+    );
+    if tick
+        .on_hover_text("Pass what is open here and go to the next one")
+        .clicked()
+    {
+        let finished = mode.tick(project, current, go);
+        mode.finished = finished;
+    }
     ui.horizontal(|ui| {
-        let label = if open == 0 {
-            "All decided".to_owned()
-        } else {
-            format!("Pass {open} open   Space")
-        };
-        let tick = ui.add_enabled(
-            open > 0,
-            egui::Button::new(
-                egui::RichText::new(label)
-                    .size(18.0)
-                    .strong()
-                    .color(p.on_accent),
-            )
-            .fill(p.accent)
-            .stroke(egui::Stroke::NONE)
-            .min_size(egui::vec2(ui.available_width() * 0.6, 52.0)),
-        );
-        if tick
-            .on_hover_text("Pass what is open here and go to the next one")
-            .clicked()
-        {
-            let finished = mode.tick(project, current, go);
-            mode.finished = finished;
-        }
         if ui
-            .add(egui::Button::new("Skip").min_size(egui::vec2(0.0, 52.0)))
+            .add(egui::Button::new("Skip").min_size(egui::vec2(0.0, 40.0)))
             .on_hover_text("Go to the next one without deciding this one")
             .clicked()
             && let Some(next) = next_open(project, &mode.store, mode.selected, current, mode.scope)
@@ -1473,7 +1479,7 @@ fn walk_card(
             && ui
                 .add(
                     egui::Button::new(format!("{} 3D", icons::canvas::VIEW_3D))
-                        .min_size(egui::vec2(0.0, 52.0)),
+                        .min_size(egui::vec2(0.0, 40.0)),
                 )
                 .on_hover_text("Show this wire in the 3D view")
                 .clicked()
