@@ -76,6 +76,24 @@ pub(crate) struct OptionsWindow {
 struct ConditionText {
     text: String,
     synced: Option<(String, Option<String>)>,
+    /// Why the picker could not write the last line, until a line is written.
+    error: Option<String>,
+}
+
+/// A number being dragged: it is shown at once but written to the project
+/// only when the drag (or the typed entry) ends, so one drag is one undo step.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub(super) struct NumberDraft(Option<f64>);
+
+impl NumberDraft {
+    /// `changed`: the box reported a new value; `finished`: the drag or the
+    /// entry ended. Returns the value to write, once.
+    pub(super) fn feed(&mut self, value: f64, changed: bool, finished: bool) -> Option<f64> {
+        if changed {
+            self.0 = Some(value);
+        }
+        if finished { self.0.take() } else { None }
+    }
 }
 
 #[derive(Debug)]
@@ -1190,8 +1208,10 @@ fn condition_editor(
                     current.as_deref().unwrap_or_default()
                 ));
                 if ui
-                    .small_button("Use the picker instead")
-                    .on_hover_text("Remove this rule, then pick it line by line")
+                    .small_button("Remove this expression")
+                    .on_hover_text(
+                        "Clears the rule so it can be picked line by line. Undo brings it back",
+                    )
                     .clicked()
                 {
                     result = Some(None);
@@ -1204,6 +1224,7 @@ fn condition_editor(
         Some(mut lines) => {
             let mut changed = false;
             let mut remove = None;
+            let taken: Vec<String> = lines.iter().map(|l| l.option.clone()).collect();
             if lines.is_empty() {
                 ui.weak("Always appears. No rule yet.");
             }
@@ -1217,7 +1238,11 @@ fn condition_editor(
                     egui::ComboBox::from_id_salt((key, i, "option"))
                         .selected_text(def.label())
                         .show_ui(ui, |ui| {
-                            for d in defs {
+                            // One line per option: the others are taken.
+                            for d in defs
+                                .iter()
+                                .filter(|d| d.id == def.id || !taken.contains(&d.id))
+                            {
                                 ui.selectable_value(&mut chosen, d.id.clone(), d.label());
                             }
                         });
@@ -1267,19 +1292,25 @@ fn condition_editor(
                             line.value = Value::Text(text);
                         }
                         _ => {
-                            let mut n = match &line.value {
+                            let draft_id = egui::Id::new((key, i, "draft"));
+                            let mut draft: NumberDraft =
+                                ui.data(|d| d.get_temp(draft_id)).unwrap_or_default();
+                            let mut n = draft.0.unwrap_or(match &line.value {
                                 Value::Int(i) => *i as f64,
                                 Value::Float(f) => *f,
                                 _ => 0.0,
-                            };
+                            });
                             let mut drag = egui::DragValue::new(&mut n).speed(0.1);
                             if let (Some(lo), Some(hi)) = (def.spec.min, def.spec.max) {
                                 drag = drag.range(lo..=hi);
                             }
-                            if ui.add(drag).changed() {
-                                line.value = novo_workflow::expr::Val::Num(n).to_value();
+                            let response = ui.add(drag);
+                            let finished = response.drag_stopped() || response.lost_focus();
+                            if let Some(done) = draft.feed(n, response.changed(), finished) {
+                                line.value = novo_workflow::expr::Val::Num(done).to_value();
                                 changed = true;
                             }
+                            ui.data_mut(|d| d.insert_temp(draft_id, draft));
                         }
                     }
                     if ui
@@ -1295,21 +1326,28 @@ fn condition_editor(
                 lines.remove(i);
                 changed = true;
             }
-            if ui
-                .small_button("+ Add a rule")
-                .on_hover_text("All the lines must hold for it to appear")
-                .clicked()
-            {
-                let used: Vec<&str> = lines.iter().map(|l| l.option.as_str()).collect();
-                let def = defs
-                    .iter()
-                    .find(|d| !used.contains(&d.id.as_str()))
-                    .unwrap_or(&defs[0]);
+            let free = defs
+                .iter()
+                .find(|d| !lines.iter().any(|l| l.option == d.id));
+            let add = ui
+                .add_enabled(free.is_some(), egui::Button::new("+ Add a rule").small())
+                .on_hover_text("All the lines must hold for it to appear, one line per option")
+                .clicked();
+            if let (true, Some(def)) = (add, free) {
                 lines.push(Clause::first_for(def));
                 changed = true;
             }
-            if let (true, Ok(condition)) = (changed, condition_from_clauses(defs, &lines)) {
-                result = Some(condition);
+            if changed {
+                match condition_from_clauses(defs, &lines) {
+                    Ok(condition) => {
+                        raw.error = None;
+                        result = Some(condition);
+                    }
+                    Err(e) => raw.error = Some(e.to_string()),
+                }
+            }
+            if let Some(error) = &raw.error {
+                novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Error, error, |_| {});
             }
         }
     }
@@ -1370,6 +1408,19 @@ fn finding_text(project: &Project, f: &Finding) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_drag_writes_once_when_it_ends() {
+        let mut draft = NumberDraft::default();
+        for frame in 1..=30 {
+            assert_eq!(draft.feed(f64::from(frame), true, false), None);
+        }
+        assert_eq!(draft.feed(30.0, false, true), Some(30.0));
+        // A click that changed nothing writes nothing, and the draft is gone.
+        assert_eq!(draft.feed(30.0, false, true), None);
+        // A typed entry changes and ends in the same frame.
+        assert_eq!(draft.feed(5.0, true, true), Some(5.0));
+    }
 
     #[test]
     fn labels_become_ids() {

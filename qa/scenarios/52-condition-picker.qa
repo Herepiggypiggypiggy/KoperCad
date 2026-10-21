@@ -21,6 +21,7 @@ shot rule-one
 click_text "+ Add a rule"
 wait 6
 expect "Cooling fan and Supply 480V"
+expect_disabled "+ Add a rule"
 shot rule-two
 click_text "Advanced: type the expression"
 wait 4
