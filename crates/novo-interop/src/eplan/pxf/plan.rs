@@ -491,9 +491,23 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             file.texts.len() - texts.len(),
             "empty, or on a page that is not drawn",
         );
+        let mut drawn = vec![format!("{} circuit-diagram pages", st.pages)];
+        for (n, what) in [
+            (st.library_symbols, "symbols from KoperCAD's library"),
+            (st.box_symbols, "devices drawn as labelled boxes"),
+            (
+                st.interruptions,
+                "interruption points (links between pages)",
+            ),
+            (st.wires, "wires"),
+        ] {
+            if n > 0 {
+                drawn.push(format!("{n} {what}"));
+            }
+        }
         report.note(format!(
-            "Drawn: {} circuit-diagram pages, {} symbols from KoperCAD's library, {} as labelled boxes, {} interruption points, {} nets joined by EPLAN's rules into {} wires. Symbol artwork is inferred (a box where no KoperCAD symbol fits); positions, pin counts, tags and which points are one net are read from the file. Wires follow the runs and nodes the file implies where it has them; the rest are plain right-angle runs.",
-            st.pages, st.library_symbols, st.box_symbols, st.interruptions, st.nets, st.wires
+            "Drawn: {}. The picture of each symbol is KoperCAD's nearest match (a box where none fits); positions, pin counts, tags and which points are one net come from the file, so the nets are the ones EPLAN has. Wire corners follow the file where it has them; other wires are plain right-angle runs.",
+            drawn.join(", ")
         ));
         if !st.box_functions.is_empty() {
             let list: Vec<String> = st

@@ -21,7 +21,7 @@ fn the_plan_previews_then_applies_as_one_undo_step() {
     assert_eq!(r.count_of("cables"), 1);
     assert_eq!(r.count_of("cable cores"), 1);
     assert!(r.text().contains("symbol drawings"));
-    assert!(r.text().contains("interruption points"));
+    assert!(r.text().contains("circuit-diagram pages"));
     assert!(!plan.is_empty());
 
     let before = doc.project().devices().count();
