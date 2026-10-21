@@ -37,7 +37,7 @@ pub(super) struct Card {
     /// The author's numbered instructions (`how`), with markup.
     steps: Vec<String>,
     ticked: bool,
-    finished: bool,
+    pub(super) finished: bool,
     can_next: bool,
     first: bool,
     show_me: bool,
@@ -45,13 +45,17 @@ pub(super) struct Card {
     how: Vec<(String, bool)>,
     /// A demonstration is on show (playing, or settled on its markers).
     demo_on: bool,
-    next_lessons: Vec<(String, String)>,
+    pub(super) next_lessons: Vec<(String, String)>,
     /// A challenge: the goal is stated, the way is not.
     #[cfg_attr(not(test), allow(dead_code))]
     pub(super) challenge: bool,
     /// The hints the learner has opened, and how many there are.
     pub(super) hints_open: Vec<String>,
     pub(super) hints_total: usize,
+    /// What was wrong, for the end of a challenge, and whether "Do it for
+    /// me" did the repair.
+    pub(super) explain: String,
+    pub(super) helped: bool,
     /// Skip does the step for the learner (it has a `solve`).
     skip_does_it: bool,
     /// The lesson ships a finished drawing and the learner is at its end.
@@ -79,6 +83,8 @@ struct Words {
     done_text: String,
     next_lessons: String,
     hint: String,
+    solved: String,
+    shown: String,
     open_finished: String,
     finished_confirm: String,
 }
@@ -171,6 +177,8 @@ impl NovoApp {
             done_text: say("done_text"),
             next_lessons: say("next_lessons"),
             hint: say("hint"),
+            solved: say("challenge_solved"),
+            shown: say("challenge_shown"),
             open_finished: say("open_finished"),
             finished_confirm: say("open_finished_confirm"),
         };
@@ -234,6 +242,8 @@ impl NovoApp {
                 })
                 .unwrap_or_default(),
             hints_total: step.map_or(0, |s| s.hints(lang).len()),
+            explain: lesson.explain(lang).to_owned(),
+            helped: self.learn.helped,
             next_lessons,
             skip_does_it: step.is_some_and(|s| !s.solve.is_empty() && s.manual.is_none()),
             can_open_finished: (finished || run.index() + 1 >= total)
@@ -250,7 +260,6 @@ impl NovoApp {
     fn draw_card(&self, ui: &mut egui::Ui, card: &Card, confirm: bool) -> Option<CardAction> {
         let mut action = None;
         ui.horizontal(|ui| {
-            section_label(ui, &card.header);
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if ui
                     .small_button("✕")
@@ -259,12 +268,29 @@ impl NovoApp {
                 {
                     action = Some(CardAction::Close);
                 }
+                // The title gives way to the button, not the other way round.
+                ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                    ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
+                    section_label(ui, &card.header).on_hover_text(&card.header);
+                });
             });
         });
         ui.add_space(2.0);
         if card.finished {
             ui.label(egui::RichText::new(format!("✓ {}", card.words.done)).strong());
-            ui.label(&card.words.done_text);
+            if card.explain.is_empty() {
+                ui.label(&card.words.done_text);
+            } else {
+                ui.label(
+                    egui::RichText::new(if card.helped {
+                        &card.words.shown
+                    } else {
+                        &card.words.solved
+                    })
+                    .strong(),
+                );
+                self.markup(ui, &card.explain);
+            }
             if !card.next_lessons.is_empty() {
                 ui.add_space(4.0);
                 ui.weak(&card.words.next_lessons);
@@ -476,7 +502,9 @@ impl NovoApp {
         }
         let lang = self.learn.lang;
         let mut targets: Vec<(Option<usize>, Target, Option<String>)> = Vec::new();
-        if let Some(point) = &step.point {
+        if let Some(point) = &step.point
+            && !self.learn_point_hidden()
+        {
             targets.push((None, point.clone(), None));
         }
         for (i, note) in step.note.iter().enumerate() {
