@@ -1016,6 +1016,11 @@ pub const DUTCH: &[Aliases] = &[
         &["exporteer werkplaatspakket", "werkplaatspakket"],
         &["werkplaats", "boormal", "snijlijst"],
     ),
+    nl(
+        "export.safety_sheets",
+        &["exporteer veiligheidsfuncties", "veiligheidsfunctiebladen"],
+        &["veiligheidsfunctie", "technisch dossier"],
+    ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
     nl(
         "cabinet.place-all",
