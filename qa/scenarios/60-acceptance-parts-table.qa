@@ -1,0 +1,65 @@
+@title Parts table import: a workbook that opens on a cover sheet, bad rows, a second import, odd text files
+@area Parts
+# Acceptance round 3: the importer starts on the sheet that has the table, says why rows are left out, adds nothing twice, and refuses a binary file with a reason.
+click_text "Open example"
+wait 20
+answer_dialog qa/fixtures/parts/odd-list.xlsx
+click_text File
+wait 4
+click_text "Import parts"
+wait 4
+click_text "Import parts from a table (CSV or Excel)"
+wait 20
+expect "Import parts from odd-list.xlsx"
+expect_not "No column is the order number"
+shot columns
+check_layout
+click_text Rows Button
+wait 10
+expect "Not imported"
+shot rows
+check_layout
+expect "Price EUR"
+expect "is not a possible"
+click_text "Add 5 parts to the catalog"
+wait 20
+shot added
+# The same file again: nothing new.
+answer_dialog qa/fixtures/parts/odd-list.xlsx
+click_text File
+wait 4
+click_text "Import parts"
+wait 4
+click_text "Import parts from a table (CSV or Excel)"
+wait 20
+click_text Rows Button
+wait 10
+expect "0 new"
+expect "digits are lost"
+shot second-import
+check_layout
+click_text Cancel
+wait 6
+# Excel "Unicode Text" (UTF-16) is read.
+answer_dialog qa/fixtures/parts/unicode-text.txt
+click_text File
+wait 4
+click_text "Import parts"
+wait 4
+click_text "Import parts from a table (CSV or Excel)"
+wait 20
+expect "Import parts from unicode-text.txt"
+expect "Order number"
+shot unicode
+click_text Cancel
+wait 6
+# A picture renamed to .csv is refused with a reason, not shown as garbage columns.
+answer_dialog qa/fixtures/parts/not-text.csv
+click_text File
+wait 4
+click_text "Import parts"
+wait 4
+click_text "Import parts from a table (CSV or Excel)"
+wait 20
+expect "does not look like a text file"
+shot refused

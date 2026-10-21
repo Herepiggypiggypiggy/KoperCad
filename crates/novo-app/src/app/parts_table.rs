@@ -64,7 +64,7 @@ impl PartsTableImport {
             .as_deref()
             .map(SavedMappings::load)
             .unwrap_or_default();
-        let sheet = table.first_sheet();
+        let sheet = table.best_sheet();
         let mut me = PartsTableImport {
             file,
             mapping: Mapping::suggest(&table.sheets[sheet], 0),

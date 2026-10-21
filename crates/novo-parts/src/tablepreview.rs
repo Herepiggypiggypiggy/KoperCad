@@ -361,14 +361,6 @@ fn read_row(
             Target::Manufacturer => d.manufacturer = raw.to_owned(),
             Target::OrderNumber => {
                 d.order_number = raw.to_owned();
-                if looks_like_excel_exponent(raw) {
-                    warn(
-                        Severity::Warning,
-                        format!(
-                            "\"{raw}\" looks like Excel turned a long number into a power of ten; the digits are lost. Format the column as text in the source and export again"
-                        ),
-                    );
-                }
                 if raw.chars().count() > 40 {
                     warn(
                         Severity::Warning,
@@ -552,6 +544,19 @@ fn read_row(
             severity: Severity::Error,
             column: String::new(),
             message: "no order number; the row is not imported".into(),
+        });
+        return None;
+    }
+    // The digits of a number Excel turned into a power of ten are gone: a part
+    // under that order number could never be ordered, so the row stays out.
+    if looks_like_excel_exponent(&d.order_number) {
+        row.issues.push(Issue {
+            severity: Severity::Error,
+            column: String::new(),
+            message: format!(
+                "order number \"{}\" looks like Excel turned a long number into a power of ten and the digits are lost; the row is not imported. Format the column as text in the source and export again",
+                d.order_number
+            ),
         });
         return None;
     }
