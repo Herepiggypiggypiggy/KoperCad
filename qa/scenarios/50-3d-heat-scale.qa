@@ -15,10 +15,10 @@ expect "Hold this range"
 shot scale-menu
 click_text "Hold this range"
 wait 20
-expect "Scale: set"
+expect "Scale: held"
 shot scale-held
 click_text Auto
 wait 20
-expect_not "Scale: set"
+expect_not "Scale: held"
 shot scale-auto
 check_layout

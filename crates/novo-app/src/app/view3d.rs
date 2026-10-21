@@ -1515,7 +1515,7 @@ fn heat_controls(
 /// warm cabinet; Auto goes back to ambient to the hottest cell.
 fn scale_menu(ui: &mut egui::Ui, h: &mut Heat3d, auto: novo_heatview::range::Range) {
     let label = if h.scale.is_some() {
-        "Scale: set"
+        "Scale: held"
     } else {
         "Scale"
     };
