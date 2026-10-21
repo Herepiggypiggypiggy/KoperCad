@@ -388,3 +388,40 @@ fn ac3_in_text(description: &str) -> Option<f64> {
     let rest = description.split("AC-3 ").nth(1)?;
     rest.split_whitespace().next()?.parse().ok()
 }
+
+#[test]
+fn reopening_a_saved_project_gets_report_pages_without_an_undo_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    super::route_all_tests::wired_cabinet(&mut d);
+    let saved_pages = d.doc().project().pages().count();
+    let file = dir.path().join("Reopen.novo");
+    assert!(d.app.save_to(&file));
+    d.app.run(&ctx, Action::CloseProject);
+    d.frame();
+    // A fresh window, as after restarting the program.
+    let mut e = Drive::new(&dir.path().join("untitled2"));
+    e.app.open_path(&file);
+    e.frame();
+    let pages = e.doc().project().pages().count();
+    assert!(
+        pages > saved_pages,
+        "opening adds the report pages: {saved_pages} -> {pages}"
+    );
+    assert!(
+        !e.app.is_enabled(Action::Undo),
+        "nothing to undo after opening, but: {:?}",
+        e.doc().undo_label()
+    );
+    let ctx = e.ctx.clone();
+    e.app.run(&ctx, Action::Undo);
+    e.frame();
+    assert_eq!(
+        e.doc().project().pages().count(),
+        pages,
+        "undo does not remove them"
+    );
+}
