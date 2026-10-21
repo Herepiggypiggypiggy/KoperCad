@@ -744,6 +744,26 @@ fn compare_controls(ui: &mut egui::Ui, state: &mut HeatState) {
 
 /// Fidelity as the header and legend say it: a result that has not been
 /// checked against benchmarks is a preview, never just "converged".
+/// The accuracy headline without the level's name, which the status line
+/// above it already shows ("Coarse 3D" and "Coarse grid:" are the same level).
+fn without_level_name(headline: &str, label: &str) -> String {
+    let rest = headline
+        .strip_prefix(label)
+        .unwrap_or(headline)
+        .trim_start();
+    let rest = match rest.split_once(':') {
+        Some((name, tail)) if name.ends_with(" grid") && name.split(' ').count() <= 3 => {
+            tail.trim_start()
+        }
+        _ => rest,
+    };
+    let mut chars = rest.chars();
+    match chars.next() {
+        Some(c) => c.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
 fn status_label(p: &novo_cfd::Progress, validated: bool) -> String {
     let state = if !validated {
         "not validated"
@@ -1614,11 +1634,11 @@ fn paint_peaks(
             .find(|i| !tag.is_empty() && i.tag == *tag && i.loss_known)
             .map(|i| device_temp(cache, i));
         let card = place_card(at, Vec2::new(210.0, 34.0), canvas, &devices, &placed);
+        // A later card also keeps clear of this leader line.
+        let leader = [at, nearest_edge_point(card, at)];
         placed.push(card);
-        painter.line_segment(
-            [at, nearest_edge_point(card, at)],
-            Stroke::new(1.0, pal.text_primary),
-        );
+        placed.push(Rect::from_two_pos(leader[0], leader[1]).expand(1.0));
+        painter.line_segment(leader, Stroke::new(1.0, pal.text_primary));
         painter.rect(
             card,
             6.0,
@@ -1764,13 +1784,9 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                         }
                         let a = &sol.snapshot.accuracy;
                         // The status line above already names the level.
-                        let headline = a
-                            .headline
-                            .strip_prefix(p.fidelity.label())
-                            .unwrap_or(&a.headline)
-                            .trim_start();
+                        let headline = without_level_name(&a.headline, p.fidelity.label());
                         if !headline.is_empty() {
-                            ui.label(small(headline, t::TEXT_MUTED));
+                            ui.label(small(&headline, t::TEXT_MUTED));
                         }
                         // Warnings stay in view; the run's detailed notes fold away
                         // so a short window is not cut off mid-sentence.
@@ -1885,6 +1901,39 @@ mod tests {
             assert!(placed.iter().all(|q: &Rect| !q.intersects(card)));
             placed.push(card);
         }
+    }
+
+    #[test]
+    fn the_level_is_named_once() {
+        assert_eq!(
+            without_level_name(
+                "Coarse 3D Coarse grid: shows where the heat goes.",
+                "Coarse 3D"
+            ),
+            "Shows where the heat goes."
+        );
+        assert_eq!(
+            without_level_name("Coarse grid: a first look.", "Coarse 3D"),
+            "A first look."
+        );
+        assert_eq!(
+            without_level_name("Validated against a plate.", "Fine 3D"),
+            "Validated against a plate."
+        );
+    }
+
+    #[test]
+    fn a_card_keeps_clear_of_an_earlier_leader_line() {
+        let canvas = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0));
+        let size = Vec2::new(210.0, 34.0);
+        let first_at = Pos2::new(300.0, 300.0);
+        let first = place_card(first_at, size, canvas, &[], &[]);
+        let leader = Rect::from_two_pos(first_at, nearest_edge_point(first, first_at)).expand(1.0);
+        let placed = [first, leader];
+        // A second peak right beside the first one's leader.
+        let second = place_card(Pos2::new(310.0, 310.0), size, canvas, &[], &placed);
+        assert!(!second.intersects(leader));
+        assert!(!second.intersects(first));
     }
 
     #[test]

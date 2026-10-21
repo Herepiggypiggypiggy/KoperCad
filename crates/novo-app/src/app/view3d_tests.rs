@@ -558,6 +558,42 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
     );
 }
 
+/// With a heat result the Heat strip sits above the view; the Heat panel must
+/// still start under the view cube, which is drawn in the corner of the
+/// canvas below that strip (creative audit i01, 1366 wide).
+#[test]
+fn the_heat_panel_starts_under_the_view_cube_when_a_result_shows_the_heat_strip() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "heat.simulate", None);
+    let size = egui::vec2(1366.0, 768.0);
+    let mut seen_result = false;
+    for frame in 0..400 {
+        d.frame_sized(size, Vec::new());
+        seen_result |= d.app.cabinet.heat.solution().is_some();
+        // Every frame, while the run is still improving as well as after it.
+        if let (Some(heat), Some(canvas)) = (
+            ctx.memory(|m| m.area_rect(super::panel::id("view3d_heat_panel"))),
+            d.app.learn_anchor("workspace.view3d"),
+        ) {
+            let cube = egui::Rect::from_min_size(
+                egui::pos2(canvas.right() - 12.0 - 88.0, canvas.top() + 12.0),
+                egui::Vec2::splat(88.0),
+            );
+            assert!(
+                !heat.intersects(cube),
+                "frame {frame}: heat panel {heat:?} covers the view cube {cube:?} (canvas {canvas:?})"
+            );
+        }
+        if seen_result && !d.app.cabinet.heat.running() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(seen_result, "needs a result");
+}
+
 #[test]
 fn the_measure_command_switches_the_tool_and_it_forgets_its_points_when_left() {
     let dir = tempfile::tempdir().unwrap();
