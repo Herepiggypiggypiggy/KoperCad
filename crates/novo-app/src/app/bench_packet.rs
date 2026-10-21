@@ -202,7 +202,10 @@ impl NovoApp {
         };
         let options = |cover: &ReportOutput| novo_pdf::ReportPdfOptions {
             title: format!("{name}  Bench packet"),
-            footer_right: format!("Revision {}", project.revision()),
+            footer_right: match project.latest_revision() {
+                Some(r) => format!("Revision {}", r.index),
+                None => "No revision issued".to_owned(),
+            },
             // The facts are single lines: closer rows keep the whole cover, notes included, on page 1.
             row_mm: keys(cover)
                 .into_iter()

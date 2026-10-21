@@ -11,7 +11,10 @@ use crate::camera::{Camera, Projection};
 use crate::cull;
 use crate::look::{Highlight, Look, Rgb, mix};
 use crate::math::Frustum;
-use crate::mesh::{GeometryKey, MeshData, MeshLibrary, profile_mesh, unit_box};
+use crate::mesh::{
+    FINGER_WIDTH_MM, GeometryKey, MeshData, MeshLibrary, SLOT_WIDTH_MM, profile_mesh, slotted_mesh,
+    unit_box,
+};
 use crate::overlay::Overlay;
 use crate::scene::{Item, ItemId, ItemKind, Mark, Profile, Scene, Shape};
 use crate::view_state::ViewState;
@@ -224,6 +227,9 @@ enum MeshKey {
     Cube,
     /// Profile, width and height in half millimetres.
     Profile(Profile, u32, u32),
+    /// Slotted duct, width, height and length in half millimetres, and
+    /// whether the outline of every finger is drawn.
+    Slotted(u32, u32, u32, bool),
     Part(GeometryKey, u8),
 }
 
@@ -1239,6 +1245,14 @@ impl Renderer {
                 "profile",
                 &profile_mesh(p, w as f32 * 0.5, h as f32 * 0.5),
             ),
+            MeshKey::Slotted(w, h, len, outlined) => {
+                let mut m = slotted_mesh(len as f32 * 0.5, w as f32 * 0.5, h as f32 * 0.5);
+                if !outlined {
+                    // Fingers a few pixels wide would shimmer in outline.
+                    m.edges.clear();
+                }
+                GpuMesh::upload(device, "slotted duct", &m)
+            }
             MeshKey::Part(k, lod) => {
                 let m = library
                     .get(k)
@@ -1315,7 +1329,7 @@ impl Renderer {
             let dist = (centre - eye).length();
             let radius = item.size.length() * 0.5;
             let size_px = cull::screen_size_px(frame.camera, radius, dist, size.1 as f32);
-            let Some((key, scale)) = self.resolve(item, frame.library, size_px) else {
+            let Some((key, scale)) = self.resolve(item, frame.library, size_px, true) else {
                 continue;
             };
             let (color, edge) = colors(
@@ -1420,7 +1434,8 @@ impl Renderer {
                 if item.translucent || !frame.state.is_visible(item.id.kind) {
                     continue;
                 }
-                let Some((key, scale)) = self.resolve(item, frame.library, SHADOW_LOD_PX) else {
+                let Some((key, scale)) = self.resolve(item, frame.library, SHADOW_LOD_PX, false)
+                else {
                     continue;
                 };
                 let world = scene.world_matrix(item);
@@ -1459,6 +1474,21 @@ impl Renderer {
         // Make sure every mesh exists before recording (borrow rules).
         for (key, _) in draws.iter().chain(&shadow_draws) {
             self.mesh(device, *key, frame.library);
+        }
+        // A slotted duct has a mesh of its own length, so editing or dragging
+        // ducts makes new ones: keep only what this frame draws once there
+        // are more than a screenful.
+        if self
+            .meshes
+            .keys()
+            .filter(|k| matches!(k, MeshKey::Slotted(..)))
+            .count()
+            > SLOTTED_MESHES_KEPT
+        {
+            let used: std::collections::HashSet<MeshKey> =
+                draws.iter().chain(&shadow_draws).map(|(k, _)| *k).collect();
+            self.meshes
+                .retain(|k, _| !matches!(k, MeshKey::Slotted(..)) || used.contains(k));
         }
 
         if target.overlay_revision != Some(frame.overlay_revision) {
@@ -1735,6 +1765,11 @@ impl Renderer {
                 pass.set_vertex_buffer(0, mesh.vertices.slice(..));
                 pass.set_vertex_buffer(1, target.instances.slice(..));
                 if edges {
+                    // A mesh without outlines (a distant slotted duct) has
+                    // no edge buffer to bind.
+                    if mesh.edge_count == 0 {
+                        continue;
+                    }
                     pass.set_index_buffer(mesh.edges.slice(..), wgpu::IndexFormat::Uint32);
                     pass.draw_indexed(0..mesh.edge_count, 0, range.clone());
                 } else {
@@ -1816,10 +1851,38 @@ impl Renderer {
 
     /// The mesh to draw an item with and the per-axis scale for it, or `None`
     /// when it is too small to be worth a draw.
-    fn resolve(&self, item: &Item, library: &MeshLibrary, size_px: f32) -> Option<(MeshKey, Vec3)> {
+    fn resolve(
+        &self,
+        item: &Item,
+        library: &MeshLibrary,
+        size_px: f32,
+        slots: bool,
+    ) -> Option<(MeshKey, Vec3)> {
         let q = |v: f32| (v * 2.0).round().max(0.0) as u32;
         match item.shape {
             Shape::Box => cull::lod_for(size_px, 1).map(|_| (MeshKey::Cube, item.size)),
+            Shape::Profile(Profile::SlottedChannel) => cull::lod_for(size_px, 1).map(|_| {
+                // The slots are worth drawing once a finger and its slot are
+                // a few pixels wide; further out the solid section stands in.
+                let px_per_mm = size_px / (item.size.length() * 0.5).max(1e-3);
+                let pitch_px = px_per_mm * (FINGER_WIDTH_MM + SLOT_WIDTH_MM);
+                if slots && pitch_px >= SLOT_MIN_PITCH_PX {
+                    (
+                        MeshKey::Slotted(
+                            q(item.size.y),
+                            q(item.size.z),
+                            q(item.size.x),
+                            pitch_px >= SLOT_OUTLINE_PITCH_PX,
+                        ),
+                        Vec3::ONE,
+                    )
+                } else {
+                    (
+                        MeshKey::Profile(Profile::Channel, q(item.size.y), q(item.size.z)),
+                        Vec3::new(item.size.x, 1.0, 1.0),
+                    )
+                }
+            }),
             Shape::Profile(p) => cull::lod_for(size_px, 1).map(|_| {
                 (
                     MeshKey::Profile(p, q(item.size.y), q(item.size.z)),
@@ -1856,6 +1919,14 @@ impl Renderer {
     }
 }
 
+/// Smallest on-screen pitch of finger plus slot, in pixels, at which a duct is
+/// drawn with its slots; further out the solid section stands in.
+const SLOT_MIN_PITCH_PX: f32 = 8.0;
+/// From this pitch on, in pixels, every finger gets its outline; between this
+/// and the minimum the slots are drawn without outlines, which would shimmer.
+const SLOT_OUTLINE_PITCH_PX: f32 = 14.0;
+/// Slotted duct meshes kept beyond the ones the frame draws.
+const SLOTTED_MESHES_KEPT: usize = 64;
 /// Strength of the key light's shadow on the surfaces it falls on, 0 to 1.
 const SHADOW_STRENGTH: f32 = 0.85;
 /// Size on screen the shadow casters are drawn at (picks a coarse mesh).
