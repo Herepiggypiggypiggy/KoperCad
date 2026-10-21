@@ -1,0 +1,34 @@
+@title Autopilot groups its list by protective device and follows the project's wire rules
+@area Reports
+# The review list shows one line per protective device; opening a group shows its wires.
+# Wire rules (IEC 60204-1 or house rules) are a project setting inside the same window.
+click_text "Open example"
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+click_text Autopilot
+wait 20
+expect "Accept all"
+expect "Wire rules: IEC 60204-1"
+expect "changes"
+shot autopilot-groups-closed
+check_blank autopilot-groups-closed
+check_layout
+click_text "Wire rules: IEC 60204-1"
+wait 5
+click_text "House rules"
+wait 10
+expect "Wire rules: House rules"
+expect "AC control"
+expect "Smallest control wire"
+shot autopilot-wire-rules
+check_layout
+click_text "Wire rules: House rules"
+wait 5
+click_text "14 changes"
+wait 5
+expect "Accept ticked in this group"
+shot autopilot-group-open
+check_layout
