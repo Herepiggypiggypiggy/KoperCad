@@ -333,3 +333,21 @@ fn print_opens_the_preview_and_does_not_export_at_once() {
     let rows = search(&palette, &keymap, "print");
     assert_eq!(rows[0].target, Target::Command("export.print_preview"));
 }
+
+#[test]
+fn handover_ranks_the_handover_package_first() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    let rows = search(&palette, &keymap, "handover");
+    assert_eq!(position(&rows, "export.handover"), Some(0));
+}
+
+#[test]
+fn a_word_in_a_label_beats_the_same_word_as_a_keyword() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    // "handover" is a keyword of the commissioning report and in the label of
+    // the handover package: the label wins for Enter.
+    let rows = search(&palette, &keymap, "handover");
+    let package = position(&rows, "export.handover").unwrap();
+    let report = position(&rows, "export.commissioning");
+    assert!(report.is_none_or(|r| package < r));
+}

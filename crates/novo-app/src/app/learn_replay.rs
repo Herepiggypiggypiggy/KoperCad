@@ -70,6 +70,7 @@ impl Drive {
             | SolveOp::Place(_)
             | SolveOp::Wire(_)
             | SolveOp::Select(_)
+            | SolveOp::Choose(_)
             | SolveOp::Tee(_)
             | SolveOp::FeedRow(_)
             | SolveOp::Cable(_)

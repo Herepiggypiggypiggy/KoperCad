@@ -1,6 +1,6 @@
 # Wire list with cut lengths: roadmap
 
-Scope: the wire list's Cut length mm / Length basis columns and the cut list report in `novo-reports`. Routing engine and `route_connections` belong to the Wire routing thread (WS-16, PR #381).
+Scope: the wire list's Route length mm / Length basis columns and the cut list report in `novo-reports`. Routing engine and `route_connections` belong to the Wire routing thread (WS-16, PR #381).
 
 ## Done
 - Length columns on the wire list (routed / free air / estimate), design in docs/design/cut-list.md.

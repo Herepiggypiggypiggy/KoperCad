@@ -144,6 +144,7 @@ fn capture(
             items: Vec::new(),
         };
         draw(&mut sheet)?;
+        orthogonal_routes(sheet.tx)?;
         let items = std::mem::take(&mut sheet.items);
         sheet
             .tx
@@ -158,6 +159,54 @@ fn capture(
     Ok(MacroFile::new(definition)
         .with_author("KoperCAD")
         .with_tags(tags))
+}
+
+/// Gives every wire whose ends are not in line a right-angle route (down,
+/// across, down), so a placed macro has no diagonal wires. Parallel runs get
+/// slightly different crossing heights so they do not lie on top of each
+/// other.
+fn orthogonal_routes(tx: &mut Tx<'_>) -> Result<()> {
+    const EPS: f64 = 1e-6;
+    let mut bends = Vec::new();
+    for w in tx.project().wires() {
+        let (Some(a), Some(b)) = (
+            tx.project().endpoint_position(w.from),
+            tx.project().endpoint_position(w.to),
+        ) else {
+            continue;
+        };
+        if (a.x - b.x).abs() < EPS || (a.y - b.y).abs() < EPS || !w.route.is_empty() {
+            continue;
+        }
+        bends.push((w.id, a, b));
+    }
+    // Crossing heights already taken, with the x range of the run.
+    let mut taken: Vec<(f64, f64, f64)> = Vec::new();
+    for (id, a, b) in bends {
+        let span = b.y - a.y;
+        let (lo, hi) = (a.x.min(b.x), a.x.max(b.x));
+        let room = (span.abs() / 2.0 - 3.0).max(0.0);
+        let mut mid = a.y + span / 2.0;
+        for step in 0..8 {
+            let nudge = ((step + 1) / 2) as f64 * 2.0 * if step % 2 == 0 { 1.0 } else { -1.0 };
+            if nudge.abs() > room {
+                break;
+            }
+            let candidate = a.y + span / 2.0 + nudge;
+            let clash = taken
+                .iter()
+                .any(|&(l, h, m)| l <= hi && lo <= h && (m - candidate).abs() < 1.0);
+            if !clash {
+                mid = candidate;
+                break;
+            }
+        }
+        taken.push((lo, hi, mid));
+        tx.update::<novo_core::Wire>(id, |w| {
+            w.route = vec![Point::new(a.x, mid), Point::new(b.x, mid)];
+        })?;
+    }
+    Ok(())
 }
 
 fn parameter(name: &str, default: Value, description: &str) -> BlockParameter {

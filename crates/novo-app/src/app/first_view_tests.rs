@@ -66,3 +66,32 @@ fn escape_closes_the_standards_check_and_the_calculations_windows() {
     assert!(!d.app.standards_open, "Standards check closes");
     assert!(d.app.wb.calculations.is_none(), "Calculations closes");
 }
+
+#[test]
+fn escape_closes_three_stacked_windows_one_after_another() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    d.app.run_command(&ctx, "check.standards", None);
+    d.frame();
+    d.app.wb.assistant.open = true;
+    for _ in 0..2 {
+        d.frame();
+    }
+    d.app.run_command(&ctx, "check.calculations", None);
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert!(d.app.standards_open && d.app.wb.assistant.open && d.app.wb.calculations.is_some());
+    // The pointer rests over the drawing, which would take the key first.
+    d.frame_with(vec![egui::Event::PointerMoved(egui::pos2(1000.0, 650.0))]);
+    for _ in 0..3 {
+        d.frame_with(vec![esc_key()]);
+        d.frame();
+    }
+    assert!(d.app.wb.calculations.is_none(), "Calculations closes");
+    assert!(!d.app.wb.assistant.open, "Ask Claude closes");
+    assert!(!d.app.standards_open, "Standards check closes");
+}

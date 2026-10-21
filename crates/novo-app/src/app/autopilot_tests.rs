@@ -276,3 +276,75 @@ fn estimates_in_the_example_are_explained_by_cause() {
     );
     assert!(!text.contains("not placed"), "{text}");
 }
+
+#[test]
+fn a_wire_that_breaks_a_house_rule_shows_up_in_the_issues() {
+    use novo_core::Value;
+    let (_dir, mut d) = example();
+    let (plan, _) = build(d.doc().project(), false);
+    d.app.apply_autopilot(&plan, None);
+    d.frame();
+    let rule_problems = |d: &Drive| {
+        super::checks::open_problems(d.doc().project())
+            .into_iter()
+            .filter(|p| p.kind == novo_checks::ProblemKind::WireRule)
+            .count()
+    };
+    assert_eq!(rule_problems(&d), 0, "the standard states no house rules");
+
+    let doc = d.app.backend.document_mut().unwrap();
+    for (key, value) in [
+        (novo_reports::wire_rules::PRESET.to_owned(), "house"),
+        (novo_reports::wire_rules::ColourClass::AcPower.key(), "VT"),
+    ] {
+        doc.transact("rule", |tx| {
+            novo_checks::standards::set_info_property(tx, &key, Some(Value::Text(value.into())))
+        })
+        .unwrap();
+    }
+    assert!(rule_problems(&d) > 0, "power wires are not violet");
+}
+
+#[test]
+fn waiving_one_wire_rule_problem_leaves_the_others() {
+    use novo_core::Value;
+    let (_dir, mut d) = example();
+    let (plan, _) = build(d.doc().project(), false);
+    d.app.apply_autopilot(&plan, None);
+    d.frame();
+    let doc = d.app.backend.document_mut().unwrap();
+    for (key, value) in [
+        (novo_reports::wire_rules::PRESET.to_owned(), "house"),
+        (novo_reports::wire_rules::ColourClass::AcPower.key(), "VT"),
+    ] {
+        doc.transact("rule", |tx| {
+            novo_checks::standards::set_info_property(tx, &key, Some(Value::Text(value.into())))
+        })
+        .unwrap();
+    }
+    let rules = |d: &Drive| {
+        super::checks::open_problems(d.doc().project())
+            .into_iter()
+            .filter(|p| p.kind == novo_checks::ProblemKind::WireRule)
+            .collect::<Vec<_>>()
+    };
+    let all = rules(&d);
+    assert!(all.len() > 1, "{all:?}");
+    assert!(
+        all.iter()
+            .all(|p| p.message.starts_with("Wire")
+                || p.message.starts_with("A wire without a number"))
+    );
+    let first = all[0].clone();
+    let doc = d.app.backend.document_mut().unwrap();
+    doc.transact("waive", |tx| {
+        novo_checks::waive(tx, &first, "reviewed").map(|_| ())
+    })
+    .unwrap();
+    let left = rules(&d);
+    assert!(left.iter().all(|p| p.at != first.at), "that wire is waived");
+    assert!(
+        left.len() < all.len() && !left.is_empty(),
+        "the others stay"
+    );
+}
