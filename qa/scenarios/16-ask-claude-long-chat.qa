@@ -1,0 +1,41 @@
+@title Ask Claude, long conversation: the message box stays on screen and the transcript scrolls
+@area Assistant
+@env KOPERCAD_AI_REPLAY=qa/replay/long-chat.json
+@env ANTHROPIC_API_KEY=sk-ant-api03-qa-replay-key-0000000000
+# Four long answers fill the transcript; the box under it must stay inside the window.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text ask claude
+wait 8
+key Enter
+wait 10
+click_text "I have read this and agree"
+wait 4
+click_text "Turn Claude on" Button
+wait 8
+expect "Claude is on"
+click_text "" MultilineTextInput
+wait 3
+text Question number 1
+click_text Send Button
+wait 40
+click_text "" MultilineTextInput
+wait 3
+text Question number 2
+click_text Send Button
+wait 40
+click_text "" MultilineTextInput
+wait 3
+text Question number 3
+click_text Send Button
+wait 40
+click_text "" MultilineTextInput
+wait 3
+text Question number 4
+click_text Send Button
+wait 40
+shot long-chat
+expect "Answer 4"
+check_layout
