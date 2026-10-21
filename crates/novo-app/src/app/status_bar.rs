@@ -84,7 +84,16 @@ impl NovoApp {
             super::dock::ToolHint::default()
         };
         let selection = self.selection_summary();
-        let values = self.status_values();
+        let values = self.status_values().map(|v| {
+            // The cursor readout carries the key that brings the drawing
+            // back into view, so a lost view is one key away.
+            match self.command_shortcut_text(ui.ctx(), "view.fit") {
+                Some(key) if self.workspace() == Workspace::Schematic => {
+                    format!("{v}   {key} zoom to fit")
+                }
+                _ => v,
+            }
+        });
         let chips = self.mode_chips();
         let saved = self.saved_state();
         let path = self.project_path.clone();
