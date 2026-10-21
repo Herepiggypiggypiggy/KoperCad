@@ -60,7 +60,5 @@ listed under "left to you" with the count, as now.
 
 1. This note; the entry point accessors with the WS-02 validation, and a field
    in the Cabinet side panel to set it (where the user finds it).
-2. Routing to the entry point in `novo-routing::model` and the new bases in
-   `novo-reports::lengths`, `is_estimate`; tests on the motor starter with a
-   known entry and cable length.
+2. (done) Routing to the entry point in `novo-routing::model` (`Routed::entry_legs`) and the new basis `to entry + cable run` in `novo-reports::lengths`, `is_estimate`; tests on the motor starter. A wire to the outside without a stated cable run stays `estimate`. The feed allowance is step 3.
 3. Autopilot: the entry-point row and the refined "left to you" text.

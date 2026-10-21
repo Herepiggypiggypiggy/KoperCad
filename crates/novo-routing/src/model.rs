@@ -2,7 +2,7 @@
 //! ducts on an enclosure's mounting plate. Engine duct ids are the raw
 //! model ids of the rails.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use novo_core::{
     CabinetPlacement, DeviceId, Direction, PinRef, Project, Rail, RailKind, StructureId, SymbolRole,
@@ -97,6 +97,25 @@ pub fn route_project(project: &Project) -> Routed {
         &wire_connections(project),
         &WireRules::of(project).routing,
     )
+}
+
+/// Whether a pin is outside the enclosure whose plate has the other end: a
+/// potential feed (the supply arrives from outside the drawing), or a device
+/// whose location differs from the enclosure's.
+fn is_outside(project: &Project, plate: StructureId, pin: PinRef) -> bool {
+    let Some(symbol) = project.symbol(pin.symbol) else {
+        return false;
+    };
+    if matches!(symbol.role, SymbolRole::PotentialFeed { .. }) {
+        return true;
+    }
+    let (Some(device), Some(structure)) = (
+        device_of_pin(project, pin).and_then(|d| project.device(d)),
+        project.get::<novo_core::Structure>(plate),
+    ) else {
+        return false;
+    };
+    device.tag.location != structure.tag.location
 }
 
 /// The device a pin physically sits on: the device of a device symbol, or
@@ -243,6 +262,11 @@ pub struct Routed {
     /// Connections with an end on a surface other than the plate (the door,
     /// a side wall), by connection id: how they get there.
     pub surface_legs: BTreeMap<u64, SurfaceLeg>,
+    /// Connections routed from a placed device to the plate's cabinet entry
+    /// point because their other end is outside the enclosure (a supply feed,
+    /// a device in another location). Their route ends at the entry: the part
+    /// outside is not in the length.
+    pub entry_legs: BTreeSet<u64>,
 }
 
 /// The part of a wire that runs on a surface other than the mounting plate.
@@ -312,8 +336,44 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
             out.unrouted.push(c.id);
             continue;
         }
-        let ends =
-            anchor_of(project, &placements, c.from).zip(anchor_of(project, &placements, c.to));
+        let (a, b) = (
+            anchor_of(project, &placements, c.from),
+            anchor_of(project, &placements, c.to),
+        );
+        // One end on a plate with an entry point, the other outside the
+        // enclosure: route to the entry point.
+        let entry_leg = match (&a, &b) {
+            (Some((plate, inside)), None) => Some((*plate, *inside, c.to, true)),
+            (None, Some((plate, inside))) => Some((*plate, *inside, c.from, false)),
+            _ => None,
+        };
+        if let Some((plate, inside, far, inside_is_from)) = entry_leg
+            && is_outside(project, plate, far)
+            && let Some(point) = crate::entry::entry_point(project, plate)
+        {
+            if inside.z_mm.is_none() {
+                out.unknown_height.push(c.id);
+            }
+            let at_entry = Anchor {
+                pos: point,
+                facing: Facing::Any,
+                z_mm: Some(0.0),
+            };
+            let (job_from, job_to) = if inside_is_from {
+                (inside, at_entry)
+            } else {
+                (at_entry, inside)
+            };
+            jobs.entry(plate).or_default().push(Job {
+                id: c.id,
+                from: job_from,
+                to: job_to,
+                diameter_mm: c.diameter_mm,
+            });
+            out.entry_legs.insert(c.id);
+            continue;
+        }
+        let ends = a.zip(b);
         let Some(((s1, from), (s2, to))) = ends else {
             out.unrouted.push(c.id);
             continue;

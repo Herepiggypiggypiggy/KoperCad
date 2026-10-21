@@ -23,6 +23,8 @@ pub(crate) enum Basis {
     Door,
     /// At least one device is not placed on a plate: see [`estimate`].
     Estimate,
+    /// Routed to the cabinet entry point, plus the stated cable run outside.
+    ToEntryCable,
 }
 
 impl Basis {
@@ -33,6 +35,7 @@ impl Basis {
             Basis::FreeAir => "free air",
             Basis::Door => "door, no gap",
             Basis::Estimate => "estimate",
+            Basis::ToEntryCable => "to entry + cable run",
         }
     }
 }
@@ -66,6 +69,22 @@ pub(crate) struct Connection {
     pub from: PinRef,
     pub to: PinRef,
     pub cross_section_mm2: Option<f64>,
+    /// The length of the cable the wire lies in outside the enclosure, mm,
+    /// when the cable states one (`Cable.length_m`).
+    pub cable_run_mm: Option<f64>,
+}
+
+/// The stated length in mm of the cable a connection's wires lie in: the
+/// longest `length_m` of its cables, `None` when no wire is on a cable that
+/// states a positive finite length.
+pub(crate) fn cable_run_mm(project: &Project, wires: &[&novo_core::Wire]) -> Option<f64> {
+    wires
+        .iter()
+        .filter_map(|w| project.core_of_wire(w.id))
+        .filter_map(|(cable, _)| project.cable(cable)?.length_m)
+        .filter(|m| m.is_finite() && *m > 0.0)
+        .map(|m| m * 1000.0)
+        .max_by(f64::total_cmp)
 }
 
 /// A measured connection.
@@ -111,7 +130,22 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
         .iter()
         .enumerate()
         .map(|(i, c)| {
+            let to_entry = routed.entry_legs.contains(&(i as u64));
             let found = match routed.routes.get(&(i as u64)) {
+                // Routed to the cabinet entry: exact inside, the cable run
+                // outside is the designer's stated figure, and the far end
+                // gets its service loop. Without a stated run the length
+                // stays the estimate of the whole wire.
+                Some(route) if to_entry && c.cable_run_mm.is_some() => CutLength {
+                    mm: route.length_mm + c.cable_run_mm.unwrap_or(0.0) + rules.routing.slack_mm,
+                    basis: Basis::ToEntryCable,
+                    ducts: route.ducts.clone(),
+                },
+                Some(_) if to_entry => CutLength {
+                    mm: estimate(project, &rules, c.from, c.to),
+                    basis: Basis::Estimate,
+                    ducts: Vec::new(),
+                },
                 Some(route) => CutLength {
                     mm: route.length_mm,
                     basis: match route.kind {

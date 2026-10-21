@@ -45,7 +45,8 @@ pub(super) struct RouteRow {
     pub(super) ends: String,
     /// The cut length, rounded up to a whole millimetre.
     pub(super) length_mm: f64,
-    /// `routed`, `routed, no depth` or `free air`.
+    /// `routed`, `routed, no depth`, `free air`, `door, no gap` or
+    /// `to entry, outside not included`.
     pub(super) basis: &'static str,
     pub(super) ducts: usize,
 }
@@ -208,6 +209,7 @@ fn rows(
                 .is_some_and(|leg| leg.opening.is_some());
             let basis = match r.kind {
                 _ if to_door => "door, no gap",
+                _ if routed.entry_legs.contains(&r.job) => "to entry, outside not included",
                 Kind::FreeAir => "free air",
                 Kind::Ducted if routed.unknown_height.contains(&r.job) => "routed, no depth",
                 Kind::Ducted => "routed",
@@ -519,11 +521,11 @@ fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Op
     if overlay.entry_hidden {
         ui.colored_label(
             crate::theme::ui_palette().warning,
-            "A stored entry point lies outside the plate and is ignored. Set a new one.",
+            "A stored entry point is incomplete or outside the plate and cannot be used. Set a new one.",
         );
     }
     ui.weak(
-        "Where wires from outside will come in (origin top left). Not used for wire lengths yet.",
+        "Where wires from outside come in (origin top left). Wires to the outside are routed to it.",
     );
     ask
 }
