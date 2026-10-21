@@ -1205,3 +1205,52 @@ fn an_unreadable_replay_file_never_reaches_the_network() {
     let reply = factory().send(&request);
     assert!(reply.unwrap_err().contains("script ran out"), "no network");
 }
+
+fn first_run_window(size: egui::Vec2) -> Setup {
+    let mut s = setup(DataScope::None);
+    s.d.app.settings.ai.enabled = false;
+    s.d.app.settings.ai.consent = Consent::default();
+    s.d.app.wb.assistant.agree_for_test();
+    s.d.app.open_assistant();
+    for _ in 0..4 {
+        s.d.frame_sized(size, Vec::new());
+    }
+    s
+}
+
+#[test]
+fn on_a_small_window_the_box_stays_off_until_the_notice_has_been_in_view() {
+    let mut s = first_run_window(egui::vec2(1366.0, 450.0));
+    assert!(
+        !s.d.app.wb.assistant.notice_seen(),
+        "notice is below the fold"
+    );
+    assert!(
+        !s.d.app.wb.assistant.turn_on_ready(),
+        "ticked and keyed, but the notice was never in view"
+    );
+    // Scroll the settings to their end with the wheel over the window.
+    let at = egui::pos2(250.0, 250.0);
+    let size = egui::vec2(1366.0, 450.0);
+    s.d.frame_sized(size, vec![egui::Event::PointerMoved(at)]);
+    for _ in 0..40 {
+        s.d.frame_sized(
+            size,
+            vec![egui::Event::MouseWheel {
+                unit: egui::MouseWheelUnit::Point,
+                delta: egui::vec2(0.0, -400.0),
+                modifiers: egui::Modifiers::NONE,
+                phase: egui::TouchPhase::Move,
+            }],
+        );
+        if s.d.app.wb.assistant.notice_seen() {
+            break;
+        }
+    }
+    s.d.frame_sized(size, Vec::new());
+    assert!(s.d.app.wb.assistant.notice_seen(), "scrolled to the end");
+    assert!(
+        s.d.app.wb.assistant.turn_on_ready(),
+        "now it can be pressed"
+    );
+}
