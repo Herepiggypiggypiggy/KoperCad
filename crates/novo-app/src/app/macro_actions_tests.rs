@@ -185,4 +185,6 @@ fn the_command_field_finds_a_starter_circuit_and_opens_the_place_window_on_it() 
     );
     d.app.run_target(&ctx, rows[0].target.clone());
     assert!(d.app.wb.macro_place.open);
+    // Picked by its whole name, so the window already has it chosen.
+    assert!(d.app.wb.macro_place.selected.is_some());
 }
