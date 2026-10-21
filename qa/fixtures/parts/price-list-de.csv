@@ -1,0 +1,8 @@
+Price list 2026 (example data, not a real maker)
+
+Hersteller;Artikelnummer;Bezeichnung;Nennstrom [A];Verlustleistung (W);Breite mm;Höhe mm;Tiefe mm;ETIM;Preis;Notiz
+Example Maker;EX-100;Schütz 9 A;9;1,2;45;85;70;EC000066;12,50 €;ab Lager
+Example Maker;EX-101;Schütz 12 A;12;1,8;45;85;70;EC000066;1.234,56 €;
+Example Maker;EX-102;Schütz 500 mA Hilfsrelais;500 mA;0,3;22;78;60;12345;9,90 €;
+Example Maker;;Zeile ohne Nummer;1;;;;;;;
+Example Maker;EX-104;Motorschutz;16;4,5;45000;90;75;EC000042;31,00 €;

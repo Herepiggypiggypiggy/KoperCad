@@ -238,6 +238,7 @@ pub(crate) struct Workbench {
     pub(super) eplan_import: Option<super::eplan_import::EplanImport>,
     /// Parts read from an EPLAN parts export, waiting for Add.
     pub(super) eplan_parts: Option<super::eplan_parts::EplanPartsImport>,
+    pub(super) parts_table: Option<super::parts_table::PartsTableImport>,
     /// The EPLAN export options being chosen.
     pub(super) eplan_export: Option<super::eplan_export::EplanExport>,
     /// The options the last EPLAN export used, offered again next time.
@@ -363,6 +364,7 @@ impl Default for Workbench {
             auto_assign: None,
             eplan_import: None,
             eplan_parts: None,
+            parts_table: None,
             eplan_export: None,
             eplan_export_last: None,
             plc_card: None,
@@ -562,6 +564,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "plc.add_card",
     "plc.overview",
     "parts.import_eplan",
+    "parts.import_table",
     "plc.to_plc",
     "plc.renumber_io",
     "plc.import_tags",
@@ -1413,6 +1416,7 @@ impl NovoApp {
             "parts.browser" => self.open_parts_browser(),
             "parts.import_step" => self.import_part_model(),
             "parts.import_eplan" => self.import_eplan_parts(),
+            "parts.import_table" => self.import_parts_table(),
             "plc.overview" => self.wb.plc_overview = true,
             "parts.import_folder" => self.import_parts_folder(),
             "parts.auto_assign" => self.start_auto_assign(),

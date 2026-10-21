@@ -680,6 +680,8 @@ fn side_label(side: Side) -> Option<&'static str> {
 /// What a click in the window asks for; run after drawing, so drawing only
 /// reads.
 enum PartsAction {
+    /// Open the table import with its mapping step.
+    ImportTable,
     Select(PartKey),
     Import(PartKey),
     OpenPage(String),
@@ -784,6 +786,7 @@ impl NovoApp {
                 .collect()
         });
         let mut catalog_files = Vec::new();
+        let mut table_file = None;
         let mut no_part_for = None;
         if win.target().is_some() {
             if let Some(path) = dropped.first() {
@@ -793,6 +796,14 @@ impl NovoApp {
             // No part picked: a catalog file is imported as a catalog.
             for path in &dropped {
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+                if name.as_deref().is_some_and(|n| {
+                    n.rsplit('.')
+                        .next()
+                        .is_some_and(|e| e.eq_ignore_ascii_case("xlsx"))
+                }) {
+                    table_file = Some(path.clone());
+                    continue;
+                }
                 match name.as_deref().map(FileKind::of_file_name) {
                     Some(FileKind::Bmecat | FileKind::Csv | FileKind::Zip) => {
                         catalog_files.push(path.clone());
@@ -818,6 +829,15 @@ impl NovoApp {
         let mut open_dir = None;
         for action in actions {
             match action {
+                PartsAction::ImportTable => {
+                    if let Some(path) = crate::dialogs::FileDialog::new()
+                        .set_title("Parts table (CSV or Excel)")
+                        .add_filter("Parts table", &["csv", "tsv", "txt", "xlsx"])
+                        .pick_file()
+                    {
+                        table_file = Some(path);
+                    }
+                }
                 PartsAction::ImportCatalogFiles => {
                     if let Some(files) = crate::dialogs::FileDialog::new()
                         .set_title("Catalog files (BMEcat, CSV, ZIP)")
@@ -903,6 +923,9 @@ impl NovoApp {
         }
         if !catalog_files.is_empty() {
             self.import_catalog_files(&catalog_files);
+        }
+        if let Some(path) = table_file {
+            self.import_parts_table_from(&path, None, novo_parts::saved_mappings_path());
         }
         if let Some(name) = no_part_for {
             self.message(
@@ -1090,6 +1113,15 @@ fn parts_ui(
                 }
             });
             if ui
+                .button("Import table\u{2026}")
+                .on_hover_text(
+                    "Read a CSV or Excel parts table with any columns: you say what each column is, check the rows, then add them. You can also drop an .xlsx file on this window.",
+                )
+                .clicked()
+            {
+                actions.push(PartsAction::ImportTable);
+            }
+            if ui
                 .button("Import catalog files")
                 .on_hover_text(
                     "Read BMEcat, CSV or ZIP catalog files from a maker or wholesaler into your catalog. You can also drop them on this window.",
@@ -1162,7 +1194,7 @@ fn list_ui(
         ui.add_space(12.0);
         if win.query.trim().is_empty() && win.maker.is_none() {
             ui.weak(
-                "The catalog is empty. Press Import catalog files above, or use File > Import > Import parts from a folder to load a whole folder of maker files.",
+                "The catalog is empty. Press Import catalog files above, or use File > Import parts > Import parts from a folder to load a whole folder of maker files.",
             );
         } else {
             ui.weak("No part matches. Change the search or the maker.");

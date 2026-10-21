@@ -715,6 +715,14 @@ pub const DUTCH: &[Aliases] = &[
         &["automationml", "installatie", "overnemen", "migreren"],
     ),
     nl(
+        "parts.import_table",
+        &[
+            "importeer onderdelen uit tabel",
+            "importeer excel onderdelen",
+        ],
+        &["tabel", "excel", "xlsx", "kolommen", "prijslijst", "csv"],
+    ),
+    nl(
         "parts.import_eplan",
         &["importeer eplan onderdelen"],
         &["eplan artikelen", "eplan onderdelen", "artikelexport"],

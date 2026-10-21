@@ -326,6 +326,28 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "parts.import_table",
+            "Import parts from a table (CSV or Excel)",
+            "Project",
+            &[
+                "spreadsheet",
+                "excel",
+                "xlsx",
+                "csv",
+                "columns",
+                "mapping",
+                "price list",
+                "parts",
+                "catalog",
+                "datasheet",
+                "maker data",
+            ],
+            Needs::Nothing,
+        ),
+        &["import parts table", "import excel parts"],
+    ),
+    verb(
+        cmd(
             "parts.import_eplan",
             "Import parts from a CAD parts export",
             "Project",

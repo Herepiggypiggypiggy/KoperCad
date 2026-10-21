@@ -14,6 +14,7 @@ dirs.workspace = true
 quick-xml.workspace = true
 sha2.workspace = true
 zip.workspace = true
+calamine.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
@@ -21,6 +22,7 @@ thiserror.workspace = true
 [dev-dependencies]
 novo-tests = { path = "../novo-tests" }
 tempfile.workspace = true
+rust_xlsxwriter.workspace = true
 
 [lints]
 workspace = true

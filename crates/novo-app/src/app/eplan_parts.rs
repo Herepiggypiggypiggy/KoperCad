@@ -1,4 +1,4 @@
-//! File > Import > Import parts from an EPLAN export: reads a parts export
+//! File > Import parts > Import parts from an EPLAN export: reads a parts export
 //! the person made in their own EPLAN (parts-management XML, or the
 //! delimited text export) into the part catalog, after a preview of what
 //! would be added, what would change, and which rows were rejected and why.
