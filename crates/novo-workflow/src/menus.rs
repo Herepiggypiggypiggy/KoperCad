@@ -260,6 +260,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("export.reports", under("Reports", "Export")),
     ("export.assembly", under("Reports", "Export")),
     ("export.workshop", under("Reports", "Export")),
+    ("export.bench_packet", under("Reports", "Export")),
     ("export.safety_sheets", under("Reports", "Export")),
     ("view.bench", at("Reports")),
     ("report.designer", at("Reports")),

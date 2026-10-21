@@ -90,9 +90,9 @@ impl BenchState {
 
 /// What the bench PDFs are made from: the project's wire jobs under a
 /// ferrule standard, and the label settings.
-struct Inputs {
-    standard: FerruleStandard,
-    labels: LabelSettings,
+pub(super) struct Inputs {
+    pub(super) standard: FerruleStandard,
+    pub(super) labels: LabelSettings,
 }
 
 fn pdf_options(
@@ -122,7 +122,7 @@ impl NovoApp {
     }
 
     /// The window's drafts when it is open, else the project's settings.
-    fn bench_inputs(&self) -> Option<Inputs> {
+    pub(super) fn bench_inputs(&self) -> Option<Inputs> {
         if let Some(state) = &self.wb.bench {
             return Some(Inputs {
                 standard: state.standard.clone(),
@@ -483,6 +483,9 @@ impl NovoApp {
                 self.export_workshop();
             }
             Some(Act::PreviewWorkshop) => self.open_print_preview_workshop(),
+            Some(Act::ExportPacket) => {
+                self.export_bench_packet();
+            }
             Some(Act::ExportCut) => {
                 self.export_bench_cut();
             }
@@ -518,6 +521,7 @@ enum Act {
     /// A fix button of the readiness strip: runs this command.
     Run(&'static str),
     ExportWorkshop,
+    ExportPacket,
     PreviewWorkshop,
     ExportCut,
     ExportMachineCsv,
@@ -554,8 +558,15 @@ fn workshop_strip(
         {
             *act = Some(Act::PreviewWorkshop);
         }
+        if ui
+            .button("Bench packet (PDF)")
+            .on_hover_text(super::BENCH_PACKET_HINT)
+            .clicked()
+        {
+            *act = Some(Act::ExportPacket);
+        }
     });
-    ui.weak("1:1 drilling template with a check ruler, cut list, ferrules, labels and the tick checklist, in one folder next to the project.");
+    ui.weak("The Workshop pack puts a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the 1:1 drilling templates and the labels in one folder next to the project.");
 }
 
 /// One thing the printed bench output cannot be trusted on yet.

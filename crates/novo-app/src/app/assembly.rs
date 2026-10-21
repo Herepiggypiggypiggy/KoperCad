@@ -184,9 +184,8 @@ pub fn order_sections(project: &Project, checklist: &ReportOutput) -> Vec<Sectio
     out
 }
 
-/// The whole pack as one output: per cabinet its build order then its
-/// checklist tables, then the wire cutting list.
-pub fn print_pack(project: &Project, checklist: ReportOutput) -> ReportOutput {
+/// Per cabinet its build order then its checklist tables.
+pub(super) fn cabinet_sections(project: &Project, checklist: ReportOutput) -> Vec<Section> {
     let mut order = order_sections(project, &checklist);
     let mut sections = Vec::new();
     let mut rest = checklist.sections.into_iter().peekable();
@@ -203,11 +202,19 @@ pub fn print_pack(project: &Project, checklist: ReportOutput) -> ReportOutput {
             sections.extend(rest.next());
         }
     }
+    sections
+}
+
+/// The whole pack as one output: per cabinet its build order then its
+/// checklist tables, then the wire cutting list.
+pub fn print_pack(project: &Project, checklist: ReportOutput) -> ReportOutput {
+    let revision = checklist.revision;
+    let mut sections = cabinet_sections(project, checklist);
     sections.extend(CutList::default().generate(project).sections);
     ReportOutput {
         report: "assembly-pack".into(),
         title: "Assembly print pack".into(),
-        revision: checklist.revision,
+        revision,
         sections,
     }
 }

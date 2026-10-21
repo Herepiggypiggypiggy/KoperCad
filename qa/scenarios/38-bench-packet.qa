@@ -1,0 +1,22 @@
+@title Bench packet: window button, command and file
+@area Reports
+# Reports > Bench output has a "Bench packet (PDF)" button; Ctrl+K "bench packet" and Reports > Export write the same file.
+click_text "Open example"
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+expect "Bench packet (PDF)"
+shot window
+check_layout
+click_text "Bench packet (PDF)"
+wait 30
+expect_file "~/Documents/KoperCAD/*bench packet.pdf" 1500
+shot written
+key ctrl+k
+wait 4
+text Export bench packet
+wait 6
+shot palette
+check_layout
