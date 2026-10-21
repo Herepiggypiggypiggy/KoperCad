@@ -534,6 +534,7 @@ pub struct Editor {
     /// Where the click of the text tool was, until the view takes it.
     text_request: Option<Point>,
     notice: Option<String>,
+    wiring_note: Option<String>,
     link_hint: Option<String>,
     row: Option<RowDrag>,
     changes: ChangeSet,
@@ -571,6 +572,7 @@ impl Editor {
             paste_request: None,
             text_request: None,
             notice: None,
+            wiring_note: None,
             link_hint: None,
             row: None,
             changes: ChangeSet::default(),
@@ -619,6 +621,12 @@ impl Editor {
             Tool::Move(_) | Tool::Paste(_) | Tool::Text => true,
             _ => false,
         }
+    }
+
+    /// What the last drop wired on its own and what it left alone and why.
+    /// Information, not a refusal: the drop itself succeeded.
+    pub fn wiring_note(&self) -> Option<&str> {
+        self.wiring_note.as_deref()
     }
 
     /// The last message for the user (a refused edit and why).
@@ -671,6 +679,7 @@ impl Editor {
             (None, Ok((_, changes))) => {
                 self.changes.merge(&changes);
                 self.notice = None;
+                self.wiring_note = None;
                 true
             }
             (None, Err(e)) => {
@@ -752,8 +761,8 @@ impl Editor {
             .iter()
             .filter_map(|&s| tx.project().symbol(s).cloned())
             .collect();
-        let found = edit::facing_wires(tx.project(), &placed, &|s| self.outline(s));
-        for f in found {
+        let found = self.facing(tx.project(), &placed);
+        for f in found.wires {
             let _ = edit::accept(tx, &f);
         }
     }
@@ -1100,6 +1109,7 @@ impl Editor {
         }
         self.tool = Tool::Select;
         self.notice = None;
+        self.wiring_note = None;
         true
     }
 
@@ -1114,6 +1124,7 @@ impl Editor {
         self.cursor = None;
         self.select = None;
         self.notice = None;
+        self.wiring_note = None;
     }
 
     /// The pointer moved to `raw` (page millimetres). `tolerance` is the
@@ -1316,6 +1327,7 @@ impl Editor {
                 let delta = at - m.from;
                 let grid = self.grid;
                 let open_before = edit::open_end_count(doc.project());
+                let wires_before = doc.project().wires().count();
                 let result = doc.transact("Move", |tx| {
                     if delta != Point::ZERO {
                         let how = Transform::Move(delta);
@@ -1344,6 +1356,7 @@ impl Editor {
                 let r = self.finish(result.map(|(_, c)| c), None);
                 if r == Clicked::Edited {
                     self.propose(doc, &edit::symbols_in(&m.ids));
+                    self.explain_facing(doc, &edit::symbols_in(&m.ids), wires_before);
                     let left = edit::open_end_count(doc.project()).saturating_sub(open_before);
                     if left > 0 {
                         self.notice = Some(if left == 1 {
@@ -1406,6 +1419,7 @@ impl Editor {
                 _ => {}
             }
         }
+        let wires_before = doc.project().wires().count();
         let result = doc.transact(format!("Place {}", symbol.name), |tx| {
             let id = edit::place(tx, page, &symbol, placement, &options)?;
             self.draw_facing(tx, &[id]);
@@ -1426,8 +1440,59 @@ impl Editor {
         let r = self.finish(result.map(|(_, c)| c), placed);
         if let Some(AnyId::Symbol(s)) = placed {
             self.propose(doc, &[s]);
+            self.explain_facing(doc, &[s], wires_before);
         }
         r
+    }
+
+    /// The facing wires of `ghosts`, judged by what the pins are
+    /// ([`crate::pinkind`]): different circuits are held back.
+    fn facing(&self, project: &novo_core::Project, ghosts: &[SymbolInstance]) -> edit::Facing {
+        edit::facing_checked(project, ghosts, &|s| self.outline(s), &|a, ai, b, bi| {
+            let (Some(da), Some(db)) =
+                (self.catalog.get(&a.symbol.0), self.catalog.get(&b.symbol.0))
+            else {
+                return crate::pinkind::Verdict::Wire;
+            };
+            let (Some(pa), Some(pb)) = (a.pins.get(ai as usize), b.pins.get(bi as usize)) else {
+                return crate::pinkind::Verdict::Wire;
+            };
+            crate::pinkind::judge((da, &pa.name), (db, &pb.name))
+        })
+    }
+
+    /// After a drop in [`ConnectMode::Draw`]: what was wired on its own and
+    /// what was left alone and why, on the status line. The wires are part
+    /// of the drop's undo step.
+    fn explain_facing(&mut self, doc: &Document, symbols: &[SymbolId], wires_before: usize) {
+        if !self.auto_connect || self.connect != ConnectMode::Draw {
+            return;
+        }
+        let project = doc.project();
+        let placed: Vec<SymbolInstance> = symbols
+            .iter()
+            .filter_map(|&s| project.symbol(s).cloned())
+            .collect();
+        let found = self.facing(project, &placed);
+        let drew = project.wires().count().saturating_sub(wires_before);
+        let doubts: Vec<String> = found
+            .held
+            .iter()
+            .filter(|h| h.possible)
+            .map(|h| format!("{}: {}", pair_name(project, &h.wire), h.reason))
+            .collect();
+        let refused: Vec<_> = found.held.iter().filter(|h| !h.possible).collect();
+        let held = held_notice(project, &doubts, &refused, "Not wired, check");
+        let did = (drew > 0).then(|| {
+            format!(
+                "Connected {drew} facing pin pair{} that belong together (Ctrl+Z undoes them with the drop)",
+                if drew == 1 { "" } else { "s" }
+            )
+        });
+        self.wiring_note = match (did, held) {
+            (Some(a), Some(b)) => Some(format!("{a}. {b}")),
+            (a, b) => a.or(b),
+        };
     }
 
     /// Proposes the facing-pin wires of symbols just dropped.
@@ -1440,7 +1505,16 @@ impl Editor {
             .iter()
             .filter_map(|&s| project.symbol(s).cloned())
             .collect();
-        self.proposals = edit::facing_wires(project, &placed, &|s| self.outline(s));
+        let found = self.facing(project, &placed);
+        self.proposals = found.wires;
+        // Unusual pairs are asked about, with the reason on the status line.
+        let mut doubts = Vec::new();
+        for h in found.held.iter().filter(|h| h.possible) {
+            doubts.push(format!("{}: {}", pair_name(project, &h.wire), h.reason));
+            self.proposals.push(h.wire);
+        }
+        let refused: Vec<_> = found.held.iter().filter(|h| !h.possible).collect();
+        self.wiring_note = held_notice(project, &doubts, &refused, "Check before accepting");
         self.proposal = 0;
         self.held = None;
     }
@@ -2899,6 +2973,11 @@ impl Editor {
                 .collect::<Vec<_>>()
                 .join(" · ")
         };
+        let text = match &self.wiring_note {
+            Some(n) if text.is_empty() => n.clone(),
+            Some(n) => format!("{n} · {text}"),
+            None => text,
+        };
         match &self.notice {
             Some(n) if text.is_empty() => n.clone(),
             Some(n) => format!("{n} · {text}"),
@@ -3051,13 +3130,64 @@ impl Editor {
             && self.auto_connect
             && self.connect != ConnectMode::Never
         {
-            preview.proposals = edit::facing_wires(project, &preview.symbols, &|s| self.outline(s))
-                .into_iter()
+            let found = self.facing(project, &preview.symbols);
+            let ask = self.connect == ConnectMode::Ask;
+            preview.proposals = found
+                .wires
+                .iter()
+                .chain(
+                    found
+                        .held
+                        .iter()
+                        .filter(|h| ask && h.possible)
+                        .map(|h| &h.wire),
+                )
                 .map(|f| (f.a, f.b))
                 .collect();
         }
         preview
     }
+}
+
+/// `-K1 A2 to -M1 U1` for a facing pair.
+fn pair_name(project: &novo_core::Project, w: &edit::FacingWire) -> String {
+    let end = |e: novo_core::Endpoint| {
+        e.as_pin()
+            .and_then(|r| {
+                let s = project.symbol(r.symbol)?;
+                let tag = s
+                    .device()
+                    .and_then(|d| project.device(d))
+                    .map_or_else(String::new, |d| format!("{} ", d.tag));
+                Some(format!("{tag}{}", s.pins.get(r.pin as usize)?.name))
+            })
+            .unwrap_or_default()
+    };
+    format!("{} to {}", end(w.from), end(w.to))
+}
+
+/// The status line for pairs that were not wired on their own.
+fn held_notice(
+    project: &novo_core::Project,
+    doubts: &[String],
+    refused: &[&edit::HeldWire],
+    doubt_lead: &str,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    if !doubts.is_empty() {
+        parts.push(format!("{doubt_lead}: {}", doubts.join("; ")));
+    }
+    if !refused.is_empty() {
+        let list: Vec<String> = refused
+            .iter()
+            .map(|h| format!("{}: {}", pair_name(project, &h.wire), h.reason))
+            .collect();
+        parts.push(format!(
+            "Not wired, different circuits ({}). Draw it with W if you mean it",
+            list.join("; ")
+        ));
+    }
+    (!parts.is_empty()).then(|| parts.join(". "))
 }
 
 /// The moved symbols as they would be with the pointer at `cursor`.

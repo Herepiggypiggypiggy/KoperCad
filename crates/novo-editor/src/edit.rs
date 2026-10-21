@@ -709,6 +709,24 @@ pub struct FacingWire {
     pub b: Point,
 }
 
+/// A facing pair that was not drawn on its own, with why.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HeldWire {
+    pub wire: FacingWire,
+    /// Plain words for the status line.
+    pub reason: String,
+    /// `true` when the pair is unusual but possible (proposed in Ask mode),
+    /// `false` when it joins different circuits (never proposed).
+    pub possible: bool,
+}
+
+/// What facing pins give: wires to draw, and pairs held back.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Facing {
+    pub wires: Vec<FacingWire>,
+    pub held: Vec<HeldWire>,
+}
+
 /// The facing wires proposed for symbols at the placement they would get.
 /// `ghosts` are symbol instances as they would be (a placement preview, or
 /// moved symbols at their new place, keeping their ids); other ghosts are
@@ -716,13 +734,30 @@ pub struct FacingWire {
 /// a wire, gets none, and a line that would cross a wire or touch the drawn lines of another
 /// symbol (`outline` gives a symbol's drawn segments on the page; empty
 /// space inside its bounding box does not block) is not proposed.
+///
+/// This judges geometry only; [`facing_checked`] also asks what the pins are.
 pub fn facing_wires(
     project: &Project,
     ghosts: &[SymbolInstance],
     outline: &dyn Fn(&SymbolInstance) -> Option<Outline>,
 ) -> Vec<FacingWire> {
+    facing_checked(project, ghosts, outline, &|_, _, _, _| {
+        crate::pinkind::Verdict::Wire
+    })
+    .wires
+}
+
+/// [`facing_wires`] with a judge for each pair of pins (symbol, pin index,
+/// other symbol, other pin index): pairs it refuses or doubts are returned
+/// in `held` and not in `wires`.
+pub fn facing_checked(
+    project: &Project,
+    ghosts: &[SymbolInstance],
+    outline: &dyn Fn(&SymbolInstance) -> Option<Outline>,
+    judge: &dyn Fn(&SymbolInstance, u16, &SymbolInstance, u16) -> crate::pinkind::Verdict,
+) -> Facing {
     let ignore: BTreeSet<SymbolId> = ghosts.iter().map(|g| g.id).collect();
-    let mut out = Vec::new();
+    let mut out = Facing::default();
     for sym in ghosts {
         let page = sym.page;
         let others: Vec<SymbolId> = project
@@ -790,12 +825,32 @@ pub fn facing_wires(
                 && !crosses_wire(project, page, p, len, v)
                 && !others.iter().any(|&s| through_body(s))
             {
-                out.push(FacingWire {
+                let wire = FacingWire {
                     from,
                     to,
                     a: p,
                     b: q,
-                });
+                };
+                let verdict = match to
+                    .as_pin()
+                    .and_then(|r| Some((r.pin, project.symbol(r.symbol)?)))
+                {
+                    Some((opin, os)) => judge(sym, pin, os, opin),
+                    None => crate::pinkind::Verdict::Wire,
+                };
+                match verdict {
+                    crate::pinkind::Verdict::Wire => out.wires.push(wire),
+                    crate::pinkind::Verdict::Ask(reason) => out.held.push(HeldWire {
+                        wire,
+                        reason,
+                        possible: true,
+                    }),
+                    crate::pinkind::Verdict::Refuse(reason) => out.held.push(HeldWire {
+                        wire,
+                        reason,
+                        possible: false,
+                    }),
+                }
             }
         }
     }
