@@ -1229,11 +1229,9 @@ fn heat_controls(
         }
         ui.checkbox(&mut h.lines, "Airflow")
             .on_hover_text("Streamlines from in front of the devices; faster air is brighter");
-        let top = if h.arrows {
-            super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at)
-        } else {
-            0.0
-        };
+        let top = h
+            .arrows
+            .then(|| super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at));
         ui.checkbox(&mut h.cloud, "Cloud").on_hover_text(
             "The whole cabinet volume as see-through layers coloured by air temperature; air near ambient is invisible, hotter air is more opaque. Layers are cut across the direction you look along, so turning the view across the cabinet re-cuts them",
         );
@@ -1255,10 +1253,9 @@ fn heat_controls(
         ui.checkbox(&mut h.carry, "Heat flow").on_hover_text(
             "Where the heat goes: orange lines and moving dashes follow the heat the air carries away from hot parts (brighter is more heat per area); arrows inside plate, rails and devices show heat conducted through them. Derived from the solved temperature and air speed; surface radiation is not included. Air colder than ambient takes heat in, so its lines point against the air",
         );
-        ui.checkbox(&mut h.arrows, "Arrows").on_hover_text(format!(
-            "Arrows on the slice plane point where the air goes. Length is relative to the fastest air on this plane (now {top:.2} m/s), so two planes cannot be compared by length; air under 2 % of that is not drawn"
-        ));
-        if h.arrows {
+        ui.checkbox(&mut h.arrows, "Arrows")
+            .on_hover_text(super::heat_arrows::hover_text(top));
+        if let Some(top) = top.filter(|_| h.arrows) {
             ui.label(egui::RichText::new(format!("longest {top:.2} m/s")).small());
         }
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
