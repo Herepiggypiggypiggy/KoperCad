@@ -153,7 +153,7 @@ impl NovoApp {
             return false;
         };
         let result = doc.transact("Add PLC card", |tx| {
-            let tag: DeviceTag = next_device_tag(tx.project(), page, "K");
+            let tag: DeviceTag = next_device_tag(tx.project(), page, "A");
             let card = add_card(
                 tx,
                 tag.clone(),

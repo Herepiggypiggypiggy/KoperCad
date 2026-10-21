@@ -78,7 +78,7 @@ impl NovoApp {
                 "Drilling templates, plate full size",
                 "Workshop pack",
                 "Print at 100 % (actual size)",
-                "Hole positions from the cabinet layout; about 0.5 mm on paper (not measured)",
+                "Hole positions from the cabinet layout; about 0.5 mm if the check square is 100 mm, else up to 0.2 % (not measured)",
             ),
             CoverLine::new(
                 "Labels",
