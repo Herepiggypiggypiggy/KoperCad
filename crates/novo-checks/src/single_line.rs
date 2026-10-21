@@ -1857,7 +1857,7 @@ pub fn single_line(
     }
     if !diversity_applied.is_empty() {
         notes[0] = format!(
-            "Currents above a distribution device are the arithmetic sum of the loads below it, times the diversity factor where one is stated ({}); everywhere else no diversity or simultaneity factor is applied.",
+            "Currents above a distribution device are the arithmetic sum of the loads below it, times the diversity factor of its own level where one is stated ({}); factors on several levels multiply, and everywhere else no diversity or simultaneity factor is applied.",
             diversity_applied
                 .iter()
                 .map(|(tag, f)| format!("{tag} {}", fmt(*f)))

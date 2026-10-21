@@ -888,7 +888,7 @@ fn a_stated_device_factor_scales_the_sum_below_it_and_is_named() {
     // Branches under it keep their own currents; the supply sums Q1 as it is.
     assert!((node(&sl, p, b.m1).current_a.value.unwrap() - 12.0).abs() < 1e-9);
     assert!((sl.nodes[0].current_a.value.unwrap() - 0.8 * plain).abs() < 1e-9);
-    assert!(sl.notes[0].contains("times the diversity factor where one is stated"));
+    assert!(sl.notes[0].contains("times the diversity factor of its own level"));
     assert!(sl.notes[0].contains("0.8"));
     // The run into Q1 carries the reduced current, so Ib and the drop follow it.
     let link = q1.link.as_ref().unwrap();

@@ -124,6 +124,7 @@ fn data_text(d: &Data) -> String {
 }
 
 fn xlsx(bytes: &[u8]) -> Result<TagFile, ReadError> {
+    novo_parts::xlsx_guard::check_xlsx(bytes).map_err(|e| ReadError::Bad(e.0))?;
     let mut book: Xlsx<_> = open_workbook_from_rs(Cursor::new(bytes.to_vec()))
         .map_err(|e: calamine::XlsxError| ReadError::Bad(e.to_string()))?;
     for name in book.sheet_names() {

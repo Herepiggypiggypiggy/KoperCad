@@ -2191,6 +2191,7 @@ dependencies = [
  "calamine",
  "novo-core",
  "novo-editor",
+ "novo-parts",
  "novo-symbols",
  "novo-terminals",
  "quick-xml",
@@ -2320,6 +2321,7 @@ dependencies = [
  "novo-cli",
  "novo-core",
  "novo-editor",
+ "novo-interop",
  "novo-layout",
  "novo-numbering",
  "novo-parts",
@@ -2340,6 +2342,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "toml",
+ "zip",
 ]
 
 [[package]]

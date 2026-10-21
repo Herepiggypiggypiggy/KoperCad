@@ -408,7 +408,7 @@ fn a_stated_diversity_factor_is_in_the_schedule_the_drawing_and_the_legend() {
     );
     let legend = all.join(" ");
     assert!(legend.contains("times the stated diversity factor"));
-    assert!(legend.contains("times the diversity factor where one is stated"));
+    assert!(legend.contains("times the diversity factor of its own level"));
     assert!(!legend.contains("(no diversity)"));
     // Without a factor the legend keeps saying so.
     let plain = drawn(&board()).join(" ");

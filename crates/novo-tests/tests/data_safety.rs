@@ -5,6 +5,8 @@
 //! autosave going quadratic or rewriting everything per edit, not a slow
 //! afternoon.
 
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use novo_core::{DeviceTag, Document, Placement, Point};
@@ -192,4 +194,163 @@ fn undo_redo_and_saves_in_any_order_reach_the_file_exactly() {
     let opened = Session::open(&path).unwrap();
     assert_eq!(opened.project.to_json(), after_undo);
     assert_eq!(opened.recovered.unwrap().project.to_json(), after_delete);
+}
+
+// ------------------------------------------------- a real kill during a save
+
+/// The 600-page project and the same project with one more page: the two
+/// states the saving child alternates between.
+fn big_pair() -> (novo_core::Project, novo_core::Project) {
+    let mut doc = big_600_pages();
+    let a = doc.project().clone();
+    doc.transact("One more page", |tx| tx.add_page("LAST").map(|_| ()))
+        .unwrap();
+    (a, doc.project().clone())
+}
+
+/// The file the child touches after each finished save.
+fn marker(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap().to_owned();
+    name.push(".saved");
+    path.with_file_name(name)
+}
+
+/// Child: saves the two 600-page states over the file for as long as it lives.
+#[test]
+fn child_big_save_loop() {
+    let Some(path) = std::env::var_os("KOPERCAD_BIG_CHILD_FILE") else {
+        return;
+    };
+    let (a, b) = big_pair();
+    let mut file = ProjectFile::open(&path).unwrap();
+    let marker = marker(Path::new(&path));
+    let mut next_is_b = true;
+    loop {
+        file.save(if next_is_b { &b } else { &a }).unwrap();
+        let _ = std::fs::write(&marker, b"saved");
+        next_is_b = !next_is_b;
+    }
+}
+
+/// Child: creates a new 600-page project file (the first save of a project).
+#[test]
+fn child_big_create() {
+    let Some(path) = std::env::var_os("KOPERCAD_BIG_CHILD_FILE") else {
+        return;
+    };
+    let (a, _) = big_pair();
+    // The parent kills this process at a staggered moment after it starts.
+    Session::create(&path, &a).unwrap().close().unwrap();
+    let _ = std::fs::write(marker(Path::new(&path)), b"saved");
+}
+
+fn spawn_child(test: &str, path: &Path) -> std::process::Child {
+    std::process::Command::new(std::env::current_exe().unwrap())
+        .args([test, "--exact", "--nocapture", "--test-threads=1"])
+        .env("KOPERCAD_BIG_CHILD_FILE", path)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap()
+}
+
+/// A process killed during a full save of a 600-page project leaves the last
+/// good save or the new one, never a mix, and never a file that needs repair.
+#[test]
+fn a_process_killed_during_a_600_page_save_leaves_a_whole_project() {
+    let (a, b) = big_pair();
+    let (json_a, json_b) = (a.to_json(), b.to_json());
+    let (mut last_good, mut new_one, mut killed_inside) = (0, 0, 0);
+    for round in 0..6u64 {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("big.novo");
+        Session::create(&path, &a).unwrap().close().unwrap();
+
+        let mut child = spawn_child("child_big_save_loop", &path);
+        // Once the child has finished a save of its own, the kill lands
+        // somewhere in the saves that follow, at a different point per round.
+        let marker = marker(&path);
+        let deadline = Instant::now() + Duration::from_secs(300);
+        while !marker.exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        assert!(
+            marker.exists(),
+            "round {round}: the child never finished a save"
+        );
+        // The write transaction keeps a rollback journal beside the file
+        // while it runs, so waiting for it puts the kill inside a save.
+        let mut journal = path.as_os_str().to_owned();
+        journal.push("-journal");
+        let journal = PathBuf::from(journal);
+        while !journal.exists() && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(1));
+        }
+        std::thread::sleep(Duration::from_millis(round * 60));
+        child.kill().unwrap();
+        child.wait().unwrap();
+        if journal.exists() {
+            killed_inside += 1;
+        }
+
+        // The relaunch: the file opens for editing as it is.
+        let opened = Session::open(&path)
+            .unwrap_or_else(|e| panic!("round {round}: the file after the kill: {e}"));
+        let json = opened.project.to_json();
+        if json == json_a {
+            last_good += 1;
+        } else if json == json_b {
+            new_one += 1;
+        } else {
+            panic!("round {round}: neither the last good save nor the new one");
+        }
+        opened.session.close().unwrap();
+    }
+    eprintln!(
+        "kill rounds: {last_good} reopened as the first state, {new_one} as the second, \
+         {killed_inside} killed with a save unfinished"
+    );
+    assert!(
+        killed_inside >= 4,
+        "most kills must land inside a save ({killed_inside} of 6)"
+    );
+}
+
+/// A process killed during the first save of a new 600-page project leaves
+/// no file, or a whole one: never a half-written project under its name.
+#[test]
+fn a_process_killed_during_the_first_600_page_save_leaves_nothing_or_all() {
+    let (a, _) = big_pair();
+    let json_a = a.to_json();
+    let (mut none, mut whole) = (0, 0);
+    for round in 0..6u64 {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("new.novo");
+        let mut child = spawn_child("child_big_create", &path);
+        // Rounds 0 to 3 kill early, at staggered moments; the later rounds
+        // wait for the child to finish, so both ends are covered.
+        let marker = marker(&path);
+        if round < 4 {
+            std::thread::sleep(Duration::from_millis(200 + round * 400));
+        } else {
+            let deadline = Instant::now() + Duration::from_secs(300);
+            while !marker.exists() && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+        let _ = child.kill();
+        child.wait().unwrap();
+
+        if path.exists() {
+            let opened = Session::open(&path)
+                .unwrap_or_else(|e| panic!("round {round}: a file under the name, not whole: {e}"));
+            assert_eq!(opened.project.to_json(), json_a, "round {round}");
+            opened.session.close().unwrap();
+            whole += 1;
+        } else {
+            none += 1;
+        }
+    }
+    eprintln!("first-save rounds: {none} no file, {whole} whole file");
+    assert!(whole >= 2, "the late rounds must finish a save");
 }
