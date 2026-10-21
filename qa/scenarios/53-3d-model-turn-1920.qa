@@ -1,0 +1,24 @@
+@title 3D view at 1920x1080: a maker model that came lying down is turned and the turn is kept
+@area 3D
+@sizes 1920x1080
+# `library` puts a synthetic STEP model for K1's part (Siemens 3RT2016-1AP01) in the profile. K1 (878,505) is where the default angled view puts it at 1920x1080, so the pins on top of the model show; F zooms to the selected device.
+library qa/fixtures/library
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+click 878 505
+wait 40
+key f
+wait 300
+expect "Maker model"
+shot model-as-it-came
+click_text Roll
+wait 300
+expect "Turned about width 0°, height 0°, depth 90°"
+shot model-rolled
+click_text Reset
+wait 300
+expect_not "Turned about width"
+shot model-reset
+check_layout

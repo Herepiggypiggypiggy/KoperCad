@@ -271,6 +271,7 @@ fn model_row(
         ui.weak(format!(
             "Turned about width {x}\u{b0}, height {y}\u{b0}, depth {z}\u{b0}"
         ));
+        ui.weak("Kept for this part in every project");
     }
 }
 

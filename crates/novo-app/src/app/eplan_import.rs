@@ -313,13 +313,13 @@ impl NovoApp {
                     .max_height(260.0)
                     .show(ui, |ui| {
                         for l in &report.lossy {
-                            ui.label(format!("{} {}: {}", l.count, l.what, l.why));
+                            ui.label(l.line());
                         }
                         if !report.guessed.is_empty() {
                             ui.strong("Guessed, not exact");
                         }
                         for l in &report.guessed {
-                            ui.label(format!("{} {}: {}", l.count, l.what, l.why));
+                            ui.label(l.line());
                         }
                         for n in &report.notes {
                             ui.weak(n);
