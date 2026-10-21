@@ -1,0 +1,26 @@
+@title Wire numbering: the Numbers tab lists every net
+@area Schematic
+# Where it is: Ctrl+K "wire numbering" (Edit > Wires). The Numbers tab shows each net with its
+# number, potential and page; click a number to type another (fixed), Unlock releases it.
+click_text "New project"
+wait 20
+key ctrl+k
+text "motor starter dol"
+wait 5
+key Enter
+wait 10
+click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button #2
+wait 20
+key ctrl+k
+text "wire numbering"
+wait 5
+key Enter
+wait 10
+expect "Numbers ("
+expect "Click a number to type another"
+shot numbers-tab
+click_text Conflicts Button
+wait 5
+shot conflicts-tab

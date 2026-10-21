@@ -5,6 +5,9 @@
 //! "number wires" fills what has no number, "renumber wires" starts over
 //! with a preview, "check wire numbers" lists duplicates and gaps, and
 //! "number wire 105" types a number on the selected wire's net and locks it.
+//! The window's Numbers tab lists every net: click a number to type another
+//! (fixed, one undo step), Unlock releases it. Nets on revision-locked pages
+//! are shown as such and no run touches them.
 
 use eframe::egui;
 use novo_core::{AnyId, PageId, WireId};
@@ -24,16 +27,45 @@ pub(crate) enum ScopeChoice {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Tab {
+    /// Every net with its number: see, type, fix and release.
+    Numbers,
     Preview,
     Conflicts,
 }
 
+/// Which rows the Numbers tab lists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Filter {
+    All,
+    Fixed,
+    Problems,
+    Unnumbered,
+}
+
+/// How the Numbers tab orders its rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Order {
+    Reading,
+    Number,
+    Potential,
+}
+
+/// A change made in the Numbers tab, applied after the window is drawn.
+enum RowEdit {
+    Type(WireId, String),
+    Unlock(WireId),
+}
+
 /// The Wire numbering window while it is open.
 pub(crate) struct NumberingWindow {
+    filter: Filter,
+    order: Order,
+    /// The net whose number is being typed, with the text so far.
+    editing: Option<(WireId, String)>,
     scheme: Scheme,
     mode: Mode,
     scope: ScopeChoice,
-    tab: Tab,
+    pub(super) tab: Tab,
     /// The plan for the inputs it was made from, at project revision `.0`.
     shown: Option<Shown>,
 }
@@ -59,6 +91,9 @@ impl NovoApp {
             ScopeChoice::Selection
         };
         self.wb.numbering = Some(NumberingWindow {
+            filter: Filter::All,
+            order: Order::Reading,
+            editing: None,
             scheme,
             mode,
             scope,
@@ -119,7 +154,12 @@ impl NovoApp {
             self.wb.number_prompt = Some(String::new());
             return;
         };
-        let number = argument.trim().to_owned();
+        self.set_wire_number_of(wire, argument);
+    }
+
+    /// Types `number` on the net of `wire` and locks it: one undo step.
+    pub(super) fn set_wire_number_of(&mut self, wire: WireId, number: &str) {
+        let number = number.trim().to_owned();
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
@@ -170,11 +210,16 @@ impl NovoApp {
     /// nets again.
     pub(super) fn unlock_wire_number(&mut self) {
         let wires = self.selected_wires();
+        self.unlock_wires(&wires);
+    }
+
+    fn unlock_wires(&mut self, wires: &[WireId]) {
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
         let locked: Vec<WireId> = wires
-            .into_iter()
+            .iter()
+            .copied()
             .filter(|&w| novo_numbering::is_locked(doc.project(), w))
             .collect();
         if locked.is_empty() {
@@ -230,6 +275,7 @@ impl NovoApp {
         let mut apply = false;
         let mut save_only = false;
         let mut reveal: Option<WireId> = None;
+        let mut row_edit: Option<RowEdit> = None;
         super::panel::dialog(ctx, "Wire numbering", [560.0, 620.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
@@ -280,25 +326,39 @@ impl NovoApp {
                         ui.weak("Selection: select wires on the drawing first");
                     }
                 });
-                let Some(shown) = &win.shown else { return };
+                let Some(shown) = win.shown.take() else {
+                    return;
+                };
                 ui.add_space(8.0);
                 let conflicts = shown.plan.conflicts.len();
-                let mut tab = usize::from(win.tab == Tab::Conflicts);
+                let mut tab = match win.tab {
+                    Tab::Numbers => 0,
+                    Tab::Preview => 1,
+                    Tab::Conflicts => 2,
+                };
                 if novo_theme::widgets::tabs(
                     ui,
                     &mut tab,
-                    &["Preview", &format!("Conflicts ({conflicts})")],
+                    &[
+                        &format!("Numbers ({})", shown.plan.groups.len()),
+                        "Preview",
+                        &format!("Conflicts ({conflicts})"),
+                    ],
                 ) {
-                    win.tab = [Tab::Preview, Tab::Conflicts][tab];
+                    win.tab = [Tab::Numbers, Tab::Preview, Tab::Conflicts][tab];
                 }
-                ui.weak(shown.plan.summary());
-                egui::ScrollArea::vertical()
-                    .max_height(200.0)
-                    .auto_shrink([false, true])
-                    .show(ui, |ui| match win.tab {
-                        Tab::Preview => preview_ui(ui, &shown.plan, &mut reveal),
-                        Tab::Conflicts => conflicts_ui(ui, &shown.plan.conflicts, &mut reveal),
-                    });
+                if win.tab == Tab::Numbers {
+                    numbers_ui(ui, &mut win, &shown.plan, &mut reveal, &mut row_edit);
+                } else {
+                    ui.weak(shown.plan.summary());
+                    egui::ScrollArea::vertical()
+                        .max_height(200.0)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| match win.tab {
+                            Tab::Conflicts => conflicts_ui(ui, &shown.plan.conflicts, &mut reveal),
+                            _ => preview_ui(ui, &shown.plan, &mut reveal),
+                        });
+                }
                 ui.add_space(6.0);
                 ui.horizontal(|ui| {
                     let label = match win.mode {
@@ -320,9 +380,15 @@ impl NovoApp {
                         save_only = true;
                     }
                 });
+                win.shown = Some(shown);
             });
         if let Some(wire) = reveal {
             self.reveal_wire(wire);
+        }
+        match row_edit {
+            Some(RowEdit::Type(wire, text)) => self.set_wire_number_of(wire, &text),
+            Some(RowEdit::Unlock(wire)) => self.unlock_wires(&[wire]),
+            None => {}
         }
         if apply || save_only {
             self.apply_numbering(&mut win, apply);
@@ -413,6 +479,152 @@ fn scheme_ui(ui: &mut egui::Ui, scheme: &mut Scheme) {
     });
 }
 
+/// The Numbers tab: every net with its number, a click types a new one,
+/// the lock button releases a fixed one.
+fn numbers_ui(
+    ui: &mut egui::Ui,
+    win: &mut NumberingWindow,
+    plan: &Plan,
+    reveal: &mut Option<WireId>,
+    edit: &mut Option<RowEdit>,
+) {
+    let problem: std::collections::HashSet<WireId> = plan
+        .conflicts
+        .iter()
+        .filter(|c| c.kind != ConflictKind::OffScheme)
+        .flat_map(|c| c.wires.iter().copied())
+        .collect();
+    ui.horizontal(|ui| {
+        ui.label("Show");
+        let filters = [
+            Filter::All,
+            Filter::Fixed,
+            Filter::Problems,
+            Filter::Unnumbered,
+        ];
+        let mut f = filters.iter().position(|x| *x == win.filter).unwrap_or(0);
+        if novo_theme::widgets::segmented(ui, &mut f, &["All", "Fixed", "Problems", "No number"]) {
+            win.filter = filters[f];
+        }
+        ui.label("Order");
+        let orders = [Order::Reading, Order::Number, Order::Potential];
+        let mut o = orders.iter().position(|x| *x == win.order).unwrap_or(0);
+        if novo_theme::widgets::segmented(ui, &mut o, &["Reading", "Number", "Potential"]) {
+            win.order = orders[o];
+        }
+    });
+    let mut rows: Vec<&novo_numbering::GroupPlan> = plan
+        .groups
+        .iter()
+        .filter(|g| match win.filter {
+            Filter::All => true,
+            Filter::Fixed => g.fixed,
+            Filter::Problems => g.wires.iter().any(|w| problem.contains(w)),
+            Filter::Unnumbered => g.old.is_empty(),
+        })
+        .collect();
+    match win.order {
+        Order::Reading => {}
+        Order::Number => rows.sort_by_key(|g| natural_key(g.old.first().map_or("", |s| s))),
+        Order::Potential => rows.sort_by(|a, b| a.potential.cmp(&b.potential)),
+    }
+    ui.weak(format!(
+        "{} of {} nets. Click a number to type another; it is then fixed.",
+        rows.len(),
+        plan.groups.len()
+    ));
+    if rows.is_empty() {
+        ui.weak("No net matches");
+        return;
+    }
+    let height = ui.text_style_height(&egui::TextStyle::Body) + 6.0;
+    // Leave room for the scheme above and the buttons below on small screens.
+    let room = (ui.ctx().content_rect().height() - 560.0).clamp(90.0, 280.0);
+    egui::ScrollArea::vertical()
+        .max_height(room)
+        .auto_shrink([false, true])
+        .show_rows(ui, height, rows.len(), |ui, range| {
+            for g in &rows[range] {
+                let Some(&first) = g.wires.first() else {
+                    continue;
+                };
+                ui.horizontal(|ui| {
+                    ui.set_min_height(height);
+                    let link = ui.add_sized([52.0, height], egui::Link::new(format!("p{}", g.at)));
+                    if link.clicked() {
+                        *reveal = Some(first);
+                    }
+                    ui.add_sized(
+                        [44.0, height],
+                        egui::Label::new(g.potential.as_deref().unwrap_or("")).truncate(),
+                    );
+                    let shown = if g.old.is_empty() {
+                        "(none)".to_owned()
+                    } else {
+                        g.old.join(" / ")
+                    };
+                    let editing_here = win.editing.as_ref().is_some_and(|(w, _)| *w == first);
+                    if editing_here {
+                        let (_, text) = win.editing.as_mut().expect("checked");
+                        let r = ui.add(egui::TextEdit::singleline(text).desired_width(90.0));
+                        r.request_focus();
+                        if r.lost_focus() {
+                            if ui.input(|i| i.key_pressed(egui::Key::Enter)) {
+                                *edit = Some(RowEdit::Type(first, text.clone()));
+                            }
+                            win.editing = None;
+                        }
+                    } else if g.page_lock.is_some() {
+                        ui.label(shown);
+                    } else if ui.selectable_label(false, shown.clone()).clicked() {
+                        let seed = g.old.first().cloned().unwrap_or_default();
+                        win.editing = Some((first, seed));
+                    }
+                    if let Some(rev) = &g.page_lock {
+                        ui.weak(format!("page locked ({rev})"));
+                    } else if g.fixed {
+                        if ui
+                            .small_button("🔒 Unlock")
+                            .on_hover_text("Numbering runs may change this number again")
+                            .clicked()
+                        {
+                            *edit = Some(RowEdit::Unlock(first));
+                        }
+                    } else if g.old.len() > 1 {
+                        ui.weak("split");
+                    }
+                });
+            }
+        });
+}
+
+/// Sort key that puts 2 before 10 and numbers before text.
+fn natural_key(s: &str) -> Vec<(u8, u64, String)> {
+    let mut out = Vec::new();
+    let mut chars = s.chars().peekable();
+    while let Some(&c) = chars.peek() {
+        if c.is_ascii_digit() {
+            let mut n = 0u64;
+            while let Some(d) = chars.peek().and_then(|c| c.to_digit(10)) {
+                n = n.saturating_mul(10).saturating_add(u64::from(d));
+                chars.next();
+            }
+            out.push((0, n, String::new()));
+        } else {
+            let mut t = String::new();
+            while let Some(&c) = chars.peek() {
+                if c.is_ascii_digit() {
+                    break;
+                }
+                t.push(c);
+                chars.next();
+            }
+            out.push((1, 0, t));
+        }
+    }
+    out
+}
+
 fn preview_ui(ui: &mut egui::Ui, plan: &Plan, reveal: &mut Option<WireId>) {
     let mut any = false;
     egui::Grid::new("wirenum_preview")
@@ -450,6 +662,7 @@ fn reason_text(reason: Reason) -> &'static str {
         Reason::Replaced => "was used or off scheme",
         Reason::Renumbered => "renumbered",
         Reason::Blocked => "its number is taken",
+        Reason::PageLocked => "page locked: left alone",
     }
 }
 

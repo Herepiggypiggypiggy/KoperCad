@@ -1055,7 +1055,7 @@ impl NovoApp {
             "wires.autopilot" => self.open_autopilot(),
             "wires.number" => self.number_wires(),
             "wires.numbering" => {
-                self.open_numbering(novo_numbering::Mode::Fill, super::numbering::Tab::Preview)
+                self.open_numbering(novo_numbering::Mode::Fill, super::numbering::Tab::Numbers)
             }
             "wires.renumber" => self.open_numbering(
                 novo_numbering::Mode::Renumber,

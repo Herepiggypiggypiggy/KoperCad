@@ -457,3 +457,23 @@ fn a_wire_into_and_out_of_a_bridged_device_get_different_numbers() {
     assert!(again.is_empty());
     assert!(check(doc.project(), &scheme).is_empty());
 }
+
+#[test]
+fn a_net_on_a_revision_locked_page_is_left_alone_and_reported() {
+    let mut doc = Document::default();
+    let (s, _) = doc.transact("Draw", scene).unwrap();
+    let scheme = Scheme::new(SchemeKind::Sequential);
+    let page = doc.project().wire(s.wires[0]).unwrap().page;
+    doc.transact("Lock", |tx| tx.lock_page(page, "A")).unwrap();
+    let p = plan(doc.project(), &scheme, Mode::Fill, &Scope::Project);
+    assert!(p.is_empty(), "nothing may change on a locked page");
+    assert!(p.groups.iter().all(|g| g.reason == Reason::PageLocked));
+    assert!(p.groups.iter().all(|g| g.page_lock.as_deref() == Some("A")));
+    assert_eq!(p.changed_groups().count(), 0);
+    assert!(p.summary().contains("3 on locked pages left alone"));
+    // Applying the empty plan is harmless; the model would refuse real edits.
+    doc.transact("Number", |tx| p.apply(tx)).unwrap();
+    assert_eq!(numbers(&doc, &s.wires), [None, None, None]);
+    // Unnumbered nets still show up as conflicts so they are not forgotten.
+    assert!(!p.conflicts.is_empty());
+}

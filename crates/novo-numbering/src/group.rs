@@ -37,6 +37,9 @@ pub struct Group {
     pub function: String,
     /// A wire of the group holds a hand-typed number.
     pub locked: bool,
+    /// Revision a page of the group is locked with: edits to its wires are
+    /// refused until the page is unlocked, so a numbering run leaves it.
+    pub page_lock: Option<String>,
     /// The number most wires of the group carry (ties go to the lower).
     pub current: Option<String>,
     /// Every distinct number on the group's wires, with its wire count.
@@ -56,6 +59,11 @@ pub(crate) enum Target {
 }
 
 impl Group {
+    /// The wires disagree or some have no number.
+    pub(crate) fn needs_settling(&self) -> bool {
+        self.current.is_none() || self.unnumbered > 0 || self.numbers.len() > 1
+    }
+
     /// The target number of this group under a scheme.
     pub(crate) fn target(&self, scheme: &Scheme) -> Target {
         let sep = &scheme.separator;
@@ -260,9 +268,13 @@ fn build(
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     let (mut unnumbered, mut locked) = (0, false);
     let mut locked_number: Option<String> = None;
+    let mut page_lock: Option<String> = None;
     for &id in &wires {
         let w = project.wire(id)?;
         let page = project.page(w.page)?;
+        if page_lock.is_none() {
+            page_lock = page.locked.clone();
+        }
         let at = w
             .ends()
             .into_iter()
@@ -316,6 +328,7 @@ fn build(
         cable,
         function: page_ref.structure.function.join("."),
         locked,
+        page_lock,
         current: locked_number.or_else(|| numbers.first().map(|n| n.0.clone())),
         numbers,
         unnumbered,
