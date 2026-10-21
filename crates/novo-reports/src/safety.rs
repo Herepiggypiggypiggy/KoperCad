@@ -180,6 +180,72 @@ fn sheet_row(item: &str, detail: String, drawn: String, note: String) -> Vec<Cel
     vec![item.into(), detail.into(), drawn.into(), note.into()]
 }
 
+/// Characters of the Detail column that fit on a printed sheet.
+const DETAIL_CHARS: usize = 80;
+/// Characters of the Drawn at column that fit.
+const DRAWN_CHARS: usize = 24;
+
+/// `text` broken at spaces into lines of at most `max` characters.
+fn wrap(text: &str, max: usize) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match lines.last_mut() {
+            Some(line) if line.chars().count() + 1 + word.chars().count() <= max => {
+                line.push(' ');
+                line.push_str(word);
+            }
+            _ => lines.push(word.to_owned()),
+        }
+    }
+    if lines.is_empty() {
+        lines.push(String::new());
+    }
+    lines
+}
+
+/// A sheet row whose long detail runs on over further rows, so the printed
+/// page shows all of it. The note and the sources stay on the first row.
+fn push_wrapped(
+    s: &mut Section,
+    item: &str,
+    detail: &str,
+    drawn: String,
+    note: String,
+    sources: Vec<AnyId>,
+) {
+    let detail = wrap(detail, DETAIL_CHARS);
+    let drawn = wrap(&drawn, DRAWN_CHARS);
+    for n in 0..detail.len().max(drawn.len()) {
+        let (item, note, sources) = if n == 0 {
+            (item, note.clone(), sources.clone())
+        } else {
+            ("", String::new(), Vec::new())
+        };
+        let cell = |v: &[String]| v.get(n).cloned().unwrap_or_default();
+        s.push(sheet_row(item, cell(&detail), cell(&drawn), note), sources);
+    }
+}
+
+/// Blank lines to fill in by hand on the printed sheet, each with a spare
+/// row under it for handwriting.
+fn push_sign_off(s: &mut Section) {
+    for who in ["Prepared by", "Checked by", "Revision and date"] {
+        s.push(
+            sheet_row(
+                who,
+                "______________________".into(),
+                String::new(),
+                String::new(),
+            ),
+            Vec::new(),
+        );
+        s.push(
+            sheet_row("", String::new(), String::new(), String::new()),
+            Vec::new(),
+        );
+    }
+}
+
 /// One sheet (section, so one page) per safety function, for the technical
 /// file: the risk graph and duty, the sensor, logic and actuator blocks with
 /// where their devices are drawn, the result, and what was assumed. Each
@@ -188,8 +254,8 @@ pub fn safety_sheets(input: &SafetyReportInput) -> ReportOutput {
     let columns = || {
         vec![
             Column::new("item", "Item", 16.0),
-            Column::new("detail", "Detail", 44.0),
-            Column::new("drawn", "Drawn at", 14.0),
+            Column::new("detail", "Detail", 40.0),
+            Column::new("drawn", "Drawn at", 18.0),
             Column::new("note", "Note", 26.0),
         ]
     };
@@ -250,20 +316,16 @@ pub fn safety_sheets(input: &SafetyReportInput) -> ReportOutput {
             } else {
                 b.devices.join(", ")
             };
-            s.push(
-                sheet_row(
-                    &b.role,
-                    format!("{detail}. Devices: {devices}"),
-                    b.drawn_at.join(", "),
-                    result,
-                ),
+            push_wrapped(
+                &mut s,
+                &b.role,
+                &format!("{detail}. Devices: {devices}"),
+                b.drawn_at.join(", "),
+                result,
                 b.sources.clone(),
             );
             for n in &b.notes {
-                s.push(
-                    sheet_row("", n.clone(), String::new(), "check".into()),
-                    Vec::new(),
-                );
+                push_wrapped(&mut s, "", n, String::new(), "check".into(), Vec::new());
             }
         }
         let result = match (&f.achieved, f.pfhd) {
@@ -275,41 +337,32 @@ pub fn safety_sheets(input: &SafetyReportInput) -> ReportOutput {
             Vec::new(),
         );
         for a in ASSUMPTIONS {
-            s.push(
-                sheet_row("Assumed", a.into(), String::new(), String::new()),
+            push_wrapped(
+                &mut s,
+                "Assumed",
+                a,
+                String::new(),
+                String::new(),
                 Vec::new(),
             );
         }
-        s.push(
-            sheet_row(
-                "Standards",
-                STANDARDS_NOTE.into(),
-                String::new(),
-                String::new(),
-            ),
+        push_wrapped(
+            &mut s,
+            "Standards",
+            STANDARDS_NOTE,
+            String::new(),
+            String::new(),
             Vec::new(),
         );
-        s.push(
-            sheet_row(
-                "Disclaimer",
-                DISCLAIMER.into(),
-                String::new(),
-                String::new(),
-            ),
+        push_wrapped(
+            &mut s,
+            "Disclaimer",
+            DISCLAIMER,
+            String::new(),
+            String::new(),
             Vec::new(),
         );
-        // Blank lines to fill in by hand on the printed sheet.
-        for who in ["Prepared by", "Checked by", "Revision and date"] {
-            s.push(
-                sheet_row(
-                    who,
-                    "______________________".into(),
-                    String::new(),
-                    String::new(),
-                ),
-                Vec::new(),
-            );
-        }
+        push_sign_off(&mut s);
         sections.push(s);
     }
     if sections.is_empty() {
@@ -323,15 +376,15 @@ pub fn safety_sheets(input: &SafetyReportInput) -> ReportOutput {
             ),
             Vec::new(),
         );
-        s.push(
-            sheet_row(
-                "Disclaimer",
-                DISCLAIMER.into(),
-                String::new(),
-                String::new(),
-            ),
+        push_wrapped(
+            &mut s,
+            "Disclaimer",
+            DISCLAIMER,
+            String::new(),
+            String::new(),
             Vec::new(),
         );
+        push_sign_off(&mut s);
         sections.push(s);
     }
     ReportOutput {
@@ -433,10 +486,14 @@ mod tests {
         let chain = rows.iter().find(|r| r[0] == "Sensor").unwrap();
         assert!(chain[1].contains("E-stop button") && chain[1].contains("-S1"));
         assert_eq!(chain[2], "3.4");
-        let flat: String = rows.iter().flatten().cloned().collect();
+        let flat: String = rows
+            .iter()
+            .map(|r| r[1].as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
         assert!(flat.contains("ESTIMATE, not a certification"));
         assert!(flat.contains("unverified"));
-        assert!(flat.contains("NOT met"));
+        assert!(rows.iter().any(|r| r[3] == "NOT met"));
         let second = r.sections[1].text_rows();
         assert!(second.iter().any(|r| r[3] == "Not rated"));
         assert!(second.iter().any(|r| r[1].contains("no B10d")));
@@ -456,6 +513,32 @@ mod tests {
     fn an_empty_project_still_gets_one_sheet_with_the_disclaimer() {
         let r = safety_sheets(&SafetyReportInput::default());
         assert_eq!(r.sections.len(), 1);
-        assert!(r.sections[0].text_rows().iter().any(|r| r[1] == DISCLAIMER));
+        let rows = r.sections[0].text_rows();
+        let text: Vec<&str> = rows.iter().map(|r| r[1].as_str()).collect();
+        assert!(text.join(" ").contains(DISCLAIMER));
+        assert!(rows.iter().any(|r| r[0] == "Prepared by"));
+    }
+
+    #[test]
+    fn long_text_runs_over_rows_instead_of_being_cut() {
+        let rows = safety_sheets(&input()).sections[0].text_rows();
+        assert!(
+            rows.iter().all(
+                |r| r[1].chars().count() <= DETAIL_CHARS && r[2].chars().count() <= DRAWN_CHARS
+            )
+        );
+        let text: Vec<&str> = rows.iter().map(|r| r[1].as_str()).collect();
+        assert!(text.join(" ").contains(STANDARDS_NOTE));
+    }
+
+    #[test]
+    fn every_sign_off_line_has_a_spare_row_for_handwriting() {
+        for section in &safety_sheets(&input()).sections {
+            let rows = section.text_rows();
+            for who in ["Prepared by", "Checked by", "Revision and date"] {
+                let at = rows.iter().position(|r| r[0] == who).unwrap();
+                assert!(rows[at + 1].iter().all(|c| c.is_empty()), "{who}");
+            }
+        }
     }
 }
