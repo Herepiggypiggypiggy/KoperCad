@@ -746,30 +746,14 @@ pub fn banner(
             ui.set_width(ui.available_width());
             // The actions take their width from the right; the sentence wraps
             // in what is left, so a long one is read in full, not cut.
-            ui.with_layout(Layout::right_to_left(Align::Min), |ui| {
+            // Centred across the row, so a one-line sentence sits level with
+            // its (taller) buttons; a wrapped one keeps its icon on the first line.
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 add_actions(ui);
                 ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                     ui.label(RichText::new(level.icon()).color(level.color(p)));
                     ui.add(Label::new(RichText::new(text).color(p.text_primary)).wrap());
                 });
-            });
-        })
-        .response
-}
-
-/// [`banner`] with no actions, whose text wraps to the width it is given (a long
-/// sentence in `banner` stays on one line and runs off the window).
-pub fn banner_wrapped(ui: &mut Ui, level: Level, text: &str) -> Response {
-    let p = Palette::of(ui);
-    Frame::new()
-        .fill(level.wash(p))
-        .corner_radius(radius::CONTROL)
-        .inner_margin(Margin::symmetric(space::M as i8, 6))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal_top(|ui| {
-                ui.label(RichText::new(level.icon()).color(level.color(p)));
-                ui.add(egui::Label::new(RichText::new(text).color(p.text_primary)).wrap());
             });
         })
         .response

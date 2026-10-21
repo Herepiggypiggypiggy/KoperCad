@@ -247,7 +247,7 @@ fn body(
     }
     for line in &state.plan.left_to_you {
         ui.add_space(4.0);
-        novo_theme::widgets::banner_wrapped(ui, novo_theme::widgets::Level::Info, line);
+        novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Info, line, |_| {});
     }
     if !state.plan.unresolved.is_empty() {
         ui.add_space(4.0);
