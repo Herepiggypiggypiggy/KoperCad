@@ -830,6 +830,21 @@ fn export_step_needs_a_mounting_plate() {
 }
 
 #[test]
+fn compare_says_when_two_projects_match_and_where_they_differ() {
+    let (a, b) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let one = project(a.path(), false);
+    let same = project(b.path(), false);
+    let run = novo(&["compare", s(&one), s(&same)]);
+    assert_eq!(run.code, exit::OK, "{}{}", run.out, run.err);
+    assert!(run.out.contains("Nothing differs"), "{}", run.out);
+    let c = tempfile::tempdir().unwrap();
+    let other = project(c.path(), true);
+    let run = novo(&["compare", s(&one), s(&other)]);
+    assert_eq!(run.code, exit::PROBLEMS, "{}{}", run.out, run.err);
+    assert!(run.out.contains("devices"), "{}", run.out);
+}
+
+#[test]
 fn export_aml_writes_caex_and_lists_what_the_format_cannot_carry() {
     let dir = tempfile::tempdir().unwrap();
     let path = project(dir.path(), false);
