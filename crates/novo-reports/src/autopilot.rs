@@ -434,11 +434,11 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
     );
     left(
         field,
-        "the wire goes to a device in another location. Put the wires in a cable (see the cable rows) and state the cable's length on the cable: then the length is exact. Until then it is the page distance plus service loops.",
+        "the wire goes to a device in another location. Put the wires in a cable (see the cable rows) and accept the cable rows above, then type Length (m) in the cable's properties: that figure counts as stated and the wire is no longer an estimate. Until then it is the page distance plus service loops.",
     );
     left(
         feeds,
-        "the wire comes in from outside the drawing (a supply lead with no device at the other end). Set the cabinet entry and the wire length outside it (Cabinet > Routes): the lead is then routed to the entry and its length is exact.",
+        "the wire comes in from outside the drawing (a supply lead with no device at the other end). Set the cabinet entry and the wire length outside it (Cabinet > Routes): the lead is then routed to the entry and its length uses your figure.",
     );
     for plate in need_entry {
         let Some(structure) = project.get::<novo_core::Structure>(plate) else {

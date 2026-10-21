@@ -766,10 +766,9 @@ fn wire_list_estimates_lengths_until_devices_are_placed() {
     assert_eq!(headers, ["Cut length mm", "Length basis"]);
     for row in rows(&wires, "wires") {
         if row[6].starts_with("=A1-W1") {
-            // The motor cable states 12 m: its cores are that long plus a
-            // service loop at each end.
+            // The motor cable states 12 m: its cores run the whole cable.
             assert_eq!(row[9], "cable length", "{row:?}");
-            assert_eq!(row[8], "12100", "{row:?}");
+            assert_eq!(row[8], "12000", "{row:?}");
             continue;
         }
         assert_eq!(row[9], "estimate", "{row:?}");

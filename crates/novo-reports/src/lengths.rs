@@ -23,7 +23,8 @@ pub(crate) enum Basis {
     Door,
     /// At least one device is not placed on a plate: see [`estimate`].
     Estimate,
-    /// The cable's stated length plus a service loop at each end.
+    /// The cable's stated length: its cores run the whole cable, stripped ends
+    /// included, so no loop is added.
     CableLength,
     /// Routed to the cabinet entry point, plus the stated length outside.
     ToEntryStated,
@@ -135,16 +136,15 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
         .enumerate()
         .map(|(i, c)| {
             let to_entry = routed.entry_legs.get(&(i as u64)).copied();
-            let loops = 2.0 * rules.routing.slack_mm;
             let by_cable = c.cable_mm.map(|mm| CutLength {
-                mm: mm + loops,
+                mm,
                 basis: Basis::CableLength,
                 ducts: Vec::new(),
             });
             let found = match routed.routes.get(&(i as u64)) {
                 // A wire that leaves the enclosure on a cable is as long as
-                // the cable (stated by the designer) plus a service loop at
-                // each end; the route to the entry only fills the duct.
+                // the cable (stated by the designer); the route to the entry
+                // only fills the duct.
                 Some(route) if to_entry.is_some() && by_cable.is_some() => {
                     let mut cut = by_cable.clone().unwrap_or(CutLength {
                         mm: 0.0,

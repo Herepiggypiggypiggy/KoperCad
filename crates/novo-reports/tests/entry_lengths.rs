@@ -63,13 +63,13 @@ fn a_field_wire_is_an_estimate_until_its_cable_states_a_length() {
 }
 
 #[test]
-fn a_stated_cable_length_makes_the_core_exact_with_a_loop_at_each_end() {
+fn a_stated_cable_length_is_the_core_length_with_no_loop_added() {
     let (mut doc, h, cab) = cabinet();
     set_run(&mut doc, &h, Some(10.0));
     let ten = motor_job(&doc);
     assert_eq!(ten.basis, "cable length");
     assert!(!is_estimate(&ten.basis));
-    assert_eq!(ten.length_mm, 10_000.0 + 2.0 * LOOP_MM);
+    assert_eq!(ten.length_mm, 10_000.0);
     set_run(&mut doc, &h, Some(20.0));
     assert_eq!(
         motor_job(&doc).length_mm - ten.length_mm,
@@ -82,7 +82,7 @@ fn a_stated_cable_length_makes_the_core_exact_with_a_loop_at_each_end() {
     })
     .unwrap();
     let with_entry = motor_job(&doc);
-    assert_eq!(with_entry.length_mm, 20_000.0 + 2.0 * LOOP_MM);
+    assert_eq!(with_entry.length_mm, 20_000.0);
     assert_eq!(with_entry.basis, "cable length");
 }
 
