@@ -134,6 +134,15 @@ pub enum Command {
     UnfreezePage {
         page: PageId,
     },
+    /// Locks a page as released with a revision index; see [`Tx::lock_page`].
+    LockPage {
+        page: PageId,
+        revision: String,
+    },
+    /// Releases the lock on a page.
+    UnlockPage {
+        page: PageId,
+    },
     AddJunction {
         page: PageId,
         position: Point,
@@ -458,6 +467,8 @@ impl Command {
             Command::IssueRevision { index, .. } => format!("Issue revision {index}"),
             Command::FreezePage { .. } => "Freeze page".into(),
             Command::UnfreezePage { .. } => "Unfreeze page".into(),
+            Command::LockPage { .. } => "Lock page".into(),
+            Command::UnlockPage { .. } => "Unlock page".into(),
             Command::SetPlateSize { .. } => "Set plate size".into(),
             Command::AddRail { .. } => "Add rail".into(),
             Command::MoveRail { .. } => "Move rail".into(),
@@ -705,6 +716,14 @@ impl Tx<'_> {
             }
             Command::UnfreezePage { page } => {
                 self.unfreeze_page(page)?;
+                return Ok(Vec::new());
+            }
+            Command::LockPage { page, revision } => {
+                self.lock_page(page, revision)?;
+                return Ok(Vec::new());
+            }
+            Command::UnlockPage { page } => {
+                self.unlock_page(page)?;
                 return Ok(Vec::new());
             }
             Command::DefineBlock {

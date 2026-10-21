@@ -29,6 +29,7 @@ use crate::tag::{Aspect, DeviceTag};
 pub struct Tx<'p> {
     project: &'p mut Project,
     ops: Vec<Op>,
+    pub(crate) allow_locked: bool,
 }
 
 impl<'p> Tx<'p> {
@@ -36,6 +37,7 @@ impl<'p> Tx<'p> {
         Tx {
             project,
             ops: Vec::new(),
+            allow_locked: false,
         }
     }
 
@@ -47,6 +49,81 @@ impl<'p> Tx<'p> {
             self.project.rollback(&self.ops);
             Vec::new()
         }
+    }
+
+    /// Refuses the edit when it changes the drawing of a locked page (the
+    /// pages locked before the edit started). Changing only the lock or the
+    /// freeze of a page itself is allowed: that is how a page is released.
+    pub(crate) fn refuse_locked(&self, locked: &BTreeSet<PageId>) -> Result<()> {
+        for op in &self.ops {
+            let records: Vec<&Record> = match op {
+                Op::Insert { record } | Op::Remove { record } => vec![record],
+                Op::Update { before, after } => {
+                    if let (Record::Page(b), Record::Page(a)) = (before, after) {
+                        let mut same = b.clone();
+                        same.locked.clone_from(&a.locked);
+                        same.frozen.clone_from(&a.frozen);
+                        if same == *a {
+                            continue;
+                        }
+                    }
+                    vec![before, after]
+                }
+                Op::SetInfo { .. } => continue,
+            };
+            for record in records {
+                let page = match record {
+                    Record::BlockInstance(b) => Some(b.page),
+                    other => other.page(),
+                };
+                let mut hit = page.filter(|p| locked.contains(p));
+                if hit.is_none() && matches!(op, Op::Update { .. }) {
+                    hit = self.shown_on_locked(record, locked);
+                }
+                if let Some(page) = hit {
+                    let name = self
+                        .project
+                        .page(page)
+                        .map_or_else(|| page.to_string(), |p| p.name.clone());
+                    let revision = self
+                        .project
+                        .page(page)
+                        .and_then(|p| p.locked.clone())
+                        .unwrap_or_default();
+                    return Err(ModelError::Refused {
+                        what: format!("Page {name}"),
+                        reason: format!("it is locked with revision {revision}; unlock it to edit"),
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// The locked page a device, terminal or cable shows on, if any.
+    fn shown_on_locked(&self, record: &Record, locked: &BTreeSet<PageId>) -> Option<PageId> {
+        let project = &*self.project;
+        let pages: Vec<PageId> = match record {
+            Record::Device(d) => project
+                .symbols_of_device(d.id)
+                .iter()
+                .map(|s| s.page)
+                .collect(),
+            Record::Terminal(t) => project
+                .symbols_of_terminal(t.id)
+                .iter()
+                .map(|s| s.page)
+                .collect(),
+            Record::Cable(c) => c
+                .cores
+                .iter()
+                .filter_map(|core| core.wire)
+                .filter_map(|w| project.wire(w))
+                .map(|w| w.page)
+                .collect(),
+            _ => return None,
+        };
+        pages.into_iter().find(|p| locked.contains(p))
     }
 
     /// The wires this edit added so far.
@@ -238,6 +315,7 @@ impl<'p> Tx<'p> {
             format: Default::default(),
             structure: Default::default(),
             frozen: None,
+            locked: None,
             properties: Default::default(),
         })
     }
@@ -474,6 +552,24 @@ impl<'p> Tx<'p> {
             columns,
         };
         self.update::<Page>(page, |p| p.frozen = Some(freeze))
+    }
+
+    /// Locks a page as released with `revision` (an index): later edits to
+    /// its drawing are refused until [`Tx::unlock_page`].
+    pub fn lock_page(&mut self, page: PageId, revision: impl Into<String>) -> Result<()> {
+        let revision = revision.into();
+        self.update::<Page>(page, |p| p.locked = Some(revision))
+    }
+
+    /// Releases the lock on a page.
+    pub fn unlock_page(&mut self, page: PageId) -> Result<()> {
+        self.update::<Page>(page, |p| p.locked = None)
+    }
+
+    /// Lets this edit change locked pages. Restoring a revision uses it: the
+    /// snapshot it restores is the state the lock protects.
+    pub fn allow_locked_pages(&mut self) {
+        self.allow_locked = true;
     }
 
     /// Lets references to a page follow its drawing again.
