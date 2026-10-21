@@ -347,6 +347,9 @@ fn settings_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) -> bool {
                         }
                     }
                 });
+            if import.sheet != 0 && import.sheet == import.table.best_sheet() {
+                ui.weak("Started on the sheet with the order numbers; change it here.");
+            }
             ui.add_space(12.0);
         }
         ui.label("Headers are in row");

@@ -839,20 +839,19 @@ pub(crate) fn normalise_number_text(raw: &str) -> (String, Option<String>) {
     (t.to_owned(), None)
 }
 
-/// `1.23457E+11`: what Excel shows for a long number stored as a number.
+/// `1.23457E+11`: what Excel shows for a long number stored as a number. Excel
+/// always writes a sign and a two-digit exponent; `3E10` or `100E3` are plain order numbers and stay valid.
 fn looks_like_excel_exponent(text: &str) -> bool {
     let t = text.trim();
     let Some((mantissa, exp)) = t.split_once(['E', 'e']) else {
         return false;
     };
-    let exp = exp.trim_start_matches(['+', '-']);
-    !mantissa.is_empty()
+    let digits_exp = exp.strip_prefix(['+', '-']);
+    mantissa.chars().any(|c| c.is_ascii_digit())
         && mantissa
             .chars()
             .all(|c| c.is_ascii_digit() || c == '.' || c == ',')
-        && mantissa.chars().any(|c| c.is_ascii_digit())
-        && !exp.is_empty()
-        && exp.chars().all(|c| c.is_ascii_digit())
+        && digits_exp.is_some_and(|d| d.len() == 2 && d.chars().all(|c| c.is_ascii_digit()))
 }
 
 fn round(v: f64) -> f64 {
@@ -914,5 +913,8 @@ mod tests {
         assert!(looks_like_excel_exponent("4,0E+12"));
         assert!(!looks_like_excel_exponent("3RT2016-1BB41"));
         assert!(!looks_like_excel_exponent("E+11"));
+        for plain in ["3E10", "2E4", "100E3", "5E1234", "1.5E3", "2E+5"] {
+            assert!(!looks_like_excel_exponent(plain), "{plain}");
+        }
     }
 }

@@ -449,3 +449,14 @@ fn an_order_number_that_excel_turned_into_a_power_of_ten_is_not_imported() {
             .any(|i| i.message.contains("power of ten") && i.message.contains("not imported"))
     );
 }
+
+#[test]
+fn plain_order_numbers_that_look_like_exponents_are_imported() {
+    let sheet = csv_sheet(
+        "Maker;Order number\nExample Maker;3E10\nExample Maker;2E4\nExample Maker;100E3\nExample Maker;1.23457E+11\n",
+    );
+    let mapping = Mapping::suggest(&sheet, 0);
+    let p = preview(&sheet, &mapping);
+    let orders: Vec<&str> = p.parts.iter().map(|p| p.order_number.as_str()).collect();
+    assert_eq!(orders, ["3E10", "2E4", "100E3"], "{:#?}", p.rows);
+}
