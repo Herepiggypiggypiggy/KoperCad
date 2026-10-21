@@ -382,6 +382,41 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "project.option",
+            "Switch a machine option",
+            "Project",
+            &[
+                "option on off",
+                "with without",
+                "conveyor",
+                "machine option",
+            ],
+            Needs::Project,
+        ),
+        &["option"],
+    ),
+    verb(
+        cmd(
+            "project.tie",
+            "Tie the selection to an option",
+            "Project",
+            &["tie option", "belongs to option", "only with", "condition"],
+            Needs::Project,
+        ),
+        &["tie"],
+    ),
+    verb(
+        cmd(
+            "project.untie",
+            "Selection always appears (untie from options)",
+            "Project",
+            &["untie option", "always", "remove condition"],
+            Needs::Project,
+        ),
+        &["untie"],
+    ),
+    verb(
+        cmd(
             "project.generate",
             "Generate pages from a spec sheet",
             "Project",

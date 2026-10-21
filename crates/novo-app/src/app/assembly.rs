@@ -245,9 +245,9 @@ impl NovoApp {
     /// Exports to `path`. Without a cabinet that has a mounting plate there
     /// is nothing to build, so it says so and writes nothing.
     pub fn export_assembly_to(&mut self, path: &Path) -> Option<PathBuf> {
-        let name = self.project_name().unwrap_or_default();
-        let project = self.backend.document()?.project();
-        let output = AssemblyChecklist.generate(project);
+        let name = self.machine_title().unwrap_or_default();
+        let project = self.machine()?;
+        let output = AssemblyChecklist.generate(&project);
         if output.sections.iter().all(|s| s.key == "none") {
             self.message(
                 Level::Warning,
@@ -255,7 +255,7 @@ impl NovoApp {
             );
             return None;
         }
-        let pack = print_pack(project, output);
+        let pack = print_pack(&project, output);
         let options = ReportPdfOptions {
             title: format!("{name}  Assembly print pack"),
             row_mm: pack

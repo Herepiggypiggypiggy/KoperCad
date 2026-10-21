@@ -291,10 +291,17 @@ impl NovoApp {
         if let Some(text) = self.view3d.notice.take() {
             self.message(super::Level::Info, text);
         }
+        // The 3D view shows the machine of the current choice of options;
+        // the Cabinet keeps editing the full working project.
+        let choice = self.machine_variant();
+        let generation = self.machine_generation();
         let Some(document) = self.backend.document() else {
             return;
         };
-        let project = document.project();
+        let project: &novo_core::Project = match &choice {
+            Some(copy) => copy,
+            None => document.project(),
+        };
         let Some(id) = enclosure(project, self.cabinet.location.as_ref()) else {
             let mut open_cabinet = false;
             ui.vertical_centered(|ui| {
@@ -308,7 +315,8 @@ impl NovoApp {
             }
             return;
         };
-        let revision = project.revision();
+        // A copy for a choice has revisions of its own.
+        let revision = project.revision() ^ (generation << 40);
         let ambient = self.sizing.request().ambient_max;
         let empty_hint = super::tips::empty_3d_hint(&self.settings, &self.wb.keymap, project, id);
         let mode = &mut self.view3d;

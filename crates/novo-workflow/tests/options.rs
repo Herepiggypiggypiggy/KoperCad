@@ -265,3 +265,119 @@ fn combinations_cover_bool_and_choice_options() {
     let none = combinations(doc.project(), 3);
     assert_eq!(none.len(), 3);
 }
+
+#[test]
+fn tying_a_wire_and_a_device_to_an_option_follows_the_switch() {
+    let mut doc = machine();
+    let wire = doc.project().wires().next().unwrap().id;
+    let k1 = doc
+        .project()
+        .devices()
+        .find(|d| d.tag.to_string() == "=A1-K1")
+        .unwrap()
+        .id;
+    let defs = options(doc.project());
+    let conveyor = defs.iter().find(|d| d.id == "conveyor").unwrap().clone();
+    let supply = defs.iter().find(|d| d.id == "supply").unwrap().clone();
+    doc.transact("Tie", |tx| {
+        tie_to(tx, &[wire.into()], &conveyor, &Value::Bool(true))?;
+        tie_to(tx, &[k1.into()], &supply, &Value::Text("480V".into()))
+    })
+    .unwrap();
+    assert_eq!(
+        describe_condition(doc.project(), wire).as_deref(),
+        Some("Conveyor")
+    );
+    assert_eq!(
+        describe_condition(doc.project(), k1).as_deref(),
+        Some("Supply 480V")
+    );
+    // Off: both go. The conveyor page is off by its own condition, so the
+    // wire check uses the full conveyor.
+    let mut on = assign(&doc, &[("conveyor", Value::Bool(true))]);
+    let v = variant_project(doc.project(), &on).unwrap();
+    assert_eq!(v.wires().count(), 1);
+    assert!(v.devices().all(|d| d.tag.to_string() != "=A1-K1"));
+    on.insert("supply".into(), Value::Text("480V".into()));
+    let v = variant_project(doc.project(), &on).unwrap();
+    assert!(v.devices().any(|d| d.tag.to_string() == "=A1-K1"));
+}
+
+#[test]
+fn a_wire_alone_can_be_tied() {
+    let mut doc = machine();
+    let main = doc.project().pages().next().unwrap().id;
+    let (a, b) = {
+        let mut s = doc.project().symbols().filter(|s| s.page == main);
+        (s.next().unwrap().id, s.next().unwrap().id)
+    };
+    let wire = doc
+        .transact("Wire", |tx| {
+            tx.connect(Endpoint::pin(a, 1), Endpoint::pin(b, 0))
+        })
+        .unwrap()
+        .0;
+    let fan = OptionDef::yes_no("fan", "Fan", false);
+    doc.transact("Define", |tx| define_option(tx, fan.clone()))
+        .unwrap();
+    doc.transact("Tie", |tx| {
+        tie_to(tx, &[wire.into()], &fan, &Value::Bool(true))
+    })
+    .unwrap();
+    let before = doc.project().wires().count();
+    let off = variant_project(doc.project(), &assign(&doc, &[])).unwrap();
+    assert_eq!(before, 2, "the conveyor's wire and this one");
+    assert_eq!(off.wires().count(), 0);
+    let with_fan = variant_project(
+        doc.project(),
+        &assign(
+            &doc,
+            &[
+                ("fan", Value::Bool(true)),
+                ("supply", Value::Text("480V".into())),
+            ],
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        with_fan.wires().count(),
+        1,
+        "the conveyor page is still off"
+    );
+    assert_eq!(
+        off.devices().count(),
+        1,
+        "the conveyor page is off, the wire alone is tied"
+    );
+}
+
+#[test]
+fn the_summary_and_the_machine_name_say_the_choice() {
+    let doc = machine();
+    let a = assign(&doc, &[("conveyor", Value::Bool(true))]);
+    assert_eq!(summary(doc.project(), &a), "Conveyor, Supply 400V");
+    let m = machine_project(doc.project(), &a).unwrap();
+    assert_eq!(
+        m.info().name,
+        format!("{} [Conveyor, Supply 400V]", doc.project().info().name)
+    );
+    assert_eq!(m.pages().count(), 2);
+}
+
+#[test]
+fn a_condition_that_is_not_a_tie_is_shown_as_typed() {
+    let mut doc = machine();
+    let page = doc.project().pages().next().unwrap().id;
+    doc.transact("Cond", |tx| {
+        set_condition(tx, page, Some("opt.conveyor && opt.supply == '480V'"))
+    })
+    .unwrap();
+    assert_eq!(
+        describe_condition(doc.project(), page).as_deref(),
+        Some("opt.conveyor && opt.supply == '480V'")
+    );
+    assert_eq!(
+        describe_condition(doc.project(), doc.project().devices().next().unwrap().id),
+        None
+    );
+}
