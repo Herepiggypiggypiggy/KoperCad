@@ -65,6 +65,22 @@ pub(super) const DEVICE_INPUTS: [(&str, &str, &str, &str); 8] = [
     ("ac3_current_a", "AC-3 current", "A", "25"),
 ];
 
+/// Whether a calculation input makes sense for a device with this letter
+/// code (IEC 81346: Q breaker or switch, F protective device, K contactor or
+/// relay). A contactor has no trip curve or breaking capacity, so those rows
+/// stay hidden for it unless the device carries a value of its own; an
+/// unknown letter shows everything.
+pub(super) fn input_applies(key: &str, letter: &str) -> bool {
+    let protective = matches!(letter, "Q" | "F" | "");
+    match key {
+        "breaking_capacity_ka" | "trip_curve" | "let_through_i2t" => protective,
+        "setting_min_a" | "setting_max_a" => matches!(letter, "Q" | "F" | "K" | ""),
+        "ac3_current_a" => matches!(letter, "Q" | "K" | ""),
+        "sccr_ka" => matches!(letter, "Q" | "F" | "K" | ""),
+        _ => true,
+    }
+}
+
 /// Reads an entry for a calculation input: empty clears it, `trip_curve`
 /// takes B, C or D, every other input a positive number.
 pub(super) fn parse_device_input(key: &str, text: &str) -> Result<Option<Value>, String> {
@@ -1021,11 +1037,19 @@ pub(super) fn committed(ui: &egui::Ui, response: &egui::Response) -> bool {
 /// starter calculations read from the device. A value the part supplies is
 /// shown dimmed with a hint; typing overrides it on this device only.
 fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<InspectorAction>) {
-    let set = info
-        .calc_inputs
+    let letter = DeviceTag::parse(&info.tag)
+        .map(|t| t.letter_code().to_owned())
+        .unwrap_or_default();
+    // A row the device class does not have is hidden, unless the device
+    // carries a value of its own there (then it stays visible and editable).
+    let rows: Vec<_> = DEVICE_INPUTS
         .iter()
-        .filter(|(v, _)| !v.is_empty())
-        .count();
+        .zip(&info.calc_inputs)
+        .filter(|((key, ..), (shown, from_part))| {
+            input_applies(key, &letter) || (!shown.is_empty() && !*from_part)
+        })
+        .collect();
+    let set = rows.iter().filter(|(_, (v, _))| !v.is_empty()).count();
     let summary = if set == 0 {
         String::new()
     } else {
@@ -1038,9 +1062,7 @@ fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
         &summary,
         set > 0,
         |ui| {
-            for ((key, label, unit, hint), (shown, from_part)) in
-                DEVICE_INPUTS.iter().zip(&info.calc_inputs)
-            {
+            for ((key, label, unit, hint), (shown, from_part)) in rows.iter().copied() {
                 let id = egui::Id::new(("inspector_input", *key));
                 let focused = ui.memory(|m| m.has_focus(id));
                 let mut text = if focused {
@@ -1090,6 +1112,17 @@ fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
 mod tests {
     use super::*;
     use novo_core::DeviceTag;
+
+    #[test]
+    fn a_contactor_has_no_trip_curve_or_breaking_capacity_rows() {
+        for key in ["trip_curve", "breaking_capacity_ka", "let_through_i2t"] {
+            assert!(!input_applies(key, "K"), "{key} on a contactor");
+            assert!(input_applies(key, "Q"), "{key} on a breaker");
+            assert!(input_applies(key, "F"), "{key} on a fuse");
+        }
+        assert!(input_applies("rated_current_a", "K"));
+        assert!(input_applies("ac3_current_a", "K"));
+    }
 
     #[test]
     fn one_device_however_many_of_its_symbols() {
