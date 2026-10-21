@@ -129,9 +129,10 @@ pub fn accuracy_with_turbulence(fidelity: Fidelity, model: TurbModel) -> Accurac
              mean air rise changed by 3 % or less against laminar, the device surface rise by \
              under 1 % and the exhaust temperature at the top louvre by about 4 %, at 3400 \
              cells by up to 11 %. With a 120 m3/h intake fan in the same box the mean air rise was \
-             11 % (SST) to 15 % (k-epsilon) lower than laminar, the device surface rise 1 % to \
-             1.4 % lower and the exhaust temperature at the top louvre up to about 5 % lower, so \
-             read air temperatures of a fan case as an estimate. Radiation is not modelled, so surface temperatures of hot devices are \
+             11 % (SST) to 15 % (k-epsilon) lower than laminar. The device surface rise was 1 % \
+             to 1.4 % lower and the exhaust temperature at the top louvre up to about 5 % lower. \
+             In that fan case the 3D air rise is more than twice the simple 2D engine's and the \
+             cause is not known yet, so read air temperatures of a fan case as an estimate. Radiation is not modelled, so surface temperatures of hot devices are \
              slightly high."
         );
     }
