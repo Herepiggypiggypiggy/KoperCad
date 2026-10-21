@@ -40,11 +40,7 @@ pub(super) fn fraction(levels: &[Fidelity], p: &Progress) -> f32 {
 }
 
 pub(super) fn label(p: &Progress, secs: f64) -> String {
-    format!(
-        "{} · iteration {} · {secs:.0} s",
-        p.fidelity.label(),
-        p.iteration
-    )
+    format!("{} · it {} · {secs:.0} s", p.fidelity.label(), p.iteration)
 }
 
 /// Points of the sparkline in a `w` by `h` box: oldest left, lowest

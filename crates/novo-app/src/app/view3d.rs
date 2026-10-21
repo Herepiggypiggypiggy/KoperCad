@@ -707,7 +707,22 @@ impl NovoApp {
             ambient,
         );
         if mode.controls.heat_panel {
-            view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale);
+            let tag_of = |raw: u64| {
+                project
+                    .get::<Device>(DeviceId::from(raw))
+                    .and_then(|d| d.tag.device_code().map(str::to_owned))
+                    .unwrap_or_else(|| format!("device {raw}"))
+            };
+            if let Some(raw) =
+                view3d_heat::show(ui.ctx(), view_rect, &mut self.cabinet.heat, stale, &tag_of)
+            {
+                let item = ItemId::new(ItemKind::Device, raw);
+                if scene.get(item).is_some() {
+                    mode.view.state.selection = BTreeSet::from([item]);
+                    mode.view
+                        .fit(scene, ui.input(|i| i.time), options.reduced_motion);
+                }
+            }
         }
         if let Some(text) = empty_hint {
             ui.painter().text(

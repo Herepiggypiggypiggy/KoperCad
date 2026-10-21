@@ -88,6 +88,7 @@ mod heat_spots;
 mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
+mod heat_verdict;
 mod inspector;
 mod interop;
 mod languages;
