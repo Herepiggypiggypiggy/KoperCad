@@ -114,3 +114,23 @@ fn the_package_fills_one_folder_and_says_what_it_left_out() {
         "{last}"
     );
 }
+
+#[test]
+fn open_problems_are_asked_about_before_anything_is_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let summary = novo_checks::Summary::of(d.app.problems());
+    assert!(
+        summary.errors + summary.warnings > 0,
+        "the example carries a warning"
+    );
+    d.app.ask_handover();
+    assert!(
+        d.app.wb.handover_ask.is_some(),
+        "asked, nothing written yet"
+    );
+    assert!(d.app.wb.last_export.is_none());
+}

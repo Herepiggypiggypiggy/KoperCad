@@ -1,0 +1,14 @@
+@title Ask Claude, first run: the agree box and the Turn Claude on button are on screen without scrolling
+@area Claude
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text ask claude
+wait 8
+key Enter
+wait 20
+shot first-run
+expect "I have read this and agree"
+expect_disabled "Turn Claude on"
+check_layout

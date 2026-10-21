@@ -1,13 +1,24 @@
-@title Handover package from the File menu
+@title Handover package: search, open-problems question, result
 @area Reports
 click_text "Open example"
 wait 20
+key ctrl+k
+wait 6
+text handover
+wait 8
+shot handover-search
+check_layout
+key Escape
 click_text File #1
 wait 6
 click_text "Export reports"
 wait 6
 shot handover-menu
 click_text "Export handover package (folder)"
+wait 8
+shot handover-ask
+check_layout
+click_text "Hand over anyway"
 wait 40
 shot handover-toast
 check_layout

@@ -1,0 +1,24 @@
+@title Predict-then-see lesson: question, answer, result
+@area Learn
+key ctrl+k
+wait 4
+text predict the starter
+wait 6
+click_text "Predict the starter, then see"
+wait 40
+key shift+l
+wait 40
+shot question
+expect "Predict: let go of start"
+expect "It stays pulled in"
+check_layout
+click_text "It drops out as soon as I let go"
+wait 10
+shot wrong-guess
+expect "Not quite."
+expect "holding contact"
+check_layout
+click_text Next
+wait 30
+shot see-step
+expect "See: press start"

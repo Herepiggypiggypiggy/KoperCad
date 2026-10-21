@@ -35,7 +35,7 @@ pub(crate) const WIRE_LIST_COUNT_TITLE: &str =
 /// Connections sort by the reading order of their first pin: page, then
 /// left to right, then top to bottom.
 ///
-/// The last two columns are the cut length in millimetres and how it was
+/// The last two columns are the route length in millimetres (the bench cut list adds the ferrule allowance to it) and how it was
 /// found. A wire between two devices placed on one mounting plate is routed
 /// through that plate's ducts by `novo-routing` (`routed`; `free air` when
 /// no duct reaches both, which the cabinet checks flag); anything else is an
@@ -118,7 +118,7 @@ impl WireList {
                 Column::new("cross_section_mm2", "mm²", 10.0).right(),
                 Column::new("cable", "Cable", 25.0),
                 Column::new("location", "Location", 15.0),
-                Column::new("length_mm", "Cut length mm", 14.0).right(),
+                Column::new("length_mm", "Route length mm", 14.0).right(),
                 Column::new("length_basis", "Length basis", 12.0),
             ],
         );

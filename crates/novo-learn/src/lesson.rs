@@ -195,10 +195,44 @@ pub struct Step {
     /// instead of leaving a silent gap.
     #[serde(default)]
     pub manual: Option<String>,
+    /// A question to answer before the learner sees the result: the card
+    /// shows the options, the step ticks (`expect = { predicted = true }`)
+    /// once one is chosen, and says whether the guess was right.
+    #[serde(default)]
+    pub predict: Option<Predict>,
     /// What "Show me how" plays (`demo`): key caps, typing, a moving pointer. A step
     /// that gives none gets one derived from its check, `solve` and `point`.
     #[serde(default)]
     pub demo: Vec<DemoOp>,
+}
+
+/// The options of a prediction step, and which one is right.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Predict {
+    pub options: Vec<String>,
+    #[serde(default)]
+    pub options_nl: Vec<String>,
+    /// Index of the right option.
+    pub answer: usize,
+    /// Why, shown after any answer.
+    pub why: String,
+    #[serde(default)]
+    pub why_nl: Option<String>,
+}
+
+impl Predict {
+    pub fn options(&self, lang: Lang) -> &[String] {
+        if lang == Lang::Nl && self.options_nl.len() == self.options.len() {
+            &self.options_nl
+        } else {
+            &self.options
+        }
+    }
+
+    pub fn why(&self, lang: Lang) -> &str {
+        pick(&self.why, self.why_nl.as_deref(), lang)
+    }
 }
 
 /// A small callout next to a target. (Unknown keys are refused by
@@ -298,6 +332,7 @@ pub enum SolveOp {
     Tee(TeeOp),
     FeedRow(FeedRowOp),
     Select(SelectOp),
+    Choose(ChooseOp),
     Page(PageOp),
     Cable(CableOp),
     IssueRevision(IssueRevisionOp),
@@ -548,6 +583,13 @@ pub struct FeedRowArgs {
     pub page: String,
     pub x: f64,
     pub y: f64,
+}
+
+/// Answers the step's prediction question with this option (0 is the first).
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChooseOp {
+    pub choose: usize,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize)]

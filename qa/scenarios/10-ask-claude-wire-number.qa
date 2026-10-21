@@ -12,9 +12,9 @@ wait 8
 key Enter
 wait 10
 expect "Test replay"
-click_text "Whole project"
+scroll 250 300 -300
 wait 4
-scroll 340 600 -900
+click_text "Whole project"
 wait 4
 click_text "I have read this and agree"
 wait 4

@@ -1,0 +1,45 @@
+@title A wire that breaks the project's house wire rules is listed in Issues
+@area Reports
+# Accept one protective device's group under IEC 60204-1, then state house rules; those wires break them.
+click_text "Open example"
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+click_text Autopilot
+wait 20
+click_text "14 changes"
+wait 5
+click_text "Accept ticked in this group"
+wait 10
+click_text "Wire rules: IEC 60204-1"
+wait 5
+click_text "House rules"
+wait 10
+click_text "program default (1.5 mm²)"
+wait 5
+click_text "4 mm²"
+wait 10
+click_text "IEC 60204-1" #4
+wait 5
+click_text "VT"
+wait 8
+shot house-rules-set
+key Escape
+wait 5
+click 935 50
+wait 5
+click_text "warnings"
+wait 10
+expect "the project's house rule gives VT"
+expect "under the house minimum of 4 mm²"
+shot issues-wire-rule
+check_blank issues-wire-rule
+check_layout
+# A click on a row goes to the wire and marks it on the page.
+click_text "Wire 3 (AC power circuit) is BK; the project's house rule gives VT"
+wait 10
+shot issue-wire-marked
+check_blank issue-wire-marked
+check_layout

@@ -72,6 +72,9 @@ pub enum Truth {
     Calculated,
     /// What the project itself states, for example that a revision is issued.
     Stated,
+    /// Complete as entered, but nothing in the project says a person checked
+    /// the data against the maker's.
+    Unverified,
     /// A model or planning figure: check it before relying on it.
     Estimate,
     /// Something is missing, so the figure is not complete.
@@ -88,6 +91,7 @@ impl Truth {
             Truth::Exact => "Exact",
             Truth::Calculated => "Calculated",
             Truth::Stated => "Stated",
+            Truth::Unverified => "Unverified",
             Truth::Estimate => "Estimate",
             Truth::Incomplete => "Incomplete",
             Truth::Recorded => "Recorded on site",
@@ -140,8 +144,9 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
     rows.push(if missing == 0 {
         row(
             "Parts list",
-            Truth::Exact,
-            "Every device and cable has a part.",
+            Truth::Unverified,
+            "Complete: every device and cable has a part. The part data (sizes, article numbers, \
+             ratings) is as entered or imported; this program does not check it against the maker.",
         )
     } else {
         row(
@@ -329,7 +334,7 @@ pub fn handover_summary(project: &Project, input: &HandoverInput) -> ReportOutpu
     };
     let mut files = Section::new(
         "files",
-        &format!("Handover package, {name}, {issue}, {}", input.date),
+        &format!("Contents, {issue}, {}", input.date),
         vec![
             Column::new("file", "File", 30.0),
             Column::new("what", "What it is", 50.0),
