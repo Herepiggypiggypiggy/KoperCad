@@ -17,6 +17,7 @@ pub mod agent;
 pub mod api;
 pub mod config;
 pub mod consent;
+pub mod image;
 pub mod key;
 pub mod models;
 pub mod tools;

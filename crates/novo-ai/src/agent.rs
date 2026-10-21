@@ -61,10 +61,14 @@ pub struct TurnResult {
 #[derive(Clone, Debug, Default)]
 pub struct Conversation {
     pub messages: Vec<Value>,
+    /// Pictures to send with the next message, chosen by the person.
+    /// Taken (emptied) by the turn.
+    pub images: Vec<crate::image::Image>,
 }
 
 impl Conversation {
     pub fn clear(&mut self) {
+        self.images.clear();
         self.messages.clear();
     }
 
@@ -97,8 +101,16 @@ impl Conversation {
         on_event: &mut dyn FnMut(Event),
     ) -> Result<TurnResult, ApiError> {
         let model = models::resolve(&settings.model);
+        let images = std::mem::take(&mut self.images);
+        let content = if images.is_empty() {
+            json!(user_text)
+        } else {
+            let mut blocks: Vec<Value> = images.iter().map(|i| i.block()).collect();
+            blocks.push(json!({"type": "text", "text": user_text}));
+            Value::Array(blocks)
+        };
         self.messages
-            .push(json!({"role": "user", "content": user_text}));
+            .push(json!({"role": "user", "content": content}));
         let tools = host.specs();
         let mut total = Usage::default();
         let mut cost = 0.0;
@@ -442,5 +454,26 @@ mod tests {
             )
             .unwrap();
         assert!((r.cost_usd - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn a_chosen_picture_goes_with_the_message_once() {
+        let (s, mut c) = setup();
+        s.push(200, text_reply("claude-opus-5-5", "I see it.", 5, 2));
+        s.push(200, text_reply("claude-opus-5-5", "Fine.", 5, 2));
+        let mut conv = Conversation::default();
+        conv.images.push(crate::image::Image::png(&[1, 2, 3]));
+        let mut h = host(DataScope::None);
+        for q in ["what is this?", "and now?"] {
+            conv.run_turn(&mut c, &mut h, &settings(), 0.0, q, &mut |_| {})
+                .unwrap();
+        }
+        let first: Value = serde_json::from_str(&s.requests()[0].body).unwrap();
+        let first_user = &first["messages"][0]["content"];
+        assert_eq!(first_user[0]["type"], "image");
+        assert_eq!(first_user[1]["text"], "what is this?");
+        let later: Value = serde_json::from_str(&s.requests()[1].body).unwrap();
+        assert_eq!(later["messages"][2]["content"], "and now?");
+        assert!(conv.images.is_empty());
     }
 }

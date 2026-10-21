@@ -3,6 +3,7 @@
 use std::collections::VecDeque;
 use std::sync::{Arc, Mutex};
 
+use eframe::egui;
 use novo_ai::api::{HttpRequest, HttpResponse, Transport};
 use novo_ai::consent::{Consent, DataScope};
 use novo_ai::key::{ApiKey, KeyStore};
@@ -354,5 +355,42 @@ fn widening_the_scope_keeps_the_chat() {
             .assistant
             .transcript_text()
             .contains("Scope narrowed")
+    );
+}
+
+#[test]
+fn a_picture_of_the_window_goes_with_one_message_and_never_unasked() {
+    let mut s = setup(DataScope::None);
+    s.script
+        .replies
+        .lock()
+        .unwrap()
+        .extend([text("I see a drawing."), text("Ok.")]);
+    ask(&mut s, "hello");
+    assert!(!s.script.seen.lock().unwrap()[0].body.contains("\"image\""));
+    s.d.app.wb.assistant.attach_picture_requested();
+    s.d.frame();
+    let shot = egui::ColorImage::filled([40, 20], egui::Color32::from_rgb(10, 120, 200));
+    s.d.frame_with(vec![egui::Event::Screenshot {
+        viewport_id: egui::ViewportId::ROOT,
+        user_data: egui::UserData::default(),
+        image: Arc::new(shot),
+    }]);
+    assert!(s.d.app.wb.assistant.has_picture());
+    ask(&mut s, "what is on screen?");
+    let seen = s.script.seen.lock().unwrap();
+    let body: Value = serde_json::from_str(&seen[1].body).unwrap();
+    let content = &body["messages"][2]["content"];
+    assert_eq!(content[0]["type"], "image");
+    assert!(
+        content[0]["source"]["data"]
+            .as_str()
+            .unwrap()
+            .starts_with("iVBORw0KGgo")
+    );
+    drop(seen);
+    assert!(
+        !s.d.app.wb.assistant.has_picture(),
+        "the picture is used once"
     );
 }
