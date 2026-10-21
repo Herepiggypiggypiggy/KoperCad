@@ -1058,11 +1058,13 @@ pub(super) fn paint_over(
         paint_contours(&painter, cache, &to_screen);
     }
     paint_rims(&painter, cache, input, &to_screen);
+    // The badge pills, which the hot-spot cards keep clear of.
+    let mut badges: Vec<Rect> = Vec::new();
     if state.badges {
-        paint_badges(&painter, cache, input, &to_screen, viewport.zoom);
+        badges = paint_badges(&painter, cache, input, &to_screen, viewport.zoom);
     }
     if delta.is_none() {
-        paint_peaks(&painter, cache, input, &to_screen);
+        paint_peaks(&painter, cache, input, &to_screen, &badges);
     }
     let stale = matches!(&cache.source, Source::Solved(sol) if state.live.out_of_date(sol, layout_key(input)));
     if let Some(d) = delta {
@@ -1408,7 +1410,7 @@ fn paint_badges(
     input: &Input,
     to_screen: &dyn Fn(f64, f64) -> Pos2,
     zoom: f32,
-) {
+) -> Vec<Rect> {
     let font = FontId::monospace(t::FONT_SMALL);
     let plate_left = to_screen(0.0, 0.0).x;
     let mut placed: Vec<Rect> = Vec::new();
@@ -1418,7 +1420,7 @@ fn paint_badges(
         .filter(|i| i.loss_w > 0.0 || !i.loss_known)
     {
         if !i.loss_known {
-            paint_no_data(painter, i, to_screen, zoom, &font);
+            placed.extend(paint_no_data(painter, i, to_screen, zoom, &font));
             continue;
         }
         let Reading {
@@ -1490,6 +1492,7 @@ fn paint_badges(
             t::TEXT,
         );
     }
+    placed
 }
 
 /// A device without loss data says so instead of showing a made-up temperature.
@@ -1499,9 +1502,9 @@ fn paint_no_data(
     to_screen: &dyn Fn(f64, f64) -> Pos2,
     zoom: f32,
     font: &FontId,
-) {
+) -> Option<Rect> {
     if (i.w as f32) * zoom < 76.0 || (i.h as f32) * zoom < 30.0 {
-        return;
+        return None;
     }
     let br = to_screen(i.x + i.w, i.y + i.h);
     let pill = Rect::from_min_size(br - Vec2::new(70.0, 26.0), Vec2::new(64.0, 20.0));
@@ -1519,6 +1522,7 @@ fn paint_no_data(
         font.clone(),
         t::TEXT_MUTED,
     );
+    Some(pill)
 }
 
 /// The two lines of a hot-spot card: where, and how the field's temperature
@@ -1542,14 +1546,62 @@ fn peak_text(tag: &str, value: f64, mean: f64, device: Option<f64>) -> (String, 
     (head, detail)
 }
 
+/// Where a hot-spot card goes: beside its peak on the side that hides the
+/// least of the devices, never over another card, always inside the canvas.
+/// The first candidate wins a tie, so a free canvas keeps the usual right-above.
+fn place_card(at: Pos2, size: Vec2, canvas: Rect, devices: &[Rect], placed: &[Rect]) -> Rect {
+    let (gap, rise, step) = (14.0, 30.0, size.y + 4.0);
+    let mut candidates = Vec::new();
+    for k in 0..6 {
+        let down = k as f32 * step;
+        for left in [false, true] {
+            let x = if left { -size.x - gap } else { gap };
+            candidates.push(Rect::from_min_size(at + Vec2::new(x, -rise + down), size));
+            if k > 0 {
+                candidates.push(Rect::from_min_size(at + Vec2::new(x, -rise - down), size));
+            }
+        }
+    }
+    let covered = |card: Rect| -> f32 {
+        devices
+            .iter()
+            .map(|d| {
+                let i = d.intersect(card);
+                i.width().max(0.0) * i.height().max(0.0)
+            })
+            .sum()
+    };
+    let free = |card: &Rect| {
+        canvas.contains_rect(*card) && !placed.iter().any(|q| q.intersects(card.expand(2.0)))
+    };
+    let best = candidates
+        .iter()
+        .filter(|c| free(c))
+        .min_by(|a, b| covered(**a).total_cmp(&covered(**b)));
+    let card = best.copied().unwrap_or(candidates[0]);
+    // A peak at the canvas edge still gets a card that is fully visible.
+    let dx = (canvas.left() - card.left()).max(0.0) - (card.right() - canvas.right()).max(0.0);
+    let dy = (canvas.top() - card.top()).max(0.0) - (card.bottom() - canvas.bottom()).max(0.0);
+    card.translate(Vec2::new(dx, dy))
+}
+
 fn paint_peaks(
     painter: &egui::Painter,
     cache: &Cache,
     input: &Input,
     to_screen: &dyn Fn(f64, f64) -> Pos2,
+    badges: &[Rect],
 ) {
+    let pal = crate::theme::ui_palette();
     let title = FontId::proportional(t::FONT_SMALL);
-    let mut placed: Vec<Rect> = Vec::new();
+    let canvas = painter.clip_rect();
+    let devices: Vec<Rect> = input
+        .items
+        .iter()
+        .map(|i| Rect::from_two_pos(to_screen(i.x, i.y), to_screen(i.x + i.w, i.y + i.h)))
+        .collect();
+    // A card never covers a badge, as well as never another card.
+    let mut placed: Vec<Rect> = badges.to_vec();
     for (p, tag) in &cache.peaks {
         let at = to_screen(p.x, p.y);
         painter.circle_stroke(at, 4.0, Stroke::new(1.5, t::TEXT));
@@ -1561,18 +1613,17 @@ fn paint_peaks(
             .iter()
             .find(|i| !tag.is_empty() && i.tag == *tag && i.loss_known)
             .map(|i| device_temp(cache, i));
-        let mut card = Rect::from_min_size(at + Vec2::new(14.0, -30.0), Vec2::new(210.0, 34.0));
-        // Cards never overlap each other: step down until there is room.
-        while placed.iter().any(|q| q.intersects(card.expand(2.0))) {
-            card = card.translate(Vec2::new(0.0, 38.0));
-        }
+        let card = place_card(at, Vec2::new(210.0, 34.0), canvas, &devices, &placed);
         placed.push(card);
-        painter.line_segment([at, card.left_center()], Stroke::new(1.0, t::TEXT));
+        painter.line_segment(
+            [at, nearest_edge_point(card, at)],
+            Stroke::new(1.0, pal.text_primary),
+        );
         painter.rect(
             card,
             6.0,
-            t::BG_2,
-            Stroke::new(1.0, t::BORDER_STRONG),
+            pal.raised,
+            Stroke::new(1.0, pal.border_strong),
             egui::StrokeKind::Inside,
         );
         let (head, detail) = peak_text(tag, f64::from(p.value), f64::from(cache.mean), device);
@@ -1581,16 +1632,24 @@ fn paint_peaks(
             Align2::LEFT_TOP,
             head,
             title.clone(),
-            t::TEXT,
+            pal.text_primary,
         );
         painter.text(
             card.min + Vec2::new(8.0, 19.0),
             Align2::LEFT_TOP,
             detail,
             title.clone(),
-            t::TEXT_MUTED,
+            pal.text_secondary,
         );
     }
+}
+
+/// The point of the card's border closest to `p`, where the leader line ends.
+fn nearest_edge_point(card: Rect, p: Pos2) -> Pos2 {
+    Pos2::new(
+        p.x.clamp(card.left(), card.right()),
+        p.y.clamp(card.top(), card.bottom()),
+    )
 }
 
 fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: bool) {
@@ -1608,11 +1667,17 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
         // The notes can outgrow a short window; scroll them instead of
         // running off the bottom (a fitted panel does not scroll itself).
         egui::ScrollArea::vertical()
-            .max_height((rect.height() - 60.0).max(120.0))
+            // The window is at most the canvas less its top gap and the bottom
+            // strip; the title bar and frame take the rest of the difference.
+            .max_height(ui.available_height().min(rect.height() - 130.0).max(100.0))
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
             .auto_shrink([true, true])
             .show(ui, |ui| {
                 ui.set_width(140.0);
-                let height = 180.0;
+                // Room for the top tick label, which hangs above the bar.
+                ui.add_space(6.0);
+                // A short canvas gets a shorter colour bar, so the notes below stay in view.
+                let height = if rect.height() < 620.0 { 110.0 } else { 180.0 };
                 let (bar, _) =
                     ui.allocate_exact_size(Vec2::new(14.0, height), egui::Sense::hover());
                 let mut mesh = egui::Mesh::default();
@@ -1654,7 +1719,10 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                 let small = |text: &str, color| egui::RichText::new(text).small().color(color);
                 let (total_w, with_data, unknown) = totals(input);
                 if with_data > 0 {
-                    ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
+                    ui.label(small(
+                        &format!("Total loss {total_w:.0} W"),
+                        crate::theme::ui_palette().text_primary,
+                    ));
                 }
                 if let Some(note) = estimate_note(input) {
                     ui.label(small(&note, t::WARNING));
@@ -1681,7 +1749,10 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                     Source::Solved(sol) => {
                         let p = &sol.snapshot.progress;
                         let validated = sol.snapshot.accuracy.validated;
-                        ui.label(small(&status_label(p, validated), t::TEXT));
+                        ui.label(small(
+                            &status_label(p, validated),
+                            crate::theme::ui_palette().text_primary,
+                        ));
                         if stale {
                             ui.label(small(
                                 "Out of date: the layout changed since this run.",
@@ -1692,14 +1763,33 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                             ui.label(small("Not converged.", t::WARNING));
                         }
                         let a = &sol.snapshot.accuracy;
-                        if !a.headline.is_empty() {
-                            ui.label(small(&a.headline, t::TEXT_MUTED));
+                        // The status line above already names the level.
+                        let headline = a
+                            .headline
+                            .strip_prefix(p.fidelity.label())
+                            .unwrap_or(&a.headline)
+                            .trim_start();
+                        if !headline.is_empty() {
+                            ui.label(small(headline, t::TEXT_MUTED));
                         }
-                        for n in sol.snapshot.notes.iter().take(4) {
-                            ui.label(small(n, t::TEXT_MUTED));
-                        }
+                        // Warnings stay in view; the run's detailed notes fold away
+                        // so a short window is not cut off mid-sentence.
                         for m in &sol.messages {
                             ui.label(small(m, t::WARNING));
+                        }
+                        if !sol.snapshot.notes.is_empty() {
+                            let pal = crate::theme::ui_palette();
+                            let shown = sol.snapshot.notes.iter().take(4);
+                            egui::CollapsingHeader::new(small(
+                                &format!("Notes on this run ({})", shown.len()),
+                                pal.text_secondary,
+                            ))
+                            .default_open(false)
+                            .show(ui, |ui| {
+                                for n in shown {
+                                    ui.label(small(n, pal.text_secondary));
+                                }
+                            });
                         }
                     }
                 }
@@ -1752,6 +1842,57 @@ mod tests {
             solution: None,
             kept: None,
         }
+    }
+
+    #[test]
+    fn a_hot_spot_card_keeps_clear_of_a_badge() {
+        let canvas = Rect::from_min_size(Pos2::ZERO, Vec2::new(900.0, 700.0));
+        let at = Pos2::new(300.0, 300.0);
+        let size = Vec2::new(210.0, 34.0);
+        let free = place_card(at, size, canvas, &[], &[]);
+        // A badge pill where the card would go.
+        let badge = Rect::from_min_size(free.min + Vec2::new(10.0, 6.0), Vec2::new(90.0, 20.0));
+        let card = place_card(at, size, canvas, &[], &[badge]);
+        assert!(!card.intersects(badge), "{card:?} covers {badge:?}");
+        assert!(canvas.contains_rect(card));
+    }
+
+    #[test]
+    fn a_hot_spot_card_moves_off_the_device_it_would_cover() {
+        let canvas = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0));
+        let size = Vec2::new(210.0, 34.0);
+        let at = Pos2::new(300.0, 300.0);
+        // A device sits where the usual right-above card would go.
+        let device = Rect::from_min_size(Pos2::new(310.0, 250.0), Vec2::new(220.0, 60.0));
+        let card = place_card(at, size, canvas, &[device], &[]);
+        assert!(!card.intersects(device), "{card:?} covers {device:?}");
+        assert!(canvas.contains_rect(card));
+    }
+
+    #[test]
+    fn hot_spot_cards_stay_apart_and_inside_the_canvas() {
+        let canvas = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0));
+        let size = Vec2::new(210.0, 34.0);
+        let mut placed = Vec::new();
+        // Three peaks in the top-left corner, where cards used to stack on devices.
+        for at in [
+            Pos2::new(5.0, 4.0),
+            Pos2::new(12.0, 10.0),
+            Pos2::new(20.0, 6.0),
+        ] {
+            let card = place_card(at, size, canvas, &[], &placed);
+            assert!(canvas.contains_rect(card), "{card:?} leaves the canvas");
+            assert!(placed.iter().all(|q: &Rect| !q.intersects(card)));
+            placed.push(card);
+        }
+    }
+
+    #[test]
+    fn on_a_free_canvas_the_card_keeps_its_usual_place() {
+        let canvas = Rect::from_min_size(Pos2::ZERO, Vec2::new(800.0, 600.0));
+        let at = Pos2::new(300.0, 300.0);
+        let card = place_card(at, Vec2::new(210.0, 34.0), canvas, &[], &[]);
+        assert_eq!(card.min, at + Vec2::new(14.0, -30.0));
     }
 
     #[test]

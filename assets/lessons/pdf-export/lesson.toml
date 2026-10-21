@@ -26,6 +26,7 @@ order = 50
 level = "beginner"
 minutes = 8
 topics = ["export", "pdf", "revisions"]
+show_problems = true
 needs = ["wire-list-and-bom"]
 next = []
 project = "project.json"

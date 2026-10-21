@@ -151,6 +151,9 @@ jobs:
           }
           $lines | Set-Content -Encoding ascii dist\SHA256SUMS
           Get-Content dist\SHA256SUMS
+          # Release notes for a tag: docs/release-notes/<tag>.md at the tagged commit, when it exists.
+          $notes = "docs\release-notes\$($env:GITHUB_REF_NAME).md"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and (Test-Path $notes)) { Copy-Item $notes dist\RELEASE-NOTES.md }
       - uses: actions/upload-artifact@v4
         with:
           name: KoperCAD-windows-installer
@@ -164,6 +167,7 @@ jobs:
             dist/*.zip
             dist/SHA256SUMS
             dist/BUILD_INFO.txt
+            dist/RELEASE-NOTES.md
           if-no-files-found: error
 
   # Attaches the installer, the portable zip, the build info and the checksums
@@ -196,6 +200,9 @@ jobs:
           sha256sum -c SHA256SUMS
           flags=(--prerelease)
           case "$TAG" in *-rc*) flags+=(--draft) ;; esac
+          if [ -f RELEASE-NOTES.md ]; then
+            cp RELEASE-NOTES.md notes.md
+          else
           cat > notes.md <<'EOF'
           Beta for test users. Windows 10/11 only. No admin rights are needed.
 
@@ -205,6 +212,7 @@ jobs:
 
           The program is not code-signed yet, so Windows SmartScreen may warn on first start: choose "More info", then "Run anyway".
           EOF
+          fi
           # `gh release view` does not find draft releases by tag, so look in the list.
           if gh release list --repo "$GITHUB_REPOSITORY" --limit 100 --json tagName --jq '.[].tagName' | grep -qx "$TAG"; then
             gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber KoperCAD-*-setup.exe KoperCAD-*-portable.zip SHA256SUMS BUILD_INFO.txt

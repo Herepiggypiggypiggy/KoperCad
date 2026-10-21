@@ -195,6 +195,42 @@ impl NovoApp {
         page_hint(&self.settings, &self.wb.keymap, project, page)
     }
 
+    /// A quiet line in the middle of an empty sheet naming the first move,
+    /// gone with the first symbol. It is only text on the canvas: no
+    /// control, no click.
+    pub(super) fn empty_sheet_ghost(&self, ctx: &egui::Context, canvas: egui::Rect) {
+        let Some(hint) = self.empty_page_hint() else {
+            return;
+        };
+        let Some(page) = self.current_page() else {
+            return;
+        };
+        let Some(document) = self.backend.document() else {
+            return;
+        };
+        // Only a bare sheet: a hint for the first wire belongs in the bar.
+        if document.project().symbols().any(|s| s.page == page) {
+            return;
+        }
+        let palette = crate::theme::ui_palette();
+        let second = "Or press Ctrl+K and type: motor starter";
+        egui::Area::new(egui::Id::new("empty_sheet_ghost"))
+            .order(egui::Order::Foreground)
+            .interactable(false)
+            .fixed_pos(canvas.center())
+            .pivot(egui::Align2::CENTER_CENTER)
+            .show(ctx, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.label(
+                        egui::RichText::new(hint)
+                            .size(18.0)
+                            .color(palette.text_secondary),
+                    );
+                    ui.label(egui::RichText::new(second).color(palette.text_secondary));
+                });
+            });
+    }
+
     /// `help.show_hints`: every hint shows again.
     pub(super) fn show_hints_again(&mut self) {
         self.settings.hints_seen.clear();

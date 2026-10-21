@@ -76,9 +76,11 @@
 //! [`PageSetup::title_block_mm`] to match that frame.
 
 mod assembly;
+pub mod autopilot;
 pub(crate) mod bench;
 mod bom;
 pub mod commissioning;
+mod counts;
 mod cutlist;
 mod defaults;
 pub mod designer;
@@ -110,6 +112,7 @@ pub use bench::{
     bench_jobs, ends_without_ferrule, ferrule_counts, is_estimate, with_spares,
 };
 pub use bom::BillOfMaterials;
+pub use counts::{WireSet, count_text, headline_count, wire_set_mismatch};
 pub use cutlist::CutList;
 pub use defaults::{
     GeneratedPageSpec, add_generated_pages, default_generated_pages, default_generated_pages_with,

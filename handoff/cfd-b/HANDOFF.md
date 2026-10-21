@@ -35,3 +35,9 @@ Traps
 Contacts: R1 `cse_01NCdhCktKEbKPHFBvi2Tjsp`, lead A `cse_01FiLvRBKEcNNHbQEGhYyL1S`, CFD-A `session_01ES8fwPNsJAC5x14QbAkDQ9`.
 
 Exhaust spread (R1 re-run, 6000 cells, steady laminar/SST, march k-eps): laminar 12.75 K, SST 13.19 (+3.5 %), k-eps 12.24 (-4.0 %); at 3402 cells laminar 12.98, SST 13.64 (+5 %), k-eps 14.39 (+11 %). The exhaust temperature moves by a few percent either way with mesh and path; the accuracy text quotes both cases.
+
+
+## Fan case gap, 2D vs 3D (2026-10-21)
+Cause found. In the 120 m3/h intake fan case both engines close the heat balance and carry the same flow (0.0295 m3/s in 3D and 2D), and the wall conductance matches (about 11 to 12 W/K). The difference is where the air sits: the 2D engine is depth averaged and has no jet momentum, so the lower third stays at ambient (bands 0.0 to 0.2 K) with only 2e-3 m2/s mixing; 3D shows a box stirred by the jet at 2.3 to 3.7 K everywhere, with a cooler stream (1.8 to 1.9 K, 63 to 67 W) short-circuiting from the fan to the top louvre. 3D walls then lose 35 W against 16.6 W in 2D, because the box is hotter. Neither is validated against measurement. A well-mixed box (100 W / (mdot cp + UA)) is not a bound for the mean here, bypass can exceed it.
+Mixing sweep (3360 cells, 3D vs 2D mean air rise): at 60 m3/h 2D reaches 3D at mixing 0.03 to 0.06 m2/s; at 120 and 240 m3/h the 2D mean saturates (2.0 and 1.3 K at 0.06) and stays below 3D (2.6 to 2.9, 2.2), so mixing alone cannot close it.
+Change: novo-thermal adds a jet mixing term, 0.25 * Q_fan / depth, capped at 0.06 m2/s (setup.rs). With it, 6000 cells: 60 m3/h 3.15 vs 3.85 K, 120 m3/h 1.93 vs 3.14 K, 240 m3/h 1.28 vs 2.23 K (2D low by 18 to 43 %). Accuracy text and the 2D result note say the 2D fan-case mean air rise is a low estimate. Open: the bypass itself (fan inlet turbulence and swirl are not modelled in 3D either, which may overstate it).

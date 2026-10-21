@@ -47,6 +47,8 @@ pub(crate) struct ReportsView {
     sort: Option<(String, usize, bool)>,
     /// The shown report's output, kept while the project is unchanged.
     cache: Option<(String, u64, ReportOutput)>,
+    /// The wire counts at a project revision, so a repaint does not rebuild them.
+    wire_set: Option<(u64, novo_reports::WireSet)>,
     /// The row the keys act on: its section key and index in the section.
     cursor: Option<(String, usize)>,
     /// Put the cursor row in view on the next frame.
@@ -152,7 +154,9 @@ impl NovoApp {
             .into_iter()
             .filter_map(|id| {
                 let title = live.report(&id)?.title();
-                let count = live.get(project, &id).map_or(0, ReportOutput::row_count);
+                let count = live
+                    .get(project, &id)
+                    .map_or(0, |o| novo_reports::headline_count(&id, o).0);
                 Some((id, title, count))
             })
             .collect();
@@ -173,6 +177,16 @@ impl NovoApp {
             self.reports_view.selected = Some(id);
             self.reports_view.sort = None;
         }
+    }
+
+    /// The project's wire counts, kept while the project is unchanged.
+    fn wire_set(&mut self) -> Option<novo_reports::WireSet> {
+        let project = self.backend.document()?.project();
+        let revision = project.revision();
+        if self.reports_view.wire_set.as_ref().map(|(r, _)| *r) != Some(revision) {
+            self.reports_view.wire_set = Some((revision, novo_reports::WireSet::of(project)));
+        }
+        self.reports_view.wire_set.as_ref().map(|(_, s)| s.clone())
     }
 
     /// The centre: header, filter and the report's tables.
@@ -199,7 +213,8 @@ impl NovoApp {
         let chip = self.learn.chip(topic);
         ui.horizontal(|ui| {
             ui.heading(&output.title);
-            ui.weak(format!("{} rows", output.row_count()));
+            let (n, noun) = novo_reports::headline_count(&id, &output);
+            ui.weak(novo_reports::count_text(n, noun));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
                 lesson = chip_button(ui, chip.as_ref());
@@ -258,6 +273,11 @@ impl NovoApp {
                 );
             });
         });
+        if matches!(id.as_str(), "wires" | "cutlist" | "wirecut" | "labels")
+            && let Some(set) = self.wire_set()
+        {
+            ui.weak(set.explanation());
+        }
         ui.separator();
         let lit = self.lit_sources();
         let clicked = egui::ScrollArea::both()

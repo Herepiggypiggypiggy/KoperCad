@@ -381,6 +381,8 @@ const FIT_CONTENT_MARGIN: f32 = 64.0;
 /// text is then 15 points.
 /// How much closer than the whole sheet a content fit may be before the sheet is shown instead.
 const FIT_SHEET_WITHIN: f32 = 1.5;
+/// Below this share of the sheet's area the drawing is fitted on its own.
+const FIT_SHEET_COVERS: f32 = 0.25;
 const FIT_CONTENT_MAX_ZOOM: f32 = 6.0;
 
 /// How many frames after a fit the view follows the canvas size.
@@ -581,6 +583,31 @@ impl CanvasView {
         self.viewport.center.y += reserve * 0.5 / self.viewport.zoom;
     }
 
+    /// A close fit on the drawing must not leave a stretch of empty canvas
+    /// beside the sheet while the sheet's far columns are cut off: on an
+    /// axis where the whole sheet fits, the sheet is centred; where it does
+    /// not, the view stays inside the sheet.
+    fn keep_sheet_in_view(&mut self, sheet: &Aabb) {
+        let zoom = self.viewport.zoom;
+        let margin = 24.0 / zoom;
+        let half = self.viewport.size / zoom * 0.5;
+        let (lo, hi) = (
+            sheet.min - Vec2::splat(margin),
+            sheet.max + Vec2::splat(margin),
+        );
+        let pick = |c: f32, half: f32, lo: f32, hi: f32| {
+            if hi - lo <= 2.0 * half {
+                (lo + hi) * 0.5
+            } else {
+                c.clamp(lo + half, hi - half)
+            }
+        };
+        self.viewport.center = Vec2::new(
+            pick(self.viewport.center.x, half.x, lo.x, hi.x),
+            pick(self.viewport.center.y, half.y, lo.y, hi.y),
+        );
+    }
+
     fn fit_clear(&mut self, scene: &Scene, kind: Fit) {
         let content = scene.content_bounds();
         if kind == Fit::Content && scene.sheet().is_some() && !content.is_empty() {
@@ -590,12 +617,17 @@ impl CanvasView {
             // A drawing that fills most of the sheet (under 1.5 times
             // closer than the whole sheet) shows the sheet, centred, rather
             // than a corner of it with the rest cut off.
-            if on_content.1 > self.viewport.zoom * FIT_SHEET_WITHIN {
+            let sheet = scene.bounds().size();
+            let covers = content.size().x * content.size().y / (sheet.x * sheet.y).max(1.0);
+            // A narrow column of drawing on a big sheet is not "most of the
+            // sheet", whatever its zoom ratio: it is shown close.
+            if on_content.1 > self.viewport.zoom * FIT_SHEET_WITHIN || covers < FIT_SHEET_COVERS {
                 (self.viewport.center, self.viewport.zoom) = on_content;
                 if self.viewport.zoom > FIT_CONTENT_MAX_ZOOM {
                     self.viewport.zoom = FIT_CONTENT_MAX_ZOOM;
                     self.viewport.center = content.center();
                 }
+                self.keep_sheet_in_view(&scene.bounds());
             }
         } else {
             self.viewport.fit(&scene.bounds(), 24.0);
@@ -1845,6 +1877,28 @@ mod tests {
         let seen = view.viewport.visible_world();
         assert!(seen.contains_point(Vec2::new(5.0, 5.0)));
         assert!(seen.contains_point(Vec2::new(415.0, 292.0)));
+    }
+
+    #[test]
+    fn a_narrow_column_of_drawing_on_a_big_sheet_is_fitted_close() {
+        let mut scene = page_scene();
+        // 62 x 187 on 420 x 297: about a tenth of the sheet, but nearly its height.
+        scene.insert(
+            ItemId(3),
+            Item::new(crate::LayerId(0)).with(Primitive::stroked(
+                Shape::rect(Vec2::new(15.0, 16.0), Vec2::new(78.0, 203.0)),
+                Stroke::default(),
+            )),
+        );
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(1600.0, 836.0);
+        view.fit_scene(&scene, Fit::Content);
+        let seen = view.viewport.visible_world();
+        assert!(
+            !seen.contains_point(Vec2::new(410.0, 290.0)),
+            "sheet corner out of view"
+        );
+        assert!(view.viewport.zoom > 3.0, "{}", view.viewport.zoom);
     }
 
     #[test]

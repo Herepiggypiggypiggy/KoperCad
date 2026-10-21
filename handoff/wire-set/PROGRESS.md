@@ -1,0 +1,2 @@
+2026-10-21: audit's 19/25/27/36/50/63 traced: all reports already share 25 wires; 27/36/63 were table row totals. Fixed display + cross-check test. Screenshots not taken (QA harness needs libxkbcommon-x11-0).
+2026-10-21 follow-up (reviewer asks on #1158): WireSet cached by project revision, singular nouns, labels headline counts wire labels only, cut-list headline counts group- sections only, label count measured, numbers 19/6/25/50/27 pinned, plainer wording. Line wrap at 1366x768 not checked (no QA harness here).

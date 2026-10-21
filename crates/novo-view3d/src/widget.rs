@@ -1307,6 +1307,28 @@ impl View3d {
         }
     }
 
+    /// The space a selected device asks for around it, as a dashed outline on
+    /// the surface it stands on: anything inside it is too close.
+    fn paint_clearance_zones(
+        &self,
+        painter: &egui::Painter,
+        rect: Rect,
+        scene: &Scene,
+        bounds: &crate::math::Aabb,
+        look: &Look,
+    ) {
+        let stroke = Stroke::new(1.5, color3(look.selection.edge, 230));
+        for zone in dimension::clearance_zones(scene, &self.state.selection) {
+            let pts: Option<Vec<Pos2>> = zone
+                .iter()
+                .map(|c| self.project_in(rect, bounds, *c))
+                .collect();
+            let Some(mut pts) = pts else { continue };
+            pts.push(pts[0]);
+            painter.extend(egui::Shape::dashed_line(&pts, stroke, 5.0, 4.0));
+        }
+    }
+
     /// Measuring lines with end ticks and the length on a chip (see
     /// `dimension`). Lines too short on screen to carry their text are left
     /// out; zoom in and they appear. Gaps with a clearance verdict are the
@@ -1319,6 +1341,7 @@ impl View3d {
         bounds: &crate::math::Aabb,
         look: &Look,
     ) {
+        self.paint_clearance_zones(painter, rect, scene, bounds, look);
         let font = FontId::monospace(11.0);
         for d in dimension::dimensions(scene, &self.state.selection) {
             let (Some(a), Some(b)) = (

@@ -133,6 +133,9 @@ pub struct PlantSymbol {
     pub at: (f64, f64),
     /// What the symbol is: `coil`, `contact`, `terminal`, `lamp`, `motor`...
     pub kind: String,
+    /// KoperCAD's own library key, when the file comes from KoperCAD: the
+    /// symbol is drawn with exactly this artwork, its pins in order.
+    pub library: Option<String>,
     pub pins: Vec<PlantPin>,
     /// The net an interruption point (`Kind` `interruption`) is named after:
     /// points of the same name on different pages are one conductor.
@@ -811,6 +814,7 @@ impl Reader {
                 page: page.to_string(),
                 at: (x, y),
                 kind: first(&a, &["Kind"]).unwrap_or("generic").to_string(),
+                library: first(&a, &["Symbol"]).map(str::to_string),
                 pins,
                 net: first(&a, &["Net"]).map(str::to_string),
             });

@@ -13,6 +13,7 @@
 
 pub mod aml;
 pub mod bridge;
+pub mod compare;
 pub mod dwg;
 pub mod dxf;
 pub mod eplan;

@@ -76,3 +76,10 @@ fn every_lesson_parses_and_names_files_that_exist() {
         }
     }
 }
+
+#[test]
+fn paths_teach_prerequisites_first_and_cover_every_lesson() {
+    let (catalog, _) = catalog();
+    let notes = novo_learn::lint::path_notes(&catalog);
+    assert!(notes.is_empty(), "{notes:#?}");
+}

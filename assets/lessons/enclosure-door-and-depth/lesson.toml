@@ -22,6 +22,7 @@ level = "intermediate"
 minutes = 7
 topics = ["cabinet", "enclosure", "door"]
 needs = ["cabinet-layout"]
+show_problems = true
 next = ["heat-and-sizing"]
 project = "../wire-routing/project.json"
 

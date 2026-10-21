@@ -61,6 +61,7 @@ pub(super) struct Panel {
     height: Option<f32>,
     fit: bool,
     title_bar: bool,
+    above_card: bool,
 }
 
 impl Panel {
@@ -84,6 +85,7 @@ impl Panel {
             height: None,
             fit: false,
             title_bar: true,
+            above_card: false,
         }
     }
 
@@ -117,6 +119,13 @@ impl Panel {
     /// No title bar: the panel has its own header and is dragged by its body.
     pub(super) fn bare(mut self) -> Self {
         self.title_bar = false;
+        self
+    }
+
+    /// Starts clear of a card in the bottom right corner (the lesson card)
+    /// instead of under it: for the panels that open on every selection.
+    pub(super) fn above_card(mut self) -> Self {
+        self.above_card = true;
         self
     }
 
@@ -173,7 +182,15 @@ impl Panel {
         };
         let moved = is_moved(ctx, id);
         let (pivot, start) = self.start();
-        let max_height = (self.canvas.height() - self.top - BOTTOM - self.bottom).max(MIN_HEIGHT);
+        // A panel hanging from the right edge stays clear of a card in the
+        // bottom right corner, unless the person has moved it.
+        let corner = if self.above_card && self.side == Side::Right && !moved {
+            reserved_bottom_right(ctx)
+        } else {
+            0.0
+        };
+        let max_height =
+            (self.canvas.height() - self.top - BOTTOM - self.bottom - corner).max(MIN_HEIGHT);
         let mut window = egui::Window::new(&self.title)
             .id(id)
             .order(egui::Order::Middle)
@@ -292,6 +309,30 @@ fn pending_id() -> egui::Id {
     egui::Id::new("panel_dialog_pending")
 }
 
+/// Whether a dialog window is on top, which is then the one Escape belongs
+/// to ([`esc`] closes it on the same key press).
+pub(super) fn dialog_on_top(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<egui::Id>(pending_id()))
+        .is_some_and(|id| {
+            let layer = egui::LayerId::new(egui::Order::Middle, id);
+            top_middle_layer(ctx) == Some(layer)
+        })
+}
+
+/// The floating window on top that was drawn last frame. A window that was
+/// closed keeps its remembered layer (and its place on top of the others),
+/// so the area order alone would leave Escape
+/// with nothing to close once the top one is gone.
+fn top_middle_layer(ctx: &egui::Context) -> Option<egui::LayerId> {
+    ctx.memory(|m| {
+        let layers: Vec<_> = m.layer_ids().collect();
+        layers
+            .into_iter()
+            .rev()
+            .find(|layer| layer.order == egui::Order::Middle && m.areas().visible_last_frame(layer))
+    })
+}
+
 /// Escape closes the dialog on top: wrap the `open` flag handed to
 /// `.open(..)` right after [`dialog`]. Does nothing while a text field has
 /// the keyboard (Escape is theirs then) or when another floating window is on
@@ -302,8 +343,7 @@ pub(super) fn esc<'a>(ctx: &egui::Context, open: &'a mut bool) -> &'a mut bool {
         && !ctx.data(|d| d.get_temp::<bool>(esc_off_id()).unwrap_or(false))
         && ctx.input(|i| i.key_pressed(egui::Key::Escape))
         && !ctx.egui_wants_keyboard_input()
-        && ctx.memory(|m| m.areas().top_layer_id(egui::Order::Middle))
-            == Some(egui::LayerId::new(egui::Order::Middle, id))
+        && top_middle_layer(ctx) == Some(egui::LayerId::new(egui::Order::Middle, id))
     {
         *open = false;
     }
@@ -318,6 +358,21 @@ pub(super) fn reset_layout(ctx: &egui::Context) {
         let epoch: u32 = d.get_persisted(epoch_id()).unwrap_or(0);
         d.insert_persisted(epoch_id(), epoch.wrapping_add(1));
     });
+}
+
+fn corner_id() -> egui::Id {
+    egui::Id::new("panel_corner_reserved")
+}
+
+/// The bottom right corner is taken by a card (the lesson card) this tall:
+/// panels that start at the right side stay above it instead of drawing
+/// under it. 0 gives the corner back. Read on the next frame.
+pub(super) fn reserve_bottom_right(ctx: &egui::Context, height: f32) {
+    ctx.data_mut(|d| d.insert_temp(corner_id(), height));
+}
+
+fn reserved_bottom_right(ctx: &egui::Context) -> f32 {
+    ctx.data(|d| d.get_temp::<f32>(corner_id())).unwrap_or(0.0)
 }
 
 fn epoch_id() -> egui::Id {

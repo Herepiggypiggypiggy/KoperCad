@@ -137,7 +137,8 @@ pub fn solve_temperatures(s: &Setup, st: &mut State, load: f64, step: Option<&St
                         bld.add(i, j, -m);
                     }
                     // Conduction plus unresolved mixing.
-                    let d = s.air.k + rho_cp * (s.params.mixing_m2s + 0.05 * speed * 0.05);
+                    let d = s.air.k
+                        + rho_cp * (s.params.mixing_m2s + s.jet_mixing_m2s + 0.05 * speed * 0.05);
                     let g = d * len * s.depth * phi / ds;
                     bld.add(i, i, g);
                     bld.add(j, j, g);

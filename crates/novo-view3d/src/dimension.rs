@@ -108,6 +108,31 @@ pub fn dimensions(scene: &Scene, selection: &BTreeSet<ItemId>) -> Vec<Dimension>
     out
 }
 
+/// The free space a selected device asks for, as the four corners of a
+/// rectangle on the surface it stands on: its footprint grown by the need on
+/// each side. Devices that ask for nothing get none.
+pub fn clearance_zones(scene: &Scene, selection: &BTreeSet<ItemId>) -> Vec<[Vec3; 4]> {
+    selection
+        .iter()
+        .filter_map(|id| scene.get(*id))
+        .filter(|i| i.id.kind == ItemKind::Device)
+        .filter_map(|i| {
+            let need = i.needs.filter(|n| n.iter().any(|v| *v > 0.0))?;
+            let b = scene.world_bounds(i);
+            // Left, right, above (higher y), below, as in `Item::needs`.
+            let (x0, x1) = (b.min.x - need[0], b.max.x + need[1]);
+            let (y0, y1) = (b.min.y - need[3], b.max.y + need[2]);
+            let z = b.min.z;
+            Some([
+                Vec3::new(x0, y0, z),
+                Vec3::new(x1, y0, z),
+                Vec3::new(x1, y1, z),
+                Vec3::new(x0, y1, z),
+            ])
+        })
+        .collect()
+}
+
 fn bounds_of(scene: &Scene, kind: ItemKind) -> Option<Aabb> {
     let mut b = Aabb::EMPTY;
     for i in scene.items.iter().filter(|i| i.id.kind == kind) {
@@ -388,6 +413,50 @@ mod tests {
             height: 10.0,
         });
         assert!(dimensions(&s, &BTreeSet::new()).is_empty());
+    }
+
+    #[test]
+    fn a_device_that_asks_for_space_gets_a_zone_grown_by_its_needs() {
+        let mut s = scene();
+        for it in &mut s.items {
+            if it.id == ItemId::new(ItemKind::Device, 11) {
+                it.needs = Some([10.0, 20.0, 30.0, 40.0]);
+            }
+        }
+        let b = s.world_bounds(s.get(ItemId::new(ItemKind::Device, 11)).unwrap());
+        let z = clearance_zones(&s, &pick(&s, 11));
+        assert_eq!(z.len(), 1);
+        assert_eq!(z[0][0], Vec3::new(b.min.x - 10.0, b.min.y - 40.0, b.min.z));
+        assert_eq!(z[0][2], Vec3::new(b.max.x + 20.0, b.max.y + 30.0, b.min.z));
+        // A part with no stated need, or one that is not selected, has none.
+        assert!(clearance_zones(&s, &pick(&s, 12)).is_empty());
+        assert!(clearance_zones(&s, &BTreeSet::new()).is_empty());
+    }
+
+    #[test]
+    fn a_turned_device_asks_for_its_space_on_the_sides_of_the_plate() {
+        let mut s = scene();
+        for it in &mut s.items {
+            if it.id == ItemId::new(ItemKind::Device, 11) {
+                // R: a quarter turn clockwise seen from the door. The part is
+                // 50 x 100 upright, so 100 wide and 50 tall on the plate.
+                it.pose.rotation = glam::Quat::from_rotation_z(-std::f32::consts::FRAC_PI_2);
+                // Plate sides, as the build fills them in.
+                it.needs = Some([10.0, 20.0, 30.0, 40.0]);
+            }
+        }
+        let b = s.world_bounds(s.get(ItemId::new(ItemKind::Device, 11)).unwrap());
+        assert!(
+            (b.max.x - b.min.x - 100.0).abs() < 0.01 && (b.max.y - b.min.y - 50.0).abs() < 0.01
+        );
+        let z = clearance_zones(&s, &pick(&s, 11));
+        assert_eq!(z.len(), 1);
+        // Left 10 and right 20 grow the wide side, above 30 and below 40 the tall one:
+        // the needs are not turned a second time.
+        assert!((z[0][0].x - (b.min.x - 10.0)).abs() < 0.01);
+        assert!((z[0][0].y - (b.min.y - 40.0)).abs() < 0.01);
+        assert!((z[0][2].x - (b.max.x + 20.0)).abs() < 0.01);
+        assert!((z[0][2].y - (b.max.y + 30.0)).abs() < 0.01);
     }
 
     #[test]

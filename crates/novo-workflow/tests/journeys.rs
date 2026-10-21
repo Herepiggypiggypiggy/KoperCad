@@ -24,6 +24,7 @@ fn sources<'a>(project: &'a Project, library: &'a Library, keymap: &'a Keymap) -
             ..Context::default()
         },
         lessons: &[],
+        macros: &[],
     }
 }
 
@@ -110,9 +111,16 @@ fn commands_show_shortcuts_and_reasons() {
     assert_eq!(rows[0].shortcut.as_deref(), Some("Ctrl+Z"));
     assert_eq!(rows[0].disabled, Some("Nothing to undo"));
 
+    // Duplicate needs a selection, so Duplicate page, which can run, leads.
     let rows = palette.search("dup", &src);
-    assert_eq!(rows[0].target, Target::Command("edit.duplicate"));
-    assert_eq!(rows[0].shortcut.as_deref(), Some("Ctrl+D"));
+    assert_eq!(rows[0].target, Target::Command("page.duplicate"));
+    assert_eq!(rows[0].disabled, None);
+    let at = rows
+        .iter()
+        .position(|r| r.target == Target::Command("edit.duplicate"))
+        .expect("Duplicate is listed");
+    assert_eq!(rows[at].shortcut.as_deref(), Some("Ctrl+D"));
+    assert!(rows[at].disabled.is_some());
 
     // Symbols are in the same list.
     let rows = palette.search("mpcb", &src);

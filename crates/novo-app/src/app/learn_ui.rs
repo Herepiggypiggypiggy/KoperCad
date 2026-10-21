@@ -23,6 +23,7 @@ enum CardAction {
     CancelRestart,
     Close,
     Open(String),
+    Hint,
     OpenFinished,
     ConfirmFinished,
     CancelFinished,
@@ -45,6 +46,14 @@ pub(super) struct Card {
     /// A demonstration is on show (playing, or settled on its markers).
     demo_on: bool,
     next_lessons: Vec<(String, String)>,
+    /// A challenge: the goal is stated, the way is not.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(super) challenge: bool,
+    /// The hints the learner has opened, and how many there are.
+    pub(super) hints_open: Vec<String>,
+    pub(super) hints_total: usize,
+    /// Skip does the step for the learner (it has a `solve`).
+    skip_does_it: bool,
     /// The lesson ships a finished drawing and the learner is at its end.
     pub(super) can_open_finished: bool,
     confirm_finished: bool,
@@ -59,6 +68,7 @@ struct Words {
     replay: String,
     stop: String,
     skip: String,
+    do_it: String,
     next: String,
     restart: String,
     restart_confirm: String,
@@ -68,6 +78,7 @@ struct Words {
     done: String,
     done_text: String,
     next_lessons: String,
+    hint: String,
     open_finished: String,
     finished_confirm: String,
 }
@@ -76,6 +87,7 @@ impl NovoApp {
     /// The lesson card, the pointer and the notes, late in the frame.
     pub(super) fn learn_overlay(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         if !self.learn.card_on() {
+            super::panel::reserve_bottom_right(ctx, 0.0);
             return;
         }
         self.pointer(ctx, canvas);
@@ -100,7 +112,20 @@ impl NovoApp {
         })
         .map_or(egui::Rect::NOTHING, |r| r.response.rect);
         self.learn.card_pos = Some(card_rect.center());
+        // The inspector and the other right-hand panels keep above the card
+        // while it sits in its corner.
+        let parked =
+            card_rect.is_finite() && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
+        super::panel::reserve_bottom_right(
+            ctx,
+            if parked {
+                card_rect.height() + super::panel::MARGIN
+            } else {
+                0.0
+            },
+        );
         match action {
+            Some(CardAction::Move(Move::Skip)) => self.learn_skip(ctx),
             Some(CardAction::Move(how)) => self.learn_move(how),
             Some(CardAction::ShowMe) => self.learn_show_me(),
             Some(CardAction::StopDemo) => self.learn_stop_demo(),
@@ -112,6 +137,7 @@ impl NovoApp {
             Some(CardAction::CancelRestart) => self.learn.confirm_restart = false,
             Some(CardAction::Close) => self.learn.hidden = true,
             Some(CardAction::Open(id)) => self.start_lesson(&id),
+            Some(CardAction::Hint) => self.learn_open_hint(),
             Some(CardAction::OpenFinished) => self.learn.confirm_finished = true,
             Some(CardAction::ConfirmFinished) => {
                 self.learn_open_finished();
@@ -134,6 +160,7 @@ impl NovoApp {
             replay: say("demo_replay"),
             stop: say("demo_stop"),
             skip: say("skip_step"),
+            do_it: say("do_it_for_me"),
             next: say("next"),
             restart: say("restart_lesson"),
             restart_confirm: say("restart_confirm"),
@@ -143,13 +170,20 @@ impl NovoApp {
             done: say("done"),
             done_text: say("done_text"),
             next_lessons: say("next_lessons"),
+            hint: say("hint"),
             open_finished: say("open_finished"),
             finished_confirm: say("open_finished_confirm"),
         };
         let n = (run.index() + 1).min(total).to_string();
+        let challenge = lesson.kind == novo_learn::Kind::Challenge;
+        let title = if challenge {
+            format!("{} · {}", say("fix_it"), lesson.title(lang))
+        } else {
+            lesson.title(lang).to_owned()
+        };
         let header = format!(
             "{} · {}",
-            lesson.title(lang),
+            title,
             self.learn
                 .say_with("step_of", &[("n", &n), ("total", &total.to_string())])
         );
@@ -188,7 +222,20 @@ impl NovoApp {
             }),
             how: self.learn_how_lines(),
             demo_on: self.learn.demo.is_some(),
+            challenge,
+            hints_open: step
+                .map(|s| {
+                    let shown = if self.learn.hints_for == s.id {
+                        self.learn.hints_shown
+                    } else {
+                        0
+                    };
+                    s.hints(lang).iter().take(shown).cloned().collect()
+                })
+                .unwrap_or_default(),
+            hints_total: step.map_or(0, |s| s.hints(lang).len()),
             next_lessons,
+            skip_does_it: step.is_some_and(|s| !s.solve.is_empty() && s.manual.is_none()),
             can_open_finished: (finished || run.index() + 1 >= total)
                 && self
                     .learn
@@ -264,6 +311,23 @@ impl NovoApp {
                     });
                 }
             }
+            for (i, hint) in card.hints_open.iter().enumerate() {
+                ui.add_space(4.0);
+                section_label(ui, &format!("{} {}", card.words.hint, i + 1));
+                self.markup(ui, hint);
+            }
+            if card.hints_open.len() < card.hints_total {
+                ui.add_space(4.0);
+                let label = format!(
+                    "{} ({} / {})",
+                    card.words.hint,
+                    card.hints_open.len() + 1,
+                    card.hints_total
+                );
+                if ui.button(label).clicked() {
+                    action = Some(CardAction::Hint);
+                }
+            }
             ui.add_space(4.0);
             ui.horizontal_wrapped(|ui| {
                 if ui
@@ -289,7 +353,14 @@ impl NovoApp {
                     if novo_theme::widgets::primary_button(ui, &card.words.next).clicked() {
                         action = Some(CardAction::Move(Move::Next));
                     }
-                } else if ui.button(&card.words.skip).clicked() {
+                } else if ui
+                    .button(if card.skip_does_it {
+                        &card.words.do_it
+                    } else {
+                        &card.words.skip
+                    })
+                    .clicked()
+                {
                     action = Some(CardAction::Move(Move::Skip));
                 }
             });

@@ -62,6 +62,7 @@ pub const FIXED_CELL_TEXTS: &[&str] = &[
     "free air",
     "routed",
     "routed, no depth",
+    "to entry + cable run",
     "Built by (name)",
     "Cut DIN rail",
     "Cut Wiring duct",

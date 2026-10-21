@@ -55,6 +55,9 @@ pub(crate) struct LiveView {
     /// Click mode of "Why?": the next click on a wire or device asks why it
     /// is lit or dead (Alt+click does the same without the mode).
     pub(super) why_mode: bool,
+    /// The frame whose Escape was handled, so a repeated pass of one frame
+    /// does not step back twice.
+    escaped_in: Option<u64>,
     /// What the explanation is about.
     why: Option<Target>,
     /// The PLC program window and the program running in it.
@@ -227,6 +230,26 @@ impl LiveView {
         let closed = self.poles.is_closed(symbol, group);
         for member in together(project, symbol) {
             self.poles.set_all(project, member, !closed);
+        }
+    }
+
+    /// Switches the live view off and drops what it was asking.
+    pub(super) fn leave(&mut self) {
+        self.on = false;
+        self.why_mode = false;
+        self.why = None;
+        self.held = None;
+    }
+
+    /// Escape steps back one level: the Why? click mode, then its answer,
+    /// then the live view itself.
+    pub(super) fn escape(&mut self) {
+        if self.why_mode {
+            self.why_mode = false;
+        } else if self.why.is_some() {
+            self.why = None;
+        } else {
+            self.leave();
         }
     }
 
@@ -449,6 +472,24 @@ pub(super) fn operators(project: &Project, page: PageId, poles: &PoleState) -> V
     out
 }
 
+/// The first other page, in page order, that has a push button to press, with the name to show for it ("2 Control circuit").
+pub(super) fn operator_page(project: &Project, current: PageId) -> Option<(PageId, String)> {
+    let rest = novo_sim::rest_state(project);
+    project
+        .pages_in_order()
+        .into_iter()
+        .filter(|p| p.id != current)
+        .find(|p| operators(project, p.id, &rest).iter().any(|o| o.momentary))
+        .map(|p| {
+            let name = if p.title.is_empty() {
+                p.name.clone()
+            } else {
+                format!("{} {}", p.name, p.title)
+            };
+            (p.id, name)
+        })
+}
+
 /// A coil of the page, for its badge.
 pub(super) struct CoilBadge {
     pub symbol: SymbolId,
@@ -617,6 +658,19 @@ impl NovoApp {
         }
     }
 
+    /// `sim.why`: switches the live view on if it is off and waits for a
+    /// click on a wire or a device.
+    pub(super) fn ask_why(&mut self) {
+        if !self.wb.live.on {
+            self.toggle_live();
+        }
+        self.wb.live.why_mode = true;
+        self.message(
+            Level::Info,
+            "Click a wire or a device to see why it is lit or dead",
+        );
+    }
+
     /// Hands the canvas the wire looks of the live view (none when it is off).
     fn light_wires(&mut self, looks: HashMap<WireId, WireLook>) {
         let Some(doc) = self.backend.document() else {
@@ -629,6 +683,23 @@ impl NovoApp {
 
     /// Paints the live view over the canvas and shows its card and badges.
     pub(super) fn live_view(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+        if !self.wb.live.on {
+            self.light_wires(HashMap::new());
+            return;
+        }
+        // Escape, when nothing else is using it (the command field, the
+        // pages flyout, a menu, a text box or a dialog such as the PLC window).
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape))
+            && !self.wb.field.is_open()
+            && !self.outline_open
+            && !ctx.egui_wants_keyboard_input()
+            && !egui::Popup::is_any_open(ctx)
+            && !super::panel::dialog_on_top(ctx)
+            && self.wb.live.escaped_in != Some(ctx.cumulative_frame_nr())
+        {
+            self.wb.live.escaped_in = Some(ctx.cumulative_frame_nr());
+            self.wb.live.escape();
+        }
         if !self.wb.live.on {
             self.light_wires(HashMap::new());
             return;
@@ -1066,6 +1137,13 @@ impl NovoApp {
         let mut follow: Option<SymbolId> = None;
         let why_mode = self.wb.live.why_mode;
         let operators = operators(project, page, &poles);
+        let mut go_to: Option<PageId> = None;
+        let has_buttons = operators.iter().any(|o| o.momentary);
+        let elsewhere = if story.is_none() && !has_buttons {
+            operator_page(project, page)
+        } else {
+            None
+        };
         let card = super::panel::Panel::new(
             "live_card",
             "Live potentials",
@@ -1087,8 +1165,25 @@ impl NovoApp {
             if badges.is_empty() {
                 ui.weak("No switched contacts on this page");
             } else {
-                ui.add(egui::Label::new(egui::RichText::new(&story).strong()).wrap())
+                let said = story.as_deref().unwrap_or("Nothing is switched on yet.");
+                ui.add(egui::Label::new(egui::RichText::new(said).strong()).wrap())
                     .on_hover_text(format!("{closed} of {} poles closed", badges.len()));
+                if story.is_none() && !has_buttons {
+                    // The buttons are on another page: say where.
+                    match &elsewhere {
+                        Some((page, name)) => {
+                            ui.add(egui::Label::new(format!("The buttons are on page {name}.")).wrap());
+                            if ui.small_button(format!("Go to page {name}")).clicked() {
+                                go_to = Some(*page);
+                            }
+                        }
+                        None => {
+                            ui.weak("This drawing has no push button to press.");
+                        }
+                    }
+                } else if story.is_none() {
+                    ui.weak("Hold a push button below.");
+                }
                 if ui
                     .small_button("Reset")
                     .on_hover_text("Back to the plant at rest")
@@ -1100,12 +1195,14 @@ impl NovoApp {
             if !operators.is_empty() {
                 ui.add_space(2.0);
                 ui.label(egui::RichText::new("Operate").strong());
+                // As tall as the canvas allows, so no row is cut off.
                 egui::ScrollArea::vertical()
-                    .max_height(150.0)
+                    .max_height((canvas.height() - 330.0).clamp(120.0, 420.0))
+                    .auto_shrink([false, true])
                     .id_salt("live_operate")
                     .show(ui, |ui| {
                         for op in &operators {
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 ui.label(&op.label);
                                 ui.weak(format!("{} · {}", op.kind, op.state));
                             });
@@ -1169,7 +1266,7 @@ impl NovoApp {
                 if ui
                     .selectable_label(why_mode, "Why?")
                     .on_hover_text(
-                        "Then click a wire or a device to see why it is lit or dead. holding Alt while you click does the same at any time",
+                        "Then click a wire or a device to see why it is lit or dead. Holding Alt while you click does the same at any time",
                     )
                     .clicked()
                 {
@@ -1245,6 +1342,9 @@ impl NovoApp {
         {
             ctx.request_repaint();
         }
+        if let Some(page) = go_to {
+            self.show_page(page);
+        }
         if toggle_why {
             self.wb.live.why_mode ^= true;
             self.learn_event(novo_learn::Event::Clicked("live.why".to_owned()));
@@ -1267,7 +1367,7 @@ impl NovoApp {
             self.open_motor_start_for(motor);
         }
         if leave {
-            self.wb.live.on = false;
+            self.wb.live.leave();
         }
         if open_all {
             if let Some(doc) = self.backend.document() {
@@ -1670,6 +1770,36 @@ mod tests {
         let colors: Vec<_> = doc.project().potentials().map(potential_color).collect();
         assert_eq!(colors.len(), 3);
         assert!(colors[0] != colors[1] && colors[1] != colors[2] && colors[0] != colors[2]);
+    }
+
+    /// A page with nothing to operate points at the page that has the buttons.
+    #[test]
+    fn a_page_without_buttons_points_to_the_page_that_has_them() {
+        let mut doc = Document::default();
+        let (out, _) = doc
+            .transact("Draw", |tx| {
+                let main = tx.add_page("1")?;
+                let control = tx.add_page("2")?;
+                let s1 = tx.add_device(novo_core::DeviceTag::product("S1"), "")?;
+                let role = SymbolRole::Device {
+                    device: s1,
+                    main: true,
+                };
+                let start = part(tx, control, "iec/operators/pushbutton_no", 0.0, role);
+                tx.update::<novo_core::SymbolInstance>(start, |s| {
+                    s.pass_through = vec![vec![0, 1]]
+                })?;
+                Ok((main, control))
+            })
+            .unwrap();
+        let (main, control) = out;
+        let project = doc.project();
+        let rest = novo_sim::rest_state(project);
+        assert!(operators(project, main, &rest).is_empty());
+        let (page, name) = operator_page(project, main).expect("page 2 has a button");
+        assert_eq!(page, control);
+        assert!(name.starts_with('2'));
+        assert!(operator_page(project, control).is_none());
     }
 
     /// The Operate list holds the hand devices only, with plain-words state.

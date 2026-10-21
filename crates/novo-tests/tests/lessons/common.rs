@@ -58,11 +58,13 @@ const LESSON_KEYS: &[&str] = &[
     "project",
     "finished",
     "page",
+    "kind",
+    "show_problems",
     "step",
 ];
 const STEP_KEYS: &[&str] = &[
     "id", "title", "title_nl", "text", "text_nl", "how", "how_nl", "point", "note", "expect",
-    "solve", "pause", "demo",
+    "solve", "pause", "demo", "hints", "hints_nl",
 ];
 
 /// Lints one lesson folder against its sample project. Returns every
