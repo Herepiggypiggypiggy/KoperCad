@@ -356,24 +356,23 @@ pub fn cover(
     );
     let on_cable = jobs.iter().filter(|j| j.cable.is_some()).count();
     let set = crate::WireSet::of(project);
-    // One line each: the cover rows are one or two lines tall in the PDF.
+    // One line each: the cover rows are one or two lines tall in the PDF, and
+    // every row costs a line of notes on the same page.
     fact(
         &mut facts,
         "Wires to cut",
         format!(
-            "{} ({} between pins + {})",
+            "{} ({} between pins + {}{})",
             jobs.len(),
             set.connections,
-            crate::count_text(set.leads(), "supply and PE leads")
+            crate::count_text(set.leads(), "supply and PE leads"),
+            if on_cable > 0 {
+                format!("; {on_cable} on cables")
+            } else {
+                String::new()
+            }
         ),
     );
-    if on_cable > 0 {
-        fact(
-            &mut facts,
-            "Cable cores",
-            format!("{on_cable} of the wires to cut are cores of a cable"),
-        );
-    }
     fact(
         &mut facts,
         "Wires as drawn",
@@ -388,7 +387,6 @@ pub fn cover(
                 .any(|s| matches!(s.role, SymbolRole::Device { .. }))
         })
         .count();
-    fact(&mut facts, "Devices to fit", drawn.to_string());
     let mut sheet_count = 0usize;
     let mut seen = std::collections::BTreeSet::new();
     for job in jobs {
@@ -398,7 +396,14 @@ pub fn cover(
             sheet_count += 1;
         }
     }
-    fact(&mut facts, "Circuits with wires", sheet_count.to_string());
+    fact(
+        &mut facts,
+        "Devices to fit",
+        format!(
+            "{drawn} (wires are on {sheet_count} circuit {})",
+            if sheet_count == 1 { "sheet" } else { "sheets" }
+        ),
+    );
 
     let mut index = Section::new(
         "contents",
