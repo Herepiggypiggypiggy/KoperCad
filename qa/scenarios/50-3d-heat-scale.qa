@@ -1,0 +1,24 @@
+@title 3D Heat: hold the colour range, then go back to Auto
+@area 3D
+# Scale menu in the Heat strip: Hold this range keeps the range now shown; Auto goes back to ambient to the hottest cell.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text Simulate #2
+wait 600
+click_text Scale
+wait 20
+expect "Hold this range"
+shot scale-menu
+click_text "Hold this range"
+wait 20
+expect "Scale: set"
+shot scale-held
+click_text Auto
+wait 20
+expect_not "Scale: set"
+shot scale-auto
+check_layout
