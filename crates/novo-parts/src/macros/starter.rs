@@ -180,14 +180,28 @@ fn orthogonal_routes(tx: &mut Tx<'_>) -> Result<()> {
         }
         bends.push((w.id, a, b));
     }
-    for (n, (id, a, b)) in bends.into_iter().enumerate() {
+    // Crossing heights already taken, with the x range of the run.
+    let mut taken: Vec<(f64, f64, f64)> = Vec::new();
+    for (id, a, b) in bends {
         let span = b.y - a.y;
-        let nudge = if span.abs() >= 12.0 {
-            ((n % 4) as f64 - 1.5) * 2.0
-        } else {
-            0.0
-        };
-        let mid = a.y + span / 2.0 + nudge;
+        let (lo, hi) = (a.x.min(b.x), a.x.max(b.x));
+        let room = (span.abs() / 2.0 - 3.0).max(0.0);
+        let mut mid = a.y + span / 2.0;
+        for step in 0..8 {
+            let nudge = ((step + 1) / 2) as f64 * 2.0 * if step % 2 == 0 { 1.0 } else { -1.0 };
+            if nudge.abs() > room {
+                break;
+            }
+            let candidate = a.y + span / 2.0 + nudge;
+            let clash = taken
+                .iter()
+                .any(|&(l, h, m)| l <= hi && lo <= h && (m - candidate).abs() < 1.0);
+            if !clash {
+                mid = candidate;
+                break;
+            }
+        }
+        taken.push((lo, hi, mid));
         tx.update::<novo_core::Wire>(id, |w| {
             w.route = vec![Point::new(a.x, mid), Point::new(b.x, mid)];
         })?;
