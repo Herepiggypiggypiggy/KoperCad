@@ -1,2 +1,4 @@
 2026-10-21 20:30 UTC salvage, damaged-file open, float round trip fix, 600-page and undo-across-save tests written; PR pending.
 2026-10-21 21:20 UTC Reviewer A finding: Salvage.info_lost flag, named in summary(), test with only the info row damaged.
+
+2026-10-21 (round 3, branch claude/data-safety-autosave-checks): app-loop tests with a design check in flight on a 1600-symbol project (`crates/novo-app/src/app/checks_background_tests.rs`): a saved project keeps writing each edit to its file (file bytes equal the drawing after every write, Unix; equal after close, all platforms) and an untitled one autosaves to its recovery file, while the worker runs; the checks catch up without changing the drawing. Note for tests: edits must go through `backend.record(&changes)` as the app's edit path does, or saves skip them.
