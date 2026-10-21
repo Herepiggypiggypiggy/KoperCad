@@ -102,6 +102,7 @@ mod report;
 pub mod safety;
 mod schedule;
 mod sheets;
+pub mod single_line;
 mod strip_diagram;
 mod table;
 mod toc;
@@ -138,6 +139,7 @@ pub use plugs::PlugList;
 pub use report::{Dependencies, LiveReports, Report, Reports};
 pub use schedule::CableSchedule;
 pub use sheets::{GeneratedSheet, SheetFingerprint, fingerprint, sheet_name, sheet_names};
+pub use single_line::SingleLineDiagram;
 pub use strip_diagram::{
     sheet_count as strip_sheet_count, strip_diagram, strip_sheet, terminals_per_sheet,
 };
@@ -167,6 +169,7 @@ pub fn standard_reports() -> Vec<Box<dyn Report>> {
         Box::new(CableSchedule),
         Box::new(PlugList),
         Box::new(Labels),
+        Box::new(SingleLineDiagram),
     ]
 }
 

@@ -127,6 +127,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.io", at("Reports")),
     ("report.cable_schedule", at("Reports")),
     ("report.plugs", at("Reports")),
+    ("report.singleline", at("Reports")),
     ("report.add_page", at("Reports")),
     ("export.report_pdf", under("Reports", "Export")),
     // Edit
@@ -511,6 +512,7 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
                 "report.io",
                 "report.cable_schedule",
                 "report.plugs",
+                "report.singleline",
             ],
             &["report.add_page", "report.designer", "view.bench"],
         ],
@@ -906,6 +908,7 @@ mod tests {
             "report.io",
             "report.cable_schedule",
             "report.plugs",
+            "report.singleline",
             "report.add_page",
         ] {
             assert_eq!(home(id), at("Reports"), "{id}");

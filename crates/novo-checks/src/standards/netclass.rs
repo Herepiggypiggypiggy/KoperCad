@@ -272,6 +272,31 @@ impl<'a> Nets<'a> {
         self.dist[net.0 as usize]
     }
 
+    /// The distances from the supply with extra starting nets added, for a
+    /// converter (drive, transformer, power supply) whose output nets no
+    /// switched pole reaches: each `(net, distance)` starts a walk there.
+    pub(crate) fn distances_with(&self, extra: &[(NetId, u32)]) -> Vec<Option<u32>> {
+        let mut dist = self.dist.clone();
+        let mut queue: VecDeque<usize> = VecDeque::new();
+        for &(net, d) in extra {
+            let i = net.0 as usize;
+            if dist[i].is_none_or(|old| d < old) {
+                dist[i] = Some(d);
+                queue.push_back(i);
+            }
+        }
+        while let Some(a) = queue.pop_front() {
+            let d = dist[a].unwrap_or(0);
+            for e in &self.adj[a] {
+                if dist[e.to].is_none_or(|old| d + 1 < old) {
+                    dist[e.to] = Some(d + 1);
+                    queue.push_back(e.to);
+                }
+            }
+        }
+        dist
+    }
+
     /// Whether the supply reaches the net through switched poles.
     pub(crate) fn is_fed(&self, net: NetId) -> bool {
         self.dist[net.0 as usize].is_some()

@@ -129,6 +129,11 @@ impl LiveReports {
         let format = project.page(sheet.page)?.format;
         let setup = PageSetup::for_format(format);
         let output = self.get(project, &sheet.report)?;
+        // The single-line diagram prints as the drawing; a schedule longer
+        // than the sheet continues as the plain table.
+        if sheet.report == crate::SingleLineDiagram::ID && sheet.sheet.rows.start == 0 {
+            return crate::single_line::sheet_layout(project, sheet.sheet.section, &setup);
+        }
         // Terminal diagrams print as drawn strips, not as tables.
         if sheet.report == crate::TerminalDiagram::ID
             && let Some(section) = output.sections.get(sheet.sheet.section)

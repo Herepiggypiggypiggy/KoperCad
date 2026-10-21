@@ -2243,6 +2243,24 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["plug list"],
     ),
     verb(
+        cmd(
+            "report.singleline",
+            "Single-line diagram",
+            "View",
+            &[
+                "one-line diagram",
+                "one line",
+                "power distribution",
+                "distribution diagram",
+                "feeders",
+                "voltage drop overview",
+                "cable size and length",
+            ],
+            Needs::Project,
+        ),
+        &["single line"],
+    ),
+    verb(
         with_arguments(
             cmd(
                 "report.add_page",
@@ -2271,6 +2289,7 @@ pub const COMMANDS: &[CommandInfo] = &[
                 "cableschedule",
                 "plugs",
                 "labels",
+                "singleline",
             ],
         ),
         &["add report page", "add page"],

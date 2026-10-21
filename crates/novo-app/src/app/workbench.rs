@@ -544,6 +544,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "report.io",
     "report.cable_schedule",
     "report.plugs",
+    "report.singleline",
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
