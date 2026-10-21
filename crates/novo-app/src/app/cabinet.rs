@@ -191,6 +191,7 @@ pub(super) enum Ask {
     SetEntryPoint(StructureId, Option<(f64, f64)>),
     /// Set or clear the stated wire length outside the entry (mm).
     SetEntryOutside(StructureId, Option<f64>),
+    /// Set or clear the wall the gland is in (the way out is drawn through it).
     SetEntryWall(StructureId, Option<novo_routing::entry::Wall>),
     ExportWireProduction,
     OpenBench,

@@ -1,0 +1,26 @@
+@title Run card checks on a sized wire: tight corner, hot neighbour (1920x1080)
+@area 3D
+# A fixture with 35 mm2 wires round the corner of two 25 mm ducts and devices with a power loss.
+open qa/fixtures/cable-checks.novo
+wait 20
+resize 1920 1080
+wait 10
+click_text 3D
+wait 40
+key ctrl+k
+wait 3
+text wire runs
+wait 4
+key Enter
+wait 40
+click 1670 320
+wait 60
+shot card-top
+click 1850 108
+wait 40
+shot front-view
+scroll 1750 580 -600
+wait 10
+shot card-foot
+expect "Bend radius (model)"
+expect "Heat (model)"

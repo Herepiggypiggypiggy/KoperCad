@@ -24,6 +24,7 @@ wait 40
 shot arrow-dashed-front
 click_text Cabinet #1
 wait 30
+# The example puts the entry nearest the bottom edge, so its guess is labelled "Bottom (nearest edge)".
 click_text "Bottom (nearest edge)"
 wait 6
 click_text Left

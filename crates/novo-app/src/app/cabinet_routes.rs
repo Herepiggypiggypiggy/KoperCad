@@ -557,7 +557,7 @@ fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Op
         })
         .response
         .on_hover_text(
-            "Which side of the plate the gland is on. Not stated: the plate edge nearest to the entry point is drawn, as a guess. It only decides where the 3D view draws the way out; no length uses it.",
+            "Which side of the plate the gland is on, as seen from the front of the plate. Not stated: the plate edge nearest to the entry point is drawn, as a guess. It only decides where the 3D view draws the way out; no length uses it.",
         );
         ui.horizontal(|ui| {
             ui.label("Wire outside the entry");

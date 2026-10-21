@@ -7,6 +7,14 @@ seen once they open the list. Add an entry when a feature PR merges. -->
 Where: Cabinet workspace, Routes panel, "Gland in the" (and the 3D view).
 State the wall the gland is in; the 3D view draws the way out from the entry through that edge of the plate. Not stated, the nearest edge is drawn dashed as a guess.
 
+## 2026-10-21-d · Bend radius and heat checks on the Run card
+Where: 3D workspace, click a wire; Settings rules "Bend radius", "Gap to hot devices", "Hot from".
+The card says whether the wire or cable can take the duct corners of its path (a red cross marks a tight one) and which devices losing heat it passes close to. Both are models, and the card says what they do not know.
+
+## 2026-10-21-c · Pick a duct to list its runs
+Where: 3D workspace, click a duct.
+The Wire runs panel shows how full the duct is and every run in it; click a run for its Run card, or "Select its runs" to read them together.
+
 ## 2026-10-21-a · Cable runs in 3D
 Where: 3D workspace, click a wire (or Ctrl+K, "wire runs", then a row).
 The Run card shows the path lit up along its ducts, how the length was found, how full each duct is and where the cabinet entry is; "Select all cores of the cable" lights a whole cable.
