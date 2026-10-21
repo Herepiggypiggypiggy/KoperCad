@@ -1084,16 +1084,29 @@ impl NovoApp {
         let mut open = true;
         let mut decide: Option<(usize, bool)> = None;
         let mut send: Option<String> = None;
-        super::panel::dialog(ctx, "Ask Claude", [460.0, 620.0])
+        super::panel::dialog(ctx, "Ask Claude", [460.0, 700.0])
             .open(super::panel::esc(ctx, &mut open))
+            // The agree controls are pinned below; the rest scrolls above them.
+            .scroll([false, false])
             .show(ctx, |ui| {
-                self.assistant_settings_ui(ui, ctx);
-                ui.separator();
-                if self.settings.ai.enabled {
-                    send = self.assistant_chat_ui(ui, &mut decide);
-                } else {
-                    ui.weak("Turn Claude on above to start a conversation.");
+                if self.wb.assistant.show_settings {
+                    egui::Panel::bottom("ask_claude_agree")
+                        .resizable(false)
+                        .show(ui, |ui| self.assistant_agree_ui(ui));
                 }
+                egui::CentralPanel::default().show(ui, |ui| {
+                    egui::ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            self.assistant_settings_ui(ui, ctx);
+                            ui.separator();
+                            if self.settings.ai.enabled {
+                                send = self.assistant_chat_ui(ui, &mut decide);
+                            } else {
+                                ui.weak("Turn Claude on above to start a conversation.");
+                            }
+                        });
+                });
             });
         self.wb.assistant.open = open;
         if let Some((i, apply)) = decide {
@@ -1323,8 +1336,20 @@ impl NovoApp {
              the real bill.",
         );
         ui.add_space(6.0);
+    }
 
-        // 4. Agree and switch on.
+    /// Section 4 of the settings, pinned under the scrolling sections 1 to 3
+    /// so the box and the button are reachable on a small window.
+    fn assistant_agree_ui(&mut self, ui: &mut egui::Ui) {
+        let pal = ui_palette();
+        let enabled = self.settings.ai.enabled;
+        let key = self.wb.assistant.key();
+        // Sections 1 to 3 have already stored a change of scope.
+        let scope = self
+            .wb
+            .assistant
+            .pending_scope
+            .unwrap_or_else(|| self.settings.ai.consent.effective());
         ui.strong("4. Agree");
         ui.label(egui::RichText::new(NOTICE).color(pal.text_secondary));
         if enabled {
