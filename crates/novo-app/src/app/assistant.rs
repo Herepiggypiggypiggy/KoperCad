@@ -601,6 +601,12 @@ impl NovoApp {
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => {
                     st.running = None;
+                    st.thinking = false;
+                    // Keep what was streamed so far instead of dropping it.
+                    let partial = std::mem::take(&mut st.live);
+                    if !partial.trim().is_empty() {
+                        st.transcript.push(Entry::Claude(partial));
+                    }
                     st.transcript
                         .push(Entry::Problem("The assistant stopped unexpectedly.".into()));
                     break;
