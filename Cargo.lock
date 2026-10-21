@@ -2151,6 +2151,7 @@ dependencies = [
 name = "novo-parts"
 version = "0.1.0"
 dependencies = [
+ "calamine",
  "dirs",
  "novo-core",
  "novo-storage",
@@ -2158,6 +2159,7 @@ dependencies = [
  "novo-terminals",
  "novo-tests",
  "quick-xml",
+ "rust_xlsxwriter",
  "serde",
  "serde_json",
  "sha2",

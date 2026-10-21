@@ -29,6 +29,7 @@ mod makers;
 mod quantity;
 
 pub use apply::{ApplyContext, Mapped, RecipeReport, Skipped, local_keys};
+pub(crate) use apply::{connection_kind, currency_of, lifecycle_of};
 pub use makers::{GENERIC, RECIPES, recipe_for};
 pub use quantity::{Dim, Quantity, parse_quantity};
 

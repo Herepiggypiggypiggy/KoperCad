@@ -13,6 +13,10 @@
 //! - [`import_catalog`]: CSV import with English, German and Dutch headers.
 //! - [`import_inbox`]: the bulk import of every catalog file in one folder
 //!   (`kopercad-cli parts import`), with a per-maker report.
+//! - [`TableFile`], [`Mapping`], [`build_preview`]: the table import with a
+//!   mapping step (CSV and Excel files with any column layout), a row by
+//!   row preview with checks, and honest labelling of what the file does
+//!   not say.
 //! - [`ImportJob`], [`LocalLibrary`], [`import_bmecat`], [`step_box`]: the
 //!   one-click part import and the per-user library of downloaded maker
 //!   files (design: `docs/PARTS-LIBRARY-DESIGN.md`). No network code here.
@@ -43,6 +47,9 @@ mod search;
 mod sheet;
 mod step;
 mod table;
+mod tablefile;
+mod tablemap;
+mod tablepreview;
 
 pub use assign::{
     AssignMode, PartProposal, Suggestion, assign_cable_part, assign_part, assign_terminal_part,
@@ -112,4 +119,12 @@ pub use step::{StepBox, StepError, step_box};
 pub use table::{
     BulkError, BulkOutcome, BulkRow, BulkTable, TableColumn, apply_table, fill, find_device,
     set_cell,
+};
+pub use tablefile::{Sheet, TABLE_EXTENSIONS, TableError, TableFile};
+pub use tablemap::{
+    ColumnMap, MEASURES, Mapping, Measure, SavedMappings, Target, guess_header_row, measure,
+    saved_mappings_path, split_header, stored_unit,
+};
+pub use tablepreview::{
+    Counts, Coverage, ImportPreview, Issue, PreviewRow, RowStatus, Severity, build_preview,
 };

@@ -108,8 +108,15 @@ pub fn parse_delimited(text: &str) -> Result<Vec<DelimitedRow>, ParseError> {
     Ok(rows)
 }
 
+/// The delimiter the lines of the text agree on. A title line above the
+/// table (`Price list 2026, example`) must not decide it, so the first
+/// lines vote: each candidate scores the lines that hold its most common
+/// non-zero count outside quotes, weighted by that count. Ties go to tab
+/// (Excel paste), then `;`.
 fn detect_delimiter(text: &str) -> char {
-    let mut counts = [('\t', 0usize), (';', 0), (',', 0)];
+    const CANDIDATES: [char; 3] = ['\t', ';', ','];
+    let mut per_line: Vec<[usize; 3]> = Vec::new();
+    let mut counts = [0usize; 3];
     let mut quoted = false;
     let mut field_start = true;
     let mut chars = text.chars().peekable();
@@ -125,23 +132,49 @@ fn detect_delimiter(text: &str) -> char {
             continue;
         }
         match c {
-            '"' if field_start => quoted = true,
-            '\n' | '\r' => break,
+            '"' if field_start => {
+                quoted = true;
+                field_start = false;
+            }
+            '\n' | '\r' => {
+                if counts.iter().any(|n| *n > 0) {
+                    per_line.push(counts);
+                    if per_line.len() >= 30 {
+                        break;
+                    }
+                }
+                counts = [0; 3];
+                field_start = true;
+            }
             _ => {
-                if let Some(entry) = counts.iter_mut().find(|(d, _)| *d == c) {
-                    entry.1 += 1;
+                if let Some(i) = CANDIDATES.iter().position(|d| *d == c) {
+                    counts[i] += 1;
                     field_start = true;
-                    continue;
+                } else {
+                    field_start = false;
                 }
             }
         }
-        field_start = false;
     }
-    // Ties go to the earlier entry: tab (Excel paste), then `;`.
-    let mut best = (',', 0);
-    for (d, n) in counts {
-        if n > best.1 {
-            best = (d, n);
+    if counts.iter().any(|n| *n > 0) && per_line.len() < 30 {
+        per_line.push(counts);
+    }
+    let mut best = (',', 0usize);
+    for (i, d) in CANDIDATES.iter().enumerate() {
+        let mut votes: std::collections::BTreeMap<usize, usize> = Default::default();
+        for line in &per_line {
+            if line[i] > 0 {
+                *votes.entry(line[i]).or_default() += 1;
+            }
+        }
+        // The most common count wins; on a tie the larger count (a wider
+        // table beats a one-off title).
+        let Some((&count, &lines)) = votes.iter().max_by_key(|(c, n)| (**n, **c)) else {
+            continue;
+        };
+        let score = lines * count;
+        if score > best.1 {
+            best = (*d, score);
         }
     }
     best.0
@@ -465,6 +498,15 @@ mod tests {
             .into_iter()
             .map(|r| r.fields)
             .collect()
+    }
+
+    #[test]
+    fn a_title_line_with_a_comma_does_not_decide_the_delimiter() {
+        let rows = fields("Price list 2026, example\n\nMaker;Order;Price\nA;B-1;1,5\nA;B-2;2,5\n");
+        assert_eq!(rows[2], ["A", "B-1", "1,5"]);
+        // Two real comma rows still win over one stray semicolon.
+        let rows = fields("a,b,c\n1,2;x,3\n4,5,6\n");
+        assert_eq!(rows[0], ["a", "b", "c"]);
     }
 
     #[test]

@@ -140,6 +140,7 @@ mod parts_pins;
 #[cfg(test)]
 mod parts_pins_tests;
 mod parts_quality;
+mod parts_table;
 mod pdf;
 mod pdf_options;
 mod plate_export;
@@ -312,6 +313,8 @@ mod onboarding_tests;
 mod outline_tests;
 #[cfg(test)]
 mod page_commands_tests;
+#[cfg(test)]
+mod parts_table_tests;
 #[cfg(test)]
 mod pdf_options_tests;
 #[cfg(test)]
@@ -1390,6 +1393,7 @@ impl NovoApp {
         self.plc_card_dialog(&ctx);
         self.plc_overview_window(&ctx);
         self.eplan_parts_dialog(&ctx);
+        self.parts_table_dialog(&ctx);
         self.eplan_export_dialog(&ctx);
         self.plc_import_dialog(&ctx);
         self.plc_list_dialog(&ctx);

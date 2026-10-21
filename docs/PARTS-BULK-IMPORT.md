@@ -24,7 +24,7 @@ is needed and where to save. `--dry-run` reads and reports without writing.
 
 The same import runs from the app, no command line needed:
 
-- **File > Import > Import parts from a folder** (command `parts.import_folder`,
+- **File > Import parts > Import parts from a folder** (command `parts.import_folder`,
   also in the Ctrl+K palette as "import parts"): pick a folder of catalog files
   (the picker opens in the inbox); the result and the files that held no parts
   are listed afterwards.
@@ -33,6 +33,9 @@ The same import runs from the app, no command line needed:
   (what to download per maker) and *New part...* (add a part by hand to your
   own catalog). A catalog file dropped on the window with no part selected is
   imported as a catalog.
+
+A spreadsheet or price list with your own column layout (`.xlsx`, or a CSV that is not a maker
+file) goes through the table import instead, with a mapping step: `PARTS-TABLE-IMPORT.md`.
 
 ## What it does
 
