@@ -1,0 +1,16 @@
+{
+  "format": 1,
+  "records": [
+    {
+      "manufacturer": "Siemens",
+      "order_number": "3RT2016-1AP01",
+      "kind": "step",
+      "file_name": "3rt2016-1ap01.step",
+      "stored_path": "siemens/3rt20161ap01/3rt2016-1ap01.step",
+      "sha256": "9c8c2d5672a9168bfd3fa0adb569a0730af07108f205885b9349b733fe79b232",
+      "bytes": 13955,
+      "imported": "2026-10-21",
+      "flow": "manual"
+    }
+  ]
+}

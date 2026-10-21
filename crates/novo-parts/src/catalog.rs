@@ -153,6 +153,16 @@ impl PartKey {
     pub fn of_model(part: &Part) -> Self {
         PartKey::new(&part.manufacturer, &part.order_number)
     }
+
+    /// The normalized manufacturer.
+    pub fn manufacturer(&self) -> &str {
+        &self.manufacturer
+    }
+
+    /// The normalized order number.
+    pub fn order_number(&self) -> &str {
+        &self.order_number
+    }
 }
 
 impl CatalogPart {

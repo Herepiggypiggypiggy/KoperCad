@@ -1,0 +1,1 @@
+A synthetic parts library for QA scenarios (`library qa/fixtures/library`): one STEP model, a 45 x 40 x 80 mm box with two thick pins (14 mm across, 30 mm long) sticking out of the top, stored for the Siemens 3RT2016-1AP01 contactor of the bundled example. Not a maker file; written by the generator in `crates/novo-interop/tests/pins.rs`.
