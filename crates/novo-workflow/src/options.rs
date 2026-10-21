@@ -365,6 +365,189 @@ pub fn condition_for(def: &OptionDef, wanted: &Value) -> Result<String> {
     })
 }
 
+/// How a rule compares an option with a value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Test {
+    Is,
+    IsNot,
+    AtLeast,
+    AtMost,
+}
+
+impl Test {
+    /// The words the picker shows.
+    pub fn words(self) -> &'static str {
+        match self {
+            Test::Is => "is",
+            Test::IsNot => "is not",
+            Test::AtLeast => "is at least",
+            Test::AtMost => "is at most",
+        }
+    }
+
+    fn operator(self) -> &'static str {
+        match self {
+            Test::Is => "==",
+            Test::IsNot => "!=",
+            Test::AtLeast => ">=",
+            Test::AtMost => "<=",
+        }
+    }
+}
+
+/// The tests that make sense for an option: a yes/no is yes or no, a choice
+/// is or is not a value, a number can also be at least or at most.
+pub fn tests_for(def: &OptionDef) -> Vec<Test> {
+    match def.spec.kind {
+        ParamKind::Bool => vec![Test::Is],
+        ParamKind::Choice => vec![Test::Is, Test::IsNot],
+        _ => vec![Test::Is, Test::IsNot, Test::AtLeast, Test::AtMost],
+    }
+}
+
+/// One line of a picked condition: "Supply is 480V".
+#[derive(Debug, Clone, PartialEq)]
+pub struct Clause {
+    pub option: String,
+    pub test: Test,
+    pub value: Value,
+}
+
+impl Clause {
+    /// A first line for an option: the answer that leaves something out of
+    /// the standard machine (yes for a yes/no, the first choice that is not
+    /// the default), so a new line is not just the default restated.
+    pub fn first_for(def: &OptionDef) -> Clause {
+        let value = match def.spec.kind {
+            ParamKind::Bool => Value::Bool(true),
+            ParamKind::Choice => def
+                .spec
+                .choices
+                .iter()
+                .find(|c| Value::Text((*c).clone()) != def.default)
+                .map_or_else(|| def.default.clone(), |c| Value::Text(c.clone())),
+            _ => def.default.clone(),
+        };
+        Clause {
+            option: def.id.clone(),
+            test: Test::Is,
+            value,
+        }
+    }
+}
+
+fn clause_text(def: &OptionDef, clause: &Clause) -> Result<String> {
+    let value = def.check(&clause.value).map_err(|e| bad(e.to_string()))?;
+    if !tests_for(def).contains(&clause.test) {
+        return Err(bad(format!("{} cannot be compared that way", def.label())));
+    }
+    Ok(match value {
+        Value::Bool(true) => format!("opt.{}", def.id),
+        Value::Bool(false) => format!("!opt.{}", def.id),
+        Value::Text(t) => {
+            if t.contains('\'') {
+                return Err(bad(
+                    "a choice with a quote in it cannot be used in a condition",
+                ));
+            }
+            format!("opt.{} {} '{t}'", def.id, clause.test.operator())
+        }
+        other => format!("opt.{} {} {other}", def.id, clause.test.operator()),
+    })
+}
+
+/// The condition for picked lines, all of which must hold. `None` for no
+/// lines (always).
+pub fn condition_from_clauses(defs: &[OptionDef], clauses: &[Clause]) -> Result<Option<String>> {
+    let mut parts = Vec::new();
+    for clause in clauses {
+        let def = defs
+            .iter()
+            .find(|d| d.id == clause.option)
+            .ok_or_else(|| bad(format!("no option '{}'", clause.option)))?;
+        parts.push(clause_text(def, clause)?);
+    }
+    Ok((!parts.is_empty()).then(|| parts.join(" && ")))
+}
+
+/// Reads a condition back as picked lines. `None` when it is more than
+/// lines joined by `&&` (a hand-written expression): the picker then leaves
+/// it alone and the expression stays editable as text.
+pub fn clauses_of(defs: &[OptionDef], condition: &str) -> Option<Vec<Clause>> {
+    let mut clauses = Vec::new();
+    for part in split_all(condition) {
+        let part = part.trim();
+        let (negated, rest) = match part.strip_prefix('!') {
+            Some(r) => (true, r),
+            None => (false, part),
+        };
+        let rest = rest.strip_prefix("opt.")?;
+        let id_len = rest
+            .find(|c: char| !(c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_'))
+            .unwrap_or(rest.len());
+        let (id, tail) = rest.split_at(id_len);
+        let def = defs.iter().find(|d| d.id == id)?;
+        let tail = tail.trim();
+        let clause = if tail.is_empty() {
+            if def.spec.kind != ParamKind::Bool {
+                return None;
+            }
+            Clause {
+                option: id.into(),
+                test: Test::Is,
+                value: Value::Bool(!negated),
+            }
+        } else {
+            if negated {
+                return None;
+            }
+            let test = [Test::Is, Test::IsNot, Test::AtLeast, Test::AtMost]
+                .into_iter()
+                .find(|t| tail.starts_with(t.operator()))?;
+            let value = tail[test.operator().len()..].trim();
+            let value = match def.spec.kind {
+                ParamKind::Choice => {
+                    let t = value.strip_prefix('\'')?.strip_suffix('\'')?;
+                    Value::Text(t.into())
+                }
+                ParamKind::Number => crate::expr::Val::Num(value.parse().ok()?).to_value(),
+                _ => return None,
+            };
+            Clause {
+                option: id.into(),
+                test,
+                value,
+            }
+        };
+        clauses.push(clause);
+    }
+    // Only what the picker would write itself: nothing is silently changed.
+    (condition_from_clauses(defs, &clauses).ok()?.as_deref() == Some(condition.trim()))
+        .then_some(clauses)
+}
+
+/// Splits on `&&` outside quotes.
+fn split_all(condition: &str) -> Vec<&str> {
+    let mut parts = Vec::new();
+    let (mut start, mut quoted) = (0, false);
+    let bytes = condition.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'\'' => quoted = !quoted,
+            b'&' if !quoted && bytes.get(i + 1) == Some(&b'&') => {
+                parts.push(&condition[start..i]);
+                start = i + 2;
+                i += 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    parts.push(&condition[start..]);
+    parts
+}
+
 /// Ties objects to an option: each appears only while `def` has the value
 /// `wanted`. Replaces any condition they had (the one condition is the whole
 /// rule; a combined rule is typed in the Project options window).
@@ -377,7 +560,8 @@ pub fn tie_to(tx: &mut Tx<'_>, ids: &[AnyId], def: &OptionDef, wanted: &Value) -
 }
 
 /// Says an object's condition in words: "Conveyor", "not Conveyor",
-/// "Supply 480V", or the expression itself when it is none of those. `None`
+/// "Supply 480V", "Conveyor and Supply is not 480V", or the expression itself
+/// when it is more than lines joined by "and". `None`
 /// for an object with no condition.
 pub fn describe_condition(project: &Project, id: impl Into<AnyId>) -> Option<String> {
     let condition = condition_of(project, id)?;
@@ -391,6 +575,24 @@ pub fn describe_condition(project: &Project, id: impl Into<AnyId>) -> Option<Str
                 });
             }
         }
+    }
+    let defs = options(project);
+    if let Some(lines) = clauses_of(&defs, &condition) {
+        let words: Vec<String> = lines
+            .iter()
+            .filter_map(|c| {
+                let def = defs.iter().find(|d| d.id == c.option)?;
+                Some(match &c.value {
+                    Value::Bool(true) => def.label().to_owned(),
+                    Value::Bool(false) => format!("not {}", def.label()),
+                    other => match c.test {
+                        Test::Is => format!("{} {other}", def.label()),
+                        test => format!("{} {} {other}", def.label(), test.words()),
+                    },
+                })
+            })
+            .collect();
+        return Some(words.join(" and "));
     }
     Some(condition)
 }
