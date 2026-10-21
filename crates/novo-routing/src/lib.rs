@@ -5,6 +5,7 @@
 //! Millimetres, origin top left, x right, y down. Nothing here touches a
 //! project; routes are derived and never stored.
 
+pub mod entry;
 mod graph;
 pub mod model;
 mod plan;

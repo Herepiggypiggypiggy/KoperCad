@@ -404,11 +404,11 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
     };
     left(
         unplaced,
-        "a device is not placed on the mounting plate, or the plate has no ducts. Use Cabinet > Place all, then the lengths are routed.",
+        "a device is not placed on the mounting plate, or its two ends are on different plates. Use Cabinet > Place all; the lengths of placed devices are routed.",
     );
     left(
         field,
-        "the wire leaves the cabinet for a device in another location. Its length is the cable run, which the drawing cannot know; the estimate is the page distance plus service loops.",
+        "the wire goes to a device in another location. Its length is the cable run, which the drawing cannot know; the estimate is the page distance plus service loops.",
     );
     left(
         feeds,
@@ -883,6 +883,21 @@ mod tests {
             let got = size(&basis(current, PotentialKind::Line, 400.0), None);
             assert_eq!(got.section, expect, "{current} A");
         }
+    }
+
+    /// The table column follows the loaded conductors: single-phase and DC
+    /// (two) read the two-conductor column, three-phase the three-conductor
+    /// one. Method C PVC at 1.5 mm²: 19.5 A and 17.5 A in the built-in
+    /// planning table (unverified against the standard, see the table
+    /// disclosure shown with every plan).
+    #[test]
+    fn the_table_column_follows_the_number_of_loaded_conductors() {
+        let one_phase = basis(19.0, PotentialKind::Line, 230.0);
+        assert_eq!(size(&one_phase, None).section, 1.5, "19 A, two loaded");
+        let three = basis(19.0, PotentialKind::Line, 400.0);
+        assert_eq!(size(&three, None).section, 2.5, "19 A, three loaded");
+        let dc = basis(19.0, PotentialKind::DcPositive, 24.0);
+        assert_eq!(size(&dc, None).section, 1.5, "19 A, two loaded (DC)");
     }
 
     #[test]
