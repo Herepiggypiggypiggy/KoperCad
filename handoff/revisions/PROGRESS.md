@@ -4,3 +4,4 @@
 2026-10-21 10:30 UTC PR #1167 opened. R3 review: restore now asks first (counts, Esc/click-outside cancels), buttons offered for whichever side is a revision, lock toast says "since X", error colour from ui_palette. Default-on lock kept (decision for Tadjiro if unwanted).
 2026-10-21 10:45 UTC R-review notes: LockFailed error (revision issued but lock failed), UI text says reports and parts are not locked, release note line, test that devices can be added elsewhere while pages are locked.
 2026-10-21 10:55 UTC Failed lock after issue now keeps the snapshot and returns the Issued (LockFailed carries it); test in issue.rs.
+2026-10-21 12:20 UTC Lock marks: outline icon, status chip, contents columns Issued and Locked (PR from main).

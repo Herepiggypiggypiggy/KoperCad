@@ -903,6 +903,21 @@ impl NovoApp {
             );
         }
         if let RowKind::Page { page, .. } = &row.kind
+            && self
+                .backend
+                .document()
+                .and_then(|d| d.project().page(*page))
+                .is_some_and(|p| p.locked.is_some())
+        {
+            ui.painter_at(rect).text(
+                egui::pos2(rect.right() - 16.0, mid),
+                egui::Align2::RIGHT_CENTER,
+                novo_theme::icons::LOCK_SIMPLE,
+                egui::FontId::proportional(tokens::FONT_SMALL),
+                crate::theme::ui_palette().text_tertiary,
+            );
+        }
+        if let RowKind::Page { page, .. } = &row.kind
             && self.page_has_changes(*page)
         {
             ui.painter_at(rect).circle_filled(
