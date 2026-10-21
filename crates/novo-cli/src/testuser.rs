@@ -48,6 +48,10 @@ pub(crate) struct TestUser {
     /// Extra environment for the app (set by a QA scenario's `@env`).
     #[arg(skip)]
     env: Vec<(String, String)>,
+    /// A parts library (`records.json` and the files it names) copied into
+    /// the empty profile at every launch (a QA scenario's `library` step).
+    #[arg(skip)]
+    library_seed: Option<PathBuf>,
 }
 
 impl TestUser {
@@ -67,6 +71,7 @@ impl TestUser {
             shots: Some(shots),
             real_profile: false,
             env,
+            library_seed: None,
         }
     }
 }
@@ -462,6 +467,11 @@ impl Server {
         self.opts.project = project;
     }
 
+    /// Start every launch from here with this parts library in the profile.
+    pub(crate) fn set_library_seed(&mut self, dir: Option<PathBuf>) {
+        self.opts.library_seed = dir;
+    }
+
     /// Whether the next launch keeps the profile of the last one.
     pub(crate) fn keep_profile(&mut self, keep: bool) {
         self.keep_profile = keep;
@@ -613,6 +623,20 @@ impl Server {
                 .env("XDG_CONFIG_HOME", home.join("config"))
                 .env("APPDATA", home.join("AppData"))
                 .env("LOCALAPPDATA", home.join("Local"));
+            if let Some(seed) = &self.opts.library_seed {
+                // Where the app looks (`novo_parts::default_library_root`).
+                let to = if cfg!(windows) {
+                    home.join("AppData/KoperCAD/library")
+                } else {
+                    home.join("data/novoelectric/library")
+                };
+                copy_dir(seed, &to).map_err(|e| {
+                    format!(
+                        "cannot copy the library {} to the profile: {e}",
+                        seed.display()
+                    )
+                })?;
+            }
         }
         #[cfg(target_os = "linux")]
         if std::env::var_os("DISPLAY").is_none() && std::env::var_os("WAYLAND_DISPLAY").is_none() {
@@ -870,6 +894,21 @@ fn tools() -> Value {
         ),
         tool("quit", "Close the app.", json!({}), json!([])),
     ])
+}
+
+/// Copies a folder and everything below it.
+fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(to)?;
+    for entry in std::fs::read_dir(from)? {
+        let entry = entry?;
+        let target = to.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            copy_dir(&entry.path(), &target)?;
+        } else {
+            std::fs::copy(entry.path(), target)?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

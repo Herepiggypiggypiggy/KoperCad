@@ -148,6 +148,11 @@ pub(super) fn parse_mm(text: &str) -> Option<f64> {
 #[derive(Debug, Default)]
 pub(crate) struct Fields {
     pub(super) hidden: bool,
+    /// The selected device's maker model, set before each `show`; `None` when
+    /// its part has no STEP file.
+    pub(super) model: Option<super::view3d_models::ModelRow>,
+    /// A turn asked for in the last `show`, for the caller to take.
+    pub(super) turned: Option<super::view3d_models::Turn>,
     for_device: Option<(u64, Position)>,
     x: String,
     y: String,
@@ -207,12 +212,66 @@ impl Fields {
                         pos.to_right, pos.to_bottom
                     ));
                     ui.weak("Arrows nudge: grid, Ctrl 5 mm, Shift 1 mm");
+                    if let Some(row) = &self.model {
+                        model_row(ui, row, &mut self.turned);
+                    }
                 });
             });
         if typed == (None, None) {
             return None;
         }
         set_position(layout, device, typed.0, typed.1)
+    }
+}
+
+/// The maker model's turns: the model of a part arrives as its file has it,
+/// which can be lying down or facing back; a quarter turn about each axis
+/// puts it right, and the turns stay with the part.
+fn model_row(
+    ui: &mut egui::Ui,
+    row: &super::view3d_models::ModelRow,
+    asked: &mut Option<super::view3d_models::Turn>,
+) {
+    use super::view3d_models::Turn;
+    ui.separator();
+    ui.strong(row.status);
+    ui.weak("Lying down or facing back? Turn it.");
+    ui.horizontal(|ui| {
+        for (label, turn, tip) in [
+            (
+                "Tip",
+                Turn::Tip,
+                "A quarter turn about the width: the top goes towards or away from the door",
+            ),
+            (
+                "Spin",
+                Turn::Spin,
+                "A quarter turn about the height: the front goes to the side or the back",
+            ),
+            (
+                "Roll",
+                Turn::Roll,
+                "A quarter turn about the depth: lays the model on its side or stands it up",
+            ),
+        ] {
+            if ui.button(label).on_hover_text(tip).clicked() {
+                *asked = Some(turn);
+            }
+        }
+        if ui
+            .add_enabled(row.turns != [0; 3], egui::Button::new("Reset"))
+            .on_hover_text("Back to the way the file came")
+            .clicked()
+        {
+            *asked = Some(Turn::Reset);
+        }
+    });
+    if row.turns != [0; 3] {
+        let [x, y, z] = row.turns.map(|q| u32::from(q) * 90);
+        ui.weak(format!(
+            "Turned about width {x}\u{b0}, height {y}\u{b0}, depth {z}\u{b0}"
+        ));
+        ui.weak("Kept for this part in every project");
     }
 }
 

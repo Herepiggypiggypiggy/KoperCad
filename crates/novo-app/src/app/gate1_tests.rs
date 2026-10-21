@@ -1674,7 +1674,10 @@ fn double_clicking_a_tag_opens_a_rename_box() {
     d.frame();
     let coil = d.place("coil", 200.0, 144.0);
     d.editor_leave();
-    d.frame();
+    // Let the fit settle: the dock reports its height a frame after the sheet is laid out.
+    for i in 0..3 {
+        frame_at(&mut d, 40.0 + f64::from(i) * 0.1, vec![]);
+    }
 
     // Find the tag on screen: the point whose pick is a device-tag label.
     let rect = d.app.wb.canvas_area.unwrap().1;
@@ -1683,8 +1686,8 @@ fn double_clicking_a_tag_opens_a_rename_box() {
     let origin = project.symbol(coil).unwrap().placement.origin;
     let scene = view.scene().unwrap();
     let zoom = view.canvas.viewport.zoom;
-    let mut found = None;
-    'scan: for dy in -40..=40 {
+    let mut hits = Vec::new();
+    for dy in -40..=40 {
         for dx in -40..=40 {
             let w =
                 novo_canvas::Vec2::new(origin.x as f32 + dx as f32, origin.y as f32 + dy as f32);
@@ -1692,12 +1695,13 @@ fn double_clicking_a_tag_opens_a_rename_box() {
                 && let Some(l) = scene.label_hit(&project, &hit)
                 && l.kind == LabelKind::DeviceTag
             {
-                found = Some(w);
-                break 'scan;
+                hits.push(w);
             }
         }
     }
-    let w = found.expect("the coil shows a tag");
+    // The middle of the label, not the first point that touches it: the edge
+    // can belong to a neighbour at some zoom levels.
+    let w = *hits.get(hits.len() / 2).expect("the coil shows a tag");
     let at = view.canvas.viewport.world_to_screen(w);
     let pos = rect.min + egui::vec2(at.x, at.y);
     let button = |pressed| egui::Event::PointerButton {
@@ -1903,7 +1907,10 @@ fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
             Ok((terminal, feed, jump))
         })
         .unwrap();
-    d.frame();
+    // Let the fit settle: the dock reports its height a frame after the sheet is laid out.
+    for _ in 0..3 {
+        d.frame();
+    }
     let (terminal, feed, jump) = syms;
 
     let double_click_label = |d: &mut Drive, sym, t0: f64| -> bool {

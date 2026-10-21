@@ -9,8 +9,8 @@
 use crate::icons::status;
 use crate::{Palette, fonts, icon_size, radius, space};
 use egui::{
-    Align, Align2, Button, CornerRadius, FontId, Frame, Layout, Margin, Rect, Response, RichText,
-    Sense, Stroke, Ui, UiBuilder, Vec2,
+    Align, Align2, Button, CornerRadius, FontId, Frame, Label, Layout, Margin, Rect, Response,
+    RichText, Sense, Stroke, Ui, UiBuilder, Vec2,
 };
 
 /// The height of a control at the current density.
@@ -744,28 +744,20 @@ pub fn banner(
         .inner_margin(Margin::symmetric(space::M as i8, 6))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(level.icon()).color(level.color(p)));
-                ui.label(RichText::new(text).color(p.text_primary));
-                ui.with_layout(Layout::right_to_left(Align::Center), add_actions);
-            });
-        })
-        .response
-}
-
-/// [`banner`] with no actions, whose text wraps to the width it is given (a long
-/// sentence in `banner` stays on one line and runs off the window).
-pub fn banner_wrapped(ui: &mut Ui, level: Level, text: &str) -> Response {
-    let p = Palette::of(ui);
-    Frame::new()
-        .fill(level.wash(p))
-        .corner_radius(radius::CONTROL)
-        .inner_margin(Margin::symmetric(space::M as i8, 6))
-        .show(ui, |ui| {
-            ui.set_width(ui.available_width());
-            ui.horizontal_top(|ui| {
-                ui.label(RichText::new(level.icon()).color(level.color(p)));
-                ui.add(egui::Label::new(RichText::new(text).color(p.text_primary)).wrap());
+            // The actions take their width from the right; the sentence wraps
+            // in what is left, so a long one is read in full, not cut.
+            // Centred across the row, so a one-line sentence sits level with
+            // its (taller) buttons; a wrapped one keeps its icon on the first line.
+            // The row is one control tall to start with (as `Ui::horizontal`
+            // does): a centred layout given the whole remaining height would
+            // stretch the banner to the bottom of the panel.
+            let row = Vec2::new(ui.available_width(), ui.spacing().interact_size.y);
+            ui.allocate_ui_with_layout(row, Layout::right_to_left(Align::Center), |ui| {
+                add_actions(ui);
+                ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
+                    ui.label(RichText::new(level.icon()).color(level.color(p)));
+                    ui.add(Label::new(RichText::new(text).color(p.text_primary)).wrap());
+                });
             });
         })
         .response
@@ -855,6 +847,48 @@ mod tests {
         assert_ne!(p.hover, p.accent_wash);
     }
 
+    /// The height of a banner drawn in a panel 700 pt tall and `width` wide.
+    fn banner_height(width: f32, text: &str, with_button: bool) -> f32 {
+        let ctx = egui::Context::default();
+        crate::apply(&ctx);
+        let mut height = 0.0;
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(
+                egui::Pos2::ZERO,
+                Vec2::new(width, 700.0),
+            )),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            height = banner(ui, Level::Info, text, |ui| {
+                if with_button {
+                    let _ = ui.button("Accept");
+                }
+            })
+            .rect
+            .height();
+        });
+        out.textures_delta.clear();
+        height
+    }
+
+    #[test]
+    fn a_banner_is_as_tall_as_its_text_and_buttons_not_the_panel() {
+        let long = "Sizes use planning values: the built-in ampacity tables are not checked against the standard. Read the clauses in your licensed copy before relying on a number.";
+        for width in [360.0, 1000.0] {
+            for with_button in [false, true] {
+                let one = banner_height(width, "Done", with_button);
+                let many = banner_height(width, long, with_button);
+                assert!(one < 60.0, "{width} wide, button {with_button}: {one}");
+                // Wrapped text grows the banner by its lines, nothing more.
+                assert!(
+                    many < 140.0 && many >= one,
+                    "{width} wide, button {with_button}: {many}"
+                );
+            }
+        }
+    }
+
     #[test]
     fn issue_pill_counts_errors_and_warnings_together() {
         let p = Palette::DARK;
@@ -922,6 +956,28 @@ mod tests {
             );
         });
         output.textures_delta.clear();
+    }
+
+    #[test]
+    fn a_long_banner_wraps_inside_its_width_and_keeps_its_action() {
+        let ctx = egui::Context::default();
+        let long = "A sentence much longer than the panel it sits in, so that it has to wrap onto more lines instead of running past the right edge. ".repeat(3);
+        let mut seen = None;
+        crate::apply_with(&ctx, crate::ThemeChoice::Dark, crate::Density::ALL[0]);
+        let mut output = ctx.run_ui(egui::RawInput::default(), |ui| {
+            ui.set_max_width(400.0);
+            let mut action = None;
+            let banner = banner(ui, Level::Info, &long, |ui| {
+                action = Some(ghost_button(ui, "Show").rect);
+            });
+            seen = Some((banner.rect, action));
+        });
+        output.textures_delta.clear();
+        let (rect, action) = seen.unwrap();
+        assert!(rect.width() <= 400.5, "{rect:?} is wider than its panel");
+        assert!(rect.height() > 40.0, "{rect:?} did not wrap");
+        let action = action.expect("the action was drawn");
+        assert!(rect.contains_rect(action), "{action:?} outside {rect:?}");
     }
 
     #[test]

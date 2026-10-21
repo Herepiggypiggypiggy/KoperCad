@@ -392,6 +392,9 @@ const FIT_SETTLE_FRAMES: u32 = 120;
 struct FitSettle {
     kind: Fit,
     size: Vec2,
+    /// The bottom reserve the fit was made with: the dock reports its height
+    /// after the canvas is drawn, so the first fit often used a stale one.
+    reserve: f32,
     /// The view the fit left; a different one means something else (a
     /// reveal, a jump) moved it and the fit must not be redone over it.
     center: Vec2,
@@ -400,10 +403,11 @@ struct FitSettle {
 }
 
 impl FitSettle {
-    fn of(kind: Fit, viewport: &Viewport) -> FitSettle {
+    fn of(kind: Fit, viewport: &Viewport, reserve: f32) -> FitSettle {
         FitSettle {
             kind,
             size: viewport.size,
+            reserve,
             center: viewport.center,
             zoom: viewport.zoom,
             frames: FIT_SETTLE_FRAMES,
@@ -638,16 +642,21 @@ impl CanvasView {
         let Some(mut settle) = self.fit_settle.take() else {
             return;
         };
-        let displaced = self.viewport.center != settle.center || self.viewport.zoom != settle.zoom;
+        // Within a pixel is still the fit: the view is snapped to whole
+        // pixels while drawing, which nudges the centre by a fraction.
+        let nudge = (self.viewport.center - settle.center).abs().max_element() * settle.zoom;
+        let displaced = nudge > 1.0 || self.viewport.zoom != settle.zoom;
         if moved || displaced || settle.frames == 0 || self.viewport.size.x <= 1.0 {
             return;
         }
         settle.frames -= 1;
-        if (self.viewport.size - settle.size).abs().max_element() > 0.5 {
+        if (self.viewport.size - settle.size).abs().max_element() > 0.5
+            || (self.fit_reserve_bottom - settle.reserve).abs() > 0.5
+        {
             self.fit_scene(scene, settle.kind);
             settle = FitSettle {
                 frames: settle.frames,
-                ..FitSettle::of(settle.kind, &self.viewport)
+                ..FitSettle::of(settle.kind, &self.viewport, self.fit_reserve_bottom)
             };
         }
         self.fit_settle = Some(settle);
@@ -665,7 +674,7 @@ impl CanvasView {
             && let Some(kind) = self.fit_pending.take()
         {
             self.fit_scene(scene, kind);
-            self.fit_settle = Some(FitSettle::of(kind, &self.viewport));
+            self.fit_settle = Some(FitSettle::of(kind, &self.viewport, self.fit_reserve_bottom));
         } else {
             let moved = response.dragged()
                 || response.clicked()
@@ -1932,12 +1941,34 @@ mod tests {
     }
 
     #[test]
+    fn a_dock_that_reports_its_height_after_the_fit_still_gets_its_strip() {
+        let scene = page_scene();
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(800.0, 600.0);
+        view.fit_scene(&scene, Fit::Sheet);
+        view.fit_settle = Some(FitSettle::of(
+            Fit::Sheet,
+            &view.viewport,
+            view.fit_reserve_bottom,
+        ));
+        // The dock is drawn after the canvas and only now says how tall it is.
+        view.fit_reserve_bottom = 80.0;
+        view.settle_fit(&scene, false);
+        let bottom = view.viewport.world_to_screen(Vec2::new(210.0, 297.0)).y;
+        assert!(bottom <= 600.0 - 80.0 + 0.5, "sheet bottom at {bottom}");
+    }
+
+    #[test]
     fn a_fit_follows_the_canvas_when_a_panel_takes_width_after_it() {
         let scene = page_scene();
         let mut view = CanvasView::new();
         view.viewport.size = Vec2::new(1280.0, 700.0);
         view.fit_scene(&scene, Fit::Content);
-        view.fit_settle = Some(FitSettle::of(Fit::Content, &view.viewport));
+        view.fit_settle = Some(FitSettle::of(
+            Fit::Content,
+            &view.viewport,
+            view.fit_reserve_bottom,
+        ));
         // The outline opens and takes 300 points.
         view.viewport.size = Vec2::new(980.0, 700.0);
         view.settle_fit(&scene, false);
@@ -1952,7 +1983,11 @@ mod tests {
         let mut view = CanvasView::new();
         view.viewport.size = Vec2::new(1280.0, 700.0);
         view.fit_scene(&scene, Fit::Content);
-        view.fit_settle = Some(FitSettle::of(Fit::Content, &view.viewport));
+        view.fit_settle = Some(FitSettle::of(
+            Fit::Content,
+            &view.viewport,
+            view.fit_reserve_bottom,
+        ));
         let before = view.viewport.center;
         view.viewport.size = Vec2::new(980.0, 700.0);
         view.settle_fit(&scene, true);
@@ -1966,7 +2001,11 @@ mod tests {
         let mut view = CanvasView::new();
         view.viewport.size = Vec2::new(1280.0, 700.0);
         view.fit_scene(&scene, Fit::Content);
-        view.fit_settle = Some(FitSettle::of(Fit::Content, &view.viewport));
+        view.fit_settle = Some(FitSettle::of(
+            Fit::Content,
+            &view.viewport,
+            view.fit_reserve_bottom,
+        ));
         // Something outside the fit moves the view (a reveal or a jump).
         view.viewport.reveal(
             &Aabb::new(Vec2::new(300.0, 250.0), Vec2::new(320.0, 270.0)),

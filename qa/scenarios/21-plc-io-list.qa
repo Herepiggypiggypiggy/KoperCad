@@ -20,3 +20,22 @@ wait 30
 shot io-list-built
 check_layout
 check_blank io-list-built
+# A list with problems: duplicate address, a tag like a contactor, an unknown type.
+fresh
+click_text "Open example"
+wait 20
+answer_dialog crates/novo-plc/tests/fixtures/io-list-with-problems.csv
+key ctrl+k
+wait 4
+text import io list
+wait 6
+key Enter
+wait 20
+expect "same address"
+shot io-list-problems-review
+check_layout
+key Enter
+wait 30
+shot io-list-problems-built
+check_layout
+check_blank io-list-problems-built

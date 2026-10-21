@@ -214,12 +214,54 @@ impl NovoApp {
         }
     }
 
+    /// The address texts under imported channels follow the cards: after an
+    /// edit of a device (a card added, moved, deleted) or of the project info
+    /// (the address style), stale ones are brought up to date in the same undo
+    /// step. Does nothing, and adds no step, when none is stale.
+    pub(super) fn sync_plc_address_texts(&mut self, changes: &novo_core::ChangeSet) {
+        let touches_cards = changes.info
+            || changes
+                .added
+                .iter()
+                .chain(&changes.removed)
+                .chain(&changes.modified)
+                .any(|id| matches!(id, novo_core::AnyId::Device(_)));
+        if !touches_cards {
+            return;
+        }
+        let library = self
+            .canvas
+            .schematic_ref()
+            .map(|view| view.editor.catalog.library())
+            .unwrap_or_else(|| novo_symbols::Library::shared(novo_symbols::Pack::Iec));
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        if novo_plc::stale_address_texts(doc.project(), library).is_empty() {
+            return;
+        }
+        if let Ok((_, extra)) = doc.amend_last("Update PLC address texts", |tx| {
+            novo_plc::sync_address_texts(tx, library).map(|_| ())
+        }) {
+            self.changed_outside_canvas(&extra);
+        }
+    }
+
     fn apply_renumber_plans(&mut self, plans: &[RenumberPlan]) {
         let Some(doc) = self.backend.document_mut() else {
             return;
         };
+        let library = self
+            .canvas
+            .schematic_ref()
+            .map(|view| view.editor.catalog.library());
         let result = doc.transact("Renumber I/O", |tx| {
-            plans.iter().try_for_each(|plan| apply_renumber(tx, plan))
+            plans.iter().try_for_each(|plan| apply_renumber(tx, plan))?;
+            // The address texts drawn by the I/O list import follow the cards.
+            if let Some(library) = library {
+                novo_plc::sync_address_texts(tx, library)?;
+            }
+            Ok(())
         });
         match result {
             Ok(((), changes)) => {
