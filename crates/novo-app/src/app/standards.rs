@@ -62,6 +62,7 @@ impl NovoApp {
                         }
                     }
                 });
+                ui.weak("Each standard you tick adds its findings to the Issues list and to the count in the top bar.");
                 ui.add_space(6.0);
                 novo_theme::widgets::section_label(ui, "Assumptions");
                 ui.horizontal(|ui| {

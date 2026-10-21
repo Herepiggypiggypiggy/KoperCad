@@ -170,3 +170,25 @@ fn colours_are_not_checkable_when_no_wire_states_one() {
     }
     assert_ne!(row.verdict, standards::document::Verdict::Pass);
 }
+
+#[test]
+fn selecting_a_standard_adds_findings_and_the_pill_and_list_say_so() {
+    let (_dir, mut d) = example();
+    let none = d.app.problems().to_vec();
+    assert_eq!(super::checks::standards_findings(&none), 0);
+    assert!(super::checks::standards_note(0).is_none());
+    assert!(d.app.edit_project("Select standards", |tx| {
+        standards::select(tx, &StandardSet::ALL)
+    }));
+    d.frame();
+    let all = d.app.problems().to_vec();
+    let n = super::checks::standards_findings(&all);
+    assert!(
+        n > 0,
+        "the example has standards findings with every set on"
+    );
+    let note = super::checks::standards_note(n).unwrap();
+    assert!(note.contains("standards you selected"), "{note}");
+    assert!(note.starts_with(&n.to_string()), "{note}");
+    assert!(super::checks::standards_note(1).unwrap().contains("comes"));
+}

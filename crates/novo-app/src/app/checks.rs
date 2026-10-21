@@ -15,6 +15,24 @@ pub(super) fn open_problems(project: &Project) -> Vec<Problem> {
     novo_reports::issues::open(project)
 }
 
+/// How many of the open errors and warnings come from the standards the project selected.
+pub(super) fn standards_findings(problems: &[Problem]) -> usize {
+    problems
+        .iter()
+        .filter(|p| p.kind == novo_checks::ProblemKind::Standard && p.severity != Severity::Info)
+        .count()
+}
+
+/// The sentence that says the standards' findings are inside the count, or `None` without any.
+pub(super) fn standards_note(n: usize) -> Option<String> {
+    (n > 0).then(|| {
+        format!(
+            "{n} of these {} from the standards you selected (Standards check). Untick a standard there to leave its findings out.",
+            if n == 1 { "comes" } else { "come" }
+        )
+    })
+}
+
 /// Symbols plus wires above which the design check runs on a worker thread.
 const BACKGROUND_FROM: usize = 1500;
 
@@ -157,6 +175,7 @@ impl NovoApp {
             return;
         }
         let summary = Summary::of(self.shown_problems());
+        let from_standards = standards_note(standards_findings(self.shown_problems()));
         let pending = self.checks_pending();
         if pending {
             ui.ctx()
@@ -181,6 +200,8 @@ impl NovoApp {
                         .gamma_multiply(alpha),
                 );
                 response.on_hover_text("Updating after your last edit; the counts may change")
+            } else if let Some(note) = &from_standards {
+                response.on_hover_text(note)
             } else {
                 response
             }
@@ -220,6 +241,9 @@ impl NovoApp {
                 }
             }
         });
+        if let Some(note) = standards_note(standards_findings(self.shown_problems())) {
+            ui.weak(note);
+        }
         let filter = self.wb.issue_filter;
         // Errors first, then warnings, then infos, each in check order.
         let mut problems: Vec<(usize, Problem)> = self
