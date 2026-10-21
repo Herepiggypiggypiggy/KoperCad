@@ -2641,6 +2641,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.handover",
+            "Export handover package (folder)",
+            "Export",
+            &[
+                "handover",
+                "customer",
+                "as built",
+                "documentation",
+                "delivery",
+                "package",
+                "oplevering",
+            ],
+            Needs::Project,
+        ),
+        &["export handover", "handover package", "customer package"],
+    ),
+    verb(
+        cmd(
             "export.workshop",
             "Export workshop pack (folder)",
             "Export",

@@ -455,6 +455,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.report_pdf",
     "report.add_page",
     "export.assembly",
+    "export.handover",
     "export.workshop",
     "export.sheets",
     "export.sheets_csv",
@@ -1260,6 +1261,9 @@ impl NovoApp {
             "report.add_page" => self.add_report_page_command(argument),
             "export.assembly" => {
                 self.export_assembly();
+            }
+            "export.handover" => {
+                self.export_handover();
             }
             "export.workshop" => {
                 self.export_workshop();

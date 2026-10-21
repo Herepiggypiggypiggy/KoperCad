@@ -97,7 +97,7 @@ fn project_key(path: Option<&std::path::Path>) -> String {
 }
 
 /// File-name safe version of a plot set name.
-fn file_part(name: &str) -> String {
+pub(super) fn file_part(name: &str) -> String {
     name.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "-")
         .trim()
         .to_owned()
@@ -397,27 +397,12 @@ impl NovoApp {
                 );
                 continue;
             }
-            let as_state = PrintPreview {
-                tab: Tab::Sheets,
-                choice: set.print.clone(),
-                colour: set.look == "colour",
-                checks: set.checks,
-                pick: ids.clone(),
-                pages: Vec::new(),
-                sheets: Vec::new(),
-                built_for: None,
-                current: 0,
-                set: None,
-                set_name: String::new(),
-                note: None,
-            };
-            let options = self.print_options(&as_state, &ids);
             let path = self.own_pdf_path(&dir.join(format!(
                 "{} plot {}.pdf",
                 file_part(&stem),
                 file_part(&set.name)
             )));
-            if let Some(p) = self.export_options_to(&path, &options) {
+            if let Some(p) = self.write_plot_set(set, &ids, &path) {
                 written.push(p);
             }
         }
@@ -427,6 +412,56 @@ impl NovoApp {
             if written.len() == 1 { "" } else { "s" }
         ));
         written
+    }
+
+    /// Writes one plot set's pages to `path` with the set's own setup.
+    pub(super) fn write_plot_set(
+        &mut self,
+        set: &PlotSetChoice,
+        ids: &BTreeSet<PageId>,
+        path: &std::path::Path,
+    ) -> Option<PathBuf> {
+        let as_state = PrintPreview {
+            tab: Tab::Sheets,
+            choice: set.print.clone(),
+            colour: set.look == "colour",
+            checks: set.checks,
+            pick: ids.clone(),
+            pages: Vec::new(),
+            sheets: Vec::new(),
+            built_for: None,
+            current: 0,
+            set: None,
+            set_name: String::new(),
+            note: None,
+        };
+        let options = self.print_options(&as_state, ids);
+        self.export_options_to(path, &options)
+    }
+
+    /// The saved plot sets of this project with the pages each still has, as
+    /// `(set, page ids)`; a set with no page left is dropped.
+    pub(super) fn plot_sets_with_pages(&self) -> Vec<(PlotSetChoice, BTreeSet<PageId>)> {
+        let Some(doc) = self.backend.document() else {
+            return Vec::new();
+        };
+        let pages: Vec<(PageId, String)> = doc
+            .project()
+            .pages_in_order()
+            .iter()
+            .map(|p| (p.id, p.name.to_string()))
+            .collect();
+        self.plot_sets()
+            .into_iter()
+            .filter_map(|set| {
+                let ids: BTreeSet<PageId> = pages
+                    .iter()
+                    .filter(|(_, n)| set.pages.contains(n))
+                    .map(|(id, _)| *id)
+                    .collect();
+                (!ids.is_empty()).then_some((set, ids))
+            })
+            .collect()
     }
 
     /// The plates of the workshop pack and how each is cut into pages on the
@@ -491,6 +526,7 @@ fn sheets_tab(
             |ui| {
                 egui::ScrollArea::vertical()
                     .id_salt("print_controls")
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
                     .max_height((height - 92.0).max(200.0))
                     .show(ui, |ui| controls(ui, state, sets, wants));
                 ui.separator();
@@ -599,6 +635,9 @@ fn controls(
         });
     ui.add_space(6.0);
 
+    ui.checkbox(&mut state.checks, "Design checks as a last page")
+        .on_hover_text("The same last page the plain Export PDF adds when checks are open");
+    ui.add_space(6.0);
     novo_theme::widgets::section_label(ui, "Paper");
     let c = &mut state.choice;
     let paper = PrintPaper::from_key(&c.paper).unwrap_or_default();
@@ -662,8 +701,6 @@ fn controls(
         ui.selectable_value(&mut state.colour, false, "Black on white");
         ui.selectable_value(&mut state.colour, true, "In colour");
     });
-    ui.checkbox(&mut state.checks, "Design checks as a last page")
-        .on_hover_text("The same last page the plain Export PDF adds when checks are open");
     ui.add_space(8.0);
 }
 
@@ -679,7 +716,7 @@ fn actions(
     ui.add_space(4.0);
     let can = !state.pick.is_empty();
     if ui
-        .add_enabled(can, egui::Button::new("Save PDF"))
+        .add_enabled(can, egui::Button::new(save_label(state)))
         .on_hover_text("Writes the pages ticked, as previewed, to your Documents\\KoperCAD folder")
         .clicked()
     {
@@ -697,8 +734,22 @@ fn actions(
     }
 }
 
+/// The Save PDF button: says how many pages it writes and whether the
+/// checks page is among them.
+fn save_label(state: &PrintPreview) -> String {
+    let n = state.sheets.len();
+    format!(
+        "Save PDF ({n} page{}{})",
+        if n == 1 { "" } else { "s" },
+        if state.checks { ", with checks" } else { "" }
+    )
+}
+
 /// A sheet name that fits under its thumbnail.
 fn short_name(name: &str) -> String {
+    if name.starts_with("Design check") {
+        return "Checks".into();
+    }
     if name.chars().count() <= 8 {
         name.to_owned()
     } else {
@@ -854,9 +905,26 @@ fn preview_area(
                             let [r, g, b, a] = c.0;
                             Color32::from_rgba_unmultiplied(r, g, b, a)
                         };
+                        let drawn = state.sheets[i]
+                            .ops
+                            .iter()
+                            .any(|op| matches!(op, DrawOp::Primitive(_)));
                         for op in &state.sheets[i].ops {
-                            if let DrawOp::Primitive(prim) = op {
-                                paint_primitive(&thumb, prim, &map, k, &ink);
+                            match op {
+                                DrawOp::Primitive(prim) => {
+                                    paint_primitive(&thumb, prim, &map, k, &ink);
+                                }
+                                // A text-only page (the checks) shows its
+                                // lines as grey strokes.
+                                DrawOp::Label(l) if !drawn => {
+                                    let from = map(l.pos);
+                                    let len = l.text.chars().count() as f32 * l.height * 0.55 * k;
+                                    thumb.line_segment(
+                                        [from, from + vec2(len, 0.0)],
+                                        Stroke::new(1.0, Color32::from_gray(150)),
+                                    );
+                                }
+                                DrawOp::Label(_) => {}
                             }
                         }
                     }
