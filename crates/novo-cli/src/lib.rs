@@ -871,12 +871,18 @@ fn finish_import(
             .iter()
             .map(|l| json!({"what": l.what, "count": l.count, "why": l.why}))
             .collect();
+        let guessed: Vec<Value> = report
+            .guessed
+            .iter()
+            .map(|l| json!({"what": l.what, "count": l.count, "why": l.why}))
+            .collect();
         let doc = json!({
             "summary": plan.summary(),
             "creates": plan.creates(),
             "existing": plan.existing,
             "carried": moved,
             "not_carried": not_carried,
+            "guessed": guessed,
             "notes": report.notes,
             "written": written,
         });
