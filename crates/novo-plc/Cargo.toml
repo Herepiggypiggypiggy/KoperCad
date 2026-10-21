@@ -8,6 +8,7 @@ license.workspace = true
 [dependencies]
 novo-core.workspace = true
 novo-symbols.workspace = true
+novo-terminals.workspace = true
 # Not the workspace entry: that one keeps novo-editor's default features
 # (the egui view), which a headless engine must not pull in.
 novo-editor = { path = "../novo-editor", default-features = false }

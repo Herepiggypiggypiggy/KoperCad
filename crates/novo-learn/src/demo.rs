@@ -582,7 +582,7 @@ fn derive(step: &Step) -> Vec<DemoOp> {
                 })));
             }
             SolveOp::Key(k) => out.push(DemoOp::Key(KeyOp { key: k.key.clone() })),
-            SolveOp::Select(s) => {
+            SolveOp::Select(s) if !s.select.contains('~') => {
                 out.push(DemoOp::Move(MoveOp {
                     to: at_device(&s.select),
                 }));

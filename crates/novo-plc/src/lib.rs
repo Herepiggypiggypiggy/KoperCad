@@ -36,6 +36,7 @@
 pub mod address;
 pub mod card;
 pub mod commands;
+pub mod generate;
 pub mod index;
 pub mod io;
 pub mod layout;

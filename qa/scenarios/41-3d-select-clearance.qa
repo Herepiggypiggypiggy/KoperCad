@@ -1,0 +1,20 @@
+@title 3D view: front view, select a device, dimensions and clearance zone
+@area 3D
+@sizes 1366x768
+# Fixed 1366x768 window points: the cube (1296,108) and K1 (522,436) are where the front view puts them at that size. Re-aim after a layout change.
+# Front view from the cube, select K1, look at its distances and the dashed free-space rectangle.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click_text Dimensions
+wait 10
+click 1296 108
+wait 40
+click 522 436
+wait 20
+move 1000 600
+wait 20
+expect "Space above"
+shot clearance-selected
+check_layout

@@ -1,0 +1,15 @@
+@title 3D view: Open door frames the cabinet with the door open
+@area 3D
+# The door leaf swings out toward the viewer; opening it from closed reframes once so it is not cut off.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+shot door-closed
+click_text "Open door"
+wait 60
+shot door-open
+check_layout
+click_text "Close door"
+wait 30
+shot door-closed-again

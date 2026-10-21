@@ -99,6 +99,8 @@ pub(super) struct State {
     pub open: bool,
     proposal_notes: HashMap<u32, String>,
     show_settings: bool,
+    /// Tests only: retries do not wait.
+    instant_retries: bool,
     agreed: bool,
     key_input: String,
     key_note: Option<(bool, String)>,
@@ -143,12 +145,78 @@ pub(super) struct State {
     now: Arc<dyn Fn() -> u64 + Send + Sync>,
 }
 
+/// Name of the variable that makes the assistant answer from a file instead of the
+/// network, for the QA harness: the file holds a JSON list of Messages API replies,
+/// used in order. Nothing is sent anywhere while it is set, and the window says so.
+pub(super) const REPLAY_VAR: &str = "KOPERCAD_AI_REPLAY";
+
+/// The replay file read once: the script, or why it could not be read.
+/// While the variable is set the network is never used, even when this fails.
+fn replay() -> Option<&'static Result<novo_ai::api::testing::Script, String>> {
+    static REPLAY: std::sync::OnceLock<Option<Result<novo_ai::api::testing::Script, String>>> =
+        std::sync::OnceLock::new();
+    REPLAY
+        .get_or_init(|| {
+            let path = std::env::var_os(REPLAY_VAR)?;
+            Some(load_replay(&path))
+        })
+        .as_ref()
+}
+
+pub(super) fn load_replay(path: &std::ffi::OsStr) -> Result<novo_ai::api::testing::Script, String> {
+    let shown = path.to_string_lossy();
+    let bytes = std::fs::read(path).map_err(|e| format!("cannot read {shown}: {e}"))?;
+    let list: Vec<Value> = serde_json::from_slice(&bytes)
+        .map_err(|e| format!("{shown} is not a JSON list of replies: {e}"))?;
+    let script = novo_ai::api::testing::Script::default();
+    for reply in list {
+        script.push(200, reply);
+    }
+    Ok(script)
+}
+
+/// The line the window shows while the variable is set.
+fn replay_notice() -> Option<(String, bool)> {
+    Some(match replay()? {
+        Ok(_) => (
+            "Test replay: answers come from a file, nothing is sent".to_string(),
+            true,
+        ),
+        Err(why) => (
+            format!("Test replay failed ({why}). Nothing is sent and no answers will come"),
+            false,
+        ),
+    })
+}
+
+fn default_transport() -> TransportFactory {
+    transport_for(replay())
+}
+
+pub(super) fn transport_for(
+    replay: Option<&Result<novo_ai::api::testing::Script, String>>,
+) -> TransportFactory {
+    match replay {
+        // A readable file answers from it; an unreadable one gives an empty
+        // script, so every request fails here instead of reaching the network.
+        Some(Ok(script)) => {
+            let script = script.clone();
+            Arc::new(move || Box::new(script.clone()))
+        }
+        Some(Err(_)) => {
+            let empty = novo_ai::api::testing::Script::default();
+            Arc::new(move || Box::new(empty.clone()))
+        }
+        None => Arc::new(|| Box::new(UreqTransport::new())),
+    }
+}
+
 impl State {
     pub fn new() -> Self {
         Self::with(
             KeyStore::in_profile(),
             novo_ai::key::default_dir().map(|d| d.join("usage.json")),
-            Arc::new(|| Box::new(UreqTransport::new())),
+            default_transport(),
             Arc::new(unix_now),
         )
     }
@@ -164,6 +232,7 @@ impl State {
             open: false,
             proposal_notes: HashMap::new(),
             show_settings: false,
+            instant_retries: false,
             agreed: false,
             key_input: String::new(),
             key_note: None,
@@ -196,12 +265,14 @@ impl State {
 
     #[cfg(test)]
     pub(super) fn for_test(store: KeyStore, ledger: PathBuf, transport: TransportFactory) -> Self {
-        Self::with(
+        let mut state = Self::with(
             Some(store),
             Some(ledger),
             transport,
             Arc::new(|| 1_792_000_000),
-        )
+        );
+        state.instant_retries = true;
+        state
     }
 
     #[cfg(test)]
@@ -247,6 +318,14 @@ impl State {
     }
 
     #[cfg(test)]
+    pub(super) fn proposal_state(&self, index: usize) -> Option<ProposalState> {
+        match self.transcript.get(index) {
+            Some(Entry::Proposal(_, state)) => Some(state.clone()),
+            _ => None,
+        }
+    }
+
+    #[cfg(test)]
     pub(super) fn transcript_text(&self) -> String {
         self.transcript
             .iter()
@@ -268,7 +347,7 @@ impl State {
         month_of((self.now)())
     }
 
-    fn spent(&self) -> f64 {
+    pub(super) fn spent(&self) -> f64 {
         self.ledger.spent_in(&self.month())
     }
 
@@ -380,6 +459,16 @@ fn edit_actions() -> Vec<EditAction> {
                 "required": ["device_id", "key", "value"]}),
         },
         EditAction {
+            name: "set_wire_number",
+            description: "Sets the number printed on a wire, or clears it with an empty \
+                          number. Use it to resolve wire-number conflicts (section wire_numbers).",
+            schema: json!({"type": "object", "properties": {
+                "wire_id": {"type": "integer", "description": "id from section wires"},
+                "number": {"type": "string",
+                           "description": "the new wire number; empty clears it"}},
+                "required": ["wire_id", "number"]}),
+        },
+        EditAction {
             name: "add_page",
             description: "Adds an empty schematic page at the end.",
             schema: json!({"type": "object", "properties": {
@@ -402,6 +491,14 @@ pub(super) const MAX_VALUE_CHARS: usize = 500;
 /// What a proposal would replace, for the card only. It is never sent back to
 /// the model: old values and part names can be above the agreed scope.
 pub(super) fn proposal_note(project: &Project, p: &Proposal) -> Option<String> {
+    if p.action == "set_wire_number" {
+        let wire = project.wire(p.args["wire_id"].as_u64()?.into())?;
+        let name = wire_description(project, wire);
+        return Some(match &wire.number {
+            Some(old) => format!("Replaces the current number of {name}: {old}"),
+            None => format!("{} has no number yet.", capitalised(&name)),
+        });
+    }
     let device = project.device(p.args["device_id"].as_u64()?.into())?;
     match p.action.as_str() {
         "set_property" => {
@@ -426,7 +523,32 @@ pub(super) struct Known {
     devices: HashMap<u64, String>,
     pages: HashMap<u64, String>,
     parts: HashMap<u64, String>,
+    /// Wire id to how the wire is named for the person: its two ends and page.
+    wires: HashMap<u64, String>,
 }
+
+/// The wire as the person sees it, without the internal id: "the wire from
+/// -K1:2 to -F2:3 (page Main circuit)".
+fn wire_description(p: &Project, w: &novo_core::Wire) -> String {
+    let end = |e| novo_cables::ends::designation(p, e).unwrap_or_else(|| "an open end".into());
+    let page = p.page(w.page).map_or("?", |g| g.name.as_str());
+    format!(
+        "the wire from {} to {} (page {page})",
+        end(w.from),
+        end(w.to)
+    )
+}
+
+fn capitalised(text: &str) -> String {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
+}
+
+/// Longest wire number accepted.
+const MAX_WIRE_NUMBER_CHARS: usize = 40;
 
 pub(super) fn known_of(p: &Project) -> Known {
     Known {
@@ -435,6 +557,10 @@ pub(super) fn known_of(p: &Project) -> Known {
             .map(|d| (d.id.raw(), d.tag.to_string()))
             .collect(),
         pages: p.pages().map(|g| (g.id.raw(), g.name.clone())).collect(),
+        wires: p
+            .wires()
+            .map(|w| (w.id.raw(), wire_description(p, w)))
+            .collect(),
         parts: p
             .parts()
             .map(|x| {
@@ -449,8 +575,80 @@ pub(super) fn known_of(p: &Project) -> Known {
     }
 }
 
+/// What applying a proposal does.
+pub(super) enum Plan {
+    Command(Box<Command>),
+    /// The person's own "Set wire number": the whole net, fixed against
+    /// numbering runs, refused when another net has the number.
+    WireNumber {
+        wire: novo_core::WireId,
+        number: String,
+    },
+}
+
 /// Turns a proposal into the model command, and its one-line summary.
+#[cfg(test)]
 pub(super) fn proposal_command(
+    known: &Known,
+    action: &str,
+    args: &Value,
+) -> Result<(Command, String), String> {
+    match proposal_plan(known, action, args)? {
+        (Plan::Command(command), summary) => Ok((*command, summary)),
+        (Plan::WireNumber { .. }, _) => Err(format!("{action} is not a plain command")),
+    }
+}
+
+/// Turns a proposal into what applying it does, and its one-line summary.
+pub(super) fn proposal_plan(
+    known: &Known,
+    action: &str,
+    args: &Value,
+) -> Result<(Plan, String), String> {
+    if action == "set_wire_number" {
+        return wire_number_plan(known, args);
+    }
+    let (command, summary) = proposal_command_inner(known, action, args)?;
+    Ok((Plan::Command(Box::new(command)), summary))
+}
+
+fn wire_number_plan(known: &Known, args: &Value) -> Result<(Plan, String), String> {
+    let wire = args["wire_id"]
+        .as_u64()
+        .ok_or("wire_id must be a whole number id from the project data")?;
+    let name = known
+        .wires
+        .get(&wire)
+        .ok_or_else(|| format!("there is no wire with id {wire} (see section wires)"))?;
+    let number = args["number"]
+        .as_str()
+        .ok_or("number must be text; use an empty text to clear it")?
+        .trim();
+    if number.chars().count() > MAX_WIRE_NUMBER_CHARS {
+        return Err(format!(
+            "number is longer than {MAX_WIRE_NUMBER_CHARS} characters"
+        ));
+    }
+    if number.chars().any(char::is_control) {
+        return Err("number must not contain control characters or line breaks".into());
+    }
+    let summary = if number.is_empty() {
+        format!("Clear the number of {name} and its net")
+    } else {
+        format!(
+            "Number {name} and its net {number}. The number is fixed: numbering runs leave it alone"
+        )
+    };
+    Ok((
+        Plan::WireNumber {
+            wire: wire.into(),
+            number: number.to_string(),
+        },
+        summary,
+    ))
+}
+
+fn proposal_command_inner(
     known: &Known,
     action: &str,
     args: &Value,
@@ -765,12 +963,16 @@ impl NovoApp {
             conversation.images.push(p.image);
         }
         let factory = Arc::clone(&st.transport);
+        let instant = st.instant_retries;
         let first = st.next_proposal;
         let (tx, rx) = channel();
         st.running = Some(rx);
         let ctx = ctx.clone();
         std::thread::spawn(move || {
             let mut client = Client::new(factory(), key);
+            if instant {
+                client = client.with_sleep(|_| {});
+            }
             let validator_known = known;
             let mut host = SnapshotHost::new(
                 snapshot,
@@ -779,10 +981,12 @@ impl NovoApp {
                 Box::new(move |action, args| {
                     // The answer goes back to the model, so it must not reveal
                     // more than the agreed scope (part names are Whole project).
-                    if action == "assign_part" && scope != DataScope::Project {
-                        return Err("assign_part is not allowed above the agreed scope".into());
+                    if matches!(action, "assign_part" | "set_wire_number")
+                        && scope != DataScope::Project
+                    {
+                        return Err(format!("{action} is not allowed above the agreed scope"));
                     }
-                    proposal_command(&validator_known, action, args).map(|(_, summary)| summary)
+                    proposal_plan(&validator_known, action, args).map(|(_, summary)| summary)
                 }),
             )
             .starting_at(first);
@@ -912,6 +1116,22 @@ impl NovoApp {
         }
     }
 
+    /// The same path as Edit > Set wire number: one undo step, the whole net.
+    fn apply_wire_number(&mut self, wire: novo_core::WireId, number: &str) -> ProposalState {
+        let Some(doc) = self.backend.document_mut() else {
+            return ProposalState::Failed("No project is open.".into());
+        };
+        match doc.transact("Set wire number", |tx| {
+            novo_numbering::set_number(tx, wire, number)
+        }) {
+            Ok((_, changes)) => {
+                self.changed_outside_canvas(&changes);
+                ProposalState::Applied
+            }
+            Err(e) => ProposalState::Failed(format!("Wire number: {e}")),
+        }
+    }
+
     fn assistant_decide(&mut self, index: usize, apply: bool) {
         let known = self
             .backend
@@ -927,13 +1147,14 @@ impl NovoApp {
         } else if self.backend.is_read_only() || self.commissioning_locks_edits() {
             ProposalState::Failed("The project is read-only right now.".into())
         } else {
-            match proposal_command(&known, &p.action, &p.args) {
+            match proposal_plan(&known, &p.action, &p.args) {
                 Err(why) => ProposalState::Failed(why),
-                Ok((command, _)) => match self.execute(command) {
+                Ok((Plan::Command(command), _)) => match self.execute(*command) {
                     Some(Ok(_)) => ProposalState::Applied,
                     Some(Err(e)) => ProposalState::Failed(e.to_string()),
                     None => ProposalState::Failed("No project is open.".into()),
                 },
+                Ok((Plan::WireNumber { wire, number }, _)) => self.apply_wire_number(wire, &number),
             }
         };
         let st = &mut self.wb.assistant;
@@ -1123,6 +1344,9 @@ impl NovoApp {
         let spent = self.wb.assistant.spent();
         let cap = self.settings.ai.monthly_cap_usd;
         let model = models::resolve(&self.settings.ai.model);
+        if let Some((line, loaded)) = replay_notice() {
+            ui.label(egui::RichText::new(line).color(if loaded { pal.warning } else { pal.error }));
+        }
         ui.horizontal(|ui| {
             if enabled {
                 ui.label(egui::RichText::new("Claude is on").color(pal.success));

@@ -1,0 +1,70 @@
+@title Journey: workshop and bench output from the example project
+@area Journeys
+# Each export runs through the command palette and must leave its own file in the app's Documents/KoperCAD.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text Export wire cut list (CSV)
+wait 6
+key Enter
+wait 30
+shot export-1
+expect_file "~/Documents/KoperCAD/*wire cut.csv" 20
+key ctrl+k
+wait 4
+text Export bench cut list (PDF)
+wait 6
+key Enter
+wait 30
+shot export-2
+expect_file "~/Documents/KoperCAD/*bench cut list.pdf" 1500
+key ctrl+k
+wait 4
+text Export ferrule table (PDF)
+wait 6
+key Enter
+wait 30
+shot export-3
+expect_file "~/Documents/KoperCAD/*ferrules.pdf" 1500
+key ctrl+k
+wait 4
+text Export label sheets (PDF)
+wait 6
+key Enter
+wait 30
+shot export-4
+expect_file "~/Documents/KoperCAD/*labels.pdf" 1500
+key ctrl+k
+wait 4
+text Export assembly checklist (PDF)
+wait 6
+key Enter
+wait 30
+shot export-5
+expect_file "~/Documents/KoperCAD/*assembly.pdf" 1500
+key ctrl+k
+wait 4
+text Export bill of materials
+wait 6
+key Enter
+wait 30
+shot export-6
+expect_file "~/Documents/KoperCAD/*Bill of materials.xlsx" 1500
+key ctrl+k
+wait 4
+text Export commissioning report
+wait 6
+key Enter
+wait 30
+shot export-7
+expect_file "~/Documents/KoperCAD/*commissioning.pdf" 1500
+key ctrl+k
+wait 4
+text Export all pages as DXF
+wait 6
+key Enter
+wait 30
+shot export-8
+expect_file "~/Documents/KoperCAD/*DXF/*.dxf" 500
+check_layout

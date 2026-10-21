@@ -198,26 +198,39 @@ impl Camera {
 
     /// Frames `bounds` from the current direction, centred, with a margin.
     pub fn fit(&mut self, bounds: &Aabb, aspect: f32) {
+        self.fit_below(bounds, aspect, 0.0);
+    }
+
+    /// As [`Camera::fit`], but keeps the top `top` of the view (a fraction of
+    /// its height, 0 to 0.5) clear: a toolbar floats there and must not cover
+    /// the model.
+    pub fn fit_below(&mut self, bounds: &Aabb, aspect: f32, top: f32) {
         if bounds.is_empty() {
             return;
         }
+        let top = top.clamp(0.0, 0.5);
         let target = bounds.center();
         let (right, up, _) = self.basis();
         let dir = self.dir();
         let tan_v = (self.fov_y * 0.5).tan();
         let tan_h = tan_v * aspect;
+        // The model fills the lower part: its centre sits `top` of the
+        // half-height below the middle, and the room above shrinks to match.
+        let room = 1.0 - top;
         let mut d = MIN_DISTANCE;
         for c in bounds.corners() {
             let rel = c - target;
             let (x, y, z) = (rel.dot(right).abs(), rel.dot(up).abs(), rel.dot(dir));
             let need = match self.projection {
-                Projection::Perspective => (z + x / tan_h).max(z + y / tan_v),
-                Projection::Orthographic => (x / tan_h).max(y / tan_v),
+                Projection::Perspective => (z + x / tan_h).max(z + y / (tan_v * room)),
+                Projection::Orthographic => (x / tan_h).max(y / (tan_v * room)),
             };
             d = d.max(need);
         }
-        self.target = target;
-        self.distance = (d * 1.08).clamp(MIN_DISTANCE, MAX_DISTANCE);
+        let distance = (d * 1.08).clamp(MIN_DISTANCE, MAX_DISTANCE);
+        // Looking at a point above the model puts the model lower on screen.
+        self.target = target + up * (top * tan_v * distance);
+        self.distance = distance;
     }
 
     /// Looks from a cube face, keeping target and distance.
@@ -280,6 +293,30 @@ mod tests {
             let (ndc, depth) = c.project(c.target, 1.6, &bounds()).unwrap();
             assert!(ndc.length() < 1e-4, "{projection:?} {ndc}");
             assert!(depth > 0.0 && depth <= 1.0);
+        }
+    }
+
+    #[test]
+    fn a_fit_below_a_toolbar_keeps_every_corner_under_it_in_both_projections() {
+        let top = 0.2;
+        for projection in [Projection::Perspective, Projection::Orthographic] {
+            for preset in [ViewPreset::Front, ViewPreset::Iso, ViewPreset::Top] {
+                let mut c = Camera {
+                    projection,
+                    ..Camera::default()
+                };
+                c.set_preset(preset);
+                c.fit_below(&bounds(), 1.6, top);
+                for corner in bounds().corners() {
+                    let (ndc, _) = c.project(corner, 1.6, &bounds()).unwrap();
+                    // NDC y runs from -1 (bottom) to 1 (top); the toolbar
+                    // covers the top `top` of the height, which is 2 * top.
+                    assert!(
+                        ndc.y <= 1.0 - 2.0 * top + 1e-3 && ndc.y >= -1.0 && ndc.x.abs() <= 1.0,
+                        "{projection:?} {preset:?}: {ndc}"
+                    );
+                }
+            }
         }
     }
 

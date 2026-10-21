@@ -169,6 +169,10 @@ pub(crate) struct LearnState {
     /// The step whose hints are being shown and how many are open.
     pub(super) hints_for: String,
     pub(super) hints_shown: usize,
+    /// The step whose pointer ring a challenge learner asked for (Show me).
+    pub(super) point_asked: Option<(String, String)>,
+    /// "Do it for me" did a step of this run.
+    pub(super) helped: bool,
     /// Set by the replay gate: draws one frame, so a page shown by a solve
     /// op has its canvas before the op goes on (a person's next frame).
     #[cfg(test)]
@@ -229,6 +233,8 @@ impl LearnState {
             confirm_restart: false,
             hints_for: String::new(),
             hints_shown: 0,
+            point_asked: None,
+            helped: false,
             #[cfg(test)]
             settle: None,
             confirm_reset: false,
@@ -780,6 +786,31 @@ impl NovoApp {
         self.learn_reveal();
     }
 
+    /// A challenge keeps its pointer ring back until the learner has opened
+    /// every hint or asked to be shown, so the ring does not give the answer.
+    pub(super) fn learn_point_hidden(&self) -> bool {
+        let Some(run) = self.learn.run.as_ref() else {
+            return false;
+        };
+        let Some(step) = run.step() else {
+            return false;
+        };
+        let total = step.hints(self.learn.lang).len();
+        if run.lesson().kind != novo_learn::Kind::Challenge || total == 0 {
+            return false;
+        }
+        let key = (run.lesson().id.clone(), step.id.clone());
+        if self.learn.point_asked.as_ref() == Some(&key) {
+            return false;
+        }
+        let opened = if self.learn.hints_for == step.id {
+            self.learn.hints_shown
+        } else {
+            0
+        };
+        opened < total
+    }
+
     /// When a step opens, brings its canvas target into view and switches
     /// to its page (a target says `view = "keep"` to stay put).
     fn learn_reveal(&mut self) {
@@ -798,6 +829,9 @@ impl NovoApp {
         let Some(target) = step.point.clone() else {
             return;
         };
+        if self.learn_point_hidden() {
+            return;
+        }
         // The door form sits below the plate fields: scroll to what the step
         // points at, so the ring is not drawn around a clipped control.
         if let Some(ui) = &target.ui {
@@ -926,6 +960,10 @@ impl NovoApp {
             self.show_page(page);
         }
         self.learn.run = Some(Run::new(entry.lesson.clone()));
+        self.learn.point_asked = None;
+        self.learn.helped = false;
+        self.learn.hints_for.clear();
+        self.learn.hints_shown = 0;
         self.learn.hidden = false;
         self.learn.window = false;
         self.learn.confirm_restart = false;
@@ -1001,6 +1039,8 @@ impl NovoApp {
         self.learn.ticked_at = None;
         self.learn.hints_for.clear();
         self.learn.hints_shown = 0;
+        self.learn.point_asked = None;
+        self.learn.helped = false;
     }
 
     /// The card's Hint: opens the next hint of the open step.
@@ -1046,6 +1086,7 @@ impl NovoApp {
             }
         }
         if applied {
+            self.learn.helped = true;
             self.learn_step(ctx);
         }
         let ticked = self
@@ -1140,6 +1181,20 @@ impl NovoApp {
 
     /// The pointer flashes again.
     pub(super) fn learn_show_me(&mut self) {
+        // Being shown where it is, in a challenge, means it was not found.
+        if self
+            .learn
+            .run
+            .as_ref()
+            .is_some_and(|r| r.lesson().kind == novo_learn::Kind::Challenge)
+        {
+            self.learn.helped = true;
+        }
+        self.learn.point_asked = self
+            .learn
+            .run
+            .as_ref()
+            .and_then(|r| r.step().map(|s| (r.lesson().id.clone(), s.id.clone())));
         self.learn.flash_until = Some(Instant::now() + Duration::from_millis(2500));
         self.learn.revealed = None;
         self.learn_start_demo();

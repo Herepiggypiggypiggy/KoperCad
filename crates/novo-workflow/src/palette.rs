@@ -913,6 +913,12 @@ fn verbs_of(info: &CommandInfo) -> impl Iterator<Item = &'static str> {
 /// what follows it. Verbs are ASCII, so folding ASCII case keeps the byte
 /// offset valid in the typed text.
 fn split_verb<'q>(info: &CommandInfo, query: &'q str) -> Option<(&'static str, &'q str)> {
+    // The command's own name typed in full is the bare command, not its first
+    // verb with the rest as the argument (`issue revision` is not a revision
+    // whose description is "revision").
+    if verbs_of(info).next().is_some() && query.trim().eq_ignore_ascii_case(info.label) {
+        return verbs_of(info).next().map(|v| (v, ""));
+    }
     verbs_of(info)
         .filter_map(|v| {
             let head = query.get(..v.len())?;

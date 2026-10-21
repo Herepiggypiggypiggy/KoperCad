@@ -204,7 +204,7 @@ impl Report for CutList {
             vec![
                 Column::new("group", "Wire", 30.0),
                 Column::new("wires", "Wires", 10.0).right(),
-                Column::new("total_m", "Total m", 12.0).right(),
+                Column::new("total_m", "Total m (cable cores left out)", 22.0).right(),
             ],
         );
         let mut tables: Vec<Section> = Vec::new();
@@ -233,7 +233,10 @@ impl Report for CutList {
             let mut total = 0.0;
             for w in group {
                 let cut = w.length + allowance(w);
-                total += cut;
+                // A core is cut from the cable, which is bought once.
+                if w.cable.is_empty() {
+                    total += cut;
+                }
                 table.push(
                     vec![
                         Cell::text(&w.number),

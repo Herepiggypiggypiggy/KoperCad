@@ -13,3 +13,6 @@
 2026-10-21 07:40 UTC #1129 merged. Claude can read wire-number conflicts (read_project section wire_numbers, Whole project only; consent version 3) (PR from claude/ai-numbering-tool).
 2026-10-21 10:40 UTC #1136 and #1165 merged. Follow-up: datasheet confirm line shows cost and month spend, Stop while reading, warning for a duplicate manufacturer and order number (PR from claude/ai-datasheet-followup).
 2026-10-21 11:00 UTC #1170 merged. Polish: spend label says counted by KoperCAD, no dollar guess, duplicate match ignores case/spaces/dashes, Stop tested (PR from claude/ai-datasheet-polish).
+2026-10-21 12:45 UTC Claude can propose set_wire_number (Whole project only, card shows the old number, one undo step) so it can act on the wire-number conflicts it reads (PR from claude/ai-wire-number-edit).
+2026-10-21 13:20 UTC QA replay mode: KOPERCAD_AI_REPLAY=<file> answers from canned replies (nothing sent, window says so); qa runner header @env; scenario 10-ask-claude-wire-number passes at both sizes (PR #1188).
+2026-10-21 13:50 UTC #1187 merged. #1188 review fixes: card names the wire by its ends and page (no id), uses numbering::set_number (whole net, fixed, refuses a number another net has, one undo step), control characters refused, refusal reason on the card; standing notice says suggestions wait for Apply (no CONSENT_VERSION change, nothing new is sent).

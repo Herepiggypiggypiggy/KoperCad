@@ -14,10 +14,9 @@ use novo_view3d::scene::{ItemId, ItemKind};
 
 use super::view3d_move::{Landing, rail_snap};
 
-/// Margin from the view's corner and the height of the toolbar above the
-/// list, in points.
+/// Margin from the view's corner, in points. The list sits below the toolbar
+/// (`view3d_controls::BELOW`).
 const MARGIN: f32 = 12.0;
-const BELOW_TOOLBAR: f32 = 52.0;
 
 /// The list: open or not, the device picked from it and where the pointer
 /// was over the plate last frame.
@@ -97,7 +96,7 @@ pub(super) fn panel(
     let mut out = Picked::default();
     egui::Area::new(egui::Id::new("view3d_place"))
         .order(egui::Order::Middle)
-        .fixed_pos(view.left_top() + egui::vec2(MARGIN, BELOW_TOOLBAR + MARGIN))
+        .fixed_pos(view.left_top() + egui::vec2(MARGIN, super::view3d_controls::BELOW))
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_max_width(190.0);

@@ -343,6 +343,9 @@ impl NovoApp {
         {
             return Ok(());
         }
+        if let Some((a, b)) = text.split_once('~') {
+            return self.solve_select_wire(a.trim(), b.trim(), add);
+        }
         let project = self.solve_doc()?.project();
         let mut found: Vec<SymbolId> = Vec::new();
         if text.contains(':') {
@@ -385,6 +388,43 @@ impl NovoApp {
             found
                 .iter()
                 .map(|s| novo_canvas::model::item_id(AnyId::Symbol(*s))),
+            novo_canvas::SelectOp::Add,
+        );
+        self.settle();
+        Ok(())
+    }
+
+    /// Selects the wire drawn between two pins (`select = "-S1:11~-S1:12"`),
+    /// as a click on it does.
+    fn solve_select_wire(&mut self, a: &str, b: &str, add: bool) -> Result<(), String> {
+        let project = self.solve_doc()?.project();
+        let from = novo_learn::check::pins_named(project, a);
+        let to = novo_learn::check::pins_named(project, b);
+        let joins = |w: &novo_core::Wire| {
+            let pin = |e: &novo_core::Endpoint| match e {
+                novo_core::Endpoint::Pin { symbol, pin } => {
+                    Some(novo_core::PinRef::new(*symbol, *pin))
+                }
+                _ => None,
+            };
+            let (x, y) = (pin(&w.from), pin(&w.to));
+            from.iter().any(|f| {
+                to.iter()
+                    .any(|t| (x == Some(*f) && y == Some(*t)) || (x == Some(*t) && y == Some(*f)))
+            })
+        };
+        let (id, page) = project
+            .wires()
+            .find(|w| joins(w))
+            .map(|w| (w.id, w.page))
+            .ok_or_else(|| format!("no wire between `{a}` and `{b}`"))?;
+        self.solve_page_id(page);
+        let view = self.canvas.schematic().ok_or("no editor canvas")?;
+        if !add {
+            view.canvas.selection.clear();
+        }
+        view.canvas.selection.apply(
+            [novo_canvas::model::item_id(AnyId::Wire(id))],
             novo_canvas::SelectOp::Add,
         );
         self.settle();

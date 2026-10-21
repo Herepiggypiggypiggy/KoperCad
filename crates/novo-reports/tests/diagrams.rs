@@ -530,3 +530,34 @@ fn generated_terminal_pages_print_the_drawn_strip() {
     let tag = doc.project().device(s.x1).expect("strip").tag.to_string();
     assert!(layout.texts.iter().any(|t| t.text.ends_with(&tag)));
 }
+
+#[test]
+fn the_contents_list_shows_the_issued_revision_and_the_lock() {
+    let mut doc = starter();
+    let first = doc.project().pages_in_order()[0].id;
+    let before = LiveReports::standard()
+        .get(doc.project(), "toc")
+        .expect("toc")
+        .clone();
+    assert_eq!(before.sections[0].text_rows()[0][5..], ["", ""]);
+    doc.execute(novo_core::Command::IssueRevision {
+        index: "A".into(),
+        date: "2026-10-21".into(),
+        author: "TV".into(),
+        description: "first".into(),
+        note: String::new(),
+    })
+    .expect("issue");
+    doc.execute(novo_core::Command::LockPage {
+        page: first,
+        revision: "A".into(),
+    })
+    .expect("lock");
+    let toc = LiveReports::standard()
+        .get(doc.project(), "toc")
+        .expect("toc")
+        .clone();
+    let rows = toc.sections[0].text_rows();
+    assert_eq!(rows[0][5..], ["A", "A"], "issued and locked");
+    assert_eq!(rows[1][5..], ["A", ""], "issued, not locked");
+}

@@ -111,6 +111,11 @@ pub struct Lesson {
     pub level: Level,
     #[serde(default)]
     pub kind: Kind,
+    /// What was wrong and why, shown when a challenge ends.
+    #[serde(default)]
+    pub explain: String,
+    #[serde(default)]
+    pub explain_nl: Option<String>,
     #[serde(default)]
     pub minutes: u32,
     #[serde(default)]
@@ -632,6 +637,10 @@ impl Lesson {
 
     pub fn summary(&self, lang: Lang) -> &str {
         pick(&self.summary, self.summary_nl.as_deref(), lang)
+    }
+
+    pub fn explain(&self, lang: Lang) -> &str {
+        pick(&self.explain, self.explain_nl.as_deref(), lang)
     }
 
     /// Position of the step with this id.

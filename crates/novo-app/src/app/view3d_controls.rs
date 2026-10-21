@@ -112,10 +112,20 @@ impl Controls {
 }
 
 /// Wide enough for every toggle and the door slider on one row.
-const TOOLBAR_WIDTH: f32 = 900.0;
+const TOOLBAR_WIDTH: f32 = 980.0;
 
 /// Where a panel under the toolbar starts, from the top of the view.
 pub(super) const BELOW: f32 = 140.0;
+
+/// How much of the view's height the toolbar covers at the top, as a
+/// fraction: a fit frames the model below it. Before the toolbar has been
+/// drawn once it is [`BELOW`].
+pub(super) fn toolbar_inset(ctx: &egui::Context, view: egui::Rect) -> f32 {
+    let covered = ctx
+        .memory(|m| m.area_rect(super::panel::id("view3d_toolbar")))
+        .map_or(BELOW, |r| r.bottom() - view.top());
+    (covered / view.height().max(1.0)).clamp(0.0, 0.4)
+}
 
 /// The toolbar, top left of the view. `limit` is how far the enclosure's door
 /// opens, `None` when it has none.
@@ -212,13 +222,6 @@ pub(super) fn toolbar(
                     );
                     toggle(
                         ui,
-                        measure,
-                        "Measure",
-                        "Click two points to read the distance, and the gap between two \
-                         devices (View > 3D > Measure)",
-                    );
-                    toggle(
-                        ui,
                         &mut controls.shadows,
                         "Shadows",
                         "Soft shadows from the key light (View > 3D > Shadows)",
@@ -293,6 +296,14 @@ pub(super) fn toolbar(
                  size and its distances to neighbours and the plate edge, and a dashed \
                  rectangle around it: the free space it asks for (View > 3D > \
                  Dimensions)",
+            );
+            // A tool, not a layer: next to the other measuring control.
+            toggle(
+                ui,
+                measure,
+                "Measure",
+                "Click two points to read the distance, and the gap between two \
+                 devices (View > 3D > Measure)",
             );
             if controls.reduced {
                 ui.label(
