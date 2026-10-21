@@ -20,6 +20,7 @@
 
 use std::io::{Cursor, Read};
 
+use quick_xml::events::{BytesStart, Event};
 use thiserror::Error;
 
 /// What a workbook may be.
@@ -87,58 +88,69 @@ pub fn check_xlsx_with(bytes: &[u8], limits: XlsxLimits) -> Result<(), XlsxTooLa
 }
 
 /// Streams one worksheet's XML and stops at the first limit it breaks.
-fn scan_sheet(mut xml: impl Read, limits: XlsxLimits) -> Result<(), String> {
+///
+/// It reads the XML the way the spreadsheet library does (quick-xml,
+/// elements matched by local name, so a namespace prefix such as `x:c`
+/// counts, and attributes through the attribute iterator, so single quotes
+/// and spaces around `=` count), so no spelling the library accepts slips
+/// past. An XML error ends the scan: the library fails on it too.
+fn scan_sheet(xml: impl Read, limits: XlsxLimits) -> Result<(), String> {
+    let mut reader = quick_xml::Reader::from_reader(std::io::BufReader::new(xml));
     let mut bbox = Bbox::default();
     let mut cells = 0u64;
     let (mut row, mut col) = (0u64, 0u64);
-    let mut pending: Vec<u8> = Vec::new();
-    let mut chunk = vec![0u8; 64 * 1024];
+    let mut buf = Vec::new();
     loop {
-        let n = xml.read(&mut chunk).map_err(|e| e.to_string())?;
-        if n == 0 {
-            return Ok(());
-        }
-        pending.extend_from_slice(&chunk[..n]);
-        let mut at = 0;
-        while let Some(open) = find(&pending, b'<', at) {
-            let Some(close) = find(&pending, b'>', open) else {
-                at = open;
-                break;
-            };
-            let tag = &pending[open + 1..close];
-            at = close + 1;
-            if let Some(rest) = tag_rest(tag, b"c") {
+        let event = reader.read_event_into(&mut buf);
+        let element = match &event {
+            Ok(Event::Start(e) | Event::Empty(e)) => e,
+            Ok(Event::Eof) | Err(_) => return Ok(()),
+            Ok(_) => {
+                buf.clear();
+                continue;
+            }
+        };
+        match element.local_name().as_ref() {
+            b"c" => {
                 cells += 1;
                 if cells > limits.max_cells {
                     return Err(format!("more than {} cells", limits.max_cells));
                 }
                 col += 1;
-                if let Some((r, c)) = attr(rest, b"r").and_then(|v| cell_ref(&v)) {
+                if let Some((r, c)) = attribute(element, b"r").and_then(|v| cell_ref(&v)) {
                     (row, col) = (r, c);
                 }
                 bbox.add(row.max(1), col, limits)?;
-            } else if let Some(rest) = tag_rest(tag, b"row") {
-                row = attr(rest, b"r")
-                    .and_then(|v| std::str::from_utf8(&v).ok()?.parse().ok())
+            }
+            b"row" => {
+                row = attribute(element, b"r")
+                    .and_then(|v| std::str::from_utf8(&v).ok()?.trim().parse().ok())
                     .unwrap_or(row + 1);
                 col = 0;
-            } else if let Some(rest) = tag_rest(tag, b"dimension")
-                && let Some(reference) = attr(rest, b"ref")
-            {
-                let mut ends = reference.split(|b| *b == b':').filter_map(cell_ref);
-                if let (Some(first), Some(last)) = (ends.next(), ends.next()) {
-                    let mut dim = Bbox::default();
-                    dim.add(first.0, first.1, limits)?;
-                    dim.add(last.0, last.1, limits)?;
+            }
+            b"dimension" => {
+                if let Some(reference) = attribute(element, b"ref") {
+                    let mut ends = reference.split(|b| *b == b':').filter_map(cell_ref);
+                    if let (Some(first), Some(last)) = (ends.next(), ends.next()) {
+                        let mut dim = Bbox::default();
+                        dim.add(first.0, first.1, limits)?;
+                        dim.add(last.0, last.1, limits)?;
+                    }
                 }
             }
+            _ => {}
         }
-        // Keep the unfinished tag; a tag that never closes is not one of ours.
-        pending.drain(..at);
-        if pending.len() > 8192 {
-            pending.clear();
-        }
+        buf.clear();
     }
+}
+
+/// The raw value of attribute `name` (matched by local name).
+fn attribute(element: &BytesStart<'_>, name: &[u8]) -> Option<Vec<u8>> {
+    element
+        .attributes()
+        .flatten()
+        .find(|a| a.key.local_name().as_ref() == name)
+        .map(|a| a.value.into_owned())
 }
 
 /// The used rectangle of a sheet so far.
@@ -175,32 +187,6 @@ impl Bbox {
         }
         Ok(())
     }
-}
-
-fn find(hay: &[u8], needle: u8, from: usize) -> Option<usize> {
-    hay.get(from..)?
-        .iter()
-        .position(|b| *b == needle)
-        .map(|p| p + from)
-}
-
-/// The attributes part of `tag` when it is the element `name`.
-fn tag_rest<'a>(tag: &'a [u8], name: &[u8]) -> Option<&'a [u8]> {
-    let rest = tag.strip_prefix(name)?;
-    match rest.first() {
-        None | Some(b' ' | b'/' | b'\t' | b'\r' | b'\n') => Some(rest),
-        _ => None,
-    }
-}
-
-/// The value of attribute `name` in the attribute text `rest`.
-fn attr(rest: &[u8], name: &[u8]) -> Option<Vec<u8>> {
-    let mut key = vec![b' '];
-    key.extend_from_slice(name);
-    key.extend_from_slice(b"=\"");
-    let start = rest.windows(key.len()).position(|w| w == key.as_slice())? + key.len();
-    let end = find(rest, b'"', start)?;
-    Some(rest[start..end].to_vec())
 }
 
 /// `B7` as (row 7, column 2); `None` for anything else.
@@ -254,7 +240,23 @@ mod tests {
     }
 
     #[test]
-    fn a_tag_split_across_reads_is_still_seen() {
+    fn every_spelling_the_library_accepts_is_refused() {
+        for xml in [
+            r#"<x:worksheet><x:dimension ref="A1:XFD1048576"/></x:worksheet>"#,
+            r#"<worksheet><dimension ref='A1:XFD1048576'/></worksheet>"#,
+            r#"<worksheet><dimension ref = "A1:XFD1048576"/></worksheet>"#,
+            r#"<worksheet><dimension
+                 ref="A1:XFD1048576"/></worksheet>"#,
+            r#"<x:sheetData><x:row r="1"><x:c r="A1"/></x:row><x:row r="1048576"><x:c r="XFD1048576"/></x:row></x:sheetData>"#,
+            r#"<sheetData><row r='1'><c r='A1'/></row><row r = '1048576'><c r = 'XFD1048576'/></row></sheetData>"#,
+            r#"<sheetData><row r="1"><c r="A1"></c></row><row r="1048576"><c r="XFD1048576"><v>1</v></c></row></sheetData>"#,
+        ] {
+            assert!(sheet(xml).is_err(), "{xml}");
+        }
+    }
+
+    #[test]
+    fn a_dribbling_reader_is_still_checked() {
         struct Dribble<'a>(&'a [u8]);
         impl Read for Dribble<'_> {
             fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {

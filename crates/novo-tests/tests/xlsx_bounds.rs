@@ -63,11 +63,50 @@ fn small() -> Vec<u8> {
     ))
 }
 
-fn crafted() -> Vec<(&'static str, Vec<u8>)> {
+/// The same two attacks spelled the ways the spreadsheet library also
+/// accepts: namespace prefix, single quotes, spaces around `=`.
+fn spelled_differently() -> Vec<(&'static str, Vec<u8>)> {
     vec![
+        (
+            "prefixed dimension",
+            workbook(&format!(
+                r#"{HEAD}<x:dimension ref="A1:XFD1048576"/><sheetData/></worksheet>"#
+            )),
+        ),
+        (
+            "single-quoted dimension",
+            workbook(&format!(
+                r#"{HEAD}<dimension ref='A1:XFD1048576'/><sheetData/></worksheet>"#
+            )),
+        ),
+        (
+            "spaced dimension",
+            workbook(&format!(
+                r#"{HEAD}<dimension ref = "A1:XFD1048576"/><sheetData/></worksheet>"#
+            )),
+        ),
+        (
+            "prefixed far cells",
+            workbook(&format!(
+                r#"{HEAD}<sheetData><x:row r="1"><x:c r="A1"/></x:row><x:row r="1048576"><x:c r="XFD1048576"/></x:row></sheetData></worksheet>"#
+            )),
+        ),
+        (
+            "single-quoted far cells",
+            workbook(&format!(
+                r#"{HEAD}<sheetData><row r='1'><c r='A1'/></row><row r = '1048576'><c r = 'XFD1048576'/></row></sheetData></worksheet>"#
+            )),
+        ),
+    ]
+}
+
+fn crafted() -> Vec<(&'static str, Vec<u8>)> {
+    let mut all = vec![
         ("far apart cells", far_apart()),
         ("lying dimension", lying_dimension()),
-    ]
+    ];
+    all.extend(spelled_differently());
+    all
 }
 
 #[test]
