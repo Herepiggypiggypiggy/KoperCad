@@ -22,8 +22,10 @@ pub(super) enum Foldable {
     Rules,
 }
 
-/// Room kept free at the right edge so a group never touches the pane edge.
-const MARGIN: f32 = 16.0;
+/// Room kept free at the right edge so a group never touches the pane edge:
+/// the measured label widths run short of the laid-out bar by up to about 70
+/// points at 1366 (the More button stood 6 points past the window).
+const MARGIN: f32 = 90.0;
 
 /// Which items of the bar fit and which wait in More. Decided from the
 /// measured widths of the real labels and the width of this pane, so a wide
@@ -265,6 +267,19 @@ mod tests {
             (Foldable::Arrange, 260.0),
             (Foldable::Heat, 80.0),
         ]
+    }
+
+    #[test]
+    fn the_bar_keeps_room_at_the_right_edge() {
+        // 1366 wide, as the layout measured it: items that fit with only a few
+        // points to spare used to run the More button past the window.
+        let f = Fold::plan(1300.0, 600.0, 90.0, &items());
+        let shown: f32 = items()
+            .iter()
+            .filter(|i| !f.has(i.0))
+            .map(|i| i.1)
+            .sum::<f32>();
+        assert!(600.0 + shown + 90.0 + 80.0 <= 1300.0, "{shown}");
     }
 
     #[test]
