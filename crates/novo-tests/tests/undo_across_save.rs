@@ -1,5 +1,5 @@
 //! Project data safety: undo, redo and save in any order reach the file
-//! exactly, for every kind of edit.
+//! exactly, for the kinds of edit listed below.
 //!
 //! `data_safety.rs` pins single steps. Here a seeded random run mixes edits
 //! (place, move, remove a symbol, a wire or a device, add and delete pages,
@@ -9,6 +9,10 @@
 //! file and the drawing as it stood in the recovery file. Undoing the whole
 //! history and saving gives back the project the run started from (the id
 //! counter stays where the edits left it).
+//!
+//! Not covered here: adding devices, connecting pins, property and wire data
+//! edits, cables, parts, revisions, numbering, Autopilot and generated pages
+//! (a follow-up extends the mix to those).
 
 use std::path::Path;
 
@@ -137,7 +141,7 @@ fn file_json(path: &Path) -> String {
     ProjectFile::read(&copy).unwrap().to_json()
 }
 
-fn run(seed: u64, steps: usize) {
+fn run(seed: u64, steps: usize) -> usize {
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("run.novo");
     let mut doc = Document::default();
@@ -212,6 +216,7 @@ fn run(seed: u64, steps: usize) {
         saved,
         "seed {seed}"
     );
+    redos
 }
 
 /// Undo to the bottom of the history and save: the file is the starting
@@ -275,9 +280,8 @@ fn undo_all_then_redo_all(seed: u64, steps: usize) {
 
 #[test]
 fn random_runs_of_edits_undo_redo_and_saves_reach_the_file_exactly() {
-    for seed in 1..=10 {
-        run(seed, 160);
-    }
+    let redos: usize = (1..=10).map(|seed| run(seed, 160)).sum();
+    assert!(redos > 0, "no redo happened across the seeds");
 }
 
 #[test]
