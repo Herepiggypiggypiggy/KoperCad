@@ -28,6 +28,10 @@ pub struct CommandField {
     open: Option<OpenField>,
     /// Where the field was drawn this frame, for lessons to point at.
     rect: Option<egui::Rect>,
+    /// Whether Claude is on, so a search with no match offers to ask it.
+    pub ask_enabled: bool,
+    /// What the person chose to ask Claude; the app takes it.
+    pub asked: Option<String>,
 }
 
 impl CommandField {
@@ -192,6 +196,12 @@ impl CommandField {
             Mode::Place => "Place: no, nc, coil, m3, terminal, K1 no… or 1 to 9",
         };
         let mut clicked: Option<usize> = None;
+        let mut ask_clicked = false;
+        let ask_row = rows.is_empty()
+            && self.ask_enabled
+            && open.mode == Mode::All
+            // Two words at least, so a mistyped command is not sent anywhere.
+            && open.query.split_whitespace().count() >= 2;
         let area = egui::Area::new(egui::Id::new("command_field"))
             .order(egui::Order::Foreground)
             .pivot(pivot)
@@ -210,7 +220,24 @@ impl CommandField {
                     }
                     ui.separator();
                     if rows.is_empty() {
-                        ui.weak("No match");
+                        if ask_row {
+                            let text = format!(
+                                "Ask Claude: {}   (Enter sends this to Claude)",
+                                open.query.trim()
+                            );
+                            if ui
+                                .selectable_label(true, text)
+                                .on_hover_text(
+                                    "Sends this question to Claude (your own API key). \
+                                     Enter asks.",
+                                )
+                                .clicked()
+                            {
+                                ask_clicked = true;
+                            }
+                        } else {
+                            ui.weak("No match");
+                        }
                     }
                     egui::ScrollArea::vertical()
                         .max_height(MAX_HEIGHT)
@@ -234,6 +261,12 @@ impl CommandField {
                         });
                 });
             });
+        if ask_row && (ask_clicked || enter) {
+            let q = self.open.take().map(|o| o.query.trim().to_string());
+            self.asked = q.filter(|q| !q.is_empty());
+            self.rect = Some(area.response.rect);
+            return None;
+        }
         let picked = match (clicked, enter) {
             (Some(i), _) => rows.get(i).and_then(|row| self.pick(row)),
             (None, true) => rows
