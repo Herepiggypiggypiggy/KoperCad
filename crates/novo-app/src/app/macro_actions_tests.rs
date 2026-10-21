@@ -160,3 +160,29 @@ fn a_device_part_is_saved_with_the_macro_and_assigned_on_placement() {
     assert_eq!(with_part, 2);
     assert_eq!(d.doc().project().parts().count(), 1, "the part is reused");
 }
+
+#[test]
+fn the_command_field_finds_a_starter_circuit_and_opens_the_place_window_on_it() {
+    use novo_workflow::palette::{Mode, Target};
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.wb.macro_place =
+        PlaceWindow::new(Some(MacroLibrary::new(dir.path().join("Macros"), "user")));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, crate::actions::Action::NewProject);
+    d.frame();
+    d.app.wb.field.open(Mode::All, None);
+    d.app.wb.field.type_text("motor starter");
+    let rows = d.app.with_field(|field, sources| field.rows(sources));
+    assert_eq!(
+        rows[0].target,
+        Target::Macro("Motor starter DOL".into()),
+        "{:?}",
+        rows.iter()
+            .take(4)
+            .map(|r| (r.label.clone(), r.score))
+            .collect::<Vec<_>>()
+    );
+    d.app.run_target(&ctx, rows[0].target.clone());
+    assert!(d.app.wb.macro_place.open);
+}

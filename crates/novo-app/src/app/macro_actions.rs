@@ -43,6 +43,11 @@ pub(crate) struct PlaceWindow {
     pub(super) open: bool,
     library: Option<MacroLibrary>,
     started: bool,
+    /// What the command field searches, read again every few seconds.
+    palette: (
+        Option<std::time::Instant>,
+        Vec<novo_workflow::palette::MacroEntry>,
+    ),
     query: String,
     selected: Option<String>,
     keep_numbers: bool,
@@ -55,11 +60,42 @@ pub(crate) struct PlaceWindow {
 }
 
 impl PlaceWindow {
+    /// The macros as the command field searches them. The starters are put
+    /// in the library the first time; the list is read from disk at most
+    /// every few seconds, not on every keystroke.
+    pub(crate) fn palette_entries(&mut self) -> Vec<novo_workflow::palette::MacroEntry> {
+        const EVERY: std::time::Duration = std::time::Duration::from_secs(5);
+        if self.palette.0.is_some_and(|at| at.elapsed() < EVERY) {
+            return self.palette.1.clone();
+        }
+        let Some(library) = &self.library else {
+            return Vec::new();
+        };
+        if !self.started {
+            self.started = true;
+            if let Err(e) = library.install_starters() {
+                self.status = format!("Starter macros: {e}");
+            }
+        }
+        let entries = library
+            .search("")
+            .into_iter()
+            .map(|e| novo_workflow::palette::MacroEntry {
+                words: format!("{} {}", e.tags.join(" "), e.description).to_lowercase(),
+                detail: e.description,
+                name: e.name,
+            })
+            .collect();
+        self.palette = (Some(std::time::Instant::now()), entries);
+        self.palette.1.clone()
+    }
+
     pub(crate) fn new(library: Option<MacroLibrary>) -> Self {
         PlaceWindow {
             open: false,
             library,
             started: false,
+            palette: (None, Vec::new()),
             query: String::new(),
             selected: None,
             keep_numbers: false,

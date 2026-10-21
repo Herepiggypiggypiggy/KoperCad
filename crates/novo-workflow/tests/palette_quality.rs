@@ -5,7 +5,7 @@
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::Keymap;
-use novo_workflow::palette::{LessonEntry, Palette, Row, Sources, Target};
+use novo_workflow::palette::{LessonEntry, MacroEntry, Mode, Palette, Row, Sources, Target};
 
 fn context() -> Context {
     Context {
@@ -30,6 +30,7 @@ fn search(palette: &Palette, keymap: &Keymap, query: &str) -> Vec<Row> {
         keymap,
         context: context(),
         lessons: &[],
+        macros: &[],
     };
     palette.search(query, &sources)
 }
@@ -160,6 +161,7 @@ fn search_lessons(query: &str) -> Vec<Row> {
         keymap: &keymap,
         context: context(),
         lessons: &lessons,
+        macros: &[],
     };
     Palette::default().search(query, &sources)
 }
@@ -226,6 +228,7 @@ fn a_command_that_cannot_run_now_scores_below_the_same_command_that_can() {
                 ..context()
             },
             lessons: &[],
+            macros: &[],
         };
         let rows = palette.search("undo", &sources);
         let at = position(&rows, "edit.undo").expect("Undo is found");
@@ -235,4 +238,91 @@ fn a_command_that_cannot_run_now_scores_below_the_same_command_that_can() {
     let (idle, idle_greyed) = score(false);
     assert!(!ready_greyed && idle_greyed);
     assert!(idle <= ready - 300, "{idle} vs {ready}");
+}
+
+fn macros() -> Vec<MacroEntry> {
+    [
+        (
+            "Motor starter",
+            "Direct on line starter",
+            "motor starter dol contactor",
+        ),
+        (
+            "Reversing starter",
+            "Forward and reverse",
+            "reversing motor contactor",
+        ),
+        (
+            "Emergency stop",
+            "E-stop with a safety relay",
+            "safety emergency stop e-stop relay",
+        ),
+    ]
+    .into_iter()
+    .map(|(name, detail, words)| MacroEntry {
+        name: name.into(),
+        detail: detail.into(),
+        words: format!("{words} {}", detail.to_lowercase()),
+    })
+    .collect()
+}
+
+fn search_macros(query: &str) -> Vec<Row> {
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let macros = macros();
+    let sources = Sources {
+        project: None,
+        library: Some(&library),
+        keymap: &keymap,
+        context: context(),
+        lessons: &[],
+        macros: &macros,
+    };
+    Palette::default().search(query, &sources)
+}
+
+#[test]
+fn a_circuit_is_found_by_name_by_tag_and_leads_what_only_contains_the_words() {
+    let rows = search_macros("motor starter");
+    assert_eq!(rows[0].target, Target::Macro("Motor starter".into()));
+    let rows = search_macros("reversing");
+    assert_eq!(rows[0].target, Target::Macro("Reversing starter".into()));
+    let rows = search_macros("e-stop");
+    assert!(
+        rows.iter()
+            .take(3)
+            .any(|r| r.target == Target::Macro("Emergency stop".into())),
+        "{:?}",
+        rows.iter().take(3).map(|r| &r.label).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn q_finds_a_circuit_too() {
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let macros = macros();
+    let sources = Sources {
+        project: None,
+        library: Some(&library),
+        keymap: &keymap,
+        context: context(),
+        lessons: &[],
+        macros: &macros,
+    };
+    let rows = Palette::default().search_in(Mode::Place, "motor starter", &sources);
+    assert!(
+        rows.iter()
+            .any(|r| r.target == Target::Macro("Motor starter".into()))
+    );
+}
+
+#[test]
+fn two_letters_do_not_list_every_circuit() {
+    assert!(
+        !search_macros("mo")
+            .iter()
+            .any(|r| matches!(r.target, Target::Macro(_)))
+    );
 }
