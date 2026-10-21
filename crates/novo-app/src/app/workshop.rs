@@ -90,6 +90,7 @@ impl NovoApp {
         let (templates, too_big) = template_pdfs(self.backend.document()?.project(), &name, paper);
         let mut done: Vec<String> = Vec::new();
         let mut skipped: Vec<String> = Vec::new();
+        let mut no_single_sheet: Vec<String> = Vec::new();
 
         if templates.is_empty() && too_big.is_empty() {
             skipped.push("drilling template (no cabinet has a mounting plate)".to_owned());
@@ -109,11 +110,14 @@ impl NovoApp {
             if self.workshop_write(&file, &t.tiled) {
                 done.push(format!("drilling template {tag} ({})", paper.name()));
             }
-            if let Some(bytes) = &t.plate {
-                let file = folder.join(format!("1 Plate full size {}.pdf", clean(tag)));
-                if self.workshop_write(&file, bytes) {
-                    done.push(format!("plate {tag} on one sheet for a print shop"));
+            match &t.plate {
+                Some(bytes) => {
+                    let file = folder.join(format!("1 Plate full size {}.pdf", clean(tag)));
+                    if self.workshop_write(&file, bytes) {
+                        done.push(format!("plate {tag} on one sheet for a print shop"));
+                    }
                 }
+                None => no_single_sheet.push(tag.clone()),
             }
         }
         let steps: [(&str, &str); 4] = [
@@ -147,6 +151,12 @@ impl NovoApp {
             text.push_str(&format!(
                 ". Left out, nothing to print yet: {}",
                 skipped.join(", ")
+            ));
+        }
+        if !no_single_sheet.is_empty() {
+            text.push_str(&format!(
+                ". No one-sheet plate for {}: the plate is under 150 x 40 mm or over 5080 mm, use the tiled template",
+                no_single_sheet.join(", ")
             ));
         }
         self.message_file(text, folder);

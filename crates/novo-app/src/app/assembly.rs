@@ -8,7 +8,7 @@
 //! name (`Plant 2.novo` gives `Plant 2 assembly.pdf`); a second export
 //! replaces the first only while it is still exactly what we wrote.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 
 use novo_core::{Device, DeviceId, Project};
@@ -57,6 +57,24 @@ impl Circuit {
             Circuit::Control
         }
     }
+}
+
+/// The circuits of the wire jobs by wire number, each name's circuits in job
+/// order, so a number used twice still gets its own circuit each time.
+fn circuits_by_mark(jobs: &[(Circuit, WireJob)]) -> BTreeMap<String, VecDeque<Circuit>> {
+    let mut out: BTreeMap<String, VecDeque<Circuit>> = BTreeMap::new();
+    for (circuit, job) in jobs {
+        out.entry(job.name.clone()).or_default().push_back(*circuit);
+    }
+    out
+}
+
+/// The circuit of the wire step marked `mark`.
+fn circuit_of(by_mark: &mut BTreeMap<String, VecDeque<Circuit>>, mark: &str) -> &'static str {
+    by_mark
+        .get_mut(mark)
+        .and_then(VecDeque::pop_front)
+        .map_or("", Circuit::name)
 }
 
 /// Step numbers as a short list: runs of consecutive numbers become
@@ -128,12 +146,7 @@ pub fn order_sections(project: &Project, checklist: &ReportOutput) -> Vec<Sectio
         // One circuit at a time: power, then control, then earth. The sort is
         // stable, so inside a circuit the wire list's order stays.
         jobs.sort_by_key(|(circuit, _)| *circuit);
-        // The wire steps come out in job order, so the circuits line up.
-        let mut circuits = jobs
-            .iter()
-            .map(|(circuit, _)| *circuit)
-            .collect::<Vec<_>>()
-            .into_iter();
+        let mut circuits = circuits_by_mark(&jobs);
         let jobs: Vec<WireJob> = jobs.into_iter().map(|(_, job)| job).collect();
         let mut section = Section::new(
             &format!("{tag}:order"),
@@ -142,8 +155,8 @@ pub fn order_sections(project: &Project, checklist: &ReportOutput) -> Vec<Sectio
                 Column::new("step", "Step", 8.0).right(),
                 Column::new("phase", "Phase", 12.0),
                 Column::new("mark", "Mark", 16.0),
-                Column::new("circuit", "Circuit", 12.0),
-                Column::new("do", "Do", 70.0),
+                Column::new("circuit", "Group (colour, size)", 18.0),
+                Column::new("do", "Do", 64.0),
                 Column::new("after", "After", 16.0),
                 Column::new("done", "Done", 7.0),
             ],
@@ -155,7 +168,7 @@ pub fn order_sections(project: &Project, checklist: &ReportOutput) -> Vec<Sectio
                     Cell::text(step.phase.name()),
                     Cell::text(step.mark.clone()),
                     Cell::text(if step.phase == Phase::Wires {
-                        circuits.next().map_or("", Circuit::name)
+                        circuit_of(&mut circuits, &step.mark)
                     } else {
                         ""
                     }),
@@ -276,7 +289,54 @@ impl NovoApp {
 
 #[cfg(test)]
 mod circuit_tests {
-    use super::{Circuit, number_ranges};
+    use super::{Circuit, circuit_of, circuits_by_mark, number_ranges};
+    use novo_layout::Plate;
+    use novo_layout::assembly::{Phase, WireJob, steps};
+    use novo_layout::state::CabinetLayout;
+
+    #[test]
+    fn the_group_sits_beside_the_right_wire_number() {
+        let job = |name: &str| WireJob {
+            name: name.into(),
+            text: format!("Run {name}"),
+        };
+        // Wire list order mixes the groups; "7" is used for two wires.
+        let mut jobs = vec![
+            (Circuit::Earth, job("PE1")),
+            (Circuit::Control, job("7")),
+            (Circuit::Power, job("L1")),
+            (Circuit::Power, job("7")),
+            (Circuit::Control, job("3")),
+        ];
+        jobs.sort_by_key(|(circuit, _)| *circuit);
+        let mut by_mark = circuits_by_mark(&jobs);
+        let wires: Vec<WireJob> = jobs.iter().map(|(_, j)| j.clone()).collect();
+        let layout = CabinetLayout::new(Plate {
+            width: 400.0,
+            height: 300.0,
+            margin: 10.0,
+        });
+        let got: Vec<(String, &str)> = steps(&layout, &|id| format!("d{id}"), &wires)
+            .into_iter()
+            .filter(|s| s.phase == Phase::Wires)
+            .map(|s| {
+                let group = circuit_of(&mut by_mark, &s.mark);
+                (s.mark, group)
+            })
+            .collect();
+        let want = [
+            ("L1", "Power"),
+            ("7", "Power"),
+            ("7", "Control"),
+            ("3", "Control"),
+            ("PE1", "PE"),
+        ];
+        assert_eq!(
+            got,
+            want.map(|(m, g)| (m.to_owned(), g)).to_vec(),
+            "power first, control next, PE last, each beside its own wire"
+        );
+    }
 
     #[test]
     fn wires_sort_into_power_control_and_earth() {
