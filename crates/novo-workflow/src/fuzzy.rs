@@ -5,7 +5,8 @@
 //! an exact match, a prefix, matches at word starts and runs of adjacent
 //! characters. Higher is better.
 
-/// From this many typed letters a match must be more than scattered.
+/// From this many typed letters a match must lie in the words of the text,
+/// not be scattered across them.
 const SCATTER_FROM: usize = 4;
 
 /// Score of `query` against `text`, or `None` when it does not match. An
@@ -36,9 +37,6 @@ pub fn score(query: &str, text: &str) -> Option<i32> {
 
     let mut qi = 0;
     let mut previous: Option<usize> = None;
-    let mut first: Option<usize> = None;
-    let mut last = 0usize;
-    let mut starts = 0usize;
     for (i, &c) in lower.iter().enumerate() {
         if qi == query.len() {
             break;
@@ -48,30 +46,85 @@ pub fn score(query: &str, text: &str) -> Option<i32> {
         }
         let at_word_start = i == 0 || !lower[i - 1].is_alphanumeric();
         total += if at_word_start { 15 } else { 1 };
-        starts += usize::from(at_word_start);
         if previous.is_some_and(|p| p + 1 == i) {
             total += 10;
         }
-        first.get_or_insert(i);
-        last = i;
         previous = Some(i);
         qi += 1;
     }
     if qi < query.len() {
         return None;
     }
-    // A longer query whose letters are scattered over several words (and are
-    // not the initials of them) is noise, not a typo: a typo stays inside one
-    // word. `option` is not in "Reset note position" or "Interruption point".
-    if query.len() >= SCATTER_FROM
-        && !compact.contains(&q)
-        && starts < query.len()
-        && first.is_some_and(|f| lower[f..=last].iter().any(|c| !c.is_alphanumeric()))
-    {
+    if query.len() >= SCATTER_FROM && !compact.contains(&q) && !fits_in_words(&query, &lower) {
         return None;
     }
     // Shorter texts win ties: "Wire" before "Wire numbering".
     Some(total - i32::try_from(lower.len().min(200)).unwrap_or(200) / 10)
+}
+
+/// Whether the query can be laid over the words of the text in order, each
+/// word taking a piece of it: a typo stays inside a word and a small word of
+/// the label may be left out ("zoom fit" finds "Zoom to fit"), but a lone
+/// letter picked out of the middle of a word is noise. `option` is not in
+/// "Reset note position", which holds an `o` only in the middle of "note".
+fn fits_in_words(query: &[char], text: &[char]) -> bool {
+    if !query.iter().all(|c| c.is_alphanumeric()) {
+        return true;
+    }
+    let mut words: Vec<&[char]> = Vec::new();
+    let mut at = 0;
+    while at < text.len() {
+        if text[at].is_alphanumeric() {
+            let end = text[at..]
+                .iter()
+                .position(|c| !c.is_alphanumeric())
+                .map_or(text.len(), |n| at + n);
+            words.push(&text[at..end]);
+            at = end;
+        } else {
+            at += 1;
+        }
+    }
+    // `free[n]`: the first n query letters are placed in the words so far.
+    // `lone[n]`: the same, and the last of them is a single initial taken from
+    // the previous word, so the next word must take the following letters too
+    // ("wnum" is "Wire numbering"; the `o` of "or" in "Show or hide the
+    // Position box" is not the start of "option").
+    let mut free = vec![false; query.len() + 1];
+    free[0] = true;
+    let mut lone = vec![false; query.len() + 1];
+    for word in words {
+        let (mut next_free, mut next_lone) =
+            (vec![false; query.len() + 1], vec![false; query.len() + 1]);
+        for from in 0..query.len() {
+            if !free[from] && !lone[from] {
+                continue;
+            }
+            let mut w = 0;
+            for k in 1..=query.len() - from {
+                let Some(found) = word[w..].iter().position(|&c| c == query[from + k - 1]) else {
+                    break;
+                };
+                w += found + 1;
+                // A piece of a longer match starts its word; the one piece
+                // that is the whole query may start anywhere.
+                if k == query.len() {
+                    return true;
+                }
+                if k >= 2 && word[0] == query[from] {
+                    next_free[from + k] = true;
+                } else if found == 0 {
+                    next_lone[from + k] = true;
+                }
+            }
+        }
+        // A word left out keeps the free states only.
+        for n in 0..=query.len() {
+            next_free[n] |= free[n];
+        }
+        (free, lone) = (next_free, next_lone);
+    }
+    free[query.len()] || lone[query.len()]
 }
 
 fn word_starts(text: &[char]) -> impl Iterator<Item = usize> + '_ {
@@ -119,5 +172,31 @@ mod tests {
     fn spaces_in_the_query_are_ignored() {
         assert!(score("new page", "New page").unwrap() >= 1000);
         assert!(score("newp", "New page").is_some());
+    }
+
+    #[test]
+    fn a_small_word_of_the_label_may_be_left_out() {
+        assert!(score("zoom fit", "Zoom to fit").is_some());
+        assert!(score("export pdf", "Export to PDF").is_some());
+        assert!(score("cable run", "Show cable and wire runs in 3D").is_some());
+        assert!(score("wire runs", "Show cable and wire runs in 3D").is_some());
+    }
+
+    #[test]
+    fn a_typo_in_any_word_or_an_abbreviation_still_matches() {
+        assert!(score("new proect", "New project").is_some());
+        assert!(score("renme page", "Rename page").is_some());
+        assert!(score("close proect", "Close project").is_some());
+        assert!(score("nw proect", "New project").is_some());
+        assert!(score("saas", "Save as").is_some());
+        assert!(score("opepro", "Open project").is_some());
+        assert!(score("duplcate", "Duplicate").is_some());
+    }
+
+    #[test]
+    fn letters_picked_out_of_the_middle_of_words_do_not_match() {
+        assert!(score("option", "Reset note position").is_none());
+        assert!(score("option", "Interruption point").is_none());
+        assert!(score("option", "Options").is_some());
     }
 }
