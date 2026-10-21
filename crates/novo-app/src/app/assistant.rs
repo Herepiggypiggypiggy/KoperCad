@@ -105,6 +105,8 @@ pub(super) struct State {
     running: Option<Receiver<Msg>>,
     shot: Shot,
     picture: Option<Picture>,
+    /// The scope that was agreed when the picture was taken.
+    picture_scope: DataScope,
     /// What the person decided about proposals since their last message;
     /// sent along with the next one so Claude knows.
     notes: Vec<String>,
@@ -156,6 +158,7 @@ impl State {
             running: None,
             shot: Shot::Idle,
             picture: None,
+            picture_scope: DataScope::None,
             notes: Vec::new(),
             ledger,
             ledger_path,
@@ -248,22 +251,37 @@ impl State {
     /// Called before each message with the scope now in force. Narrower than
     /// the conversation's scope: forget the conversation and say so.
     fn enforce_scope(&mut self, scope: DataScope) {
+        if self.picture.is_some() && scope < self.picture_scope {
+            self.picture = None;
+            self.shot = Shot::Idle;
+            self.transcript.push(Entry::Problem(
+                "Scope narrowed, so the attached picture was dropped.".into(),
+            ));
+        }
         if scope < self.conv_scope {
             self.conversation.clear();
             self.notes.clear();
-            self.transcript.push(Entry::Problem(
+            let had_picture = self.picture.take().is_some();
+            self.shot = Shot::Idle;
+            self.transcript.push(Entry::Problem(if had_picture {
+                "Scope narrowed, so the earlier chat and the attached picture were cleared. \
+                 Claude no longer has what it read or saw before."
+                    .into()
+            } else {
                 "Scope narrowed, so the earlier chat was cleared. Claude no longer has what it \
                  read before."
-                    .into(),
-            ));
+                    .into()
+            }));
         }
         self.conv_scope = scope;
     }
 
-    fn clear_chat(&mut self) {
+    pub(super) fn clear_chat(&mut self) {
         self.transcript.clear();
         self.conversation.clear();
         self.notes.clear();
+        self.picture = None;
+        self.shot = Shot::Idle;
         self.session_cost = 0.0;
     }
 }
@@ -707,11 +725,15 @@ impl NovoApp {
                         _ => None,
                     })
                 });
+                let scope_now = self.settings.ai.consent.effective();
                 let st = &mut self.wb.assistant;
                 match got {
                     Some(img) => {
                         match picture_of(&img) {
-                            Ok(p) => st.picture = Some(p),
+                            Ok(p) => {
+                                st.picture = Some(p);
+                                st.picture_scope = scope_now;
+                            }
                             Err(e) => st
                                 .transcript
                                 .push(Entry::Problem(format!("Could not take the picture: {e}"))),
@@ -891,6 +913,7 @@ impl NovoApp {
                 ui.weak(s.describes());
             });
         }
+        ui.weak("A picture you attach shows everything on screen at that moment, whatever you chose here.");
         let current = self.settings.ai.consent.effective();
         if scope != self.wb.assistant.pending_scope.unwrap_or(current) {
             if enabled && scope > current {
@@ -1114,7 +1137,9 @@ impl NovoApp {
                         .on_hover_text(
                             "Sends a picture of this whole KoperCAD window with your next \
                              message: everything visible in it, whatever the data scope. \
-                             This window steps aside for a moment.",
+                             The picture stays in this chat and is sent again with each later \
+                             question until you press Clear chat. This window steps aside for \
+                             a moment.",
                         )
                         .clicked()
                     {

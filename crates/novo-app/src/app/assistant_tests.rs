@@ -394,3 +394,43 @@ fn a_picture_of_the_window_goes_with_one_message_and_never_unasked() {
         "the picture is used once"
     );
 }
+
+fn attach(s: &mut Setup) {
+    s.d.app.wb.assistant.attach_picture_requested();
+    s.d.frame();
+    let shot = egui::ColorImage::filled([40, 20], egui::Color32::from_rgb(10, 120, 200));
+    s.d.frame_with(vec![egui::Event::Screenshot {
+        viewport_id: egui::ViewportId::ROOT,
+        user_data: egui::UserData::default(),
+        image: Arc::new(shot),
+    }]);
+    assert!(s.d.app.wb.assistant.has_picture());
+}
+
+#[test]
+fn clear_chat_drops_an_attached_picture() {
+    let mut s = setup(DataScope::Project);
+    s.script.replies.lock().unwrap().push_back(text("Ok."));
+    attach(&mut s);
+    s.d.app.wb.assistant.clear_chat();
+    assert!(!s.d.app.wb.assistant.has_picture());
+    ask(&mut s, "hello");
+    assert!(!s.script.seen.lock().unwrap()[0].body.contains("\"image\""));
+}
+
+#[test]
+fn narrowing_the_scope_drops_an_attached_picture() {
+    let mut s = setup(DataScope::Project);
+    s.script.replies.lock().unwrap().push_back(text("Ok."));
+    attach(&mut s);
+    s.d.app.settings.ai.consent = Consent::give(DataScope::None, 1_792_000_100);
+    ask(&mut s, "hello");
+    assert!(!s.script.seen.lock().unwrap()[0].body.contains("\"image\""));
+    assert!(
+        s.d.app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("attached picture")
+    );
+}
