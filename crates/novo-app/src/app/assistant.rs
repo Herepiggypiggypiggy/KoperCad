@@ -623,7 +623,7 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
         },
         "pages": novo_py::pages_json(p),
         "devices": tags,
-        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals", "parts", "problems"],
+        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals", "parts", "problems", "wire_numbers"],
     });
     if scope >= DataScope::Selection {
         let items: Vec<Value> = p
@@ -676,6 +676,16 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
                 "page_id": q.page.map(|g| g.raw()),
                 "objects": q.at.len(),
                 "rule": q.rule})).collect::<Vec<_>>(),
+            // Wire-number conflicts against the project's own scheme, read only.
+            "wire_numbers": novo_numbering::check(p, &novo_numbering::Scheme::load(p))
+                .iter()
+                .map(|c| json!({
+                    "kind": format!("{:?}", c.kind),
+                    "severity": format!("{:?}", c.severity),
+                    "number": c.number,
+                    "wires": c.wires.iter().map(|w| w.raw()).collect::<Vec<_>>(),
+                    "message": c.message}))
+                .collect::<Vec<_>>(),
         });
     }
     snap
