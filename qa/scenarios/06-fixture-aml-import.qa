@@ -1,0 +1,20 @@
+@title AutomationML import (hoist feeder)
+@area Fixtures
+# A synthetic crane-style AutomationML file; the native file dialog is answered by the harness.
+click_text "Open example"
+wait 20
+answer_dialog crates/novo-interop/tests/fixtures/aml/hoist-feeder.aml
+key ctrl+k
+wait 4
+text Import AutomationML
+wait 6
+key Enter
+wait 20
+shot aml-import-plan
+check_layout
+check_blank aml-import-plan
+click_text Import #1 Button
+wait 20
+shot aml-imported
+check_layout
+expect_scene X1

@@ -6,11 +6,13 @@
 //! changes the catalog; the score only reports what is recorded.
 
 use eframe::egui;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::sync::Mutex;
+use std::time::{Instant, SystemTime};
 
 use novo_parts::{
     Catalog, Criterion, DuplicateGroup, Fill, Grade, PartKey, PartQuality, QualityReport,
-    QueueItem, ReviewLedger, assess,
+    QueueItem, ReviewLedger, Trust, assess, review_path_for,
 };
 
 use super::revisions::today;
@@ -445,6 +447,117 @@ fn apply_decision(
     state.queue = None;
 }
 
+// ---------------------------------------------------------------------
+// Trust marks for the part picker and the Parts list
+// ---------------------------------------------------------------------
+
+/// How long the ledger file is trusted to be unchanged before it is looked
+/// at again, so a list that draws every frame does not touch the disk.
+const LEDGER_RECHECK: std::time::Duration = std::time::Duration::from_secs(1);
+
+/// The review ledger of one catalog, read again when its file changes.
+struct LedgerCache {
+    path: PathBuf,
+    stamp: Option<SystemTime>,
+    checked: Instant,
+    ledger: ReviewLedger,
+}
+
+static LEDGER: Mutex<Option<LedgerCache>> = Mutex::new(None);
+
+/// Whether `part` is trusted, from the review file next to the catalog at
+/// `catalog_path`. A missing or unreadable file reads as no decisions, so an
+/// imported part shows as not reviewed. Without a catalog folder there are
+/// no decisions either.
+pub(crate) fn trust_at(catalog_path: Option<&Path>, part: &novo_parts::CatalogPart) -> Trust {
+    let Some(catalog_path) = catalog_path else {
+        return ReviewLedger::new().trust_of(part);
+    };
+    let path = review_path_for(catalog_path);
+    let Ok(mut guard) = LEDGER.lock() else {
+        return ReviewLedger::new().trust_of(part);
+    };
+    let fresh = guard
+        .as_ref()
+        .is_some_and(|c| c.path == path && c.checked.elapsed() < LEDGER_RECHECK);
+    if !fresh {
+        let stamp = std::fs::metadata(&path).and_then(|m| m.modified()).ok();
+        let same = guard
+            .as_ref()
+            .is_some_and(|c| c.path == path && c.stamp == stamp);
+        if same {
+            if let Some(c) = guard.as_mut() {
+                c.checked = Instant::now();
+            }
+        } else {
+            *guard = Some(LedgerCache {
+                ledger: ReviewLedger::load(&path).unwrap_or_default(),
+                path,
+                stamp,
+                checked: Instant::now(),
+            });
+        }
+    }
+    guard.as_ref().map_or_else(
+        || ReviewLedger::new().trust_of(part),
+        |c| c.ledger.trust_of(part),
+    )
+}
+
+/// The trust of `part` in the user's own catalog.
+pub(crate) fn user_trust(part: &novo_parts::CatalogPart) -> Trust {
+    trust_at(novo_parts::user_catalog_path().as_deref(), part)
+}
+
+/// A short tag for a part that nobody has vouched for; `None` when there is
+/// nothing to say (authored, reviewed, or no recorded origin).
+pub(crate) fn trust_tag(trust: &Trust) -> Option<&'static str> {
+    match trust {
+        Trust::Unreviewed => Some("Unreviewed"),
+        Trust::ChangedSinceReview => Some("Changed since review"),
+        Trust::Rejected { .. } => Some("Rejected"),
+        Trust::Authored | Trust::Reviewed { .. } | Trust::Unrecorded => None,
+    }
+}
+
+/// What the tag means. The part still works: nothing is blocked.
+pub(crate) fn trust_tooltip(trust: &Trust) -> String {
+    match trust {
+        Trust::Unreviewed => {
+            "Imported from a maker file and not looked at yet. The part still works; \
+            check its data in Parts > Review."
+                .to_owned()
+        }
+        Trust::ChangedSinceReview => "Reviewed once, but its data changed since. The part still \
+            works; look at it again in Parts > Review."
+            .to_owned(),
+        Trust::Rejected { date, note } => {
+            let why = if note.is_empty() {
+                String::new()
+            } else {
+                format!(" ({note})")
+            };
+            format!(
+                "Rejected on {date}{why}. The part is not blocked, but someone decided its data should not be used."
+            )
+        }
+        _ => String::new(),
+    }
+}
+
+/// Draws the tag as a small coloured label; nothing for a trusted part.
+pub(crate) fn trust_badge(ui: &mut egui::Ui, trust: &Trust) {
+    let Some(tag) = trust_tag(trust) else {
+        return;
+    };
+    let color = match trust {
+        Trust::Rejected { .. } => crate::theme::ui_palette().error,
+        _ => crate::theme::ui_palette().warning,
+    };
+    ui.small(egui::RichText::new(tag).color(color))
+        .on_hover_text(trust_tooltip(trust));
+}
+
 fn grade_color(grade: Grade) -> egui::Color32 {
     match grade {
         Grade::Good => crate::theme::ui_palette().success,
@@ -647,6 +760,36 @@ mod tests {
         catalog.upsert(CatalogPart::new("ABB", "S201-B16"));
         tab.ensure(&catalog);
         assert_eq!(tab.report.as_ref().unwrap().1.len(), 1);
+    }
+
+    #[test]
+    fn tags_name_only_the_parts_nobody_vouched_for() {
+        assert_eq!(trust_tag(&Trust::Unreviewed), Some("Unreviewed"));
+        assert_eq!(
+            trust_tag(&Trust::ChangedSinceReview),
+            Some("Changed since review")
+        );
+        assert_eq!(trust_tag(&Trust::Authored), None);
+        assert_eq!(trust_tag(&Trust::Unrecorded), None);
+        assert!(trust_tooltip(&Trust::Unreviewed).contains("still works"));
+    }
+
+    #[test]
+    fn the_ledger_cache_follows_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let catalog_path = dir.path().join("parts.json");
+        let catalog = imported_catalog();
+        let part = &catalog.parts()[0];
+        assert_eq!(trust_at(Some(&catalog_path), part), Trust::Unreviewed);
+        let mut ledger = ReviewLedger::new();
+        ledger.approve(part, "2026-10-17");
+        ledger.save(&review_path_for(&catalog_path)).unwrap();
+        // Within the recheck interval the old answer may stand; wait it out.
+        std::thread::sleep(LEDGER_RECHECK + std::time::Duration::from_millis(50));
+        assert!(matches!(
+            trust_at(Some(&catalog_path), part),
+            Trust::Reviewed { .. }
+        ));
     }
 
     fn imported_catalog() -> Catalog {

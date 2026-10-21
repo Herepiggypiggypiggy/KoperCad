@@ -1,0 +1,7 @@
+@title Every command of the command field
+@area Commands
+@slow
+# Runs each command by its own name; records not found, crashes, new layout problems, log panics.
+click_text "Open example"
+wait 20
+sweep_commands

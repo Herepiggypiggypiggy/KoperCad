@@ -68,6 +68,8 @@ others). Positions are millimetres on the page, origin bottom left, y up. `Kind`
 
 ## 4. Exact and approximated
 
+The import report lists the approximated parts apart from what was left out: **Guessed** (symbols drawn as boxes, wire routes the file does not give, devices without a footprint) shows in the import dialog, in the text report and as `guessed` in `kopercad-cli import --json`.
+
 Exact: pages, positions, pins, nets, tags, part numbers, the part's `Width`, `Height` and `Depth` when the file
 gives them (they become the part's `width_mm`, `height_mm`, `depth_mm`; a size the catalog already has stays), and (with `Wire` runs) the wire routes. Approximated:
 the symbol artwork (a library symbol or a labelled box, fitted to the file's pins) and, for a file without runs,

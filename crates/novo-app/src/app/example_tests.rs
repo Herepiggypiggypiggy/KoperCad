@@ -248,6 +248,26 @@ fn the_example_wires_are_numbered_and_commissioning_names_them_by_number() {
 }
 
 #[test]
+fn the_example_cabinet_problems_pill_can_say_what_it_counts() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let p = d.doc().project();
+    let cab = p
+        .structures()
+        .find(|s| s.tag.to_string() == "+CAB")
+        .unwrap();
+    let l = novo_layout::model::load(p, cab.id).unwrap();
+    let name = |id: u64| format!("#{id}");
+    let lines = super::cabinet::panel_problem_lines(&l, &name);
+    assert!(
+        lines.iter().any(|t| t.contains("free room in front")),
+        "{lines:?}"
+    );
+}
+
+#[test]
 fn open_example_starts_with_an_empty_undo_history() {
     let (_dir, mut d) = drive();
     let ctx = d.ctx.clone();
