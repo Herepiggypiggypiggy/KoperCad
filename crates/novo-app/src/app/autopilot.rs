@@ -208,6 +208,7 @@ pub(super) fn meter(ui: &mut egui::Ui, ready: Ready) {
         0.0,
     )
     .on_hover_text(ready.explanation());
+    ui.weak(ready.caption());
 }
 
 fn body(

@@ -1115,6 +1115,17 @@ impl Ready {
         self.total > 0 && self.done == self.total
     }
 
+    /// One line under the meter: what the percentage counts, without hovering.
+    pub fn caption(&self) -> String {
+        if self.wires == 0 {
+            return "Counts four checks per wire plus the mounting plate.".to_owned();
+        }
+        format!(
+            "{} of {} checks: four per wire (number, size, colour, known length) plus the plate.",
+            self.done, self.total
+        )
+    }
+
     /// What the percentage counts, for the hover text.
     pub fn explanation(&self) -> String {
         format!(
@@ -1149,6 +1160,19 @@ pub fn ready(jobs: &[WireCutJob], has_plate: bool) -> Ready {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn meter_caption_says_what_is_counted() {
+        let r = Ready {
+            done: 13,
+            total: 25,
+            wires: 6,
+        };
+        let c = r.caption();
+        assert!(c.contains("13 of 25 checks"), "{c}");
+        assert!(c.contains("four per wire"), "{c}");
+        assert!(Ready::default().caption().contains("four checks per wire"));
+    }
     use novo_checks::calc::Insulation;
     use novo_checks::calc_basis::Protecting;
     use novo_core::DeviceId;
