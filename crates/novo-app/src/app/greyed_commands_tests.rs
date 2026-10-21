@@ -53,6 +53,15 @@ fn two_relays(d: &mut Drive) {
     d.frame();
 }
 
+/// The lesson step commands run (`learn_run_command`), so the command field
+/// must not grey them as "Comes later".
+#[test]
+fn lesson_step_commands_are_not_greyed() {
+    for id in ["learn.next", "learn.back", "learn.restart", "learn.close"] {
+        assert!(super::workbench::app_runs(id), "{id}");
+    }
+}
+
 #[test]
 fn nothing_is_greyed_any_more() {
     for id in ["edit.renumber", "draw.tidy", "project.rules"] {
