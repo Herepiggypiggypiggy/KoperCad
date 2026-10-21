@@ -29,6 +29,13 @@ text_nl = "Terug"
 text = "Show me how"
 text_nl = "Laat zien"
 
+[hint]
+text = "Hint"
+text_nl = "Hint"
+
+[fix_it]
+text = "Fix it"
+text_nl = "Repareer het"
 [do_it_for_me]
 text = "Do it for me"
 text_nl = "Doe het voor mij"
