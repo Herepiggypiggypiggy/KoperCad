@@ -140,7 +140,7 @@ impl NovoApp {
                 let (dir, stem) = self.pdf_base()?;
                 let file = format!("{stem} {tail}.pdf")
                     .replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "-");
-                super::pdf::replaceable_path(&dir.join(file))
+                self.own_pdf_path(&dir.join(file))
             }
         };
         self.export_pdf_choice_to(&path, set, choice)

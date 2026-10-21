@@ -1837,6 +1837,29 @@ mod tests {
     }
 
     #[test]
+    fn a_whole_sheet_fit_follows_the_canvas_when_a_panel_takes_width_after_it() {
+        let mut scene = page_scene();
+        scene.insert(
+            ItemId(3),
+            Item::new(crate::LayerId(0)).with(Primitive::stroked(
+                Shape::rect(Vec2::new(20.0, 20.0), Vec2::new(400.0, 280.0)),
+                Stroke::default(),
+            )),
+        );
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(1600.0, 900.0);
+        view.fit_scene(&scene, Fit::Content);
+        view.fit_settle = Some(FitSettle::of(Fit::Content, &view.viewport));
+        // The outline opens and takes 300 points.
+        view.viewport.size = Vec2::new(1300.0, 900.0);
+        view.settle_fit(&scene, false);
+        let sheet = scene.bounds();
+        let seen = view.viewport.visible_world();
+        assert!(seen.contains_point(sheet.min) && seen.contains_point(sheet.max));
+        assert!((view.viewport.center - sheet.center()).length() < 1e-3);
+    }
+
+    #[test]
     fn a_fit_follows_the_canvas_when_a_panel_takes_width_after_it() {
         let scene = page_scene();
         let mut view = CanvasView::new();
