@@ -1,0 +1,17 @@
+@title Live view: operate and explain
+@area Schematic
+@sizes 1366x768
+# Shift+L opens the live view; the card has Operate rows, a plain-words line and Why?.
+open crates/novo-tests/tests/golden/v0.1-motor-starter.novo
+wait 20
+key shift+l
+wait 20
+shot live-operate
+tree Why
+expect "Operate"
+expect "Why?"
+check_layout
+click_text "Why?"
+wait 10
+shot live-why-mode
+expect "Click a wire or a device"
