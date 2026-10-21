@@ -1,0 +1,9 @@
+@title Inspector on the contactor: AC-3 current shows the part's 9 A, empty rows read "e.g."
+@area Schematic
+@sizes 1366x768
+click_text "Open example"
+wait 30
+click 353 228
+wait 40
+shot contactor-ac3
+expect "AC-3 current"
