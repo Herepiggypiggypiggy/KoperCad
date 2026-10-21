@@ -209,7 +209,10 @@ impl NovoApp {
                 draft.error = Some(e.to_string());
                 self.wb.issue = Some(draft);
             }
-            Err(e @ BackendError::IssuedNotLocked(_)) => {
+            Err(e @ BackendError::IssuedNotLocked(..)) => {
+                if let BackendError::IssuedNotLocked(_, changes) = &e {
+                    self.changed_outside_canvas(changes);
+                }
                 self.message(Level::Error, e.to_string());
             }
             Err(e) => {

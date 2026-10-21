@@ -30,7 +30,7 @@ pub enum BackendError {
     /// The project is open read-only; saving over its file is refused.
     ReadOnly,
     /// The revision was issued but its pages could not be locked.
-    IssuedNotLocked(ModelError),
+    IssuedNotLocked(Box<ModelError>, Box<novo_core::ChangeSet>),
 }
 
 impl fmt::Display for BackendError {
@@ -39,7 +39,7 @@ impl fmt::Display for BackendError {
             BackendError::Unavailable(what) => write!(f, "{what} is not available yet"),
             BackendError::Model(e) => write!(f, "{e}"),
             BackendError::Storage(e) => write!(f, "{e}"),
-            BackendError::IssuedNotLocked(e) => write!(
+            BackendError::IssuedNotLocked(e, _) => write!(
                 f,
                 "the revision was issued, but locking the pages failed ({e}); lock them from File > Revisions"
             ),
@@ -74,7 +74,9 @@ impl From<novo_revisions::IssueError> for BackendError {
             novo_revisions::IssueError::NoIndex => BackendError::NoNextIndex,
             novo_revisions::IssueError::Model(e) => BackendError::Model(e),
             novo_revisions::IssueError::Storage(e) => BackendError::Storage(e),
-            novo_revisions::IssueError::LockFailed(e) => BackendError::IssuedNotLocked(e),
+            novo_revisions::IssueError::LockFailed { reason, issued } => {
+                BackendError::IssuedNotLocked(Box::new(reason), Box::new(issued.changes))
+            }
         }
     }
 }

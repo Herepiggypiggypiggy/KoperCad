@@ -3,7 +3,7 @@
 //! Issue revision dialog, the command line and scripts call this, so they
 //! all propose the same index and keep the same snapshot.
 
-use novo_core::{AnyId, ChangeSet, Command, Document, ModelError, Project, RevisionId};
+use novo_core::{AnyId, ChangeSet, Command, Document, ModelError, PageId, Project, RevisionId, Tx};
 use novo_storage::{Session, StorageError};
 
 use crate::{IndexRule, diff};
@@ -23,8 +23,12 @@ pub enum IssueError {
     Storage(#[from] StorageError),
     /// The revision was issued, but locking the pages failed; lock them
     /// from File > Revisions > Lock page.
-    #[error("the revision was issued, but locking the pages failed: {0}")]
-    LockFailed(ModelError),
+    #[error("the revision was issued, but locking the pages failed: {reason}")]
+    LockFailed {
+        reason: ModelError,
+        /// The issue that did happen; its snapshot is kept.
+        issued: Box<Issued>,
+    },
 }
 
 /// What an issue did.
@@ -80,7 +84,17 @@ pub fn issue_revision_noted(
     description: &str,
     note: &str,
 ) -> Result<Issued, IssueError> {
-    issue(doc, session, index, date, author, description, note, false)
+    issue(
+        doc,
+        session,
+        index,
+        date,
+        author,
+        description,
+        note,
+        false,
+        lock_all,
+    )
 }
 
 /// Like [`issue_revision_noted`], and locks every page with the new
@@ -96,7 +110,25 @@ pub fn issue_revision_locked(
     description: &str,
     note: &str,
 ) -> Result<Issued, IssueError> {
-    issue(doc, session, index, date, author, description, note, true)
+    issue(
+        doc,
+        session,
+        index,
+        date,
+        author,
+        description,
+        note,
+        true,
+        lock_all,
+    )
+}
+
+/// Locks every page in `pages` with `index`.
+fn lock_all(tx: &mut Tx<'_>, pages: &[PageId], index: &str) -> Result<(), ModelError> {
+    for &page in pages {
+        tx.lock_page(page, index)?;
+    }
+    Ok(())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -109,6 +141,7 @@ fn issue(
     description: &str,
     note: &str,
     lock: bool,
+    locker: fn(&mut Tx<'_>, &[PageId], &str) -> Result<(), ModelError>,
 ) -> Result<Issued, IssueError> {
     let unchanged_since = unchanged_since(doc.project(), session);
     let outcome = doc.execute(Command::IssueRevision {
@@ -120,18 +153,16 @@ fn issue(
     })?;
     session.record(&outcome.changes);
     let mut changes = outcome.changes.clone();
+    let mut lock_failed = None;
     if lock {
         let pages: Vec<_> = doc.project().pages().map(|p| p.id).collect();
-        let (_, locked) = doc
-            .amend_last("Lock released pages", |tx| {
-                for page in pages {
-                    tx.lock_page(page, index.clone())?;
-                }
-                Ok(())
-            })
-            .map_err(IssueError::LockFailed)?;
-        session.record(&locked);
-        changes.merge(&locked);
+        match doc.amend_last("Lock released pages", |tx| locker(tx, &pages, &index)) {
+            Ok((_, locked)) => {
+                session.record(&locked);
+                changes.merge(&locked);
+            }
+            Err(e) => lock_failed = Some(e),
+        }
     }
     let revision = outcome
         .created
@@ -142,12 +173,19 @@ fn issue(
         })
         .expect("IssueRevision creates a revision");
     session.put_snapshot(revision, doc.project())?;
-    Ok(Issued {
+    let issued = Issued {
         revision,
         index,
         unchanged_since,
         changes,
-    })
+    };
+    match lock_failed {
+        None => Ok(issued),
+        Some(reason) => Err(IssueError::LockFailed {
+            reason,
+            issued: Box::new(issued),
+        }),
+    }
 }
 
 fn unchanged_since(project: &Project, session: &Session) -> Option<String> {
@@ -156,4 +194,41 @@ fn unchanged_since(project: &Project, session: &Session) -> Option<String> {
     let changes = diff(&snapshot, project);
     // Issuing re-takes freezes, which `diff` already ignores.
     changes.is_empty().then(|| latest.index.clone())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_failed_lock_still_keeps_the_issued_revision_and_its_snapshot() {
+        let mut doc = Document::default();
+        doc.transact("p", |tx| tx.add_page("1")).unwrap();
+        let dir = tempfile::tempdir().unwrap();
+        let mut session = Session::create(dir.path().join("p.novo"), doc.project()).unwrap();
+        let refuse: fn(&mut Tx<'_>, &[PageId], &str) -> Result<(), ModelError> = |_, _, _| {
+            Err(ModelError::Refused {
+                what: "test".into(),
+                reason: "no".into(),
+            })
+        };
+        let err = issue(
+            &mut doc,
+            &mut session,
+            "A".into(),
+            "2026-10-21",
+            "TV",
+            "",
+            "",
+            true,
+            refuse,
+        )
+        .unwrap_err();
+        let IssueError::LockFailed { issued, .. } = err else {
+            panic!("expected LockFailed");
+        };
+        assert!(doc.project().issued_revision(issued.revision).is_some());
+        assert!(session.snapshot(issued.revision).unwrap().is_some());
+        assert!(!issued.changes.is_empty());
+    }
 }
