@@ -891,31 +891,6 @@ fn a_panel_chip_names_the_lesson_for_its_topic_and_steps_aside_when_it_runs() {
 }
 
 #[test]
-<<<<<<< HEAD
-fn the_inspector_keeps_above_the_lesson_card_at_1366() {
-    let (_dir, mut d) = drive();
-    d.app.start_lesson("tiny");
-    let size = eframe::egui::vec2(1366.0, 768.0);
-    for _ in 0..3 {
-        d.frame_sized(size, Vec::new());
-    }
-    let k = d.place("km3", 80.0, 96.0);
-    d.editor_leave();
-    d.select(k);
-    for _ in 0..6 {
-        d.frame_sized(size, Vec::new());
-    }
-    let rect = |name: &str| {
-        d.ctx
-            .memory(|m| m.area_rect(super::panel::id(name)))
-            .unwrap_or_else(|| panic!("{name} is not shown"))
-    };
-    let (card, inspector) = (rect("lesson_card"), rect("inspector"));
-    assert!(
-        inspector.max.y <= card.min.y || inspector.max.x <= card.min.x,
-        "the inspector {inspector:?} covers the lesson card {card:?}"
-    );
-=======
 fn reset_progress_waits_for_the_second_click() {
     let (_dir, mut d) = drive();
     d.app.learn.window = true;
@@ -965,5 +940,30 @@ fn open_finished_version_opens_the_finished_drawing_on_the_last_step() {
         d.doc().project().info().name
     );
     assert!(d.doc().project().symbols().count() > 0);
->>>>>>> origin/main
+}
+
+#[test]
+fn the_inspector_keeps_above_the_lesson_card_at_1366() {
+    let (_dir, mut d) = drive();
+    d.app.start_lesson("tiny");
+    let size = eframe::egui::vec2(1366.0, 768.0);
+    for _ in 0..3 {
+        d.frame_sized(size, Vec::new());
+    }
+    let k = d.place("km3", 80.0, 96.0);
+    d.editor_leave();
+    d.select(k);
+    for _ in 0..6 {
+        d.frame_sized(size, Vec::new());
+    }
+    let rect = |name: &str| {
+        d.ctx
+            .memory(|m| m.area_rect(super::panel::id(name)))
+            .unwrap_or_else(|| panic!("{name} is not shown"))
+    };
+    let (card, inspector) = (rect("lesson_card"), rect("inspector"));
+    assert!(
+        inspector.max.y <= card.min.y || inspector.max.x <= card.min.x,
+        "the inspector {inspector:?} covers the lesson card {card:?}"
+    );
 }
