@@ -217,6 +217,7 @@ const KNOWN_VERBS: &[&str] = &[
     "expect",
     "expect_not",
     "expect_scene",
+    "expect_file",
     "expect_enabled",
     "expect_disabled",
     "check_layout",
@@ -807,7 +808,15 @@ impl Ctx<'_> {
         ))
     }
 
+    /// `~/` is the app's own home folder (where exports without a file dialog
+    /// land, e.g. `~/Documents/KoperCAD/*.pdf`); other relative paths start at the repository.
     fn resolve(&self, p: &str) -> PathBuf {
+        if let Some(rest) = p.strip_prefix("~/") {
+            return std::env::temp_dir()
+                .join(format!("kopercad-test-user-{}", std::process::id()))
+                .join("home")
+                .join(rest);
+        }
         let p = PathBuf::from(p);
         if p.is_absolute() {
             p
@@ -833,7 +842,8 @@ impl Ctx<'_> {
                     return Err(format!("project file {} not found", p.display()));
                 }
                 self.srv.stop();
-                self.srv.keep_profile(false);
+                // A project under `~/` was saved by this run: keep the profile folder it lives in.
+                self.srv.keep_profile(words[1].starts_with("~/"));
                 self.srv.set_project(Some(p));
                 self.srv.ensure()?;
                 Ok(())
@@ -925,6 +935,9 @@ impl Ctx<'_> {
                 .map(|_| ()),
             "answer_dialog" => {
                 let p = self.resolve(need(1, "a path")?);
+                if let Some(dir) = p.parent() {
+                    let _ = std::fs::create_dir_all(dir);
+                }
                 self.srv
                     .tool("answer_dialog", &json!({"path": p.to_string_lossy()}))
                     .map(|_| ())
@@ -1012,6 +1025,21 @@ impl Ctx<'_> {
                         format!("`{want}` not in the project data"),
                         &format!("the scene dump contains `{want}`"),
                         "not found".into(),
+                    );
+                }
+                Ok(())
+            }
+            "expect_file" => {
+                let path = self.resolve(need(1, "path")?);
+                let min: u64 = a(2).and_then(|w| w.parse().ok()).unwrap_or(1);
+                let len = biggest_match(&path);
+                if len < min {
+                    self.add(
+                        "S2",
+                        "expect",
+                        format!("file `{}` missing or too small", path.display()),
+                        &format!("the file exists and has at least {min} bytes"),
+                        format!("{len} bytes"),
                     );
                 }
                 Ok(())
@@ -1347,6 +1375,8 @@ fn run_scenarios(r: Run, out: &mut dyn Write) -> Result<i32, Failure> {
         .map_err(|e| Failure::new(exit::WRITE, e.to_string()))?;
     std::fs::write(out_dir.join("report.md"), render_report(&results))
         .map_err(|e| Failure::new(exit::WRITE, e.to_string()))?;
+    std::fs::write(out_dir.join("summary.md"), render_summary(&results))
+        .map_err(|e| Failure::new(exit::WRITE, e.to_string()))?;
     writeln!(
         out,
         "\n{} run(s), {} failed, {} finding(s). Report: {}",
@@ -1375,7 +1405,123 @@ fn repo_root() -> Option<PathBuf> {
     }
 }
 
+/// Size of the file, or the biggest file when the last component has one `*`
+/// (`Motor*.pdf`); 0 when nothing matches.
+fn biggest_match(path: &Path) -> u64 {
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+    let Some((pre, post)) = name.as_deref().and_then(|n| n.split_once('*')) else {
+        return std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    };
+    let Some(dir) = path.parent() else { return 0 };
+    // One `*` may also stand in the folder name (`*DXF/*.dxf`).
+    let dir_name = dir.file_name().map(|n| n.to_string_lossy().into_owned());
+    if let (Some((dpre, dpost)), Some(grand)) = (
+        dir_name.as_deref().and_then(|n| n.split_once('*')),
+        dir.parent(),
+    ) {
+        return std::fs::read_dir(grand)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .filter(|e| {
+                let n = e.file_name().to_string_lossy().into_owned();
+                n.starts_with(dpre) && n.ends_with(dpost)
+            })
+            .map(|e| biggest_match(&e.path().join(path.file_name().unwrap_or_default())))
+            .max()
+            .unwrap_or(0);
+    }
+    std::fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter(|e| {
+            let n = e.file_name().to_string_lossy().into_owned();
+            n.len() >= pre.len() + post.len() && n.starts_with(pre) && n.ends_with(post)
+        })
+        .filter_map(|e| e.metadata().ok())
+        .map(|m| m.len())
+        .max()
+        .unwrap_or(0)
+}
+
 // ---- report -------------------------------------------------------------
+
+/// The merge-gate view: one row per scenario, one column per window size,
+/// then only the blocking findings (S1 to S3). Short enough for a PR comment.
+pub(crate) fn render_summary(v: &Value) -> String {
+    let sizes: Vec<String> = v["sizes"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|x| x.as_str().map(str::to_string))
+        .collect();
+    let rows = v["scenarios"].as_array().cloned().unwrap_or_default();
+    let mut names: Vec<String> = Vec::new();
+    for r in &rows {
+        let n = r["name"].as_str().unwrap_or("").to_string();
+        if !names.contains(&n) {
+            names.push(n);
+        }
+    }
+    let sum = &v["summary"];
+    let ok = sum["failed"].as_u64().unwrap_or(0) == 0 && sum["blocking"].as_u64().unwrap_or(0) == 0;
+    let mut s = String::new();
+    let _ = writeln!(
+        s,
+        "**QA gate: {}** ({} run(s), {} failed, {} blocking finding(s))\n",
+        if ok { "PASS" } else { "FAIL" },
+        sum["runs"],
+        sum["failed"],
+        sum["blocking"]
+    );
+    let _ = writeln!(s, "| Scenario | {} |", sizes.join(" | "));
+    let _ = writeln!(s, "|---|{}", "---|".repeat(sizes.len()));
+    for n in &names {
+        let mut cells = Vec::new();
+        for z in &sizes {
+            let hit = rows
+                .iter()
+                .find(|r| r["name"].as_str() == Some(n) && r["size"].as_str() == Some(z));
+            cells.push(match hit {
+                None => "-".to_string(),
+                Some(r) if r["status"].as_str() == Some("pass") => "pass".to_string(),
+                Some(r) => {
+                    let ids = r["findings"]
+                        .as_array()
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(Value::as_str)
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        })
+                        .unwrap_or_default();
+                    format!("FAIL {ids}")
+                }
+            });
+        }
+        let _ = writeln!(s, "| {} | {} |", n, cells.join(" | "));
+    }
+    let mut any = false;
+    for f in v["findings"].as_array().into_iter().flatten() {
+        if matches!(f["severity"].as_str(), Some("S1" | "S2" | "S3")) {
+            if !any {
+                let _ = writeln!(s, "\nBlocking findings:\n");
+                any = true;
+            }
+            let _ = writeln!(
+                s,
+                "- {} {} ({}, {}): {}",
+                f["id"].as_str().unwrap_or(""),
+                f["severity"].as_str().unwrap_or(""),
+                f["area"].as_str().unwrap_or(""),
+                f["size"].as_str().unwrap_or(""),
+                f["title"].as_str().unwrap_or("")
+            );
+        }
+    }
+    s
+}
 
 /// The audit report: summary, scenario table, then every finding with the
 /// steps that led to it, what was expected, what was seen and the picture.
@@ -1541,7 +1687,9 @@ mod tests {
         assert!(all.len() >= 7);
         for sc in &all {
             for st in &sc.steps {
-                if matches!(st.words[0].as_str(), "open" | "answer_dialog") {
+                if matches!(st.words[0].as_str(), "open" | "answer_dialog")
+                    && !st.words[1].starts_with("~/")
+                {
                     let f = root.join(&st.words[1]);
                     assert!(f.exists(), "{}: {} missing", sc.file, f.display());
                 }
@@ -1601,5 +1749,9 @@ mod tests {
         assert!(md.contains("F-001 S3 cut off"));
         assert!(md.contains("1. `click_text X`"));
         assert!(md.contains("![F-001](a.png)"));
+        let sum = render_summary(&v);
+        assert!(sum.contains("QA gate: FAIL"));
+        assert!(sum.contains("| t | FAIL F-001 |"));
+        assert!(sum.contains("- F-001 S3 (A, 1366x768): cut off"));
     }
 }
