@@ -266,13 +266,10 @@ fn estimates_in_the_example_are_explained_by_cause() {
     let (_dir, d) = example();
     let (plan, _) = build(d.doc().project(), false);
     let text = plan.left_to_you.join("\n");
-    // Four motor wires leave the cabinet; six wires are supply feeds.
-    assert!(
-        text.contains(
-            "4 wire lengths are estimates: the wire goes to a device in another location"
-        ),
-        "{text}"
-    );
+    // The motor cable states its length, so its four cores are exact; the six
+    // supply leads come in from outside and still wait for an entry and a
+    // stated length outside it.
+    assert!(!text.contains("another location"), "{text}");
     assert!(
         text.contains("6 wire lengths are estimates: the wire comes in from outside"),
         "{text}"

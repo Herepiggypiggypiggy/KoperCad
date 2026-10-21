@@ -3,7 +3,7 @@
 
 use novo_core::{DeviceTag, Document, MountingPlate, Point, RailKind, StructureId};
 use novo_reports::{is_estimate, wire_cut_jobs};
-use novo_routing::entry::set_entry_point;
+use novo_routing::entry::{set_entry_point, set_outside_mm};
 use novo_tests::{MotorStarter, motor_starter};
 
 /// X1 and F1 and K1 on a plate with a duct; the motor M1 is in +FLD.
@@ -50,65 +50,93 @@ fn motor_job(doc: &Document) -> novo_reports::WireCutJob {
         .expect("the X1 to M1 wire")
 }
 
+/// The service loop at one wire end (project default), mm.
+const LOOP_MM: f64 = 50.0;
+
 #[test]
-fn a_field_wire_is_an_estimate_until_it_has_an_entry_and_a_cable_run() {
-    let (mut doc, h, cab) = cabinet();
-    set_run(&mut doc, &h, Some(12.0));
-    // No entry point: as before.
-    assert_eq!(motor_job(&doc).basis, "estimate");
-    // An entry point but no stated run: still the whole-wire estimate.
-    doc.transact("Entry", |tx| {
-        set_entry_point(tx, cab, Some(novo_routing::Point::new(400.0, 600.0)))
-    })
-    .unwrap();
+fn a_field_wire_is_an_estimate_until_its_cable_states_a_length() {
+    let (mut doc, h, _cab) = cabinet();
     set_run(&mut doc, &h, None);
-    let unstated = motor_job(&doc);
-    assert_eq!(unstated.basis, "estimate");
-    assert!(is_estimate(&unstated.basis));
+    let job = motor_job(&doc);
+    assert_eq!(job.basis, "estimate");
+    assert!(is_estimate(&job.basis));
 }
 
 #[test]
-fn with_both_the_length_is_the_route_to_the_entry_plus_the_run_plus_a_service_loop() {
+fn a_stated_cable_length_makes_the_core_exact_with_a_loop_at_each_end() {
     let (mut doc, h, cab) = cabinet();
-    doc.transact("Entry", |tx| {
-        set_entry_point(tx, cab, Some(novo_routing::Point::new(400.0, 600.0)))
-    })
-    .unwrap();
     set_run(&mut doc, &h, Some(10.0));
     let ten = motor_job(&doc);
-    assert_eq!(ten.basis, "to entry + cable run");
+    assert_eq!(ten.basis, "cable length");
     assert!(!is_estimate(&ten.basis));
-    assert!(!ten.ducts.is_empty() || ten.length_mm > 10_000.0);
+    assert_eq!(ten.length_mm, 10_000.0 + 2.0 * LOOP_MM);
     set_run(&mut doc, &h, Some(20.0));
-    let twenty = motor_job(&doc);
     assert_eq!(
-        twenty.length_mm - ten.length_mm,
+        motor_job(&doc).length_mm - ten.length_mm,
         10_000.0,
-        "the run adds metre for metre"
+        "metre for metre"
     );
-    // The inside part is routed: moving the entry changes it, not the run.
-    doc.transact("Entry", |tx| {
-        set_entry_point(tx, cab, Some(novo_routing::Point::new(100.0, 600.0)))
-    })
-    .unwrap();
-    let moved = motor_job(&doc);
-    assert_ne!(moved.length_mm, twenty.length_mm);
-    assert_eq!(moved.basis, "to entry + cable run");
-}
-
-#[test]
-fn a_supply_feed_is_routed_to_the_entry_but_stays_an_estimate_without_a_stated_outside() {
-    let (mut doc, _h, cab) = cabinet();
+    // An entry point changes nothing for a wire on a cable: the cable is as long as it is.
     doc.transact("Entry", |tx| {
         set_entry_point(tx, cab, Some(novo_routing::Point::new(400.0, 600.0)))
     })
     .unwrap();
-    let feed: Vec<_> = wire_cut_jobs(doc.project())
+    let with_entry = motor_job(&doc);
+    assert_eq!(with_entry.length_mm, 20_000.0 + 2.0 * LOOP_MM);
+    assert_eq!(with_entry.basis, "cable length");
+}
+
+fn feed_jobs(doc: &Document) -> Vec<novo_reports::WireCutJob> {
+    wire_cut_jobs(doc.project())
         .into_iter()
         .filter(|j| {
-            j.end_b.designation.ends_with("(feed)") || j.end_a.designation.ends_with("(feed)")
+            j.end_a.designation.ends_with("(feed)") || j.end_b.designation.ends_with("(feed)")
         })
+        .collect()
+}
+
+#[test]
+fn a_supply_lead_is_routed_to_the_entry_and_exact_only_with_a_stated_outside() {
+    let (mut doc, _h, cab) = cabinet();
+    let feeds = feed_jobs(&doc);
+    assert!(!feeds.is_empty());
+    assert!(feeds.iter().all(|j| j.basis == "estimate"), "no entry yet");
+    doc.transact("Entry", |tx| {
+        set_entry_point(tx, cab, Some(novo_routing::Point::new(400.0, 600.0)))
+    })
+    .unwrap();
+    assert!(
+        feed_jobs(&doc).iter().all(|j| j.basis == "estimate"),
+        "no outside stated"
+    );
+
+    doc.transact("Outside", |tx| set_outside_mm(tx, cab, Some(800.0)))
+        .unwrap();
+    let routed = novo_routing::model::route_project(doc.project());
+    let exact: Vec<_> = feed_jobs(&doc)
+        .into_iter()
+        .filter(|j| j.basis == "to entry + stated outside")
         .collect();
-    assert!(!feed.is_empty());
-    assert!(feed.iter().all(|j| j.basis == "estimate"), "{feed:?}");
+    assert!(
+        !exact.is_empty(),
+        "the placed fuse's lead is routed to the entry"
+    );
+    for job in &exact {
+        assert!(!is_estimate(&job.basis));
+        let inside = routed
+            .routes
+            .get(&job.wires[0].raw())
+            .expect("the lead has a route to the entry")
+            .length_mm;
+        assert_eq!(
+            job.length_mm,
+            (inside + 800.0).ceil(),
+            "inside route + stated outside"
+        );
+        assert!(inside > 2.0 * LOOP_MM, "a real route, not only the loops");
+    }
+    // A clear removes the exactness again.
+    doc.transact("Outside", |tx| set_outside_mm(tx, cab, None))
+        .unwrap();
+    assert!(feed_jobs(&doc).iter().all(|j| j.basis == "estimate"));
 }

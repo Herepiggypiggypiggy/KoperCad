@@ -94,7 +94,7 @@ impl NovoApp {
 
     /// Writes the proposals with these ids as one undo step.
     pub(super) fn apply_autopilot(&mut self, plan: &Autopilot, ids: Option<&BTreeSet<usize>>) {
-        let mut counts = (0, 0, 0, 0);
+        let mut counts = (0, 0, 0, 0, 0);
         let unverified = plan.proposals.iter().any(|p| {
             ids.is_none_or(|set| set.contains(&p.id))
                 && matches!(p.change, Change::Size(_))
@@ -106,7 +106,7 @@ impl NovoApp {
         }) {
             return;
         }
-        let (sized, coloured, numbered, cabled) = counts;
+        let (sized, coloured, numbered, cabled, entries) = counts;
         let mut parts = Vec::new();
         if sized > 0 {
             parts.push(if unverified {
@@ -123,6 +123,9 @@ impl NovoApp {
         }
         if cabled > 0 {
             parts.push(format!("{cabled} cables"));
+        }
+        if entries > 0 {
+            parts.push(format!("{entries} cabinet entry points"));
         }
         let text = if parts.is_empty() {
             "Autopilot had nothing to fill in".to_owned()

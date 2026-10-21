@@ -14,51 +14,54 @@ Owner: Autopilot thread. The WS-02 thread agreed to the property keys and the va
 | Thing | Where | Shape |
 | --- | --- | --- |
 | Entry point | Enclosure structure `properties` | `entry.x_mm`, `entry.y_mm`: Number, plate coordinates, origin top left |
-| Cable run | `Cable.length_m` (exists) | metres, the length outside the cabinet between the two enclosures' entries |
-| Feed allowance | project wire rule `wire.feed_outside_mm` | mm of wire outside the entry; unset = unknown |
+| Wire outside the entry | Enclosure structure `properties` | `entry.outside_mm`: Number, mm of wire from the entry to where it ends, loops included; for wires without a cable |
+| Cable length | `Cable.length_m` (exists) | metres, **the whole cable as bought**, between its two ends |
 
-Rules for the entry point (WS-02): both keys set or neither; finite; inside the
-plate; written with `Tx::set_property`. A plate with no entry point has none.
+Rules for the entry point (WS-02): both keys set or neither; finite; inside
+the plate; written with `Tx::set_property`. A plate with no entry point has
+none. A stored point that no longer fits a smaller plate reads as none and the
+panel says so.
 
 ## How a length is found
 
-For a wire with exactly one end on a placed device of a plate (the "inside
-end") and the other end elsewhere:
+Wires that stay on one plate are routed over its ducts as before. For a wire
+with an end outside the plate:
 
-1. Inside part: the routed length from the inside end to the entry point, using
-   the same graph, stubs, slack and bend rules as any other wire (the entry is
-   an anchor with no facing, at the plate surface).
-2. Outside part:
-   - the wire lies on a cable with `length_m`: that length, plus the service
-     loop at the far end;
-   - a feed, `wire.feed_outside_mm` set: that value;
-   - otherwise unknown.
-3. Length = inside + outside. Basis text:
-   - `to entry + cable run` (both parts known): not an estimate;
-   - `to entry + stated outside` (feed allowance set): not an estimate;
-   - `to entry, outside unknown` (inside part routed, outside from the page
-     estimate): still an estimate, and says which half is exact.
-
-A wire with both ends outside any plate, or with no entry point on its plate,
-stays `estimate` exactly as today. Nothing changes for wires already routed.
+1. **On a cable with a stated length**: the cable length plus a service loop
+   at each end (`wire.slack_mm`, default 50 mm). Basis `cable length`, not an
+   estimate. The cores run the whole cable, so no entry point is needed; if the
+   wire is also routed to the entry (see 2) its route only fills the duct. If
+   one connection has wires on several cables, the longest cable wins.
+2. **Without a cable**, one end on a placed device and the other outside (a
+   supply lead from a potential feed, or a device whose `+location` differs
+   from the enclosure's; a tag without a location is *unknown*, not outside):
+   routed over the ducts to the entry point. The route holds a service loop at
+   the placed terminal and one at the entry. With `entry.outside_mm` stated the
+   length is route + outside, basis `to entry + stated outside`, not an
+   estimate.
+3. Otherwise the whole-wire page estimate, labelled `estimate`, as before.
 
 ## What is exact and what is not
 
-Exact (to the model): the inside part, when devices and ducts are placed. Stated
-by the designer: the cable run and the feed allowance. Never invented: an
-unknown outside part is not replaced by a made-up number; it keeps the estimate
-label.
+Exact (to the model): the inside part, when devices and ducts are placed.
+Stated by the designer: the cable length and the wire outside the entry. Never
+invented: an unknown outside part is not replaced by a number; the wire keeps
+the estimate label.
 
 ## Autopilot
 
-A plate with wires that need an entry and has none gets one row: "Entry point
-at the bottom middle of the plate" (basis Assumed, so unticked), because where
-the gland really is, the designer knows. Cable runs and feed allowances are
-listed under "left to you" with the count, as now.
+A plate with supply leads that are still estimates and no entry point gets one
+row: "entry point at the bottom middle of the plate" (basis Assumed, so
+unticked), because where the gland really is, the designer knows. The cable
+rows (accept them, then state each cable's length) and the entry plus the wire
+outside it are what turn the remaining estimates exact; the window says so.
 
 ## Plan (small PRs)
 
 1. This note; the entry point accessors with the WS-02 validation, and a field
-   in the Cabinet side panel to set it (where the user finds it).
-2. (done) Routing to the entry point in `novo-routing::model` (`Routed::entry_legs`) and the new basis `to entry + cable run` in `novo-reports::lengths`, `is_estimate`; tests on the motor starter. A wire to the outside without a stated cable run stays `estimate`. The feed allowance is step 3.
-3. Autopilot: the entry-point row and the refined "left to you" text.
+   in the Cabinet routes panel (done, #1160).
+2. Routing to the entry point in `novo-routing::model` (`Routed::entry_legs`)
+   and the length rules in `novo-reports::lengths` (done, #1163; the cable
+   meaning was corrected in step 3 after review).
+3. Cable length as bought, wire outside the entry, empty location is unknown,
+   Autopilot entry row (this step).

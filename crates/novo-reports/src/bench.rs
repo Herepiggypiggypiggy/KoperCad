@@ -165,10 +165,13 @@ pub fn bench_jobs(project: &Project) -> Vec<WireCutJob> {
 }
 
 /// Whether a length basis is an estimate to check on the plate, not a
-/// length found by routing (`routed`, `routed, no depth`) or by routing to
-/// the cabinet entry plus a stated cable run.
+/// length found by routing (`routed`, `routed, no depth`) or from a length the
+/// designer states (the cable's, or the wire outside the entry).
 pub fn is_estimate(basis: &str) -> bool {
-    !(basis == "routed" || basis == "routed, no depth" || basis == "to entry + cable run")
+    !(basis == "routed"
+        || basis == "routed, no depth"
+        || basis == "cable length"
+        || basis == "to entry + stated outside")
 }
 
 // ---------------------------------------------------------------- ferrules

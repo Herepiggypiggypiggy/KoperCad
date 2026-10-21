@@ -23,8 +23,10 @@ pub(crate) enum Basis {
     Door,
     /// At least one device is not placed on a plate: see [`estimate`].
     Estimate,
-    /// Routed to the cabinet entry point, plus the stated cable run outside.
-    ToEntryCable,
+    /// The cable's stated length plus a service loop at each end.
+    CableLength,
+    /// Routed to the cabinet entry point, plus the stated length outside.
+    ToEntryStated,
 }
 
 impl Basis {
@@ -35,7 +37,8 @@ impl Basis {
             Basis::FreeAir => "free air",
             Basis::Door => "door, no gap",
             Basis::Estimate => "estimate",
-            Basis::ToEntryCable => "to entry + cable run",
+            Basis::CableLength => "cable length",
+            Basis::ToEntryStated => "to entry + stated outside",
         }
     }
 }
@@ -69,15 +72,16 @@ pub(crate) struct Connection {
     pub from: PinRef,
     pub to: PinRef,
     pub cross_section_mm2: Option<f64>,
-    /// The length of the cable the wire lies in outside the enclosure, mm,
-    /// when the cable states one (`Cable.length_m`).
-    pub cable_run_mm: Option<f64>,
+    /// The stated length of the cable the wire lies in, mm (`Cable.length_m`,
+    /// the whole cable as bought).
+    pub cable_mm: Option<f64>,
 }
 
-/// The stated length in mm of the cable a connection's wires lie in: the
-/// longest `length_m` of its cables, `None` when no wire is on a cable that
-/// states a positive finite length.
-pub(crate) fn cable_run_mm(project: &Project, wires: &[&novo_core::Wire]) -> Option<f64> {
+/// The stated length in mm of the cable a connection's wires lie in. When
+/// its wires are on several cables the longest cable wins (the connection is
+/// one wire to cut, and the longer cable is the safer length). `None` when no
+/// wire is on a cable that states a positive finite length.
+pub(crate) fn cable_mm(project: &Project, wires: &[&novo_core::Wire]) -> Option<f64> {
     wires
         .iter()
         .filter_map(|w| project.core_of_wire(w.id))
@@ -130,22 +134,45 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
         .iter()
         .enumerate()
         .map(|(i, c)| {
-            let to_entry = routed.entry_legs.contains(&(i as u64));
+            let to_entry = routed.entry_legs.get(&(i as u64)).copied();
+            let loops = 2.0 * rules.routing.slack_mm;
+            let by_cable = c.cable_mm.map(|mm| CutLength {
+                mm: mm + loops,
+                basis: Basis::CableLength,
+                ducts: Vec::new(),
+            });
             let found = match routed.routes.get(&(i as u64)) {
-                // Routed to the cabinet entry: exact inside, the cable run
-                // outside is the designer's stated figure, and the far end
-                // gets its service loop. Without a stated run the length
-                // stays the estimate of the whole wire.
-                Some(route) if to_entry && c.cable_run_mm.is_some() => CutLength {
-                    mm: route.length_mm + c.cable_run_mm.unwrap_or(0.0) + rules.routing.slack_mm,
-                    basis: Basis::ToEntryCable,
-                    ducts: route.ducts.clone(),
-                },
-                Some(_) if to_entry => CutLength {
-                    mm: estimate(project, &rules, c.from, c.to),
-                    basis: Basis::Estimate,
-                    ducts: Vec::new(),
-                },
+                // A wire that leaves the enclosure on a cable is as long as
+                // the cable (stated by the designer) plus a service loop at
+                // each end; the route to the entry only fills the duct.
+                Some(route) if to_entry.is_some() && by_cable.is_some() => {
+                    let mut cut = by_cable.clone().unwrap_or(CutLength {
+                        mm: 0.0,
+                        basis: Basis::Estimate,
+                        ducts: Vec::new(),
+                    });
+                    cut.ducts = route.ducts.clone();
+                    cut
+                }
+                // Routed to the cabinet entry without a cable: the inside
+                // is routed (loops at the terminal and at the entry), the
+                // outside is the length the designer states for the
+                // enclosure. Without it the length stays the estimate.
+                Some(route) if to_entry.is_some() => {
+                    match to_entry.and_then(|plate| novo_routing::entry::outside_mm(project, plate))
+                    {
+                        Some(outside) => CutLength {
+                            mm: route.length_mm + outside,
+                            basis: Basis::ToEntryStated,
+                            ducts: route.ducts.clone(),
+                        },
+                        None => CutLength {
+                            mm: estimate(project, &rules, c.from, c.to),
+                            basis: Basis::Estimate,
+                            ducts: Vec::new(),
+                        },
+                    }
+                }
                 Some(route) => CutLength {
                     mm: route.length_mm,
                     basis: match route.kind {
@@ -166,11 +193,11 @@ pub(crate) fn measure(project: &Project, connections: &[Connection]) -> Measurem
                     },
                     ducts: route.ducts.clone(),
                 },
-                None => CutLength {
+                None => by_cable.unwrap_or_else(|| CutLength {
                     mm: estimate(project, &rules, c.from, c.to),
                     basis: Basis::Estimate,
                     ducts: Vec::new(),
-                },
+                }),
             };
             CutLength {
                 mm: found.mm.ceil().max(1.0),
