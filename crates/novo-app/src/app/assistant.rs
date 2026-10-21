@@ -268,7 +268,7 @@ impl State {
         month_of((self.now)())
     }
 
-    fn spent(&self) -> f64 {
+    pub(super) fn spent(&self) -> f64 {
         self.ledger.spent_in(&self.month())
     }
 
