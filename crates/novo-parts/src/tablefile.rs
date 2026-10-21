@@ -54,7 +54,16 @@ pub enum TableError {
     OldExcel(String),
     #[error("{0} is not a table file; use CSV, TSV, TXT or XLSX")]
     Unsupported(String),
+    #[error("{0}")]
+    TooLarge(String),
 }
+
+/// Largest file the importer reads, in bytes.
+pub const MAX_FILE_BYTES: u64 = 32 * 1024 * 1024;
+/// Most rows one sheet may have; a parts table has far fewer.
+pub const MAX_ROWS: usize = 200_000;
+/// Most an `.xlsx` may expand to when unzipped (a zip bomb stays small on disk).
+const MAX_UNZIPPED_BYTES: u64 = 256 * 1024 * 1024;
 
 /// File extensions the table reader accepts.
 pub const TABLE_EXTENSIONS: &[&str] = &["csv", "tsv", "txt", "xlsx"];
@@ -64,6 +73,9 @@ impl TableFile {
     /// the Windows-1252 that German and Dutch Excel writes; the delimiter
     /// (`;`, `,`, tab) is detected.
     pub fn read(name: &str, bytes: &[u8]) -> Result<TableFile, TableError> {
+        if bytes.len() as u64 > MAX_FILE_BYTES {
+            return Err(too_large_file(name));
+        }
         let ext = name
             .rsplit_once('.')
             .map(|(_, e)| e.to_ascii_lowercase())
@@ -92,9 +104,24 @@ impl TableFile {
     }
 }
 
+/// The refusal for a file over [`MAX_FILE_BYTES`], also used by callers that
+/// check the size before reading the file.
+pub fn too_large_file(name: &str) -> TableError {
+    TableError::TooLarge(format!(
+        "{name} is larger than {} MB; split it into smaller tables",
+        MAX_FILE_BYTES / (1024 * 1024)
+    ))
+}
+
 fn read_text(bytes: &[u8]) -> Result<Sheet, TableError> {
     let text = decode_text(bytes);
     let parsed = parse_delimited(&text)?;
+    if parsed.len() > MAX_ROWS {
+        return Err(TableError::TooLarge(format!(
+            "the file has {} rows; the import takes at most {MAX_ROWS}",
+            parsed.len()
+        )));
+    }
     let lines = parsed.iter().map(|r| r.line).collect();
     let rows = parsed
         .into_iter()
@@ -108,6 +135,16 @@ fn read_text(bytes: &[u8]) -> Result<Sheet, TableError> {
 }
 
 fn read_workbook(bytes: &[u8]) -> Result<Vec<Sheet>, TableError> {
+    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
+        .map_err(|e| TableError::Workbook(e.to_string()))?;
+    let unzipped: u64 = (0..archive.len())
+        .filter_map(|i| archive.by_index_raw(i).ok().map(|f| f.size()))
+        .sum();
+    if unzipped > MAX_UNZIPPED_BYTES {
+        return Err(TableError::TooLarge(
+            "the workbook expands to far more data than a parts table holds; export the sheet as CSV".into(),
+        ));
+    }
     let mut book: Xlsx<_> = open_workbook_from_rs(Cursor::new(bytes.to_vec()))
         .map_err(|e: calamine::XlsxError| TableError::Workbook(e.to_string()))?;
     let mut sheets = Vec::new();
@@ -115,6 +152,12 @@ fn read_workbook(bytes: &[u8]) -> Result<Vec<Sheet>, TableError> {
         let range = book
             .worksheet_range(&name)
             .map_err(|e| TableError::Workbook(format!("sheet {name}: {e}")))?;
+        if range.height() > MAX_ROWS {
+            return Err(TableError::TooLarge(format!(
+                "sheet {name} has {} rows; the import takes at most {MAX_ROWS}",
+                range.height()
+            )));
+        }
         let Some((first_row, first_col)) = range.start() else {
             sheets.push(Sheet {
                 name,

@@ -205,6 +205,11 @@ impl NovoApp {
             .file_name()
             .map(|n| n.to_string_lossy().into_owned())
             .unwrap_or_default();
+        // Refuse before reading: a huge file would take the app down.
+        if std::fs::metadata(path).is_ok_and(|m| m.len() > novo_parts::MAX_FILE_BYTES) {
+            self.message(Level::Error, novo_parts::too_large_file(&name).to_string());
+            return false;
+        }
         let bytes = match std::fs::read(path) {
             Ok(b) => b,
             Err(e) => {
@@ -361,12 +366,12 @@ fn settings_ui(ui: &mut egui::Ui, import: &mut PartsTableImport) -> bool {
             new_header = Some(row);
         }
         ui.add_space(12.0);
-        ui.label("Maker for rows without one");
+        ui.label("Maker for rows that name none");
         changed |= ui
             .add(
                 egui::TextEdit::singleline(&mut import.mapping.default_manufacturer)
                     .desired_width(150.0)
-                    .hint_text("none"),
+                    .hint_text("maker of this file"),
             )
             .changed();
     });
@@ -521,6 +526,7 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
     ui.horizontal(|ui| {
         ui.label(egui::RichText::new("What the file tells").weak());
         for c in &import.preview.coverage {
+            let price_note = c.label == "Price";
             let full = c.total > 0 && c.have == c.total;
             let color = if c.have == 0 {
                 p.text_tertiary
@@ -530,7 +536,9 @@ fn rows_ui(ui: &mut egui::Ui, import: &mut PartsTableImport, height: f32) {
                 p.warning
             };
             ui.colored_label(color, format!("{} {}/{}", c.label, c.have, c.total))
-                .on_hover_text(if c.have == c.total {
+                .on_hover_text(if price_note {
+                    "Prices are list prices as in the file. Their date is the day of the import, not the date of the price list."
+                } else if c.have == c.total {
                     "Every imported part has this."
                 } else {
                     "Parts without it stay unknown: nothing is filled in."

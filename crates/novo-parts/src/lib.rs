@@ -120,7 +120,9 @@ pub use table::{
     BulkError, BulkOutcome, BulkRow, BulkTable, TableColumn, apply_table, fill, find_device,
     set_cell,
 };
-pub use tablefile::{Sheet, TABLE_EXTENSIONS, TableError, TableFile};
+pub use tablefile::{
+    MAX_FILE_BYTES, MAX_ROWS, Sheet, TABLE_EXTENSIONS, TableError, TableFile, too_large_file,
+};
 pub use tablemap::{
     ColumnMap, MEASURES, Mapping, Measure, SavedMappings, Target, guess_header_row, measure,
     saved_mappings_path, split_header, stored_unit,

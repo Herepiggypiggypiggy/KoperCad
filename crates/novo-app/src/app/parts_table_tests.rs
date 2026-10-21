@@ -101,3 +101,21 @@ fn old_excel_and_unknown_files_are_refused_in_words() {
         assert!(d.app.messages().last().unwrap().text.contains(word));
     }
 }
+
+#[test]
+fn a_file_over_the_size_cap_is_refused_before_it_is_read() {
+    let (dir, mut d) = open();
+    let big = dir.path().join("big.csv");
+    let f = std::fs::File::create(&big).unwrap();
+    f.set_len(novo_parts::MAX_FILE_BYTES + 1).unwrap();
+    assert!(!d.app.import_parts_table_from(&big, None, None));
+    assert!(d.app.wb.parts_table.is_none());
+    assert!(
+        d.app
+            .messages()
+            .last()
+            .unwrap()
+            .text
+            .contains("larger than")
+    );
+}

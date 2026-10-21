@@ -370,3 +370,15 @@ fn a_title_line_above_the_table_is_not_the_header_even_when_it_has_the_delimiter
     // Row numbers are the file's own lines: the part is on line 4.
     assert_eq!(p.rows[0].line, 4);
 }
+
+#[test]
+fn oversized_tables_are_refused_in_words() {
+    let big = vec![b'a'; MAX_FILE_BYTES as usize + 1];
+    assert!(matches!(
+        TableFile::read("x.csv", &big),
+        Err(TableError::TooLarge(_))
+    ));
+    let rows = "a;b\n".repeat(MAX_ROWS + 1);
+    let err = TableFile::read("x.csv", rows.as_bytes()).unwrap_err();
+    assert!(err.to_string().contains("rows"), "{err}");
+}
