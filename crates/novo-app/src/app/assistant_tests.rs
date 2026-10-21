@@ -66,7 +66,7 @@ fn ask(s: &mut Setup, question: &str) {
     s.d.app.wb.assistant.set_draft(question);
     let ctx = s.d.ctx.clone();
     s.d.app.assistant_test_send(&ctx);
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if !s.d.app.wb.assistant.is_running() {
             return;
@@ -523,7 +523,7 @@ fn ctrl_k_offers_to_ask_claude_when_nothing_matches_and_only_when_it_is_on() {
         repeat: false,
         modifiers: egui::Modifiers::NONE,
     }]);
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if !s.d.app.wb.assistant.is_running()
             && s.d.app.wb.assistant.transcript_text().contains("load")
@@ -568,7 +568,7 @@ fn a_ctrl_k_question_while_claude_answers_is_refused_not_doubled() {
     s.d.app.assistant_test_send(&ctx);
     assert!(s.d.app.wb.assistant.is_running());
     s.d.app.ask_claude(&ctx, "second question here".into());
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if !s.d.app.wb.assistant.is_running() {
             break;
@@ -609,7 +609,7 @@ fn a_question_queued_from_elsewhere_opens_the_window_and_is_sent_once() {
         .wb
         .assistant
         .ask_later("Explain this problem".into());
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if s.d.app.wb.assistant.transcript_text().contains("no end") {
             break;
@@ -722,7 +722,7 @@ fn a_panel_can_leave_a_question_and_only_when_claude_is_on() {
     let ctx = s.d.ctx.clone();
     assert!(super::assistant::claude_is_on(&ctx));
     super::assistant::ask_claude_later(&ctx, "Describe this heat result".into());
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if s.d
             .app
@@ -793,7 +793,7 @@ fn read_sheet(s: &mut Setup, reply: Value) {
         "nothing is sent before the person agrees"
     );
     s.d.app.datasheet_test_send(&ctx);
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if s.d.app.datasheet_test_stage() != "reading" {
             return;
