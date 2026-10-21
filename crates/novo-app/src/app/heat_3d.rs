@@ -25,6 +25,8 @@ pub(crate) struct Heat3d {
     pub arrows: bool,
     /// Colour the device bodies by the air temperature in front of them.
     pub devices: bool,
+    /// Pinned labels (tag, temperature, margin) on the hottest devices.
+    pub labels: bool,
     /// The whole volume as see-through slices coloured by temperature.
     pub cloud: bool,
     /// Opacity of the cloud, 0 to 1.
@@ -51,6 +53,7 @@ impl Default for Heat3d {
             lines: false,
             arrows: false,
             devices: false,
+            labels: true,
             cloud: false,
             cloud_opacity: 0.6,
             cloud_layers: super::heat_cloud::LAYERS as u8,

@@ -28,6 +28,7 @@ use super::heat_spots;
 use super::view3d_align;
 use super::view3d_controls::{self, Controls};
 use super::view3d_heat;
+use super::view3d_heat_labels;
 use super::view3d_hints::Hints;
 use super::view3d_measure::{self, Measure};
 use super::view3d_move::{self, MoveState};
@@ -814,6 +815,25 @@ impl NovoApp {
                 ui.painter()
                     .galley(chip.min + egui::vec2(6.0, 3.0), galley, pal.sunken);
             }
+            if mode.heat.labels
+                && let Some(sol) = &solution
+            {
+                let tag_of = |raw: u64| {
+                    project
+                        .get::<Device>(DeviceId::from(raw))
+                        .and_then(|d| d.tag.device_code().map(str::to_owned))
+                        .unwrap_or_else(|| format!("device {raw}"))
+                };
+                let labels = view3d_heat_labels::labels(&sol.snapshot, &tag_of);
+                view3d_heat_labels::paint(
+                    ui,
+                    &mode.view,
+                    out.rect,
+                    scene,
+                    &labels,
+                    stale || self.cabinet.heat.running(),
+                );
+            }
             if view3d_measure::readout(ui.ctx(), out.rect, &mode.measure, reading) {
                 mode.measure.clear();
             }
@@ -1319,6 +1339,9 @@ fn heat_controls(
         }
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
             "Colour each device by the air temperature in front of it, on the same scale as the slice",
+        );
+        ui.checkbox(&mut h.labels, "Labels").on_hover_text(
+            "Pin the tag, surface temperature and margin to the limit on the six devices closest to theirs (model values from the solver, not measurements)",
         );
         ui.checkbox(&mut probe.on, "Probe").on_hover_text(
             "Click the air to read its temperature and speed there (Esc clears the point)",
