@@ -1,0 +1,32 @@
+@title Machine options: a condition is picked, not typed
+@area Options
+# Project options > Conditions: option, is / is not, value per line; the raw expression sits under Advanced.
+open qa/fixtures/machine-options.novo
+wait 20
+key ctrl+k
+wait 3
+text options
+wait 4
+key Enter
+wait 10
+expect "Appears when"
+expect "Current page"
+expect "Always appears. No rule yet."
+expect "Advanced: type the expression"
+shot picker-always
+click_text "+ Add a rule"
+wait 6
+expect "Nothing is selected, so this acts on page 1 now: Cooling fan"
+shot rule-one
+click_text "+ Add a rule"
+wait 6
+expect "Cooling fan and Supply 480V"
+shot rule-two
+click_text "Advanced: type the expression"
+wait 4
+expect "opt.fan && opt.supply == '480V'"
+expect "Nothing is selected, so this acts on page 1 now: Cooling fan and Supply 480V"
+shot advanced
+click_text "480V" ComboBox
+wait 4
+shot value-list

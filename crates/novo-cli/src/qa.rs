@@ -844,9 +844,20 @@ impl Ctx<'_> {
         };
         match words[0].as_str() {
             "open" => {
-                let p = self.resolve(need(1, "a project file")?)?;
+                let mut p = self.resolve(need(1, "a project file")?)?;
                 if !p.exists() {
                     return Err(format!("project file {} not found", p.display()));
+                }
+                // A project in the repository is opened as a copy: the app autosaves edits,
+                // and a run must not change a committed fixture.
+                if p.starts_with(self.root) {
+                    let dir = std::env::temp_dir()
+                        .join(format!("kopercad-qa-open-{}", std::process::id()));
+                    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+                    let copy = dir.join(p.file_name().unwrap_or_default());
+                    std::fs::copy(&p, &copy)
+                        .map_err(|e| format!("copying {}: {e}", p.display()))?;
+                    p = copy;
                 }
                 self.srv.stop();
                 // A project under `~/` was saved by this run: keep the profile folder it lives in.

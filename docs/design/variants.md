@@ -58,8 +58,11 @@ How it is switched and tied:
 | Untie | Ctrl+K `untie`, or *Always* in the window |
 | Heat difference | Project options, *What the current choice includes*: sum of device losses in the cabinets, with the change against a compared variant |
 
-A tie replaces the object's condition; a combined rule (`opt.a && opt.b`) is typed in the window's conditions box
-and shown as typed. A device tied to an option takes all its symbols with it, on every page.
+A tie replaces the object's condition. The window's *Conditions* block picks a rule line by line (option, is / is not /
+at least / at most, value; all lines must hold) for the current page and the selected device, and says it in words
+("Cooling fan and Supply 480V"). A hand-written expression the lines cannot say (`||`, brackets) stays as text under
+*Advanced* and is shown as typed; *Use the picker instead* removes it. A device tied to an option takes all its symbols
+with it, on every page.
 
 Limits, said plainly: cost is not shown because project parts carry no prices; the heat figure is the sum of the
 loss figures of the parts (a model of what the devices put in, not a temperature; devices without a figure are

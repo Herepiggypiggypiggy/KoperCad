@@ -19,13 +19,14 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use eframe::egui;
-use novo_core::{AnyId, PageId, Project, Value};
+use novo_core::{AnyId, Project, Value};
 use novo_interop::sheets::{read_grid, write_grid};
 use novo_workflow::generate::{
     Generated, Mode, SheetProblem, SpecSheet, generate, macros_used, preview, spec_from_project,
 };
 use novo_workflow::options::{
-    self, Assignment, Configuration, Difference, Finding, OptionDef, condition_of,
+    self, Assignment, Clause, Configuration, Difference, Finding, OptionDef, clauses_of,
+    condition_from_clauses, condition_of, tests_for,
 };
 use novo_workflow::parametric::ParamKind;
 
@@ -62,12 +63,19 @@ pub(crate) struct OptionsWindow {
     variant_name: String,
     /// The variant the current choice is compared with; empty for none.
     compare: String,
-    page_condition: String,
-    page_condition_for: Option<PageId>,
-    device_condition: String,
+    /// The expression text boxes under Advanced, with what each was last
+    /// filled from (so an outside change, like Tie, shows up in them).
+    page_raw: ConditionText,
+    device_raw: ConditionText,
     error: Option<String>,
     /// What the window shows, kept until the project or the choice changes.
     shown: Option<Shown>,
+}
+
+#[derive(Debug, Default)]
+struct ConditionText {
+    text: String,
+    synced: Option<(String, Option<String>)>,
 }
 
 #[derive(Debug)]
@@ -220,13 +228,6 @@ impl NovoApp {
                     .and_then(|other| cabinet_heat(&project, &other)),
             });
         }
-        if win.page_condition_for != page {
-            win.page_condition_for = page;
-            win.page_condition = page
-                .and_then(|p| condition_of(&project, p))
-                .unwrap_or_default();
-        }
-
         let mut set: Vec<(String, Value)> = Vec::new();
         let mut remove: Option<String> = None;
         let mut define: Option<OptionDef> = None;
@@ -348,46 +349,40 @@ Schematic and Cabinet always show everything.",
                     ui.separator();
                     novo_theme::widgets::section_label(ui, "Conditions");
                     ui.weak(
-                        "Appears when ... an expression over the options, for example \
-opt.conveyor, or opt.supply == '480V' && !opt.compact. Empty means always.",
+                        "Appears when ... Pick the options a page or device needs. \
+No rule means it always appears.",
                     );
-                    ui.horizontal(|ui| {
-                        ui.label("Current page");
-                        let enabled = page.is_some();
-                        let text = ui.add_enabled(
-                            enabled,
-                            egui::TextEdit::singleline(&mut win.page_condition)
-                                .hint_text("always")
-                                .desired_width(260.0),
-                        );
-                        let apply_it =
-                            text.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                        if ui.add_enabled(enabled, egui::Button::new("Set")).clicked() || apply_it {
-                            let c = win.page_condition.trim();
-                            page_condition = Some((!c.is_empty()).then(|| c.to_owned()));
+                    ui.strong("Current page");
+                    if let Some(page) = page {
+                        let current = condition_of(&project, page);
+                        if let Some(change) = condition_editor(
+                            ui,
+                            &format!("page-{page:?}"),
+                            &defs,
+                            current,
+                            &mut win.page_raw,
+                        ) {
+                            page_condition = Some(change);
                         }
-                    });
+                    } else {
+                        ui.weak("Open a page to give it a condition.");
+                    }
                     if let Some(device) = selected_device {
-                        ui.horizontal(|ui| {
-                            let tag = project
-                                .device(device)
-                                .map(|d| d.tag.to_string())
-                                .unwrap_or_default();
-                            ui.label(format!("Selected {tag}"));
-                            let mut text = condition_of(&project, device).unwrap_or_default();
-                            let edit = ui.add(
-                                egui::TextEdit::singleline(&mut text)
-                                    .hint_text("always")
-                                    .desired_width(260.0),
-                            );
-                            if edit.changed() || edit.lost_focus() {
-                                win.device_condition = text.clone();
-                            }
-                            if ui.button("Set").clicked() {
-                                let c = win.device_condition.trim();
-                                device_condition = Some((!c.is_empty()).then(|| c.to_owned()));
-                            }
-                        });
+                        let tag = project
+                            .device(device)
+                            .map(|d| d.tag.to_string())
+                            .unwrap_or_default();
+                        ui.strong(format!("Selected {tag}"));
+                        let current = condition_of(&project, device);
+                        if let Some(change) = condition_editor(
+                            ui,
+                            &format!("device-{device:?}"),
+                            &defs,
+                            current,
+                            &mut win.device_raw,
+                        ) {
+                            device_condition = Some(change);
+                        }
                     } else {
                         ui.weak("Select a device on the drawing to give it a condition too.");
                     }
@@ -1168,6 +1163,182 @@ fn tie_choices(def: &OptionDef) -> Vec<(String, Value)> {
             .collect(),
         _ => Vec::new(),
     }
+}
+
+/// The rule of one page or device as lines to pick: option, is / is not,
+/// value. Returns the new condition when a line was changed (`Some(None)`
+/// removes it). A condition typed by hand that the lines cannot say stays as
+/// text under Advanced, where it can also be edited.
+fn condition_editor(
+    ui: &mut egui::Ui,
+    key: &str,
+    defs: &[OptionDef],
+    current: Option<String>,
+    raw: &mut ConditionText,
+) -> Option<Option<String>> {
+    let mut result = None;
+    let lines = match current.as_deref() {
+        None => Some(Vec::new()),
+        Some(c) if c.trim().is_empty() => Some(Vec::new()),
+        Some(c) => clauses_of(defs, c),
+    };
+    match lines {
+        None => {
+            ui.horizontal_wrapped(|ui| {
+                ui.weak(format!(
+                    "Written as an expression: {}.",
+                    current.as_deref().unwrap_or_default()
+                ));
+                if ui
+                    .small_button("Use the picker instead")
+                    .on_hover_text("Remove this rule, then pick it line by line")
+                    .clicked()
+                {
+                    result = Some(None);
+                }
+            });
+        }
+        Some(_) if defs.is_empty() => {
+            ui.weak("Add an option above first, then a rule can use it.");
+        }
+        Some(mut lines) => {
+            let mut changed = false;
+            let mut remove = None;
+            if lines.is_empty() {
+                ui.weak("Always appears. No rule yet.");
+            }
+            for (i, line) in lines.iter_mut().enumerate() {
+                ui.horizontal_wrapped(|ui| {
+                    let def = defs
+                        .iter()
+                        .find(|d| d.id == line.option)
+                        .unwrap_or(&defs[0]);
+                    let mut chosen = def.id.clone();
+                    egui::ComboBox::from_id_salt((key, i, "option"))
+                        .selected_text(def.label())
+                        .show_ui(ui, |ui| {
+                            for d in defs {
+                                ui.selectable_value(&mut chosen, d.id.clone(), d.label());
+                            }
+                        });
+                    let mut def = def;
+                    if let Some(d) = defs.iter().find(|d| d.id == chosen && d.id != def.id) {
+                        def = d;
+                        *line = Clause::first_for(d);
+                        changed = true;
+                    }
+                    let tests = tests_for(def);
+                    if tests.len() > 1 {
+                        egui::ComboBox::from_id_salt((key, i, "test"))
+                            .selected_text(line.test.words())
+                            .show_ui(ui, |ui| {
+                                for t in tests {
+                                    changed |=
+                                        ui.selectable_value(&mut line.test, t, t.words()).changed();
+                                }
+                            });
+                    } else {
+                        ui.label(line.test.words());
+                    }
+                    match def.spec.kind {
+                        ParamKind::Bool => {
+                            let mut yes = line.value == Value::Bool(true);
+                            egui::ComboBox::from_id_salt((key, i, "value"))
+                                .selected_text(if yes { "yes" } else { "no" })
+                                .show_ui(ui, |ui| {
+                                    changed |= ui.selectable_value(&mut yes, true, "yes").changed();
+                                    changed |= ui.selectable_value(&mut yes, false, "no").changed();
+                                });
+                            line.value = Value::Bool(yes);
+                        }
+                        ParamKind::Choice => {
+                            let mut text = match &line.value {
+                                Value::Text(t) => t.clone(),
+                                _ => String::new(),
+                            };
+                            egui::ComboBox::from_id_salt((key, i, "value"))
+                                .selected_text(text.clone())
+                                .show_ui(ui, |ui| {
+                                    for c in &def.spec.choices {
+                                        changed |=
+                                            ui.selectable_value(&mut text, c.clone(), c).changed();
+                                    }
+                                });
+                            line.value = Value::Text(text);
+                        }
+                        _ => {
+                            let mut n = match &line.value {
+                                Value::Int(i) => *i as f64,
+                                Value::Float(f) => *f,
+                                _ => 0.0,
+                            };
+                            let mut drag = egui::DragValue::new(&mut n).speed(0.1);
+                            if let (Some(lo), Some(hi)) = (def.spec.min, def.spec.max) {
+                                drag = drag.range(lo..=hi);
+                            }
+                            if ui.add(drag).changed() {
+                                line.value = novo_workflow::expr::Val::Num(n).to_value();
+                                changed = true;
+                            }
+                        }
+                    }
+                    if ui
+                        .small_button(novo_theme::icons::X)
+                        .on_hover_text("Remove this line")
+                        .clicked()
+                    {
+                        remove = Some(i);
+                    }
+                });
+            }
+            if let Some(i) = remove {
+                lines.remove(i);
+                changed = true;
+            }
+            if ui
+                .small_button("+ Add a rule")
+                .on_hover_text("All the lines must hold for it to appear")
+                .clicked()
+            {
+                let used: Vec<&str> = lines.iter().map(|l| l.option.as_str()).collect();
+                let def = defs
+                    .iter()
+                    .find(|d| !used.contains(&d.id.as_str()))
+                    .unwrap_or(&defs[0]);
+                lines.push(Clause::first_for(def));
+                changed = true;
+            }
+            if let (true, Ok(condition)) = (changed, condition_from_clauses(defs, &lines)) {
+                result = Some(condition);
+            }
+        }
+    }
+
+    let sync = (key.to_owned(), current.clone());
+    if raw.synced.as_ref() != Some(&sync) {
+        raw.text = current.unwrap_or_default();
+        raw.synced = Some(sync);
+    }
+    egui::CollapsingHeader::new("Advanced: type the expression")
+        .id_salt((key, "advanced"))
+        .show(ui, |ui| {
+            ui.weak(
+                "For example opt.conveyor || opt.compact, or opt.supply == '480V' && !opt.compact.",
+            );
+            ui.horizontal(|ui| {
+                let edit = ui.add(
+                    egui::TextEdit::singleline(&mut raw.text)
+                        .hint_text("always")
+                        .desired_width(260.0),
+                );
+                let enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                if ui.button("Set").clicked() || enter {
+                    let c = raw.text.trim();
+                    result = Some((!c.is_empty()).then(|| c.to_owned()));
+                }
+            });
+        });
+    result
 }
 
 fn finding_text(project: &Project, f: &Finding) -> String {
