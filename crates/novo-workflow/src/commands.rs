@@ -2668,7 +2668,6 @@ pub const COMMANDS: &[CommandInfo] = &[
                 "performance level",
                 "pfhd",
                 "iso 13849",
-                "e-stop sheet",
             ],
             Needs::Project,
         ),

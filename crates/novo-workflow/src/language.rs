@@ -1013,7 +1013,7 @@ pub const DUTCH: &[Aliases] = &[
     ),
     nl(
         "export.safety_sheets",
-        &["exporteer veiligheidsfuncties", "veiligheidsbladen"],
+        &["exporteer veiligheidsfuncties", "veiligheidsfunctiebladen"],
         &["veiligheidsfunctie", "technisch dossier"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),

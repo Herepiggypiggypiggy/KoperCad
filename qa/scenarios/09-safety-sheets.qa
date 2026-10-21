@@ -16,7 +16,7 @@ wait 5
 key Return
 wait 10
 expect "Motor stop (illustrative values)"
-expect "Export sheets (PDF)"
+expect "Export one sheet per function (PDF)"
 expect "not a certification"
 shot safety-window
 check_blank safety-window
