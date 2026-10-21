@@ -595,7 +595,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             out.wires.extend(spanning_wires(page, &pts, &placed));
         }
     }
-    follow_runs(&mut out.wires, &nets, &graph, &by_key);
+    follow_runs(&mut out.wires, &nets, &graph, &by_key, &placed);
     out.stats.wires = out.wires.len();
     out.stats.wires_followed = out.wires.iter().filter(|w| w.followed).count();
     out.keys = by_key
@@ -697,6 +697,7 @@ fn follow_runs(
     nets: &ReconNets,
     graph: &ConnGraph,
     by_key: &BTreeMap<PinKey, (usize, u16, usize)>,
+    placed: &[Placed],
 ) {
     let at: BTreeMap<&PinKey, (bool, Point)> = graph
         .points
@@ -745,20 +746,33 @@ fn follow_runs(
             path.push(prev);
         }
         path.reverse();
-        let mut pts: Vec<Point> = Vec::new();
-        for k in &path {
-            if let Some(&(_, p)) = at.get(k)
-                && pts
-                    .last()
-                    .is_none_or(|l| (l.x - p.x).abs() > 1e-6 || (l.y - p.y).abs() > 1e-6)
-            {
+        // The pins sit where the drawn symbol has them, which can be off from
+        // where the file has the port (a loosely matched symbol): an end that
+        // is not in line with its first node gets a right-angle leg.
+        let end = |(si, pin): (usize, u16)| placed[si].page_pos.get(&pin).copied();
+        let (Some(a), Some(b)) = (end(w.from), end(w.to)) else {
+            continue;
+        };
+        let mut pts: Vec<Point> = vec![a];
+        let interior = path.len().saturating_sub(2);
+        for k in path.iter().skip(1).take(interior) {
+            if let Some(&(_, p)) = at.get(k) {
                 pts.push(p);
             }
         }
+        pts.push(b);
+        let mut full: Vec<Point> = vec![a];
+        for i in 1..pts.len() {
+            let (p, q) = (pts[i - 1], pts[i]);
+            let dir = (i == 1).then(|| placed[w.from.0].symbol.pins[w.from.1 as usize].direction);
+            full.extend(route(p, q, dir.flatten()));
+            full.push(q);
+        }
+        full.dedup_by(|x, y| (x.x - y.x).abs() < 1e-6 && (x.y - y.y).abs() < 1e-6);
         // Keep only the corners; the ends are the pins themselves.
         let mut corners: Vec<Point> = Vec::new();
-        for i in 1..pts.len().saturating_sub(1) {
-            let (a, b, c) = (pts[i - 1], pts[i], pts[i + 1]);
+        for i in 1..full.len().saturating_sub(1) {
+            let (a, b, c) = (full[i - 1], full[i], full[i + 1]);
             let straight = ((a.x - b.x).abs() < 1e-6 && (b.x - c.x).abs() < 1e-6)
                 || ((a.y - b.y).abs() < 1e-6 && (b.y - c.y).abs() < 1e-6);
             if !straight {
@@ -943,6 +957,20 @@ mod tests {
             (PinKey("b".into()), (1, 0, 0)),
         ]
         .into();
+        let sym = |x: f64, y: f64| Placed {
+            symbol: DrawnSymbol {
+                page: 0,
+                key: BOX_SYMBOL.to_string(),
+                origin: Point::new(x, y),
+                pins: vec![Pin::new("1", 0.0, 0.0)],
+                bridges: Vec::new(),
+                pass_through: Vec::new(),
+                role: Role::Plain,
+                label: String::new(),
+            },
+            page_pos: BTreeMap::from([(0, Point::new(x, y))]),
+        };
+        let placed = [sym(0.0, PAGE_HEIGHT), sym(10.0, PAGE_HEIGHT - 20.0)];
         let mut wires = vec![DrawnWire {
             page: 0,
             from: (0, 0),
@@ -950,14 +978,14 @@ mod tests {
             route: vec![Point::new(0.0, 0.0)],
             followed: false,
         }];
-        follow_runs(&mut wires, &nets, &graph, &by_key);
+        follow_runs(&mut wires, &nets, &graph, &by_key, &placed);
         assert!(wires[0].followed);
         assert_eq!(wires[0].route, vec![Point::new(10.0, PAGE_HEIGHT)]);
         // No path through nodes: the guess stays.
         wires[0].followed = false;
         wires[0].route = vec![Point::new(1.0, 1.0)];
         let none = ReconNets::default();
-        follow_runs(&mut wires, &none, &graph, &by_key);
+        follow_runs(&mut wires, &none, &graph, &by_key, &placed);
         assert!(!wires[0].followed);
         assert_eq!(wires[0].route, vec![Point::new(1.0, 1.0)]);
     }
