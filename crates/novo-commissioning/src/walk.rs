@@ -196,6 +196,23 @@ pub enum WalkScope {
     Wires,
 }
 
+/// The order the wires are walked in.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum WalkOrder {
+    /// Page by page, wires by number: the order of the drawing.
+    #[default]
+    Number,
+    /// Where the hand moves: wires grouped by the device or terminal strip
+    /// they start on, in terminal order, across the whole project.
+    Place,
+}
+
+/// `=A1+CAB-X1:2` split into the device part and the pin; a designation
+/// without a pin is all device.
+fn split_end(designation: &str) -> (&str, &str) {
+    designation.rsplit_once(':').unwrap_or((designation, ""))
+}
+
 fn rank(target: Target) -> u8 {
     match target {
         Target::Wire(_) => 0,
@@ -208,6 +225,20 @@ fn rank(target: Target) -> u8 {
 /// page wires by number, terminals and devices in the project's order. A target
 /// drawn on several pages is visited on its first page.
 pub fn walk_order(project: &Project, scope: WalkScope) -> Vec<TargetInfo> {
+    walk_order_with(project, &WirePlan::default(), scope, WalkOrder::Number)
+}
+
+/// [`walk_order`] in the chosen order. `WalkOrder::Place` needs the plan for
+/// the wire ends; wires the plan does not know come last.
+pub fn walk_order_with(
+    project: &Project,
+    plan: &WirePlan,
+    scope: WalkScope,
+    order: WalkOrder,
+) -> Vec<TargetInfo> {
+    if order == WalkOrder::Place {
+        return place_order(project, plan, scope);
+    }
     let all = targets(project);
     let mut out = Vec::new();
     let mut seen = std::collections::HashSet::new();
@@ -240,6 +271,36 @@ pub fn walk_order(project: &Project, scope: WalkScope) -> Vec<TargetInfo> {
     out
 }
 
+/// Wires by their starting device and pin, then the other targets as in
+/// the number order.
+fn place_order(project: &Project, plan: &WirePlan, scope: WalkScope) -> Vec<TargetInfo> {
+    let by_number = walk_order_with(project, plan, scope, WalkOrder::Number);
+    let (mut wires, rest): (Vec<_>, Vec<_>) = by_number
+        .into_iter()
+        .partition(|i| matches!(i.target, Target::Wire(_)));
+    let key = |i: &TargetInfo| -> (bool, String, String) {
+        let Target::Wire(w) = i.target else {
+            return (true, String::new(), String::new());
+        };
+        match plan.step(w) {
+            Some(step) if !step.from.is_empty() => {
+                let (device, pin) = split_end(&step.from);
+                (false, device.to_owned(), pin.to_owned())
+            }
+            _ => (true, String::new(), String::new()),
+        }
+    };
+    wires.sort_by(|a, b| {
+        let (ka, kb) = (key(a), key(b));
+        ka.0.cmp(&kb.0)
+            .then_with(|| novo_core::natural_cmp(&ka.1, &kb.1))
+            .then_with(|| novo_core::natural_cmp(&ka.2, &kb.2))
+            .then_with(|| novo_core::natural_cmp(&a.label, &b.label))
+    });
+    wires.extend(rest);
+    wires
+}
+
 /// The next target with an open check after `from` in walking order,
 /// wrapping round to the start. With no `from` the walk starts on `page`
 /// (the page being looked at), else on the first page. `None` when
@@ -251,7 +312,28 @@ pub fn next_open(
     page: Option<PageId>,
     scope: WalkScope,
 ) -> Option<TargetInfo> {
-    let order = walk_order(project, scope);
+    next_open_with(
+        project,
+        &WirePlan::default(),
+        store,
+        from,
+        page,
+        scope,
+        WalkOrder::Number,
+    )
+}
+
+/// [`next_open`] in the chosen order.
+pub fn next_open_with(
+    project: &Project,
+    plan: &WirePlan,
+    store: &CommissioningStore,
+    from: Option<Target>,
+    page: Option<PageId>,
+    scope: WalkScope,
+    walk: WalkOrder,
+) -> Option<TargetInfo> {
+    let order = walk_order_with(project, plan, scope, walk);
     let start = from
         .and_then(|t| order.iter().position(|i| i.target == t).map(|p| p + 1))
         .or_else(|| page.and_then(|p| order.iter().position(|i| i.pages.first() == Some(&p))))
