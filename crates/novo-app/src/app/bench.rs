@@ -565,7 +565,10 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     let unnumbered = count(&|j| j.number.trim().is_empty());
     if unnumbered > 0 {
         out.push(Gap {
-            text: format!("{unnumbered} wires have no number, so their labels and flags are blank"),
+            text: format!(
+                "{unnumbered} of {} wires to cut have no number, so their labels and flags are blank",
+                jobs.len()
+            ),
             fix: Some(("Number wires", "wires.number")),
         });
     }
@@ -573,7 +576,8 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     if no_size > 0 {
         out.push(Gap {
             text: format!(
-                "{no_size} wires have no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each"
+                "{no_size} of {} wires to cut have no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each",
+                jobs.len()
             ),
             fix: Some(("Autopilot", "wires.autopilot")),
         });
@@ -712,15 +716,14 @@ fn defaults_row(
     let mut missing = Vec::new();
     if !unset.no_size.is_empty() {
         missing.push(format!(
-            "{} of {} wires have no size (no strip length, no ferrule)",
-            unset.no_size.len(),
-            unset.total
+            "{} of {} wires to cut have no size (no strip length, no ferrule)",
+            unset.connections_no_size, unset.connections
         ));
     }
     if !unset.no_colour.is_empty() {
         missing.push(format!(
             "{} have no colour (blank in the list)",
-            unset.no_colour.len()
+            unset.connections_no_colour
         ));
     }
     novo_theme::widgets::banner(

@@ -878,6 +878,21 @@ impl Ready {
     pub fn is_complete(&self) -> bool {
         self.total > 0 && self.done == self.total
     }
+
+    /// Wires to cut the meter counts (four checks each, one more for the plate).
+    pub fn wires(&self) -> usize {
+        self.total.saturating_sub(1) / 4
+    }
+
+    /// What the percentage counts, for the hover text.
+    pub fn explanation(&self) -> String {
+        format!(
+            "{} of {} checks pass: {} wires to cut with four checks each (number, cross-section, colour, routed length), plus one for the mounting plate. Estimated lengths do not count.",
+            self.done,
+            self.total,
+            self.wires()
+        )
+    }
 }
 
 /// The meter for a cut list. `has_plate` is whether a mounting plate exists.

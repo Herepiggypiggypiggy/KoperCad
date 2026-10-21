@@ -190,9 +190,7 @@ pub(super) fn meter(ui: &mut egui::Ui, ready: Ready) {
         fraction,
         0.0,
     )
-    .on_hover_text(
-        "Per wire: a number, a cross-section, a colour and a routed length; plus a mounting plate. Estimated lengths do not count.",
-    );
+    .on_hover_text(ready.explanation());
 }
 
 fn body(

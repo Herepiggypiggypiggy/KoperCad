@@ -34,3 +34,47 @@ fn every_report_counts_the_same_wire_set() {
     assert!(set.explanation().contains("6 supply and PE leads"));
     assert_eq!(novo_reports::count_text(1, "connections"), "1 connection");
 }
+
+/// The Bench output counts wires to cut everywhere: the missing sizes,
+/// colours and numbers are counted per connection, whatever number of drawn
+/// pieces a connection has.
+#[test]
+fn the_bench_counts_missing_values_per_wire_to_cut() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let p = d.app.backend.document().unwrap().project();
+    let jobs = wire_cut_jobs(p);
+    let unset = novo_reports::unset_wires(p);
+    assert_eq!(unset.connections, jobs.len());
+    assert_eq!(
+        unset.connections_no_size,
+        jobs.iter()
+            .filter(|j| j.cross_section_mm2.is_none())
+            .count()
+    );
+    assert_eq!(
+        unset.connections_no_colour,
+        jobs.iter().filter(|j| j.colour.trim().is_empty()).count()
+    );
+    // Drawn pieces can outnumber the wires to cut, and are not what is shown.
+    assert!(unset.no_size.len() >= unset.connections_no_size);
+    let gaps = super::bench::readiness(&jobs, true);
+    let text = gaps
+        .iter()
+        .find(|g| g.text.contains("no cross-section"))
+        .map(|g| g.text.clone())
+        .expect("the example has unsized wires");
+    assert!(
+        text.starts_with(&format!(
+            "{} of {} wires to cut",
+            unset.connections_no_size,
+            jobs.len()
+        )),
+        "{text}"
+    );
+    let ready = novo_reports::autopilot::ready(&jobs, true);
+    assert_eq!(ready.wires(), jobs.len());
+}
