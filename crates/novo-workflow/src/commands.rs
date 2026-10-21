@@ -1663,6 +1663,21 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "sim.why",
+        "Why is this lit or dead?",
+        "View",
+        &[
+            "explain",
+            "why",
+            "dead",
+            "lit",
+            "energized",
+            "trace",
+            "path",
+        ],
+        Needs::Page,
+    ),
+    cmd(
         "sim.plc_program",
         "Simulate PLC program",
         "View",

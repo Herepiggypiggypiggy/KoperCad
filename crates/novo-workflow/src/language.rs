@@ -565,6 +565,11 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.why",
+        &["waarom"],
+        &["waarom brandt dit", "waarom dood", "uitleg", "pad volgen"],
+    ),
+    nl(
         "sim.plc_program",
         &["plc programma"],
         &["ladder", "programma draaien", "plc simuleren"],

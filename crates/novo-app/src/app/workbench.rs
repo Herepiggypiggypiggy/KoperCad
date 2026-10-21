@@ -423,6 +423,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "view.devices_drawer",
     "view.toggle_marks",
     "sim.live",
+    "sim.why",
     "sim.plc_program",
     "sim.faults",
     "sim.add_fault",
@@ -839,6 +840,14 @@ impl NovoApp {
     pub(super) fn run_command(&mut self, ctx: &egui::Context, id: &str, argument: Option<&str>) {
         crate::diag::note_command(id);
         self.learn_command(id);
+        // The other Simulate commands open their own views: the live view
+        // does not stay switched on behind them.
+        if matches!(
+            id,
+            "simulate.motor-start" | "view.protection" | "heat.simulate"
+        ) {
+            self.wb.live.leave();
+        }
         if id == "help.learn" || id.starts_with("learn.") {
             self.learn_run_command(id, argument);
             return;
@@ -1138,7 +1147,7 @@ impl NovoApp {
             "export.reports" => {
                 self.export_all_reports();
             }
-            "sim.live" | "sim.plc_program" => {
+            "sim.live" | "sim.why" | "sim.plc_program" => {
                 // The live view and the PLC window draw only over the
                 // schematic: go there first so the command is not silent.
                 if self.workspace() != Workspace::Schematic && self.is_open() {
@@ -1150,6 +1159,8 @@ impl NovoApp {
                 }
                 if id == "sim.live" {
                     self.toggle_live();
+                } else if id == "sim.why" {
+                    self.ask_why();
                 } else {
                     self.open_plc_program();
                 }

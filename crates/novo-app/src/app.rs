@@ -3020,6 +3020,66 @@ mod tests {
     }
 
     #[test]
+    fn escape_steps_back_out_of_the_live_view_and_other_simulate_commands_leave_it() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        app.run_command(&ctx, "sim.live", None);
+        frame(&ctx, &mut app, sized(1366.0));
+        // Escape first drops the Why? click mode, then leaves Live.
+        app.wb.live.why_mode = true;
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(app.wb.live.on && !app.wb.live.why_mode);
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(!app.wb.live.on);
+        // Another Simulate command does not leave Live switched on.
+        app.run_command(&ctx, "sim.live", None);
+        assert!(app.wb.live.on);
+        app.run_command(&ctx, "simulate.motor-start", None);
+        assert!(!app.wb.live.on);
+        // Nor does a workspace change.
+        app.run_command(&ctx, "sim.live", None);
+        app.switch_workspace(crate::app::workspace::Workspace::Cabinet);
+        assert!(!app.wb.live.on);
+    }
+
+    #[test]
+    fn escape_closing_the_plc_window_leaves_live_on() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        app.run_command(&ctx, "sim.plc_program", None);
+        for _ in 0..3 {
+            frame(&ctx, &mut app, sized(1366.0));
+        }
+        assert!(app.wb.live.on && app.wb.live.plc.window);
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(!app.wb.live.plc.window, "Escape closes the window");
+        assert!(app.wb.live.on, "and the live view stays");
+        for _ in 0..3 {
+            frame(&ctx, &mut app, sized(1366.0));
+        }
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(!app.wb.live.on, "the next Escape leaves Live");
+    }
+
+    #[test]
     fn cabinet_needs_an_open_project() {
         let app = app_with(MemoryBackend::default());
         assert!(!app.is_enabled(Action::ShowCabinet));
