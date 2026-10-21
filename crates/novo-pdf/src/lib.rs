@@ -52,6 +52,7 @@ pub use novo_canvas::model::{NoteAnchor, NoteDensity, NoteGlyph, NoteRow, Symbol
 pub use print::{Orientation, Placement, PrintPaper, PrintScale, PrintSetup};
 pub use report::{
     ReportFileFormat, ReportPdfOptions, export_layouts_pdf, export_report_pdf, report_bytes,
+    report_outline,
 };
 
 /// Which pages to export.

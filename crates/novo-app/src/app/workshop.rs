@@ -4,12 +4,14 @@
 //! 1. the 1:1 drilling template of every mounting plate (and any door or
 //!    wall that has holes), tiled on A4 or A3 with cross hairs, hole sizes
 //!    and a scale-check ruler (`novo_layout::template`, `novo_pdf::template`),
-//! 2. the bench cut list, 3. the ferrule counts, 4. the labels, and
-//! 5. the assembly print pack with its tick boxes.
+//! 2. the labels, and
+//! 3. the bench packet, `0 Bench packet.pdf`: one PDF with a cover, the
+//!    cabinet build order, the cut list, the ferrules, a tick sheet per
+//!    schematic page and the terminal strip plans (`bench_packet`).
 //!
-//! The last four are the Bench output exports; they are written under the
-//! settings of the Bench output window. A step that has nothing to print
-//! (no wires, no plate) is skipped and the summary says so.
+//! The labels and the packet are written under the settings of the Bench
+//! output window. A step that has nothing to print (no wires, no plate) is
+//! skipped and the summary says so.
 
 use std::path::{Path, PathBuf};
 
@@ -17,6 +19,9 @@ use novo_core::Project;
 use novo_layout::model::template_documents;
 use novo_layout::template::Paper;
 
+use novo_reports::packet::CoverLine;
+
+use super::bench_packet::PACKET_FILE;
 use super::{Level, NovoApp};
 
 /// Most pages one template PDF may take. A plate this large is a data entry
@@ -120,24 +125,42 @@ impl NovoApp {
                 None => no_single_sheet.push(tag.clone()),
             }
         }
-        let steps: [(&str, &str); 4] = [
-            ("2 Cut list.pdf", "cut list"),
-            ("3 Ferrules.pdf", "ferrules"),
-            ("4 Labels.pdf", "labels"),
-            ("5 Assembly checklist.pdf", "assembly checklist"),
-        ];
-        for (file, what) in steps {
-            let path = folder.join(file);
-            let written = match what {
-                "cut list" => self.export_bench_cut_to(&path),
-                "ferrules" => self.export_ferrules_to(&path),
-                "labels" => self.export_labels_to(&path),
-                _ => self.export_assembly_to(&path),
-            };
-            match written {
-                Some(_) => done.push(what.to_owned()),
-                None => skipped.push(what.to_owned()),
+        // Files of the first version of this pack, now inside the packet.
+        for old in [
+            "2 Cut list.pdf",
+            "3 Ferrules.pdf",
+            "4 Labels.pdf",
+            "5 Assembly checklist.pdf",
+        ] {
+            let _ = std::fs::remove_file(folder.join(old));
+        }
+        let mut separate: Vec<CoverLine> = templates
+            .iter()
+            .map(|t| {
+                CoverLine::new(
+                    &format!("Drilling template {}", t.tag),
+                    &format!("1 Drilling template {} {}.pdf", clean(&t.tag), paper.name()),
+                    "Print at 100 % (actual size), then check the 100 mm ruler",
+                    "Hole positions from the cabinet layout; about 0.5 mm on paper (not measured)",
+                )
+            })
+            .collect();
+        let labels = folder.join("2 Labels.pdf");
+        match self.export_labels_to(&labels) {
+            Some(_) => {
+                done.push("labels".to_owned());
+                separate.push(CoverLine::new(
+                    "Labels",
+                    "2 Labels.pdf",
+                    "Print at 100 % on the label stock",
+                    "Texts from the drawing; sheet pitch from published data, never printed here",
+                ));
             }
+            None => skipped.push("labels".to_owned()),
+        }
+        match self.export_bench_packet_to(&folder.join(PACKET_FILE), &separate) {
+            Some(_) => done.push("bench packet".to_owned()),
+            None => skipped.push("bench packet".to_owned()),
         }
         if done.is_empty() {
             self.message(

@@ -473,6 +473,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.assembly",
     "export.handover",
     "export.workshop",
+    "export.bench_packet",
     "export.safety_sheets",
     "export.sheets",
     "export.sheets_csv",
@@ -1295,6 +1296,9 @@ impl NovoApp {
             "export.handover" => self.ask_handover(),
             "export.workshop" => {
                 self.export_workshop();
+            }
+            "export.bench_packet" => {
+                self.export_bench_packet();
             }
             "export.sheets" => {
                 self.export_spreadsheet();

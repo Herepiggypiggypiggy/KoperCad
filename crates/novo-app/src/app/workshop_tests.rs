@@ -78,7 +78,7 @@ fn the_pack_needs_something_to_print_then_fills_one_folder() {
     let pdf = lopdf::Document::load_mem(&bytes).unwrap();
     let text = pdf.extract_text(&[1]).unwrap();
     assert!(text.contains("Drilling template 1:1"), "{text}");
-    assert!(folder.join("5 Assembly checklist.pdf").exists());
+    assert!(folder.join("0 Bench packet.pdf").exists());
     // The plate also comes as one sheet the size of the plate, for a print shop.
     let single = lopdf::Document::load_mem(
         &std::fs::read(folder.join("1 Plate full size +CAB1.pdf")).unwrap(),
@@ -89,7 +89,7 @@ fn the_pack_needs_something_to_print_then_fills_one_folder() {
     assert!(!folder.join("2 Cut list.pdf").exists());
     let last = &d.app.messages().last().unwrap().text;
     assert!(
-        last.contains("Left out") && last.contains("cut list"),
+        last.contains("Left out") && last.contains("labels"),
         "{last}"
     );
 

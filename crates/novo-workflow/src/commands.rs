@@ -2737,6 +2737,25 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.bench_packet",
+            "Export bench packet (PDF)",
+            "Export",
+            &[
+                "bench",
+                "packet",
+                "cut list",
+                "ferrules",
+                "checklist",
+                "workshop",
+                "circuit",
+                "terminal plan",
+            ],
+            Needs::Project,
+        ),
+        &["export bench packet", "bench packet", "build packet"],
+    ),
+    verb(
+        cmd(
             "export.safety_sheets",
             "Export safety function sheets (PDF)",
             "Export",
