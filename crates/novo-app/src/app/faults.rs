@@ -859,7 +859,7 @@ impl NovoApp {
         let mut open = true;
         let mut add = false;
         super::panel::dialog(ctx, "Add fault", [380.0, 0.0])
-            .id(egui::Id::new("add_fault"))
+            .id(super::panel::keep_id(ctx, egui::Id::new("add_fault")))
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.weak(

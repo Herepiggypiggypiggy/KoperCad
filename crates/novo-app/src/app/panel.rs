@@ -269,6 +269,13 @@ pub(super) fn dialog<'a>(
     }
 }
 
+/// For a dialog that sets its own window id: pass the id through here so
+/// [`esc`] finds the window.
+pub(super) fn keep_id(ctx: &egui::Context, id: egui::Id) -> egui::Id {
+    ctx.data_mut(|d| d.insert_temp(pending_id(), id));
+    id
+}
+
 fn esc_off_id() -> egui::Id {
     egui::Id::new("panel_dialog_esc_off")
 }
@@ -544,6 +551,11 @@ mod tests {
 
     /// One frame of a dialog opened with `open`; `escape` presses Escape.
     fn dialog_frame(ctx: &egui::Context, open: &mut bool, escape: bool) {
+        dialog_frame_with(ctx, open, escape, false);
+    }
+
+    /// As `dialog_frame`; `own_id` gives the window an id of its own.
+    fn dialog_frame_with(ctx: &egui::Context, open: &mut bool, escape: bool, own_id: bool) {
         let events = if escape {
             vec![egui::Event::Key {
                 key: egui::Key::Escape,
@@ -563,11 +575,15 @@ mod tests {
             },
             |ctx| {
                 if *open {
-                    dialog(ctx, "Escape test", [400.0, 0.0])
-                        .open(esc(ctx, open))
-                        .show(ctx, |ui| {
-                            ui.label("content");
-                        });
+                    let window = dialog(ctx, "Escape test", [400.0, 0.0]);
+                    let window = if own_id {
+                        window.id(keep_id(ctx, egui::Id::new("own_id_dialog")))
+                    } else {
+                        window
+                    };
+                    window.open(esc(ctx, open)).show(ctx, |ui| {
+                        ui.label("content");
+                    });
                 }
             },
         );
@@ -583,6 +599,16 @@ mod tests {
         assert!(open, "stays open without a key");
         dialog_frame(&ctx, &mut open, true);
         assert!(!open, "Escape closes it");
+    }
+
+    #[test]
+    fn escape_closes_a_dialog_with_its_own_window_id() {
+        let ctx = egui::Context::default();
+        let mut open = true;
+        dialog_frame_with(&ctx, &mut open, false, true);
+        dialog_frame_with(&ctx, &mut open, false, true);
+        dialog_frame_with(&ctx, &mut open, true, true);
+        assert!(!open);
     }
 
     #[test]
