@@ -40,6 +40,7 @@ impl NovoApp {
             SolveOp::Place(p) => self.solve_place(&p.place),
             SolveOp::Wire(w) => self.solve_wire(ctx, w),
             SolveOp::Select(s) => self.solve_select(&s.select, s.add),
+            SolveOp::Choose(c) => self.learn_predict(c.choose),
             SolveOp::Tee(t) => self.solve_tee(&t.tee.from, t.tee.at),
             SolveOp::FeedRow(f) => self.solve_feed_row(&f.feed_row),
             SolveOp::Cable(c) => self.solve_cable(&c.cable.wires),

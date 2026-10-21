@@ -37,6 +37,14 @@ text_nl = "Opgelost"
 text = "Shown, not solved. Try it again from the start to do it yourself."
 text_nl = "Getoond, niet zelf opgelost. Probeer het opnieuw om het zelf te doen."
 
+[predict_right]
+text = "Right."
+text_nl = "Juist."
+
+[predict_wrong]
+text = "Not quite."
+text_nl = "Niet helemaal."
+
 [hint]
 text = "Hint"
 text_nl = "Hint"
