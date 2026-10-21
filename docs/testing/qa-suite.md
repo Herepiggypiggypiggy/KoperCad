@@ -60,6 +60,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | --- | --- |
 | `open FILE` | restart the app with this project (fresh profile); paths are relative to the repository root |
 | `fresh` | restart with no project |
+| `library DIR` | restart with this parts library (a folder holding `records.json` and the files it names) copied into the profile, so maker models and other library files are there from the start; every later launch of the scenario has it too |
 | `click_text "Label" [Role] [#n]` | click the enabled widget with this label (exact match first); `#2` = second match (a label can be a menu and a workspace button) |
 | `click X Y`, `move X Y`, `drag X1 Y1 X2 Y2`, `scroll X Y DY` | pointer, window points |
 | `key ctrl+k Escape`, `text some words` | keyboard |

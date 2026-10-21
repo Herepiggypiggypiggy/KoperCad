@@ -1495,6 +1495,7 @@ impl NovoApp {
         } else if !changes.is_empty() {
             self.reports_heard(&changes);
             self.mark_earthed_terminals(&changes);
+            self.sync_plc_address_texts(&changes);
             self.fix_current_page();
         }
         if let Some(page) = self.canvas.take_page_request() {
@@ -2037,7 +2038,7 @@ impl NovoApp {
                 ui.add_space(novo_theme::space::XXL);
                 if self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
-                    ui.weak("Two minutes: place, wire, cable, live view");
+                    ui.weak("Seven short steps: place, wire, cable, live view");
                     ui.add_space(8.0);
                 }
                 for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
@@ -2049,7 +2050,7 @@ impl NovoApp {
                 ui.small("LEARN");
                 if !self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
-                    ui.weak("Two minutes: place, wire, cable, live view");
+                    ui.weak("Seven short steps: place, wire, cable, live view");
                     ui.add_space(4.0);
                 }
                 self.learn_start_entry(ui);

@@ -81,3 +81,61 @@ fn a_file_that_is_not_a_list_is_refused_with_the_reason() {
     assert!(text.contains("no heading row"), "{text}");
     assert!(d.app.wb.plc_list.is_none());
 }
+
+/// The printed address under a channel, by the signal text of its symbol.
+fn printed(d: &Drive, signal: &str) -> Option<String> {
+    use novo_core::Value;
+    d.doc().project().symbols().find_map(|s| {
+        let named =
+            matches!(s.properties.get(novo_plc::card::SIGNAL), Some(Value::Text(t)) if t == signal);
+        match (named, s.properties.get(novo_plc::card::ADDRESS_TEXT)) {
+            (true, Some(Value::Text(a))) => Some(a.clone()),
+            _ => None,
+        }
+    })
+}
+
+#[test]
+fn the_printed_addresses_follow_an_edit_of_a_card_or_the_address_style() {
+    use novo_plc::card::{ADDRESS_STYLE, start_key};
+    let (dir, mut d) = project();
+    let path = dir.path().join("signals.csv");
+    std::fs::write(&path, "Tag,Description,Type\nB1,Pump on,DI\n").unwrap();
+    assert!(d.app.plc_import_list_from(&path));
+    d.frame();
+    d.key(egui::Key::Enter, egui::Modifiers::NONE);
+    assert_eq!(printed(&d, "Pump on").as_deref(), Some("%IX0.0"));
+
+    // The card moves to byte 8: the page says so, in the edit's own undo step.
+    let card = cards(d.doc().project())[0].device;
+    let depth = d.doc().undo_depth();
+    let (_, changes) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Move the card", |tx| {
+            tx.set_property(card, start_key(novo_plc::Space::Input), Some(8i64.into()))
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    assert_eq!(printed(&d, "Pump on").as_deref(), Some("%IX8.0"));
+    assert_eq!(d.doc().undo_depth(), depth + 1);
+
+    // The address style changes how every address reads.
+    let (_, changes) = d
+        .app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Style", |tx| {
+            tx.set_info(|i| {
+                i.properties
+                    .insert(ADDRESS_STYLE.to_owned(), "rockwell".into());
+            })
+        })
+        .unwrap();
+    d.app.changed_outside_canvas(&changes);
+    let shown = printed(&d, "Pump on").unwrap();
+    assert!(shown.starts_with("Local:"), "{shown}");
+}

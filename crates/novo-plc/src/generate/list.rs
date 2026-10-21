@@ -19,7 +19,7 @@ use crate::link::csvio;
 /// One signal of the list.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IoItem {
-    /// Row of the file, from 1, counting only rows that are not empty.
+    /// Line of the file, from 1, blank lines counted.
     pub line: usize,
     /// The sensor or actuator (`B1`, `-Y3`): what the signal belongs to.
     pub tag: String,
@@ -278,7 +278,7 @@ fn from_rows(rows: &[Vec<String>]) -> Result<IoList, ListError> {
             list.notes.push(Note {
                 line: Some(line),
                 text: format!(
-                    "skipped {}: no signal type that can be told (type \"{kind_text}\", \
+                    "Skipped: {}: no signal type that can be told (type \"{kind_text}\", \
                      address \"{address_text}\")",
                     label(&tag, &description)
                 ),
