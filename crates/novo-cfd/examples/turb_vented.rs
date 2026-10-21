@@ -65,7 +65,10 @@ fn scenario(loss_w: f64, fan: bool) -> Scenario {
                     height_mm: 120.0,
                 },
                 mode: FanMode::Intake,
-                free_flow_m3h: 120.0,
+                free_flow_m3h: std::env::var("FANQ")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+                    .unwrap_or(120.0),
                 max_pressure_pa: 60.0,
             }]
         } else {
@@ -85,7 +88,10 @@ fn main() {
         .nth(2)
         .and_then(|s| s.parse().ok())
         .unwrap_or(6000);
-    let scn = scenario(100.0, std::env::args().any(|a| a == "fan"));
+    let mut scn = scenario(100.0, std::env::args().any(|a| a == "fan"));
+    if let Ok(m) = std::env::var("MIX") {
+        scn.params.mixing_m2s = m.parse().unwrap();
+    }
     let two_d = simulate_steady(&scn).unwrap();
     let d2 = &two_d.devices[0];
     let mut tuning = Tuning::default().with_cells(cells);
@@ -155,6 +161,53 @@ fn main() {
         q_2d,
         two_d.balance.openings_w / (rho_cp * q_2d)
     );
+    if std::env::var("PROFILE").is_ok() {
+        let bands = 8usize;
+        let mut b3 = vec![(0.0, 0.0); bands];
+        for k in 0..g.nz {
+            for j in 0..g.ny {
+                for i in 0..g.nx {
+                    let c = g.index(i, j, k);
+                    if s.material[c] == 0 {
+                        let yc = 0.5 * (g.y_edges_mm[j] + g.y_edges_mm[j + 1]);
+                        let b = ((yc / 800.0 * bands as f64) as usize).min(bands - 1);
+                        let v = g.volume_m3(i, j, k);
+                        b3[b].0 += v * (f64::from(s.temperature_c[c]) - 25.0);
+                        b3[b].1 += v;
+                    }
+                }
+            }
+        }
+        let f = &two_d.air_temp;
+        let mut b2 = vec![(0.0, 0.0); bands];
+        for r in 0..f.grid.rows {
+            for c in 0..f.grid.cols {
+                let yc = (r as f64 + 0.5) * f.grid.cell_h_mm;
+                let b = ((yc / f.grid.height_mm * bands as f64) as usize).min(bands - 1);
+                b2[b].0 += f.at(c, r) - 25.0;
+                b2[b].1 += 1.0;
+            }
+        }
+        for b in 0..bands {
+            println!(
+                "BAND {b} (top=0) 3D {:.2} K  2D {:.2} K",
+                b3[b].0 / b3[b].1,
+                b2[b].0 / b2[b].1
+            );
+        }
+        let bal = &two_d.balance;
+        println!(
+            "2D balance walls f{:.1} r{:.1} l{:.1} rt{:.1} t{:.1} b{:.1} openings {:.1} resid {:.2}",
+            bal.front_w,
+            bal.rear_w,
+            bal.left_w,
+            bal.right_w,
+            bal.top_w,
+            bal.bottom_w,
+            bal.openings_w,
+            bal.residual_w
+        );
+    }
     let d3 = &s.devices[0];
     let max_ratio = s.turb_visc_ratio.iter().fold(0.0_f32, |a, v| a.max(*v));
     println!(

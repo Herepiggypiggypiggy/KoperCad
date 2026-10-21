@@ -103,6 +103,17 @@ pub struct Port {
     pub area_m2: f64,
 }
 
+/// Eddy diffusivity added per unit of fan flow per metre of air depth
+/// (dimensionless). The 2D flow is depth averaged and has no momentum, so a
+/// fan jet leaves a cold pool below the device and a plug-like stream; the 3D
+/// CFD of the 600 x 800 x 300 mm box with a 60 to 240 m3/h intake fan shows a
+/// box stirred by the jet. Planar jet entrainment scales with the flow per
+/// unit width, `Q / depth`, so the term does too. Chosen from that CFD (60 m3/h:
+/// 2D mean air rise 3.0 K against 3.3 K, one box, not measured), not from tests.
+pub const JET_MIXING_COEFFICIENT: f64 = 0.25;
+/// Upper end of the jet term, m2/s; more mixing no longer raises the mean.
+pub const JET_MIXING_MAX: f64 = 0.06;
+
 pub struct Setup {
     pub air: Air,
     pub ambient: f64,
@@ -128,6 +139,8 @@ pub struct Setup {
     pub devices: Vec<DeviceCells>,
     pub ports: Vec<Port>,
     pub params: Params,
+    /// Extra eddy diffusivity from the fan jets, m2/s (see [`JET_MIXING_COEFFICIENT`]).
+    pub jet_mixing_m2s: f64,
     /// k times effective surface, W/K (IEC 60890 whole enclosure).
     pub k_ae: f64,
     pub on_plate: Vec<bool>,
@@ -462,6 +475,18 @@ impl Setup {
             .map(|i| 7850.0 * 490.0 * p.plate_thickness_mm / 1000.0 * hx * hy * plate_frac[i])
             .collect();
 
+        // A fan jet stirs the box far beyond what the depth-averaged flow shows.
+        // Intake and exhaust fans pass the same air, so the larger side counts.
+        let fan_flow = |mode: FanMode| -> f64 {
+            s.fans
+                .iter()
+                .filter(|f| f.mode == mode)
+                .map(|f| f.free_flow_m3h / 3600.0)
+                .sum()
+        };
+        let fan_flow_m3s = fan_flow(FanMode::Intake).max(fan_flow(FanMode::Exhaust));
+        let jet_mixing_m2s = (JET_MIXING_COEFFICIENT * fan_flow_m3s / depth).min(JET_MIXING_MAX);
+
         Ok(Setup {
             air,
             ambient: s.ambient_c,
@@ -481,6 +506,7 @@ impl Setup {
             devices,
             ports,
             params: p.clone(),
+            jet_mixing_m2s,
             k_ae,
             on_plate,
             c_air,

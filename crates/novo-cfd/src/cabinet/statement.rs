@@ -131,8 +131,14 @@ pub fn accuracy_with_turbulence(fidelity: Fidelity, model: TurbModel) -> Accurac
              cells by up to 11 %. With a 120 m3/h intake fan in the same box the mean air rise was \
              11 % (SST) to 15 % (k-epsilon) lower than laminar. The device surface rise was 1 % \
              to 1.4 % lower and the exhaust temperature at the top louvre up to about 5 % lower. \
-             In that fan case the 3D air rise is about twice the simple 2D engine's and the \
-             cause is not known yet, so read air temperatures of a fan case as an estimate. Radiation is not modelled, so surface temperatures of hot devices are \
+             In that fan case the 3D air rise is about 1.6 times the 2D engine's (3.1 against \
+             1.9 K; the 2D engine gave 1.33 K before it got a fan-jet mixing term). Both close \
+             the heat balance and carry the same flow (0.0295 m3/s), so neither creates heat. The \
+             2D engine averages over the depth and has no jet momentum, so it leaves a cold pool \
+             below the device, while 3D shows a box stirred by the fan jet with a cooler stream \
+             short-circuiting from the fan to the top louvre. The device surface rise \
+             agrees within 3 to 9 %. Neither is validated against measurement, so \
+             read air temperatures of a fan case as an estimate. Radiation is not modelled, so surface temperatures of hot devices are \
              slightly high."
         );
     }

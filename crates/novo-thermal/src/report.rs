@@ -215,6 +215,15 @@ pub fn build(
     if s.ports.is_empty() {
         notes.push("Closed enclosure: air circulates inside only.".into());
     }
+    if s.jet_mixing_m2s > 0.0 {
+        notes.push(
+            "Fan case: this 2D model has no jet momentum. A mixing term stands in for the fan \
+             jet, but 3D CFD of a test box still gave a mean air rise about 1.6 times higher \
+             (air next to the device up to 3 times); treat the mean air temperature as a low \
+             estimate. Heat balance and flow agree with the CFD."
+                .into(),
+        );
+    }
     if scn
         .devices
         .iter()
