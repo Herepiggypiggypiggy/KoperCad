@@ -969,6 +969,33 @@ fn the_inspector_keeps_above_the_lesson_card_at_1366() {
 }
 
 #[test]
+fn skip_does_the_step_so_the_steps_after_it_find_their_parts() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("placing-parts");
+    d.frame();
+    let ctx = d.ctx.clone();
+    let placed = |d: &Drive| d.doc().project().symbols().count();
+    let before = placed(&d);
+    // Skip each step in turn: the ones with a solve place the parts the
+    // later steps point at.
+    for _ in 0..12 {
+        if d.app.learn.run.is_none() {
+            break;
+        }
+        d.app.learn_skip(&ctx);
+        d.frame();
+    }
+    assert!(
+        placed(&d) > before,
+        "skipping did the steps: {before} -> {}",
+        placed(&d)
+    );
+}
+
+#[test]
 fn a_challenge_gives_its_hints_one_at_a_time_and_is_solved_by_the_fix() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));

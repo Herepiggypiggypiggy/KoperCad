@@ -33,13 +33,12 @@ text_nl = "Laat zien"
 text = "Hint"
 text_nl = "Hint"
 
-[show_fix]
-text = "Show me the fix"
-text_nl = "Laat de oplossing zien"
-
 [fix_it]
 text = "Fix it"
 text_nl = "Repareer het"
+[do_it_for_me]
+text = "Do it for me"
+text_nl = "Doe het voor mij"
 
 [skip_step]
 text = "Skip step"

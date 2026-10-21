@@ -47,10 +47,13 @@ pub(super) struct Card {
     demo_on: bool,
     next_lessons: Vec<(String, String)>,
     /// A challenge: the goal is stated, the way is not.
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(super) challenge: bool,
     /// The hints the learner has opened, and how many there are.
     pub(super) hints_open: Vec<String>,
     pub(super) hints_total: usize,
+    /// Skip does the step for the learner (it has a `solve`).
+    skip_does_it: bool,
     /// The lesson ships a finished drawing and the learner is at its end.
     pub(super) can_open_finished: bool,
     confirm_finished: bool,
@@ -65,6 +68,7 @@ struct Words {
     replay: String,
     stop: String,
     skip: String,
+    do_it: String,
     next: String,
     restart: String,
     restart_confirm: String,
@@ -75,7 +79,6 @@ struct Words {
     done_text: String,
     next_lessons: String,
     hint: String,
-    show_fix: String,
     open_finished: String,
     finished_confirm: String,
 }
@@ -122,6 +125,7 @@ impl NovoApp {
             },
         );
         match action {
+            Some(CardAction::Move(Move::Skip)) => self.learn_skip(ctx),
             Some(CardAction::Move(how)) => self.learn_move(how),
             Some(CardAction::ShowMe) => self.learn_show_me(),
             Some(CardAction::StopDemo) => self.learn_stop_demo(),
@@ -156,6 +160,7 @@ impl NovoApp {
             replay: say("demo_replay"),
             stop: say("demo_stop"),
             skip: say("skip_step"),
+            do_it: say("do_it_for_me"),
             next: say("next"),
             restart: say("restart_lesson"),
             restart_confirm: say("restart_confirm"),
@@ -166,7 +171,6 @@ impl NovoApp {
             done_text: say("done_text"),
             next_lessons: say("next_lessons"),
             hint: say("hint"),
-            show_fix: say("show_fix"),
             open_finished: say("open_finished"),
             finished_confirm: say("open_finished_confirm"),
         };
@@ -231,6 +235,7 @@ impl NovoApp {
                 .unwrap_or_default(),
             hints_total: step.map_or(0, |s| s.hints(lang).len()),
             next_lessons,
+            skip_does_it: step.is_some_and(|s| !s.solve.is_empty() && s.manual.is_none()),
             can_open_finished: (finished || run.index() + 1 >= total)
                 && self
                     .learn
@@ -349,8 +354,8 @@ impl NovoApp {
                         action = Some(CardAction::Move(Move::Next));
                     }
                 } else if ui
-                    .button(if card.challenge {
-                        &card.words.show_fix
+                    .button(if card.skip_does_it {
+                        &card.words.do_it
                     } else {
                         &card.words.skip
                     })

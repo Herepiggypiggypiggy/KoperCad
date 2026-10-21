@@ -13,6 +13,7 @@
 2026-10-17 12:50 UTC #986 merged. Fourth runner PR (draft, held for freeze): 10 click-only manual steps now replay; tab clicks tick; replay state no longer leaks between lessons.
 - Challenge lessons: `kind = "challenge"` (card header "FIX IT"), per-step `hints`/`hints_nl` opened one at a time with a Hint button, the skip button reads "Show me the fix". First challenge `motor-wont-hold` (cross-references/finished.json without the hold-in wire; goal = live view, start held in, then stop). Replay test proves it is solvable and that start alone drops out. Next challenges from the proposal: motor will not stop (stop as NO), coil never pulls in (A2 not connected), double tag, PE missing, wrong potential.
 - Second challenge `coil-wont-pull-in` (wire to the coil A1 removed); test shows start alone does nothing until the wire is drawn.
+- Skip step now does the step for the learner ("Do it for me") when it has a `solve` the editor can carry out: the document-changing solve ops moved from the replay gate (`learn_replay`) into `learn_solve.rs` (`NovoApp::solve_op`), shared by the gate and the card. UI-only ops (clicks on controls, held keys, live badges, cabinet ops) are still replay-only; those steps are skipped as before.
 
 ## 2026-10-21 Learning fixer
 - Inspector (and other right-hand panels) now stay above the lesson card while it sits in its corner (`panel::reserve_bottom_right`); test at 1366x768.

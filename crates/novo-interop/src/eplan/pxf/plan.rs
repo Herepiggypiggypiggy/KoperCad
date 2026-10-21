@@ -513,9 +513,15 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         );
         report.guess(
             "wire routes",
-            st.wires,
-            "plain right-angle runs between the pins, not EPLAN's lines; which pins are one net is read from the file",
+            st.wires - st.wires_followed,
+            "plain right-angle runs between the pins; which pins are one net is read from the file",
         );
+        if st.wires_followed > 0 {
+            report.note(format!(
+                "{} wires follow the runs and nodes the file implies: the corners are at its nodes, not guessed.",
+                st.wires_followed
+            ));
+        }
         for (what, n) in &st.issues {
             report.note(format!("Net check: {n} {what}."));
         }
