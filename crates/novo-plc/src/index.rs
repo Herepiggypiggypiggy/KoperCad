@@ -234,32 +234,44 @@ pub struct PlcIndex {
     issues: Vec<Issue>,
 }
 
-/// Sets the address text of every channel symbol that carries one to the
-/// address its card gives that channel. Returns how many changed. Symbols
-/// without the property (drawn by hand) are left alone.
-pub fn sync_address_texts(
-    tx: &mut novo_core::Tx<'_>,
+/// What [`sync_address_texts`] would change: each channel symbol that carries
+/// an address text, with the address its card gives that channel now.
+pub fn stale_address_texts(
+    project: &Project,
     functions: &dyn Functions,
-) -> novo_core::Result<usize> {
-    let index = PlcIndex::build(tx.project(), functions);
-    let mut changes = Vec::new();
+) -> Vec<(SymbolId, String)> {
+    let index = PlcIndex::build(project, functions);
+    let mut stale = Vec::new();
     for ch in &index.channels {
-        let Some(symbol) = tx.project().symbol(ch.symbol) else {
+        let Some(symbol) = project.symbol(ch.symbol) else {
             continue;
         };
-        if !symbol.properties.contains_key(ADDRESS_TEXT) {
+        let Some(Value::Text(shown)) = symbol.properties.get(ADDRESS_TEXT) else {
             continue;
-        }
+        };
         let text = ch
             .address
             .map(|a| a.format(index.style))
             .unwrap_or_default();
-        if symbol.properties.get(ADDRESS_TEXT) != Some(&Value::from(text.clone())) {
-            changes.push((ch.symbol, text));
+        if *shown != text {
+            stale.push((ch.symbol, text));
         }
     }
-    let n = changes.len();
-    for (symbol, text) in changes {
+    stale
+}
+
+/// Sets the address text of every channel symbol that carries one to the
+/// address its card gives that channel. Returns how many changed. Symbols
+/// without the property (drawn by hand) are left alone. The app runs this
+/// after any edit of a card or of the address style, so the printed address
+/// follows the cards.
+pub fn sync_address_texts(
+    tx: &mut novo_core::Tx<'_>,
+    functions: &dyn Functions,
+) -> novo_core::Result<usize> {
+    let stale = stale_address_texts(tx.project(), functions);
+    let n = stale.len();
+    for (symbol, text) in stale {
         tx.set_property(symbol, ADDRESS_TEXT, Some(Value::from(text)))?;
     }
     Ok(n)

@@ -1619,6 +1619,7 @@ impl NovoApp {
         }
         self.backend.record(changes);
         self.reports_heard(changes);
+        self.sync_plc_address_texts(changes);
         self.fix_current_page();
     }
 

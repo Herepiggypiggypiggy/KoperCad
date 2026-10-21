@@ -354,7 +354,7 @@ fn by_address(
             notes.push(Note {
                 line: Some(list.items[i].line),
                 text: format!(
-                    "{} ({}) has the same address as {} ({}, row {}); the addresses of \
+                    "Duplicate: {} ({}) has the same address as {} ({}, row {}); the addresses of \
                      the {} signals are assigned by the project",
                     list.items[i].address_text,
                     name_of(&list.items[i]),

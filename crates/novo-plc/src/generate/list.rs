@@ -278,7 +278,7 @@ fn from_rows(rows: &[Vec<String>]) -> Result<IoList, ListError> {
             list.notes.push(Note {
                 line: Some(line),
                 text: format!(
-                    "skipped {}: no signal type that can be told (type \"{kind_text}\", \
+                    "Skipped: {}: no signal type that can be told (type \"{kind_text}\", \
                      address \"{address_text}\")",
                     label(&tag, &description)
                 ),

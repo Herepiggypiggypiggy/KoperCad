@@ -1494,6 +1494,7 @@ impl NovoApp {
         } else if !changes.is_empty() {
             self.reports_heard(&changes);
             self.mark_earthed_terminals(&changes);
+            self.sync_plc_address_texts(&changes);
             self.fix_current_page();
         }
         if let Some(page) = self.canvas.take_page_request() {

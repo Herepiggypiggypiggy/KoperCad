@@ -47,7 +47,7 @@ pub use card::{Card, LayoutSource, address_style, allocate, cards, next_start};
 pub use commands::{RenumberPlan, StartMove};
 pub use index::{
     DrawnChannel, FromKey, Functions, Issue, PlcIndex, READS, channel_key, parse_channel,
-    sync_address_texts,
+    stale_address_texts, sync_address_texts,
 };
 pub use io::IoRow;
 pub use layout::{CardLayout, Channel, ChannelType, Group, LayoutError, Space};
