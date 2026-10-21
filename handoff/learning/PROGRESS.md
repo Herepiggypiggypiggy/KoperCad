@@ -11,3 +11,4 @@
 2026-10-16 12:10 UTC #642 merged (replay gate, 142 steps tick). Second runner PR: rename/tee/feed_row/cable/issue_revision/assign_part/held-key ops, `manual` marker, menu-row anchors with fallback, free-text control-name ratchet; fmt, clippy and tests pass locally.
 2026-10-17 10:20 UTC #682 merged. Third runner PR: ui_click, list_row, type_text ops; waive/restore replay; flyout kept open when a row menu entry is chosen; live-view momentary wording.
 2026-10-17 12:50 UTC #986 merged. Fourth runner PR (draft, held for freeze): 10 click-only manual steps now replay; tab clicks tick; replay state no longer leaks between lessons.
+- "Open finished version" now exists on the lesson card (last step and finished card), with a confirm because it replaces the drawing; opens `finished.json` as "Finished: <lesson>", ends the lesson as done.
