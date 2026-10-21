@@ -47,6 +47,11 @@ pub(super) struct DeviceInfo {
     pub calc_inputs: Vec<(String, bool)>,
 }
 
+/// One entry of [`DEVICE_INPUTS`]: key, label, unit, typical entry.
+type DeviceInput = (&'static str, &'static str, &'static str, &'static str);
+/// What an input shows: the value and whether it comes from the part.
+type InputValue = (String, bool);
+
 /// The numbers a device states for the calculations: property key, label,
 /// unit and what a typical entry looks like. `trip_curve` is a letter.
 pub(super) const DEVICE_INPUTS: [(&str, &str, &str, &str); 8] = [
@@ -92,10 +97,7 @@ pub(super) fn input_applies(key: &str, letter: &str) -> bool {
 fn visible_inputs<'a>(
     info: &'a DeviceInfo,
     letter: &str,
-) -> Vec<(
-    &'static (&'static str, &'static str, &'static str, &'static str),
-    &'a (String, bool),
-)> {
+) -> Vec<(&'static DeviceInput, &'a InputValue)> {
     DEVICE_INPUTS
         .iter()
         .zip(&info.calc_inputs)
