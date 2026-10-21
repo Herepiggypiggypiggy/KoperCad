@@ -326,3 +326,20 @@ fn every_tip_command_is_known_and_hover_reads_its_live_key() {
         "Open or close the door · Shift+D"
     );
 }
+
+#[test]
+fn a_bare_sheet_says_what_to_press_in_the_middle_and_stops_at_the_first_symbol() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.frame();
+    let layer = egui::LayerId::new(egui::Order::Foreground, egui::Id::new("empty_sheet_ghost"));
+    let shown = || ctx.memory(|m| m.areas().visible_last_frame(&layer));
+    assert!(shown(), "a new sheet has a line in the middle");
+    d.place("mcb3", 80.0, 48.0);
+    d.frame();
+    d.frame();
+    assert!(!shown(), "gone once something is placed");
+}
