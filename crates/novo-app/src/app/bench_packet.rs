@@ -30,6 +30,8 @@ const TABLE: &str = "Planning values you can edit";
 
 /// Row height of the tick tables, mm.
 const ROW_MM: f64 = 8.0;
+/// Row height of the cover facts, in mm.
+const COVER_FACT_ROW_MM: f64 = 4.5;
 
 /// The parts of a packet in order, each with its first section's place in
 /// the whole.
@@ -201,7 +203,12 @@ impl NovoApp {
         let options = |cover: &ReportOutput| novo_pdf::ReportPdfOptions {
             title: format!("{name}  Bench packet"),
             footer_right: format!("Revision {}", project.revision()),
-            row_mm: keys(cover).into_iter().map(|k| (k, ROW_MM)).collect(),
+            // The facts are single lines: closer rows keep the whole cover, notes included, on page 1.
+            row_mm: keys(cover)
+                .into_iter()
+                .map(|k| (k, ROW_MM))
+                .chain([("facts".to_owned(), COVER_FACT_ROW_MM)])
+                .collect(),
             language: language.clone(),
             ..novo_pdf::ReportPdfOptions::default()
         };
