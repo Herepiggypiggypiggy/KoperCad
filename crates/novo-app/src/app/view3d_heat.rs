@@ -171,7 +171,7 @@ fn verdict_line(
             .on_hover_text(
                 "Sends the verdict and hot-spot lines shown here to Claude (your own API \
                  key, whatever data scope you chose) and shows a short paragraph for a \
-                 report in Ask Claude. It is Claude's reading of a model estimate.",
+                 report in Ask Claude. It is Claude's reading of a model estimate. Check it before you use it.",
             )
             .clicked()
     {
