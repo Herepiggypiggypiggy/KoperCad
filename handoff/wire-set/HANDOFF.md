@@ -1,0 +1,1 @@
+Counts live in `novo-reports/src/counts.rs` (`headline_count`, `WireSet`, `wire_set_mismatch`). Reports workspace shows them in the sidebar, header and an explanation line. Test: `wire_set_tests.rs` in novo-app. Example: 19 connections + 6 leads = 25 wires to cut, 50 wire labels, 27 drawn.
