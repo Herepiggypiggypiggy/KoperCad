@@ -1,0 +1,19 @@
+@title 3D view: select a device and duplicate it, then undo
+@area 3D
+@sizes 1366x768
+# Fixed 1366x768 window points: the cube (1296,108) and K1 (522,436) are where the front view puts them at that size.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click 1296 108
+wait 40
+click 522 436
+wait 20
+key ctrl+d
+wait 30
+shot duplicated
+key ctrl+z
+wait 30
+shot undone
+check_layout
