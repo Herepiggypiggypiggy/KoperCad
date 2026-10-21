@@ -1376,10 +1376,16 @@ impl NovoApp {
     }
 }
 
-/// Starts the run Simulate asked for (here or by command) and says whether
-/// the shown result belongs to another layout than the plate now has.
 /// The devices on the plate with the power loss the Heat view uses, for the
 /// heat-neighbour check on the Run card.
+#[cfg(test)]
+pub(super) fn hot_devices_for_tests(
+    project: &Project,
+    id: StructureId,
+) -> Vec<super::view3d_run_checks::HotDevice> {
+    hot_devices(project, id)
+}
+
 fn hot_devices(project: &Project, id: StructureId) -> Vec<super::view3d_run_checks::HotDevice> {
     let Some(layout) = load(project, id) else {
         return Vec::new();
@@ -1392,7 +1398,6 @@ fn hot_devices(project: &Project, id: StructureId) -> Vec<super::view3d_run_chec
     };
     heat::items_of(project, &layout, &tag_of)
         .into_iter()
-        .filter(|i| i.loss_known)
         .map(|i| super::view3d_run_checks::HotDevice {
             hot: novo_routing::checks::Hot {
                 id: i.id,
@@ -1403,10 +1408,14 @@ fn hot_devices(project: &Project, id: StructureId) -> Vec<super::view3d_run_chec
                 loss_w: i.loss_w,
             },
             tag: i.tag,
+            known: i.loss_known,
+            estimated: i.loss_estimated,
         })
         .collect()
 }
 
+/// Starts the run Simulate asked for (here or by command) and says whether
+/// the shown result belongs to another layout than the plate now has.
 fn run_heat(
     heat: &mut HeatState,
     project: &Project,

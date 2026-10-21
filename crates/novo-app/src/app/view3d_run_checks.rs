@@ -24,6 +24,11 @@ use super::cabinet_routes::Tone;
 pub(super) struct HotDevice {
     pub hot: Hot,
     pub tag: String,
+    /// The Heat view has a loss figure for it; a device without one is
+    /// never "cool", it is unchecked.
+    pub known: bool,
+    /// The loss is a planning estimate, not a maker figure.
+    pub estimated: bool,
 }
 
 /// A corner the wire cannot take in the ducts.
@@ -32,6 +37,8 @@ pub(super) struct TightCorner {
     pub at: Point,
     pub needed_mm: f64,
     pub available_mm: f64,
+    /// Height of the ducts at the corner above the plate, mm.
+    pub top_mm: f64,
 }
 
 /// A device the run passes close to.
@@ -40,6 +47,7 @@ pub(super) struct Neighbour {
     pub tag: String,
     pub gap_mm: f64,
     pub loss_w: f64,
+    pub estimated: bool,
 }
 
 /// Where the diameter used for the bend check comes from.
@@ -61,9 +69,14 @@ pub(super) struct RunChecks {
     pub neighbours: Vec<Neighbour>,
     pub hot_gap_mm: f64,
     pub hot_loss_w: f64,
-    /// Devices on the plate that count as hot, so "none close" means
-    /// something.
-    pub hot_devices: usize,
+    /// Other devices on the plate (not the two the wire ends at) with a
+    /// known loss at or above the rule, so "none close" means something.
+    pub others_hot: usize,
+    /// Other devices with no loss figure: not checked.
+    pub others_unknown: usize,
+    /// The "no wire size" note was merged into the fill problem line, so
+    /// the bend line does not repeat it.
+    pub size_folded: bool,
 }
 
 /// The outer diameter of the cable the wire is a core of, from its part.
@@ -107,6 +120,7 @@ pub(super) fn run_checks(
             at: b.at,
             needed_mm: b.needed_mm,
             available_mm: b.available_mm,
+            top_mm: b.top_mm,
         })
         .collect();
     let own: Vec<u64> = [&wire.from, &wire.to]
@@ -115,7 +129,11 @@ pub(super) fn run_checks(
         .filter_map(|p| novo_routing::model::device_of_pin(project, p))
         .map(|d| d.raw())
         .collect();
-    let all: Vec<Hot> = hot.iter().map(|h| h.hot.clone()).collect();
+    let all: Vec<Hot> = hot
+        .iter()
+        .filter(|h| h.known)
+        .map(|h| h.hot.clone())
+        .collect();
     let neighbours = near_hot(route, &all, &own, rules.hot_gap_mm, rules.hot_loss_w)
         .into_iter()
         .map(|n| Neighbour {
@@ -126,8 +144,10 @@ pub(super) fn run_checks(
                 .unwrap_or_default(),
             gap_mm: n.gap_mm,
             loss_w: n.loss_w,
+            estimated: hot.iter().any(|h| h.hot.id == n.device && h.estimated),
         })
         .collect();
+    let others = || hot.iter().filter(|h| !own.contains(&h.hot.id));
     RunChecks {
         size,
         factor: rules.bend_factor,
@@ -135,10 +155,11 @@ pub(super) fn run_checks(
         neighbours,
         hot_gap_mm: rules.hot_gap_mm,
         hot_loss_w: rules.hot_loss_w,
-        hot_devices: hot
-            .iter()
-            .filter(|h| h.hot.loss_w >= rules.hot_loss_w)
+        others_hot: others()
+            .filter(|h| h.known && h.hot.loss_w >= rules.hot_loss_w)
             .count(),
+        others_unknown: others().filter(|h| !h.known).count(),
+        size_folded: false,
     }
 }
 
@@ -151,10 +172,12 @@ impl RunChecks {
             Size::Cable(tag, d) => (format!("cable {tag} {d:.0} mm"), *d),
             Size::Wire(d) => (format!("wire {d:.1} mm"), *d),
             Size::Unknown => {
-                out.push((
-                    Tone::Busy,
-                    "Bend radius not checked: no wire size or cable diameter is set".to_owned(),
-                ));
+                if !self.size_folded {
+                    out.push((
+                        Tone::Busy,
+                        "Bend radius not checked: no wire size or cable diameter is set".to_owned(),
+                    ));
+                }
                 return self.with_heat(out);
             }
         };
@@ -163,8 +186,8 @@ impl RunChecks {
             out.push((
                 Tone::Idle,
                 format!(
-                    "Bend radius (model): the {what} needs {need:.0} mm ({:.0} x its diameter); \
-                     the duct corners leave enough",
+                    "Bend radius (model): the {what} needs {need:.0} mm ({:.0} x its diameter, \
+                     a planning value); the duct corners leave enough",
                     self.factor
                 ),
             ));
@@ -174,8 +197,8 @@ impl RunChecks {
                 Tone::Over,
                 format!(
                     "Bend radius (model): at x {:.0}, y {:.0} mm the ducts leave about {:.0} mm, \
-                     the {what} needs {:.0} mm ({:.0} x its diameter): widen the ducts or lay it \
-                     round the corner by hand",
+                     the {what} needs {:.0} mm ({:.0} x its diameter, a planning value): widen \
+                     the ducts or lay it round the corner by hand",
                     c.at.x, c.at.y, c.available_mm, c.needed_mm, self.factor
                 ),
             ));
@@ -194,31 +217,38 @@ impl RunChecks {
             out.push((
                 Tone::Busy,
                 format!(
-                    "Heat (model): passes {:.0} mm from {} which loses {:.0} W (rule: keep {:.0} mm \
-                     from devices losing {:.0} W or more)",
+                    "Heat (model): passes {:.0} mm from {} which loses {}{:.0} W{} (rule: keep \
+                     {:.0} mm from devices losing {:.0} W or more)",
                     n.gap_mm,
                     if n.tag.is_empty() { "a device" } else { &n.tag },
+                    if n.estimated { "about " } else { "" },
                     n.loss_w,
+                    if n.estimated { " (estimated)" } else { "" },
                     self.hot_gap_mm,
                     self.hot_loss_w
                 ),
             ));
         }
-        if self.neighbours.is_empty() && self.hot_devices > 0 {
+        if self.neighbours.is_empty() && self.others_hot > 0 {
             out.push((
                 Tone::Idle,
                 format!(
-                    "Heat (model): {:.0} mm or more from every device losing {:.0} W or more",
+                    "Heat (model): {:.0} mm or more from every other device with a known loss of \
+                     {:.0} W or more",
                     self.hot_gap_mm, self.hot_loss_w
                 ),
             ));
         }
-        out.push((
-            Tone::Idle,
-            "Not checked: how stiff this cable is, its temperature rating, the real surface \
-             temperature of a device, corners at terminals and in free air"
-                .to_owned(),
-        ));
+        let mut not = "Not checked: how stiff this cable is, its temperature rating, the real \
+                       surface temperature of a device, corners at terminals and in free air"
+            .to_owned();
+        if self.others_unknown > 0 {
+            not.push_str(&format!(
+                ", and {} other devices with no power loss figure",
+                self.others_unknown
+            ));
+        }
+        out.push((Tone::Idle, not));
         out
     }
 }
@@ -235,7 +265,9 @@ mod tests {
             neighbours: Vec::new(),
             hot_gap_mm: 20.0,
             hot_loss_w: 5.0,
-            hot_devices: 0,
+            others_hot: 0,
+            others_unknown: 0,
+            size_folded: false,
         }
     }
 
@@ -264,6 +296,7 @@ mod tests {
             at: Point::new(300.0, 100.0),
             needed_mm: 120.0,
             available_mm: 40.0,
+            top_mm: 60.0,
         });
         let lines = c.lines();
         assert_eq!(lines[0].0, Tone::Over);
@@ -284,11 +317,12 @@ mod tests {
     #[test]
     fn a_close_hot_device_is_named_with_its_loss_and_the_rule() {
         let mut c = checks(Size::Wire(3.0));
-        c.hot_devices = 1;
+        c.others_hot = 1;
         c.neighbours.push(Neighbour {
             tag: "-K1".into(),
             gap_mm: 8.0,
             loss_w: 30.0,
+            estimated: false,
         });
         let text = c
             .lines()
@@ -304,14 +338,54 @@ mod tests {
     }
 
     #[test]
-    fn nothing_close_is_only_claimed_when_there_are_hot_devices() {
+    fn nothing_close_is_only_claimed_when_there_are_other_hot_devices() {
         let mut c = checks(Size::Wire(3.0));
         assert!(!c.lines().iter().any(|l| l.1.starts_with("Heat")));
-        c.hot_devices = 2;
+        c.others_hot = 2;
+        let text = c
+            .lines()
+            .iter()
+            .map(|l| l.1.clone())
+            .collect::<Vec<_>>()
+            .join("\n");
         assert!(
-            c.lines()
-                .iter()
-                .any(|l| l.1.starts_with("Heat (model): 20 mm or more"))
+            text.contains(
+                "Heat (model): 20 mm or more from every other device with a known loss of 5 W"
+            ),
+            "{text}"
         );
+    }
+
+    #[test]
+    fn an_estimated_loss_is_marked_and_unknown_ones_are_counted() {
+        let mut c = checks(Size::Wire(3.0));
+        c.others_hot = 1;
+        c.others_unknown = 2;
+        c.neighbours.push(Neighbour {
+            tag: "-K1".into(),
+            gap_mm: 8.0,
+            loss_w: 30.0,
+            estimated: true,
+        });
+        let lines = c.lines();
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.1.contains("loses about 30 W (estimated)"))
+        );
+        assert!(
+            lines
+                .last()
+                .unwrap()
+                .1
+                .ends_with("and 2 other devices with no power loss figure")
+        );
+    }
+
+    #[test]
+    fn a_folded_missing_size_does_not_repeat_itself() {
+        let mut c = checks(Size::Unknown);
+        c.size_folded = true;
+        assert!(!c.lines().iter().any(|l| l.1.starts_with("Bend radius")));
     }
 }

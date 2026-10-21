@@ -223,6 +223,17 @@ pub(super) fn facts(
                     _ => {}
                 }
             }
+            let mut checks = run_checks(project, wire, route, &ducts, hot, &rules);
+            // One amber line for a missing size: the fill guess and the
+            // unchecked bend radius have the same cause.
+            if checks.size == super::view3d_run_checks::Size::Unknown
+                && let Some((_, text)) = problems
+                    .iter_mut()
+                    .find(|(_, t)| t.starts_with("No wire size set"))
+            {
+                text.push_str("; the bend radius is not checked");
+                checks.size_folded = true;
+            }
             let to_entry = routed.entry_legs.contains_key(id);
             Some((
                 *id,
@@ -245,7 +256,7 @@ pub(super) fn facts(
                         outside_mm: novo_routing::entry::outside_mm(project, structure),
                     }),
                     basis: None,
-                    checks: Some(run_checks(project, wire, route, &ducts, hot, &rules)),
+                    checks: Some(checks),
                 },
             ))
         })

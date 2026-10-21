@@ -21,6 +21,9 @@ pub struct TightBend {
     pub available_mm: f64,
     /// The two ducts meeting at the corner.
     pub ducts: (u64, u64),
+    /// How high the taller of the two stands off the plate, mm: where a mark
+    /// must sit to be seen above them.
+    pub top_mm: f64,
 }
 
 const ON_LINE_MM: f64 = 0.5;
@@ -126,6 +129,7 @@ pub fn tight_bends(route: &Route, ducts: &[Duct], diameter_mm: f64, factor: f64)
                 needed_mm: needed,
                 available_mm: available,
                 ducts: (h.id, v.id),
+                top_mm: h.height.max(v.height),
             });
         }
     }
@@ -256,6 +260,7 @@ mod tests {
             b.available_mm
         );
         assert_eq!(b.ducts, (1, 2));
+        assert_eq!(b.top_mm, 60.0, "the ducts of the fixture stand 60 mm");
     }
 
     #[test]

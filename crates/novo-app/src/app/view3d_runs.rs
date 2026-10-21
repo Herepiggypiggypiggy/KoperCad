@@ -406,10 +406,10 @@ pub(super) fn overlays(
     if !ducts.positions.is_empty() {
         out.push(Overlay::Lines(ducts));
     }
-    let tight: Vec<Point> = chosen
+    let tight: Vec<(Point, f64)> = chosen
         .iter()
         .filter_map(|f| f.checks.as_ref())
-        .flat_map(|c| c.corners.iter().map(|k| k.at))
+        .flat_map(|c| c.corners.iter().map(|k| (k.at, k.top_mm)))
         .collect();
     if !tight.is_empty() {
         out.push(Overlay::Lines(corner_marks(scene, &tight)));
@@ -469,17 +469,18 @@ fn entry_marker(scene: &Scene, at: Point) -> OverlayLines {
     lines
 }
 
-/// A red cross over each corner the wire cannot take.
-fn corner_marks(scene: &Scene, at: &[Point]) -> OverlayLines {
-    let r = 12.0;
+/// A red cross over each corner the wire cannot take, held above the ducts
+/// that meet there (a mark on the plate would sit inside them, out of sight).
+fn corner_marks(scene: &Scene, at: &[(Point, f64)]) -> OverlayLines {
+    let r = 16.0;
     let red = tone_colour(Tone::Over);
     let mut lines = OverlayLines {
         width_px: 3.0,
         order: 23,
         ..OverlayLines::default()
     };
-    for p in at {
-        let c = scene.frame.world(p.x, p.y, 1.0);
+    for (p, top) in at {
+        let c = scene.frame.world(p.x, p.y, *top + 4.0);
         for (a, b) in [
             (Vec3::X + Vec3::Y, -Vec3::X - Vec3::Y),
             (Vec3::X - Vec3::Y, Vec3::Y - Vec3::X),
