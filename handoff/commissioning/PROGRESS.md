@@ -3,3 +3,5 @@
 2026-10-15 19:40 UTC app PR #471 (Commissioning tab, punch list, marks); to_report_input and store json in #431
 2026-10-15 19:55 UTC #399, #431, #446, #471 merged; follow-up #494 (edit lock, Pass all open, Large)
 2026-10-15 20:00 UTC #494 review round done (two-step Pass all, Large buttons in Settings); READY, merged main (e382fbd). Land-only mode; Workspace migration written up in HANDOFF.md
+2026-10-21 06:10 UTC guided walk (thread "Commissioning guided walk", proposal 8 and critic C-06): walk engine `novo-commissioning::walk`, walk card + Space tick + Wire/Cable core groups + tablet rows in the Commissioning panel, punch list PDF (`export.punch_list`)
+2026-10-21 06:50 UTC walk follow-up: Fail opens the Note with the wire's ends (second press or Enter records), "By place" order (wires by the device/strip they start on), the card scrolls inside itself at tablet height, keys F, N and Backspace

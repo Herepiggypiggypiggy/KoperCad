@@ -67,10 +67,14 @@ pub struct TurnResult {
 #[derive(Clone, Debug, Default)]
 pub struct Conversation {
     pub messages: Vec<Value>,
+    /// Pictures to send with the next message, chosen by the person.
+    /// Taken (emptied) by the turn.
+    pub images: Vec<crate::image::Image>,
 }
 
 impl Conversation {
     pub fn clear(&mut self) {
+        self.images.clear();
         self.messages.clear();
     }
 
@@ -78,6 +82,44 @@ impl Conversation {
     /// budget cap. On error the conversation is left as it was before the turn.
     #[allow(clippy::too_many_arguments)]
     pub fn run_turn<T: Transport>(
+        &mut self,
+        client: &mut Client<T>,
+        host: &mut dyn ToolHost,
+        settings: &AiSettings,
+        spent_before: f64,
+        user_text: &str,
+        on_event: &mut dyn FnMut(Event),
+        cancel: &AtomicBool,
+    ) -> Result<TurnResult, ApiError> {
+        let result = self.run_turn_inner(
+            client,
+            host,
+            settings,
+            spent_before,
+            user_text,
+            on_event,
+            cancel,
+        );
+        self.drop_pictures();
+        result
+    }
+
+    /// A picture goes with one question only: later requests carry a note in
+    /// its place, so it is neither re-sent (cost, privacy) nor kept in memory.
+    fn drop_pictures(&mut self) {
+        for m in &mut self.messages {
+            if let Some(blocks) = m["content"].as_array_mut() {
+                for b in blocks.iter_mut() {
+                    if b["type"] == "image" {
+                        *b = json!({"type": "text", "text": "[a picture of the window was attached to this question]"});
+                    }
+                }
+            }
+        }
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn run_turn_inner<T: Transport>(
         &mut self,
         client: &mut Client<T>,
         host: &mut dyn ToolHost,
@@ -115,8 +157,16 @@ impl Conversation {
         cancel: &AtomicBool,
     ) -> Result<TurnResult, ApiError> {
         let model = models::resolve(&settings.model);
+        let images = std::mem::take(&mut self.images);
+        let content = if images.is_empty() {
+            json!(user_text)
+        } else {
+            let mut blocks: Vec<Value> = images.iter().map(|i| i.block()).collect();
+            blocks.push(json!({"type": "text", "text": user_text}));
+            Value::Array(blocks)
+        };
         self.messages
-            .push(json!({"role": "user", "content": user_text}));
+            .push(json!({"role": "user", "content": content}));
         let tools = host.specs();
         let mut total = Usage::default();
         let mut cost = 0.0;
@@ -570,5 +620,43 @@ mod tests {
         // The million input tokens were already read and are still counted.
         assert!((cost - 4.0).abs() < 0.01, "{cost}");
         assert!(conv.messages.is_empty());
+    }
+
+    #[test]
+    fn a_chosen_picture_goes_with_the_message_once() {
+        let (s, mut c) = setup();
+        s.push(200, text_reply("claude-opus-5-5", "I see it.", 5, 2));
+        s.push(200, text_reply("claude-opus-5-5", "Fine.", 5, 2));
+        let mut conv = Conversation::default();
+        conv.images.push(crate::image::Image::png(&[1, 2, 3]));
+        let mut h = host(DataScope::None);
+        for q in ["what is this?", "and now?"] {
+            conv.run_turn(
+                &mut c,
+                &mut h,
+                &settings(),
+                0.0,
+                q,
+                &mut |_| {},
+                &AtomicBool::new(false),
+            )
+            .unwrap();
+        }
+        let first: Value = serde_json::from_str(&s.requests()[0].body).unwrap();
+        let first_user = &first["messages"][0]["content"];
+        assert_eq!(first_user[0]["type"], "image");
+        assert_eq!(first_user[1]["text"], "what is this?");
+        let later: Value = serde_json::from_str(&s.requests()[1].body).unwrap();
+        assert_eq!(later["messages"][2]["content"], "and now?");
+        assert!(conv.images.is_empty());
+        assert!(
+            !later["messages"][0].to_string().contains("\"image\""),
+            "the picture is not sent again"
+        );
+        assert!(
+            !serde_json::to_string(&conv.messages)
+                .unwrap()
+                .contains("iVBOR")
+        );
     }
 }

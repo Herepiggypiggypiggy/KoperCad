@@ -24,6 +24,9 @@ enum CardAction {
     Close,
     Open(String),
     Hint,
+    OpenFinished,
+    ConfirmFinished,
+    CancelFinished,
 }
 
 /// The card's words for one frame, copied out so drawing needs no borrow.
@@ -48,6 +51,9 @@ pub(super) struct Card {
     /// The hints the learner has opened, and how many there are.
     pub(super) hints_open: Vec<String>,
     pub(super) hints_total: usize,
+    /// The lesson ships a finished drawing and the learner is at its end.
+    pub(super) can_open_finished: bool,
+    confirm_finished: bool,
     words: Words,
 }
 
@@ -70,6 +76,8 @@ struct Words {
     next_lessons: String,
     hint: String,
     show_fix: String,
+    open_finished: String,
+    finished_confirm: String,
 }
 
 impl NovoApp {
@@ -113,6 +121,11 @@ impl NovoApp {
             Some(CardAction::Close) => self.learn.hidden = true,
             Some(CardAction::Open(id)) => self.start_lesson(&id),
             Some(CardAction::Hint) => self.learn_open_hint(),
+            Some(CardAction::OpenFinished) => self.learn.confirm_finished = true,
+            Some(CardAction::ConfirmFinished) => {
+                self.learn_open_finished();
+            }
+            Some(CardAction::CancelFinished) => self.learn.confirm_finished = false,
             None => {}
         }
     }
@@ -141,6 +154,8 @@ impl NovoApp {
             next_lessons: say("next_lessons"),
             hint: say("hint"),
             show_fix: say("show_fix"),
+            open_finished: say("open_finished"),
+            finished_confirm: say("open_finished_confirm"),
         };
         let n = (run.index() + 1).min(total).to_string();
         let challenge = lesson.kind == novo_learn::Kind::Challenge;
@@ -203,6 +218,13 @@ impl NovoApp {
                 .unwrap_or_default(),
             hints_total: step.map_or(0, |s| s.hints(lang).len()),
             next_lessons,
+            can_open_finished: (finished || run.index() + 1 >= total)
+                && self
+                    .learn
+                    .catalog
+                    .get(&lesson.id)
+                    .is_some_and(|e| e.finished.is_some()),
+            confirm_finished: self.learn.confirm_finished,
             words,
         })
     }
@@ -340,6 +362,25 @@ impl NovoApp {
                 .clicked()
             {
                 action = Some(CardAction::Restart);
+            }
+        }
+        if card.can_open_finished {
+            ui.add_space(2.0);
+            if card.confirm_finished {
+                ui.label(&card.words.finished_confirm);
+                ui.horizontal(|ui| {
+                    if ui.button(&card.words.open_finished).clicked() {
+                        action = Some(CardAction::ConfirmFinished);
+                    }
+                    if ui.button(&card.words.cancel).clicked() {
+                        action = Some(CardAction::CancelFinished);
+                    }
+                });
+            } else {
+                let button = ui.small_button(&card.words.open_finished);
+                if button.clicked() {
+                    action = Some(CardAction::OpenFinished);
+                }
             }
         }
         action
@@ -536,8 +577,8 @@ impl NovoApp {
         let mut reload = false;
         let mut reset = false;
         super::panel::dialog(ctx, title, [560.0, 560.0])
-            .id(egui::Id::new("learn_window"))
-            .open(&mut open)
+            .id(super::panel::keep_id(ctx, egui::Id::new("learn_window")))
+            .open(super::panel::esc(ctx, &mut open))
             .pivot(egui::Align2::CENTER_CENTER)
             .default_pos(ctx.content_rect().center())
             .collapsible(false)
@@ -667,8 +708,16 @@ impl NovoApp {
             if ui.small_button(self.learn.say("reload")).clicked() {
                 *reload = true;
             }
-            if ui.small_button(self.learn.say("reset_progress")).clicked() {
-                *reset = true;
+            if self.learn.confirm_reset {
+                ui.label(self.learn.say("reset_confirm"));
+                if ui.small_button(self.learn.say("yes_reset")).clicked() {
+                    *reset = true;
+                }
+                if ui.small_button(self.learn.say("cancel")).clicked() {
+                    self.learn.confirm_reset = false;
+                }
+            } else if ui.small_button(self.learn.say("reset_progress")).clicked() {
+                self.learn.confirm_reset = true;
             }
             let drafts_label = self.learn.say("show_drafts");
             ui.checkbox(&mut self.learn.show_drafts, drafts_label);

@@ -173,8 +173,8 @@ impl NovoApp {
         let mut add = false;
         let mut revert = false;
         let window = super::panel::dialog(ctx, "Edit macro parameters", [560.0, 0.0])
-            .id(egui::Id::new("macro_editor"))
-            .open(&mut open)
+            .id(super::panel::keep_id(ctx, egui::Id::new("macro_editor")))
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 let ed = &mut self.wb.macro_editor;
                 ui.weak(

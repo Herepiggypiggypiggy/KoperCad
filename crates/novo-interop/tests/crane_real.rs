@@ -95,6 +95,10 @@ fn the_real_project_keeps_its_lines_and_location_boxes() {
     .unwrap();
     let r = plan.report();
     eprintln!("{}", r.text());
+    // The generated report pages' cells are named; what is really unknown
+    // stays a short list.
+    assert!(r.text().contains("report table cells and texts"));
+    assert!(r.count_of("other objects") < 100, "{}", r.text());
     let mut doc = novo_core::Document::new(novo_core::Project::new("x"));
     plan.apply(&mut doc).unwrap();
     let with_bg = doc

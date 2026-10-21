@@ -100,6 +100,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("export.bom", under("File", "Export reports")),
     ("export.change_report", under("File", "Export reports")),
     ("export.commissioning", under("File", "Export reports")),
+    ("export.punch_list", under("File", "Export reports")),
     ("export.standards_report", under("File", "Export reports")),
     ("export.standards_xlsx", under("File", "Export reports")),
     ("export.wirecut", under("File", "Export production")),
@@ -251,6 +252,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     // Reports
     ("export.reports", under("Reports", "Export")),
     ("export.assembly", under("Reports", "Export")),
+    ("export.workshop", under("Reports", "Export")),
     ("view.bench", at("Reports")),
     ("report.designer", at("Reports")),
     ("export.bench_cut", under("Reports", "Export")),

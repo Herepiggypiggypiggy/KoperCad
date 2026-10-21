@@ -38,6 +38,46 @@ pub(super) enum ProposalState {
     Failed(String),
 }
 
+/// Where taking a picture of the window has got to.
+#[derive(Clone, Copy, PartialEq)]
+enum Shot {
+    Idle,
+    /// The assistant window steps out of the way for one frame.
+    Hide,
+    /// Waiting for the picture to come back (frames waited).
+    Waiting(u32),
+}
+
+/// Longest side of a picture sent, in pixels.
+const PICTURE_MAX_SIDE: u32 = 1400;
+
+struct Picture {
+    image: novo_ai::image::Image,
+    size: [u32; 2],
+}
+
+/// The window's pixels as a PNG, shrunk to a size that reads well and costs little.
+fn picture_of(img: &egui::ColorImage) -> Result<Picture, String> {
+    let (w, h) = (img.size[0] as u32, img.size[1] as u32);
+    let rgba: Vec<u8> = img.pixels.iter().flat_map(|c| c.to_array()).collect();
+    let mut buf = image::RgbaImage::from_raw(w, h, rgba).ok_or("the picture has the wrong size")?;
+    if w.max(h) > PICTURE_MAX_SIDE {
+        let f = f64::from(PICTURE_MAX_SIDE) / f64::from(w.max(h));
+        let (nw, nh) = (
+            ((f64::from(w) * f) as u32).max(1),
+            ((f64::from(h) * f) as u32).max(1),
+        );
+        buf = image::imageops::resize(&buf, nw, nh, image::imageops::FilterType::Triangle);
+    }
+    let mut png = std::io::Cursor::new(Vec::new());
+    buf.write_to(&mut png, image::ImageFormat::Png)
+        .map_err(|e| e.to_string())?;
+    Ok(Picture {
+        size: [buf.width(), buf.height()],
+        image: novo_ai::image::Image::png(&png.into_inner()),
+    })
+}
+
 pub(super) enum Entry {
     User(String),
     Claude(String),
@@ -71,12 +111,18 @@ pub(super) struct State {
     thinking: bool,
     /// Set by the Stop button; the background thread reads it.
     cancel: Arc<AtomicBool>,
+    shot: Shot,
+    picture: Option<Picture>,
+    /// The scope that was agreed when the picture was taken.
+    picture_scope: DataScope,
     /// What the person decided about proposals since their last message;
     /// sent along with the next one so Claude knows.
     notes: Vec<String>,
     ledger: Ledger,
     ledger_path: Option<PathBuf>,
     session_cost: f64,
+    /// A question to send as soon as the window can (from a button elsewhere).
+    pending_question: Option<String>,
     /// The widest scope any answer in the running conversation was given
     /// under. If the scope later narrows, the conversation is dropped: what
     /// Claude already read must not keep informing answers the person
@@ -124,10 +170,14 @@ impl State {
             live: String::new(),
             thinking: false,
             cancel: Arc::new(AtomicBool::new(false)),
+            shot: Shot::Idle,
+            picture: None,
+            picture_scope: DataScope::None,
             notes: Vec::new(),
             ledger,
             ledger_path,
             session_cost: 0.0,
+            pending_question: None,
             conv_scope: DataScope::None,
             pending_scope: None,
             next_proposal: 1,
@@ -145,6 +195,16 @@ impl State {
             transport,
             Arc::new(|| 1_792_000_000),
         )
+    }
+
+    #[cfg(test)]
+    pub(super) fn attach_picture_requested(&mut self) {
+        self.shot = Shot::Hide;
+    }
+
+    #[cfg(test)]
+    pub(super) fn has_picture(&self) -> bool {
+        self.picture.is_some()
     }
 
     #[cfg(test)]
@@ -191,6 +251,12 @@ impl State {
             .join("\n")
     }
 
+    /// Opens the window and sends `question` when no answer is in progress.
+    pub(super) fn ask_later(&mut self, question: String) {
+        self.open = true;
+        self.pending_question = Some(question);
+    }
+
     fn month(&self) -> String {
         month_of((self.now)())
     }
@@ -206,14 +272,27 @@ impl State {
     /// Called before each message with the scope now in force. Narrower than
     /// the conversation's scope: forget the conversation and say so.
     fn enforce_scope(&mut self, scope: DataScope) {
+        if self.picture.is_some() && scope < self.picture_scope {
+            self.picture = None;
+            self.shot = Shot::Idle;
+            self.transcript.push(Entry::Problem(
+                "Scope narrowed, so the attached picture was dropped.".into(),
+            ));
+        }
         if scope < self.conv_scope {
             self.conversation.clear();
             self.notes.clear();
-            self.transcript.push(Entry::Problem(
+            let had_picture = self.picture.take().is_some();
+            self.shot = Shot::Idle;
+            self.transcript.push(Entry::Problem(if had_picture {
+                "Scope narrowed, so the earlier chat and the attached picture were cleared. \
+                 Claude no longer has what it read or saw before."
+                    .into()
+            } else {
                 "Scope narrowed, so the earlier chat was cleared. Claude no longer has what it \
                  read before."
-                    .into(),
-            ));
+                    .into()
+            }));
         }
         self.conv_scope = scope;
     }
@@ -226,11 +305,13 @@ impl State {
         }
     }
 
-    fn clear_chat(&mut self) {
+    pub(super) fn clear_chat(&mut self) {
         self.transcript.clear();
         self.conversation.clear();
         self.notes.clear();
         self.proposal_notes.clear();
+        self.picture = None;
+        self.shot = Shot::Idle;
         self.session_cost = 0.0;
     }
 }
@@ -239,6 +320,21 @@ fn unix_now() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs())
+}
+
+const ON_ID: &str = "kopercad_ai_on";
+const ASK_ID: &str = "kopercad_ai_ask";
+
+/// True when Claude is turned on, so a panel may offer an "… with Claude" button.
+pub(super) fn claude_is_on(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(egui::Id::new(ON_ID)))
+        .unwrap_or(false)
+}
+
+/// Leaves a question for the Ask Claude window; it is sent on the next frame
+/// when Claude is on and no answer is in progress.
+pub(super) fn ask_claude_later(ctx: &egui::Context, question: String) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(ASK_ID), question));
 }
 
 /// The edits Claude may suggest. Each maps to one model command.
@@ -527,7 +623,7 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
         },
         "pages": novo_py::pages_json(p),
         "devices": tags,
-        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals", "parts"],
+        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals", "parts", "problems"],
     });
     if scope >= DataScope::Selection {
         let items: Vec<Value> = p
@@ -572,6 +668,14 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
                 "id": x.id.raw(), "manufacturer": x.manufacturer,
                 "order_number": x.order_number, "type_number": x.type_number,
                 "description": x.description})).collect::<Vec<_>>(),
+            // The design checks, read-only: what the Issues list would show.
+            "problems": novo_checks::check(p).iter().map(|q| json!({
+                "kind": format!("{:?}", q.kind),
+                "severity": format!("{:?}", q.severity),
+                "message": q.message,
+                "page_id": q.page.map(|g| g.raw()),
+                "objects": q.at.len(),
+                "rule": q.rule})).collect::<Vec<_>>(),
         });
     }
     snap
@@ -626,15 +730,23 @@ impl NovoApp {
         st.thinking = true;
         st.cancel.store(false, Ordering::Relaxed);
         let cancel = Arc::clone(&st.cancel);
+        let picture = st.picture.take();
         let mut message = String::new();
         for n in st.notes.drain(..) {
             message.push_str(&format!("[{n}]\n"));
         }
         message.push_str(&text);
-        st.transcript.push(Entry::User(text));
+        st.transcript.push(Entry::User(if picture.is_some() {
+            format!("{text}\n[a picture of the window is attached]")
+        } else {
+            text
+        }));
         let settings = self.settings.ai.clone();
         let spent = st.spent();
         let mut conversation = std::mem::take(&mut st.conversation);
+        if let Some(p) = picture {
+            conversation.images.push(p.image);
+        }
         let factory = Arc::clone(&st.transport);
         let first = st.next_proposal;
         let (tx, rx) = channel();
@@ -840,10 +952,75 @@ impl NovoApp {
     }
 
     pub(super) fn assistant_window(&mut self, ctx: &egui::Context) {
+        // Panels elsewhere (the Heat panel) cannot reach this state; they read
+        // whether Claude is on and leave a question here for the next frame.
+        let on = self.settings.ai.enabled;
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(ON_ID), on));
+        if let Some(q) = ctx.data_mut(|d| d.remove_temp::<String>(egui::Id::new(ASK_ID)))
+            && on
+        {
+            self.wb.assistant.ask_later(q);
+        }
         if !self.wb.assistant.open {
             return;
         }
         self.assistant_poll();
+        match self.wb.assistant.shot {
+            Shot::Idle => {}
+            Shot::Hide => {
+                ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(egui::UserData::default()));
+                self.wb.assistant.shot = Shot::Waiting(0);
+                ctx.request_repaint();
+                return;
+            }
+            Shot::Waiting(n) => {
+                let got = ctx.input(|i| {
+                    i.events.iter().find_map(|e| match e {
+                        egui::Event::Screenshot { image, .. } => Some(Arc::clone(image)),
+                        _ => None,
+                    })
+                });
+                let scope_now = self.settings.ai.consent.effective();
+                let st = &mut self.wb.assistant;
+                match got {
+                    Some(img) => {
+                        match picture_of(&img) {
+                            Ok(p) => {
+                                st.picture = Some(p);
+                                st.picture_scope = scope_now;
+                            }
+                            Err(e) => st
+                                .transcript
+                                .push(Entry::Problem(format!("Could not take the picture: {e}"))),
+                        }
+                        st.shot = Shot::Idle;
+                    }
+                    None if n > 180 => {
+                        st.shot = Shot::Idle;
+                        st.transcript.push(Entry::Problem(
+                            "This computer's graphics did not give a picture of the window.".into(),
+                        ));
+                    }
+                    None => {
+                        st.shot = Shot::Waiting(n + 1);
+                        ctx.request_repaint();
+                        return;
+                    }
+                }
+            }
+        }
+        if self.wb.assistant.running.is_none()
+            && let Some(q) = self.wb.assistant.pending_question.take()
+        {
+            if self.settings.ai.enabled {
+                self.assistant_send(ctx, q);
+            } else {
+                self.wb
+                    .assistant
+                    .transcript
+                    .push(Entry::Problem("Claude is off, so nothing was sent.".into()));
+            }
+        }
         if self.wb.assistant.running.is_some() || self.wb.assistant.key_check.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(120));
         }
@@ -851,7 +1028,7 @@ impl NovoApp {
         let mut decide: Option<(usize, bool)> = None;
         let mut send: Option<String> = None;
         super::panel::dialog(ctx, "Ask Claude", [460.0, 620.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 self.assistant_settings_ui(ui, ctx);
                 ui.separator();
@@ -1003,6 +1180,10 @@ impl NovoApp {
                 ui.weak(s.describes());
             });
         }
+        ui.weak(
+            "Buttons that say “with Claude” send the text shown on screen, whatever you chose here.",
+        );
+        ui.weak("A picture you attach shows everything on screen at that moment, whatever you chose here.");
         let current = self.settings.ai.consent.effective();
         if scope != self.wb.assistant.pending_scope.unwrap_or(current) {
             if enabled && scope > current {
@@ -1143,7 +1324,16 @@ impl NovoApp {
                         }
                         Entry::Claude(t) => {
                             ui.add_space(4.0);
-                            ui.label(egui::RichText::new("Claude").strong());
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Claude").strong());
+                                if ui
+                                    .small_button("Copy")
+                                    .on_hover_text("Copy this answer")
+                                    .clicked()
+                                {
+                                    ui.ctx().copy_text(t.clone());
+                                }
+                            });
                             ui.label(t);
                         }
                         Entry::Tool(t) => {
@@ -1225,6 +1415,31 @@ impl NovoApp {
             }
             if ui.small_button("Clear chat").clicked() && !running {
                 st.clear_chat();
+            }
+            match &st.picture {
+                Some(p) => {
+                    ui.weak(format!("Picture attached ({}×{})", p.size[0], p.size[1]));
+                    if ui.small_button("Remove picture").clicked() {
+                        st.picture = None;
+                    }
+                }
+                None => {
+                    if ui
+                        .add_enabled(
+                            !running && st.shot == Shot::Idle,
+                            egui::Button::new("Attach picture").small(),
+                        )
+                        .on_hover_text(
+                            "Sends a picture of this whole KoperCAD window with your next \
+                             message: everything visible in it, whatever the data scope. \
+                             It goes with that one question only; Claude is not shown it again. \
+                             This window steps aside for a moment.",
+                        )
+                        .clicked()
+                    {
+                        st.shot = Shot::Hide;
+                    }
+                }
             }
             ui.weak(format!(
                 "Chat so far {} · month {}",
