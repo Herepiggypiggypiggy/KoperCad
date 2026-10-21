@@ -283,10 +283,13 @@ fn a_wire_between_two_cabinets_is_routed_to_each_entry() {
             "no whole length is claimed for the run between the entries"
         );
         assert!(!routed.routes.contains_key(id));
-        let (near, far) = (
-            &routed.cross_routes[&(*id, plates[0])],
-            &routed.cross_routes[&(*id, plates[1])],
-        );
+        let leg = |plate| {
+            routed
+                .cross_routes
+                .get(&(*id, plate))
+                .unwrap_or_else(|| panic!("wire {id} has no leg on plate {plate:?}"))
+        };
+        let (near, far) = (leg(plates[0]), leg(plates[1]));
         assert_eq!(
             near.points.last(),
             Some(&e_cab),
