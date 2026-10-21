@@ -169,3 +169,20 @@ fn write_distribution_fixture() {
     let _ = std::fs::remove_file(&path);
     backend.save(&path).unwrap();
 }
+
+/// Rewrites the fixture: `cargo test -p novo-app write_signals_fixture -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/distribution-board-lighting.novo"]
+fn write_signals_fixture() {
+    use crate::backend::ProjectBackend;
+    let mut backend = crate::backend::StorageBackend::default();
+    backend
+        .new_project("Distribution board with a lighting feeder (example)")
+        .unwrap();
+    novo_tests::distribution_board_with_signals(backend.document_mut().unwrap()).unwrap();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures/distribution-board-lighting.novo");
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let _ = std::fs::remove_file(&path);
+    backend.save(&path).unwrap();
+}

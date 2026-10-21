@@ -283,3 +283,122 @@ fn distribution_board_with(tx: &mut Tx<'_>, extra: usize) -> Result<Board> {
         })
     }
 }
+
+/// The single-phase signal devices added by [`distribution_board_with_signals`].
+#[derive(Debug, Clone)]
+pub struct Signals {
+    /// One-pole breaker (10 A) on the L1 side of Q1.
+    pub q5: DeviceId,
+    /// Lamps and a sounder on the Q5 feeder, 60 W, 60 W and 30 W.
+    pub h1: DeviceId,
+    pub h2: DeviceId,
+    pub b1: DeviceId,
+    /// A lamp on a 24 V DC circuit: a control device, not on the diagram.
+    pub h9: DeviceId,
+}
+
+/// [`distribution_board`] plus a one-pole lighting feeder: breaker `-Q5` on
+/// the L1 conductor of Q1 feeding two lamps and a sounder, and a 24 V lamp
+/// that must stay off the diagram.
+pub fn distribution_board_with_signals(doc: &mut Document) -> Result<(Board, Signals)> {
+    let board = distribution_board(doc)?;
+    let (q1s, board_page) = doc
+        .project()
+        .symbols()
+        .find(|s| matches!(s.role, SymbolRole::Device { device, .. } if device == board.q1))
+        .map(|s| (s.id, s.page))
+        .expect("Q1 symbol");
+    let signals = doc
+        .transact("Lighting feeder", |tx| {
+            let page = board_page;
+            let place = |tx: &mut Tx<'_>, tag: &str, what: &str, key: &str, x: f64, n: &[&str]| {
+                let d = tx.add_device(DeviceTag::parse(tag).unwrap(), what).unwrap();
+                let s = tx
+                    .place_symbol(
+                        page,
+                        key,
+                        at(x),
+                        pins(n),
+                        SymbolRole::Device {
+                            device: d,
+                            main: true,
+                        },
+                    )
+                    .unwrap();
+                (d, s)
+            };
+            let (q5, q5s) = place(
+                tx,
+                "=A1+CAB-Q5",
+                "Lighting breaker",
+                "iec/protection/mcb_1p",
+                200.0,
+                &["1", "2"],
+            );
+            tx.update::<SymbolInstance>(q5s, |s| s.pass_through = vec![vec![0, 1]])?;
+            tx.set_property(q5, "rated_current_a", Some(10.0.into()))?;
+            let wire = |tx: &mut Tx<'_>, a: (SymbolId, u16), b: (SymbolId, u16), mm2, m| {
+                let w = tx
+                    .connect(Endpoint::pin(a.0, a.1), Endpoint::pin(b.0, b.1))
+                    .unwrap();
+                tx.update::<Wire>(w, |w| w.cross_section_mm2 = Some(mm2))
+                    .unwrap();
+                tx.set_property(w, "length_m", Some(f64::from(m).into()))
+                    .unwrap();
+            };
+            wire(tx, (q1s, 1), (q5s, 0), 16.0, 4);
+            let (h1, h1s) = place(
+                tx,
+                "=A1+FLD-H1",
+                "Hall lamp",
+                "iec/signalling/lamp",
+                200.0,
+                &["L", "N"],
+            );
+            let (h2, h2s) = place(
+                tx,
+                "=A1+FLD-H2",
+                "Yard lamp",
+                "iec/signalling/lamp",
+                210.0,
+                &["L", "N"],
+            );
+            let (b1, b1s) = place(
+                tx,
+                "=A1+FLD-B1",
+                "Alarm horn",
+                "iec/signalling/horn",
+                220.0,
+                &["L", "N"],
+            );
+            tx.set_property(h1, "power_kw", Some(0.06.into()))?;
+            tx.set_property(h2, "power_kw", Some(0.06.into()))?;
+            tx.set_property(b1, "power_kw", Some(0.03.into()))?;
+            wire(tx, (q5s, 1), (h1s, 0), 1.5, 20);
+            wire(tx, (q5s, 1), (h2s, 0), 1.5, 35);
+            wire(tx, (q5s, 1), (b1s, 0), 1.5, 12);
+            // A 24 V lamp: its net is fed from a DC potential, not from mains.
+            let dc = tx.add_potential("+24V", PotentialKind::DcPositive)?;
+            tx.update::<Potential>(dc, |p| p.voltage = Some(24.0))?;
+            let feed = tx.place_symbol(
+                page,
+                "iec/connectivity/potential_feed",
+                at(230.0),
+                pins(&["1"]),
+                SymbolRole::PotentialFeed { potential: dc },
+            )?;
+            let (h9, h9s) = place(
+                tx,
+                "=A1+FLD-H9",
+                "Panel lamp",
+                "iec/signalling/lamp",
+                240.0,
+                &["+", "-"],
+            );
+            wire(tx, (feed, 0), (h9s, 0), 0.75, 2);
+            tx.set_property(h9, "power_kw", Some(0.003.into()))?;
+            Ok(Signals { q5, h1, h2, b1, h9 })
+        })?
+        .0;
+    Ok((board, signals))
+}

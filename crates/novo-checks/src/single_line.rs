@@ -146,6 +146,8 @@ pub enum Kind {
     Drive,
     SoftStarter,
     Heater,
+    Lamp,
+    Sounder,
     Transformer,
     PowerSupply,
 }
@@ -167,6 +169,8 @@ impl Kind {
             Kind::Drive => "Drive",
             Kind::SoftStarter => "Soft starter",
             Kind::Heater => "Heater",
+            Kind::Lamp => "Lamp",
+            Kind::Sounder => "Sounder",
             Kind::Transformer => "Transformer",
             Kind::PowerSupply => "Power supply",
         }
@@ -203,9 +207,17 @@ impl Kind {
                 | Kind::Drive
                 | Kind::SoftStarter
                 | Kind::Heater
+                | Kind::Lamp
+                | Kind::Sounder
                 | Kind::Transformer
                 | Kind::PowerSupply
         )
+    }
+
+    /// Signal devices, drawn only where they hang on a mains-level net (see
+    /// [`mains_signal_nets`]).
+    fn is_signal(self) -> bool {
+        matches!(self, Kind::Lamp | Kind::Sounder)
     }
 
     /// A load that also feeds what is wired to its output.
@@ -237,6 +249,8 @@ impl Kind {
             Class::Drive => Kind::Drive,
             Class::SoftStarter => Kind::SoftStarter,
             Class::Heater => Kind::Heater,
+            Class::Lamp => Kind::Lamp,
+            Class::Sounder => Kind::Sounder,
             Class::Transformer => Kind::Transformer,
             Class::PowerSupply => Kind::PowerSupply,
             _ => return None,
@@ -440,11 +454,88 @@ fn is_ground_pin(name: &str) -> bool {
     )
 }
 
-fn is_live(nets: &Nets<'_>, net: NetId) -> bool {
-    !matches!(
-        nets.circuit(net),
-        NetCircuit::ProtectiveEarth | NetCircuit::Neutral | NetCircuit::Control
-    )
+fn is_live(nets: &Nets<'_>, signal: &BTreeSet<NetId>, net: NetId) -> bool {
+    signal.contains(&net)
+        || !matches!(
+            nets.circuit(net),
+            NetCircuit::ProtectiveEarth | NetCircuit::Neutral | NetCircuit::Control
+        )
+}
+
+/// Below this a Line potential is extra-low voltage, not mains.
+const MAINS_MIN_V: f64 = 100.0;
+
+/// Nets a stated AC line voltage of mains level reaches over the switched
+/// poles of the drawing (a converter output is not reached: its pins are not
+/// switched poles).
+fn mains_reach(project: &Project, netlist: &Netlist) -> BTreeSet<NetId> {
+    let mut reached: BTreeSet<NetId> = netlist
+        .nets()
+        .iter()
+        .filter(|net| {
+            net.potentials
+                .iter()
+                .filter_map(|p| project.potential(*p))
+                .any(|p| {
+                    p.kind == PotentialKind::Line && p.voltage.is_some_and(|v| v >= MAINS_MIN_V)
+                })
+        })
+        .map(|net| net.id)
+        .collect();
+    let mut edges: Vec<(NetId, NetId)> = Vec::new();
+    for symbol in project.symbols() {
+        for group in &symbol.pass_through {
+            let nets: Vec<NetId> = group
+                .iter()
+                .filter_map(|&p| netlist.net_of(Endpoint::pin(symbol.id, p)))
+                .collect();
+            for pair in nets.windows(2) {
+                if pair[0] != pair[1] {
+                    edges.push((pair[0], pair[1]));
+                }
+            }
+        }
+    }
+    loop {
+        let before = reached.len();
+        for (a, b) in &edges {
+            if reached.contains(a) {
+                reached.insert(*b);
+            }
+            if reached.contains(b) {
+                reached.insert(*a);
+            }
+        }
+        if reached.len() == before {
+            return reached;
+        }
+    }
+}
+
+/// Control-class nets with a lamp or sounder on them that mains reaches. A
+/// lamp or sounder on any other net (24 V, or no mains voltage stated
+/// upstream) is a control device and stays off the distribution diagram.
+/// Contactor and relay coils are never drawn, wherever they hang.
+fn mains_signal_nets(project: &Project, netlist: &Netlist, nets: &Nets<'_>) -> BTreeSet<NetId> {
+    let mains = mains_reach(project, netlist);
+    let mut out = BTreeSet::new();
+    for net in netlist.nets() {
+        if nets.circuit(net.id) != NetCircuit::Control || !mains.contains(&net.id) {
+            continue;
+        }
+        let signal = net.endpoints.iter().any(|e| {
+            let Endpoint::Pin { symbol, .. } = e else {
+                return false;
+            };
+            project
+                .symbol(*symbol)
+                .is_some_and(|s| Kind::of_load(class_of(s)).is_some_and(Kind::is_signal))
+        });
+        if signal {
+            out.insert(net.id);
+        }
+    }
+    out
 }
 
 /// The device a power symbol belongs to.
@@ -462,10 +553,10 @@ fn tag_of(project: &Project, device: DeviceId) -> String {
         .unwrap_or_default()
 }
 
-/// The live pins of a load symbol by net: `(net, pin endpoint, pin name)`.
 fn live_pins(
     netlist: &Netlist,
     nets: &Nets<'_>,
+    signal: &BTreeSet<NetId>,
     symbol: &SymbolInstance,
 ) -> Vec<(NetId, Endpoint)> {
     let mut out = Vec::new();
@@ -478,7 +569,7 @@ fn live_pins(
         let Some(net) = netlist.net_of(end) else {
             continue;
         };
-        if is_live(nets, net) {
+        if is_live(nets, signal, net) {
             out.push((net, end));
         }
     }
@@ -498,10 +589,14 @@ struct Collected {
     /// Devices wired into a run, by symbol.
     inline: HashMap<SymbolId, (DeviceId, Kind)>,
     unfed: BTreeSet<DeviceId>,
+    /// Lamps and sounders on a control circuit: not part of the diagram.
+    signals_left_out: BTreeSet<DeviceId>,
 }
 
 fn collect(project: &Project, netlist: &Netlist, nets: &Nets<'_>) -> Collected {
     let n = netlist.nets().len();
+    let signal = mains_signal_nets(project, netlist, nets);
+    let mut signals_left_out: BTreeSet<DeviceId> = BTreeSet::new();
     let basic: Vec<Option<u32>> = (0..n).map(|i| nets.distance(NetId(i as u32))).collect();
     let mut dist = basic.clone();
     let dist_of = |dist: &[Option<u32>], net: NetId| dist[net.0 as usize];
@@ -515,7 +610,20 @@ fn collect(project: &Project, netlist: &Netlist, nets: &Nets<'_>) -> Collected {
         .symbols()
         .filter_map(|s| {
             let kind = Kind::of_load(class_of(s))?;
-            Some((s, device_of(s)?, kind))
+            let device = device_of(s)?;
+            if kind.is_signal() {
+                let on_mains = s.pins.iter().enumerate().any(|(i, _)| {
+                    u16::try_from(i)
+                        .ok()
+                        .and_then(|i| netlist.net_of(Endpoint::pin(s.id, i)))
+                        .is_some_and(|n| signal.contains(&n) || is_live(nets, &signal, n))
+                });
+                if !on_mains {
+                    signals_left_out.insert(device);
+                    return None;
+                }
+            }
+            Some((s, device, kind))
         })
         .collect();
     pending.sort_by_key(|(s, d, _)| (*d, s.id));
@@ -529,7 +637,7 @@ fn collect(project: &Project, netlist: &Netlist, nets: &Nets<'_>) -> Collected {
             if !kind.is_converter() {
                 continue;
             }
-            let live = live_pins(netlist, nets, symbol);
+            let live = live_pins(netlist, nets, &signal, symbol);
             let fed: Vec<(NetId, Endpoint, u32)> = live
                 .iter()
                 .filter_map(|(net, end)| Some((*net, *end, dist_of(&dist, *net)?)))
@@ -583,7 +691,7 @@ fn collect(project: &Project, netlist: &Netlist, nets: &Nets<'_>) -> Collected {
         if kind.is_converter() {
             continue;
         }
-        let live = live_pins(netlist, nets, symbol);
+        let live = live_pins(netlist, nets, &signal, symbol);
         let fed: Vec<(NetId, Endpoint, u32)> = live
             .iter()
             .filter_map(|(net, end)| Some((*net, *end, dist_of(&dist, *net)?)))
@@ -631,7 +739,7 @@ fn collect(project: &Project, netlist: &Netlist, nets: &Nets<'_>) -> Collected {
                     let end = Endpoint::pin(symbol.id, p);
                     Some((netlist.net_of(end)?, end))
                 })
-                .filter(|(net, _)| is_live(nets, *net))
+                .filter(|(net, _)| is_live(nets, &signal, *net))
                 .collect();
             let distinct: BTreeSet<NetId> = pins.iter().map(|(n, _)| *n).collect();
             if distinct.is_empty() {
@@ -713,6 +821,7 @@ fn collect(project: &Project, netlist: &Netlist, nets: &Nets<'_>) -> Collected {
         items: items.into_values().collect(),
         inline,
         unfed,
+        signals_left_out,
     }
 }
 
@@ -871,6 +980,8 @@ struct Inputs<'a> {
 struct RunFacts {
     voltage: Figure,
     three_phase: bool,
+    /// One line conductor: the voltage is the stated line voltage over √3.
+    phase_to_neutral: bool,
 }
 
 fn run_facts(inputs: &Inputs<'_>, net: NetId, poles: usize) -> RunFacts {
@@ -882,14 +993,29 @@ fn run_facts(inputs: &Inputs<'_>, net: NetId, poles: usize) -> RunFacts {
     match potential {
         Some(p) if p.voltage.is_some_and(|v| v > 0.0) => {
             let v = p.voltage.unwrap_or(inputs.voltage);
+            let line = p.kind == PotentialKind::Line && v >= 380.0;
+            if line && poles == 1 {
+                return RunFacts {
+                    voltage: Figure::calculated(v / 3.0_f64.sqrt()),
+                    three_phase: false,
+                    phase_to_neutral: true,
+                };
+            }
             RunFacts {
                 voltage: Figure::stated(v),
-                three_phase: p.kind == PotentialKind::Line && v >= 380.0 && poles >= 3,
+                three_phase: line && poles >= 3,
+                phase_to_neutral: false,
             }
         }
+        _ if poles == 1 && inputs.voltage >= 380.0 => RunFacts {
+            voltage: Figure::new(inputs.voltage / 3.0_f64.sqrt(), Origin::Assumed),
+            three_phase: false,
+            phase_to_neutral: true,
+        },
         _ => RunFacts {
             voltage: Figure::new(inputs.voltage, Origin::Assumed),
             three_phase: poles >= 3,
+            phase_to_neutral: false,
         },
     }
 }
@@ -1209,6 +1335,7 @@ pub fn single_line(
         items,
         inline,
         unfed,
+        signals_left_out,
     } = collect(project, netlist, &nets);
 
     let mut notes = vec![
@@ -1606,6 +1733,7 @@ pub fn single_line(
     }
 
     // Links, top down, so the cumulative drop and the protector are known.
+    let mut phase_voltage_used = false;
     let mut order_down: Vec<usize> = (1..nodes.len()).collect();
     order_down.sort_by_key(|n| nodes[*n].depth);
     let mut protector_above: HashMap<usize, Option<(String, f64)>> = HashMap::new();
@@ -1627,6 +1755,7 @@ pub fn single_line(
         let Some((route, _net, poles, facts)) = runs.remove(&id) else {
             continue;
         };
+        phase_voltage_used |= facts.phase_to_neutral;
         let inline_tags: Vec<String> = route
             .via
             .iter()
@@ -1702,6 +1831,36 @@ pub fn single_line(
         .filter(|t| !t.is_empty())
         .collect();
     unfed_tags.sort_by(|a, b| natural_cmp(a, b));
+    let mut left_out: Vec<String> = signals_left_out
+        .iter()
+        .map(|d| tag_of(project, *d))
+        .filter(|t| !t.is_empty())
+        .collect();
+    left_out.sort_by(|a, b| natural_cmp(a, b));
+    if !left_out.is_empty() {
+        let shown = left_out.len().min(4);
+        notes.push(format!(
+            "Not drawn, lamps and sounders on control circuits (no mains voltage stated on their net): {}{}.",
+            left_out[..shown].join(", "),
+            if left_out.len() > shown {
+                format!(" and {} more", left_out.len() - shown)
+            } else {
+                String::new()
+            }
+        ));
+    }
+    if nodes.iter().skip(1).any(|n| n.kind.is_signal()) {
+        notes.push(
+            "Lamps and sounders are drawn from their stated power or current; contactor and relay coils on the same feeder are not counted in its current."
+                .to_owned(),
+        );
+    }
+    if phase_voltage_used {
+        notes.push(
+            "A load on one line conductor is taken phase to neutral, the stated line voltage divided by √3 (400 V gives 231 V); a load between two lines keeps the line voltage."
+                .to_owned(),
+        );
+    }
     if !unfed_tags.is_empty() {
         notes.push(format!(
             "Not on the diagram, no supply reaches their power poles: {}.",

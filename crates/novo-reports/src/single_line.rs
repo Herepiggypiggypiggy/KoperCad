@@ -616,6 +616,17 @@ impl Canvas {
                 lead(self);
                 self.rect(cx, cy, 3.6, 4.0);
             }
+            Kind::Lamp => {
+                self.circle(cx, cy, 4.2);
+                self.line((cx - 3.0, cy - 3.0), (cx + 3.0, cy + 3.0), false);
+                self.line((cx - 3.0, cy + 3.0), (cx + 3.0, cy - 3.0), false);
+            }
+            Kind::Sounder => {
+                self.rect(cx - 2.0, cy, 3.0, 4.0);
+                self.line((cx - 0.5, cy - 2.0), (cx + 3.5, cy - 4.5), false);
+                self.line((cx - 0.5, cy + 2.0), (cx + 3.5, cy + 4.5), false);
+                self.line((cx + 3.5, cy - 4.5), (cx + 3.5, cy + 4.5), false);
+            }
             Kind::Drive | Kind::SoftStarter | Kind::PowerSupply => {
                 self.rect(cx, cy, 9.0, 8.0);
                 self.line((cx - 4.5, cy + 4.0), (cx + 4.5, cy - 4.0), false);
@@ -912,7 +923,11 @@ fn legend(sl: &SingleLine) -> Vec<String> {
             .to_owned(),
     );
     for note in &sl.notes {
-        if note.starts_with("Iz assumes") || note.starts_with("ΔU is calculated at power factor 1")
+        if note.starts_with("Iz assumes")
+            || note.starts_with("ΔU is calculated at power factor 1")
+            || note.starts_with("Lamps and sounders are drawn")
+            || note.starts_with("Not drawn, lamps and sounders")
+            || note.starts_with("A load on one line conductor")
         {
             out.push(note.clone());
         }
