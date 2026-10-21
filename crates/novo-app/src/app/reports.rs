@@ -133,13 +133,17 @@ impl NovoApp {
         {
             return;
         }
+        // Only a fresh history is reset: turning a page kind back on mid-session keeps the undo stack.
+        let fresh = doc.undo_depth() == 0 && doc.redo_label().is_none();
         match doc.transact("Generated pages", |tx| {
             novo_reports::add_generated_pages(tx, &specs)
         }) {
             Ok(((), changes)) => {
                 // The pages are part of opening, not an edit of the person's: a fresh
                 // history (a project that was not saved with them stays unsaved).
-                doc.clear_history();
+                if fresh {
+                    doc.clear_history();
+                }
                 self.changed_outside_canvas(&changes);
             }
             Err(e) => self.message(
