@@ -15,3 +15,5 @@
 - 2026-10-16 PR: a frame walks the scene bounds once (show passes them to paint_overlay and paint_dimensions; test now requires one walk).
 - 2026-10-16 PR (R7 follow-ups on #755): toolbar says "Reduced quality" next to Restore quality; the overall size has no depth line when there is no shell (it was the plate thickness); docs say hardware floors at Integrated.
 - 2026-10-16 PR: wires without a colour take their potential colour (PE green-yellow, neutral and 0 V blue, positive DC red); line conductors stay grey (circuit class not in the model).
+
+- 2026-10-21 (3D re-test): the Place-a-device list opened under the toolbar and covered its buttons; it now sits below the toolbar (`view3d_controls::BELOW`). Scenario `qa/scenarios/47-3d-place-device.qa`. Picture: `/mnt/project-files/qa/3d-tools/47-3d-place-device-1366x768-01-place-list.png`.
