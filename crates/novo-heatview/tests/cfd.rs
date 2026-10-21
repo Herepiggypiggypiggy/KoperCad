@@ -198,3 +198,71 @@ fn an_inconsistent_snapshot_is_refused_not_a_panic() {
     assert!(cfd::iso_surface(&s, 25.0).is_empty());
     assert!(cfd::streamlines(&s, &[[10.0, 10.0, 10.0]], Trace::default()).is_empty());
 }
+
+/// The snapshot with a wire duct on the plate: 60 mm long in x, 20 mm wide
+/// in y, 20 mm high off the plate (z < 20).
+fn snapshot_with_duct() -> CfdSnapshot {
+    let mut s = snapshot();
+    s.materials.push(MaterialInfo {
+        id: 2,
+        kind: MaterialKind::Duct,
+        name: "Duct 1".into(),
+        conductivity_w_mk: 0.2,
+    });
+    let g = s.grid.clone();
+    for k in 0..g.nz {
+        for j in 0..g.ny {
+            for i in 0..g.nx {
+                let c = g.centre_mm(i, j, k);
+                if (30.0..90.0).contains(&c[0]) && (40.0..60.0).contains(&c[1]) && c[2] < 20.0 {
+                    s.material[g.index(i, j, k)] = 2;
+                }
+            }
+        }
+    }
+    s
+}
+
+#[test]
+fn air_and_heat_pass_through_a_slotted_duct_and_the_slice_shows_them() {
+    let s = snapshot_with_duct();
+    // inside the duct the slice is air (a porous medium), a device stays solid
+    assert!(!cfd::solid_at(&s, [60.0, 50.0, 10.0]));
+    assert!(cfd::solid_at(&s, [10.0, 10.0, 10.0]));
+    let w = cfd::whole_window(&s, Axis::Z);
+    let inside = cfd::slice(
+        &s,
+        Plane {
+            axis: Axis::Z,
+            offset_mm: 10.0,
+        },
+        w,
+        5.0,
+    )
+    .unwrap();
+    assert!(!inside.is_solid(60.0, 50.0), "duct cell drawn as a hole");
+    assert!((inside.temperature.sample(60.0, 50.0) - 26.0).abs() < 0.3);
+    // past the duct (30 mm off the plate) nothing is cut out where it stands
+    let past = cfd::slice(
+        &s,
+        Plane {
+            axis: Axis::Z,
+            offset_mm: 30.0,
+        },
+        w,
+        5.0,
+    )
+    .unwrap();
+    assert!(
+        past.solid.iter().all(|x| !x),
+        "slice past the duct is pierced"
+    );
+}
+
+#[test]
+fn a_streamline_runs_through_a_slotted_duct() {
+    let s = snapshot_with_duct();
+    let lines = cfd::streamlines(&s, &[[25.0, 50.0, 10.0]], Trace::default());
+    let end = lines[0].last().unwrap();
+    assert!(end[0] > 90.0, "stopped inside the duct at x = {}", end[0]);
+}

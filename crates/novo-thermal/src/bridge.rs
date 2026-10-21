@@ -108,6 +108,8 @@ pub struct BridgeReport {
     pub unplaced: Vec<DeviceRef>,
     /// Sum of effective loss of the placed devices, W.
     pub total_loss_w: f64,
+    /// Ducts with no height in the model (the solver takes the width).
+    pub unsized_ducts: usize,
 }
 
 impl BridgeReport {
@@ -132,6 +134,17 @@ impl BridgeReport {
             ),
             line(self.without_depth.len(), "no depth (60 mm is assumed)"),
             line(self.unplaced.len(), "not been placed on the plate"),
+            (self.unsized_ducts > 0).then(|| {
+                format!(
+                    "{} wire duct{} no height (the width is used as the height off the plate)",
+                    self.unsized_ducts,
+                    if self.unsized_ducts == 1 {
+                        " has"
+                    } else {
+                        "s have"
+                    }
+                )
+            }),
         ]
         .into_iter()
         .flatten()
@@ -328,11 +341,22 @@ pub fn scenario_from_project(
     }
 
     let mut obstacles = Vec::new();
+    // A duct stands on the plate as high as its cross-section says, not as
+    // high as a typical share of the air depth: the solver gets the real
+    // height as a share of the air in front of the plate.
+    let air_depth = (interior.depth - options.params.plate_thickness_mm).max(1.0);
     for duct in &layout.ducts {
+        let height = project
+            .get::<novo_core::Rail>(novo_core::RailId::from(duct.id))
+            .map(|r| r.height)
+            .filter(|h| *h > 0.0);
+        if height.is_none() {
+            report.unsized_ducts += 1;
+        }
         obstacles.push(Obstacle {
             kind: ObstacleKind::Duct,
             rect: shift(duct.footprint()),
-            blockage: None,
+            blockage: Some((height.unwrap_or(duct.width) / air_depth).clamp(0.01, 1.0)),
         });
     }
     for rail in &layout.rails {
