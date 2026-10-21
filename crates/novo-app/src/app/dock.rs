@@ -213,6 +213,11 @@ impl NovoApp {
             56.0
         };
         if let Some(view) = self.canvas.schematic() {
+            // The canvas is drawn before the dock: when the reserve changes
+            // the fit is redone on the next frame, so ask for one.
+            if (view.canvas.fit_reserve_bottom - reserve).abs() > 0.5 {
+                ctx.request_repaint();
+            }
             view.canvas.fit_reserve_bottom = reserve;
         }
         let Some(view) = self.canvas.schematic_ref() else {
