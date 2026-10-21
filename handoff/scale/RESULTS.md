@@ -1,10 +1,21 @@
-# Scale results (2026-10-21)
+# Scale results
 
-Measured with `scripts/scale-bench.sh` (release build, one cloud container core set, no GPU). Project: 300 generated motor starters = **600 pages, 2,130 devices, 8,100 wires, 6,000 symbols, 21,015 records**, 30 cabinets with plates, rails and every device placed. File size 6.6 MB. Generator: `crates/novo-tests/src/big.rs` (`BigSpec::SMALL/MEDIUM/LARGE`, or `--feeders N`).
+Two measured projects, both 600 pages, one run each (not averages), release build, one cloud container, no GPU. Run with `scripts/scale-bench.sh --size large` (varied, default) or `--uniform`.
 
-Numbers are one run each, not averages. The generator is plain: repeated identical circuits, a few dozen distinct parts. A real project has more variety, so treat this as a lower bound on work per page, not a promise.
+* **Varied (update 2026-10-21, second PR)**: 300 circuits of five kinds: motor starters (0.37 to 11 kW, parts and cable size by power, cable length 5 to 80 m), three-phase heater groups, and I/O loops (4 to 12 sensors on an input module and valves on an output module). About 45 distinct parts, cabinets of different size and slot count (rails per plate height). **600 pages, 2,676 devices, 8,513 wires, 6,418 symbols, 23,385 records**, 29 cabinets, 7.0 MB file. Seeded, so the same every run. Full table: `large-run-varied.md`.
+* **Uniform (first PR)**: the same motor starter 300 times (2,130 devices, 8,100 wires). A best case for caches and a baseline. Full table: `large-run.md`.
 
-## What is fast (after the fixes below)
+Still synthetic. Still no customer data, no imported EPLAN-style tags, no multi-level structure. Real projects will differ; treat these as order of magnitude, not a promise.
+
+## Varied project against uniform (what changed)
+
+The varied project has 5 percent more wires and 25 percent more devices, and some steps cost more than that: wire cut jobs 67 to 116 ms, wires report 70 to 110 ms, search 2 to 5 ms, design checks 0.86 to 1.0 s (6,204 problems against 2,762, since I/O and heater circuits have more open ends), Autopilot 217 to 226 ms (14,931 proposals), PDF 188 to 144 ms. No step went into seconds with the variety (largest: design checks, 1.0 s). The two hot spots found in the first PR were not specific to identical circuits.
+
+## What "redraw" measures
+
+The earlier line "redraw 0.5 ms" is the **model-side cost of one page only**: building the page scene from the model and tessellating it to triangles on the CPU. It is **not a frame**: no GPU, no egui layout, no upload, no rasterisation, and unchanged items come from the mesh cache. The benchmark now also does every one of the 600 pages with the real symbol artwork: 90 ms for all 600 (0.15 ms mean), slowest page 0.88 ms. A real frame time at 600 pages needs the QA harness on a real GPU (still open, item 5 below).
+
+## What is fast (uniform project, after the fixes below)
 
 | Step | Time | Notes |
 | --- | ---: | --- |
@@ -12,7 +23,7 @@ Numbers are one run each, not averages. The generator is plain: repeated identic
 | Save whole project | 134 ms | |
 | Autosave after one edit | 11 ms | |
 | One edit / undo | under 1 ms | |
-| Draw one page (scene build + tessellation) | 0.5 ms | all 600 pages: 43 ms |
+| Page scene build + tessellation (model side only, not a frame) | 0.5 ms | all 600 pages: 43 ms |
 | Search for a tag | 2.3 ms | |
 | Number all 8,100 wires (plan / apply) | 50 / 28 ms | |
 | Design checks | 857 ms | 2,762 problems |
@@ -54,3 +65,23 @@ The cabinet in the heat test is deliberately dense (60 placed devices on a 1.6 x
 ## Where the user finds it
 
 Developer tooling only: `scripts/scale-bench.sh` and `cargo run --release -p novo-tests --example scale_bench`. Fixes 1 and 2 show in the app as Reports mode (Cable diagram, Cable schedule) opening quickly on big projects and Heat finishing sooner.
+
+## 2D heat solver: temperatures before and after (kelvin)
+
+The first PR made the 2D solver stop sooner (stall rule, 3x tolerance) and loosened the pressure solve (1e-9 to 1e-7). Before = main before #1173 (`158dfc1^`), after = main now. Same example (`crates/novo-thermal/examples/validation_temps.rs` and `crates/novo-tests/examples/heat_dense_temps.rs`), central run, coarse grid as in the tests.
+
+| Case | Mean air rise before / after (K) | Air at top (C) | Hottest surface (C) | Mean device air (C) | Iterations before / after |
+| --- | --- | --- | --- | --- | --- |
+| closed box, 120 W spread | 8.382 / 8.382 | 34.018 / 34.018 | 72.001 / 72.001 | 34.727 / 34.727 | 22 / 22 |
+| closed box, 40 W hot device | 2.883 / 2.883 | 28.056 / 28.056 | 112.606 / 112.606 | 30.161 / 30.161 | 16 / 16 |
+| two vents, 120 W | 5.795 / 5.795 | 32.500 / 32.500 | 70.294 / 70.294 | 32.156 / 32.156 | 16 / 16 |
+| fan pair, 200 W | 3.696 / 3.696 | 30.372 / 30.372 | 89.569 / 89.569 | 29.266 / 29.266 | 10 / 10 |
+| stacked pair, 2 x 30 W | 4.278 / 4.278 | 29.512 / 29.512 | 95.530 / 95.529 | 31.284 / 31.284 | 15 / 15 |
+| side by side pair | 4.389 / 4.389 | 29.034 / 29.033 | 95.646 / 95.646 | 31.018 / 31.018 | 12 / 12 |
+| fan box, one fan | 1.925 / 1.925 | 27.128 / 27.128 | 117.598 / 117.598 | 27.907 / 27.907 | 11 / 11 |
+| fan box, two vents | 6.949 / 6.949 | 33.351 / 33.351 | 123.471 / 123.471 | 35.362 / 35.362 | 16 / 16 |
+| dense cabinet, 60 devices, 100 W (low load, default grid) | 2.308 / 2.308 | 27.367 / 27.366 | 36.522 / 36.521 | 28.050 / 28.050 | 19 / 22 |
+| generated cabinet, varied, 69 devices, 132 W | 4.895 / 4.887 | 40.052 / 40.048 | 74.649 / 74.659 | 41.922 / 41.872 | 60 (not converged) / 23 (stalled) |
+| generated cabinet, uniform, 70 devices, 117 W | 2.800 / 2.797 | 38.945 / 38.940 | 55.430 / 55.442 | 38.266 / 38.264 | 60 (not converged) / 30 (stalled) |
+
+Reading it: the cases that converge normally move by 0.001 K or less (only the looser pressure tolerance acts on them). The two cases that used to run all 60 iterations without converging move by at most **0.05 K** (mean device air, varied cabinet) and stop at 23 and 30 iterations. A larger shift, up to about 0.7 K, was measured by R1 against a much longer run of the same cabinet, which is why those runs are marked stalled and not converged: neither the old 60-iteration answer nor the new one is a reference. Wall time of the varied cabinet, central run: 14.6 s before, 6.0 s after; uniform 28.8 s, 13.2 s.
