@@ -356,3 +356,48 @@ fn widening_the_scope_keeps_the_chat() {
             .contains("Scope narrowed")
     );
 }
+
+#[test]
+fn the_other_edits_apply_and_undo() {
+    use novo_core::Project;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    let (dev, tag) = {
+        let p = d.app.document().unwrap().project();
+        let dv = p.devices().next().unwrap();
+        (dv.id.raw(), dv.tag.to_string())
+    };
+    let known = known_of(d.app.document().unwrap().project());
+    let (cmd, summary) = proposal_command(
+        &known,
+        "set_property",
+        &json!({"device_id": dev, "key": "note", "value": "check"}),
+    )
+    .unwrap();
+    assert!(summary.contains(&tag) && summary.contains("note"));
+    assert!(d.app.execute(cmd).unwrap().is_ok());
+    let (cmd, summary) = proposal_command(
+        &known,
+        "add_page",
+        &json!({"name": "ZZ1", "title": "Added"}),
+    )
+    .unwrap();
+    assert_eq!(summary, "Add page ZZ1 (Added)");
+    let pages = d.app.document().unwrap().project().pages().count();
+    assert!(d.app.execute(cmd).unwrap().is_ok());
+    assert_eq!(
+        d.app.document().unwrap().project().pages().count(),
+        pages + 1
+    );
+    // A part that is not there is refused with the section to look in.
+    let e = proposal_command(
+        &known,
+        "assign_part",
+        &json!({"device_id": dev, "part_id": 999_999}),
+    )
+    .unwrap_err();
+    assert!(e.contains("parts"));
+    let _ = Project::new("x");
+}

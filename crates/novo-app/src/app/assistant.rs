@@ -239,6 +239,29 @@ fn edit_actions() -> Vec<EditAction> {
                 "required": ["page_id", "name"]}),
         },
         EditAction {
+            name: "assign_part",
+            description: "Assigns a part from the project's parts (section \"parts\") to a device.",
+            schema: json!({"type": "object", "properties": {
+                "device_id": {"type": "integer"}, "part_id": {"type": "integer"}},
+                "required": ["device_id", "part_id"]}),
+        },
+        EditAction {
+            name: "set_property",
+            description: "Sets one named property of a device (text, number or true/false).",
+            schema: json!({"type": "object", "properties": {
+                "device_id": {"type": "integer"},
+                "key": {"type": "string"},
+                "value": {"type": ["string", "number", "boolean"]}},
+                "required": ["device_id", "key", "value"]}),
+        },
+        EditAction {
+            name: "add_page",
+            description: "Adds an empty schematic page at the end.",
+            schema: json!({"type": "object", "properties": {
+                "name": {"type": "string"}, "title": {"type": "string"}},
+                "required": ["name"]}),
+        },
+        EditAction {
             name: "add_device",
             description: "Adds a device with a tag and description (not drawn on a page yet).",
             schema: json!({"type": "object", "properties": {
@@ -254,6 +277,7 @@ fn edit_actions() -> Vec<EditAction> {
 pub(super) struct Known {
     devices: HashMap<u64, String>,
     pages: HashMap<u64, String>,
+    parts: HashMap<u64, String>,
 }
 
 pub(super) fn known_of(p: &Project) -> Known {
@@ -263,6 +287,17 @@ pub(super) fn known_of(p: &Project) -> Known {
             .map(|d| (d.id.raw(), d.tag.to_string()))
             .collect(),
         pages: p.pages().map(|g| (g.id.raw(), g.name.clone())).collect(),
+        parts: p
+            .parts()
+            .map(|x| {
+                (
+                    x.id.raw(),
+                    format!("{} {}", x.manufacturer, x.order_number)
+                        .trim()
+                        .to_string(),
+                )
+            })
+            .collect(),
     }
 }
 
@@ -314,6 +349,79 @@ pub(super) fn proposal_command(
                     name: name.to_string(),
                 },
                 format!("Rename page {old} to {name}"),
+            ))
+        }
+        "assign_part" => {
+            let device = id("device_id")?;
+            let part = id("part_id")?;
+            let tag = known
+                .devices
+                .get(&device)
+                .ok_or_else(|| format!("there is no device with id {device}"))?;
+            let name = known
+                .parts
+                .get(&part)
+                .ok_or_else(|| format!("there is no part with id {part} (see section parts)"))?;
+            Ok((
+                Command::AssignPart {
+                    device: device.into(),
+                    part: part.into(),
+                },
+                format!("Assign part {name} to {tag}"),
+            ))
+        }
+        "set_property" => {
+            let device = id("device_id")?;
+            let tag = known
+                .devices
+                .get(&device)
+                .ok_or_else(|| format!("there is no device with id {device}"))?;
+            let key = text("key")?;
+            let (value, shown) = match &args["value"] {
+                Value::String(s) => (novo_core::Value::Text(s.clone()), format!("{s:?}")),
+                Value::Bool(b) => (novo_core::Value::Bool(*b), b.to_string()),
+                Value::Number(n) => match n.as_i64() {
+                    Some(i) => (novo_core::Value::Int(i), i.to_string()),
+                    None => {
+                        let f = n.as_f64().unwrap_or_default();
+                        (novo_core::Value::Float(f), f.to_string())
+                    }
+                },
+                _ => return Err("value must be text, a number or true/false".into()),
+            };
+            Ok((
+                Command::SetProperty {
+                    target: novo_core::AnyId::Device(device.into()),
+                    key: key.to_string(),
+                    value: Some(value),
+                },
+                format!("Set {key} of {tag} to {shown}"),
+            ))
+        }
+        "add_page" => {
+            let name = text("name")?;
+            if known.pages.values().any(|n| n == name) {
+                return Err(format!("a page {name} already exists"));
+            }
+            let title = args["title"]
+                .as_str()
+                .unwrap_or_default()
+                .trim()
+                .to_string();
+            let shown = if title.is_empty() {
+                format!("Add page {name}")
+            } else {
+                format!("Add page {name} ({title})")
+            };
+            Ok((
+                Command::AddPage {
+                    name: name.to_string(),
+                    title,
+                    kind: Default::default(),
+                    format: Default::default(),
+                    structure: Default::default(),
+                },
+                shown,
             ))
         }
         "add_device" => {
@@ -368,7 +476,7 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
         },
         "pages": novo_py::pages_json(p),
         "devices": tags,
-        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals"],
+        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals", "parts"],
     });
     if scope >= DataScope::Selection {
         let items: Vec<Value> = p
@@ -409,6 +517,10 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
             "nets": novo_py::nets_json(p),
             "potentials": novo_py::potentials_json(p),
             "terminals": terminals,
+            "parts": p.parts().map(|x| json!({
+                "id": x.id.raw(), "manufacturer": x.manufacturer,
+                "order_number": x.order_number, "type_number": x.type_number,
+                "description": x.description})).collect::<Vec<_>>(),
         });
     }
     snap
