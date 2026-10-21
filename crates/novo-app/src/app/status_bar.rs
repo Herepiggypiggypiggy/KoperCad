@@ -19,23 +19,26 @@ pub(super) const STATUS_BAR: f32 = 22.0;
 /// the bar cuts its text to half its width.
 const REFUSAL_CARD_FROM: usize = 60;
 
+/// The widest the refusal card gets.
+const REFUSAL_CARD_WIDTH: f32 = 520.0;
+
 /// Id of the card that carries a long refusal in full.
 pub(super) fn refusal_card_id() -> egui::Id {
     egui::Id::new("refusal_card")
 }
 
-fn refusal_card(ctx: &egui::Context, text: &str) {
+/// The card sits at the top left of the canvas: the toasts keep the bottom
+/// left, the tool dock the bottom centre, the cursor readout the top right.
+fn refusal_card(ctx: &egui::Context, canvas: egui::Rect, text: &str) {
     let palette = crate::theme::ui_palette();
     egui::Area::new(refusal_card_id())
         .order(egui::Order::Foreground)
         .interactable(false)
-        .anchor(
-            egui::Align2::LEFT_BOTTOM,
-            egui::vec2(8.0, -(STATUS_BAR + 8.0)),
-        )
+        .pivot(egui::Align2::LEFT_TOP)
+        .fixed_pos(canvas.left_top() + egui::vec2(12.0, 12.0))
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_max_width(520.0);
+                ui.set_max_width(REFUSAL_CARD_WIDTH.min((canvas.width() * 0.6).max(160.0)));
                 ui.label(
                     egui::RichText::new(format!("{} {text}", novo_theme::icons::status::WARNING))
                         .color(palette.error),
@@ -188,8 +191,11 @@ impl NovoApp {
         for (id, rect, label) in spots {
             self.anchor(id, rect, label);
         }
-        if tool.refused && tool.text.chars().count() > REFUSAL_CARD_FROM {
-            refusal_card(ui.ctx(), &tool.text);
+        if tool.refused
+            && tool.text.chars().count() > REFUSAL_CARD_FROM
+            && let Some((_, canvas)) = self.wb.canvas_area
+        {
+            refusal_card(ui.ctx(), canvas, &tool.text);
         }
         if let Some(command) = run {
             self.wb.queued.push(command);
@@ -373,19 +379,35 @@ mod refusal_tests {
         let mut d = Drive::new(&dir.path().join("untitled"));
         let ctx = d.ctx.clone();
         d.app.run(&ctx, Action::NewProject);
-        d.frame();
+        let size = egui::vec2(1366.0, 768.0);
+        d.frame_sized(size, Vec::new());
         let layer = egui::LayerId::new(egui::Order::Foreground, super::refusal_card_id());
         let shown = |ctx: &egui::Context| ctx.memory(|m| m.areas().visible_last_frame(&layer));
-        d.frame();
+        d.frame_sized(size, Vec::new());
         assert!(!shown(&ctx), "no refusal, no card");
+        // A toast is up too: the card must keep clear of it.
+        d.app
+            .message(crate::app::Level::Error, "Could not save the project");
         let long = "x".repeat(90);
         let view = d.app.canvas.schematic().unwrap();
         assert!(!view.editor.begin_place(&long, None));
-        d.frame();
-        d.frame();
+        for _ in 0..3 {
+            d.frame_sized(size, Vec::new());
+        }
         assert!(
             shown(&ctx),
             "a long refusal gets a card with the whole text"
         );
+        let rect = |name: &str| ctx.memory(|m| m.area_rect(egui::Id::new(name)));
+        let card = ctx
+            .memory(|m| m.area_rect(super::refusal_card_id()))
+            .expect("the card has a place");
+        let canvas = d.app.wb.canvas_area.unwrap().1;
+        assert!(canvas.contains_rect(card), "{card:?} inside {canvas:?}");
+        for other in ["tool_dock", "toasts", "hud"] {
+            if let Some(r) = rect(other) {
+                assert!(!card.intersects(r), "{other} {r:?} under the card {card:?}");
+            }
+        }
     }
 }
