@@ -1169,7 +1169,7 @@ impl NovoApp {
                 if ui
                     .selectable_label(why_mode, "Why?")
                     .on_hover_text(
-                        "Then click a wire or a device to see why it is lit or dead. Alt+click does the same at any time",
+                        "Then click a wire or a device to see why it is lit or dead. holding Alt while you click does the same at any time",
                     )
                     .clicked()
                 {

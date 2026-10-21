@@ -192,7 +192,7 @@ impl Explanation {
                 ps.iter().map(|&p| pot(p)).collect::<Vec<_>>().join(" and ")
             ))],
             Verdict::Isolated => vec![Line::plain(
-                "It is dead, and no supply is wired to it even through the contacts. Check the wiring.",
+                "It is dead: no supply reaches it through contacts. Check the wiring, or a device that is not a contact (a transformer winding) may feed it.",
             )],
             Verdict::Cut(route) => {
                 let breaks: Vec<&Step> = route.breaks().collect();
