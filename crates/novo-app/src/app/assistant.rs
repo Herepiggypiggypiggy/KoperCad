@@ -99,6 +99,8 @@ pub(super) struct State {
     pub open: bool,
     proposal_notes: HashMap<u32, String>,
     show_settings: bool,
+    /// Tests only: retries do not wait.
+    instant_retries: bool,
     agreed: bool,
     key_input: String,
     key_note: Option<(bool, String)>,
@@ -164,6 +166,7 @@ impl State {
             open: false,
             proposal_notes: HashMap::new(),
             show_settings: false,
+            instant_retries: false,
             agreed: false,
             key_input: String::new(),
             key_note: None,
@@ -196,12 +199,14 @@ impl State {
 
     #[cfg(test)]
     pub(super) fn for_test(store: KeyStore, ledger: PathBuf, transport: TransportFactory) -> Self {
-        Self::with(
+        let mut state = Self::with(
             Some(store),
             Some(ledger),
             transport,
             Arc::new(|| 1_792_000_000),
-        )
+        );
+        state.instant_retries = true;
+        state
     }
 
     #[cfg(test)]
@@ -268,7 +273,7 @@ impl State {
         month_of((self.now)())
     }
 
-    fn spent(&self) -> f64 {
+    pub(super) fn spent(&self) -> f64 {
         self.ledger.spent_in(&self.month())
     }
 
@@ -765,12 +770,16 @@ impl NovoApp {
             conversation.images.push(p.image);
         }
         let factory = Arc::clone(&st.transport);
+        let instant = st.instant_retries;
         let first = st.next_proposal;
         let (tx, rx) = channel();
         st.running = Some(rx);
         let ctx = ctx.clone();
         std::thread::spawn(move || {
             let mut client = Client::new(factory(), key);
+            if instant {
+                client = client.with_sleep(|_| {});
+            }
             let validator_known = known;
             let mut host = SnapshotHost::new(
                 snapshot,

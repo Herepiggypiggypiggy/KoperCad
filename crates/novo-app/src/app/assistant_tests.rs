@@ -941,3 +941,78 @@ fn stopping_a_reading_drops_the_answer_and_adds_nothing() {
     assert_eq!(s.d.app.datasheet_test_stage(), "note", "no review appears");
     assert!(!s.d.app.datasheet_test_duplicate());
 }
+
+#[test]
+fn a_bad_key_says_what_to_do_costs_nothing_and_the_chat_keeps_working() {
+    let mut s = setup(DataScope::Outline);
+    s.script.push(
+        401,
+        json!({"error": {"type": "authentication_error", "message": "invalid x-api-key"}}),
+    );
+    ask(&mut s, "first");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("did not accept the API key"), "{shown}");
+    assert!(shown.contains("Settings"), "it says where to fix it");
+    assert!(!shown.contains("sk-ant-"), "the key is never shown");
+    assert!(!s.d.app.wb.assistant.is_running());
+    assert_eq!(
+        s.d.app.wb.assistant.spent(),
+        0.0,
+        "a refused request costs nothing"
+    );
+    // A fixed key (or a retry) works in the same window without reopening it.
+    queue(&s.script, [text("Back again.")]);
+    ask(&mut s, "second");
+    assert!(
+        s.d.app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("Back again.")
+    );
+}
+
+#[test]
+fn a_key_without_access_and_a_bad_request_give_a_reason_not_a_crash() {
+    let mut s = setup(DataScope::Outline);
+    s.script.push(
+        403,
+        json!({"error": {"type": "permission_error", "message": "no access to this model"}}),
+    );
+    ask(&mut s, "first");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("no access to this model"), "{shown}");
+    s.script.push(
+        400,
+        json!({"error": {"type": "invalid_request_error", "message": "prompt is too long"}}),
+    );
+    ask(&mut s, "second");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("prompt is too long"), "{shown}");
+    assert!(!s.d.app.wb.assistant.is_running());
+}
+
+#[test]
+fn no_network_and_a_rate_limit_end_in_a_plain_message_after_the_retries() {
+    // The test client does not wait between retries.
+    let mut s = setup(DataScope::Outline);
+    ask(&mut s, "offline"); // the script has no reply: the transport fails
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("No internet connection"), "{shown}");
+    assert_eq!(
+        s.script.requests().len(),
+        3,
+        "it tried three times, no more"
+    );
+    assert!(!s.d.app.wb.assistant.is_running());
+
+    let limited = json!({"error": {"type": "rate_limit_error", "message": "slow down"}});
+    for _ in 0..3 {
+        s.script.push(429, limited.clone());
+    }
+    ask(&mut s, "busy");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("Rate limited"), "{shown}");
+    assert!(!shown.contains("slow down"), "no raw API text for this one");
+    assert_eq!(s.d.app.wb.assistant.spent(), 0.0);
+}
