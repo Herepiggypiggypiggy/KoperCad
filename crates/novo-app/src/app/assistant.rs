@@ -874,7 +874,7 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
                 "order_number": x.order_number, "type_number": x.type_number,
                 "description": x.description})).collect::<Vec<_>>(),
             // The design checks, read-only: what the Issues list would show.
-            "problems": novo_checks::check(p).iter().map(|q| json!({
+            "problems": novo_reports::issues::open(p).iter().map(|q| json!({
                 "kind": format!("{:?}", q.kind),
                 "severity": format!("{:?}", q.severity),
                 "message": q.message,

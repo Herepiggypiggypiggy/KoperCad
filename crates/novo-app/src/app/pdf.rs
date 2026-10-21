@@ -81,7 +81,7 @@ impl NovoApp {
     /// The design checks as report pages after the drawing. A clean
     /// project prints none, so its PDF is the drawing alone.
     fn checks_appendix(&self) -> Option<novo_pdf::Appendix> {
-        let lines = novo_checks::report_lines(&*self.machine()?);
+        let lines = novo_reports::issues::report_lines(&*self.machine()?);
         // Headline and summary only: nothing to report.
         (lines.len() > 2).then(|| novo_pdf::Appendix {
             title: "Design checks".into(),

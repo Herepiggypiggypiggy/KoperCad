@@ -206,29 +206,73 @@ fn wires_that_break_the_house_rules_are_listed_and_the_standard_is_not_checked()
     );
 }
 
+/// A line wire with no voltage between a feed and a lone terminal: nothing on
+/// it says power or control, so the Autopilot has to guess its class. Returns
+/// the wire, still without a colour or size.
+fn add_wire_of_unknown_class(d: &mut Document) -> novo_core::WireId {
+    use novo_core::{Endpoint, Pin, Placement, Point, PotentialKind, SymbolRole};
+    let at = |x, y| Placement::at(Point::new(x, y));
+    let (wire, _) = d
+        .transact("a guessed wire", |tx| {
+            let page = tx.add_page("9")?;
+            let line = tx.add_potential("LX", PotentialKind::Line)?;
+            let strip = tx.add_terminal_strip("=A1+CAB-X9".parse().expect("tag"))?;
+            let terminal = tx.add_terminal(strip, "1")?;
+            let feed = tx.place_symbol(
+                page,
+                "iec/connectivity/potential_feed",
+                at(0.0, 0.0),
+                vec![Pin::new("1", 0.0, 8.0)],
+                SymbolRole::PotentialFeed { potential: line },
+            )?;
+            let lone = tx.place_symbol(
+                page,
+                "iec/terminals/terminal",
+                at(0.0, 40.0),
+                vec![Pin::new("1", 0.0, 0.0), Pin::new("2", 0.0, 8.0)],
+                SymbolRole::Terminal {
+                    terminals: vec![terminal],
+                },
+            )?;
+            let wire = tx.connect(Endpoint::pin(feed, 0), Endpoint::pin(lone, 0))?;
+            Ok(wire)
+        })
+        .expect("the wire is added");
+    wire
+}
+
 #[test]
 fn a_wire_whose_class_was_a_guess_is_not_reported() {
     let mut d = doc();
-    let before = plan_for(d.project(), &TableSet::builtin());
-    let guessed: Vec<_> = before
+    let wire = add_wire_of_unknown_class(&mut d);
+    let plan = plan_for(d.project(), &TableSet::builtin());
+    let guessed = plan
         .proposals
         .iter()
-        .filter(|p| matches!(p.change, Change::Colour(_)) && p.basis == Basis::Assumed)
-        .flat_map(|p| p.wires.iter().copied())
-        .collect();
+        .any(|p| p.basis == Basis::Assumed && p.wires.contains(&wire));
+    assert!(guessed, "the Autopilot has to guess this wire's class");
+
+    d.transact("colour it", |tx| {
+        tx.update::<novo_core::Wire>(wire, |w| {
+            w.color = Some("BK".into());
+            w.cross_section_mm2 = Some(1.5);
+        })
+    })
+    .expect("coloured");
     accept_all(&mut d);
     set(&mut d, wire_rules::PRESET, Value::Text("house".into()));
     for class in ColourClass::EDITABLE {
         set(&mut d, &class.key(), Value::Text("VT".into()));
     }
+    set(&mut d, wire_rules::MIN_POWER_MM2, Value::Float(4.0));
     let breaks = rule_breaks(d.project());
     assert!(!breaks.is_empty(), "sure classes are still reported");
-    for w in guessed {
-        assert!(
-            !breaks
-                .iter()
-                .any(|b| b.wire == w && b.message.contains("house rule gives")),
-            "wire {w:?} has a guessed class"
-        );
-    }
+    let mut unique: Vec<_> = breaks.iter().map(|b| (b.wire, b.message.clone())).collect();
+    unique.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)));
+    unique.dedup();
+    assert_eq!(unique.len(), breaks.len(), "each finding once: {breaks:?}");
+    assert!(
+        breaks.iter().all(|b| b.wire != wire),
+        "a guessed class is not a finding: {breaks:?}"
+    );
 }
