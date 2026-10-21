@@ -966,6 +966,9 @@ impl NovoApp {
             self.message(Level::Error, format!("There is no lesson `{id}`."));
             return;
         };
+        // Opening a lesson replaces the open project; the backend keeps its
+        // work, and the notice below says where to find it.
+        let left = self.left_behind();
         self.learn.opening = true;
         let opened = self.open_lesson_project(&entry);
         self.learn.opening = false;
@@ -999,6 +1002,25 @@ impl NovoApp {
         self.learn.ticked_at = None;
         self.learn.record();
         self.settings.onboarding.dismissed = true;
+        if let Some(left) = left {
+            self.message(Level::Info, format!("Opened the lesson. {left}"));
+        }
+    }
+
+    /// What became of the open project when something else replaces it: a
+    /// sentence for the notice, or `None` when there was nothing to keep.
+    fn left_behind(&self) -> Option<String> {
+        self.backend.document()?;
+        if self.project_path.is_some() {
+            let name = self.project_name()?;
+            Some(format!(
+                "\u{201c}{name}\u{201d} is saved: File > Open > Recent."
+            ))
+        } else if self.backend.is_dirty() {
+            Some("Your unsaved project is kept: start screen, UNSAVED.".to_owned())
+        } else {
+            None
+        }
     }
 
     /// The card's Continue: the card back on a lesson still under way.
