@@ -162,6 +162,8 @@ pub(crate) struct LearnState {
     pub(super) only_path: Option<String>,
     pub(super) show_drafts: bool,
     pub(super) confirm_restart: bool,
+    /// The Reset progress button was pressed and waits for a second click.
+    pub(super) confirm_reset: bool,
     /// Lessons whose lint has errors, so they are not offered yet.
     coming: Option<BTreeSet<String>>,
     /// Controls registered so far this frame, and last frame.
@@ -211,6 +213,7 @@ impl LearnState {
             only_path: None,
             show_drafts: false,
             confirm_restart: false,
+            confirm_reset: false,
             coming: None,
             anchors: BTreeMap::new(),
             rows: BTreeMap::new(),
@@ -294,6 +297,7 @@ impl LearnState {
     }
 
     pub(super) fn reset_progress(&mut self) {
+        self.confirm_reset = false;
         self.progress.reset_all();
         self.save();
     }

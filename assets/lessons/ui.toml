@@ -113,6 +113,14 @@ text_nl = "Opnieuw laden"
 text = "Reset progress"
 text_nl = "Voortgang wissen"
 
+[reset_confirm]
+text = "Clear the progress of every lesson?"
+text_nl = "De voortgang van alle lessen wissen?"
+
+[yes_reset]
+text = "Clear it"
+text_nl = "Wissen"
+
 [no_lessons]
 text = "No lessons yet."
 text_nl = "Nog geen lessen."

@@ -614,8 +614,16 @@ impl NovoApp {
             if ui.small_button(self.learn.say("reload")).clicked() {
                 *reload = true;
             }
-            if ui.small_button(self.learn.say("reset_progress")).clicked() {
-                *reset = true;
+            if self.learn.confirm_reset {
+                ui.label(self.learn.say("reset_confirm"));
+                if ui.small_button(self.learn.say("yes_reset")).clicked() {
+                    *reset = true;
+                }
+                if ui.small_button(self.learn.say("cancel")).clicked() {
+                    self.learn.confirm_reset = false;
+                }
+            } else if ui.small_button(self.learn.say("reset_progress")).clicked() {
+                self.learn.confirm_reset = true;
             }
             let drafts_label = self.learn.say("show_drafts");
             ui.checkbox(&mut self.learn.show_drafts, drafts_label);
