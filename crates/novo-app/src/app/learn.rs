@@ -1181,6 +1181,15 @@ impl NovoApp {
 
     /// The pointer flashes again.
     pub(super) fn learn_show_me(&mut self) {
+        // Being shown where it is, in a challenge, means it was not found.
+        if self
+            .learn
+            .run
+            .as_ref()
+            .is_some_and(|r| r.lesson().kind == novo_learn::Kind::Challenge)
+        {
+            self.learn.helped = true;
+        }
         self.learn.point_asked = self
             .learn
             .run

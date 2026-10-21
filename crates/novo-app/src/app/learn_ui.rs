@@ -243,7 +243,7 @@ impl NovoApp {
                 .unwrap_or_default(),
             hints_total: step.map_or(0, |s| s.hints(lang).len()),
             explain: lesson.explain(lang).to_owned(),
-            helped: self.learn.helped,
+            helped: self.learn.helped || !run.skipped().is_empty(),
             next_lessons,
             skip_does_it: step.is_some_and(|s| !s.solve.is_empty() && s.manual.is_none()),
             can_open_finished: (finished || run.index() + 1 >= total)

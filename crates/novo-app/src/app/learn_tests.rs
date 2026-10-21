@@ -1162,3 +1162,21 @@ fn doing_a_challenge_for_the_learner_ends_with_shown_not_solved() {
     assert!(card.explain.contains("holding contact"), "{}", card.explain);
     assert_eq!(card.next_lessons.len(), 1, "a next challenge is offered");
 }
+
+#[test]
+fn a_challenge_that_was_shown_or_skipped_never_ends_on_solved() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    assert!(!d.app.card().unwrap().helped);
+    d.app.learn_show_me();
+    assert!(d.app.card().unwrap().helped, "Show me counts as shown");
+    d.app.start_lesson("motor-wont-hold");
+    d.frame();
+    assert!(!d.app.card().unwrap().helped, "a new run starts clean");
+    d.app.learn_move(super::learn::Move::Skip);
+    assert!(d.app.card().unwrap().helped, "a plain skip counts as shown");
+}
