@@ -106,6 +106,14 @@ fn unknown_depth_and_duct_section_are_marked_not_zero() {
 }
 
 #[test]
+fn ducts_are_built_slotted_with_the_size_of_the_solid_section() {
+    let s = from_layout(&layout(), &inputs(), &Options::default());
+    let duct = s.get(id(ItemKind::Duct, 9)).unwrap();
+    assert_eq!(duct.shape, Shape::Profile(Profile::SlottedChannel));
+    assert_eq!((duct.size.y, duct.size.z), (40.0, 60.0));
+}
+
+#[test]
 fn marks_follow_the_layout_report() {
     let mut l = layout();
     l.placements.push(Placement {

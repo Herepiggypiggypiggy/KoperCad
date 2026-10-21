@@ -2,7 +2,7 @@
 //! tidy the picture. A layer is a filter over a built scene, so the project
 //! and the builder do not know about it.
 
-use crate::scene::{ItemKind, Scene};
+use crate::scene::{ItemKind, Profile, Scene, Shape};
 
 /// Which parts of the scene are drawn. Everything on by default.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -15,6 +15,8 @@ pub struct Layers {
     pub wires: bool,
     /// The typical shape of each device family; off draws plain boxes.
     pub shapes: bool,
+    /// Ducts drawn with slotted walls; off draws them solid.
+    pub slots: bool,
 }
 
 impl Default for Layers {
@@ -24,6 +26,7 @@ impl Default for Layers {
             door: true,
             wires: true,
             shapes: true,
+            slots: true,
         }
     }
 }
@@ -47,6 +50,13 @@ impl Layers {
         }
         if !self.shapes {
             crate::device_shape::strip(&mut scene);
+        }
+        if !self.slots {
+            for i in &mut scene.items {
+                if i.shape == Shape::Profile(Profile::SlottedChannel) {
+                    i.shape = Shape::Profile(Profile::Channel);
+                }
+            }
         }
         scene
     }
@@ -135,5 +145,29 @@ mod tests {
         .apply(s.clone());
         assert!(no_wires.wires.is_empty());
         assert_eq!(no_wires.items.len(), s.items.len());
+    }
+
+    #[test]
+    fn slots_off_draws_the_ducts_solid_and_changes_nothing_else() {
+        let mut s = scene();
+        let mut duct = item(ItemKind::Duct, 4);
+        duct.shape = Shape::Profile(Profile::SlottedChannel);
+        s.push(duct);
+        let solid = Layers {
+            slots: false,
+            ..Layers::default()
+        }
+        .apply(s.clone());
+        let d = solid.get(ItemId::new(ItemKind::Duct, 4)).unwrap();
+        assert_eq!(d.shape, Shape::Profile(Profile::Channel));
+        assert_eq!(solid.items.len(), s.items.len());
+        assert_eq!(
+            Layers::default()
+                .apply(s.clone())
+                .get(ItemId::new(ItemKind::Duct, 4))
+                .unwrap()
+                .shape,
+            Shape::Profile(Profile::SlottedChannel)
+        );
     }
 }
