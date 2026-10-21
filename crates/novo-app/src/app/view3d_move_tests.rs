@@ -519,6 +519,16 @@ fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
             egui::pos2(heat.right() + 12.0 - 12.0 - 88.0, heat.top() - 8.0 - 88.0),
             egui::Vec2::splat(88.0),
         );
+        // The cube as the view draws it: in the corner of its own canvas.
+        let canvas = d.app.learn_anchor("workspace.view3d").expect("3D canvas");
+        let real_cube = egui::Rect::from_min_size(
+            egui::pos2(canvas.right() - 12.0 - 88.0, canvas.top() + 12.0),
+            egui::Vec2::splat(88.0),
+        );
+        assert!(
+            !heat.intersects(real_cube),
+            "{w} x {h}: heat {heat:?} over the cube {real_cube:?} (canvas {canvas:?})"
+        );
         let panels = [
             ("toolbar", toolbar),
             ("inspector", inspector),
