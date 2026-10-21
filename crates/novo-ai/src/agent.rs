@@ -76,6 +76,7 @@ impl Conversation {
 
     /// Runs one turn. `spent_before` is this month's spend so far, for the
     /// budget cap. On error the conversation is left as it was before the turn.
+    #[allow(clippy::too_many_arguments)]
     pub fn run_turn<T: Transport>(
         &mut self,
         client: &mut Client<T>,
@@ -102,6 +103,7 @@ impl Conversation {
         result
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn turn<T: Transport>(
         &mut self,
         client: &mut Client<T>,
@@ -142,7 +144,7 @@ impl Conversation {
                 Ok(r) => r,
                 Err(ApiError::Cancelled(usage)) => {
                     // What was read before the stop is still billed.
-                    let step_cost = usage.cost_usd(&model.id, model.id);
+                    let step_cost = usage.cost_usd(model.id, model.id);
                     on_event(Event::Request {
                         model: model.id.to_string(),
                         usage,
