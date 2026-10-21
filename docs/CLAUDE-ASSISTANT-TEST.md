@@ -1,0 +1,31 @@
+# Trying the Claude assistant with your own API key
+
+About ten minutes. It costs a few cents. Nothing is sent until step 5.
+
+You need an Anthropic API key (console.anthropic.com, API keys, create key; it starts with `sk-ant-`)
+and some credit on that account. A Claude.ai chat subscription is not an API key.
+
+1. Start KoperCAD and open the example (File > Open example).
+2. Open Help > Ask Claude (or Ctrl+K and type "Ask Claude"). Claude is off; the settings are open.
+3. Paste the key and press Save key. Only the last four characters are shown afterwards.
+4. Press Check key. Expect "Anthropic accepted the key." This costs nothing and sends only the key.
+   A wrong key says Anthropic did not accept it.
+5. Pick what Claude may read. For this test choose "Whole project" (the example is not secret).
+   Tick "I have read this and agree" and press Turn Claude on.
+6. Ask: "How many devices and pages does this project have?" Expect a short answer and a line
+   "Looked at the project outline". Under the box, the chat cost should be well under one cent on
+   Sonnet, a few cents at most on Opus.
+7. Ask: "Rename the first device to -K99." Expect a Suggested change card. Nothing has changed yet.
+   Press Apply. The device tag changes everywhere; Ctrl+Z puts it back. Try Reject on another one.
+8. Narrow the scope to "Nothing from the project" and ask "What did you see before?". Expect the
+   note "Scope narrowed, so the earlier chat was cleared" and an answer that has no project data.
+9. Set the monthly limit to $0.01, ask anything. Expect the budget message and nothing sent.
+   Set it back (0 means no limit).
+10. Compare "This month" in the window with Usage on console.anthropic.com. They should be close
+    (ours is an estimate from list prices). Tell us if they differ by more than about 20 percent.
+
+Remove the key afterwards with Remove key if you do not want it kept. It lives in
+`%LOCALAPPDATA%\KoperCAD\ai\api-key` (not encrypted).
+
+What to report: anything that errors, any step where the screen and these notes disagree, and
+how long step 6 took.
