@@ -598,9 +598,13 @@ symbol = "protection/mcb_3p_n"
 letters = ["F", "Q"]
 names = ["circuit breaker 3 pole and neutral", "mcb 3p n", "mcb 3+n", "circuit breaker 3p+n", "automaat 3p+n", "leitungsschutzschalter 3p+n"]
 [[entry]]
+symbol = "protection/motor_protection_breaker_1p"
+letters = ["Q", "F"]
+names = ["motor overload switch variable", "motor protection switch 1 pole", "motor protection breaker 1 pole", "motorbeveiligingsschakelaar 1 polig", "motorschutzschalter 1 polig"]
+[[entry]]
 symbol = "protection/motor_protection_breaker"
 letters = ["Q", "F"]
-names = ["motor protection switch", "motor protection circuit breaker", "motor protective circuit breaker", "motor starter protector", "mpcb", "motor circuit breaker", "motor protection breaker", "motorbeveiligingsschakelaar", "motorbeveiliging", "motorschutzschalter", "motorschutz"]
+names = ["motor overload switch variable", "motor protection switch", "motor protection circuit breaker", "motor protective circuit breaker", "motor starter protector", "mpcb", "motor circuit breaker", "motor protection breaker", "motorbeveiligingsschakelaar", "motorbeveiliging", "motorschutzschalter", "motorschutz"]
 [[entry]]
 symbol = "protection/motor_circuit_protector"
 letters = ["Q", "F"]
