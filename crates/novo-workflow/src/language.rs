@@ -1121,6 +1121,11 @@ pub const DUTCH: &[Aliases] = &[
         &["specificatielijst exporteren"],
     ),
     nl(
+        "plc.import_list",
+        &["importeer io lijst", "importeer signaallijst"],
+        &["io lijst", "signaallijst", "plc kaarten", "pagina's"],
+    ),
+    nl(
         "plc.import_tags",
         &["importeer plc", "importeer tags"],
         &["plc", "tags", "inlezen"],

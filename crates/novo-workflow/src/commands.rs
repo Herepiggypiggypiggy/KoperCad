@@ -2707,6 +2707,28 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "plc.import_list",
+            "Import I/O list (pages from a signal list)",
+            "Export",
+            &[
+                "plc",
+                "i/o",
+                "excel",
+                "csv",
+                "signal list",
+                "sensor",
+                "actuator",
+                "generate",
+                "pages",
+                "cards",
+                "terminals",
+            ],
+            Needs::Project,
+        ),
+        &["import io", "import io list", "import signals"],
+    ),
+    verb(
+        cmd(
             "plc.import_tags",
             "Import PLC tags",
             "Export",
