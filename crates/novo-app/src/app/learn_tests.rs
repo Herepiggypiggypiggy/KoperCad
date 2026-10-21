@@ -891,6 +891,26 @@ fn a_panel_chip_names_the_lesson_for_its_topic_and_steps_aside_when_it_runs() {
 }
 
 #[test]
+fn reset_progress_waits_for_the_second_click() {
+    let (_dir, mut d) = drive();
+    d.app.learn.window = true;
+    d.app.start_lesson("tiny");
+    d.frame();
+    d.app.learn_move(super::learn::Move::Next);
+    d.app.learn.confirm_reset = true;
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert!(
+        d.app.learn.progress().of("tiny").is_some(),
+        "drawing the question changes nothing"
+    );
+    d.app.learn.reset_progress();
+    assert!(d.app.learn.progress().of("tiny").is_none());
+    assert!(!d.app.learn.confirm_reset, "the question closes");
+}
+
+#[test]
 fn open_finished_version_opens_the_finished_drawing_on_the_last_step() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
