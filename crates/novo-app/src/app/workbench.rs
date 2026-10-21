@@ -635,6 +635,14 @@ impl NovoApp {
         }
     }
 
+    /// How many symbols are selected (a link needs a contact and a coil).
+    pub(super) fn selected_symbol_count(&self) -> usize {
+        self.selection()
+            .iter()
+            .filter(|id| matches!(id, AnyId::Symbol(_)))
+            .count()
+    }
+
     pub(super) fn here(&self) -> Option<Place> {
         Some(Place {
             page: self.current_page?,
@@ -662,7 +670,9 @@ impl NovoApp {
             has_device: devices == 1,
             can_undo: doc.is_some_and(Document::can_undo),
             can_redo: doc.is_some_and(Document::can_redo),
-            clipboard: true,
+            // Paste from the menu and the command field uses the last copy made
+            // here (a key press reads the system clipboard itself).
+            clipboard: self.wb.clip.last.is_some(),
             can_go_back: self.wb.nav.history.can_go_back(),
             can_go_forward: self.wb.nav.history.can_go_forward(),
         }
