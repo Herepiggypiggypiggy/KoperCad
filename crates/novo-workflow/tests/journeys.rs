@@ -792,15 +792,17 @@ fn wiring_mode_is_one_key_and_findable_by_its_names() {
         Some("Shift+W")
     );
 
-    // Typed "mode", "lines" and the names of the two programs find it.
+    // Typed "mode", "lines" and the names of the two programs find it. A
+    // command that says the word in its label ("Import EPLAN project") ranks
+    // before one that only lists it as a keyword, so give it room.
     for query in ["mode", "lines", "eplan", "autocad", "modus", "lijnen"] {
         let rows = palette.search(query, &src);
         assert!(
             rows.iter()
-                .take(3)
+                .take(5)
                 .any(|r| r.target == Target::Command("wire.mode")),
             "{query}: {:?}",
-            rows.iter().take(3).map(|r| &r.label).collect::<Vec<_>>()
+            rows.iter().take(5).map(|r| &r.label).collect::<Vec<_>>()
         );
     }
     // The verb with a mode runs that mode, in either language.

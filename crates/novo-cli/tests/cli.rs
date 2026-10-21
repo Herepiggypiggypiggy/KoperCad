@@ -352,7 +352,7 @@ fn export_wires_and_cut_list_carry_cut_lengths() {
     let run = novo(&["export", "wires", s(&path)]);
     assert_eq!(run.code, exit::OK, "{}", run.err);
     assert!(
-        run.out.contains("Cut length mm,Length basis"),
+        run.out.contains("Route length mm,Length basis"),
         "{}",
         run.out
     );

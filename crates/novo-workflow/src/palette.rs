@@ -203,6 +203,9 @@ const DISABLED_PENALTY: i32 = 400;
 /// The most a command's keyword (not its label or verb) can score, kept
 /// below a symbol's name so a part-like word finds the part first.
 const KEYWORD_CAP: i32 = 400;
+/// The most a keyword-only match can score when another command's label has
+/// the typed word as a whole word: below every such label match.
+const KEYWORD_BELOW_LABELS: i32 = 100;
 /// The lowest score (a whole word prefix) a recent pick is lifted from.
 const RECENT_MIN_MATCH: i32 = 250;
 
@@ -937,6 +940,16 @@ fn command_rows(
         .filter_map(|info| split_verb(info, query))
         .map(|(verb, _)| verb.len())
         .max();
+    // When some command's label contains the typed word as a whole word, a
+    // command that only lists it as a keyword ranks below all of those: the
+    // word the user typed names the command that says it on its face
+    // (`handover` is the handover package, not the commissioning report).
+    let label_owns_word = query.chars().count() >= 3
+        && COMMANDS.iter().any(|info| {
+            info.label
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|w| w.eq_ignore_ascii_case(query))
+        });
     for info in COMMANDS {
         // A verb: bare it runs, with words after it it runs on them.
         if let Some((verb, argument)) = split_verb(info, query)
@@ -981,8 +994,14 @@ fn command_rows(
                 .any(|w| w.eq_ignore_ascii_case(query));
         let by_label = fuzzy::score(query, info.label)
             .map(|s| s + LABEL_BONUS + if whole_word { WHOLE_WORD_BONUS } else { 0 });
-        let by_hint = fuzzy::best_score(query, hints)
-            .map(|s| if names_part { s.min(KEYWORD_CAP) } else { s });
+        let by_hint = fuzzy::best_score(query, hints).map(|s| {
+            let s = if names_part { s.min(KEYWORD_CAP) } else { s };
+            if label_owns_word && !whole_word {
+                s.min(KEYWORD_BELOW_LABELS)
+            } else {
+                s
+            }
+        });
         let score = fuzzy::score(query, &full)
             .max(fuzzy::best_score(query, direct))
             .max(by_label)
