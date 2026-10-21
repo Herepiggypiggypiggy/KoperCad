@@ -34,12 +34,12 @@ impl PinKind {
     /// Short wording for refusal messages.
     pub fn label(self) -> &'static str {
         match self {
-            PinKind::Power => "main-circuit (power) pin",
-            PinKind::Control => "control pin (coil, contact or signal)",
-            PinKind::Earth => "protective-earth pin",
-            PinKind::Neutral => "neutral pin",
-            PinKind::Terminal => "terminal pin",
-            PinKind::Either => "single-pole pin",
+            PinKind::Power => "power",
+            PinKind::Control => "control",
+            PinKind::Earth => "earth",
+            PinKind::Neutral => "neutral",
+            PinKind::Terminal => "terminal",
+            PinKind::Either => "single pole",
         }
     }
 }
@@ -114,15 +114,7 @@ pub fn judge(a: (&Symbol, &str), b: (&Symbol, &str)) -> Verdict {
             || pair(PinKind::Earth, PinKind::Either)
     };
     if clash(ka, kb) {
-        return Verdict::Refuse(format!(
-            "{} {} is a {}, {} {} is a {}",
-            a.0.name,
-            a.1,
-            ka.label(),
-            b.0.name,
-            b.1,
-            kb.label()
-        ));
+        return Verdict::Refuse(format!("{} to {}", ka.label(), kb.label()));
     }
     // Designations in a series chain run odd (supply side) to even (load
     // side); the next device starts again at an odd number. Two odd or two
@@ -135,8 +127,7 @@ pub fn judge(a: (&Symbol, &str), b: (&Symbol, &str)) -> Verdict {
         if x % 2 == y % 2 {
             let side = if x % 2 == 1 { "supply" } else { "load" };
             return Verdict::Ask(format!(
-                "{} {} and {} {} are both on the {side} side; one part may be turned over",
-                a.0.name, a.1, b.0.name, b.1
+                "both on the {side} side, a part may be turned over"
             ));
         }
         // Pole n of the upstream device (even, load side) belongs to pole n
@@ -144,10 +135,7 @@ pub fn judge(a: (&Symbol, &str), b: (&Symbol, &str)) -> Verdict {
         if ka == PinKind::Power && kb == PinKind::Power {
             let (even, odd) = if x % 2 == 0 { (x, y) } else { (y, x) };
             if odd + 1 != even {
-                return Verdict::Ask(format!(
-                    "{} {} would go to {} {}: that crosses the poles",
-                    a.0.name, a.1, b.0.name, b.1
-                ));
+                return Verdict::Ask("crosses poles".to_string());
             }
         }
     }

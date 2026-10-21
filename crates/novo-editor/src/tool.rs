@@ -1479,7 +1479,7 @@ impl Editor {
             .held
             .iter()
             .filter(|h| h.possible)
-            .map(|h| format!("{}: {}", pair_name(project, &h.wire), h.reason))
+            .map(|h| format!("{} ({})", pair_name(project, &h.wire), h.reason))
             .collect();
         let refused: Vec<_> = found.held.iter().filter(|h| !h.possible).collect();
         let held = held_notice(project, &doubts, &refused, "Not wired, check");
@@ -1510,7 +1510,7 @@ impl Editor {
         // Unusual pairs are asked about, with the reason on the status line.
         let mut doubts = Vec::new();
         for h in found.held.iter().filter(|h| h.possible) {
-            doubts.push(format!("{}: {}", pair_name(project, &h.wire), h.reason));
+            doubts.push(format!("{} ({})", pair_name(project, &h.wire), h.reason));
             self.proposals.push(h.wire);
         }
         let refused: Vec<_> = found.held.iter().filter(|h| !h.possible).collect();
@@ -3180,10 +3180,10 @@ fn held_notice(
     if !refused.is_empty() {
         let list: Vec<String> = refused
             .iter()
-            .map(|h| format!("{}: {}", pair_name(project, &h.wire), h.reason))
+            .map(|h| format!("{} ({})", pair_name(project, &h.wire), h.reason))
             .collect();
         parts.push(format!(
-            "Not wired, different circuits ({}). Draw it with W if you mean it",
+            "Not wired: {}. Draw it with W if you mean it",
             list.join("; ")
         ));
     }

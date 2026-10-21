@@ -159,7 +159,7 @@ fn crossed_poles_are_asked_about_not_drawn() {
         p(48.0, 80.0),
     );
     assert_eq!(doc.project().wires().count(), 0);
-    assert!(editor.wiring_note().unwrap().contains("crosses the poles"));
+    assert!(editor.wiring_note().unwrap().contains("crosses poles"));
 
     let (mut doc, page, mut editor) = setup(ConnectMode::Ask);
     put(
