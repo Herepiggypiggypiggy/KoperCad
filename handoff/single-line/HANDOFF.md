@@ -14,4 +14,4 @@ Resume: `cargo test -p novo-checks --test single_line -p novo-reports --test sin
 
 Honesty: marks on the drawing: none = stated, `~` calculated, `?` assumed, `*` Autopilot proposal. Iz and voltage drop are always calculated. Ampacity tables are planning values. IEC 60204-1 clause numbers unverified. No diversity. Supply taken at the first device. Disk: `scripts/free-disk.sh`; use CARGO_INCREMENTAL=0.
 
-Traps: a fixture run protected by an upstream breaker is judged against that breaker (In > Iz); the fixture uses 16 mm² for that reason.
+Traps: a transformer or power supply carries power, not summed amps, and restarts the ΔU sum; the Reports menu holds at most 15 plain rows (plug list and single-line diagram sit in "More reports"); adding a report also needs the Dutch strings, the cli sheet list and the live-report stale lists. Also: a fixture run protected by an upstream breaker is judged against that breaker (In > Iz); the fixture uses 16 mm² for that reason.

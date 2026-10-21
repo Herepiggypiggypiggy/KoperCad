@@ -50,7 +50,9 @@ const LINK_H: f64 = 21.0;
 /// Character height inside a box, mm.
 const TEXT_MM: f64 = 2.3;
 /// Character height of the legend, mm.
-const SMALL_MM: f64 = 2.0;
+const SMALL_MM: f64 = 2.6;
+/// Line pitch of the legend, mm.
+const LEGEND_PITCH: f64 = 3.9;
 /// Smallest scale a crowded sheet is shrunk to, and the largest a sparse one
 /// is enlarged to.
 const MIN_SCALE: f64 = 0.55;
@@ -221,24 +223,49 @@ fn number(f: Figure) -> Cell {
 }
 
 fn columns() -> Vec<Column> {
+    // The verdict and what was assumed come before the long texts: on a
+    // 1366 px window the first columns up to "Assumed" fit.
     vec![
-        Column::new("tag", "Device", 20.0),
-        Column::new("type", "Type", 14.0),
-        Column::new("in", "In A", 6.0).right(),
-        Column::new("curve", "Curve", 6.0),
-        Column::new("icu", "Icu kA", 6.0).right(),
-        Column::new("ik", "Ik kA", 6.0).right(),
+        Column::new("tag", "Device", 17.5),
+        Column::new("type", "Type", 11.0),
+        Column::new("in", "In A", 5.0).right(),
+        Column::new("curve", "Curve", 5.0),
+        Column::new("icu", "Icu kA", 5.0).right(),
+        Column::new("ik", "Ik max kA", 7.0).right(),
         Column::new("ib", "Ib A", 6.0).right(),
-        Column::new("ib_basis", "Ib basis", 22.0),
-        Column::new("cable", "Cable", 12.0),
-        Column::new("section", "mm²", 6.0).right(),
-        Column::new("length", "m", 6.0).right(),
+        Column::new("section", "mm²", 5.0).right(),
+        Column::new("length", "m", 5.0).right(),
         Column::new("iz", "Iz A", 6.0).right(),
         Column::new("du", "ΔU %", 6.0).right(),
-        Column::new("du_total", "ΔU Σ %", 7.0).right(),
-        Column::new("check", "Check", 10.0),
-        Column::new("why", "Why", 30.0),
+        Column::new("du_total", "ΔU Σ %", 6.5).right(),
+        Column::new("check", "Check", 14.0),
+        Column::new("assumed", "Assumed", 20.0),
+        Column::new("why", "Why", 20.0),
+        Column::new("ib_basis", "Ib basis", 28.0),
+        Column::new("cable", "Cable", 8.0),
     ]
+}
+
+/// The basis of a current for the table: the notes and the drawing's legend
+/// carry the no-diversity remark and the advice in brackets.
+fn basis_short(basis: &str) -> String {
+    basis
+        .split(" (")
+        .next()
+        .unwrap_or_default()
+        .replace(", no diversity", "")
+}
+
+/// What a run's Iz and ΔU assumed, for the schedule's "Assumed" column.
+fn assumed_text(link: &Link) -> String {
+    let mut parts = Vec::new();
+    if !link.iz_defaults.is_empty() {
+        parts.push(format!("Iz ?: {}", link.iz_defaults.join(", ")));
+    }
+    if link.drop_pf_assumed {
+        parts.push("ΔU ?: pf 1".to_owned());
+    }
+    parts.join("; ")
 }
 
 fn cable_text(link: &Link) -> String {
@@ -276,7 +303,7 @@ fn row(sl: &SingleLine, node: &Node) -> (Vec<Cell>, Vec<AnyId>) {
     let _ = sl;
     let cells = vec![
         Cell::text(node.tag.clone()),
-        Cell::text(node.kind.label()),
+        Cell::text(node.kind.short_label()),
         number(node.rated_a),
         Cell::text(
             node.characteristic
@@ -290,8 +317,6 @@ fn row(sl: &SingleLine, node: &Node) -> (Vec<Cell>, Vec<AnyId>) {
             .and_then(|v| v.ik_max_ka)
             .map_or(Cell::Empty, |k| Cell::Number(round2(k))),
         number(node.current_a),
-        Cell::text(node.current_basis.clone()),
-        Cell::text(link.map(cable_text).unwrap_or_default()),
         link.map_or(Cell::Empty, |l| number(l.section_mm2)),
         link.map_or(Cell::Empty, |l| number(l.length_m)),
         link.map_or(Cell::Empty, |l| number(l.iz_a)),
@@ -302,7 +327,10 @@ fn row(sl: &SingleLine, node: &Node) -> (Vec<Cell>, Vec<AnyId>) {
         } else {
             ""
         }),
+        Cell::text(link.map(assumed_text).unwrap_or_default()),
         Cell::text(why.join("; ")),
+        Cell::text(basis_short(&node.current_basis)),
+        Cell::text(link.map(cable_text).unwrap_or_default()),
     ];
     let mut sources: Vec<AnyId> = Vec::new();
     if let Some(d) = node.device {
@@ -480,7 +508,7 @@ fn current_line(node: &Node) -> String {
         s.push_str(&format!(" (+{} without)", node.loads_without_current));
     }
     if let Some(ik) = node.verdict.as_ref().and_then(|v| v.ik_max_ka) {
-        s.push_str(&format!("  Ik {} kA", fmt(ik)));
+        s.push_str(&format!("  Ik ≤ {} kA", fmt(ik)));
     }
     s
 }
@@ -707,15 +735,19 @@ fn link_lines(link: &Link) -> Vec<String> {
         .value
         .map_or("no length".to_owned(), |l| format!("{} m", fmt(l)));
     out.push(match link.iz_a.value {
-        Some(iz) => format!("{length}  Iz {} A", fmt(iz)),
+        Some(iz) => format!("{length}  Iz {} A{}", fmt(iz), mark(link.iz_a.origin)),
         None => length,
     });
     if let Some(d) = link.drop_percent.value {
-        let mut s = format!("ΔU {} %", fmt(d));
+        let mut s = format!("ΔU {} %{}", fmt(d), mark(link.drop_percent.origin));
         if let Some(t) = link.drop_total_percent.value
             && (t - d).abs() > 0.005
         {
-            s.push_str(&format!(" Σ {} %", fmt(t)));
+            s.push_str(&format!(
+                " Σ {} %{}",
+                fmt(t),
+                mark(link.drop_total_percent.origin)
+            ));
         }
         if !link.total_complete {
             s.push_str(" +");
@@ -819,6 +851,25 @@ fn draw_run(
     }
 }
 
+/// `text` broken at spaces into lines of at most `max` characters.
+fn wrap(text: &str, max: usize) -> Vec<String> {
+    let mut lines = Vec::new();
+    let mut line = String::new();
+    for word in text.split(' ').filter(|w| !w.is_empty()) {
+        if !line.is_empty() && line.chars().count() + 1 + word.chars().count() > max {
+            lines.push(std::mem::take(&mut line));
+        }
+        if !line.is_empty() {
+            line.push(' ');
+        }
+        line.push_str(word);
+    }
+    if !line.is_empty() {
+        lines.push(line);
+    }
+    lines
+}
+
 fn legend(sl: &SingleLine) -> Vec<String> {
     let mut out = vec![
         "No mark: stated.  ~ calculated from a power or from the loads below (no diversity).  ? assumed.  * proposed by the Autopilot, not applied.  Heavy outline: a check fails.".to_owned(),
@@ -835,6 +886,16 @@ fn legend(sl: &SingleLine) -> Vec<String> {
             sl.missing[..sl.missing.len().min(2)].join("; "),
             if sl.missing.len() > 2 { "; ..." } else { "" }
         ));
+    }
+    out.push(
+        "Ik ≤ is the stated supply short-circuit current carried down unchanged: the cable impedance is not included, so the real value is lower."
+            .to_owned(),
+    );
+    for note in &sl.notes {
+        if note.starts_with("Iz assumes") || note.starts_with("ΔU is calculated at power factor 1")
+        {
+            out.push(note.clone());
+        }
     }
     if sl.planning_values {
         out.push(
@@ -899,8 +960,13 @@ pub fn sheet_layout_of(sl: &SingleLine, index: usize, setup: &PageSetup) -> Opti
     }
     let columns = next.max(1.0);
     let natural_w = columns * PITCH_MM;
-    let legend_lines = legend(sl);
-    let legend_h = legend_lines.len() as f64 * 3.2 + 2.0;
+    // About 0.5 of the character height per character; wrap to the area.
+    let legend_chars = (area_w / (SMALL_MM * 0.5)) as usize;
+    let legend_lines: Vec<String> = legend(sl)
+        .iter()
+        .flat_map(|l| wrap(l, legend_chars))
+        .collect();
+    let legend_h = legend_lines.len() as f64 * LEGEND_PITCH + 2.0;
     let natural_h = level_y(deepest) + BOX_H;
     let avail_h = (area_h - legend_h).max(10.0);
     let scale = (area_w / natural_w)
@@ -1005,9 +1071,9 @@ pub fn sheet_layout_of(sl: &SingleLine, index: usize, setup: &PageSetup) -> Opti
     for (i, text) in legend_lines.iter().enumerate() {
         c.layout.texts.push(TextBox {
             x: x0,
-            y: bottom + 1.0 + 3.2 * i as f64,
+            y: bottom + 1.0 + LEGEND_PITCH * i as f64,
             width: area_w,
-            height: 3.2,
+            height: LEGEND_PITCH,
             text: text.clone(),
             text_mm: SMALL_MM,
             align: Align::Left,

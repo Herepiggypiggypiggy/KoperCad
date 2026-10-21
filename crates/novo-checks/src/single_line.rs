@@ -276,6 +276,12 @@ pub struct Link {
     pub insulation: Insulation,
     pub method: Method,
     pub method_origin: Origin,
+    /// What `Iz` assumed because the wire does not state it: the
+    /// installation method, the ambient temperature, the grouping.
+    pub iz_defaults: Vec<&'static str>,
+    /// The voltage drop used power factor 1 because no wire of the run
+    /// states one.
+    pub drop_pf_assumed: bool,
     /// Current the run carries, A (the child's current).
     pub current_a: Figure,
     pub power_factor: Figure,
@@ -927,6 +933,8 @@ fn build_link(inputs: &Inputs<'_>, run: RunInput) -> Link {
     let mut reasons = Vec::new();
     let mut fail_codes: Vec<&'static str> = Vec::new();
     let mut method_origin = Origin::Assumed;
+    let mut iz_defaults: Vec<&'static str> = Vec::new();
+    let mut pf_stated = false;
     let mut method = Method::C;
     let mut insulation = Insulation::Pvc;
     let mut iz: Option<f64> = None;
@@ -948,6 +956,7 @@ fn build_link(inputs: &Inputs<'_>, run: RunInput) -> Link {
             wire_number(project, wire, "power_factor").filter(|pf| (0.1..=1.0).contains(pf));
         if let Some(f) = power_factor {
             pf = Figure::stated(f);
+            pf_stated = true;
         }
         let drop = match (length.value, section.value, run.current.value) {
             (Some(l), Some(s), Some(i)) => {
@@ -986,6 +995,8 @@ fn build_link(inputs: &Inputs<'_>, run: RunInput) -> Link {
             });
             let parsed = m_text.as_deref().and_then(Method::parse);
             let m = parsed.unwrap_or(Method::C);
+            let ambient = wire_number(project, wire, AMBIENT_C);
+            let grouping = wire_number(project, wire, GROUPED_CIRCUITS).filter(|n| *n >= 1.0);
             let circuit = Circuit {
                 design_current: run.current.value.unwrap_or(0.0),
                 device_rating: run.protector.as_ref().map_or(0.0, |p| p.1),
@@ -997,10 +1008,8 @@ fn build_link(inputs: &Inputs<'_>, run: RunInput) -> Link {
                 } else {
                     Loaded::Two
                 },
-                ambient_c: wire_number(project, wire, AMBIENT_C).unwrap_or(30.0),
-                grouped_circuits: wire_number(project, wire, GROUPED_CIRCUITS)
-                    .filter(|n| *n >= 1.0)
-                    .map_or(1, |n| n as u32),
+                ambient_c: ambient.unwrap_or(30.0),
+                grouped_circuits: grouping.map_or(1, |n| n as u32),
             };
             if let Some(z) = circuit.rating_with(inputs.tables)
                 && iz.is_none_or(|old| z < old)
@@ -1013,6 +1022,16 @@ fn build_link(inputs: &Inputs<'_>, run: RunInput) -> Link {
                     Origin::Assumed
                 };
                 weakest_label = wire_label(wire);
+                iz_defaults.clear();
+                if parsed.is_none() {
+                    iz_defaults.push("installation method C");
+                }
+                if ambient.is_none() {
+                    iz_defaults.push("30 °C");
+                }
+                if grouping.is_none() {
+                    iz_defaults.push("one circuit");
+                }
             }
         }
         segments.push(Segment {
@@ -1031,7 +1050,21 @@ fn build_link(inputs: &Inputs<'_>, run: RunInput) -> Link {
     if segments.is_empty() {
         complete = true;
     }
-    let iz_fig = iz.map_or(Figure::MISSING, Figure::calculated);
+    let iz_fig = iz.map_or(Figure::MISSING, |z| {
+        if iz_defaults.is_empty() {
+            Figure::calculated(z)
+        } else {
+            Figure::new(z, Origin::Assumed)
+        }
+    });
+    let drop_pf_assumed = !pf_stated && any_drop;
+    let drop_origin = |v: f64| {
+        if drop_pf_assumed {
+            Figure::new(v, Origin::Assumed)
+        } else {
+            Figure::calculated(v)
+        }
+    };
     let mut status = Status::Pass;
     let worsen = |to: Status, status: &mut Status| {
         let rank = |s: Status| match s {
@@ -1111,8 +1144,10 @@ fn build_link(inputs: &Inputs<'_>, run: RunInput) -> Link {
         method_origin,
         current_a: run.current,
         power_factor: pf,
+        iz_defaults,
+        drop_pf_assumed,
         drop_percent: if any_drop {
-            Figure::calculated(sum_drop)
+            drop_origin(sum_drop)
         } else {
             Figure::MISSING
         },
@@ -1447,6 +1482,11 @@ pub fn single_line(
         {
             let current = if item.kind == Kind::Motor && three_phase {
                 full_load_current(p, facts_voltage, typical_efficiency(p), typical_cos_phi(p))
+            } else if item.kind == Kind::Motor {
+                // One phase: the same typical efficiency and power factor.
+                let (eta, cos) = (typical_efficiency(p), typical_cos_phi(p));
+                (facts_voltage > 0.0 && eta > 0.0 && cos > 0.0)
+                    .then(|| p * 1000.0 / (facts_voltage * eta * cos))
             } else if three_phase {
                 Some(p * 1000.0 / (3.0_f64.sqrt() * facts_voltage))
             } else {
@@ -1479,8 +1519,32 @@ pub fn single_line(
         let mut sum = 0.0;
         let mut counted = 0;
         let mut without = 0;
+        // Behind a transformer or power supply the branches carry another
+        // voltage: their power is carried to the input side, never their
+        // amperes added.
+        let converter = matches!(item.kind, Kind::Transformer | Kind::PowerSupply);
+        let phases = |three: bool| if three { 3.0_f64.sqrt() } else { 1.0 };
         for k in &kids {
-            match nodes[*k].current_a.value {
+            let below = if converter {
+                let out = runs.get(k).map(|r| &r.3);
+                match (nodes[*k].current_a.value, out) {
+                    (Some(a), Some(f))
+                        if matches!(f.voltage.origin, Origin::Stated | Origin::Calculated)
+                            && f.voltage.value.is_some_and(|v| v > 0.0)
+                            && facts_voltage > 0.0 =>
+                    {
+                        let v_out = f.voltage.value.unwrap_or(0.0);
+                        Some(
+                            a * v_out * phases(f.three_phase)
+                                / (facts_voltage * phases(three_phase)),
+                        )
+                    }
+                    _ => None,
+                }
+            } else {
+                nodes[*k].current_a.value
+            };
+            match below {
                 Some(a) => {
                     sum += a;
                     counted += 1;
@@ -1496,9 +1560,19 @@ pub fn single_line(
         if counted > 0 {
             nodes[id].current_a = Figure::calculated(sum);
             nodes[id].current_basis = format!(
-                "sum of {} branch{} below, no diversity",
+                "{} {} branch{} below{}, no diversity",
+                if converter {
+                    "output power of"
+                } else {
+                    "sum of"
+                },
                 counted,
-                if counted == 1 { "" } else { "es" }
+                if counted == 1 { "" } else { "es" },
+                if converter {
+                    " carried to the input voltage, no losses"
+                } else {
+                    ""
+                },
             );
         } else if item.kind.is_load() {
             nodes[id].loads_without_current = 1;
@@ -1535,6 +1609,7 @@ pub fn single_line(
     let mut order_down: Vec<usize> = (1..nodes.len()).collect();
     order_down.sort_by_key(|n| nodes[*n].depth);
     let mut protector_above: HashMap<usize, Option<(String, f64)>> = HashMap::new();
+    let mut restarted: Vec<String> = Vec::new();
     protector_above.insert(0, None);
     for &id in &order_down {
         let parent_id = nodes[id].parent.unwrap_or(0);
@@ -1579,6 +1654,15 @@ pub fn single_line(
             above_link = nodes[u].link.as_ref();
             up = nodes[u].parent;
         }
+        // The drop is counted again from the output of a transformer or
+        // power supply: percentages of two voltages are not added.
+        let from_converter = matches!(nodes[parent_id].kind, Kind::Transformer | Kind::PowerSupply);
+        if from_converter {
+            above_link = None;
+            if let Some(d) = nodes[parent_id].device {
+                restarted.push(tag_of(project, d));
+            }
+        }
         let parent_total = above_link
             .and_then(|l| l.drop_total_percent.value)
             .unwrap_or(0.0);
@@ -1588,14 +1672,24 @@ pub fn single_line(
             None if parent_total > 0.0 => Figure::calculated(parent_total),
             None => Figure::MISSING,
         };
+        if link.drop_pf_assumed
+            || above_link.is_some_and(|l| l.drop_total_percent.origin == Origin::Assumed)
+        {
+            link.drop_total_percent.origin = Origin::Assumed;
+        }
         if let Some(total) = link.drop_total_percent.value
             && total > drop_limit
         {
             link.status = Status::Fail;
             link.fail_codes.push("ΔU > limit");
             link.reasons.push(format!(
-                "voltage drop {} % from the supply is above the limit {} %",
+                "voltage drop {} % from {} is above the limit {} %",
                 fmt(total),
+                if from_converter {
+                    "the converter output"
+                } else {
+                    "the supply"
+                },
                 fmt(drop_limit)
             ));
         }
@@ -1613,6 +1707,32 @@ pub fn single_line(
             "Not on the diagram, no supply reaches their power poles: {}.",
             unfed_tags.join(", ")
         ));
+    }
+    restarted.sort_by(|a, b| natural_cmp(a, b));
+    restarted.dedup();
+    if !restarted.is_empty() {
+        notes.push(format!(
+            "ΔU Σ is counted again from the output of {}: percentages of two voltages are not added.",
+            restarted.join(", ")
+        ));
+    }
+    let links = || nodes.iter().filter_map(|n| n.link.as_ref());
+    let mut assumed: Vec<&'static str> = links()
+        .flat_map(|l| l.iz_defaults.iter().copied())
+        .collect();
+    assumed.sort_unstable();
+    assumed.dedup();
+    if !assumed.is_empty() {
+        notes.push(
+            "Iz assumes installation method C, 30 °C and one circuit where the wire does not state them (marked ?)."
+                .to_owned(),
+        );
+    }
+    if links().any(|l| l.drop_pf_assumed) {
+        notes.push(
+            "ΔU is calculated at power factor 1 where none is stated (marked ?); inductive loads drop more."
+                .to_owned(),
+        );
     }
     SingleLine {
         nodes,

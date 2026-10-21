@@ -126,8 +126,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("report.wirecut", at("Reports")),
     ("report.io", at("Reports")),
     ("report.cable_schedule", at("Reports")),
-    ("report.plugs", at("Reports")),
-    ("report.singleline", at("Reports")),
+    ("report.plugs", under("Reports", "More reports")),
+    ("report.singleline", under("Reports", "More reports")),
     ("report.add_page", at("Reports")),
     ("export.report_pdf", under("Reports", "Export")),
     // Edit
@@ -511,8 +511,6 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
                 "report.wirecut",
                 "report.io",
                 "report.cable_schedule",
-                "report.plugs",
-                "report.singleline",
             ],
             &["report.add_page", "report.designer", "view.bench"],
         ],
@@ -907,12 +905,12 @@ mod tests {
             "report.wirecut",
             "report.io",
             "report.cable_schedule",
-            "report.plugs",
-            "report.singleline",
             "report.add_page",
         ] {
             assert_eq!(home(id), at("Reports"), "{id}");
         }
+        assert_eq!(home("report.plugs"), under("Reports", "More reports"));
+        assert_eq!(home("report.singleline"), under("Reports", "More reports"));
         assert_eq!(home("export.report_pdf"), under("Reports", "Export"));
         assert_eq!(home("export.pdf_page"), under("File", "Export drawings"));
         assert_eq!(home("export.plate_dxf"), under("File", "Export drawings"));

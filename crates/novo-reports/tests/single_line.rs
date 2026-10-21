@@ -268,3 +268,90 @@ fn a_smaller_sheet_scales_the_drawing_down_instead_of_cutting_it() {
     assert!(height(&a4) <= height(&a3));
     assert_eq!(a3.texts.len(), a4.texts.len());
 }
+
+fn state_all(doc: &mut Document, b: &novo_tests::Board, key: &str, value: novo_core::Value) {
+    doc.transact("State", |tx| {
+        for wires in b.wires.values() {
+            for w in wires {
+                tx.set_property(*w, key, Some(value.clone()))?;
+            }
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+fn drawn(doc: &Document) -> Vec<String> {
+    let setup = PageSetup::default();
+    single_line::sheet_layout(doc.project(), 0, &setup)
+        .unwrap()
+        .texts
+        .into_iter()
+        .map(|t| t.text)
+        .collect()
+}
+
+#[test]
+fn assumed_inputs_are_marked_on_the_drawing_the_schedule_and_the_legend() {
+    let doc = board();
+    let all = drawn(&doc);
+    assert!(
+        all.iter().any(|t| t.contains(" A?") && t.contains("Iz ")),
+        "{all:?}"
+    );
+    assert!(
+        all.iter()
+            .any(|t| t.starts_with("ΔU ") && t.contains(" %?")),
+        "{all:?}"
+    );
+    let legend = all.join(" ");
+    assert!(legend.contains("Iz assumes installation method C, 30 °C and one circuit"));
+    assert!(legend.contains("ΔU is calculated at power factor 1"));
+    // Ik is a ceiling carried down from the supply, not a stated figure.
+    assert!(all.iter().any(|t| t.contains("Ik ≤ 10 kA")));
+    assert!(legend.contains("Ik ≤ is the stated supply short-circuit current"));
+    // The schedule column names what was assumed.
+    let out = SingleLineDiagram.generate(doc.project());
+    let section = &out.sections[0];
+    let col = |key: &str| section.column(key).unwrap();
+    let m1 = section
+        .rows
+        .iter()
+        .find(|r| r.cells[col("tag")].to_string() == "=A1+FLD-M1")
+        .unwrap();
+    let assumed = m1.cells[col("assumed")].to_string();
+    assert!(
+        assumed.contains("Iz ?") && assumed.contains("installation method C"),
+        "{assumed}"
+    );
+    assert!(assumed.contains("ΔU ?: pf 1"), "{assumed}");
+}
+
+#[test]
+fn nothing_is_marked_or_noted_when_the_wires_state_the_inputs() {
+    let mut doc = Document::default();
+    let b = distribution_board(&mut doc).unwrap();
+    state_all(
+        &mut doc,
+        &b,
+        "install_method",
+        novo_core::Value::Text("C".into()),
+    );
+    state_all(&mut doc, &b, "ambient_c", novo_core::Value::Float(30.0));
+    state_all(&mut doc, &b, "grouped_circuits", novo_core::Value::Int(1));
+    state_all(&mut doc, &b, "power_factor", novo_core::Value::Float(0.9));
+    let all = drawn(&doc);
+    let legend = all.join(" ");
+    assert!(!legend.contains("Iz assumes"));
+    assert!(!legend.contains("power factor 1"));
+    assert!(!all.iter().any(|t| t.starts_with("ΔU ") && t.contains("%?")));
+    let out = SingleLineDiagram.generate(doc.project());
+    let section = &out.sections[0];
+    let assumed = section.column("assumed").unwrap();
+    assert!(
+        section
+            .rows
+            .iter()
+            .all(|r| r.cells[assumed].to_string().is_empty())
+    );
+}

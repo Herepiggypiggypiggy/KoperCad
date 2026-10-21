@@ -155,7 +155,7 @@ fn the_drop_over_a_run_is_the_formula_and_adds_up_from_the_supply() {
         run.drop_total_percent
     );
     assert!(run.total_complete);
-    assert_eq!(run.drop_percent.origin, Origin::Calculated);
+    assert_eq!(run.drop_percent.origin, Origin::Assumed);
     // The run into Q2 carries Q2's current, the sum of what is behind it.
     let into_q2 = q2.link.as_ref().unwrap();
     assert_eq!(into_q2.current_a.value, Some(12.0));
@@ -177,7 +177,7 @@ fn the_cable_rating_is_read_from_the_tables_for_the_weakest_wire() {
         .ampacity(1.5, Insulation::Pvc, Method::C, Loaded::Three)
         .unwrap();
     assert_eq!(run.iz_a.value, Some(iz));
-    assert_eq!(run.iz_a.origin, Origin::Calculated);
+    assert_eq!(run.iz_a.origin, Origin::Assumed);
     assert_eq!(run.method, Method::C);
     // Method C is the default, not something the project said.
     assert_eq!(run.method_origin, Origin::Assumed);
@@ -459,4 +459,265 @@ fn building_twice_gives_the_same_diagram() {
     let (doc, _) = board();
     assert_eq!(build(&doc), build(&doc));
     let _ = (Run::new(1.0, 1.0, 1.0, Supply::ThreePhase, 400.0), 0);
+}
+
+fn state(doc: &mut Document, wires: &[WireId], key: &str, value: Value) {
+    doc.transact("State", |tx| {
+        for w in wires {
+            tx.set_property(*w, key, Some(value.clone()))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+}
+
+#[test]
+fn iz_is_marked_assumed_and_noted_when_the_wire_states_nothing() {
+    let (doc, b) = board();
+    let sl = build(&doc);
+    let p = doc.project();
+    let run = node(&sl, p, b.m1).link.as_ref().unwrap();
+    assert_eq!(run.iz_a.origin, Origin::Assumed);
+    assert_eq!(
+        run.iz_defaults,
+        ["installation method C", "30 °C", "one circuit"]
+    );
+    assert!(sl.notes.iter().any(|n| n.starts_with("Iz assumes")));
+}
+
+#[test]
+fn iz_is_calculated_when_method_ambient_and_grouping_are_stated() {
+    let (mut doc, b) = board();
+    for (name, wires) in b.wires.clone() {
+        let _ = name;
+        state(&mut doc, &wires, "install_method", Value::Text("C".into()));
+        state(&mut doc, &wires, "ambient_c", Value::Float(30.0));
+        state(&mut doc, &wires, "grouped_circuits", Value::Int(1));
+    }
+    let sl = build(&doc);
+    let p = doc.project();
+    for n in sl.nodes.iter().filter_map(|n| n.link.as_ref()) {
+        assert!(n.iz_defaults.is_empty(), "{:?}", n.iz_defaults);
+        assert_eq!(n.iz_a.origin, Origin::Calculated);
+    }
+    assert!(!sl.notes.iter().any(|n| n.starts_with("Iz assumes")));
+    let _ = p;
+}
+
+#[test]
+fn only_the_missing_inputs_are_named_as_assumed() {
+    let (mut doc, b) = board();
+    state(&mut doc, &b.wires["m1"], "ambient_c", Value::Float(40.0));
+    let sl = build(&doc);
+    let run = node(&sl, doc.project(), b.m1).link.as_ref().unwrap();
+    assert_eq!(run.iz_defaults, ["installation method C", "one circuit"]);
+    assert_eq!(run.iz_a.origin, Origin::Assumed);
+}
+
+#[test]
+fn the_drop_is_marked_assumed_at_power_factor_one_unless_a_wire_states_it() {
+    let (mut doc, b) = board();
+    let sl = build(&doc);
+    let run = node(&sl, doc.project(), b.m1).link.as_ref().unwrap();
+    assert!(run.drop_pf_assumed);
+    assert_eq!(run.drop_percent.origin, Origin::Assumed);
+    // The total from the supply carries the assumption down.
+    assert_eq!(run.drop_total_percent.origin, Origin::Assumed);
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.starts_with("ΔU is calculated at power factor 1") && n.contains("inductive"))
+    );
+    // A stated power factor on the run's wires removes the mark on the run.
+    state(&mut doc, &b.wires["m1"], "power_factor", Value::Float(0.85));
+    let sl = build(&doc);
+    let run = node(&sl, doc.project(), b.m1).link.as_ref().unwrap();
+    assert!(!run.drop_pf_assumed);
+    assert_eq!(run.drop_percent.origin, Origin::Calculated);
+    // The run above still assumes, so the note stays and the total stays marked.
+    assert_eq!(run.drop_total_percent.origin, Origin::Assumed);
+}
+
+#[test]
+fn no_pf_note_when_every_run_states_one() {
+    let (mut doc, b) = board();
+    for (_, wires) in b.wires.clone() {
+        state(&mut doc, &wires, "power_factor", Value::Float(0.9));
+    }
+    let sl = build(&doc);
+    assert!(!sl.notes.iter().any(|n| n.contains("power factor 1")));
+    for n in sl.nodes.iter().filter_map(|n| n.link.as_ref()) {
+        assert_eq!(n.drop_percent.origin, Origin::Calculated);
+        assert_eq!(n.drop_total_percent.origin, Origin::Calculated);
+    }
+}
+
+/// A 24 V load behind a power supply fed from the heater breaker's side of
+/// the board: 48 W at 24 V is 2 A out and 0.12 A in at 400 V.
+fn board_with_psu() -> (Document, Board, DeviceId, DeviceId) {
+    let (mut doc, b) = board();
+    let (psu, load) = doc
+        .transact("PSU", |tx| {
+            let page = tx.project().pages().next().expect("board page").id;
+            let plus = tx.add_potential("+24V", PotentialKind::Line)?;
+            tx.update::<Potential>(plus, |p| p.voltage = Some(24.0))?;
+            let minus = tx.add_potential("0V", PotentialKind::Line)?;
+            tx.update::<Potential>(minus, |p| p.voltage = Some(24.0))?;
+            let d = tx.add_device(DeviceTag::parse("=A1+CAB-G1")?, "Power supply")?;
+            let s = tx.place_symbol(
+                page,
+                "iec/supplies/power_supply",
+                at(0.0),
+                pins(&["L1", "L2", "+", "-"]),
+                SymbolRole::Device {
+                    device: d,
+                    main: true,
+                },
+            )?;
+            let fp = tx.place_symbol(
+                page,
+                "iec/connectivity/potential_feed",
+                at(20.0),
+                pins(&["1"]),
+                SymbolRole::PotentialFeed { potential: plus },
+            )?;
+            tx.connect(Endpoint::pin(fp, 0), Endpoint::pin(s, 2))?;
+            let fm = tx.place_symbol(
+                page,
+                "iec/connectivity/potential_feed",
+                at(28.0),
+                pins(&["1"]),
+                SymbolRole::PotentialFeed { potential: minus },
+            )?;
+            tx.connect(Endpoint::pin(fm, 0), Endpoint::pin(s, 3))?;
+            let l = tx.add_device(DeviceTag::parse("=A1+FLD-E2")?, "Lamp bank")?;
+            let ls = tx.place_symbol(
+                page,
+                "iec/passive/heater_3p",
+                at(40.0),
+                pins(&["1", "2"]),
+                SymbolRole::Device {
+                    device: l,
+                    main: true,
+                },
+            )?;
+            tx.set_property(l, "power_kw", Some(0.048.into()))?;
+            for (i, out) in [2u16, 3].into_iter().enumerate() {
+                let w = tx.connect(Endpoint::pin(s, out), Endpoint::pin(ls, i as u16))?;
+                tx.update::<Wire>(w, |w| w.cross_section_mm2 = Some(1.5))?;
+                tx.set_property(w, "length_m", Some(5.0.into()))?;
+            }
+            Ok((d, l))
+        })
+        .unwrap()
+        .0;
+    // Feed the input from the heater breaker's load poles.
+    let q4 = doc.project().devices().find(|d| d.id == b.q4).map(|d| d.id);
+    let _ = q4;
+    (doc, b, psu, load)
+}
+
+#[test]
+fn behind_a_power_supply_the_input_current_is_power_not_summed_amps() {
+    let (mut doc, b, psu, load) = board_with_psu();
+    // Wire L1 and L2 of the supply to the load poles of Q4.
+    let (q4s, psus) = {
+        let p = doc.project();
+        let sym = |d: DeviceId| {
+            p.symbols()
+                .find(|s| matches!(s.role, SymbolRole::Device { device, .. } if device == d))
+                .map(|s| s.id)
+                .unwrap()
+        };
+        (sym(b.q4), sym(psu))
+    };
+    doc.transact("Feed", |tx| {
+        for (i, pin) in [1u16, 3].into_iter().enumerate() {
+            let w = tx.connect(Endpoint::pin(q4s, pin), Endpoint::pin(psus, i as u16))?;
+            tx.update::<Wire>(w, |w| w.cross_section_mm2 = Some(2.5))?;
+            tx.set_property(w, "length_m", Some(1.0.into()))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let p = doc.project();
+    let converter = node(&sl, p, psu);
+    let amps = converter.current_a.value.expect("input current known");
+    assert!(
+        (amps - 0.12).abs() < 0.02,
+        "the supply must carry 0.12 A in, not the 2 A out: {amps}"
+    );
+    assert!(
+        converter
+            .current_basis
+            .contains("carried to the input voltage")
+    );
+    let lamps = node(&sl, p, load);
+    assert!((lamps.current_a.value.unwrap() - 2.0).abs() < 0.05);
+    // The drop behind the supply is counted again from its output.
+    let out = lamps.link.as_ref().unwrap();
+    assert_eq!(out.drop_total_percent.value, out.drop_percent.value);
+    assert!(
+        sl.notes
+            .iter()
+            .any(|n| n.contains("counted again from the output of"))
+    );
+}
+
+#[test]
+fn a_single_phase_motor_current_uses_efficiency_and_power_factor() {
+    let (mut doc, b) = board();
+    let (m, ms) = doc
+        .transact("Single phase motor", |tx| {
+            let page = tx.project().pages().next().expect("board page").id;
+            let m = tx.add_device(DeviceTag::parse("=A1+FLD-M7")?, "Small pump")?;
+            let ms = tx.place_symbol(
+                page,
+                "iec/motors/motor_3ph",
+                at(200.0),
+                pins(&["U1", "V1"]),
+                SymbolRole::Device {
+                    device: m,
+                    main: true,
+                },
+            )?;
+            tx.set_property(m, "power_kw", Some(0.75.into()))?;
+            Ok((m, ms))
+        })
+        .unwrap()
+        .0;
+    let q4s = doc
+        .project()
+        .symbols()
+        .find(|s| matches!(s.role, SymbolRole::Device { device, .. } if device == b.q4))
+        .map(|s| s.id)
+        .unwrap();
+    doc.transact("Wire", |tx| {
+        for (i, pin) in [1u16, 3].into_iter().enumerate() {
+            let w = tx.connect(Endpoint::pin(q4s, pin), Endpoint::pin(ms, i as u16))?;
+            tx.update::<Wire>(w, |w| w.cross_section_mm2 = Some(2.5))?;
+            tx.set_property(w, "length_m", Some(5.0.into()))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let sl = build(&doc);
+    let motor = node(&sl, doc.project(), m);
+    let p = 0.75;
+    let expected = p * 1000.0
+        / (400.0
+            * novo_checks::calc::starter::typical_efficiency(p)
+            * novo_checks::calc::starter::typical_cos_phi(p));
+    assert!(
+        (motor.current_a.value.unwrap() - expected).abs() < 1e-6,
+        "{:?} vs {expected}",
+        motor.current_a
+    );
+    assert!(
+        motor
+            .current_basis
+            .contains("typical efficiency and power factor")
+    );
+    assert!(motor.current_a.value.unwrap() > p * 1000.0 / 400.0 * 1.2);
 }
