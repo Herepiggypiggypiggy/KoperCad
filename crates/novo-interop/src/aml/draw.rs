@@ -234,17 +234,34 @@ fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
             "lamp" | "earth" | "pin" | "plug" | "generic" | "enclosure" | "interruption"
         );
     let faces: Vec<Option<Direction>> = sym.pins.iter().map(|p| direction(&p.faces)).collect();
-    for id in candidates(&sym.kind, &sym.pins) {
+    // KoperCAD's own key first: that symbol, its pins in order.
+    let own = sym
+        .library
+        .as_deref()
+        .map(|k| k.trim_start_matches("iec/").to_string());
+    let ids: Vec<String> = own
+        .iter()
+        .cloned()
+        .chain(
+            candidates(&sym.kind, &sym.pins)
+                .into_iter()
+                .map(String::from),
+        )
+        .collect();
+    for id in &ids {
         let Some(s) = lib.get(&format!("iec/{id}")) else {
             continue;
         };
         if s.connections.len() != sym.pins.len() {
             continue;
         }
+        let exact = own.as_deref() == Some(id.as_str());
         // Pin names decide which pin is which; a symbol whose pins are
         // all positional is accepted only where order is the only meaning
         // (a terminal's two sides, a lamp).
-        let conns: Vec<usize> = if named {
+        let conns: Vec<usize> = if exact {
+            (0..sym.pins.len()).collect()
+        } else if named {
             let map = match_pins(&names, s, None);
             let by_name: Vec<Option<usize>> = names
                 .iter()

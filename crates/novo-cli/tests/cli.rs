@@ -840,7 +840,8 @@ fn export_aml_writes_caex_and_lists_what_the_format_cannot_carry() {
     assert!(text.contains("<CAEXFile"));
     assert!(text.contains("Name=\"-K1\""));
     assert!(run.out.contains("1 devices"), "{}", run.out);
-    assert!(run.out.contains("pages and drawings"), "{}", run.out);
+    assert!(run.out.contains("2 pages"), "{}", run.out);
+    assert!(run.out.contains("page graphics"), "{}", run.out);
 }
 
 /// An edited export of `project`: the first device's description set to
