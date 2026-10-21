@@ -25,6 +25,13 @@ impl NovoApp {
             .collect()
     }
 
+    /// Whether the project has no terminal proposal on any page.
+    pub(super) fn all_proposals_empty(&self) -> bool {
+        self.backend
+            .document()
+            .is_none_or(|d| novo_terminals::suggest_terminals(d.project()).is_empty())
+    }
+
     /// Enter: accepts the highlighted proposal, but only while it is on
     /// screen; otherwise it is brought into view first, so nothing is
     /// accepted that the user cannot see.

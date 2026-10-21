@@ -60,8 +60,8 @@ fn poles(names: &[&'static str]) -> Vec<(&'static str, f64, f64, &'static str)> 
         .collect()
 }
 
-fn import(devices: &[String]) -> Project {
-    let text = format!(
+fn file_of(devices: &[String]) -> String {
+    format!(
         r#"<?xml version="1.0" encoding="utf-8"?>
 <CAEXFile FileName="t.aml" SchemaVersion="2.15"><InstanceHierarchy Name="Test">
 <InternalElement ID="proj" Name="Test"><RoleRequirements RefBaseRoleClassPath="KoperCADRoleClassLib/Project"/>
@@ -70,8 +70,11 @@ fn import(devices: &[String]) -> Project {
 </InternalElement>
 {}</InternalElement></InstanceHierarchy></CAEXFile>"#,
         devices.concat()
-    );
-    let plant = read_aml(&text).unwrap();
+    )
+}
+
+fn import(devices: &[String]) -> Project {
+    let plant = read_aml(&file_of(devices)).unwrap();
     let mut doc = Document::new(Project::new("t"));
     plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
     doc.project().clone()
@@ -180,4 +183,55 @@ fn an_unreadable_part_size_is_ignored() {
     let part = p.parts().find(|x| x.order_number == "BAD").unwrap();
     assert!(!part.properties.contains_key("width_mm"));
     assert!(!part.properties.contains_key("height_mm"));
+}
+
+#[test]
+fn the_report_says_what_was_guessed() {
+    let plant = read_aml(&file_of(&[
+        device(1, "motor", 20.0, &row(&["A", "B", "C"])),
+        sized(
+            2,
+            "KNOWN",
+            &[attr("Width", "45", "mm"), attr("Height", "90", "mm")].concat(),
+        ),
+        sized(3, "UNKNOWN", ""),
+    ]))
+    .unwrap();
+    let doc = Document::new(Project::new("t"));
+    let report = plan_import(doc.project(), &plant).report();
+    let guessed = |what: &str| report.guessed.iter().find(|g| g.what == what);
+    let boxes = guessed("symbols drawn as labelled boxes").expect("a box was drawn");
+    assert_eq!(boxes.count, 1);
+    assert!(boxes.why.contains("motor (3 pins) x1"), "{}", boxes.why);
+    // The motor has no part and no size, the second part has both, the third
+    // has none: two devices fall back to the default footprint.
+    assert_eq!(
+        guessed("devices without a footprint").map(|g| g.count),
+        Some(2)
+    );
+    assert!(report.summary().contains("Guessed: "));
+    assert!(report.text().contains("(guessed)"));
+}
+
+#[test]
+fn only_the_missing_footprint_is_reported_when_every_symbol_fits() {
+    let plant = read_aml(&file_of(&[
+        device(
+            1,
+            "power_poles",
+            20.0,
+            &poles(&["1", "2", "3", "4", "5", "6"]),
+        ),
+        sized(
+            2,
+            "KNOWN",
+            &[attr("Width", "45", "mm"), attr("Height", "90", "mm")].concat(),
+        ),
+    ]))
+    .unwrap();
+    let doc = Document::new(Project::new("t"));
+    let report = plan_import(doc.project(), &plant).report();
+    // The poles fit a library symbol; the device without a part has no size.
+    assert_eq!(report.guessed.len(), 1, "{}", report.text());
+    assert_eq!(report.guessed[0].what, "devices without a footprint");
 }

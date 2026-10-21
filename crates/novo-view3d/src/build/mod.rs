@@ -311,6 +311,16 @@ pub fn from_layout(layout: &CabinetLayout, inputs: &Inputs, options: &Options) -
         }
         item.label = inputs.labels.get(&p.id).cloned();
         item.tint = inputs.classes.get(&p.id).map(|c| c.tint());
+        item.needs = Some({
+            use novo_layout::Side;
+            let n = |side| p.need(side) as f32;
+            [
+                n(Side::Left),
+                n(Side::Right),
+                n(Side::Above),
+                n(Side::Below),
+            ]
+        });
         if let Some(class) = inputs.classes.get(&p.id)
             && let Some(k) = crate::device_shape::key(*class, item.size)
         {

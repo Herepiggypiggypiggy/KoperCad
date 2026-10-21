@@ -5,6 +5,7 @@
 use glam::Vec3;
 use novo_cfd::CfdSnapshot;
 use novo_heatview::cfd::{self, Axis};
+use novo_heatview::flux;
 use novo_view3d::{Overlay, OverlayLines, Ray};
 
 use super::heat_3d::Place;
@@ -21,6 +22,11 @@ pub(crate) struct Reading {
     pub speed: f64,
     /// Vertical part of the air velocity, m/s, positive upward in the view.
     pub up: f64,
+    /// Size of the heat the air carries here, `rho cp |T - ambient| |u|`,
+    /// W/m2. Derived from the fields; no radiation, no conduction.
+    pub heat_w_m2: f64,
+    /// Vertical part of that heat flow, W/m2, positive upward in the view.
+    pub heat_up: f64,
 }
 
 impl Reading {
@@ -37,8 +43,19 @@ impl Reading {
         } else {
             format!("{:.2} m/s", self.speed)
         };
+        let heat = if self.heat_w_m2 < 1.0 {
+            String::from("air carries no heat")
+        } else if self.heat_up.abs() > 0.5 * self.heat_w_m2 {
+            format!(
+                "air carries {:.0} W/m² {}",
+                self.heat_w_m2,
+                if self.heat_up > 0.0 { "up" } else { "down" }
+            )
+        } else {
+            format!("air carries {:.0} W/m²", self.heat_w_m2)
+        };
         format!(
-            "{:.1} °C ({:+.1} K), air {dir}  at x {:.0}, y {:.0}, z {:.0} mm",
+            "{:.1} °C ({:+.1} K), air {dir}, {heat}  at x {:.0}, y {:.0}, z {:.0} mm",
             self.temperature_c, self.rise_k, self.at[0], self.at[1], self.at[2]
         )
     }
@@ -174,13 +191,18 @@ pub(crate) fn read(snap: &CfdSnapshot, ambient: f64, at: [f64; 3]) -> Reading {
     let temperature_c = f64::from(cfd::temperature_at(snap, at));
     let v = cfd::velocity_at(snap, at);
     let speed = v.iter().map(|c| f64::from(*c).powi(2)).sum::<f64>().sqrt();
+    let rise_k = temperature_c - ambient;
+    // The heat the air carries away from ambient; no radiation, no conduction.
+    let scale = flux::AIR_DENSITY * flux::AIR_CP * rise_k;
     Reading {
         at,
         temperature_c,
-        rise_k: temperature_c - ambient,
+        rise_k,
         speed,
         // The solver's y runs down the plate.
         up: -f64::from(v[1]),
+        heat_w_m2: (scale * speed).abs(),
+        heat_up: -scale * f64::from(v[1]),
     }
 }
 
@@ -232,6 +254,24 @@ mod tests {
         assert!((r.rise_k - 6.0).abs() < 0.05);
         assert!((r.speed - 1.0).abs() < 1e-6 && r.up.abs() < 1e-6);
         assert!(r.text().contains("26.0 °C"));
+        // 1.16 * 1007 * 6 K * 1 m/s, sideways.
+        assert!((r.heat_w_m2 - 7008.9).abs() < 5.0, "{r:?}");
+        assert!(r.text().contains("air carries 7009 W/m²"), "{}", r.text());
+    }
+
+    #[test]
+    fn heat_going_up_is_named_and_still_air_carries_none() {
+        let mut snap = snapshot();
+        snap.velocity.iter_mut().for_each(|v| *v = [0.0, -0.2, 0.0]);
+        let r = read(&snap, 20.0, [60.0, 30.0, 40.0]);
+        assert!(
+            r.heat_up > 0.0 && r.text().contains("W/m² up"),
+            "{}",
+            r.text()
+        );
+        snap.velocity.iter_mut().for_each(|v| *v = [0.0; 3]);
+        let r = read(&snap, 20.0, [60.0, 30.0, 40.0]);
+        assert!(r.text().contains("air carries no heat"));
     }
 
     #[test]

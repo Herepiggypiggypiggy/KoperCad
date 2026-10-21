@@ -101,11 +101,15 @@ pub(crate) struct View3dMode {
     heat_carry: super::heat_carry::Carry,
     /// Scene with devices coloured by temperature, for the key (scene
     /// revision, result id).
-    heat_scene: Option<((u64, u64), Arc<novo_view3d::Scene>)>,
+    heat_scene: Option<(HeatSceneKey, Arc<novo_view3d::Scene>)>,
     /// The layers the scene was built with.
     built_layers: Layers,
     /// The hidden items the scene was built with.
     built_hidden: BTreeSet<ItemId>,
+    /// Whether the scene was built with the duct fill tints, and the fill of
+    /// each duct at a project revision.
+    built_duct_fill: bool,
+    duct_fill: Option<(StructureId, u64, Vec<super::cabinet_routes::DuctFill>)>,
     /// The routed wires of an enclosure at a project revision.
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
     /// What each routed wire comes to, for the hover card and the list.
@@ -119,6 +123,10 @@ pub(crate) struct View3dMode {
     /// The frame statistics panel and the cost of the last scene rebuild.
     pub(super) stats: Stats,
 }
+
+/// What the tinted scene was built for: scene revision, result id and the
+/// set temperature scale (as bits).
+type HeatSceneKey = (u64, u64, Option<(u64, u64)>);
 
 /// What a `view.*` command asks of the 3D view.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -161,6 +169,8 @@ impl Default for View3dMode {
             heat_scene: None,
             built_layers: Layers::default(),
             built_hidden: BTreeSet::new(),
+            built_duct_fill: false,
+            duct_fill: None,
             wires: None,
             wire_facts: None,
             wire_runs: false,
@@ -284,14 +294,28 @@ impl NovoApp {
         let stale = mode.built_models != mode.models.revision
             || !matches!(&mode.built, Some((s, r, _)) if *s == id && *r == revision)
             || mode.built_layers != layers
-            || mode.built_hidden != mode.controls.hidden;
+            || mode.built_hidden != mode.controls.hidden
+            || mode.built_duct_fill != mode.controls.duct_fill;
         if stale {
             let started = Instant::now();
             let mut routing_ms = None;
             // Routing is the slow part: it is redone only for a new revision.
-            let wires = if layers.wires {
-                if !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision) {
-                    let routed = novo_routing::model::route_project(project);
+            let want_fill = mode.controls.duct_fill;
+            let fill_stale =
+                !matches!(&mode.duct_fill, Some((s, r, _)) if *s == id && *r == revision);
+            let wires_stale = !matches!(&mode.wires, Some((s, r, _)) if *s == id && *r == revision);
+            if (layers.wires && wires_stale) || (want_fill && fill_stale) {
+                let routed = novo_routing::model::route_project(project);
+                if want_fill {
+                    let fills = routed
+                        .plans
+                        .iter()
+                        .find(|(s, _)| *s == id)
+                        .map(|(_, plan)| super::cabinet_routes::duct_fills(project, id, plan))
+                        .unwrap_or_default();
+                    mode.duct_fill = Some((id, revision, fills));
+                }
+                if layers.wires && wires_stale {
                     let inputs = model::wires_with(project, id, &routed);
                     let on_plate = inputs.iter().map(|w| w.id).collect();
                     mode.wire_facts = Some((
@@ -300,8 +324,10 @@ impl NovoApp {
                         view3d_wires::facts(project, &routed, &on_plate),
                     ));
                     mode.wires = Some((id, revision, inputs));
-                    routing_ms = Some(started.elapsed().as_secs_f32() * 1000.0);
                 }
+                routing_ms = Some(started.elapsed().as_secs_f32() * 1000.0);
+            }
+            let wires = if layers.wires {
                 mode.wires.as_ref().map(|w| w.2.clone()).unwrap_or_default()
             } else {
                 Vec::new()
@@ -326,6 +352,9 @@ impl NovoApp {
                         &model::inputs(project, id),
                     );
                 }
+                if want_fill && let Some((_, _, fills)) = &mode.duct_fill {
+                    super::view3d_duct_fill::tint(&mut built, fills);
+                }
                 // Items deleted from the project are no longer hidden.
                 mode.controls.hidden.retain(|i| built.get(*i).is_some());
                 // The renderer redraws on a new scene revision only: `refresh`
@@ -343,6 +372,7 @@ impl NovoApp {
                 mode.built = Some((id, revision, Arc::new(shown)));
                 mode.built_layers = layers;
                 mode.built_hidden = mode.controls.hidden.clone();
+                mode.built_duct_fill = want_fill;
                 let total = started.elapsed().as_secs_f32() * 1000.0;
                 mode.stats.build = Build {
                     scene_ms: total - routing_ms.unwrap_or(0.0),
@@ -493,6 +523,10 @@ impl NovoApp {
             };
             if let Some(text) = view3d_move::warning(lay, &landings, &tag_of) {
                 view3d_move::show_warning(ui.ctx(), &text);
+            } else if let [one] = landings.as_slice() {
+                // One device in the hand: its distances to the neighbours.
+                let gaps = super::view3d_drag_gaps::gaps(lay, one);
+                super::view3d_drag_gaps::show(ui.ctx(), one, &gaps);
             }
         }
         let mut ghost: Vec<_> = landings
@@ -709,15 +743,25 @@ impl NovoApp {
         }
         let shown = match &solution {
             Some(sol) if mode.heat.devices => {
-                let key = (scene.revision, sol.id);
+                let key = (
+                    scene.revision,
+                    sol.id,
+                    mode.heat.scale.map(|(a, b)| (a.to_bits(), b.to_bits())),
+                );
                 if !matches!(&mode.heat_scene, Some((k, _)) if *k == key) {
                     let place = Place {
                         plate_x: sol.plate[0],
                         plate_y: sol.plate[1],
                         frame: scene.frame,
                     };
-                    let tinted =
-                        heat_3d::tint_devices(scene, &sol.snapshot, sol.ambient, place, sol.id);
+                    let tinted = heat_3d::tint_devices(
+                        scene,
+                        &sol.snapshot,
+                        sol.ambient,
+                        place,
+                        mode.heat.scale,
+                        sol.id,
+                    );
                     mode.heat_scene = Some((key, Arc::new(tinted)));
                 }
                 mode.heat_scene.as_ref().map(|(_, s)| s)
@@ -1218,7 +1262,7 @@ fn heat_controls(
     tag_of: &dyn Fn(u64) -> String,
 ) -> Option<u64> {
     use novo_heatview::cfd::Axis;
-    let range = heat_3d::range(&sol.snapshot, sol.ambient);
+    let range = heat_3d::range_for(&sol.snapshot, sol.ambient, h.scale);
     let mut jump = None;
     egui::Frame::new()
         .inner_margin(egui::Margin::symmetric(10, 4))
@@ -1244,11 +1288,9 @@ fn heat_controls(
         }
         ui.checkbox(&mut h.lines, "Airflow")
             .on_hover_text("Streamlines from in front of the devices; faster air is brighter");
-        let top = if h.arrows {
-            super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at)
-        } else {
-            0.0
-        };
+        let top = h
+            .arrows
+            .then(|| super::heat_arrows::top_speed(&sol.snapshot, h.axis, h.slice_at));
         ui.checkbox(&mut h.cloud, "Cloud").on_hover_text(
             "The whole cabinet volume as see-through layers coloured by air temperature; air near ambient is invisible, hotter air is more opaque. Layers are cut across the direction you look along, so turning the view across the cabinet re-cuts them",
         );
@@ -1258,14 +1300,21 @@ fn heat_controls(
                     .show_value(false),
             )
             .on_hover_text("How solid the cloud looks");
+            ui.add(
+                egui::DragValue::new(&mut h.cloud_layers)
+                    .range(heat_cloud::LAYERS_RANGE)
+                    .suffix(" layers"),
+            )
+            .on_hover_text(
+                "Slices through the cabinet: fewer is lighter on a slow graphics card, more is smoother",
+            );
         }
         ui.checkbox(&mut h.carry, "Heat flow").on_hover_text(
             "Where the heat goes: orange lines and moving dashes follow the heat the air carries away from hot parts (brighter is more heat per area); arrows inside plate, rails and devices show heat conducted through them. Derived from the solved temperature and air speed; surface radiation is not included. Air colder than ambient takes heat in, so its lines point against the air",
         );
-        ui.checkbox(&mut h.arrows, "Arrows").on_hover_text(format!(
-            "Arrows on the slice plane point where the air goes. Length is relative to the fastest air on this plane (now {top:.2} m/s), so two planes cannot be compared by length; air under 2 % of that is not drawn"
-        ));
-        if h.arrows {
+        ui.checkbox(&mut h.arrows, "Arrows")
+            .on_hover_text(super::heat_arrows::hover_text(top));
+        if let Some(top) = top.filter(|_| h.arrows) {
             ui.label(egui::RichText::new(format!("longest {top:.2} m/s")).small());
         }
         ui.checkbox(&mut h.devices, "Devices").on_hover_text(
@@ -1275,6 +1324,7 @@ fn heat_controls(
             "Click the air to read its temperature and speed there (Esc clears the point)",
         );
         jump = heat_spots::menu(ui, &sol.snapshot, tag_of);
+        scale_menu(ui, h, heat_3d::range(&sol.snapshot, sol.ambient));
         if probe.on {
             // Its own row, always there while the probe is on, so the strip
             // does not change height when a point is picked.
@@ -1290,6 +1340,50 @@ fn heat_controls(
             });
         });
     jump
+}
+
+/// The Scale menu: the temperature range the colours, the cloud and the
+/// shell use. Raising the lower end makes air below it clear in the cloud and
+/// spreads the colours over the hot part, which finds a hot spot in a mostly
+/// warm cabinet; Auto goes back to ambient to the hottest cell.
+fn scale_menu(ui: &mut egui::Ui, h: &mut Heat3d, auto: novo_heatview::range::Range) {
+    let label = if h.scale.is_some() {
+        "Scale: set"
+    } else {
+        "Scale"
+    };
+    let config = egui::containers::menu::MenuConfig::new()
+        .close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside);
+    egui::containers::menu::MenuButton::new(label).config(config).ui(ui, |ui| {
+        let (mut lo, mut hi) = h.scale.unwrap_or((auto.lo, auto.hi));
+        let mut changed = false;
+        ui.horizontal(|ui| {
+            ui.label("From");
+            changed |= ui
+                .add(egui::DragValue::new(&mut lo).range(-50.0..=300.0).max_decimals(1).suffix(" °C"))
+                .changed();
+            ui.label("to");
+            changed |= ui
+                .add(egui::DragValue::new(&mut hi).range(-50.0..=300.0).max_decimals(1).suffix(" °C"))
+                .changed();
+        });
+        if changed {
+            h.scale = Some((lo, hi.max(lo + 1.0)));
+        }
+        ui.label(
+            egui::RichText::new(
+                "Colours, cloud and shell use this range. Air below the lower end is clear in the cloud.",
+            )
+            .small(),
+        );
+        if ui
+            .add_enabled(h.scale.is_some(), egui::Button::new("Auto"))
+            .on_hover_text("Ambient to the hottest cell")
+            .clicked()
+        {
+            h.scale = None;
+        }
+    });
 }
 
 /// The slice plane's position in millimetres along its axis, with a step to

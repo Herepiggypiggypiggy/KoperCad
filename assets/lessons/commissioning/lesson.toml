@@ -82,7 +82,7 @@ Eronder verschijnt de naam van het item met voor elk van zijn controles een rege
 """
 point = { ui = "commissioning.next_open" }
 expect = { clicked = "commissioning.next_open" }
-manual = "a click on the Next open button; no script clicks panel buttons yet"
+solve = [ { ui_click = "commissioning.next_open" } ]
 
 [[step]]
 id = "pass"
@@ -100,7 +100,7 @@ De regel krijgt een vinkje, je naam en de tijd en de waarde wordt erbij bewaard.
 """
 point = { ui = "commissioning.pass" }
 expect = { clicked = "commissioning.pass" }
-manual = "a click on the Pass button; no script clicks panel buttons yet"
+solve = [ { ui_click = "commissioning.pass" } ]
 
 [[step]]
 id = "fail"
@@ -118,7 +118,7 @@ De controle wordt afgekeurd met je notitie en KoperCAD maakt zelf een punt aan: 
 """
 point = { ui = "commissioning.fail" }
 expect = { clicked = "commissioning.fail" }
-manual = "a click on the Fail button; no script clicks panel buttons yet"
+solve = [ { ui_click = "commissioning.next_open" }, { ui_click = "commissioning.fail" } ]
 
 [[step]]
 id = "punch"
@@ -136,7 +136,7 @@ Een punt staat er als "Major · Open · Klem vastdraaien · (het item)". De punt
 """
 point = { ui = "commissioning.punch" }
 expect = { clicked = "commissioning.punch" }
-manual = "a click on the Punch list button; no script clicks panel buttons yet"
+solve = [ { ui_click = "commissioning.punch" } ]
 
 [[step]]
 id = "resolve"

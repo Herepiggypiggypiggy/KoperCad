@@ -841,8 +841,11 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
                 } else {
                     bar.show_percentage()
                 });
-                ui.label(egui::RichText::new(heat_progress::label(p, secs)).small())
-                    .on_hover_text("Level, iteration (it) and seconds since the run started");
+                ui.add(
+                    egui::Label::new(egui::RichText::new(heat_progress::label(p, secs)).small())
+                        .wrap_mode(egui::TextWrapMode::Extend),
+                )
+                .on_hover_text("Level, iteration (it) and seconds since the run started");
                 heat_progress::sparkline(ui, &state.history);
             }
             None => {

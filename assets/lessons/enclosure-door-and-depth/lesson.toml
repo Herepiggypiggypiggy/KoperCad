@@ -57,18 +57,18 @@ Zolang de binnenmaat niet bekend is, kan er niets over diepte worden gecontrolee
 """
 point = { ui = "cabinet.plate" }
 expect = { clicked = "cabinet.plate" }
-manual = "a click on the Plate setup button; no script clicks panel buttons yet"
+solve = [ { select = "" }, { ui_click = "cabinet.plate" } ]
 
 [[step]]
 id = "read-form"
 title = "What the form asks: the box"
 title_nl = "Wat het formulier vraagt: de kast"
 text = """
-**Inside width**, **Inside height** and **Inside depth** are the size of the enclosure inside, not the outside. **Plate setback** is how far the plate stands from the back wall.
+**Inside width**, **Inside height** and {ui:cabinet.door.depth} are the size of the enclosure inside, not the outside. **Plate setback** is how far the plate stands from the back wall.
 Right now they are filled in for you: the plate size, a depth of 250 mm and a setback of 20 mm.
 """
 text_nl = """
-**Inside width**, **Inside height** en **Inside depth** zijn de maten van de kast aan de binnenkant, niet de buitenkant. **Plate setback** is hoever de plaat van de achterwand staat.
+**Inside width**, **Inside height** en {ui:cabinet.door.depth} zijn de maten van de kast aan de binnenkant, niet de buitenkant. **Plate setback** is hoever de plaat van de achterwand staat.
 Nu zijn ze alvast ingevuld: de plaatmaat, een diepte van 250 mm en een setback van 20 mm.
 """
 point = { ui = "cabinet.door" }
@@ -103,25 +103,30 @@ Eronder tekent een bovenaanzicht de plaat, de componenten zo diep als hun artike
 """
 point = { ui = "cabinet.door.apply" }
 expect = { clicked = "cabinet.door.apply" }
-manual = "a click on Apply in the Door and depth card; no script clicks panel buttons yet"
+solve = [ { ui_click = "cabinet.door.apply" } ]
 
 [[step]]
 id = "shallow"
-how = ["Double-click Inside depth.", "Type 100 and press Enter.", "Click Apply."]
-how_nl = ["Dubbelklik op Inside depth.", "Typ 100 en druk op Enter.", "Klik op Apply."]
+how = ["Double-click {ui:cabinet.door.depth}.", "Type 100 and press Enter.", "Click Apply."]
+how_nl = ["Dubbelklik op {ui:cabinet.door.depth}.", "Typ 100 en druk op Enter.", "Klik op Apply."]
 title = "Try a shallow cabinet"
 title_nl = "Probeer een ondiepe kast"
 text = """
-Double-click **Inside depth**, type **100** and press Enter, then click **Apply**. The {tip:usable-depth} is now 100 - 20 = 80 mm.
+Double-click {ui:cabinet.door.depth}, type **100** and press Enter, then click **Apply**. The {tip:usable-depth} is now 100 - 20 = 80 mm.
 The contactor **-K1**, the fuse **-F2** (both 90 mm deep) and the transformer **-T1** (85 mm) are deeper than that.
 """
 text_nl = """
-Dubbelklik op **Inside depth**, typ **100** en druk op Enter en klik dan op **Apply**. De {tip:usable-depth} is nu 100 - 20 = 80 mm.
+Dubbelklik op {ui:cabinet.door.depth}, typ **100** en druk op Enter en klik dan op **Apply**. De {tip:usable-depth} is nu 100 - 20 = 80 mm.
 De contactor **-K1**, de zekering **-F2** (beide 90 mm diep) en de transformator **-T1** (85 mm) zijn dieper dan dat.
 """
 point = { ui = "cabinet.door.apply" }
 expect = { clicked = "cabinet.door.apply" }
-manual = "a click on Apply in the Door and depth card; no script clicks panel buttons yet"
+solve = [
+  { ui_click = "cabinet.door.depth" },
+  { type_text = "100" },
+  { key = "Enter" },
+  { ui_click = "cabinet.door.apply" },
+]
 
 [[step]]
 id = "read-depth"
