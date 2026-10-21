@@ -198,10 +198,7 @@ fn attr(rest: &[u8], name: &[u8]) -> Option<Vec<u8>> {
     let mut key = vec![b' '];
     key.extend_from_slice(name);
     key.extend_from_slice(b"=\"");
-    let start = rest
-        .windows(key.len())
-        .position(|w| w == key.as_slice())?
-        + key.len();
+    let start = rest.windows(key.len()).position(|w| w == key.as_slice())? + key.len();
     let end = find(rest, b'"', start)?;
     Some(rest[start..end].to_vec())
 }
@@ -213,9 +210,9 @@ fn cell_ref(text: &[u8]) -> Option<(u64, u64)> {
     if l.is_empty() || l.len() > 3 || d.is_empty() || !d.iter().all(u8::is_ascii_digit) {
         return None;
     }
-    let col = l
-        .iter()
-        .fold(0u64, |a, b| a * 26 + u64::from(b.to_ascii_uppercase() - b'A' + 1));
+    let col = l.iter().fold(0u64, |a, b| {
+        a * 26 + u64::from(b.to_ascii_uppercase() - b'A' + 1)
+    });
     let row: u64 = std::str::from_utf8(d).ok()?.parse().ok()?;
     Some((row, col))
 }
