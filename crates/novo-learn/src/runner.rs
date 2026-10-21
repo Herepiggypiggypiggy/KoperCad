@@ -35,7 +35,7 @@ pub struct Run {
     done: Vec<String>,
     skipped: Vec<String>,
     events: BTreeSet<Event>,
-    netlist: Option<Netlist>,
+    netlist: Option<std::sync::Arc<Netlist>>,
 }
 
 impl Run {

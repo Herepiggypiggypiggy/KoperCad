@@ -215,6 +215,7 @@ const KNOWN_VERBS: &[&str] = &[
     "fresh",
     "shot",
     "wait",
+    "frame_stats",
     "resize",
     "click_text",
     "click",
@@ -585,6 +586,8 @@ struct StepResult {
     status: &'static str,
     ms: u128,
     error: Option<String>,
+    /// A measurement the step made (`frame_stats`), shown in the report.
+    note: Option<String>,
 }
 
 struct ScenarioRun {
@@ -860,6 +863,30 @@ impl Ctx<'_> {
                 self.srv
                     .tool("wait", &json!({"frames": frames}))
                     .map(|_| ())
+            }
+            "frame_stats" => {
+                // `frame_stats [pan|zoom|none] [frames]`: how long frames take
+                // with the page moving; the numbers go into the step list.
+                let motion = a(1).unwrap_or("pan").to_owned();
+                let frames = a(2).map_or(Ok(120.0), |_| num(2, "frames"))?;
+                let r = self
+                    .srv
+                    .send(json!({"cmd": "frame_stats", "motion": motion, "frames": frames}))?;
+                let s = &r["frame_stats"];
+                let f = |k: &str, q: &str| s[k][q].as_f64().unwrap_or(f64::NAN);
+                self.notes.push(format!(
+                    "frame_stats {motion}, {} frames: UI pass {:.1} ms mean, {:.1} median, {:.1} p95, {:.1} worst; whole frame {:.1} mean, {:.1} median, {:.1} p95, {:.1} worst (ms)",
+                    s["frames"],
+                    f("pass_ms", "mean"),
+                    f("pass_ms", "median"),
+                    f("pass_ms", "p95"),
+                    f("pass_ms", "max"),
+                    f("period_ms", "mean"),
+                    f("period_ms", "median"),
+                    f("period_ms", "p95"),
+                    f("period_ms", "max"),
+                ));
+                Ok(())
             }
             "resize" => {
                 let args = json!({"w": num(1, "w")?, "h": num(2, "h")?});
@@ -1242,6 +1269,7 @@ fn run_scenarios(r: Run, out: &mut dyn Write) -> Result<i32, Failure> {
                         status: "skipped",
                         ms: 0,
                         error: None,
+                        note: None,
                     });
                     continue;
                 }
@@ -1275,6 +1303,7 @@ fn run_scenarios(r: Run, out: &mut dyn Write) -> Result<i32, Failure> {
                     status,
                     ms: t.elapsed().as_millis(),
                     error,
+                    note: ctx.notes.pop().filter(|_| st.words[0] == "frame_stats"),
                 });
             }
             // The app's own log: panics and GPU validation errors count.
@@ -1345,7 +1374,7 @@ fn run_scenarios(r: Run, out: &mut dyn Write) -> Result<i32, Failure> {
             "shots": r.shots,
             "findings": r.findings.iter().map(|i| format!("F-{:03}", i + 1)).collect::<Vec<_>>(),
             "steps": r.steps.iter().map(|s| json!({
-                "n": s.n, "step": s.text, "status": s.status, "ms": s.ms, "error": s.error,
+                "n": s.n, "step": s.text, "status": s.status, "ms": s.ms, "error": s.error, "note": s.note,
             })).collect::<Vec<_>>(),
         })).collect::<Vec<_>>(),
         "findings": findings.iter().enumerate().map(|(i, f)| f.json(i + 1)).collect::<Vec<_>>(),
@@ -1442,6 +1471,37 @@ pub(crate) fn render_report(v: &Value) -> String {
             if f.is_empty() { "-".into() } else { f },
             r["shots"].as_array().map_or(0, Vec::len),
         );
+    }
+    let measured: Vec<(String, String, String)> = v["scenarios"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .flat_map(|r| {
+            let (name, size) = (
+                r["name"].as_str().unwrap_or("").to_owned(),
+                r["size"].as_str().unwrap_or("").to_owned(),
+            );
+            r["steps"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(move |st| {
+                    Some((
+                        format!("{name} @ {size}"),
+                        st["step"].as_str()?.to_owned(),
+                        st["note"].as_str()?.to_owned(),
+                    ))
+                })
+        })
+        .collect();
+    if !measured.is_empty() {
+        let _ = writeln!(
+            s,
+            "\n## Measurements\n\n| Scenario | Step | Result |\n|---|---|---|"
+        );
+        for (scenario, step, note) in &measured {
+            let _ = writeln!(s, "| {scenario} | {step} | {note} |");
+        }
     }
     let sweeps = v["sweeps"].as_array().cloned().unwrap_or_default();
     if !sweeps.is_empty() {

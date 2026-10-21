@@ -10,6 +10,15 @@ use novo_xref::Place;
 
 use super::{Level, NovoApp};
 
+/// Symbols plus wires above which the design check runs on a worker thread.
+const BACKGROUND_FROM: usize = 1500;
+
+/// A design check running for one project revision.
+pub(super) struct CheckJob {
+    revision: u64,
+    rx: std::sync::mpsc::Receiver<Vec<Problem>>,
+}
+
 impl NovoApp {
     /// Problems marked where they are (DESIGN.md §5, principle 7): a
     /// warning or error glyph on each drawn object of each problem on
@@ -18,6 +27,7 @@ impl NovoApp {
         if self.learn.quiet_checks() {
             return Vec::new();
         }
+        self.refresh_problems(true);
         let Some(doc) = self.backend.document() else {
             return Vec::new();
         };
@@ -27,12 +37,11 @@ impl NovoApp {
             AnyId::Wire(w) => project.wire(*w).is_some_and(|w| w.page == page),
             _ => false,
         };
-        let problems = match &self.wb.problems {
-            Some((revision, problems)) if *revision == project.revision() => problems.clone(),
-            _ => novo_checks::check_open(project),
-        };
+        // While a background run is catching up, the marks of the last
+        // finished one stay (they may be a revision old).
+        let problems = self.wb.problems.as_ref().map_or(&[][..], |(_, p)| p);
         let mut marks = Vec::new();
-        for p in &problems {
+        for p in problems {
             let kind = match p.severity {
                 Severity::Error => MarkKind::Error,
                 Severity::Warning => MarkKind::Warning,
@@ -52,24 +61,82 @@ impl NovoApp {
         if self.learn.quiet_checks() {
             return &[];
         }
-        self.problems()
+        self.refresh_problems(true);
+        self.wb.problems.as_ref().map_or(&[], |(_, p)| p.as_slice())
     }
 
-    /// The design-check problems of the current revision.
-    pub(super) fn problems(&mut self) -> &[Problem] {
+    /// True while the shown problems belong to an older revision than the
+    /// drawing, because a background run has not finished yet.
+    pub(super) fn checks_pending(&self) -> bool {
         let Some(doc) = self.backend.document() else {
-            return &[];
+            return false;
+        };
+        self.wb
+            .problems
+            .as_ref()
+            .is_none_or(|(r, _)| *r != doc.project().revision())
+    }
+
+    /// Brings `wb.problems` up to the current revision. Small projects check
+    /// right here (a few milliseconds). On a big one the check (about a
+    /// second at 600 pages) runs on a worker thread when `background` is set,
+    /// and the last finished result stays in place until the new one lands,
+    /// so an edit never freezes the window. Exports and reports pass
+    /// `false`: they need the current answer and wait for it.
+    fn refresh_problems(&mut self, background: bool) {
+        let Some(doc) = self.backend.document() else {
+            return;
         };
         let project = doc.project();
         let revision = project.revision();
+        if let Some(job) = &self.wb.check_job {
+            match job.rx.try_recv() {
+                Ok(problems) => {
+                    let done = job.revision;
+                    self.wb.check_job = None;
+                    if self.wb.problems.as_ref().is_none_or(|(r, _)| *r < done) {
+                        self.wb.problems = Some((done, problems));
+                    }
+                }
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.wb.check_job = None,
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+            }
+        }
         if self
             .wb
             .problems
             .as_ref()
-            .is_none_or(|(r, _)| *r != revision)
+            .is_some_and(|(r, _)| *r == revision)
         {
-            self.wb.problems = Some((revision, novo_checks::check_open(project)));
+            return;
         }
+        let big = project.symbols().count() + project.wires().count() > BACKGROUND_FROM;
+        if !(background && big) {
+            // A run for an older revision is left to finish and is dropped.
+            self.wb.check_job = None;
+            self.wb.problems = Some((revision, novo_checks::check_open(project)));
+            return;
+        }
+        let stale = self
+            .wb
+            .check_job
+            .as_ref()
+            .is_some_and(|j| j.revision != revision);
+        if self.wb.check_job.is_none() || stale {
+            // One worker at a time: a run for an older revision is not waited
+            // for, its answer is dropped when it lands.
+            let snapshot = project.clone();
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let _ = tx.send(novo_checks::check_open(&snapshot));
+            });
+            self.wb.check_job = Some(CheckJob { revision, rx });
+        }
+    }
+
+    /// The design-check problems of the current revision.
+    pub(super) fn problems(&mut self) -> &[Problem] {
+        self.refresh_problems(false);
         self.wb.problems.as_ref().map_or(&[], |(_, p)| p.as_slice())
     }
 
@@ -79,7 +146,21 @@ impl NovoApp {
             return;
         }
         let summary = Summary::of(self.shown_problems());
-        let response = novo_theme::widgets::issue_pill(ui, summary.errors, summary.warnings);
+        let pending = self.checks_pending();
+        if pending {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(100));
+        }
+        let response = if pending && self.wb.problems.is_none() {
+            // Nothing finished yet: "No issues" would be a claim not yet checked.
+            ui.weak("Checking…")
+        } else {
+            let response = novo_theme::widgets::issue_pill(ui, summary.errors, summary.warnings);
+            if pending {
+                ui.weak("updating…");
+            }
+            response
+        };
         self.wb.pill_rect = response.rect;
         self.anchor_response("issue.pill", &response, "Issues");
         if response.clicked() {

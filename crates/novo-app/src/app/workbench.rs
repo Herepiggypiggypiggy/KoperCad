@@ -174,6 +174,8 @@ pub(crate) struct Workbench {
     pub(super) clip: super::clipboard::ClipState,
     /// Design-check results for one project revision.
     pub(super) problems: Option<(u64, Vec<Problem>)>,
+    /// The design check running on a worker thread (big projects only).
+    pub(super) check_job: Option<super::checks::CheckJob>,
     /// Where the issue pill was drawn, so its own click does not close
     /// the outline it opens.
     pub(super) pill_rect: egui::Rect,
@@ -326,6 +328,7 @@ impl Default for Workbench {
             override_marks: true,
             clip: Default::default(),
             problems: None,
+            check_job: None,
             pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,
