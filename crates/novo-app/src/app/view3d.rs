@@ -96,6 +96,9 @@ pub(crate) struct View3dMode {
     /// The probe tool and the point it reads.
     probe: ProbeState,
     heat_shown: Option<(u64, Heat3d)>,
+    /// Whether the door was open on the last frame: opening it from closed
+    /// reframes the cabinet once so the leaf is not cut off.
+    door_was_open: bool,
     /// Overlays without the moving tracers, and the lines the tracers follow.
     heat_base: Vec<novo_view3d::Overlay>,
     heat_flow: heat_3d::Flow,
@@ -172,6 +175,7 @@ impl Default for View3dMode {
             heat: Heat3d::default(),
             probe: ProbeState::default(),
             heat_shown: None,
+            door_was_open: false,
             heat_base: Vec::new(),
             heat_flow: heat_3d::Flow::default(),
             heat_carry: super::heat_carry::Carry::default(),
@@ -287,10 +291,17 @@ impl NovoApp {
         if let Some(text) = self.view3d.notice.take() {
             self.message(super::Level::Info, text);
         }
+        // The 3D view shows the machine of the current choice of options;
+        // the Cabinet keeps editing the full working project.
+        let choice = self.machine_variant();
+        let generation = self.machine_generation();
         let Some(document) = self.backend.document() else {
             return;
         };
-        let project = document.project();
+        let project: &novo_core::Project = match &choice {
+            Some(copy) => copy,
+            None => document.project(),
+        };
         let Some(id) = enclosure(project, self.cabinet.location.as_ref()) else {
             let mut open_cabinet = false;
             ui.vertical_centered(|ui| {
@@ -304,7 +315,8 @@ impl NovoApp {
             }
             return;
         };
-        let revision = project.revision();
+        // A copy for a choice has revisions of its own.
+        let revision = project.revision() ^ (generation << 40);
         let ambient = self.sizing.request().ambient_max;
         let empty_hint = super::tips::empty_3d_hint(&self.settings, &self.wb.keymap, project, id);
         let mode = &mut self.view3d;
@@ -808,6 +820,17 @@ impl NovoApp {
             mode.view
                 .set_door(DOOR_HINGE, angle, now, options.reduced_motion);
         }
+        // Opening the door from closed frames the cabinet with the door as far
+        // open as it goes, once; the slider after that moves nothing else.
+        let door_open = target > 0.0;
+        if door_open
+            && !mode.door_was_open
+            && let Some(max) = limit.and_then(|l| open_angle(scene, DOOR_HINGE, l as f32))
+        {
+            mode.view
+                .fit_with_door(scene, DOOR_HINGE, max, now, options.reduced_motion);
+        }
+        mode.door_was_open = door_open;
         let shown = match &solution {
             Some(sol) if mode.heat.devices => {
                 let key = (

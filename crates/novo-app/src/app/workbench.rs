@@ -55,6 +55,8 @@ pub(crate) struct Workbench {
     pub(super) preview_art: Option<novo_editor::art::LibraryArt>,
     /// The generated pages' reports, live.
     pub(super) reports: super::reports::Reports,
+    /// The machine as the current choice of options (copy and its reports).
+    pub(super) machine: super::machine::Machine,
     /// The place wheel, when open.
     pub(super) wheel: Option<super::wheel::Wheel>,
     /// A key that opens the wheel went down at this time (egui seconds),
@@ -265,6 +267,7 @@ impl Default for Workbench {
             xref: LiveXref::default(),
             preview_art: None,
             reports: Default::default(),
+            machine: Default::default(),
             wheel: None,
             place_hold: None,
             place_latch: None,
@@ -588,6 +591,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "macro.export_pack",
     "project.options",
     "project.variant",
+    "project.option",
+    "project.tie",
+    "project.untie",
     "project.generate",
     "export.variant_pdf",
     "export.spec",
@@ -1404,6 +1410,9 @@ impl NovoApp {
             "macro.export_pack" => self.macro_export_pack(),
             "project.options" => self.open_options(),
             "project.variant" => self.switch_variant(argument),
+            "project.option" => self.option_command(argument),
+            "project.tie" => self.tie_command(argument),
+            "project.untie" => self.untie_command(),
             "project.generate" => self.open_generate(),
             "export.variant_pdf" => {
                 self.export_variant_pdf(argument);

@@ -213,6 +213,21 @@ pub const DUTCH: &[Aliases] = &[
         &["uitvoering", "configuratie"],
     ),
     nl(
+        "project.option",
+        &["optie"],
+        &["optie schakelen", "met zonder", "machineoptie"],
+    ),
+    nl(
+        "project.tie",
+        &["koppel"],
+        &["koppel aan optie", "alleen met"],
+    ),
+    nl(
+        "project.untie",
+        &["ontkoppel"],
+        &["altijd tonen", "voorwaarde weg"],
+    ),
+    nl(
         "project.generate",
         &["genereer"],
         &["genereren", "specificatielijst", "uit excel"],
