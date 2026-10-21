@@ -174,11 +174,14 @@ fn accept_all(doc: &mut Document) {
 }
 
 #[test]
-fn wires_that_break_the_house_rules_are_listed_and_the_standard_is_not_checked() {
+fn wires_that_break_the_house_rules_are_listed() {
     let mut d = doc();
     assert!(rule_breaks(d.project()).is_empty(), "nothing set yet");
     accept_all(&mut d);
-    assert!(rule_breaks(d.project()).is_empty(), "IEC states no rules");
+    assert!(
+        rule_breaks(d.project()).is_empty(),
+        "the Autopilot follows IEC"
+    );
 
     set(&mut d, wire_rules::PRESET, Value::Text("house".into()));
     assert!(
@@ -275,4 +278,62 @@ fn a_wire_whose_class_was_a_guess_is_not_reported() {
         breaks.iter().all(|b| b.wire != wire),
         "a guessed class is not a finding: {breaks:?}"
     );
+}
+
+/// The wires of this class by the colour the Autopilot proposes for it.
+fn wires_proposed(d: &Document, code: &str) -> Vec<novo_core::WireId> {
+    plan_for(d.project(), &TableSet::builtin())
+        .proposals
+        .iter()
+        .filter(|p| matches!(&p.change, Change::Colour(c) if c == code) && p.basis == Basis::Rule)
+        .flat_map(|p| p.wires.iter().copied())
+        .collect()
+}
+
+#[test]
+fn a_neutral_wire_that_is_not_blue_is_listed_under_iec_too() {
+    let mut d = doc();
+    let neutral = wires_proposed(&d, "BU");
+    assert!(!neutral.is_empty(), "the fixture has a neutral wire");
+    accept_all(&mut d);
+    assert!(
+        rule_breaks(d.project()).is_empty(),
+        "the proposals follow IEC"
+    );
+
+    let wire = neutral[0];
+    let colour = |d: &mut Document, code: &str| {
+        d.transact("colour", |tx| {
+            tx.update::<novo_core::Wire>(wire, |w| w.color = Some(code.into()))
+        })
+        .expect("coloured");
+    };
+    colour(&mut d, "BK");
+    let breaks = rule_breaks(d.project());
+    assert_eq!(breaks.len(), 1, "{breaks:?}");
+    assert_eq!(breaks[0].wire, wire);
+    assert!(
+        breaks[0]
+            .message
+            .contains("(Neutral circuit) is BK; IEC 60204-1 gives BU"),
+        "{breaks:?}"
+    );
+    // The same under a house set that leaves the class blank; a house colour wins.
+    set(&mut d, wire_rules::PRESET, Value::Text("house".into()));
+    assert_eq!(rule_breaks(d.project()).len(), 1);
+    set(
+        &mut d,
+        &ColourClass::Neutral.key(),
+        Value::Text("WH".into()),
+    );
+    let breaks = rule_breaks(d.project());
+    assert!(
+        breaks
+            .iter()
+            .any(|b| b.wire == wire && b.message.contains("the project's house rule gives WH"))
+    );
+    // Blue is right under IEC; protective earth and power wires are not judged by it.
+    set(&mut d, wire_rules::PRESET, Value::Text("iec60204".into()));
+    colour(&mut d, "BU");
+    assert!(rule_breaks(d.project()).is_empty());
 }
