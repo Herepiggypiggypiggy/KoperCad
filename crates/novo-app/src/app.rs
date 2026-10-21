@@ -1340,6 +1340,7 @@ impl NovoApp {
             self.sync_menu_keys();
             self.sync_catalog();
             self.tool_dock(&ctx, canvas_rect);
+            self.empty_sheet_ghost(&ctx, canvas_rect);
             self.inspector(&ctx, canvas_rect);
             self.live_view(&ctx, canvas_rect);
             self.plc_window(&ctx);

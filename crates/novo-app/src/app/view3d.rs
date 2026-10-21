@@ -281,9 +281,16 @@ impl NovoApp {
         };
         let project = document.project();
         let Some(id) = enclosure(project, self.cabinet.location.as_ref()) else {
-            ui.centered_and_justified(|ui| {
+            let mut open_cabinet = false;
+            ui.vertical_centered(|ui| {
+                ui.add_space((ui.available_height() * 0.4).max(0.0));
                 ui.weak("Set a mounting plate in the Cabinet to see it in 3D");
+                ui.add_space(8.0);
+                open_cabinet = ui.button("Set up the cabinet").clicked();
             });
+            if open_cabinet {
+                self.wb.queued.push("view.cabinet");
+            }
             return;
         };
         let revision = project.revision();
@@ -1439,5 +1446,43 @@ fn slice_position(ui: &mut egui::Ui, h: &mut Heat3d, snap: &novo_cfd::CfdSnapsho
     }
     if back || forward || drag.changed() {
         h.slice_at = (((mm - lo) / (hi - lo).max(1e-9)) as f32).clamp(0.0, 1.0);
+    }
+}
+
+#[cfg(test)]
+mod empty_tests {
+    use super::super::gate1_tests::Drive;
+    use super::super::workspace::Workspace;
+    use crate::actions::Action;
+    use eframe::egui;
+
+    #[test]
+    fn the_3d_view_of_a_new_project_offers_a_way_to_the_cabinet() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        // How a project reopens when it was last left in 3D.
+        d.app.workspace = Workspace::View3d;
+        d.frame();
+        d.frame();
+        assert_eq!(d.app.workspace(), Workspace::View3d);
+        // The button sits in the middle column, a little above halfway.
+        for y in (200..800).step_by(6) {
+            let at = egui::pos2(800.0, y as f32);
+            let button = |down| egui::Event::PointerButton {
+                pos: at,
+                button: egui::PointerButton::Primary,
+                pressed: down,
+                modifiers: Default::default(),
+            };
+            d.frame_with(vec![egui::Event::PointerMoved(at), button(true)]);
+            d.frame_with(vec![button(false)]);
+            d.frame();
+            if d.app.workspace() == Workspace::Cabinet {
+                return;
+            }
+        }
+        panic!("no button on the empty 3D view reached the Cabinet");
     }
 }
