@@ -1,0 +1,42 @@
+@title Cable runs in 3D: Wire runs list, Run card, lit path
+@area 3D
+# Cabinet > Route all: set the cabinet entry. 3D > Wire runs (Ctrl+K): pick a row and read the Run card.
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 3
+text Route all
+wait 4
+key Enter
+wait 30
+shot routes-panel
+click_text Set
+wait 20
+shot entry-set
+click_text 3D
+wait 40
+key ctrl+k
+wait 3
+text wire runs
+wait 4
+key Enter
+wait 40
+shot wire-runs-list
+expect "Wire runs"
+click_text "4   554 mm"
+wait 30
+shot run-card-entry
+expect "Run 4"
+expect "Drawn to the cabinet entry"
+expect "Not checked: cable bend radius"
+click_text "Select all cores of the cable"
+wait 30
+shot cable-cores
+expect "runs"
+click_text "2   466 mm"
+wait 30
+shot run-card-routed
+expect "routed"
+expect "Duct at"

@@ -1180,3 +1180,54 @@ fn a_challenge_that_was_shown_or_skipped_never_ends_on_solved() {
     d.app.learn_move(super::learn::Move::Skip);
     assert!(d.app.card().unwrap().helped, "a plain skip counts as shown");
 }
+
+#[test]
+fn the_bypassed_stop_button_only_stops_the_motor_once_the_jumper_is_gone() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("motor-wont-stop");
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "run");
+    let solve = |d: &Drive| {
+        d.app
+            .learn
+            .run
+            .as_ref()
+            .unwrap()
+            .step()
+            .unwrap()
+            .solve
+            .clone()
+    };
+    d.replay_op(&solve(&d)[0]).unwrap();
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "stop", "start holds the contactor in");
+    let ops = solve(&d);
+    // Stop with the jumper still there: the coil stays on, the step stays open.
+    d.replay_op(&ops[2]).unwrap();
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "stop", "a bypassed stop button stops nothing");
+    // Remove the jumper (select it, Delete) and press stop again.
+    d.replay_op(&ops[0]).unwrap();
+    d.replay_op(&ops[1]).unwrap();
+    d.replay_op(&ops[2]).unwrap();
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert!(
+        d.app.card().is_some_and(|c| c.finished),
+        "the repaired circuit stops, the lesson is done"
+    );
+}

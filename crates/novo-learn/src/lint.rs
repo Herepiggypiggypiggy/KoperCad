@@ -436,6 +436,16 @@ fn lint_lesson(
                         }
                     }
                 }
+                SolveOp::Select(s) if s.select.contains('~') => {
+                    for pin in s.select.split('~') {
+                        if project.is_some_and(|p| pins_named(p, pin.trim()).is_empty()) {
+                            sink.warn(
+                                Some(step),
+                                format!("pin `{}` is not in the sample project", pin.trim()),
+                            );
+                        }
+                    }
+                }
                 SolveOp::Select(s) => {
                     if project.is_some_and(|p| !p.devices().any(|d| tag_matches(&d.tag, &s.select)))
                     {

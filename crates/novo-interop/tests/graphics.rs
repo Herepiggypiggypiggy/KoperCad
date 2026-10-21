@@ -44,7 +44,7 @@ fn the_pages_get_their_lines_and_boxes_as_a_background_drawing() {
     let page = doc
         .project()
         .pages()
-        .find(|p| p.name.starts_with("=A1+CAB1/1"))
+        .find(|p| p.name == "1" && p.structure.to_string() == "=A1+CAB1")
         .expect("the schematic page");
     let text = underlay::stored_text(&page.properties).expect("a background drawing");
     assert!(text.contains("+CAB"), "the location box carries its name");

@@ -43,6 +43,7 @@ pub fn count_text(n: usize, noun: &str) -> String {
     let one = match noun {
         "connections" => "connection",
         "wires" => "wire",
+        "cores" => "core",
         "wires to cut" => "wire to cut",
         "drawn wires" => "drawn wire",
         "wire labels" => "wire label",
