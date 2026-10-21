@@ -203,6 +203,8 @@ pub(crate) struct Workbench {
     pub(super) assistant: super::assistant::State,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
+    /// Paper of the workshop pack's drilling template.
+    pub(super) workshop_paper: novo_layout::template::Paper,
     /// The PDF options dialog (File > Export drawings > Export PDF with options...), while open.
     pub(super) pdf_options: Option<super::pdf_options::PdfOptionsState>,
     /// Test hook: the folder PDFs go to instead of `<Documents>\KoperCAD`.
@@ -325,6 +327,7 @@ impl Default for Workbench {
             background_panel: None,
             assistant: super::assistant::State::new(),
             bench: None,
+            workshop_paper: novo_layout::template::Paper::A4,
             pdf_options: None,
             #[cfg(test)]
             pdf_dir: None,
@@ -433,6 +436,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.pdf_options",
     "export.change_report",
     "export.commissioning",
+    "export.punch_list",
     "export.standards_report",
     "export.standards_xlsx",
     "export.plate",
@@ -441,6 +445,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.report_pdf",
     "report.add_page",
     "export.assembly",
+    "export.workshop",
     "export.sheets",
     "export.sheets_csv",
     "export.wirecut",
@@ -1207,6 +1212,7 @@ impl NovoApp {
                 self.export_change_report();
             }
             "export.commissioning" => self.export_commissioning_pdf(),
+            "export.punch_list" => self.export_punch_list_pdf(),
             "export.standards_report" => {
                 self.export_standards_report(StandardsFormat::Pdf);
             }
@@ -1228,6 +1234,9 @@ impl NovoApp {
             "report.add_page" => self.add_report_page_command(argument),
             "export.assembly" => {
                 self.export_assembly();
+            }
+            "export.workshop" => {
+                self.export_workshop();
             }
             "export.sheets" => {
                 self.export_spreadsheet();
@@ -1693,7 +1702,10 @@ impl NovoApp {
         let panned = self.wb.space_pan.take().is_some();
         let moved = pointer.map_or(0.0, |p| p.distance(down));
         if released && !panned && moved <= 4.0 {
-            self.wb.field.open(Mode::All, pointer.or(Some(down)));
+            // At the cabinet a tap of Space ticks the wire in front of you.
+            if !self.commissioning_space() {
+                self.wb.field.open(Mode::All, pointer.or(Some(down)));
+            }
         }
     }
 }

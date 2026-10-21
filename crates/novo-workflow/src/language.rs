@@ -732,6 +732,11 @@ pub const DUTCH: &[Aliases] = &[
         &["restpuntenlijst", "oplevering"],
     ),
     nl(
+        "export.punch_list",
+        &["exporteer restpuntenlijst", "restpuntenlijst exporteren"],
+        &["restpunten pdf", "open punten"],
+    ),
+    nl(
         "export.standards_report",
         &["exporteer normenrapport", "normenrapport exporteren"],
         &["conformiteitsrapport", "normen pdf"],
@@ -969,6 +974,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.assembly",
         &["exporteer montagelijst", "montagelijst"],
         &["werkplaats", "boren"],
+    ),
+    nl(
+        "export.workshop",
+        &["exporteer werkplaatspakket", "werkplaatspakket"],
+        &["werkplaats", "boormal", "snijlijst"],
     ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
     nl(

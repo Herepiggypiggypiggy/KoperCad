@@ -88,6 +88,7 @@ mod heat_spots;
 mod heat_time;
 #[cfg(test)]
 mod heat_time_tests;
+mod heat_verdict;
 mod inspector;
 mod interop;
 mod languages;
@@ -212,6 +213,7 @@ mod wire_panel;
 mod wire_panel_tests;
 mod wire_production;
 mod workbench;
+mod workshop;
 mod workspace;
 mod xref;
 
@@ -247,6 +249,8 @@ mod clipboard_tests;
 mod commissioning_photos_tests;
 #[cfg(test)]
 mod commissioning_tests;
+#[cfg(test)]
+mod commissioning_walk_tests;
 #[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
@@ -303,6 +307,8 @@ mod ui_gaps_tests;
 mod variants_tests;
 #[cfg(test)]
 mod whats_new_tests;
+#[cfg(test)]
+mod workshop_tests;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -312,6 +318,7 @@ use eframe::egui;
 use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
+const WORKSHOP_HINT: &str = "One folder for the hand workshop: a 1:1 drilling template of each mounting plate (tiled on A4 or A3, with cross hairs, hole sizes and a 100 mm check ruler), the cut list, ferrules, labels and the assembly checklist with tick boxes.";
 const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Edit the file in Excel and bring it back with File > Import spreadsheet. The generated reports are under Export all reports to Excel.";
 use novo_core::{Aspect, Command, DeviceTag, ModelError, Outcome, PageId, PageKind};

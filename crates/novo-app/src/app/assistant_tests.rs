@@ -599,3 +599,44 @@ fn a_single_typed_word_is_not_offered_to_claude() {
     s.d.frame();
     assert!(s.script.seen.lock().unwrap().is_empty());
 }
+
+#[test]
+fn a_question_queued_from_elsewhere_opens_the_window_and_is_sent_once() {
+    let mut s = setup(DataScope::Outline);
+    s.d.app.wb.assistant.open = false;
+    s.script.push(200, text("It means the wire has no end."));
+    s.d.app
+        .wb
+        .assistant
+        .ask_later("Explain this problem".into());
+    for _ in 0..400 {
+        s.d.frame();
+        if s.d.app.wb.assistant.transcript_text().contains("no end") {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(s.d.app.wb.assistant.open);
+    assert_eq!(s.script.seen.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn a_queued_question_is_not_sent_while_claude_is_off() {
+    let mut s = setup(DataScope::Outline);
+    s.d.app.settings.ai.enabled = false;
+    s.d.app
+        .wb
+        .assistant
+        .ask_later("Explain this problem".into());
+    for _ in 0..20 {
+        s.d.frame();
+    }
+    assert!(s.script.seen.lock().unwrap().is_empty());
+    assert!(
+        s.d.app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("nothing was sent")
+    );
+}

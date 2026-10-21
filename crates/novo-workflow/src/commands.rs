@@ -2353,6 +2353,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.punch_list",
+            "Export punch list (open items)",
+            "Export",
+            &["restpunten", "snag list", "defects", "open items"],
+            Needs::Project,
+        ),
+        &["export punch list", "punch list pdf"],
+    ),
+    verb(
+        cmd(
             "export.standards_report",
             "Export standards compliance report",
             "Export",
@@ -2546,6 +2556,24 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export assembly", "assembly checklist"],
+    ),
+    verb(
+        cmd(
+            "export.workshop",
+            "Export workshop pack (folder)",
+            "Export",
+            &[
+                "workshop",
+                "drilling template",
+                "1:1",
+                "bench",
+                "cut list",
+                "labels",
+                "checklist",
+            ],
+            Needs::Project,
+        ),
+        &["export workshop", "workshop pack", "drilling template"],
     ),
     verb(
         cmd(
