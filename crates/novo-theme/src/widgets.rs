@@ -748,7 +748,11 @@ pub fn banner(
             // in what is left, so a long one is read in full, not cut.
             // Centred across the row, so a one-line sentence sits level with
             // its (taller) buttons; a wrapped one keeps its icon on the first line.
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            // The row is one control tall to start with (as `Ui::horizontal`
+            // does): a centred layout given the whole remaining height would
+            // stretch the banner to the bottom of the panel.
+            let row = Vec2::new(ui.available_width(), ui.spacing().interact_size.y);
+            ui.allocate_ui_with_layout(row, Layout::right_to_left(Align::Center), |ui| {
                 add_actions(ui);
                 ui.with_layout(Layout::left_to_right(Align::Min), |ui| {
                     ui.label(RichText::new(level.icon()).color(level.color(p)));
@@ -841,6 +845,48 @@ mod tests {
         assert_eq!(seen, [false, true]);
         let p = Palette::DARK;
         assert_ne!(p.hover, p.accent_wash);
+    }
+
+    /// The height of a banner drawn in a panel 700 pt tall and `width` wide.
+    fn banner_height(width: f32, text: &str, with_button: bool) -> f32 {
+        let ctx = egui::Context::default();
+        crate::apply(&ctx);
+        let mut height = 0.0;
+        let input = egui::RawInput {
+            screen_rect: Some(Rect::from_min_size(
+                egui::Pos2::ZERO,
+                Vec2::new(width, 700.0),
+            )),
+            ..Default::default()
+        };
+        let mut out = ctx.run_ui(input, |ui| {
+            height = banner(ui, Level::Info, text, |ui| {
+                if with_button {
+                    ui.button("Accept");
+                }
+            })
+            .rect
+            .height();
+        });
+        out.textures_delta.clear();
+        height
+    }
+
+    #[test]
+    fn a_banner_is_as_tall_as_its_text_and_buttons_not_the_panel() {
+        let long = "Sizes use planning values: the built-in ampacity tables are not checked against the standard. Read the clauses in your licensed copy before relying on a number.";
+        for width in [360.0, 1000.0] {
+            for with_button in [false, true] {
+                let one = banner_height(width, "Done", with_button);
+                let many = banner_height(width, long, with_button);
+                assert!(one < 60.0, "{width} wide, button {with_button}: {one}");
+                // Wrapped text grows the banner by its lines, nothing more.
+                assert!(
+                    many < 140.0 && many >= one,
+                    "{width} wide, button {with_button}: {many}"
+                );
+            }
+        }
     }
 
     #[test]
