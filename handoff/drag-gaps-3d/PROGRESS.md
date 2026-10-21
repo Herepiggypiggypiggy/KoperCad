@@ -1,0 +1,1 @@
+- 2026-10-21 live gap card, 3 unit tests, seen in the window

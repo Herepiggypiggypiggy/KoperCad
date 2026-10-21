@@ -177,6 +177,7 @@ mod variants;
 mod view3d;
 mod view3d_align;
 mod view3d_controls;
+mod view3d_drag_gaps;
 mod view3d_duplicate;
 mod view3d_heat;
 mod view3d_hints;
