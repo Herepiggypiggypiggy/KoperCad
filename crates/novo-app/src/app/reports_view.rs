@@ -1126,6 +1126,7 @@ mod tests {
                 "I/O list",
                 "Cable schedule",
                 "Plug connection list",
+                "Single-line diagram",
             ]
         );
         // The palette still finds a report by the name it used to have.

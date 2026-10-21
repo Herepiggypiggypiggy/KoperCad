@@ -470,7 +470,8 @@ fn export_reports_as_excel_and_csv() {
             "IO list",
             "Cable schedule",
             "Plug connection list",
-            "Labels"
+            "Labels",
+            "Single-line diagram"
         ]
     );
 
@@ -1119,4 +1120,18 @@ fn eplan_script_is_written_and_an_export_is_checked() {
         "fr",
     ]);
     assert_eq!(r.code, exit::USAGE);
+}
+
+#[test]
+fn export_the_single_line_schedule() {
+    let board = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures/distribution-board.novo");
+    let run = novo(&["export", "single-line", s(&board)]);
+    assert_eq!(run.code, exit::OK, "{}", run.err);
+    assert!(
+        run.out.contains("'-Q1") || run.out.contains("=A1+CAB-Q1"),
+        "{}",
+        run.out
+    );
+    assert!(run.out.contains("Iz A"), "{}", run.out);
 }

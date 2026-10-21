@@ -253,6 +253,8 @@ enum Export {
     Cables(ReportArgs),
     /// Plug connection lists: every pin of every plug with its wire.
     Plugs(ReportArgs),
+    /// Single-line diagram schedule: protection, cable, current and voltage drop per feeder.
+    SingleLine(ReportArgs),
     /// Every report in one workbook, one sheet each.
     Reports {
         file: PathBuf,
@@ -570,6 +572,9 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
             export_reports(&args.file, &["cableschedule"], &args, out)
         }
         Cmd::Export(Export::Plugs(args)) => export_reports(&args.file, &["plugs"], &args, out),
+        Cmd::Export(Export::SingleLine(args)) => {
+            export_reports(&args.file, &["singleline"], &args, out)
+        }
         Cmd::Export(Export::Reports { file, output }) => {
             let args = ReportArgs {
                 file,
