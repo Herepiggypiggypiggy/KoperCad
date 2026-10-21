@@ -100,6 +100,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("export.plate", under("File", "Export drawings")),
     ("export.plate_dxf", under("File", "Export drawings")),
     ("export.wiring_dxf", under("File", "Export drawings")),
+    ("export.handover", under("File", "Export reports")),
     ("export.bom", under("File", "Export reports")),
     ("export.change_report", under("File", "Export reports")),
     ("export.commissioning", under("File", "Export reports")),
