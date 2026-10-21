@@ -205,6 +205,16 @@ impl NovoApp {
         // The status bar carries the hint; the dock keeps to its controls so
         // they never move.
         let in_bar = self.status_bar_shown();
+        // A fit keeps the sheet's bottom edge (the title block) above the dock.
+        let dock_height = self.wb.dock_size.y;
+        let reserve = if dock_height > 0.0 {
+            dock_height + MARGIN
+        } else {
+            56.0
+        };
+        if let Some(view) = self.canvas.schematic() {
+            view.canvas.fit_reserve_bottom = reserve;
+        }
         let Some(view) = self.canvas.schematic_ref() else {
             return;
         };

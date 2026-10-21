@@ -47,7 +47,7 @@ impl NovoApp {
         let (mut to_inputs, mut to_calc) = (false, false);
         let mut open = true;
         super::panel::dialog(ctx, "Standards check", [640.0, 520.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 novo_theme::widgets::section_label(ui, "Check against");
                 ui.horizontal(|ui| {

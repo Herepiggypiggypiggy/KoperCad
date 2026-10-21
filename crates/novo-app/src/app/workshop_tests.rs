@@ -1,0 +1,156 @@
+//! Workshop pack: refuses without anything to print, then writes the
+//! template and the checklist into one folder next to the project, and
+//! replaces its own files on a second run.
+
+use novo_core::{DeviceTag, Value};
+use novo_layout::template::Paper;
+
+use super::Level;
+use super::cabinet::Ask;
+use super::gate1_tests::Drive;
+use crate::actions::Action;
+
+fn cabinet_with_devices(d: &mut Drive) {
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Cabinet", |tx| {
+            tx.add_structure(DeviceTag::parse("+CAB1").unwrap(), "Cabinet", true)?;
+            let part = tx.add_part("ACME", "C1")?;
+            tx.set_property(part, "width_mm", Some(Value::Float(45.0)))?;
+            tx.set_property(part, "height_mm", Some(Value::Float(90.0)))?;
+            tx.set_property(
+                part,
+                "hole_pattern",
+                Some(Value::Text("4,4,4.2;41,86,4.2".into())),
+            )?;
+            for tag in ["=A1+CAB1-K1", "=A1+CAB1-K2"] {
+                let device = tx.add_device(DeviceTag::parse(tag).unwrap(), "")?;
+                tx.assign_part(device, part)?;
+            }
+            Ok(())
+        })
+        .unwrap();
+}
+
+#[test]
+fn the_pack_needs_something_to_print_then_fills_one_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    let file = dir.path().join("Plant 2.novo");
+    assert!(d.app.save_to(&file));
+    d.frame();
+
+    let folder = dir.path().join("Plant 2 workshop");
+    assert_eq!(d.app.export_workshop(), None);
+    assert_eq!(d.app.messages().last().unwrap().level, Level::Warning);
+    assert!(!folder.exists(), "nothing written for an empty project");
+
+    cabinet_with_devices(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .structures()
+        .find(|s| s.enclosure)
+        .unwrap()
+        .id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let project = d.app.backend.document().unwrap().project();
+    let layout = novo_layout::model::load(project, cab);
+    let candidates = novo_layout::model::candidates(project, cab);
+    d.app
+        .cabinet_ask(Ask::PlaceAll, Some(cab), layout, &candidates);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+
+    assert_eq!(d.app.export_workshop().as_deref(), Some(folder.as_path()));
+    let template = folder.join("1 Drilling template +CAB1 A4.pdf");
+    let bytes = std::fs::read(&template).unwrap();
+    let pdf = lopdf::Document::load_mem(&bytes).unwrap();
+    let text = pdf.extract_text(&[1]).unwrap();
+    assert!(text.contains("Drilling template 1:1"), "{text}");
+    assert!(folder.join("5 Assembly checklist.pdf").exists());
+    // No wires yet: the wire steps are left out and the summary says so.
+    assert!(!folder.join("2 Cut list.pdf").exists());
+    let last = &d.app.messages().last().unwrap().text;
+    assert!(
+        last.contains("Left out") && last.contains("cut list"),
+        "{last}"
+    );
+
+    // The paper choice changes the template, and a second run replaces it.
+    d.app.wb.workshop_paper = Paper::A3;
+    d.app.export_workshop().expect("again");
+    assert!(folder.join("1 Drilling template +CAB1 A3.pdf").exists());
+}
+
+#[test]
+fn an_absurd_plate_is_left_out_with_a_hint_instead_of_hundreds_of_sheets() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.save_to(&dir.path().join("Plant 3.novo")));
+    cabinet_with_devices(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .structures()
+        .find(|s| s.enclosure)
+        .unwrap()
+        .id;
+    // Metres typed as millimetres: a 400 m x 300 m plate.
+    d.app.cabinet_ask(
+        Ask::SetPlateSize(
+            cab,
+            novo_core::MountingPlate {
+                width: 400_000.0,
+                height: 300_000.0,
+                margin: 10.0,
+            },
+        ),
+        Some(cab),
+        None,
+        &[],
+    );
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let (pdfs, too_big) = super::workshop::template_pdfs(project, "Plant 3", Paper::A4);
+    assert!(pdfs.is_empty(), "no template for the absurd plate");
+    assert_eq!(too_big.len(), 1, "{too_big:?}");
+    assert!(too_big[0].starts_with("+CAB1"), "{too_big:?}");
+
+    // The page count must not overflow for a plate beyond any real size.
+    d.app.cabinet_ask(
+        Ask::SetPlateSize(
+            cab,
+            novo_core::MountingPlate {
+                width: 1e30,
+                height: 1e30,
+                margin: 10.0,
+            },
+        ),
+        Some(cab),
+        None,
+        &[],
+    );
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let (pdfs, too_big) = super::workshop::template_pdfs(project, "Plant 3", Paper::A3);
+    assert!(pdfs.is_empty() && too_big.len() == 1, "{too_big:?}");
+}

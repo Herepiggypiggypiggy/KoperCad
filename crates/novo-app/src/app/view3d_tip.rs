@@ -5,7 +5,7 @@
 //! Where the user finds it: hold the pointer over a device in the 3D view.
 
 use eframe::egui;
-use novo_core::{Device, DeviceId, Project};
+use novo_core::{Device, DeviceId, Page, Project};
 use novo_thermal::DeviceResult;
 
 /// What the tooltip says: a title and one line per fact.
@@ -35,6 +35,7 @@ pub(super) fn tip(
     for p in parts {
         lines.push(format!("Part: {} {}", p.manufacturer, p.order_number));
     }
+    lines.push(schematic_line(project, device));
     let sized = novo_layout::sizing_model::sizing_device(project, d);
     let known = novo_thermal::bridge::device_loss_w(project, d).is_some();
     let loss = sized.power_loss * sized.load_factor;
@@ -69,6 +70,33 @@ pub(super) fn tip(
         title: d.tag.to_string(),
         lines,
     })
+}
+
+/// Where the device is drawn in the schematic, and how to jump there.
+fn schematic_line(project: &Project, device: DeviceId) -> String {
+    let mut pages: Vec<String> = project
+        .symbols_of_device(device)
+        .iter()
+        .filter_map(|s| project.get::<Page>(s.page))
+        .map(|p| {
+            if p.title.is_empty() {
+                format!("page {}", p.name)
+            } else {
+                format!("page {} ({})", p.name, p.title)
+            }
+        })
+        .collect();
+    pages.sort();
+    let mut seen = std::collections::BTreeSet::new();
+    pages.retain(|p| seen.insert(p.clone()));
+    if pages.is_empty() {
+        "Not drawn in the schematic yet".to_owned()
+    } else {
+        format!(
+            "Schematic: {} (select it, then Show in schematic)",
+            pages.join(", ")
+        )
+    }
 }
 
 /// Draws the tip next to the pointer.
@@ -178,6 +206,32 @@ mod tests {
         )
         .unwrap();
         assert!(old.lines.join("\n").contains("out of date"), "{old:?}");
+    }
+
+    #[test]
+    fn the_tip_says_which_pages_draw_the_device() {
+        use novo_core::{Pin, Placement, Point, SymbolRole};
+        let (mut project, device) = project(None);
+        let text = tip(&project, device, None, false).unwrap().lines.join("\n");
+        assert!(text.contains("Not drawn in the schematic yet"), "{text}");
+        project
+            .transact("Draw", |tx| {
+                let page = tx.add_page("3")?;
+                for x in [10.0, 40.0] {
+                    tx.place_symbol(
+                        page,
+                        "iec/coils/relay",
+                        Placement::at(Point::new(x, 100.0)),
+                        vec![Pin::new("A1", 0.0, -8.0)],
+                        SymbolRole::Device { device, main: true },
+                    )?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        let text = tip(&project, device, None, false).unwrap().lines.join("\n");
+        assert!(text.contains("Schematic: page 3 (select"), "{text}");
+        assert_eq!(text.matches("page 3").count(), 1, "one page, listed once");
     }
 
     #[test]

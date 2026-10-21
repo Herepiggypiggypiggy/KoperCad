@@ -319,7 +319,7 @@ pub(super) fn show_window(
     // Tall by default: the result and notes sit below the inputs, and a
     // window sized to its first frame cut them off.
     let window = super::panel::dialog(ctx, "Size the enclosure", [380.0, 620.0])
-        .open(&mut open)
+        .open(super::panel::esc(ctx, &mut open))
         .show(ctx, |ui| {
             show_panel(ui, state, devices, plate, fit);
             // The lesson link comes last, so the result is the first thing
@@ -445,7 +445,7 @@ pub(super) fn show_editor(ctx: &egui::Context, state: &mut SizingState) {
     let mut import = false;
     let mut export = false;
     super::panel::dialog(ctx, "Enclosures", [620.0, 0.0])
-        .open(&mut open)
+        .open(super::panel::esc(ctx, &mut open))
         .show(ctx, |ui| {
             ui.weak("Your own list of enclosure sizes, in mm. Outside size sets the cooling surface; the plate is the mounting plate inside.");
             ui.add_space(4.0);

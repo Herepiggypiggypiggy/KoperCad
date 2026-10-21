@@ -206,7 +206,7 @@ impl NovoApp {
         let mut copy = None;
         let mut export = false;
         super::panel::dialog(ctx, "Safety functions", [700.0, 640.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.colored_label(crate::theme::ui_palette().warning, DISCLAIMER);
                 super::dialog_ui::hint(

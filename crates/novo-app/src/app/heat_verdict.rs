@@ -189,6 +189,19 @@ mod tests {
     }
 
     #[test]
+    fn the_hottest_device_is_named_even_when_another_is_tighter() {
+        // -F1 is hotter, -F2 has the smaller margin: the sentence says
+        // "Hottest", so it names -F1 and quotes -F1's own margin.
+        let v = with(vec![
+            dev(1, 80.0, Status::Ok, Some(25.0), Some(20.0)),
+            dev(2, 60.0, Status::Ok, Some(3.0), Some(2.0)),
+        ])
+        .unwrap();
+        assert_eq!(v.device, Some((1, "-F1".into())));
+        assert_eq!(v.text(), "Fine. Hottest -F1 80 °C, 25 K under its limit.");
+    }
+
+    #[test]
     fn a_device_over_its_limit_decides_and_the_others_are_counted() {
         let v = with(vec![
             dev(1, 90.0, Status::Over, Some(-3.0), Some(-6.0)),

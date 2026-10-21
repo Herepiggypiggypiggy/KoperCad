@@ -416,7 +416,7 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
                     function.clone()
                 };
                 *out.stats.box_functions.entry(label).or_default() += 1;
-                box_label = function.clone();
+                box_label = box_caption(&function, d.type_text.get("en_US"), &d.part_number);
                 *out.stats
                     .box_kinds
                     .entry((
@@ -796,6 +796,24 @@ fn pick_library_symbol(
     (None, Vec::new())
 }
 
+/// The text beside a labelled box. A black box has no function worth showing,
+/// so the placement's own words come first: the first line of its type text,
+/// then its part number; the function name is the last resort.
+fn box_caption(function: &str, type_text: &str, part_number: &str) -> String {
+    let type_line = type_text
+        .lines()
+        .map(str::trim)
+        .find(|l| !l.is_empty())
+        .unwrap_or_default();
+    if !type_line.is_empty() {
+        type_line.to_string()
+    } else if !part_number.is_empty() {
+        part_number.to_string()
+    } else {
+        function.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::library::{DOWN, UP};
@@ -813,6 +831,16 @@ mod tests {
             position: Some((10.0, 10.0)),
             variant: 0,
         }
+    }
+
+    #[test]
+    fn a_box_is_captioned_by_the_placements_own_words_first() {
+        assert_eq!(
+            box_caption("Black box", "\n Safety relay\n230 V", "MAKER.RELAY"),
+            "Safety relay"
+        );
+        assert_eq!(box_caption("Black box", "", "MAKER.RELAY"), "MAKER.RELAY");
+        assert_eq!(box_caption("Black box", " ", ""), "Black box");
     }
 
     fn port(index: u32, x: f64, y: f64, dirs: u8) -> LibPort {

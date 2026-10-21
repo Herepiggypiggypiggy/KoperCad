@@ -310,7 +310,7 @@ pub(super) fn show_rules_window(ctx: &egui::Context, state: &mut RulesState) {
     state.ensure_loaded();
     let mut open = true;
     super::panel::dialog(ctx, "Place rules", [520.0, 0.0])
-        .open(&mut open)
+        .open(super::panel::esc(ctx, &mut open))
         .show(ctx, |ui| {
             super::dialog_ui::hint(
                 ui,
@@ -433,7 +433,7 @@ pub(super) fn show_cut_window(
     let mut open = true;
     let mut ask = None;
     super::panel::dialog(ctx, "Cut list: rails and ducts", [460.0, 0.0])
-        .open(&mut open)
+        .open(super::panel::esc(ctx, &mut open))
         .show(ctx, |ui| {
             let Some(lists) = lists else {
                 ui.weak("This panel has no mounting plate yet.");

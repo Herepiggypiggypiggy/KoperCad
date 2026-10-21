@@ -2,7 +2,7 @@
 
 Branch: claude/project-thread-03q1dh (kopercad). One PR: "Test and screenshot suite".
 
-State: runner, scenarios, docs and MCP tools written and run headless on Linux (Xvfb, lavapipe).
+State: #1074 merged. Follow-up PR has the harness fixes. Full command sweep (270 commands, 33 lessons) ran headless: no crashes.
 Quick scenarios (01 to 06) pass or give real findings; sweeps (90, 91) take about 3 s per command
 (about 14 min for all commands at one size).
 

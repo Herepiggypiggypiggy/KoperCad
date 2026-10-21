@@ -22,6 +22,7 @@ use crate::rules::Class;
 use crate::state::CabinetLayout;
 use crate::surfaces::{MAIN_PLATE, SURFACE_PROPERTY, SurfaceKind};
 use crate::swing::DoorDevice;
+use crate::template::{TemplateSheet, template_sheets};
 use crate::{DEFAULT_DUCT_MM, Duct, Margins, Placement, Plate, Rail, Size};
 
 /// Property of a duct: what its wiring carries (`power`, `signal`, `mixed`).
@@ -398,6 +399,23 @@ pub fn plate_documents(
         .collect();
     let title = structure(project, id)?.tag.to_string();
     Some(documents(&title, &layout, &features))
+}
+
+/// The 1:1 drilling template sheets and drill table of an enclosure; `None`
+/// when it has no plate.
+pub fn template_documents(
+    project: &Project,
+    id: StructureId,
+) -> Option<(Vec<TemplateSheet>, DrillTable)> {
+    let layout = load(project, id)?;
+    let features: Vec<DeviceFeatures> = layout
+        .placements
+        .iter()
+        .filter_map(|p| project.get::<Device>(DeviceId::from(p.id)))
+        .map(|d| features(project, d))
+        .collect();
+    let title = structure(project, id)?.tag.to_string();
+    Some(template_sheets(&title, &layout, &features))
 }
 
 /// Places a device on the plate at `(x, y)`, or moves it there; it leaves

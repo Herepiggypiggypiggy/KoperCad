@@ -225,7 +225,7 @@ impl NovoApp {
         let mut action = None::<PlcAction>;
         let plc = &mut self.wb.live.plc;
         super::panel::dialog(ctx, "PLC program", [560.0, 640.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button("Open…").clicked() {

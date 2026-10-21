@@ -64,6 +64,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `wait N`, `resize W H` | run N frames; resize the window |
 | `shot label` | labelled screenshot |
 | `expect "text"`, `expect_not "text"` | a label or value containing the text is (not) in the widget tree; a miss is a finding (S3) |
+| `expect_enabled "Label"`, `expect_disabled "Label"` | the control with this label (icon glyphs ignored) is enabled / disabled; a miss is a finding |
 | `expect_scene "text"` | the project data dump (`scene`) contains the text: checks the canvas without reading pixels |
 | `check_layout` | cheap layout checks, see below |
 | `check_blank [label]` | takes a screenshot; finding S2 when the window is one flat colour |
@@ -118,6 +119,14 @@ How other threads use it:
    your PR. Use `tree` to find labels, `expect` for what must stay true.
 4. Sweeps (`--slow`) take minutes: run them before a release, not per push.
 
+## Regression scenarios
+
+`qa/scenarios/20-regressions-critic.qa` checks the fixed behaviour of defects from
+`audit/critic/defects.md` (ids in the comments). A finding means the defect is back.
+Add a block to it (or a new `2x-` file) when an audit defect is fixed and merged:
+state the fixed behaviour with `expect*` steps, and add a `shot` for the ones only a
+picture can show. Run it with `scripts/qa.sh --only critic`.
+
 ## Fixtures
 
 Scenarios use files in the repository only: the golden motor starter
@@ -126,6 +135,21 @@ Scenarios use files in the repository only: the golden motor starter
 No customer data goes into a scenario in this public repository; customer-derived
 projects stay in the private repository and are opened by absolute path from a
 local scenario that is not committed.
+
+## Where it writes
+
+Everything goes under `--out` (screenshots, logs, reports) and the temporary profile
+folder of the run (`kopercad-test-user-<pid>` in the temp folder); `--slow` sweeps
+included. Nothing is written beside the fixtures in the repository. The MCP `report`
+tool accepts `out` only below the shots folder, the temp folder, `/mnt/project-files`
+or the current folder, and `finding` attaches only pictures from the shots folder.
+
+## Windows
+
+`scripts/qa.sh` is a bash script: run it from Git Bash (no admin rights needed).
+`KOPERCAD_BIN_DIR` can point at the folder holding `kopercad.exe` and
+`kopercad-cli.exe` (for example the unzipped portable build) instead of `target/debug`.
+Not verified on Windows yet.
 
 ## Gaps, said plainly
 

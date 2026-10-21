@@ -295,6 +295,9 @@ pub struct CanvasView {
     band_ids: Vec<ItemId>,
     right_drag: Option<RightDrag>,
     fit_pending: Option<Fit>,
+    /// Screen points at the bottom of the canvas that something floats
+    /// over (the tool dock); a fit leaves them clear.
+    pub fit_reserve_bottom: f32,
     /// The last fit, until the person moves the view or a few frames pass:
     /// panels that open or resize after the first frame change the canvas
     /// size, and the fit is redone for the new size.
@@ -459,6 +462,7 @@ impl CanvasView {
             band_ids: Vec::new(),
             right_drag: None,
             fit_pending: Some(Fit::Content),
+            fit_reserve_bottom: 0.0,
             fit_settle: None,
             reveal_pending: None,
             reveal_zoom: 4.0,
@@ -566,6 +570,18 @@ impl CanvasView {
     /// drawing alone (never closer than [`FIT_CONTENT_MAX_ZOOM`], so a lone
     /// symbol is not blown up to fill the screen).
     fn fit_scene(&mut self, scene: &Scene, kind: Fit) {
+        let reserve = self
+            .fit_reserve_bottom
+            .clamp(0.0, self.viewport.size.y * 0.3);
+        self.viewport.size.y -= reserve;
+        self.fit_clear(scene, kind);
+        self.viewport.size.y += reserve;
+        // The fit centred in the part above the reserve: the canvas centre
+        // sits half the reserve lower.
+        self.viewport.center.y += reserve * 0.5 / self.viewport.zoom;
+    }
+
+    fn fit_clear(&mut self, scene: &Scene, kind: Fit) {
         let content = scene.content_bounds();
         if kind == Fit::Content && scene.sheet().is_some() && !content.is_empty() {
             self.viewport.fit(&content, FIT_CONTENT_MARGIN);
@@ -1829,6 +1845,19 @@ mod tests {
         let seen = view.viewport.visible_world();
         assert!(seen.contains_point(Vec2::new(5.0, 5.0)));
         assert!(seen.contains_point(Vec2::new(415.0, 292.0)));
+    }
+
+    #[test]
+    fn a_fit_leaves_the_reserved_bottom_strip_clear() {
+        let scene = page_scene();
+        let mut view = CanvasView::new();
+        view.viewport.size = Vec2::new(800.0, 600.0);
+        view.fit_reserve_bottom = 80.0;
+        view.fit_scene(&scene, Fit::Sheet);
+        let bottom = view.viewport.world_to_screen(Vec2::new(210.0, 297.0)).y;
+        assert!(bottom <= 600.0 - 80.0 + 0.5, "sheet bottom at {bottom}");
+        let top = view.viewport.world_to_screen(Vec2::ZERO).y;
+        assert!(top >= 0.0);
     }
 
     #[test]
