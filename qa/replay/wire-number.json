@@ -32,7 +32,7 @@
   "content": [
    {
     "type": "text",
-    "text": "I suggest renumbering wire 34 to L1-77. Apply it if you agree."
+    "text": "I suggest numbering that net L1-77. Apply it if you agree."
    }
   ],
   "stop_reason": "end_turn",

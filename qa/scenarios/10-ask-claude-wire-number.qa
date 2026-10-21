@@ -29,8 +29,9 @@ text Fix my wire numbers
 click_text Send Button
 wait 60
 expect "Suggested change"
-expect "Set the number of wire 34 to L1-77"
-expect "Replaces the current number: 1"
+expect "Number the wire from"
+expect "and its net L1-77"
+expect "Replaces the current number of the wire from"
 shot ask-claude-wire-card
 check_layout
 click_text Apply Button

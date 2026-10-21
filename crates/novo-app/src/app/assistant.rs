@@ -274,6 +274,14 @@ impl State {
     }
 
     #[cfg(test)]
+    #[cfg(test)]
+    pub(super) fn proposal_state(&self, index: usize) -> Option<ProposalState> {
+        match self.transcript.get(index) {
+            Some(Entry::Proposal(_, state)) => Some(state.clone()),
+            _ => None,
+        }
+    }
+
     pub(super) fn transcript_text(&self) -> String {
         self.transcript
             .iter()
@@ -441,9 +449,10 @@ pub(super) const MAX_VALUE_CHARS: usize = 500;
 pub(super) fn proposal_note(project: &Project, p: &Proposal) -> Option<String> {
     if p.action == "set_wire_number" {
         let wire = project.wire(p.args["wire_id"].as_u64()?.into())?;
+        let name = wire_description(project, wire);
         return Some(match &wire.number {
-            Some(old) => format!("Replaces the current number: {old}"),
-            None => "The wire has no number yet.".into(),
+            Some(old) => format!("Replaces the current number of {name}: {old}"),
+            None => format!("{} has no number yet.", capitalised(&name)),
         });
     }
     let device = project.device(p.args["device_id"].as_u64()?.into())?;
@@ -470,8 +479,28 @@ pub(super) struct Known {
     devices: HashMap<u64, String>,
     pages: HashMap<u64, String>,
     parts: HashMap<u64, String>,
-    /// Wire id to its current number (empty when it has none).
+    /// Wire id to how the wire is named for the person: its two ends and page.
     wires: HashMap<u64, String>,
+}
+
+/// The wire as the person sees it, without the internal id: "the wire from
+/// -K1:2 to -F2:3 (page Main circuit)".
+fn wire_description(p: &Project, w: &novo_core::Wire) -> String {
+    let end = |e| novo_cables::ends::designation(p, e).unwrap_or_else(|| "an open end".into());
+    let page = p.page(w.page).map_or("?", |g| g.name.as_str());
+    format!(
+        "the wire from {} to {} (page {page})",
+        end(w.from),
+        end(w.to)
+    )
+}
+
+fn capitalised(text: &str) -> String {
+    let mut chars = text.chars();
+    chars
+        .next()
+        .map(|c| c.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 /// Longest wire number accepted.
@@ -486,7 +515,7 @@ pub(super) fn known_of(p: &Project) -> Known {
         pages: p.pages().map(|g| (g.id.raw(), g.name.clone())).collect(),
         wires: p
             .wires()
-            .map(|w| (w.id.raw(), w.number.clone().unwrap_or_default()))
+            .map(|w| (w.id.raw(), wire_description(p, w)))
             .collect(),
         parts: p
             .parts()
@@ -502,8 +531,80 @@ pub(super) fn known_of(p: &Project) -> Known {
     }
 }
 
+/// What applying a proposal does.
+pub(super) enum Plan {
+    Command(Box<Command>),
+    /// The person's own "Set wire number": the whole net, fixed against
+    /// numbering runs, refused when another net has the number.
+    WireNumber {
+        wire: novo_core::WireId,
+        number: String,
+    },
+}
+
 /// Turns a proposal into the model command, and its one-line summary.
+#[cfg(test)]
 pub(super) fn proposal_command(
+    known: &Known,
+    action: &str,
+    args: &Value,
+) -> Result<(Command, String), String> {
+    match proposal_plan(known, action, args)? {
+        (Plan::Command(command), summary) => Ok((*command, summary)),
+        (Plan::WireNumber { .. }, _) => Err(format!("{action} is not a plain command")),
+    }
+}
+
+/// Turns a proposal into what applying it does, and its one-line summary.
+pub(super) fn proposal_plan(
+    known: &Known,
+    action: &str,
+    args: &Value,
+) -> Result<(Plan, String), String> {
+    if action == "set_wire_number" {
+        return wire_number_plan(known, args);
+    }
+    let (command, summary) = proposal_command_inner(known, action, args)?;
+    Ok((Plan::Command(Box::new(command)), summary))
+}
+
+fn wire_number_plan(known: &Known, args: &Value) -> Result<(Plan, String), String> {
+    let wire = args["wire_id"]
+        .as_u64()
+        .ok_or("wire_id must be a whole number id from the project data")?;
+    let name = known
+        .wires
+        .get(&wire)
+        .ok_or_else(|| format!("there is no wire with id {wire} (see section wires)"))?;
+    let number = args["number"]
+        .as_str()
+        .ok_or("number must be text; use an empty text to clear it")?
+        .trim();
+    if number.chars().count() > MAX_WIRE_NUMBER_CHARS {
+        return Err(format!(
+            "number is longer than {MAX_WIRE_NUMBER_CHARS} characters"
+        ));
+    }
+    if number.chars().any(char::is_control) {
+        return Err("number must not contain control characters or line breaks".into());
+    }
+    let summary = if number.is_empty() {
+        format!("Clear the number of {name} and its net")
+    } else {
+        format!(
+            "Number {name} and its net {number}. The number is fixed: numbering runs leave it alone"
+        )
+    };
+    Ok((
+        Plan::WireNumber {
+            wire: wire.into(),
+            number: number.to_string(),
+        },
+        summary,
+    ))
+}
+
+fn proposal_command_inner(
     known: &Known,
     action: &str,
     args: &Value,
@@ -603,35 +704,6 @@ pub(super) fn proposal_command(
                     value: Some(value),
                 },
                 format!("Set {key} of {tag} to {shown}"),
-            ))
-        }
-        "set_wire_number" => {
-            let wire = id("wire_id")?;
-            if !known.wires.contains_key(&wire) {
-                return Err(format!(
-                    "there is no wire with id {wire} (see section wires)"
-                ));
-            }
-            let number = args["number"]
-                .as_str()
-                .ok_or("number must be text; use an empty text to clear it")?
-                .trim();
-            if number.chars().count() > MAX_WIRE_NUMBER_CHARS {
-                return Err(format!(
-                    "number is longer than {MAX_WIRE_NUMBER_CHARS} characters"
-                ));
-            }
-            let summary = if number.is_empty() {
-                format!("Clear the number of wire {wire}")
-            } else {
-                format!("Set the number of wire {wire} to {number}")
-            };
-            Ok((
-                Command::SetWireNumber {
-                    wire: wire.into(),
-                    number: (!number.is_empty()).then(|| number.to_string()),
-                },
-                summary,
             ))
         }
         "add_page" => {
@@ -870,7 +942,7 @@ impl NovoApp {
                     {
                         return Err(format!("{action} is not allowed above the agreed scope"));
                     }
-                    proposal_command(&validator_known, action, args).map(|(_, summary)| summary)
+                    proposal_plan(&validator_known, action, args).map(|(_, summary)| summary)
                 }),
             )
             .starting_at(first);
@@ -1000,6 +1072,22 @@ impl NovoApp {
         }
     }
 
+    /// The same path as Edit > Set wire number: one undo step, the whole net.
+    fn apply_wire_number(&mut self, wire: novo_core::WireId, number: &str) -> ProposalState {
+        let Some(doc) = self.backend.document_mut() else {
+            return ProposalState::Failed("No project is open.".into());
+        };
+        match doc.transact("Set wire number", |tx| {
+            novo_numbering::set_number(tx, wire, number)
+        }) {
+            Ok((_, changes)) => {
+                self.changed_outside_canvas(&changes);
+                ProposalState::Applied
+            }
+            Err(e) => ProposalState::Failed(format!("Wire number: {e}")),
+        }
+    }
+
     fn assistant_decide(&mut self, index: usize, apply: bool) {
         let known = self
             .backend
@@ -1015,13 +1103,14 @@ impl NovoApp {
         } else if self.backend.is_read_only() || self.commissioning_locks_edits() {
             ProposalState::Failed("The project is read-only right now.".into())
         } else {
-            match proposal_command(&known, &p.action, &p.args) {
+            match proposal_plan(&known, &p.action, &p.args) {
                 Err(why) => ProposalState::Failed(why),
-                Ok((command, _)) => match self.execute(command) {
+                Ok((Plan::Command(command), _)) => match self.execute(*command) {
                     Some(Ok(_)) => ProposalState::Applied,
                     Some(Err(e)) => ProposalState::Failed(e.to_string()),
                     None => ProposalState::Failed("No project is open.".into()),
                 },
+                Ok((Plan::WireNumber { wire, number }, _)) => self.apply_wire_number(wire, &number),
             }
         };
         let st = &mut self.wb.assistant;

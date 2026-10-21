@@ -1079,3 +1079,97 @@ fn no_network_and_a_rate_limit_end_in_a_plain_message_after_the_retries() {
     assert!(!shown.contains("slow down"), "no raw API text for this one");
     assert_eq!(s.d.app.wb.assistant.spent(), 0.0);
 }
+
+#[test]
+fn the_wire_card_names_the_wire_by_its_ends_not_its_id() {
+    let s = setup(DataScope::Project);
+    let project = s.d.app.document().unwrap().project();
+    let known = known_of(project);
+    let (id, _) = first_wire(&s);
+    let (plan, summary) = proposal_plan(
+        &known,
+        "set_wire_number",
+        &json!({"wire_id": id, "number": "L1-77"}),
+    )
+    .unwrap();
+    assert!(matches!(plan, Plan::WireNumber { .. }));
+    assert!(summary.starts_with("Number the wire from "), "{summary}");
+    assert!(
+        summary.contains(" to ") && summary.contains("(page "),
+        "{summary}"
+    );
+    assert!(
+        summary.contains("L1-77") && summary.contains("fixed"),
+        "{summary}"
+    );
+    assert!(
+        !summary.contains(&format!("wire {id}")) && !summary.contains(&format!("#{id}")),
+        "no internal id: {summary}"
+    );
+    let (_, clear) = proposal_plan(
+        &known,
+        "set_wire_number",
+        &json!({"wire_id": id, "number": ""}),
+    )
+    .unwrap();
+    assert!(
+        clear.starts_with("Clear the number of the wire from "),
+        "{clear}"
+    );
+    // The card's note names the wire too, and says what is replaced.
+    let note = proposal_note(
+        project,
+        &Proposal {
+            id: 1,
+            action: "set_wire_number".into(),
+            args: json!({"wire_id": id, "number": "L1-77"}),
+            summary,
+        },
+    )
+    .unwrap();
+    assert!(note.contains("the wire from "), "{note}");
+    assert!(!note.contains(&format!("#{id}")), "{note}");
+}
+
+#[test]
+fn wire_numbers_with_control_characters_are_refused() {
+    let s = setup(DataScope::Project);
+    let known = known_of(s.d.app.document().unwrap().project());
+    let (id, _) = first_wire(&s);
+    for bad in ["A\nB", "A\u{7}", "\tX\u{0}"] {
+        let r = proposal_plan(
+            &known,
+            "set_wire_number",
+            &json!({"wire_id": id, "number": bad}),
+        );
+        assert!(r.is_err(), "{bad:?}");
+    }
+}
+
+#[test]
+fn a_number_another_net_has_is_refused_with_a_reason_on_the_card() {
+    let mut s = setup(DataScope::Project);
+    let (wire, before, taken) = {
+        let p = s.d.app.document().unwrap().project();
+        let first = p.wires().next().unwrap();
+        let other = p
+            .wires()
+            .find(|w| w.number.is_some() && w.number != first.number)
+            .expect("the example has numbered nets");
+        (
+            first.id.raw(),
+            first.number.clone(),
+            other.number.clone().unwrap(),
+        )
+    };
+    propose_wire(&mut s, wire, &taken);
+    let index = s.d.app.wb.assistant.first_proposal_index().expect("a card");
+    s.d.app.assistant_test_decide(index, true);
+    assert_eq!(first_wire(&s).1, before, "nothing changed");
+    match s.d.app.wb.assistant.proposal_state(index) {
+        Some(ProposalState::Failed(why)) => {
+            assert!(why.contains("already used on another net"), "{why}")
+        }
+        other => panic!("the card should show the refusal, not {other:?}"),
+    }
+}
