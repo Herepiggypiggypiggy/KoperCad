@@ -92,3 +92,46 @@ fn the_pack_needs_something_to_print_then_fills_one_folder() {
     d.app.export_workshop().expect("again");
     assert!(folder.join("1 Drilling template +CAB1 A3.pdf").exists());
 }
+
+#[test]
+fn an_absurd_plate_is_left_out_with_a_hint_instead_of_hundreds_of_sheets() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.save_to(&dir.path().join("Plant 3.novo")));
+    cabinet_with_devices(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .structures()
+        .find(|s| s.enclosure)
+        .unwrap()
+        .id;
+    // Metres typed as millimetres: a 400 m x 300 m plate.
+    d.app.cabinet_ask(
+        Ask::SetPlateSize(
+            cab,
+            novo_core::MountingPlate {
+                width: 400_000.0,
+                height: 300_000.0,
+                margin: 10.0,
+            },
+        ),
+        Some(cab),
+        None,
+        &[],
+    );
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let (pdfs, too_big) = super::workshop::template_pdfs(project, "Plant 3", Paper::A4);
+    assert!(pdfs.is_empty(), "no template for the absurd plate");
+    assert_eq!(too_big.len(), 1, "{too_big:?}");
+    assert!(too_big[0].starts_with("+CAB1"), "{too_big:?}");
+}
