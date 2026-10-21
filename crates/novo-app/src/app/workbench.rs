@@ -205,8 +205,11 @@ pub(crate) struct Workbench {
     pub(super) bench: Option<super::bench::BenchState>,
     /// Paper of the workshop pack's drilling template.
     pub(super) workshop_paper: novo_layout::template::Paper,
-    /// The PDF options dialog (File > Export drawings > Export PDF...), while open.
+    /// The PDF options dialog (File > Export drawings > Export PDF with options...), while open.
     pub(super) pdf_options: Option<super::pdf_options::PdfOptionsState>,
+    /// Test hook: the folder PDFs go to instead of `<Documents>\KoperCAD`.
+    #[cfg(test)]
+    pub(super) pdf_dir: Option<std::path::PathBuf>,
     /// The Report designer window, while open.
     pub(super) designer: Option<super::designer::DesignerState>,
     pub(super) underlay_seen: Option<(novo_core::PageId, u64, Option<u64>)>,
@@ -326,6 +329,8 @@ impl Default for Workbench {
             bench: None,
             workshop_paper: novo_layout::template::Paper::A4,
             pdf_options: None,
+            #[cfg(test)]
+            pdf_dir: None,
             designer: None,
             commissioning: None,
             underlay_seen: None,

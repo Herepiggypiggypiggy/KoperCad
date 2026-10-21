@@ -19,20 +19,40 @@ use novo_layout::template::Paper;
 
 use super::{Level, NovoApp};
 
+/// Most pages one template PDF may take. A plate this large is a data entry
+/// slip (metres typed as millimetres); printing it would not be.
+const MAX_TEMPLATE_PAGES: usize = 300;
+
 /// The enclosures that have a mounting plate and the PDF of each one's
-/// template, as `(tag, pdf bytes)`.
-pub(super) fn template_pdfs(project: &Project, name: &str, paper: Paper) -> Vec<(String, Vec<u8>)> {
-    project
+/// template, as `(tag, pdf bytes)`, and the tags left out for needing more
+/// than `MAX_TEMPLATE_PAGES` pages.
+pub(super) fn template_pdfs(
+    project: &Project,
+    name: &str,
+    paper: Paper,
+) -> (Vec<(String, Vec<u8>)>, Vec<String>) {
+    let mut pdfs = Vec::new();
+    let mut too_big = Vec::new();
+    for s in project
         .structures()
         .filter(|s| s.enclosure && s.plate.is_some())
-        .filter_map(|s| {
-            let (sheets, _) = template_documents(project, s.id)?;
-            Some((
-                s.tag.to_string(),
-                novo_pdf::template::export_template_pdf(&sheets, name, paper),
-            ))
-        })
-        .collect()
+    {
+        let Some((sheets, _)) = template_documents(project, s.id) else {
+            continue;
+        };
+        let pages = sheets.iter().fold(0usize, |n, sh| {
+            n.saturating_add(novo_pdf::template::page_count(sh, paper))
+        });
+        if pages > MAX_TEMPLATE_PAGES {
+            too_big.push(format!("{} ({pages} pages)", s.tag));
+            continue;
+        }
+        pdfs.push((
+            s.tag.to_string(),
+            novo_pdf::template::export_template_pdf(&sheets, name, paper),
+        ));
+    }
+    (pdfs, too_big)
 }
 
 /// A file name part without characters Windows does not allow.
@@ -53,12 +73,17 @@ impl NovoApp {
     pub fn export_workshop_to(&mut self, folder: &Path) -> Option<PathBuf> {
         let name = self.project_name().unwrap_or_default();
         let paper = self.wb.workshop_paper;
-        let templates = template_pdfs(self.backend.document()?.project(), &name, paper);
+        let (templates, too_big) = template_pdfs(self.backend.document()?.project(), &name, paper);
         let mut done: Vec<String> = Vec::new();
-        let mut skipped: Vec<&str> = Vec::new();
+        let mut skipped: Vec<String> = Vec::new();
 
-        if templates.is_empty() {
-            skipped.push("drilling template (no cabinet has a mounting plate)");
+        if templates.is_empty() && too_big.is_empty() {
+            skipped.push("drilling template (no cabinet has a mounting plate)".to_owned());
+        }
+        for tag in &too_big {
+            skipped.push(format!(
+                "drilling template {tag}, over {MAX_TEMPLATE_PAGES} pages: check the plate size"
+            ));
         }
         for (tag, bytes) in &templates {
             let file = folder.join(format!(
@@ -86,7 +111,7 @@ impl NovoApp {
             };
             match written {
                 Some(_) => done.push(what.to_owned()),
-                None => skipped.push(what),
+                None => skipped.push(what.to_owned()),
             }
         }
         if done.is_empty() {

@@ -33,4 +33,7 @@ pub use punch::{Photo, PunchItem, PunchState, Severity, Signature};
 pub use redline::{Change, Redline, RedlineState, apply_commands, revision_description};
 pub use report::to_report_input;
 pub use store::{CommissioningError, CommissioningStore};
-pub use walk::{WalkScope, WireKind, WirePlan, WireStep, next_open, walk_order};
+pub use walk::{
+    WalkOrder, WalkScope, WireKind, WirePlan, WireStep, next_open, next_open_with, walk_order,
+    walk_order_with,
+};

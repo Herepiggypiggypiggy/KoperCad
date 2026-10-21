@@ -148,3 +148,73 @@ fn back_takes_the_last_pass_back() {
     }
     assert!(!mode.back(&project, page, &mut go), "nothing more to undo");
 }
+
+fn key(d: &mut Drive, k: egui::Key) {
+    let ev = |pressed| egui::Event::Key {
+        key: k,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    };
+    d.frame_with(vec![ev(true)]);
+    d.frame_with(vec![ev(false)]);
+}
+
+#[test]
+fn fail_opens_the_note_with_the_ends_then_records_on_the_second_press() {
+    let (_dir, mut d) = walking();
+    tap_space(&mut d);
+    let target = d.app.wb.commissioning.as_ref().unwrap().selected.unwrap();
+    key(&mut d, egui::Key::F);
+    {
+        let mode = d.app.wb.commissioning.as_ref().unwrap();
+        let first = target.checks()[0];
+        assert_eq!(mode.store.state(target, first), CheckState::Pending);
+        assert!(
+            mode.note.contains(" to "),
+            "the note starts with the ends: {}",
+            mode.note
+        );
+    }
+    // The reason is typed in the focused Note, then Enter records.
+    d.frame_with(vec![egui::Event::Text("loose".into())]);
+    d.frame_with(vec![egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }]);
+    d.frame();
+    let mode = d.app.wb.commissioning.as_ref().unwrap();
+    let first = target.checks()[0];
+    assert_eq!(mode.store.state(target, first), CheckState::Failed);
+    let item = mode.store.punch_items().find(|p| p.target == Some(target));
+    assert!(item.is_some(), "the failure is on the punch list");
+}
+
+#[test]
+fn n_marks_not_applicable_and_backspace_takes_a_pass_back() {
+    let (_dir, mut d) = walking();
+    tap_space(&mut d);
+    let target = d.app.wb.commissioning.as_ref().unwrap().selected.unwrap();
+    key(&mut d, egui::Key::N);
+    let mode = d.app.wb.commissioning.as_ref().unwrap();
+    assert_eq!(
+        mode.store.state(target, target.checks()[0]),
+        CheckState::NotApplicable
+    );
+    tap_space(&mut d); // passes the rest, moves on
+    let moved = d.app.wb.commissioning.as_ref().unwrap().selected.unwrap();
+    assert_ne!(moved, target);
+    let wires = d.doc().project().wires().count();
+    key(&mut d, egui::Key::Backspace);
+    let mode = d.app.wb.commissioning.as_ref().unwrap();
+    assert_eq!(mode.selected, Some(target), "Backspace went back one wire");
+    assert_eq!(
+        d.doc().project().wires().count(),
+        wires,
+        "Backspace and N and F never delete a wire on the canvas"
+    );
+}

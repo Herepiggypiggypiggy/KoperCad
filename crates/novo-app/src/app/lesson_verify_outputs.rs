@@ -777,6 +777,7 @@ fn pdf_export_every_step_works_from_its_own_start() {
     // Saved first: a lesson project exports into Documents\KoperCAD, which this machine lacks.
     let file = dir.path().join("Pump.novo");
     assert!(l.d.app.save_to(&file), "{}", l.say());
+    l.d.app.wb.pdf_dir = Some(dir.path().to_owned());
     assert!(l.project().latest_revision().is_none(), "no revision yet");
     l.read("intro");
 
@@ -820,7 +821,7 @@ fn pdf_export_every_step_works_from_its_own_start() {
     l.open_reading("title-block");
     l.next();
 
-    // export: Ctrl+K, export pdf, Enter. The file sits next to the project.
+    // export: Ctrl+K, export pdf, Enter. The file sits in the PDF folder (the test points it at the project folder).
     l.open("export");
     l.palette("export pdf");
     l.ticked("export");
@@ -850,6 +851,7 @@ fn the_menu_routes_and_the_page_list_click_work() {
     let dir = tempfile::tempdir().unwrap();
     let mut l = Ox::start("pdf-export");
     assert!(l.d.app.save_to(&dir.path().join("Pump.novo")));
+    l.d.app.wb.pdf_dir = Some(dir.path().to_owned());
     menu(&mut l, &["File", "Revisions", "Issue revision"]);
     assert!(
         texts(&l).iter().any(|t| t == "Issue revision A"),

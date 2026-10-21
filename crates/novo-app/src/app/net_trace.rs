@@ -188,7 +188,7 @@ impl NovoApp {
         let mut jump: Option<Place> = None;
         let mut page: Option<PageId> = None;
         super::panel::dialog(ctx, "Pages and devices on this net", [380.0, 0.0])
-            .id(egui::Id::new("net_trace"))
+            .id(super::panel::keep_id(ctx, egui::Id::new("net_trace")))
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.weak("As of opening; select again to refresh");

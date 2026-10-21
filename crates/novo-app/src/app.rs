@@ -182,6 +182,7 @@ mod view3d_drag_gaps;
 mod view3d_duct_fill;
 mod view3d_duplicate;
 mod view3d_heat;
+mod view3d_heat_labels;
 mod view3d_hints;
 mod view3d_measure;
 mod view3d_models;

@@ -707,8 +707,16 @@ fn marks_keys_and_export_follow_the_design() {
     assert_eq!(rules.disabled, None);
     d.app.wb.field.close();
 
-    // A saved project's PDF goes next to its file, named after it; a second
-    // export says it replaced the first.
+    // A saved project's PDF is named after its file and goes to the PDF
+    // folder (Documents\KoperCAD unless a profile folder moves it; not beside
+    // the project); a second export says it replaced the first.
+    let default_dir = d.app.pdf_base().expect("a PDF folder").0;
+    assert_ne!(default_dir, dir.path());
+    assert!(
+        default_dir.ends_with("KoperCAD") || default_dir.ends_with("NovoElectric"),
+        "{default_dir:?}"
+    );
+    d.app.wb.pdf_dir = Some(dir.path().to_owned());
     let pdf = d.app.export_pdf().expect("exported");
     assert_eq!(pdf, dir.path().join("Plant 2.pdf"));
     assert!(pdf.is_file());

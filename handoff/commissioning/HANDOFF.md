@@ -35,3 +35,4 @@ Move commissioning from the outline tab to `Workspace::Commissioning` (Workspace
 - Report: `novo_reports::commissioning::punch_list_report`.
 - Tests: `crates/novo-commissioning/tests/walk.rs`, `app/commissioning_walk_tests.rs`.
 - `novo-theme::widgets::row_of_height` is new (a row with a height of its own).
+- Walk follow-up: `walk_order_with` / `next_open_with` take a `WalkOrder` (`Number` or `Place`); Fail is two-step when no note is typed (the Note opens with the ends, Enter or a second Fail records); keys F (fail), N (n/a), Backspace (back) work while no text field has focus.
