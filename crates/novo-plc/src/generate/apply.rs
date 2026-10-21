@@ -20,7 +20,7 @@ use novo_editor::pinkind::{Verdict, judge};
 use novo_symbols::{Library, Symbol};
 use novo_terminals::{next_free_number, next_order, strip_style, symbol_pins};
 
-use crate::card::{CHANNEL, SIGNAL, start_key};
+use crate::card::{ADDRESS_TEXT, CHANNEL, SIGNAL, SPARE, start_key};
 use crate::commands::{NewCardLayout, add_card};
 use crate::index::channel_key;
 use crate::layout::{ChannelType, Space};
@@ -75,6 +75,8 @@ pub fn apply(tx: &mut Tx<'_>, library: &Library, list: &IoList, plan: &Plan) -> 
         built.pages.push(page);
         after = Some(page);
     }
+    // The cards exist now: fill in the address texts drawn under the channels.
+    crate::index::sync_address_texts(tx, library)?;
     Ok(built)
 }
 
@@ -144,8 +146,8 @@ fn build_card(
     )?;
 
     for (number, item) in planned.channels.iter().enumerate() {
-        let Some(&item) = item.as_ref() else { continue };
-        let item = &list.items[item];
+        // A spare is drawn too, so the page shows the whole card; it has no terminal or wire.
+        let item = item.as_ref().map(|&i| &list.items[i]);
         let x = MARGIN + spacing * (number as f64 + 0.5);
         let channel = place_channel(
             tx,
@@ -155,14 +157,28 @@ fn build_card(
             symbol,
             &pins,
             page,
-            x,
-            y0,
+            (x, y0),
             item,
         )?;
-        built.channels += 1;
+        if item.is_some() {
+            built.channels += 1;
+        }
+        // A spare shows its address too: the card's free channels are the ones to find.
+        address_label(tx, page, channel, has_up, has_down)?;
         for (pin_index, pin) in pins.iter().enumerate() {
             let above = pin.direction == Some(Direction::Up);
             let pin_at = Point::new(x + pin.offset.x, y0 + pin.offset.y);
+            if item.is_none() {
+                if pin_index == 0 {
+                    let far_y = if above {
+                        pin_at.y - GAP - 6.0
+                    } else {
+                        pin_at.y + GAP + 6.0
+                    };
+                    label(tx, page, channel, pin_at, far_y, above)?;
+                }
+                continue;
+            }
             let end = terminal_for(tx, strip, page, pin_at, above, built)?;
             wire(
                 tx,
@@ -193,20 +209,37 @@ fn place_channel(
     symbol: &Symbol,
     pins: &[novo_core::Pin],
     page: PageId,
-    x: f64,
-    y: f64,
-    item: &IoItem,
+    (x, y): (f64, f64),
+    item: Option<&IoItem>,
 ) -> Result<SymbolId> {
+    let mut pins = pins.to_vec();
+    if item.is_none() {
+        // A spare channel is meant to stay free.
+        for pin in &mut pins {
+            pin.optional = true;
+        }
+    }
     let id = tx.place_symbol(
         page,
         symbol.id.as_str(),
         Placement::at(Point::new(x, y)),
-        pins.to_vec(),
+        pins,
         SymbolRole::Device {
             device,
             main: false,
         },
     )?;
+    let Some(item) = item else {
+        // Marked, not keyed: the index keeps counting this channel as a spare.
+        tx.set_property(id, SPARE, Some(Value::Bool(true)))?;
+        tx.set_property(id, SIGNAL, Some(Value::from("Spare".to_owned())))?;
+        // The channel it stands for, so the address text can follow the card.
+        let number = u16::try_from(number)
+            .map_err(|_| refused("import I/O list", "too many channels".into()))?;
+        tx.set_property(id, CHANNEL, Some(Value::from(channel_key(kind, number))))?;
+        tx.set_property(id, ADDRESS_TEXT, Some(Value::from(String::new())))?;
+        return Ok(id);
+    };
     let number = u16::try_from(number)
         .map_err(|_| refused("import I/O list", "too many channels".into()))?;
     tx.set_property(id, CHANNEL, Some(Value::from(channel_key(kind, number))))?;
@@ -216,6 +249,7 @@ fn place_channel(
         item.description.clone()
     };
     tx.set_property(id, SIGNAL, Some(Value::from(signal)))?;
+    tx.set_property(id, ADDRESS_TEXT, Some(Value::from(String::new())))?;
     if !item.tag.is_empty() {
         tx.set_property(id, FIELD, Some(Value::from(item.tag.clone())))?;
     }
@@ -252,8 +286,10 @@ fn terminal_for(
         t.order = order;
     })?;
     let key = strip_style(tx.project(), strip, kind).symbol;
-    let pins = symbol_pins(&key)?;
+    let mut pins = symbol_pins(&key)?;
     let length = pins[1].offset.y;
+    // The field side waits for the field cable, which is not drawn yet.
+    pins[1].optional = true;
     // Pin `1` is the cabinet side and meets the channel; `2` is the field.
     let (origin, rotation, far_y) = if above {
         let y = pin_at.y - GAP;
@@ -313,6 +349,35 @@ fn wire(
         Target::Endpoint(Endpoint::pin(channel, pin), pin_at),
         &[],
         Target::Endpoint(Endpoint::pin(end.symbol, 0), end.near),
+    )?;
+    Ok(())
+}
+
+/// The channel's address, on the side of the box that has no terminal wire.
+fn address_label(
+    tx: &mut Tx<'_>,
+    page: PageId,
+    channel: SymbolId,
+    has_up: bool,
+    has_down: bool,
+) -> Result<()> {
+    let (offset, anchor) = match (has_up, has_down) {
+        // The box hangs below the pin: the address goes under the box.
+        (true, false) => (Point::new(0.0, 12.5), TextAnchor::TopCenter),
+        (false, true) => (Point::new(0.0, -2.5), TextAnchor::BottomCenter),
+        _ => (Point::new(8.0, 8.0), TextAnchor::MiddleLeft),
+    };
+    tx.add_text(
+        page,
+        TextContent::Property {
+            key: ADDRESS_TEXT.into(),
+        },
+        TextPlacement {
+            offset,
+            rotation: Rotation::R0,
+            anchor,
+        },
+        Some(channel.into()),
     )?;
     Ok(())
 }

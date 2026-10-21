@@ -399,10 +399,21 @@ fn child_save_loop() {
     // write the app does (an incremental save is a shorter transaction).
     let mut file = ProjectFile::open(&path).unwrap();
     let mut next_is_b = true;
+    let marker = saved_marker(Path::new(&path));
     loop {
         file.save(if next_is_b { &b } else { &a }).unwrap();
+        // Tells the parent a whole save has finished (it cannot read the
+        // database for that while this loop keeps it locked).
+        let _ = std::fs::write(&marker, b"saved");
         next_is_b = !next_is_b;
     }
+}
+
+/// The file the saving child touches after each finished save.
+fn saved_marker(path: &Path) -> PathBuf {
+    let mut name = path.file_name().unwrap().to_owned();
+    name.push(".saved");
+    path.with_file_name(name)
 }
 
 fn run_child(test: &str, path: &Path, lifetime: Duration) {
@@ -413,15 +424,14 @@ fn run_child(test: &str, path: &Path, lifetime: Duration) {
         .stderr(Stdio::null())
         .spawn()
         .unwrap();
-    // Wait until the child is really writing (the file changed), however
-    // slow the runner is to start it, then let it run on for `lifetime`.
-    let started = std::fs::metadata(path).and_then(|m| m.modified()).unwrap();
+    // Wait until the child has finished a save of its own, however slow the
+    // runner is to start it. A file timestamp is too coarse for this on
+    // Windows: a short `lifetime` then killed the child before its first save
+    // and the round proved nothing. The kill still lands at a different point
+    // of the saves that follow.
+    let marker = saved_marker(path);
     let deadline = std::time::Instant::now() + Duration::from_secs(60);
-    while std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .is_ok_and(|m| m == started)
-        && std::time::Instant::now() < deadline
-    {
+    while !marker.exists() && std::time::Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(5));
     }
     std::thread::sleep(lifetime);
@@ -452,8 +462,9 @@ fn a_process_killed_while_saving_leaves_a_whole_file_every_time() {
         opened.session.close().unwrap();
         saves_seen += usize::from(save_seq(&path) > 1);
     }
+    // The parent waits for a finished save before it kills, so every round counts.
     assert!(
-        saves_seen >= 8,
+        saves_seen == 10,
         "the child must have been saving when it was killed ({saves_seen} of 10 rounds)"
     );
 }

@@ -177,3 +177,41 @@ fn drives_and_circuits_are_found_by_their_everyday_words() {
         );
     }
 }
+
+#[test]
+fn no_starter_has_a_diagonal_wire_even_after_placing() {
+    for (_, file) in starter_macros() {
+        let mut doc = Document::new(Project::new(""));
+        doc.transact("place", |tx| {
+            let page = tx.add_page("1")?;
+            let mut definition = file.definition.clone();
+            definition.id = BlockDefinitionId(9_000_000);
+            let def = definition.id;
+            tx.insert_record(Record::BlockDefinition(definition))?;
+            tx.place_block(def, page, Point::new(50.0, 70.0), vec![])?;
+            Ok(())
+        })
+        .unwrap();
+        let p = doc.project();
+        let mut wires = 0;
+        for w in p.wires() {
+            wires += 1;
+            let mut pts = vec![p.endpoint_position(w.from).expect("end")];
+            pts.extend(w.route.iter().copied());
+            pts.push(p.endpoint_position(w.to).expect("end"));
+            for pair in pts.windows(2) {
+                let (a, b) = (pair[0], pair[1]);
+                assert!(
+                    (a.x - b.x).abs() < 1e-6 || (a.y - b.y).abs() < 1e-6,
+                    "{}: diagonal wire from ({}, {}) to ({}, {})",
+                    file.name,
+                    a.x,
+                    a.y,
+                    b.x,
+                    b.y
+                );
+            }
+        }
+        assert!(wires >= 2, "{} placed {wires} wires", file.name);
+    }
+}

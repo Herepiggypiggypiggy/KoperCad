@@ -276,3 +276,170 @@ fn estimates_in_the_example_are_explained_by_cause() {
     );
     assert!(!text.contains("not placed"), "{text}");
 }
+
+#[test]
+fn a_wire_that_breaks_a_house_rule_shows_up_in_the_issues() {
+    use novo_core::Value;
+    let (_dir, mut d) = example();
+    let (plan, _) = build(d.doc().project(), false);
+    d.app.apply_autopilot(&plan, None);
+    d.frame();
+    let rule_problems = |d: &Drive| {
+        super::checks::open_problems(d.doc().project())
+            .into_iter()
+            .filter(|p| p.kind == novo_checks::ProblemKind::WireRule)
+            .count()
+    };
+    assert_eq!(rule_problems(&d), 0, "the standard states no house rules");
+
+    let doc = d.app.backend.document_mut().unwrap();
+    for (key, value) in [
+        (novo_reports::wire_rules::PRESET.to_owned(), "house"),
+        (novo_reports::wire_rules::ColourClass::AcPower.key(), "VT"),
+    ] {
+        doc.transact("rule", |tx| {
+            novo_checks::standards::set_info_property(tx, &key, Some(Value::Text(value.into())))
+        })
+        .unwrap();
+    }
+    assert!(rule_problems(&d) > 0, "power wires are not violet");
+}
+
+#[test]
+fn waiving_one_wire_rule_problem_leaves_the_others() {
+    use novo_core::Value;
+    let (_dir, mut d) = example();
+    let (plan, _) = build(d.doc().project(), false);
+    d.app.apply_autopilot(&plan, None);
+    d.frame();
+    let doc = d.app.backend.document_mut().unwrap();
+    for (key, value) in [
+        (novo_reports::wire_rules::PRESET.to_owned(), "house"),
+        (novo_reports::wire_rules::ColourClass::AcPower.key(), "VT"),
+    ] {
+        doc.transact("rule", |tx| {
+            novo_checks::standards::set_info_property(tx, &key, Some(Value::Text(value.into())))
+        })
+        .unwrap();
+    }
+    let rules = |d: &Drive| {
+        super::checks::open_problems(d.doc().project())
+            .into_iter()
+            .filter(|p| p.kind == novo_checks::ProblemKind::WireRule)
+            .collect::<Vec<_>>()
+    };
+    let all = rules(&d);
+    assert!(all.len() > 1, "{all:?}");
+    assert!(
+        all.iter()
+            .all(|p| p.message.starts_with("Wire")
+                || p.message.starts_with("A wire without a number"))
+    );
+    let first = all[0].clone();
+    let doc = d.app.backend.document_mut().unwrap();
+    doc.transact("waive", |tx| {
+        novo_checks::waive(tx, &first, "reviewed").map(|_| ())
+    })
+    .unwrap();
+    let left = rules(&d);
+    assert!(left.iter().all(|p| p.at != first.at), "that wire is waived");
+    assert!(
+        left.len() < all.len() && !left.is_empty(),
+        "the others stay"
+    );
+}
+
+/// The committed project the neutral-colour QA scenario opens: the example
+/// with its wires coloured by the Autopilot and one neutral wire black.
+fn neutral_fixture_path() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../qa/fixtures/neutral-black.novo")
+}
+
+fn build_neutral_fixture(doc: &mut novo_core::Document) {
+    super::example::build_example(doc).unwrap();
+    let (plan, _) = build(doc.project(), false);
+    doc.transact("Autopilot", |tx| plan.apply(tx, None))
+        .unwrap();
+    let netlist = doc.project().netlist();
+    let neutral = doc
+        .project()
+        .wires()
+        .find(|w| {
+            netlist
+                .net_of_wire(w)
+                .and_then(|n| netlist.net(n).potential())
+                .and_then(|p| doc.project().potential(p))
+                .is_some_and(|p| p.kind == novo_core::PotentialKind::Neutral)
+        })
+        .map(|w| w.id)
+        .expect("the example has a neutral wire");
+    doc.transact("black neutral", |tx| {
+        tx.update::<novo_core::Wire>(neutral, |w| w.color = Some("BK".into()))
+    })
+    .unwrap();
+}
+
+/// Rewrites the fixture: `cargo test -p novo-app write_neutral_fixture -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/neutral-black.novo"]
+fn write_neutral_fixture() {
+    use crate::backend::ProjectBackend;
+    let mut backend = crate::backend::StorageBackend::default();
+    backend.new_project("Black neutral (example)").unwrap();
+    build_neutral_fixture(backend.document_mut().unwrap());
+    let path = neutral_fixture_path();
+    let _ = std::fs::remove_file(&path);
+    backend.save(&path).unwrap();
+}
+
+#[test]
+fn the_committed_neutral_fixture_has_one_wire_that_is_not_blue() {
+    use crate::backend::ProjectBackend;
+    let path = neutral_fixture_path();
+    assert!(path.exists(), "run write_neutral_fixture");
+    // Open a copy: opening takes a lock and may write beside the file.
+    let dir = tempfile::tempdir().unwrap();
+    let copy = dir.path().join("fixture.novo");
+    std::fs::copy(&path, &copy).unwrap();
+    let mut backend = crate::backend::StorageBackend::default();
+    backend.open(&copy).unwrap();
+    let rows: Vec<_> = novo_reports::issues::open(backend.document().unwrap().project())
+        .into_iter()
+        .filter(|p| p.kind == novo_checks::ProblemKind::WireRule)
+        .collect();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert!(
+        rows[0]
+            .message
+            .contains("(Neutral circuit) is BK; IEC 60204-1 gives BU")
+    );
+}
+
+#[test]
+fn filling_every_missing_colour_with_black_makes_the_neutral_wire_an_issue() {
+    let (_dir, mut d) = example();
+    let wires: Vec<_> = d
+        .doc()
+        .project()
+        .wires()
+        .filter(|w| w.color.is_none())
+        .map(|w| w.id)
+        .collect();
+    let doc = d.app.backend.document_mut().unwrap();
+    doc.transact("fill", |tx| {
+        for id in &wires {
+            tx.update::<novo_core::Wire>(*id, |w| w.color = Some("BK".into()))?;
+        }
+        Ok(())
+    })
+    .unwrap();
+    let rows: Vec<_> = super::checks::open_problems(d.doc().project())
+        .into_iter()
+        .filter(|p| p.kind == novo_checks::ProblemKind::WireRule)
+        .map(|p| p.message)
+        .collect();
+    assert!(
+        rows.iter().any(|m| m.contains("IEC 60204-1 gives BU")),
+        "{rows:?}"
+    );
+}

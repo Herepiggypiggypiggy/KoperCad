@@ -10,8 +10,10 @@ use std::collections::BTreeSet;
 
 use eframe::egui;
 use novo_checks::calc::tables::TableSet;
+use novo_core::Value;
 use novo_numbering::{Mode, Reason, Scheme, Scope};
-use novo_reports::autopilot::{self, Autopilot, Basis, Change, Proposal, Ready};
+use novo_reports::autopilot::{self, Autopilot, Basis, Change, Group, Proposal, Ready};
+use novo_reports::wire_rules::{self, ColourClass, Preset, WireRules};
 use novo_reports::{FerruleStandard, wire_cut_jobs_with};
 
 use super::{Level, NovoApp};
@@ -21,6 +23,8 @@ pub(super) struct AutopilotState {
     plan: Autopilot,
     ready: Ready,
     ticked: BTreeSet<usize>,
+    /// The plan grouped by protective device.
+    groups: Vec<Group>,
 }
 
 /// The rows ticked when the list opens: everything but the assumed ones,
@@ -85,10 +89,12 @@ impl NovoApp {
         };
         let (plan, ready) = build(project, has_plate);
         let ticked = default_ticked(&plan);
+        let groups = autopilot::groups(project, &plan);
         self.wb.autopilot = Some(AutopilotState {
             plan,
             ready,
             ticked,
+            groups,
         });
     }
 
@@ -154,16 +160,27 @@ impl NovoApp {
             // The drawing changed under the list (an undo, an edit): plan again.
             let (plan, ready) = build(project, has_plate);
             state.ticked = default_ticked(&plan);
+            state.groups = autopilot::groups(project, &plan);
             state.plan = plan;
             state.ready = ready;
         }
         let mut open = true;
         let mut apply: Option<(BTreeSet<usize>, bool)> = None;
+        let mut rule_edits: Vec<(String, Option<Value>)> = Vec::new();
         super::panel::dialog(ctx, "Autopilot", [620.0, 640.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
+                rules_section(ui, &WireRules::of(project), &mut rule_edits);
                 body(ui, &mut state, &mut apply);
             });
+        if !rule_edits.is_empty() {
+            self.edit_project("Wire rules", |tx| {
+                for (key, value) in &rule_edits {
+                    novo_checks::standards::set_info_property(tx, key, value.clone())?;
+                }
+                Ok(())
+            });
+        }
         if let Some((ids, finish)) = apply {
             // Accept all is the end of the job: close, so Bench output behind
             // it shows the new meter. Accepting some rows keeps the list.
@@ -198,7 +215,6 @@ fn body(
     state: &mut AutopilotState,
     apply: &mut Option<(BTreeSet<usize>, bool)>,
 ) {
-    let pal = crate::theme::ui_palette();
     meter(ui, state.ready);
     ui.add_space(6.0);
     let total = state.plan.proposals.len();
@@ -247,7 +263,7 @@ fn body(
     }
     for line in &state.plan.left_to_you {
         ui.add_space(4.0);
-        novo_theme::widgets::banner_wrapped(ui, novo_theme::widgets::Level::Info, line);
+        novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Info, line, |_| {});
     }
     if !state.plan.unresolved.is_empty() {
         ui.add_space(4.0);
@@ -291,8 +307,73 @@ fn body(
             }
         });
         ui.add_space(6.0);
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for p in &state.plan.proposals {
+        egui::ScrollArea::vertical()
+            .auto_shrink([false, true])
+            .show(ui, |ui| {
+                let groups = state.groups.clone();
+                for g in &groups {
+                    group_view(ui, state, g, apply);
+                }
+            });
+    }
+}
+
+/// One protective device (or "Cabinet") with its proposals.
+fn group_view(
+    ui: &mut egui::Ui,
+    state: &mut AutopilotState,
+    g: &Group,
+    apply: &mut Option<(BTreeSet<usize>, bool)>,
+) {
+    let pal = crate::theme::ui_palette();
+    let ticked = g.ids.iter().filter(|i| state.ticked.contains(i)).count();
+    let header = format!(
+        "{}  ·  {} {}  ·  {}",
+        g.title,
+        g.ids.len(),
+        if g.ids.len() == 1 {
+            "change"
+        } else {
+            "changes"
+        },
+        g.summary
+    );
+    egui::CollapsingHeader::new(egui::RichText::new(header).strong())
+        .id_salt(("autopilot-group", &g.title))
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ui
+                    .add_enabled(
+                        ticked > 0,
+                        egui::Button::new(format!("Accept ticked in this group ({ticked})")),
+                    )
+                    .clicked()
+                {
+                    *apply = Some((
+                        g.ids
+                            .iter()
+                            .copied()
+                            .filter(|i| state.ticked.contains(i))
+                            .collect(),
+                        false,
+                    ));
+                }
+                if ui.small_button("Tick group").clicked() {
+                    state.ticked.extend(g.ids.iter().copied());
+                }
+                if ui.small_button("Untick group").clicked() {
+                    for i in &g.ids {
+                        state.ticked.remove(i);
+                    }
+                }
+            });
+            for p in state
+                .plan
+                .proposals
+                .iter()
+                .filter(|p| g.ids.contains(&p.id))
+            {
                 let mut on = state.ticked.contains(&p.id);
                 ui.horizontal_wrapped(|ui| {
                     if ui.checkbox(&mut on, "").changed() {
@@ -320,5 +401,94 @@ fn body(
                 ui.add_space(2.0);
             }
         });
+}
+
+/// What a blank minimum means: the program's own smallest size.
+fn default_min(control: bool) -> String {
+    if control {
+        "program default (0.75 mm²)".to_owned()
+    } else {
+        "program default (1.5 mm²)".to_owned()
     }
+}
+
+/// Smallest sections a house rule can name, mm².
+const MIN_CHOICES: [f64; 6] = [0.5, 0.75, 1.0, 1.5, 2.5, 4.0];
+
+/// The "Wire rules" part of the window: which colour and minimum-size rules
+/// the Autopilot follows in this project. Stored in the project, one undo
+/// step per change.
+fn rules_section(ui: &mut egui::Ui, rules: &WireRules, edits: &mut Vec<(String, Option<Value>)>) {
+    let title = format!("Wire rules: {}", rules.preset.label());
+    egui::CollapsingHeader::new(egui::RichText::new(title).strong())
+        .id_salt("autopilot-wire-rules")
+        .default_open(false)
+        .show(ui, |ui| {
+            ui.label("Colours and smallest sections the Autopilot proposes. IEC 60204-1 is the default; House rules let this project use its own. Rules only change what the Autopilot proposes from now on; wires that already have a colour or size are not touched, and the ones that break the house rules are listed in Issues. Under either setting a neutral or 0 V wire that is not blue is listed too. A wire's class (power, control, neutral, ...) is worked out from its circuit; a wire whose class is a guess is not reported, and protective earth and PEN colours are not checked. Ampacity sizing stays on planning values either way.");
+            ui.horizontal(|ui| {
+                for preset in [Preset::Iec60204, Preset::House] {
+                    if ui
+                        .radio(rules.preset == preset, preset.label())
+                        .clicked()
+                        && rules.preset != preset
+                    {
+                        let text = if preset == Preset::House { "house" } else { "iec60204" };
+                        edits.push((
+                            wire_rules::PRESET.to_owned(),
+                            Some(Value::Text(text.to_owned())),
+                        ));
+                    }
+                }
+            });
+            if rules.preset != Preset::House {
+                return;
+            }
+            ui.weak("A class left on \"IEC 60204-1\" keeps the colour of the standard. Protective earth and PEN are always green-yellow (IEC 60204-1, IEC 60445): a house rule cannot change them.");
+            egui::Grid::new("autopilot-house-colours")
+                .num_columns(4)
+                .show(ui, |ui| {
+                    for (n, class) in ColourClass::EDITABLE.into_iter().enumerate() {
+                        ui.label(class.label());
+                        let current = rules.house_colour(class).map(str::to_owned);
+                        let mut pick = current.clone();
+                        egui::ComboBox::from_id_salt(("house-colour", class.key()))
+                            .selected_text(pick.clone().unwrap_or_else(|| "IEC 60204-1".into()))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut pick, None, "IEC 60204-1");
+                                for code in wire_rules::CODES {
+                                    ui.selectable_value(&mut pick, Some(code.to_owned()), code);
+                                }
+                            });
+                        if pick != current {
+                            edits.push((class.key(), pick.map(Value::Text)));
+                        }
+                        if n % 2 == 1 {
+                            ui.end_row();
+                        }
+                    }
+                    for (label, key, control) in [
+                        ("Smallest power wire", wire_rules::MIN_POWER_MM2, false),
+                        ("Smallest control wire", wire_rules::MIN_CONTROL_MM2, true),
+                    ] {
+                        ui.label(label);
+                        let current = rules.min_mm2(control);
+                        let mut pick = current;
+                        egui::ComboBox::from_id_salt(("house-min", key))
+                            .selected_text(match pick {
+                                Some(v) => format!("{v} mm²"),
+                                None => default_min(control),
+                            })
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut pick, None, default_min(control));
+                                for v in MIN_CHOICES {
+                                    ui.selectable_value(&mut pick, Some(v), format!("{v} mm²"));
+                                }
+                            });
+                        if pick != current {
+                            edits.push((key.to_owned(), pick.map(Value::Float)));
+                        }
+                    }
+                    ui.end_row();
+                });
+        });
 }

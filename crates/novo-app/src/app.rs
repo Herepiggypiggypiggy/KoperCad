@@ -1418,6 +1418,7 @@ impl NovoApp {
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.restore_ask_dialog(&ctx);
+        self.handover_ask_dialog(&ctx);
         self.compare_window(&ctx);
         self.aml_import_dialog(&ctx);
         self.eplan_import_dialog(&ctx);
@@ -1496,6 +1497,7 @@ impl NovoApp {
         } else if !changes.is_empty() {
             self.reports_heard(&changes);
             self.mark_earthed_terminals(&changes);
+            self.sync_plc_address_texts(&changes);
             self.fix_current_page();
         }
         if let Some(page) = self.canvas.take_page_request() {
@@ -2038,16 +2040,23 @@ impl NovoApp {
                 ui.add_space(novo_theme::space::XXL);
                 if self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
-                    ui.weak("Two minutes: place, wire, cable, live view");
+                    ui.weak("Seven short steps: place, wire, cable, live view");
                     ui.add_space(8.0);
                 }
                 for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
                     self.action_button(ui, a, picked);
                 }
+                // Ways to learn, named as such and each with what it is, so the
+                // two are not read as copies of each other.
+                ui.add_space(12.0);
+                ui.small("LEARN");
                 if !self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
+                    ui.weak("Seven short steps: place, wire, cable, live view");
+                    ui.add_space(4.0);
                 }
                 self.learn_start_entry(ui);
+                ui.weak("Lessons for every part of the program");
                 let unsaved = self.backend.unsaved_projects();
                 if !unsaved.is_empty() {
                     ui.add_space(16.0);

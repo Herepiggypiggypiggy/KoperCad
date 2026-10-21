@@ -1077,6 +1077,58 @@ mod tests {
         assert_eq!(ReportFormat::Pdf.extension(), "pdf");
     }
 
+    /// One name per report: the menu, the palette, the workspace list and the
+    /// header all say the same words, so a person who saw it in one place
+    /// finds it in the others.
+    #[test]
+    fn a_report_has_one_name_in_the_menu_the_palette_and_the_workspace() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = saved_example(dir.path());
+        let doc = d.app.backend.document().unwrap();
+        let live = d.app.wb.reports.live(doc.project());
+        let mut names = Vec::new();
+        for (command, report) in REPORT_COMMANDS {
+            let title = live.report(report).expect("the report exists").title();
+            let label = novo_workflow::commands::get(command)
+                .expect("the command exists")
+                .label;
+            assert_eq!(
+                label, title,
+                "{command} is called {label:?} in the menu but {title:?} in the workspace"
+            );
+            names.push(title);
+        }
+        assert_eq!(
+            names,
+            [
+                "Table of contents",
+                "Bill of materials",
+                "Device list",
+                "Wire list",
+                "Terminal diagram",
+                "Cable diagram",
+                "Cut list",
+                "Labels",
+                "Wire production",
+                "I/O list",
+                "Cable schedule",
+                "Plug connection list",
+            ]
+        );
+        // The palette still finds a report by the name it used to have.
+        for (old, command) in [
+            ("contents", "report.toc"),
+            ("plug list", "report.plugs"),
+            ("wire cut list", "report.wirecut"),
+        ] {
+            let hit = novo_workflow::commands::get(command).unwrap();
+            assert!(
+                hit.keywords.contains(&old) || hit.verbs.contains(&old),
+                "{command} lost {old:?}"
+            );
+        }
+    }
+
     #[test]
     fn the_four_more_reports_have_their_own_commands() {
         let dir = tempfile::tempdir().unwrap();

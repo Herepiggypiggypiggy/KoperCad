@@ -2201,6 +2201,7 @@ name = "novo-py"
 version = "0.1.0"
 dependencies = [
  "calamine",
+ "novo-checks",
  "novo-core",
  "novo-reports",
  "novo-revisions",

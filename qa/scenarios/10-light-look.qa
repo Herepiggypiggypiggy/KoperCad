@@ -1,0 +1,43 @@
+@title Light look: every workspace and the main dialogs
+@area Layout
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text preferences
+wait 8
+key Enter
+wait 10
+click_text Light
+wait 10
+shot preferences-light
+check_layout
+key Escape
+wait 6
+shot schematic-light
+check_layout
+click_text Cabinet #1
+wait 20
+shot cabinet-light
+check_layout
+click_text 3D #1
+wait 30
+shot 3d-light
+click_text Reports #2
+wait 20
+shot reports-light
+check_layout
+click_text Commissioning #1
+wait 20
+shot commissioning-light
+check_layout
+click_text File #1
+wait 6
+shot file-menu-light
+key Escape
+key ctrl+k
+wait 6
+text cabinet
+wait 8
+shot search-light
+key Escape

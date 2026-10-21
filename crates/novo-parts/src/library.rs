@@ -120,6 +120,15 @@ struct RecordsFile {
     /// Manufacturers whose first-use notice the user accepted.
     #[serde(default)]
     notices: Vec<String>,
+    /// Quarter turns about x, y, z of a part's model (the user's fix for a
+    /// model that arrives lying down or facing back), by `turn_key`.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    turns: std::collections::BTreeMap<String, [u64; 3]>,
+}
+
+/// The key of a part in the turns table: its normalized identity.
+fn turn_key(key: &PartKey) -> String {
+    format!("{}|{}", key.manufacturer(), key.order_number())
 }
 
 /// What the library needs to know to store one file.
@@ -293,9 +302,50 @@ impl LocalLibrary {
             let _ = fs::remove_file(self.path_of(r));
         }
         file.records = keep;
+        file.turns.remove(&turn_key(key));
         let n = gone.len();
         self.write(file)?;
         Ok(n)
+    }
+
+    /// The quarter turns (about x, y, z, each 0 to 3) the user set for each
+    /// part's model. Parts left as they came are not listed.
+    pub fn turns(&self) -> Result<std::collections::BTreeMap<String, [u8; 3]>, LibraryError> {
+        // Counts are read wide and folded to 0..=3 so a hand-edited count
+        // cannot make the whole records file unreadable.
+        Ok(self
+            .read()?
+            .turns
+            .into_iter()
+            .map(|(k, t)| (k, t.map(|n| (n % 4) as u8)))
+            .collect())
+    }
+
+    /// The quarter turns of `key` in a table returned by `turns`, `[0; 3]`
+    /// when none are set. Keeps the table's key format in this file.
+    pub fn turns_in(table: &std::collections::BTreeMap<String, [u8; 3]>, key: &PartKey) -> [u8; 3] {
+        table.get(&turn_key(key)).copied().unwrap_or([0; 3])
+    }
+
+    /// The quarter turns of one part's model, `[0; 3]` when none are set.
+    pub fn turn_of(&self, key: &PartKey) -> [u8; 3] {
+        self.turns()
+            .map(|t| Self::turns_in(&t, key))
+            .unwrap_or([0; 3])
+    }
+
+    /// Stores the quarter turns of a part's model (taken modulo 4); all zero
+    /// forgets them. They belong to the part, not to a project or a placement.
+    pub fn set_turns(&self, key: &PartKey, turns: [u8; 3]) -> Result<(), LibraryError> {
+        let _lock = Self::lock();
+        let mut file = self.read()?;
+        let turns = turns.map(|t| u64::from(t % 4));
+        if turns == [0; 3] {
+            file.turns.remove(&turn_key(key));
+        } else {
+            file.turns.insert(turn_key(key), turns);
+        }
+        self.write(file)
     }
 
     /// Whether the user accepted the first-use notice for a manufacturer.

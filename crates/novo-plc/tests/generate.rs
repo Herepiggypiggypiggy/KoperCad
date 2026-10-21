@@ -145,7 +145,7 @@ fn a_clash_with_an_existing_card_falls_back_to_assigned_addresses() {
         "Tag,Description,Type\n-B1,First,DI\n",
         &Options::default(),
     );
-    // The list wants byte 0 again, where -K1 already is.
+    // The list wants byte 0 again, where the first card already is.
     let list = "Tag,Description,Address\n-B7,Second,%IX0.0\n";
     let plan = import(&mut doc, list, &Options::default());
     assert!(plan.notes.iter().any(|n| n.text.contains("overlap")));
@@ -172,8 +172,8 @@ fn more_signals_than_a_card_holds_make_more_cards() {
 #[test]
 fn a_card_tag_is_free_in_every_plant_and_location() {
     let mut doc = Document::default();
-    doc.transact("Contactor elsewhere", |tx| {
-        tx.add_device(novo_core::DeviceTag::parse("=A1+CAB-K1")?, "Contactor")
+    doc.transact("Card elsewhere", |tx| {
+        tx.add_device(novo_core::DeviceTag::parse("=P1+CAB-A1")?, "Contactor")
             .map(|_| ())
     })
     .unwrap();
@@ -188,5 +188,141 @@ fn a_card_tag_is_free_in_every_plant_and_location() {
         .filter_map(|c| project.device(c.device))
         .map(|d| d.tag.to_string())
         .collect();
-    assert!(!tags.iter().any(|t| t == "-K1"), "{tags:?}");
+    assert!(!tags.iter().any(|t| t == "-A1"), "{tags:?}");
+}
+
+#[test]
+fn a_card_never_takes_a_tag_the_list_uses() {
+    let mut doc = Document::default();
+    import(
+        &mut doc,
+        "Tag,Description,Type\nA1,Pump,DI\nK1,Contactor,DQ\n",
+        &Options::default(),
+    );
+    let project = doc.project();
+    let tags: Vec<String> = cards(project)
+        .iter()
+        .filter_map(|c| project.device(c.device))
+        .map(|d| d.tag.to_string())
+        .collect();
+    assert!(!tags.iter().any(|t| t == "-A1" || t == "-K1"), "{tags:?}");
+    assert_eq!(tags.len(), 2);
+}
+
+#[test]
+fn the_page_shows_the_whole_card_with_its_spares() {
+    let mut doc = Document::default();
+    import(
+        &mut doc,
+        "Tag,Description,Type\nB1,Sensor,DI\n",
+        &Options::default(),
+    );
+    let project = doc.project();
+    // One signal on a DI8 card: eight channel symbols, one terminal, one wire.
+    let channels = project
+        .symbols()
+        .filter(|s| matches!(s.role, SymbolRole::Device { .. }))
+        .count();
+    assert_eq!(channels, 8);
+    assert_eq!(project.wires().count(), 1);
+    let index = PlcIndex::build(project, library());
+    let rows = index.io_rows(project);
+    assert_eq!(rows.iter().filter(|r| r.spare).count(), 7);
+}
+
+#[test]
+fn a_duplicate_address_note_names_the_other_row() {
+    let mut doc = Document::default();
+    let plan = import(
+        &mut doc,
+        "Tag,Description,Type,Address\nS1,Start,DI,E0.0\nS2,Stop,DI,E0.0\n",
+        &Options::default(),
+    );
+    let note = plan
+        .notes
+        .iter()
+        .find(|n| n.text.contains("same address"))
+        .unwrap();
+    assert!(
+        note.text.contains("S1") && note.text.contains("S2"),
+        "{}",
+        note.text
+    );
+    assert!(note.text.contains("row 2"), "{}", note.text);
+}
+
+#[test]
+fn the_address_text_under_a_channel_follows_a_renumbering() {
+    use novo_plc::card::{ADDRESS_TEXT, start_key};
+    let mut doc = Document::default();
+    import(
+        &mut doc,
+        "Tag,Description,Type\nB1,Sensor,DI\n",
+        &Options::default(),
+    );
+    let text = |doc: &Document| {
+        doc.project()
+            .symbols()
+            .find_map(|s| match s.properties.get(ADDRESS_TEXT) {
+                Some(novo_core::Value::Text(t)) => Some(t.clone()),
+                _ => None,
+            })
+    };
+    assert_eq!(text(&doc).as_deref(), Some("%IX0.0"));
+    let card = cards(doc.project())[0].device;
+    doc.transact("Move the card", |tx| {
+        tx.set_property(card, start_key(novo_plc::Space::Input), Some(8i64.into()))?;
+        novo_plc::sync_address_texts(tx, library()).map(|_| ())
+    })
+    .unwrap();
+    assert_eq!(text(&doc).as_deref(), Some("%IX8.0"));
+}
+
+#[test]
+fn a_spare_channel_shows_its_address_too_and_it_follows_the_card() {
+    use novo_plc::card::{ADDRESS_TEXT, SPARE, start_key};
+    let mut doc = Document::default();
+    import(
+        &mut doc,
+        "Tag,Description,Type\nB1,Sensor,DI\n",
+        &Options::default(),
+    );
+    let spares = |doc: &Document| -> Vec<String> {
+        let mut texts: Vec<String> = doc
+            .project()
+            .symbols()
+            .filter(|s| s.properties.contains_key(SPARE))
+            .filter_map(|s| match s.properties.get(ADDRESS_TEXT) {
+                Some(novo_core::Value::Text(t)) => Some(t.clone()),
+                _ => None,
+            })
+            .collect();
+        texts.sort();
+        texts
+    };
+    let first = spares(&doc);
+    assert_eq!(first.len(), 7);
+    assert_eq!(first[0], "%IX0.1");
+    // A text object of the page prints it, as for a signal.
+    let printed = doc
+        .project()
+        .texts()
+        .filter(|t| {
+            matches!(&t.content, novo_core::TextContent::Property { key } if key == ADDRESS_TEXT)
+        })
+        .count();
+    assert_eq!(printed, 8);
+    let card = cards(doc.project())[0].device;
+    doc.transact("Move the card", |tx| {
+        tx.set_property(card, start_key(novo_plc::Space::Input), Some(8i64.into()))?;
+        novo_plc::sync_address_texts(tx, library()).map(|_| ())
+    })
+    .unwrap();
+    assert_eq!(spares(&doc)[0], "%IX8.1");
+}
+
+#[test]
+fn a_project_without_address_texts_is_not_indexed_to_look_for_stale_ones() {
+    let doc = Document::default();
+    assert!(novo_plc::stale_address_texts(doc.project(), library()).is_empty());
 }

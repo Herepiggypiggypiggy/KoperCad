@@ -5,10 +5,15 @@ use eframe::egui;
 use novo_canvas::model::item_id;
 use novo_canvas::{Mark, MarkKind};
 use novo_checks::{Problem, Severity, Summary};
-use novo_core::{AnyId, PageId};
+use novo_core::{AnyId, PageId, Project};
 use novo_xref::Place;
 
 use super::{Level, NovoApp};
+
+/// The open problems: the design checks plus the house-rule wire breaks.
+pub(super) fn open_problems(project: &Project) -> Vec<Problem> {
+    novo_reports::issues::open(project)
+}
 
 /// Symbols plus wires above which the design check runs on a worker thread.
 const BACKGROUND_FROM: usize = 1500;
@@ -114,7 +119,7 @@ impl NovoApp {
         if !(background && big) {
             // A run for an older revision is left to finish and is dropped.
             self.wb.check_job = None;
-            self.wb.problems = Some((revision, novo_checks::check_open(project)));
+            self.wb.problems = Some((revision, open_problems(project)));
             return;
         }
         let stale = self
@@ -128,7 +133,7 @@ impl NovoApp {
             let snapshot = project.clone();
             let (tx, rx) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
-                let _ = tx.send(novo_checks::check_open(&snapshot));
+                let _ = tx.send(open_problems(&snapshot));
             });
             self.wb.check_job = Some(CheckJob { revision, rx });
         }
@@ -384,7 +389,7 @@ impl NovoApp {
         let Some(doc) = self.backend.document() else {
             return;
         };
-        let waived = novo_checks::waived_problems(doc.project());
+        let waived = novo_reports::issues::waived(doc.project());
         if waived.is_empty() {
             return;
         }

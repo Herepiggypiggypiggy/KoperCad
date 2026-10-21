@@ -1,0 +1,23 @@
+@title 3D view: Measure from the toolbar, two points, the distance card
+@area 3D
+@sizes 1366x768
+# Fixed 1366x768 window points: the cube (1296,108) and two points on the duct row (540,300) and (700,300).
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click 1296 108
+wait 40
+click_text Measure
+wait 10
+expect "Click a point on the cabinet."
+shot measure-armed
+click 540 300
+wait 10
+click 700 300
+wait 20
+expect "Distance"
+shot measure-two-points
+check_layout
+key Escape
+wait 6

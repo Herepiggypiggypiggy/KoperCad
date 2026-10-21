@@ -497,3 +497,37 @@ fn a_derived_result_is_worked_out_once_per_revision() {
     assert_eq!(doc.project().derived(count).0, 2);
     assert_eq!(runs.get(), 3);
 }
+
+#[test]
+fn caches_do_not_go_stale_inside_a_transaction_or_survive_a_rollback() {
+    struct Wires(usize);
+    let mut doc = Document::default();
+    let (_, wires, _) = wires(&mut doc, 3);
+    let probe = doc.project().wire(wires[0]).unwrap().clone();
+    // Inside one transaction the revision has not moved yet: each look at the
+    // project must still see the edits made so far.
+    doc.transact("Remove two", |tx| {
+        assert!(tx.project().netlist().connected(probe.from, probe.to));
+        assert_eq!(tx.project().derived(|p| Wires(p.wires().count())).0, 3);
+        tx.remove(wires[0])?;
+        assert!(!tx.project().netlist().connected(probe.from, probe.to));
+        assert_eq!(tx.project().derived(|p| Wires(p.wires().count())).0, 2);
+        tx.remove(wires[1])?;
+        assert_eq!(tx.project().derived(|p| Wires(p.wires().count())).0, 1);
+        Ok(())
+    })
+    .unwrap();
+    doc.undo().unwrap();
+    // An aborted transaction must not leave its half-edited answer cached.
+    let before = doc.project().revision();
+    let mut copy = doc.project().clone();
+    let _ = copy.transact("Abort", |tx| -> Result<()> {
+        tx.remove(wires[0])?;
+        let _ = tx.project().netlist();
+        let _ = tx.project().derived(|p| Wires(p.wires().count()));
+        Err(ModelError::InvalidId(0))
+    });
+    assert_eq!(copy.revision(), before);
+    assert!(copy.netlist().connected(probe.from, probe.to));
+    assert_eq!(copy.derived(|p| Wires(p.wires().count())).0, 3);
+}

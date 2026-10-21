@@ -125,6 +125,7 @@ pub(crate) struct View3dMode {
     /// The lit path, outlined ducts and entry marker, and what they were
     /// built for (enclosure, project revision, pose revision, selection).
     runs_shown: Option<(StructureId, u64, u64, BTreeSet<ItemId>)>,
+    runs_settle: view3d_runs::Settle,
     pub(super) run_marks: Vec<novo_view3d::Overlay>,
     /// The Wire runs list is open.
     pub(super) wire_runs: bool,
@@ -188,6 +189,7 @@ impl Default for View3dMode {
             wire_facts: None,
             undrawn: None,
             runs_shown: None,
+            runs_settle: Default::default(),
             run_marks: Vec::new(),
             wire_runs: false,
             controls: Controls::default(),
@@ -557,6 +559,9 @@ impl NovoApp {
                     .any(|i| i.kind == ItemKind::Wire))
         {
             view3d_runs::ensure(
+                ui.ctx(),
+                ui.input(|i| i.time),
+                &mut mode.runs_settle,
                 &mut mode.wire_facts,
                 &mut mode.undrawn,
                 project,
@@ -955,6 +960,9 @@ impl NovoApp {
         // the picked wires, and the list.
         if mode.controls.layers.wires && out.hover.is_some_and(|h| h.kind == ItemKind::Wire) {
             view3d_runs::ensure(
+                ui.ctx(),
+                ui.input(|i| i.time),
+                &mut mode.runs_settle,
                 &mut mode.wire_facts,
                 &mut mode.undrawn,
                 project,
@@ -978,43 +986,45 @@ impl NovoApp {
         }
         if let Some(facts) = wire_facts {
             let chosen = view3d_runs::picked(facts, &mode.view.state.selection);
-            let asked = view3d_runs::card(ui.ctx(), out.rect, &chosen, mode.wire_runs);
-            if let Some(cores) = asked.select_cores {
-                let cores: BTreeSet<ItemId> = cores
-                    .into_iter()
-                    .filter(|w| facts.contains_key(w))
-                    .map(|w| ItemId::new(ItemKind::Wire, w))
-                    .collect();
-                if !cores.is_empty() {
-                    mode.view.state.selection = cores;
-                }
-            } else if asked.clear {
-                mode.view.state.selection.clear();
-            }
-        }
-        if mode.wire_runs
-            && let Some(facts) = wire_facts
-        {
             let undrawn = mode
                 .undrawn
                 .as_ref()
                 .filter(|(s, r, _)| *s == id && *r == revision)
                 .map_or(&[][..], |(_, _, u)| u.as_slice());
-            let asked = view3d_wires::list(
+            let list = mode.wire_runs.then_some(view3d_runs::ListInput {
+                all: facts,
+                undrawn,
+            });
+            let asked = view3d_runs::panel(
                 ui.ctx(),
                 out.rect,
-                facts,
-                undrawn,
+                mode.controls.heat_panel,
+                list,
+                &chosen,
                 &mode.view.state.selection,
             );
-            if let Some(w) = asked.select {
-                mode.view.state.selection = BTreeSet::from([ItemId::new(ItemKind::Wire, w)]);
-            }
-            if asked.close {
-                mode.wire_runs = false;
-            }
-            if asked.cut_list {
-                self.wb.queued.push("report.cutlist");
+            if let Some(asked) = asked {
+                if let Some(w) = asked.list.select {
+                    mode.view.state.selection = BTreeSet::from([ItemId::new(ItemKind::Wire, w)]);
+                }
+                if asked.list.close {
+                    mode.wire_runs = false;
+                }
+                if asked.list.cut_list {
+                    self.wb.queued.push("report.cutlist");
+                }
+                if let Some(cores) = asked.card.select_cores {
+                    let cores: BTreeSet<ItemId> = cores
+                        .into_iter()
+                        .filter(|w| facts.contains_key(w))
+                        .map(|w| ItemId::new(ItemKind::Wire, w))
+                        .collect();
+                    if !cores.is_empty() {
+                        mode.view.state.selection = cores;
+                    }
+                } else if asked.card.clear {
+                    mode.view.state.selection.clear();
+                }
             }
         }
         // Placing: the pointer moves the landing box, a click drops the
@@ -1238,6 +1248,7 @@ impl NovoApp {
             .map(|i| i.raw)
             .collect();
         let mut ask = None;
+        let mut model_message = None;
         if devices.len() >= 2
             && let Some(op) = view3d_align::strip(ui.ctx(), out.rect, devices.len())
         {
@@ -1252,7 +1263,11 @@ impl NovoApp {
             if let [one] = devices.as_slice()
                 && !mode.position.hidden
             {
+                mode.position.model = mode.models.row(*one);
                 edits.extend(mode.position.show(ui.ctx(), out.rect, &stored, *one));
+                if let Some(turn) = mode.position.turned.take() {
+                    model_message = mode.models.turn(*one, turn);
+                }
             }
             if state.selection != mode.synced.1 {
                 self.cabinet.view.selection.apply(
@@ -1337,6 +1352,9 @@ impl NovoApp {
             self.cabinet_rail_ask(Some(id), rail_ask);
             // The scene is rebuilt on the next frame; nothing else asks for it.
             ui.ctx().request_repaint();
+        }
+        if let Some(message) = model_message {
+            self.message(super::Level::Warning, message);
         }
         for edit in edits {
             if let view3d_move::Edit::Group { devices, rails } = edit {
@@ -1497,7 +1515,7 @@ fn heat_controls(
 /// warm cabinet; Auto goes back to ambient to the hottest cell.
 fn scale_menu(ui: &mut egui::Ui, h: &mut Heat3d, auto: novo_heatview::range::Range) {
     let label = if h.scale.is_some() {
-        "Scale: set"
+        "Scale: held"
     } else {
         "Scale"
     };
@@ -1525,13 +1543,24 @@ fn scale_menu(ui: &mut egui::Ui, h: &mut Heat3d, auto: novo_heatview::range::Ran
             )
             .small(),
         );
-        if ui
-            .add_enabled(h.scale.is_some(), egui::Button::new("Auto"))
-            .on_hover_text("Ambient to the hottest cell")
-            .clicked()
-        {
-            h.scale = None;
-        }
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(h.scale.is_none(), egui::Button::new("Hold this range"))
+                .on_hover_text(
+                    "Keep the range now shown, so the colours do not shift while the run goes on or between runs",
+                )
+                .clicked()
+            {
+                h.scale = Some((auto.lo, auto.hi.max(auto.lo + 1.0)));
+            }
+            if ui
+                .add_enabled(h.scale.is_some(), egui::Button::new("Auto"))
+                .on_hover_text("Ambient to the hottest cell")
+                .clicked()
+            {
+                h.scale = None;
+            }
+        });
     });
 }
 

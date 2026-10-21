@@ -1,0 +1,34 @@
+@title Escape closes three stacked windows, the top one first
+@area Windows
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text standards check
+wait 8
+key Enter
+wait 15
+key ctrl+k
+wait 6
+text ask claude
+wait 8
+key Enter
+wait 15
+key ctrl+k
+wait 6
+text calculations
+wait 8
+key Enter
+wait 15
+shot three-open
+key Escape
+wait 8
+shot after-one-escape
+key Escape
+wait 8
+shot after-two-escapes
+key Escape
+wait 8
+shot after-three-escapes
+expect_not "Ask Claude"
+check_layout

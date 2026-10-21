@@ -16,7 +16,7 @@ if [ "$(uname -s)" = Linux ] && [ -z "${DISPLAY:-}" ] && [ -z "${WAYLAND_DISPLAY
   command -v Xvfb >/dev/null || missing="$missing xvfb"
   command -v openbox >/dev/null || missing="$missing openbox"
   ls /usr/share/vulkan/icd.d/lvp_icd.json >/dev/null 2>&1 || missing="$missing mesa-vulkan-drivers libvulkan1"
-  [ -n "$(ldconfig -p 2>/dev/null | grep libxkbcommon-x11.so)" ] || missing="$missing libxkbcommon-x11-0"
+  { ldconfig -p 2>/dev/null | grep libxkbcommon-x11.so >/dev/null; } || missing="$missing libxkbcommon-x11-0"
   if [ -n "$missing" ]; then
     echo "qa.sh: missing on this Linux box:$missing" >&2
     echo "  sudo apt-get update && sudo apt-get install -y$missing   (as root: drop sudo)" >&2

@@ -345,6 +345,12 @@ impl PyProject {
         to_py(py, &self.get()?.potentials())
     }
 
+    /// The open design-check problems as dicts (severity, kind, label,
+    /// message, page, at): what ``kopercad-cli check --json`` prints.
+    fn problems<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        to_py(py, &self.get()?.problems())
+    }
+
     fn terminals<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         to_py(py, &self.get()?.terminals())
     }

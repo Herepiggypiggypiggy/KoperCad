@@ -333,3 +333,92 @@ fn print_opens_the_preview_and_does_not_export_at_once() {
     let rows = search(&palette, &keymap, "print");
     assert_eq!(rows[0].target, Target::Command("export.print_preview"));
 }
+
+#[test]
+fn the_3d_run_card_is_found_by_cable_run_and_route() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in ["cable run", "cable runs", "run card", "route", "wire runs"] {
+        let rows = search(&palette, &keymap, query);
+        let at = position(&rows, "view.3d_wire_runs")
+            .unwrap_or_else(|| panic!("{query:?} does not find the 3D runs command"));
+        assert!(
+            at < 3,
+            "{query:?} ranks it {at}th: {:?}",
+            rows.iter().take(5).map(|r| &r.target).collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn handover_ranks_the_handover_package_first() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    let rows = search(&palette, &keymap, "handover");
+    assert_eq!(position(&rows, "export.handover"), Some(0));
+}
+
+#[test]
+fn a_word_in_a_label_beats_the_same_word_as_a_keyword() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    // "handover" is a keyword of the commissioning report and in the label of
+    // the handover package: the label wins for Enter.
+    let rows = search(&palette, &keymap, "handover");
+    let package = position(&rows, "export.handover").unwrap();
+    let report = position(&rows, "export.commissioning");
+    assert!(report.is_none_or(|r| package < r));
+}
+
+#[test]
+fn a_word_does_not_match_letters_scattered_across_unrelated_labels() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    let rows = search(&palette, &keymap, "option");
+    assert!(!rows.is_empty(), "the options commands are found");
+    for row in &rows {
+        let label = row.label.to_lowercase();
+        let keywords_hit = matches!(&row.target, Target::Command(id)
+            if novo_workflow::commands::get(id)
+                .is_some_and(|c| c.keywords.iter().chain(c.verbs.iter()).any(|k| k.contains("option"))));
+        assert!(
+            label.contains("option") || keywords_hit,
+            "{:?} matched `option` by scattered letters only",
+            row.label
+        );
+    }
+    // A typo and an initialism still find their command.
+    let rows = search(&palette, &keymap, "duplicte");
+    assert_eq!(rows[0].target, Target::Command("edit.duplicate"));
+}
+
+#[test]
+fn a_report_is_found_first_by_its_own_name_and_by_its_old_one() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for (query, command) in [
+        ("cut list", "report.cutlist"),
+        ("table of contents", "report.toc"),
+        ("contents", "report.toc"),
+        ("wire production", "report.wirecut"),
+        ("plug connection list", "report.plugs"),
+        ("plug list", "report.plugs"),
+    ] {
+        let rows = search(&palette, &keymap, query);
+        assert_eq!(
+            rows[0].target,
+            Target::Command(command),
+            "{query:?} ranks {:?} first",
+            rows[0].label
+        );
+    }
+}
+
+#[test]
+fn live_view_finds_the_live_view_before_any_lesson_about_it() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in ["live view", "live"] {
+        let rows = search(&palette, &keymap, query);
+        assert_eq!(
+            position(&rows, "sim.live"),
+            Some(0),
+            "{query:?} leads to the Live view, not {:?}",
+            rows[0].label
+        );
+    }
+}

@@ -232,3 +232,23 @@ fn two_outputs_with_the_same_report_id_do_not_flow_into_each_other() {
     let pages = Pdf::load_mem(&bytes).expect("valid pdf").get_pages().len();
     assert_eq!(pages, 2);
 }
+
+#[test]
+fn a_column_header_too_narrow_for_one_line_runs_onto_two() {
+    use novo_core::Document;
+    use novo_reports::generate_all;
+    let mut doc = Document::default();
+    novo_tests::motor_starter(&mut doc).expect("fixture");
+    let all = generate_all(doc.project());
+    let wires = all.iter().find(|r| r.report == "wires").expect("wire list");
+    let bytes = export_report_pdf(&[wires], &ReportPdfOptions::default());
+    let pdf = Pdf::load_mem(&bytes).expect("parses");
+    let pages: Vec<u32> = pdf.get_pages().keys().copied().collect();
+    let text = pdf.extract_text(&pages).expect("text");
+    assert!(!text.contains("Route lengt..."), "{text}");
+    assert!(!text.contains("Length ba..."), "{text}");
+    assert!(
+        text.contains("Route length") && text.contains("basis"),
+        "{text}"
+    );
+}

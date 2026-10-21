@@ -222,3 +222,50 @@ Motor starter DOL,Pumps,=A1,15,480\n",
     assert_eq!(rows.len(), 3);
     assert_eq!(rows[1][0], "Motor starter DOL");
 }
+
+#[test]
+fn dragging_a_number_in_a_condition_is_one_undo_step() {
+    use super::variants::NumberDraft;
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    machine(&mut d);
+    d.app
+        .backend
+        .document_mut()
+        .unwrap()
+        .transact("Option", |tx| {
+            options::define_option(tx, OptionDef::number("motors", "Motors", 1.0, 8.0, 2.0))
+        })
+        .unwrap();
+    let page = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .pages()
+        .next()
+        .unwrap()
+        .id;
+    let depth = d.app.document().unwrap().undo_depth();
+
+    // Thirty frames of dragging write nothing; the end of the drag writes once.
+    let mut draft = NumberDraft::default();
+    let mut writes = 0;
+    for frame in 1..=31 {
+        let value = 1.0 + f64::from(frame) * 0.1;
+        if let Some(done) = draft.feed(value, true, frame == 31) {
+            let condition = format!("opt.motors >= {}", done.round());
+            assert!(d.app.edit_project("Page condition", |tx| {
+                options::set_condition(tx, page, Some(&condition))
+            }));
+            writes += 1;
+        }
+        assert_eq!(
+            d.app.document().unwrap().undo_depth(),
+            depth + writes,
+            "frame {frame}"
+        );
+    }
+    assert_eq!(d.app.document().unwrap().undo_depth(), depth + 1);
+}

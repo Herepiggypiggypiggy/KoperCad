@@ -1,0 +1,9 @@
+tag,description,signal type,address,station
+S1,Start button,DI,E0.0,Pump
+S2,Stop button,DI,E0.0,Pump
+,,,,
+K1,Pump contactor,DO,A0.0,Pump
+H1,Running lamp,DO,A0.1,Pump
+B1,Level sensor,AI,EW64,Pump
+Y1,Valve,DO,A0.0,Pump
+M9,Spare,XX,,

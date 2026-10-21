@@ -874,7 +874,7 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
                 "order_number": x.order_number, "type_number": x.type_number,
                 "description": x.description})).collect::<Vec<_>>(),
             // The design checks, read-only: what the Issues list would show.
-            "problems": novo_checks::check(p).iter().map(|q| json!({
+            "problems": novo_reports::issues::open(p).iter().map(|q| json!({
                 "kind": format!("{:?}", q.kind),
                 "severity": format!("{:?}", q.severity),
                 "message": q.message,
@@ -1305,16 +1305,45 @@ impl NovoApp {
         let mut open = true;
         let mut decide: Option<(usize, bool)> = None;
         let mut send: Option<String> = None;
-        super::panel::dialog(ctx, "Ask Claude", [460.0, 620.0])
+        super::panel::dialog(ctx, "Ask Claude", [460.0, 700.0])
             .open(super::panel::esc(ctx, &mut open))
+            // The agree controls are pinned below; the rest scrolls above them.
+            .scroll([false, false])
             .show(ctx, |ui| {
-                self.assistant_settings_ui(ui, ctx);
-                ui.separator();
-                if self.settings.ai.enabled {
-                    send = self.assistant_chat_ui(ui, &mut decide);
-                } else {
-                    ui.weak("Turn Claude on above to start a conversation.");
+                if self.wb.assistant.show_settings {
+                    egui::Panel::bottom("ask_claude_agree")
+                        .resizable(false)
+                        .show(ui, |ui| self.assistant_agree_ui(ui));
                 }
+                egui::CentralPanel::default().show(ui, |ui| {
+                    // Settings scroll in their own area, at most half the
+                    // dialog while a chat sits below; the chat is outside it
+                    // (inside a scroll area its height would be unbounded and
+                    // the message box would leave the window).
+                    let room = ui.available_height();
+                    let settings_max = if self.settings.ai.enabled {
+                        (room * 0.5).max(160.0)
+                    } else {
+                        room
+                    };
+                    egui::ScrollArea::vertical()
+                        .id_salt("ask_claude_settings")
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .max_height(settings_max)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| self.assistant_settings_ui(ui, ctx));
+                    ui.separator();
+                    if self.settings.ai.enabled {
+                        send = self.assistant_chat_ui(ui, &mut decide);
+                    } else {
+                        ui.weak("Turn Claude on above to start a conversation.");
+                    }
+                });
             });
         self.wb.assistant.open = open;
         if let Some((i, apply)) = decide {
@@ -1547,8 +1576,20 @@ impl NovoApp {
              the real bill.",
         );
         ui.add_space(6.0);
+    }
 
-        // 4. Agree and switch on.
+    /// Section 4 of the settings, pinned under the scrolling sections 1 to 3
+    /// so the box and the button are reachable on a small window.
+    fn assistant_agree_ui(&mut self, ui: &mut egui::Ui) {
+        let pal = ui_palette();
+        let enabled = self.settings.ai.enabled;
+        let key = self.wb.assistant.key();
+        // Sections 1 to 3 have already stored a change of scope.
+        let scope = self
+            .wb
+            .assistant
+            .pending_scope
+            .unwrap_or_else(|| self.settings.ai.consent.effective());
         ui.strong("4. Agree");
         ui.label(egui::RichText::new(NOTICE).color(pal.text_secondary));
         if enabled {

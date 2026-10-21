@@ -763,7 +763,7 @@ fn wire_list_estimates_lengths_until_devices_are_placed() {
         .iter()
         .map(|c| c.header.as_str())
         .collect();
-    assert_eq!(headers, ["Cut length mm", "Length basis"]);
+    assert_eq!(headers, ["Route length mm", "Length basis"]);
     for row in rows(&wires, "wires") {
         if row[6].starts_with("=A1-W1") {
             // The motor cable states 12 m: its cores run the whole cable.
@@ -909,7 +909,7 @@ fn wire_list_csv_carries_the_cut_length() {
     let csv = to_csv(&report(&doc, "wires"), &CsvOptions::default());
     let header = csv.lines().next().expect("header");
     assert!(
-        header.ends_with("Location,Cut length mm,Length basis"),
+        header.ends_with("Location,Route length mm,Length basis"),
         "{header}"
     );
     assert!(csv.contains(",estimate\r\n"));

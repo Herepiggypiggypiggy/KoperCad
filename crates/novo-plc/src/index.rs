@@ -7,7 +7,7 @@ use novo_core::{
 };
 
 use crate::address::{Address, AddressStyle};
-use crate::card::{CHANNEL, Card, LayoutSource, address_style, cards};
+use crate::card::{ADDRESS_TEXT, CHANNEL, Card, LayoutSource, SPARE, address_style, cards};
 use crate::layout::{ChannelType, LayoutError, Space};
 
 /// Looks up a symbol's function type (`plc.input.digital`).
@@ -234,6 +234,77 @@ pub struct PlcIndex {
     issues: Vec<Issue>,
 }
 
+/// What [`sync_address_texts`] would change: each channel symbol that carries
+/// an address text, with the address its card gives that channel now.
+pub fn stale_address_texts(
+    project: &Project,
+    functions: &dyn Functions,
+) -> Vec<(SymbolId, String)> {
+    // Most projects carry no address text at all: skip the index for them.
+    if !project
+        .symbols()
+        .any(|s| s.properties.contains_key(ADDRESS_TEXT))
+    {
+        return Vec::new();
+    }
+    let index = PlcIndex::build(project, functions);
+    let mut stale = Vec::new();
+    // A spare channel is not in the index; it names its channel for this.
+    for card in &index.cards {
+        for symbol in project.symbols_of_device(card.device) {
+            let (Some(Value::Text(shown)), Some(Value::Text(key))) = (
+                symbol.properties.get(ADDRESS_TEXT),
+                symbol.properties.get(CHANNEL),
+            ) else {
+                continue;
+            };
+            if !symbol.properties.contains_key(SPARE) {
+                continue;
+            }
+            let text = parse_channel(key)
+                .and_then(|(kind, number)| card.address_in(kind, number, index.style))
+                .map(|a| a.format(index.style))
+                .unwrap_or_default();
+            if *shown != text {
+                stale.push((symbol.id, text));
+            }
+        }
+    }
+    for ch in &index.channels {
+        let Some(symbol) = project.symbol(ch.symbol) else {
+            continue;
+        };
+        let Some(Value::Text(shown)) = symbol.properties.get(ADDRESS_TEXT) else {
+            continue;
+        };
+        let text = ch
+            .address
+            .map(|a| a.format(index.style))
+            .unwrap_or_default();
+        if *shown != text {
+            stale.push((ch.symbol, text));
+        }
+    }
+    stale
+}
+
+/// Sets the address text of every channel symbol that carries one to the
+/// address its card gives that channel. Returns how many changed. Symbols
+/// without the property (drawn by hand) are left alone. The app runs this
+/// after any edit of a card or of the address style, so the printed address
+/// follows the cards.
+pub fn sync_address_texts(
+    tx: &mut novo_core::Tx<'_>,
+    functions: &dyn Functions,
+) -> novo_core::Result<usize> {
+    let stale = stale_address_texts(tx.project(), functions);
+    let n = stale.len();
+    for (symbol, text) in stale {
+        tx.set_property(symbol, ADDRESS_TEXT, Some(Value::from(text)))?;
+    }
+    Ok(n)
+}
+
 impl PlcIndex {
     pub fn build(project: &Project, functions: &dyn Functions) -> PlcIndex {
         let cards = cards(project);
@@ -242,6 +313,9 @@ impl PlcIndex {
         for card in &cards {
             for symbol in project.symbols_of_device(card.device) {
                 if let SymbolRole::Device { main: true, .. } = symbol.role {
+                    continue;
+                }
+                if symbol.properties.contains_key(SPARE) {
                     continue;
                 }
                 let Some(kind) = functions

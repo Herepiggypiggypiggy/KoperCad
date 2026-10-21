@@ -49,7 +49,7 @@ pub(crate) struct PlaceWindow {
         Vec<novo_workflow::palette::MacroEntry>,
     ),
     query: String,
-    selected: Option<String>,
+    pub(super) selected: Option<String>,
     keep_numbers: bool,
     /// The parts the picked macro carries, and whether to assign them.
     parts: Vec<PartRef>,
@@ -402,6 +402,17 @@ impl NovoApp {
             win.started = true;
             if let Some(Err(e)) = win.library.as_ref().map(|l| l.install_starters()) {
                 win.status = format!("Starter macros: {e}");
+            }
+        }
+        // A circuit picked by its whole name is already chosen: the preview
+        // shows.
+        if let Some(name) = query.map(str::trim) {
+            let found = win
+                .entries()
+                .into_iter()
+                .find(|e| e.name.eq_ignore_ascii_case(name));
+            if let Some(entry) = found {
+                win.select(&entry.path);
             }
         }
         win.open = true;

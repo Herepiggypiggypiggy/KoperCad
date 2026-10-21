@@ -3,6 +3,7 @@
 
 use std::collections::BTreeSet;
 
+use eframe::egui;
 use novo_core::{Cable, CableCore, DeviceTag, StructureId};
 use novo_view3d::scene::{ItemId, ItemKind};
 use novo_view3d::{Overlay, OverlayLines};
@@ -35,6 +36,25 @@ fn drawn(d: &Drive) -> Vec<u64> {
         .collect()
 }
 
+/// Frames a second and more apart: the basis is read only once the project
+/// has stayed unchanged for a moment.
+fn settle(d: &mut Drive) {
+    for _ in 0..3 {
+        let t = d.ctx.input(|i| i.time) + 1.0;
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1600.0, 900.0),
+            )),
+            time: Some(t),
+            ..Default::default()
+        };
+        let app = &mut d.app;
+        let mut out = d.ctx.run_ui(input, |ui| app.show(ui));
+        out.textures_delta.clear();
+    }
+}
+
 fn pick(d: &mut Drive, wires: &[u64]) {
     d.app.view3d.view.state.selection = wires
         .iter()
@@ -42,6 +62,7 @@ fn pick(d: &mut Drive, wires: &[u64]) {
         .collect::<BTreeSet<_>>();
     d.frame();
     d.frame();
+    settle(d);
 }
 
 fn cabinet(d: &Drive) -> StructureId {
@@ -108,6 +129,7 @@ fn wires_with_an_end_off_the_plate_are_listed_as_not_drawn_with_their_basis() {
     d.app.run_command(&ctx, "view.3d_wire_runs", None);
     d.frame();
     d.frame();
+    settle(&mut d);
     let (_, _, undrawn) = d.app.view3d.undrawn.as_ref().expect("read for the list");
     assert!(
         !undrawn.is_empty(),
@@ -322,5 +344,94 @@ fn a_duct_that_is_too_small_is_called_out_on_every_run_in_it() {
     assert!(
         f.lines().iter().any(|l| l.contains("% full of")),
         "the hover card names it"
+    );
+}
+
+#[test]
+fn while_the_project_keeps_changing_the_basis_is_not_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.frame();
+    let ids = drawn(&d);
+    pick(&mut d, &ids[..1]);
+    let cab = cabinet(&d);
+    // An edit: the basis of the new revision is not there until it settles.
+    let doc = d.app.backend.document_mut().unwrap();
+    doc.transact("Entry", |tx| {
+        novo_routing::entry::set_entry_point(tx, cab, Some(novo_routing::Point::new(100.0, 500.0)))
+    })
+    .unwrap();
+    d.frame();
+    let facts = &d.app.view3d.wire_facts.as_ref().unwrap().2;
+    assert!(
+        facts[&ids[0]].basis.is_none(),
+        "not read in the frame of the edit"
+    );
+    settle(&mut d);
+    let facts = &d.app.view3d.wire_facts.as_ref().unwrap().2;
+    assert!(facts[&ids[0]].basis.is_some(), "read once it has settled");
+}
+
+#[test]
+fn the_wire_runs_panel_and_the_inspector_never_share_screen_space() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.3d_wire_runs", None);
+    d.frame();
+    d.frame();
+    let ids = drawn(&d);
+    pick(&mut d, &ids[..1]);
+    d.app.run_command(&ctx, "view.3d_select_devices", None);
+    for size in [egui::vec2(1366.0, 768.0), egui::vec2(1920.0, 1080.0)] {
+        for _ in 0..3 {
+            d.frame_sized(size, Vec::new());
+        }
+        let area = |name: &str| {
+            ctx.memory(|m| m.area_rect(super::panel::id(name)))
+                .unwrap_or_else(|| panic!("{name} is open at {size:?}"))
+        };
+        let (runs, inspector) = (area("view3d_wire_runs"), area("cabinet_inspector"));
+        assert!(
+            !runs.intersects(inspector),
+            "{size:?}: runs {runs:?} meets inspector {inspector:?}"
+        );
+        assert!(runs.left() > size.x / 2.0, "the list hangs on the right");
+    }
+}
+
+#[test]
+fn the_wire_runs_panel_keeps_clear_of_the_heat_panel_even_before_there_is_a_result() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    let ctx = d.ctx.clone();
+    d.app.view3d.controls.heat_panel = true;
+    d.app.run_command(&ctx, "view.3d_wire_runs", None);
+    for size in [egui::vec2(1366.0, 768.0), egui::vec2(1920.0, 1080.0)] {
+        for _ in 0..4 {
+            d.frame_sized(size, Vec::new());
+        }
+        let area = |name: &str| {
+            ctx.memory(|m| m.area_rect(super::panel::id(name)))
+                .unwrap_or_else(|| panic!("{name} is open at {size:?}"))
+        };
+        let (runs, heat) = (area("view3d_wire_runs"), area("view3d_heat_panel"));
+        assert!(
+            !runs.intersects(heat),
+            "{size:?}: runs {runs:?} meets heat {heat:?}"
+        );
+    }
+    // With the Heat panel closed, the stale rectangle it left is not used:
+    // the panel starts under the view cube again.
+    d.app.view3d.controls.heat_panel = false;
+    for _ in 0..4 {
+        d.frame_sized(egui::vec2(1366.0, 768.0), Vec::new());
+    }
+    let runs = ctx
+        .memory(|m| m.area_rect(super::panel::id("view3d_wire_runs")))
+        .unwrap();
+    assert!(
+        runs.top() < 200.0,
+        "starts under the cube, not low: {runs:?}"
     );
 }

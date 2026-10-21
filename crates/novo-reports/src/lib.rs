@@ -90,6 +90,7 @@ mod export;
 pub mod handover;
 pub mod i18n;
 mod io;
+pub mod issues;
 mod label_sheet;
 mod labels;
 mod lengths;
@@ -104,6 +105,7 @@ mod strip_diagram;
 mod table;
 mod toc;
 mod wire_defaults;
+pub mod wire_rules;
 mod wirecut;
 mod wires;
 

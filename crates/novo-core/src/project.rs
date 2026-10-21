@@ -73,6 +73,22 @@ type DerivedEntries = std::collections::HashMap<
     (u64, std::sync::Arc<dyn std::any::Any + Send + Sync>),
 >;
 
+impl NetlistCache {
+    fn clear(&mut self) {
+        if let Ok(slot) = self.0.get_mut() {
+            *slot = None;
+        }
+    }
+}
+
+impl DerivedCache {
+    fn clear(&mut self) {
+        if let Ok(entries) = self.0.get_mut() {
+            entries.clear();
+        }
+    }
+}
+
 impl std::fmt::Debug for DerivedCache {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str("DerivedCache")
@@ -368,6 +384,11 @@ impl Project {
 
     /// Applies one primitive op after checking every integrity rule.
     pub(crate) fn apply_op(&mut self, op: &Op) -> Result<()> {
+        // The revision moves only when a whole transaction ends, so a netlist
+        // or derived result kept for it would go stale (or survive a rollback)
+        // after the first op inside one. Every op forgets them.
+        self.netlist_cache.clear();
+        self.derived_cache.clear();
         match op {
             Op::Insert { record } => {
                 let id = record.id();

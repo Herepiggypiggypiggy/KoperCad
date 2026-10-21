@@ -95,6 +95,7 @@ pub(crate) struct Workbench {
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
     pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
+    pub(super) handover_ask: Option<super::handover::HandoverAsk>,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
@@ -287,6 +288,7 @@ impl Default for Workbench {
             project_settings: false,
             issue: None,
             restore_ask: None,
+            handover_ask: None,
             compare: None,
             faults: None,
             add_fault: None,
@@ -829,6 +831,12 @@ impl NovoApp {
                 self.outline_open = false;
             }
         }
+        // Escape belongs to a window floating on top, not the drawing, even
+        // with the pointer over it (the drawing would take the key first).
+        let window_on_top = super::panel::dialog_on_top(ctx);
+        if let Some(view) = self.canvas.schematic() {
+            view.yield_escape = window_on_top;
+        }
     }
 
     /// The commands this frame's key presses run, taken out of the input.
@@ -1279,9 +1287,7 @@ impl NovoApp {
             "export.safety_sheets" => {
                 self.export_safety_sheets();
             }
-            "export.handover" => {
-                self.export_handover();
-            }
+            "export.handover" => self.ask_handover(),
             "export.workshop" => {
                 self.export_workshop();
             }
@@ -1622,6 +1628,7 @@ impl NovoApp {
         }
         self.backend.record(changes);
         self.reports_heard(changes);
+        self.sync_plc_address_texts(changes);
         self.fix_current_page();
     }
 

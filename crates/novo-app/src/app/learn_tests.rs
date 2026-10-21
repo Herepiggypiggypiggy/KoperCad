@@ -85,6 +85,36 @@ fn a_lesson_opens_its_own_project_marked_saved() {
     assert!(d.app.learn_active());
 }
 
+fn said(d: &Drive, words: &str) -> bool {
+    d.app.messages().iter().any(|m| m.text.contains(words))
+}
+
+#[test]
+fn opening_a_lesson_over_edited_work_says_where_that_work_went() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.place("mcb3", 60.0, 60.0);
+    d.frame();
+    assert!(d.app.is_dirty());
+    d.app.start_lesson("tiny");
+    d.frame();
+    assert!(
+        said(&d, "Your unsaved project is kept"),
+        "{:?}",
+        d.app.messages()
+    );
+}
+
+#[test]
+fn opening_a_lesson_over_an_empty_project_says_nothing_extra() {
+    let (_dir, mut d) = drive();
+    d.app.start_lesson("tiny");
+    d.frame();
+    assert!(!said(&d, "is kept") && !said(&d, "is saved"));
+}
+
 #[test]
 fn the_fast_keys_card_steps_aside_while_a_lesson_runs() {
     let (_dir, mut d) = drive();
@@ -1230,4 +1260,48 @@ fn the_bypassed_stop_button_only_stops_the_motor_once_the_jumper_is_gone() {
         d.app.card().is_some_and(|c| c.finished),
         "the repaired circuit stops, the lesson is done"
     );
+}
+
+#[test]
+fn a_prediction_step_waits_for_an_answer_and_says_whether_it_was_right() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("predict-the-starter");
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "guess-hold", "the question is open");
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "guess-hold", "nothing ticks it but an answer");
+    let card = d.app.card().unwrap();
+    let predict = card.predict.as_ref().expect("the card shows the question");
+    assert_eq!(predict.options.len(), 3);
+    assert_eq!(predict.chosen, None);
+    // A wrong guess still moves on, and the card says so.
+    d.app.learn_predict(0).unwrap();
+    let card = d.app.card().unwrap();
+    let predict = card.predict.as_ref().unwrap();
+    assert_eq!(predict.chosen, Some(0));
+    assert_ne!(predict.chosen, Some(predict.answer), "that guess was wrong");
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(
+        step(&d),
+        "guess-hold",
+        "the answer stays on show until Next"
+    );
+    d.app.learn_move(super::learn::Move::Next);
+    d.frame();
+    assert_eq!(step(&d), "see-hold", "an answer ticks the question");
+    assert!(d.app.card().unwrap().predict.is_none(), "no question here");
+    assert!(d.app.learn_predict(1).is_err(), "no question to answer");
 }

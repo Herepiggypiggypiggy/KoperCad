@@ -112,7 +112,7 @@ impl Controls {
 }
 
 /// Wide enough for every toggle and the door slider on one row.
-const TOOLBAR_WIDTH: f32 = 900.0;
+const TOOLBAR_WIDTH: f32 = 980.0;
 
 /// Where a panel under the toolbar starts, from the top of the view.
 pub(super) const BELOW: f32 = 140.0;
@@ -222,13 +222,6 @@ pub(super) fn toolbar(
                     );
                     toggle(
                         ui,
-                        measure,
-                        "Measure",
-                        "Click two points to read the distance, and the gap between two \
-                         devices (View > 3D > Measure)",
-                    );
-                    toggle(
-                        ui,
                         &mut controls.shadows,
                         "Shadows",
                         "Soft shadows from the key light (View > 3D > Shadows)",
@@ -304,6 +297,14 @@ pub(super) fn toolbar(
                  rectangle around it: the free space it asks for (View > 3D > \
                  Dimensions)",
             );
+            // A tool, not a layer: next to the other measuring control.
+            toggle(
+                ui,
+                measure,
+                "Measure",
+                "Click two points to read the distance, and the gap between two \
+                 devices (View > 3D > Measure)",
+            );
             if controls.reduced {
                 ui.label(
                     egui::RichText::new("Reduced quality")
@@ -324,7 +325,13 @@ pub(super) fn toolbar(
             if let Some(limit) = limit
                 && controls.layers.door
             {
-                ui.separator();
+                // The slider does not wrap by itself: in a narrow window the door
+                // gets its own row instead of running under the view cube.
+                if width < TOOLBAR_WIDTH {
+                    ui.end_row();
+                } else {
+                    ui.separator();
+                }
                 let label = if controls.door_deg > 0.0 {
                     "Close door"
                 } else {
