@@ -363,6 +363,26 @@ fn the_safety_sheets_are_one_page_per_function_with_drawing_locations() {
 }
 
 #[test]
+fn the_example_has_a_rated_safety_function_and_the_command_exports_its_sheet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let list = novo_checks::safety::functions(project);
+    assert_eq!(list.len(), 1);
+    let rating = novo_checks::safety::rate(project, &list[0]);
+    assert_eq!(rating.met(), Some(true), "{rating:?}");
+    assert!(novo_workflow::commands::get("export.safety_sheets").is_some());
+    d.app.run_command(&ctx, "export.safety_sheets", None);
+    d.frame();
+    let out = d.app.wb.last_export.clone().expect("exported");
+    assert!(out.to_string_lossy().contains("safety sheets"));
+    assert!(std::fs::metadata(out).unwrap().len() > 500);
+}
+
+#[test]
 fn the_safety_calculator_survives_save_close_and_reopen() {
     use novo_safety::{Category, Severity};
     let dir = tempfile::tempdir().unwrap();

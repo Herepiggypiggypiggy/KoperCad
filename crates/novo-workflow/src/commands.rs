@@ -2659,6 +2659,23 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.safety_sheets",
+            "Export safety function sheets (PDF)",
+            "Export",
+            &[
+                "safety function",
+                "technical file",
+                "performance level",
+                "pfhd",
+                "iso 13849",
+                "e-stop sheet",
+            ],
+            Needs::Project,
+        ),
+        &["export safety sheets", "safety sheets"],
+    ),
+    verb(
+        cmd(
             "export.variant_pdf",
             "Export PDF of a variant",
             "Export",
