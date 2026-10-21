@@ -102,6 +102,8 @@ pub(crate) struct CommissioningMode {
     show_3d: Option<WireId>,
     /// The last big tick ended the walk; the panel says so.
     pub(super) finished: bool,
+    /// What each big tick passed, so Back can take it back.
+    walked: Vec<(Target, Vec<CheckKind>)>,
 }
 
 impl CommissioningMode {
@@ -134,6 +136,7 @@ impl CommissioningMode {
             reveal_wire: None,
             show_3d: None,
             finished: false,
+            walked: Vec::new(),
         }
     }
 
@@ -178,10 +181,15 @@ impl CommissioningMode {
     ) -> bool {
         let from = self.selected;
         if let Some(target) = from {
+            let mut passed = Vec::new();
             for &check in target.checks() {
                 if self.store.state(target, check) == CheckState::Pending {
                     self.decide(target, check, CheckState::Passed);
+                    passed.push(check);
                 }
+            }
+            if !passed.is_empty() {
+                self.walked.push((target, passed));
             }
         }
         match next_open(project, &self.store, from, current, self.scope) {
@@ -194,6 +202,28 @@ impl CommissioningMode {
                 true
             }
         }
+    }
+
+    /// Takes back the last big tick: its checks are pending again and the
+    /// walk is on that target. Returns whether there was one.
+    pub(super) fn back(
+        &mut self,
+        project: &Project,
+        current: Option<PageId>,
+        go: &mut Option<Place>,
+    ) -> bool {
+        let Some((target, checks)) = self.walked.pop() else {
+            return false;
+        };
+        for check in checks {
+            self.store.clear_check(target, check);
+        }
+        self.dirty = true;
+        self.finished = false;
+        if let Some(info) = targets(project).into_iter().find(|i| i.target == target) {
+            self.walk_to(project, &info, current, go);
+        }
+        true
     }
 
     /// Decides one check for the person set, with the value and note typed.
@@ -940,7 +970,7 @@ fn header_menu(
     let mut export = None;
     let mut field = None;
     let name = if mode.who.trim().is_empty() {
-        "By".to_owned()
+        "Your name".to_owned()
     } else {
         format!("By {}", mode.who.trim())
     };
@@ -1079,7 +1109,13 @@ fn checks_tab(
             };
         }
         if next.is_none() || mode.finished {
-            ui.weak("Everything is decided");
+            let wires_done = mode.scope == WalkScope::Wires
+                && next_open(project, &mode.store, None, None, WalkScope::All).is_some();
+            ui.weak(if wires_done {
+                "Wires done. Untick Wires only for terminals and devices"
+            } else {
+                "Everything is decided. Check the Punch list"
+            });
         }
     });
     let p = Palette::of(ui);
@@ -1095,8 +1131,8 @@ fn checks_tab(
         ui.horizontal(|ui| {
             ui.add(
                 egui::TextEdit::singleline(&mut mode.value)
-                    .hint_text("Value (2.5 Nm, 0.2 ohm)")
-                    .desired_width(130.0),
+                    .hint_text("Value")
+                    .desired_width(80.0),
             );
             ui.add(
                 egui::TextEdit::singleline(&mut mode.note)
@@ -1359,6 +1395,14 @@ fn walk_card(
         .iter()
         .filter(|&&c| mode.store.state(info.target, c) == CheckState::Pending)
         .count();
+    let order = novo_commissioning::walk_order(project, mode.scope);
+    if let Some(at) = order.iter().position(|i| i.target == info.target) {
+        ui.label(
+            egui::RichText::new(format!("{} of {}", at + 1, order.len()))
+                .small()
+                .color(p.text_tertiary),
+        );
+    }
     ui.horizontal(|ui| {
         ui.label(
             egui::RichText::new(if let Some(s) = step.filter(|s| !s.number.is_empty()) {
@@ -1400,16 +1444,14 @@ fn walk_card(
                         .truncate(),
                     );
                 });
-                if let Some(f) = ferrule {
-                    ui.horizontal(|ui| {
-                        ui.add_space(space::XL + space::S);
-                        ui.label(
-                            egui::RichText::new(format!("ferrule {f}"))
-                                .small()
-                                .color(p.text_secondary),
-                        );
-                    });
-                }
+                ui.horizontal(|ui| {
+                    ui.add_space(space::XL + space::S);
+                    let (text, color) = match ferrule {
+                        Some(f) => (format!("ferrule {f}"), p.text_secondary),
+                        None => ("ferrule: not set".to_owned(), p.text_tertiary),
+                    };
+                    ui.label(egui::RichText::new(text).small().color(color));
+                });
             };
         end(ui, "FROM", &step.from, &step.ferrule_from);
         end(ui, "TO  ", &step.to, &step.ferrule_to);
@@ -1445,7 +1487,14 @@ fn walk_card(
     let label = if open == 0 {
         "All decided".to_owned()
     } else {
-        format!("Pass {open} open   Space")
+        let names: Vec<&str> = info
+            .target
+            .checks()
+            .iter()
+            .filter(|&&c| mode.store.state(info.target, c) == CheckState::Pending)
+            .map(|c| c.label())
+            .collect();
+        format!("Pass {} (Space)", names.join(" + ").to_lowercase())
     };
     let tick = ui.add_enabled(
         open > 0,
@@ -1467,6 +1516,16 @@ fn walk_card(
         mode.finished = finished;
     }
     ui.horizontal(|ui| {
+        if ui
+            .add_enabled(
+                !mode.walked.is_empty(),
+                egui::Button::new("Back").min_size(egui::vec2(0.0, 40.0)),
+            )
+            .on_hover_text("Take back the last pass")
+            .clicked()
+        {
+            mode.back(project, current, go);
+        }
         if ui
             .add(egui::Button::new("Skip").min_size(egui::vec2(0.0, 40.0)))
             .on_hover_text("Go to the next one without deciding this one")

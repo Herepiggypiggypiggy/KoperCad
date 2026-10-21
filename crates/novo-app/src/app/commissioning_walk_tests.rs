@@ -129,3 +129,22 @@ fn the_punch_list_is_written_as_pdf() {
     assert!(bytes.starts_with(b"%PDF"));
     let _ = std::fs::remove_file(path);
 }
+
+#[test]
+fn back_takes_the_last_pass_back() {
+    let (_dir, mut d) = walking();
+    tap_space(&mut d); // starts the walk
+    let first = d.app.wb.commissioning.as_ref().unwrap().selected.unwrap();
+    tap_space(&mut d); // passes it
+    assert_eq!(decided(&d), first.checks().len());
+    let page = d.app.current_page();
+    let mut go = None;
+    let project = d.doc().project().clone();
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    assert!(mode.back(&project, page, &mut go));
+    assert_eq!(mode.selected, Some(first), "the walk is back on it");
+    for &check in first.checks() {
+        assert_eq!(mode.store.state(first, check), CheckState::Pending);
+    }
+    assert!(!mode.back(&project, page, &mut go), "nothing more to undo");
+}
