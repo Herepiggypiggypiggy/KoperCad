@@ -39,6 +39,8 @@ A KoperCAD project is one `.novo` file: a SQLite database (`crates/novo-storage`
 - `crates/novo-tests/tests/data_safety.rs`: a 600-page project saves, autosaves incrementally, is offered back after a crash and is salvaged when cut short; a crash after undoing past a save offers the undone state; save, undo, save, redo reach the file exactly;
 - a child that autosaves and aborts: the app backend offers the work back on the next open.
 
+`crates/novo-tests/tests/compat_releases.rs` reads files written by the release candidates themselves (`golden/releases/rc1`, `rc2`: motor starter, a 300-object page, every lesson's finished project): read-only with the counts the release wrote, open for editing, edit, save, reopen. A new release adds a directory beside these.
+
 To rewrite the golden files after an **intended** format change (and only then): `KOPERCAD_REGEN_GOLDEN=1 cargo test -p novo-tests --test compat_v0_1 regenerate_golden`. For a released version, add a new golden file instead.
 
 Verified on headless Linux only; the Windows run (rename over an open file, antivirus locking) is part of the release's Windows pass.
