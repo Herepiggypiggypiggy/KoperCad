@@ -623,8 +623,19 @@ pub fn progress_bar(ui: &mut Ui, caption: &str, detail: &str, done: f32, failed:
 /// selected looks (the selected row has the copper wash and a copper bar on
 /// its left). `add_contents` lays out the row's content from left to right.
 pub fn row(ui: &mut Ui, selected: bool, add_contents: impl FnOnce(&mut Ui)) -> Response {
-    let p = Palette::of(ui);
     let height = control_height(ui) + 2.0;
+    row_of_height(ui, selected, height, add_contents)
+}
+
+/// [`row`] with a height of its own, for a row that carries a second line
+/// (a finger-sized list at the cabinet).
+pub fn row_of_height(
+    ui: &mut Ui,
+    selected: bool,
+    height: f32,
+    add_contents: impl FnOnce(&mut Ui),
+) -> Response {
+    let p = Palette::of(ui);
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(ui.available_width(), height), Sense::click());
     paint_row_background(ui, p, rect, selected, response.hovered());

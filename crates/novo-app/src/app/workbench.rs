@@ -428,6 +428,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.pdf_options",
     "export.change_report",
     "export.commissioning",
+    "export.punch_list",
     "export.standards_report",
     "export.standards_xlsx",
     "export.plate",
@@ -1192,6 +1193,7 @@ impl NovoApp {
                 self.export_change_report();
             }
             "export.commissioning" => self.export_commissioning_pdf(),
+            "export.punch_list" => self.export_punch_list_pdf(),
             "export.standards_report" => {
                 self.export_standards_report(StandardsFormat::Pdf);
             }
@@ -1674,7 +1676,10 @@ impl NovoApp {
         let panned = self.wb.space_pan.take().is_some();
         let moved = pointer.map_or(0.0, |p| p.distance(down));
         if released && !panned && moved <= 4.0 {
-            self.wb.field.open(Mode::All, pointer.or(Some(down)));
+            // At the cabinet a tap of Space ticks the wire in front of you.
+            if !self.commissioning_space() {
+                self.wb.field.open(Mode::All, pointer.or(Some(down)));
+            }
         }
     }
 }

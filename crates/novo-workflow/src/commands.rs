@@ -2353,6 +2353,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.punch_list",
+            "Export punch list (open items)",
+            "Export",
+            &["restpunten", "snag list", "defects", "open items"],
+            Needs::Project,
+        ),
+        &["export punch list", "punch list pdf"],
+    ),
+    verb(
+        cmd(
             "export.standards_report",
             "Export standards compliance report",
             "Export",

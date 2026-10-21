@@ -246,6 +246,8 @@ mod commissioning_photos_tests;
 #[cfg(test)]
 mod commissioning_tests;
 #[cfg(test)]
+mod commissioning_walk_tests;
+#[cfg(test)]
 mod compare_tests;
 #[cfg(test)]
 mod context_menu_tests;
