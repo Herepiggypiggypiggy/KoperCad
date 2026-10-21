@@ -177,7 +177,7 @@ pub fn read_list(bytes: &[u8]) -> Result<IoList, ListError> {
     let rows = if bytes.starts_with(b"PK") {
         sheet_rows(bytes)?
     } else {
-        csvio::rows(&String::from_utf8_lossy(bytes))
+        csvio::rows_with_blanks(&String::from_utf8_lossy(bytes))
     };
     from_rows(&rows)
 }
@@ -203,9 +203,10 @@ fn sheet_rows(bytes: &[u8]) -> Result<Vec<Vec<String>>, ListError> {
         let range = book
             .worksheet_range(&name)
             .map_err(|e| ListError::Bad(e.to_string()))?;
-        let rows: Vec<Vec<String>> = range
-            .rows()
-            .map(|r| r.iter().map(cell_text).collect())
+        // The range starts at the first used cell: pad so an index is the sheet row.
+        let skipped = range.start().map_or(0, |(row, _)| row as usize);
+        let rows: Vec<Vec<String>> = std::iter::repeat_n(Vec::new(), skipped)
+            .chain(range.rows().map(|r| r.iter().map(cell_text).collect()))
             .collect();
         if rows.iter().take(30).any(|r| is_heading(&columns(r))) {
             return Ok(rows);
@@ -336,8 +337,16 @@ pub fn read_address(text: &str) -> Option<AddrKey> {
     } else {
         upper
     };
-    parse_address(&english)
+    // A list is a user's file: no real controller has bytes up to u32::MAX, and the plan adds to them.
+    parse_address(&english).filter(|key| match key {
+        AddrKey::Bit { byte, .. } | AddrKey::Word { byte, .. } => *byte <= MAX_BYTE,
+        AddrKey::Point { point, .. } => *point <= MAX_BYTE,
+        AddrKey::Analog { .. } => true,
+    })
 }
+
+/// The highest byte address a list may use.
+const MAX_BYTE: u32 = 65_535;
 
 /// The channel type an address implies when the list has no type: a bit
 /// is a digital channel, a word an analog one.
@@ -448,7 +457,29 @@ mod tests {
         assert!(list.items[0].address.is_some());
         assert_eq!(list.items[1].kind, ChannelType::DigitalOutput);
         assert_eq!(list.notes.len(), 1);
-        assert_eq!(list.notes[0].line, Some(4));
+        // The line in the file, the empty one included.
+        assert_eq!(list.notes[0].line, Some(5));
+    }
+
+    #[test]
+    fn a_note_names_the_line_of_the_file_with_blank_lines_counted() {
+        let list = read_list(b"tag,type\n\n\nB1,DI\nB2,?\n").unwrap();
+        assert_eq!(list.notes.len(), 1);
+        assert_eq!(list.notes[0].line, Some(5));
+    }
+
+    #[test]
+    fn an_address_near_the_top_of_u32_is_left_out_and_never_panics() {
+        let text = "tag,address,type\nB1,I4294967295.0,DI\nB2,IW4294967294,AI\nB3,I0.0,DI\n";
+        let list = read_list(text.as_bytes()).unwrap();
+        assert!(read_address("I4294967295.0").is_none());
+        assert!(read_address("IW4294967294").is_none());
+        let plan = crate::generate::plan(
+            &novo_core::Project::default(),
+            &list,
+            &crate::generate::Options::default(),
+        );
+        assert!(!plan.cards.is_empty());
     }
 
     #[test]

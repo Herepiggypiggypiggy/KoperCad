@@ -29,6 +29,13 @@ pub fn quoted(text: &str) -> String {
 /// `,` `;` and tab that the first non-empty line has most of. A byte order
 /// mark is ignored.
 pub fn rows(text: &str) -> Vec<Vec<String>> {
+    let mut out = rows_with_blanks(text);
+    out.retain(|r| r.iter().any(|f| !f.trim().is_empty()));
+    out
+}
+
+/// Like [`rows`], but empty lines stay, so a row's index is its line in the file.
+pub fn rows_with_blanks(text: &str) -> Vec<Vec<String>> {
     let text = text.trim_start_matches('\u{feff}');
     let first = text.lines().find(|l| !l.trim().is_empty()).unwrap_or("");
     let delimiter = [',', ';', '\t']
@@ -72,7 +79,6 @@ pub fn rows(text: &str) -> Vec<Vec<String>> {
         row.push(field);
         out.push(row);
     }
-    out.retain(|r| r.iter().any(|f| !f.trim().is_empty()));
     out
 }
 

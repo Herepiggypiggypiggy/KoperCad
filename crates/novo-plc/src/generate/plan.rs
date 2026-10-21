@@ -209,7 +209,7 @@ pub fn plan(project: &Project, list: &IoList, options: &Options) -> Plan {
                 let clash = found.iter().find_map(|(channels, start)| {
                     let layout = layout_of(*kind, channels.len());
                     let bytes = layout.bytes(space);
-                    let range = (*start)..(*start + bytes);
+                    let range = (*start)..start.saturating_add(bytes);
                     taken
                         .get(&(station.clone(), space))
                         .into_iter()
@@ -234,7 +234,7 @@ pub fn plan(project: &Project, list: &IoList, options: &Options) -> Plan {
                         taken
                             .entry((station.clone(), space))
                             .or_default()
-                            .push(start..start + layout.bytes(space));
+                            .push(start..start.saturating_add(layout.bytes(space)));
                         chunks.push((channels, Some(start)));
                     }
                 }

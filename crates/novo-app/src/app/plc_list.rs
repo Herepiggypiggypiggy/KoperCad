@@ -155,7 +155,7 @@ impl NovoApp {
             ui.horizontal(|ui| {
                 let apply = ui
                     .add_enabled_ui(!review.plan.is_empty(), |ui| {
-                        novo_theme::widgets::primary_button(ui, "Add pages (Enter)")
+                        novo_theme::widgets::primary_button(ui, "Add cards and pages (Enter)")
                     })
                     .inner
                     .clicked();
@@ -219,7 +219,7 @@ impl NovoApp {
                     ),
                 );
                 if let Some(note) = built.notes.first() {
-                    self.message(Level::Warning, note.text.clone());
+                    self.message(Level::Info, note.text.clone());
                 }
             }
             Err(e) => self.message(Level::Error, format!("Could not import the I/O list: {e}")),
