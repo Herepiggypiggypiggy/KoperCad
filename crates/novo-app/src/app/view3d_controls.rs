@@ -164,6 +164,7 @@ pub(super) fn toolbar(
                 controls.layers.door,
                 controls.layers.wires,
                 controls.layers.shapes,
+                controls.layers.slots,
                 controls.shadows,
                 controls.ssao && controls.ssao_available,
                 controls.missing_data,
@@ -192,6 +193,16 @@ pub(super) fn toolbar(
                         "Draw each device with the typical form of its family (breaker, contactor, \
                          terminal block, PLC, drive, power supply) at the part's real width, height \
                          and depth. The details are typical, not the maker's. Off draws plain boxes.",
+                    );
+                    changed.layers |= toggle(
+                        ui,
+                        &mut layers.slots,
+                        "Slotted ducts",
+                        "Draw each duct with slotted walls (fingers) and mounting slots in the floor, \
+                         at the real width, height and length. The slot pitch (about 9 mm) and the \
+                         base band are typical of commercial duct, not one maker's; the heat and \
+                         fill figures do not read them. Far out the duct is drawn solid. Off draws \
+                         every duct solid.",
                     );
                     if let Some(text) = &controls.models_text {
                         ui.label(egui::RichText::new(text).weak().small());

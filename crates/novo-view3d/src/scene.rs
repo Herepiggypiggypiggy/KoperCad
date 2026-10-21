@@ -94,6 +94,11 @@ pub enum Profile {
     TopHat35x15,
     /// Open wiring duct; width is `size.y`, height is `size.z`.
     Channel,
+    /// The same duct with slotted walls (fingers) and mounting slots in the
+    /// floor. Drawn with a mesh cut to the length, so the slot pitch stays
+    /// the same on a short and on a long duct; a solid `Channel` stands in
+    /// when the view is too far out to tell the slots apart.
+    SlottedChannel,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

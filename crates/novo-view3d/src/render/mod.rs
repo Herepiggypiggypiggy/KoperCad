@@ -11,7 +11,10 @@ use crate::camera::{Camera, Projection};
 use crate::cull;
 use crate::look::{Highlight, Look, Rgb, mix};
 use crate::math::Frustum;
-use crate::mesh::{GeometryKey, MeshData, MeshLibrary, profile_mesh, unit_box};
+use crate::mesh::{
+    FINGER_WIDTH_MM, GeometryKey, MeshData, MeshLibrary, SLOT_WIDTH_MM, profile_mesh, slotted_mesh,
+    unit_box,
+};
 use crate::overlay::Overlay;
 use crate::scene::{Item, ItemId, ItemKind, Mark, Profile, Scene, Shape};
 use crate::view_state::ViewState;
@@ -224,6 +227,8 @@ enum MeshKey {
     Cube,
     /// Profile, width and height in half millimetres.
     Profile(Profile, u32, u32),
+    /// Slotted duct, width, height and length in half millimetres.
+    Slotted(u32, u32, u32),
     Part(GeometryKey, u8),
 }
 
@@ -1239,6 +1244,11 @@ impl Renderer {
                 "profile",
                 &profile_mesh(p, w as f32 * 0.5, h as f32 * 0.5),
             ),
+            MeshKey::Slotted(w, h, len) => GpuMesh::upload(
+                device,
+                "slotted duct",
+                &slotted_mesh(len as f32 * 0.5, w as f32 * 0.5, h as f32 * 0.5),
+            ),
             MeshKey::Part(k, lod) => {
                 let m = library
                     .get(k)
@@ -1820,6 +1830,22 @@ impl Renderer {
         let q = |v: f32| (v * 2.0).round().max(0.0) as u32;
         match item.shape {
             Shape::Box => cull::lod_for(size_px, 1).map(|_| (MeshKey::Cube, item.size)),
+            Shape::Profile(Profile::SlottedChannel) => cull::lod_for(size_px, 1).map(|_| {
+                // The slots are worth drawing once a finger and its slot are
+                // a few pixels wide; further out the solid section stands in.
+                let px_per_mm = size_px / (item.size.length() * 0.5).max(1e-3);
+                if px_per_mm * (FINGER_WIDTH_MM + SLOT_WIDTH_MM) >= SLOT_MIN_PITCH_PX {
+                    (
+                        MeshKey::Slotted(q(item.size.y), q(item.size.z), q(item.size.x)),
+                        Vec3::ONE,
+                    )
+                } else {
+                    (
+                        MeshKey::Profile(Profile::Channel, q(item.size.y), q(item.size.z)),
+                        Vec3::new(item.size.x, 1.0, 1.0),
+                    )
+                }
+            }),
             Shape::Profile(p) => cull::lod_for(size_px, 1).map(|_| {
                 (
                     MeshKey::Profile(p, q(item.size.y), q(item.size.z)),
@@ -1856,6 +1882,9 @@ impl Renderer {
     }
 }
 
+/// Smallest on-screen pitch of finger plus slot, in pixels, at which a duct is
+/// drawn with its slots.
+const SLOT_MIN_PITCH_PX: f32 = 5.0;
 /// Strength of the key light's shadow on the surfaces it falls on, 0 to 1.
 const SHADOW_STRENGTH: f32 = 0.85;
 /// Size on screen the shadow casters are drawn at (picks a coarse mesh).
