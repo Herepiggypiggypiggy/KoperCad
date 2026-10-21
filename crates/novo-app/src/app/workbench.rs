@@ -207,8 +207,10 @@ pub(crate) struct Workbench {
     pub(super) autopilot: Option<super::autopilot::AutopilotState>,
     /// Paper of the workshop pack's drilling template.
     pub(super) workshop_paper: novo_layout::template::Paper,
-    /// The PDF options dialog (File > Export drawings > Export PDF with options...), while open.
+    /// The PDF options dialog (File > Export print > Export PDF with options...), while open.
     pub(super) pdf_options: Option<super::pdf_options::PdfOptionsState>,
+    /// The print preview and plot sets window (File > Export print > Print preview and plot sets...), while open.
+    pub(super) print_preview: Option<Box<super::print_preview::PrintPreview>>,
     /// Test hook: the folder PDFs go to instead of `<Documents>\KoperCAD`.
     #[cfg(test)]
     pub(super) pdf_dir: Option<std::path::PathBuf>,
@@ -332,6 +334,7 @@ impl Default for Workbench {
             autopilot: None,
             workshop_paper: novo_layout::template::Paper::A4,
             pdf_options: None,
+            print_preview: None,
             #[cfg(test)]
             pdf_dir: None,
             designer: None,
@@ -437,6 +440,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "check.next_problem",
     "check.previous_problem",
     "export.pdf",
+    "export.print_preview",
     "export.pdf_options",
     "export.change_report",
     "export.commissioning",
@@ -1223,6 +1227,7 @@ impl NovoApp {
             "export.pdf" => {
                 self.export_pdf();
             }
+            "export.print_preview" => self.open_print_preview(),
             "export.pdf_options" => self.open_pdf_options(),
             "export.change_report" => {
                 self.export_change_report();
