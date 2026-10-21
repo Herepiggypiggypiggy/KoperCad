@@ -70,7 +70,8 @@ pub(super) const DEVICE_INPUTS: [(&str, &str, &str, &str); 8] = [
 /// rows hidden, the ones that belong to protective devices: it has no trip
 /// curve, breaking capacity, let-through energy or overload setting. Every
 /// other code, a two-letter one like `QF` or `FR` and an unknown one
-/// included, shows everything, so a value can always be typed.
+/// included, shows everything, so a value can always be typed. A hidden row
+/// that holds a value is shown anyway, see [`visible_inputs`].
 pub(super) fn input_applies(key: &str, letter: &str) -> bool {
     let contactor = letter.starts_with('K');
     match key {
@@ -81,6 +82,25 @@ pub(super) fn input_applies(key: &str, letter: &str) -> bool {
         | "setting_max_a" => !contactor,
         _ => true,
     }
+}
+
+/// The input rows to show for a device: those that apply to its letter
+/// code, and any other that holds a value, whether the device's own or its
+/// part's. A value the checks read is therefore never hidden: the person can
+/// see it, and clear it when it is their own. A contactor with nothing
+/// entered simply has no empty protective rows.
+fn visible_inputs<'a>(
+    info: &'a DeviceInfo,
+    letter: &str,
+) -> Vec<(
+    &'static (&'static str, &'static str, &'static str, &'static str),
+    &'a (String, bool),
+)> {
+    DEVICE_INPUTS
+        .iter()
+        .zip(&info.calc_inputs)
+        .filter(|((key, ..), (shown, _))| input_applies(key, letter) || !shown.is_empty())
+        .collect()
 }
 
 /// Reads an entry for a calculation input: empty clears it, `trip_curve`
@@ -1042,15 +1062,7 @@ fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
     let letter = DeviceTag::parse(&info.tag)
         .map(|t| t.letter_code().to_owned())
         .unwrap_or_default();
-    // A row the device class does not have is hidden, unless the device
-    // carries a value of its own there (then it stays visible and editable).
-    let rows: Vec<_> = DEVICE_INPUTS
-        .iter()
-        .zip(&info.calc_inputs)
-        .filter(|((key, ..), (shown, from_part))| {
-            input_applies(key, &letter) || (!shown.is_empty() && !*from_part)
-        })
-        .collect();
+    let rows = visible_inputs(info, &letter);
     let set = rows.iter().filter(|(_, (v, _))| !v.is_empty()).count();
     let summary = if set == 0 {
         String::new()
@@ -1114,6 +1126,48 @@ fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
 mod tests {
     use super::*;
     use novo_core::DeviceTag;
+
+    #[test]
+    fn a_hidden_row_that_holds_a_value_is_still_shown() {
+        let mut project = Project::new("Plant");
+        let (device, _) = project
+            .transact("Add", |tx| {
+                tx.add_device(DeviceTag::parse("=A1-KM1").unwrap(), "")
+            })
+            .unwrap();
+        let mut info = DeviceInfo {
+            device,
+            tag: "=A1-KM1".into(),
+            description: String::new(),
+            part: String::new(),
+            relations: Vec::new(),
+            properties: Vec::new(),
+            part_values: Vec::new(),
+            delay: None,
+            mate: None,
+            calc_inputs: DEVICE_INPUTS
+                .iter()
+                .map(|_| (String::new(), false))
+                .collect(),
+        };
+        let keys = |info: &DeviceInfo| -> Vec<&str> {
+            visible_inputs(info, "KM")
+                .iter()
+                .map(|((k, ..), _)| *k)
+                .collect()
+        };
+        assert!(!keys(&info).contains(&"breaking_capacity_ka"));
+        assert!(!keys(&info).contains(&"trip_curve"));
+        // A part supplies a breaking capacity: the checks read it, so the
+        // row is shown.
+        let at = DEVICE_INPUTS
+            .iter()
+            .position(|(k, ..)| *k == "breaking_capacity_ka")
+            .unwrap();
+        info.calc_inputs[at] = ("6".into(), true);
+        assert!(keys(&info).contains(&"breaking_capacity_ka"));
+        assert!(!keys(&info).contains(&"trip_curve"));
+    }
 
     #[test]
     fn a_contactor_has_no_protective_rows_but_other_codes_keep_every_row() {
