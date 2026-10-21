@@ -458,7 +458,7 @@ fn scheme_ui(ui: &mut egui::Ui, scheme: &mut Scheme) {
                     ui.selectable_value(&mut scheme.kind, kind, kind.label());
                 }
             });
-        ui.weak(scheme.kind.example());
+        ui.weak(scheme.sample());
     });
     ui.horizontal(|ui| {
         ui.label("Prefix");
