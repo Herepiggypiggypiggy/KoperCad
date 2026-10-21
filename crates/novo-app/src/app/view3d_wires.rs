@@ -12,10 +12,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use eframe::egui;
-use novo_core::{Project, WireId, natural_cmp};
-use novo_routing::Kind;
+use novo_core::{Project, StructureId, WireId, natural_cmp};
 use novo_routing::model::Routed;
+use novo_routing::{Kind, Problem};
 use novo_view3d::scene::{ItemId, ItemKind};
+
+use super::cabinet_routes::{DuctFill, Tone, duct_fills, tone};
+use super::view3d_runs::{Basis, EntryFacts, Undrawn};
 
 /// Margin from the view's edge, in points.
 const MARGIN: f32 = 12.0;
@@ -40,6 +43,55 @@ pub(super) struct WireFacts {
     /// A device depth is unknown, so the length is too short by the rise to
     /// the duct.
     pub flat: bool,
+    /// The ducts it lies in with their fill, in the order it passes them.
+    pub duct_use: Vec<DuctUse>,
+    /// What the checks say about this run, in words.
+    pub problems: Vec<(Tone, String)>,
+    /// Set when the wire is drawn to the cabinet entry point because its
+    /// other end is outside the cabinet.
+    pub entry: Option<EntryFacts>,
+    /// How the length was found; read when a card needs it
+    /// (`view3d_runs::fill_basis`).
+    pub basis: Option<Basis>,
+}
+
+/// One duct a wire lies in.
+#[derive(Debug, Clone, PartialEq)]
+pub(super) struct DuctUse {
+    pub rail: u64,
+    /// Where the duct is: `Duct at y 250 mm`, `Duct at x 100 mm`.
+    pub place: String,
+    /// Fill over the allowed fill (above 1.0 is overfull); `None` for a duct
+    /// without a cross-section.
+    pub ratio: Option<f64>,
+    /// Share of the duct's cross-section the wires take, per cent.
+    pub share_pct: Option<f64>,
+    /// The allowed share, per cent.
+    pub limit_pct: f64,
+    /// Wires lying in it.
+    pub wires: usize,
+    pub tone: Tone,
+}
+
+impl DuctUse {
+    /// `Duct 3: 31 % full (limit 50 %), 4 wires`.
+    pub(super) fn text(&self) -> String {
+        match (self.ratio, self.share_pct) {
+            (Some(_), Some(share)) => format!(
+                "{}: {:.0} % full of {:.0} % allowed, {} wires",
+                self.place, share, self.limit_pct, self.wires
+            ),
+            _ => format!(
+                "{}: no cross-section set, fill not checked, {} wires",
+                self.place, self.wires
+            ),
+        }
+    }
+
+    /// Whether this duct needs the designer's eye.
+    pub(super) fn is_problem(&self) -> bool {
+        matches!(self.tone, Tone::Over | Tone::NoSize)
+    }
 }
 
 impl WireFacts {
@@ -55,7 +107,14 @@ impl WireFacts {
     /// The lines of the hover card.
     pub(super) fn lines(&self) -> Vec<String> {
         let mut out = vec![format!("{} → {}", self.from, self.to)];
-        out.push(format!("Length {:.0} mm", self.length_mm));
+        out.push(match &self.basis {
+            Some(b) if b.length_mm.round() != self.length_mm.round() => format!(
+                "Length {:.0} mm ({}), inside the cabinet {:.0} mm",
+                b.length_mm, b.text, self.length_mm
+            ),
+            Some(b) => format!("Length {:.0} mm ({})", self.length_mm, b.text),
+            None => format!("Length {:.0} mm", self.length_mm),
+        });
         let mut how = if self.free_air {
             "No duct reaches both ends: straight line".to_owned()
         } else if self.ducts == 0 {
@@ -79,6 +138,12 @@ impl WireFacts {
         if !kind.is_empty() {
             out.push(kind.join("  "));
         }
+        if let Some(e) = &self.entry {
+            out.push(e.line());
+        }
+        for d in self.duct_use.iter().filter(|d| d.is_problem()) {
+            out.push(d.text());
+        }
         if self.flat {
             out.push("A device depth is unknown: the length is a little short".to_owned());
         }
@@ -89,9 +154,20 @@ impl WireFacts {
 /// The wires routed on the plate of an enclosure, by wire id.
 pub(super) fn facts(
     project: &Project,
+    structure: StructureId,
     routed: &Routed,
     on_plate: &BTreeSet<u64>,
 ) -> BTreeMap<u64, WireFacts> {
+    let plan = routed
+        .plans
+        .iter()
+        .find(|(s, _)| *s == structure)
+        .map(|(_, p)| p);
+    let limit_pct = novo_routing::WireRules::of(project).routing.fill_limit * 100.0;
+    let fills: Vec<DuctFill> = plan
+        .map(|p| duct_fills(project, structure, p))
+        .unwrap_or_default();
+    let entry = novo_routing::entry::entry_point(project, structure);
     routed
         .routes
         .iter()
@@ -103,6 +179,48 @@ pub(super) fn facts(
                     .and_then(|p| project.pin_designation(p))
                     .unwrap_or_default()
             };
+            let mut duct_use: Vec<DuctUse> = Vec::new();
+            for rail in &route.ducts {
+                if duct_use.iter().any(|d| d.rail == *rail) {
+                    continue;
+                }
+                let Some(f) = fills.iter().find(|f| f.rail == *rail) else {
+                    continue;
+                };
+                duct_use.push(DuctUse {
+                    rail: *rail,
+                    place: duct_place(f),
+                    ratio: f.ratio,
+                    share_pct: f.ratio.map(|r| r * limit_pct),
+                    limit_pct,
+                    wires: f.wires,
+                    tone: tone(f),
+                });
+            }
+            let mut problems = Vec::new();
+            for p in plan.map(|p| p.problems.as_slice()).unwrap_or_default() {
+                match p {
+                    Problem::GuessedWire { job } if job == id => problems.push((
+                        Tone::Busy,
+                        "No wire size set: a 3 mm wire is assumed in the fill".into(),
+                    )),
+                    Problem::OverfullDuct { duct, ratio, jobs } if jobs.contains(id) => {
+                        let place = fills
+                            .iter()
+                            .find(|f| f.rail == *duct)
+                            .map_or_else(|| format!("Duct {duct}"), duct_place);
+                        problems.push((
+                            Tone::Over,
+                            format!(
+                                "{place} carries {:.0} % of what it may: move wires out of it",
+                                ratio * 100.0
+                            ),
+                        ));
+                    }
+                    _ => {}
+                }
+            }
+            let to_entry = routed.entry_legs.contains_key(id);
             Some((
                 *id,
                 WireFacts {
@@ -117,10 +235,27 @@ pub(super) fn facts(
                     ducts: route.ducts.len(),
                     free_air: route.kind == Kind::FreeAir,
                     flat: routed.unknown_height.contains(id),
+                    duct_use,
+                    problems,
+                    entry: to_entry.then(|| EntryFacts {
+                        at: entry,
+                        outside_mm: novo_routing::entry::outside_mm(project, structure),
+                    }),
+                    basis: None,
                 },
             ))
         })
         .collect()
+}
+
+/// Where a duct is, in words a person can find on the plate: its middle line.
+fn duct_place(f: &DuctFill) -> String {
+    let (x, y, w, h) = f.rect;
+    if w >= h {
+        format!("Duct at y {:.0} mm", y + h / 2.0)
+    } else {
+        format!("Duct at x {:.0} mm", x + w / 2.0)
+    }
 }
 
 /// The facts in list order: wire number, natural order, unnumbered last.
@@ -186,6 +321,7 @@ pub(super) fn list(
     ctx: &egui::Context,
     view: egui::Rect,
     all: &BTreeMap<u64, WireFacts>,
+    undrawn: &[Undrawn],
     selection: &BTreeSet<ItemId>,
 ) -> Asked {
     let mut asked = Asked::default();
@@ -207,7 +343,7 @@ pub(super) fn list(
                     ui.weak("No wire is routed on this plate yet");
                 }
                 egui::ScrollArea::vertical()
-                    .max_height((view.height() * 0.5).max(120.0))
+                    .max_height((view.height() * 0.4).max(120.0))
                     .show(ui, |ui| {
                         for f in sorted(all) {
                             let on = chosen.iter().any(|c| c.id == f.id);
@@ -220,6 +356,26 @@ pub(super) fn list(
                             }
                         }
                     });
+                if !undrawn.is_empty() {
+                    ui.separator();
+                    egui::CollapsingHeader::new(format!("Not drawn ({})", undrawn.len()))
+                        .default_open(false)
+                        .show(ui, |ui| {
+                            ui.weak("No path in the picture: how long each is and why");
+                            egui::ScrollArea::vertical()
+                                .id_salt("view3d_wire_runs_undrawn")
+                                .max_height((view.height() * 0.2).max(60.0))
+                                .show(ui, |ui| {
+                                    for u in undrawn {
+                                        ui.label(format!(
+                                            "{}   {:.0} mm, {}",
+                                            u.name, u.length_mm, u.text
+                                        ))
+                                        .on_hover_text(u.why);
+                                    }
+                                });
+                        });
+                }
                 ui.separator();
                 let total: f64 = all.values().map(|f| f.length_mm).sum();
                 ui.weak(format!("{} wires, {} in all", all.len(), metres(total)));
@@ -256,6 +412,10 @@ mod tests {
             ducts: 1,
             free_air: false,
             flat: false,
+            duct_use: Vec::new(),
+            problems: Vec::new(),
+            entry: None,
+            basis: None,
         }
     }
 

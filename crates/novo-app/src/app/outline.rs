@@ -972,9 +972,31 @@ impl NovoApp {
         // Drops
         self.row_drop(ui, &resp, row, &mut out);
 
-        // Tooltip and menu
-        if let Some(tip) = self.row_tip(row) {
+        // Tooltip and menu. The padlock has its own tip, so the row's waits.
+        let lock_rect = egui::Rect::from_center_size(
+            egui::pos2(rect.right() - 24.0, rect.center().y),
+            egui::vec2(18.0, rect.height()),
+        );
+        let over_lock = locked
+            && ui
+                .input(|i| i.pointer.hover_pos())
+                .is_some_and(|p| lock_rect.contains(p));
+        if !over_lock && let Some(tip) = self.row_tip(row) {
             resp.clone().on_hover_text(tip);
+        }
+        if locked {
+            let generated = matches!(&row.kind, RowKind::Page { page, .. } if self
+                .backend
+                .document()
+                .and_then(|d| d.project().page(*page))
+                .is_some_and(|p| matches!(p.kind, PageKind::Generated { .. })));
+            let tip = if generated {
+                "Locked with the issue. The content still regenerates from the drawings; the lock only stops edits to the page itself."
+            } else {
+                "Locked with the issue. Open the page, then click Page locked in the status bar to unlock it."
+            };
+            ui.interact(lock_rect, resp.id.with("lock"), egui::Sense::hover())
+                .on_hover_text(tip);
         }
         if let Some(doc) = self.backend.document()
             && let Some(target) = target_of(row)

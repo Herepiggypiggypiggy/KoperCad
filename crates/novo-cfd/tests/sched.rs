@@ -130,7 +130,9 @@ fn cancel_is_prompt_and_keeps_the_last_snapshot() {
     let c = Instant::now();
     s.cancel();
     while !s.current().unwrap().is_finished() {
-        assert!(c.elapsed() < Duration::from_secs(10), "cancel too slow");
+        // Release keeps the tight guard; a debug build on a loaded runner gets five times as long.
+        let limit = Duration::from_secs(2) * if cfg!(debug_assertions) { 5 } else { 1 };
+        assert!(c.elapsed() < limit, "cancel too slow");
         std::thread::sleep(Duration::from_millis(1));
     }
     let ev = s.current().unwrap().poll();

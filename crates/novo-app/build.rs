@@ -41,6 +41,9 @@ fn collect(root: &Path, dir: &Path, out: &mut Vec<(String, String)>) {
                 .map(|c| c.as_os_str().to_string_lossy().into_owned())
                 .collect::<Vec<_>>()
                 .join("/");
+            // The directory watch alone missed edits to existing files after a
+            // merge (a stale embed shows raw ui keys such as `learn_menu`).
+            println!("cargo:rerun-if-changed={}", path.display());
             out.push((key, path.to_string_lossy().into_owned()));
         }
     }

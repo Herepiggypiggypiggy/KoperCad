@@ -46,6 +46,8 @@ pub(crate) struct PrintPreview {
     tab: Tab,
     choice: PrintChoice,
     colour: bool,
+    /// The design checks as a last page, as in the plain PDF export.
+    checks: bool,
     /// The pages ticked, by id.
     pick: BTreeSet<PageId>,
     /// The project's pages at the last refresh: id, name, title.
@@ -53,7 +55,7 @@ pub(crate) struct PrintPreview {
     /// The drawn sheets for `built_for`.
     sheets: Vec<DrawnSheet>,
     /// What `sheets` was drawn for: pages, look and the project's revision.
-    built_for: Option<(BTreeSet<PageId>, bool, u64)>,
+    built_for: Option<(BTreeSet<PageId>, bool, bool, u64)>,
     current: usize,
     /// The plot set loaded, as an index into the project's sets.
     set: Option<usize>,
@@ -111,6 +113,7 @@ impl NovoApp {
             tab: Tab::Sheets,
             choice: self.settings.print_choice.clone(),
             colour: self.settings.pdf_choice.look == "colour",
+            checks: self.settings.pdf_choice.checks_appendix,
             pick: BTreeSet::new(),
             pages: Vec::new(),
             sheets: Vec::new(),
@@ -166,9 +169,7 @@ impl NovoApp {
     ) -> novo_pdf::PdfOptions {
         let mut choice = self.settings.pdf_choice.clone();
         choice.look = if state.colour { "colour" } else { "black" }.into();
-        // The appendix (design checks) is part of the PDF, not of the
-        // sheets ticked here.
-        choice.checks_appendix = false;
+        choice.checks_appendix = state.checks;
         self.pdf_options_for(
             PageSet::Pages(pages.iter().copied().collect()),
             &choice,
@@ -182,11 +183,11 @@ impl NovoApp {
         let Some(revision) = self.backend.document().map(|d| d.project().revision()) else {
             return;
         };
-        let key = (state.pick.clone(), state.colour, revision);
+        let key = (state.pick.clone(), state.colour, state.checks, revision);
         if !force && state.built_for.as_ref() == Some(&key) {
             return;
         }
-        if state.built_for.as_ref().is_none_or(|k| k.2 != revision) {
+        if state.built_for.as_ref().is_none_or(|k| k.3 != revision) {
             self.refresh_pages(state);
         }
         let options = self.print_options(state, &state.pick.clone());
@@ -270,6 +271,7 @@ impl NovoApp {
                     .collect();
                 state.choice = set.print.clone();
                 state.colour = set.look == "colour";
+                state.checks = set.checks;
                 state.set_name = set.name.clone();
                 let missing = set.pages.len() - state.pick.len().min(set.pages.len());
                 state.note = (missing > 0).then(|| {
@@ -327,6 +329,7 @@ impl NovoApp {
                 .collect(),
             print: state.choice.clone(),
             look: if state.colour { "colour" } else { "black" }.into(),
+            checks: state.checks,
         };
         let key = project_key(self.backend.file().as_deref());
         let list = self.settings.plot_sets.entry(key).or_default();
@@ -422,6 +425,7 @@ impl NovoApp {
             tab: Tab::Sheets,
             choice: set.print.clone(),
             colour: set.look == "colour",
+            checks: set.checks,
             pick: ids.clone(),
             pages: Vec::new(),
             sheets: Vec::new(),
@@ -522,8 +526,11 @@ fn sheets_tab(
             |ui| {
                 egui::ScrollArea::vertical()
                     .id_salt("print_controls")
-                    .max_height(height)
-                    .show(ui, |ui| controls(ui, state, sets, wants, palette));
+                    .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+                    .max_height((height - 92.0).max(200.0))
+                    .show(ui, |ui| controls(ui, state, sets, wants));
+                ui.separator();
+                actions(ui, state, sets, wants, palette);
             },
         );
         ui.separator();
@@ -540,7 +547,6 @@ fn controls(
     state: &mut PrintPreview,
     sets: &[PlotSetChoice],
     wants: &mut Wants,
-    palette: &novo_theme::Palette,
 ) {
     novo_theme::widgets::section_label(ui, "Plot set");
     let current = state
@@ -629,6 +635,9 @@ fn controls(
         });
     ui.add_space(6.0);
 
+    ui.checkbox(&mut state.checks, "Design checks as a last page")
+        .on_hover_text("The same last page the plain Export PDF adds when checks are open");
+    ui.add_space(6.0);
     novo_theme::widgets::section_label(ui, "Paper");
     let c = &mut state.choice;
     let paper = PrintPaper::from_key(&c.paper).unwrap_or_default();
@@ -693,10 +702,21 @@ fn controls(
         ui.selectable_value(&mut state.colour, true, "In colour");
     });
     ui.add_space(8.0);
+}
 
+/// The buttons that write PDFs, kept under the scrolling controls so they
+/// are always in view.
+fn actions(
+    ui: &mut egui::Ui,
+    state: &PrintPreview,
+    sets: &[PlotSetChoice],
+    wants: &mut Wants,
+    palette: &novo_theme::Palette,
+) {
+    ui.add_space(4.0);
     let can = !state.pick.is_empty();
     if ui
-        .add_enabled(can, egui::Button::new("Save PDF"))
+        .add_enabled(can, egui::Button::new(save_label(state)))
         .on_hover_text("Writes the pages ticked, as previewed, to your Documents\\KoperCAD folder")
         .clicked()
     {
@@ -710,8 +730,37 @@ fn controls(
         wants.export_all_sets = true;
     }
     if let Some(note) = &state.note {
-        ui.add_space(4.0);
         ui.colored_label(palette.warning, note);
+    }
+}
+
+/// The Save PDF button: says how many pages it writes and whether the
+/// checks page is among them.
+fn save_label(state: &PrintPreview) -> String {
+    let n = state.sheets.len();
+    // The checks page exists only when the project has open problems.
+    let checks = state.checks && state.sheets.last().is_some_and(|s| is_checks_page(&s.name));
+    format!(
+        "Save PDF ({n} page{}{})",
+        if n == 1 { "" } else { "s" },
+        if checks { ", with checks" } else { "" }
+    )
+}
+
+/// Whether a sheet is the design checks page the PDF appends.
+fn is_checks_page(name: &str) -> bool {
+    name.starts_with("Design check")
+}
+
+/// A sheet name that fits under its thumbnail.
+fn short_name(name: &str) -> String {
+    if is_checks_page(name) {
+        return "Checks".into();
+    }
+    if name.chars().count() <= 8 {
+        name.to_owned()
+    } else {
+        format!("{}…", name.chars().take(7).collect::<String>())
     }
 }
 
@@ -842,22 +891,50 @@ fn preview_area(
                     );
                     let painter = ui.painter_at(r);
                     painter.rect_filled(paper, 1.0, Color32::WHITE);
+                    // The sheet itself, small: lines and rectangles only,
+                    // drawn when the thumbnail is in view.
+                    let sheet_origin = paper.min + vec2(p.offset.0, p.offset.1) * scale;
                     let sheet_rect = Rect::from_min_size(
-                        paper.min + vec2(p.offset.0, p.offset.1) * scale,
+                        sheet_origin,
                         vec2(state.sheets[i].size_mm.0, state.sheets[i].size_mm.1)
                             * p.scale
                             * scale,
                     )
                     .intersect(paper);
-                    painter.rect_filled(
-                        sheet_rect,
-                        0.0,
-                        if p.cut_off {
-                            palette.warning.gamma_multiply(0.45)
-                        } else {
-                            Color32::from_gray(205)
-                        },
-                    );
+                    if p.cut_off {
+                        painter.rect_filled(sheet_rect, 0.0, palette.warning.gamma_multiply(0.3));
+                    }
+                    if ui.is_rect_visible(r) {
+                        let thumb = painter.with_clip_rect(sheet_rect);
+                        let k = p.scale * scale;
+                        let map = |q: Vec2| sheet_origin + vec2(q.x, q.y) * k;
+                        let ink = |c: novo_canvas::Color| {
+                            let [r, g, b, a] = c.0;
+                            Color32::from_rgba_unmultiplied(r, g, b, a)
+                        };
+                        let drawn = state.sheets[i]
+                            .ops
+                            .iter()
+                            .any(|op| matches!(op, DrawOp::Primitive(_)));
+                        for op in &state.sheets[i].ops {
+                            match op {
+                                DrawOp::Primitive(prim) => {
+                                    paint_primitive(&thumb, prim, &map, k, &ink);
+                                }
+                                // A text-only page (the checks) shows its
+                                // lines as grey strokes.
+                                DrawOp::Label(l) if !drawn => {
+                                    let from = map(l.pos);
+                                    let len = l.text.chars().count() as f32 * l.height * 0.55 * k;
+                                    thumb.line_segment(
+                                        [from, from + vec2(len, 0.0)],
+                                        Stroke::new(1.0, Color32::from_gray(150)),
+                                    );
+                                }
+                                DrawOp::Label(_) => {}
+                            }
+                        }
+                    }
                     let selected = i == index;
                     painter.rect_stroke(
                         paper,
@@ -875,7 +952,7 @@ fn preview_area(
                     painter.text(
                         Pos2::new(r.center().x, r.max.y - 2.0),
                         egui::Align2::CENTER_BOTTOM,
-                        &state.sheets[i].name,
+                        short_name(&state.sheets[i].name),
                         egui::FontId::proportional(10.0),
                         ui.visuals().text_color(),
                     );
@@ -1230,6 +1307,14 @@ impl NovoApp {
     pub(super) fn print_preview_export_all_sets(&mut self) -> Vec<PathBuf> {
         self.with_preview(|app, s| app.export_every_plot_set(s))
             .unwrap_or_default()
+    }
+
+    pub(super) fn print_preview_save_label(&mut self) -> Option<String> {
+        self.with_preview(|_, s| save_label(s))
+    }
+
+    pub(super) fn print_preview_set_checks(&mut self, on: bool) {
+        self.with_preview(|_, s| s.checks = on);
     }
 
     pub(super) fn print_preview_show_workshop(&mut self) {

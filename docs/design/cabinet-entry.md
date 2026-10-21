@@ -65,3 +65,8 @@ outside it are what turn the remaining estimates exact; the window says so.
    meaning was corrected in step 3 after review).
 3. Cable length as bought, wire outside the entry, empty location is unknown,
    Autopilot entry row (this step).
+4. The entry and the runs in the 3D view: the entry is marked on the plate, a
+   wire drawn to it shows where it leaves, and the Run card says how the
+   length was found (done,
+   `handoff/cable-3d/`). The outside part stays a stated length and is not
+   drawn.

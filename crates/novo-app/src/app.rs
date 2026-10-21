@@ -176,6 +176,8 @@ mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;
 mod terminals;
+#[cfg(test)]
+mod test_wait;
 mod tidy;
 mod tips;
 mod title_revisions;
@@ -203,6 +205,9 @@ mod view3d_place;
 mod view3d_rail;
 #[cfg(test)]
 mod view3d_rail_tests;
+mod view3d_runs;
+#[cfg(test)]
+mod view3d_runs_tests;
 mod view3d_stats;
 mod view3d_surface_devices;
 #[cfg(test)]
