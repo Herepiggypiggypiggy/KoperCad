@@ -15,6 +15,35 @@ use super::{Level, NovoApp, TOAST_INFO};
 /// Height of the bar.
 pub(super) const STATUS_BAR: f32 = 22.0;
 
+/// A refusal longer than this is also shown in full, wrapped, above the bar:
+/// the bar cuts its text to half its width.
+const REFUSAL_CARD_FROM: usize = 60;
+
+/// Id of the card that carries a long refusal in full.
+pub(super) fn refusal_card_id() -> egui::Id {
+    egui::Id::new("refusal_card")
+}
+
+fn refusal_card(ctx: &egui::Context, text: &str) {
+    let palette = crate::theme::ui_palette();
+    egui::Area::new(refusal_card_id())
+        .order(egui::Order::Foreground)
+        .interactable(false)
+        .anchor(
+            egui::Align2::LEFT_BOTTOM,
+            egui::vec2(8.0, -(STATUS_BAR + 8.0)),
+        )
+        .show(ctx, |ui| {
+            egui::Frame::popup(ui.style()).show(ui, |ui| {
+                ui.set_max_width(520.0);
+                ui.label(
+                    egui::RichText::new(format!("{} {text}", novo_theme::icons::status::WARNING))
+                        .color(palette.error),
+                );
+            });
+        });
+}
+
 /// A mode that is on, with the command that turns it off.
 struct ModeChip {
     label: &'static str,
@@ -158,6 +187,9 @@ impl NovoApp {
             });
         for (id, rect, label) in spots {
             self.anchor(id, rect, label);
+        }
+        if tool.refused && tool.text.chars().count() > REFUSAL_CARD_FROM {
+            refusal_card(ui.ctx(), &tool.text);
         }
         if let Some(command) = run {
             self.wb.queued.push(command);
@@ -326,5 +358,34 @@ mod tests {
         assert_eq!(chips[0].command, "view.toggle_marks");
         // Every chip's command is a registered command.
         assert!(novo_workflow::commands::is_known(chips[0].command));
+    }
+}
+
+#[cfg(test)]
+mod refusal_tests {
+    use super::super::gate1_tests::Drive;
+    use crate::actions::Action;
+    use eframe::egui;
+
+    #[test]
+    fn a_long_refusal_is_read_in_full_above_the_status_bar() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        let layer = egui::LayerId::new(egui::Order::Foreground, super::refusal_card_id());
+        let shown = |ctx: &egui::Context| ctx.memory(|m| m.areas().visible_last_frame(&layer));
+        d.frame();
+        assert!(!shown(&ctx), "no refusal, no card");
+        let long = "x".repeat(90);
+        let view = d.app.canvas.schematic().unwrap();
+        assert!(!view.editor.begin_place(&long, None));
+        d.frame();
+        d.frame();
+        assert!(
+            shown(&ctx),
+            "a long refusal gets a card with the whole text"
+        );
     }
 }
