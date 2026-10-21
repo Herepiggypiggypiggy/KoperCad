@@ -307,6 +307,18 @@ impl NovoApp {
             device.is_some() || self.wb.inspector.pinned,
             0.15,
         );
+        // The card floats over the sheet: tell the canvas how much of its
+        // edge it takes so a view of the whole sheet is fitted beside it.
+        let card = INSPECTOR_WIDTH + 2.0 * MARGIN;
+        let room = match device {
+            Some(_) if self.selection_under_inspector(canvas, &selection) => [card, 0.0],
+            Some(_) => [0.0, card],
+            None if self.wb.inspector.pinned => [0.0, card],
+            None => [0.0, 0.0],
+        };
+        if let Some(view) = self.canvas.schematic() {
+            view.canvas.card_room = room;
+        }
         if device.is_none() && self.wire_panel(ctx, canvas) {
             return;
         }

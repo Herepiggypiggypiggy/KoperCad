@@ -1,0 +1,13 @@
+@title Inspector at 1920x1080: the sheet stays clear of the card
+@area Schematic
+@sizes 1920x1080
+click_text "Open example"
+wait 30
+shot before-select
+click 585 312
+wait 40
+shot device-selected
+key Escape
+wait 40
+shot deselected
+check_layout
