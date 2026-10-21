@@ -80,6 +80,11 @@ struct Shown {
     plan: Plan,
 }
 
+/// Why the Number button cannot be pressed, when it cannot.
+pub(super) fn number_blocked(plan: &novo_numbering::Plan) -> Option<&'static str> {
+    plan.is_empty().then_some("Nothing to change")
+}
+
 impl NovoApp {
     /// Opens the window; `mode` and `tab` decide what it shows first.
     pub(super) fn open_numbering(&mut self, mode: Mode, tab: Tab) {
@@ -395,12 +400,15 @@ impl NovoApp {
                         Mode::Renumber => "Renumber",
                         _ => "Number",
                     };
-                    let can = !shown.plan.is_empty();
-                    if ui
-                        .add_enabled_ui(can, |ui| novo_theme::widgets::primary_button(ui, label))
-                        .inner
-                        .clicked()
-                    {
+                    // The accent fill would hide the disabled look, so a plan with nothing to do
+                    // draws a plain disabled button that says why.
+                    let number = match number_blocked(&shown.plan) {
+                        None => novo_theme::widgets::primary_button(ui, label),
+                        Some(why) => ui
+                            .add_enabled(false, egui::Button::new(label))
+                            .on_disabled_hover_text(why),
+                    };
+                    if number.clicked() {
                         apply = true;
                     }
                     if ui

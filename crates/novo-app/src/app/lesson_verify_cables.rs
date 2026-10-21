@@ -94,6 +94,27 @@ impl Lv {
             .1;
         self.click_screen(rect.center());
     }
+    /// Whether the control with this visible label is drawn disabled.
+    pub fn is_disabled(&mut self, label: &str) -> bool {
+        self.frames(1);
+        self.d.ctx.enable_accesskit();
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1600.0, 900.0),
+            )),
+            ..Default::default()
+        };
+        let app = &mut self.d.app;
+        let out = self.d.ctx.run_ui(input, |ui| app.show(ui));
+        let update = out.platform_output.accesskit_update.expect("accesskit");
+        let (_, node) = update
+            .nodes
+            .iter()
+            .find(|(_, n)| n.label() == Some(label))
+            .unwrap_or_else(|| panic!("no control labelled `{label}`"));
+        node.is_disabled()
+    }
     pub fn has_label(&mut self, label: &str) -> bool {
         self.widgets().iter().any(|(l, _)| l == label)
     }
@@ -514,6 +535,44 @@ fn numbers_by_wire(
             (format!("{} > {}", n(w.from), n(w.to)), w.number.clone())
         })
         .collect()
+}
+
+#[test]
+fn the_number_button_is_disabled_when_there_is_nothing_to_change() {
+    let mut lv = Lv::start("wire-numbers");
+    lv.palette("wire numbering");
+    assert!(lv.d.app.wb.numbering.is_some());
+    assert!(!lv.is_disabled("Number"), "seven nets still have no number");
+    assert_eq!(
+        super::numbering::number_blocked(&novo_numbering::plan(
+            lv.project(),
+            &novo_numbering::Scheme::load(lv.project()),
+            novo_numbering::Mode::Fill,
+            &novo_numbering::Scope::Project,
+        )),
+        None
+    );
+    lv.click_label("Close window");
+    lv.palette("number wires");
+    lv.palette("wire numbering");
+    assert!(lv.is_disabled("Number"), "every net is numbered");
+    assert_eq!(
+        super::numbering::number_blocked(&novo_numbering::plan(
+            lv.project(),
+            &novo_numbering::Scheme::load(lv.project()),
+            novo_numbering::Mode::Fill,
+            &novo_numbering::Scope::Project,
+        )),
+        Some("Nothing to change"),
+        "the button says why"
+    );
+    let depth = lv.d.doc().undo_depth();
+    lv.click_label("Number");
+    assert_eq!(
+        lv.d.doc().undo_depth(),
+        depth,
+        "a disabled button does nothing"
+    );
 }
 
 #[test]
