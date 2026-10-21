@@ -1,7 +1,7 @@
-@title 3D view: heat slice through the cabinet ducts, finished run
+@title 3D view: Z slice past the cabinet ducts after a finished Quick run
 @area 3D
 @slow
-# The example cabinet has horizontal wire ducts; the Z slice must run unbroken through and past them. Waits until the run has finished.
+# Finished-run picture of the example cabinet (horizontal wire ducts, 60 mm high) with the Z slice at 62.5 mm, just past the duct tops: the slice must show no holes where the ducts stand. The picture is for a human; the hole count itself is tested in heat_duct_slice_tests. Needs a release build to finish in minutes.
 click_text "Open example"
 wait 20
 click_text 3D #1
@@ -93,7 +93,8 @@ wait 1000
 wait 1000
 wait 1000
 wait 1000
-try expect_not "Preliminary"
+expect "Fine. Hottest"
+expect_not "Preliminary"
 move 700 650
 wait 10
 shot heat-finished-slice
