@@ -88,6 +88,12 @@ fn a_locked_page_refuses_edits_until_unlocked() {
     // A new page is open; unlocking opens the old one; the whole step undoes.
     let new_page = f.doc.transact("p", |tx| tx.add_page("3")).unwrap().0;
     text(&mut f.doc, new_page, "fine");
+    // Work elsewhere in the project goes on: devices, new pages.
+    f.doc
+        .transact("d", |tx| {
+            tx.add_device(DeviceTag::parse("-Q9").unwrap(), "added after the issue")
+        })
+        .unwrap();
     f.doc
         .execute(Command::UnlockPage { page: f.page1 })
         .unwrap();

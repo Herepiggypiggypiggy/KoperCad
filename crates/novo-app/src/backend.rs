@@ -29,6 +29,8 @@ pub enum BackendError {
     NoNextIndex,
     /// The project is open read-only; saving over its file is refused.
     ReadOnly,
+    /// The revision was issued but its pages could not be locked.
+    IssuedNotLocked(ModelError),
 }
 
 impl fmt::Display for BackendError {
@@ -37,6 +39,10 @@ impl fmt::Display for BackendError {
             BackendError::Unavailable(what) => write!(f, "{what} is not available yet"),
             BackendError::Model(e) => write!(f, "{e}"),
             BackendError::Storage(e) => write!(f, "{e}"),
+            BackendError::IssuedNotLocked(e) => write!(
+                f,
+                "the revision was issued, but locking the pages failed ({e}); lock them from File > Revisions"
+            ),
             BackendError::NoNextIndex => {
                 write!(f, "no index follows the latest revision, type one")
             }
@@ -68,6 +74,7 @@ impl From<novo_revisions::IssueError> for BackendError {
             novo_revisions::IssueError::NoIndex => BackendError::NoNextIndex,
             novo_revisions::IssueError::Model(e) => BackendError::Model(e),
             novo_revisions::IssueError::Storage(e) => BackendError::Storage(e),
+            novo_revisions::IssueError::LockFailed(e) => BackendError::IssuedNotLocked(e),
         }
     }
 }

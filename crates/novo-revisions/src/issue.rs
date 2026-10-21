@@ -21,6 +21,10 @@ pub enum IssueError {
     /// issue (the orphan snapshot is dropped on the next open).
     #[error(transparent)]
     Storage(#[from] StorageError),
+    /// The revision was issued, but locking the pages failed; lock them
+    /// from File > Revisions > Lock page.
+    #[error("the revision was issued, but locking the pages failed: {0}")]
+    LockFailed(ModelError),
 }
 
 /// What an issue did.
@@ -118,12 +122,14 @@ fn issue(
     let mut changes = outcome.changes.clone();
     if lock {
         let pages: Vec<_> = doc.project().pages().map(|p| p.id).collect();
-        let (_, locked) = doc.amend_last("Lock released pages", |tx| {
-            for page in pages {
-                tx.lock_page(page, index.clone())?;
-            }
-            Ok(())
-        })?;
+        let (_, locked) = doc
+            .amend_last("Lock released pages", |tx| {
+                for page in pages {
+                    tx.lock_page(page, index.clone())?;
+                }
+                Ok(())
+            })
+            .map_err(IssueError::LockFailed)?;
         session.record(&locked);
         changes.merge(&locked);
     }

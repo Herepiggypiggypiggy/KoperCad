@@ -140,7 +140,7 @@ impl NovoApp {
             ui.add_space(6.0);
             ui.checkbox(&mut draft.lock, "Lock the released pages")
                 .on_hover_text(
-                    "Locked pages refuse edits until File > Revisions > Unlock page, \
+                    "Locked pages refuse edits to their drawing until File > Revisions > Unlock page (reports and parts are not locked), \
                      and Restore brings a locked page back as issued",
                 );
             ui.add_space(2.0);
@@ -208,6 +208,9 @@ impl NovoApp {
             Err(BackendError::Model(e)) => {
                 draft.error = Some(e.to_string());
                 self.wb.issue = Some(draft);
+            }
+            Err(e @ BackendError::IssuedNotLocked(_)) => {
+                self.message(Level::Error, e.to_string());
             }
             Err(e) => {
                 self.message(Level::Error, format!("Could not issue the revision: {e}"));
