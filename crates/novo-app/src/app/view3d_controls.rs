@@ -198,8 +198,8 @@ pub(super) fn toolbar(
                         &mut controls.duct_fill,
                         "Duct fill",
                         "Tint each duct by how full the routed wires leave it: green up to 80 % \
-                         of the allowed fill, amber above, red over the limit, grey for a duct \
-                         nothing runs in or without a cross-section. The figure is the routing \
+                         of the allowed fill, amber above, red over the limit. A duct nothing runs in \
+                         keeps its normal colour; grey means the duct has no cross-section yet. The figure is the routing \
                          engine's (wire section and the project's fill limit).",
                     );
                     toggle(
