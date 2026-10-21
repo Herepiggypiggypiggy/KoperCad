@@ -889,3 +889,35 @@ fn a_panel_chip_names_the_lesson_for_its_topic_and_steps_aside_when_it_runs() {
     d.frame();
     assert!(d.app.learn.chip("terminals").is_none(), "the card is on it");
 }
+
+#[test]
+fn open_finished_version_opens_the_finished_drawing_on_the_last_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("placing-parts");
+    d.frame();
+    assert!(
+        !d.app.card().unwrap().can_open_finished,
+        "not offered on the first step"
+    );
+    let steps = d.app.learn.run.as_ref().unwrap().progress().1;
+    for _ in 1..steps {
+        d.app.learn_move(super::learn::Move::Skip);
+    }
+    d.frame();
+    assert!(
+        d.app.card().unwrap().can_open_finished,
+        "offered at the end"
+    );
+    assert!(d.app.learn_open_finished());
+    d.frame();
+    assert!(d.app.learn.run.is_none(), "the lesson ends");
+    assert!(
+        d.doc().project().info().name.starts_with("Finished:"),
+        "{}",
+        d.doc().project().info().name
+    );
+    assert!(d.doc().project().symbols().count() > 0);
+}
