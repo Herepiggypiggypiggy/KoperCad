@@ -47,11 +47,22 @@ fn refusal_card(ctx: &egui::Context, canvas: egui::Rect, text: &str) {
         });
 }
 
+/// The chip text for the machine's choice, cut to a length the bar can keep.
+fn machine_chip_label(summary: &str) -> String {
+    const MOST: usize = 36;
+    let text = format!("Options: {summary}");
+    if text.chars().count() <= MOST {
+        return text;
+    }
+    let cut: String = text.chars().take(MOST - 1).collect();
+    format!("{}…", cut.trim_end())
+}
+
 /// A mode that is on, with the command that turns it off.
 struct ModeChip {
     label: String,
     command: &'static str,
-    hover: &'static str,
+    hover: String,
 }
 
 impl NovoApp {
@@ -181,7 +192,7 @@ impl NovoApp {
                             )
                             .fill(crate::theme::ui_palette().control)
                             .small();
-                            if ui.add(button).on_hover_text(chip.hover).clicked() {
+                            if ui.add(button).on_hover_text(&chip.hover).clicked() {
                                 run = Some(chip.command);
                             }
                         }
@@ -284,6 +295,18 @@ impl NovoApp {
     /// The modes that are on, each with the command that switches it off.
     fn mode_chips(&self) -> Vec<ModeChip> {
         let mut chips = Vec::new();
+        // The machine's choice is shown wherever the documents come from.
+        if let Some(info) = self.machine_info() {
+            chips.push(ModeChip {
+                label: machine_chip_label(&info.summary),
+                command: "project.options",
+                hover: format!(
+                    "Machine options: {}\n{}\nClick to change them",
+                    info.summary,
+                    info.left_out()
+                ),
+            });
+        }
         if self.workspace() != Workspace::Schematic {
             return chips;
         }
@@ -291,14 +314,14 @@ impl NovoApp {
             chips.push(ModeChip {
                 label: "Marks hidden".into(),
                 command: "view.toggle_marks",
-                hover: "Show the marks again",
+                hover: "Show the marks again".into(),
             });
         }
         if self.wb.live.on {
             chips.push(ModeChip {
                 label: "Live".into(),
                 command: "sim.live",
-                hover: "Switch live potentials off",
+                hover: "Switch live potentials off".into(),
             });
         }
         if let Some(locked) = self
@@ -308,14 +331,14 @@ impl NovoApp {
             chips.push(ModeChip {
                 label: format!("{} Page locked ({locked})", novo_theme::icons::LOCK_SIMPLE),
                 command: "revision.unlock_page",
-                hover: "This page is locked with the issued revision. Click to unlock it",
+                hover: "This page is locked with the issued revision. Click to unlock it".into(),
             });
         }
         if self.wb.changes.is_some() {
             chips.push(ModeChip {
                 label: "Changes".into(),
                 command: "view.changes",
-                hover: "Leave Changes mode",
+                hover: "Leave Changes mode".into(),
             });
         }
         chips

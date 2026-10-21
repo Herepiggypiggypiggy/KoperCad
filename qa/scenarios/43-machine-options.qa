@@ -1,0 +1,48 @@
+@title Machine options: the documents follow the switch
+@area Options
+# The fixture is the example motor starter plus a Cooling fan page (only with the Cooling fan option)
+# and a 480 V control transformer (only with Supply 480V). Chip in the status bar, switch from Ctrl+K,
+# reports header, Project options window with the tie buttons and the cabinet heat.
+open qa/fixtures/machine-options.novo
+wait 20
+expect "Options: no Cooling fan, Supply 400V"
+shot chip-fan-off
+check_layout
+key ctrl+k
+wait 3
+text option fan on
+wait 4
+key Enter
+wait 10
+expect "Options: Cooling fan, Supply 400V"
+shot chip-fan-on
+click_text Reports #2
+wait 20
+expect "Machine: Cooling fan, Supply 400V"
+expect "Left out of the documents: 1 device"
+shot reports-fan-on
+check_layout
+key ctrl+k
+wait 3
+text option fan off
+wait 4
+key Enter
+wait 10
+expect "Machine: no Cooling fan, Supply 400V"
+expect "Left out of the documents: 1 page, 3 devices"
+shot reports-fan-off
+check_layout
+click_text Cabinet #1
+wait 20
+shot cabinet-keeps-everything
+key ctrl+k
+wait 3
+text options
+wait 4
+key Enter
+wait 10
+expect "Project options and variants"
+expect "Tie the selection"
+expect "Heat inside the cabinets"
+shot options-window
+check_layout

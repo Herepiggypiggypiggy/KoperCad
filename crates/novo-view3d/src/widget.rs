@@ -616,6 +616,36 @@ impl View3d {
         }
     }
 
+    /// Eases to a view that frames the cabinet with the hinge `group` turned
+    /// to `angle` (radians, as `open_angle` gives it): for the moment the
+    /// door is first opened, so the open leaf is not cut off by the view; a
+    /// view that already shows it all stays as it is.
+    pub fn fit_with_door(
+        &mut self,
+        scene: &Scene,
+        group: GroupId,
+        angle: f32,
+        now: f64,
+        reduced: bool,
+    ) {
+        let open = scene.bounds_with_group_angle(group, angle);
+        // Left alone while the open door is already in view, below the toolbar.
+        let bounds = scene.bounds();
+        let inside = open.corners().iter().all(|c| {
+            self.camera
+                .project(*c, self.last_aspect, &bounds)
+                .is_some_and(|(ndc, _)| {
+                    ndc.x.abs() <= 1.0 && ndc.y >= -1.0 && ndc.y <= 1.0 - 2.0 * self.top_inset
+                })
+        });
+        if inside {
+            return;
+        }
+        let mut to = self.camera;
+        to.fit_below(&open, self.last_aspect, self.top_inset);
+        self.animate_to(to, now, reduced);
+    }
+
     /// The door angle being shown (radians), if the view drives one.
     pub fn door_angle(&self, now: f64) -> Option<f32> {
         self.door.as_ref().map(|d| d.angle(now))
