@@ -95,7 +95,7 @@ fn project_key(path: Option<&std::path::Path>) -> String {
 }
 
 /// File-name safe version of a plot set name.
-fn file_part(name: &str) -> String {
+pub(super) fn file_part(name: &str) -> String {
     name.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "-")
         .trim()
         .to_owned()
@@ -394,26 +394,12 @@ impl NovoApp {
                 );
                 continue;
             }
-            let as_state = PrintPreview {
-                tab: Tab::Sheets,
-                choice: set.print.clone(),
-                colour: set.look == "colour",
-                pick: ids.clone(),
-                pages: Vec::new(),
-                sheets: Vec::new(),
-                built_for: None,
-                current: 0,
-                set: None,
-                set_name: String::new(),
-                note: None,
-            };
-            let options = self.print_options(&as_state, &ids);
             let path = self.own_pdf_path(&dir.join(format!(
                 "{} plot {}.pdf",
                 file_part(&stem),
                 file_part(&set.name)
             )));
-            if let Some(p) = self.export_options_to(&path, &options) {
+            if let Some(p) = self.write_plot_set(set, &ids, &path) {
                 written.push(p);
             }
         }
@@ -423,6 +409,55 @@ impl NovoApp {
             if written.len() == 1 { "" } else { "s" }
         ));
         written
+    }
+
+    /// Writes one plot set's pages to `path` with the set's own setup.
+    pub(super) fn write_plot_set(
+        &mut self,
+        set: &PlotSetChoice,
+        ids: &BTreeSet<PageId>,
+        path: &std::path::Path,
+    ) -> Option<PathBuf> {
+        let as_state = PrintPreview {
+            tab: Tab::Sheets,
+            choice: set.print.clone(),
+            colour: set.look == "colour",
+            pick: ids.clone(),
+            pages: Vec::new(),
+            sheets: Vec::new(),
+            built_for: None,
+            current: 0,
+            set: None,
+            set_name: String::new(),
+            note: None,
+        };
+        let options = self.print_options(&as_state, ids);
+        self.export_options_to(path, &options)
+    }
+
+    /// The saved plot sets of this project with the pages each still has, as
+    /// `(set, page ids)`; a set with no page left is dropped.
+    pub(super) fn plot_sets_with_pages(&self) -> Vec<(PlotSetChoice, BTreeSet<PageId>)> {
+        let Some(doc) = self.backend.document() else {
+            return Vec::new();
+        };
+        let pages: Vec<(PageId, String)> = doc
+            .project()
+            .pages_in_order()
+            .iter()
+            .map(|p| (p.id, p.name.to_string()))
+            .collect();
+        self.plot_sets()
+            .into_iter()
+            .filter_map(|set| {
+                let ids: BTreeSet<PageId> = pages
+                    .iter()
+                    .filter(|(_, n)| set.pages.contains(n))
+                    .map(|(id, _)| *id)
+                    .collect();
+                (!ids.is_empty()).then_some((set, ids))
+            })
+            .collect()
     }
 
     /// The plates of the workshop pack and how each is cut into pages on the
