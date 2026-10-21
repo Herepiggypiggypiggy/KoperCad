@@ -492,6 +492,27 @@ fn scope_note_explains_fewer_numbers_than_wires() {
     let joined = plan(doc.project(), &scheme, Mode::Fill, &Scope::Project);
     assert_eq!(
         joined.scope_note(),
-        "2 numbers for 4 wires: wires joined at a device or terminal share one number."
+        "2 numbers for 4 wires: wires joined at a terminal, junction or shared pin share one number."
     );
+}
+
+#[test]
+fn scope_note_is_singular_for_one_wire() {
+    let mut doc = Document::default();
+    doc.transact("Draw", |tx| {
+        let page = tx.add_page("1")?;
+        let k = tx.add_device(tag("-K1"), "Contactor")?;
+        let m = tx.add_device(tag("-M1"), "Motor")?;
+        let a = block(tx, page, k, 40.0, 20.0)?;
+        let b = block(tx, page, m, 40.0, 100.0)?;
+        tx.connect(Endpoint::pin(a, 0), Endpoint::pin(b, 0))
+    })
+    .unwrap();
+    let p = plan(
+        doc.project(),
+        &Scheme::new(SchemeKind::Sequential),
+        Mode::Fill,
+        &Scope::Project,
+    );
+    assert_eq!(p.scope_note(), "1 wire, one number each.");
 }

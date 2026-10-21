@@ -30,6 +30,8 @@ const TABLE: &str = "Planning values you can edit";
 
 /// Row height of the tick tables, mm.
 const ROW_MM: f64 = 8.0;
+/// Row height of the cover facts, in mm.
+const COVER_FACT_ROW_MM: f64 = 4.5;
 
 /// The parts of a packet in order, each with its first section's place in
 /// the whole.
@@ -76,7 +78,7 @@ impl NovoApp {
                 "Drilling templates, plate full size",
                 "Workshop pack",
                 "Print at 100 % (actual size)",
-                "Hole positions from the cabinet layout; about 0.5 mm on paper (not measured)",
+                "Hole positions from the cabinet layout; about 0.5 mm if the check square is 100 mm, else up to 0.2 % (not measured)",
             ),
             CoverLine::new(
                 "Labels",
@@ -204,7 +206,12 @@ impl NovoApp {
                 Some(r) => format!("Revision {}", r.index),
                 None => "No revision issued".to_owned(),
             },
-            row_mm: keys(cover).into_iter().map(|k| (k, ROW_MM)).collect(),
+            // The facts are single lines: closer rows keep the whole cover, notes included, on page 1.
+            row_mm: keys(cover)
+                .into_iter()
+                .map(|k| (k, ROW_MM))
+                .chain([("facts".to_owned(), COVER_FACT_ROW_MM)])
+                .collect(),
             language: language.clone(),
             ..novo_pdf::ReportPdfOptions::default()
         };

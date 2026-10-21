@@ -7,6 +7,7 @@
 pub mod assembly;
 pub mod check;
 pub mod collide;
+pub mod cutout_cards;
 pub mod drill;
 pub mod enclosure;
 pub mod model;

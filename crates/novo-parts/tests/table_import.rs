@@ -382,3 +382,81 @@ fn oversized_tables_are_refused_in_words() {
     let err = TableFile::read("x.csv", rows.as_bytes()).unwrap_err();
     assert!(err.to_string().contains("rows"), "{err}");
 }
+
+#[test]
+fn a_workbook_starts_on_the_sheet_that_has_an_order_number_column() {
+    let sheet = |name: &str, rows: &[&[&str]]| Sheet {
+        name: name.into(),
+        rows: rows
+            .iter()
+            .map(|r| r.iter().map(|c| c.to_string()).collect())
+            .collect(),
+        lines: Vec::new(),
+    };
+    let file = TableFile {
+        name: "list.xlsx".into(),
+        sheets: vec![
+            sheet("Cover", &[&["Contents only"]]),
+            sheet(
+                "Contactors",
+                &[&["Maker", "Order number"], &["Example Maker", "EX-1"]],
+            ),
+        ],
+    };
+    assert_eq!(file.first_sheet(), 0);
+    assert_eq!(file.best_sheet(), 1);
+    // No sheet has one: the first with rows, as before.
+    let none = TableFile {
+        name: "n.xlsx".into(),
+        sheets: vec![sheet("A", &[&["x"]]), sheet("B", &[&["y"]])],
+    };
+    assert_eq!(none.best_sheet(), 0);
+}
+
+#[test]
+fn excel_unicode_text_is_read_and_a_binary_file_is_refused() {
+    let text = "Maker\tOrder number\nExample Maker\tEX-1\n";
+    let mut bytes = vec![0xFF, 0xFE];
+    for u in text.encode_utf16() {
+        bytes.extend(u.to_le_bytes());
+    }
+    let file = TableFile::read("unicode.txt", &bytes).unwrap();
+    assert_eq!(file.sheets[0].rows[1], vec!["Example Maker", "EX-1"]);
+    let junk: Vec<u8> = (0..2000u32).map(|i| (i * 37 % 251) as u8).collect();
+    assert_eq!(TableFile::read("p.csv", &junk), Err(TableError::NotText));
+}
+
+#[test]
+fn a_price_header_with_a_currency_after_it_is_the_price() {
+    let sheet = csv_sheet("Maker;Order number;Price EUR;Preis USD\nExample Maker;EX-1;12,5;13\n");
+    let mapping = Mapping::suggest(&sheet, 0);
+    assert_eq!(target_of(&mapping, "Price EUR"), &Target::Price);
+    // The second price column is kept as data, nothing is overwritten.
+    assert_ne!(target_of(&mapping, "Preis USD"), &Target::Price);
+}
+
+#[test]
+fn an_order_number_that_excel_turned_into_a_power_of_ten_is_not_imported() {
+    let sheet = csv_sheet("Maker;Order number\nExample Maker;1,23E+11\nExample Maker;EX-2\n");
+    let mapping = Mapping::suggest(&sheet, 0);
+    let p = preview(&sheet, &mapping);
+    assert_eq!(p.parts.len(), 1, "{:#?}", p.rows);
+    assert_eq!(p.parts[0].order_number, "EX-2");
+    assert!(
+        p.rows[0]
+            .issues
+            .iter()
+            .any(|i| i.message.contains("power of ten") && i.message.contains("not imported"))
+    );
+}
+
+#[test]
+fn plain_order_numbers_that_look_like_exponents_are_imported() {
+    let sheet = csv_sheet(
+        "Maker;Order number\nExample Maker;3E10\nExample Maker;2E4\nExample Maker;100E3\nExample Maker;1.23457E+11\n",
+    );
+    let mapping = Mapping::suggest(&sheet, 0);
+    let p = preview(&sheet, &mapping);
+    let orders: Vec<&str> = p.parts.iter().map(|p| p.order_number.as_str()).collect();
+    assert_eq!(orders, ["3E10", "2E4", "100E3"], "{:#?}", p.rows);
+}

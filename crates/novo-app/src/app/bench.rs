@@ -71,6 +71,8 @@ pub(super) struct BenchState {
     pub(super) labels: LabelSettings,
     cache: Option<Cache>,
     defaults: DefaultsDraft,
+    /// The sides of the printed check square as typed, mm.
+    check: [String; 3],
 }
 
 impl BenchState {
@@ -84,6 +86,7 @@ impl BenchState {
                 colour: "BK".into(),
                 ..DefaultsDraft::default()
             },
+            check: [String::new(), String::new(), "100".into()],
         }
     }
 }
@@ -455,7 +458,7 @@ impl NovoApp {
                     super::autopilot::meter(ui, ready);
                     ui.add_space(6.0);
                 }
-                workshop_strip(ui, &mut paper, &mut action);
+                workshop_strip(ui, &mut paper, &mut state.check, &mut action);
                 ui.add_space(6.0);
                 readiness_strip(ui, &ready, &mut action);
                 let mut tab = match state.tab {
@@ -483,6 +486,9 @@ impl NovoApp {
                 self.export_workshop();
             }
             Some(Act::PreviewWorkshop) => self.open_print_preview_workshop(),
+            Some(Act::ExportScaleCheck) => {
+                self.export_scale_check();
+            }
             Some(Act::ExportPacket) => {
                 self.export_bench_packet();
             }
@@ -521,6 +527,7 @@ enum Act {
     /// A fix button of the readiness strip: runs this command.
     Run(&'static str),
     ExportWorkshop,
+    ExportScaleCheck,
     ExportPacket,
     PreviewWorkshop,
     ExportCut,
@@ -537,6 +544,7 @@ enum Act {
 fn workshop_strip(
     ui: &mut egui::Ui,
     paper: &mut novo_layout::template::Paper,
+    check: &mut [String; 3],
     act: &mut Option<Act>,
 ) {
     use novo_layout::template::Paper;
@@ -566,6 +574,7 @@ fn workshop_strip(
             *act = Some(Act::ExportPacket);
         }
     });
+    print_check(ui, check, act);
     ui.weak("The Workshop pack puts a bench packet (cover, build order, cut list, ferrules, a tick sheet per schematic page, terminal plans), the 1:1 drilling templates and the labels in one folder next to the project.");
 }
 
@@ -1236,4 +1245,45 @@ fn tape_fields(ui: &mut egui::Ui, t: &mut TapeStock) {
         }
     });
     ui.weak("One label per page, as wide as the tape. Print it from the printer's driver at the tape size.");
+}
+
+/// Parses a length typed in millimetres; a comma works as the decimal mark.
+fn typed_mm(text: &str) -> Option<f64> {
+    text.trim().replace(',', ".").parse().ok()
+}
+
+/// The print check: the page to print first, and what to do with the sides
+/// of its square once measured.
+fn print_check(ui: &mut egui::Ui, check: &mut [String; 3], act: &mut Option<Act>) {
+    ui.horizontal_wrapped(|ui| {
+        if ui
+            .button("Print scale check (PDF)")
+            .on_hover_text(super::SCALE_CHECK_HINT)
+            .clicked()
+        {
+            *act = Some(Act::ExportScaleCheck);
+        }
+        ui.label("Printed square measures");
+        for (i, text) in check.iter_mut().take(2).enumerate() {
+            ui.add(
+                egui::TextEdit::singleline(text)
+                    .desired_width(48.0)
+                    .hint_text(if i == 0 { "width" } else { "height" }),
+            );
+            ui.label(if i == 0 { "x" } else { "mm" });
+        }
+        ui.label("printed at");
+        ui.add(egui::TextEdit::singleline(&mut check[2]).desired_width(40.0));
+        ui.label("%");
+    });
+    if let (Some(w), Some(h), Some(at)) = (
+        typed_mm(&check[0]),
+        typed_mm(&check[1]),
+        typed_mm(&check[2]),
+    ) {
+        let advice = novo_layout::cutout_cards::scale_advice(w, h, at);
+        ui.label(advice.sentence());
+    } else if !check[0].trim().is_empty() || !check[1].trim().is_empty() {
+        ui.weak("Type both sides of the square in millimetres and the scale you printed at.");
+    }
 }
