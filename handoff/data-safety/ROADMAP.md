@@ -13,7 +13,7 @@ Next, in order:
 1. Salvage a damaged recovery (`.autosave`) file: today it is set aside as `.autosave.broken`; salvage could read work back from it.
 2. Salvage fallback folder when the project's folder is write-protected (today: error).
 3. Real-kill test of a 600-page save (compat_v0_1 does it for a small project).
-4. Autosave while background check jobs run: jobs read a project snapshot; no test drives the app loop with a job in flight.
+4. DONE (round 3): autosave while background check jobs run, app-loop tests.
 5. Fixtures written by older released builds, once releases exist (0.1 golden only).
 
 Open questions: none for the owner.

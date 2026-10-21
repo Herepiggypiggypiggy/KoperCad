@@ -12,7 +12,7 @@ Scope: a generated power distribution single-line diagram, derived from the proj
 1. CLI export (`kopercad-cli export single-line`).
 2. Single-phase circuits whose only load is not a motor, heater, drive, transformer or power supply are not drawn yet.
 3. Diversity factors (today: plain sum, said on the drawing).
-4. Short-circuit current along the run (today: the stated supply Ik at every device).
+4. Short-circuit current along the run: DONE in the follow-up PR (Ik at each box from the supply through the cables; ceiling where data is missing; not carried past a converter; Icu check). Still open: motor contribution, busbar impedance, minimum Ik for disconnection.
 5. Verify ampacity tables and IEC 60204-1 clause numbers against a licensed copy (Tadjiro).
 
 ## Open questions
