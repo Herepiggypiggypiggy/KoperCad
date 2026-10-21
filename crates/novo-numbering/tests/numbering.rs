@@ -477,3 +477,21 @@ fn a_net_on_a_revision_locked_page_is_left_alone_and_reported() {
     // Unnumbered nets still show up as conflicts so they are not forgotten.
     assert!(!p.conflicts.is_empty());
 }
+
+#[test]
+fn scope_note_explains_fewer_numbers_than_wires() {
+    let mut doc = Document::default();
+    let (s, _) = doc.transact("Draw", scene).unwrap();
+    let scheme = Scheme::new(SchemeKind::Sequential);
+    let plain = plan(doc.project(), &scheme, Mode::Fill, &Scope::Project);
+    assert_eq!(plain.scope_note(), "3 wires, one number each.");
+    doc.transact("Bridge", |tx| {
+        tx.connect(Endpoint::pin(s.k1, 0), Endpoint::pin(s.k1, 1))
+    })
+    .unwrap();
+    let joined = plan(doc.project(), &scheme, Mode::Fill, &Scope::Project);
+    assert_eq!(
+        joined.scope_note(),
+        "2 numbers for 4 wires: wires joined at a device or terminal share one number."
+    );
+}
