@@ -1,0 +1,33 @@
+@title Reopen fit: a saved project reopened, and Home, show the whole page
+@area Schematic
+# Acceptance A-07: reopening framed the content with the page frame off screen and the
+# contact table behind the bottom toolbar; Home did not fit the page either.
+click_text "New project"
+wait 20
+key ctrl+k
+text "motor starter dol"
+wait 5
+key Enter
+wait 10
+click_text "Motor starter DOL" Label
+wait 10
+click_text Place Button #2
+wait 20
+expect_scene "-K1"
+shot placed
+answer_dialog ~/reopen-fit.kopercad
+key ctrl+s
+wait 30
+expect_file ~/reopen-fit.kopercad 1
+key ctrl+w
+wait 20
+answer_dialog ~/reopen-fit.kopercad
+key ctrl+o
+wait 40
+expect_scene "-K1"
+shot reopened
+check_layout
+key Home
+wait 30
+shot home
+check_layout

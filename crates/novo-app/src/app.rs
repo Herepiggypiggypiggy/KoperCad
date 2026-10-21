@@ -327,6 +327,8 @@ mod protection_tests;
 #[cfg(test)]
 mod read_only_tests;
 #[cfg(test)]
+mod reopen_fit_tests;
+#[cfg(test)]
 mod route_all_tests;
 #[cfg(test)]
 mod shortcuts_sheet_tests;
