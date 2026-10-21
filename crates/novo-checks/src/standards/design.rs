@@ -139,7 +139,7 @@ pub static FAMILIES: &[Family] = &[
         what: "No device in the cabinet exceeds its surface or ambient temperature limit with the stated losses and ambient.",
         kinds: &[],
         source: "The Heat simulation in the 3D view (physical heat and airflow model of the cabinet), device losses and temperature limits from the devices and parts.",
-        assumptions: "A physical model with stated numerical uncertainty, not a measurement. It judges only the layout it was run on: after the layout changes the result is out of date. Devices without loss or limit data are listed as unknown, never as fine.",
+        assumptions: "A physical model with stated numerical uncertainty, not a measurement. It describes the one cabinet it was run on, not other cabinets of the project. It judges only the layout it was run on: after the layout changes the result is out of date. Devices without loss or limit data are listed as unknown, never as fine.",
         reliance: Reliance::Model,
         fix: "Open the 3D view, switch on Heat and run it; the hot-spot list names the devices to move or cool.",
     },
@@ -381,6 +381,12 @@ fn missing(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String> 
                     "{} state no installation method (B1, B2, C) and the project has no default, so the table check cannot judge them",
                     plural(no_method, "protected wire", "protected wires")
                 ));
+            }
+        }
+        "colours" => {
+            let wires = project.wires().count();
+            if wires > 0 && project.wires().all(|w| w.color.is_none()) {
+                out.push("No wire states a colour, so no colour was judged".to_owned());
             }
         }
         "protection" => {
@@ -677,6 +683,21 @@ mod tests {
         let p = rows.iter().find(|r| r.family.id == "protection").unwrap();
         assert_eq!(p.verdict, Verdict::NotCheckable);
         assert!(p.not_checkable.iter().any(|t| t.contains("rated current")));
+    }
+
+    #[test]
+    fn a_pass_carries_its_basis_in_the_result_word() {
+        let project = Project::new("P");
+        let mut rows = rows(&project, &DesignInput::default());
+        for r in &mut rows {
+            r.verdict = Verdict::Pass;
+            let text = r.result_text();
+            match r.family.reliance {
+                Reliance::Exact => assert_eq!(text, "Pass"),
+                Reliance::Planning => assert_eq!(text, "Met (planning values)"),
+                Reliance::Model => assert_eq!(text, "Met (estimate)"),
+            }
+        }
     }
 
     #[test]

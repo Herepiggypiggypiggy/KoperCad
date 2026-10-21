@@ -429,6 +429,14 @@ fn report_path(file: Option<&Path>, dir: Option<&Path>, name: &str, ext: &str) -
     }
 }
 
+/// Whether the held Heat result may describe an older project. The live flag
+/// is only refreshed while the Cabinet or 3D view draws, so an edit made
+/// elsewhere (the schematic, a parts change) since that last frame also
+/// counts: conservative, never a pass for a layout that was not run.
+pub(super) fn heat_out_of_date(stale: bool, synced: Option<u64>, now: u64) -> bool {
+    stale || synced != Some(now)
+}
+
 impl NovoApp {
     /// The Heat result the 3D view holds, as the report states it. `None`
     /// when no run has finished in this session.
@@ -456,7 +464,11 @@ impl NovoApp {
         Some(HeatFact {
             tone,
             sentence,
-            out_of_date: self.cabinet.heat.live.is_stale(),
+            out_of_date: heat_out_of_date(
+                self.cabinet.heat.live.is_stale(),
+                self.cabinet.heat.live.synced_revision(),
+                project.revision(),
+            ),
         })
     }
 
@@ -537,6 +549,48 @@ impl NovoApp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_edit_since_the_last_heat_frame_makes_the_result_out_of_date() {
+        assert!(!heat_out_of_date(false, Some(7), 7));
+        assert!(heat_out_of_date(false, Some(7), 8));
+        assert!(heat_out_of_date(true, Some(7), 7));
+        assert!(heat_out_of_date(false, None, 7));
+    }
+
+    #[test]
+    fn an_out_of_date_heat_result_is_not_checkable_in_the_document() {
+        use novo_checks::standards::design::{HeatFact, HeatTone};
+        let fact = |out_of_date| DesignInput {
+            heat: Some(HeatFact {
+                tone: HeatTone::Fine,
+                sentence: "Fine. Hottest -F1 57 °C.".into(),
+                out_of_date,
+            }),
+            ..DesignInput::default()
+        };
+        let mut project = novo_core::Project::new("P");
+        project
+            .transact("device", |tx| {
+                tx.add_device(novo_core::DeviceTag::parse("-F1")?, "")?;
+                Ok(())
+            })
+            .unwrap();
+        let row = |input: &DesignInput| {
+            novo_checks::standards::design::rows(&project, input)
+                .into_iter()
+                .find(|r| r.family.id == "heat")
+                .unwrap()
+        };
+        assert_eq!(row(&fact(false)).verdict, Verdict::Pass);
+        let old = row(&fact(true));
+        assert_eq!(old.verdict, Verdict::NotCheckable);
+        assert!(
+            old.not_checkable
+                .iter()
+                .any(|t| t.contains("earlier layout"))
+        );
+    }
 
     #[test]
     fn wrapping_keeps_words_and_cuts_long_ones() {
