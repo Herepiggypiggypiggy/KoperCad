@@ -87,6 +87,7 @@ impl<'a> View<'a> {
              to the air."
                 .into()
         });
+        notes.extend(duct_note(scn));
         notes.extend(super::march::lost_heat_note(setup, scn));
         let base = CfdSnapshot {
             grid: cm.grid.clone(),
@@ -459,4 +460,37 @@ pub fn cell_velocity(m: &FlowMesh, vel: &[Vec<f64>; 3]) -> Vec<[f32; 3]> {
         }
     }
     out
+}
+
+/// What the result says about wire ducts: how they are modelled, at what
+/// height, and what is left out. `None` when the cabinet has no duct.
+fn duct_note(scn: &Scenario) -> Option<String> {
+    let ducts: Vec<&novo_thermal::Obstacle> = scn
+        .obstacles
+        .iter()
+        .filter(|o| o.kind == novo_thermal::ObstacleKind::Duct)
+        .collect();
+    if ducts.is_empty() {
+        return None;
+    }
+    let depth = scn.enclosure.interior_depth_mm() - scn.params.plate_thickness_mm;
+    let (lo, hi) = ducts.iter().fold((f64::MAX, 0.0f64), |(lo, hi), o| {
+        let h = o.blockage() * depth;
+        (lo.min(h), hi.max(h))
+    });
+    let height = if hi - lo < 1.0 {
+        format!("{hi:.0} mm")
+    } else {
+        format!("{lo:.0} to {hi:.0} mm")
+    };
+    Some(format!(
+        "{} wire duct{} modelled as slotted, porous block{} {height} high (about half of each \
+         side wall open, planning values, not a maker's data): air and heat pass through, the \
+         slice shows them. Slotted against closed ducts changes the device housing temperature \
+         by about 0.1 K in the reference study (tests/duct_compare.rs), a duct against none by \
+         about 1.5 K of 60 K. The heat of the wires inside the ducts is not modelled yet.",
+        ducts.len(),
+        if ducts.len() == 1 { "" } else { "s" },
+        if ducts.len() == 1 { "" } else { "s" },
+    ))
 }

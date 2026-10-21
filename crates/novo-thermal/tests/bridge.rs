@@ -2,6 +2,7 @@ use novo_core::{Command, DeviceTag, MountingPlate, Project, RailKind, StructureI
 use novo_layout::enclosure::Enclosure;
 use novo_layout::model::{place_device, set_enclosure, set_plate};
 use novo_thermal::bridge::{BridgeError, BridgeOptions, scenario_from_project};
+use novo_thermal::{ObstacleKind, Params};
 
 fn fixture() -> (Project, StructureId) {
     let mut p = Project::new("t");
@@ -240,4 +241,46 @@ fn keys_match_novo_parts() {
     assert_eq!(mine::MAX_AMBIENT_C, part::MAX_AMBIENT_C);
     assert_eq!(mine::MAX_SURFACE_C, part::MAX_SURFACE_C);
     assert_eq!(mine::DEPTH_MM, part::DEPTH_MM);
+}
+
+#[test]
+fn a_duct_stands_as_high_as_its_cross_section_says() {
+    let (mut p, cab) = fixture();
+    let air = {
+        let b = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+        // no height in the model: the width (60 mm) is used and reported
+        assert_eq!(b.report.unsized_ducts, 1);
+        assert!(b.report.messages().iter().any(|m| m.contains("no height")));
+        let s = &b.scenario;
+        let air = s.enclosure.interior_depth_mm() - Params::default().plate_thickness_mm;
+        let duct = s
+            .obstacles
+            .iter()
+            .find(|o| o.kind == ObstacleKind::Duct)
+            .unwrap();
+        assert!((duct.blockage() - 60.0 / air).abs() < 1e-9);
+        air
+    };
+    let rail = p
+        .all::<novo_core::Rail>()
+        .find(|r| r.kind == RailKind::Duct)
+        .map(|r| r.id)
+        .unwrap();
+    p.transact("size", |tx| tx.set_rail_size(rail, 500.0, 60.0, 80.0))
+        .unwrap();
+    let b = scenario_from_project(&p, cab, &BridgeOptions::default()).unwrap();
+    assert_eq!(b.report.unsized_ducts, 0);
+    let duct = b
+        .scenario
+        .obstacles
+        .iter()
+        .find(|o| o.kind == ObstacleKind::Duct)
+        .unwrap();
+    assert!(
+        (duct.blockage() - 80.0 / air).abs() < 1e-9,
+        "{}",
+        duct.blockage()
+    );
+    // far below the old typical 70 % of the air depth
+    assert!(duct.blockage() < 0.35);
 }

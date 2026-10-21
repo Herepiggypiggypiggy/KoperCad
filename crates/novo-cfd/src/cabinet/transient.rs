@@ -72,6 +72,7 @@ impl TransientSolver for CabinetSolver {
         let st = SolidsSettings {
             mesh,
             solid_speedup: 1.0,
+            duct: self.duct,
             ..SolidsSettings::default()
         };
         let mut setup =

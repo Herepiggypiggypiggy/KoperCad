@@ -52,6 +52,19 @@ impl Default for DuctModel {
     }
 }
 
+impl DuctModel {
+    /// A duct without slots: closed walls, no air share. For the comparison
+    /// with the slotted model; no real duct is this tight, and the solver
+    /// then treats it as a solid block.
+    pub fn closed() -> DuctModel {
+        DuctModel {
+            porosity: 0.0,
+            slot_free: 0.0,
+            cd: 0.6,
+        }
+    }
+}
+
 /// How the mounting plate enters the 3D model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PlateModel {

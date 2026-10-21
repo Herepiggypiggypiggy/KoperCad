@@ -37,7 +37,7 @@ use novo_thermal::Scenario;
 
 use crate::mesh::MeshSettings;
 use crate::result::{CfdSnapshot, CfdSnapshot as Snap, Fidelity};
-use crate::solids::{FlowSetup, SolidsSettings};
+use crate::solids::{DuctModel, FlowSetup, SolidsSettings};
 use crate::solver::{CfdError, Control, Solver};
 use crate::turb::{TurbModel, TurbState};
 
@@ -56,6 +56,8 @@ pub struct CabinetSolver {
     pub second_order_turbulence: bool,
     /// Surface-to-surface radiation between devices, plate and walls.
     pub radiation: RadMode,
+    /// How a wire duct is treated: a slotted (porous) duct by default.
+    pub duct: DuctModel,
 }
 
 /// Whether the cabinet solver couples radiation.
@@ -86,7 +88,15 @@ impl CabinetSolver {
             turbulence: TurbModel::Laminar,
             second_order_turbulence: false,
             radiation: RadMode::Auto,
+            duct: DuctModel::default(),
         }
+    }
+
+    /// The same solver with another duct model (slot share, porosity): the
+    /// comparison cases of the duct study use a closed duct and a free one.
+    pub fn with_duct(mut self, duct: DuctModel) -> CabinetSolver {
+        self.duct = duct;
+        self
     }
 
     /// The same solver with radiation forced on or off (the Simulate
@@ -133,6 +143,7 @@ impl Solver for CabinetSolver {
         let st = SolidsSettings {
             mesh,
             solid_speedup: lvl.solid_speedup,
+            duct: self.duct,
             ..SolidsSettings::default()
         };
         let mut setup =

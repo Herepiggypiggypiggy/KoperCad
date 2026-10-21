@@ -164,13 +164,20 @@ pub fn velocity_at(snap: &CfdSnapshot, p: [f64; 3]) -> [f32; 3] {
     v
 }
 
-/// Is the cell holding the point a solid.
+/// Is the cell holding the point a solid. A slotted wire duct is not: air
+/// and heat pass through it (the solver treats it as a porous medium), so
+/// the slice, the arrows and the streamlines go through it like any air.
 pub fn solid_at(snap: &CfdSnapshot, p: [f64; 3]) -> bool {
     let g = &snap.grid;
     let i = cell_of(&g.x_edges_mm, p[0]);
     let j = cell_of(&g.y_edges_mm, p[1]);
     let k = cell_of(&g.z_edges_mm, p[2]);
-    snap.material[g.index(i, j, k)] != 0
+    let id = snap.material[g.index(i, j, k)];
+    id != 0
+        && !snap
+            .materials
+            .iter()
+            .any(|m| m.id == id && m.kind == novo_cfd::MaterialKind::Duct)
 }
 
 /// Is the point inside the interior.
