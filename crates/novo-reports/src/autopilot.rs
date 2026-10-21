@@ -927,6 +927,78 @@ pub struct Group {
     pub summary: String,
 }
 
+/// A drawn wire that contradicts the project's house wire rules.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuleBreak {
+    pub wire: WireId,
+    pub message: String,
+}
+
+/// Wires that already have a colour or size the project's house rules do not
+/// allow: a colour other than the house colour of its class, a section under
+/// the house minimum. Empty under IEC 60204-1 (the project states no rules of
+/// its own), and a wire without a value is not a break: the Autopilot fills
+/// those in. Read only.
+pub fn rule_breaks(project: &Project) -> Vec<RuleBreak> {
+    let rules = WireRules::of(project);
+    if rules.preset != crate::wire_rules::Preset::House {
+        return Vec::new();
+    }
+    let basis = wire_basis(project, &project.netlist());
+    let mut out = Vec::new();
+    for item in crate::wires::items(project, true) {
+        for wire in item.wires {
+            let Some(b) = basis.get(&wire.id) else {
+                continue;
+            };
+            let class = colour_class(b);
+            let name = match wire.number.as_deref().map(str::trim) {
+                Some(n) if !n.is_empty() => format!("Wire {n}"),
+                _ => "A wire without a number".to_owned(),
+            };
+            let have = wire
+                .color
+                .as_deref()
+                .and_then(crate::wire_rules::normal_code);
+            // A class the Autopilot had to guess is no ground for a warning.
+            let sure_class = colour_of(b).2 != Basis::Assumed;
+            if let (Some(have), Some(house)) = (have, rules.house_colour(class))
+                && sure_class
+                && have != house
+            {
+                out.push(RuleBreak {
+                    wire: wire.id,
+                    message: format!(
+                        "{name} ({} circuit) is {have}; the project's house rule gives {house}",
+                        class.label()
+                    ),
+                });
+            }
+            let control = is_control(b);
+            let smallest = crate::wirecut::sections(project, &[wire])
+                .into_iter()
+                .reduce(f64::min);
+            // Power or control is a guess when neither the circuit nor a voltage says.
+            let sure_kind = b.circuit != Circuit::Unknown || b.potential_voltage.is_some();
+            if let (Some(have), Some(min)) = (smallest, rules.min_mm2(control))
+                && sure_kind
+                && have + 1e-9 < min
+            {
+                out.push(RuleBreak {
+                    wire: wire.id,
+                    message: format!(
+                        "{name} is {} mm², under the house minimum of {} mm² for {} wires",
+                        fmt(have),
+                        fmt(min),
+                        if control { "control" } else { "power" }
+                    ),
+                });
+            }
+        }
+    }
+    out
+}
+
 /// Groups the plan by protective device. The wire's protective device is the
 /// one `wire_basis` finds (the highest-rated one in front of it); proposals
 /// that touch no wire (cabinet entry points) go in "Cabinet".
