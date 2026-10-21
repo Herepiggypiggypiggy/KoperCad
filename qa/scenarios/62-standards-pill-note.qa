@@ -1,0 +1,24 @@
+@title Standards findings are labelled in the Issues list (B-12)
+@area Reports
+@sizes 1366x768 1920x1080
+# Ticking a standard adds its findings to the issue count; the window says so and the Issues list names the share.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text Standards check
+wait 4
+key Enter
+wait 10
+expect "adds its findings to the Issues list"
+click_text "IEC 60204-1" #1
+wait 10
+shot standards-ticked
+check_layout
+key Escape
+wait 3
+click_text "errors" #1
+wait 10
+expect "from the standards you selected"
+shot issues-standards-note
+check_layout
