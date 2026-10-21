@@ -18,7 +18,10 @@ Same thing without the wrapper: `kopercad-cli qa run [FILES|FOLDERS] [--size WxH
 It builds on the visual test user (`docs/testing/visual-test-user.md`): the same
 `kopercad --control` app, the same empty first-run profile for every scenario, the
 same virtual screen on Linux (Xvfb, openbox, software Vulkan). Needs on Linux:
-`apt install xvfb openbox mesa-vulkan-drivers libxkbcommon-x11-0`.
+`apt-get update && apt-get install -y xvfb openbox mesa-vulkan-drivers libvulkan1 libxkbcommon-x11-0`
+(run `apt-get update` first on a fresh cloud box). `scripts/qa.sh` checks for them and
+prints the exact line when something is missing (exit 3); without `libxkbcommon-x11-0`
+the app cannot open a window.
 
 ## What a run writes
 
@@ -126,6 +129,11 @@ How other threads use it:
 Add a block to it (or a new `2x-` file) when an audit defect is fixed and merged:
 state the fixed behaviour with `expect*` steps, and add a `shot` for the ones only a
 picture can show. Run it with `scripts/qa.sh --only critic`.
+
+`qa/scenarios/30-heat-cabinet.qa` runs Cabinet > Simulate heat of the cabinet (Ctrl+K) and
+takes pictures while it runs and after 400 frames; on software rendering the coarse run
+is still going then, so the picture shows the running state ("working", "not converged").
+Use it before and after a change to the hot-spot cards or the Temperature panel.
 
 ## Fixtures
 
