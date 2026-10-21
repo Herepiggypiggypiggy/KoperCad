@@ -657,13 +657,14 @@ pub fn answer_symbol(
 }
 
 /// A short plain-words summary of what the circuit is doing, to replace a
-/// count of closed poles: coils pulled in, motors running, lamps lit.
+/// count of closed poles: coils pulled in, motors running, lamps lit. `None`
+/// when nothing is switched on.
 pub fn story(
     project: &Project,
     settled: &Settled,
     states: &crate::DeviceStates,
     name: &dyn Fn(SymbolId) -> String,
-) -> String {
+) -> Option<String> {
     use crate::{Direction, MotorRun};
     let mut parts: Vec<String> = Vec::new();
     for &coil in &settled.energized {
@@ -691,9 +692,5 @@ pub fn story(
     if lit > 0 {
         parts.push(format!("{lit} lamp{} lit", if lit == 1 { "" } else { "s" }));
     }
-    if parts.is_empty() {
-        "Nothing is switched on yet. Press a button.".to_owned()
-    } else {
-        parts.join(" · ")
-    }
+    (!parts.is_empty()).then(|| parts.join(" · "))
 }

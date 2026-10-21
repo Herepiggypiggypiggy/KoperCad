@@ -472,6 +472,24 @@ pub(super) fn operators(project: &Project, page: PageId, poles: &PoleState) -> V
     out
 }
 
+/// The first other page, in page order, that has a push button to press, with the name to show for it ("2 Control circuit").
+pub(super) fn operator_page(project: &Project, current: PageId) -> Option<(PageId, String)> {
+    let rest = novo_sim::rest_state(project);
+    project
+        .pages_in_order()
+        .into_iter()
+        .filter(|p| p.id != current)
+        .find(|p| operators(project, p.id, &rest).iter().any(|o| o.momentary))
+        .map(|p| {
+            let name = if p.title.is_empty() {
+                p.name.clone()
+            } else {
+                format!("{} {}", p.name, p.title)
+            };
+            (p.id, name)
+        })
+}
+
 /// A coil of the page, for its badge.
 pub(super) struct CoilBadge {
     pub symbol: SymbolId,
@@ -1119,6 +1137,13 @@ impl NovoApp {
         let mut follow: Option<SymbolId> = None;
         let why_mode = self.wb.live.why_mode;
         let operators = operators(project, page, &poles);
+        let mut go_to: Option<PageId> = None;
+        let has_buttons = operators.iter().any(|o| o.momentary);
+        let elsewhere = if story.is_none() && !has_buttons {
+            operator_page(project, page)
+        } else {
+            None
+        };
         let card = super::panel::Panel::new(
             "live_card",
             "Live potentials",
@@ -1140,8 +1165,25 @@ impl NovoApp {
             if badges.is_empty() {
                 ui.weak("No switched contacts on this page");
             } else {
-                ui.add(egui::Label::new(egui::RichText::new(&story).strong()).wrap())
+                let said = story.as_deref().unwrap_or("Nothing is switched on yet.");
+                ui.add(egui::Label::new(egui::RichText::new(said).strong()).wrap())
                     .on_hover_text(format!("{closed} of {} poles closed", badges.len()));
+                if story.is_none() && !has_buttons {
+                    // The buttons are on another page: say where.
+                    match &elsewhere {
+                        Some((page, name)) => {
+                            ui.add(egui::Label::new(format!("The buttons are on page {name}.")).wrap());
+                            if ui.small_button(format!("Go to page {name}")).clicked() {
+                                go_to = Some(*page);
+                            }
+                        }
+                        None => {
+                            ui.weak("This drawing has no push button to press.");
+                        }
+                    }
+                } else if story.is_none() {
+                    ui.weak("Hold a push button below.");
+                }
                 if ui
                     .small_button("Reset")
                     .on_hover_text("Back to the plant at rest")
@@ -1153,12 +1195,14 @@ impl NovoApp {
             if !operators.is_empty() {
                 ui.add_space(2.0);
                 ui.label(egui::RichText::new("Operate").strong());
+                // As tall as the canvas allows, so no row is cut off.
                 egui::ScrollArea::vertical()
-                    .max_height(150.0)
+                    .max_height((canvas.height() - 330.0).clamp(120.0, 420.0))
+                    .auto_shrink([false, true])
                     .id_salt("live_operate")
                     .show(ui, |ui| {
                         for op in &operators {
-                            ui.horizontal(|ui| {
+                            ui.horizontal_wrapped(|ui| {
                                 ui.label(&op.label);
                                 ui.weak(format!("{} · {}", op.kind, op.state));
                             });
@@ -1297,6 +1341,9 @@ impl NovoApp {
             || plc_running
         {
             ctx.request_repaint();
+        }
+        if let Some(page) = go_to {
+            self.show_page(page);
         }
         if toggle_why {
             self.wb.live.why_mode ^= true;
@@ -1723,6 +1770,36 @@ mod tests {
         let colors: Vec<_> = doc.project().potentials().map(potential_color).collect();
         assert_eq!(colors.len(), 3);
         assert!(colors[0] != colors[1] && colors[1] != colors[2] && colors[0] != colors[2]);
+    }
+
+    /// A page with nothing to operate points at the page that has the buttons.
+    #[test]
+    fn a_page_without_buttons_points_to_the_page_that_has_them() {
+        let mut doc = Document::default();
+        let (out, _) = doc
+            .transact("Draw", |tx| {
+                let main = tx.add_page("1")?;
+                let control = tx.add_page("2")?;
+                let s1 = tx.add_device(novo_core::DeviceTag::product("S1"), "")?;
+                let role = SymbolRole::Device {
+                    device: s1,
+                    main: true,
+                };
+                let start = part(tx, control, "iec/operators/pushbutton_no", 0.0, role);
+                tx.update::<novo_core::SymbolInstance>(start, |s| {
+                    s.pass_through = vec![vec![0, 1]]
+                })?;
+                Ok((main, control))
+            })
+            .unwrap();
+        let (main, control) = out;
+        let project = doc.project();
+        let rest = novo_sim::rest_state(project);
+        assert!(operators(project, main, &rest).is_empty());
+        let (page, name) = operator_page(project, main).expect("page 2 has a button");
+        assert_eq!(page, control);
+        assert!(name.starts_with('2'));
+        assert!(operator_page(project, control).is_none());
     }
 
     /// The Operate list holds the hand devices only, with plain-words state.
