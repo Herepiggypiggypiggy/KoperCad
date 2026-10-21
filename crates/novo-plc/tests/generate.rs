@@ -168,3 +168,25 @@ fn more_signals_than_a_card_holds_make_more_cards() {
     assert_eq!(plan.cards[1].channels.len(), 8);
     assert_eq!(plan.cards[1].spares(), 4);
 }
+
+#[test]
+fn a_card_tag_is_free_in_every_plant_and_location() {
+    let mut doc = Document::default();
+    doc.transact("Contactor elsewhere", |tx| {
+        tx.add_device(novo_core::DeviceTag::parse("=A1+CAB-K1")?, "Contactor")
+            .map(|_| ())
+    })
+    .unwrap();
+    import(
+        &mut doc,
+        "Tag,Description,Type\n-B1,First,DI\n",
+        &Options::default(),
+    );
+    let project = doc.project();
+    let tags: Vec<String> = cards(project)
+        .iter()
+        .filter_map(|c| project.device(c.device))
+        .map(|d| d.tag.to_string())
+        .collect();
+    assert!(!tags.iter().any(|t| t == "-K1"), "{tags:?}");
+}

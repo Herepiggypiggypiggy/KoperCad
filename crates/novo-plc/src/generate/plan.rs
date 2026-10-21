@@ -183,7 +183,14 @@ pub fn plan(project: &Project, list: &IoList, options: &Options) -> Plan {
             *n = (*n).max(slot.saturating_add(1));
         }
     }
-    let letter_number = project.next_tag_number(&DeviceTag::default(), &options.card_letter);
+    // Free across every plant and location: a card -K1 beside an =A1+CAB-K1 would read as one device.
+    let letter_number = project
+        .devices()
+        .map(|d| &d.tag)
+        .filter(|t| t.letter_code() == options.card_letter)
+        .filter_map(DeviceTag::number)
+        .max()
+        .map_or(1, |n| n + 1);
     let mut explicit_cards = Vec::new();
     let mut sequential_cards = Vec::new();
     for ((station, kind), members) in &groups {
