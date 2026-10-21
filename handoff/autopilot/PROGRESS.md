@@ -2,3 +2,4 @@
 2026-10-21 08:05 UTC Engine, calc_basis, window, command and meter built; example goes to 0 unsized and 0 uncoloured wires in one undo step.
 2026-10-21 08:40 UTC Full novo-app tests pass (1099). QA screenshots could not run in this cloud box (no xkbcommon-x11 / Vulkan); scenario 08-autopilot.qa is ready for the QA thread.
 2026-10-21 09:00 UTC R3 wording asks done: meter named Wires ready to build, confirmation says planning values, bench tip says planning values.
+2026-10-21 09:20 UTC QA findings: window closes after Accept all (covered Bench output); repeated wire numbers 16/17 are in the example's own numbering, not written by Autopilot.

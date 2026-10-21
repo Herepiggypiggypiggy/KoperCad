@@ -21,5 +21,6 @@ check_layout
 click_text "Accept all" Button
 wait 20
 shot autopilot-done
-expect "Nothing left to fill in"
+expect "Wires ready to build"
+expect_not "Accept all"
 check_layout

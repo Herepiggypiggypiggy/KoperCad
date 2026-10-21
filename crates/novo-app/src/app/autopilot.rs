@@ -145,6 +145,11 @@ impl NovoApp {
                 body(ui, &mut state, &mut apply);
             });
         if let Some(ids) = apply {
+            // Accept all is the end of the job: close, so Bench output behind
+            // it shows the new meter. Accepting some rows keeps the list.
+            if ids.is_none() {
+                open = false;
+            }
             let plan = state.plan.clone();
             self.apply_autopilot(&plan, ids.as_ref());
             // The list is re-planned on the next frame, from the new drawing.
