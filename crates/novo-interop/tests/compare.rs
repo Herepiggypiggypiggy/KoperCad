@@ -88,13 +88,19 @@ fn every_kind_of_difference_is_named() {
     let c = compare_projects(&before, &after);
     assert!(!c.is_equal());
     let t = c.report.text();
-    assert!(t.contains("devices missing or changed"), "{t}");
+    assert!(t.contains("device missing or changed"), "{t}");
     assert!(t.contains("Main contactor"), "{t}");
     assert!(t.contains("devices added or changed"), "{t}");
-    assert!(t.contains("pages missing or changed"), "{t}");
+    assert!(t.contains("page missing or changed"), "{t}");
     // What did not change is not reported.
-    assert!(!t.contains("nets missing"), "{t}");
-    assert!(!t.contains("drawn symbols missing"), "{t}");
+    for unchanged in [
+        "net missing",
+        "nets missing",
+        "drawn symbol missing",
+        "drawn symbols missing",
+    ] {
+        assert!(!t.contains(unchanged), "{t}");
+    }
 }
 
 #[test]
@@ -110,7 +116,7 @@ fn a_cut_wire_shows_as_a_changed_net() {
         .unwrap();
     let c = compare_projects(&before, &after);
     assert!(
-        c.report.text().contains("nets missing or changed"),
+        c.report.text().contains("net missing or changed"),
         "{}",
         c.report.text()
     );
