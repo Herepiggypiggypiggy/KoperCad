@@ -78,6 +78,14 @@ fn the_report_counts_what_is_not_carried() {
 }
 
 #[test]
+fn generated_report_cells_are_named_not_lumped_with_unknown_objects() {
+    use super::skipped_name;
+    assert_eq!(skipped_name(52).0, "report table cells and texts");
+    assert_eq!(skipped_name(53).0, "report table cells and texts");
+    assert_eq!(skipped_name(9999).0, "other objects");
+}
+
+#[test]
 fn a_page_macro_is_recognised_and_other_files_are_refused() {
     let emp = r#"<EplanPxfRoot Type="PageMacro" PxfVersion="1.23"><O4 A1="4/1"><P49 P11012="1"/></O4></EplanPxfRoot>"#;
     let f = read_pxf_str(emp).unwrap();
