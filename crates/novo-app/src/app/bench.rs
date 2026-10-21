@@ -48,6 +48,8 @@ struct Cache {
     revision: u64,
     standard: FerruleStandard,
     jobs: Vec<WireCutJob>,
+    /// The cables the jobs are cores of, each once.
+    cables: Vec<novo_reports::CableRun>,
     labels: ReportOutput,
     /// Wires of the cut list that still have no size or colour.
     unset: UnsetWires,
@@ -417,10 +419,12 @@ impl NovoApp {
             .as_ref()
             .is_none_or(|c| c.revision != revision || c.standard != state.standard);
         if stale && state.standard.is_valid() {
+            let jobs = wire_cut_jobs_with(project, &state.standard);
             state.cache = Some(Cache {
                 revision,
                 standard: state.standard.clone(),
-                jobs: wire_cut_jobs_with(project, &state.standard),
+                cables: novo_reports::cable_runs(project, &jobs),
+                jobs,
                 labels: Labels.generate(project),
                 unset: unset_wires(project),
             });
@@ -646,7 +650,8 @@ fn cut_tab(
         ui.weak("No wires to cut yet: connect two device pins");
         return;
     }
-    let metres: f64 = jobs.iter().map(|j| j.cut_mm).sum::<f64>() / 1000.0;
+    let metres = novo_reports::hookup_cut_mm(jobs) / 1000.0;
+
     let estimates = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
     let groups = jobs
         .windows(2)
@@ -654,9 +659,17 @@ fn cut_tab(
         .count()
         + 1;
     ui.label(format!(
-        "{} wires in {groups} groups, {metres:.1} m of wire to pull",
+        "{} wires in {groups} groups, {metres:.1} m of hookup wire to pull",
         jobs.len()
     ));
+    for run in &cache.cables {
+        ui.label(format!(
+            "Cable {}: {:.1} m, once ({} cores cut from it)",
+            run.tag,
+            run.length_mm / 1000.0,
+            run.cores
+        ));
+    }
     if estimates > 0 {
         novo_theme::widgets::banner(
             ui,

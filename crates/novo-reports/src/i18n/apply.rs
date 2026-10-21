@@ -14,6 +14,7 @@ pub const FIXED_SECTION_TITLES: &[&str] = &[
     "Checks",
     "Devices without parts",
     "Duct fill",
+    "Cables",
     "Ferrule standard used",
     "Ferrules",
     "Ferrules to crimp",
