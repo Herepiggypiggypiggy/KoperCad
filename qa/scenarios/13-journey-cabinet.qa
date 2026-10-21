@@ -1,0 +1,46 @@
+@title Journey: example project to placed, routed and cut-listed cabinet
+@area Journeys
+# Cabinet workspace steps through the palette: place all, size the enclosure, route, cut list, 3D.
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 20
+shot cabinet-start
+key ctrl+k
+wait 4
+text place all
+wait 6
+key Enter
+wait 30
+shot cabinet-placed
+check_layout
+check_blank cabinet-placed
+key ctrl+k
+wait 4
+text size enclosure
+wait 6
+key Enter
+wait 30
+shot cabinet-sized
+check_layout
+key ctrl+k
+wait 4
+text Route all wires
+wait 6
+key Enter
+wait 40
+shot cabinet-routed
+check_layout
+key ctrl+k
+wait 4
+text Rail and duct cut list
+wait 6
+key Enter
+wait 30
+shot cabinet-cutlist
+check_layout
+click_text 3D
+wait 40
+shot cabinet-3d
+check_blank cabinet-3d
+check_layout

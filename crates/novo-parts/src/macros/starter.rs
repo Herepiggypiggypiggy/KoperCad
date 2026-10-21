@@ -144,6 +144,7 @@ fn capture(
             items: Vec::new(),
         };
         draw(&mut sheet)?;
+        orthogonal_routes(sheet.tx)?;
         let items = std::mem::take(&mut sheet.items);
         sheet
             .tx
@@ -158,6 +159,40 @@ fn capture(
     Ok(MacroFile::new(definition)
         .with_author("KoperCAD")
         .with_tags(tags))
+}
+
+/// Gives every wire whose ends are not in line a right-angle route (down,
+/// across, down), so a placed macro has no diagonal wires. Parallel runs get
+/// slightly different crossing heights so they do not lie on top of each
+/// other.
+fn orthogonal_routes(tx: &mut Tx<'_>) -> Result<()> {
+    const EPS: f64 = 1e-6;
+    let mut bends = Vec::new();
+    for w in tx.project().wires() {
+        let (Some(a), Some(b)) = (
+            tx.project().endpoint_position(w.from),
+            tx.project().endpoint_position(w.to),
+        ) else {
+            continue;
+        };
+        if (a.x - b.x).abs() < EPS || (a.y - b.y).abs() < EPS || !w.route.is_empty() {
+            continue;
+        }
+        bends.push((w.id, a, b));
+    }
+    for (n, (id, a, b)) in bends.into_iter().enumerate() {
+        let span = b.y - a.y;
+        let nudge = if span.abs() >= 12.0 {
+            ((n % 4) as f64 - 1.5) * 2.0
+        } else {
+            0.0
+        };
+        let mid = a.y + span / 2.0 + nudge;
+        tx.update::<novo_core::Wire>(id, |w| {
+            w.route = vec![Point::new(a.x, mid), Point::new(b.x, mid)];
+        })?;
+    }
+    Ok(())
 }
 
 fn parameter(name: &str, default: Value, description: &str) -> BlockParameter {

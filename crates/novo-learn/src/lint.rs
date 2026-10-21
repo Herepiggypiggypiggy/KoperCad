@@ -361,6 +361,40 @@ fn lint_lesson(
         } else if step.pause {
             sink.warn(Some(step), "`pause` on a reading step does nothing".into());
         }
+        if let Some(predict) = &step.predict {
+            if predict.options.len() < 2 || predict.answer >= predict.options.len() {
+                sink.error(
+                    Some(step),
+                    "`predict` needs two or more options and an `answer` that is one of them"
+                        .into(),
+                );
+            }
+            if !predict.options_nl.is_empty() && predict.options_nl.len() != predict.options.len() {
+                sink.warn(
+                    Some(step),
+                    "`options_nl` has a different count from `options`".into(),
+                );
+            }
+            if !matches!(step.expect, Some(Check::Predicted(true))) {
+                sink.error(
+                    Some(step),
+                    "a `predict` step is ticked by `expect = { predicted = true }`".into(),
+                );
+            }
+        }
+        for op in &step.solve {
+            if let SolveOp::Choose(c) = op
+                && step
+                    .predict
+                    .as_ref()
+                    .is_none_or(|p| c.choose >= p.options.len())
+            {
+                sink.error(
+                    Some(step),
+                    "`choose` needs a `predict` step and one of its options".into(),
+                );
+            }
+        }
         if step.manual.is_some() && !step.solve.is_empty() {
             sink.error(
                 Some(step),

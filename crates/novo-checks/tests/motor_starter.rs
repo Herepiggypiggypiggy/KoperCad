@@ -259,6 +259,8 @@ fn every_deliberate_error_is_flagged_exactly_once() {
         ProblemKind::StructureCode,
         ProblemKind::SafetyLevelNotMet,
         ProblemKind::SafetyBinding,
+        // Found by the application, which reads the rules; see novo-reports tests/autopilot_rules.
+        ProblemKind::WireRule,
     ];
     let kinds: Vec<ProblemKind> = ProblemKind::ALL
         .into_iter()
