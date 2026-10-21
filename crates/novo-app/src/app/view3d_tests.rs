@@ -545,7 +545,7 @@ fn simulate_runs_from_the_3d_view_without_leaving_it() {
         d.app.view3d.controls.heat_panel,
         "the panel with progress and stop opens with the run"
     );
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         d.frame();
         if d.app.cabinet.heat.solution().is_some() && !d.app.cabinet.heat.running() {
             break;
@@ -574,7 +574,7 @@ fn an_open_heat_panel_follows_the_view_cube_down_when_the_heat_strip_appears() {
     }
     d.app.run_command(&ctx, "heat.simulate", None);
     let mut strip_seen = false;
-    for frame in 0..400 {
+    for frame in super::test_wait::patient() {
         d.frame_sized(size, Vec::new());
         let (Some(heat), Some(canvas)) = (
             ctx.memory(|m| m.area_rect(super::panel::id("view3d_heat_panel"))),
@@ -611,7 +611,7 @@ fn the_heat_panel_starts_under_the_view_cube_when_a_result_shows_the_heat_strip(
     d.app.run_command(&ctx, "heat.simulate", None);
     let size = egui::vec2(1366.0, 768.0);
     let mut seen_result = false;
-    for frame in 0..400 {
+    for frame in super::test_wait::patient() {
         d.frame_sized(size, Vec::new());
         seen_result |= d.app.cabinet.heat.solution().is_some();
         // Every frame, while the run is still improving as well as after it.

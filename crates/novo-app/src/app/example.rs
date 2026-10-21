@@ -37,6 +37,7 @@ pub(crate) fn build_example(doc: &mut Document) -> ModelResult<novo_core::Change
         novo_numbering::number_new_wires(tx)?;
         give_parts_their_data(tx)?;
         add_cabinet(tx)?;
+        add_safety_function(tx)?;
         tx.set_info(|info| {
             info.name = EXAMPLE_NAME.into();
             info.description = EXAMPLE_DESCRIPTION.into();
@@ -188,4 +189,36 @@ impl NovoApp {
             "This is an example. Edit freely; Ctrl+S keeps your own copy.",
         );
     }
+}
+
+/// One illustrative safety function so Check > Safety functions and the
+/// sheets export have something to show: the stop button and the motor
+/// contactor of the starter. The reliability values are typed in as
+/// illustrative numbers, not taken from a datasheet, and the function says so.
+fn add_safety_function(tx: &mut Tx<'_>) -> ModelResult<()> {
+    use novo_checks::safety::{Basis, Block, PartRef, Role, SafetyFunction, encode};
+    let part = |name: &str, device: &str, b10d: f64| PartRef {
+        name: name.into(),
+        device: Some(device.into()),
+        basis: Basis::B10d,
+        value: Some(b10d),
+    };
+    let mut f = SafetyFunction::new("Motor stop, ordinary stop not e-stop (illustrative values)");
+    f.blocks = vec![
+        Block {
+            category: "1".into(),
+            dc_percent: 0.0,
+            ccf: 0,
+            channel1: vec![part("Stop button", "=A1+CAB-S0", 150_000.0)],
+            ..Block::new(Role::Sensor, "Stop")
+        },
+        Block {
+            category: "1".into(),
+            dc_percent: 0.0,
+            ccf: 0,
+            channel1: vec![part("Motor contactor", "=A1+CAB-K1", 1_300_000.0)],
+            ..Block::new(Role::Actuator, "Motor contactor")
+        },
+    ];
+    novo_checks::standards::set_info_property(tx, novo_checks::safety::FUNCTIONS_KEY, encode(&[f]))
 }

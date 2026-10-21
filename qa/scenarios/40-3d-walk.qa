@@ -1,0 +1,32 @@
+@title 3D view: first-time walk (open, navigate, layers, dimensions, clearance, section, door, saved views)
+@area 3D
+# A first-time user opens the example and works through the 3D tab.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+shot open
+check_blank open
+check_layout
+click_text Layers
+wait 8
+shot layers
+key Escape
+wait 6
+click_text Views
+wait 8
+shot views
+key Escape
+wait 6
+click_text Dimensions
+wait 10
+shot dimensions
+click_text Section
+wait 8
+shot section
+key Escape
+wait 6
+click_text "Open door"
+wait 30
+shot door
+check_layout

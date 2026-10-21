@@ -143,6 +143,9 @@ mod plate_export;
 mod plc;
 mod plc_card;
 mod plc_link;
+mod plc_list;
+#[cfg(test)]
+mod plc_list_tests;
 mod plc_run;
 mod potentials;
 mod preferences;
@@ -176,6 +179,8 @@ mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;
 mod terminals;
+#[cfg(test)]
+mod test_wait;
 mod tidy;
 mod tips;
 mod title_revisions;
@@ -203,6 +208,9 @@ mod view3d_place;
 mod view3d_rail;
 #[cfg(test)]
 mod view3d_rail_tests;
+mod view3d_runs;
+#[cfg(test)]
+mod view3d_runs_tests;
 mod view3d_stats;
 mod view3d_surface_devices;
 #[cfg(test)]
@@ -1378,6 +1386,7 @@ impl NovoApp {
         self.eplan_parts_dialog(&ctx);
         self.eplan_export_dialog(&ctx);
         self.plc_import_dialog(&ctx);
+        self.plc_list_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
         self.whats_new_window(&ctx);

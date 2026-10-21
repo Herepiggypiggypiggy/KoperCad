@@ -265,7 +265,7 @@ impl NovoApp {
     }
 }
 
-fn notes(ui: &mut egui::Ui, title: &str, lines: impl Iterator<Item = String>) {
+pub(super) fn notes(ui: &mut egui::Ui, title: &str, lines: impl Iterator<Item = String>) {
     let lines: Vec<String> = lines.collect();
     if lines.is_empty() {
         return;

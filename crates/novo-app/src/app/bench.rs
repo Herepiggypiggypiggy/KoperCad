@@ -678,10 +678,15 @@ fn cut_tab(
     ));
     for run in &cache.cables {
         ui.label(format!(
-            "Cable {}: {:.1} m, once ({} cores cut from it)",
+            "Cable {}: {:.1} m to buy{}; {} cut from it",
             run.tag,
-            run.length_mm / 1000.0,
-            run.cores
+            run.metres(),
+            if run.stated {
+                ""
+            } else {
+                " (estimated: no length stated)"
+            },
+            novo_reports::count_text(run.cores, "cores")
         ));
     }
     if estimates > 0 {

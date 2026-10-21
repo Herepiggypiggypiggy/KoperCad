@@ -2190,6 +2190,7 @@ dependencies = [
  "novo-core",
  "novo-editor",
  "novo-symbols",
+ "novo-terminals",
  "quick-xml",
  "rust_xlsxwriter",
  "thiserror 2.0.21",

@@ -174,3 +174,21 @@ fn the_design_checks_page_follows_the_checkbox_and_the_plain_export() {
         d.app.messages().last().map(|m| m.text.clone())
     );
 }
+
+#[test]
+fn the_save_button_names_the_checks_page_only_when_it_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = saved_example(dir.path());
+    d.app.wb.queued.push("export.print_preview");
+    d.frame();
+    d.app.print_preview_counts().unwrap();
+    assert!(
+        d.app
+            .print_preview_save_label()
+            .unwrap()
+            .contains("with checks")
+    );
+    d.app.print_preview_set_checks(false);
+    d.app.print_preview_counts().unwrap();
+    assert!(!d.app.print_preview_save_label().unwrap().contains("checks"));
+}

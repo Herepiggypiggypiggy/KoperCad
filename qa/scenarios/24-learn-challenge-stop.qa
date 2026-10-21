@@ -1,0 +1,26 @@
+@title Challenge lesson: the motor will not stop (jumper across the stop button)
+@area Learn
+key ctrl+k
+wait 4
+text will not stop
+wait 6
+click_text "The motor will not stop"
+wait 40
+key shift+l
+wait 40
+shot start-step
+click_text "Hold to press" #2
+wait 30
+shot goal-no-ring
+expect "Goal: stop must stop"
+expect "Hint (1 / 3)"
+check_layout
+click_text "Hold to press" #1
+wait 20
+shot stop-does-nothing
+click_text "Do it for me"
+wait 60
+shot end-shown
+expect "Shown, not solved"
+expect "jumper wire"
+check_layout
