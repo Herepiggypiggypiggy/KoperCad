@@ -36,7 +36,7 @@ use novo_checks::calc::tables::TableSet;
 use novo_checks::calc_basis::{
     Circuit, WireBasis, drop_limit_percent, supply_voltage_v, wire_basis,
 };
-use novo_core::{PotentialKind, Project, Result, Tx, Wire, WireId};
+use novo_core::{DeviceId, PotentialKind, Project, Result, SymbolRole, Tx, Wire, WireId};
 
 use crate::wire_defaults::unset_wires;
 use crate::wirecut::WireCutJob;
@@ -80,6 +80,9 @@ pub enum Change {
     Colour(String),
     /// Wire number.
     Number(String),
+    /// Put these wires in one cable of this type (`4G1.5`). Written last,
+    /// when the sizes are in, from the cable proposal of that moment.
+    Cable(String),
 }
 
 impl Change {
@@ -88,6 +91,7 @@ impl Change {
             Change::Size(_) => "Size",
             Change::Colour(_) => "Colour",
             Change::Number(_) => "Number",
+            Change::Cable(_) => "Cable",
         }
     }
 
@@ -95,7 +99,7 @@ impl Change {
     pub fn value(&self) -> String {
         match self {
             Change::Size(s) => format!("{} mm²", fmt(*s)),
-            Change::Colour(c) | Change::Number(c) => c.clone(),
+            Change::Colour(c) | Change::Number(c) | Change::Cable(c) => c.clone(),
         }
     }
 }
@@ -119,6 +123,9 @@ pub struct Autopilot {
     pub proposals: Vec<Proposal>,
     /// Connections that could not be sized, with the reason.
     pub unresolved: Vec<String>,
+    /// What Autopilot cannot do for the drawing, said plainly: lengths still
+    /// estimated because the devices are not placed or no duct is drawn.
+    pub left_to_you: Vec<String>,
     /// Which ampacity tables the sizes were read from.
     pub tables: String,
     pub planning_values: bool,
@@ -149,19 +156,19 @@ impl Autopilot {
 
     /// Writes the proposals with these ids (all when `accepted` is `None`).
     /// Call it in one transaction: one undo. Refused when the drawing
-    /// changed since the plan was made. Returns `(sizes, colours, numbers)`.
+    /// changed since the plan was made. Returns `(sizes, colours, numbers, cables)`.
     pub fn apply(
         &self,
         tx: &mut Tx<'_>,
         accepted: Option<&BTreeSet<usize>>,
-    ) -> Result<(usize, usize, usize)> {
+    ) -> Result<(usize, usize, usize, usize)> {
         if tx.project().revision() != self.revision {
             return Err(novo_core::ModelError::Refused {
                 what: "Autopilot".into(),
                 reason: "the drawing changed since the review list was made".into(),
             });
         }
-        let mut counts = (0, 0, 0);
+        let mut counts = (0, 0, 0, 0);
         for p in &self.proposals {
             if accepted.is_some_and(|set| !set.contains(&p.id)) {
                 continue;
@@ -175,13 +182,30 @@ impl Autopilot {
                     Change::Number(n) => {
                         tx.update::<Wire>(*wire, |w| w.number = Some(n.clone()))?
                     }
+                    Change::Cable(_) => {}
                 }
             }
             match p.change {
                 Change::Size(_) => counts.0 += 1,
                 Change::Colour(_) => counts.1 += 1,
                 Change::Number(_) => counts.2 += 1,
+                Change::Cable(_) => {}
             }
+        }
+        // Cables last: their type follows the sizes just written.
+        let wanted: Vec<BTreeSet<WireId>> = self
+            .proposals
+            .iter()
+            .filter(|p| matches!(p.change, Change::Cable(_)))
+            .filter(|p| accepted.is_none_or(|set| set.contains(&p.id)))
+            .map(|p| p.wires.iter().copied().collect())
+            .collect();
+        if !wanted.is_empty() {
+            let now: Vec<_> = novo_cables::propose::propose_cables(tx.project())
+                .into_iter()
+                .filter(|c| wanted.contains(&c.wires.iter().copied().collect::<BTreeSet<_>>()))
+                .collect();
+            counts.3 = novo_cables::propose::accept_proposals(tx, &now, None)?.len();
         }
         Ok(counts)
     }
@@ -219,7 +243,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
 
     // Line sections known so far, by class (control = true): the wires that
     // have one, then the proposals. Neutral and earth follow these.
-    let mut lines: Vec<(f64, bool, String, bool)> = Vec::new();
+    let mut lines: Vec<Line> = Vec::new();
     let follows = |k: Option<PotentialKind>| {
         matches!(
             k,
@@ -234,7 +258,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
             .zip(job.wires.first().and_then(|w| basis.get(w)))
             && !follows(b.kind)
         {
-            lines.push((s, is_control(b), job_label(job), false));
+            lines.push(Line::new(project, job, s, is_control(b), false));
         }
     }
 
@@ -256,7 +280,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
         let length = (job.length_mm > 0.0).then(|| job.length_mm / 1000.0);
         match size_wire(b, length, is_estimate(&job.basis), tables, supply_v, limit) {
             Ok(s) => {
-                lines.push((s.section, is_control(b), job_label(job), true));
+                lines.push(Line::new(project, job, s.section, is_control(b), true));
                 out.proposals.push(Proposal {
                     id: out.proposals.len(),
                     wires,
@@ -269,12 +293,18 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
             Err(why) => out.unresolved.push(format!("{}: {why}", job_label(job))),
         }
     }
-    let largest = |control: Option<bool>| {
-        lines
-            .iter()
-            .filter(|(_, c, _, _)| control.is_none_or(|want| *c == want))
-            .max_by(|a, b| a.0.total_cmp(&b.0))
-            .cloned()
+    // The largest line wire (of one class) on the same devices as the
+    // follower; the whole project when its devices have none.
+    let largest = |control: Option<bool>, devices: &BTreeSet<DeviceId>| {
+        let pick = |same_circuit: bool| {
+            lines
+                .iter()
+                .filter(|l| control.is_none_or(|want| l.control == want))
+                .filter(|l| !same_circuit || !l.devices.is_disjoint(devices))
+                .max_by(|a, b| a.section.total_cmp(&b.section))
+                .map(|l| (l.section, l.label.clone(), l.proposed, same_circuit))
+        };
+        pick(true).or_else(|| pick(false))
     };
     for job in followers {
         let wires: Vec<WireId> = job
@@ -288,33 +318,36 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
         };
         let earth = b.kind == Some(PotentialKind::ProtectiveEarth);
         let control = is_control(b);
+        let devices = job_devices(project, job);
         // Earth follows the power conductors; neutral the conductors of its own class.
         let reference = if earth {
-            largest(Some(false)).or_else(|| largest(None))
+            largest(Some(false), &devices).or_else(|| largest(None, &devices))
         } else {
-            largest(Some(control)).or_else(|| largest(None))
+            largest(Some(control), &devices).or_else(|| largest(None, &devices))
         };
         let (section, reason, basis_kind) = match reference {
-            Some((phase, _, from, proposed)) if earth => {
+            Some((phase, from, proposed, same)) if earth => {
                 let want = min_pe_section(phase).unwrap_or(phase);
                 (
                     listed_at_least(tables, want),
                     format!(
-                        "protective conductor sized from the largest power wire in the project ({} mm², {from}{}): the same up to 16 mm², 16 mm² up to 35, half above (IEC 60364-5-54 Table 54.2)",
+                        "protective conductor sized from the largest power wire {} ({} mm², {from}{}): the same up to 16 mm², 16 mm² up to 35, half above (IEC 60364-5-54 Table 54.2)",
+                        scope(same),
                         fmt(phase),
                         if proposed { ", itself a proposal" } else { "" }
                     ),
-                    if proposed { Basis::Planning } else { Basis::Rule },
+                    if proposed || !same { Basis::Planning } else { Basis::Rule },
                 )
             }
-            Some((phase, _, from, proposed)) => (
+            Some((phase, from, proposed, same)) => (
                 phase,
                 format!(
-                    "the neutral or 0 V conductor takes the section of the largest line wire of its kind in the project ({} mm², {from}{}), IEC 60364-5-52 §524.2",
+                    "the neutral or 0 V conductor takes the section of the largest line wire {} ({} mm², {from}{}), IEC 60364-5-52 §524.2",
+                    scope(same),
                     fmt(phase),
                     if proposed { ", itself a proposal" } else { "" }
                 ),
-                if proposed { Basis::Planning } else { Basis::Rule },
+                if proposed || !same { Basis::Planning } else { Basis::Rule },
             ),
             None => (
                 if control { SMALL[0].0 } else { 1.5 },
@@ -352,12 +385,82 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
             basis: basis_kind,
         });
     }
+    let estimated = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
+    if estimated > 0 {
+        out.left_to_you.push(format!(
+            "{estimated} wire lengths are still estimates (devices not placed on the plate or no duct drawn): place the devices and draw the ducts in Cabinet, then the lengths are routed and the Ready meter moves. Ferrules, strip lengths and labels follow the sizes and numbers by themselves."
+        ));
+    }
+    for c in novo_cables::propose::propose_cables(project) {
+        let name = c.cable_type.name();
+        out.proposals.push(Proposal {
+            id: out.proposals.len(),
+            wires: c.wires.clone(),
+            label: format!("cable {}, {} wires", c.tag, c.wires.len()),
+            change: Change::Cable(name.clone()),
+            reason: format!(
+                "{} wires run together from {} to {} and leave the cabinet location: one {name} cable, its type chosen from the conductors and the largest wire size when you accept",
+                c.wires.len(),
+                c.ends[0].location.join(" "),
+                c.ends[1].location.join(" "),
+            ),
+            basis: Basis::Planning,
+        });
+    }
     out
 }
 
 /// Convenience: the cut list for the project's saved ferrule standard.
 pub fn plan_for(project: &Project, tables: &TableSet) -> Autopilot {
     plan(project, tables, &wire_cut_jobs(project))
+}
+
+/// A wire with a known section, as a reference for neutral and earth.
+struct Line {
+    section: f64,
+    control: bool,
+    label: String,
+    proposed: bool,
+    /// The devices at its two ends.
+    devices: BTreeSet<DeviceId>,
+}
+
+impl Line {
+    fn new(
+        project: &Project,
+        job: &WireCutJob,
+        section: f64,
+        control: bool,
+        proposed: bool,
+    ) -> Self {
+        Line {
+            section,
+            control,
+            label: job_label(job),
+            proposed,
+            devices: job_devices(project, job),
+        }
+    }
+}
+
+/// The devices a connection ends on (terminals do not count: a strip joins
+/// many circuits).
+fn job_devices(project: &Project, job: &WireCutJob) -> BTreeSet<DeviceId> {
+    [job.end_a.pin, job.end_b.pin]
+        .into_iter()
+        .filter_map(|pin| match &project.symbol(pin.symbol)?.role {
+            SymbolRole::Device { device, .. } => Some(*device),
+            _ => None,
+        })
+        .collect()
+}
+
+fn scope(same_circuit: bool) -> &'static str {
+    if same_circuit {
+        "on the same device"
+    } else {
+        "in the project (none on the same device)"
+    }
 }
 
 fn job_label(job: &WireCutJob) -> String {
