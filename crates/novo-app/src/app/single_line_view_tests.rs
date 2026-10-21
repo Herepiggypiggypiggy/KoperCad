@@ -169,3 +169,30 @@ fn write_distribution_fixture() {
     let _ = std::fs::remove_file(&path);
     backend.save(&path).unwrap();
 }
+
+/// Rewrites the fixture: `cargo test -p novo-app write_diversity_fixture -- --ignored`.
+#[test]
+#[ignore = "writes qa/fixtures/distribution-board-diversity.novo"]
+fn write_diversity_fixture() {
+    use crate::backend::ProjectBackend;
+    let mut backend = crate::backend::StorageBackend::default();
+    backend
+        .new_project("Distribution board with diversity (example)")
+        .unwrap();
+    let board = novo_tests::distribution_board(backend.document_mut().unwrap()).unwrap();
+    backend
+        .document_mut()
+        .unwrap()
+        .transact("Diversity", |tx| {
+            tx.set_property(
+                board.q1,
+                novo_checks::single_line::DIVERSITY_FACTOR,
+                Some(0.8.into()),
+            )
+        })
+        .unwrap();
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../qa/fixtures/distribution-board-diversity.novo");
+    let _ = std::fs::remove_file(&path);
+    backend.save(&path).unwrap();
+}

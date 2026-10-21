@@ -46,6 +46,23 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
 
+/// Device property: a diversity (simultaneity) factor, 0.1 to 1, applied to
+/// the sum of the currents of what hangs below the device.
+pub const DIVERSITY_FACTOR: &str = "diversity_factor";
+/// Project property: the same factor for the sum at the supply.
+pub const SUPPLY_DIVERSITY_FACTOR: &str = "supply.diversity_factor";
+
+/// A stated factor, `Ok(None)` when none is stated, `Err` when it is not a
+/// number from 0.1 to 1 (a factor above 1 or near zero is a typing slip, not
+/// a diversity).
+fn diversity(raw: Option<f64>) -> Result<Option<f64>, ()> {
+    match raw {
+        None => Ok(None),
+        Some(f) if (0.1..=1.0).contains(&f) => Ok(Some(f)),
+        Some(_) => Err(()),
+    }
+}
+
 use novo_core::{
     DeviceId, Endpoint, NetId, Netlist, PotentialKind, Project, SymbolId, SymbolInstance,
     SymbolRole, TerminalId, WireId, natural_cmp,
@@ -355,6 +372,9 @@ pub struct Node {
     pub loads_without_current: usize,
     pub link: Option<Link>,
     pub verdict: Option<Verdict>,
+    /// The diversity factor applied to the sum of the currents below this
+    /// box, as stated on the device (the supply: in the project).
+    pub diversity: Option<f64>,
     /// Hops from the supply.
     pub depth: usize,
 }
@@ -1306,6 +1326,7 @@ pub fn single_line(
         loads_without_current: 0,
         link: None,
         verdict: None,
+        diversity: None,
         depth: 0,
     }];
     let mut node_of_item: Vec<usize> = vec![usize::MAX; items.len()];
@@ -1398,6 +1419,7 @@ pub fn single_line(
             } else {
                 None
             },
+            diversity: None,
             depth: 0,
         });
     }
@@ -1458,6 +1480,9 @@ pub fn single_line(
     }
 
     // Currents, from the leaves up.
+    let mut diversity_applied: Vec<(String, f64)> = Vec::new();
+    let mut diversity_unused: Vec<String> = Vec::new();
+    let mut diversity_invalid: Vec<String> = Vec::new();
     let mut order_up: Vec<usize> = (1..nodes.len()).collect();
     order_up.sort_by_key(|n| std::cmp::Reverse(nodes[*n].depth));
     for &id in &order_up {
@@ -1468,6 +1493,14 @@ pub fn single_line(
             .unwrap_or(voltage);
         let three_phase = runs.get(&id).is_none_or(|r| r.3.three_phase);
         let kids: Vec<usize> = nodes[id].children.clone();
+        let raw_factor = device_number(project, item.device, DIVERSITY_FACTOR);
+        let factor = match diversity(raw_factor) {
+            Ok(f) => f,
+            Err(()) => {
+                diversity_invalid.push(nodes[id].tag.clone());
+                None
+            }
+        };
         let (own, basis): (Figure, String) = if let Some(a) = stated_on_wire.get(&id) {
             (
                 Figure::stated(*a),
@@ -1510,6 +1543,9 @@ pub fn single_line(
             (Figure::MISSING, String::new())
         };
         if !own.is_missing() {
+            if factor.is_some() {
+                diversity_unused.push(nodes[id].tag.clone());
+            }
             nodes[id].current_a = own;
             nodes[id].current_basis = basis;
             nodes[id].loads_without_current = 0;
@@ -1558,9 +1594,14 @@ pub fn single_line(
             }
         }
         if counted > 0 {
+            if let Some(f) = factor {
+                sum *= f;
+                nodes[id].diversity = Some(f);
+                diversity_applied.push((nodes[id].tag.clone(), f));
+            }
             nodes[id].current_a = Figure::calculated(sum);
             nodes[id].current_basis = format!(
-                "{} {} branch{} below{}, no diversity",
+                "{} {} branch{} below{}{}",
                 if converter {
                     "output power of"
                 } else {
@@ -1573,11 +1614,18 @@ pub fn single_line(
                 } else {
                     ""
                 },
+                match factor {
+                    Some(f) => format!(" × {} diversity", fmt(f)),
+                    None => ", no diversity".to_owned(),
+                },
             );
         } else if item.kind.is_load() {
             nodes[id].loads_without_current = 1;
         } else {
             nodes[id].loads_without_current = without;
+        }
+        if counted == 0 && factor.is_some() {
+            diversity_unused.push(nodes[id].tag.clone());
         }
         if counted > 0 {
             nodes[id].loads_without_current = without;
@@ -1598,9 +1646,27 @@ pub fn single_line(
                 None => without += nodes[k].loads_without_current.max(1),
             }
         }
+        let supply_factor = match diversity(number(props, SUPPLY_DIVERSITY_FACTOR)) {
+            Ok(f) => f,
+            Err(()) => {
+                diversity_invalid.push("the supply".to_owned());
+                None
+            }
+        };
         if counted > 0 {
+            let basis = match supply_factor {
+                Some(f) => {
+                    sum *= f;
+                    nodes[0].diversity = Some(f);
+                    diversity_applied.push(("the supply".to_owned(), f));
+                    format!("sum of the branches × {} diversity", fmt(f))
+                }
+                None => "sum of the branches, no diversity".to_owned(),
+            };
             nodes[0].current_a = Figure::calculated(sum);
-            nodes[0].current_basis = "sum of the branches, no diversity".to_owned();
+            nodes[0].current_basis = basis;
+        } else if supply_factor.is_some() {
+            diversity_unused.push("the supply".to_owned());
         }
         nodes[0].loads_without_current = without;
     }
@@ -1706,6 +1772,28 @@ pub fn single_line(
         notes.push(format!(
             "Not on the diagram, no supply reaches their power poles: {}.",
             unfed_tags.join(", ")
+        ));
+    }
+    if !diversity_applied.is_empty() {
+        notes[0] = format!(
+            "Currents above a distribution device are the arithmetic sum of the loads below it, times the diversity factor where one is stated ({}); everywhere else no diversity or simultaneity factor is applied.",
+            diversity_applied
+                .iter()
+                .map(|(tag, f)| format!("{tag} {}", fmt(*f)))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    if !diversity_unused.is_empty() {
+        notes.push(format!(
+            "A diversity factor is stated but not used at {}: its current is stated or nothing with a current hangs below it.",
+            diversity_unused.join(", ")
+        ));
+    }
+    if !diversity_invalid.is_empty() {
+        notes.push(format!(
+            "Ignored: the diversity factor at {} is not a number from 0.1 to 1.",
+            diversity_invalid.join(", ")
         ));
     }
     restarted.sort_by(|a, b| natural_cmp(a, b));
