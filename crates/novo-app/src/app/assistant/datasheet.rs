@@ -123,7 +123,12 @@ impl Review {
         for r in self.rows.iter().filter(|r| r.keep && !r.unit.is_empty()) {
             match r.text.trim().replace(',', ".").parse::<f64>() {
                 Ok(n) if n.is_finite() && n > 0.0 => {}
-                _ => return Some(format!("{} must be a positive number.", r.label)),
+                _ => {
+                    return Some(format!(
+                        "{} must be a positive number, or untick it.",
+                        r.label
+                    ));
+                }
             }
         }
         None
@@ -154,7 +159,10 @@ impl NovoApp {
                     let _ = st.ledger.save(path);
                 }
                 let file = st.datasheet_name.clone();
-                st.sheet.stage = Stage::Review(review_of(file, reading.draft));
+                st.sheet.stage = match reading.failure {
+                    Some(f) => Stage::Note(f),
+                    None => Stage::Review(review_of(file, reading.draft)),
+                };
             }
             Err(e) => st.sheet.stage = Stage::Note(e.to_string()),
         }
@@ -167,6 +175,9 @@ impl NovoApp {
         };
         let settings = self.settings.ai.clone();
         let st = &mut self.wb.assistant;
+        if !matches!(st.sheet.stage, Stage::Confirm { .. }) {
+            return;
+        }
         let Stage::Confirm { name, bytes } = std::mem::take(&mut st.sheet.stage) else {
             return;
         };
@@ -203,6 +214,15 @@ impl NovoApp {
             || "datasheet.pdf".into(),
             |n| n.to_string_lossy().into_owned(),
         );
+        if let Ok(meta) = std::fs::metadata(&path)
+            && meta.len() > MAX_PDF_BYTES as u64
+        {
+            self.wb.assistant.sheet.stage = Stage::Note(format!(
+                "{name} is larger than {} MB.",
+                MAX_PDF_BYTES / 1024 / 1024
+            ));
+            return;
+        }
         self.wb.assistant.sheet.stage = match std::fs::read(&path) {
             Ok(b) if b.len() > MAX_PDF_BYTES => Stage::Note(format!(
                 "{name} is larger than {} MB.",

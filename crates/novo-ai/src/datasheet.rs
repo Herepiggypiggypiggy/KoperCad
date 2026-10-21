@@ -199,6 +199,8 @@ pub struct Reading {
     pub draft: Draft,
     pub usage: Usage,
     pub cost_usd: f64,
+    /// Set when the request was billed but gave no usable part.
+    pub failure: Option<String>,
 }
 
 /// Sends the datasheet and returns Claude's draft. One request, no project data.
@@ -241,19 +243,27 @@ pub fn read<T: Transport>(
     let calls = reply.tool_uses();
     let Some((_, _, input)) = calls.iter().find(|(_, name, _)| name == "report_part") else {
         let say = reply.text();
-        return Err(ApiError::Parse(if say.is_empty() {
+        let failure = if say.is_empty() {
             "Claude did not report a part from this file".into()
         } else {
             format!(
                 "Claude did not report a part: {}",
                 say.chars().take(300).collect::<String>()
             )
-        }));
+        };
+        // The request was billed, so the cost is still returned.
+        return Ok(Reading {
+            draft: Draft::default(),
+            usage: reply.usage,
+            cost_usd,
+            failure: Some(failure),
+        });
     };
     Ok(Reading {
         draft: parse_draft(input),
         usage: reply.usage,
         cost_usd,
+        failure: None,
     })
 }
 
@@ -363,7 +373,9 @@ mod tests {
             200,
             text_reply("claude-opus-5-5", "This is a recipe.", 10, 5),
         );
-        let e = read(&mut c, &settings(), 0.0, "a.pdf", &pdf()).unwrap_err();
-        assert!(e.to_string().contains("recipe"), "{e}");
+        let r = read(&mut c, &settings(), 0.0, "a.pdf", &pdf()).unwrap();
+        assert!(r.failure.unwrap().contains("recipe"));
+        assert!(r.cost_usd > 0.0, "a billed request is still counted");
+        assert!(r.draft.fields.is_empty());
     }
 }

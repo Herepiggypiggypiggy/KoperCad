@@ -62,7 +62,7 @@ impl DataScope {
             }
             Self::Project => {
                 "Everything in the open project can be sent when Claude asks: devices, \
-                 parts, wires, terminals, cabinet layout, notes and the design-check problems. Use \
+                 parts, wires, terminals, cabinet layout, notes, the design-check problems and wire-number conflicts. Use \
                  this only for projects you are allowed to share with Anthropic."
             }
         }
