@@ -15,7 +15,7 @@ text safety functions
 wait 5
 key Return
 wait 10
-expect "Motor stop (illustrative values)"
+expect "Motor stop, ordinary stop not e-stop (illustrative values)"
 expect "Export one sheet per function (PDF)"
 expect "not a certification"
 shot safety-window

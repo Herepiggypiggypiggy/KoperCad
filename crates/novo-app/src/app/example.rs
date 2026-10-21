@@ -203,13 +203,13 @@ fn add_safety_function(tx: &mut Tx<'_>) -> ModelResult<()> {
         basis: Basis::B10d,
         value: Some(b10d),
     };
-    let mut f = SafetyFunction::new("Motor stop (illustrative values)");
+    let mut f = SafetyFunction::new("Motor stop, ordinary stop not e-stop (illustrative values)");
     f.blocks = vec![
         Block {
             category: "1".into(),
             dc_percent: 0.0,
             ccf: 0,
-            channel1: vec![part("Stop button", "=A1+CAB-S0", 200_000.0)],
+            channel1: vec![part("Stop button", "=A1+CAB-S0", 150_000.0)],
             ..Block::new(Role::Sensor, "Stop")
         },
         Block {
