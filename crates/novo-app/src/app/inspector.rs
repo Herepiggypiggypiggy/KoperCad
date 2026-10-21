@@ -66,17 +66,19 @@ pub(super) const DEVICE_INPUTS: [(&str, &str, &str, &str); 8] = [
 ];
 
 /// Whether a calculation input makes sense for a device with this letter
-/// code (IEC 81346: Q breaker or switch, F protective device, K contactor or
-/// relay). A contactor has no trip curve or breaking capacity, so those rows
-/// stay hidden for it unless the device carries a value of its own; an
-/// unknown letter shows everything.
+/// code. Only a contactor or relay (IEC 81346 class K: `K`, `KM`, `KA`) has
+/// rows hidden, the ones that belong to protective devices: it has no trip
+/// curve, breaking capacity, let-through energy or overload setting. Every
+/// other code, a two-letter one like `QF` or `FR` and an unknown one
+/// included, shows everything, so a value can always be typed.
 pub(super) fn input_applies(key: &str, letter: &str) -> bool {
-    let protective = matches!(letter, "Q" | "F" | "");
+    let contactor = letter.starts_with('K');
     match key {
-        "breaking_capacity_ka" | "trip_curve" | "let_through_i2t" => protective,
-        "setting_min_a" | "setting_max_a" => matches!(letter, "Q" | "F" | ""),
-        "ac3_current_a" => matches!(letter, "Q" | "K" | ""),
-        "sccr_ka" => matches!(letter, "Q" | "F" | "K" | ""),
+        "breaking_capacity_ka"
+        | "trip_curve"
+        | "let_through_i2t"
+        | "setting_min_a"
+        | "setting_max_a" => !contactor,
         _ => true,
     }
 }
@@ -1114,16 +1116,26 @@ mod tests {
     use novo_core::DeviceTag;
 
     #[test]
-    fn a_contactor_has_no_trip_curve_or_breaking_capacity_rows() {
-        for key in ["trip_curve", "breaking_capacity_ka", "let_through_i2t"] {
+    fn a_contactor_has_no_protective_rows_but_other_codes_keep_every_row() {
+        let protective = [
+            "trip_curve",
+            "breaking_capacity_ka",
+            "let_through_i2t",
+            "setting_min_a",
+            "setting_max_a",
+        ];
+        for key in protective {
             assert!(!input_applies(key, "K"), "{key} on a contactor");
-            assert!(input_applies(key, "Q"), "{key} on a breaker");
-            assert!(input_applies(key, "F"), "{key} on a fuse");
+            assert!(!input_applies(key, "KM"), "{key} on a motor contactor");
+            for code in ["Q", "QF", "F", "FU", "FR", "M", "X", "S", ""] {
+                assert!(input_applies(key, code), "{key} on {code:?}");
+            }
         }
-        assert!(!input_applies("setting_max_a", "K"), "overload settings");
-        assert!(input_applies("setting_max_a", "F"));
-        assert!(input_applies("rated_current_a", "K"));
-        assert!(input_applies("ac3_current_a", "K"));
+        for code in ["K", "KM", "QF", "M"] {
+            assert!(input_applies("rated_current_a", code));
+            assert!(input_applies("ac3_current_a", code));
+            assert!(input_applies("sccr_ka", code));
+        }
     }
 
     #[test]
