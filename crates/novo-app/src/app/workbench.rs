@@ -203,6 +203,8 @@ pub(crate) struct Workbench {
     pub(super) assistant: super::assistant::State,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
+    /// Paper of the workshop pack's drilling template.
+    pub(super) workshop_paper: novo_layout::template::Paper,
     /// The PDF options dialog (File > Export drawings > Export PDF...), while open.
     pub(super) pdf_options: Option<super::pdf_options::PdfOptionsState>,
     /// The Report designer window, while open.
@@ -322,6 +324,7 @@ impl Default for Workbench {
             background_panel: None,
             assistant: super::assistant::State::new(),
             bench: None,
+            workshop_paper: novo_layout::template::Paper::A4,
             pdf_options: None,
             designer: None,
             commissioning: None,
@@ -432,6 +435,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.report_pdf",
     "report.add_page",
     "export.assembly",
+    "export.workshop",
     "export.sheets",
     "export.sheets_csv",
     "export.wirecut",
@@ -1209,6 +1213,9 @@ impl NovoApp {
             "report.add_page" => self.add_report_page_command(argument),
             "export.assembly" => {
                 self.export_assembly();
+            }
+            "export.workshop" => {
+                self.export_workshop();
             }
             "export.sheets" => {
                 self.export_spreadsheet();

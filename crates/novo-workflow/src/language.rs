@@ -970,6 +970,11 @@ pub const DUTCH: &[Aliases] = &[
         &["exporteer montagelijst", "montagelijst"],
         &["werkplaats", "boren"],
     ),
+    nl(
+        "export.workshop",
+        &["exporteer werkplaatspakket", "werkplaatspakket"],
+        &["werkplaats", "boormal", "snijlijst"],
+    ),
     nl("export.sheets_csv", &["exporteer csv"], &["csv"]),
     nl(
         "cabinet.place-all",

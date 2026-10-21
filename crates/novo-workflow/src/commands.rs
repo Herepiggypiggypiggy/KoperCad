@@ -2549,6 +2549,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.workshop",
+            "Export workshop pack (folder)",
+            "Export",
+            &[
+                "workshop",
+                "drilling template",
+                "1:1",
+                "bench",
+                "cut list",
+                "labels",
+                "checklist",
+            ],
+            Needs::Project,
+        ),
+        &["export workshop", "workshop pack", "drilling template"],
+    ),
+    verb(
+        cmd(
             "export.variant_pdf",
             "Export PDF of a variant",
             "Export",
