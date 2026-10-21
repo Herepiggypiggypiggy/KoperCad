@@ -8,11 +8,11 @@
 //! name (`Plant 2.novo` gives `Plant 2 assembly.pdf`); a second export
 //! replaces the first only while it is still exactly what we wrote.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 
 use novo_core::{Device, DeviceId, Project};
-use novo_layout::assembly::{WireJob, steps};
+use novo_layout::assembly::{Phase, WireJob, steps};
 use novo_pdf::{ReportPdfOptions, export_report_pdf};
 use novo_reports::{AssemblyChecklist, Cell, Column, CutList, Report, ReportOutput, Section};
 
@@ -21,6 +21,81 @@ use super::{Level, NovoApp, projects_dir};
 
 /// Row height in mm: room for a tick or a pencilled note.
 const ROW_MM: f64 = 8.0;
+
+/// Which circuit a wire belongs to, for working through one at a time. A
+/// model of the usual practice, not a reading of the schematic: green-yellow
+/// is protective earth, 2.5 mm² and up is power (mains, motor), the rest is
+/// control.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub(crate) enum Circuit {
+    Power,
+    Control,
+    Earth,
+}
+
+impl Circuit {
+    pub(crate) fn name(self) -> &'static str {
+        match self {
+            Circuit::Power => "Power",
+            Circuit::Control => "Control",
+            Circuit::Earth => "PE",
+        }
+    }
+
+    pub(crate) fn of(colour: &str, cross_section_mm2: &str) -> Circuit {
+        if novo_checks::standards::Colour::parse(colour)
+            == Some(novo_checks::standards::Colour::GreenYellow)
+        {
+            Circuit::Earth
+        } else if cross_section_mm2
+            .trim()
+            .parse::<f64>()
+            .is_ok_and(|mm2| mm2 >= 2.5)
+        {
+            Circuit::Power
+        } else {
+            Circuit::Control
+        }
+    }
+}
+
+/// The circuits of the wire jobs by wire number, each name's circuits in job
+/// order, so a number used twice still gets its own circuit each time.
+fn circuits_by_mark(jobs: &[(Circuit, WireJob)]) -> BTreeMap<String, VecDeque<Circuit>> {
+    let mut out: BTreeMap<String, VecDeque<Circuit>> = BTreeMap::new();
+    for (circuit, job) in jobs {
+        out.entry(job.name.clone()).or_default().push_back(*circuit);
+    }
+    out
+}
+
+/// The circuit of the wire step marked `mark`.
+fn circuit_of(by_mark: &mut BTreeMap<String, VecDeque<Circuit>>, mark: &str) -> &'static str {
+    by_mark
+        .get_mut(mark)
+        .and_then(VecDeque::pop_front)
+        .map_or("", Circuit::name)
+}
+
+/// Step numbers as a short list: runs of consecutive numbers become
+/// `5-12`, so a wire that waits on every device does not print them all.
+fn number_ranges(numbers: &[usize]) -> String {
+    let mut out: Vec<String> = Vec::new();
+    let mut i = 0;
+    while i < numbers.len() {
+        let mut j = i;
+        while j + 1 < numbers.len() && numbers[j + 1] == numbers[j] + 1 {
+            j += 1;
+        }
+        out.push(if j > i {
+            format!("{}-{}", numbers[i], numbers[j])
+        } else {
+            numbers[i].to_string()
+        });
+        i = j + 1;
+    }
+    out.join(", ")
+}
 
 /// The build order of every plated cabinet as one table each, keyed
 /// `{tag}:order`. The wire steps come from the checklist's own wire tables,
@@ -38,7 +113,7 @@ pub fn order_sections(project: &Project, checklist: &ReportOutput) -> Vec<Sectio
                 .map(|d| d.tag.to_string())
                 .unwrap_or_else(|| format!("device {id}"))
         };
-        let jobs: Vec<WireJob> = checklist
+        let mut jobs: Vec<(Circuit, WireJob)> = checklist
             .sections
             .iter()
             .find(|s| s.key == format!("{tag}:wire"))
@@ -51,18 +126,28 @@ pub fn order_sections(project: &Project, checklist: &ReportOutput) -> Vec<Sectio
                 };
                 wire.rows
                     .iter()
-                    .map(|row| WireJob {
-                        name: at(row, "number"),
-                        text: format!(
-                            "Run {} to {}, cut {} mm",
-                            at(row, "from"),
-                            at(row, "to"),
-                            at(row, "length_mm")
-                        ),
+                    .map(|row| {
+                        (
+                            Circuit::of(&at(row, "colour"), &at(row, "cross_section_mm2")),
+                            WireJob {
+                                name: at(row, "number"),
+                                text: format!(
+                                    "Run {} to {}, cut {} mm",
+                                    at(row, "from"),
+                                    at(row, "to"),
+                                    at(row, "length_mm")
+                                ),
+                            },
+                        )
                     })
                     .collect()
             })
             .unwrap_or_default();
+        // One circuit at a time: power, then control, then earth. The sort is
+        // stable, so inside a circuit the wire list's order stays.
+        jobs.sort_by_key(|(circuit, _)| *circuit);
+        let mut circuits = circuits_by_mark(&jobs);
+        let jobs: Vec<WireJob> = jobs.into_iter().map(|(_, job)| job).collect();
         let mut section = Section::new(
             &format!("{tag}:order"),
             &format!("{tag}  Build order"),
@@ -70,8 +155,9 @@ pub fn order_sections(project: &Project, checklist: &ReportOutput) -> Vec<Sectio
                 Column::new("step", "Step", 8.0).right(),
                 Column::new("phase", "Phase", 12.0),
                 Column::new("mark", "Mark", 16.0),
-                Column::new("do", "Do", 80.0),
-                Column::new("after", "After", 14.0),
+                Column::new("circuit", "Group (colour, size)", 18.0),
+                Column::new("do", "Do", 64.0),
+                Column::new("after", "After", 16.0),
                 Column::new("done", "Done", 7.0),
             ],
         );
@@ -80,15 +166,14 @@ pub fn order_sections(project: &Project, checklist: &ReportOutput) -> Vec<Sectio
                 vec![
                     Cell::Int(step.number as i64),
                     Cell::text(step.phase.name()),
-                    Cell::text(step.mark),
+                    Cell::text(step.mark.clone()),
+                    Cell::text(if step.phase == Phase::Wires {
+                        circuit_of(&mut circuits, &step.mark)
+                    } else {
+                        ""
+                    }),
                     Cell::text(step.text),
-                    Cell::text(
-                        step.after
-                            .iter()
-                            .map(|n| n.to_string())
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                    ),
+                    Cell::text(number_ranges(&step.after)),
                     Cell::text(novo_reports::ASSEMBLY_BOX),
                 ],
                 Vec::new(),
@@ -199,5 +284,77 @@ impl NovoApp {
                 None
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod circuit_tests {
+    use super::{Circuit, circuit_of, circuits_by_mark, number_ranges};
+    use novo_layout::Plate;
+    use novo_layout::assembly::{Phase, WireJob, steps};
+    use novo_layout::state::CabinetLayout;
+
+    #[test]
+    fn the_group_sits_beside_the_right_wire_number() {
+        let job = |name: &str| WireJob {
+            name: name.into(),
+            text: format!("Run {name}"),
+        };
+        // Wire list order mixes the groups; "7" is used for two wires.
+        let mut jobs = vec![
+            (Circuit::Earth, job("PE1")),
+            (Circuit::Control, job("7")),
+            (Circuit::Power, job("L1")),
+            (Circuit::Power, job("7")),
+            (Circuit::Control, job("3")),
+        ];
+        jobs.sort_by_key(|(circuit, _)| *circuit);
+        let mut by_mark = circuits_by_mark(&jobs);
+        let wires: Vec<WireJob> = jobs.iter().map(|(_, j)| j.clone()).collect();
+        let layout = CabinetLayout::new(Plate {
+            width: 400.0,
+            height: 300.0,
+            margin: 10.0,
+        });
+        let got: Vec<(String, &str)> = steps(&layout, &|id| format!("d{id}"), &wires)
+            .into_iter()
+            .filter(|s| s.phase == Phase::Wires)
+            .map(|s| {
+                let group = circuit_of(&mut by_mark, &s.mark);
+                (s.mark, group)
+            })
+            .collect();
+        let want = [
+            ("L1", "Power"),
+            ("7", "Power"),
+            ("7", "Control"),
+            ("3", "Control"),
+            ("PE1", "PE"),
+        ];
+        assert_eq!(
+            got,
+            want.map(|(m, g)| (m.to_owned(), g)).to_vec(),
+            "power first, control next, PE last, each beside its own wire"
+        );
+    }
+
+    #[test]
+    fn wires_sort_into_power_control_and_earth() {
+        assert_eq!(Circuit::of("black", "2.5"), Circuit::Power);
+        assert_eq!(Circuit::of("BK", "10"), Circuit::Power);
+        assert_eq!(Circuit::of("blue", "0.75"), Circuit::Control);
+        assert_eq!(Circuit::of("", ""), Circuit::Control);
+        // Earth wins over size: a 10 mm² earth lead is still the PE circuit.
+        assert_eq!(Circuit::of("GNYE", "10"), Circuit::Earth);
+        assert_eq!(Circuit::of("green-yellow", "1.5"), Circuit::Earth);
+        assert!(Circuit::Power < Circuit::Control && Circuit::Control < Circuit::Earth);
+    }
+
+    #[test]
+    fn long_dependency_lists_print_as_ranges() {
+        assert_eq!(number_ranges(&[]), "");
+        assert_eq!(number_ranges(&[4]), "4");
+        assert_eq!(number_ranges(&[5, 6, 7, 8, 9, 10, 11, 12]), "5-12");
+        assert_eq!(number_ranges(&[1, 2, 4, 6, 7]), "1-2, 4, 6-7");
     }
 }

@@ -87,7 +87,7 @@ pub(super) fn show(
             t::TEXT_MUTED
         }));
         if let Some(sol) = state.solution() {
-            jump = verdict_line(ui, &sol.snapshot, tag_of, stale || state.running());
+            jump = verdict_line(ui, &sol.snapshot, tag_of, stale, state.running());
         }
         ui.horizontal_wrapped(|ui| heat::simulate_controls_with(ui, state, false));
         let running = state.running();
@@ -104,18 +104,24 @@ pub(super) fn show(
 }
 
 /// The verdict sentence of the shown result, its device name a button that
-/// selects the device in the view. Greyed while the result is out of date or
-/// a new run is under way. Returns the device picked.
+/// selects the device in the view. While a run is under way the sentence is
+/// marked "Preliminary" in the warning colour (the shown numbers are not final
+/// yet); a finished result made for another layout is greyed as out of date.
+/// Returns the device picked.
 fn verdict_line(
     ui: &mut egui::Ui,
     snap: &novo_cfd::CfdSnapshot,
     tag_of: &dyn Fn(u64) -> String,
-    dim: bool,
+    stale: bool,
+    running: bool,
 ) -> Option<u64> {
     use super::heat_verdict::{Tone, verdict};
+    let dim = stale || running;
     let v = verdict(snap, tag_of)?;
     let pal = crate::theme::ui_palette();
-    let colour = if dim {
+    let colour = if running {
+        pal.warning
+    } else if dim {
         pal.text_secondary
     } else {
         match v.tone {
@@ -128,6 +134,9 @@ fn verdict_line(
     let mut jump = None;
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
+        if running {
+            ui.label(egui::RichText::new("Preliminary: ").strong().color(colour));
+        }
         ui.label(egui::RichText::new(&v.lead).strong().color(colour));
         if let Some((id, tag)) = &v.device {
             let resp = ui.add(
@@ -156,8 +165,10 @@ fn verdict_line(
         "From the solver's per-device margins. A model estimate, not a measurement: limits come from the parts data.",
     );
     ui.label(
-        egui::RichText::new(if dim {
-            "Out of date or running: this is the previous result."
+        egui::RichText::new(if running {
+            "Still running: this reading can change until the run finishes."
+        } else if stale {
+            "Out of date: this result was made for another layout."
         } else {
             "Model estimate, not a measurement."
         })

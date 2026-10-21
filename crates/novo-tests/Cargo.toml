@@ -8,6 +8,7 @@ publish = false
 
 [dependencies]
 novo-core.workspace = true
+novo-layout.workspace = true
 
 [dev-dependencies]
 novo-app = { path = "../novo-app" }
@@ -33,6 +34,10 @@ novo-xref.workspace = true
 novo-cli.workspace = true
 novo-py.workspace = true
 novo-numbering.workspace = true
+novo-view3d.workspace = true
+novo-thermal.workspace = true
+novo-cfd.workspace = true
+novo-routing.workspace = true
 
 [lints]
 workspace = true

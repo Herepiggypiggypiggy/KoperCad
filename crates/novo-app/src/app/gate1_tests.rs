@@ -2057,6 +2057,23 @@ fn the_issue_revision_window_proposes_everything_and_issues_in_one_step() {
             .pages()
             .all(|p| p.frozen.as_ref().is_some_and(|f| f.revision == "A"))
     );
+    // Later: an empty description is refused unless "No description" is ticked.
+    d.app.run_command(&ctx, "revision.issue", None);
+    let mut blank = d.app.wb.issue.take().unwrap();
+    blank.description = "  ".into();
+    d.app.submit_issue(blank);
+    let kept = d.app.wb.issue.take().expect("the window stays open");
+    assert!(kept.error.as_deref().unwrap().contains("what changed"));
+    assert_eq!(
+        d.app
+            .backend
+            .document()
+            .unwrap()
+            .project()
+            .revisions()
+            .count(),
+        1
+    );
     // The next proposal follows, and a taken index is refused in place.
     d.app.run_command(&ctx, "revision.issue", None);
     assert_eq!(d.app.wb.issue.as_ref().unwrap().index, "B");
