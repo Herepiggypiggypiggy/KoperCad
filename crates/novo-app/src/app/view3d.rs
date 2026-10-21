@@ -493,10 +493,6 @@ impl NovoApp {
             };
             if let Some(text) = view3d_move::warning(lay, &landings, &tag_of) {
                 view3d_move::show_warning(ui.ctx(), &text);
-            } else if let [one] = landings.as_slice() {
-                // One device in the hand: its distances to the neighbours.
-                let gaps = super::view3d_drag_gaps::gaps(lay, one);
-                super::view3d_drag_gaps::show(ui.ctx(), one, &gaps);
             }
         }
         let mut ghost: Vec<_> = landings
