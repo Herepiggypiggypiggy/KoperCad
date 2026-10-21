@@ -39,4 +39,4 @@ Round-trip check (2026-10-21)
 Sample round trips (2026-10-21, `crates/novo-interop/tests/roundtrips.rs`)
 - Every sample (both synthetic PXF files, both crane demo versions) goes import, PXF export, import, `compare_projects`; only "drawn symbols" and "nets" may differ (no EPLAN symbol table).
 - Found and fixed by it: the PXF writer dropped devices and terminals that are not drawn (every imported project has none); they are now written on the first page without symbol or position, like cables (EPLAN reading of that is unverified). A leading zero in a device number (`Q011`) came back as `Q11`. A line break in a page title became a space.
-- Still to add after #1148 merges: the AML sample (`hoist-feeder.aml`) and PXF-to-AML round trips in the same file.
+- The AML sample (`hoist-feeder.aml`) and every PXF sample also go through AML export and import and compare equal. That found two AML bugs, fixed: free symbols (an earth) were not written, and a net crossing pages got extra interruption points on re-import because the file's own were not linked to the net.

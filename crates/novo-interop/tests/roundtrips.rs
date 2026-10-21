@@ -5,6 +5,7 @@
 use std::path::Path;
 
 use novo_core::{Document, Project};
+use novo_interop::aml::{AmlOptions, export_project, plan_import, read_aml};
 use novo_interop::compare::compare_projects;
 use novo_interop::eplan::pxf::{PxfOptions, PxfWriteOptions, plan_pxf, read_pxf_str, write_pxf};
 
@@ -21,6 +22,13 @@ fn from_pxf(text: &str) -> Project {
     plan_pxf(doc.project(), &file, &PxfOptions::default())
         .apply(&mut doc)
         .unwrap();
+    doc.project().clone()
+}
+
+fn from_aml(text: &str) -> Project {
+    let plant = read_aml(text).unwrap();
+    let mut doc = Document::default();
+    plan_import(doc.project(), &plant).apply(&mut doc).unwrap();
     doc.project().clone()
 }
 
@@ -64,5 +72,29 @@ fn the_crane_samples_survive_a_pxf_round_trip() {
         for what in lossy(&first, &second) {
             assert!(PXF_LOSES.contains(&what.as_str()), "{name}: {what}");
         }
+    }
+}
+
+#[test]
+fn the_aml_sample_survives_an_aml_round_trip() {
+    let first = from_aml(&fixture("aml/hoist-feeder.aml"));
+    let out = export_project(&first, &AmlOptions::default());
+    let second = from_aml(&out.text);
+    let got = lossy(&first, &second);
+    assert!(got.is_empty(), "{got:?}");
+}
+
+#[test]
+fn the_pxf_samples_survive_an_aml_round_trip() {
+    for name in [
+        "pxf/synthetic-small.epj",
+        "pxf/synthetic-layout.epj",
+        "crane/output/custom/demo/v2/DEMO-1.epj",
+    ] {
+        let first = from_pxf(&fixture(name));
+        let out = export_project(&first, &AmlOptions::default());
+        let second = from_aml(&out.text);
+        let got = lossy(&first, &second);
+        assert!(got.is_empty(), "{name}: {got:?}");
     }
 }
