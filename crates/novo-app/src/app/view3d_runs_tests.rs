@@ -435,3 +435,48 @@ fn the_wire_runs_panel_keeps_clear_of_the_heat_panel_even_before_there_is_a_resu
         "starts under the cube, not low: {runs:?}"
     );
 }
+
+#[test]
+fn picking_a_duct_lights_every_run_in_it_and_lists_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = drive_with_cabinet(dir.path());
+    d.frame();
+    let ids = drawn(&d);
+    pick(&mut d, &ids);
+    let facts = d.app.view3d.wire_facts.as_ref().expect("facts").2.clone();
+    let rail = facts
+        .values()
+        .find_map(|f| f.duct_use.first().map(|u| u.rail))
+        .expect("a wire lies in a duct");
+    let inside: Vec<u64> = facts
+        .values()
+        .filter(|f| f.duct_use.iter().any(|u| u.rail == rail))
+        .map(|f| f.id)
+        .collect();
+    // Let go of the wires, pick the duct alone.
+    d.app.view3d.view.state.selection = BTreeSet::from([ItemId::new(ItemKind::Duct, rail)]);
+    d.frame();
+    d.frame();
+    settle(&mut d);
+    let runs = super::view3d_runs::duct_runs(&facts, &d.app.view3d.view.state.selection);
+    assert_eq!(runs.len(), 1);
+    assert_eq!(
+        runs[0].wires.iter().map(|f| f.id).collect::<BTreeSet<_>>(),
+        inside.iter().copied().collect()
+    );
+    assert!(runs[0].fill.is_some());
+    let lit = lines_of(&d)
+        .into_iter()
+        .find(|l| l.width_px == 4.0)
+        .expect("the runs in the duct are lit");
+    assert_eq!(lit.starts.len(), inside.len(), "one lit path per run in it");
+}
+
+#[test]
+fn a_duct_without_wires_says_so() {
+    let facts = std::collections::BTreeMap::new();
+    let sel = BTreeSet::from([ItemId::new(ItemKind::Duct, 99)]);
+    let runs = super::view3d_runs::duct_runs(&facts, &sel);
+    assert_eq!(runs.len(), 1);
+    assert!(runs[0].wires.is_empty() && runs[0].fill.is_none());
+}
