@@ -93,8 +93,8 @@ pub(super) const LIMITS: [Field; 2] = [
 pub(super) const DISTRIBUTION: [Field; 1] = [Field {
     key: novo_checks::single_line::SUPPLY_DIVERSITY_FACTOR,
     label: "Diversity factor at the supply",
-    unit: "0.1 to 1",
-    hint: "0.8",
+    unit: "(0.1 to 1, e.g. 0.8)",
+    hint: "none",
     integer: false,
     max: 1.0,
 }];

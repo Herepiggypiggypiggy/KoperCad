@@ -233,6 +233,7 @@ fn columns() -> Vec<Column> {
         Column::new("icu", "Icu kA", 5.0).right(),
         Column::new("ik", "Ik max kA", 7.0).right(),
         Column::new("ib", "Ib A", 6.0).right(),
+        Column::new("div", "Diversity", 6.5).right(),
         Column::new("section", "mm²", 5.0).right(),
         Column::new("length", "m", 5.0).right(),
         Column::new("iz", "Iz A", 6.0).right(),
@@ -310,10 +311,29 @@ fn row(sl: &SingleLine, node: &Node) -> (Vec<Cell>, Vec<AnyId>) {
             )
         });
     }
+    match node.icu_status {
+        Status::Fail => why.push(format!(
+            "Ik {} kA at this device is above its breaking capacity {} kA",
+            fmt(node.ik_ka.value.unwrap_or_default()),
+            fmt(node.breaking_ka.value.unwrap_or_default())
+        )),
+        Status::Warning => why.push(format!(
+            "Ik may reach {} kA, above the breaking capacity {} kA: runs above have no length or cross-section",
+            fmt(node.ik_ka.value.unwrap_or_default()),
+            fmt(node.breaking_ka.value.unwrap_or_default())
+        )),
+        _ => {}
+    }
     let check = match (
         link.map(|l| l.status),
         node.verdict.as_ref().map(|v| v.status),
     ) {
+        _ if node.icu_status == Status::Fail => Status::Fail,
+        _ if node.icu_status == Status::Warning
+            && !node.link.as_ref().is_some_and(|l| l.status == Status::Fail) =>
+        {
+            Status::Warning
+        }
         (Some(Status::Fail), _) | (_, Some(Status::Fail)) => Status::Fail,
         (Some(Status::Unknown), _) => Status::Unknown,
         (_, Some(Status::Warning)) | (Some(Status::Warning), _) => Status::Warning,
@@ -332,11 +352,17 @@ fn row(sl: &SingleLine, node: &Node) -> (Vec<Cell>, Vec<AnyId>) {
                 .unwrap_or_default(),
         ),
         number(node.breaking_ka),
-        node.verdict
-            .as_ref()
-            .and_then(|v| v.ik_max_ka)
-            .map_or(Cell::Empty, |k| Cell::Number(round2(k))),
+        match node.ik_ka.value {
+            Some(k) if node.ik_exact => Cell::Number(round2(k)),
+            Some(k) => Cell::text(format!("≤ {}", fmt(k))),
+            None => Cell::Empty,
+        },
         number(node.current_a),
+        Cell::text(
+            node.diversity
+                .map(|f| format!("×{}", fmt(f)))
+                .unwrap_or_default(),
+        ),
         link.map_or(Cell::Empty, |l| number(l.section_mm2)),
         link.map_or(Cell::Empty, |l| number(l.length_m)),
         link.map_or(Cell::Empty, |l| number(l.iz_a)),
@@ -530,8 +556,15 @@ fn current_line(node: &Node) -> String {
     if node.loads_without_current > 0 {
         s.push_str(&format!(" (+{} without)", node.loads_without_current));
     }
-    if let Some(ik) = node.verdict.as_ref().and_then(|v| v.ik_max_ka) {
-        s.push_str(&format!("  Ik ≤ {} kA", fmt(ik)));
+    if node.kind != Kind::Supply
+        && let Some(ik) = node.ik_ka.value
+    {
+        s.push_str(&format!(
+            "  Ik {}{} kA{}",
+            if node.ik_exact { "" } else { "≤ " },
+            fmt(ik),
+            mark(node.ik_ka.origin)
+        ));
     }
     s
 }
@@ -925,16 +958,14 @@ fn legend(sl: &SingleLine) -> Vec<String> {
             if sl.missing.len() > 2 { "; ..." } else { "" }
         ));
     }
-    out.push(
-        "Ik ≤ is the stated supply short-circuit current carried down unchanged: the cable impedance is not included, so the real value is lower."
-            .to_owned(),
-    );
     for note in &sl.notes {
         if note.starts_with("Iz assumes")
             || note.contains("times the diversity factor")
             || note.starts_with("A diversity factor is stated")
             || note.starts_with("Ignored: the diversity factor")
             || note.starts_with("ΔU is calculated at power factor 1")
+            || note.starts_with("Ik is")
+            || note.starts_with("Short-circuit current is not carried")
         {
             out.push(note.clone());
         }
