@@ -320,11 +320,7 @@ fn assumed_inputs_are_marked_on_the_drawing_the_schedule_and_the_legend() {
         .find(|r| r.cells[col("tag")].to_string() == "=A1+FLD-M1")
         .unwrap();
     let assumed = m1.cells[col("assumed")].to_string();
-    assert!(
-        assumed.contains("Iz ?") && assumed.contains("installation method C"),
-        "{assumed}"
-    );
-    assert!(assumed.contains("ΔU ?: pf 1"), "{assumed}");
+    assert_eq!(assumed, "Iz ?, ΔU ?");
 }
 
 #[test]
@@ -354,4 +350,25 @@ fn nothing_is_marked_or_noted_when_the_wires_state_the_inputs() {
             .iter()
             .all(|r| r.cells[assumed].to_string().is_empty())
     );
+}
+
+#[test]
+fn an_incomplete_check_says_what_is_missing() {
+    let doc = board();
+    let out = SingleLineDiagram.generate(doc.project());
+    let section = &out.sections[0];
+    let col = |key: &str| section.column(key).unwrap();
+    let mut seen = 0;
+    for r in &section.rows {
+        if r.cells[col("check")].to_string() == "incomplete" {
+            seen += 1;
+            let why = r.cells[col("why")].to_string();
+            assert!(
+                !why.is_empty(),
+                "{} is incomplete without a reason",
+                r.cells[0]
+            );
+        }
+    }
+    assert!(seen > 0, "the fixture has breakers without curve or Icu");
 }

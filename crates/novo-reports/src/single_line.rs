@@ -239,8 +239,8 @@ fn columns() -> Vec<Column> {
         Column::new("du", "ΔU %", 6.0).right(),
         Column::new("du_total", "ΔU Σ %", 6.5).right(),
         Column::new("check", "Check", 14.0),
-        Column::new("assumed", "Assumed", 20.0),
-        Column::new("why", "Why", 20.0),
+        Column::new("why", "Why", 26.0),
+        Column::new("assumed", "Assumed", 10.0),
         Column::new("ib_basis", "Ib basis", 28.0),
         Column::new("cable", "Cable", 8.0),
     ]
@@ -258,14 +258,14 @@ fn basis_short(basis: &str) -> String {
 
 /// What a run's Iz and ΔU assumed, for the schedule's "Assumed" column.
 fn assumed_text(link: &Link) -> String {
-    let mut parts = Vec::new();
+    let mut parts: Vec<&str> = Vec::new();
     if !link.iz_defaults.is_empty() {
-        parts.push(format!("Iz ?: {}", link.iz_defaults.join(", ")));
+        parts.push("Iz ?");
     }
     if link.drop_pf_assumed {
-        parts.push("ΔU ?: pf 1".to_owned());
+        parts.push("ΔU ?");
     }
-    parts.join("; ")
+    parts.join(", ")
 }
 
 fn cable_text(link: &Link) -> String {
@@ -289,6 +289,26 @@ fn row(sl: &SingleLine, node: &Node) -> (Vec<Cell>, Vec<AnyId>) {
         && !v.failing.is_empty()
     {
         why.push(format!("Calculations: {}", v.failing.join(", ")));
+    }
+    if let Some(v) = &node.verdict
+        && v.status == Status::Unknown
+        && v.failing.is_empty()
+    {
+        why.push(if v.missing.is_empty() {
+            "the calculation lacks an input".to_owned()
+        } else {
+            format!(
+                "missing: {}",
+                v.missing
+                    .iter()
+                    .map(|m| m
+                        .trim_end_matches("_ka")
+                        .trim_end_matches("_a")
+                        .replace('_', " "))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        });
     }
     let check = match (
         link.map(|l| l.status),
@@ -327,8 +347,8 @@ fn row(sl: &SingleLine, node: &Node) -> (Vec<Cell>, Vec<AnyId>) {
         } else {
             ""
         }),
-        Cell::text(link.map(assumed_text).unwrap_or_default()),
         Cell::text(why.join("; ")),
+        Cell::text(link.map(assumed_text).unwrap_or_default()),
         Cell::text(basis_short(&node.current_basis)),
         Cell::text(link.map(cable_text).unwrap_or_default()),
     ];
