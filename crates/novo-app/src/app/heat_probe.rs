@@ -44,15 +44,15 @@ impl Reading {
             format!("{:.2} m/s", self.speed)
         };
         let heat = if self.heat_w_m2 < 1.0 {
-            String::from("no heat carried")
+            String::from("air carries no heat")
         } else if self.heat_up.abs() > 0.5 * self.heat_w_m2 {
             format!(
-                "heat {} {:.0} W/m²",
-                if self.heat_up > 0.0 { "up" } else { "down" },
-                self.heat_w_m2
+                "air carries {:.0} W/m² {}",
+                self.heat_w_m2,
+                if self.heat_up > 0.0 { "up" } else { "down" }
             )
         } else {
-            format!("heat {:.0} W/m²", self.heat_w_m2)
+            format!("air carries {:.0} W/m²", self.heat_w_m2)
         };
         format!(
             "{:.1} °C ({:+.1} K), air {dir}, {heat}  at x {:.0}, y {:.0}, z {:.0} mm",
@@ -256,7 +256,7 @@ mod tests {
         assert!(r.text().contains("26.0 °C"));
         // 1.16 * 1007 * 6 K * 1 m/s, sideways.
         assert!((r.heat_w_m2 - 7008.9).abs() < 5.0, "{r:?}");
-        assert!(r.text().contains("heat 7009 W/m²"), "{}", r.text());
+        assert!(r.text().contains("air carries 7009 W/m²"), "{}", r.text());
     }
 
     #[test]
@@ -265,13 +265,13 @@ mod tests {
         snap.velocity.iter_mut().for_each(|v| *v = [0.0, -0.2, 0.0]);
         let r = read(&snap, 20.0, [60.0, 30.0, 40.0]);
         assert!(
-            r.heat_up > 0.0 && r.text().contains("heat up"),
+            r.heat_up > 0.0 && r.text().contains("W/m² up"),
             "{}",
             r.text()
         );
         snap.velocity.iter_mut().for_each(|v| *v = [0.0; 3]);
         let r = read(&snap, 20.0, [60.0, 30.0, 40.0]);
-        assert!(r.text().contains("no heat carried"));
+        assert!(r.text().contains("air carries no heat"));
     }
 
     #[test]
