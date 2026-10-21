@@ -213,6 +213,7 @@ pub(crate) fn parse_scenario(file: &str, text: &str) -> Result<Scenario, String>
 const KNOWN_VERBS: &[&str] = &[
     "open",
     "fresh",
+    "library",
     "shot",
     "wait",
     "resize",
@@ -854,6 +855,21 @@ impl Ctx<'_> {
                 self.srv.set_project(Some(p));
                 self.srv.ensure()?;
                 Ok(())
+            }
+            "library" => {
+                let dir = self.resolve(need(1, "a library folder")?)?;
+                if !dir.join("records.json").exists() {
+                    return Err(format!(
+                        "library folder {} has no records.json",
+                        dir.display()
+                    ));
+                }
+                // Restart with the library in the profile; every later launch
+                // of the scenario has it too.
+                self.srv.stop();
+                self.srv.keep_profile(false);
+                self.srv.set_library_seed(Some(dir));
+                self.srv.ensure()
             }
             "fresh" => {
                 self.srv.stop();

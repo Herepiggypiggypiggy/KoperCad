@@ -1238,6 +1238,7 @@ impl NovoApp {
             .map(|i| i.raw)
             .collect();
         let mut ask = None;
+        let mut model_message = None;
         if devices.len() >= 2
             && let Some(op) = view3d_align::strip(ui.ctx(), out.rect, devices.len())
         {
@@ -1252,7 +1253,11 @@ impl NovoApp {
             if let [one] = devices.as_slice()
                 && !mode.position.hidden
             {
+                mode.position.model = mode.models.row(*one);
                 edits.extend(mode.position.show(ui.ctx(), out.rect, &stored, *one));
+                if let Some(turn) = mode.position.turned.take() {
+                    model_message = mode.models.turn(*one, turn);
+                }
             }
             if state.selection != mode.synced.1 {
                 self.cabinet.view.selection.apply(
@@ -1337,6 +1342,9 @@ impl NovoApp {
             self.cabinet_rail_ask(Some(id), rail_ask);
             // The scene is rebuilt on the next frame; nothing else asks for it.
             ui.ctx().request_repaint();
+        }
+        if let Some(message) = model_message {
+            self.message(super::Level::Warning, message);
         }
         for edit in edits {
             if let view3d_move::Edit::Group { devices, rails } = edit {

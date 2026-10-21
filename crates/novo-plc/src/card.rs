@@ -25,6 +25,15 @@ pub const ADDRESS_STYLE: &str = "plc.address_style";
 /// On a channel symbol: which channel it draws, type and number in one
 /// text, `"DI 3"` (plc.md §2; see [`channel_key`](crate::index::channel_key)).
 pub const CHANNEL: &str = "plc.channel";
+/// On a channel symbol drawn for a channel that carries no signal: the page
+/// shows the whole card, the index still counts the channel as a spare.
+pub const SPARE: &str = "plc.spare";
+/// On a channel symbol the import drew: the channel's address as a text for
+/// the page. It is a stored copy: [`sync_address_texts`](crate::index::sync_address_texts)
+/// brings it back to the address the cards give, and the app runs that after
+/// every edit of a card or of the address style. Edits made outside the app
+/// (scripts) call it themselves.
+pub const ADDRESS_TEXT: &str = "plc.address_text";
 /// On a channel symbol: the signal text, when typed.
 pub const SIGNAL: &str = "plc.signal";
 
