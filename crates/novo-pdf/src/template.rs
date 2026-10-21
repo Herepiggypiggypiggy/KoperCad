@@ -30,14 +30,21 @@ pub fn page_count(sheet: &TemplateSheet, paper: Paper) -> usize {
     tile_plan(sheet, paper).count().saturating_add(1)
 }
 
-type Draw<'a> = Box<dyn Fn(&mut PageWriter<'_>) + 'a>;
+pub(crate) type Draw<'a> = Box<dyn Fn(&mut PageWriter<'_>) + 'a>;
 
-struct Page<'a> {
-    size: (f64, f64),
-    draw: Draw<'a>,
+pub(crate) struct Page<'a> {
+    pub(crate) size: (f64, f64),
+    pub(crate) draw: Draw<'a>,
 }
 
-fn text(m: &mut Marks, pos: (f64, f64), height: f64, h: HAlign, bold: bool, s: impl Into<String>) {
+pub(crate) fn text(
+    m: &mut Marks,
+    pos: (f64, f64),
+    height: f64,
+    h: HAlign,
+    bold: bool,
+    s: impl Into<String>,
+) {
     m.texts.push(Text {
         layer: Layer::Text,
         pos,
@@ -50,13 +57,13 @@ fn text(m: &mut Marks, pos: (f64, f64), height: f64, h: HAlign, bold: bool, s: i
     });
 }
 
-fn line(m: &mut Marks, layer: Layer, a: (f64, f64), b: (f64, f64)) {
+pub(crate) fn line(m: &mut Marks, layer: Layer, a: (f64, f64), b: (f64, f64)) {
     m.shapes.push((layer, MarkShape::Line { a, b }));
 }
 
 /// The scale-check ruler: `RULER_MM` long with a tick every 10 mm, its left
 /// end at `x`, its line at `y`; the caption sits below.
-fn ruler(m: &mut Marks, x: f64, y: f64) {
+pub(crate) fn ruler(m: &mut Marks, x: f64, y: f64) {
     line(m, Layer::Table, (x, y), (x + RULER_MM, y));
     for i in 0..=10 {
         let tx = x + i as f64 * 10.0;
@@ -245,7 +252,14 @@ fn tile_page<'a>(
 }
 
 /// Appends `lines` from `y` down, one row each; returns the next free y.
-fn paragraph(m: &mut Marks, x: f64, mut y: f64, width: f64, height: f64, s: &str) -> f64 {
+pub(crate) fn paragraph(
+    m: &mut Marks,
+    x: f64,
+    mut y: f64,
+    width: f64,
+    height: f64,
+    s: &str,
+) -> f64 {
     let per_line = (width / (height * 0.5)).floor().max(10.0) as usize;
     let mut cur = String::new();
     let flush = |m: &mut Marks, cur: &mut String, y: &mut f64| {
@@ -604,7 +618,7 @@ pub fn export_plate_pdf(sheet: &TemplateSheet, project_name: &str) -> Option<Vec
     ))
 }
 
-fn write_pages(pages: &[Page<'_>], title: &str) -> Vec<u8> {
+pub(crate) fn write_pages(pages: &[Page<'_>], title: &str) -> Vec<u8> {
     let mut next = 1;
     let mut alloc = || {
         let r = Ref::new(next);

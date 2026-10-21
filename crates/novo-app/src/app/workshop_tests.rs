@@ -79,6 +79,13 @@ fn the_pack_needs_something_to_print_then_fills_one_folder() {
     let text = pdf.extract_text(&[1]).unwrap();
     assert!(text.contains("Drilling template 1:1"), "{text}");
     assert!(folder.join("0 Bench packet.pdf").exists());
+    // The print check goes with every pack that has a template; no door
+    // cut-outs here, so no cards.
+    let check =
+        lopdf::Document::load_mem(&std::fs::read(folder.join("0 Print scale check.pdf")).unwrap())
+            .unwrap();
+    assert_eq!(check.get_pages().len(), 1);
+    assert!(!folder.join("1 Cut-out cards +CAB1.pdf").exists());
     // The plate also comes as one sheet the size of the plate, for a print shop.
     let single = lopdf::Document::load_mem(
         &std::fs::read(folder.join("1 Plate full size +CAB1.pdf")).unwrap(),
@@ -159,4 +166,29 @@ fn an_absurd_plate_is_left_out_with_a_hint_instead_of_hundreds_of_sheets() {
     let project = d.app.backend.document().unwrap().project();
     let (pdfs, too_big) = super::workshop::template_pdfs(project, "Plant 3", Paper::A3);
     assert!(pdfs.is_empty() && too_big.len() == 1, "{too_big:?}");
+}
+
+#[test]
+fn the_scale_check_command_writes_one_page_next_to_the_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    assert!(d.app.save_to(&dir.path().join("Plant 4.novo")));
+    d.app.run_command(&ctx, "export.scale_check", None);
+    let file = dir.path().join("Plant 4 print scale check.pdf");
+    assert!(file.exists(), "{:?}", d.app.messages().last());
+    let pdf = lopdf::Document::load_mem(&std::fs::read(&file).unwrap()).unwrap();
+    assert_eq!(pdf.get_pages().len(), 1);
+    // A second run replaces it.
+    d.app.run_command(&ctx, "export.scale_check", None);
+    assert!(
+        d.app
+            .messages()
+            .last()
+            .unwrap()
+            .text
+            .starts_with("Replaced")
+    );
 }

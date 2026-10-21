@@ -2762,6 +2762,22 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.scale_check",
+            "Export print scale check (PDF)",
+            "Export",
+            &[
+                "print", "scale", "check", "1:1", "template", "square", "printer",
+            ],
+            Needs::Project,
+        ),
+        &[
+            "export scale check",
+            "print scale check",
+            "check printer scale",
+        ],
+    ),
+    verb(
+        cmd(
             "export.bench_packet",
             "Export bench packet (PDF)",
             "Export",
