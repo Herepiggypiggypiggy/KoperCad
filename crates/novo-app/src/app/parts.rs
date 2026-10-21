@@ -1202,6 +1202,11 @@ fn list_ui(
                 RowAction::InLibrary => "In library",
                 _ => "Not imported",
             };
+            let trust = super::parts_quality::trust_at(win.catalog_path.as_deref(), part);
+            let description = match super::parts_quality::trust_tag(&trust) {
+                Some(tag) => format!("[{tag}] {}", part.description),
+                None => part.description.clone(),
+            };
             let cells = [
                 TableCell {
                     text: &part.manufacturer,
@@ -1212,7 +1217,7 @@ fn list_ui(
                     numeric: true,
                 },
                 TableCell {
-                    text: &part.description,
+                    text: &description,
                     numeric: false,
                 },
                 TableCell {
@@ -1388,6 +1393,10 @@ fn detail_ui(ui: &mut egui::Ui, win: &mut PartsWindow, actions: &mut Vec<PartsAc
             if !part.description.is_empty() {
                 ui.label(egui::RichText::new(&part.description).color(p.text_secondary));
             }
+            super::parts_quality::trust_badge(
+                ui,
+                &super::parts_quality::trust_at(win.catalog_path.as_deref(), part),
+            );
             ui.add_space(6.0);
             ui.horizontal_wrapped(|ui| {
                 if widgets::primary_button(ui, "Use for selected device")

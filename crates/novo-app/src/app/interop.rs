@@ -322,10 +322,21 @@ impl NovoApp {
             ui.label(import.plan.summary());
             ui.add_space(6.0);
             ui.weak("An import only adds. Anything that exists keeps what the project says.");
-            if !import.report.lossy.is_empty() || !import.report.notes.is_empty() {
+            if !import.report.lossy.is_empty()
+                || !import.report.guessed.is_empty()
+                || !import.report.notes.is_empty()
+            {
                 ui.add_space(8.0);
-                ui.strong("Not carried over");
+                if !import.report.lossy.is_empty() {
+                    ui.strong("Not carried over");
+                }
                 for l in &import.report.lossy {
+                    ui.label(format!("{} {}: {}", l.count, l.what, l.why));
+                }
+                if !import.report.guessed.is_empty() {
+                    ui.strong("Guessed, not exact");
+                }
+                for l in &import.report.guessed {
                     ui.label(format!("{} {}: {}", l.count, l.what, l.why));
                 }
                 for n in &import.report.notes {

@@ -43,16 +43,7 @@ fn id_of_run(app: &super::NovoApp) -> String {
 
 /// Steps whose `solve` the editor cannot carry out today, each with the
 /// reason. A step that starts working must come off this list.
-const KNOWN_BROKEN: &[(&str, &str)] = &[
-    (
-        "enclosure-door-and-depth/apply-defaults",
-        "the Door and depth card has no Apply button in the Mounting plate panel (door/hinge thread fixes it)",
-    ),
-    (
-        "enclosure-door-and-depth/shallow",
-        "same Apply button as apply-defaults",
-    ),
-];
+const KNOWN_BROKEN: &[(&str, &str)] = &[];
 
 /// What happened to one step.
 #[derive(Debug, Clone, PartialEq)]
@@ -232,12 +223,22 @@ impl Drive {
                 self.app.wb.wheel = None;
                 self.frame();
                 self.frame();
-                let rect = self
-                    .app
-                    .learn_anchor(&u.ui_click)
-                    .ok_or_else(|| format!("the control `{}` is not on screen", u.ui_click))?;
-                self.pointer_click(rect.center(), false);
-                Ok(())
+                // A control folded away or inside a closed menu is reached the
+                // way a learner reaches it: through the control that opens it.
+                for _ in 0..4 {
+                    let mut id = u.ui_click.clone();
+                    while self.app.learn_drawn(&id).is_none() {
+                        id = super::learn_labels::anchor_fallback(&id).ok_or_else(|| {
+                            format!("the control `{}` is not on screen", u.ui_click)
+                        })?;
+                    }
+                    let rect = self.app.learn_drawn(&id).expect("drawn");
+                    self.pointer_click(rect.center(), false);
+                    if id == u.ui_click {
+                        return Ok(());
+                    }
+                }
+                Err(format!("the control `{}` did not appear", u.ui_click))
             }
             SolveOp::ListRow(l) => {
                 let l = &l.list_row;
@@ -523,6 +524,12 @@ impl Drive {
     /// Selects a device (all its symbols) or one pin's symbol, as a click
     /// (or Shift+click) on it does.
     fn replay_select(&mut self, text: &str, add: bool) -> Result<(), String> {
+        // Nothing named: a click on an empty spot of the plate.
+        if text.is_empty() {
+            self.app.cabinet.view.selection.clear();
+            self.frame();
+            return Ok(());
+        }
         // In the Cabinet a click lands on the plate.
         if !text.contains(':')
             && matches!(self.app.workspace(), Workspace::Cabinet | Workspace::View3d)
@@ -698,6 +705,7 @@ impl Drive {
         self.app.wb.macros.open = false;
         self.app.wb.macro_save = None;
         self.app.wb.project_settings = false;
+        self.app.cabinet.plate_card = false;
         self.app.wb.numbering = None;
         self.app.wb.wheel = None;
         // And so would a dialog (settings, shortcuts): Escape closes each.
@@ -746,6 +754,12 @@ impl Drive {
             }
             next = index + 1;
             guard += 1;
+            // The lessons tell the learner to close a reading window (Place
+            // rules, Rails and ducts, Cut list) when done; left open it sits
+            // over the bar and takes the next click.
+            self.app.cabinet.rules.editor_open = false;
+            self.app.cabinet.rules.cut_open = false;
+            self.app.cabinet.rails.open = false;
             if guard > 200
                 || self
                     .app
@@ -1025,6 +1039,9 @@ fn every_shipped_lesson_replays_from_its_own_solve() {
         known_seen.len(),
         failed.len()
     );
+    for f in &failed {
+        eprintln!("  FAILED: {f}");
+    }
     for w in waiting.iter().chain(&downstream) {
         eprintln!("  not counted: {w}");
     }

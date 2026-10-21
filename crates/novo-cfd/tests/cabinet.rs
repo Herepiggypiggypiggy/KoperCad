@@ -480,5 +480,8 @@ fn the_turbulence_statement_stays_whole_when_radiation_is_marked() {
         .iter()
         .find(|l| l.starts_with("Turbulence: "))
         .unwrap();
-    assert!(t.ends_with("fan-driven flow is not checked yet."), "{t}");
+    assert!(
+        t.ends_with("read air temperatures of a fan case as an estimate."),
+        "{t}"
+    );
 }

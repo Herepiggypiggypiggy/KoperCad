@@ -1,0 +1,6 @@
+@title Every shipped lesson opens
+@area Learn
+@slow
+click_text "Open example"
+wait 20
+sweep_lessons

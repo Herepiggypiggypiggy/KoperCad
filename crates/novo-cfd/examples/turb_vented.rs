@@ -1,6 +1,7 @@
 //! The vented 600 x 800 x 300 mm box with 100 W: laminar, SST and k-epsilon
 //! at a given cell count against the 2D engine (lane CFD-B).
 //! `cargo run --release -p novo-cfd --example turb_vented -- sst 6000`
+//! Add `fan` for a 120 m3/h intake fan in place of the bottom louvre.
 use novo_cfd::cabinet::{CabinetSolver, Tuning};
 use novo_cfd::turb::TurbModel;
 use novo_cfd::{Control, Fidelity, Solver};
@@ -8,7 +9,7 @@ use novo_layout::Rect;
 use novo_layout::sizing::{Installation, Material};
 use novo_thermal::*;
 
-fn scenario(loss_w: f64) -> Scenario {
+fn scenario(loss_w: f64, fan: bool) -> Scenario {
     let vent = |placement| Vent {
         opening: Opening {
             placement,
@@ -48,11 +49,28 @@ fn scenario(loss_w: f64) -> Scenario {
             heat_capacity_j_per_k: None,
         }],
         obstacles: vec![],
-        vents: vec![
-            vent(Placement::Bottom { x_mm: 300.0 }),
-            vent(Placement::Top { x_mm: 300.0 }),
-        ],
-        fans: vec![],
+        vents: if fan {
+            vec![vent(Placement::Top { x_mm: 300.0 })]
+        } else {
+            vec![
+                vent(Placement::Bottom { x_mm: 300.0 }),
+                vent(Placement::Top { x_mm: 300.0 }),
+            ]
+        },
+        fans: if fan {
+            vec![Fan {
+                opening: Opening {
+                    placement: Placement::Bottom { x_mm: 300.0 },
+                    width_mm: 200.0,
+                    height_mm: 120.0,
+                },
+                mode: FanMode::Intake,
+                free_flow_m3h: 120.0,
+                max_pressure_pa: 60.0,
+            }]
+        } else {
+            vec![]
+        },
         params: Params::default(),
     }
 }
@@ -67,7 +85,7 @@ fn main() {
         .nth(2)
         .and_then(|s| s.parse().ok())
         .unwrap_or(6000);
-    let scn = scenario(100.0);
+    let scn = scenario(100.0, std::env::args().any(|a| a == "fan"));
     let two_d = simulate_steady(&scn).unwrap();
     let d2 = &two_d.devices[0];
     let mut tuning = Tuning::default().with_cells(cells);

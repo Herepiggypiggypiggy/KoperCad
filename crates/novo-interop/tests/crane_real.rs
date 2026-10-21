@@ -62,6 +62,13 @@ fn the_drawn_pages_keep_the_nets_of_the_real_project() {
     let r = plan.report();
     assert!(r.count_of("symbols drawn") > 100, "{}", r.text());
     assert!(r.count_of("wires") > 100, "{}", r.text());
+    // Only the black boxes (no pin names, no function the library knows) stay
+    // boxes: the transformer with PE is fitted by where its points sit.
+    let text = r.text();
+    assert!(
+        !text.contains("Transformer, 5 connection points with PE x"),
+        "{text}"
+    );
     let mut doc = novo_core::Document::new(novo_core::Project::new("x"));
     let (_, _, check) = plan.apply_checked(&mut doc).unwrap().unwrap();
     let c = check.expect("pages are drawn");

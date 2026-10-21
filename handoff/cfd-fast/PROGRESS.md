@@ -13,3 +13,4 @@ Coordinator relay: skip the momentum rewrite; make the results usable in 3D. One
 - 2026-10-16 22:10 UTC probe polish: the probe line is in the Heat strip (clicked point, or the pointer's point), says "model, not validated", a new result drops the point, repaint only when the line changes, crosshair cursor while probing.
 - Slice plane (own PR): 3D Heat strip > Slice shows the plane position in mm, typed or dragged, with one-cell step buttons.
 - Arrows (own PR): 3D Heat strip > Arrows draws a grid of arrows on the slice plane, length follows air speed.
+- Arrows hover fix (own PR): the Arrows checkbox hover only quotes the plane's top speed while Arrows is on (3D Heat strip > Arrows); before it read "now 0.00 m/s" with Arrows off.

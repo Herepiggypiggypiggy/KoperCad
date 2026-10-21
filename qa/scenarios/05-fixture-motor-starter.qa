@@ -1,0 +1,18 @@
+@title Golden motor starter project opens
+@area Fixtures
+# The v0.1 golden file (also a compatibility test): must open with its devices and wires.
+open crates/novo-tests/tests/golden/v0.1-motor-starter.novo
+wait 20
+expect_scene K1
+shot schematic
+check_blank schematic
+check_layout
+# The golden file has no panel, so Cabinet shows the empty state.
+click_text Cabinet #1
+wait 20
+shot cabinet-empty
+check_layout
+click_text Commissioning
+wait 20
+shot commissioning
+check_layout
