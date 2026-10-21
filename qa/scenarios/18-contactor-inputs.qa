@@ -1,0 +1,12 @@
+@title Inspector on the contactor: no trip curve, breaking capacity or let-through rows
+@area Schematic
+@sizes 1366x768
+click_text "Open example"
+wait 30
+click 353 228
+wait 40
+shot contactor-inspector
+expect_not "Trip curve"
+expect_not "Breaking capacity"
+expect "Rated current"
+expect_not "Relay setting"

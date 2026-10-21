@@ -74,7 +74,7 @@ pub(super) fn input_applies(key: &str, letter: &str) -> bool {
     let protective = matches!(letter, "Q" | "F" | "");
     match key {
         "breaking_capacity_ka" | "trip_curve" | "let_through_i2t" => protective,
-        "setting_min_a" | "setting_max_a" => matches!(letter, "Q" | "F" | "K" | ""),
+        "setting_min_a" | "setting_max_a" => matches!(letter, "Q" | "F" | ""),
         "ac3_current_a" => matches!(letter, "Q" | "K" | ""),
         "sccr_ka" => matches!(letter, "Q" | "F" | "K" | ""),
         _ => true,
@@ -1120,6 +1120,8 @@ mod tests {
             assert!(input_applies(key, "Q"), "{key} on a breaker");
             assert!(input_applies(key, "F"), "{key} on a fuse");
         }
+        assert!(!input_applies("setting_max_a", "K"), "overload settings");
+        assert!(input_applies("setting_max_a", "F"));
         assert!(input_applies("rated_current_a", "K"));
         assert!(input_applies("ac3_current_a", "K"));
     }
