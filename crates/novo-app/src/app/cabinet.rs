@@ -187,6 +187,8 @@ pub(super) enum Ask {
     ExportWireCut,
     /// Set a wire production rule of the project (`None` back to its default).
     SetWireRule(&'static str, Option<f64>),
+    /// Set or clear the cabinet entry point of a plate (mm, plate coordinates).
+    SetEntryPoint(StructureId, Option<(f64, f64)>),
     ExportWireProduction,
     OpenBench,
     ExportWiringDxf(StructureId),
@@ -2384,6 +2386,15 @@ impl NovoApp {
             Ask::SetWireRule(key, value) => {
                 self.cabinet_edit("Wire rule", move |tx| {
                     novo_routing::project_rules::set_rule(tx, key, value)
+                });
+            }
+            Ask::SetEntryPoint(plate, point) => {
+                self.cabinet_edit("Cabinet entry point", move |tx| {
+                    novo_routing::entry::set_entry_point(
+                        tx,
+                        plate,
+                        point.map(|(x, y)| novo_routing::Point::new(x, y)),
+                    )
                 });
             }
             Ask::ExportWireCut => {

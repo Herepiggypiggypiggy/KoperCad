@@ -112,3 +112,19 @@ fn the_overlay_is_routed_with_the_project_rules() {
     assert!(none.rows.is_empty());
     assert_ne!(none, Overlay::default());
 }
+
+#[test]
+fn the_overlay_carries_the_plate_and_its_entry_point_for_the_editor() {
+    let (mut doc, cab) = cabinet();
+    let o = overlay(doc.project(), cab);
+    assert!(o.plate.is_some(), "the plate size is shown to the editor");
+    assert_eq!(o.entry, None);
+    let (w, h) = o.plate.unwrap();
+    doc.transact("Entry", |tx| {
+        novo_routing::entry::set_entry_point(tx, cab, Some(novo_routing::Point::new(w / 2.0, h)))
+    })
+    .unwrap();
+    assert_eq!(overlay(doc.project(), cab).entry, Some((w / 2.0, h)));
+    doc.undo().unwrap();
+    assert_eq!(overlay(doc.project(), cab).entry, None);
+}

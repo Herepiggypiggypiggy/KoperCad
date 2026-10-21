@@ -268,7 +268,9 @@ fn estimates_in_the_example_are_explained_by_cause() {
     let text = plan.left_to_you.join("\n");
     // Four motor wires leave the cabinet; six wires are supply feeds.
     assert!(
-        text.contains("4 wire lengths are estimates: the wire leaves the cabinet"),
+        text.contains(
+            "4 wire lengths are estimates: the wire goes to a device in another location"
+        ),
         "{text}"
     );
     assert!(

@@ -61,6 +61,9 @@ pub(super) struct Overlay {
     pub(super) notes: Vec<String>,
     /// The project's wire production rules the lengths were made with.
     pub(super) rules: WireRules,
+    /// The plate's size and its entry point (where outside wires arrive).
+    pub(super) plate: Option<(f64, f64)>,
+    pub(super) entry: Option<(f64, f64)>,
 }
 
 impl Overlay {
@@ -97,9 +100,16 @@ impl Overlay {
 pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
     let routed = route_project(project);
     let rules = WireRules::of(project);
+    let plate = project
+        .get::<novo_core::Structure>(structure)
+        .and_then(|s| s.plate)
+        .map(|p| (p.width, p.height));
+    let entry = novo_routing::entry::entry_point(project, structure).map(|p| (p.x, p.y));
     let Some((_, plan)) = routed.plans.iter().find(|(s, _)| *s == structure) else {
         return Overlay {
             rules,
+            plate,
+            entry,
             ..Overlay::default()
         };
     };
@@ -122,6 +132,8 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
         rows,
         notes,
         rules,
+        plate,
+        entry,
     }
 }
 
@@ -362,6 +374,9 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
             if let Some(a) = rules_section(ui, &overlay.rules) {
                 ask = Some(a);
             }
+            if let Some(a) = entry_section(ui, overlay, plate) {
+                ask = Some(a);
+            }
             if overlay.rows.is_empty() {
                 ui.weak("No wire has both ends placed on this plate");
                 return;
@@ -440,6 +455,54 @@ pub(super) fn panel(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) ->
         panel.response.rect,
         false,
     );
+    ask
+}
+
+/// The cabinet entry: the point on the plate where wires from outside (a
+/// supply feed, a cable to the field) come in. Wires to the outside are routed
+/// to it. Empty means not set; both numbers are kept together.
+fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Option<Ask> {
+    let (width, height) = overlay.plate?;
+    let mut ask = None;
+    ui.horizontal(|ui| {
+        ui.label("Cabinet entry");
+        let id = egui::Id::new(("cabinet_entry", plate));
+        let set = overlay.entry;
+        let (mut x, mut y) = ui
+            .data(|d| d.get_temp::<(f64, f64)>(id))
+            .or(set)
+            .unwrap_or((width / 2.0, height));
+        let rx = ui.add(
+            egui::DragValue::new(&mut x)
+                .range(0.0..=width)
+                .suffix(" mm x"),
+        );
+        let ry = ui.add(
+            egui::DragValue::new(&mut y)
+                .range(0.0..=height)
+                .suffix(" mm y"),
+        );
+        if rx.changed() || ry.changed() {
+            ui.data_mut(|d| d.insert_temp(id, (x, y)));
+        }
+        let done = rx.drag_stopped() || rx.lost_focus() || ry.drag_stopped() || ry.lost_focus();
+        if done && ui.data(|d| d.get_temp::<(f64, f64)>(id)).is_some() {
+            ui.data_mut(|d| d.remove_temp::<(f64, f64)>(id));
+            if Some((x, y)) != set {
+                ask = Some(Ask::SetEntryPoint(plate, Some((x, y))));
+            }
+        }
+        if set.is_none() {
+            ui.weak("not set");
+        } else if ui
+            .small_button("\u{21ba}")
+            .on_hover_text("Remove the entry point")
+            .clicked()
+        {
+            ask = Some(Ask::SetEntryPoint(plate, None));
+        }
+    });
+    ui.weak("Where wires from outside come in (gland). Origin top left of the plate.");
     ask
 }
 
