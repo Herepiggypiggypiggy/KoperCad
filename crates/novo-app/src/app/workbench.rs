@@ -203,6 +203,8 @@ pub(crate) struct Workbench {
     pub(super) assistant: super::assistant::State,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
+    /// The Autopilot review list, while open.
+    pub(super) autopilot: Option<super::autopilot::AutopilotState>,
     /// Paper of the workshop pack's drilling template.
     pub(super) workshop_paper: novo_layout::template::Paper,
     /// The PDF options dialog (File > Export drawings > Export PDF with options...), while open.
@@ -327,6 +329,7 @@ impl Default for Workbench {
             background_panel: None,
             assistant: super::assistant::State::new(),
             bench: None,
+            autopilot: None,
             workshop_paper: novo_layout::template::Paper::A4,
             pdf_options: None,
             #[cfg(test)]
@@ -582,6 +585,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "wire.mode",
     "edit.reset_note",
     "interruption.renumber",
+    "wires.autopilot",
     "wires.number",
     "wires.numbering",
     "wires.renumber",
@@ -1002,6 +1006,7 @@ impl NovoApp {
             | "terminal.style"
             | "terminal.restore_declined" => self.terminal_edit_command(id, argument),
             "interruption.renumber" => self.renumber_interruptions(),
+            "wires.autopilot" => self.open_autopilot(),
             "wires.number" => self.number_wires(),
             "wires.numbering" => {
                 self.open_numbering(novo_numbering::Mode::Fill, super::numbering::Tab::Preview)

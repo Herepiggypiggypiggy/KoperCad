@@ -20,7 +20,7 @@ Unresolved after the full crane import (2026-10-21, report on the full crane exp
 - 13 "Black box" devices (tag letters B x4, U x7, ES x1, K x1): no pins and no function in the file, so no symbol can be chosen. They stay labelled boxes with 2 points. Done (#1123): the box is captioned by the placement's own type text, then part number (8 of the 13 now say what they are). Left: the other 5 have neither in the file. Not invented.
 - 2 "Insulated wire termination" matched loosely (another variant of the library symbol): connection points may be off. Checked 2026-10-21: the file's own library has no variant with that pin count in any match tier (preferring pin count across tiers changed nothing), so the loose match is the best the file offers. Nothing to fix.
 - 4-point motor protection breakers: stay boxes on purpose (two poles, no library symbol). Plan: a 2-pole symbol only when a real file needs it.
-- 577 wire routes are plain right-angle runs, not EPLAN's lines. Which pins are one net is exact (agrees over 1115 of 1117 points). Plan: carry EPLAN's connection-line geometry when the file has it (waits on the text-anchor and line questions below).
+- Wire routes: the file stores no wire lines; its connections are implied by pin directions and nodes. #1139: 459 of 577 wires now follow those runs through the nodes; 118 keep a guessed right-angle route (the pair only connects through another pin or across pages). Which pins are one net is exact (agrees over 1115 of 1117 points). Plan: route the remaining 118 through the pins they pass.
 - 24 cable cores without a cable: the core names a cable that is not in the file. Nothing to read; reported as is.
 - 1 mounting plate device with no project device of that name in its location: reported; placed only when the name exists.
 - 16 groups and 36 generated report pages: left out on purpose (KoperCAD generates its own lists).
@@ -29,4 +29,4 @@ Unresolved after the full crane import (2026-10-21, report on the full crane exp
 
 Next PRs, in order
 1. Kind 17 and 91 objects: identify, or keep named.
-2. EPLAN connection-line geometry for wire routes.
+2. The remaining 118 guessed wire routes.

@@ -1040,6 +1040,11 @@ pub const DUTCH: &[Aliases] = &[
         &["pdf", "afdrukken", "draadsnijden"],
     ),
     nl(
+        "wires.autopilot",
+        &["autopilot", "vul de bedrading aan"],
+        &["draaddikte", "kleur", "doorsnede", "klaar om te bouwen"],
+    ),
+    nl(
         "view.bench",
         &["werkbank uitvoer", "open werkbank"],
         &["werkbank", "adereindhulzen", "etiketten", "draadsnijlijst"],
