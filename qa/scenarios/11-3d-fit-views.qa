@@ -1,0 +1,39 @@
+@title 3D view: the cabinet clears the toolbar after the first open, a fit and the standard views
+@area 3D
+click_text "Open example"
+wait 20
+click_text 3D
+wait 30
+shot first-open
+key ctrl+k
+wait 6
+text front view
+wait 8
+key Enter
+wait 40
+shot front
+key ctrl+k
+wait 6
+text isometric view
+wait 8
+key Enter
+wait 40
+shot iso
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 40
+shot fit
+check_layout
+note rolled up: the toolbar gives its room back to the model
+click 33 75
+wait 10
+key ctrl+k
+wait 6
+text zoom to fit
+wait 8
+key Enter
+wait 40
+shot fit-toolbar-rolled-up
