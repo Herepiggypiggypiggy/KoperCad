@@ -7,18 +7,13 @@
 //! ops this replay cannot perform yet as unsupported; neither fails the gate.
 
 use eframe::egui;
-use novo_core::{AnyId, PageId, Point, SymbolId};
-use novo_editor::tool::{EditorKey, WiringMode};
+use novo_core::SymbolId;
 use novo_learn::check::Check;
-use novo_learn::lesson::{CabinetStep, SolveOp, WireOp};
+use novo_learn::lesson::{CabinetStep, SolveOp};
 use novo_learn::{Phase, Step};
 
 use super::cabinet::Ask;
 use super::gate1_tests::Drive;
-use super::workspace::Workspace;
-
-/// Pick tolerance for clicks, in millimetres.
-const TOL: f64 = 1.0;
 
 thread_local! {
     /// Clicks the headless window could not deliver, raised as events instead.
@@ -63,90 +58,47 @@ pub(super) enum Outcome {
 }
 
 impl Drive {
-    fn replay_page(&mut self, name: &str) -> Result<PageId, String> {
-        let page = self
-            .doc()
-            .project()
-            .pages_in_order()
-            .into_iter()
-            .find(|p| p.name == name || p.title == name)
-            .map(|p| p.id)
-            .ok_or_else(|| format!("no page `{name}`"))?;
-        self.app.show_page(page);
-        self.frame();
-        Ok(page)
-    }
-
-    fn replay_pin(&self, text: &str) -> Result<(PageId, Point), String> {
-        let project = self.doc().project();
-        let found = novo_learn::check::pins_named(project, text);
-        let pin = found
-            .first()
-            .ok_or_else(|| format!("no pin `{text}` in the project"))?;
-        let symbol = project.symbol(pin.symbol).ok_or("symbol")?;
-        let at = symbol
-            .pin_position(pin.pin)
-            .ok_or_else(|| format!("pin `{text}` has no position"))?;
-        Ok((symbol.page, at))
-    }
-
-    fn replay_click(&mut self, page: PageId, at: Point) -> Result<(), String> {
-        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
-        let doc = self.app.backend.document_mut().ok_or("no project")?;
-        view.editor.click(doc, page, at, TOL);
-        let notice = view.editor.notice().map(str::to_owned);
-        self.frame();
-        match notice {
-            Some(n) => Err(n),
-            None => Ok(()),
-        }
-    }
-
-    fn replay_leave(&mut self) {
-        if let Some(view) = self.app.canvas.schematic() {
-            view.editor.leave_tool();
-        }
-        self.frame();
+    fn replay_symbols(&self, text: &str) -> Result<Vec<SymbolId>, String> {
+        self.app.solve_symbols(text)
     }
 
     pub(super) fn replay_op(&mut self, op: &SolveOp) -> Result<(), String> {
         let ctx = self.ctx.clone();
         match op {
-            SolveOp::Command(c) => {
-                self.app.run_command(&ctx, &c.command, c.arg.as_deref());
+            SolveOp::Command(_)
+            | SolveOp::Page(_)
+            | SolveOp::Place(_)
+            | SolveOp::Wire(_)
+            | SolveOp::Select(_)
+            | SolveOp::Tee(_)
+            | SolveOp::FeedRow(_)
+            | SolveOp::Cable(_)
+            | SolveOp::IssueRevision(_)
+            | SolveOp::AssignPart(_)
+            | SolveOp::Rename(_)
+            | SolveOp::SetPotential(_) => {
+                // A frame wherever the editor would get one between two of
+                // its calls, as the window gives it to a person.
+                let frame_ctx = ctx.clone();
+                self.app.learn.settle = Some(std::rc::Rc::new(move |app: &mut super::NovoApp| {
+                    let input = egui::RawInput {
+                        screen_rect: Some(egui::Rect::from_min_size(
+                            egui::Pos2::ZERO,
+                            egui::vec2(1600.0, 900.0),
+                        )),
+                        ..Default::default()
+                    };
+                    let mut output = frame_ctx.run_ui(input, |ui| app.show(ui));
+                    output.textures_delta.clear();
+                }));
+                let result = self
+                    .app
+                    .solve_op(&ctx, op)
+                    .expect("an editor op is applied by the app");
+                self.app.learn.settle = None;
                 self.frame();
-                Ok(())
-            }
-            SolveOp::Page(p) => {
-                // A jump to a page puts where we were in the back history.
-                let from = self.app.here();
-                let page = self.replay_page(&p.page)?;
-                if let Some(from) = from.filter(|f| f.page != page) {
-                    self.app.wb.nav.history.record(from);
-                }
-                Ok(())
-            }
-            SolveOp::Place(p) => {
-                let a = &p.place;
-                let page = self.replay_page(&a.page)?;
-                let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
-                if !view.editor.begin_place(&a.symbol, a.parent.as_deref()) {
-                    return Err(view
-                        .editor
-                        .notice()
-                        .unwrap_or("the symbol cannot be placed")
-                        .to_owned());
-                }
-                for _ in 0..a.turns % 4 {
-                    let doc = self.app.backend.document_mut().ok_or("no project")?;
-                    let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
-                    view.editor.key(doc, EditorKey::Rotate, &[]);
-                }
-                let result = self.replay_click(page, Point::new(a.x, a.y));
-                self.replay_leave();
                 result
             }
-            SolveOp::Wire(w) => self.replay_wire(w),
             SolveOp::LivePole(l) => self.replay_live_pole(&l.live_pole.device, l.live_pole.shift),
             SolveOp::LiveCoil(l) => {
                 if !self.app.wb.live.on {
@@ -168,7 +120,6 @@ impl Drive {
                 self.frame();
                 Ok(())
             }
-            SolveOp::SetPotential(p) => self.replay_set_potential(&p.set_potential),
             SolveOp::Key(k) => {
                 let key =
                     egui::Key::from_name(&k.key).ok_or_else(|| format!("no key `{}`", k.key))?;
@@ -200,25 +151,6 @@ impl Drive {
                 self.frame();
                 Ok(())
             }
-            SolveOp::Select(s) => self.replay_select(&s.select, s.add),
-            SolveOp::Tee(t) => self.replay_tee(&t.tee.from, t.tee.at),
-            SolveOp::FeedRow(f) => self.replay_feed_row(&f.feed_row),
-            SolveOp::Cable(c) => self.replay_cable(&c.cable.wires),
-            SolveOp::IssueRevision(i) => {
-                let ctx = self.ctx.clone();
-                self.app
-                    .run_command(&ctx, "revision.issue", Some(&i.issue_revision.description));
-                let draft = self
-                    .app
-                    .wb
-                    .issue
-                    .take()
-                    .ok_or("the issue window did not open")?;
-                self.app.submit_issue(draft);
-                self.frame();
-                Ok(())
-            }
-            SolveOp::AssignPart(a) => self.replay_assign_part(&a.assign_part),
             SolveOp::UiClick(u) => {
                 self.app.wb.wheel = None;
                 self.frame();
@@ -268,7 +200,6 @@ impl Drive {
                 self.frame();
                 Ok(())
             }
-            SolveOp::Rename(r) => self.replay_rename(&r.rename.target, &r.rename.to),
             SolveOp::CabinetPlace(c) => {
                 let a = &c.cabinet_place;
                 self.replay_cabinet(&a.device, |id| Ask::Drop(id, a.x, a.y))
@@ -332,150 +263,6 @@ impl Drive {
         Ok(())
     }
 
-    /// A wire from a pin that ends on another wire at a point, as dragging
-    /// it there does: the T joins the two.
-    fn replay_tee(&mut self, from: &str, at: [f64; 2]) -> Result<(), String> {
-        let (page, start) = self.replay_pin(from)?;
-        self.replay_page_id(page);
-        self.replay_leave();
-        let doc = self.app.backend.document().ok_or("no project")?;
-        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
-        view.editor.hover(doc, page, start, TOL);
-        if !view.editor.begin_drag() {
-            return Err(format!("no pin `{from}` to drag from"));
-        }
-        let result = self.replay_click(page, Point::new(at[0], at[1]));
-        self.replay_leave();
-        result
-    }
-
-    /// A row of feeds dragged out from a point at the pole pitch.
-    fn replay_feed_row(&mut self, row: &novo_learn::lesson::FeedRowArgs) -> Result<(), String> {
-        const PITCH: f64 = 8.0;
-        let page = self.replay_page(&row.page)?;
-        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
-        let doc = self.app.backend.document().ok_or("no project")?;
-        if !view
-            .editor
-            .begin_place("iec/connectivity/potential_feed", None)
-        {
-            return Err("the feed cannot be placed".into());
-        }
-        view.editor.hover(doc, page, Point::new(row.x, row.y), TOL);
-        if !view.editor.begin_row() {
-            return Err("a row cannot start here".into());
-        }
-        let last = row.names.len().saturating_sub(1) as f64;
-        view.editor
-            .row_follow(Point::new(row.x + PITCH * last + 1.0, row.y), PITCH);
-        let doc = self.app.backend.document_mut().ok_or("no project")?;
-        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
-        let done = view.editor.end_row(doc, page);
-        let notice = view.editor.notice().map(str::to_owned);
-        self.replay_leave();
-        if done == novo_editor::tool::Clicked::Edited {
-            Ok(())
-        } else {
-            Err(notice.unwrap_or_else(|| "the row was not placed".into()))
-        }
-    }
-
-    /// A cable over the wires that join these pairs of pins, as the cables
-    /// drawer's button makes it.
-    fn replay_cable(&mut self, pairs: &[[String; 2]]) -> Result<(), String> {
-        let project = self.doc().project();
-        let mut wires = Vec::new();
-        for [a, b] in pairs {
-            let pa = novo_learn::check::pins_named(project, a);
-            let pb = novo_learn::check::pins_named(project, b);
-            let found = project.wires().find(|w| {
-                let (f, t) = (w.from.as_pin(), w.to.as_pin());
-                pa.iter().any(|x| Some(*x) == f) && pb.iter().any(|y| Some(*y) == t)
-                    || pb.iter().any(|x| Some(*x) == f) && pa.iter().any(|y| Some(*y) == t)
-            });
-            wires.push(found.ok_or_else(|| format!("no wire {a} - {b}"))?.id);
-        }
-        self.app.make_cable(&wires);
-        self.frame();
-        Ok(())
-    }
-
-    /// A part with this maker and order number on a device, as the
-    /// spreadsheet import or the part picker leaves it.
-    fn replay_assign_part(&mut self, a: &novo_learn::lesson::AssignPartArgs) -> Result<(), String> {
-        let project = self.doc().project();
-        let device = project
-            .devices()
-            .find(|d| novo_learn::check::tag_matches(&d.tag, &a.device))
-            .ok_or_else(|| format!("nothing named `{}`", a.device))?
-            .id;
-        let doc = self.app.backend.document_mut().ok_or("no project")?;
-        let (_, changes) = doc
-            .transact("Assign part", |tx| {
-                let part = tx.add_part(&a.manufacturer, &a.order_number)?;
-                tx.assign_part(device, part)
-            })
-            .map_err(|e| e.to_string())?;
-        self.app.changed_outside_canvas(&changes);
-        self.frame();
-        Ok(())
-    }
-
-    /// The rename box's Enter: a terminal by designation, an interruption
-    /// point by name, or a device by tag.
-    fn replay_rename(&mut self, target: &str, to: &str) -> Result<(), String> {
-        let project = self.doc().project();
-        let label_symbol: Option<SymbolId> = if let Some((strip, name)) = target.rsplit_once(':') {
-            let strip = project
-                .devices()
-                .find(|d| novo_learn::check::tag_matches(&d.tag, strip))
-                .ok_or_else(|| format!("nothing named `{strip}`"))?
-                .id;
-            let terminal = project
-                .terminals_of_strip(strip)
-                .into_iter()
-                .find(|t| t.name == name)
-                .ok_or_else(|| format!("no terminal `{target}`"))?
-                .id;
-            project
-                .symbols()
-                .find(|s| {
-                    matches!(&s.role, novo_core::SymbolRole::Terminal { terminals }
-                        if terminals.contains(&terminal))
-                })
-                .map(|s| s.id)
-        } else {
-            project
-                .symbols()
-                .find(|s| {
-                    matches!(&s.role, novo_core::SymbolRole::Interruption { name }
-                        if name == target)
-                })
-                .map(|s| s.id)
-        };
-        if let Some(symbol) = label_symbol {
-            let doc = self.app.backend.document_mut().ok_or("no project")?;
-            let (result, changes) = doc
-                .transact("Rename", |tx| {
-                    Ok(novo_editor::edit::rename_label(tx, symbol, to))
-                })
-                .map_err(|e| e.to_string())?;
-            self.app.changed_outside_canvas(&changes);
-            self.frame();
-            return result;
-        }
-        let device = project
-            .devices()
-            .find(|d| novo_learn::check::tag_matches(&d.tag, target))
-            .ok_or_else(|| format!("nothing named `{target}` to rename"))?
-            .id;
-        let doc = self.app.backend.document_mut().ok_or("no project")?;
-        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
-        let result = view.editor.rename(doc, device, to);
-        self.frame();
-        result
-    }
-
     /// One frame at egui time `time` seconds, so a held key counts time.
     fn frame_at(&mut self, time: f64, events: Vec<egui::Event>) {
         let input = egui::RawInput {
@@ -490,139 +277,6 @@ impl Drive {
         let app = &mut self.app;
         let mut output = self.ctx.run_ui(input, |ui| app.show(ui));
         output.textures_delta.clear();
-    }
-
-    fn replay_wire(&mut self, w: &WireOp) -> Result<(), String> {
-        let (page, from) = self.replay_pin(&w.wire[0])?;
-        let (_, to) = self.replay_pin(&w.wire[1])?;
-        self.replay_page_id(page);
-        if let Some(mode) = &w.mode {
-            let mode = match mode.as_str() {
-                "lines" => WiringMode::Lines,
-                _ => WiringMode::Corners,
-            };
-            if let Some(view) = self.app.canvas.schematic() {
-                view.editor.set_wire_mode(mode);
-            }
-        }
-        let ctx = self.ctx.clone();
-        self.app.run_command(&ctx, "tool.connect", None);
-        self.frame();
-        let mut result = self.replay_click(page, from);
-        for via in &w.via {
-            if result.is_ok() {
-                result = self.replay_click(page, Point::new(via[0], via[1]));
-            }
-        }
-        if result.is_ok() {
-            result = self.replay_click(page, to);
-        }
-        self.replay_leave();
-        result
-    }
-
-    /// Selects a device (all its symbols) or one pin's symbol, as a click
-    /// (or Shift+click) on it does.
-    fn replay_select(&mut self, text: &str, add: bool) -> Result<(), String> {
-        // Nothing named: a click on an empty spot of the plate.
-        if text.is_empty() {
-            self.app.cabinet.view.selection.clear();
-            self.frame();
-            return Ok(());
-        }
-        // In the Cabinet a click lands on the plate.
-        if !text.contains(':')
-            && matches!(self.app.workspace(), Workspace::Cabinet | Workspace::View3d)
-            && self.replay_select_on_plate(text, add).is_ok()
-        {
-            return Ok(());
-        }
-        let project = self.doc().project();
-        let mut found: Vec<SymbolId> = Vec::new();
-        if text.contains(':') {
-            found.extend(
-                novo_learn::check::pins_named(project, text)
-                    .first()
-                    .map(|p| p.symbol),
-            );
-        } else {
-            for symbol in project.symbols() {
-                let tag = novo_editor::edit::device_of(project, AnyId::Symbol(symbol.id))
-                    .and_then(|d| project.device(d))
-                    .map(|d| d.tag.clone());
-                if tag.is_some_and(|t| novo_learn::check::tag_matches(&t, text)) {
-                    found.push(symbol.id);
-                }
-            }
-        }
-        if found.is_empty() && !text.contains(':') {
-            return self.replay_select_on_plate(text, add);
-        }
-        let first = *found
-            .first()
-            .ok_or_else(|| format!("nothing named `{text}` to select"))?;
-        let page = self
-            .doc()
-            .project()
-            .symbol(first)
-            .map(|s| s.page)
-            .ok_or("symbol")?;
-        self.replay_page_id(page);
-        if !add {
-            self.app.cabinet.view.selection.clear();
-        }
-        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
-        if !add {
-            view.canvas.selection.clear();
-        }
-        view.canvas.selection.apply(
-            found
-                .iter()
-                .map(|s| novo_canvas::model::item_id(AnyId::Symbol(*s))),
-            novo_canvas::SelectOp::Add,
-        );
-        self.frame();
-        Ok(())
-    }
-
-    /// Selects a device that has no symbol but a place on the plate, as a
-    /// click on it in the Cabinet does.
-    fn replay_select_on_plate(&mut self, text: &str, add: bool) -> Result<(), String> {
-        let project = self.doc().project();
-        let id = project
-            .all::<novo_core::CabinetPlacement>()
-            .filter_map(|p| project.device(p.device))
-            .find(|d| novo_learn::check::tag_matches(&d.tag, text))
-            .map(|d| d.id)
-            .ok_or_else(|| format!("nothing named `{text}` to select"))?;
-        let selection = &mut self.app.cabinet.view.selection;
-        if !add {
-            selection.clear();
-        }
-        selection.apply(
-            [novo_canvas::cabinet::box_item(id.raw())],
-            novo_canvas::SelectOp::Add,
-        );
-        self.frame();
-        Ok(())
-    }
-
-    fn replay_symbols(&self, text: &str) -> Result<Vec<SymbolId>, String> {
-        let project = self.doc().project();
-        let found: Vec<SymbolId> = project
-            .symbols()
-            .filter(|symbol| {
-                novo_editor::edit::device_of(project, AnyId::Symbol(symbol.id))
-                    .and_then(|d| project.device(d))
-                    .is_some_and(|d| novo_learn::check::tag_matches(&d.tag, text))
-            })
-            .map(|s| s.id)
-            .collect();
-        if found.is_empty() {
-            Err(format!("nothing named `{text}`"))
-        } else {
-            Ok(found)
-        }
     }
 
     fn replay_live_pole(&mut self, device: &str, shift: bool) -> Result<(), String> {
@@ -648,54 +302,6 @@ impl Drive {
         }
         self.frame();
         Ok(())
-    }
-
-    fn replay_set_potential(
-        &mut self,
-        args: &novo_learn::lesson::SetPotentialArgs,
-    ) -> Result<(), String> {
-        if let Some(name) = &args.page {
-            self.replay_page(name)?;
-        }
-        let page = self.app.current_page().ok_or("no page")?;
-        let at = Point::new(args.feed_at[0], args.feed_at[1]);
-        let feed = self
-            .doc()
-            .project()
-            .symbols()
-            .find(|s| {
-                s.page == page && {
-                    let o = s.placement.origin;
-                    (o.x - at.x).hypot(o.y - at.y) < 1.0
-                }
-            })
-            .map(|s| s.id)
-            .ok_or_else(|| format!("no feed at {at:?}"))?;
-        let menu =
-            novo_editor::potential_menu::feed_menu(self.doc().project(), &[AnyId::Symbol(feed)])
-                .ok_or("that symbol is not a potential feed")?;
-        let chip = menu
-            .chips
-            .iter()
-            .find(|c| c.name == args.chip)
-            .cloned()
-            .ok_or_else(|| format!("the menu has no chip `{}`", args.chip))?;
-        let view = self.app.canvas.schematic().ok_or("no editor canvas")?;
-        let doc = self.app.backend.document_mut().ok_or("no project")?;
-        if !view.editor.set_feed_potential(doc, &[feed], &chip) {
-            return Err(view
-                .editor
-                .notice()
-                .unwrap_or("the chip was refused")
-                .to_owned());
-        }
-        self.frame();
-        Ok(())
-    }
-
-    fn replay_page_id(&mut self, page: PageId) {
-        self.app.show_page(page);
-        self.frame();
     }
 
     /// Plays every step of a lesson; one outcome per step, in order.
