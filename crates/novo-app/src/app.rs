@@ -5,6 +5,9 @@
 
 mod appearance;
 mod assembly;
+mod assistant;
+#[cfg(test)]
+mod assistant_tests;
 mod background_panel;
 mod bench;
 mod cabinet;
@@ -64,6 +67,8 @@ mod heat_3d;
 #[cfg(test)]
 mod heat_3d_tests;
 mod heat_arrows;
+mod heat_carry;
+mod heat_cloud;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
@@ -160,6 +165,7 @@ mod standards_report;
 #[cfg(test)]
 mod standards_report_tests;
 mod status_bar;
+mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;
 mod terminals;
@@ -175,6 +181,7 @@ mod view3d_duplicate;
 mod view3d_heat;
 mod view3d_hints;
 mod view3d_measure;
+mod view3d_models;
 mod view3d_move;
 #[cfg(test)]
 mod view3d_move_tests;
@@ -1016,6 +1023,7 @@ impl NovoApp {
         self.wb.field.close();
         self.wb.commissioning = None;
         self.wb.sheet = 0;
+        self.cabinet.result = None;
         self.add_generated_pages();
         // Nothing to commission in a closed project.
         if !self.is_open() && self.workspace() == workspace::Workspace::Commissioning {
@@ -1349,6 +1357,7 @@ impl NovoApp {
         self.whats_new_window(&ctx);
         self.numbers_window(&ctx);
         self.background_panel(&ctx);
+        self.assistant_window(&ctx);
         self.bench_window(&ctx);
         self.pdf_options_window(&ctx);
         self.designer_window(&ctx);
@@ -2250,7 +2259,11 @@ impl NovoApp {
                 ui.add_space(novo_theme::space::L);
                 ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
                 ui.weak(format!("Model API v{}", novo_core::MODEL_VERSION));
-                ui.weak(format!("Build {}", crate::diag::BUILD_COMMIT));
+                ui.weak(format!(
+                    "Build {}, built {}",
+                    crate::diag::BUILD_COMMIT,
+                    crate::diag::BUILD_TIME
+                ));
                 ui.add_space(novo_theme::space::L);
                 ui.button("Close").clicked()
             })

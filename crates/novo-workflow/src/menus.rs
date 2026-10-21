@@ -69,6 +69,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("file.import_dxf_background", under("File", "Import")),
     ("file.remove_background", under("File", "Import")),
     ("file.import_aml", under("File", "Import")),
+    ("file.import_crane", under("File", "Import")),
     ("file.import_eplan", under("File", "Import")),
     ("parts.import_eplan", under("File", "Import")),
     ("file.import_dwg", under("File", "Import")),
@@ -233,6 +234,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("heat.contours", under("View", "Layers")),
     // Lessons live with Help
     ("help.learn", at("Help")),
+    ("ai.assistant", at("Help")),
+    ("help.next_lesson", at("Help")),
     ("learn.next", under("Help", "Lesson")),
     ("learn.back", under("Help", "Lesson")),
     ("learn.restart", under("Help", "Lesson")),
@@ -511,7 +514,9 @@ const BLOCKS: &[(&str, &[&[&str]])] = &[
         "Help",
         &[
             &[
+                "help.next_lesson",
                 "help.learn",
+                "ai.assistant",
                 "view.shortcuts",
                 "help.walkthrough",
                 "file.practice",

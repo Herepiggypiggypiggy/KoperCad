@@ -12,12 +12,14 @@
 //! vendor's data.
 
 mod caex;
+mod draw;
 mod plan;
 mod read;
 mod write;
 
 pub use plan::{AmlPlan, plan_import};
 pub use read::{
-    AmlError, Plant, PlantCable, PlantCore, PlantDevice, PlantStructure, PlantTerminal, read_aml,
+    AmlError, Plant, PlantCable, PlantCore, PlantDevice, PlantNet, PlantPage, PlantPin,
+    PlantSegment, PlantStructure, PlantSymbol, PlantTerminal, PlantText, read_aml,
 };
 pub use write::{AmlExport, AmlOptions, INTERFACE_LIB, ROLE_LIB, export_project};

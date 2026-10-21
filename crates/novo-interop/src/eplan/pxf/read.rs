@@ -4,6 +4,8 @@ use std::collections::{BTreeMap, HashSet};
 use std::io::BufRead;
 
 use super::PxfError;
+use super::graphics::{PxfShape, ShapeKind, point, points};
+use super::library::{LibFunction, LibPort, LibSymbol, finite, parse_point, split_pins};
 use super::model::*;
 use super::stream::{Event, Tokens};
 use super::text::MlText;
@@ -12,8 +14,22 @@ const MAX_DEPTH: usize = 512;
 
 /// Object types the reader reads into the model.
 const KIND_PAGE: u32 = 4;
+const KIND_STRUCTURE: u32 = 6;
+const KIND_PROJECT: u32 = 14;
+const KIND_SYMBOL: u32 = 17;
+const KIND_LIB_SYMBOL: u32 = 20;
 const KIND_TEXT: u32 = 30;
+const KIND_LINE: u32 = 31;
+const KIND_ARC: u32 = 32;
+const KIND_POLYGON: u32 = 34;
+const KIND_LOCATION_BOX: u32 = 88;
+const KIND_RECT: u32 = 89;
+const KIND_NODE: u32 = 42;
+const KIND_LIB_VARIANT: u32 = 45;
+const KIND_REPORT_CELL: u32 = 52;
+const KIND_REPORT_TEXT: u32 = 53;
 const KIND_CORE: u32 = 59;
+const KIND_LIB_FUNCTION: u32 = 60;
 const KIND_INTERRUPTION: u32 = 70;
 
 /// An open `O<n>` element and the property elements seen inside it.
@@ -23,6 +39,11 @@ struct Frame {
     props: Vec<(String, Vec<(String, String)>)>,
     /// Ordinal of the page this frame is (kind 4) or sits on.
     page: Option<usize>,
+    /// Sits inside another object that is not a page (the graphics of a
+    /// library symbol), or outside every page.
+    library: bool,
+    /// The drawn variants (`O45`) of a library symbol, filled as they end.
+    variants: Vec<(u32, Vec<LibPort>)>,
 }
 
 impl Frame {
@@ -69,7 +90,29 @@ impl Frame {
             .filter(|(n, _)| n.starts_with("S40x"))
             .find_map(|(_, a)| find(a, "A762"))?;
         let (x, y) = v.split_once('/')?;
-        Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+        Some((finite(x)?, finite(y)?))
+    }
+
+    fn matrix(&self) -> [f64; 4] {
+        let get = |n: &str, d: f64| {
+            self.props
+                .iter()
+                .find_map(|(e, a)| (e == "S39x761").then(|| find(a, n)).flatten())
+                .and_then(finite)
+                .unwrap_or(d)
+        };
+        [
+            get("A751", 1.0),
+            get("A752", 0.0),
+            get("A753", 0.0),
+            get("A754", 1.0),
+        ]
+    }
+
+    fn int(&self, name: &str) -> i64 {
+        self.own(name)
+            .and_then(|v| v.trim().parse().ok())
+            .unwrap_or(0)
     }
 
     fn symbol(&self) -> Option<SymbolRef> {
@@ -110,6 +153,9 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
     let mut open_objects: Vec<usize> = Vec::new(); // depth at which each object opened
 
     let mut pages: Vec<Option<PxfPage>> = Vec::new();
+    // Objects written between pages, not inside one, belong to the page
+    // before them. Objects inside another object that is not a page (the
+    // graphics of a library symbol) never do.
     let mut last_page: Option<usize> = None;
     let mut out = PxfFile {
         header: PxfHeader {
@@ -125,12 +171,18 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
         cores: Vec::new(),
         interruptions: Vec::new(),
         texts: Vec::new(),
+        shapes: Vec::new(),
+        nodes: Vec::new(),
+        project: PxfProjectData::default(),
+        structures: Vec::new(),
+        library: Default::default(),
         skipped: BTreeMap::new(),
+        library_objects: BTreeMap::new(),
         duplicate_ids: Vec::new(),
         notes: Vec::new(),
     };
     let mut seen: HashSet<ObjId> = HashSet::new();
-    let mut page_objects: BTreeMap<usize, usize> = BTreeMap::new();
+    let mut page_objects: BTreeMap<usize, [usize; 4]> = BTreeMap::new();
 
     while let Some(ev) = tokens.next_event()? {
         match ev {
@@ -165,12 +217,13 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
                         pages.push(None);
                         last_page = Some(pages.len() - 1);
                         last_page
+                    } else if stack.is_empty() {
+                        last_page
                     } else {
                         stack
                             .iter()
                             .rev()
                             .find_map(|f| f.page.filter(|_| f.kind == KIND_PAGE))
-                            .or(last_page)
                     };
                     open_objects.push(depth);
                     stack.push(Frame {
@@ -178,16 +231,34 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
                         attrs,
                         props: Vec::new(),
                         page,
+                        library: kind != KIND_PAGE && page.is_none(),
+                        variants: Vec::new(),
                     });
                 } else if let Some(top) = stack.last_mut() {
-                    top.props.push((name, attrs));
+                    // Only the elements the reader asks about are kept; the
+                    // graphics rows of an embedded library are the bulk of a
+                    // project and are never looked at.
+                    if name.starts_with('P')
+                        || name.starts_with("S40x")
+                        || name.starts_with("S39x")
+                        || name.starts_with("S48x")
+                        || name.starts_with("S89x")
+                    {
+                        top.props.push((name, attrs));
+                    }
                 }
             }
             Event::End { .. } => {
                 if open_objects.last() == Some(&depth) {
                     open_objects.pop();
                     if let Some(frame) = stack.pop() {
-                        finish(frame, &mut out, &mut pages, &mut seen, &mut page_objects);
+                        if frame.kind == KIND_LIB_VARIANT {
+                            if let Some(parent) = stack.last_mut() {
+                                parent.variants.push(variant_ports(&frame));
+                            }
+                        } else {
+                            finish(frame, &mut out, &mut pages, &mut seen, &mut page_objects);
+                        }
                     }
                 }
                 depth = depth.saturating_sub(1);
@@ -208,9 +279,21 @@ pub(super) fn read<R: BufRead>(r: R) -> Result<PxfFile, PxfError> {
     // A page start with no end tag cannot happen here (depth checked), so
     // every slot is filled; keep the order of appearance.
     out.pages = pages.into_iter().flatten().collect();
-    for (i, n) in page_objects {
+    for (i, [all, symbols, nodes, cells]) in page_objects {
         if let Some(p) = out.pages.get_mut(i) {
-            p.objects = n;
+            p.objects = all;
+            p.symbols = symbols;
+            p.nodes = nodes;
+            p.report_cells = cells;
+        }
+    }
+    // A cable drawn without a cable text is still a cable when a core says
+    // it belongs to it.
+    let cable_ids: std::collections::BTreeSet<ObjId> =
+        out.cores.iter().filter_map(|c| c.cable_ref).collect();
+    for d in &mut out.devices {
+        if d.role == DeviceRole::Device && d.id.is_some_and(|i| cable_ids.contains(&i)) {
+            d.role = DeviceRole::Cable;
         }
     }
     finish_notes(&mut out);
@@ -222,7 +305,7 @@ fn finish(
     out: &mut PxfFile,
     pages: &mut [Option<PxfPage>],
     seen: &mut HashSet<ObjId>,
-    page_objects: &mut BTreeMap<usize, usize>,
+    page_objects: &mut BTreeMap<usize, [usize; 4]>,
 ) {
     let id = f.own("A1").and_then(ObjId::parse);
     if let Some(i) = id
@@ -234,9 +317,100 @@ fn finish(
     if f.kind != KIND_PAGE
         && let Some(p) = f.page
     {
-        *page_objects.entry(p).or_default() += 1;
+        let c = page_objects.entry(p).or_default();
+        c[0] += 1;
+        match f.kind {
+            KIND_SYMBOL => c[1] += 1,
+            KIND_NODE | KIND_INTERRUPTION => c[2] += 1,
+            KIND_REPORT_CELL | KIND_REPORT_TEXT => c[3] += 1,
+            _ => {}
+        }
+    }
+    if f.library
+        && !matches!(
+            f.kind,
+            KIND_STRUCTURE | KIND_PROJECT | KIND_LIB_SYMBOL | KIND_LIB_FUNCTION
+        )
+    {
+        *out.library_objects.entry(f.kind).or_default() += 1;
+        return;
     }
     match f.kind {
+        KIND_PROJECT => {
+            out.project = PxfProjectData {
+                number: f.any("P10013").to_string(),
+                title: MlText::parse(f.any("P10011")),
+            };
+        }
+        KIND_STRUCTURE => {
+            let code = f.own("A82").unwrap_or("").trim();
+            if !code.is_empty() {
+                out.structures.push(PxfStructure {
+                    aspect: f
+                        .own("A81")
+                        .and_then(|v| v.trim().parse().ok())
+                        .unwrap_or(0),
+                    code: code.to_string(),
+                    title: MlText::parse(f.any("P1002")),
+                });
+            }
+        }
+        KIND_LIB_SYMBOL => {
+            let mut variants = BTreeMap::new();
+            for (v, ports) in &f.variants {
+                variants.entry(*v).or_insert_with(|| ports.clone());
+            }
+            out.library.add_symbol(LibSymbol {
+                function_def: f.int("A242"),
+                library_id: f.int("A247"),
+                key: (f.int("A1381"), f.int("A1382"), f.int("A1383")),
+                code: f.own("A241").unwrap_or("").to_string(),
+                name: MlText::parse(f.any("P16011")),
+                variants,
+            });
+        }
+        KIND_LIB_FUNCTION => {
+            let rows = |name: &str| -> Vec<String> {
+                f.own(name)
+                    .unwrap_or("")
+                    .split('\t')
+                    .flat_map(|row| row.split('\n'))
+                    .map(|p| p.trim().to_string())
+                    .collect()
+            };
+            let letters = f
+                .own("A1044")
+                .and_then(|v| v.split('\n').next())
+                .unwrap_or("")
+                .trim()
+                .to_string();
+            out.library.add_function(LibFunction {
+                key: (f.int("A1381"), f.int("A1382"), f.int("A1383")),
+                name: MlText::parse(f.own("A1041").unwrap_or("")),
+                letters,
+                pins: rows("A1045"),
+            });
+        }
+        KIND_LINE | KIND_RECT | KIND_ARC | KIND_POLYGON | KIND_LOCATION_BOX => {
+            if let Some(kind) = shape_kind(&f) {
+                let numeric = finite;
+                out.shapes.push(PxfShape {
+                    page: f.page,
+                    kind,
+                    pen: f.own("A414").and_then(numeric),
+                    dashed: f.own("A412").and_then(numeric).is_some_and(|t| t > 1.5),
+                });
+            } else {
+                *out.skipped.entry(f.kind).or_default() += 1;
+            }
+        }
+        KIND_NODE => out.nodes.push(PxfNode {
+            id,
+            page: f.page,
+            kind: f.int("A1262"),
+            variant: f.int("A1263"),
+            position: f.position(),
+        }),
         KIND_PAGE => {
             let number = match f.prop("P49", "P11012") {
                 "" => f.own("A1101").unwrap_or(""),
@@ -258,6 +432,9 @@ fn finish(
                     suffix: f.prop("P49", "P11013").to_string(),
                     title,
                     objects: 0,
+                    symbols: 0,
+                    nodes: 0,
+                    report_cells: 0,
                 });
             }
         }
@@ -265,31 +442,49 @@ fn finish(
             id,
             page: f.page,
             cable: f.tag(),
+            cable_ref: f.own("R1031").and_then(ObjId::parse),
             number: f.any("P31004").to_string(),
+            position: f.position(),
         }),
         KIND_INTERRUPTION => out.interruptions.push(PxfInterruption {
             id,
             page: f.page,
             tag: f.tag(),
             text: f.any("P24810").to_string(),
+            position: f.position(),
+            variant: f.int("A1263"),
         }),
         KIND_TEXT => {
-            // The property that holds the text is not pinned down by the
-            // material this reader was written from: take the first value
-            // with the multi-language shape.
+            // The text is the object's own `A511` and its position `A501`;
+            // the height and angle (radians, counter-clockwise) are on the
+            // `S54x505` element. Older material kept the text in a property:
+            // then take the first value with the multi-language shape.
             let text = f
-                .props
-                .iter()
-                .flat_map(|(_, a)| a.iter())
-                .map(|(_, v)| v.as_str())
-                .find(|v| MlText::looks_like(v))
+                .own("A511")
+                .filter(|v| MlText::looks_like(v))
+                .or_else(|| {
+                    f.props
+                        .iter()
+                        .flat_map(|(_, a)| a.iter())
+                        .map(|(_, v)| v.as_str())
+                        .find(|v| MlText::looks_like(v))
+                })
                 .map(MlText::parse)
                 .unwrap_or_default();
+            let position = f.position().or_else(|| parse_point(f.own("A501")?));
+            let style = |n: &str| -> Option<f64> {
+                f.props
+                    .iter()
+                    .find_map(|(e, a)| (e == "S54x505").then(|| find(a, n)).flatten())
+                    .and_then(finite)
+            };
             out.texts.push(PxfText {
                 id,
                 page: f.page,
                 text,
-                position: f.position(),
+                position,
+                height: style("A961").filter(|h| *h > 0.0),
+                angle: style("A962").unwrap_or(0.0),
             });
         }
         kind => {
@@ -318,9 +513,83 @@ fn finish(
                 cable_text,
                 symbol: f.symbol(),
                 position: f.position(),
+                function_def: f.int("A1262"),
+                library_id: f.int("A1261"),
+                variant: f.int("A1263"),
+                pins: split_pins(f.own("A185").unwrap_or("")),
+                matrix: f.matrix(),
             });
         }
     }
+}
+
+/// The geometry of a line, rectangle, arc, polygon or location box.
+fn shape_kind(f: &Frame) -> Option<ShapeKind> {
+    let at = |name: &str| f.own(name).and_then(point);
+    match f.kind {
+        KIND_LINE => Some(ShapeKind::Line {
+            a: at("A531")?,
+            b: at("A532")?,
+        }),
+        KIND_RECT => Some(ShapeKind::Rect {
+            a: at("A1651")?,
+            b: at("A1652")?,
+        }),
+        KIND_ARC => {
+            let num = |n: &str| f.own(n).and_then(finite);
+            Some(ShapeKind::Arc {
+                center: at("A555")?,
+                radius: at("A556")?.0,
+                start: num("A553")?,
+                end: num("A554")?,
+            })
+        }
+        KIND_POLYGON => {
+            let pts = points(f.own("A621")?);
+            (pts.len() >= 3).then_some(ShapeKind::Polygon {
+                points: pts,
+                filled: f.own("A623").is_some_and(|v| v.trim() != "0"),
+            })
+        }
+        KIND_LOCATION_BOX => {
+            let (ox, oy) = f.position()?;
+            let (a, b) = (at("A1631")?, at("A1632")?);
+            let sign = |prefix: char, v: &str| {
+                if v.is_empty() {
+                    String::new()
+                } else {
+                    format!("{prefix}{}", v.trim_start_matches(prefix))
+                }
+            };
+            Some(ShapeKind::LocationBox {
+                a: (ox + a.0, oy + a.1),
+                b: (ox + b.0, oy + b.1),
+                function: sign('=', f.prop("P150", "P1100")),
+                location: sign('+', f.prop("P150", "P1200")),
+            })
+        }
+        _ => None,
+    }
+}
+
+/// The connection points of an `O45` variant: `S48x823` rows with the index
+/// (`A861`), the offset (`A862`, `x/y`) and the directions (`A863`).
+fn variant_ports(f: &Frame) -> (u32, Vec<LibPort>) {
+    let ports = f
+        .props
+        .iter()
+        .filter(|(n, _)| n == "S48x823")
+        .filter_map(|(_, a)| {
+            let (x, y) = parse_point(find(a, "A862")?)?;
+            Some(LibPort {
+                index: find(a, "A861")?.trim().parse().ok()?,
+                x,
+                y,
+                dirs: find(a, "A863")?.trim().parse().ok()?,
+            })
+        })
+        .collect();
+    (f.int("A822").max(0) as u32, ports)
 }
 
 fn finish_notes(out: &mut PxfFile) {

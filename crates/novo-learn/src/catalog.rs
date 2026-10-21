@@ -114,6 +114,38 @@ impl Track {
     }
 }
 
+/// A reading order across the tracks for one kind of person
+/// (`paths.toml`). Only a list: progress comes from the lessons.
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct LearningPath {
+    pub id: String,
+    pub title: String,
+    #[serde(default)]
+    pub title_nl: Option<String>,
+    #[serde(default)]
+    pub summary: String,
+    #[serde(default)]
+    pub summary_nl: Option<String>,
+    pub lessons: Vec<String>,
+}
+
+impl LearningPath {
+    pub fn title(&self, lang: Lang) -> &str {
+        match (lang, &self.title_nl) {
+            (Lang::Nl, Some(nl)) => nl,
+            _ => &self.title,
+        }
+    }
+
+    pub fn summary(&self, lang: Lang) -> &str {
+        match (lang, &self.summary_nl) {
+            (Lang::Nl, Some(nl)) => nl,
+            _ => &self.summary,
+        }
+    }
+}
+
 /// A word explained once, for `{tip:term}`.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -163,6 +195,13 @@ struct TracksFile {
 }
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PathsFile {
+    #[serde(default)]
+    path: Vec<LearningPath>,
+}
+
+#[derive(Deserialize)]
 struct GlossaryFile {
     #[serde(default)]
     term: BTreeMap<String, Term>,
@@ -180,6 +219,7 @@ pub struct TrackSummary {
 #[derive(Debug, Clone, Default)]
 pub struct Catalog {
     pub tracks: Vec<Track>,
+    pub paths: Vec<LearningPath>,
     pub glossary: BTreeMap<String, Term>,
     pub entries: Vec<Entry>,
     /// Files that were refused: path and why.
@@ -196,6 +236,12 @@ impl Catalog {
             match toml::from_str::<TracksFile>(text) {
                 Ok(t) => catalog.tracks = t.track,
                 Err(e) => catalog.notes.push(format!("tracks.toml: {e}")),
+            }
+        }
+        if let Some(text) = files.get("paths.toml") {
+            match toml::from_str::<PathsFile>(text) {
+                Ok(p) => catalog.paths = p.path,
+                Err(e) => catalog.notes.push(format!("paths.toml: {e}")),
             }
         }
         if let Some(text) = files.get("glossary.toml") {
@@ -256,6 +302,19 @@ impl Catalog {
                 &b.lesson.id,
             ))
         });
+        let unknown: Vec<String> = catalog
+            .paths
+            .iter()
+            .flat_map(|p| {
+                p.lessons
+                    .iter()
+                    .filter(|id| catalog.get(id).is_none())
+                    .map(move |id| {
+                        format!("paths.toml: path `{}` names unknown lesson `{id}`", p.id)
+                    })
+            })
+            .collect();
+        catalog.notes.extend(unknown);
         catalog
     }
 
@@ -318,6 +377,54 @@ impl Catalog {
             }
         }
         sum
+    }
+
+    /// The lessons of a path that are on offer, in the path's order.
+    pub fn path_lessons<'a>(
+        &'a self,
+        path: &'a LearningPath,
+        show_drafts: bool,
+    ) -> impl Iterator<Item = &'a Entry> {
+        path.lessons
+            .iter()
+            .filter_map(|id| self.get(id))
+            .filter(move |e| show_drafts || e.lesson.status != Status::Draft)
+    }
+
+    /// Lessons done, lessons in all and their minutes, for one path.
+    pub fn path_summary(
+        &self,
+        progress: &Progress,
+        path: &LearningPath,
+        show_drafts: bool,
+    ) -> TrackSummary {
+        let mut sum = TrackSummary::default();
+        for e in self.path_lessons(path, show_drafts) {
+            sum.total += 1;
+            sum.minutes += e.lesson.minutes;
+            if progress.standing(&e.lesson) == Standing::Completed {
+                sum.done += 1;
+            }
+        }
+        sum
+    }
+
+    /// The lesson of a path to do next: one under way, else the first not
+    /// done. `None` when the path is done or empty.
+    pub fn path_next<'a>(
+        &'a self,
+        progress: &Progress,
+        path: &'a LearningPath,
+        show_drafts: bool,
+    ) -> Option<&'a Entry> {
+        let todo: Vec<&Entry> = self
+            .path_lessons(path, show_drafts)
+            .filter(|e| progress.standing(&e.lesson) != Standing::Completed)
+            .collect();
+        todo.iter()
+            .find(|e| matches!(progress.standing(&e.lesson), Standing::InProgress { .. }))
+            .or(todo.first())
+            .copied()
     }
 
     /// Lessons that carry a topic, for the "Lesson: ..." links in panels.
@@ -539,5 +646,64 @@ mod tests {
         done(&mut p, "wiring");
         assert_eq!(next(&p), None);
         assert_eq!(catalog.track_summary(&p, "draw", false).done, 1);
+    }
+
+    #[test]
+    fn a_path_lists_its_lessons_and_names_the_next_one() {
+        use crate::progress::LessonProgress;
+        let mut f = files();
+        f.remove("lost/lesson.toml");
+        f.insert(
+            "paths.toml".into(),
+            "[[path]]\nid = \"p\"\ntitle = \"Path\"\ntitle_nl = \"Pad\"\nlessons = [\"tour\", \"wiring\", \"later\"]\n".into(),
+        );
+        let catalog = Catalog::from_files(&f);
+        assert!(catalog.notes.is_empty(), "{:?}", catalog.notes);
+        let path = &catalog.paths[0];
+        assert_eq!(path.title(Lang::Nl), "Pad");
+        let ids = |drafts| -> Vec<String> {
+            catalog
+                .path_lessons(path, drafts)
+                .map(|e| e.lesson.id.clone())
+                .collect()
+        };
+        assert_eq!(ids(false), ["tour", "wiring"], "drafts stay out");
+        assert_eq!(ids(true), ["tour", "wiring", "later"]);
+        let mut p = Progress::default();
+        let next = |p: &Progress| {
+            catalog
+                .path_next(p, path, false)
+                .map(|e| e.lesson.id.clone())
+        };
+        assert_eq!(next(&p).as_deref(), Some("tour"));
+        p.lessons.insert(
+            "tour".into(),
+            LessonProgress {
+                version: 1,
+                completed: Some("2026-10-19".into()),
+                ..Default::default()
+            },
+        );
+        assert_eq!(next(&p).as_deref(), Some("wiring"));
+        let sum = catalog.path_summary(&p, path, false);
+        assert_eq!((sum.done, sum.total), (1, 2));
+    }
+
+    #[test]
+    fn a_path_naming_a_missing_lesson_is_a_note() {
+        let mut f = files();
+        f.insert(
+            "paths.toml".into(),
+            "[[path]]\nid = \"p\"\ntitle = \"Path\"\nlessons = [\"tour\", \"nope\"]\n".into(),
+        );
+        let catalog = Catalog::from_files(&f);
+        assert!(
+            catalog
+                .notes
+                .iter()
+                .any(|n| n.contains("unknown lesson `nope`")),
+            "{:?}",
+            catalog.notes
+        );
     }
 }

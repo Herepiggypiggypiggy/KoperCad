@@ -1,0 +1,40 @@
+format = 1
+id = "nfpa/motors/motor_3ph_pe_t2"
+name = "Three-phase motor, 2 extra terminals"
+description = "Three-phase motor with U1, V1, W1 and PE plus two auxiliary terminals T1 and T2, drawn dashed because they are not part of the winding. Their function is not documented in the source this symbol was drawn from."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "motors"
+function = "motor.ac3"
+keywords = ["motor", "3 phase", "auxiliary terminals", "6 terminals", "nfpa", "ansi"]
+
+connections = [
+  { id = "U1", at = [0, 0], dir = "up" },
+  { id = "V1", at = [8, 0], dir = "up" },
+  { id = "W1", at = [16, 0], dir = "up" },
+  { id = "T1", at = [0, 32], dir = "down" },
+  { id = "T2", at = [16, 32], dir = "down" },
+  { id = "PE", at = [24, 0], dir = "up", role = "pe" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 16], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "line", from = [0, 4], to = [3.6, 10.556] },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "line", from = [8, 4], to = [8, 9] },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "line", from = [16, 4], to = [12.4, 10.556] },
+  { kind = "circle", center = [8, 16], r = 7 },
+  { kind = "text", at = [8, 14.5], text = "M", size = 4 },
+  { kind = "polyline", points = [[0, 32], [0, 28], [3.6, 21.444]], stroke = "dashed" },
+  { kind = "polyline", points = [[16, 32], [16, 28], [12.4, 21.444]], stroke = "dashed" },
+  { kind = "polyline", points = [[24, 0], [24, 16], [15, 16]] },
+]
+
+[behavior]
+kind = "motor"
+phases = 3
+ports = [["U1", "V1", "W1"]]

@@ -301,8 +301,13 @@ impl CabinetScene {
             }
             out.push((rail_item(d.id), item));
         }
+        // On a big plate fitted to the window a 3.5 mm tag is under 2 points
+        // high and is dropped as unreadable, so the tag grows with the plate.
+        let tag_height = view.plate.map_or(s.tag_height, |p| {
+            s.tag_height.max(p.width.max(p.height) / 200.0)
+        });
         for b in &view.boxes {
-            out.push((box_item(b.id), self.device(b)));
+            out.push((box_item(b.id), self.device(b, tag_height)));
             if b.clearance > 0.0 {
                 out.push((clearance_item(b.id), self.clearance(b)));
             }
@@ -318,8 +323,7 @@ impl CabinetScene {
         }
     }
 
-    fn device(&self, b: &BoxView) -> Item {
-        let s = &self.style;
+    fn device(&self, b: &BoxView, tag_height: f32) -> Item {
         let min = Vec2::new(b.x, b.y);
         let max = min + Vec2::new(b.width, b.height);
         let color = self.state_color(b.state);
@@ -338,11 +342,18 @@ impl CabinetScene {
                 .push(Primitive::stroked(Shape::rect(min, max), stroke));
         }
         if !b.tag.is_empty() {
-            item.labels.push(
-                Label::new((min + max) * 0.5, b.tag.clone(), s.tag_height)
-                    .anchored(Anchor::Center)
-                    .colored(color),
-            );
+            // A tall device carries its tag along its height: at "fit" the
+            // box is a few dozen points wide, so a horizontal tag meets the
+            // neighbour's and is hidden, a vertical one has the room.
+            let tall = b.height > b.width * 1.2;
+            let label = Label::new((min + max) * 0.5, b.tag.clone(), tag_height)
+                .anchored(Anchor::Center)
+                .colored(color);
+            item.labels.push(if tall {
+                label.rotated(-std::f32::consts::FRAC_PI_2)
+            } else {
+                label
+            });
         }
         // The mark in the top right corner, so state never rests on colour.
         let m = (b.width.min(b.height) * 0.25).clamp(2.0, 6.0);
@@ -522,6 +533,19 @@ mod tests {
         assert!(s.get(box_item(1)).unwrap().selectable);
         // The tag is the box's label.
         assert_eq!(s.get(box_item(2)).unwrap().labels[0].text, "-K2");
+    }
+
+    #[test]
+    fn a_tall_device_carries_its_tag_along_its_height() {
+        let mut c = CabinetScene::new(CabinetStyle::default());
+        let mut v = view();
+        v.boxes[0].width = 90.0;
+        v.boxes[0].height = 45.0;
+        c.set(&v);
+        let wide = &c.scene().get(box_item(v.boxes[0].id)).unwrap().labels[0];
+        assert_eq!(wide.rotation, 0.0);
+        let tall = &c.scene().get(box_item(v.boxes[1].id)).unwrap().labels[0];
+        assert!(tall.rotation < 0.0);
     }
 
     #[test]

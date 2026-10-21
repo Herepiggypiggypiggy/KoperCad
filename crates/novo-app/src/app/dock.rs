@@ -115,6 +115,9 @@ impl NovoApp {
     /// The recently used symbols follow to the new pack.
     pub(super) fn sync_catalog(&mut self) {
         let pack = self.standard();
+        if self.sync_symbol_folder(pack) {
+            return;
+        }
         let Some(view) = self.canvas.schematic() else {
             return;
         };

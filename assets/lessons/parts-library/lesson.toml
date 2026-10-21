@@ -89,15 +89,17 @@ how = [
   "Find a row without a green **In library** label.",
   "Click its small **Import** button.",
   "For most makers your web browser opens the part page. Save the file they offer.",
-  "KoperCAD finds the file in your Downloads folder by itself.",
-  "If no page opens, save the file yourself and drop it on the Parts window.",
+  "KoperCAD finds the file in your Downloads folder by itself, if its name contains the order number.",
+  "If no page opens, or the file has another name, save it yourself and drop it on the Parts window, or pick it with the Choose file button.",
+  "Nothing arrives? The strip stops waiting after ten minutes and says so. Its stop button ends it sooner.",
 ]
 how_nl = [
   "Zoek een regel zonder groen label **In library**.",
   "Klik op de kleine knop **Import**.",
   "Bij de meeste fabrikanten opent je webbrowser de pagina van het onderdeel. Bewaar het bestand dat ze aanbieden.",
-  "KoperCAD vindt het bestand zelf in je map Downloads.",
-  "Opent er geen pagina, bewaar het bestand dan zelf en sleep het op het venster Parts.",
+  "KoperCAD vindt het bestand zelf in je map Downloads, als de naam het bestelnummer bevat.",
+  "Opent er geen pagina, of heeft het bestand een andere naam, bewaar het dan zelf en sleep het op het venster Parts, of kies het met de knop Choose file.",
+  "Komt er niets binnen? De strook stopt na tien minuten met wachten en zegt dat. De stopknop beëindigt het eerder.",
 ]
 
 [[step]]

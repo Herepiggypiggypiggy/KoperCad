@@ -5,14 +5,14 @@ document. It extends DESIGN.md "Pages navigator" and §3.
 
 ## What is stored today
 
-Groups (`=10D41`) and panels (`+K1B1G1`) are not entities. They are tag
+Groups (`=20D41`) and panels (`+BAY1G1`) are not entities. They are tag
 levels copied as strings into five places:
 
 | Where | Field |
 | --- | --- |
 | `Page` | `structure` (function and location levels) |
 | `PageFreeze` | `structure`, the value printed when the page was issued |
-| `Device` | `tag` (`=10D41+K1B1G1-K1`) |
+| `Device` | `tag` (`=20D41+BAY1G1-K1`) |
 | `Cable` | `tag` |
 | `Structure` | `tag`, the optional node that carries `description` and `enclosure` |
 
@@ -29,7 +29,7 @@ New additive command `RenameLevel { aspect, from, to }` (WS-02 owns the
 API; same pattern as `RenamePage` in #314).
 
 - `aspect` is Function (group) or Location (panel). `from` and `to` are
-  level paths, so `from = [K1B1G1]` and `to = [K1B2G1]`.
+  level paths, so `from = [BAY1G1]` and `to = [BAY2G1]`.
 - It rewrites every copy listed above whose levels for that aspect start
   with `from`, replacing that prefix with `to`. Prefix matching keeps
   children attached: renaming `+CAB1` also renames `+CAB1+DOOR`, so the
@@ -61,7 +61,7 @@ Refusals, each with a reason shown in the hint and nothing changed:
 - Outline (Function and Location views): double-click a group or panel row,
   or right-click, Rename. Same inline editor as page rename (Enter or click
   away keeps, Esc cancels). The hint after a rename says what moved, for
-  example "Renamed +K1B1G1 to +K1B2G1: 6 pages, 41 devices, 3 cables".
+  example "Renamed +BAY1G1 to +BAY2G1: 6 pages, 41 devices, 3 cables".
 - Palette: "Rename group" and "Rename panel", acting on the current page's
   group or panel when nothing is selected in the outline.
 - Scripts and AI edits use the same command.
@@ -99,7 +99,7 @@ a panel the user also wants its own list (the pages of one cabinet drawing
 set).
 
 - A generated page whose structure holds only a location lists only the
-  pages of that panel. The generator id is `toc@+K1B1G1`; `LiveReports`
+  pages of that panel. The generator id is `toc@+BAY1G1`; `LiveReports`
   (WS-13) resolves the part after `@` as the scope. The project contents
   list is unchanged and still lists every page, with these pages in it.
 - Outline right-click on a panel: "Add contents page for this panel". It is

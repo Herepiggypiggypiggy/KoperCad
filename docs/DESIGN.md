@@ -473,8 +473,8 @@ reason in the hint, and nothing changes.
 
 **Pages navigator.** Pages are reached through the outline (§3), which is
 the navigator: there is no second one. Its filter has two views of the
-same pages, **Function** (the page groups, `=10D41`) and **Location** (the
-panels, `+K1B1G1`). Each page has both: the group it sits in and the panel
+same pages, **Function** (the page groups, `=20D41`) and **Location** (the
+panels, `+BAY1G1`). Each page has both: the group it sits in and the panel
 it is drawn for.
 
 **DXF background.** A page can carry one imported DXF as a reference
@@ -487,7 +487,7 @@ is placed at the page corner, and move and scale come later.
   of the row), New group, New panel. New group asks for its name and,
   optionally, its panels as chips; a panel is named once in the project
   however many groups use it.
-- Two pages in `=10D41 +K1B1G1` and two in `=11D21 +K1B1G1` are four pages
+- Two pages in `=20D41 +BAY1G1` and two in `=21D21 +BAY1G1` are four pages
   of one panel: the Cabinet canvas and the cabinet layout are per panel,
   so they appear on the same layout though the groups differ. The panel
   row in the Location view lists all four.

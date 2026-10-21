@@ -8,12 +8,18 @@ use novo_canvas::{Anchor, Color, Label, Primitive, Shape, Stroke, Vec2};
 use novo_core::SymbolInstance;
 use novo_symbols::{Align, Graphic, Library, Symbol};
 
+/// Key of the labelled box the importers draw for a symbol with no library match.
+pub const BOX_KEY: &str = "import/box";
+
 /// Dash and gap length of dashed artwork lines (mechanical links), in mm.
 const DASH: f32 = 1.5;
 const GAP: f32 = 1.0;
 
 /// Symbol artwork from a symbol library, converted once per symbol.
 pub struct LibraryArt {
+    stroke: Stroke,
+    /// Connection points of each symbol, in library order.
+    pins: HashMap<String, Vec<Vec2>>,
     shapes: HashMap<String, Vec<Primitive>>,
     labels: HashMap<String, Vec<Label>>,
     tags: HashMap<String, (Vec2, Anchor)>,
@@ -22,6 +28,15 @@ pub struct LibraryArt {
 impl LibraryArt {
     /// Converts every symbol of `library` with the given line style.
     pub fn new(library: &Library, stroke: Stroke) -> Self {
+        let pins = library
+            .iter()
+            .map(|s| {
+                (
+                    s.id.clone(),
+                    s.connections.iter().map(|c| v(c.at)).collect(),
+                )
+            })
+            .collect();
         let shapes = library
             .iter()
             .map(|s| (s.id.clone(), primitives(s, stroke)))
@@ -39,6 +54,8 @@ impl LibraryArt {
             })
             .collect();
         LibraryArt {
+            stroke,
+            pins,
             shapes,
             labels,
             tags,
@@ -46,20 +63,177 @@ impl LibraryArt {
     }
 }
 
+/// How far (mm) a pin may sit from the library's before the artwork follows it.
+const PIN_TOLERANCE: f32 = 0.05;
+
+impl LibraryArt {
+    /// The scale that fits the library artwork to the pins of this instance,
+    /// and the library pins; `None` when the pins are where the library has
+    /// them (the usual case) or are not the library's pins at all.
+    ///
+    /// Pins that sit elsewhere (a symbol imported from a drawing with its own
+    /// pin pitch) scale the artwork about the symbol origin, so a 16 mm
+    /// contact drawn with 8 mm between its pins is a smaller contact, not one
+    /// whose leads miss the pins.
+    fn fit(&self, symbol: &SymbolInstance) -> Option<(f32, &[Vec2])> {
+        let lib = self.pins.get(&symbol.symbol.0)?;
+        if lib.len() != symbol.pins.len() {
+            return None;
+        }
+        let at = |i: usize| v([symbol.pins[i].offset.x, symbol.pins[i].offset.y]);
+        if (0..lib.len()).all(|i| (at(i) - lib[i]).length() <= PIN_TOLERANCE) {
+            return None;
+        }
+        let (dot, norm) = (0..lib.len()).fold((0.0f32, 0.0f32), |(d, n), i| {
+            (d + at(i).dot(lib[i]), n + lib[i].dot(lib[i]))
+        });
+        let scale = if norm > 1e-3 {
+            (dot / norm).clamp(0.2, 5.0)
+        } else {
+            1.0
+        };
+        Some((scale, lib))
+    }
+}
+
+fn scaled(shape: &Shape, k: f32) -> Shape {
+    match shape {
+        Shape::Line { a, b } => Shape::Line {
+            a: *a * k,
+            b: *b * k,
+        },
+        Shape::Polyline { points, closed } => Shape::Polyline {
+            points: points.iter().map(|p| *p * k).collect(),
+            closed: *closed,
+        },
+        Shape::Rect { min, max } => Shape::Rect {
+            min: *min * k,
+            max: *max * k,
+        },
+        Shape::Circle { center, radius } => Shape::Circle {
+            center: *center * k,
+            radius: radius * k,
+        },
+        Shape::Arc {
+            center,
+            radius,
+            start,
+            sweep,
+        } => Shape::Arc {
+            center: *center * k,
+            radius: radius * k,
+            start: *start,
+            sweep: *sweep,
+        },
+    }
+}
+
+/// How far (mm) a pin's lead reaches into a labelled box.
+const LEAD: f32 = 3.0;
+/// The smallest a labelled box is drawn.
+const BOX_MIN: f32 = 3.5;
+
+/// The artwork of a symbol that has no library drawing: a box with each pin
+/// on the side it faces and a short lead from the pin to the box. Pins that
+/// face up sit on the top edge, so two rows of pins (the poles of a
+/// breaker) give a box between the rows, not one that runs over its
+/// neighbours.
+pub fn box_art(symbol: &SymbolInstance, stroke: Stroke) -> Vec<Primitive> {
+    use novo_core::Direction;
+    let pins: Vec<(Vec2, Option<Direction>)> = symbol
+        .pins
+        .iter()
+        .map(|p| (v([p.offset.x, p.offset.y]), p.direction))
+        .collect();
+    if pins.is_empty() {
+        return Vec::new();
+    }
+    let (mut lo, mut hi) = (Vec2::splat(f32::MAX), Vec2::splat(f32::MIN));
+    for (p, _) in &pins {
+        lo = lo.min(*p);
+        hi = hi.max(*p);
+    }
+    // Each side is where its pins' leads end; a side without pins is the
+    // pins' hull plus half the smallest box.
+    let side = |dir: Direction, pick: fn(Vec2) -> f32, take: fn(f32, f32) -> f32, margin: f32| {
+        pins.iter()
+            .filter(|(_, d)| *d == Some(dir))
+            .map(|(p, _)| pick(*p) + margin)
+            .reduce(take)
+    };
+    let top = side(Direction::Up, |p| p.y, f32::min, LEAD).unwrap_or(lo.y - BOX_MIN / 2.0);
+    let bottom = side(Direction::Down, |p| p.y, f32::max, -LEAD).unwrap_or(hi.y + BOX_MIN / 2.0);
+    let left = side(Direction::Left, |p| p.x, f32::min, LEAD).unwrap_or(lo.x - BOX_MIN / 2.0);
+    let right = side(Direction::Right, |p| p.x, f32::max, -LEAD).unwrap_or(hi.x + BOX_MIN / 2.0);
+    let (mut min, mut max) = (Vec2::new(left, top), Vec2::new(right, bottom));
+    for axis in 0..2 {
+        if max[axis] - min[axis] < BOX_MIN {
+            let mid = (max[axis] + min[axis]) / 2.0;
+            min[axis] = mid - BOX_MIN / 2.0;
+            max[axis] = mid + BOX_MIN / 2.0;
+        }
+    }
+    let mut out = vec![Primitive::stroked(Shape::rect(min, max), stroke)];
+    for (p, _) in pins {
+        if p.x >= min.x && p.x <= max.x && p.y >= min.y && p.y <= max.y {
+            continue;
+        }
+        out.push(Primitive::stroked(
+            Shape::line(p, p.clamp(min, max)),
+            stroke,
+        ));
+    }
+    out
+}
+
 impl SymbolArt for LibraryArt {
     fn artwork(&self, symbol: &SymbolInstance) -> Option<Vec<Primitive>> {
-        self.shapes.get(&symbol.symbol.0).cloned()
+        if symbol.symbol.0 == BOX_KEY {
+            return Some(box_art(symbol, self.stroke));
+        }
+        let base = self.shapes.get(&symbol.symbol.0)?;
+        let Some((k, lib)) = self.fit(symbol) else {
+            return Some(base.clone());
+        };
+        let mut out: Vec<Primitive> = base
+            .iter()
+            .map(|p| Primitive {
+                shape: scaled(&p.shape, k),
+                ..p.clone()
+            })
+            .collect();
+        // A lead from where the scaled artwork ends to where the pin is.
+        let stroke = base.iter().find_map(|p| p.stroke);
+        for (i, l) in lib.iter().enumerate() {
+            let pin = v([symbol.pins[i].offset.x, symbol.pins[i].offset.y]);
+            if let Some(stroke) = stroke
+                && (pin - *l * k).length() > PIN_TOLERANCE
+            {
+                out.push(Primitive::stroked(Shape::line(*l * k, pin), stroke));
+            }
+        }
+        Some(out)
     }
 
     fn labels(&self, symbol: &SymbolInstance) -> Vec<Label> {
-        self.labels
+        let mut labels = self
+            .labels
             .get(&symbol.symbol.0)
             .cloned()
-            .unwrap_or_default()
+            .unwrap_or_default();
+        if let Some((k, _)) = self.fit(symbol) {
+            for l in &mut labels {
+                l.pos *= k;
+                l.height *= k.clamp(0.6, 1.0);
+            }
+        }
+        labels
     }
 
     fn tag_anchor(&self, symbol: &SymbolInstance) -> Option<(Vec2, Anchor)> {
-        self.tags.get(&symbol.symbol.0).copied()
+        let (at, anchor) = *self.tags.get(&symbol.symbol.0)?;
+        let k = self.fit(symbol).map_or(1.0, |(k, _)| k);
+        Some((at * k, anchor))
     }
 }
 

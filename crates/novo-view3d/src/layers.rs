@@ -13,6 +13,8 @@ pub struct Layers {
     pub door: bool,
     /// The routed wires.
     pub wires: bool,
+    /// The typical shape of each device family; off draws plain boxes.
+    pub shapes: bool,
 }
 
 impl Default for Layers {
@@ -21,6 +23,7 @@ impl Default for Layers {
             shell: true,
             door: true,
             wires: true,
+            shapes: true,
         }
     }
 }
@@ -41,6 +44,9 @@ impl Layers {
         }
         if !self.wires {
             scene.wires.clear();
+        }
+        if !self.shapes {
+            crate::device_shape::strip(&mut scene);
         }
         scene
     }

@@ -969,10 +969,45 @@ fn import_eplan_previews_with_a_counted_not_carried_list_and_writes_nothing() {
     let pxf = pxf_fixture();
     let r = novo(&["import", "eplan", s(&pxf)]);
     assert_eq!(r.code, exit::OK, "{}", r.err);
-    assert!(r.out.contains("2 pages (empty)"), "{}", r.out);
+    assert!(r.out.contains("2 pages"), "{}", r.out);
     assert!(r.out.contains("symbol drawings"), "{}", r.out);
     let r = novo(&["import", "eplan", s(&pxf), "--json"]);
     assert!(r.out.contains("\"not_carried\""), "{}", r.out);
+}
+
+fn crane_fixture() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../novo-interop/tests/fixtures/crane/output")
+}
+
+#[test]
+fn import_crane_reads_the_newest_version_and_quotes_the_configurator() {
+    let r = novo(&["import", "crane", s(&crane_fixture())]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    assert!(r.out.contains("version 2"), "{}", r.out);
+    assert!(r.out.contains("GOED MET OPMERKINGEN"), "{}", r.out);
+    assert!(r.out.contains("generated report pages"), "{}", r.out);
+    assert!(r.out.contains("Inferred"), "{}", r.out);
+}
+
+#[test]
+fn import_crane_output_writes_a_new_project_and_never_replaces_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("crane.novo");
+    let r = novo(&["import", "crane", s(&crane_fixture()), "-o", s(&target)]);
+    assert_eq!(r.code, exit::OK, "{}", r.err);
+    let imported = novo_storage::ProjectFile::read(&target).unwrap();
+    assert_eq!(imported.cables().count(), 2);
+    assert_eq!(imported.info().name, "DEMO-1 Demo slewing crane");
+    let again = novo(&["import", "crane", s(&crane_fixture()), "-o", s(&target)]);
+    assert_ne!(again.code, exit::OK);
+}
+
+#[test]
+fn import_crane_says_when_the_folder_holds_no_project() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = novo(&["import", "crane", s(dir.path())]);
+    assert_eq!(r.code, exit::READ);
+    assert!(r.err.contains("no .epj file"), "{}", r.err);
 }
 
 #[test]

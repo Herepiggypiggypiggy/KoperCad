@@ -106,6 +106,16 @@ pub(crate) fn select(
     for i in order(&kinds, &names, &wish) {
         let adapter = &adapters[i];
         if surface.is_some_and(|s| !adapter.is_surface_supported(s)) {
+            log::warn!(
+                "Skipping {}: cannot draw to the window",
+                describe(&infos[i])
+            );
+            continue;
+        }
+        // The driver can list an adapter and still refuse to open it (old
+        // drivers, hybrid laptops); try the next one instead of giving up.
+        if let Err(e) = pollster::block_on(adapter.request_device(&device_descriptor(adapter))) {
+            log::warn!("Skipping {}: cannot open it: {e}", describe(&infos[i]));
             continue;
         }
         log::info!(
@@ -125,11 +135,32 @@ pub(crate) fn select(
     })
 }
 
+/// eframe's device request, but never asking for more than the adapter has:
+/// eframe's own asks for the full default limits and 8192 pixel textures,
+/// which an older integrated GPU or driver (typical in laptops) refuses.
+pub(crate) fn device_descriptor(adapter: &wgpu::Adapter) -> wgpu::DeviceDescriptor<'static> {
+    let base = if adapter.get_info().backend == wgpu::Backend::Gl {
+        wgpu::Limits::downlevel_webgl2_defaults()
+    } else {
+        wgpu::Limits::default()
+    };
+    let wanted = wgpu::Limits {
+        max_texture_dimension_2d: 8192,
+        ..base
+    };
+    wgpu::DeviceDescriptor {
+        label: Some("KoperCAD device"),
+        required_limits: wanted.or_worse_values_from(&adapter.limits()),
+        ..Default::default()
+    }
+}
+
 /// eframe's wgpu setup with [`select`] as the adapter choice.
 pub(crate) fn configuration() -> eframe::egui_wgpu::WgpuConfiguration {
     let mut config = eframe::egui_wgpu::WgpuConfiguration::default();
     if let eframe::egui_wgpu::WgpuSetup::CreateNew(create) = &mut config.wgpu_setup {
         create.native_adapter_selector = Some(std::sync::Arc::new(select));
+        create.device_descriptor = std::sync::Arc::new(device_descriptor);
     }
     config
 }

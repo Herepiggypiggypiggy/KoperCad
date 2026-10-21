@@ -1,0 +1,21 @@
+format = 1
+id = "nfpa/connectivity/device_pin"
+name = "Device connection point"
+description = "One connection point of a device that is drawn on another page or in another place: a lead ending in a small circle. The designation (A1, 13, L1) is the pin name. Turn it to face any side."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "connectivity"
+function = "connectivity.device_pin"
+keywords = ["device pin", "connection point", "device terminal", "pin", "contact point", "split device", "nfpa", "ansi"]
+aliases = ["dpin"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 2.8] },
+  { kind = "circle", center = [0, 4], r = 1.2 },
+]
+
+[behavior]
+kind = "none"

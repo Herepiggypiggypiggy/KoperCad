@@ -35,6 +35,8 @@ pub(super) enum RailAsk {
     /// Dragged on the plate: the rail's new start.
     MoveTo(u64, f64, f64),
     Delete(u64),
+    /// The lesson chip: start or continue this lesson.
+    Lesson(String),
 }
 
 /// A rail with all the values the list can change.
@@ -292,6 +294,7 @@ pub(super) fn show_window(
     state: &mut RailsState,
     project: &novo_core::Project,
     structure: Option<StructureId>,
+    chip: Option<&(String, String)>,
 ) -> Option<RailAsk> {
     if !state.open {
         return None;
@@ -310,6 +313,9 @@ pub(super) fn show_window(
                 return;
             }
             ui.horizontal(|ui| {
+                if let Some(id) = super::learn_ui::chip_button(ui, chip) {
+                    ask = Some(RailAsk::Lesson(id));
+                }
                 if ui.button("Add DIN rail").clicked() {
                     ask = Some(RailAsk::Add {
                         kind: RailKind::DinRail,
@@ -511,6 +517,10 @@ impl super::NovoApp {
 
     /// Applies what the list asked for as one undo step.
     pub(super) fn cabinet_rail_ask(&mut self, structure: Option<StructureId>, ask: RailAsk) {
+        if let RailAsk::Lesson(id) = ask {
+            self.learn_run_command_lesson(&id);
+            return;
+        }
         let Some(structure) = structure else {
             return;
         };
@@ -597,6 +607,8 @@ impl super::NovoApp {
                         .map(|_| ())
                 });
             }
+            // Handled before the match.
+            RailAsk::Lesson(_) => {}
             RailAsk::Delete(id) => {
                 let rail = RailId::from(id);
                 self.cabinet_edit("Delete rail", move |tx| {

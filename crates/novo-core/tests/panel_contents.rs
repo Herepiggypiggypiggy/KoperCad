@@ -38,9 +38,9 @@ fn generator(doc: &Document, page: PageId) -> String {
 
 #[test]
 fn the_generator_id_names_the_panel() {
-    let id = panel_contents_generator(&levels("K1B1G1"));
-    assert_eq!(id, "toc@+K1B1G1");
-    assert_eq!(contents_scope(&id), Some(tag("+K1B1G1")));
+    let id = panel_contents_generator(&levels("BAY1G1"));
+    assert_eq!(id, "toc@+BAY1G1");
+    assert_eq!(contents_scope(&id), Some(tag("+BAY1G1")));
     assert_eq!(
         contents_scope(&panel_contents_generator(&levels("CAB1/DOOR"))),
         Some(tag("+CAB1+DOOR"))

@@ -810,3 +810,82 @@ fn menu_rows_are_anchors_that_fall_back_to_their_menu() {
             .unwrap()
     )));
 }
+
+#[test]
+fn help_next_lesson_names_and_starts_the_lesson_on_offer() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    let info = novo_workflow::commands::get("help.next_lesson").expect("registered");
+    assert_eq!(d.app.command_label(info), "Next lesson: Tiny lesson");
+    assert!(crate::app::app_runs("help.next_lesson"));
+    d.app.run_command(&ctx, "help.next_lesson", None);
+    d.frame();
+    assert_eq!(step(&d), "hello", "it starts the lesson");
+    assert_eq!(d.app.command_label(info), "Continue lesson: Tiny lesson");
+    d.app.run_command(&ctx, "learn.close", None);
+    d.app.run_command(&ctx, "help.next_lesson", None);
+    assert!(d.app.learn.card_on(), "it brings the card back");
+    assert_eq!(step(&d), "hello", "and does not start over");
+}
+
+#[test]
+fn the_window_lists_a_chosen_path_in_its_order() {
+    let (_dir, mut d) = drive();
+    let mut files = files();
+    files.insert(
+        "paths.toml".into(),
+        "[[path]]\nid = \"only\"\ntitle = \"Only path\"\nlessons = [\"tiny\"]\n".into(),
+    );
+    d.app.learn.use_files(files);
+    let entries: Vec<_> = d.app.learn.catalog.visible(false).cloned().collect();
+    let groups = d.app.lesson_groups(&entries);
+    assert_eq!(groups[0].0, "Basics", "tracks by default");
+    d.app.learn.only_path = Some("only".into());
+    let groups = d.app.lesson_groups(&entries);
+    assert_eq!(groups.len(), 1);
+    assert_eq!(groups[0].0, "Only path");
+    assert_eq!(groups[0].2[0].lesson.id, "tiny");
+    d.app.learn.window = true;
+    d.frame();
+    d.app.run_command(&d.ctx.clone(), "help.learn", None);
+    assert!(d.app.learn.only_path.is_none(), "opening plainly clears it");
+}
+
+#[test]
+fn the_command_field_finds_and_starts_a_lesson() {
+    let (_dir, mut d) = drive();
+    let entries = d.app.learn.palette_entries();
+    assert_eq!(entries[0].id, "tiny");
+    assert_eq!(entries[0].title, "Tiny lesson");
+    let ctx = d.ctx.clone();
+    d.app
+        .run_target(&ctx, novo_workflow::palette::Target::Lesson("tiny".into()));
+    d.frame();
+    assert_eq!(step(&d), "hello", "picking the row starts the lesson");
+    d.app
+        .run_target(&ctx, novo_workflow::palette::Target::Lesson("tiny".into()));
+    assert_eq!(step(&d), "hello", "picking it again resumes, not restarts");
+}
+
+#[test]
+fn a_panel_chip_names_the_lesson_for_its_topic_and_steps_aside_when_it_runs() {
+    let (_dir, mut d) = drive();
+    let mut files = files();
+    files.insert(
+        "tiny/lesson.toml".into(),
+        LESSON.replace(
+            "project = \"@blank\"",
+            "project = \"@blank\"\ntopics = [\"terminals\"]",
+        ),
+    );
+    d.app.learn.use_files(files);
+    assert!(d.app.learn.chip("cables").is_none(), "no lesson for it");
+    let (id, label) = d.app.learn.chip("terminals").expect("a chip");
+    assert_eq!(
+        (id.as_str(), label.as_str()),
+        ("tiny", "Lesson: Tiny lesson")
+    );
+    d.app.learn_run_command_lesson(&id);
+    d.frame();
+    assert!(d.app.learn.chip("terminals").is_none(), "the card is on it");
+}
