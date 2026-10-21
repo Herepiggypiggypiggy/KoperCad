@@ -2019,7 +2019,8 @@ pub const COMMANDS: &[CommandInfo] = &[
             &["cut list", "bars", "rail length", "duct length", "buy"],
             Needs::Project,
         ),
-        &["cut list"],
+        // Not the bare "cut list": that is the report's own verb.
+        &["rail cut list", "duct cut list"],
     ),
     verb(
         cmd(
