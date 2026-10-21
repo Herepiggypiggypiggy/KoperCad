@@ -241,17 +241,17 @@ fn model_row(
             (
                 "Tip",
                 Turn::Tip,
-                "A quarter turn about the width: the top goes towards or away from the door",
+                "A quarter turn about the model's own width: the top goes towards or away from the door",
             ),
             (
                 "Spin",
                 Turn::Spin,
-                "A quarter turn about the height: the front goes to the side or the back",
+                "A quarter turn about the model's own height: the front goes to the side or the back",
             ),
             (
                 "Roll",
                 Turn::Roll,
-                "A quarter turn about the depth: lays the model on its side or stands it up",
+                "A quarter turn about the model's own depth: lays the model on its side or stands it up",
             ),
         ] {
             if ui.button(label).on_hover_text(tip).clicked() {
