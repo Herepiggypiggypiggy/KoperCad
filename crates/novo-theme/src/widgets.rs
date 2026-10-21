@@ -645,6 +645,9 @@ pub fn row_of_height(
             .max_rect(inner)
             .layout(Layout::left_to_right(Align::Center)),
     );
+    // A selectable label would take the press for its own text selection and the
+    // row would never see the click.
+    child.style_mut().interaction.selectable_labels = false;
     add_contents(&mut child);
     response
 }
