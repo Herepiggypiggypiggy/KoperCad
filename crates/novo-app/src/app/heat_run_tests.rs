@@ -72,7 +72,7 @@ pub(super) fn scenario() -> Scenario {
 fn drain(r: &mut Runner) -> Vec<Event> {
     let t0 = Instant::now();
     let mut all = Vec::new();
-    while t0.elapsed() < Duration::from_secs(10) {
+    while t0.elapsed() < super::test_wait::PATIENCE {
         all.extend(r.poll());
         if matches!(all.last(), Some(Event::Finished(_) | Event::Lost)) {
             return all;

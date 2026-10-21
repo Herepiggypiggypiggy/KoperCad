@@ -1,0 +1,19 @@
+@title 3D view: Heat panel, Simulate, verdict and pinned hot-spot labels
+@area 3D
+# Heat button in the 3D toolbar opens the Heat panel; a run shows the verdict, the colours on the devices and pinned labels.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+shot heat-panel
+click_text Simulate #2
+wait 300
+shot heat-working
+wait 300
+move 700 650
+wait 10
+shot heat-result
+check_blank heat-result
+check_layout

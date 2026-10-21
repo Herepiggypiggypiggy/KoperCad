@@ -65,6 +65,7 @@ mod eplan_parts;
 mod error_words;
 mod example;
 mod faults;
+mod handover;
 mod heat;
 mod heat_3d;
 #[cfg(test)]
@@ -106,6 +107,9 @@ mod learn_ui;
 mod link;
 mod live;
 mod live_anim;
+mod machine;
+#[cfg(test)]
+mod machine_tests;
 mod macro_actions;
 #[cfg(test)]
 mod macro_actions_tests;
@@ -142,6 +146,9 @@ mod plate_export;
 mod plc;
 mod plc_card;
 mod plc_link;
+mod plc_list;
+#[cfg(test)]
+mod plc_list_tests;
 mod plc_run;
 mod potentials;
 mod preferences;
@@ -175,6 +182,8 @@ mod symbol_folder;
 mod symbol_preview;
 mod terminal_edit;
 mod terminals;
+#[cfg(test)]
+mod test_wait;
 mod tidy;
 mod tips;
 mod title_revisions;
@@ -202,6 +211,9 @@ mod view3d_place;
 mod view3d_rail;
 #[cfg(test)]
 mod view3d_rail_tests;
+mod view3d_runs;
+#[cfg(test)]
+mod view3d_runs_tests;
 mod view3d_stats;
 mod view3d_surface_devices;
 #[cfg(test)]
@@ -278,6 +290,8 @@ mod gate1_tests;
 #[cfg(test)]
 mod greyed_commands_tests;
 #[cfg(test)]
+mod handover_tests;
+#[cfg(test)]
 mod learn_replay;
 #[cfg(test)]
 mod learn_tests;
@@ -330,6 +344,7 @@ use eframe::egui;
 use crate::actions::Action;
 
 /// Hover text of the bulk-edit exports (the data to edit, not the reports).
+const HANDOVER_HINT: &str = "One folder for the customer: the drawing set, revisions, parts, wire, terminal and cable lists, the commissioning record, safety functions, an Excel workbook, and a contents page that says what is exact and what is an estimate.";
 const WORKSHOP_HINT: &str = "One folder for the hand workshop: a 1:1 drilling template of each mounting plate (tiled on A4 or A3, with cross hairs, hole sizes and a 100 mm check ruler), the cut list, ferrules, labels and the assembly checklist with tick boxes.";
 const ASSEMBLY_HINT: &str = "The shop-floor print pack of every cabinet: build order (rails, ducts, devices, wires, labels), then prepare with the cut list, drill table, mount, wire, label and check, then the wire cutting list. Needs a cabinet with a mounting plate.";
 const SHEETS_HINT: &str = "Devices, terminals, wires and cables to edit in Excel. Edit the file in Excel and bring it back with File > Import spreadsheet. The generated reports are under Export all reports to Excel.";
@@ -1374,6 +1389,7 @@ impl NovoApp {
         self.eplan_parts_dialog(&ctx);
         self.eplan_export_dialog(&ctx);
         self.plc_import_dialog(&ctx);
+        self.plc_list_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
         self.whats_new_window(&ctx);
@@ -2026,10 +2042,17 @@ impl NovoApp {
                 for a in [Action::NewProject, Action::OpenProject, Action::OpenExample] {
                     self.action_button(ui, a, picked);
                 }
+                // Ways to learn, named as such and each with what it is, so the
+                // two are not read as copies of each other.
+                ui.add_space(12.0);
+                ui.small("LEARN");
                 if !self.first_run() {
                     self.action_button(ui, Action::TryFastKeys, picked);
+                    ui.weak("Two minutes: place, wire, cable, live view");
+                    ui.add_space(4.0);
                 }
                 self.learn_start_entry(ui);
+                ui.weak("Lessons for every part of the program");
                 let unsaved = self.backend.unsaved_projects();
                 if !unsaved.is_empty() {
                     ui.add_space(16.0);

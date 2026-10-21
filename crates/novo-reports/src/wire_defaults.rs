@@ -22,10 +22,16 @@ const NEUTRAL: &str = "BU";
 /// The wires of the cut list that still lack a value.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct UnsetWires {
-    /// Wires of the cut list.
+    /// Drawn wires of the cut list (the pieces a connection is drawn in).
     pub total: usize,
     pub no_size: Vec<WireId>,
     pub no_colour: Vec<WireId>,
+    /// Wires to cut: the connections, the unit every other count in the
+    /// Bench output uses. A connection lacks a size or colour when none of
+    /// its drawn wires has one (the same rule the cut list applies).
+    pub connections: usize,
+    pub connections_no_size: usize,
+    pub connections_no_colour: usize,
 }
 
 impl UnsetWires {
@@ -62,16 +68,25 @@ pub fn unset_wires(project: &Project) -> UnsetWires {
     let mut out = UnsetWires::default();
     for item in items(project, true) {
         out.total += item.wires.len();
+        out.connections += 1;
+        let mut sized = false;
+        let mut coloured = false;
         for wire in &item.wires {
             if crate::wirecut::sections(project, &[*wire]).is_empty() {
                 out.no_size.push(wire.id);
+            } else {
+                sized = true;
             }
             if wire.color.as_deref().is_none_or(|c| c.trim().is_empty())
                 && core_colour(project, wire.id).is_none()
             {
                 out.no_colour.push(wire.id);
+            } else {
+                coloured = true;
             }
         }
+        out.connections_no_size += usize::from(!sized);
+        out.connections_no_colour += usize::from(!coloured);
     }
     out
 }

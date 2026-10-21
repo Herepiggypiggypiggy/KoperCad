@@ -247,6 +247,10 @@ const LIMITED: [ContactKind; 4] = [
 /// main functions, and more contacts of a kind than the device has.
 pub(crate) fn device_functions(cx: &Context<'_>, out: &mut Vec<Problem>) {
     for device in cx.project.devices() {
+        // A PLC card is drawn as channels, it has no coil.
+        if device.kind == DeviceKind::Plc {
+            continue;
+        }
         let Some(symbols) = cx.by_device.get(&device.id) else {
             continue;
         };

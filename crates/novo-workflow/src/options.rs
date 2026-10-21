@@ -345,6 +345,98 @@ pub fn condition_of(project: &Project, id: impl Into<AnyId>) -> Option<String> {
     }
 }
 
+/// The condition that holds when option `def` has the value `wanted`:
+/// `opt.conveyor`, `!opt.conveyor`, `opt.supply == '480V'` or, for a number,
+/// `opt.motors == 3`. Refused for a value with a quote in it.
+pub fn condition_for(def: &OptionDef, wanted: &Value) -> Result<String> {
+    let wanted = def.check(wanted).map_err(|e| bad(e.to_string()))?;
+    Ok(match wanted {
+        Value::Bool(true) => format!("opt.{}", def.id),
+        Value::Bool(false) => format!("!opt.{}", def.id),
+        Value::Text(t) => {
+            if t.contains('\'') {
+                return Err(bad(
+                    "a choice with a quote in it cannot be used in a condition",
+                ));
+            }
+            format!("opt.{} == '{t}'", def.id)
+        }
+        other => format!("opt.{} == {other}", def.id),
+    })
+}
+
+/// Ties objects to an option: each appears only while `def` has the value
+/// `wanted`. Replaces any condition they had (the one condition is the whole
+/// rule; a combined rule is typed in the Project options window).
+pub fn tie_to(tx: &mut Tx<'_>, ids: &[AnyId], def: &OptionDef, wanted: &Value) -> Result<()> {
+    let condition = condition_for(def, wanted)?;
+    for id in ids {
+        set_condition(tx, *id, Some(&condition))?;
+    }
+    Ok(())
+}
+
+/// Says an object's condition in words: "Conveyor", "not Conveyor",
+/// "Supply 480V", or the expression itself when it is none of those. `None`
+/// for an object with no condition.
+pub fn describe_condition(project: &Project, id: impl Into<AnyId>) -> Option<String> {
+    let condition = condition_of(project, id)?;
+    for def in &options(project) {
+        for wanted in wanted_values(def) {
+            if condition_for(def, &wanted).is_ok_and(|c| c == condition) {
+                return Some(match wanted {
+                    Value::Bool(true) => def.label().to_owned(),
+                    Value::Bool(false) => format!("not {}", def.label()),
+                    other => format!("{} {other}", def.label()),
+                });
+            }
+        }
+    }
+    Some(condition)
+}
+
+/// The values worth trying when reading a condition back: both answers of a
+/// yes/no option and every choice.
+fn wanted_values(def: &OptionDef) -> Vec<Value> {
+    match def.spec.kind {
+        ParamKind::Bool => vec![Value::Bool(true), Value::Bool(false)],
+        ParamKind::Choice => def.spec.choices.iter().cloned().map(Value::Text).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// The current choice in a few words for a status bar or a title block:
+/// "Conveyor, no Fan, Supply 480V". Yes/no options read as the option's
+/// name or "no <name>"; the rest as "<name> <value>".
+pub fn summary(project: &Project, assignment: &Assignment) -> String {
+    options(project)
+        .iter()
+        .map(|def| {
+            let value = assignment.get(&def.id).unwrap_or(&def.default);
+            match value {
+                Value::Bool(true) => def.label().to_owned(),
+                Value::Bool(false) => format!("no {}", def.label()),
+                other => format!("{} {other}", def.label()),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// [`variant_project`] for an output: the same copy, with the project's name
+/// carrying the choice (`Press line [Conveyor, no Fan]`), so the title block
+/// and every report header say which machine the document is. A project
+/// without options comes back unchanged.
+pub fn machine_project(project: &Project, assignment: &Assignment) -> Result<Project> {
+    let mut copy = variant_project(project, assignment)?;
+    let label = summary(project, assignment);
+    if !label.is_empty() {
+        let name = format!("{} [{label}]", project.info().name);
+        copy.transact("Name the variant", |tx| tx.set_info(|i| i.name = name))?;
+    }
+    Ok(copy)
+}
+
 /// Which objects a set of values leaves out, and what could not be decided.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Evaluation {

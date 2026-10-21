@@ -66,7 +66,7 @@ fn ask(s: &mut Setup, question: &str) {
     s.d.app.wb.assistant.set_draft(question);
     let ctx = s.d.ctx.clone();
     s.d.app.assistant_test_send(&ctx);
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if !s.d.app.wb.assistant.is_running() {
             return;
@@ -523,7 +523,7 @@ fn ctrl_k_offers_to_ask_claude_when_nothing_matches_and_only_when_it_is_on() {
         repeat: false,
         modifiers: egui::Modifiers::NONE,
     }]);
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if !s.d.app.wb.assistant.is_running()
             && s.d.app.wb.assistant.transcript_text().contains("load")
@@ -568,7 +568,7 @@ fn a_ctrl_k_question_while_claude_answers_is_refused_not_doubled() {
     s.d.app.assistant_test_send(&ctx);
     assert!(s.d.app.wb.assistant.is_running());
     s.d.app.ask_claude(&ctx, "second question here".into());
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if !s.d.app.wb.assistant.is_running() {
             break;
@@ -609,7 +609,7 @@ fn a_question_queued_from_elsewhere_opens_the_window_and_is_sent_once() {
         .wb
         .assistant
         .ask_later("Explain this problem".into());
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if s.d.app.wb.assistant.transcript_text().contains("no end") {
             break;
@@ -722,7 +722,7 @@ fn a_panel_can_leave_a_question_and_only_when_claude_is_on() {
     let ctx = s.d.ctx.clone();
     assert!(super::assistant::claude_is_on(&ctx));
     super::assistant::ask_claude_later(&ctx, "Describe this heat result".into());
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if s.d
             .app
@@ -793,7 +793,7 @@ fn read_sheet(s: &mut Setup, reply: Value) {
         "nothing is sent before the person agrees"
     );
     s.d.app.datasheet_test_send(&ctx);
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if s.d.app.datasheet_test_stage() != "reading" {
             return;
@@ -940,4 +940,268 @@ fn stopping_a_reading_drops_the_answer_and_adds_nothing() {
     }
     assert_eq!(s.d.app.datasheet_test_stage(), "note", "no review appears");
     assert!(!s.d.app.datasheet_test_duplicate());
+}
+
+fn propose_wire(s: &mut Setup, wire: u64, number: &str) {
+    queue(
+        &s.script,
+        [
+            tool(
+                "t1",
+                "propose_edit",
+                json!({"action": "set_wire_number", "args": {"wire_id": wire, "number": number}}),
+            ),
+            text("done"),
+        ],
+    );
+    ask(s, "Fix the wire numbers");
+}
+
+fn first_wire(s: &Setup) -> (u64, Option<String>) {
+    let w =
+        s.d.app
+            .document()
+            .unwrap()
+            .project()
+            .wires()
+            .next()
+            .unwrap();
+    (w.id.raw(), w.number.clone())
+}
+
+#[test]
+fn a_wire_number_changes_as_one_undo_step_and_only_at_whole_project() {
+    let mut s = setup(DataScope::Project);
+    let (wire, before) = first_wire(&s);
+    propose_wire(&mut s, wire, "L1-77");
+    let index = s.d.app.wb.assistant.first_proposal_index().expect("a card");
+    s.d.app.assistant_test_decide(index, true);
+    assert_eq!(first_wire(&s).1.as_deref(), Some("L1-77"));
+    let ctx = s.d.ctx.clone();
+    s.d.app.run(&ctx, Action::Undo);
+    assert_eq!(first_wire(&s).1, before, "one undo takes the number back");
+
+    // Below the whole project no card is made and the answer says nothing about wires.
+    let mut low = setup(DataScope::Selection);
+    let (wire, _) = first_wire(&low);
+    propose_wire(&mut low, wire, "X1");
+    propose_wire(&mut low, 999_999, "X1");
+    assert!(low.d.app.wb.assistant.first_proposal_index().is_none());
+}
+
+#[test]
+fn a_wire_number_proposal_is_checked_before_a_card_is_made() {
+    let mut s = setup(DataScope::Project);
+    let (wire, _) = first_wire(&s);
+    propose_wire(&mut s, 999_999, "A");
+    assert!(
+        s.d.app.wb.assistant.first_proposal_index().is_none(),
+        "unknown wire"
+    );
+    propose_wire(&mut s, wire, &"9".repeat(60));
+    assert!(
+        s.d.app.wb.assistant.first_proposal_index().is_none(),
+        "too long"
+    );
+}
+
+#[test]
+fn a_bad_key_says_what_to_do_costs_nothing_and_the_chat_keeps_working() {
+    let mut s = setup(DataScope::Outline);
+    s.script.push(
+        401,
+        json!({"error": {"type": "authentication_error", "message": "invalid x-api-key"}}),
+    );
+    ask(&mut s, "first");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("did not accept the API key"), "{shown}");
+    assert!(shown.contains("Settings"), "it says where to fix it");
+    assert!(!shown.contains("sk-ant-"), "the key is never shown");
+    assert!(!s.d.app.wb.assistant.is_running());
+    assert_eq!(
+        s.d.app.wb.assistant.spent(),
+        0.0,
+        "a refused request costs nothing"
+    );
+    // A fixed key (or a retry) works in the same window without reopening it.
+    queue(&s.script, [text("Back again.")]);
+    ask(&mut s, "second");
+    assert!(
+        s.d.app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("Back again.")
+    );
+}
+
+#[test]
+fn a_key_without_access_and_a_bad_request_give_a_reason_not_a_crash() {
+    let mut s = setup(DataScope::Outline);
+    s.script.push(
+        403,
+        json!({"error": {"type": "permission_error", "message": "no access to this model"}}),
+    );
+    ask(&mut s, "first");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("no access to this model"), "{shown}");
+    s.script.push(
+        400,
+        json!({"error": {"type": "invalid_request_error", "message": "prompt is too long"}}),
+    );
+    ask(&mut s, "second");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("prompt is too long"), "{shown}");
+    assert!(!s.d.app.wb.assistant.is_running());
+}
+
+#[test]
+fn no_network_and_a_rate_limit_end_in_a_plain_message_after_the_retries() {
+    // The test client does not wait between retries.
+    let mut s = setup(DataScope::Outline);
+    ask(&mut s, "offline"); // the script has no reply: the transport fails
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("No internet connection"), "{shown}");
+    assert_eq!(
+        s.script.requests().len(),
+        3,
+        "it tried three times, no more"
+    );
+    assert!(!s.d.app.wb.assistant.is_running());
+
+    let limited = json!({"error": {"type": "rate_limit_error", "message": "slow down"}});
+    for _ in 0..3 {
+        s.script.push(429, limited.clone());
+    }
+    ask(&mut s, "busy");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("Rate limited"), "{shown}");
+    assert!(!shown.contains("slow down"), "no raw API text for this one");
+    assert_eq!(s.d.app.wb.assistant.spent(), 0.0);
+}
+
+#[test]
+fn the_wire_card_names_the_wire_by_its_ends_not_its_id() {
+    let s = setup(DataScope::Project);
+    let project = s.d.app.document().unwrap().project();
+    let known = known_of(project);
+    let (id, _) = first_wire(&s);
+    let (plan, summary) = proposal_plan(
+        &known,
+        "set_wire_number",
+        &json!({"wire_id": id, "number": "L1-77"}),
+    )
+    .unwrap();
+    assert!(matches!(plan, Plan::WireNumber { .. }));
+    assert!(summary.starts_with("Number the wire from "), "{summary}");
+    assert!(
+        summary.contains(" to ") && summary.contains("(page "),
+        "{summary}"
+    );
+    assert!(
+        summary.contains("L1-77") && summary.contains("fixed"),
+        "{summary}"
+    );
+    assert!(
+        !summary.contains(&format!("wire {id}")) && !summary.contains(&format!("#{id}")),
+        "no internal id: {summary}"
+    );
+    let (_, clear) = proposal_plan(
+        &known,
+        "set_wire_number",
+        &json!({"wire_id": id, "number": ""}),
+    )
+    .unwrap();
+    assert!(
+        clear.starts_with("Clear the number of the wire from "),
+        "{clear}"
+    );
+    // The card's note names the wire too, and says what is replaced.
+    let note = proposal_note(
+        project,
+        &Proposal {
+            id: 1,
+            action: "set_wire_number".into(),
+            args: json!({"wire_id": id, "number": "L1-77"}),
+            summary,
+        },
+    )
+    .unwrap();
+    assert!(note.contains("the wire from "), "{note}");
+    assert!(!note.contains(&format!("#{id}")), "{note}");
+}
+
+#[test]
+fn wire_numbers_with_control_characters_are_refused() {
+    let s = setup(DataScope::Project);
+    let known = known_of(s.d.app.document().unwrap().project());
+    let (id, _) = first_wire(&s);
+    for bad in ["A\nB", "A\u{7}", "\tX\u{0}"] {
+        let r = proposal_plan(
+            &known,
+            "set_wire_number",
+            &json!({"wire_id": id, "number": bad}),
+        );
+        assert!(r.is_err(), "{bad:?}");
+    }
+}
+
+#[test]
+fn a_number_another_net_has_is_refused_with_a_reason_on_the_card() {
+    let mut s = setup(DataScope::Project);
+    let (wire, before, taken) = {
+        let p = s.d.app.document().unwrap().project();
+        let first = p.wires().next().unwrap();
+        let other = p
+            .wires()
+            .find(|w| w.number.is_some() && w.number != first.number)
+            .expect("the example has numbered nets");
+        (
+            first.id.raw(),
+            first.number.clone(),
+            other.number.clone().unwrap(),
+        )
+    };
+    propose_wire(&mut s, wire, &taken);
+    let index = s.d.app.wb.assistant.first_proposal_index().expect("a card");
+    s.d.app.assistant_test_decide(index, true);
+    assert_eq!(first_wire(&s).1, before, "nothing changed");
+    match s.d.app.wb.assistant.proposal_state(index) {
+        Some(ProposalState::Failed(why)) => {
+            assert!(why.contains("already used on another net"), "{why}")
+        }
+        other => panic!("the card should show the refusal, not {other:?}"),
+    }
+}
+
+#[test]
+fn an_unreadable_replay_file_never_reaches_the_network() {
+    let dir = tempfile::tempdir().unwrap();
+    let missing = load_replay(dir.path().join("nope.json").as_os_str());
+    assert!(missing.err().unwrap().contains("cannot read"));
+    let bad = dir.path().join("bad.json");
+    std::fs::write(&bad, "not json").unwrap();
+    assert!(
+        load_replay(bad.as_os_str())
+            .err()
+            .unwrap()
+            .contains("not a JSON list")
+    );
+    let good = dir.path().join("good.json");
+    std::fs::write(&good, "[{\"id\":\"m\"}]").unwrap();
+    let script = load_replay(good.as_os_str()).unwrap();
+    assert_eq!(script.replies.lock().unwrap().len(), 1);
+
+    // With the variable set but the file unusable, a request fails inside the
+    // app: it is never handed to the real HTTP transport.
+    let failed: Result<novo_ai::api::testing::Script, String> = Err("broken".into());
+    let factory = transport_for(Some(&failed));
+    let request = novo_ai::api::HttpRequest {
+        method: novo_ai::api::Method::Post,
+        url: "https://api.anthropic.com/v1/messages".into(),
+        headers: vec![],
+        body: "{}".into(),
+    };
+    let reply = factory().send(&request);
+    assert!(reply.unwrap_err().contains("script ran out"), "no network");
 }

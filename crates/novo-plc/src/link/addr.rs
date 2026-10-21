@@ -23,6 +23,16 @@ pub enum AddrKey {
 }
 
 impl AddrKey {
+    /// The space the address is in.
+    pub fn space(self) -> Space {
+        match self {
+            AddrKey::Bit { space, .. }
+            | AddrKey::Word { space, .. }
+            | AddrKey::Point { space, .. }
+            | AddrKey::Analog { space, .. } => space,
+        }
+    }
+
     /// Whether the key names a whole word (an analog value).
     pub fn is_word(self) -> bool {
         matches!(self, AddrKey::Word { .. } | AddrKey::Analog { .. })

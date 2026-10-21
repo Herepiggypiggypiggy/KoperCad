@@ -481,6 +481,9 @@ pub struct View3d {
     /// Where the last Alt + click landed and how many times in a row.
     alt_cycle: Option<(Pos2, usize)>,
     last_aspect: f32,
+    /// The top of the view, as a fraction of its height, that a floating
+    /// toolbar covers: a fit frames the model below it.
+    pub top_inset: f32,
     label_fades: HashMap<ItemId, Fade>,
     overlays: Arc<Vec<Overlay>>,
     overlay_revision: u64,
@@ -512,6 +515,7 @@ impl View3d {
             item_grab: None,
             alt_cycle: None,
             last_aspect: 1.0,
+            top_inset: 0.0,
             label_fades: HashMap::new(),
             overlays: Arc::new(Vec::new()),
             overlay_revision: 0,
@@ -612,6 +616,36 @@ impl View3d {
         }
     }
 
+    /// Eases to a view that frames the cabinet with the hinge `group` turned
+    /// to `angle` (radians, as `open_angle` gives it): for the moment the
+    /// door is first opened, so the open leaf is not cut off by the view; a
+    /// view that already shows it all stays as it is.
+    pub fn fit_with_door(
+        &mut self,
+        scene: &Scene,
+        group: GroupId,
+        angle: f32,
+        now: f64,
+        reduced: bool,
+    ) {
+        let open = scene.bounds_with_group_angle(group, angle);
+        // Left alone while the open door is already in view, below the toolbar.
+        let bounds = scene.bounds();
+        let inside = open.corners().iter().all(|c| {
+            self.camera
+                .project(*c, self.last_aspect, &bounds)
+                .is_some_and(|(ndc, _)| {
+                    ndc.x.abs() <= 1.0 && ndc.y >= -1.0 && ndc.y <= 1.0 - 2.0 * self.top_inset
+                })
+        });
+        if inside {
+            return;
+        }
+        let mut to = self.camera;
+        to.fit_below(&open, self.last_aspect, self.top_inset);
+        self.animate_to(to, now, reduced);
+    }
+
     /// The door angle being shown (radians), if the view drives one.
     pub fn door_angle(&self, now: f64) -> Option<f32> {
         self.door.as_ref().map(|d| d.angle(now))
@@ -665,7 +699,11 @@ impl View3d {
     pub fn go_to(&mut self, preset: ViewPreset, scene: &Scene, now: f64, reduced: bool) {
         let mut to = self.camera;
         feel::enter_standard(&mut to, preset);
-        to.fit(&self.framing_bounds(scene), self.last_aspect);
+        to.fit_below(
+            &self.framing_bounds(scene),
+            self.last_aspect,
+            self.top_inset,
+        );
         self.auto_ortho = to.projection == Projection::Orthographic;
         self.animate_to(to, now, reduced);
     }
@@ -680,7 +718,7 @@ impl View3d {
     pub fn fit(&mut self, scene: &Scene, now: f64, reduced: bool) {
         let b = self.framing_bounds(scene);
         let mut to = self.camera;
-        to.fit(&b, self.last_aspect);
+        to.fit_below(&b, self.last_aspect, self.top_inset);
         self.animate_to(to, now, reduced);
     }
 
@@ -793,7 +831,7 @@ impl View3d {
         let bounds = scene.bounds();
 
         if self.needs_fit && !bounds.is_empty() {
-            self.camera.fit(&bounds, aspect);
+            self.camera.fit_below(&bounds, aspect, self.top_inset);
             self.needs_fit = false;
             self.transition = None;
             self.last_activity = now;

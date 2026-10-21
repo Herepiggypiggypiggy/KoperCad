@@ -382,6 +382,41 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "project.option",
+            "Switch a machine option",
+            "Project",
+            &[
+                "option on off",
+                "with without",
+                "conveyor",
+                "machine option",
+            ],
+            Needs::Project,
+        ),
+        &["option"],
+    ),
+    verb(
+        cmd(
+            "project.tie",
+            "Tie the selection to an option",
+            "Project",
+            &["tie option", "belongs to option", "only with", "condition"],
+            Needs::Project,
+        ),
+        &["tie"],
+    ),
+    verb(
+        cmd(
+            "project.untie",
+            "Selection always appears (untie from options)",
+            "Project",
+            &["untie option", "always", "remove condition"],
+            Needs::Project,
+        ),
+        &["untie"],
+    ),
+    verb(
+        cmd(
             "project.generate",
             "Generate pages from a spec sheet",
             "Project",
@@ -2043,9 +2078,9 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.toc",
-            "Contents",
+            "Table of contents",
             "View",
-            &["table of contents", "index", "page list"],
+            &["contents", "index", "page list"],
             Needs::Project,
         ),
         &["contents"],
@@ -2103,9 +2138,9 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.cutlist",
-            "Cut list (wire by the metre)",
+            "Cut list",
             "View",
-            &["cut length", "wire lengths", "sleeves"],
+            &["wire by the metre", "cut length", "wire lengths", "sleeves"],
             Needs::Project,
         ),
         &["cut list"],
@@ -2123,9 +2158,14 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.wirecut",
-            "Wire cut list (machine job)",
+            "Wire production",
             "View",
-            &["wire machine", "cut and strip", "production"],
+            &[
+                "wire cut list",
+                "machine job",
+                "wire machine",
+                "cut and strip",
+            ],
             Needs::Project,
         ),
         &["wire cut report"],
@@ -2153,9 +2193,9 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.plugs",
-            "Plug list",
+            "Plug connection list",
             "View",
-            &["connectors", "plugs", "sockets", "mating"],
+            &["plug list", "connectors", "plugs", "sockets", "mating"],
             Needs::Project,
         ),
         &["plug list"],
@@ -2352,7 +2392,7 @@ pub const COMMANDS: &[CommandInfo] = &[
             "export.pdf",
             "Export PDF",
             "Export",
-            &["print"],
+            &["pdf all pages"],
             Needs::Project,
         ),
         &["export pdf", "pdf"],
@@ -2641,6 +2681,24 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.handover",
+            "Export handover package (folder)",
+            "Export",
+            &[
+                "handover",
+                "customer",
+                "as built",
+                "documentation",
+                "delivery",
+                "package",
+                "oplevering",
+            ],
+            Needs::Project,
+        ),
+        &["export handover", "handover package", "customer package"],
+    ),
+    verb(
+        cmd(
             "export.workshop",
             "Export workshop pack (folder)",
             "Export",
@@ -2656,6 +2714,22 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export workshop", "workshop pack", "drilling template"],
+    ),
+    verb(
+        cmd(
+            "export.safety_sheets",
+            "Export safety function sheets (PDF)",
+            "Export",
+            &[
+                "safety function",
+                "technical file",
+                "performance level",
+                "pfhd",
+                "iso 13849",
+            ],
+            Needs::Project,
+        ),
+        &["export safety sheets", "safety sheets"],
     ),
     verb(
         cmd(
@@ -2686,6 +2760,28 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export csv", "csv"],
+    ),
+    verb(
+        cmd(
+            "plc.import_list",
+            "Import I/O list (pages from a signal list)",
+            "Export",
+            &[
+                "plc",
+                "i/o",
+                "excel",
+                "csv",
+                "signal list",
+                "sensor",
+                "actuator",
+                "generate",
+                "pages",
+                "cards",
+                "terminals",
+            ],
+            Needs::Project,
+        ),
+        &["import io", "import io list", "import signals"],
     ),
     verb(
         cmd(

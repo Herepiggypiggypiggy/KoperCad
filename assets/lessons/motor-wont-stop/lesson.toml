@@ -1,0 +1,85 @@
+# Challenge: pressing stop does nothing. A jumper wire across the stop button
+# -S1 (pins 11 and 12) bypasses it. Sample project: cross-references/finished.json
+# plus that jumper (wire 57). The repair removes the wire; goal checks use the live view.
+format = 1
+id = "motor-wont-stop"
+version = 1
+status = "early"
+kind = "challenge"
+title = "The motor will not stop"
+title_nl = "De motor gaat niet uit"
+explain = "A jumper wire ran across the stop button **-S1**, from pin 11 to pin 12. Current went round the button, so opening it cut nothing off. Removing the jumper puts the button back in the circuit, and the coil drops out when you press stop."
+explain_nl = "Een draadbrug liep over de stopknop **-S1**, van pen 11 naar pen 12. De stroom ging om de knop heen, dus openen sneed niets af. Zonder de brug zit de knop weer in het circuit en valt de spoel af als je op stop drukt."
+summary = "The pump keeps running when you press stop. Find out why and repair the drawing."
+summary_nl = "De pomp blijft draaien als je op stop drukt. Zoek uit waarom en herstel de tekening."
+track = "circuits"
+order = 45
+level = "intermediate"
+minutes = 5
+topics = ["simulation", "live", "troubleshooting"]
+needs = ["live-view"]
+next = ["motor-wont-hold"]
+project = "project.json"
+finished = "finished.json"
+page = "Control circuit"
+
+[[step]]
+id = "live"
+title = "Switch the live view on"
+title_nl = "Zet de live-weergave aan"
+text = """
+This pump starter has a fault. You will find it by trying it, like a technician on site. The live view lets you press the buttons without changing the drawing.
+"""
+text_nl = """
+Deze pompstarter heeft een fout. Je vindt hem door te proberen, zoals een monteur ter plaatse. Met de live-weergave druk je op de knoppen zonder de tekening te veranderen.
+"""
+how = [
+  "Press {key:sim.live}.",
+]
+how_nl = [
+  "Druk op {key:sim.live}.",
+]
+expect = { live = true }
+solve = [ { command = "sim.live" } ]
+
+[[step]]
+id = "run"
+title = "Start the pump"
+title_nl = "Start de pomp"
+text = """
+Press start (**-S2**) and let go. The contactor **-K1** holds in and the motor runs. That part works.
+"""
+text_nl = """
+Druk op start (**-S2**) en laat los. De contactor **-K1** blijft aangetrokken en de motor draait. Dat deel werkt.
+"""
+point = { at = { device = "-S2" } }
+expect = { all = [ { coil_on = "-K1" }, { not = { pole_closed = "-S2" } } ] }
+solve = [ { live_pole = { device = "-S2" } } ]
+
+[[step]]
+id = "stop"
+title = "Goal: stop must stop"
+title_nl = "Doel: stop moet stoppen"
+text = """
+**Goal:** press stop (**-S1**) and the contactor **-K1** drops out and stays out. Right now the pump keeps running. Find out why and repair the drawing, then press stop.
+"""
+text_nl = """
+**Doel:** druk op stop (**-S1**) en de contactor **-K1** valt af en blijft af. Nu blijft de pomp draaien. Zoek uit waarom, herstel de tekening en druk dan op stop.
+"""
+hints = [
+  "Press stop and watch the coil -K1. If nothing changes, current must reach the coil another way. Look at the stop button and what is drawn around it.",
+  "Something is wired across the stop button -S1, so the current goes round its contact. A button that is bypassed cannot stop anything.",
+  "Click the wire that runs from pin 11 to pin 12 of -S1 and press Delete. Then press stop again.",
+]
+hints_nl = [
+  "Druk op stop en kijk naar de spoel -K1. Als er niets verandert, moet de stroom de spoel op een andere manier bereiken. Kijk naar de stopknop en wat eromheen getekend is.",
+  "Er is iets over de stopknop -S1 heen gebonden, dus de stroom gaat om het contact heen. Een knop die omzeild wordt kan niets stoppen.",
+  "Klik op de draad van pen 11 naar pen 12 van -S1 en druk op Delete. Druk daarna opnieuw op stop.",
+]
+point = { at = { device = "-S1" } }
+expect = { all = [ { not = { wire = { from = "-S1:11", to = "-S1:12" } } }, { not = { coil_on = "-K1" } } ] }
+solve = [
+  { select = "-S1:11~-S1:12" },
+  { command = "edit.delete" },
+  { live_pole = { device = "-S1" } },
+]

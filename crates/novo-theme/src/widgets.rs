@@ -645,6 +645,9 @@ pub fn row_of_height(
             .max_rect(inner)
             .layout(Layout::left_to_right(Align::Center)),
     );
+    // A selectable label would take the press for its own text selection and the
+    // row would never see the click.
+    child.style_mut().interaction.selectable_labels = false;
     add_contents(&mut child);
     response
 }
@@ -749,6 +752,24 @@ pub fn banner(
                     ui.label(RichText::new(level.icon()).color(level.color(p)));
                     ui.add(Label::new(RichText::new(text).color(p.text_primary)).wrap());
                 });
+            });
+        })
+        .response
+}
+
+/// [`banner`] with no actions, whose text wraps to the width it is given (a long
+/// sentence in `banner` stays on one line and runs off the window).
+pub fn banner_wrapped(ui: &mut Ui, level: Level, text: &str) -> Response {
+    let p = Palette::of(ui);
+    Frame::new()
+        .fill(level.wash(p))
+        .corner_radius(radius::CONTROL)
+        .inner_margin(Margin::symmetric(space::M as i8, 6))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal_top(|ui| {
+                ui.label(RichText::new(level.icon()).color(level.color(p)));
+                ui.add(egui::Label::new(RichText::new(text).color(p.text_primary)).wrap());
             });
         })
         .response

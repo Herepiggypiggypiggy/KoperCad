@@ -195,11 +195,15 @@ impl NovoApp {
         st.datasheet_name = name.clone();
         let spent = st.spent();
         let factory = Arc::clone(&st.transport);
+        let instant = st.instant_retries;
         let (tx, rx) = channel();
         st.sheet.stage = Stage::Reading(rx);
         let ctx = ctx.clone();
         std::thread::spawn(move || {
             let mut client = Client::new(factory(), key);
+            if instant {
+                client = client.with_sleep(|_| {});
+            }
             let _ = tx.send(datasheet::read(
                 &mut client,
                 &settings,

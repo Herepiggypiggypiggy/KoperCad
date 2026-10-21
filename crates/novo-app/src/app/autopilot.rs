@@ -190,9 +190,7 @@ pub(super) fn meter(ui: &mut egui::Ui, ready: Ready) {
         fraction,
         0.0,
     )
-    .on_hover_text(
-        "Per wire: a number, a cross-section, a colour and a routed length; plus a mounting plate. Estimated lengths do not count.",
-    );
+    .on_hover_text(ready.explanation());
 }
 
 fn body(
@@ -213,12 +211,15 @@ fn body(
         );
     } else {
         ui.label(format!(
-            "{} sizes, {} colours, {} wire numbers, {} cables and {} cabinet entry points can be filled in from the drawing. Nothing is written until you accept; one Undo takes it all back.",
+            "{} sizes, {} colours, {} wire numbers, {} cables and {} can be filled in from the drawing. Nothing is written until you accept; one Undo takes it all back.",
             state.plan.count("Size"),
             state.plan.count("Colour"),
             state.plan.count("Number"),
             state.plan.count("Cable"),
-            state.plan.count("Entry point"),
+            match state.plan.count("Entry point") {
+                1 => "1 cabinet entry point".to_owned(),
+                n => format!("{n} cabinet entry points"),
+            },
         ));
     }
     if state.plan.planning_values && state.plan.count("Size") > 0 {
@@ -246,7 +247,7 @@ fn body(
     }
     for line in &state.plan.left_to_you {
         ui.add_space(4.0);
-        novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Info, line, |_| {});
+        novo_theme::widgets::banner_wrapped(ui, novo_theme::widgets::Level::Info, line);
     }
     if !state.plan.unresolved.is_empty() {
         ui.add_space(4.0);

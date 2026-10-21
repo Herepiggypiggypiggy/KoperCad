@@ -201,14 +201,14 @@ impl NovoApp {
             );
             return None;
         }
-        let name = self.project_name().unwrap_or_default();
-        let project = self.backend.document()?.project();
-        let jobs = wire_cut_jobs_with(project, &inputs.standard);
+        let name = self.machine_title().unwrap_or_default();
+        let project = self.machine()?;
+        let jobs = wire_cut_jobs_with(&project, &inputs.standard);
         if jobs.is_empty() {
             self.message(Level::Info, "No wires to cut yet: connect two device pins");
             return None;
         }
-        let report = BenchCut::build(project, &jobs);
+        let report = BenchCut::build(&project, &jobs);
         let options = pdf_options(
             format!("{name}  Bench cut list"),
             report.sections.iter().map(|s| s.key.clone()),
@@ -244,8 +244,8 @@ impl NovoApp {
             );
             return None;
         }
-        let project = self.backend.document()?.project();
-        let jobs = wire_cut_jobs_with(project, &inputs.standard);
+        let project = self.machine()?;
+        let jobs = wire_cut_jobs_with(&project, &inputs.standard);
         if jobs.is_empty() {
             self.message(Level::Info, "No wires to cut yet: connect two device pins");
             return None;
@@ -273,10 +273,10 @@ impl NovoApp {
             );
             return None;
         }
-        let name = self.project_name().unwrap_or_default();
-        let project = self.backend.document()?.project();
-        let jobs = wire_cut_jobs_with(project, &inputs.standard);
-        let report = FerruleTable::build(project, &jobs, &inputs.standard);
+        let name = self.machine_title().unwrap_or_default();
+        let project = self.machine()?;
+        let jobs = wire_cut_jobs_with(&project, &inputs.standard);
+        let report = FerruleTable::build(&project, &jobs, &inputs.standard);
         if report.section("ferrules").is_none() {
             let (unknown, off) = novo_reports::ends_without_ferrule(&jobs);
             let why = if jobs.is_empty() {
@@ -304,8 +304,8 @@ impl NovoApp {
 
     /// The label run for the current settings.
     fn label_run(&self, inputs: &Inputs) -> Option<(LabelRun, usize)> {
-        let project = self.backend.document()?.project();
-        let report = Labels.generate(project);
+        let project = self.machine()?;
+        let report = Labels.generate(&project);
         let items = label_items(&report, &inputs.labels.kinds);
         let count = items.len();
         Some((layout_labels(&items, &inputs.labels), count))
@@ -331,7 +331,7 @@ impl NovoApp {
             self.message(Level::Info, "No labels to print for the chosen kinds yet");
             return None;
         }
-        let name = self.project_name().unwrap_or_default();
+        let name = self.machine_title().unwrap_or_default();
         let bytes = novo_pdf::export_layouts_pdf(&run.pages, &format!("{name}  Labels"), &[]);
         let mut what = format!("{} labels on {} {}", run.labels, run.pages.len(), {
             if run.per_page > 1 {
@@ -369,10 +369,10 @@ impl NovoApp {
         let Some(inputs) = self.bench_inputs() else {
             return Vec::new();
         };
-        let Some(project) = self.backend.document().map(|d| d.project()) else {
+        let Some(project) = self.machine() else {
             return Vec::new();
         };
-        let report = Labels.generate(project);
+        let report = Labels.generate(&project);
         let kinds: Vec<String> = if inputs.labels.kinds.is_empty() {
             Labels::KINDS.iter().map(|k| (*k).to_owned()).collect()
         } else {
@@ -410,10 +410,13 @@ impl NovoApp {
         let Some(mut state) = self.wb.bench.take() else {
             return;
         };
-        let Some(project) = self.backend.document().map(|d| d.project()) else {
+        // The bench pack describes the machine of the current choice.
+        let generation = self.machine_generation();
+        let Some(machine) = self.machine() else {
             return;
         };
-        let revision = project.revision();
+        let project: &novo_core::Project = &machine;
+        let revision = project.revision() ^ (generation << 40);
         let stale = state
             .cache
             .as_ref()
@@ -563,6 +566,16 @@ pub(super) struct Gap {
     pub(super) fix: Option<(&'static str, &'static str)>,
 }
 
+/// `1 of 1 wire to cut has`, `3 of 25 wires to cut have`: the start of a
+/// sentence about the wires to cut that lack something.
+fn lacking(k: usize, total: usize) -> String {
+    format!(
+        "{k} of {} to cut {}",
+        novo_reports::count_text(total, "wires"),
+        if k == 1 { "has" } else { "have" }
+    )
+}
+
 /// What is missing before the bench output can be trusted: wires without a
 /// number or a cross-section, ends that get no ferrule, lengths that are
 /// estimates, and no mounting plate (nothing is routed without one).
@@ -578,7 +591,10 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     let unnumbered = count(&|j| j.number.trim().is_empty());
     if unnumbered > 0 {
         out.push(Gap {
-            text: format!("{unnumbered} wires have no number, so their labels and flags are blank"),
+            text: format!(
+                "{} no number, so their labels and flags are blank",
+                lacking(unnumbered, jobs.len())
+            ),
             fix: Some(("Number wires", "wires.number")),
         });
     }
@@ -586,7 +602,8 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     if no_size > 0 {
         out.push(Gap {
             text: format!(
-                "{no_size} wires have no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each"
+                "{} no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each",
+                lacking(no_size, jobs.len())
             ),
             fix: Some(("Autopilot", "wires.autopilot")),
         });
@@ -664,10 +681,15 @@ fn cut_tab(
     ));
     for run in &cache.cables {
         ui.label(format!(
-            "Cable {}: {:.1} m, once ({} cores cut from it)",
+            "Cable {}: {:.1} m to buy{}; {} cut from it",
             run.tag,
-            run.length_mm / 1000.0,
-            run.cores
+            run.metres(),
+            if run.stated {
+                ""
+            } else {
+                " (estimated: no length stated)"
+            },
+            novo_reports::count_text(run.cores, "cores")
         ));
     }
     if estimates > 0 {
@@ -734,15 +756,14 @@ fn defaults_row(
     let mut missing = Vec::new();
     if !unset.no_size.is_empty() {
         missing.push(format!(
-            "{} of {} wires have no size (no strip length, no ferrule)",
-            unset.no_size.len(),
-            unset.total
+            "{} no size (no strip length, no ferrule)",
+            lacking(unset.connections_no_size, unset.connections)
         ));
     }
     if !unset.no_colour.is_empty() {
         missing.push(format!(
-            "{} have no colour (blank in the list)",
-            unset.no_colour.len()
+            "{} no colour (blank in the list)",
+            lacking(unset.connections_no_colour, unset.connections)
         ));
     }
     novo_theme::widgets::banner(
@@ -753,7 +774,9 @@ fn defaults_row(
     );
     ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
-        ui.label("Size for wires without one");
+        ui.label("Size for wires without one").on_hover_text(
+            "A wire to cut counts as sized when any of its drawn pieces has a size; filling in sets every unsized drawn piece",
+        );
         egui::ComboBox::from_id_salt("bench_default_size")
             .selected_text(
                 draft
@@ -779,9 +802,11 @@ fn defaults_row(
         let colours = draft.fill_colours && !unset.no_colour.is_empty();
         if ui
             .add_enabled(size.is_some() || colours, egui::Button::new("Fill in"))
-            .on_hover_text(
-                "Only wires without a value change; sizes and colours you set stay. One undo step",
-            )
+            .on_hover_text(format!(
+                "Sets the size on {} without one and the colour on {} without one. Values you set stay. One undo step",
+                novo_reports::count_text(if size.is_some() { unset.no_size.len() } else { 0 }, "drawn wires"),
+                novo_reports::count_text(if colours { unset.no_colour.len() } else { 0 }, "drawn wires"),
+            ))
             .clicked()
         {
             *act = Some(Act::FillDefaults(WireDefaults {

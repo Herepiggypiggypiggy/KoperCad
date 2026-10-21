@@ -864,6 +864,8 @@ pub fn by_wire(plan: &Autopilot) -> BTreeMap<WireId, Vec<&Proposal>> {
 pub struct Ready {
     pub done: usize,
     pub total: usize,
+    /// Wires to cut the meter counts (four checks each, one more for the plate).
+    pub wires: usize,
 }
 
 impl Ready {
@@ -878,6 +880,16 @@ impl Ready {
     pub fn is_complete(&self) -> bool {
         self.total > 0 && self.done == self.total
     }
+
+    /// What the percentage counts, for the hover text.
+    pub fn explanation(&self) -> String {
+        format!(
+            "{} of {} checks pass: {} with four checks each (number, cross-section, colour, a known length: routed or stated by you), plus one for the mounting plate. Estimated lengths do not count, and without a plate no length check passes.",
+            self.done,
+            self.total,
+            crate::count_text(self.wires, "wires to cut")
+        )
+    }
 }
 
 /// The meter for a cut list. `has_plate` is whether a mounting plate exists.
@@ -888,6 +900,7 @@ pub fn ready(jobs: &[WireCutJob], has_plate: bool) -> Ready {
     let mut r = Ready {
         done: usize::from(has_plate),
         total: 1,
+        wires: jobs.len(),
     };
     for job in jobs {
         r.total += 4;
@@ -1081,12 +1094,32 @@ mod tests {
     #[test]
     fn the_meter_counts_four_checks_per_wire_and_the_plate() {
         assert_eq!(ready(&[], true), Ready::default());
-        assert_eq!(Ready { done: 5, total: 9 }.percent(), 55);
         assert_eq!(
-            Ready { done: 8, total: 9 }.percent(),
+            Ready {
+                done: 5,
+                total: 9,
+                wires: 2
+            }
+            .percent(),
+            55
+        );
+        assert_eq!(
+            Ready {
+                done: 8,
+                total: 9,
+                wires: 2
+            }
+            .percent(),
             88,
             "never rounds up to 100"
         );
-        assert!(Ready { done: 9, total: 9 }.is_complete());
+        assert!(
+            Ready {
+                done: 9,
+                total: 9,
+                wires: 2
+            }
+            .is_complete()
+        );
     }
 }

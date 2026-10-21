@@ -271,11 +271,12 @@ impl NovoApp {
             Ok(outcome) => {
                 self.changed_outside_canvas(&outcome.changes);
                 let word = if lock { "locked" } else { "unlocked" };
+                let undo = if lock { "" } else { ". Undo locks it again" };
                 let since = project_latest.map_or_else(String::new, |i| format!(" (since {i})"));
                 self.message(
                     Level::Info,
                     format!(
-                        "Page {name} {word}{}",
+                        "Page {name} {word}{}{undo}",
                         if lock { since } else { String::new() }
                     ),
                 );
