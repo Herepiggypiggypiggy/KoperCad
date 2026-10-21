@@ -810,19 +810,16 @@ impl Ctx<'_> {
 
     /// `~/` is the app's own home folder (where exports without a file dialog
     /// land, e.g. `~/Documents/KoperCAD/*.pdf`); other relative paths start at the repository.
-    fn resolve(&self, p: &str) -> PathBuf {
+    fn resolve(&self, p: &str) -> Result<PathBuf, String> {
         if let Some(rest) = p.strip_prefix("~/") {
-            return std::env::temp_dir()
-                .join(format!("kopercad-test-user-{}", std::process::id()))
-                .join("home")
-                .join(rest);
+            return app_home_path(rest);
         }
         let p = PathBuf::from(p);
-        if p.is_absolute() {
+        Ok(if p.is_absolute() {
             p
         } else {
             self.root.join(p)
-        }
+        })
     }
 
     /// Runs one step. `Err` stops the scenario (the app is gone or the step
@@ -837,7 +834,7 @@ impl Ctx<'_> {
         };
         match words[0].as_str() {
             "open" => {
-                let p = self.resolve(need(1, "a project file")?);
+                let p = self.resolve(need(1, "a project file")?)?;
                 if !p.exists() {
                     return Err(format!("project file {} not found", p.display()));
                 }
@@ -934,8 +931,11 @@ impl Ctx<'_> {
                 .tool("text", &json!({"text": words[1..].join(" ")}))
                 .map(|_| ()),
             "answer_dialog" => {
-                let p = self.resolve(need(1, "a path")?);
-                if let Some(dir) = p.parent() {
+                let p = self.resolve(need(1, "a path")?)?;
+                // Only the app's home folder is created on demand; a typo elsewhere must not leave folders behind.
+                if words[1].starts_with("~/")
+                    && let Some(dir) = p.parent()
+                {
                     let _ = std::fs::create_dir_all(dir);
                 }
                 self.srv
@@ -1030,7 +1030,7 @@ impl Ctx<'_> {
                 Ok(())
             }
             "expect_file" => {
-                let path = self.resolve(need(1, "path")?);
+                let path = self.resolve(need(1, "path")?)?;
                 let min: u64 = a(2).and_then(|w| w.parse().ok()).unwrap_or(1);
                 let len = biggest_match(&path);
                 if len < min {
@@ -1405,6 +1405,21 @@ fn repo_root() -> Option<PathBuf> {
     }
 }
 
+/// A path under the app's own home folder. Only plain names are allowed: no
+/// `..` and no root, so a scenario cannot leave that folder.
+fn app_home_path(rest: &str) -> Result<PathBuf, String> {
+    let plain = Path::new(rest)
+        .components()
+        .all(|c| matches!(c, std::path::Component::Normal(_)));
+    if !plain {
+        return Err(format!("`~/{rest}` leaves the app's home folder"));
+    }
+    Ok(std::env::temp_dir()
+        .join(format!("kopercad-test-user-{}", std::process::id()))
+        .join("home")
+        .join(rest))
+}
+
 /// Size of the file, or the biggest file when the last component has one `*`
 /// (`Motor*.pdf`); 0 when nothing matches.
 fn biggest_match(path: &Path) -> u64 {
@@ -1731,6 +1746,14 @@ mod tests {
             log_trouble("thread 'main' panicked at src/x.rs:1:1:\nboom").len(),
             1
         );
+    }
+
+    #[test]
+    fn home_paths_cannot_leave_the_home_folder() {
+        assert!(app_home_path("Documents/KoperCAD/*.pdf").is_ok());
+        assert!(app_home_path("../x").is_err());
+        assert!(app_home_path("Documents/../../x/y").is_err());
+        assert!(app_home_path("/etc/passwd").is_err());
     }
 
     #[test]
