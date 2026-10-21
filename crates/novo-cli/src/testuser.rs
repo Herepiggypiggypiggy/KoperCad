@@ -45,11 +45,19 @@ pub(crate) struct TestUser {
     /// Keep the user's real settings instead of an empty first-run profile.
     #[arg(long)]
     real_profile: bool,
+    /// Extra environment for the app (set by a QA scenario's `@env`).
+    #[arg(skip)]
+    env: Vec<(String, String)>,
 }
 
 impl TestUser {
     /// Settings for the QA runner: a fresh profile at `size`, pictures in `shots`.
-    pub(crate) fn for_qa(app: Option<PathBuf>, size: &str, shots: PathBuf) -> TestUser {
+    pub(crate) fn for_qa(
+        app: Option<PathBuf>,
+        size: &str,
+        shots: PathBuf,
+        env: Vec<(String, String)>,
+    ) -> TestUser {
         TestUser {
             app,
             connect: None,
@@ -58,6 +66,7 @@ impl TestUser {
             project: None,
             shots: Some(shots),
             real_profile: false,
+            env,
         }
     }
 }
@@ -582,6 +591,7 @@ impl Server {
         cmd.env("KOPERCAD_CONTROL_PORT_FILE", &port_file)
             .env("KOPERCAD_CONTROL_SHOTS", &self.shots)
             .env("RUST_BACKTRACE", "1")
+            .envs(self.opts.env.iter().map(|(k, v)| (k, v)))
             .stdout(log)
             .stderr(log_err);
         if !self.opts.real_profile {
