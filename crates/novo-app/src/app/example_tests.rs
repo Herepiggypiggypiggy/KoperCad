@@ -308,4 +308,23 @@ fn the_example_survives_a_pxf_round_trip() {
     let cores = |p: &novo_core::Project| p.cables().map(|c| c.cores.len()).sum::<usize>();
     assert_eq!(cores(before), cores(after));
     assert_eq!(before.terminals().count(), after.terminals().count());
+
+#[test]
+fn the_example_cabinet_problems_pill_can_say_what_it_counts() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let p = d.doc().project();
+    let cab = p
+        .structures()
+        .find(|s| s.tag.to_string() == "+CAB")
+        .unwrap();
+    let l = novo_layout::model::load(p, cab.id).unwrap();
+    let name = |id: u64| format!("#{id}");
+    let lines = super::cabinet::panel_problem_lines(&l, &name);
+    assert!(
+        lines.iter().any(|t| t.contains("free room in front")),
+        "{lines:?}"
+    );
 }
