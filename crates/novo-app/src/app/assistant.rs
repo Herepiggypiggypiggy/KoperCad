@@ -623,7 +623,7 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
         },
         "pages": novo_py::pages_json(p),
         "devices": tags,
-        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals", "parts"],
+        "sections_for_read_project": ["pages", "devices", "wires", "nets", "potentials", "terminals", "parts", "problems"],
     });
     if scope >= DataScope::Selection {
         let items: Vec<Value> = p
@@ -668,6 +668,14 @@ pub(super) fn snapshot_of(p: &Project, selected: &[u64], scope: DataScope) -> Sn
                 "id": x.id.raw(), "manufacturer": x.manufacturer,
                 "order_number": x.order_number, "type_number": x.type_number,
                 "description": x.description})).collect::<Vec<_>>(),
+            // The design checks, read-only: what the Issues list would show.
+            "problems": novo_checks::check(p).iter().map(|q| json!({
+                "kind": format!("{:?}", q.kind),
+                "severity": format!("{:?}", q.severity),
+                "message": q.message,
+                "page_id": q.page.map(|g| g.raw()),
+                "objects": q.at.len(),
+                "rule": q.rule})).collect::<Vec<_>>(),
         });
     }
     snap

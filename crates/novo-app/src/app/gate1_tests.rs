@@ -115,7 +115,7 @@ impl Drive {
         self.frame();
     }
 
-    fn editor_leave(&mut self) {
+    pub(super) fn editor_leave(&mut self) {
         if let Some(view) = self.app.canvas.schematic() {
             view.editor.leave_tool();
         }
@@ -152,7 +152,7 @@ impl Drive {
         *p.expect("the symbol has pins")
     }
 
-    fn select(&mut self, symbol: SymbolId) {
+    pub(super) fn select(&mut self, symbol: SymbolId) {
         let view = self.app.canvas.schematic().expect("editor");
         view.canvas.selection.clear();
         view.canvas.selection.apply(
@@ -1915,8 +1915,8 @@ fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
         let zoom = view.canvas.viewport.zoom;
         // The tolerance the canvas itself picks with.
         let tol = view.canvas.viewport.screen_to_world_len(5.0);
-        let mut found = None;
-        'scan: for dy in -80..=80 {
+        let mut hits = Vec::new();
+        for dy in -80..=80 {
             for dx in -80..=80 {
                 let w = novo_canvas::Vec2::new(
                     origin.x as f32 + dx as f32 * 0.5,
@@ -1932,11 +1932,13 @@ fn double_clicking_a_terminal_a_feed_or_an_interruption_name_renames_it() {
                             | LabelKind::Potential
                     )
                 {
-                    found = Some(w);
-                    break 'scan;
+                    hits.push(w);
                 }
             }
         }
+        // The middle of the label, not the first point that touches it: the
+        // edge can belong to a neighbour at some zoom levels.
+        let found = hits.get(hits.len() / 2).copied();
         let Some(w) = found else { return false };
         let at = view.canvas.viewport.world_to_screen(w);
         let pos = rect.min + egui::vec2(at.x, at.y);

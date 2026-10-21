@@ -137,3 +137,39 @@ fn next_open_after_the_last_open_target_wraps_to_an_earlier_one() {
     let next = next_open(project, &store, Some(last), None, WalkScope::Wires).unwrap();
     assert_eq!(next.target, first.target);
 }
+
+#[test]
+fn place_order_groups_wires_by_the_device_they_start_on() {
+    let (doc, _) = starter();
+    let project = doc.project();
+    let plan = WirePlan::of(project);
+    let order = walk_order_with(project, &plan, WalkScope::Wires, WalkOrder::Place);
+    let by_number = walk_order(project, WalkScope::Wires);
+    assert_eq!(
+        order.len(),
+        by_number.len(),
+        "the same wires, another order"
+    );
+    let devices: Vec<String> = order
+        .iter()
+        .filter_map(|i| match i.target {
+            Target::Wire(w) => plan.step(w),
+            _ => None,
+        })
+        .map(|s| {
+            s.from
+                .rsplit_once(':')
+                .map_or(s.from.as_str(), |p| p.0)
+                .to_owned()
+        })
+        .collect();
+    // Once the walk leaves a device it does not come back to it.
+    let mut seen = std::collections::HashSet::new();
+    let mut last = None;
+    for d in &devices {
+        if Some(d) != last.as_ref() {
+            assert!(seen.insert(d.clone()), "{d} was walked twice");
+            last = Some(d.clone());
+        }
+    }
+}

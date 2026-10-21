@@ -748,3 +748,31 @@ fn a_panel_can_leave_a_question_and_only_when_claude_is_on() {
     }
     assert!(s.script.seen.lock().unwrap().is_empty());
 }
+
+#[test]
+fn the_design_checks_are_a_project_section_only() {
+    let result_for = |scope: DataScope| {
+        let mut s = setup(scope);
+        queue(
+            &s.script,
+            [
+                tool("t1", "read_project", json!({"section": "problems"})),
+                text("ok"),
+            ],
+        );
+        ask(&mut s, "What is wrong with my project?");
+        let seen = s.script.seen.lock().unwrap();
+        let second: Value = serde_json::from_str(&seen[1].body).unwrap();
+        second["messages"][2]["content"][0]["content"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    let whole = result_for(DataScope::Project);
+    assert!(
+        !whole.starts_with("Unknown section") && !whole.starts_with("Not allowed"),
+        "{whole}"
+    );
+    assert!(whole.contains("problems"));
+    assert!(result_for(DataScope::Outline).starts_with("Not allowed"));
+}

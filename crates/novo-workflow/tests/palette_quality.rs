@@ -11,6 +11,13 @@ fn context() -> Context {
     Context {
         has_project: true,
         has_page: true,
+        // Something selected and copied, so the editing commands can run
+        // and these tests judge the match, not the greying.
+        selection: 1,
+        has_device: true,
+        clipboard: true,
+        can_undo: true,
+        can_redo: true,
         ..Context::default()
     }
 }
@@ -202,4 +209,30 @@ fn a_command_with_the_word_in_its_label_beats_a_part_that_only_starts_with_it() 
         .position(|r| r.label == "Heating element")
         .expect("the part is still listed");
     assert!(simulate < element);
+}
+
+#[test]
+fn a_command_that_cannot_run_now_scores_below_the_same_command_that_can() {
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let palette = Palette::default();
+    let score = |can_undo: bool| {
+        let sources = Sources {
+            project: None,
+            library: Some(&library),
+            keymap: &keymap,
+            context: Context {
+                can_undo,
+                ..context()
+            },
+            lessons: &[],
+        };
+        let rows = palette.search("undo", &sources);
+        let at = position(&rows, "edit.undo").expect("Undo is found");
+        (rows[at].score, rows[at].disabled.is_some())
+    };
+    let (ready, ready_greyed) = score(true);
+    let (idle, idle_greyed) = score(false);
+    assert!(!ready_greyed && idle_greyed);
+    assert!(idle <= ready - 300, "{idle} vs {ready}");
 }

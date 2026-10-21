@@ -61,6 +61,7 @@ pub(super) struct Panel {
     height: Option<f32>,
     fit: bool,
     title_bar: bool,
+    above_card: bool,
 }
 
 impl Panel {
@@ -84,6 +85,7 @@ impl Panel {
             height: None,
             fit: false,
             title_bar: true,
+            above_card: false,
         }
     }
 
@@ -117,6 +119,13 @@ impl Panel {
     /// No title bar: the panel has its own header and is dragged by its body.
     pub(super) fn bare(mut self) -> Self {
         self.title_bar = false;
+        self
+    }
+
+    /// Starts clear of a card in the bottom right corner (the lesson card)
+    /// instead of under it: for the panels that open on every selection.
+    pub(super) fn above_card(mut self) -> Self {
+        self.above_card = true;
         self
     }
 
@@ -173,7 +182,15 @@ impl Panel {
         };
         let moved = is_moved(ctx, id);
         let (pivot, start) = self.start();
-        let max_height = (self.canvas.height() - self.top - BOTTOM - self.bottom).max(MIN_HEIGHT);
+        // A panel hanging from the right edge stays clear of a card in the
+        // bottom right corner, unless the person has moved it.
+        let corner = if self.above_card && self.side == Side::Right && !moved {
+            reserved_bottom_right(ctx)
+        } else {
+            0.0
+        };
+        let max_height =
+            (self.canvas.height() - self.top - BOTTOM - self.bottom - corner).max(MIN_HEIGHT);
         let mut window = egui::Window::new(&self.title)
             .id(id)
             .order(egui::Order::Middle)
@@ -269,6 +286,13 @@ pub(super) fn dialog<'a>(
     }
 }
 
+/// For a dialog that sets its own window id: pass the id through here so
+/// [`esc`] finds the window.
+pub(super) fn keep_id(ctx: &egui::Context, id: egui::Id) -> egui::Id {
+    ctx.data_mut(|d| d.insert_temp(pending_id(), id));
+    id
+}
+
 fn esc_off_id() -> egui::Id {
     egui::Id::new("panel_dialog_esc_off")
 }
@@ -311,6 +335,21 @@ pub(super) fn reset_layout(ctx: &egui::Context) {
         let epoch: u32 = d.get_persisted(epoch_id()).unwrap_or(0);
         d.insert_persisted(epoch_id(), epoch.wrapping_add(1));
     });
+}
+
+fn corner_id() -> egui::Id {
+    egui::Id::new("panel_corner_reserved")
+}
+
+/// The bottom right corner is taken by a card (the lesson card) this tall:
+/// panels that start at the right side stay above it instead of drawing
+/// under it. 0 gives the corner back. Read on the next frame.
+pub(super) fn reserve_bottom_right(ctx: &egui::Context, height: f32) {
+    ctx.data_mut(|d| d.insert_temp(corner_id(), height));
+}
+
+fn reserved_bottom_right(ctx: &egui::Context) -> f32 {
+    ctx.data(|d| d.get_temp::<f32>(corner_id())).unwrap_or(0.0)
 }
 
 fn epoch_id() -> egui::Id {
@@ -544,6 +583,11 @@ mod tests {
 
     /// One frame of a dialog opened with `open`; `escape` presses Escape.
     fn dialog_frame(ctx: &egui::Context, open: &mut bool, escape: bool) {
+        dialog_frame_with(ctx, open, escape, false);
+    }
+
+    /// As `dialog_frame`; `own_id` gives the window an id of its own.
+    fn dialog_frame_with(ctx: &egui::Context, open: &mut bool, escape: bool, own_id: bool) {
         let events = if escape {
             vec![egui::Event::Key {
                 key: egui::Key::Escape,
@@ -563,11 +607,15 @@ mod tests {
             },
             |ctx| {
                 if *open {
-                    dialog(ctx, "Escape test", [400.0, 0.0])
-                        .open(esc(ctx, open))
-                        .show(ctx, |ui| {
-                            ui.label("content");
-                        });
+                    let window = dialog(ctx, "Escape test", [400.0, 0.0]);
+                    let window = if own_id {
+                        window.id(keep_id(ctx, egui::Id::new("own_id_dialog")))
+                    } else {
+                        window
+                    };
+                    window.open(esc(ctx, open)).show(ctx, |ui| {
+                        ui.label("content");
+                    });
                 }
             },
         );
@@ -583,6 +631,16 @@ mod tests {
         assert!(open, "stays open without a key");
         dialog_frame(&ctx, &mut open, true);
         assert!(!open, "Escape closes it");
+    }
+
+    #[test]
+    fn escape_closes_a_dialog_with_its_own_window_id() {
+        let ctx = egui::Context::default();
+        let mut open = true;
+        dialog_frame_with(&ctx, &mut open, false, true);
+        dialog_frame_with(&ctx, &mut open, false, true);
+        dialog_frame_with(&ctx, &mut open, true, true);
+        assert!(!open);
     }
 
     #[test]

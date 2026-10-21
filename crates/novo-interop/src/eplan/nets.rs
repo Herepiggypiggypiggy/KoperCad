@@ -244,6 +244,9 @@ pub enum NetIssue {
 pub struct ReconNets {
     pub nets: Vec<ReconNet>,
     pub issues: Vec<NetIssue>,
+    /// The straight runs and coincident points that joined two points, in
+    /// the order found: the wires EPLAN implies, as a graph over the points.
+    pub runs: Vec<(PinKey, PinKey)>,
     by_pin: HashMap<PinKey, usize>,
 }
 
@@ -358,6 +361,7 @@ pub fn rebuild_nets(graph: &ConnGraph) -> ReconNets {
         return nets;
     }
     let mut issues = Vec::new();
+    let mut runs: Vec<(PinKey, PinKey)> = Vec::new();
     let n = graph.points.len();
     let mut index: HashMap<&PinKey, usize> = HashMap::with_capacity(n);
     for (i, p) in graph.points.iter().enumerate() {
@@ -389,6 +393,12 @@ pub fn rebuild_nets(graph: &ConnGraph) -> ReconNets {
             // A line end or node: everything at the position is joined.
             for w in members.windows(2) {
                 dsu.union(w[0], w[1]);
+                if w[0] < n && w[1] < n {
+                    runs.push((
+                        graph.points[w[0]].key.clone(),
+                        graph.points[w[1]].key.clone(),
+                    ));
+                }
             }
         } else {
             // Bare pins join only when they face each other.
@@ -495,6 +505,7 @@ pub fn rebuild_nets(graph: &ConnGraph) -> ReconNets {
                     continue;
                 }
                 dsu.union(i, j);
+                runs.push((p.key.clone(), q.key.clone()));
                 joined = true;
                 backed[i][slot(d)] = true;
                 backed[j][slot(d.opposite())] = true;
@@ -653,6 +664,7 @@ pub fn rebuild_nets(graph: &ConnGraph) -> ReconNets {
     ReconNets {
         nets,
         issues,
+        runs,
         by_pin,
     }
 }

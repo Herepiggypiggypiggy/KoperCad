@@ -8,6 +8,9 @@ mod assembly;
 mod assistant;
 #[cfg(test)]
 mod assistant_tests;
+mod autopilot;
+#[cfg(test)]
+mod autopilot_tests;
 mod background_panel;
 mod bench;
 mod cabinet;
@@ -98,6 +101,7 @@ mod layout_presets;
 mod learn;
 mod learn_demo;
 mod learn_labels;
+mod learn_solve;
 mod learn_ui;
 mod link;
 mod live;
@@ -1369,6 +1373,7 @@ impl NovoApp {
         self.background_panel(&ctx);
         self.assistant_window(&ctx);
         self.bench_window(&ctx);
+        self.autopilot_window(&ctx);
         self.pdf_options_window(&ctx);
         self.designer_window(&ctx);
         self.parts_window(&ctx);
