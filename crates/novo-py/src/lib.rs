@@ -605,6 +605,12 @@ impl ScriptProject {
         potentials_json(self.project())
     }
 
+    /// The open design-check problems, as `kopercad-cli check --json` lists
+    /// them (house wire rule breaks included, waived problems left out).
+    pub fn problems(&self) -> Value {
+        problems_json(self.project())
+    }
+
     pub fn terminals(&self) -> Value {
         let p = self.project();
         let mut terminals: Vec<_> = p.terminals().collect();
@@ -763,6 +769,41 @@ pub fn devices_json(p: &Project) -> Value {
                     "tag": d.tag.to_string(),
                     "description": d.description,
                     "kind": d.kind,
+                })
+            })
+            .collect(),
+    )
+}
+
+/// The open problems of the project as one JSON list: the issue list of
+/// `novo_reports::issues`, the same on every route.
+pub fn problems_json(p: &Project) -> Value {
+    use novo_checks::Severity;
+    let key = |kind: novo_checks::ProblemKind| {
+        let mut key = String::new();
+        for (i, c) in format!("{kind:?}").chars().enumerate() {
+            if c.is_ascii_uppercase() && i > 0 {
+                key.push('_');
+            }
+            key.push(c.to_ascii_lowercase());
+        }
+        key
+    };
+    Value::Array(
+        novo_reports::issues::open(p)
+            .iter()
+            .map(|q| {
+                json!({
+                    "severity": match q.severity {
+                        Severity::Error => "error",
+                        Severity::Warning => "warning",
+                        Severity::Info => "info",
+                    },
+                    "kind": key(q.kind),
+                    "label": q.kind.label(),
+                    "message": q.message,
+                    "page": q.page.and_then(|id| p.page(id)).map(|g| g.name.clone()),
+                    "at": q.at,
                 })
             })
             .collect(),

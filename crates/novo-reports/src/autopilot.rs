@@ -946,11 +946,16 @@ pub fn rule_breaks(project: &Project) -> Vec<RuleBreak> {
     }
     let basis = wire_basis(project, &project.netlist());
     let mut out = Vec::new();
+    // A wire can belong to more than one cut item; it is judged once.
+    let mut seen = BTreeSet::new();
     for item in crate::wires::items(project, true) {
         for wire in item.wires {
             let Some(b) = basis.get(&wire.id) else {
                 continue;
             };
+            if !seen.insert(wire.id) {
+                continue;
+            }
             let class = colour_class(b);
             let name = match wire.number.as_deref().map(str::trim) {
                 Some(n) if !n.is_empty() => format!("Wire {n}"),

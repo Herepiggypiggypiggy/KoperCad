@@ -12,7 +12,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand};
-use novo_checks::{Problem, ProblemKind, Severity, Summary};
+use novo_checks::{Problem, Severity, Summary};
 use novo_core::{PageId, Project};
 use novo_editor::art::LibraryArt;
 use novo_pdf::{NoteAnchor, NoteDensity, NoteGlyph, NoteRow, PageSet, PdfOptions, SymbolNote};
@@ -792,11 +792,10 @@ fn dispatch(command: Cmd, out: &mut dyn Write) -> Result<i32, Failure> {
         } => calc(&file, tables.as_deref(), pairs.as_deref(), json, out),
         Cmd::Check { file, json } => {
             let project = read(&file)?;
-            let problems = novo_checks::check(&project);
+            let problems = novo_reports::issues::open(&project);
             let summary = Summary::of(&problems);
             if json {
-                let list: Vec<Value> = problems.iter().map(|p| problem_json(&project, p)).collect();
-                print(out, &format!("{:#}", Value::Array(list)))?;
+                print(out, &format!("{:#}", novo_py::problems_json(&project)))?;
             } else {
                 for p in &problems {
                     print(out, &problem_text(&project, p))?;
@@ -1830,18 +1829,6 @@ fn severity_name(severity: Severity) -> &'static str {
     }
 }
 
-/// `DuplicateTag` as `duplicate_tag`, a stable key for scripts.
-fn kind_key(kind: ProblemKind) -> String {
-    let mut key = String::new();
-    for (i, c) in format!("{kind:?}").chars().enumerate() {
-        if c.is_ascii_uppercase() && i > 0 {
-            key.push('_');
-        }
-        key.push(c.to_ascii_lowercase());
-    }
-    key
-}
-
 fn page_name(project: &Project, problem: &Problem) -> Option<String> {
     problem
         .page
@@ -1859,15 +1846,4 @@ fn problem_text(project: &Project, problem: &Problem) -> String {
         problem.kind.label(),
         problem.message
     )
-}
-
-fn problem_json(project: &Project, problem: &Problem) -> Value {
-    json!({
-        "severity": severity_name(problem.severity),
-        "kind": kind_key(problem.kind),
-        "label": problem.kind.label(),
-        "message": problem.message,
-        "page": page_name(project, problem),
-        "at": problem.at,
-    })
 }
