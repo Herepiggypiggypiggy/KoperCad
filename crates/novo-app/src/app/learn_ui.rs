@@ -524,7 +524,7 @@ impl NovoApp {
         let mut reload = false;
         let mut reset = false;
         super::panel::dialog(ctx, title, [560.0, 560.0])
-            .id(egui::Id::new("learn_window"))
+            .id(super::panel::keep_id(ctx, egui::Id::new("learn_window")))
             .open(super::panel::esc(ctx, &mut open))
             .pivot(egui::Align2::CENTER_CENTER)
             .default_pos(ctx.content_rect().center())
