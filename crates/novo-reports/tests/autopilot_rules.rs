@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use novo_checks::calc::tables::TableSet;
 use novo_core::{Document, Value};
-use novo_reports::autopilot::{Change, groups, plan_for};
+use novo_reports::autopilot::{Change, groups, plan_for, rule_breaks};
 use novo_reports::wire_rules::{self, ColourClass, Preset, WireRules};
 use novo_tests::motor_starter;
 
@@ -165,4 +165,43 @@ fn an_absurd_minimum_section_is_ignored_as_unset() {
     }
     set(&mut d, wire_rules::MIN_POWER_MM2, Value::Float(2.5));
     assert_eq!(WireRules::of(d.project()).min_mm2(false), Some(2.5));
+}
+
+fn accept_all(doc: &mut Document) {
+    let plan = plan_for(doc.project(), &TableSet::builtin());
+    doc.transact("Autopilot", |tx| plan.apply(tx, None))
+        .expect("apply");
+}
+
+#[test]
+fn wires_that_break_the_house_rules_are_listed_and_the_standard_is_not_checked() {
+    let mut d = doc();
+    assert!(rule_breaks(d.project()).is_empty(), "nothing set yet");
+    accept_all(&mut d);
+    assert!(rule_breaks(d.project()).is_empty(), "IEC states no rules");
+
+    set(&mut d, wire_rules::PRESET, Value::Text("house".into()));
+    assert!(
+        rule_breaks(d.project()).is_empty(),
+        "a house set without entries breaks nothing"
+    );
+    set(
+        &mut d,
+        &ColourClass::AcPower.key(),
+        Value::Text("RD".into()),
+    );
+    set(&mut d, wire_rules::MIN_POWER_MM2, Value::Float(4.0));
+    let breaks = rule_breaks(d.project());
+    assert!(
+        breaks
+            .iter()
+            .any(|b| b.message.contains("house rule gives RD")),
+        "{breaks:?}"
+    );
+    assert!(
+        breaks
+            .iter()
+            .any(|b| b.message.contains("under the house minimum of 4 mm²")),
+        "{breaks:?}"
+    );
 }

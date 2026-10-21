@@ -4,11 +4,26 @@
 use eframe::egui;
 use novo_canvas::model::item_id;
 use novo_canvas::{Mark, MarkKind};
-use novo_checks::{Problem, Severity, Summary};
-use novo_core::{AnyId, PageId};
+use novo_checks::{Problem, ProblemKind, Severity, Summary};
+use novo_core::{AnyId, PageId, Project};
 use novo_xref::Place;
 
 use super::{Level, NovoApp};
+
+/// The open design-check problems plus the wires that break the project's
+/// house wire rules (those rules live in the reports crate, so the checks
+/// crate cannot see them). A waiver of "Wire breaks project rule" covers them.
+pub(super) fn open_problems(project: &Project) -> Vec<Problem> {
+    let mut problems = novo_checks::check_open(project);
+    for b in novo_reports::autopilot::rule_breaks(project) {
+        let mut problem = Problem::new(ProblemKind::WireRule, vec![AnyId::Wire(b.wire)], b.message);
+        problem.page = project.wire(b.wire).map(|w| w.page);
+        if novo_checks::waiver_of(project, &problem).is_none() {
+            problems.push(problem);
+        }
+    }
+    problems
+}
 
 impl NovoApp {
     /// Problems marked where they are (DESIGN.md §5, principle 7): a
@@ -29,7 +44,7 @@ impl NovoApp {
         };
         let problems = match &self.wb.problems {
             Some((revision, problems)) if *revision == project.revision() => problems.clone(),
-            _ => novo_checks::check_open(project),
+            _ => open_problems(project),
         };
         let mut marks = Vec::new();
         for p in &problems {
@@ -68,7 +83,7 @@ impl NovoApp {
             .as_ref()
             .is_none_or(|(r, _)| *r != revision)
         {
-            self.wb.problems = Some((revision, novo_checks::check_open(project)));
+            self.wb.problems = Some((revision, open_problems(project)));
         }
         self.wb.problems.as_ref().map_or(&[], |(_, p)| p.as_slice())
     }

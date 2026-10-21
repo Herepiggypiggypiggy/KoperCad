@@ -424,7 +424,7 @@ fn rules_section(ui: &mut egui::Ui, rules: &WireRules, edits: &mut Vec<(String, 
         .id_salt("autopilot-wire-rules")
         .default_open(false)
         .show(ui, |ui| {
-            ui.label("Colours and smallest sections the Autopilot proposes. IEC 60204-1 is the default; House rules let this project use its own. Rules only change what the Autopilot proposes from now on; wires that already have a colour or size are not touched. Ampacity sizing stays on planning values either way.");
+            ui.label("Colours and smallest sections the Autopilot proposes. IEC 60204-1 is the default; House rules let this project use its own. Rules only change what the Autopilot proposes from now on; wires that already have a colour or size are not touched, and the ones that break the house rules are listed in Issues. Ampacity sizing stays on planning values either way.");
             ui.horizontal(|ui| {
                 for preset in [Preset::Iec60204, Preset::House] {
                     if ui
