@@ -100,6 +100,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("export.bom", under("File", "Export reports")),
     ("export.change_report", under("File", "Export reports")),
     ("export.commissioning", under("File", "Export reports")),
+    ("export.punch_list", under("File", "Export reports")),
     ("export.standards_report", under("File", "Export reports")),
     ("export.standards_xlsx", under("File", "Export reports")),
     ("export.wirecut", under("File", "Export production")),

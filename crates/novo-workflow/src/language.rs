@@ -732,6 +732,11 @@ pub const DUTCH: &[Aliases] = &[
         &["restpuntenlijst", "oplevering"],
     ),
     nl(
+        "export.punch_list",
+        &["exporteer restpuntenlijst", "restpuntenlijst exporteren"],
+        &["restpunten pdf", "open punten"],
+    ),
+    nl(
         "export.standards_report",
         &["exporteer normenrapport", "normenrapport exporteren"],
         &["conformiteitsrapport", "normen pdf"],

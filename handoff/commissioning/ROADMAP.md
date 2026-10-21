@@ -12,3 +12,7 @@ Order (small draft PRs):
 6. App: punch list tab, compact touch layout.
 
 Open: none blocking.
+
+## Guided walk (2026-10-21)
+Done: Next open walks pages in order and wires by number; the big card shows from, to, ferrules, length and wire or cable core; a tap of Space (or the big button) passes what is open and moves on; the wire is selected in the drawing; "3D" button selects the wire run in the 3D view; list groups Wires and Cable cores apart; tablet rows have a second line; punch list (open items only) to PDF.
+Next: Fail from the card with a reason picker; walk order by cabinet/duct route instead of page; show the wire lit in the Commissioning workspace's own 3D side view.

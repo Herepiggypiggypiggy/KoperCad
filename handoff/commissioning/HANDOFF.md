@@ -27,3 +27,11 @@ Move commissioning from the outline tab to `Workspace::Commissioning` (Workspace
 - Add a `view.commissioning` row in `menus.rs` (PLACEMENTS or PALETTE_ONLY); keep the Dutch words in `novo-workflow/language.rs`. Do not bind Shift+K; Ctrl+5 is the workspace key.
 - Adapt `commissioning_tests.rs` (toggle test becomes a workspace switch). Touch layout slot belongs to Layout and branding.
 - Known limits: the lock applies then undoes a canvas edit (needs a read-only flag in the editor view, WS-06, and a redo drop in `Document`, WS-02); only canvas edits are covered, not palette or key commands.
+
+## Guided walk (2026-10-21)
+- Engine: `novo-commissioning/src/walk.rs` (`WirePlan::of(project)` per drawn wire from `novo_reports::wire_cut_jobs`: ends, ferrule text, length, plain wire or cable core, "same number also on ..." hint; `walk_order`, `next_open(project, store, from, page, scope)`; `WalkScope::{All, Wires}`). Routing every wire is not cheap: the app caches the plan against `Project::revision()`.
+- App: `app/commissioning.rs` (`walk_card`, `CommissioningMode::tick/walk_to`, `commissioning_space`), `app/workbench.rs` `space_released` (a tap of Space ticks in the Commissioning workspace, else opens the command field; hold + drag still pans).
+- Where the user finds it: Commissioning workspace (Ctrl+5), Checks tab: "Next open", "Wires only", the big card and Space; By menu > "Write punch list PDF"; palette `Export punch list (open items)` (File > Export reports).
+- Report: `novo_reports::commissioning::punch_list_report`.
+- Tests: `crates/novo-commissioning/tests/walk.rs`, `app/commissioning_walk_tests.rs`.
+- `novo-theme::widgets::row_of_height` is new (a row with a height of its own).
