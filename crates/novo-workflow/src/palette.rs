@@ -178,6 +178,8 @@ const LABEL_BONUS: i32 = 50;
 /// "Simulate heat of the cabinet") outranks a part that only starts with it
 /// ("Heating element"); a part named exactly by the word still leads.
 const WHOLE_WORD_BONUS: i32 = 120;
+/// How far a row that cannot run now drops below one that can.
+const DISABLED_PENALTY: i32 = 400;
 
 /// The most a command's keyword (not its label or verb) can score, kept
 /// below a symbol's name so a part-like word finds the part first.
@@ -326,6 +328,13 @@ impl Palette {
             }
         }
 
+        // A command that cannot run now sorts below one that can, unless it
+        // is a much better match; Enter acts on the first row.
+        for row in &mut rows {
+            if row.disabled.is_some() {
+                row.score -= DISABLED_PENALTY;
+            }
+        }
         // One row per target, keeping the best.
         rows.sort_by_key(|r| std::cmp::Reverse(r.score));
         let mut seen = Vec::new();

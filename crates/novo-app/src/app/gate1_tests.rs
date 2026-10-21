@@ -115,7 +115,7 @@ impl Drive {
         self.frame();
     }
 
-    fn editor_leave(&mut self) {
+    pub(super) fn editor_leave(&mut self) {
         if let Some(view) = self.app.canvas.schematic() {
             view.editor.leave_tool();
         }
@@ -152,7 +152,7 @@ impl Drive {
         *p.expect("the symbol has pins")
     }
 
-    fn select(&mut self, symbol: SymbolId) {
+    pub(super) fn select(&mut self, symbol: SymbolId) {
         let view = self.app.canvas.schematic().expect("editor");
         view.canvas.selection.clear();
         view.canvas.selection.apply(

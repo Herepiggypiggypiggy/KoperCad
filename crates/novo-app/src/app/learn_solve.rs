@@ -62,6 +62,16 @@ impl NovoApp {
 
     fn solve_place(&mut self, a: &novo_learn::lesson::PlaceArgs) -> Result<(), String> {
         let page = self.solve_page(&a.page)?;
+        // A step done halfway is not placed twice.
+        let there = self.solve_doc()?.project().symbols().any(|s| {
+            s.page == page
+                && s.symbol.0 == a.symbol
+                && (s.placement.origin.x - a.x).abs() < 3.0
+                && (s.placement.origin.y - a.y).abs() < 3.0
+        });
+        if there {
+            return Ok(());
+        }
         let view = self.canvas.schematic().ok_or("no editor canvas")?;
         if !view.editor.begin_place(&a.symbol, a.parent.as_deref()) {
             return Err(view
@@ -88,13 +98,14 @@ impl NovoApp {
         }
     }
 
-    fn solve_doc(&self) -> &Document {
-        self.document().expect("a project is open")
+    fn solve_doc(&self) -> Result<&Document, String> {
+        self.document()
+            .ok_or_else(|| "no project is open".to_string())
     }
 
     pub(super) fn solve_page(&mut self, name: &str) -> Result<PageId, String> {
         let page = self
-            .solve_doc()
+            .solve_doc()?
             .project()
             .pages_in_order()
             .into_iter()
@@ -107,7 +118,7 @@ impl NovoApp {
     }
 
     pub(super) fn solve_pin(&self, text: &str) -> Result<(PageId, Point), String> {
-        let project = self.solve_doc().project();
+        let project = self.solve_doc()?.project();
         let found = novo_learn::check::pins_named(project, text);
         let pin = found
             .first()
@@ -192,7 +203,7 @@ impl NovoApp {
     /// A cable over the wires that join these pairs of pins, as the cables
     /// drawer's button makes it.
     pub(super) fn solve_cable(&mut self, pairs: &[[String; 2]]) -> Result<(), String> {
-        let project = self.solve_doc().project();
+        let project = self.solve_doc()?.project();
         let mut wires = Vec::new();
         for [a, b] in pairs {
             let pa = novo_learn::check::pins_named(project, a);
@@ -215,7 +226,7 @@ impl NovoApp {
         &mut self,
         a: &novo_learn::lesson::AssignPartArgs,
     ) -> Result<(), String> {
-        let project = self.solve_doc().project();
+        let project = self.solve_doc()?.project();
         let device = project
             .devices()
             .find(|d| novo_learn::check::tag_matches(&d.tag, &a.device))
@@ -236,7 +247,7 @@ impl NovoApp {
     /// The rename box's Enter: a terminal by designation, an interruption
     /// point by name, or a device by tag.
     pub(super) fn solve_rename(&mut self, target: &str, to: &str) -> Result<(), String> {
-        let project = self.solve_doc().project();
+        let project = self.solve_doc()?.project();
         let label_symbol: Option<SymbolId> = if let Some((strip, name)) = target.rsplit_once(':') {
             let strip = project
                 .devices()
@@ -332,7 +343,7 @@ impl NovoApp {
         {
             return Ok(());
         }
-        let project = self.solve_doc().project();
+        let project = self.solve_doc()?.project();
         let mut found: Vec<SymbolId> = Vec::new();
         if text.contains(':') {
             found.extend(
@@ -357,7 +368,7 @@ impl NovoApp {
             .first()
             .ok_or_else(|| format!("nothing named `{text}` to select"))?;
         let page = self
-            .solve_doc()
+            .solve_doc()?
             .project()
             .symbol(first)
             .map(|s| s.page)
@@ -383,7 +394,7 @@ impl NovoApp {
     /// Selects a device that has no symbol but a place on the plate, as a
     /// click on it in the Cabinet does.
     pub(super) fn solve_select_on_plate(&mut self, text: &str, add: bool) -> Result<(), String> {
-        let project = self.solve_doc().project();
+        let project = self.solve_doc()?.project();
         let id = project
             .all::<novo_core::CabinetPlacement>()
             .filter_map(|p| project.device(p.device))
@@ -404,7 +415,7 @@ impl NovoApp {
 
     #[cfg_attr(not(test), allow(dead_code))]
     pub(super) fn solve_symbols(&self, text: &str) -> Result<Vec<SymbolId>, String> {
-        let project = self.solve_doc().project();
+        let project = self.solve_doc()?.project();
         let found: Vec<SymbolId> = project
             .symbols()
             .filter(|symbol| {
@@ -431,7 +442,7 @@ impl NovoApp {
         let page = self.current_page().ok_or("no page")?;
         let at = Point::new(args.feed_at[0], args.feed_at[1]);
         let feed = self
-            .solve_doc()
+            .solve_doc()?
             .project()
             .symbols()
             .find(|s| {
@@ -443,7 +454,7 @@ impl NovoApp {
             .map(|s| s.id)
             .ok_or_else(|| format!("no feed at {at:?}"))?;
         let menu = novo_editor::potential_menu::feed_menu(
-            self.solve_doc().project(),
+            self.solve_doc()?.project(),
             &[AnyId::Symbol(feed)],
         )
         .ok_or("that symbol is not a potential feed")?;

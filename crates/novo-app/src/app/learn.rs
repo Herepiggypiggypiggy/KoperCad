@@ -1009,7 +1009,12 @@ impl NovoApp {
             match self.solve_op(ctx, op) {
                 Some(Ok(())) => applied = true,
                 Some(Err(why)) => {
-                    self.message(Level::Warning, format!("Could not do this step: {why}"));
+                    let said = if applied {
+                        "Did part of this step"
+                    } else {
+                        "Could not do this step"
+                    };
+                    self.message(Level::Warning, format!("{said}: {why}"));
                     break;
                 }
                 None => break,
