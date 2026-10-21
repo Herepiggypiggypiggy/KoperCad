@@ -65,7 +65,7 @@ pub fn accuracy_for(fidelity: Fidelity) -> AccuracyStatement {
     }
     AccuracyStatement {
         validated: ENCLOSURE_VALIDATED,
-        headline: format!("{} {level}", fidelity.label()),
+        headline: level.to_string(),
         benchmarks: core.benchmarks,
         limits,
     }
@@ -138,4 +138,20 @@ pub fn accuracy_with_turbulence(fidelity: Fidelity, model: TurbModel) -> Accurac
     }
     a.headline.push_str(&format!(" Turbulence: {name}."));
     a
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_headline_names_the_grid_once() {
+        // The panel shows "Coarse 3D" in its status line; the headline under
+        // it used to start with the same label and then say "Coarse grid".
+        for f in [Fidelity::Coarse, Fidelity::Medium, Fidelity::Fine] {
+            let h = accuracy_for(f).headline;
+            assert!(!h.starts_with(f.label()), "{h}");
+            assert_eq!(h.matches(" grid").count(), 1, "{h}");
+        }
+    }
 }

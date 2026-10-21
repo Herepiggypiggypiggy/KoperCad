@@ -1058,11 +1058,13 @@ pub(super) fn paint_over(
         paint_contours(&painter, cache, &to_screen);
     }
     paint_rims(&painter, cache, input, &to_screen);
-    if state.badges {
-        paint_badges(&painter, cache, input, &to_screen, viewport.zoom);
-    }
+    let badges = if state.badges {
+        paint_badges(&painter, cache, input, &to_screen, viewport.zoom)
+    } else {
+        Vec::new()
+    };
     if delta.is_none() {
-        paint_peaks(&painter, cache, input, &to_screen);
+        paint_peaks(&painter, cache, input, &to_screen, rect, &badges);
     }
     let stale = matches!(&cache.source, Source::Solved(sol) if state.live.out_of_date(sol, layout_key(input)));
     if let Some(d) = delta {
@@ -1408,7 +1410,7 @@ fn paint_badges(
     input: &Input,
     to_screen: &dyn Fn(f64, f64) -> Pos2,
     zoom: f32,
-) {
+) -> Vec<Rect> {
     let font = FontId::monospace(t::FONT_SMALL);
     let plate_left = to_screen(0.0, 0.0).x;
     let mut placed: Vec<Rect> = Vec::new();
@@ -1418,7 +1420,7 @@ fn paint_badges(
         .filter(|i| i.loss_w > 0.0 || !i.loss_known)
     {
         if !i.loss_known {
-            paint_no_data(painter, i, to_screen, zoom, &font);
+            placed.extend(paint_no_data(painter, i, to_screen, zoom, &font));
             continue;
         }
         let Reading {
@@ -1490,6 +1492,7 @@ fn paint_badges(
             t::TEXT,
         );
     }
+    placed
 }
 
 /// A device without loss data says so instead of showing a made-up temperature.
@@ -1499,9 +1502,9 @@ fn paint_no_data(
     to_screen: &dyn Fn(f64, f64) -> Pos2,
     zoom: f32,
     font: &FontId,
-) {
+) -> Option<Rect> {
     if (i.w as f32) * zoom < 76.0 || (i.h as f32) * zoom < 30.0 {
-        return;
+        return None;
     }
     let br = to_screen(i.x + i.w, i.y + i.h);
     let pill = Rect::from_min_size(br - Vec2::new(70.0, 26.0), Vec2::new(64.0, 20.0));
@@ -1519,6 +1522,7 @@ fn paint_no_data(
         font.clone(),
         t::TEXT_MUTED,
     );
+    Some(pill)
 }
 
 /// The two lines of a hot-spot card: where, and how the field's temperature
@@ -1547,9 +1551,19 @@ fn paint_peaks(
     cache: &Cache,
     input: &Input,
     to_screen: &dyn Fn(f64, f64) -> Pos2,
+    view: Rect,
+    badges: &[Rect],
 ) {
     let title = FontId::proportional(t::FONT_SMALL);
-    let mut placed: Vec<Rect> = Vec::new();
+    // What a card must not cover: the badges and the cards already placed.
+    let mut hard: Vec<Rect> = badges.to_vec();
+    // What it covers only if nothing else is free: the devices.
+    let devices: Vec<Rect> = input
+        .items
+        .iter()
+        .map(|i| Rect::from_two_pos(to_screen(i.x, i.y), to_screen(i.x + i.w, i.y + i.h)))
+        .collect();
+    let bounds = view.shrink(4.0);
     for (p, tag) in &cache.peaks {
         let at = to_screen(p.x, p.y);
         painter.circle_stroke(at, 4.0, Stroke::new(1.5, t::TEXT));
@@ -1561,13 +1575,9 @@ fn paint_peaks(
             .iter()
             .find(|i| !tag.is_empty() && i.tag == *tag && i.loss_known)
             .map(|i| device_temp(cache, i));
-        let mut card = Rect::from_min_size(at + Vec2::new(14.0, -30.0), Vec2::new(210.0, 34.0));
-        // Cards never overlap each other: step down until there is room.
-        while placed.iter().any(|q| q.intersects(card.expand(2.0))) {
-            card = card.translate(Vec2::new(0.0, 38.0));
-        }
-        placed.push(card);
-        painter.line_segment([at, card.left_center()], Stroke::new(1.0, t::TEXT));
+        let card = super::heat_callouts::place(at, bounds, &hard, &devices);
+        hard.push(card);
+        painter.line_segment([at, card.clamp(at)], Stroke::new(1.0, t::TEXT));
         painter.rect(
             card,
             6.0,
@@ -1607,7 +1617,10 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
     .show(ctx, |ui| {
         // The notes can outgrow a short window; scroll them instead of
         // running off the bottom (a fitted panel does not scroll itself).
-        egui::ScrollArea::vertical()
+        // The bar is solid, not the floating kind that shows only while the
+        // pointer is over it: a cut-off line with no bar reads as a bug.
+        ui.spacing_mut().scroll = egui::style::ScrollStyle::solid();
+        let _scrolled = egui::ScrollArea::vertical()
             .max_height((rect.height() - 60.0).max(120.0))
             .auto_shrink([true, true])
             .show(ui, |ui| {
@@ -1704,6 +1717,17 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                     }
                 }
             });
+        #[cfg(test)]
+        ui.ctx().data_mut(|d| {
+            d.insert_temp(
+                egui::Id::new("heat_legend_scroll"),
+                (
+                    _scrolled.inner_rect,
+                    _scrolled.content_size,
+                    ui.spacing().scroll.floating,
+                ),
+            );
+        });
     });
     // The whole panel, title bar and frame, is what the tour points at.
     if let Some(shown) = shown {
@@ -2124,6 +2148,72 @@ mod tests {
         assert!(
             card.bottom() <= canvas.bottom() && card.top() >= canvas.top(),
             "{card:?} leaves the canvas {canvas:?}"
+        );
+    }
+
+    #[test]
+    fn long_legend_notes_scroll_with_a_bar_that_stays_visible() {
+        let ctx = egui::Context::default();
+        let screen = Rect::from_min_size(Pos2::ZERO, Vec2::new(1366.0, 768.0));
+        // The canvas of a 1366 by 768 laptop under its toolbars.
+        let canvas = Rect::from_min_size(Pos2::new(110.0, 200.0), Vec2::new(1100.0, 520.0));
+        let raw = egui::RawInput {
+            screen_rect: Some(screen),
+            ..Default::default()
+        };
+        let mut inp = input();
+        for item in &mut inp.items {
+            item.loss_estimated = true;
+        }
+        inp.items.push(Item {
+            id: 3,
+            tag: "-X1".into(),
+            x: 10.0,
+            y: 10.0,
+            w: 20.0,
+            h: 20.0,
+            loss_w: 0.0,
+            loss_known: false,
+            loss_estimated: false,
+        });
+        let mut cache = build(&inp);
+        let mut snap = novo_cfd::Solver::solve(
+            &novo_cfd::StubSolver,
+            &scenario(),
+            novo_cfd::Fidelity::Coarse,
+            &novo_cfd::Control::new(),
+            &mut |_| {},
+        )
+        .unwrap();
+        snap.notes = Vec::new();
+        let messages: Vec<String> = (0..12)
+            .map(|i| format!("Note {i}: a long remark about the solver and its limits that wraps over several lines in a narrow panel."))
+            .collect();
+        cache.source = Source::Solved(std::sync::Arc::new(crate::app::heat_run::Solution {
+            snapshot: std::sync::Arc::new(snap),
+            id: 1,
+            scenario_key: 1,
+            layout_key: 2,
+            ambient: 35.0,
+            plate: [20.0, 20.0, 360.0, 360.0],
+            messages,
+        }));
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(raw.clone(), |ui| {
+                legend(ui.ctx(), canvas, &cache, &inp, false);
+            });
+            out.textures_delta.clear();
+        }
+        let (inner, content, floating): (Rect, Vec2, bool) = ctx
+            .data(|d| d.get_temp(egui::Id::new("heat_legend_scroll")))
+            .expect("scroll area drawn");
+        assert!(
+            content.y > inner.height(),
+            "the test needs notes taller than the panel: {content:?} in {inner:?}"
+        );
+        assert!(
+            !floating,
+            "the notes are cut off by the panel and the scroll bar shows only on hover"
         );
     }
 }
