@@ -1305,3 +1305,40 @@ fn a_prediction_step_waits_for_an_answer_and_says_whether_it_was_right() {
     assert!(d.app.card().unwrap().predict.is_none(), "no question here");
     assert!(d.app.learn_predict(1).is_err(), "no question to answer");
 }
+
+/// A debug build panics on an anchor the shell draws but `ANCHORS` lacks
+/// (`whats_new.pill` did, and crashed every debug start-up). Scan the
+/// sources so the next one fails here, with its name.
+#[test]
+fn every_anchor_the_shell_registers_is_in_the_list() {
+    let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut missing = Vec::new();
+    let mut dirs = vec![src];
+    while let Some(dir) = dirs.pop() {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = e.path();
+            if path.is_dir() {
+                dirs.push(path);
+                continue;
+            }
+            let name = path.file_name().unwrap().to_string_lossy().into_owned();
+            if !name.ends_with(".rs") || name.contains("_tests") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            for call in ["anchor(\"", "anchor_response(\""] {
+                for (at, _) in text.match_indices(call) {
+                    let rest = &text[at + call.len()..];
+                    let id = &rest[..rest.find('"').unwrap()];
+                    if !super::learn::ANCHORS.contains(&id) {
+                        missing.push(format!("{id} ({name})"));
+                    }
+                }
+            }
+        }
+    }
+    assert!(
+        missing.is_empty(),
+        "anchors drawn but not in ANCHORS: {missing:?}"
+    );
+}

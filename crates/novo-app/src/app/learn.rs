@@ -72,6 +72,7 @@ pub(crate) const ANCHORS: &[&str] = &[
     "dock.proposals",
     "palette.field",
     "issue.pill",
+    "whats_new.pill",
     "drawer.terminals",
     "drawer.terminals.tab",
     "drawer.cables",
