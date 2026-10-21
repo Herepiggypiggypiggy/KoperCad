@@ -952,17 +952,24 @@ pub fn rule_breaks(project: &Project) -> Vec<RuleBreak> {
                 continue;
             };
             let class = colour_class(b);
+            let name = match wire.number.as_deref().map(str::trim) {
+                Some(n) if !n.is_empty() => format!("Wire {n}"),
+                _ => "A wire without a number".to_owned(),
+            };
             let have = wire
                 .color
                 .as_deref()
                 .and_then(crate::wire_rules::normal_code);
+            // A class the Autopilot had to guess is no ground for a warning.
+            let sure_class = colour_of(b).2 != Basis::Assumed;
             if let (Some(have), Some(house)) = (have, rules.house_colour(class))
+                && sure_class
                 && have != house
             {
                 out.push(RuleBreak {
                     wire: wire.id,
                     message: format!(
-                        "{} wire is {have}; the project's house rule gives {house}",
+                        "{name} ({} circuit) is {have}; the project's house rule gives {house}",
                         class.label()
                     ),
                 });
@@ -971,13 +978,16 @@ pub fn rule_breaks(project: &Project) -> Vec<RuleBreak> {
             let smallest = crate::wirecut::sections(project, &[wire])
                 .into_iter()
                 .reduce(f64::min);
+            // Power or control is a guess when neither the circuit nor a voltage says.
+            let sure_kind = b.circuit != Circuit::Unknown || b.potential_voltage.is_some();
             if let (Some(have), Some(min)) = (smallest, rules.min_mm2(control))
+                && sure_kind
                 && have + 1e-9 < min
             {
                 out.push(RuleBreak {
                     wire: wire.id,
                     message: format!(
-                        "{} mm² is under the house minimum of {} mm² for {} wires",
+                        "{name} is {} mm², under the house minimum of {} mm² for {} wires",
                         fmt(have),
                         fmt(min),
                         if control { "control" } else { "power" }

@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use novo_checks::calc::tables::TableSet;
 use novo_core::{Document, Value};
-use novo_reports::autopilot::{Change, groups, plan_for, rule_breaks};
+use novo_reports::autopilot::{Basis, Change, groups, plan_for, rule_breaks};
 use novo_reports::wire_rules::{self, ColourClass, Preset, WireRules};
 use novo_tests::motor_starter;
 
@@ -204,4 +204,31 @@ fn wires_that_break_the_house_rules_are_listed_and_the_standard_is_not_checked()
             .any(|b| b.message.contains("under the house minimum of 4 mm²")),
         "{breaks:?}"
     );
+}
+
+#[test]
+fn a_wire_whose_class_was_a_guess_is_not_reported() {
+    let mut d = doc();
+    let before = plan_for(d.project(), &TableSet::builtin());
+    let guessed: Vec<_> = before
+        .proposals
+        .iter()
+        .filter(|p| matches!(p.change, Change::Colour(_)) && p.basis == Basis::Assumed)
+        .flat_map(|p| p.wires.iter().copied())
+        .collect();
+    accept_all(&mut d);
+    set(&mut d, wire_rules::PRESET, Value::Text("house".into()));
+    for class in ColourClass::EDITABLE {
+        set(&mut d, &class.key(), Value::Text("VT".into()));
+    }
+    let breaks = rule_breaks(d.project());
+    assert!(!breaks.is_empty(), "sure classes are still reported");
+    for w in guessed {
+        assert!(
+            !breaks
+                .iter()
+                .any(|b| b.wire == w && b.message.contains("house rule gives")),
+            "wire {w:?} has a guessed class"
+        );
+    }
 }
