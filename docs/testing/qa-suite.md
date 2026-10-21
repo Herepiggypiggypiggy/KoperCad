@@ -64,6 +64,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `wait N`, `resize W H` | run N frames; resize the window |
 | `shot label` | labelled screenshot |
 | `expect "text"`, `expect_not "text"` | a label or value containing the text is (not) in the widget tree; a miss is a finding (S3) |
+| `expect_enabled "Label"`, `expect_disabled "Label"` | the control with this label (icon glyphs ignored) is enabled / disabled; a miss is a finding |
 | `expect_scene "text"` | the project data dump (`scene`) contains the text: checks the canvas without reading pixels |
 | `check_layout` | cheap layout checks, see below |
 | `check_blank [label]` | takes a screenshot; finding S2 when the window is one flat colour |
@@ -117,6 +118,14 @@ How other threads use it:
 3. To keep a check: copy a scenario in `qa/scenarios/`, change it, commit it with
    your PR. Use `tree` to find labels, `expect` for what must stay true.
 4. Sweeps (`--slow`) take minutes: run them before a release, not per push.
+
+## Regression scenarios
+
+`qa/scenarios/20-regressions-critic.qa` checks the fixed behaviour of defects from
+`audit/critic/defects.md` (ids in the comments). A finding means the defect is back.
+Add a block to it (or a new `2x-` file) when an audit defect is fixed and merged:
+state the fixed behaviour with `expect*` steps, and add a `shot` for the ones only a
+picture can show. Run it with `scripts/qa.sh --only critic`.
 
 ## Fixtures
 
