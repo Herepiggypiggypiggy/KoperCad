@@ -188,7 +188,17 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
     assert_eq!(out.sections[0].key, "summary");
     // The estimates note shares the summary page instead of taking one.
     assert!(out.sections.iter().all(|s| s.key != "estimates"));
-    assert_eq!(out.sections[1].key, BenchCut::group_key(Some(1.5), "BK"));
+    // The motor cable's four cores are not pulled from a reel: a note says so
+    // and their metres are left out of the totals.
+    assert_eq!(out.sections[1].key, "check");
+    assert!(
+        out.sections[1]
+            .text_rows()
+            .iter()
+            .any(|r| r[0].contains("4 of 25 wires are cores of cables")),
+        "{:?}",
+        out.sections[1].text_rows()
+    );
     let group = out
         .section(&BenchCut::group_key(Some(1.5), "BK"))
         // Nineteen device-to-device wires and six that end at a supply feed.

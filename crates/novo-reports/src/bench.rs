@@ -515,8 +515,19 @@ impl BenchCut {
                 Column::new("estimates", "Estimated", 10.0).right(),
             ],
         );
+        // Cores of a cable come with the cable (bought by the length on its
+        // BOM line); they are stripped and ferruled here but not pulled from
+        // a reel, so their metres are not metres to pull.
+        let on_cable = |j: &WireCutJob| {
+            j.wires
+                .first()
+                .is_some_and(|w| project.cable_of_wire(*w).is_some())
+        };
+        let reel_mm = |list: &[&WireCutJob]| -> f64 {
+            list.iter().filter(|j| !on_cable(j)).map(|j| j.cut_mm).sum()
+        };
         for (mm2, colour, list) in &groups {
-            let mm: f64 = list.iter().map(|j| j.cut_mm).sum();
+            let mm: f64 = reel_mm(list);
             let longest = list.iter().map(|j| j.cut_mm).fold(0.0, f64::max);
             let ferrule = list
                 .iter()
@@ -561,6 +572,15 @@ impl BenchCut {
                 jobs.len()
             ));
         }
+        let cores: Vec<&WireCutJob> = jobs.iter().filter(|j| on_cable(j)).collect();
+        if !cores.is_empty() {
+            let cable_m: f64 = cores.iter().map(|j| j.cut_mm).sum::<f64>() / 1000.0;
+            notes.push(format!(
+                "{} of {} wires are cores of cables ({cable_m:.1} m of core in all). The cable is bought, not cut from a reel, so these are not in the Metres to pull; strip and ferrule each core end as listed.",
+                cores.len(),
+                jobs.len()
+            ));
+        }
         let mut sections = vec![summary];
         if !notes.is_empty() {
             let mut note = Section::new(
@@ -576,7 +596,7 @@ impl BenchCut {
 
         let mut first_group = true;
         for (mm2, colour, list) in &groups {
-            let total: f64 = list.iter().map(|j| j.cut_mm).sum();
+            let total: f64 = reel_mm(list);
             let heading = format!(
                 "{} · {} wires · {:.1} m",
                 group_name(*mm2, colour),
