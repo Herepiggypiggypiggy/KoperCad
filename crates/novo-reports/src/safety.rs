@@ -298,6 +298,18 @@ pub fn safety_sheets(input: &SafetyReportInput) -> ReportOutput {
             ),
             Vec::new(),
         );
+        // Blank lines to fill in by hand on the printed sheet.
+        for who in ["Prepared by", "Checked by", "Revision and date"] {
+            s.push(
+                sheet_row(
+                    who,
+                    "______________________".into(),
+                    String::new(),
+                    String::new(),
+                ),
+                Vec::new(),
+            );
+        }
         sections.push(s);
     }
     if sections.is_empty() {
@@ -428,6 +440,16 @@ mod tests {
         let second = r.sections[1].text_rows();
         assert!(second.iter().any(|r| r[3] == "Not rated"));
         assert!(second.iter().any(|r| r[1].contains("no B10d")));
+    }
+
+    #[test]
+    fn every_sheet_ends_with_blank_sign_off_lines() {
+        for section in &safety_sheets(&input()).sections {
+            let rows = section.text_rows();
+            for who in ["Prepared by", "Checked by", "Revision and date"] {
+                assert!(rows.iter().any(|r| r[0] == who), "{who}");
+            }
+        }
     }
 
     #[test]
