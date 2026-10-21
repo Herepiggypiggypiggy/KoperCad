@@ -293,6 +293,25 @@ impl NovoApp {
         Ok(format!("Added part {maker} {order}"))
     }
 
+    /// Whether the part being reviewed is already in the project.
+    pub(super) fn datasheet_duplicate(&self) -> bool {
+        let Stage::Review(review) = &self.wb.assistant.sheet.stage else {
+            return false;
+        };
+        let (maker, order) = (
+            review.text_of("manufacturer"),
+            review.text_of("order_number"),
+        );
+        if maker.is_empty() || order.is_empty() {
+            return false;
+        }
+        self.document().is_some_and(|d| {
+            d.project()
+                .parts()
+                .any(|p| p.manufacturer == maker && p.order_number == order)
+        })
+    }
+
     /// The section of the window. Nothing is sent before "Send datasheet".
     pub(super) fn datasheet_ui(&mut self, ui: &mut egui::Ui) {
         let pal = ui_palette();
@@ -302,6 +321,9 @@ impl NovoApp {
         let mut cancel = false;
         let mut add = false;
         let mut note_clear = false;
+        let mut stop = false;
+        let spent = self.wb.assistant.spent();
+        let duplicate = self.datasheet_duplicate();
         egui::CollapsingHeader::new("Part from a datasheet")
             .id_salt("claude_datasheet")
             .show(ui, |ui| match &mut self.wb.assistant.sheet.stage {
@@ -329,6 +351,10 @@ impl NovoApp {
                         ))
                         .color(pal.warning),
                     );
+                    ui.weak(format!(
+                        "A PDF is billed per page, as text and as pictures, so a long \
+                         datasheet can cost a few dollars. Spent this month: ${spent:.2}."
+                    ));
                     ui.horizontal(|ui| {
                         send = ui.button("Send datasheet").clicked();
                         cancel = ui.button("Cancel").clicked();
@@ -338,6 +364,7 @@ impl NovoApp {
                     ui.horizontal(|ui| {
                         ui.spinner();
                         ui.weak("Claude is reading the datasheet…");
+                        stop = ui.button("Stop").clicked();
                     });
                 }
                 Stage::Review(review) => {
@@ -366,6 +393,13 @@ impl NovoApp {
                     for line in &review.refused {
                         ui.colored_label(pal.warning, format!("Left out: {line}"));
                     }
+                    if duplicate {
+                        ui.colored_label(
+                            pal.warning,
+                            "A part with this manufacturer and order number is already in the \
+                             project; adding it makes a second one.",
+                        );
+                    }
                     let problem = review.problem();
                     if let Some(p) = &problem {
                         ui.colored_label(pal.error, p);
@@ -387,6 +421,13 @@ impl NovoApp {
         if send {
             let ctx = ui.ctx().clone();
             self.datasheet_start(&ctx);
+        }
+        if stop {
+            // The request may already be billed; its answer is dropped unread.
+            self.wb.assistant.sheet.stage = Stage::Note(
+                "Stopped. Anthropic may still bill the request, and its cost is not counted here."
+                    .into(),
+            );
         }
         if cancel || note_clear {
             self.wb.assistant.sheet.stage = Stage::Idle;

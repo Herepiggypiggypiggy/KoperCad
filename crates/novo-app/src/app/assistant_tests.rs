@@ -784,11 +784,12 @@ fn report(fields: Value) -> Value {
 fn read_sheet(s: &mut Setup, reply: Value) {
     s.script.push(200, reply);
     let ctx = s.d.ctx.clone();
+    let sent_before = s.script.seen.lock().unwrap().len();
     s.d.app
         .datasheet_test_choose("a.pdf", b"%PDF-1.4 test".to_vec());
     assert_eq!(s.d.app.datasheet_test_stage(), "confirm");
     assert!(
-        s.script.seen.lock().unwrap().is_empty(),
+        s.script.seen.lock().unwrap().len() == sent_before,
         "nothing is sent before the person agrees"
     );
     s.d.app.datasheet_test_send(&ctx);
@@ -878,4 +879,20 @@ fn wire_number_conflicts_are_a_project_section_only() {
         "{whole}"
     );
     assert!(result_for(DataScope::Outline).starts_with("Not allowed"));
+}
+
+#[test]
+fn reading_the_same_datasheet_twice_is_flagged_as_a_duplicate() {
+    let mut s = setup(DataScope::None);
+    let sheet = || {
+        report(json!({
+            "manufacturer": {"value": "Acme", "quote": "Acme GmbH"},
+            "order_number": {"value": "DUP-1", "quote": "Order DUP-1"}
+        }))
+    };
+    read_sheet(&mut s, sheet());
+    assert!(!s.d.app.datasheet_test_duplicate());
+    s.d.app.datasheet_test_add().unwrap();
+    read_sheet(&mut s, sheet());
+    assert!(s.d.app.datasheet_test_duplicate());
 }
