@@ -48,9 +48,9 @@ impl DataScope {
     pub fn describes(self) -> &'static str {
         match self {
             Self::None => {
-                "Only the messages you type are sent, a picture of the window if you attach one \
-                 yourself, and the text of a button that says “with Claude” when you press it. \
-                 Claude cannot look at your drawing on its own."
+                "Only the messages you type are sent, a picture of the window or a datasheet \
+                 PDF if you choose to send one, and the text of a button that says “with \
+                 Claude” when you press it. Claude cannot look at your drawing on its own."
             }
             Self::Outline => {
                 "The project name, page names and titles, device tags and counts are sent \
@@ -82,7 +82,7 @@ impl DataScope {
 }
 
 /// Bump when the wording of what is sent changes, so people agree again.
-pub const CONSENT_VERSION: u32 = 2;
+pub const CONSENT_VERSION: u32 = 4;
 
 /// What the person agreed to.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

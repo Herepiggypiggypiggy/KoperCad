@@ -9,3 +9,4 @@
 2026-10-21 07:00 UTC #1070, #1076, #1081, #1088, #1090 merged. Heat panel: Describe with Claude (report paragraph), Copy on answers (PR from claude/ai-heat).
 2026-10-21 07:10 UTC picture of the window attached by the person (Attach picture), PNG, shrunk to 1400px, sent once.
 2026-10-21 07:20 UTC #1120 merged. Claude can read the design checks (read_project section problems, Whole project only) (PR from claude/ai-checks-tool).
+2026-10-21 10:10 UTC Part from a datasheet (Help > Ask Claude > "Part from a datasheet"): PDF sent as a document block, report_part tool with page and quote per field, person ticks fields, one undo step. Consent version 4. Decision: no in-app click tools for Claude (they would bypass Apply); the control harness stays for tests only. Open request for Tadjiro: real-key test, steps in docs/CLAUDE-ASSISTANT-TEST.md.
