@@ -1,5 +1,6 @@
 @title 3D view: a maker model that came lying down is turned and the turn is kept
 @area 3D
+@sizes 1366x768
 # `library` puts a synthetic STEP model for K1's part (Siemens 3RT2016-1AP01) in the profile. K1 (612,392) is where the default angled view puts it at 1366x768, so the pins on top of the model show; F zooms to the selected device.
 library qa/fixtures/library
 click_text "Open example"
