@@ -30,8 +30,6 @@ const MIN_WIDTH: f32 = 260.0;
 const MIN_HEIGHT: f32 = 120.0;
 /// A panel the person opens starts at least this wide.
 const DIALOG_MIN_WIDTH: f32 = 380.0;
-/// How far each further open dialog starts from the one before.
-const CASCADE: f32 = 28.0;
 
 /// Which end of the canvas a panel starts at.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -256,17 +254,7 @@ pub(super) fn dialog<'a>(
         size[1] * grow(screen.width()),
     ];
     let width = size[0].max(DIALOG_MIN_WIDTH).min(screen.width());
-    // Dialogs opened together start a step apart, not on top of each other.
-    let nr = ctx.cumulative_pass_nr();
-    let before = ctx.data_mut(|d| {
-        let (seen_nr, count) = d.get_temp::<(u64, usize)>(count_id()).unwrap_or((nr, 0));
-        let count = if seen_nr == nr { count } else { 0 };
-        d.insert_temp(count_id(), (nr, count + 1));
-        count
-    });
-    let step = CASCADE * (before % 6) as f32;
     let window = egui::Window::new(title)
-        .default_pos(screen.min + egui::vec2(DIALOG_MIN_WIDTH / 2.0 + step, TOP + step))
         .resizable(true)
         .collapsible(true)
         .min_width(MIN_WIDTH.min(width))
@@ -279,10 +267,6 @@ pub(super) fn dialog<'a>(
     } else {
         window.default_width(width)
     }
-}
-
-fn count_id() -> egui::Id {
-    egui::Id::new("panel_dialog_count")
 }
 
 fn esc_off_id() -> egui::Id {

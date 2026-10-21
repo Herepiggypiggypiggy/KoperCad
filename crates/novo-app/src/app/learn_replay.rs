@@ -722,7 +722,6 @@ impl Drive {
             }]);
             self.frame();
         }
-        super::panel::set_esc_closes(&self.ctx, true);
         self.app.start_lesson(id);
         self.frame();
         self.frame();
