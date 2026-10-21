@@ -24,6 +24,7 @@ enum CardAction {
     Close,
     Open(String),
     Hint,
+    Predict(usize),
     OpenFinished,
     ConfirmFinished,
     CancelFinished,
@@ -52,6 +53,9 @@ pub(super) struct Card {
     /// The hints the learner has opened, and how many there are.
     pub(super) hints_open: Vec<String>,
     pub(super) hints_total: usize,
+    /// A prediction question: the options, the one chosen, the right one and
+    /// the reason, shown once chosen.
+    pub(super) predict: Option<PredictView>,
     /// What was wrong, for the end of a challenge, and whether "Do it for
     /// me" did the repair.
     pub(super) explain: String,
@@ -62,6 +66,14 @@ pub(super) struct Card {
     pub(super) can_open_finished: bool,
     confirm_finished: bool,
     words: Words,
+}
+
+/// The prediction question of a step as the card shows it.
+pub(super) struct PredictView {
+    pub(super) options: Vec<String>,
+    pub(super) chosen: Option<usize>,
+    pub(super) answer: usize,
+    pub(super) why: String,
 }
 
 #[derive(Default)]
@@ -84,6 +96,8 @@ struct Words {
     next_lessons: String,
     hint: String,
     solved: String,
+    predict_right: String,
+    predict_wrong: String,
     shown: String,
     open_finished: String,
     finished_confirm: String,
@@ -144,6 +158,9 @@ impl NovoApp {
             Some(CardAction::Close) => self.learn.hidden = true,
             Some(CardAction::Open(id)) => self.start_lesson(&id),
             Some(CardAction::Hint) => self.learn_open_hint(),
+            Some(CardAction::Predict(choice)) => {
+                let _ = self.learn_predict(choice);
+            }
             Some(CardAction::OpenFinished) => self.learn.confirm_finished = true,
             Some(CardAction::ConfirmFinished) => {
                 self.learn_open_finished();
@@ -178,6 +195,8 @@ impl NovoApp {
             next_lessons: say("next_lessons"),
             hint: say("hint"),
             solved: say("challenge_solved"),
+            predict_right: say("predict_right"),
+            predict_wrong: say("predict_wrong"),
             shown: say("challenge_shown"),
             open_finished: say("open_finished"),
             finished_confirm: say("open_finished_confirm"),
@@ -242,6 +261,12 @@ impl NovoApp {
                 })
                 .unwrap_or_default(),
             hints_total: step.map_or(0, |s| s.hints(lang).len()),
+            predict: step.and_then(|s| s.predict.as_ref()).map(|p| PredictView {
+                options: p.options(lang).to_vec(),
+                chosen: self.learn_predicted(),
+                answer: p.answer,
+                why: p.why(lang).to_owned(),
+            }),
             explain: lesson.explain(lang).to_owned(),
             helped: self.learn.helped || !run.skipped().is_empty(),
             next_lessons,
@@ -335,6 +360,41 @@ impl NovoApp {
                     } else {
                         text
                     });
+                }
+            }
+            if let Some(predict) = &card.predict {
+                ui.add_space(4.0);
+                for (i, option) in predict.options.iter().enumerate() {
+                    let label = if predict.chosen == Some(i) {
+                        format!("● {option}")
+                    } else {
+                        option.clone()
+                    };
+                    if ui
+                        .add_enabled(predict.chosen.is_none(), egui::Button::new(label))
+                        .clicked()
+                    {
+                        action = Some(CardAction::Predict(i));
+                    }
+                }
+                if let Some(chosen) = predict.chosen {
+                    ui.add_space(2.0);
+                    let right = chosen == predict.answer;
+                    let ui_palette = crate::theme::ui_palette();
+                    ui.label(
+                        egui::RichText::new(if right {
+                            &card.words.predict_right
+                        } else {
+                            &card.words.predict_wrong
+                        })
+                        .strong()
+                        .color(if right {
+                            ui_palette.success
+                        } else {
+                            ui_palette.warning
+                        }),
+                    );
+                    self.markup(ui, &predict.why);
                 }
             }
             for (i, hint) in card.hints_open.iter().enumerate() {

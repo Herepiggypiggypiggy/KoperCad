@@ -39,6 +39,7 @@ use novo_checks::calc_basis::{
 use novo_core::{DeviceId, PotentialKind, Project, Result, SymbolRole, Tx, Wire, WireId};
 
 use crate::wire_defaults::unset_wires;
+use crate::wire_rules::{ColourClass, WireRules};
 use crate::wirecut::WireCutJob;
 use crate::{is_estimate, wire_cut_jobs};
 
@@ -251,6 +252,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
     let no_size: BTreeSet<WireId> = unset.no_size.iter().copied().collect();
     let no_colour: BTreeSet<WireId> = unset.no_colour.iter().copied().collect();
     let limit = drop_limit_percent(project);
+    let rules = WireRules::of(project);
     let supply_v = supply_voltage_v(project);
     let mut out = Autopilot {
         tables: tables.disclosure(),
@@ -298,13 +300,14 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
         let length = (job.length_mm > 0.0).then(|| job.length_mm / 1000.0);
         match size_wire(b, length, is_estimate(&job.basis), tables, supply_v, limit) {
             Ok(s) => {
-                lines.push(Line::new(project, job, s.section, is_control(b), true));
+                let (section, reason) = with_minimum(s.section, s.reason, is_control(b), &rules);
+                lines.push(Line::new(project, job, section, is_control(b), true));
                 out.proposals.push(Proposal {
                     id: out.proposals.len(),
                     wires,
                     label: job_label(job),
-                    change: Change::Size(s.section),
-                    reason: s.reason,
+                    change: Change::Size(section),
+                    reason,
                     basis: s.basis,
                 });
             }
@@ -373,6 +376,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
                 Basis::Assumed,
             ),
         };
+        let (section, reason) = with_minimum(section, reason, control, &rules);
         out.proposals.push(Proposal {
             id: out.proposals.len(),
             wires,
@@ -393,12 +397,12 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
         let Some(b) = wires.first().and_then(|w| basis.get(w)) else {
             continue;
         };
-        let (code, reason, basis_kind) = colour_of(b);
+        let (code, reason, basis_kind) = colour_for(b, &rules);
         out.proposals.push(Proposal {
             id: out.proposals.len(),
             wires,
             label: job_label(job),
-            change: Change::Colour(code.to_owned()),
+            change: Change::Colour(code),
             reason,
             basis: basis_kind,
         });
@@ -756,6 +760,75 @@ fn size_wire(
     })
 }
 
+/// Which colour class a wire belongs to, following the same branches as
+/// [`colour_of`].
+fn colour_class(b: &WireBasis) -> ColourClass {
+    let v = b.potential_voltage;
+    match b.kind {
+        Some(PotentialKind::ProtectiveEarth) => ColourClass::ProtectiveEarth,
+        Some(PotentialKind::Pen) => ColourClass::Pen,
+        Some(PotentialKind::Neutral) => ColourClass::Neutral,
+        Some(PotentialKind::DcNegative) => ColourClass::DcNegative,
+        Some(PotentialKind::Line) if v.is_some_and(|v| v >= 380.0) => ColourClass::AcPower,
+        Some(PotentialKind::Line) => match b.circuit {
+            Circuit::Power => ColourClass::AcPower,
+            Circuit::Control => ColourClass::AcControl,
+            Circuit::Unknown => match b.protecting.as_ref().map(|p| p.rated_a) {
+                Some(a) if a <= 6.0 => ColourClass::AcControl,
+                _ => ColourClass::AcPower,
+            },
+        },
+        Some(PotentialKind::DcPositive | PotentialKind::Signal) if v.is_some_and(|v| v > 60.0) => {
+            if b.kind == Some(PotentialKind::Signal) {
+                ColourClass::AcControl
+            } else {
+                ColourClass::DcPower
+            }
+        }
+        Some(PotentialKind::DcPositive | PotentialKind::Signal) => ColourClass::DcControl,
+        None => ColourClass::Unknown,
+    }
+}
+
+/// The colour under the project's rules: the house colour of the class when
+/// the project states one, else IEC 60204-1.
+fn colour_for(b: &WireBasis, rules: &WireRules) -> (String, String, Basis) {
+    let (code, reason, basis) = colour_of(b);
+    let class = colour_class(b);
+    match rules.house_colour(class) {
+        Some(house) => (
+            house.to_owned(),
+            format!(
+                "house rule (Wire rules setting): {} wires are {house}; IEC 60204-1 would give {code}",
+                class.label().to_lowercase()
+            ),
+            // A rule of the project is as good as a rule gets, unless the
+            // class itself was a guess.
+            if basis == Basis::Assumed {
+                Basis::Assumed
+            } else {
+                Basis::Rule
+            },
+        ),
+        None => (code.to_owned(), reason, basis),
+    }
+}
+
+/// Raises a proposed section to the project's minimum for its class.
+fn with_minimum(section: f64, reason: String, control: bool, rules: &WireRules) -> (f64, String) {
+    match rules.min_mm2(control) {
+        Some(min) if section + 1e-9 < min => (
+            min,
+            format!(
+                "{reason}; raised to {} mm², the house minimum for {} wires (Wire rules setting)",
+                fmt(min),
+                if control { "control" } else { "power" }
+            ),
+        ),
+        _ => (section, reason),
+    }
+}
+
 /// Colour per IEC 60204-1 §13.2 and IEC 60757 codes.
 fn colour_of(b: &WireBasis) -> (&'static str, String, Basis) {
     let v = b.potential_voltage;
@@ -840,6 +913,149 @@ fn colour_of(b: &WireBasis) -> (&'static str, String, Basis) {
             Basis::Assumed,
         ),
     }
+}
+
+/// Proposals gathered under the protective device that limits their wires,
+/// so a reviewer accepts a circuit instead of dozens of lines.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Group {
+    /// "-F2 (5 A)", "Not behind a protective device", "Cabinet".
+    pub title: String,
+    /// Proposal ids, in plan order.
+    pub ids: Vec<usize>,
+    /// What the group proposes in a line: "1.5 mm² · BK, BN, GY · 6 wire numbers".
+    pub summary: String,
+}
+
+/// A drawn wire that contradicts the project's house wire rules.
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuleBreak {
+    pub wire: WireId,
+    pub message: String,
+}
+
+/// Wires that already have a colour or size the project's house rules do not
+/// allow: a colour other than the house colour of its class, a section under
+/// the house minimum. Empty under IEC 60204-1 (the project states no rules of
+/// its own), and a wire without a value is not a break: the Autopilot fills
+/// those in. Read only.
+pub fn rule_breaks(project: &Project) -> Vec<RuleBreak> {
+    let rules = WireRules::of(project);
+    if rules.preset != crate::wire_rules::Preset::House {
+        return Vec::new();
+    }
+    let basis = wire_basis(project, &project.netlist());
+    let mut out = Vec::new();
+    for item in crate::wires::items(project, true) {
+        for wire in item.wires {
+            let Some(b) = basis.get(&wire.id) else {
+                continue;
+            };
+            let class = colour_class(b);
+            let name = match wire.number.as_deref().map(str::trim) {
+                Some(n) if !n.is_empty() => format!("Wire {n}"),
+                _ => "A wire without a number".to_owned(),
+            };
+            let have = wire
+                .color
+                .as_deref()
+                .and_then(crate::wire_rules::normal_code);
+            // A class the Autopilot had to guess is no ground for a warning.
+            let sure_class = colour_of(b).2 != Basis::Assumed;
+            if let (Some(have), Some(house)) = (have, rules.house_colour(class))
+                && sure_class
+                && have != house
+            {
+                out.push(RuleBreak {
+                    wire: wire.id,
+                    message: format!(
+                        "{name} ({} circuit) is {have}; the project's house rule gives {house}",
+                        class.label()
+                    ),
+                });
+            }
+            let control = is_control(b);
+            let smallest = crate::wirecut::sections(project, &[wire])
+                .into_iter()
+                .reduce(f64::min);
+            // Power or control is a guess when neither the circuit nor a voltage says.
+            let sure_kind = b.circuit != Circuit::Unknown || b.potential_voltage.is_some();
+            if let (Some(have), Some(min)) = (smallest, rules.min_mm2(control))
+                && sure_kind
+                && have + 1e-9 < min
+            {
+                out.push(RuleBreak {
+                    wire: wire.id,
+                    message: format!(
+                        "{name} is {} mm², under the house minimum of {} mm² for {} wires",
+                        fmt(have),
+                        fmt(min),
+                        if control { "control" } else { "power" }
+                    ),
+                });
+            }
+        }
+    }
+    out
+}
+
+/// Groups the plan by protective device. The wire's protective device is the
+/// one `wire_basis` finds (the highest-rated one in front of it); proposals
+/// that touch no wire (cabinet entry points) go in "Cabinet".
+pub fn groups(project: &Project, plan: &Autopilot) -> Vec<Group> {
+    let basis = wire_basis(project, &project.netlist());
+    let mut map: BTreeMap<(u8, String), Vec<usize>> = BTreeMap::new();
+    for p in &plan.proposals {
+        let key = match p.wires.first() {
+            None => (2, "Cabinet".to_owned()),
+            Some(w) => match basis.get(w).and_then(|b| b.protecting.as_ref()) {
+                Some(f) => {
+                    // "-F2" of "=A1+CAB-F2": the plant and place are on the page.
+                    let short = f.tag.rfind('-').map_or(f.tag.as_str(), |i| &f.tag[i..]);
+                    (0, format!("{short} ({} A)", fmt(f.rated_a)))
+                }
+                None => (1, "Not behind a protective device".to_owned()),
+            },
+        };
+        map.entry(key).or_default().push(p.id);
+    }
+    map.into_iter()
+        .map(|((_, title), ids)| {
+            let mut sizes: BTreeSet<String> = BTreeSet::new();
+            let mut colours: BTreeSet<String> = BTreeSet::new();
+            let (mut numbers, mut other) = (0usize, 0usize);
+            for p in plan.proposals.iter().filter(|p| ids.contains(&p.id)) {
+                match &p.change {
+                    Change::Size(s) => {
+                        sizes.insert(format!("{} mm²", fmt(*s)));
+                    }
+                    Change::Colour(c) => {
+                        colours.insert(c.clone());
+                    }
+                    Change::Number(_) => numbers += 1,
+                    _ => other += 1,
+                }
+            }
+            let mut parts: Vec<String> = Vec::new();
+            if !sizes.is_empty() {
+                parts.push(sizes.into_iter().collect::<Vec<_>>().join(", "));
+            }
+            if !colours.is_empty() {
+                parts.push(colours.into_iter().collect::<Vec<_>>().join(", "));
+            }
+            if numbers > 0 {
+                parts.push(format!("{numbers} wire numbers"));
+            }
+            if other > 0 {
+                parts.push(format!("{other} other"));
+            }
+            Group {
+                title,
+                ids,
+                summary: parts.join(" · "),
+            }
+        })
+        .collect()
 }
 
 /// The proposals as a map from wire to what is proposed, for tests and

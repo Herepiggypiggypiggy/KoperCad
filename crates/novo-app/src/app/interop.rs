@@ -331,13 +331,13 @@ impl NovoApp {
                     ui.strong("Not carried over");
                 }
                 for l in &import.report.lossy {
-                    ui.label(format!("{} {}: {}", l.count, l.what, l.why));
+                    ui.label(l.line());
                 }
                 if !import.report.guessed.is_empty() {
                     ui.strong("Guessed, not exact");
                 }
                 for l in &import.report.guessed {
-                    ui.label(format!("{} {}: {}", l.count, l.what, l.why));
+                    ui.label(l.line());
                 }
                 for n in &import.report.notes {
                     ui.weak(n);

@@ -1,0 +1,11 @@
+@title 3D view at 1024 wide: the toolbar wraps and leaves the view cube clear
+@area 3D
+@sizes 1024x768
+# Under 980 points the door controls take their own row, so the toolbar ends before the view cube (top right).
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 40
+expect "Open door"
+shot narrow-toolbar
+check_layout

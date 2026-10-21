@@ -1,0 +1,11 @@
+@title Cabinet: the problems pill opens the list of what is wrong
+@area Cabinet
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 30
+shot cabinet
+click_text "1 problem"
+wait 10
+shot pill-open
+check_layout
