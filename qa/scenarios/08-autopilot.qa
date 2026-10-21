@@ -9,6 +9,7 @@ click_text "Bench output..."
 wait 20
 expect "Wires ready to build"
 expect "Before you print"
+expect "wires to cut have no"
 shot bench-before
 check_layout
 click_text Autopilot

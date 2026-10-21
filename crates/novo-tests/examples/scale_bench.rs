@@ -19,12 +19,16 @@ use novo_numbering::{Mode, Scheme, SchemeKind, Scope, plan};
 use novo_tests::{BigSpec, big_project};
 
 /// Step name prefix and its budget in milliseconds on the reference
-/// container (release build). A step over budget fails `--budget`.
+/// container (release build). A step over budget fails `--budget`. The first
+/// entry whose prefix matches wins, so each row has its own entry (a loose
+/// budget on a shared prefix once covered rows it was not meant for).
 const BUDGETS: &[(&str, f64)] = &[
     ("open file", 3000.0),
     ("save full", 5000.0),
     ("autosave", 500.0),
-    ("page scene", 100.0),
+    ("page scene (one page", 100.0),
+    ("page scene + tessellate (one page", 100.0),
+    ("page scene + tessellate (every page", 1000.0),
     ("search", 100.0),
     ("edit one symbol", 100.0),
     ("undo edit", 100.0),
@@ -76,6 +80,9 @@ fn main() {
         Some("large") => BigSpec::LARGE,
         _ => BigSpec::MEDIUM,
     };
+    if args.iter().any(|a| a == "--uniform") {
+        spec = spec.uniform();
+    }
     if let Some(n) = arg(&args, "--feeders") {
         spec.feeders = n.parse().expect("--feeders needs a number");
     }
@@ -157,30 +164,54 @@ fn main() {
 
     // ---- redraw ---------------------------------------------------------
     let mid = big.pages[big.pages.len() / 2];
-    b.time("page scene (one page)", || {
+    // What "redraw" measures here: building the page scene from the model and
+    // turning it into triangles on the CPU. It is NOT a frame: no GPU, no egui
+    // layout, no upload or rasterisation. It is the model-side cost a frame
+    // pays after an edit; unchanged items come from the mesh cache.
+    b.time("page scene (one page, placeholder art)", || {
         let s = PageScene::new(project, mid, &PlaceholderArt);
-        let note = format!("{} items", s.scene().iter().count());
+        let note = format!(
+            "{} items; model side only, not a frame",
+            s.scene().iter().count()
+        );
         (s, note)
     });
     b.time("page scene + tessellate (one page)", || {
         let s = PageScene::new(project, mid, &PlaceholderArt);
         let mesh = Tessellator::default().scene_cached(s.scene(), &mut ItemMeshCache::default());
-        let note = format!("{} indices", mesh.mesh.indices.len());
+        let note = format!("{} indices; CPU triangles, no GPU", mesh.mesh.indices.len());
         ((), note)
     });
-    b.time("page scene (all pages)", || {
-        let n: usize = big
-            .pages
-            .iter()
-            .map(|&p| {
-                PageScene::new(project, p, &PlaceholderArt)
-                    .scene()
-                    .iter()
-                    .count()
-            })
-            .sum();
-        ((), format!("{pages} pages, {n} items"))
-    });
+    // Every page, with the real symbol artwork: mean and slowest page.
+    if let Ok(library) = novo_py::library() {
+        let art = novo_editor::art::LibraryArt::new(
+            library,
+            novo_pdf::PdfOptions::default().style.symbol,
+        );
+        b.time("page scene + tessellate (every page, symbol art)", || {
+            let tess = Tessellator::default();
+            let mut worst = (0.0_f64, 0);
+            let mut items = 0;
+            for (k, &page) in big.pages.iter().enumerate() {
+                let start = Instant::now();
+                let s = PageScene::new(project, page, &art);
+                let _ = tess.scene_cached(s.scene(), &mut ItemMeshCache::default());
+                let ms = start.elapsed().as_secs_f64() * 1000.0;
+                items += s.scene().iter().count();
+                if ms > worst.0 {
+                    worst = (ms, k);
+                }
+            }
+            (
+                (),
+                format!(
+                    "{pages} pages, {items} items; slowest page {:.2} ms (page {}); CPU only",
+                    worst.0,
+                    worst.1 + 1
+                ),
+            )
+        });
+    }
 
     // ---- edits ----------------------------------------------------------
     let probe = big.probe;

@@ -2387,7 +2387,7 @@ pub const COMMANDS: &[CommandInfo] = &[
             "export.pdf",
             "Export PDF",
             "Export",
-            &["print"],
+            &["pdf all pages"],
             Needs::Project,
         ),
         &["export pdf", "pdf"],
@@ -2673,6 +2673,24 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export assembly", "assembly checklist"],
+    ),
+    verb(
+        cmd(
+            "export.handover",
+            "Export handover package (folder)",
+            "Export",
+            &[
+                "handover",
+                "customer",
+                "as built",
+                "documentation",
+                "delivery",
+                "package",
+                "oplevering",
+            ],
+            Needs::Project,
+        ),
+        &["export handover", "handover package", "customer package"],
     ),
     verb(
         cmd(

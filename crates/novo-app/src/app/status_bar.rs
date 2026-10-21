@@ -324,6 +324,16 @@ impl NovoApp {
                 hover: "Switch live potentials off".into(),
             });
         }
+        if let Some(locked) = self
+            .current_page
+            .and_then(|p| self.backend.document()?.project().page(p)?.locked.clone())
+        {
+            chips.push(ModeChip {
+                label: format!("{} Page locked ({locked})", novo_theme::icons::LOCK_SIMPLE),
+                command: "revision.unlock_page",
+                hover: "This page is locked with the issued revision. Click to unlock it",
+            });
+        }
         if self.wb.changes.is_some() {
             chips.push(ModeChip {
                 label: "Changes".into(),
@@ -387,6 +397,31 @@ mod tests {
         assert_eq!(chips[0].command, "view.toggle_marks");
         // Every chip's command is a registered command.
         assert!(novo_workflow::commands::is_known(chips[0].command));
+    }
+
+    #[test]
+    fn a_locked_page_shows_a_chip_that_unlocks_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        let page = d.app.current_page.expect("a page is shown");
+        d.app
+            .backend
+            .document_mut()
+            .unwrap()
+            .execute(novo_core::Command::LockPage {
+                page,
+                revision: "A".into(),
+            })
+            .unwrap();
+        let chips = d.app.mode_chips();
+        assert_eq!(chips.len(), 1);
+        assert!(chips[0].label.contains("Page locked (A)"));
+        assert_eq!(chips[0].command, "revision.unlock_page");
+        d.app.run_command(&ctx, chips[0].command, None);
+        assert!(d.app.mode_chips().is_empty());
     }
 }
 

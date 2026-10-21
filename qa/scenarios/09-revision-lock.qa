@@ -1,0 +1,43 @@
+@title Issue a revision with lock: outline icon, status chip, contents columns
+@area Revisions
+# Issue with the default "Lock the released pages", see the lock marks, then unlock from the chip.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text issue First issue
+wait 4
+key Enter
+wait 10
+expect "Lock the released pages"
+expect "No description"
+shot issue-window
+check_layout
+click_text "Issue A" Button
+wait 20
+expect "Page locked (A)"
+shot locked-chip-and-outline
+check_blank locked-chip-and-outline
+check_layout
+# The outline shows a padlock on each locked page.
+try click_text Pages
+wait 10
+shot outline-padlocks
+check_layout
+# The contents list carries Issued and Locked.
+click_text Reports #1
+wait 6
+click_text Contents
+wait 20
+expect "Issued"
+expect "Locked"
+shot reports-contents
+check_layout
+click_text Schematic #1
+wait 10
+# A click on the chip unlocks the page again.
+click_text "Page locked (A)"
+wait 10
+expect_not "Page locked (A)"
+shot unlocked
+check_layout

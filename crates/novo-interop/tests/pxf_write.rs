@@ -122,8 +122,14 @@ fn the_report_counts_what_was_left_out_and_says_it_was_never_opened_in_eplan() {
             .find(|l| l.what == what)
             .map_or(0, |l| l.count)
     };
-    assert_eq!(lost("devices without a drawn symbol"), 1);
-    assert_eq!(lost("terminals without a drawn symbol"), 1);
+    // Undrawn devices and terminals are written on the first page, with no
+    // symbol or position, rather than dropped.
+    assert_eq!(
+        r.count_of("devices and terminals without a drawing, on the first page"),
+        2
+    );
+    assert_eq!(lost("devices without a drawn symbol"), 0);
+    assert_eq!(lost("terminals without a drawn symbol"), 0);
     let text = r.text();
     assert!(text.contains("not been opened in a real EPLAN"), "{text}");
 }

@@ -74,6 +74,7 @@ fn esc(s: &str) -> String {
             '<' => out.push_str("&lt;"),
             '>' => out.push_str("&gt;"),
             '"' => out.push_str("&quot;"),
+            '\n' => out.push_str("&#10;"),
             c if c.is_control() => out.push(' '),
             c => out.push(c),
         }
@@ -89,6 +90,7 @@ fn ml(lang: &str, text: &str) -> Option<String> {
         .chars()
         .map(|c| match c {
             ';' => ',',
+            '\n' => '\n',
             c if c.is_control() => ' ',
             c => c,
         })
@@ -126,7 +128,15 @@ fn tag_fields(tag: &DeviceTag) -> Option<TagFields> {
         function: levels(&tag.function),
         location: levels(&tag.location),
         letters: letters.to_string(),
-        number: number.map(|n| n.to_string()).unwrap_or_default(),
+        // The digits as written: `Q011` must not come back as `Q11`.
+        number: number
+            .map(|_| {
+                code[letters.len()..]
+                    .chars()
+                    .take_while(char::is_ascii_digit)
+                    .collect()
+            })
+            .unwrap_or_default(),
         sub: suffix.trim_start_matches('.').to_string(),
         display: tag.to_string(),
     })
@@ -323,6 +333,63 @@ pub fn write_pxf(project: &Project, opts: &PxfWriteOptions) -> PxfExport {
                     counts.cores += 1;
                 }
             }
+            // Devices and terminals that are not drawn yet (an import without
+            // an EPLAN symbol table has none) go on the first page without a
+            // symbol or a position, like the cables, so that nothing is lost.
+            let undrawn: Vec<_> = project
+                .devices()
+                .filter(|d| d.kind != DeviceKind::TerminalStrip && !drawn_devices.contains(&d.id))
+                .collect();
+            for dev in undrawn {
+                let Some(f) = tag_fields(&dev.tag) else {
+                    counts.bad_tags += 1;
+                    continue;
+                };
+                let part = dev.parts.first().and_then(|p| project.part(*p));
+                let id = w.id(17);
+                let _ = writeln!(w.out, "    <O17 A1=\"{id}\">");
+                w.tag(&f);
+                let text = ml(&opts.lang, &dev.description);
+                match (part, text) {
+                    (Some(p), text) => {
+                        let t = part_number(&p.manufacturer, &p.type_number, &p.order_number);
+                        let _ = writeln!(
+                            w.out,
+                            "      <P11 P20027=\"{}\" P20100_1=\"{}\"/>",
+                            esc(&text.unwrap_or_default()),
+                            esc(&t)
+                        );
+                    }
+                    (None, Some(t)) => {
+                        let _ = writeln!(w.out, "      <P11 P20027=\"{}\"/>", esc(&t));
+                    }
+                    (None, None) => {}
+                }
+                let _ = writeln!(w.out, "    </O17>");
+                counts.unplaced += 1;
+                drawn_devices.insert(dev.id);
+            }
+            let undrawn_terminals: Vec<_> = project
+                .terminals()
+                .filter(|t| !drawn_terminals.contains(&t.id))
+                .collect();
+            for t in undrawn_terminals {
+                let Some(strip) = project.device(t.strip) else {
+                    continue;
+                };
+                let Some(f) = tag_fields(&strip.tag) else {
+                    counts.bad_tags += 1;
+                    continue;
+                };
+                let part = t.part.and_then(|p| project.part(p));
+                let id = w.id(17);
+                let _ = writeln!(w.out, "    <O17 A1=\"{id}\">");
+                w.tag(&f);
+                write_terminal(&mut w, t, part);
+                let _ = writeln!(w.out, "    </O17>");
+                counts.unplaced += 1;
+                drawn_terminals.insert(t.id);
+            }
         }
         let _ = writeln!(w.out, "  </O4>");
     }
@@ -428,6 +495,8 @@ struct Counts {
     without_key: usize,
     cables: usize,
     cores: usize,
+    /// Devices and terminals written without a symbol or position.
+    unplaced: usize,
     bad_tags: usize,
     other_symbols: usize,
 }
@@ -449,6 +518,10 @@ impl Counts {
         r.moved(
             "device and terminal placements without a symbol reference",
             self.without_key,
+        );
+        r.moved(
+            "devices and terminals without a drawing, on the first page",
+            self.unplaced,
         );
         r.moved("cables", self.cables);
         r.moved("cable cores", self.cores);

@@ -1,0 +1,19 @@
+@title Crane configurator project import
+@area Fixtures
+# A synthetic crane configurator output folder; the native folder dialog is answered by the harness.
+click_text "Open example"
+wait 20
+answer_dialog crates/novo-interop/tests/fixtures/crane/output
+key ctrl+k
+wait 4
+text Import crane configurator
+wait 6
+key Enter
+wait 20
+shot crane-import-plan
+check_layout
+check_blank crane-import-plan
+click_text Import #1 Button
+wait 20
+shot crane-imported
+check_layout

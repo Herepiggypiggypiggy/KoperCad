@@ -3,6 +3,7 @@
 Branch: claude/project-thread-xx2ycy (kopercad). One PR from main; no stacked PRs. Follow CLAUDE.md.
 
 ## State
+#1169 is merged. Follow-up PR (C-31, C-32): actions bar, thumbnails, palette ranking, checks page checkbox. C-33 (safety function sheets findable by Ctrl+K) is not print and not mine: needs the Safety thread.
 Engine and UI are in the PR (see ROADMAP.md "Done"). Tests: `cargo test -p novo-pdf` (print unit tests, tests/print_setup.rs), `cargo test -p novo-app --lib print_preview`.
 
 ## Where things are

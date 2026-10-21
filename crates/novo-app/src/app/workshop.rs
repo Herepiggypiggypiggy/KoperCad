@@ -70,7 +70,7 @@ pub(super) fn template_pdfs(
 }
 
 /// A file name part without characters Windows does not allow.
-fn clean(s: &str) -> String {
+pub(super) fn clean(s: &str) -> String {
     s.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "-")
 }
 

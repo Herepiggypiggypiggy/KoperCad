@@ -66,7 +66,7 @@ fn ask(s: &mut Setup, question: &str) {
     s.d.app.wb.assistant.set_draft(question);
     let ctx = s.d.ctx.clone();
     s.d.app.assistant_test_send(&ctx);
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if !s.d.app.wb.assistant.is_running() {
             return;
@@ -523,7 +523,7 @@ fn ctrl_k_offers_to_ask_claude_when_nothing_matches_and_only_when_it_is_on() {
         repeat: false,
         modifiers: egui::Modifiers::NONE,
     }]);
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if !s.d.app.wb.assistant.is_running()
             && s.d.app.wb.assistant.transcript_text().contains("load")
@@ -568,7 +568,7 @@ fn a_ctrl_k_question_while_claude_answers_is_refused_not_doubled() {
     s.d.app.assistant_test_send(&ctx);
     assert!(s.d.app.wb.assistant.is_running());
     s.d.app.ask_claude(&ctx, "second question here".into());
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if !s.d.app.wb.assistant.is_running() {
             break;
@@ -609,7 +609,7 @@ fn a_question_queued_from_elsewhere_opens_the_window_and_is_sent_once() {
         .wb
         .assistant
         .ask_later("Explain this problem".into());
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if s.d.app.wb.assistant.transcript_text().contains("no end") {
             break;
@@ -722,7 +722,7 @@ fn a_panel_can_leave_a_question_and_only_when_claude_is_on() {
     let ctx = s.d.ctx.clone();
     assert!(super::assistant::claude_is_on(&ctx));
     super::assistant::ask_claude_later(&ctx, "Describe this heat result".into());
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if s.d
             .app
@@ -793,7 +793,7 @@ fn read_sheet(s: &mut Setup, reply: Value) {
         "nothing is sent before the person agrees"
     );
     s.d.app.datasheet_test_send(&ctx);
-    for _ in 0..400 {
+    for _ in super::test_wait::patient() {
         s.d.frame();
         if s.d.app.datasheet_test_stage() != "reading" {
             return;
@@ -940,4 +940,79 @@ fn stopping_a_reading_drops_the_answer_and_adds_nothing() {
     }
     assert_eq!(s.d.app.datasheet_test_stage(), "note", "no review appears");
     assert!(!s.d.app.datasheet_test_duplicate());
+}
+
+#[test]
+fn a_bad_key_says_what_to_do_costs_nothing_and_the_chat_keeps_working() {
+    let mut s = setup(DataScope::Outline);
+    s.script.push(
+        401,
+        json!({"error": {"type": "authentication_error", "message": "invalid x-api-key"}}),
+    );
+    ask(&mut s, "first");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("did not accept the API key"), "{shown}");
+    assert!(shown.contains("Settings"), "it says where to fix it");
+    assert!(!shown.contains("sk-ant-"), "the key is never shown");
+    assert!(!s.d.app.wb.assistant.is_running());
+    assert_eq!(
+        s.d.app.wb.assistant.spent(),
+        0.0,
+        "a refused request costs nothing"
+    );
+    // A fixed key (or a retry) works in the same window without reopening it.
+    queue(&s.script, [text("Back again.")]);
+    ask(&mut s, "second");
+    assert!(
+        s.d.app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("Back again.")
+    );
+}
+
+#[test]
+fn a_key_without_access_and_a_bad_request_give_a_reason_not_a_crash() {
+    let mut s = setup(DataScope::Outline);
+    s.script.push(
+        403,
+        json!({"error": {"type": "permission_error", "message": "no access to this model"}}),
+    );
+    ask(&mut s, "first");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("no access to this model"), "{shown}");
+    s.script.push(
+        400,
+        json!({"error": {"type": "invalid_request_error", "message": "prompt is too long"}}),
+    );
+    ask(&mut s, "second");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("prompt is too long"), "{shown}");
+    assert!(!s.d.app.wb.assistant.is_running());
+}
+
+#[test]
+fn no_network_and_a_rate_limit_end_in_a_plain_message_after_the_retries() {
+    // The test client does not wait between retries.
+    let mut s = setup(DataScope::Outline);
+    ask(&mut s, "offline"); // the script has no reply: the transport fails
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("No internet connection"), "{shown}");
+    assert_eq!(
+        s.script.requests().len(),
+        3,
+        "it tried three times, no more"
+    );
+    assert!(!s.d.app.wb.assistant.is_running());
+
+    let limited = json!({"error": {"type": "rate_limit_error", "message": "slow down"}});
+    for _ in 0..3 {
+        s.script.push(429, limited.clone());
+    }
+    ask(&mut s, "busy");
+    let shown = s.d.app.wb.assistant.transcript_text();
+    assert!(shown.contains("Rate limited"), "{shown}");
+    assert!(!shown.contains("slow down"), "no raw API text for this one");
+    assert_eq!(s.d.app.wb.assistant.spent(), 0.0);
 }

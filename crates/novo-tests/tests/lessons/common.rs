@@ -59,6 +59,8 @@ const LESSON_KEYS: &[&str] = &[
     "finished",
     "page",
     "kind",
+    "explain",
+    "explain_nl",
     "show_problems",
     "step",
 ];

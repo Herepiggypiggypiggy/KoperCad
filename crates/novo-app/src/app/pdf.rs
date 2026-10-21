@@ -196,7 +196,15 @@ impl NovoApp {
                 };
                 // Overwriting is never silent.
                 let verb = if replaced { "Replaced" } else { "Exported" };
-                self.message_file(format!("{verb} {}{remaining}", path.display()), path);
+                let checks = if options.appendix.is_some() {
+                    ", with a Design checks page at the end"
+                } else {
+                    ""
+                };
+                self.message_file(
+                    format!("{verb} {}{checks}{remaining}", path.display()),
+                    path,
+                );
                 self.wb.last_export = Some(path.to_owned());
                 Some(path.to_owned())
             }

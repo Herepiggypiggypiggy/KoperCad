@@ -1,0 +1,13 @@
+@title Bench cut list counts the motor cable once
+@area Reports
+# The example motor cable states 12.0 m: one line "to buy", its cores are not metres of wire. The estimated case is a unit test.
+click_text "Open example"
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+expect "hookup wire to pull"
+expect "to buy"
+shot bench-cable
+check_layout
