@@ -12,7 +12,7 @@ Scope: propose everything the drawing implies for the workshop pack, with a reas
 ## Next, in order
 1. (done: PE/neutral per circuit; cable rows as one undo with sizes; cores take their size from the cable still open)
 2. Ferrule and strip length rows: not needed as rows (they and the labels follow size and number by themselves; the window says so). Only an override per wire would be new.
-3. Ducts: routes are derived, never stored, so there is nothing to write. The window lists the estimated lengths under "left to you". A real step would be proposing duct placement (new engine in novo-routing/novo-layout).
+3. Ducts: routes are derived, never stored, so there is nothing to write. The window lists the estimated lengths under "left to you". Finding: the example's estimates are field cable runs and supply feeds, not unplaced devices, so duct placement does not fix them (Cabinet > Place all already routes the placed ones). Real step: a cabinet entry point per enclosure (gland position) plus a stated run length on the cable, so a feed is routed to the entry and a field wire gets entry + stated run; needs a novo-core model change (ask WS-02).
 4. Labels as rows (label stock and text), not only wire numbers.
 5. Ready to build in the top bar; unlock "Workshop pack" at 100 % (decide with the owner: today the button is never locked).
 6. Datasheet PDF to part with Claude: separate PR with the Claude integration thread (cmsg_01TV2QyH4AYw9X2aTmgUsuhC3b51sHqKoWryzmy63oxF2L). The user confirms every field.

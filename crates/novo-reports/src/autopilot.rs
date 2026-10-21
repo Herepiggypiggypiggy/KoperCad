@@ -385,12 +385,35 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
             basis: basis_kind,
         });
     }
-    let estimated = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
-    if estimated > 0 {
-        out.left_to_you.push(format!(
-            "{estimated} wire lengths are still estimates (devices not placed on the plate or no duct drawn): place the devices and draw the ducts in Cabinet, then the lengths are routed and the Ready meter moves. Ferrules, strip lengths and labels follow the sizes and numbers by themselves."
-        ));
+    let (mut feeds, mut field, mut unplaced) = (0, 0, 0);
+    for job in jobs.iter().filter(|j| is_estimate(&j.basis)) {
+        let (a, b) = (&job.end_a.designation, &job.end_b.designation);
+        if a.ends_with("(feed)") || b.ends_with("(feed)") {
+            feeds += 1;
+        } else if location_of(a) != location_of(b) {
+            field += 1;
+        } else {
+            unplaced += 1;
+        }
     }
+    let mut left = |n: usize, what: &str| {
+        if n > 0 {
+            out.left_to_you
+                .push(format!("{n} wire lengths are estimates: {what}"));
+        }
+    };
+    left(
+        unplaced,
+        "a device is not placed on the mounting plate, or the plate has no ducts. Use Cabinet > Place all, then the lengths are routed.",
+    );
+    left(
+        field,
+        "the wire leaves the cabinet for a device in another location. Its length is the cable run, which the drawing cannot know; the estimate is the page distance plus service loops.",
+    );
+    left(
+        feeds,
+        "the wire comes in from outside the drawing (a supply feed with no device at the other end). The cabinet entry is not modelled, so its length is a planning figure.",
+    );
     for c in novo_cables::propose::propose_cables(project) {
         let name = c.cable_type.name();
         out.proposals.push(Proposal {
@@ -461,6 +484,14 @@ fn scope(same_circuit: bool) -> &'static str {
     } else {
         "in the project (none on the same device)"
     }
+}
+
+/// The `+LOCATION` of a designation (`=A1+CAB-X1:1` gives `CAB`).
+fn location_of(designation: &str) -> &str {
+    designation
+        .split_once('+')
+        .map(|(_, rest)| rest.split('-').next().unwrap_or(rest))
+        .unwrap_or("")
 }
 
 fn job_label(job: &WireCutJob) -> String {
