@@ -158,6 +158,9 @@ pub struct SchematicView {
     /// The Preferences default for moving a symbol: its wires go along
     /// (Shift then leaves them) or stay (Shift then takes them).
     pub move_carries: bool,
+    /// A window floats on top and Escape is its: the drawing leaves the key
+    /// alone, even with the pointer over it.
+    pub yield_escape: bool,
     /// The press that closed a popup, until its release.
     swallow: bool,
     /// The move in progress was picked up by dragging a selected object (no
@@ -302,6 +305,7 @@ impl SchematicView {
             shortcuts: HashMap::new(),
             band_count: None,
             move_carries: true,
+            yield_escape: false,
             swallow: false,
             drag_move: false,
             wire_part: None,
@@ -1468,7 +1472,7 @@ impl SchematicView {
                 self.goto = Some(p);
             }
         }
-        if pressed(Key::Escape) {
+        if !self.yield_escape && pressed(Key::Escape) {
             // The first Esc puts a dragged label or wire part back, the next
             // drops a selected wire part.
             if self.label_drag.take().is_none()
