@@ -90,6 +90,9 @@ impl Draft {
 pub(super) struct DoorState {
     draft: Option<Draft>,
     source: Option<Option<Enclosure>>,
+    /// The plate size the form last saw: while no enclosure is stored the
+    /// inside size is the plate's, so it follows when the plate changes.
+    plate: Option<(f64, f64)>,
     /// Scroll the inspector to the form (`"cabinet.door"`) or to Apply
     /// (`"cabinet.door.apply"`) the next time the section is drawn: the
     /// form sits below the plate fields and can start out of view.
@@ -125,6 +128,23 @@ fn paint_color(c: novo_canvas::Color) -> Color32 {
 }
 
 impl DoorState {
+    /// Brings the form up to date with the layout: refilled when the stored
+    /// enclosure changed, and following the plate while none is stored.
+    fn sync(&mut self, layout: &CabinetLayout) {
+        let plate = (layout.plate.width, layout.plate.height);
+        if let (None, Some(old), Some(draft)) = (&layout.enclosure, self.plate, self.draft.as_mut())
+            && old != plate
+            && (draft.width, draft.height) == old
+        {
+            (draft.width, draft.height) = plate;
+        }
+        self.plate = Some(plate);
+        if self.source.as_ref() != Some(&layout.enclosure) || self.draft.is_none() {
+            self.draft = Some(Draft::new(layout.enclosure.as_ref(), layout));
+            self.source = Some(layout.enclosure);
+        }
+    }
+
     /// The panel for the shown layout. Returns the enclosure to store when
     /// Apply was pressed.
     pub(super) fn show(
@@ -133,14 +153,14 @@ impl DoorState {
         layout: &CabinetLayout,
         tag_of: &impl Fn(u64) -> String,
     ) -> Option<Ask> {
-        if self.source.as_ref() != Some(&layout.enclosure) || self.draft.is_none() {
-            self.draft = Some(Draft::new(layout.enclosure.as_ref(), layout));
-            self.source = Some(layout.enclosure);
-        }
+        self.sync(layout);
         let draft = self.draft.as_mut()?;
         let mut ask = None;
         let top = ui.cursor().left_top();
 
+        if layout.enclosure.is_none() {
+            ui.weak("Not stored yet: the inside size follows the plate until you apply it.");
+        }
         ui.weak("Depth and door swing are checked against these. The plate is taken as centred.");
         ui.add_space(4.0);
         egui::Grid::new("cabinet_door_form")
@@ -528,5 +548,38 @@ fn top_view(ui: &mut egui::Ui, e: &Enclosure, layout: &CabinetLayout, report: &D
             egui::FontId::proportional(tokens::FONT_SMALL),
             color,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use novo_layout::Plate;
+
+    fn layout(width: f64, height: f64) -> CabinetLayout {
+        CabinetLayout::new(Plate {
+            width,
+            height,
+            margin: 10.0,
+        })
+    }
+
+    #[test]
+    fn the_inside_size_follows_the_plate_until_an_enclosure_is_stored() {
+        let mut state = DoorState::default();
+        state.sync(&layout(600.0, 800.0));
+        state.sync(&layout(1000.0, 1200.0));
+        let draft = state.draft.as_ref().unwrap();
+        assert_eq!((draft.width, draft.height), (1000.0, 1200.0));
+    }
+
+    #[test]
+    fn a_size_typed_into_the_form_is_not_overwritten_by_a_plate_change() {
+        let mut state = DoorState::default();
+        state.sync(&layout(600.0, 800.0));
+        state.draft.as_mut().unwrap().width = 700.0;
+        state.sync(&layout(1000.0, 1200.0));
+        let draft = state.draft.as_ref().unwrap();
+        assert_eq!((draft.width, draft.height), (700.0, 800.0));
     }
 }

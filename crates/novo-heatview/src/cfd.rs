@@ -120,12 +120,12 @@ fn cell_of(edges: &[f64], x: f64) -> usize {
     edges[1..n].partition_point(|e| *e <= x)
 }
 
-struct Taps {
-    idx: [usize; 8],
-    w: [f32; 8],
+pub(crate) struct Taps {
+    pub(crate) idx: [usize; 8],
+    pub(crate) w: [f32; 8],
 }
 
-fn taps(snap: &CfdSnapshot, p: [f64; 3]) -> Taps {
+pub(crate) fn taps(snap: &CfdSnapshot, p: [f64; 3]) -> Taps {
     let g = &snap.grid;
     let (i0, i1, tx) = locate(&g.x_edges_mm, p[0]);
     let (j0, j1, ty) = locate(&g.y_edges_mm, p[1]);
@@ -304,14 +304,24 @@ impl Default for Trace {
 /// leaves the interior, enters a solid, stalls or runs out of steps. A seed
 /// in still air or in a solid gives a one point line.
 pub fn streamlines(snap: &CfdSnapshot, seeds: &[[f64; 3]], trace: Trace) -> Vec<Vec<[f64; 3]>> {
-    if !snap.is_consistent() {
-        return Vec::new();
-    }
-    let dir = |p: [f64; 3]| -> Option<[f64; 3]> {
+    trace_field(snap, seeds, trace, |p| {
         let v = velocity_at(snap, p).map(f64::from);
         let s = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
         (s >= trace.min_speed).then(|| [v[0] / s, v[1] / s, v[2] / s])
-    };
+    })
+}
+
+/// The tracer behind [`streamlines`] for any direction field: `dir` gives the
+/// unit direction at a point, or `None` where the field is too weak to follow.
+pub fn trace_field(
+    snap: &CfdSnapshot,
+    seeds: &[[f64; 3]],
+    trace: Trace,
+    dir: impl Fn([f64; 3]) -> Option<[f64; 3]>,
+) -> Vec<Vec<[f64; 3]>> {
+    if !snap.is_consistent() {
+        return Vec::new();
+    }
     seeds
         .iter()
         .map(|&seed| {

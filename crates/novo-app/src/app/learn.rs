@@ -156,6 +156,10 @@ pub(crate) struct LearnState {
     /// The Learn window is open.
     pub(super) window: bool,
     pub(super) filter: String,
+    /// The Learn window lists only this track (Help > Learning paths).
+    pub(super) only_track: Option<String>,
+    /// The Learn window lists only this learning path, in its order.
+    pub(super) only_path: Option<String>,
     pub(super) show_drafts: bool,
     pub(super) confirm_restart: bool,
     /// Lessons whose lint has errors, so they are not offered yet.
@@ -203,6 +207,8 @@ impl LearnState {
             hidden: false,
             window: false,
             filter: String::new(),
+            only_track: None,
+            only_path: None,
             show_drafts: false,
             confirm_restart: false,
             coming: None,
@@ -356,6 +362,58 @@ impl LearnState {
         self.files.get(path).map(String::as_str)
     }
 
+    /// The lesson Help and the Learn window offer: the one on the card,
+    /// else the next one the person can do.
+    pub(super) fn offered(&self) -> Option<Entry> {
+        let running = self.running().and_then(|id| self.catalog.get(id));
+        running
+            .or_else(|| self.catalog.next_lesson(&self.progress, self.show_drafts))
+            .cloned()
+    }
+
+    /// The lessons the command field searches: title, and the summary and
+    /// topics in both languages as the words a person may type.
+    pub(super) fn palette_entries(&self) -> Vec<novo_workflow::palette::LessonEntry> {
+        self.catalog
+            .visible(self.show_drafts)
+            .map(|e| {
+                let l = &e.lesson;
+                let words = [
+                    l.summary(Lang::En),
+                    l.summary(Lang::Nl),
+                    l.title(Lang::Nl),
+                    &l.topics.join(" "),
+                ]
+                .join(" ")
+                .to_lowercase();
+                novo_workflow::palette::LessonEntry {
+                    id: l.id.clone(),
+                    title: l.title(self.lang).to_owned(),
+                    detail: l.summary(self.lang).to_owned(),
+                    words,
+                }
+            })
+            .collect()
+    }
+
+    /// The "Lesson: <title>" chip a panel shows for a topic it knows: the
+    /// lesson id and the label. `None` when no lesson carries the topic or
+    /// that lesson is the one on the card already.
+    pub(super) fn chip(&self, topic: &str) -> Option<(String, String)> {
+        let entry = self
+            .catalog
+            .visible(self.show_drafts)
+            .find(|e| e.lesson.topics.iter().any(|t| t == topic))?;
+        let l = &entry.lesson;
+        if self.running() == Some(l.id.as_str()) {
+            return None;
+        }
+        Some((
+            l.id.clone(),
+            self.say_with("lesson_chip", &[("title", l.title(self.lang))]),
+        ))
+    }
+
     /// The id of the lesson being done.
     pub(super) fn running(&self) -> Option<&str> {
         self.run.as_ref().map(|r| r.lesson().id.as_str())
@@ -379,8 +437,10 @@ fn add_folder(files: &mut Files, notes: &mut Vec<String>, dir: &Path) {
             notes.extend(skipped);
             for (key, text) in found {
                 match key.split_once('/') {
-                    None if matches!(key.as_str(), "tracks.toml" | "glossary.toml" | "ui.toml") => {
-                    }
+                    None if matches!(
+                        key.as_str(),
+                        "tracks.toml" | "glossary.toml" | "paths.toml" | "ui.toml"
+                    ) => {}
                     None => notes.push(format!("{key}: ignored, lessons live in folders")),
                     Some((folder, _)) if shipped.contains(folder) => {
                         notes.push(format!(
@@ -943,6 +1003,16 @@ impl NovoApp {
         self.learn_start_demo();
     }
 
+    /// A lesson picked in the command field: resume it when it is the one
+    /// on the card, else start it.
+    pub(super) fn learn_run_command_lesson(&mut self, id: &str) {
+        if self.learn.running() == Some(id) {
+            self.continue_lesson();
+        } else {
+            self.start_lesson(id);
+        }
+    }
+
     /// `help.learn`, with or without a word to look for, and the
     /// `learn.*` commands.
     pub(super) fn learn_run_command(&mut self, id: &str, argument: Option<&str>) {
@@ -955,7 +1025,18 @@ impl NovoApp {
                         self.learn.window = true;
                     }
                 },
-                None => self.learn.window = !self.learn.window,
+                None => {
+                    self.learn.window = !self.learn.window;
+                    self.learn.only_track = None;
+                    self.learn.only_path = None;
+                }
+            },
+            "help.next_lesson" => match self.learn.offered() {
+                Some(entry) if self.learn.running() == Some(entry.lesson.id.as_str()) => {
+                    self.continue_lesson();
+                }
+                Some(entry) => self.start_lesson(&entry.lesson.id),
+                None => self.learn.window = true,
             },
             "learn.next" => self.learn_move(Move::Next),
             "learn.back" => self.learn_move(Move::Back),

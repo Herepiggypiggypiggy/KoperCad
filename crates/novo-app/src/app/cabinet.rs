@@ -34,16 +34,44 @@ const DEFAULT_PLATE: MountingPlate = MountingPlate {
     margin: 10.0,
 };
 
+/// Whether a panel with `left` devices left out and `count` placed is the one
+/// to show after All panels, over the best so far (`(left, count)`): a panel
+/// with devices left out wins over one without, and among panels of the same
+/// kind the first with the most placed devices wins.
+pub(super) fn lands_before(best: Option<(bool, usize)>, left: bool, count: usize) -> bool {
+    match best {
+        None => true,
+        Some((best_left, _)) if left != best_left => left,
+        Some((true, _)) => false,
+        Some((false, best_count)) => count > best_count,
+    }
+}
+
+/// What the plate Place all would need was worked out for: the panel, its
+/// plate, how many devices are placed and not, and the rules.
+type FitKey = (
+    StructureId,
+    [u64; 3],
+    usize,
+    usize,
+    novo_layout::rules::RuleSet,
+);
+
 pub(super) struct CabinetState {
     pub(super) view: CanvasView,
     pub(super) scene: CabinetScene,
-    /// The panel shown, by its location (`+K1B1G1`).
+    /// The panel shown, by its location (`+BAY1G1`).
     pub(super) location: Option<DeviceTag>,
     /// A `Place all` plan waiting for Enter.
     pub(super) preview: Option<Plan>,
     /// The part of that plan for other surfaces (the door, a side wall):
     /// devices the surface rules send there, stored together with it.
     pub(super) surface_preview: Vec<(String, Plan)>,
+    /// The plate that would hold every device, kept until its key changes.
+    fit: Option<(FitKey, Option<MountingPlate>)>,
+    /// What the last All panels did, shown as a banner until closed: a toast
+    /// fades, and the status bar is easy to miss after a one-click action.
+    pub(super) result: Option<(String, bool)>,
     /// The panel the drawing was last fitted to.
     fitted: Option<DeviceTag>,
     /// A placed device being dragged, with where it would land.
@@ -113,6 +141,8 @@ impl CabinetState {
             location: None,
             preview: None,
             surface_preview: Vec::new(),
+            fit: None,
+            result: None,
             fitted: None,
             drag: None,
             ghost: None,
@@ -143,6 +173,9 @@ pub(super) enum Ask {
     /// Set the plate to new dimensions from the inspector.
     SetPlateSize(StructureId, MountingPlate),
     PlaceAll,
+    /// Set a plate where a panel has none or too small a one, and place every
+    /// device of every panel, as one undo step.
+    PlaceEveryPanel,
     /// Export the plate drawing PDF of the shown enclosure.
     ExportPlate,
     ExportPlateDxf,
@@ -471,6 +504,7 @@ impl NovoApp {
             .is_none_or(|l| !locations.contains(l))
         {
             self.cabinet.location = locations.first().cloned();
+            self.cabinet.result = None;
             self.cabinet.preview = None;
             self.cabinet.surface_preview.clear();
         }
@@ -613,6 +647,38 @@ impl NovoApp {
             _ => (0, cands.len(), 0),
         };
         let has_plan = self.cabinet.preview.is_some();
+        let current_plate = layout.as_ref().map(|l| MountingPlate {
+            width: l.plate.width,
+            height: l.plate.height,
+            margin: l.plate.margin,
+        });
+        // Some devices do not fit: the plate that would hold them, found by
+        // planning on bigger plates (what Place all would really do), offered
+        // as one button instead of making the person do sums. Kept until the
+        // plate, the devices or the rules change.
+        let plate_offer = match (&layout, structure) {
+            (Some(l), Some(s)) if unplaced > 0 => {
+                self.cabinet.rules.ensure_loaded();
+                let key = (
+                    s,
+                    [
+                        l.plate.width.to_bits(),
+                        l.plate.height.to_bits(),
+                        l.plate.margin.to_bits(),
+                    ],
+                    placed,
+                    unplaced,
+                    self.cabinet.rules.rules.clone(),
+                );
+                if self.cabinet.fit.as_ref().is_none_or(|(k, _)| *k != key) {
+                    let found =
+                        cabinet_rules::plate_that_holds(project, s, l, &self.cabinet.rules.rules);
+                    self.cabinet.fit = Some((key, found));
+                }
+                self.cabinet.fit.as_ref().and_then(|(_, p)| *p)
+            }
+            _ => None,
+        };
         let homeless = structure.map_or(0, |s| {
             novo_layout::model::without_enclosure(project, s).len()
         });
@@ -750,23 +816,6 @@ impl NovoApp {
                         });
                     }
                     if has_plan {
-                        cabinet_bar::group(ui, Some("Preview, nothing stored yet"), |ui| {
-                            let accept = cabinet_bar::primary(
-                                ui,
-                                icons::CHECK,
-                                "Accept",
-                                Some("Enter"),
-                                true,
-                            );
-                            if cabinet_bar::note(&mut anchors, "cabinet.accept", "Accept", &accept)
-                                .clicked()
-                            {
-                                ask = Some(Ask::Accept);
-                            }
-                            if ui.button(format!("{}  Cancel   Esc", icons::X)).clicked() {
-                                ask = Some(Ask::Cancel);
-                            }
-                        });
                         return;
                     }
                     cabinet_bar::group(ui, caption("Place"), |ui| {
@@ -792,6 +841,16 @@ impl NovoApp {
                         cabinet_bar::note(&mut anchors, "cabinet.place_all", "Place all", &r);
                         if r.clicked() {
                             ask = Some(Ask::PlaceAll);
+                        }
+                        if locations.len() > 1 {
+                            let all = cabinet_bar::button(ui, icons::SQUARES_FOUR, "All panels", false)
+                                .on_hover_text(
+                                    "Set a plate where a panel has none or too small a one, and place \
+                                     every device of every panel (one undo step). Empty panels are skipped.",
+                                );
+                            if all.clicked() {
+                                ask = Some(Ask::PlaceEveryPanel);
+                            }
                         }
                         if !fold.has(Foldable::Rules) {
                             let rules =
@@ -1156,6 +1215,72 @@ impl NovoApp {
                 ui.label(egui::RichText::new("Heat").strong());
                 super::heat::strip(ui, &mut self.cabinet.heat);
             });
+        }
+        if has_plan {
+            let (n, left) = self
+                .cabinet
+                .preview
+                .as_ref()
+                .map_or((0, 0), |p| (p.placements.len(), p.unplaced.len()));
+            let mut text = format!(
+                "Preview: {n} {} would be placed. Nothing is stored until you accept.",
+                if n == 1 { "device" } else { "devices" }
+            );
+            if left > 0 {
+                text.push_str(&format!(" {left} do not fit."));
+            }
+            let mut accept = None;
+            novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Info, &text, |ui| {
+                let r = cabinet_bar::primary(ui, icons::CHECK, "Accept", Some("Enter"), true);
+                if cabinet_bar::note(&mut anchors, "cabinet.accept", "Accept", &r).clicked() {
+                    accept = Some(Ask::Accept);
+                }
+                if ui.button(format!("{}  Cancel   Esc", icons::X)).clicked() {
+                    accept = Some(Ask::Cancel);
+                }
+                if let Some(plate) = plate_offer
+                    && ui
+                        .button(format!("Apply plate {} x {} mm", plate.width, plate.height))
+                        .on_hover_text(
+                            "Cancels this preview and sets a plate that holds every device",
+                        )
+                        .clicked()
+                    && let Some(s) = structure
+                {
+                    accept = Some(Ask::SetPlateSize(s, plate));
+                }
+            });
+            ask = accept.or(ask);
+        } else if let Some(plate) = plate_offer {
+            let text = format!(
+                "These devices need a larger plate than {} x {} mm.",
+                current_plate.map_or(0.0, |c| c.width),
+                current_plate.map_or(0.0, |c| c.height)
+            );
+            novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Warning, &text, |ui| {
+                if ui
+                    .button(format!("Apply plate {} x {} mm", plate.width, plate.height))
+                    .on_hover_text("Sets the plate of this panel to that size (one undo step)")
+                    .clicked()
+                    && let Some(s) = structure
+                {
+                    ask = Some(Ask::SetPlateSize(s, plate));
+                }
+            });
+        }
+        if !has_plan && let Some((text, warn)) = self.cabinet.result.clone() {
+            let level = if warn {
+                novo_theme::widgets::Level::Warning
+            } else {
+                novo_theme::widgets::Level::Info
+            };
+            let mut close = false;
+            novo_theme::widgets::banner(ui, level, &text, |ui| {
+                close = ui.button(format!("{}  Close", icons::X)).clicked();
+            });
+            if close {
+                self.cabinet.result = None;
+            }
         }
         if layout.is_some() {
             ui.horizontal_wrapped(|ui| {
@@ -1885,7 +2010,9 @@ impl NovoApp {
                 ui.vertical_centered(|ui| {
                     ui.label(match (&location, structure) {
                         (None, _) => "No panel yet. Give a page a panel name (+K1) to lay it out.",
-                        (Some(_), None) => "This panel has no cabinet yet.",
+                        (Some(_), None) => {
+                            "This panel has no cabinet yet. Create one to set its plate and place devices."
+                        }
                         _ => "Set the size of the mounting plate to start placing devices.",
                     });
                     ui.add_space(8.0);
@@ -1911,6 +2038,22 @@ impl NovoApp {
                             }
                             ui.add_space(4.0);
                             ui.weak("You can change the size later under Plate setup.");
+                            if locations.len() > 1 {
+                                ui.add_space(10.0);
+                                if ui
+                                    .button(format!(
+                                        "{}  Set plates and place every panel",
+                                        icons::SQUARES_FOUR
+                                    ))
+                                    .on_hover_text(
+                                        "Gives each panel with devices a plate that holds them and \
+                                         places them by the rules (one undo step). Empty panels are skipped.",
+                                    )
+                                    .clicked()
+                                {
+                                    ask = Some(Ask::PlaceEveryPanel);
+                                }
+                            }
                         }
                         _ => {}
                     }
@@ -1918,7 +2061,19 @@ impl NovoApp {
             }
         }
 
-        super::sizing::show_window(ui.ctx(), &mut self.sizing, &sizing_devices);
+        let sizing_chip = self.learn.chip("sizing");
+        let rails_chip = self.learn.chip("rails");
+        let sizing_lesson = super::sizing::show_window(
+            ui.ctx(),
+            &mut self.sizing,
+            &sizing_devices,
+            current_plate,
+            plate_offer,
+            sizing_chip.as_ref(),
+        );
+        if let (Some(plate), Some(s)) = (self.sizing.apply.take(), structure) {
+            ask = Some(Ask::SetPlateSize(s, plate));
+        }
         super::sizing::show_editor(ui.ctx(), &mut self.sizing);
         cabinet_rules::show_rules_window(ui.ctx(), &mut self.cabinet.rules);
         let lists = if self.cabinet.rules.cut_open {
@@ -1937,6 +2092,7 @@ impl NovoApp {
             &mut self.cabinet.rails,
             project,
             structure,
+            rails_chip.as_ref(),
         );
 
         if let Some(id) = delete_rail {
@@ -1963,6 +2119,9 @@ impl NovoApp {
         }
         if let Some(rail_ask) = rail_ask {
             self.cabinet_rail_ask(structure, rail_ask);
+        }
+        if let Some(id) = sizing_lesson {
+            self.learn_run_command_lesson(&id);
         }
     }
 
@@ -2049,18 +2208,38 @@ impl NovoApp {
                 .get::<novo_core::Device>(novo_core::DeviceId::from(id))
                 .map_or_else(|| format!("device {id}"), |d| d.tag.to_string())
         };
-        let mut parts: Vec<String> = plan
-            .unplaced
-            .iter()
-            .map(|&id| {
-                let why = self
-                    .cabinet
-                    .rules
-                    .explain
-                    .as_ref()
-                    .and_then(|e| e.unplaced.iter().find(|(u, _)| *u == id))
-                    .map_or("no room left on the plate", |(_, why)| why.text());
-                format!("{} ({why})", tag(id))
+        // One entry per reason: a few devices are named, many are counted, so
+        // a plate that is too small gives one line and not a page of them.
+        let mut by_reason: Vec<(String, Vec<String>)> = Vec::new();
+        for &id in &plan.unplaced {
+            let why = self
+                .cabinet
+                .rules
+                .explain
+                .as_ref()
+                .and_then(|e| e.unplaced.iter().find(|(u, _)| *u == id))
+                .map_or("no room left on the plate", |(_, why)| why.text());
+            match by_reason.iter_mut().find(|(w, _)| w == why) {
+                Some((_, tags)) => tags.push(tag(id)),
+                None => by_reason.push((why.to_owned(), vec![tag(id)])),
+            }
+        }
+        const NAMED: usize = 5;
+        let mut parts: Vec<String> = by_reason
+            .into_iter()
+            .flat_map(|(why, tags)| {
+                if tags.len() <= NAMED {
+                    tags.into_iter()
+                        .map(|t| format!("{t} ({why})"))
+                        .collect::<Vec<_>>()
+                } else {
+                    vec![format!(
+                        "{} devices ({why}), for example {} and {} more",
+                        tags.len(),
+                        tags[..3].join(", "),
+                        tags.len() - 3
+                    )]
+                }
             })
             .collect();
         if let Some(s) = structure {
@@ -2121,6 +2300,7 @@ impl NovoApp {
                 || matches!(
                     ask,
                     Ask::PlaceAll
+                        | Ask::PlaceEveryPanel
                         | Ask::SetRailLengths(_)
                         | Ask::SetPlate(_)
                         | Ask::SetPlateSize(..)
@@ -2184,6 +2364,7 @@ impl NovoApp {
                     novo_canvas::selection::SelectOp::Replace,
                 );
             }
+            Ask::PlaceEveryPanel => self.place_every_panel(),
             Ask::PlaceAll => {
                 if let Some(layout) = layout {
                     self.cabinet.rules.ensure_loaded();
@@ -2341,18 +2522,31 @@ impl NovoApp {
                 });
             }
             Ask::SetPlateSize(s, plate) => {
+                // A preview was made for the old plate.
+                self.cabinet.preview = None;
+                self.cabinet.surface_preview.clear();
                 self.cabinet_edit("Set plate size", move |tx| set_plate(tx, s, plate));
             }
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));
             }
             Ask::CreateCabinet(tag) => {
-                let command = Command::AddStructure {
-                    tag,
-                    description: String::new(),
-                    enclosure: true,
-                };
-                self.cabinet_edit("Create cabinet", move |tx| tx.execute(command).map(|_| ()));
+                // An imported project already has the node, as a plain
+                // location: it becomes the cabinet instead of a second node.
+                let existing = self
+                    .backend
+                    .document()
+                    .and_then(|d| d.project().structure_by_tag(&tag).map(|s| s.id));
+                self.cabinet_edit("Create cabinet", move |tx| match existing {
+                    Some(id) => tx.set_enclosure(id, true),
+                    None => tx
+                        .execute(Command::AddStructure {
+                            tag,
+                            description: String::new(),
+                            enclosure: true,
+                        })
+                        .map(|_| ()),
+                });
             }
         }
     }
@@ -2369,6 +2563,139 @@ impl NovoApp {
         self.switch_workspace(super::workspace::Workspace::Cabinet);
         self.cabinet.table = false;
         self.cabinet.routes = true;
+    }
+
+    /// Gives every panel with devices a plate that holds them (the default
+    /// where it has none, a bigger one found by planning where it is too
+    /// small; a plate that is big enough stays) and places the devices by the
+    /// rules, as one undo step. Empty panels are skipped and named.
+    fn place_every_panel(&mut self) {
+        self.cabinet.rules.ensure_loaded();
+        let rules = self.cabinet.rules.rules.clone();
+        let mut placed = 0;
+        let mut panels = 0;
+        let mut left_out = 0;
+        let mut guessed = 0;
+        // The panel to show afterwards: the first with devices left out, else
+        // the one with the most devices.
+        let mut land: Option<(bool, usize, DeviceTag)> = None;
+        let mut enlarged = 0;
+        let mut empty: Vec<String> = Vec::new();
+        let done = self.cabinet_edit("Place all panels", |tx| {
+            let all: Vec<_> = tx
+                .project()
+                .structures()
+                .filter(|s| s.enclosure)
+                .map(|s| (s.id, s.tag.clone()))
+                .collect();
+            for (id, panel) in all {
+                let tag = panel.to_string();
+                let cands = novo_layout::model::candidates(tx.project(), id);
+                if cands.is_empty() {
+                    empty.push(tag);
+                    continue;
+                }
+                guessed += cands.iter().filter(|c| c.size.guessed).count();
+                if load(tx.project(), id).is_none() {
+                    set_plate(tx, id, DEFAULT_PLATE)?;
+                }
+                let Some(layout) = load(tx.project(), id) else {
+                    continue;
+                };
+                let mut plan = cabinet_rules::plan(tx.project(), id, &layout, &rules).0;
+                if !plan.unplaced.is_empty()
+                    && let Some(bigger) =
+                        cabinet_rules::plate_that_holds(tx.project(), id, &layout, &rules)
+                {
+                    set_plate(tx, id, bigger)?;
+                    enlarged += 1;
+                    if let Some(layout) = load(tx.project(), id) {
+                        plan = cabinet_rules::plan(tx.project(), id, &layout, &rules).0;
+                    }
+                }
+                if !plan.placements.is_empty() {
+                    panels += 1;
+                    placed += plan.placements.len();
+                    apply_plan(tx, id, &plan)?;
+                }
+                left_out += plan.unplaced.len();
+                let (left, count) = (!plan.unplaced.is_empty(), plan.placements.len());
+                if lands_before(land.as_ref().map(|&(l, n, _)| (l, n)), left, count) {
+                    land = Some((left, count, panel));
+                }
+            }
+            Ok(())
+        });
+        if !done {
+            return;
+        }
+        self.cabinet.preview = None;
+        self.cabinet.surface_preview.clear();
+        if let Some((_, _, panel)) = land {
+            self.cabinet.location = Some(panel);
+        }
+        let mut text = if placed == 0 {
+            "Nothing to place: every panel with devices is already placed.".to_owned()
+        } else {
+            format!(
+                "Placed {placed} {} on {panels} {}.",
+                if placed == 1 { "device" } else { "devices" },
+                if panels == 1 { "panel" } else { "panels" }
+            )
+        };
+        if enlarged > 0 {
+            text.push_str(&format!(
+                " {enlarged} {} enlarged.",
+                if enlarged == 1 { "plate" } else { "plates" }
+            ));
+        }
+        if !empty.is_empty() {
+            text.push_str(&format!(" No devices on {}, skipped.", empty.join(", ")));
+        }
+        if left_out > 0 {
+            text.push_str(&format!(
+                " {left_out} could not be placed; open the panel and press Place all for the reasons."
+            ));
+        }
+        if guessed > 0 {
+            text.push_str(&format!(
+                " {guessed} {} no size in {} part, so {} placed at a guessed {} x {} mm: \
+                 give the parts a size and place again for a true layout.",
+                if guessed == 1 {
+                    "device has"
+                } else {
+                    "devices have"
+                },
+                if guessed == 1 { "its" } else { "their" },
+                if guessed == 1 { "it was" } else { "they were" },
+                novo_layout::DEFAULT_FOOTPRINT_MM.0,
+                novo_layout::DEFAULT_FOOTPRINT_MM.1,
+            ));
+        }
+        let level = if left_out > 0 || guessed > 0 {
+            Level::Warning
+        } else {
+            Level::Info
+        };
+        // The banner is one line; the toast and the status bar carry the rest.
+        let mut line = format!(
+            "Placed {placed} {} on {panels} {}",
+            if placed == 1 { "device" } else { "devices" },
+            if panels == 1 { "panel" } else { "panels" }
+        );
+        if guessed > 0 {
+            line.push_str(&format!(
+                ", {guessed} at a guessed {} x {} mm",
+                novo_layout::DEFAULT_FOOTPRINT_MM.0,
+                novo_layout::DEFAULT_FOOTPRINT_MM.1
+            ));
+        }
+        if left_out > 0 {
+            line.push_str(&format!(", {left_out} not placed"));
+        }
+        line.push('.');
+        self.cabinet.result = Some((line, level == Level::Warning));
+        self.message(level, text);
     }
 
     /// Runs an edit of the model from the Cabinet canvas as one undo step.

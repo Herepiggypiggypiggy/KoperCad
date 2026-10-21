@@ -17,6 +17,8 @@ impl NovoApp {
         let mut carries = !self.settings.move_leaves_wires;
         let mut calm = self.settings.reduce_motion;
         let mut company = self.settings.company_macros.clone();
+        let mut symbols = self.settings.symbol_folder.clone();
+        let mut reload_symbols = false;
         let mut density = self.settings.xref_density();
         let mut theme = self.settings.theme_choice();
         let mut ui_density = self.settings.density_choice();
@@ -152,6 +154,45 @@ impl NovoApp {
                             .truncate(),
                         );
                     });
+                    section(ui, "Symbols", false);
+                    row_title(
+                        ui,
+                        "My symbol folder",
+                        "Your own symbols, one .toml file each; the id inside must be the file's path below this folder without .toml (my/pump for my/pump.toml) and category is the folder it sits in (my). They appear in the insert search next to the built-in ones. A symbol placed from here is not drawn on a computer without the folder.",
+                    );
+                    ui.horizontal(|ui| {
+                        if ui.button("Choose...").clicked()
+                            && let Some(dir) = rfd::FileDialog::new()
+                                .set_title("My symbol folder")
+                                .pick_folder()
+                        {
+                            symbols = Some(dir);
+                        }
+                        if symbols.is_some() && ui.button("Clear").clicked() {
+                            symbols = None;
+                        }
+                        if symbols.is_some() && ui.button("Reload").clicked() {
+                            reload_symbols = true;
+                        }
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(
+                                    symbols
+                                        .as_ref()
+                                        .map(|p| p.display().to_string())
+                                        .unwrap_or_else(|| "None".into()),
+                                )
+                                .weak(),
+                            )
+                            .truncate(),
+                        );
+                    });
+                    if let Some(line) = self.wb.custom_symbols.summary() {
+                        hint(ui, &line);
+                    }
+                    for problem in self.wb.custom_symbols.problems.iter().take(5) {
+                        ui.colored_label(crate::theme::ui_palette().warning, problem);
+                    }
                     section(ui, "Simulation", false);
                     ui.checkbox(&mut calm, "Reduce motion");
                     hint(
@@ -183,6 +224,10 @@ impl NovoApp {
             self.next_tick = Instant::now();
         }
         self.settings.company_macros = company;
+        if symbols != self.settings.symbol_folder || reload_symbols {
+            self.settings.symbol_folder = symbols;
+            self.wb.custom_symbols.key = None;
+        }
         self.settings.move_leaves_wires = !carries;
         self.settings.reduce_motion = calm;
         if modal.inner || modal.should_close() {

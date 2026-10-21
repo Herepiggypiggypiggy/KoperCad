@@ -29,6 +29,9 @@ clap.workspace = true
 serde_json.workspace = true
 
 [dev-dependencies]
+# By path with the `model` feature only (no GPU stack in the test build), which
+# `workspace = true` cannot narrow.
+novo-canvas = { path = "../novo-canvas", default-features = false, features = ["model"] }
 tempfile.workspace = true
 calamine.workspace = true
 

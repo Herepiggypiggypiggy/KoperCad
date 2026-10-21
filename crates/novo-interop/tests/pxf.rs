@@ -15,7 +15,7 @@ fn the_plan_previews_then_applies_as_one_undo_step() {
     let mut doc = Document::default();
     let plan = plan_pxf(doc.project(), &file, &PxfOptions::default());
     let r = plan.report();
-    assert_eq!(r.count_of("pages (empty)"), 2);
+    assert_eq!(r.count_of("pages"), 2);
     assert_eq!(r.count_of("terminal strips"), 1);
     assert_eq!(r.count_of("terminals"), 1);
     assert_eq!(r.count_of("cables"), 1);
@@ -30,6 +30,10 @@ fn the_plan_previews_then_applies_as_one_undo_step() {
     let p = doc.project();
     assert_eq!(p.pages().count(), 2);
     assert_eq!(p.structures().count(), 2); // =A1 and +CAB1
+    // The location is a panel, the section is not.
+    let panel = |t: &str| p.structure_by_tag(&tag(t)).unwrap().enclosure;
+    assert!(panel("+CAB1"));
+    assert!(!panel("=A1"));
     assert_eq!(p.cables().count(), 1);
     let q1 = p.devices_by_tag(&tag("=A1+CAB1-Q1"));
     assert_eq!(q1.len(), 1);

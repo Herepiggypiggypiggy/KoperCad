@@ -162,6 +162,14 @@ fn downloads_watcher_waits_for_a_finished_matching_file() {
     assert!(ready[0].names_the_part);
     assert!(ready[0].path.ends_with("WAGO_9000_0001.stp"));
 
+    // The passed-over model is listed, the picture and the half download are not.
+    let names: Vec<_> = w
+        .skipped()
+        .iter()
+        .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["other-part.stp"]);
+
     // A file that is older than the click is ignored.
     let late = SystemTime::now() + Duration::from_secs(3600);
     let mut w = DownloadsWatcher::new(downloads.path(), late, "9000-0001");

@@ -1,0 +1,21 @@
+format = 1
+id = "nfpa/connectivity/wire_end_insulated"
+name = "Insulated wire end"
+description = "A conductor that ends on purpose and is insulated or capped: a spare core or a wire laid out for later. Marked by a solid cap so design checks and readers see it is not an open mistake."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "connectivity"
+function = "connectivity.wire_end"
+keywords = ["wire end", "insulated end", "spare core", "capped", "end sleeve", "unused wire", "nfpa", "ansi"]
+aliases = ["wend"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 5] },
+  { kind = "rect", at = [-1.2, 5], size = [2.4, 3], fill = true },
+]
+
+[behavior]
+kind = "none"

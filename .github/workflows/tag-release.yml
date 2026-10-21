@@ -1,0 +1,45 @@
+name: Tag a release
+
+# Started by hand only (Actions > Tag a release > Run workflow). Creates the
+# tag on a commit of main and starts the Windows installer workflow on that
+# tag, whose release job then makes the release (a draft for -rc tags).
+# Needed because tags pushed with the workflow token do not start workflows,
+# and some automation sessions cannot push tags.
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to create, for example v0.1.0-rc1"
+        required: true
+      sha:
+        description: "Full 40 character commit sha on main to tag"
+        required: true
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ inputs.tag }}
+      SHA: ${{ inputs.sha }}
+    steps:
+      - name: Check the inputs
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-rc[0-9]+)?$ ]] || { echo "tag must look like v0.1.0 or v0.1.0-rc1"; exit 1; }
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "sha must be 40 lowercase hex characters"; exit 1; }
+          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$SHA" --jq .status)
+          case "$status" in identical|behind) ;; *) echo "$SHA is not on main (compare says: $status)"; exit 1 ;; esac
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            echo "tag $TAG already exists"; exit 1
+          fi
+      - name: Create the tag
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f "ref=refs/tags/$TAG" -f "sha=$SHA"
+      - name: Build the installer and make the release from the tag
+        run: gh workflow run package-windows.yml --repo "$GITHUB_REPOSITORY" --ref "$TAG"

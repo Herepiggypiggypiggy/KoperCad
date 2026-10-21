@@ -62,6 +62,8 @@ pub struct Settings {
     /// The interface size in percent: 100 (empty or 0), 125, 150 or 200,
     /// on top of the system's own scaling.
     pub ui_scale: u32,
+    /// The optional Claude assistant (off until the person turns it on).
+    pub ai: novo_ai::config::AiSettings,
     /// Whether the status bar is switched off (docs/design/workspaces.md §7).
     pub hide_status_bar: bool,
     /// Commissioning's large touch buttons: a tablet user sets it once.
@@ -110,6 +112,10 @@ pub struct Settings {
     /// (`app/pdf_options.rs`): a per-user preference, kept in the settings
     /// file under the user's profile.
     pub pdf_choice: PdfChoice,
+    /// A folder of the person's own symbols (`*.toml`, ids relative to the
+    /// folder), offered beside the built-in pack. Per user, not in the
+    /// project.
+    pub symbol_folder: Option<PathBuf>,
     /// Seconds between the writes that keep the open project and its
     /// recovery file current. 0: the default (`DEFAULT_AUTOSAVE_SECONDS`).
     pub autosave_seconds: u32,

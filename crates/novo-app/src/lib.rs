@@ -166,6 +166,7 @@ pub fn run() -> eframe::Result {
             if let Some(path) = startup_file {
                 app.open_on_start(path);
             }
+            diag::startup_done();
             Ok(Box::new(app))
         }),
     )

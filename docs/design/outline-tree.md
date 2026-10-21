@@ -15,7 +15,7 @@ A tree: page group (`=G1`), cabinet inside it (`+A1`), pages inside that. A togg
 
 ## Automatic, never a prerequisite
 
-- A new group or cabinet is named from the project: the prefix most names share, one past the highest number, as wide as the habit (`K1B1G2` then `K1B1G3`, `A01` then `A02`, `CAB` then `CAB2`). A project with none starts from the user's letters (default `G` and `A`, Project settings, with a live preview). `outline_tree::next_name`.
+- A new group or cabinet is named from the project: the prefix most names share, one past the highest number, as wide as the habit (`BAY1G2` then `BAY1G3`, `A01` then `A02`, `CAB` then `CAB2`). A project with none starts from the user's letters (default `G` and `A`, Project settings, with a live preview). `outline_tree::next_name`.
 - New pages take the next number in their group and cabinet and land beside the page being worked on. A page moved into a group where its number is taken gets the next free one. Renumber puts a group in 1, 2, 3 reading order.
 - New cabinet: name filled in, enclosure picked from the user's list (`enclosures.csv`) or the standard 600 x 800 plate, first page added in the chosen group. Enter creates it. The enclosure name is kept as property `enclosure` on the cabinet's structure node.
 - Pages in no group or cabinet whose devices are tagged (`=A1+CAB-K1`) are offered a home: "File them" in the tree, or "File pages by their device tags" in the menu. The example project is filed this way.

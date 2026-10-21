@@ -9,6 +9,7 @@ use novo_xref::Place;
 
 use super::cable_controls::{CableAction, CableEdit, cable_controls};
 use super::cable_cores::{candidate_wires, core_cells, header_controls, proposals_section};
+use super::learn_ui::chip_button;
 use super::part_picker::{Candidate, cable_candidates};
 use super::terminal_edit::{ToolbarAction, strip_toolbar};
 use super::terminals::strip_table;
@@ -30,6 +31,7 @@ pub(super) enum DrawerAction {
     DeclineOne(u64),
     RestoreDeclined,
     Tab(Drawer),
+    Lesson(String),
     Close,
 }
 
@@ -82,6 +84,11 @@ impl NovoApp {
             Drawer::Cables => cable_proposals.len(),
             Drawer::Devices => 0,
         };
+        let chip = match tab {
+            Drawer::Terminals => self.learn.chip("terminals"),
+            Drawer::Cables => self.learn.chip("cables"),
+            Drawer::Devices => None,
+        };
         let mut actions = Vec::new();
         // Controls for lessons to point at, registered after the panel.
         let mut spots: Vec<(String, egui::Rect, bool, String)> = Vec::new();
@@ -110,6 +117,9 @@ impl NovoApp {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         if ui.small_button("Close").clicked() {
                             actions.push(DrawerAction::Close);
+                        }
+                        if let Some(id) = chip_button(ui, chip.as_ref()) {
+                            actions.push(DrawerAction::Lesson(id));
                         }
                         if proposed > 0 {
                             if tab == Drawer::Cables {
@@ -236,6 +246,7 @@ impl NovoApp {
                 DrawerAction::DeclineOne(key) => self.decline_one_cable(key),
                 DrawerAction::RestoreDeclined => self.restore_declined_cables(),
                 DrawerAction::Tab(t) => self.wb.drawer = Some(t),
+                DrawerAction::Lesson(id) => self.learn_run_command_lesson(&id),
                 DrawerAction::Close => self.wb.drawer = None,
             }
         }

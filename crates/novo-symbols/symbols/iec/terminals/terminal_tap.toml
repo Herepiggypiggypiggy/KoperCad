@@ -1,0 +1,31 @@
+format = 1
+id = "iec/terminals/terminal_tap"
+name = "Terminal with tap"
+description = "Feed-through terminal with a third connection that taps the same conductor (a cross-connection or measuring point on the field side). All three connections are one potential."
+standard = "IEC 60617"
+category = "terminals"
+function = "terminal.tap"
+keywords = ["terminal", "tap", "three connections", "branch", "cross connection", "clamp"]
+aliases = ["term3"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+  { id = "2", at = [0, 8], dir = "down" },
+  { id = "3", at = [4, 8], dir = "down" },
+]
+
+anchors = [
+  { role = "tag", at = [-3, 4], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 2.8] },
+  { kind = "circle", center = [0, 4], r = 1.2 },
+  { kind = "line", from = [0, 5.2], to = [0, 8] },
+  { kind = "polyline", points = [[0.370, 6.553], [0.153, 6.770], [-0.153, 6.770], [-0.370, 6.553], [-0.370, 6.247], [-0.153, 6.030], [0.153, 6.030], [0.370, 6.247]], closed = true, fill = true },
+  { kind = "polyline", points = [[0, 6.4], [4, 6.4], [4, 8]] },
+]
+
+[behavior]
+kind = "conductor"
+poles = [["1", "2", "3"]]

@@ -21,6 +21,11 @@
 //! them.
 
 mod dialect;
+mod draw;
+mod graphics;
+mod layout;
+mod layout_apply;
+mod library;
 mod model;
 mod plan;
 mod read;
@@ -36,9 +41,13 @@ use thiserror::Error;
 use crate::report::Report;
 
 pub use dialect::{Dialect, EPLAN_2024};
+pub use graphics::{GraphicsStats, PxfShape, ShapeKind, background_properties};
+pub use layout::{LayoutDevice, LayoutDuct, LayoutRail, LayoutSheet};
+pub use library::{DOWN, LEFT, LibFunction, LibPort, LibSymbol, Match, PxfLibrary, RIGHT, UP};
 pub use model::{
-    DeviceRole, ObjId, PxfCore, PxfDevice, PxfFile, PxfHeader, PxfInterruption, PxfKind, PxfPage,
-    PxfTag, PxfText, SymbolRef, pair_interruptions, split_part_number,
+    DeviceRole, ObjId, PageClass, PxfCore, PxfDevice, PxfFile, PxfHeader, PxfInterruption, PxfKind,
+    PxfNode, PxfPage, PxfProjectData, PxfStructure, PxfTag, PxfText, SymbolRef, pair_interruptions,
+    split_part_number,
 };
 pub use plan::{PxfOptions, PxfPlan, plan_pxf};
 pub use survey::{PxfSurvey, survey_pxf};
@@ -93,13 +102,10 @@ fn skipped_name(kind: u32) -> (&'static str, &'static str) {
             "EPLAN's symbol library is the user's own; symbols come in with the symbol mapping",
         ),
         26 => ("groups", "grouping is not carried"),
-        31 => ("lines", "drawing geometry follows with the net rebuild"),
-        32 => ("arcs", "drawing geometry follows with the net rebuild"),
-        42 => (
-            "connection nodes",
-            "wires are rebuilt from pins and nodes in a later step",
+        31 | 32 | 34 | 88 | 89 => (
+            "lines",
+            "drawing objects with no usable geometry in the file",
         ),
-        88 | 89 => ("location boxes", "boxes are not carried"),
         _ => ("other objects", "object type not known to this reader"),
     }
 }
@@ -114,21 +120,36 @@ impl PxfFile {
         r.moved("cables", self.devices_of(DeviceRole::Cable).count());
         r.moved("cable cores", self.cores.len());
         r.moved("interruption points", self.interruptions.len());
+        r.moved("connection nodes", self.nodes.len());
         r.moved("texts", self.texts.len());
         let mut other = 0;
+        let mut by_name: Vec<(&str, usize, &str)> = Vec::new();
         for (kind, n) in &self.skipped {
             let (what, why) = skipped_name(*kind);
             if what == "other objects" {
                 other += n;
+            } else if let Some(e) = by_name.iter_mut().find(|e| e.0 == what) {
+                e.1 += n;
             } else {
-                r.lost(what, *n, why);
+                by_name.push((what, *n, why));
             }
+        }
+        for (what, n, why) in by_name {
+            r.lost(what, n, why);
         }
         r.lost(
             "other objects",
             other,
             "object type not known to this reader",
         );
+        if !self.library.is_empty() {
+            r.note(format!(
+                "The file embeds its symbol library ({} symbols, {} function definitions). It is read for pin positions and names and not carried over; {} library drawing objects were skipped.",
+                self.library.symbol_count(),
+                self.library.function_count(),
+                self.library_objects.values().sum::<usize>()
+            ));
+        }
         let (_, alone) = pair_interruptions(&self.interruptions);
         if !alone.is_empty() {
             r.note(format!(

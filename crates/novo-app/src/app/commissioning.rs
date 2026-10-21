@@ -1017,7 +1017,16 @@ fn checks_tab(
                 if !open {
                     continue;
                 }
+                let mut group = None;
                 for info in on_page {
+                    let kind = target_group(info.target);
+                    if group != Some(kind) {
+                        group = Some(kind);
+                        ui.horizontal(|ui| {
+                            ui.add_space(space::XL);
+                            ui.label(egui::RichText::new(kind).small().color(p.text_tertiary));
+                        });
+                    }
                     let state = target_state(&mode.store, info.target);
                     let decided = info
                         .target
@@ -1051,6 +1060,16 @@ fn checks_tab(
                 }
             }
         });
+}
+
+/// The sub-heading a target sits under in the checks list, so a bare wire
+/// number reads as a wire.
+fn target_group(target: Target) -> &'static str {
+    match target {
+        Target::Wire(_) => "Wires",
+        Target::Terminal(_) => "Terminals",
+        Target::Device(_) => "Devices",
+    }
 }
 
 fn severity_label(s: Severity) -> &'static str {

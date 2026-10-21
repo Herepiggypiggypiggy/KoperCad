@@ -169,6 +169,9 @@ impl NovoApp {
                 }
                 MenuItem::Command(info) => {
                     self.command_row(ui, info);
+                    if info.id == "help.learn" {
+                        self.paths_menu(ui);
+                    }
                 }
                 MenuItem::Submenu { name, items } => {
                     // The lesson steps only exist while a lesson runs;
@@ -207,12 +210,71 @@ impl NovoApp {
         });
     }
 
+    /// Help > Learning paths: one row per track with `done/total`, which
+    /// opens the Learn window at that track.
+    fn paths_menu(&mut self, ui: &mut egui::Ui) {
+        let lang = self.learn.lang;
+        let drafts = self.learn.show_drafts;
+        let rows: Vec<(String, String)> = self
+            .learn
+            .catalog
+            .tracks
+            .iter()
+            .filter_map(|track| {
+                let sum =
+                    self.learn
+                        .catalog
+                        .track_summary(self.learn.progress(), &track.id, drafts);
+                (sum.total > 0).then(|| {
+                    (
+                        track.id.clone(),
+                        format!("{}   {}/{}", track.title(lang), sum.done, sum.total),
+                    )
+                })
+            })
+            .collect();
+        let label = self.learn.say("help_paths");
+        ui.add_enabled_ui(!rows.is_empty(), |ui| {
+            ui.menu_button(label, |ui| {
+                for (id, text) in rows {
+                    if ui.button(text).clicked() {
+                        self.learn.only_track = Some(id);
+                        self.learn.window = true;
+                        ui.close();
+                    }
+                }
+            });
+        });
+    }
+
+    /// The text of a command's row; "Next lesson" names the lesson.
+    pub(super) fn command_label(&self, info: &'static CommandInfo) -> String {
+        if info.id != "help.next_lesson" {
+            return info.label.to_owned();
+        }
+        let Some(entry) = self.learn.offered() else {
+            return self.learn.say("help_all_done");
+        };
+        let title = entry.lesson.title(self.learn.lang);
+        let running = self.learn.running() == Some(entry.lesson.id.as_str());
+        let under_way = matches!(
+            self.learn.progress().standing(&entry.lesson),
+            novo_learn::Standing::InProgress { .. }
+        );
+        let key = if running || under_way {
+            "help_continue"
+        } else {
+            "help_next"
+        };
+        self.learn.say_with(key, &[("lesson", title)])
+    }
+
     /// One command: its label, its key on the right, greyed with the
     /// reason as the tooltip when it cannot run now. A click queues it, as
     /// a key press does, and closes the menu.
     fn command_row(&mut self, ui: &mut egui::Ui, info: &'static CommandInfo) {
         let reason = self.command_unavailable(info);
-        let mut button = egui::Button::new(info.label);
+        let mut button = egui::Button::new(self.command_label(info));
         if let Some(keys) = self.command_shortcut_text(ui.ctx(), info.id) {
             button = button.shortcut_text(keys);
         }

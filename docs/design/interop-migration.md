@@ -71,8 +71,10 @@ or the person picks a program with "Choose DWG converter".
   for are kept as `aml.<name>` properties, so nothing is lost silently.
 - Import is a preview first (`AmlPlan`): what would be added, what already
   exists, what was not carried. Applying is one undo step and only adds.
-- Not carried over on import (counted): connections (a wire needs symbols on a
-  page; a later slice will generate pages from nets), elements without a usable
+- Drawing profile: a file may also carry pages, drawn symbols and nets; the import then draws them
+  with connected wires (`docs/design/automationml-drawing.md`).
+- Not carried over on import (counted): connections when the file has no drawn symbols (a wire needs
+  symbols on a page), elements without a usable
   tag, repeated tags, cabinet positions.
 - Where: File > Import and export > Plant as AutomationML / Import AutomationML;
   command field `export automationml`, `import automationml`;

@@ -5,7 +5,7 @@
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::Keymap;
-use novo_workflow::palette::{Palette, Row, Sources, Target};
+use novo_workflow::palette::{LessonEntry, Palette, Row, Sources, Target};
 
 fn context() -> Context {
     Context {
@@ -22,6 +22,7 @@ fn search(palette: &Palette, keymap: &Keymap, query: &str) -> Vec<Row> {
         library: Some(&library),
         keymap,
         context: context(),
+        lessons: &[],
     };
     palette.search(query, &sources)
 }
@@ -119,4 +120,68 @@ fn overload_is_the_overload_relay_and_fault_scenarios_stay_reachable() {
     assert_eq!(rows[0].target, Target::Command("sim.faults"));
     let rows = search(&palette, &keymap, "short circuit");
     assert_eq!(rows[0].target, Target::Command("sim.faults"));
+}
+
+fn lessons() -> Vec<LessonEntry> {
+    let entry = |id: &str, title: &str, words: &str| LessonEntry {
+        id: id.to_owned(),
+        title: title.to_owned(),
+        detail: String::new(),
+        words: words.to_owned(),
+    };
+    vec![
+        entry(
+            "terminal-strips",
+            "Terminal strips",
+            "klemmenstrook rij klemmen",
+        ),
+        entry(
+            "wire-numbers",
+            "Wire numbers",
+            "wire numbering potentials draadnummers",
+        ),
+    ]
+}
+
+fn search_lessons(query: &str) -> Vec<Row> {
+    let library = Library::builtin().unwrap();
+    let keymap = Keymap::workflow();
+    let lessons = lessons();
+    let sources = Sources {
+        project: None,
+        library: Some(&library),
+        keymap: &keymap,
+        context: context(),
+        lessons: &lessons,
+    };
+    Palette::default().search(query, &sources)
+}
+
+#[test]
+fn a_lesson_is_found_by_title_topic_or_the_word_lesson() {
+    let lesson = |rows: &[Row]| {
+        rows.iter()
+            .position(|r| matches!(&r.target, Target::Lesson(_)))
+    };
+    // By title. The `lesson` verb (help.learn) may run first; the lesson row
+    // is among the first few.
+    let rows = search_lessons("lesson terminal");
+    assert!(lesson(&rows).is_some_and(|i| i < 3), "{rows:?}");
+    assert_eq!(
+        rows[lesson(&rows).unwrap()].target,
+        Target::Lesson("terminal-strips".into())
+    );
+    // By a topic word in either language.
+    let rows = search_lessons("klemmenstrook");
+    assert_eq!(
+        rows[lesson(&rows).unwrap()].target,
+        Target::Lesson("terminal-strips".into())
+    );
+    let rows = search_lessons("les draadnummers");
+    assert_eq!(
+        rows[lesson(&rows).unwrap()].target,
+        Target::Lesson("wire-numbers".into())
+    );
+    // A word that matches no lesson shows none.
+    assert!(lesson(&search_lessons("lesson zzzz")).is_none());
 }
