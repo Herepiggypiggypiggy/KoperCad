@@ -889,3 +889,30 @@ fn a_panel_chip_names_the_lesson_for_its_topic_and_steps_aside_when_it_runs() {
     d.frame();
     assert!(d.app.learn.chip("terminals").is_none(), "the card is on it");
 }
+
+#[test]
+fn skip_does_the_step_so_the_steps_after_it_find_their_parts() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("placing-parts");
+    d.frame();
+    let ctx = d.ctx.clone();
+    let placed = |d: &Drive| d.doc().project().symbols().count();
+    let before = placed(&d);
+    // Skip each step in turn: the ones with a solve place the parts the
+    // later steps point at.
+    for _ in 0..12 {
+        if d.app.learn.run.is_none() {
+            break;
+        }
+        d.app.learn_skip(&ctx);
+        d.frame();
+    }
+    assert!(
+        placed(&d) > before,
+        "skipping did the steps: {before} -> {}",
+        placed(&d)
+    );
+}

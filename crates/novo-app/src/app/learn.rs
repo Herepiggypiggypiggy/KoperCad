@@ -138,6 +138,10 @@ pub(crate) const ANCHORS: &[&str] = &[
     "macros.window",
 ];
 
+/// A frame the replay gate draws between two editor calls.
+#[cfg(test)]
+pub(super) type Settle = std::rc::Rc<dyn Fn(&mut NovoApp)>;
+
 /// What the shell keeps about learning.
 pub(crate) struct LearnState {
     files: Files,
@@ -162,6 +166,10 @@ pub(crate) struct LearnState {
     pub(super) only_path: Option<String>,
     pub(super) show_drafts: bool,
     pub(super) confirm_restart: bool,
+    /// Set by the replay gate: draws one frame, so a page shown by a solve
+    /// op has its canvas before the op goes on (a person's next frame).
+    #[cfg(test)]
+    pub(super) settle: Option<Settle>,
     /// Lessons whose lint has errors, so they are not offered yet.
     coming: Option<BTreeSet<String>>,
     /// Controls registered so far this frame, and last frame.
@@ -211,6 +219,8 @@ impl LearnState {
             only_path: None,
             show_drafts: false,
             confirm_restart: false,
+            #[cfg(test)]
+            settle: None,
             coming: None,
             anchors: BTreeMap::new(),
             rows: BTreeMap::new(),
@@ -969,6 +979,41 @@ impl NovoApp {
         self.learn.confirm_restart = false;
         self.learn.revealed = None;
         self.learn.ticked_at = None;
+    }
+
+    /// The card's Skip: does the step for the learner when its `solve` is
+    /// something the editor can carry out, so the steps after it still find
+    /// their parts, then moves on. A step that cannot be done for them is
+    /// skipped as before.
+    pub(super) fn learn_skip(&mut self, ctx: &egui::Context) {
+        let ops = self
+            .learn
+            .run
+            .as_ref()
+            .and_then(|r| r.step())
+            .filter(|s| s.manual.is_none())
+            .map(|s| s.solve.clone())
+            .unwrap_or_default();
+        let mut applied = false;
+        for op in &ops {
+            match self.solve_op(ctx, op) {
+                Some(Ok(())) => applied = true,
+                Some(Err(why)) => {
+                    self.message(Level::Warning, format!("Could not do this step: {why}"));
+                    break;
+                }
+                None => break,
+            }
+        }
+        if applied {
+            self.learn_step(ctx);
+        }
+        let ticked = self
+            .learn
+            .run
+            .as_ref()
+            .is_some_and(|r| r.phase() == Phase::Ticked);
+        self.learn_move(if ticked { Move::Next } else { Move::Skip });
     }
 
     /// Back, Skip, Next and Restart, from the card or the commands.
