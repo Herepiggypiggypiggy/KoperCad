@@ -518,7 +518,7 @@ impl BenchCut {
         // Cores of a cable come with the cable (bought by the length on its
         // BOM line); they are stripped and ferruled here but not pulled from
         // a reel, so their metres are not metres to pull.
-        let on_cable = |j: &WireCutJob| j.wires.iter().any(|w| project.cable_of_wire(*w).is_some());
+        let on_cable = |j: &WireCutJob| j.cable.is_some();
         let reel_mm = |list: &[&WireCutJob]| -> f64 {
             list.iter().filter(|j| !on_cable(j)).map(|j| j.cut_mm).sum()
         };
@@ -585,6 +585,32 @@ impl BenchCut {
             ));
         }
         let mut sections = vec![summary];
+        let mut cable_section: Option<Section> = None;
+        let runs = crate::cable_runs(project, jobs);
+        if !runs.is_empty() {
+            let mut cables = Section::new(
+                "cables",
+                "Cables",
+                vec![
+                    Column::new("done", "", 5.0),
+                    Column::new("cable", "Cable", 14.0),
+                    Column::new("cores", "Cores", 8.0).right(),
+                    Column::new("metres", "Metres", 10.0).right(),
+                ],
+            );
+            for r in runs {
+                cables.push(
+                    vec![
+                        Cell::text(TICK_BOX),
+                        Cell::text(r.tag),
+                        Cell::Int(r.cores as i64),
+                        Cell::Number((r.length_mm / 1000.0 * 10.0).ceil() / 10.0),
+                    ],
+                    vec![r.cable.into()],
+                );
+            }
+            cable_section = Some(cables);
+        }
         if !notes.is_empty() {
             let mut note = Section::new(
                 "check",
@@ -664,6 +690,7 @@ impl BenchCut {
             first_group = false;
         }
 
+        sections.extend(cable_section);
         ReportOutput {
             report: Self::ID.into(),
             title,

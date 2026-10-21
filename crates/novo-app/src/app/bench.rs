@@ -48,6 +48,8 @@ struct Cache {
     revision: u64,
     standard: FerruleStandard,
     jobs: Vec<WireCutJob>,
+    /// The cables the jobs are cores of, each once.
+    cables: Vec<novo_reports::CableRun>,
     labels: ReportOutput,
     /// Wires of the cut list that still have no size or colour.
     unset: UnsetWires,
@@ -417,10 +419,12 @@ impl NovoApp {
             .as_ref()
             .is_none_or(|c| c.revision != revision || c.standard != state.standard);
         if stale && state.standard.is_valid() {
+            let jobs = wire_cut_jobs_with(project, &state.standard);
             state.cache = Some(Cache {
                 revision,
                 standard: state.standard.clone(),
-                jobs: wire_cut_jobs_with(project, &state.standard),
+                cables: novo_reports::cable_runs(project, &jobs),
+                jobs,
                 labels: Labels.generate(project),
                 unset: unset_wires(project),
             });
@@ -475,6 +479,7 @@ impl NovoApp {
             Some(Act::ExportWorkshop) => {
                 self.export_workshop();
             }
+            Some(Act::PreviewWorkshop) => self.open_print_preview_workshop(),
             Some(Act::ExportCut) => {
                 self.export_bench_cut();
             }
@@ -510,6 +515,7 @@ enum Act {
     /// A fix button of the readiness strip: runs this command.
     Run(&'static str),
     ExportWorkshop,
+    PreviewWorkshop,
     ExportCut,
     ExportMachineCsv,
     ExportFerrules,
@@ -537,6 +543,13 @@ fn workshop_strip(
         ui.label("Template on");
         for p in [Paper::A4, Paper::A3] {
             ui.selectable_value(paper, p, p.name());
+        }
+        if ui
+            .button("Preview")
+            .on_hover_text("See how each mounting plate is cut into template pages")
+            .clicked()
+        {
+            *act = Some(Act::PreviewWorkshop);
         }
     });
     ui.weak("1:1 drilling template with a check ruler, cut list, ferrules, labels and the tick checklist, in one folder next to the project.");
@@ -641,7 +654,8 @@ fn cut_tab(
         ui.weak("No wires to cut yet: connect two device pins");
         return;
     }
-    let metres: f64 = jobs.iter().map(|j| j.cut_mm).sum::<f64>() / 1000.0;
+    let metres = novo_reports::hookup_cut_mm(jobs) / 1000.0;
+
     let estimates = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
     let groups = jobs
         .windows(2)
@@ -649,9 +663,17 @@ fn cut_tab(
         .count()
         + 1;
     ui.label(format!(
-        "{} wires in {groups} groups, {metres:.1} m of wire to pull",
+        "{} wires in {groups} groups, {metres:.1} m of hookup wire to pull",
         jobs.len()
     ));
+    for run in &cache.cables {
+        ui.label(format!(
+            "Cable {}: {:.1} m, once ({} cores cut from it)",
+            run.tag,
+            run.length_mm / 1000.0,
+            run.cores
+        ));
+    }
     if estimates > 0 {
         novo_theme::widgets::banner(
             ui,
@@ -734,7 +756,9 @@ fn defaults_row(
     );
     ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
-        ui.label("Size for wires without one");
+        ui.label("Size for wires without one").on_hover_text(
+            "A wire to cut counts as sized when any of its drawn pieces has a size; filling in sets every unsized drawn piece",
+        );
         egui::ComboBox::from_id_salt("bench_default_size")
             .selected_text(
                 draft
@@ -760,9 +784,11 @@ fn defaults_row(
         let colours = draft.fill_colours && !unset.no_colour.is_empty();
         if ui
             .add_enabled(size.is_some() || colours, egui::Button::new("Fill in"))
-            .on_hover_text(
-                "Only wires without a value change; sizes and colours you set stay. One undo step",
-            )
+            .on_hover_text(format!(
+                "Sets the size on {} drawn wires without one and the colour on {} without one. Values you set stay. One undo step",
+                if size.is_some() { unset.no_size.len() } else { 0 },
+                if colours { unset.no_colour.len() } else { 0 },
+            ))
             .clicked()
         {
             *act = Some(Act::FillDefaults(WireDefaults {

@@ -19,6 +19,9 @@ pub struct State {
     pub flow: Flow,
     pub iterations: usize,
     pub converged: bool,
+    /// The run stopped because the change stopped falling a little above the
+    /// tolerance (see [`stalled`]). The answer may still move; not converged.
+    pub stalled: bool,
 }
 
 impl State {
@@ -33,9 +36,14 @@ impl State {
             flow: Flow::new(s),
             iterations: 0,
             converged: false,
+            stalled: false,
         }
     }
 }
+
+/// Iterations over which a change that stays within three times the tolerance
+/// and does not fall by a fifth counts as settled.
+const STALL_WINDOW: usize = 8;
 
 const SIGMA: f64 = 5.670_374e-8;
 const PR: f64 = 0.71;
@@ -258,6 +266,20 @@ pub fn steady(s: &Setup, load: f64) -> State {
     steady_from(s, load, None)
 }
 
+/// Whether the change history has stalled: the latest change is within three
+/// times the tolerance (0.03 K by default) and has not fallen by a fifth
+/// over the last `STALL_WINDOW` iterations. More iterations then only repeat
+/// the same wobble. Such a run is *not* converged: its answer can still move.
+fn stalled(history: &[f64], tolerance_k: f64) -> bool {
+    let Some(&change) = history.last() else {
+        return false;
+    };
+    history.len() > STALL_WINDOW
+        && change >= tolerance_k
+        && change < 3.0 * tolerance_k
+        && change > 0.8 * history[history.len() - 1 - STALL_WINDOW]
+}
+
 /// Steady state, starting from a similar solved state when one is given (the
 /// same grid, e.g. the central run for the uncertainty band runs).
 pub fn steady_from(s: &Setup, load: f64, init: Option<&State>) -> State {
@@ -271,6 +293,7 @@ pub fn steady_from(s: &Setup, load: f64, init: Option<&State>) -> State {
             st.flow.reset_ports(s.ports.len());
             st.iterations = 0;
             st.converged = false;
+            st.stalled = false;
             st
         }
         _ => {
@@ -288,6 +311,12 @@ pub fn steady_from(s: &Setup, load: f64, init: Option<&State>) -> State {
     // the change stops falling.
     let mut alpha = if warm { 0.3 } else { 0.5 };
     let mut previous = f64::INFINITY;
+    // The change can stop falling a little above the tolerance (the plume
+    // and the relaxed flow trade places by a few hundredths of a kelvin). A
+    // run whose change has stalled (see [`stalled`]) stops with `stalled`
+    // set and `converged` false: 60 iterations took 25 s on a 60-device
+    // cabinet and did not converge either.
+    let mut history: Vec<f64> = Vec::new();
     for it in 0..s.params.max_iterations {
         let relax = if it == 0 && !warm { 1.0 } else { alpha };
         for i in 0..st.t_buoy.len() {
@@ -300,6 +329,11 @@ pub fn steady_from(s: &Setup, load: f64, init: Option<&State>) -> State {
         st.iterations = it + 1;
         if change < s.params.tolerance_k && it >= 2 {
             st.converged = true;
+            break;
+        }
+        history.push(change);
+        if stalled(&history, s.params.tolerance_k) {
+            st.stalled = true;
             break;
         }
         if it >= 2 && change > 0.7 * previous {
@@ -369,4 +403,30 @@ pub fn plate_share(s: &Setup, st: &State, k: usize) -> f64 {
     let tp: f64 = d.plate.iter().map(|&(i, w)| w * st.t_plate[i]).sum();
     let q = g_plate * (st.t_dev[k] - tp);
     (q / d.loss_w).clamp(0.0, 1.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{STALL_WINDOW, stalled};
+
+    #[test]
+    fn a_change_that_stops_falling_just_above_tolerance_is_stalled() {
+        let flat = vec![0.02; STALL_WINDOW + 1];
+        assert!(stalled(&flat, 0.01));
+    }
+
+    #[test]
+    fn a_falling_tiny_or_large_change_is_not_stalled() {
+        // Still falling by more than a fifth.
+        let falling: Vec<f64> = (0..=STALL_WINDOW)
+            .map(|i| 0.03 * 0.8_f64.powi(i as i32))
+            .collect();
+        assert!(!stalled(&falling, 0.01));
+        // Met the tolerance: converged, not stalled.
+        assert!(!stalled(&[0.005; STALL_WINDOW + 1], 0.01));
+        // Far from the tolerance.
+        assert!(!stalled(&[0.5; STALL_WINDOW + 1], 0.01));
+        // Too early.
+        assert!(!stalled(&[0.02; 3], 0.01));
+    }
 }

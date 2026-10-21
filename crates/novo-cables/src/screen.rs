@@ -9,7 +9,7 @@
 
 use std::collections::BTreeMap;
 
-use novo_core::{Cable, CableId, Endpoint, Project, WireId, natural_cmp};
+use novo_core::{Cable, CableId, Endpoint, Netlist, Project, WireId, natural_cmp};
 
 use crate::edit::{ShieldConnection, is_spare, shield_connection};
 use crate::ends;
@@ -143,8 +143,14 @@ fn shield_ends(project: &Project, cable: &Cable, core: usize) -> [Option<CoreEnd
 
 /// The connection screen of one cable.
 pub fn cable_screen(project: &Project, cable: CableId) -> Option<CableScreen> {
+    cable_screen_with(project, &project.netlist(), cable)
+}
+
+/// [`cable_screen`] with the netlist already built, so a caller that walks
+/// every cable builds it once (it costs as much as the walk of a whole page
+/// set on a big project).
+fn cable_screen_with(project: &Project, netlist: &Netlist, cable: CableId) -> Option<CableScreen> {
     let c = project.cable(cable)?;
-    let netlist = project.netlist();
     let mut rows = Vec::with_capacity(c.cores.len());
     for (index, core) in c.cores.iter().enumerate() {
         let wire = core.wire.and_then(|w| project.wire(w));
@@ -200,9 +206,10 @@ pub fn cable_screen(project: &Project, cable: CableId) -> Option<CableScreen> {
 
 /// Every cable's screen, in tag order.
 pub fn cable_screens(project: &Project) -> Vec<CableScreen> {
+    let netlist = project.netlist();
     sorted_cables(project)
         .into_iter()
-        .filter_map(|c| cable_screen(project, c))
+        .filter_map(|c| cable_screen_with(project, &netlist, c))
         .collect()
 }
 

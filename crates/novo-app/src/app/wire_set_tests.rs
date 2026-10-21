@@ -76,5 +76,5 @@ fn the_bench_counts_missing_values_per_wire_to_cut() {
         "{text}"
     );
     let ready = novo_reports::autopilot::ready(&jobs, true);
-    assert_eq!(ready.wires(), jobs.len());
+    assert_eq!(ready.wires, jobs.len());
 }

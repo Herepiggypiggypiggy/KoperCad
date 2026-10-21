@@ -204,6 +204,7 @@ impl NovoApp {
         let mut jump = self.report_keys(ui, &output, &orders, filter_id);
         let mut export = None;
         let mut add_page = false;
+        let mut preview = false;
         let mut lesson = None;
         let topic = if id == "report.wires" || id == "report.wirecut" {
             "wire list"
@@ -252,6 +253,17 @@ impl NovoApp {
                         ui.close();
                     }
                     ui.separator();
+                    if ui
+                        .button("Print preview...")
+                        .on_hover_text(
+                            "See the report's sheets on paper (size, scale, margins, page \
+                             numbers) before a PDF is written",
+                        )
+                        .clicked()
+                    {
+                        preview = true;
+                        ui.close();
+                    }
                     if ui
                         .button("Add as page")
                         .on_hover_text(
@@ -303,6 +315,9 @@ impl NovoApp {
         }
         if add_page {
             self.add_report_page(&id);
+        }
+        if preview {
+            self.open_print_preview();
         }
         if let Some(lesson) = lesson {
             self.learn_run_command_lesson(&lesson);

@@ -209,7 +209,13 @@ pub fn build(
     let (half, top) = profile(&air_field);
     let max_speed = velocity.max_magnitude();
     let mut notes = vec![NOTE.to_string()];
-    if !st.converged && step.is_none() {
+    if st.stalled && step.is_none() {
+        notes.push(
+            "The solver stopped when the change stalled just above its tolerance; the numbers \
+             may still move by up to about 1 K."
+                .into(),
+        );
+    } else if !st.converged && step.is_none() {
         notes.push("The solver did not fully settle; treat the numbers with extra care.".into());
     }
     if s.ports.is_empty() {
@@ -261,6 +267,7 @@ pub fn build(
         notes,
         iterations: st.iterations,
         converged: st.converged,
+        stalled: st.stalled,
     }
 }
 
@@ -385,4 +392,83 @@ pub fn hot_spots(result: &ThermalResult) -> Vec<HotSpot> {
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::build;
+    use crate::model::*;
+    use crate::setup::Setup;
+    use crate::thermal::State;
+    use novo_layout::Rect;
+    use novo_layout::sizing::{Installation, Material};
+
+    fn scenario() -> Scenario {
+        Scenario {
+            enclosure: Enclosure {
+                width_mm: 800.0,
+                height_mm: 1200.0,
+                depth_mm: 300.0,
+                wall_mm: 2.0,
+                material: Material::Steel,
+                installation: Installation::Wall,
+                plate: Rect {
+                    x: 50.0,
+                    y: 50.0,
+                    w: 690.0,
+                    h: 1090.0,
+                },
+            },
+            ambient_c: 25.0,
+            devices: vec![Device {
+                id: 1,
+                footprint: Rect {
+                    x: 300.0,
+                    y: 300.0,
+                    w: 100.0,
+                    h: 100.0,
+                },
+                height_mm: Some(60.0),
+                loss_w: 20.0,
+                rated_max_ambient_c: Some(55.0),
+                rated_max_surface_c: None,
+                heat_capacity_j_per_k: None,
+            }],
+            obstacles: vec![],
+            vents: vec![],
+            fans: vec![],
+            params: Params::default(),
+        }
+    }
+
+    fn notes(converged: bool, stalled: bool) -> Vec<String> {
+        let scn = scenario();
+        let s = Setup::new(&scn).unwrap();
+        let mut st = State::uniform(&s, 25.0);
+        st.converged = converged;
+        st.stalled = stalled;
+        let r = build(&scn, &s, &st, 1.0, None);
+        assert_eq!((r.converged, r.stalled), (converged, stalled));
+        r.notes
+    }
+
+    #[test]
+    fn a_stalled_run_says_so_and_a_clean_one_does_not() {
+        let stalled = notes(false, true);
+        assert!(
+            stalled.iter().any(|n| n.contains("change stalled")),
+            "{stalled:?}"
+        );
+        assert!(!stalled.iter().any(|n| n.contains("did not fully settle")));
+
+        let clean = notes(true, false);
+        assert!(
+            !clean
+                .iter()
+                .any(|n| n.contains("stalled") || n.contains("did not fully settle"))
+        );
+
+        let unsettled = notes(false, false);
+        assert!(unsettled.iter().any(|n| n.contains("did not fully settle")));
+    }
 }

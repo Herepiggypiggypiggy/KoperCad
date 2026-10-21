@@ -2,7 +2,7 @@ use lopdf::{Document, Object};
 use novo_core::{DeviceTag, MountingPlate, Project, Value};
 use novo_layout::model::{apply_plan, candidates, load, set_plate, template_documents};
 use novo_layout::template::{Paper, TemplateSheet};
-use novo_pdf::template::{export_template_pdf, page_count};
+use novo_pdf::template::{export_plate_pdf, export_template_pdf, page_count};
 
 const PT_PER_MM: f64 = 72.0 / 25.4;
 
@@ -167,4 +167,41 @@ fn dump() {
     };
     let bytes = export_template_pdf(&sheets(6, (600.0, 800.0)), "Demo", Paper::A4);
     std::fs::write(path, bytes).unwrap();
+}
+
+#[test]
+fn the_single_sheet_plate_is_one_page_the_size_of_the_plate_with_a_100_mm_ruler() {
+    let sheets = sheets(3, (450.0, 550.0));
+    let bytes = export_plate_pdf(&sheets[0], "Demo").expect("a plate this size fits one page");
+    assert_eq!(bytes, export_plate_pdf(&sheets[0], "Demo").unwrap());
+    let pdf = Document::load_mem(&bytes).unwrap();
+    let pages = pdf.get_pages();
+    assert_eq!(pages.len(), 1);
+    let page = pdf.get_dictionary(pages[&1]).unwrap();
+    let media: Vec<f64> = page
+        .get(b"MediaBox")
+        .unwrap()
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(number)
+        .collect();
+    assert!((media[2] / PT_PER_MM - 450.0).abs() < 0.01, "{media:?}");
+    assert!((media[3] / PT_PER_MM - 550.0).abs() < 0.01, "{media:?}");
+    let segs = horizontal_segments(&pdf, 1);
+    assert!(
+        segs.iter().any(|l| (l - 100.0).abs() < 0.01),
+        "no 100 mm ruler in {segs:?}"
+    );
+    assert!(pdf.extract_text(&[1]).unwrap().contains("not fit to page"));
+
+    // Too small for the ruler, or longer than a PDF page can be: no single sheet.
+    for (w, h) in [(100.0, 100.0), (6000.0, 800.0), (f64::INFINITY, 800.0)] {
+        let odd = TemplateSheet {
+            width: w,
+            height: h,
+            ..sheets[0].clone()
+        };
+        assert!(export_plate_pdf(&odd, "Demo").is_none(), "{w} x {h}");
+    }
 }

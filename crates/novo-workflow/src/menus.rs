@@ -91,7 +91,8 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("help.copy_problem_report", at("Help")),
     // File > Export, split by what the file is for.
     ("export.pdf", under("File", "Export drawings")),
-    ("export.pdf_options", under("File", "Export drawings")),
+    ("export.print_preview", under("File", "Export print")),
+    ("export.pdf_options", under("File", "Export print")),
     ("export.pdf_page", under("File", "Export drawings")),
     ("export.variant_pdf", under("File", "Export drawings")),
     ("export.dxf_page", under("File", "Export drawings")),
