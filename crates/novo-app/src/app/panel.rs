@@ -247,7 +247,11 @@ impl Panel {
         // Only a drag in which the pointer moved counts: a click on a button
         // inside it presses on the window too, and that must not pin it
         // where it was (it would stop following its side of the canvas).
-        // A title-bar drag is read from the title's own response.
+        // With a title bar, egui moves a window by the response of its title
+        // (the id `__title_click` under the window's id, an egui internal that
+        // 0.36 does not export), not by the area's own response; the
+        // `a_dragged_panel_stays_until_the_layout_is_reset` test fails if an
+        // egui update renames it.
         let grabbed = shown.as_ref().is_some_and(|r| r.response.dragged())
             || ctx
                 .read_response(id.with("__title_click"))
