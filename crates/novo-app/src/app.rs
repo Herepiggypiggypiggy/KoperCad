@@ -1416,6 +1416,7 @@ impl NovoApp {
         self.generate_window(&ctx);
         self.issue_revision_dialog(&ctx);
         self.restore_ask_dialog(&ctx);
+        self.handover_ask_dialog(&ctx);
         self.compare_window(&ctx);
         self.aml_import_dialog(&ctx);
         self.eplan_import_dialog(&ctx);

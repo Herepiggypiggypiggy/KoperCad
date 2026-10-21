@@ -29,6 +29,8 @@ use novo_reports::handover::{
     CommissioningFacts, FileStatus, HandoverFile, HandoverInput, handover_summary, revision_table,
 };
 
+use eframe::egui;
+
 use super::pdf::write_replacing;
 use super::{Level, NovoApp};
 use crate::settings::{PdfChoice, PrintChoice};
@@ -100,7 +102,79 @@ fn existing_own_files(folder: &Path) -> std::collections::BTreeSet<String> {
         .collect()
 }
 
+/// What the question before writing shows: the open problems.
+pub(crate) struct HandoverAsk {
+    summary: Summary,
+    /// Errors and warnings in all, of which `lines` shows the first few.
+    shown_of: usize,
+    /// The first few problems in words.
+    lines: Vec<String>,
+}
+
 impl NovoApp {
+    /// The `export.handover` command: writes the package at once when the
+    /// design checks have no error or warning, else asks first (see
+    /// [`NovoApp::handover_ask_dialog`]).
+    pub(super) fn ask_handover(&mut self) {
+        let problems = self.problems();
+        let summary = Summary::of(problems);
+        if summary.errors + summary.warnings == 0 {
+            self.export_handover();
+            return;
+        }
+        let open = problems
+            .iter()
+            .filter(|p| p.severity != novo_checks::Severity::Info);
+        let shown_of = open.clone().count();
+        let lines = open.take(4).map(|p| p.message.clone()).collect();
+        self.wb.handover_ask = Some(HandoverAsk {
+            summary,
+            shown_of,
+            lines,
+        });
+    }
+
+    pub(super) fn handover_ask_dialog(&mut self, ctx: &egui::Context) {
+        let Some(ask) = self.wb.handover_ask.take() else {
+            return;
+        };
+        let (mut fix, mut anyway) = (false, false);
+        let modal = egui::Modal::new(egui::Id::new("handover_ask")).show(ctx, |ui| {
+            ui.set_width(420.0);
+            ui.heading("The design still has open problems");
+            ui.add_space(4.0);
+            let verb = if ask.shown_of == 1 { "remains" } else { "remain" };
+            ui.label(format!(
+                "{} {verb}. The package lists them on the contents page and in the drawing set, so the customer would see them.",
+                ask.summary.pill_text()
+            ));
+            ui.add_space(4.0);
+            for line in &ask.lines {
+                ui.weak(format!("• {line}"));
+            }
+            if ask.shown_of > ask.lines.len() {
+                ui.weak(format!("and {} more", ask.shown_of - ask.lines.len()));
+            }
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button("Fix these first").clicked() {
+                    fix = true;
+                }
+                if ui.button("Hand over anyway").clicked() {
+                    anyway = true;
+                }
+                ui.weak("Esc cancels");
+            });
+        });
+        if fix {
+            self.show_issues(false);
+        } else if anyway {
+            self.export_handover();
+        } else if !modal.should_close() {
+            self.wb.handover_ask = Some(ask);
+        }
+    }
+
     /// Writes the package into `<project> handover <date>` next to the
     /// project file (Documents for an untitled one). Returns the folder.
     pub(super) fn export_handover(&mut self) -> Option<PathBuf> {
@@ -365,7 +439,15 @@ impl NovoApp {
     ) -> Result<(), String> {
         let name = self.project_name().unwrap_or_default();
         let options = ReportPdfOptions {
-            title: format!("{name}: {}", outputs.first().map_or("", |o| &o.title)),
+            title: {
+                // Some report titles already start with the project name.
+                let title = outputs.first().map_or("", |o| o.title.as_str());
+                if title.starts_with(&name) {
+                    title.to_owned()
+                } else {
+                    format!("{name}: {title}")
+                }
+            },
             footer_right: date.to_owned(),
             language: self.report_translator(),
             ..ReportPdfOptions::default()

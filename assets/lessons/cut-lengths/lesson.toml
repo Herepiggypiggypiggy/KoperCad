@@ -49,12 +49,12 @@ id = "last-columns"
 title = "Two columns at the end"
 title_nl = "Twee kolommen achteraan"
 text = """
-The last two columns are **Cut length mm** and **Length basis**.
+The last two columns are **Route length mm** and **Length basis**.
 The first is how long to cut the wire. The second says how that length was found: "routed" or "estimate", and in free air when no duct reaches.
 Of the 19 rows here, 15 say **routed** and 4 say **estimate**.
 """
 text_nl = """
-De laatste twee kolommen zijn **Cut length mm** en **Length basis**.
+De laatste twee kolommen zijn **Route length mm** en **Length basis**.
 De eerste is hoe lang de draad moet worden afgekort. De tweede zegt hoe die lengte is bepaald: "routed" of "estimate", en free air als geen kanaal de draad bereikt.
 Van de 19 rijen hier staat er bij 15 **routed** en bij 4 **estimate**.
 """
@@ -138,17 +138,17 @@ solve = [ { cabinet_place = { device = "-K1", x = 155, y = 210 } } ]
 
 [[step]]
 id = "check-again"
-how = ["Press {key:view.schematic}.", "Click the page Wire list in the outline.", "Read Cut length mm for the wires at -K1."]
-how_nl = ["Druk op {key:view.schematic}.", "Klik op de pagina Wire list in het overzicht.", "Lees Cut length mm bij de draden op -K1."]
+how = ["Press {key:view.schematic}.", "Click the page Wire list in the outline.", "Read Route length mm for the wires at -K1."]
+how_nl = ["Druk op {key:view.schematic}.", "Klik op de pagina Wire list in het overzicht.", "Lees Route length mm bij de draden op -K1."]
 title = "Read the wire list again"
 title_nl = "Lees de draadlijst opnieuw"
 text = """
 Return to **Wire list** (the schematic with {key:view.schematic}, then the page in the outline).
-The wires that end at **-K1** have new lengths in **Cut length mm**, and nobody typed them: the list is worked out from the plate each time.
+The wires that end at **-K1** have new lengths in **Route length mm**, and nobody typed them: the list is worked out from the plate each time.
 """
 text_nl = """
 Ga terug naar **Wire list** (het schema met {key:view.schematic} en dan de pagina in het overzicht).
-De draden die bij **-K1** eindigen hebben nieuwe lengtes in **Cut length mm** en niemand heeft ze getypt: de lijst wordt elke keer uit de plaat berekend.
+De draden die bij **-K1** eindigen hebben nieuwe lengtes in **Route length mm** en niemand heeft ze getypt: de lijst wordt elke keer uit de plaat berekend.
 """
 point = { ui = "outline.pages" }
 expect = { page = "Wire list" }
