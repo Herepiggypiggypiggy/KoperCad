@@ -146,7 +146,7 @@ fn scale_check_page() -> Page<'static> {
             3.0,
             HAlign::Left,
             false,
-            "Width ..........  mm      Height ..........  mm      250 mm ruler ..........  mm",
+            "Printed at ..........  %      Width ..........  mm      Height ..........  mm      250 mm ruler ..........  mm",
         );
         // Scale table.
         let ty = by + 18.0;
@@ -156,7 +156,7 @@ fn scale_check_page() -> Page<'static> {
             3.2,
             HAlign::Left,
             true,
-            "If the square measures ... print again at ...",
+            "If the square measures ... after a print at 100 %, print again at ...",
         );
         let mut row = ty + 7.0;
         let mut col_x = x0;
@@ -191,7 +191,7 @@ fn scale_check_page() -> Page<'static> {
             A4.0 - 2.0 * PAGE_MARGIN_MM - 24.0,
             2.8,
             &format!(
-                "Good enough: both sides within {} mm of 100 mm (0.2 %: about 1.2 mm over a 600 mm door). Set the percentage in the print dialog as a custom scale, print again and measure again. If a side is outside that and width and height differ by more than 0.3 mm the printer stretches one way: print from another program or printer, a percentage cannot repair that.",
+                "Good enough: both sides within {} mm of 100 mm (0.2 %: about 1.2 mm over a 600 mm door). Set the percentage in the print dialog as a custom scale, print again and measure again. The table is for a first print at 100 %; after a reprint use new scale = scale printed at x 100 / measured (the app does this for you in Bench output). The 250 mm ruler shows the paper feed: if it is off by more than 0.5 mm, lengths along the page are off by as much. If a side is outside that and width and height differ by more than 0.3 mm the printer stretches one way: print from another program or printer, a percentage cannot repair that.",
                 mm(SCALE_TOLERANCE_MM)
             ),
         ) + 2.0;
@@ -386,6 +386,13 @@ fn card_pages(card: &CutoutCard, project: &str, pages: &mut Vec<Page<'static>>) 
         let rows: Vec<usize> = (0..first).collect();
         if first > 0 {
             table(&mut m, x0, table_top, card, &rows);
+            small_text(
+                &mut m,
+                (A4.0 - PAGE_MARGIN_MM, table_top - 3.0),
+                HAlign::Right,
+                VAlign::Bottom,
+                "The same centre, measured from each edge".into(),
+            );
         }
         if first < card.positions.len() {
             small_text(

@@ -33,8 +33,10 @@ pub const CARD_MAX_MM: f64 = 150.0;
 pub enum ScaleVerdict {
     /// Both sides are 100 mm within the tolerance.
     Good,
-    /// Both sides are off by about the same: print again at `percent` of
-    /// the current scale (for example 100.4 for a square that measured 99.6).
+    /// Both sides are off by about the same: print again at `percent` in the
+    /// print dialog, an absolute scale that already counts the scale the
+    /// measured print was made at (100.4 for a square that measured 99.6 on
+    /// a print at 100 %).
     Rescale { percent: f64 },
     /// The sides differ: the printer stretches one way. Another printer or
     /// the PDF viewer's own print path is needed; no percentage helps.
@@ -46,6 +48,9 @@ pub enum ScaleVerdict {
 /// The answer for a measured square.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ScaleAdvice {
+    /// The scale the measured print was made at, percent (100 for the first
+    /// round).
+    pub printed_at: f64,
     pub width_mm: f64,
     pub height_mm: f64,
     pub verdict: ScaleVerdict,
@@ -62,23 +67,27 @@ impl ScaleAdvice {
                 mm(SCALE_TOLERANCE_MM)
             ),
             ScaleVerdict::Rescale { percent } => format!(
-                "Print again at {} % (custom scale) and measure again.",
+                "Print again at {} % (custom scale in the print dialog, counted from 100 %) and measure again.",
                 mm((percent * 10.0).round() / 10.0)
             ),
             ScaleVerdict::Stretched => format!(
                 "The sides differ by {} mm: the printer stretches one way. Print from another program or printer; a scale percentage cannot fix this.",
                 mm(((self.width_mm - self.height_mm).abs() * 100.0).round() / 100.0)
             ),
-            ScaleVerdict::Invalid => "Enter both sides in millimetres.".to_owned(),
+            ScaleVerdict::Invalid => {
+                "Enter both sides in millimetres and the scale you printed at.".to_owned()
+            }
         }
     }
 }
 
-/// Judges the measured sides of the printed check square.
-pub fn scale_advice(width_mm: f64, height_mm: f64) -> ScaleAdvice {
+/// Judges the measured sides of the printed check square. `printed_at` is
+/// the print scale in percent that print was made at (100 for a first print);
+/// the advised scale is absolute, so a second round lands on 100 as well.
+pub fn scale_advice(width_mm: f64, height_mm: f64, printed_at: f64) -> ScaleAdvice {
     let valid = |v: f64| v.is_finite() && v > 0.0;
     let within = |v: f64| (v - CHECK_SQUARE_MM).abs() <= SCALE_TOLERANCE_MM + 1e-9;
-    let verdict = if !valid(width_mm) || !valid(height_mm) {
+    let verdict = if !valid(width_mm) || !valid(height_mm) || !valid(printed_at) {
         ScaleVerdict::Invalid
     } else if within(width_mm) && within(height_mm) {
         // Inside the tolerance is good, whatever the difference between sides.
@@ -88,10 +97,11 @@ pub fn scale_advice(width_mm: f64, height_mm: f64) -> ScaleAdvice {
     } else {
         let mean = (width_mm + height_mm) / 2.0;
         ScaleVerdict::Rescale {
-            percent: CHECK_SQUARE_MM / mean * 100.0,
+            percent: printed_at * CHECK_SQUARE_MM / mean,
         }
     };
     ScaleAdvice {
+        printed_at,
         width_mm,
         height_mm,
         verdict,
@@ -226,16 +236,22 @@ mod tests {
 
     #[test]
     fn exact_square_is_good() {
-        assert_eq!(scale_advice(100.0, 100.0).verdict, ScaleVerdict::Good);
-        assert_eq!(scale_advice(100.15, 99.9).verdict, ScaleVerdict::Good);
+        assert_eq!(
+            scale_advice(100.0, 100.0, 100.0).verdict,
+            ScaleVerdict::Good
+        );
+        assert_eq!(
+            scale_advice(100.15, 99.9, 100.0).verdict,
+            ScaleVerdict::Good
+        );
         // Both sides inside the tolerance but 0.4 apart: still good.
-        assert_eq!(scale_advice(100.2, 99.8).verdict, ScaleVerdict::Good);
+        assert_eq!(scale_advice(100.2, 99.8, 100.0).verdict, ScaleVerdict::Good);
     }
 
     #[test]
     fn small_print_asks_for_a_larger_scale() {
         // 99.0 mm measured: 100 / 99 = 101.01 %.
-        match scale_advice(99.0, 99.0).verdict {
+        match scale_advice(99.0, 99.0, 100.0).verdict {
             ScaleVerdict::Rescale { percent } => assert!((percent - 101.0101).abs() < 1e-3),
             other => panic!("{other:?}"),
         }
@@ -244,7 +260,7 @@ mod tests {
 
     #[test]
     fn rescaling_by_the_advice_lands_on_100() {
-        let ScaleVerdict::Rescale { percent } = scale_advice(98.4, 98.5).verdict else {
+        let ScaleVerdict::Rescale { percent } = scale_advice(98.4, 98.5, 100.0).verdict else {
             panic!("expected a rescale");
         };
         let after = 98.45 * percent / 100.0;
@@ -252,10 +268,37 @@ mod tests {
     }
 
     #[test]
+    fn a_second_round_lands_on_100() {
+        // First print at 100 %: 99.0 mm. Advice 101.01 %.
+        let ScaleVerdict::Rescale { percent: first } = scale_advice(99.0, 99.0, 100.0).verdict
+        else {
+            panic!("expected a rescale");
+        };
+        // The printer scales linearly: the square comes out at 99 x first/100.
+        let second = 99.0 * first / 100.0;
+        assert!((second - 100.0).abs() < 1e-9);
+        // The reviewer's case: printed at 101 %, measured 100.5: 100.5 %, not 99.5.
+        let ScaleVerdict::Rescale { percent } = scale_advice(100.5, 100.5, 101.0).verdict else {
+            panic!("expected a rescale");
+        };
+        assert!((percent - 100.5).abs() < 0.01, "{percent}");
+        // And that lands on 100: 100.5 mm at 101 % is 99.5 per 100 %; at 100.5 % it is 100.0.
+        let after = 100.5 * percent / 101.0;
+        assert!((after - 100.0).abs() < 1e-9);
+        assert_eq!(
+            scale_advice(100.0, 100.0, 0.0).verdict,
+            ScaleVerdict::Invalid
+        );
+    }
+
+    #[test]
     fn one_way_stretch_is_not_a_percentage_job() {
-        assert_eq!(scale_advice(100.0, 101.0).verdict, ScaleVerdict::Stretched);
+        assert_eq!(
+            scale_advice(100.0, 101.0, 100.0).verdict,
+            ScaleVerdict::Stretched
+        );
         assert!(
-            scale_advice(100.0, 101.0)
+            scale_advice(100.0, 101.0, 100.0)
                 .sentence()
                 .contains("stretches one way")
         );
@@ -264,7 +307,7 @@ mod tests {
     #[test]
     fn bad_numbers_are_invalid() {
         for (w, h) in [(0.0, 100.0), (-1.0, 100.0), (f64::NAN, 100.0)] {
-            assert_eq!(scale_advice(w, h).verdict, ScaleVerdict::Invalid);
+            assert_eq!(scale_advice(w, h, 100.0).verdict, ScaleVerdict::Invalid);
         }
     }
 

@@ -72,7 +72,7 @@ pub(super) struct BenchState {
     cache: Option<Cache>,
     defaults: DefaultsDraft,
     /// The sides of the printed check square as typed, mm.
-    check: [String; 2],
+    check: [String; 3],
 }
 
 impl BenchState {
@@ -86,7 +86,7 @@ impl BenchState {
                 colour: "BK".into(),
                 ..DefaultsDraft::default()
             },
-            check: [String::new(), String::new()],
+            check: [String::new(), String::new(), "100".into()],
         }
     }
 }
@@ -544,7 +544,7 @@ enum Act {
 fn workshop_strip(
     ui: &mut egui::Ui,
     paper: &mut novo_layout::template::Paper,
-    check: &mut [String; 2],
+    check: &mut [String; 3],
     act: &mut Option<Act>,
 ) {
     use novo_layout::template::Paper;
@@ -1254,7 +1254,7 @@ fn typed_mm(text: &str) -> Option<f64> {
 
 /// The print check: the page to print first, and what to do with the sides
 /// of its square once measured.
-fn print_check(ui: &mut egui::Ui, check: &mut [String; 2], act: &mut Option<Act>) {
+fn print_check(ui: &mut egui::Ui, check: &mut [String; 3], act: &mut Option<Act>) {
     ui.horizontal_wrapped(|ui| {
         if ui
             .button("Print scale check (PDF)")
@@ -1264,7 +1264,7 @@ fn print_check(ui: &mut egui::Ui, check: &mut [String; 2], act: &mut Option<Act>
             *act = Some(Act::ExportScaleCheck);
         }
         ui.label("Printed square measures");
-        for (i, text) in check.iter_mut().enumerate() {
+        for (i, text) in check.iter_mut().take(2).enumerate() {
             ui.add(
                 egui::TextEdit::singleline(text)
                     .desired_width(48.0)
@@ -1272,11 +1272,18 @@ fn print_check(ui: &mut egui::Ui, check: &mut [String; 2], act: &mut Option<Act>
             );
             ui.label(if i == 0 { "x" } else { "mm" });
         }
+        ui.label("printed at");
+        ui.add(egui::TextEdit::singleline(&mut check[2]).desired_width(40.0));
+        ui.label("%");
     });
-    if let (Some(w), Some(h)) = (typed_mm(&check[0]), typed_mm(&check[1])) {
-        let advice = novo_layout::cutout_cards::scale_advice(w, h);
+    if let (Some(w), Some(h), Some(at)) = (
+        typed_mm(&check[0]),
+        typed_mm(&check[1]),
+        typed_mm(&check[2]),
+    ) {
+        let advice = novo_layout::cutout_cards::scale_advice(w, h, at);
         ui.label(advice.sentence());
     } else if !check[0].trim().is_empty() || !check[1].trim().is_empty() {
-        ui.weak("Type both sides of the square in millimetres.");
+        ui.weak("Type both sides of the square in millimetres and the scale you printed at.");
     }
 }
