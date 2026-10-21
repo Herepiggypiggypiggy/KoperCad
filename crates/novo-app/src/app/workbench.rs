@@ -828,6 +828,12 @@ impl NovoApp {
                 self.outline_open = false;
             }
         }
+        // Escape belongs to a window floating on top, not the drawing, even
+        // with the pointer over it (the drawing would take the key first).
+        let window_on_top = super::panel::dialog_on_top(ctx);
+        if let Some(view) = self.canvas.schematic() {
+            view.yield_escape = window_on_top;
+        }
     }
 
     /// The commands this frame's key presses run, taken out of the input.
