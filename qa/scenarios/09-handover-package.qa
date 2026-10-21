@@ -1,0 +1,13 @@
+@title Handover package from the File menu
+@area Reports
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+click_text "Export reports"
+wait 6
+shot handover-menu
+click_text "Export handover package (folder)"
+wait 40
+shot handover-toast
+check_layout

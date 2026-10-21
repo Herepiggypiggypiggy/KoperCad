@@ -563,6 +563,16 @@ pub(super) struct Gap {
     pub(super) fix: Option<(&'static str, &'static str)>,
 }
 
+/// `1 of 1 wire to cut has`, `3 of 25 wires to cut have`: the start of a
+/// sentence about the wires to cut that lack something.
+fn lacking(k: usize, total: usize) -> String {
+    format!(
+        "{k} of {} to cut {}",
+        novo_reports::count_text(total, "wires"),
+        if k == 1 { "has" } else { "have" }
+    )
+}
+
 /// What is missing before the bench output can be trusted: wires without a
 /// number or a cross-section, ends that get no ferrule, lengths that are
 /// estimates, and no mounting plate (nothing is routed without one).
@@ -578,7 +588,10 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     let unnumbered = count(&|j| j.number.trim().is_empty());
     if unnumbered > 0 {
         out.push(Gap {
-            text: format!("{unnumbered} wires have no number, so their labels and flags are blank"),
+            text: format!(
+                "{} no number, so their labels and flags are blank",
+                lacking(unnumbered, jobs.len())
+            ),
             fix: Some(("Number wires", "wires.number")),
         });
     }
@@ -586,7 +599,8 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     if no_size > 0 {
         out.push(Gap {
             text: format!(
-                "{no_size} wires have no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each"
+                "{} no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each",
+                lacking(no_size, jobs.len())
             ),
             fix: Some(("Autopilot", "wires.autopilot")),
         });
@@ -739,15 +753,14 @@ fn defaults_row(
     let mut missing = Vec::new();
     if !unset.no_size.is_empty() {
         missing.push(format!(
-            "{} of {} wires have no size (no strip length, no ferrule)",
-            unset.no_size.len(),
-            unset.total
+            "{} no size (no strip length, no ferrule)",
+            lacking(unset.connections_no_size, unset.connections)
         ));
     }
     if !unset.no_colour.is_empty() {
         missing.push(format!(
-            "{} have no colour (blank in the list)",
-            unset.no_colour.len()
+            "{} no colour (blank in the list)",
+            lacking(unset.connections_no_colour, unset.connections)
         ));
     }
     novo_theme::widgets::banner(
@@ -758,7 +771,9 @@ fn defaults_row(
     );
     ui.add_space(4.0);
     ui.horizontal_wrapped(|ui| {
-        ui.label("Size for wires without one");
+        ui.label("Size for wires without one").on_hover_text(
+            "A wire to cut counts as sized when any of its drawn pieces has a size; filling in sets every unsized drawn piece",
+        );
         egui::ComboBox::from_id_salt("bench_default_size")
             .selected_text(
                 draft
@@ -784,9 +799,11 @@ fn defaults_row(
         let colours = draft.fill_colours && !unset.no_colour.is_empty();
         if ui
             .add_enabled(size.is_some() || colours, egui::Button::new("Fill in"))
-            .on_hover_text(
-                "Only wires without a value change; sizes and colours you set stay. One undo step",
-            )
+            .on_hover_text(format!(
+                "Sets the size on {} without one and the colour on {} without one. Values you set stay. One undo step",
+                novo_reports::count_text(if size.is_some() { unset.no_size.len() } else { 0 }, "drawn wires"),
+                novo_reports::count_text(if colours { unset.no_colour.len() } else { 0 }, "drawn wires"),
+            ))
             .clicked()
         {
             *act = Some(Act::FillDefaults(WireDefaults {

@@ -168,6 +168,8 @@ fn contents(
             Column::new("group", "Page group", 20.0),
             Column::new("panel", "Panel", 20.0),
             Column::new("kind", "Kind", 25.0),
+            Column::new("issued", "Issued", 12.0),
+            Column::new("locked", "Locked", 12.0),
         ],
     );
     for page in project.pages_in_order() {
@@ -197,6 +199,8 @@ fn contents(
                             Cell::text(group_of(page)),
                             Cell::text(panel_of(page)),
                             Cell::text(kind.clone()),
+                            Cell::text(issued_of(page)),
+                            Cell::text(locked_of(page)),
                         ],
                         vec![page.id.into()],
                     );
@@ -222,6 +226,8 @@ fn contents(
                 Cell::text(group_of(page)),
                 Cell::text(panel_of(page)),
                 Cell::text(kind),
+                Cell::text(issued_of(page)),
+                Cell::text(locked_of(page)),
             ],
             vec![page.id.into()],
         );
@@ -285,4 +291,18 @@ fn panel_of(page: &Page) -> String {
         ..Default::default()
     }
     .to_string()
+}
+
+/// The revision the page was last issued with (its freeze), empty before
+/// the first issue.
+fn issued_of(page: &Page) -> String {
+    page.frozen
+        .as_ref()
+        .map(|f| f.revision.clone())
+        .unwrap_or_default()
+}
+
+/// The revision the page is locked with, empty for an unlocked page.
+fn locked_of(page: &Page) -> String {
+    page.locked.clone().unwrap_or_default()
 }

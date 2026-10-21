@@ -13,3 +13,4 @@
 2026-10-21 07:40 UTC #1129 merged. Claude can read wire-number conflicts (read_project section wire_numbers, Whole project only; consent version 3) (PR from claude/ai-numbering-tool).
 2026-10-21 10:40 UTC #1136 and #1165 merged. Follow-up: datasheet confirm line shows cost and month spend, Stop while reading, warning for a duplicate manufacturer and order number (PR from claude/ai-datasheet-followup).
 2026-10-21 11:00 UTC #1170 merged. Polish: spend label says counted by KoperCAD, no dollar guess, duplicate match ignores case/spaces/dashes, Stop tested (PR from claude/ai-datasheet-polish).
+2026-10-21 12:30 UTC Failure paths: app tests for bad key, no access, bad request, offline (3 tries), rate limit; QA scenario 09-ask-claude (settings-first landing, nothing sent); real-key steps 11 and 12 added to docs/CLAUDE-ASSISTANT-TEST.md (PR from claude/ai-failure-paths).

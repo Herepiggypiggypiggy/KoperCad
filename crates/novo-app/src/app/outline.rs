@@ -843,7 +843,13 @@ impl NovoApp {
             RowKind::Page { drawn: false, .. } => crate::theme::ui_palette().text_secondary,
             _ => crate::theme::ui_palette().text_primary,
         };
-        let right_w = if right.is_empty() { 0.0 } else { 56.0 };
+        let locked = matches!(&row.kind, RowKind::Page { page, .. } if self
+            .backend
+            .document()
+            .and_then(|d| d.project().page(*page))
+            .is_some_and(|p| p.locked.is_some()));
+        // Room for the padlock, so a long title ends before it.
+        let right_w = if right.is_empty() { 0.0 } else { 56.0 } + if locked { 18.0 } else { 0.0 };
         let right_edge = rect.right() - 8.0;
         if !right.is_empty() {
             painter.text(
@@ -900,6 +906,15 @@ impl NovoApp {
                 font.clone(),
                 label_color,
                 room,
+            );
+        }
+        if locked {
+            ui.painter_at(rect).text(
+                egui::pos2(rect.right() - 16.0, mid),
+                egui::Align2::RIGHT_CENTER,
+                novo_theme::icons::LOCK_SIMPLE,
+                egui::FontId::proportional(tokens::FONT_SMALL),
+                crate::theme::ui_palette().text_tertiary,
             );
         }
         if let RowKind::Page { page, .. } = &row.kind
