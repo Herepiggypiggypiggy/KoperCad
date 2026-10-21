@@ -16,7 +16,7 @@ Traps
 - Never push to a PR marked READY; follow-ups go in a new PR from main.
 - Test strings must be invented (`=A1+CAB1-...`).
 
-Unresolved after the full crane import (2026-10-21, report on `scherpel-v95-full.epj`)
+Unresolved after the full crane import (2026-10-21, report on the full crane export, kept privately)
 - 13 "Black box" devices (tag letters B x4, U x7, ES x1, K x1): no pins and no function in the file, so no symbol can be chosen. They stay labelled boxes with 2 points. Plan: give the box the size of the EPLAN drawing (exact from the sheet) and a name from the tag letters; never invent a function.
 - 2 "Insulated wire termination" matched loosely (another variant of the library symbol): connection points may be off. Plan: compare the pin positions against the embedded library variant and pick the variant with the same pin count.
 - 4-point motor protection breakers: stay boxes on purpose (two poles, no library symbol). Plan: a 2-pole symbol only when a real file needs it.
