@@ -82,3 +82,26 @@ pub(crate) fn is_read_only(err: &rusqlite::Error, path: &std::path::Path) -> boo
         _ => false,
     }
 }
+
+/// Whether a SQLite error means the database image is malformed: a file cut
+/// short by a full disk or a bad copy, or with overwritten pages.
+pub(crate) fn is_malformed(err: &rusqlite::Error) -> bool {
+    matches!(
+        err.sqlite_error_code(),
+        Some(rusqlite::ErrorCode::DatabaseCorrupt)
+    )
+}
+
+impl StorageError {
+    /// A malformed-database error from SQLite as the plain "damaged" error
+    /// naming `path`; any other error unchanged.
+    pub(crate) fn damaged_at(self, path: &std::path::Path) -> StorageError {
+        match self {
+            StorageError::Sqlite(e) if is_malformed(&e) => StorageError::Corrupt {
+                path: path.to_owned(),
+                reason: "the file is incomplete or has damaged pages (it may have been cut short by a full disk or a bad copy)".into(),
+            },
+            other => other,
+        }
+    }
+}

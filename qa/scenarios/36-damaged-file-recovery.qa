@@ -1,0 +1,12 @@
+@title Damaged project opens as a recovered copy
+@area Fixtures
+# A project file cut short (a full disk, a bad copy). It is never edited in place: the readable part
+# is written to a recovered copy beside it, the copy opens, and a warning says what happened.
+open qa/fixtures/damaged-cut-short.novo
+wait 30
+expect "damaged"
+expect "recovered copy"
+expect "was not changed"
+shot recovered-copy
+check_layout
+check_blank recovered-copy

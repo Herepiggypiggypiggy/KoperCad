@@ -15,6 +15,8 @@ A KoperCAD project is one `.novo` file: a SQLite database (`crates/novo-storage`
 
 4. **Write-protected files open for looking.** A file marked read-only, or (on Unix) in a folder without write permission, judged from permission bits so opening creates no probe file, gives `StorageError::ReadOnly` ("... is read-only ... Open it read-only, or ... use Save as"). In the app, File > Open, Recent and drag-and-drop then open it read-only automatically (title "(read-only)", status bar "Read-only", Save disabled) with a warning that names Save as; File > Open read-only does the same on request. The CLI and `import kopercad` read such files.
 5. **A damaged copy is still a drawing.** If the snapshot or sidecar table is missing the file opens and the missing table is created empty on the first write (revision snapshots or commissioning data in it are lost, the drawing is not). If `meta` or `records` is missing the file is refused with a message naming the table; it is never changed.
+6. **A damaged file is never edited, and its drawing is salvaged.** A file cut short (full disk, bad copy) or with overwritten pages gives `StorageError::Corrupt` ("... is damaged: the file is incomplete or has damaged pages ..."). `novo_storage::salvage(path)` reads it read-only, object by object, keeps every object that decodes and passes the model's integrity rules (an object whose parent was lost is dropped), and writes a normal project file `<name>.recovered.novo` beside it (`-2`, `-3` ... if taken; an earlier copy is never replaced). The report says how many objects were read back, how many were skipped and whether reading stopped at lost pages. In the app, File > Open (also Recent, drag and drop) does this itself: the recovered copy opens and a warning toast names it. Limits: objects stored in the lost pages are gone, and the salvage cannot tell what they were; a file without a SQLite header, or from a newer build, is not salvaged.
+7. **A saved number comes back bit for bit.** `serde_json` is built with `float_roundtrip`; without it some values (3.9000000000000004) were read back 1 ULP different, so a 600-page project reopened as a not-quite-identical one.
 
 ## Rules for changing the format
 
@@ -33,6 +35,8 @@ A KoperCAD project is one `.novo` file: a SQLite database (`crates/novo-storage`
 - newer schema, and unknown record kind: readable error, bytes unchanged, no side files;
 - a real child process killed at staggered moments while saving: the file always opens as the old or the new save;
 - `compat_edge.rs`: the golden file through `kopercad-cli` and the scripting API (`import kopercad` calls the same functions; the Python module itself is not built in CI), newer files refused in words by both, write-protected file and folder, missing tables;
+- `crates/novo-storage/tests/damaged.rs`: truncated, wiped-page and missing-parent files are refused in words and salvaged to a recovered copy that opens; floats round-trip exactly;
+- `crates/novo-tests/tests/data_safety.rs`: a 600-page project saves, autosaves incrementally, is offered back after a crash and is salvaged when cut short; a crash after undoing past a save offers the undone state; save, undo, save, redo reach the file exactly;
 - a child that autosaves and aborts: the app backend offers the work back on the next open.
 
 To rewrite the golden files after an **intended** format change (and only then): `KOPERCAD_REGEN_GOLDEN=1 cargo test -p novo-tests --test compat_v0_1 regenerate_golden`. For a released version, add a new golden file instead.

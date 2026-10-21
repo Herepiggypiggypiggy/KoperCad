@@ -85,6 +85,10 @@ impl ProjectFile {
     /// comparing revisions from the command line. Never writes.
     pub fn read_only(path: impl AsRef<Path>) -> Result<ProjectFile> {
         let path = path.as_ref();
+        Self::read_only_inner(path).map_err(|e| e.damaged_at(path))
+    }
+
+    fn read_only_inner(path: &Path) -> Result<ProjectFile> {
         ensure_exists(path)?;
         let flags = OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX;
         let conn = Connection::open_with_flags(path, flags)?;
@@ -156,8 +160,8 @@ impl ProjectFile {
 
     pub(crate) fn open_as(path: &Path, role: Role) -> Result<ProjectFile> {
         ensure_exists(path)?;
-        let file = Self::connect(path, false, MIGRATIONS)?;
-        file.check_role(role)?;
+        let file = Self::connect(path, false, MIGRATIONS).map_err(|e| e.damaged_at(path))?;
+        file.check_role(role).map_err(|e| e.damaged_at(path))?;
         Ok(file)
     }
 
@@ -217,6 +221,10 @@ impl ProjectFile {
 
     /// Reads the whole project, checking every model integrity rule.
     pub fn load(&self) -> Result<Project> {
+        self.load_inner().map_err(|e| e.damaged_at(&self.path))
+    }
+
+    fn load_inner(&self) -> Result<Project> {
         let corrupt = |reason: String| StorageError::Corrupt {
             path: self.path.clone(),
             reason,
@@ -390,6 +398,20 @@ impl ProjectFile {
             }
         }
         Ok(dropped)
+    }
+
+    /// Keeps a snapshot exactly as stored in another file (salvage).
+    pub(crate) fn put_snapshot_raw(
+        &mut self,
+        revision: i64,
+        format: u32,
+        data: &[u8],
+    ) -> Result<()> {
+        self.conn.execute(
+            "INSERT OR REPLACE INTO snapshots (revision, format, data) VALUES (?1, ?2, ?3)",
+            params![revision, format, data],
+        )?;
+        Ok(())
     }
 
     /// Keeps `data` (JSON text) under `key`, replacing what was there. It is
@@ -675,7 +697,7 @@ fn encode(record: &Record) -> String {
 }
 
 /// Parses a stored record and checks it matches its `kind` column.
-fn decode(kind: &str, data: &str) -> std::result::Result<Record, DecodeError> {
+pub(crate) fn decode(kind: &str, data: &str) -> std::result::Result<Record, DecodeError> {
     let record: Record = serde_json::from_str(data).map_err(|e| {
         // serde names the tag value it could not place; a kind this build
         // lacks is a newer file, anything else is damage.
@@ -695,7 +717,7 @@ fn decode(kind: &str, data: &str) -> std::result::Result<Record, DecodeError> {
     Ok(record)
 }
 
-enum DecodeError {
+pub(crate) enum DecodeError {
     /// The record's tag names a kind of object this build does not have.
     UnknownKind,
     Damaged(String),
