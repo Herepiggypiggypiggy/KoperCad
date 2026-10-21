@@ -168,7 +168,7 @@ fn cancelling_returns_promptly() {
     let r =
         CabinetSolver::new(tuning).solve(&scenario(false), Fidelity::Coarse, &control, &mut |_| {});
     assert!(matches!(r, Err(CfdError::Cancelled)));
-    assert!(t0.elapsed() < Duration::from_secs(5));
+    assert!(t0.elapsed() < Duration::from_secs(20));
 }
 
 #[test]

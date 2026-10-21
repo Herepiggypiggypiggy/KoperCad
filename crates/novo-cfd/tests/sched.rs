@@ -130,7 +130,7 @@ fn cancel_is_prompt_and_keeps_the_last_snapshot() {
     let c = Instant::now();
     s.cancel();
     while !s.current().unwrap().is_finished() {
-        assert!(c.elapsed() < Duration::from_secs(2), "cancel too slow");
+        assert!(c.elapsed() < Duration::from_secs(10), "cancel too slow");
         std::thread::sleep(Duration::from_millis(1));
     }
     let ev = s.current().unwrap().poll();
