@@ -139,6 +139,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     ("net.select", under("Edit", "Net")),
     ("net.trace", under("Edit", "Net")),
     ("plc.add_card", under("Draw", "PLC")),
+    ("plc.import_list", under("Draw", "PLC")),
     ("plc.to_plc", under("Draw", "PLC")),
     ("plc.overview", under("Draw", "PLC")),
     ("macro.save", under("Draw", "Macros")),

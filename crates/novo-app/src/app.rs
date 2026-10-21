@@ -142,6 +142,9 @@ mod plate_export;
 mod plc;
 mod plc_card;
 mod plc_link;
+mod plc_list;
+#[cfg(test)]
+mod plc_list_tests;
 mod plc_run;
 mod potentials;
 mod preferences;
@@ -1371,6 +1374,7 @@ impl NovoApp {
         self.eplan_parts_dialog(&ctx);
         self.eplan_export_dialog(&ctx);
         self.plc_import_dialog(&ctx);
+        self.plc_list_dialog(&ctx);
         self.preferences_dialog(&ctx);
         self.shortcuts_window(&ctx);
         self.whats_new_window(&ctx);
