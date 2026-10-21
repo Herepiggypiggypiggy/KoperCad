@@ -2352,7 +2352,7 @@ pub const COMMANDS: &[CommandInfo] = &[
             "export.pdf",
             "Export PDF",
             "Export",
-            &["print"],
+            &["pdf all pages"],
             Needs::Project,
         ),
         &["export pdf", "pdf"],
