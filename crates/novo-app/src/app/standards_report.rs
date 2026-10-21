@@ -104,14 +104,15 @@ fn design_sections(doc: &ComplianceDocument) -> Vec<Section> {
         vec![
             Column::new("check", "Check", 26.0),
             Column::new("result", "Result", 14.0),
-            Column::new("found", "Found", 34.0),
             Column::new("rests", "Rests on", 40.0),
+            Column::new("found", "Found", 34.0),
         ],
     );
     for r in &doc.design {
-        let found = wrap(&document::found_text(r), 56);
-        let rests = wrap(r.family.reliance.label(), 64);
-        for i in 0..found.len().max(rests.len()).max(1) {
+        let found = wrap(&document::found_text(r), 48);
+        let rests = wrap(r.family.reliance.label(), 56);
+        let result = wrap(&r.result_text(), 20);
+        for i in 0..found.len().max(rests.len()).max(result.len()).max(1) {
             summary.push(
                 vec![
                     if i == 0 {
@@ -119,13 +120,9 @@ fn design_sections(doc: &ComplianceDocument) -> Vec<Section> {
                     } else {
                         Cell::Empty
                     },
-                    if i == 0 {
-                        Cell::text(r.verdict.label())
-                    } else {
-                        Cell::Empty
-                    },
-                    found.get(i).cloned().map_or(Cell::Empty, Cell::text),
+                    result.get(i).cloned().map_or(Cell::Empty, Cell::text),
                     rests.get(i).cloned().map_or(Cell::Empty, Cell::text),
+                    found.get(i).cloned().map_or(Cell::Empty, Cell::text),
                 ],
                 Vec::new(),
             );
@@ -189,7 +186,7 @@ fn design_sections(doc: &ComplianceDocument) -> Vec<Section> {
                             Cell::Empty
                         },
                         if first {
-                            Cell::text(r.verdict.label())
+                            Cell::text(r.result_text())
                         } else {
                             Cell::Empty
                         },

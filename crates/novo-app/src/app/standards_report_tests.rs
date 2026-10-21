@@ -51,6 +51,10 @@ fn the_report_lists_every_check_family_with_its_basis_and_never_claims_complianc
     // saying the cabinet is fine.
     assert!(text.contains("No Heat result is held"));
     assert!(!text.to_lowercase().contains("project complies"));
+    // A pass on planning values or a model carries the caveat in its word.
+    assert!(text.contains("Met (estimate)"));
+    assert!(text.contains("Met (planning values)"));
+    assert!(!text.contains("can be trusted"));
     let project = d.app.backend.document().unwrap().project();
     let doc = standards::document::build(project, &standards::compliance(project));
     let out = super::standards_report::report_output(&doc);

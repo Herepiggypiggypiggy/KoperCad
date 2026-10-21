@@ -146,7 +146,7 @@ pub static FAMILIES: &[Family] = &[
     Family {
         id: "consistency",
         title: "Drawing consistency",
-        what: "Tags are unique and complete, nets have one potential, pins and wires are connected, contacts match their devices, interruption points have partners, and the generated lists (devices, wires, terminals) can be trusted.",
+        what: "Tags are unique and complete, nets have one potential, pins and wires are connected, contacts match their devices, interruption points have partners, and the generated lists (devices, wires, terminals) are read from a drawing that shows no structural problem.",
         kinds: &[
             ProblemKind::UnconnectedPin,
             ProblemKind::DuplicateTag,
@@ -295,6 +295,19 @@ impl DesignInput {
     }
 }
 
+impl Row {
+    /// The result as the reader scans it: a pass that rests on planning
+    /// values or a model says so in the word itself, so it is not read as a
+    /// verdict from the standard.
+    pub fn result_text(&self) -> String {
+        match (self.verdict, self.family.reliance) {
+            (Verdict::Pass, Reliance::Planning) => "Met (planning values)".to_owned(),
+            (Verdict::Pass, Reliance::Model) => "Met (estimate)".to_owned(),
+            (v, _) => v.label().to_owned(),
+        }
+    }
+}
+
 /// One family's result.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Row {
@@ -354,8 +367,8 @@ fn missing(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String> 
             let limited = basis.values().filter(|b| b.protecting.is_some()).count();
             if wires > 0 && limited < wires {
                 out.push(format!(
-                    "{} of {} no protective device with a rated current limits it, so its size is not compared with one",
-                    plural(wires - limited, "wire", "wires"),
+                    "{} of {} wires: no protective device with a rated current limits it, so its size is not compared with one",
+                    wires - limited,
                     wires
                 ));
             }
@@ -371,6 +384,13 @@ fn missing(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String> 
             }
         }
         "protection" => {
+            if project.devices().count() > 0
+                && project
+                    .devices()
+                    .all(|d| project.rated_current_a(d.id).is_none())
+            {
+                out.push("No device states a rated current, so no protective device was examined".to_owned());
+            }
             if !has(keys::SUPPLY_SHORT_CIRCUIT_KA) && !has("supply.transformer_kva") {
                 out.push("The supply short-circuit current is not stated (supply.short_circuit_ka, or the feeding transformer), so breaking capacity, let-through and earth-fault times were not checked".to_owned());
             }
@@ -422,10 +442,22 @@ fn evidence(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String>
         "safety-functions" => {
             for f in safety_fn::functions(project) {
                 let rating = safety_fn::rate(project, &f);
+                let example = {
+                    let n = rating.name.to_lowercase();
+                    n.contains("illustrative") || n.contains("example")
+                };
                 let line = match (&rating.total, rating.met()) {
                     (Some(t), Some(true)) => format!(
-                        "{}: required {}, achieved {} (PFHd {:.2e} per hour): met",
-                        rating.name, rating.required, t.pl, t.pfhd
+                        "{}: required {}, achieved {} (PFHd {:.2e} per hour): met as estimated{}",
+                        rating.name,
+                        rating.required,
+                        t.pl,
+                        t.pfhd,
+                        if example {
+                            "; illustrative example data, not an assessment of a real machine"
+                        } else {
+                            ""
+                        }
                     ),
                     (Some(t), _) => format!(
                         "{}: required {}, achieved {} (PFHd {:.2e} per hour): NOT met",
@@ -521,7 +553,7 @@ pub fn rows(project: &Project, input: &DesignInput) -> Vec<Row> {
             Verdict::NotApplicable
         } else if !waived.is_empty() && not_checkable.is_empty() {
             Verdict::Waived
-        } else if n == 0 && family.id != "protection" {
+        } else if n == 0 && (family.id != "protection" || project.devices().count() == 0) {
             Verdict::NotApplicable
         } else if !not_checkable.is_empty() {
             let nothing_ran = family.id == "safety-functions"
@@ -626,6 +658,25 @@ mod tests {
         // No wires exist in the empty project: nothing to examine.
         assert_eq!(w.verdict, Verdict::NotApplicable);
         assert!(w.not_checkable.iter().any(|t| t.contains("no size")));
+    }
+
+    #[test]
+    fn protection_with_a_stated_supply_but_no_rated_device_is_not_checkable() {
+        let mut project = Project::new("P");
+        project
+            .transact("devices", |tx| {
+                tx.add_device(novo_core::DeviceTag::parse("-Q1")?, "")?;
+                super::super::set_info_property(
+                    tx,
+                    keys::SUPPLY_SHORT_CIRCUIT_KA,
+                    Some(novo_core::Value::Float(10.0)),
+                )
+            })
+            .unwrap();
+        let rows = rows(&project, &DesignInput::default());
+        let p = rows.iter().find(|r| r.family.id == "protection").unwrap();
+        assert_eq!(p.verdict, Verdict::NotCheckable);
+        assert!(p.not_checkable.iter().any(|t| t.contains("rated current")));
     }
 
     #[test]

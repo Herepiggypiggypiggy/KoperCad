@@ -382,14 +382,14 @@ pub fn to_html(doc: &ComplianceDocument, date: &str) -> String {
         h.push_str(&format!("<li>{}</li>", esc(l)));
     }
     h.push_str("</ul></div>");
-    h.push_str("<h2>Design checks</h2><p>What the design checks looked at, beyond the clause rules, how each came out, and what the verdict rests on.</p><table class=\"sum\"><tr><th>Check</th><th>Result</th><th>Found</th><th>Rests on</th></tr>");
+    h.push_str("<h2>Design checks</h2><p>What the design checks looked at, beyond the clause rules, how each came out, and what the verdict rests on.</p><table class=\"sum\"><tr><th>Check</th><th>Result</th><th>Rests on</th><th>Found</th></tr>");
     for r in &doc.design {
         h.push_str(&format!(
             "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
             esc(r.family.title),
-            r.verdict.label(),
-            esc(&found_text(r)),
-            esc(r.family.reliance.label())
+            esc(&r.result_text()),
+            esc(r.family.reliance.label()),
+            esc(&found_text(r))
         ));
     }
     h.push_str("</table>");
@@ -398,7 +398,7 @@ pub fn to_html(doc: &ComplianceDocument, date: &str) -> String {
             "<div class=\"req {}\"><div class=\"head\"><h3>{}</h3><span class=\"v\">{}</span></div><p class=\"clause\">{}</p><p>{}</p>",
             r.verdict.class(),
             esc(r.family.title),
-            r.verdict.label(),
+            esc(&r.result_text()),
             esc(r.family.reliance.label()),
             esc(r.family.what)
         ));
