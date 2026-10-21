@@ -272,6 +272,16 @@ pub struct Routed {
     /// ends at the entry: the part outside is not in the length. The route
     /// carries the service loop at the placed terminal and one at the entry.
     pub entry_legs: BTreeMap<u64, StructureId>,
+    /// Connections whose two ends sit on the plates of two different
+    /// enclosures that both have an entry point (value: the two plates, the
+    /// `from` end's first). Each end is routed to its own plate's entry
+    /// point and the legs are in `cross_routes`. These connections are also
+    /// in `unrouted`: the run between the two entries is not known, so no
+    /// whole length is claimed.
+    pub cross_legs: BTreeMap<u64, [StructureId; 2]>,
+    /// The leg of a cross-cabinet connection inside one plate, by
+    /// connection id and plate. Ends at that plate's entry point.
+    pub cross_routes: BTreeMap<(u64, StructureId), Route>,
 }
 
 /// The part of a wire that runs on a surface other than the mounting plate.
@@ -385,6 +395,43 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
         };
         if s1 != s2 {
             out.unrouted.push(c.id);
+            let (e1, e2) = (
+                crate::entry::entry_point(project, s1),
+                crate::entry::entry_point(project, s2),
+            );
+            let mut off_plate = |plate: StructureId, pin: PinRef| {
+                surfaces
+                    .entry(plate)
+                    .or_insert_with(|| surfaces_of(project, plate))
+                    .off_plate
+                    .contains_key(&device_of_pin(project, pin).map_or(0, |d| d.raw()))
+            };
+            if let (Some(e1), Some(e2)) = (e1, e2)
+                && !off_plate(s1, c.from)
+                && !off_plate(s2, c.to)
+            {
+                let at = |pos: Point| Anchor {
+                    pos,
+                    facing: Facing::Any,
+                    z_mm: Some(0.0),
+                };
+                if from.z_mm.is_none() || to.z_mm.is_none() {
+                    out.unknown_height.push(c.id);
+                }
+                jobs.entry(s1).or_default().push(Job {
+                    id: c.id,
+                    from,
+                    to: at(e1),
+                    diameter_mm: c.diameter_mm,
+                });
+                jobs.entry(s2).or_default().push(Job {
+                    id: c.id,
+                    from: at(e2),
+                    to,
+                    diameter_mm: c.diameter_mm,
+                });
+                out.cross_legs.insert(c.id, [s1, s2]);
+            }
             continue;
         }
         let known = surfaces
@@ -492,7 +539,11 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
     for (structure, jobs) in jobs {
         let p = plan(&network(project, structure), &jobs, rules);
         for r in &p.routes {
-            out.routes.insert(r.job, r.clone());
+            if out.cross_legs.contains_key(&r.job) {
+                out.cross_routes.insert((r.job, structure), r.clone());
+            } else {
+                out.routes.insert(r.job, r.clone());
+            }
         }
         out.plans.push((structure, p));
     }
