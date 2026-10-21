@@ -689,6 +689,9 @@ fn spanning_wires(page: usize, pts: &[(usize, u16, Point)], placed: &[Placed]) -
     wires
 }
 
+/// Points one wire's search may reach before it keeps its guessed route.
+const MAX_SEARCH: usize = 5000;
+
 /// Replaces the guessed route of each wire by the one EPLAN implies: the
 /// straight runs between the two pins through nodes only (a run never passes
 /// through another symbol's pin). Wires with no such path keep their guess.
@@ -724,6 +727,10 @@ fn follow_runs(
         let mut seen: BTreeSet<&PinKey> = BTreeSet::from([from]);
         let mut found = false;
         while let Some(k) = queue.pop_front() {
+            // A bound per wire keeps the import time in check on a huge net.
+            if seen.len() > MAX_SEARCH {
+                break;
+            }
             if k == to {
                 found = true;
                 break;
