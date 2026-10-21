@@ -105,6 +105,8 @@ fn existing_own_files(folder: &Path) -> std::collections::BTreeSet<String> {
 /// What the question before writing shows: the open problems.
 pub(crate) struct HandoverAsk {
     summary: Summary,
+    /// Errors and warnings in all, of which `lines` shows the first few.
+    shown_of: usize,
     /// The first few problems in words.
     lines: Vec<String>,
 }
@@ -120,13 +122,16 @@ impl NovoApp {
             self.export_handover();
             return;
         }
-        let lines = problems
+        let open = problems
             .iter()
-            .filter(|p| p.severity != novo_checks::Severity::Info)
-            .take(4)
-            .map(|p| p.message.clone())
-            .collect();
-        self.wb.handover_ask = Some(HandoverAsk { summary, lines });
+            .filter(|p| p.severity != novo_checks::Severity::Info);
+        let shown_of = open.clone().count();
+        let lines = open.take(4).map(|p| p.message.clone()).collect();
+        self.wb.handover_ask = Some(HandoverAsk {
+            summary,
+            shown_of,
+            lines,
+        });
     }
 
     pub(super) fn handover_ask_dialog(&mut self, ctx: &egui::Context) {
@@ -138,13 +143,17 @@ impl NovoApp {
             ui.set_width(420.0);
             ui.heading("The design still has open problems");
             ui.add_space(4.0);
+            let verb = if ask.shown_of == 1 { "remains" } else { "remain" };
             ui.label(format!(
-                "{} remain. The package lists them on the contents page and in the drawing set, so the customer would see them.",
+                "{} {verb}. The package lists them on the contents page and in the drawing set, so the customer would see them.",
                 ask.summary.pill_text()
             ));
             ui.add_space(4.0);
             for line in &ask.lines {
                 ui.weak(format!("• {line}"));
+            }
+            if ask.shown_of > ask.lines.len() {
+                ui.weak(format!("and {} more", ask.shown_of - ask.lines.len()));
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
