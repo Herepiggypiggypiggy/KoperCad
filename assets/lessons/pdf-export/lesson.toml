@@ -134,18 +134,18 @@ solve = [ { command = "export.pdf" } ]
 id = "where-is-it"
 title = "Where the file went"
 title_nl = "Waar het bestand staat"
-# verified: pdf.rs. A saved project's PDF goes next to its file with the same
-# name; a project with no file yet (this lesson's) goes to
-# <Documents>\KoperCAD\<name>.pdf under a name not used yet. Only a PDF
+# verified: pdf.rs. Every PDF goes to <Documents>\KoperCAD. A saved project's
+# PDF takes its file name; a project with no file yet (this lesson's) gets
+# <name>.pdf under a name not used yet. Only a PDF
 # KoperCAD wrote is replaced. The message says "Exported <path>" or
 # "Replaced <path>", with "(N remain)" when design checks still have problems:
 # an export is never blocked. Nothing in the app opens the file.
 text = """
-The message at the bottom names the file. A saved project's PDF sits next to the project file; this lesson project is not saved yet, so it is in your Documents folder under **KoperCAD**.
+The message at the bottom names the file. It is in your Documents folder under **KoperCAD**, whether or not the project is saved.
 Open it from there with your PDF viewer. A PDF of your own with the same name is never replaced.
 """
 text_nl = """
-De melding onderaan noemt het bestand. De PDF van een opgeslagen project staat naast het projectbestand; dit lesproject is nog niet opgeslagen, dus staat hij in je map Documenten onder **KoperCAD**.
+De melding onderaan noemt het bestand. Hij staat in je map Documenten onder **KoperCAD**, of het project nu is opgeslagen of niet.
 Open hem daar met je PDF-lezer. Een eigen PDF met dezelfde naam wordt nooit overschreven.
 """
 

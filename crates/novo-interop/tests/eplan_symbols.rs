@@ -457,3 +457,22 @@ fn the_new_symbols_exist_in_both_packs_and_validate() {
         }
     }
 }
+
+#[test]
+fn the_variable_motor_overload_switch_is_told_apart_by_how_many_points_it_has() {
+    let mapper = SymbolMapper::new(Pack::Iec);
+    let one_pole = dev("Motor overload switch, variable", "Q", &["1", "2"]);
+    let r = mapper.map_fitting(&one_pole, 2).unwrap();
+    assert_eq!(
+        r.symbol_id(),
+        Some("iec/protection/motor_protection_breaker_1p")
+    );
+    let three = dev("Motor overload switch, variable", "Q", &[]);
+    let r = mapper.map_fitting(&three, 6).unwrap();
+    assert_eq!(
+        r.symbol_id(),
+        Some("iec/protection/motor_protection_breaker")
+    );
+    // Four points would be two poles: no symbol, so a box, never a wrong one.
+    assert!(mapper.map_fitting(&three, 4).is_none());
+}

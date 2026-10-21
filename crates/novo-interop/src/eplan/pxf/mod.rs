@@ -106,6 +106,10 @@ fn skipped_name(kind: u32) -> (&'static str, &'static str) {
             "lines",
             "drawing objects with no usable geometry in the file",
         ),
+        52 | 53 => (
+            "report table cells and texts",
+            "the cells of the generated report pages; KoperCAD generates its own from the data",
+        ),
         _ => ("other objects", "object type not known to this reader"),
     }
 }

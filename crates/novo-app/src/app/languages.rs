@@ -249,7 +249,7 @@ impl NovoApp {
         let mut load_file = false;
         let mut open = true;
         super::panel::dialog(ctx, "Languages", [620.0, 560.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 super::dialog_ui::hint(
                     ui,

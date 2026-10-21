@@ -217,6 +217,8 @@ const KNOWN_VERBS: &[&str] = &[
     "expect",
     "expect_not",
     "expect_scene",
+    "expect_enabled",
+    "expect_disabled",
     "check_layout",
     "check_blank",
     "tree",
@@ -305,6 +307,16 @@ fn rect(n: &Value) -> Option<[f64; 4]> {
     ])
 }
 
+/// A label for matching: icon glyphs (private-use characters) dropped, trimmed, lower case.
+fn norm(label: &str) -> String {
+    label
+        .chars()
+        .filter(|c| !('\u{e000}'..='\u{f8ff}').contains(c))
+        .collect::<String>()
+        .trim()
+        .to_lowercase()
+}
+
 fn interactive(role: &str) -> bool {
     matches!(
         role.to_lowercase().as_str(),
@@ -338,6 +350,15 @@ pub(crate) fn layout_hits(nodes: &[Value], window: (f64, f64)) -> Vec<Hit> {
             n["role"]
                 .as_str()
                 .is_some_and(|r| r.eq_ignore_ascii_case("scrollbar"))
+        })
+        .filter_map(rect)
+        .collect();
+    let windows: Vec<[f64; 4]> = nodes
+        .iter()
+        .filter(|n| {
+            n["role"]
+                .as_str()
+                .is_some_and(|r| r.eq_ignore_ascii_case("window"))
         })
         .filter_map(rect)
         .collect();
@@ -415,6 +436,17 @@ pub(crate) fn layout_hits(nodes: &[Value], window: (f64, f64)) -> Vec<Hit> {
             if a.1.trim().is_empty() || b.1.trim().is_empty() || a.1 == b.1 {
                 continue;
             }
+            // A dialog or floating panel lies over the page by design: only
+            // controls inside the same window are compared.
+            let home = |r: &[f64; 4]| {
+                let (cx, cy) = ((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0);
+                windows
+                    .iter()
+                    .position(|w| cx >= w[0] && cx <= w[2] && cy >= w[1] && cy <= w[3])
+            };
+            if home(&a.2) != home(&b.2) {
+                continue;
+            }
             // A popup menu lies over the page by design.
             if a.0.eq_ignore_ascii_case("menuitem") != b.0.eq_ignore_ascii_case("menuitem") {
                 continue;
@@ -435,9 +467,9 @@ pub(crate) fn layout_hits(nodes: &[Value], window: (f64, f64)) -> Vec<Hit> {
         let n = overlaps.len();
         overlaps.truncate(5);
         hits.push((
-            "S3",
-            "layout",
-            format!("{n} pair(s) of controls overlap"),
+            "S4",
+            "layout-maybe",
+            format!("{n} pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture)"),
             overlaps.join("; "),
         ));
     }
@@ -738,7 +770,7 @@ impl Ctx<'_> {
                 .as_str()
                 .is_some_and(|r| r.eq_ignore_ascii_case("button"))
                 && l.strip_prefix(label)
-                    .is_some_and(|rest| rest.starts_with("  "))
+                    .is_some_and(|rest| rest.starts_with("  ") || rest.starts_with(':'))
                 && (!lesson || l.trim_end().ends_with("Lesson"))
         });
         let Some(row) = row else {
@@ -842,7 +874,7 @@ impl Ctx<'_> {
                 }
                 let nodes = self.tree()?;
                 let ok = |n: &&Value, exact: bool| {
-                    let label = n["label"].as_str().unwrap_or("").trim().to_lowercase();
+                    let label = norm(n["label"].as_str().unwrap_or(""));
                     (if exact {
                         label == want
                     } else {
@@ -922,6 +954,49 @@ impl Ctx<'_> {
                         format!("`{}` is on screen", words[1]),
                         &format!("nothing containing `{}`", words[1]),
                         "found in the widget tree".into(),
+                    );
+                }
+                Ok(())
+            }
+            "expect_enabled" | "expect_disabled" => {
+                // The control with this label (exact first) is enabled or disabled.
+                let want = need(1, "a label")?.trim().to_lowercase();
+                let nodes = self.tree()?;
+                let label = |n: &Value| norm(n["label"].as_str().unwrap_or(""));
+                let node = nodes
+                    .iter()
+                    .find(|n| label(n) == want && interactive(n["role"].as_str().unwrap_or("")))
+                    .or_else(|| {
+                        nodes.iter().find(|n| {
+                            label(n).starts_with(&want)
+                                && interactive(n["role"].as_str().unwrap_or(""))
+                        })
+                    });
+                let Some(n) = node else {
+                    let near: Vec<String> = nodes
+                        .iter()
+                        .filter(|n| label(n).contains(&want))
+                        .map(|n| format!("{} {:?}", n["role"], n["label"]))
+                        .collect();
+                    return Err(format!(
+                        "no control labelled `{}` (near: {})",
+                        words[1],
+                        near.join(", ")
+                    ));
+                };
+                let disabled = n["disabled"] == json!(true);
+                if (words[0] == "expect_disabled") != disabled {
+                    let (exp, saw) = if disabled {
+                        ("enabled", "disabled")
+                    } else {
+                        ("disabled", "enabled")
+                    };
+                    self.add(
+                        "S3",
+                        "expect",
+                        format!("`{}` is {saw}", words[1]),
+                        &format!("`{}` is {exp}", words[1]),
+                        format!("the widget tree says {saw}"),
                     );
                 }
                 Ok(())
@@ -1462,7 +1537,7 @@ mod tests {
     fn shipped_scenarios_all_parse_and_fixtures_exist() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let all = load_all(&[root.join("qa/scenarios")], None).unwrap();
-        assert!(all.len() >= 6);
+        assert!(all.len() >= 7);
         for sc in &all {
             for st in &sc.steps {
                 if matches!(st.words[0].as_str(), "open" | "answer_dialog") {

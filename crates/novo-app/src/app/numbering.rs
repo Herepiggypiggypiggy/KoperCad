@@ -147,7 +147,7 @@ impl NovoApp {
         let mut open = true;
         let mut done = false;
         super::panel::dialog(ctx, "Set wire number", [320.0, 130.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.label("Number for the selected wire's net (empty clears it):");
                 let edit = ui.add(egui::TextEdit::singleline(&mut text).desired_width(200.0));
@@ -231,7 +231,7 @@ impl NovoApp {
         let mut save_only = false;
         let mut reveal: Option<WireId> = None;
         super::panel::dialog(ctx, "Wire numbering", [560.0, 620.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 novo_theme::widgets::section_label(ui, "Scheme");
                 scheme_ui(ui, &mut win.scheme);

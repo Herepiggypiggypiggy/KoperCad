@@ -12,3 +12,4 @@
 2026-10-17 10:20 UTC #682 merged. Third runner PR: ui_click, list_row, type_text ops; waive/restore replay; flyout kept open when a row menu entry is chosen; live-view momentary wording.
 2026-10-17 12:50 UTC #986 merged. Fourth runner PR (draft, held for freeze): 10 click-only manual steps now replay; tab clicks tick; replay state no longer leaks between lessons.
 - Design checks are quiet while a lesson runs (issue pill, symbol marks, Issues list) unless the lesson sets `show_problems = true` (design-checks, parts-library, cabinet-layout, enclosure-door-and-depth, pdf-export, generated-pages).
+- "Open finished version" now exists on the lesson card (last step and finished card), with a confirm because it replaces the drawing; opens `finished.json` as "Finished: <lesson>", ends the lesson as done.
