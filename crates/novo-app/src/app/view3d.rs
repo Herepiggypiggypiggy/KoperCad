@@ -351,10 +351,11 @@ impl NovoApp {
                 if layers.wires && wires_stale {
                     let inputs = model::wires_with(project, id, &routed);
                     let on_plate = inputs.iter().map(|w| w.id).collect();
+                    let hot = hot_devices(project, id);
                     mode.wire_facts = Some((
                         id,
                         revision,
-                        view3d_wires::facts(project, id, &routed, &on_plate),
+                        view3d_wires::facts(project, id, &routed, &on_plate, &hot),
                     ));
                     mode.wires = Some((id, revision, inputs));
                 }
@@ -1375,6 +1376,44 @@ impl NovoApp {
             }
         }
     }
+}
+
+/// The devices on the plate with the power loss the Heat view uses, for the
+/// heat-neighbour check on the Run card.
+#[cfg(test)]
+pub(super) fn hot_devices_for_tests(
+    project: &Project,
+    id: StructureId,
+) -> Vec<super::view3d_run_checks::HotDevice> {
+    hot_devices(project, id)
+}
+
+fn hot_devices(project: &Project, id: StructureId) -> Vec<super::view3d_run_checks::HotDevice> {
+    let Some(layout) = load(project, id) else {
+        return Vec::new();
+    };
+    let tag_of = |id: u64| {
+        project
+            .get::<Device>(DeviceId::from(id))
+            .and_then(|d| d.tag.device_code().map(str::to_owned))
+            .unwrap_or_default()
+    };
+    heat::items_of(project, &layout, &tag_of)
+        .into_iter()
+        .map(|i| super::view3d_run_checks::HotDevice {
+            hot: novo_routing::checks::Hot {
+                id: i.id,
+                x: i.x,
+                y: i.y,
+                w: i.w,
+                h: i.h,
+                loss_w: i.loss_w,
+            },
+            tag: i.tag,
+            known: i.loss_known,
+            estimated: i.loss_estimated,
+        })
+        .collect()
 }
 
 /// Starts the run Simulate asked for (here or by command) and says whether

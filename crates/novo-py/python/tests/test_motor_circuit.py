@@ -231,3 +231,17 @@ def test_dol_bom_to_excel(tmp_path):
     with pytest.raises(ne.KoperError, match="project file"):
         p.export_bom(tmp_path / "dol.novo")
     p.close()
+
+
+def test_problems_lists_the_open_design_checks():
+    """`problems()` is what `kopercad-cli check --json` prints."""
+    p = ne.Project("Checks")
+    assert [q for q in p.problems() if q["severity"] == "error"] == []
+    p.add_device("-K1", "Contactor")
+    p.add_device("-K1", "Second contactor")
+    duplicates = [q for q in p.problems() if q["kind"] == "duplicate_tag"]
+    assert len(duplicates) == 1
+    problem = duplicates[0]
+    assert problem["severity"] == "error"
+    assert set(problem) == {"severity", "kind", "label", "message", "page", "at"}
+    assert problem["label"] and problem["message"]

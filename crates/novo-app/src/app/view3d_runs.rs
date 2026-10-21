@@ -134,6 +134,9 @@ enum Gap {
     OutsideNotStated,
     /// The stated cable length is shorter than the route inside the cabinet.
     CableTooShort,
+    /// The wire ends in a second cabinet: each cabinet draws its leg, the run
+    /// between the cabinets is not known.
+    AcrossCabinets,
 }
 
 /// The sentence for a basis text.
@@ -160,6 +163,9 @@ fn why(text: &str, gap: Gap) -> &'static str {
         }
         "estimate" if gap == Gap::OutsideNotStated => {
             "Drawn to the entry, but the wire outside it is not stated, so the length stays an estimate. State it in Cabinet > Routes."
+        }
+        "estimate" if gap == Gap::AcrossCabinets => {
+            "The run between the two cabinets is not known, so the length stays an estimate; the part inside each cabinet is drawn there."
         }
         _ => {
             "Not routed: a planning figure from the drawing. Place the devices (and set the cabinet entry for wires that leave) to make it exact."
@@ -210,7 +216,12 @@ pub(super) fn bases(
                 Gap::CableTooShort
             } else if is_drawn
                 .and_then(|f| f.entry.as_ref())
-                .is_some_and(|e| e.outside_mm.is_none() && e.across.is_none())
+                .is_some_and(|e| e.across.is_some())
+            {
+                Gap::AcrossCabinets
+            } else if is_drawn
+                .and_then(|f| f.entry.as_ref())
+                .is_some_and(|e| e.outside_mm.is_none())
             {
                 Gap::OutsideNotStated
             } else {
@@ -351,11 +362,13 @@ pub(super) fn duct_runs<'a>(
     facts: &'a BTreeMap<u64, WireFacts>,
     selection: &BTreeSet<ItemId>,
 ) -> Vec<DuctRuns<'a>> {
+    let ordered = super::view3d_wires::sorted(facts);
     ducts_picked(selection)
         .into_iter()
         .map(|rail| {
-            let wires: Vec<&WireFacts> = super::view3d_wires::sorted(facts)
-                .into_iter()
+            let wires: Vec<&WireFacts> = ordered
+                .iter()
+                .copied()
                 .filter(|f| f.duct_use.iter().any(|d| d.rail == rail))
                 .collect();
             let fill = wires
@@ -465,6 +478,14 @@ pub(super) fn overlays(
     if !ducts.positions.is_empty() {
         out.push(Overlay::Lines(ducts));
     }
+    let tight: Vec<(Point, f64)> = chosen
+        .iter()
+        .filter_map(|f| f.checks.as_ref())
+        .flat_map(|c| c.corners.iter().map(|k| (k.at, k.top_mm)))
+        .collect();
+    if !tight.is_empty() {
+        out.push(Overlay::Lines(corner_marks(scene, &tight)));
+    }
     if !path.positions.is_empty() {
         out.push(Overlay::Lines(path));
     }
@@ -517,6 +538,32 @@ fn entry_marker(scene: &Scene, at: Point) -> OverlayLines {
     poly(&[c - dx, c + dx]);
     poly(&[c - dy, c + dy]);
     poly(&[c, c + Vec3::Z * 40.0]);
+    lines
+}
+
+/// A red cross over each corner the wire cannot take, held above the ducts
+/// that meet there (a mark on the plate would sit inside them, out of sight).
+fn corner_marks(scene: &Scene, at: &[(Point, f64)]) -> OverlayLines {
+    let r = 16.0;
+    let red = tone_colour(Tone::Over);
+    let mut lines = OverlayLines {
+        width_px: 3.0,
+        order: 23,
+        ..OverlayLines::default()
+    };
+    for (p, top) in at {
+        let c = scene.frame.world(p.x, p.y, *top + 4.0);
+        for (a, b) in [
+            (Vec3::X + Vec3::Y, -Vec3::X - Vec3::Y),
+            (Vec3::X - Vec3::Y, Vec3::Y - Vec3::X),
+        ] {
+            lines.starts.push(lines.positions.len() as u32);
+            for q in [c + a * r, c + b * r] {
+                lines.positions.push(q);
+                lines.colors.push(red);
+            }
+        }
+    }
     lines
 }
 
@@ -604,10 +651,13 @@ pub(super) fn card_lines(f: &WireFacts) -> Vec<(Tone, String)> {
             "A device depth is unknown: the length is a little short".to_owned(),
         ));
     }
-    out.push((
-        Tone::Idle,
-        "Not checked: cable bend radius, clearance to hot parts".to_owned(),
-    ));
+    match &f.checks {
+        Some(c) => out.extend(c.lines()),
+        None => out.push((
+            Tone::Idle,
+            "Not checked: cable bend radius, clearance to hot parts".to_owned(),
+        )),
+    }
     out
 }
 
@@ -712,12 +762,17 @@ fn duct_body(ui: &mut egui::Ui, d: &DuctRuns<'_>) -> Asked {
     }
     let total: f64 = d.wires.iter().map(|f| f.length_mm).sum();
     ui.weak(format!(
-        "{} runs, {} inside the cabinet",
+        "{} {}, together {} long, whole runs",
         d.wires.len(),
+        if d.wires.len() == 1 { "run" } else { "runs" },
         super::view3d_wires::metres(total)
     ));
     if ui
-        .small_button(format!("Select its {} runs", d.wires.len()))
+        .small_button(if d.wires.len() == 1 {
+            "Select its run".to_owned()
+        } else {
+            format!("Select its {} runs", d.wires.len())
+        })
         .on_hover_text("Pick every run in this duct to read them together")
         .clicked()
     {
@@ -807,7 +862,7 @@ pub(super) fn panel(
     let room = (height - top - BELOW_PANEL).max(120.0);
     super::panel::Panel::new("view3d_wire_runs", title, view, side, PANEL_WIDTH)
         .top(top)
-        .height(room.min(560.0))
+        .height(room.min(760.0))
         .above_card()
         .show(ctx, |ui| {
             // The list on top so another run is always one click away; the card of
@@ -889,6 +944,7 @@ mod tests {
             )],
             entry: None,
             basis: None,
+            checks: None,
         }
     }
 
@@ -978,6 +1034,12 @@ mod tests {
         assert!(e.line().contains("outside it 3.00 m as stated, not drawn"));
         assert!(why("estimate", Gap::OutsideNotStated).contains("State it in Cabinet > Routes"));
         assert!(!why("estimate", Gap::None).contains("State it"));
+        let across_why = why("estimate", Gap::AcrossCabinets);
+        assert!(
+            across_why.contains("between the two cabinets"),
+            "{across_why}"
+        );
+        assert!(!across_why.contains("Place the devices"), "{across_why}");
         let across = EntryFacts {
             across: Some("+FLD".into()),
             ..e

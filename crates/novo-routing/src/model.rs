@@ -124,7 +124,7 @@ fn is_outside(project: &Project, plate: StructureId, pin: PinRef) -> bool {
 
 /// The device a pin physically sits on: the device of a device symbol, or
 /// the strip of a terminal symbol.
-fn device_of_pin(project: &Project, pin: PinRef) -> Option<DeviceId> {
+pub fn device_of_pin(project: &Project, pin: PinRef) -> Option<DeviceId> {
     let symbol = project.symbol(pin.symbol)?;
     match &symbol.role {
         SymbolRole::Device { device, .. } => Some(*device),
