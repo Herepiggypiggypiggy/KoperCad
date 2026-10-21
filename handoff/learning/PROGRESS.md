@@ -16,3 +16,4 @@
 - Inspector (and other right-hand panels) now stay above the lesson card while it sits in its corner (`panel::reserve_bottom_right`); test at 1366x768.
 - Learning paths reordered so every `needs` is taught first and all 33 lessons are in a path; `lint::path_notes` + `repo_lessons` test keep it so.
 - Next: Skip step applies `solve`; replay test must not rely on a leftover Place rules window; Open finished version; quiet design checks in lessons; challenge lessons.
+- "Open finished version" now exists on the lesson card (last step and finished card), with a confirm because it replaces the drawing; opens `finished.json` as "Finished: <lesson>", ends the lesson as done.

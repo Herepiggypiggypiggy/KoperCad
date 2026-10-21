@@ -386,7 +386,7 @@ fn distinct(mut values: Vec<f64>) -> Vec<f64> {
 
 /// Width and height of a sheet: the plate, or the door, which takes the
 /// inside size of the enclosure when that is set.
-fn sheet_size(layout: &CabinetLayout, surface: &Surface) -> (f64, f64) {
+pub(crate) fn sheet_size(layout: &CabinetLayout, surface: &Surface) -> (f64, f64) {
     match (surface, layout.enclosure) {
         (Surface::Door, Some(e)) if e.width > 0.0 && e.height > 0.0 => (e.width, e.height),
         (Surface::Named(n), _) => layout
@@ -589,16 +589,10 @@ pub fn plate_drawing(
     }
 }
 
-/// The documents to export for a layout: always the mounting plate, then a
-/// sheet for the door and for every other surface (wall, roof, extra plate)
-/// that has holes or cut-outs, in that order. All sheets of one export
-/// share the scale picked for the largest of them.
-pub fn documents(
-    title: &str,
-    layout: &CabinetLayout,
-    features: &[DeviceFeatures],
-) -> (Vec<PlateDocument>, DrillTable) {
-    let table = crate::drill::drill_table(layout, features);
+/// The surfaces that get a sheet: always the mounting plate, then every
+/// other surface (door, wall, roof, extra plate) that has holes or
+/// cut-outs, in surface order.
+pub(crate) fn sheet_surfaces(table: &DrillTable) -> Vec<Surface> {
     let mut surfaces = vec![Surface::Plate];
     let mut used: Vec<Surface> = table
         .holes
@@ -610,6 +604,20 @@ pub fn documents(
     used.sort();
     used.dedup();
     surfaces.extend(used);
+    surfaces
+}
+
+/// The documents to export for a layout: always the mounting plate, then a
+/// sheet for the door and for every other surface (wall, roof, extra plate)
+/// that has holes or cut-outs, in that order. All sheets of one export
+/// share the scale picked for the largest of them.
+pub fn documents(
+    title: &str,
+    layout: &CabinetLayout,
+    features: &[DeviceFeatures],
+) -> (Vec<PlateDocument>, DrillTable) {
+    let table = crate::drill::drill_table(layout, features);
+    let surfaces = sheet_surfaces(&table);
     let (mut sw, mut sh) = (0.0_f64, 0.0_f64);
     for s in &surfaces {
         let (w, h) = sheet_size(layout, s);

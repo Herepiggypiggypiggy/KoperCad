@@ -59,3 +59,7 @@ bottom, left to right. A long table continues on further PDF sheets.
 
 No menu, CLI command or Cabinet-view button yet; the engines and writers are
 callable. Side-view drawings, duct cut lengths (R6) and machine formats are later.
+
+## Workshop pack: 1:1 drilling template
+
+Reports > Export > Export workshop pack (folder), or the Workshop pack button in Bench output, writes `<project> workshop` next to the project file. The first file is the drilling template of each mounting plate at true size on A4 or A3: tiles overlap by 10 mm and carry grey registration crosses, a cross hair at every hole and cut-out centre with its number and size, and a 100 mm scale-check ruler. Print at 100%. Hole positions are exact in the file; on paper they are only as good as the print scale and the taping (about 0.5 mm is typical, an estimate). The folder also holds the bench cut list, ferrules, labels and the assembly checklist.

@@ -227,7 +227,7 @@ impl NovoApp {
         let mut to_inputs = false;
         if let Some((_, _, sheet)) = win.cache.clone() {
             super::panel::dialog(ctx, "Calculations", [760.0, 620.0])
-                .open(&mut open)
+                .open(super::panel::esc(ctx, &mut open))
                 .show(ctx, |ui| {
                     header(ui, &sheet, &mut to_inputs, &mut copy);
                     ui.separator();

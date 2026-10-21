@@ -1,0 +1,1 @@
+- 2026-10-21 page line in the device tooltip, 1 unit test, seen in the window

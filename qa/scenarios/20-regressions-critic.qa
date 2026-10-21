@@ -1,0 +1,43 @@
+@title Critic audit regressions (defects.md round 1 and 2)
+@area Regressions
+# Each check states the FIXED behaviour; a finding means the defect is still there.
+# Ids are those in audit/critic/defects.md. Visual-only defects (C-02, C-04, C-06, C-12) have a picture, no assertion.
+click_text "Open example"
+wait 20
+# C-03: a freshly opened file starts with an empty undo history.
+expect_disabled Undo
+# C-02: zoom to fit centres the sheet (look at the picture).
+key Home
+wait 10
+shot c02-zoom-to-fit
+# C-08: menu entries with nothing to act on are disabled.
+click_text Edit #1
+wait 6
+expect_disabled Paste
+key Escape
+click_text Draw #1
+wait 6
+expect_disabled "Accept proposal"
+expect_disabled "Accept all proposals"
+key Escape
+# C-01: Escape closes a floating window.
+key ctrl+k
+wait 4
+text Standards check
+wait 4
+key Enter
+wait 10
+shot c01-standards-open
+key Escape
+wait 6
+shot c01-after-escape
+expect_not "Standards check"
+# C-04, C-07: cabinet problem pill and clipped toolbar.
+click_text Cabinet #1
+wait 20
+shot c04-cabinet-pill
+check_layout
+# C-06: commissioning list.
+click_text Commissioning
+wait 20
+shot c06-commissioning

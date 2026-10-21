@@ -32,6 +32,7 @@ mod font;
 mod inter;
 pub mod plate;
 mod report;
+pub mod template;
 
 use novo_canvas::model::{
     ModelStyle, PageScene, PlaceholderArt, SheetContent, SheetLine, SheetText, SymbolArt,

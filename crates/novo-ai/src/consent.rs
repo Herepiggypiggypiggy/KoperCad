@@ -48,7 +48,9 @@ impl DataScope {
     pub fn describes(self) -> &'static str {
         match self {
             Self::None => {
-                "Only the messages you type are sent. Claude cannot look at your drawing."
+                "Only the messages you type are sent, a picture of the window if you attach one \
+                 yourself, and the text of a button that says “with Claude” when you press it. \
+                 Claude cannot look at your drawing on its own."
             }
             Self::Outline => {
                 "The project name, page names and titles, device tags and counts are sent \
@@ -60,8 +62,8 @@ impl DataScope {
             }
             Self::Project => {
                 "Everything in the open project can be sent when Claude asks: devices, \
-                 parts, wires, terminals, cabinet layout and notes. Use this only for \
-                 projects you are allowed to share with Anthropic."
+                 parts, wires, terminals, cabinet layout, notes and the design-check problems. Use \
+                 this only for projects you are allowed to share with Anthropic."
             }
         }
     }
@@ -80,7 +82,7 @@ impl DataScope {
 }
 
 /// Bump when the wording of what is sent changes, so people agree again.
-pub const CONSENT_VERSION: u32 = 1;
+pub const CONSENT_VERSION: u32 = 2;
 
 /// What the person agreed to.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

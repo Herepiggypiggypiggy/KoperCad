@@ -335,7 +335,7 @@ impl NovoApp {
         let mut open = true;
         let mut act: Option<Act> = None;
         super::panel::dialog(ctx, "Report designer", [1040.0, 640.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.horizontal_top(|ui| {
                     // The form takes 430 points at least and grows with the

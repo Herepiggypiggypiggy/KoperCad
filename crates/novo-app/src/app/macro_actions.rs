@@ -428,7 +428,7 @@ impl NovoApp {
         let win = &mut self.wb.macro_place;
         let entries = win.entries();
         let window = super::panel::dialog(ctx, "Place macro", [420.0, 440.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.add(
                     egui::TextEdit::singleline(&mut win.query)

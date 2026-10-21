@@ -599,3 +599,180 @@ fn a_single_typed_word_is_not_offered_to_claude() {
     s.d.frame();
     assert!(s.script.seen.lock().unwrap().is_empty());
 }
+
+#[test]
+fn a_question_queued_from_elsewhere_opens_the_window_and_is_sent_once() {
+    let mut s = setup(DataScope::Outline);
+    s.d.app.wb.assistant.open = false;
+    s.script.push(200, text("It means the wire has no end."));
+    s.d.app
+        .wb
+        .assistant
+        .ask_later("Explain this problem".into());
+    for _ in 0..400 {
+        s.d.frame();
+        if s.d.app.wb.assistant.transcript_text().contains("no end") {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(s.d.app.wb.assistant.open);
+    assert_eq!(s.script.seen.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn a_queued_question_is_not_sent_while_claude_is_off() {
+    let mut s = setup(DataScope::Outline);
+    s.d.app.settings.ai.enabled = false;
+    s.d.app
+        .wb
+        .assistant
+        .ask_later("Explain this problem".into());
+    for _ in 0..20 {
+        s.d.frame();
+    }
+    assert!(s.script.seen.lock().unwrap().is_empty());
+    assert!(
+        s.d.app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("nothing was sent")
+    );
+}
+
+#[test]
+fn a_picture_of_the_window_goes_with_one_message_and_never_unasked() {
+    let mut s = setup(DataScope::None);
+    queue(&s.script, [text("I see a drawing."), text("Ok.")]);
+    ask(&mut s, "hello");
+    assert!(!s.script.seen.lock().unwrap()[0].body.contains("\"image\""));
+    s.d.app.wb.assistant.attach_picture_requested();
+    s.d.frame();
+    let shot = egui::ColorImage::filled([40, 20], egui::Color32::from_rgb(10, 120, 200));
+    s.d.frame_with(vec![egui::Event::Screenshot {
+        viewport_id: egui::ViewportId::ROOT,
+        user_data: egui::UserData::default(),
+        image: Arc::new(shot),
+    }]);
+    assert!(s.d.app.wb.assistant.has_picture());
+    ask(&mut s, "what is on screen?");
+    let seen = s.script.seen.lock().unwrap();
+    let body: Value = serde_json::from_str(&seen[1].body).unwrap();
+    let content = &body["messages"][2]["content"];
+    assert_eq!(content[0]["type"], "image");
+    assert!(
+        content[0]["source"]["data"]
+            .as_str()
+            .unwrap()
+            .starts_with("iVBORw0KGgo")
+    );
+    drop(seen);
+    assert!(
+        !s.d.app.wb.assistant.has_picture(),
+        "the picture is used once"
+    );
+}
+
+fn attach(s: &mut Setup) {
+    s.d.app.wb.assistant.attach_picture_requested();
+    s.d.frame();
+    let shot = egui::ColorImage::filled([40, 20], egui::Color32::from_rgb(10, 120, 200));
+    s.d.frame_with(vec![egui::Event::Screenshot {
+        viewport_id: egui::ViewportId::ROOT,
+        user_data: egui::UserData::default(),
+        image: Arc::new(shot),
+    }]);
+    assert!(s.d.app.wb.assistant.has_picture());
+}
+
+#[test]
+fn clear_chat_drops_an_attached_picture() {
+    let mut s = setup(DataScope::Project);
+    s.script.push(200, text("Ok."));
+    attach(&mut s);
+    s.d.app.wb.assistant.clear_chat();
+    assert!(!s.d.app.wb.assistant.has_picture());
+    ask(&mut s, "hello");
+    assert!(!s.script.seen.lock().unwrap()[0].body.contains("\"image\""));
+}
+
+#[test]
+fn narrowing_the_scope_drops_an_attached_picture() {
+    let mut s = setup(DataScope::Project);
+    s.script.push(200, text("Ok."));
+    attach(&mut s);
+    s.d.app.settings.ai.consent = Consent::give(DataScope::None, 1_792_000_100);
+    ask(&mut s, "hello");
+    assert!(!s.script.seen.lock().unwrap()[0].body.contains("\"image\""));
+    assert!(
+        s.d.app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("attached picture")
+    );
+}
+
+#[test]
+fn a_panel_can_leave_a_question_and_only_when_claude_is_on() {
+    let mut s = setup(DataScope::Outline);
+    s.script.push(200, text("The cabinet stays cool."));
+    s.d.frame();
+    let ctx = s.d.ctx.clone();
+    assert!(super::assistant::claude_is_on(&ctx));
+    super::assistant::ask_claude_later(&ctx, "Describe this heat result".into());
+    for _ in 0..400 {
+        s.d.frame();
+        if s.d
+            .app
+            .wb
+            .assistant
+            .transcript_text()
+            .contains("stays cool")
+        {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(s.script.seen.lock().unwrap().len(), 1);
+    // Off: the button is not offered and a left question is dropped.
+    let mut s = setup(DataScope::Outline);
+    s.d.app.settings.ai.enabled = false;
+    s.d.frame();
+    let ctx = s.d.ctx.clone();
+    assert!(!super::assistant::claude_is_on(&ctx));
+    super::assistant::ask_claude_later(&ctx, "Describe this heat result".into());
+    for _ in 0..20 {
+        s.d.frame();
+    }
+    assert!(s.script.seen.lock().unwrap().is_empty());
+}
+
+#[test]
+fn the_design_checks_are_a_project_section_only() {
+    let result_for = |scope: DataScope| {
+        let mut s = setup(scope);
+        queue(
+            &s.script,
+            [
+                tool("t1", "read_project", json!({"section": "problems"})),
+                text("ok"),
+            ],
+        );
+        ask(&mut s, "What is wrong with my project?");
+        let seen = s.script.seen.lock().unwrap();
+        let second: Value = serde_json::from_str(&seen[1].body).unwrap();
+        second["messages"][2]["content"][0]["content"]
+            .as_str()
+            .unwrap()
+            .to_string()
+    };
+    let whole = result_for(DataScope::Project);
+    assert!(
+        !whole.starts_with("Unknown section") && !whole.starts_with("Not allowed"),
+        "{whole}"
+    );
+    assert!(whole.contains("problems"));
+    assert!(result_for(DataScope::Outline).starts_with("Not allowed"));
+}

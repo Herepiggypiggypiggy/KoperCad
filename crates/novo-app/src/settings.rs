@@ -108,7 +108,7 @@ pub struct Settings {
     /// A swipe in wheel lines pans the 3D view instead of zooming (Windows
     /// touchpads); the 3D toolbar's Layers > Trackpad pans.
     pub trackpad_pans: bool,
-    /// What the person last chose in File > Export drawings > Export PDF...
+    /// What the person last chose in File > Export drawings > Export PDF with options...
     /// (`app/pdf_options.rs`): a per-user preference, kept in the settings
     /// file under the user's profile.
     pub pdf_choice: PdfChoice,
