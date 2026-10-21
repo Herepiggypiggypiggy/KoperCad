@@ -1,1 +1,2 @@
 - 2026-10-21 gap clearance verdict on dimensions, tests green
+- 2026-10-21 live gap card while a device is dragged (view3d_drag_gaps.rs), 3 unit tests, seen in the window
