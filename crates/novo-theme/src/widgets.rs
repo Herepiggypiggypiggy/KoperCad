@@ -750,6 +750,24 @@ pub fn banner(
         .response
 }
 
+/// [`banner`] with no actions, whose text wraps to the width it is given (a long
+/// sentence in `banner` stays on one line and runs off the window).
+pub fn banner_wrapped(ui: &mut Ui, level: Level, text: &str) -> Response {
+    let p = Palette::of(ui);
+    Frame::new()
+        .fill(level.wash(p))
+        .corner_radius(radius::CONTROL)
+        .inner_margin(Margin::symmetric(space::M as i8, 6))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal_top(|ui| {
+                ui.label(RichText::new(level.icon()).color(level.color(p)));
+                ui.add(egui::Label::new(RichText::new(text).color(p.text_primary)).wrap());
+            });
+        })
+        .response
+}
+
 /// How large an [`empty_state`] is drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EmptySize {

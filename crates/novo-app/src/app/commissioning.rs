@@ -1178,6 +1178,8 @@ fn checks_tab(
                 && next_open(project, &mode.store, None, None, WalkScope::All).is_some();
             ui.weak(if wires_done {
                 "Wires done. Untick Wires only for terminals and devices"
+            } else if all.is_empty() {
+                "Nothing to check yet: draw wires, devices or terminals first"
             } else {
                 "Everything is decided. Check the Punch list"
             });
