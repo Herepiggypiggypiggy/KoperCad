@@ -174,6 +174,10 @@ pub const RECENT_SHOWN: usize = 5;
 const EXACT: i32 = 100_000;
 /// Added to a command's match on its own label.
 const LABEL_BONUS: i32 = 50;
+/// A command whose label has the typed word as a whole word (`heat` in
+/// "Simulate heat of the cabinet") outranks a part that only starts with it
+/// ("Heating element"); a part named exactly by the word still leads.
+const WHOLE_WORD_BONUS: i32 = 120;
 
 /// The most a command's keyword (not its label or verb) can score, kept
 /// below a symbol's name so a part-like word finds the part first.
@@ -899,7 +903,13 @@ fn command_rows(
         // The label itself counts for more than a keyword or a Dutch
         // word: `ro` lists Rotate before the commands with a keyword
         // like `route`.
-        let by_label = fuzzy::score(query, info.label).map(|s| s + LABEL_BONUS);
+        let whole_word = query.len() >= 3
+            && info
+                .label
+                .split(|c: char| !c.is_alphanumeric())
+                .any(|w| w.eq_ignore_ascii_case(query));
+        let by_label = fuzzy::score(query, info.label)
+            .map(|s| s + LABEL_BONUS + if whole_word { WHOLE_WORD_BONUS } else { 0 });
         let by_hint = fuzzy::best_score(query, hints)
             .map(|s| if names_part { s.min(KEYWORD_CAP) } else { s });
         let score = fuzzy::score(query, &full)
