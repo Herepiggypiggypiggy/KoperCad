@@ -1309,7 +1309,8 @@ impl View3d {
 
     /// Measuring lines with end ticks and the length on a chip (see
     /// `dimension`). Lines too short on screen to carry their text are left
-    /// out; zoom in and they appear.
+    /// out; zoom in and they appear. Gaps with a clearance verdict are the
+    /// exception: they are always drawn.
     fn paint_dimensions(
         &self,
         painter: &egui::Painter,
@@ -1330,7 +1331,9 @@ impl View3d {
             let chip = galley.size() + Vec2::new(8.0, 4.0);
             let along = b - a;
             let len = along.length();
-            if len < chip.x.max(MIN_DIMENSION_PX) {
+            // A gap with a clearance verdict is drawn however short: a part
+            // that is too close is exactly the one whose line is short.
+            if len <= f32::EPSILON || (d.required.is_none() && len < chip.x.max(MIN_DIMENSION_PX)) {
                 continue;
             }
             let col = match d.role {
