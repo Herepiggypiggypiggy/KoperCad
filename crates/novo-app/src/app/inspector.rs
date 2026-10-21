@@ -111,6 +111,17 @@ fn visible_inputs<'a>(
         .collect()
 }
 
+/// The grey text of an empty input row. A typical entry is marked "e.g." so
+/// it is not read as the device's value (audit C-49: "25" beside a 9 A
+/// contactor looked like a stored AC-3 current).
+fn input_hint(key: &str, typical: &str) -> String {
+    if key == "trip_curve" {
+        typical.to_owned()
+    } else {
+        format!("e.g. {typical}")
+    }
+}
+
 /// Reads an entry for a calculation input: empty clears it, `trip_curve`
 /// takes B, C or D, every other input a positive number.
 pub(super) fn parse_device_input(key: &str, text: &str) -> Result<Option<Value>, String> {
@@ -1113,7 +1124,7 @@ fn calc_inputs_section(ui: &mut egui::Ui, info: &DeviceInfo, actions: &mut Vec<I
                     ui.add(
                         egui::TextEdit::singleline(&mut text)
                             .id(id)
-                            .hint_text(*hint)
+                            .hint_text(input_hint(key, hint))
                             .desired_width(f32::INFINITY),
                     )
                     .on_hover_text(if *from_part {
