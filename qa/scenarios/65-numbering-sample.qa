@@ -1,0 +1,16 @@
+@title Wire numbering window: the sample follows the fields (C-52)
+@area Schematic
+@sizes 1366x768 1920x1080
+# Start 1, empty prefix, one digit: the sample next to the scheme reads 1, 2, 3, never 101, 102, 103.
+click_text "Open example"
+wait 20
+key ctrl+k
+text "wire numbering"
+wait 5
+key Enter
+wait 10
+expect "Scheme"
+expect "1, 2, 3"
+expect_not "101, 102"
+shot numbering-sample
+check_layout
