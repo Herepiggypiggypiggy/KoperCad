@@ -563,6 +563,16 @@ pub(super) struct Gap {
     pub(super) fix: Option<(&'static str, &'static str)>,
 }
 
+/// `1 of 1 wire to cut has`, `3 of 25 wires to cut have`: the start of a
+/// sentence about the wires to cut that lack something.
+fn lacking(k: usize, total: usize) -> String {
+    format!(
+        "{k} of {} to cut {}",
+        novo_reports::count_text(total, "wires"),
+        if k == 1 { "has" } else { "have" }
+    )
+}
+
 /// What is missing before the bench output can be trusted: wires without a
 /// number or a cross-section, ends that get no ferrule, lengths that are
 /// estimates, and no mounting plate (nothing is routed without one).
@@ -579,8 +589,8 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     if unnumbered > 0 {
         out.push(Gap {
             text: format!(
-                "{unnumbered} of {} wires to cut have no number, so their labels and flags are blank",
-                jobs.len()
+                "{} no number, so their labels and flags are blank",
+                lacking(unnumbered, jobs.len())
             ),
             fix: Some(("Number wires", "wires.number")),
         });
@@ -589,8 +599,8 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     if no_size > 0 {
         out.push(Gap {
             text: format!(
-                "{no_size} of {} wires to cut have no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each",
-                jobs.len()
+                "{} no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each",
+                lacking(no_size, jobs.len())
             ),
             fix: Some(("Autopilot", "wires.autopilot")),
         });
@@ -738,14 +748,14 @@ fn defaults_row(
     let mut missing = Vec::new();
     if !unset.no_size.is_empty() {
         missing.push(format!(
-            "{} of {} wires to cut have no size (no strip length, no ferrule)",
-            unset.connections_no_size, unset.connections
+            "{} no size (no strip length, no ferrule)",
+            lacking(unset.connections_no_size, unset.connections)
         ));
     }
     if !unset.no_colour.is_empty() {
         missing.push(format!(
-            "{} have no colour (blank in the list)",
-            unset.connections_no_colour
+            "{} no colour (blank in the list)",
+            lacking(unset.connections_no_colour, unset.connections)
         ));
     }
     novo_theme::widgets::banner(
@@ -785,9 +795,9 @@ fn defaults_row(
         if ui
             .add_enabled(size.is_some() || colours, egui::Button::new("Fill in"))
             .on_hover_text(format!(
-                "Sets the size on {} drawn wires without one and the colour on {} without one. Values you set stay. One undo step",
-                if size.is_some() { unset.no_size.len() } else { 0 },
-                if colours { unset.no_colour.len() } else { 0 },
+                "Sets the size on {} without one and the colour on {} without one. Values you set stay. One undo step",
+                novo_reports::count_text(if size.is_some() { unset.no_size.len() } else { 0 }, "drawn wires"),
+                novo_reports::count_text(if colours { unset.no_colour.len() } else { 0 }, "drawn wires"),
             ))
             .clicked()
         {

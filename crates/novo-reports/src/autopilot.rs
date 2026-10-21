@@ -884,8 +884,10 @@ impl Ready {
     /// What the percentage counts, for the hover text.
     pub fn explanation(&self) -> String {
         format!(
-            "{} of {} checks pass: {} wires to cut with four checks each (number, cross-section, colour, a known length: routed or stated by you), plus one for the mounting plate. Estimated lengths do not count, and without a plate no length check passes.",
-            self.done, self.total, self.wires
+            "{} of {} checks pass: {} with four checks each (number, cross-section, colour, a known length: routed or stated by you), plus one for the mounting plate. Estimated lengths do not count, and without a plate no length check passes.",
+            self.done,
+            self.total,
+            crate::count_text(self.wires, "wires to cut")
         )
     }
 }

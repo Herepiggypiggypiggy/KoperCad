@@ -43,6 +43,8 @@ pub fn count_text(n: usize, noun: &str) -> String {
     let one = match noun {
         "connections" => "connection",
         "wires" => "wire",
+        "wires to cut" => "wire to cut",
+        "drawn wires" => "drawn wire",
         "wire labels" => "wire label",
         "rows" => "row",
         "supply and PE leads" => "supply or PE lead",
@@ -128,4 +130,16 @@ pub fn wire_set_mismatch(project: &Project) -> Option<String> {
         .iter()
         .find(|(_, n, expect)| n != expect)
         .map(|(name, n, expect)| format!("{name} counts {n}, expected {expect}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::count_text;
+
+    #[test]
+    fn one_is_singular() {
+        assert_eq!(count_text(1, "wires to cut"), "1 wire to cut");
+        assert_eq!(count_text(1, "drawn wires"), "1 drawn wire");
+        assert_eq!(count_text(2, "drawn wires"), "2 drawn wires");
+    }
 }
