@@ -1,0 +1,25 @@
+@title Auto-wiring by pin kind: a motor below a coil is not wired to it
+@area Schematic
+@sizes 1366x768
+# Audit defect C-11. A one-pole breaker may feed a coil (that wire is drawn),
+# but the motor placed under the coil must not get a power wire to A2.
+click_text "New project"
+wait 20
+key q
+text mcb
+key Return
+click 600 150
+wait 10
+key q
+text contactor
+key Return
+click 600 225
+wait 10
+shot coil-under-breaker
+key q
+text m3
+key Return
+click 600 300
+wait 10
+shot motor-under-coil
+expect "Not wired"
