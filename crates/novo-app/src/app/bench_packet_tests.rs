@@ -71,6 +71,12 @@ fn the_packet_has_a_cover_then_the_parts_and_the_cover_names_the_right_pages() {
     assert!(cover.contains("2 Labels.pdf"), "{cover}");
     assert!(cover.contains("Print at 100"), "{cover}");
     assert!(cover.contains("Read before you print"), "{cover}");
+    // The wire counts are printed whole: a cell that is too long ends in "...".
+    assert!(!cover.contains("..."), "{cover}");
+    assert!(
+        cover.contains("between pins +") && cover.contains("pieces on the sheets"),
+        "{cover}"
+    );
     // Every "p. N" on the cover points at a page that starts the part.
     let marks: Vec<usize> = cover
         .split("p. ")

@@ -316,7 +316,7 @@ pub fn cover_notes(jobs: &[WireCutJob]) -> Vec<String> {
         notes.insert(
             0,
             format!(
-                "{no_size} of {} wires have no cross-section: no ferrule is listed for them and they sit in one group. Set the size (Reports > Bench output > Cut list, or Autopilot), then print again.",
+                "{no_size} of {} wires to cut have no cross-section: no ferrule is listed for them and they sit in one group. Set the size (Reports > Bench output > Cut list, or Autopilot), then print again.",
                 jobs.len()
             ),
         );
@@ -355,14 +355,29 @@ pub fn cover(
         },
     );
     let on_cable = jobs.iter().filter(|j| j.cable.is_some()).count();
+    let set = crate::WireSet::of(project);
+    // One line each: the cover rows are one or two lines tall in the PDF.
     fact(
         &mut facts,
         "Wires to cut",
-        if on_cable > 0 {
-            format!("{} ({on_cable} are cores of a cable)", jobs.len())
-        } else {
-            jobs.len().to_string()
-        },
+        format!(
+            "{} ({} between pins + {})",
+            jobs.len(),
+            set.connections,
+            crate::count_text(set.leads(), "supply and PE leads")
+        ),
+    );
+    if on_cable > 0 {
+        fact(
+            &mut facts,
+            "Cable cores",
+            format!("{on_cable} of the wires to cut are cores of a cable"),
+        );
+    }
+    fact(
+        &mut facts,
+        "Wires as drawn",
+        format!("{} pieces on the sheets (supply feeds included)", set.drawn),
     );
     let drawn = project
         .devices()
