@@ -64,6 +64,11 @@ pub struct HandoverInput {
 pub enum Truth {
     /// Counted or read straight from the drawing.
     Exact,
+    /// A result the program works out from the model and the figures the
+    /// designer stated (routed lengths, checks it runs). Not measured.
+    Calculated,
+    /// What the project itself states, for example that a revision is issued.
+    Stated,
     /// A model or planning figure: check it before relying on it.
     Estimate,
     /// Something is missing, so the figure is not complete.
@@ -78,6 +83,8 @@ impl Truth {
     pub fn text(self) -> &'static str {
         match self {
             Truth::Exact => "Exact",
+            Truth::Calculated => "Calculated",
+            Truth::Stated => "Stated",
             Truth::Estimate => "Estimate",
             Truth::Incomplete => "Incomplete",
             Truth::Recorded => "Recorded on site",
@@ -152,14 +159,32 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
             "No connected wires yet.",
         ));
     } else {
+        let mut bases: std::collections::BTreeMap<&str, usize> = Default::default();
+        for j in &jobs {
+            *bases.entry(j.basis.as_str()).or_default() += 1;
+        }
         let guessed = jobs.iter().filter(|j| is_estimate(&j.basis)).count();
+        let present = bases
+            .iter()
+            .map(|(b, n)| format!("{n} {b}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let mut notes = String::new();
+        if bases.contains_key("routed, no depth") {
+            notes.push_str(
+                " Wires \"routed, no depth\" are too short by the rise to the terminals.",
+            );
+        }
+        if bases.contains_key("door, no gap") {
+            notes.push_str(" Door wires leave out the gap to the door and the hinge loop.");
+        }
         rows.push(if guessed == 0 {
             row(
                 "Wire lengths",
-                Truth::Exact,
+                Truth::Calculated,
                 format!(
-                    "All {} are routed through the cabinet model or taken from a stated cable length. \
-                     Routed means the model's ducts, not a tape measure.",
+                    "{} by basis: {present}. Routed through the model's ducts or taken from a stated \
+                     cable length: calculated, not measured on the plate.{notes}",
                     plural(jobs.len(), "wire", "wires")
                 ),
             )
@@ -168,9 +193,8 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
                 "Wire lengths",
                 Truth::Estimate,
                 format!(
-                    "{} of {} are estimates (a device is not placed on a plate, or the wire leaves the cabinet). \
-                     The rest are routed or stated. Check the estimated ones on the plate.",
-                    guessed,
+                    "{guessed} of {} are estimates. By basis: {present}. See the Basis column of the wire \
+                     list. Check the estimated ones on the plate.{notes}",
                     plural(jobs.len(), "wire", "wires")
                 ),
             )
@@ -183,7 +207,11 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
             Truth::NotIncluded,
             "The checks were not run for this package.",
         ),
-        Some(s) if s.is_clean() => row("Design checks", Truth::Exact, "No open problems."),
+        Some(s) if s.is_clean() => row(
+            "Design checks",
+            Truth::Calculated,
+            "No open problems in the checks the program runs. This is not a design review.",
+        ),
         Some(s) => row(
             "Design checks",
             Truth::Incomplete,
@@ -255,7 +283,7 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
     let locked = project.pages().filter(|p| p.locked.is_some()).count();
     rows.push(match project.latest_revision() {
         None => row(
-            "As built",
+            "Issued state",
             Truth::Incomplete,
             "No revision has been issued, so no page is locked and nothing is recorded as the state handed over.",
         ),
@@ -263,16 +291,17 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
             let loose = pages - locked.min(pages);
             if loose == 0 && input.changed_pages == 0 {
                 row(
-                    "As built",
-                    Truth::Exact,
+                    "Issued state",
+                    Truth::Stated,
                     format!(
-                        "Revision {} is issued and every page is locked and unchanged since.",
+                        "The drawing set is frozen at revision {}: every page is locked and unchanged since. \
+                         Whether the machine was built to it is recorded on site, not known to the program.",
                         r.index
                     ),
                 )
             } else {
                 row(
-                    "As built",
+                    "Issued state",
                     Truth::Incomplete,
                     format!(
                         "Latest revision {}: {} not locked, {} changed since it was issued.",
@@ -291,9 +320,13 @@ pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
 /// The contents page: what is in the package, then what to rely on.
 pub fn handover_summary(project: &Project, input: &HandoverInput) -> ReportOutput {
     let name = project.info().name.clone();
+    let issue = match project.latest_revision() {
+        Some(r) => format!("revision {}", r.index),
+        None => "no revision issued".to_owned(),
+    };
     let mut files = Section::new(
         "files",
-        &format!("Handover package, {name}, {}", input.date),
+        &format!("Handover package, {name}, {issue}, {}", input.date),
         vec![
             Column::new("file", "File", 30.0),
             Column::new("what", "What it is", 50.0),
@@ -331,7 +364,7 @@ pub fn handover_summary(project: &Project, input: &HandoverInput) -> ReportOutpu
     }
     ReportOutput {
         report: CONTENTS_ID.to_owned(),
-        title: format!("{name}: handover package"),
+        title: format!("{name}: handover package, {issue}"),
         revision: project.revision(),
         sections: vec![files, truth],
     }
@@ -396,7 +429,7 @@ mod tests {
         let rows = truth_rows(doc.project(), &HandoverInput::default());
         let find = |item: &str| rows.iter().find(|r| r.item == item).unwrap();
         assert_eq!(find("Wire lengths").truth, Truth::NotIncluded);
-        assert_eq!(find("As built").truth, Truth::Incomplete);
+        assert_eq!(find("Issued state").truth, Truth::Incomplete);
         assert_eq!(find("Heat").truth, Truth::NotIncluded);
         assert_eq!(find("Design checks").truth, Truth::NotIncluded);
         assert_eq!(find("Commissioning record").truth, Truth::NotIncluded);
@@ -433,6 +466,20 @@ mod tests {
         assert_eq!(files[0][2], "Included");
         assert_eq!(files[1][2], "Left out: no safety functions");
         assert!(out.section("truth").unwrap().rows.len() >= 5);
+    }
+
+    #[test]
+    fn wire_lengths_are_never_called_exact() {
+        let doc = Document::default();
+        let rows = truth_rows(doc.project(), &HandoverInput::default());
+        assert!(
+            rows.iter()
+                .all(|r| r.item != "Wire lengths" || r.truth != Truth::Exact)
+        );
+        assert!(
+            rows.iter()
+                .all(|r| r.item != "Issued state" || r.truth != Truth::Exact)
+        );
     }
 
     #[test]

@@ -32,6 +32,24 @@ fn the_package_fills_one_folder_and_says_what_it_left_out() {
         })
         .unwrap();
     d.frame();
+    let first_page = d
+        .app
+        .backend
+        .document()
+        .unwrap()
+        .project()
+        .pages_in_order()
+        .first()
+        .map(|p| p.name.to_string())
+        .unwrap();
+    d.app.settings.plot_sets.insert(
+        crate::app::pdf::owner_tag(&file),
+        vec![crate::settings::PlotSetChoice {
+            name: "Issue A3".into(),
+            pages: vec![first_page],
+            ..Default::default()
+        }],
+    );
 
     assert_eq!(
         d.app.export_handover_to(&folder).as_deref(),
@@ -43,6 +61,7 @@ fn the_package_fills_one_folder_and_says_what_it_left_out() {
         "2 Revisions.pdf",
         "3 Parts list.pdf",
         "9 Lists.xlsx",
+        "1 Plot set Issue A3.pdf",
     ] {
         assert!(folder.join(name).exists(), "{name}");
     }
@@ -56,6 +75,8 @@ fn the_package_fills_one_folder_and_says_what_it_left_out() {
     ] {
         assert!(!folder.join(name).exists(), "{name}");
     }
+    // No plate and no wires: no workshop pack.
+    assert!(!folder.join("Workshop").exists());
     let last = &d.app.messages().last().unwrap().text;
     assert!(
         last.contains("Left out") && last.contains("4 Wire list.pdf"),
@@ -70,7 +91,20 @@ fn the_package_fills_one_folder_and_says_what_it_left_out() {
     assert!(text.contains("exact or estimated"), "{text}");
     assert!(text.contains("Left out"), "{text}");
 
+    // An old file this run no longer writes is removed, the user's own file stays.
+    std::fs::write(folder.join("8 Safety functions.pdf"), b"old").unwrap();
+    std::fs::write(folder.join("Customer notes.pdf"), b"theirs").unwrap();
     // A second run replaces its own files.
     assert!(d.app.export_handover_to(&folder).is_some());
     assert_eq!(d.app.messages().last().unwrap().level, Level::Info);
+    assert!(
+        !folder.join("8 Safety functions.pdf").exists(),
+        "stale file removed"
+    );
+    assert!(folder.join("Customer notes.pdf").exists());
+    let last = &d.app.messages().last().unwrap().text;
+    assert!(
+        last.contains("replaced") && last.contains("removed"),
+        "{last}"
+    );
 }
