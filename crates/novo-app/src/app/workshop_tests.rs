@@ -134,4 +134,23 @@ fn an_absurd_plate_is_left_out_with_a_hint_instead_of_hundreds_of_sheets() {
     assert!(pdfs.is_empty(), "no template for the absurd plate");
     assert_eq!(too_big.len(), 1, "{too_big:?}");
     assert!(too_big[0].starts_with("+CAB1"), "{too_big:?}");
+
+    // The page count must not overflow for a plate beyond any real size.
+    d.app.cabinet_ask(
+        Ask::SetPlateSize(
+            cab,
+            novo_core::MountingPlate {
+                width: 1e30,
+                height: 1e30,
+                margin: 10.0,
+            },
+        ),
+        Some(cab),
+        None,
+        &[],
+    );
+    d.frame();
+    let project = d.app.backend.document().unwrap().project();
+    let (pdfs, too_big) = super::workshop::template_pdfs(project, "Plant 3", Paper::A3);
+    assert!(pdfs.is_empty() && too_big.len() == 1, "{too_big:?}");
 }

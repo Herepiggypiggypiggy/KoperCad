@@ -40,10 +40,9 @@ pub(super) fn template_pdfs(
         let Some((sheets, _)) = template_documents(project, s.id) else {
             continue;
         };
-        let pages: usize = sheets
-            .iter()
-            .map(|sh| novo_pdf::template::page_count(sh, paper))
-            .sum();
+        let pages = sheets.iter().fold(0usize, |n, sh| {
+            n.saturating_add(novo_pdf::template::page_count(sh, paper))
+        });
         if pages > MAX_TEMPLATE_PAGES {
             too_big.push(format!("{} ({pages} pages)", s.tag));
             continue;

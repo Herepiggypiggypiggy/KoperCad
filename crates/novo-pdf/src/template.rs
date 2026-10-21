@@ -27,7 +27,7 @@ pub fn tile_plan(sheet: &TemplateSheet, paper: Paper) -> TilePlan {
 
 /// Number of PDF pages one sheet takes: the overview and its tiles.
 pub fn page_count(sheet: &TemplateSheet, paper: Paper) -> usize {
-    1 + tile_plan(sheet, paper).count()
+    tile_plan(sheet, paper).count().saturating_add(1)
 }
 
 type Draw<'a> = Box<dyn Fn(&mut PageWriter<'_>) + 'a>;
