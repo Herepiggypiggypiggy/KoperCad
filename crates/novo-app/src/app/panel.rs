@@ -182,6 +182,13 @@ impl Panel {
         };
         let moved = is_moved(ctx, id);
         let (pivot, start) = self.start();
+        // egui ignores the position given to a window that already exists
+        // unless it may be dragged from anywhere, so a panel that has not
+        // been moved is told once whenever its start changes (a bar or strip
+        // above the canvas appeared, the window was resized).
+        let start_id = id.with("start");
+        let restart = !moved && ctx.data(|d| d.get_temp::<egui::Pos2>(start_id)) != Some(start);
+        ctx.data_mut(|d| d.insert_temp(start_id, start));
         // A panel hanging from the right edge stays clear of a card in the
         // bottom right corner, unless the person has moved it.
         let corner = if self.above_card && self.side == Side::Right && !moved {
@@ -220,7 +227,7 @@ impl Panel {
         } else {
             window.constrain(false).pivot(pivot).current_pos(start)
         };
-        if taken.is_some() {
+        if taken.is_some() || restart {
             // A window dragged by its title bar keeps the position it had
             // before the frame and ignores the one given here; for the one
             // frame that a layout places it, it may be dragged from anywhere.
