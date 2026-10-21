@@ -20,7 +20,7 @@ use novo_plc::link::LinkFormat;
 use novo_symbols::Library;
 use novo_workflow::commands::Context;
 use novo_workflow::keymap::{FAVOURITE_COMMANDS, Focus, Keymap};
-use novo_workflow::palette::{Mode, Sources, Target};
+use novo_workflow::palette::{LessonEntry, Mode, Sources, Target};
 use novo_xref::{LiveXref, Navigator, Place, Reference};
 
 use novo_view3d::camera::ViewPreset;
@@ -131,6 +131,8 @@ pub(crate) struct Workbench {
     /// An item to select and centre once its page is shown (a row of the
     /// Changes list).
     pub(super) pending_item: Option<(PageId, AnyId)>,
+    /// The person's symbol folder as last loaded into the catalog.
+    pub(super) custom_symbols: super::symbol_folder::CustomSymbols,
     /// Several items to select together on a page, once it is shown (a
     /// cable's core wires from the outline).
     pub(super) pending_items: Option<(PageId, Vec<AnyId>)>,
@@ -197,6 +199,8 @@ pub(crate) struct Workbench {
     /// The DXF background panel, while open; inside, the values being
     /// edited before they are committed.
     pub(super) background_panel: Option<Option<super::background_panel::Placement>>,
+    /// The Claude assistant window and its conversation.
+    pub(super) assistant: super::assistant::State,
     /// The Bench output window (cut list, ferrules, labels), while open.
     pub(super) bench: Option<super::bench::BenchState>,
     /// The PDF options dialog (File > Export drawings > Export PDF with options...), while open.
@@ -288,6 +292,7 @@ impl Default for Workbench {
             nav: Navigator::default(),
             pending: None,
             pending_item: None,
+            custom_symbols: Default::default(),
             pending_items: None,
             canvas_area: None,
             occurrences: None,
@@ -318,6 +323,7 @@ impl Default for Workbench {
             changes: None,
             changes_closed: false,
             background_panel: None,
+            assistant: super::assistant::State::new(),
             bench: None,
             pdf_options: None,
             #[cfg(test)]
@@ -501,6 +507,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "file.import_dxf_background",
     "view.background",
     "view.background_place",
+    "ai.assistant",
     "file.remove_background",
     "export.dxf_page",
     "export.dxf_all",
@@ -509,6 +516,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.aml",
     "export.eplan",
     "file.import_aml",
+    "file.import_crane",
     "file.import_eplan",
     "file.import_dwg",
     "file.choose_dwg_converter",
@@ -528,6 +536,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "app.preferences",
     "view.shortcuts",
     "help.show_hints",
+    "help.next_lesson",
     "help.whats_new",
     "help.numbers",
     "view.reset_panels",
@@ -1257,6 +1266,7 @@ impl NovoApp {
             "file.import_dxf_background" => self.import_dxf_background(),
             "view.background" => self.toggle_background(),
             "view.background_place" => self.open_background_panel(),
+            "ai.assistant" => self.open_assistant(),
             "file.remove_background" => self.remove_background(),
             "export.dxf_page" => {
                 self.export_dxf(super::dxf::DxfScope::CurrentPage);
@@ -1273,6 +1283,7 @@ impl NovoApp {
                 self.export_aml();
             }
             "file.import_aml" => self.import_aml(),
+            "file.import_crane" => self.import_crane(),
             "file.import_eplan" => self.import_eplan(),
             "file.import_dwg" => self.import_dwg(),
             "file.choose_dwg_converter" => self.choose_dwg_converter(),
@@ -1306,6 +1317,7 @@ impl NovoApp {
             "view.shortcuts" => self.toggle_shortcuts(),
             "help.show_hints" => self.show_hints_again(),
             "help.whats_new" => self.show_whats_new = true,
+            "help.next_lesson" => self.learn_run_command(id, None),
             "help.numbers" => self.show_numbers = true,
             "view.reset_panels" => super::panel::reset_layout(ctx),
             "layout.draw" | "layout.cabinet" | "layout.3d" | "layout.review" | "layout.reports"
@@ -1413,6 +1425,7 @@ impl NovoApp {
                     );
                 }
             }
+            Target::Lesson(id) => self.learn_run_command_lesson(&id),
             Target::Cable(cable) => self.show_cable(cable),
             Target::Wire(wire) => self.go_to_wire(wire),
             Target::Symbol(symbol) => self.begin_place(&symbol, None),
@@ -1502,8 +1515,9 @@ impl NovoApp {
         f: impl FnOnce(&mut CommandField, &Sources<'_>) -> R,
     ) -> R {
         let mut field = std::mem::take(&mut self.wb.field);
+        let lessons = self.learn.palette_entries();
         let result = {
-            let sources = sources(self);
+            let sources = sources(self, &lessons);
             f(&mut field, &sources)
         };
         self.wb.field = field;
@@ -1667,8 +1681,9 @@ impl NovoApp {
 }
 
 /// What the command field searches, from the app's parts.
-fn sources(app: &NovoApp) -> Sources<'_> {
+fn sources<'a>(app: &'a NovoApp, lessons: &'a [LessonEntry]) -> Sources<'a> {
     Sources {
+        lessons,
         project: app.backend.document().map(Document::project),
         library: app.library(),
         keymap: &app.wb.keymap,

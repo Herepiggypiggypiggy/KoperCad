@@ -956,6 +956,22 @@ impl<'p> Tx<'p> {
         })
     }
 
+    /// Marks a structure node as a cabinet or box (or not). A node that holds
+    /// a mounting plate stays an enclosure.
+    pub fn set_enclosure(&mut self, structure: StructureId, enclosure: bool) -> Result<()> {
+        let plated = self
+            .project
+            .structures()
+            .any(|s| s.id == structure && s.plate.is_some());
+        if !enclosure && plated {
+            return Err(ModelError::Refused {
+                what: "Remove cabinet".into(),
+                reason: "it has a mounting plate".into(),
+            });
+        }
+        self.update::<Structure>(structure, |s| s.enclosure = enclosure)
+    }
+
     /// Sets the mounting plate of an enclosure, or removes it with `None`
     /// (refused while rails or placed devices are on it).
     pub fn set_plate(

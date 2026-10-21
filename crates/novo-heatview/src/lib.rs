@@ -9,6 +9,7 @@ pub mod cfd;
 pub mod compare;
 pub mod contour;
 pub mod field;
+pub mod flux;
 pub mod hotspot;
 pub mod range;
 pub mod streamline;

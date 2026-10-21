@@ -29,6 +29,8 @@ calamine.workspace = true
 # EPLAN symbol mapping tables (data files).
 serde.workspace = true
 toml.workspace = true
+# The configurator's project.json and hernoemen.json beside an export.
+serde_json.workspace = true
 
 [dev-dependencies]
 novo-tests = { path = "../novo-tests" }

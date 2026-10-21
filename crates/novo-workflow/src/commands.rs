@@ -482,6 +482,16 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "file.import_crane",
+            "Import crane configurator project",
+            "Project",
+            &["crane", "kraan", "configurator", "migrate", "other tool"],
+            Needs::Project,
+        ),
+        &["import crane", "import crane configurator"],
+    ),
+    verb(
+        cmd(
             "file.import_eplan",
             "Import EPLAN project (PXF)",
             "Project",
@@ -1529,6 +1539,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Project,
     ),
     cmd(
+        "ai.assistant",
+        "Ask Claude",
+        "View",
+        &["claude", "ai", "assistant", "chat", "anthropic", "ask"],
+        Needs::Nothing,
+    ),
+    cmd(
         "simulate.motor-start",
         "Simulate motor start",
         "View",
@@ -1806,6 +1823,15 @@ pub const COMMANDS: &[CommandInfo] = &[
         "Fast keys walk-through",
         "View",
         &["tour", "tutorial", "walkthrough", "help"],
+        Needs::Nothing,
+    ),
+    cmd(
+        "help.next_lesson",
+        "Next lesson",
+        "View",
+        &[
+            "lesson", "tutorial", "training", "learn", "continue", "next",
+        ],
         Needs::Nothing,
     ),
     verb(

@@ -16,7 +16,7 @@ pub mod progress;
 pub mod runner;
 pub mod ui;
 
-pub use catalog::{Catalog, Entry, Files, ProjectRef, Track, TrackSummary};
+pub use catalog::{Catalog, Entry, Files, LearningPath, ProjectRef, Track, TrackSummary};
 pub use check::{Check, Event, Facts};
 pub use demo::{Demo, DemoOp};
 pub use lesson::{Lang, Lesson, LessonError, Status, Step, Target};

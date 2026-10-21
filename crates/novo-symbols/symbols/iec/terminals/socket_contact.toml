@@ -1,0 +1,25 @@
+format = 1
+id = "iec/terminals/socket_contact"
+name = "Socket contact, wire side"
+description = "One female contact of a plug connector seen from its wire side only. The mating side is the matching plug contact on the other half; the terminal logic joins the same pin number of both halves."
+standard = "IEC 60617"
+category = "terminals"
+function = "connector.female"
+keywords = ["socket", "female", "receptacle", "contact", "connector pin", "plug half"]
+aliases = ["xfc"]
+
+connections = [
+  { id = "1", at = [0, 0], dir = "up" },
+]
+
+anchors = [
+  { role = "tag", at = [-3.5, 4], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 2] },
+  { kind = "arc", center = [0, 4], r = 2, start = 180, end = 360 },
+]
+
+[behavior]
+kind = "none"

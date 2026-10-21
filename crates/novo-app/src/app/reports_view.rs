@@ -32,6 +32,7 @@ const WIDE_TABLE_COLUMNS: usize = 8;
 const WIDE_PX_PER_WEIGHT: f32 = 5.5;
 const WIDE_MAX_COLUMN: f32 = 230.0;
 
+use super::learn_ui::chip_button;
 use super::workspace::Workspace;
 use super::{Level, NovoApp};
 
@@ -189,11 +190,19 @@ impl NovoApp {
         let mut jump = self.report_keys(ui, &output, &orders, filter_id);
         let mut export = None;
         let mut add_page = false;
+        let mut lesson = None;
+        let topic = if id == "report.wires" || id == "report.wirecut" {
+            "wire list"
+        } else {
+            "reports"
+        };
+        let chip = self.learn.chip(topic);
         ui.horizontal(|ui| {
             ui.heading(&output.title);
             ui.weak(format!("{} rows", output.row_count()));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
+                lesson = chip_button(ui, chip.as_ref());
                 ui.menu_button("Export", |ui| {
                     if ui
                         .button("PDF")
@@ -274,6 +283,9 @@ impl NovoApp {
         }
         if add_page {
             self.add_report_page(&id);
+        }
+        if let Some(lesson) = lesson {
+            self.learn_run_command_lesson(&lesson);
         }
         if let Some(source) = jump {
             self.jump_to_source(source);

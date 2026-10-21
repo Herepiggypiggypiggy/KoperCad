@@ -23,6 +23,7 @@ fn sources<'a>(project: &'a Project, library: &'a Library, keymap: &'a Keymap) -
             has_page: true,
             ..Context::default()
         },
+        lessons: &[],
     }
 }
 

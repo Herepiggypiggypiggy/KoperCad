@@ -107,6 +107,11 @@ pub const DUTCH: &[Aliases] = &[
         &["nieuw", "wat is nieuw", "nieuwigheden"],
     ),
     nl(
+        "help.next_lesson",
+        &[],
+        &["volgende les", "les doorgaan", "doorgaan met leren"],
+    ),
+    nl(
         "help.numbers",
         &[],
         &["over de getallen", "schatting", "model", "rekenwaarde"],
@@ -532,6 +537,7 @@ pub const DUTCH: &[Aliases] = &[
             "kortsluitvastheid",
         ],
     ),
+    nl("ai.assistant", &["vraag claude"], &["assistent", "chat"]),
     nl(
         "simulate.motor-start",
         &[],
@@ -677,6 +683,11 @@ pub const DUTCH: &[Aliases] = &[
         "parts.import_eplan",
         &["importeer eplan onderdelen"],
         &["eplan artikelen", "eplan onderdelen", "artikelexport"],
+    ),
+    nl(
+        "file.import_crane",
+        &["importeer kraanconfigurator"],
+        &["kraan", "configurator", "migreren", "overnemen"],
     ),
     nl(
         "file.import_eplan",

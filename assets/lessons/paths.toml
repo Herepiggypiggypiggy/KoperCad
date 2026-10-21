@@ -1,0 +1,36 @@
+# Learning paths: a reading order across the tracks for one kind of person.
+# A path is only a list; progress comes from the lessons themselves.
+# Lessons that are drafts are left out of a path until they are shown.
+# The plan behind the paths is docs/design/lesson-plan.md.
+
+[[path]]
+id = "first-hour"
+title = "First hour"
+title_nl = "Eerste uur"
+summary = "Anyone new: place parts, wire them, give them a supply, draw a motor starter and follow its contacts."
+summary_nl = "Voor wie nieuw is: onderdelen plaatsen, bedraden, voeden, een motorstarter tekenen en de contacten volgen."
+lessons = ["placing-parts", "wiring-modes", "potentials", "motor-starter", "cross-references"]
+
+[[path]]
+id = "draftsperson"
+title = "Draftsperson"
+title_nl = "Tekenaar"
+summary = "Draws the schematics: after the first hour, terminals, cables, wire numbers and checks."
+summary_nl = "Tekent de schema's: na het eerste uur klemmen, kabels, draadnummers en controles."
+lessons = ["interruption-points", "terminal-strips", "cables-and-shields", "wire-numbers", "design-checks"]
+
+[[path]]
+id = "panel-builder"
+title = "Panel builder"
+title_nl = "Kastenbouwer"
+summary = "Builds the cabinet: layout, rails and ducts, routing, cut lengths, plate drawing, labels and commissioning."
+summary_nl = "Bouwt de kast: indeling, rails en kanalen, routing, snijlengtes, plaattekening, labels en inbedrijfstelling."
+lessons = ["cabinet-layout", "rails-and-ducts", "wire-routing", "cut-lengths", "enclosure-door-and-depth", "panel-plate-drawing", "panel-labels", "commissioning"]
+
+[[path]]
+id = "project-lead"
+title = "Project lead"
+title_nl = "Projectleider"
+summary = "Issues and hands over: generated pages, wire list and parts list, revisions, PDF and spreadsheets."
+summary_nl = "Geeft uit en draagt over: gegenereerde pagina's, draadlijst en stuklijst, revisies, PDF en spreadsheets."
+lessons = ["generated-pages", "wire-list-and-bom", "revisions-and-compare", "pdf-export", "spreadsheets"]

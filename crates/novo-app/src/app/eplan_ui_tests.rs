@@ -29,7 +29,12 @@ const PARTS_XML: &str = r#"<?xml version="1.0"?>
 
 #[test]
 fn the_new_commands_are_run_by_the_app() {
-    for id in ["plc.overview", "parts.import_eplan", "export.eplan"] {
+    for id in [
+        "plc.overview",
+        "parts.import_eplan",
+        "export.eplan",
+        "file.import_crane",
+    ] {
         assert!(super::workbench::app_runs(id), "{id}");
     }
 }
@@ -187,4 +192,27 @@ fn the_overview_lists_cards_channels_and_addresses() {
     assert_eq!(rows[0].channels.len(), 6);
     assert!(rows[0].channels[0].0.contains("DI 0"));
     assert!(issues.is_empty(), "{issues:?}");
+}
+
+#[test]
+fn a_crane_configurator_folder_is_previewed_with_its_notes_then_imported() {
+    let (_dir, mut d) = open();
+    let output = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../novo-interop/tests/fixtures/crane/output");
+    assert!(d.app.import_crane_from(&output));
+    let import = d.app.wb.eplan_import.as_ref().expect("a preview opens");
+    let text = import.plan.report().text();
+    assert!(text.contains("version 2"), "{text}");
+    assert!(text.contains("Exact (as the file writes it)"), "{text}");
+    assert!(d.app.confirm_eplan_import());
+    let doc = d.app.backend.document().unwrap();
+    assert_eq!(doc.project().cables().count(), 2);
+    assert_eq!(doc.project().info().name, "DEMO-1 Demo slewing crane");
+}
+
+#[test]
+fn a_folder_without_a_project_is_refused_in_words() {
+    let (dir, mut d) = open();
+    assert!(!d.app.import_crane_from(dir.path()));
+    assert!(d.app.wb.eplan_import.is_none());
 }

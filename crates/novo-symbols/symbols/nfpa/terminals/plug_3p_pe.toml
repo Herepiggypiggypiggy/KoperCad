@@ -1,0 +1,37 @@
+format = 1
+id = "nfpa/terminals/plug_3p_pe"
+name = "Power plug, 3P+PE"
+description = "Male power plug with 3 contacts and protective earth (three phases). Poles in a row, one wire each."
+standard = "NFPA 79 / ANSI Y32.2"
+category = "terminals"
+function = "connector.male"
+keywords = ["plug", "male", "inlet", "cee", "iec 60309", "power connector", "3p", "pe", "nfpa", "ansi"]
+aliases = ["xp4"]
+
+connections = [
+  { id = "L1", at = [0, 0], dir = "up" },
+  { id = "L2", at = [8, 0], dir = "up" },
+  { id = "L3", at = [16, 0], dir = "up" },
+  { id = "PE", at = [24, 0], dir = "up", role = "pe" },
+]
+
+anchors = [
+  { role = "tag", at = [-6, 7], align = "right" },
+]
+
+graphics = [
+  { kind = "line", from = [0, 0], to = [0, 4] },
+  { kind = "rect", at = [-0.8, 4], size = [1.6, 3], fill = true },
+  { kind = "line", from = [8, 0], to = [8, 4] },
+  { kind = "rect", at = [7.2, 4], size = [1.6, 3], fill = true },
+  { kind = "line", from = [16, 0], to = [16, 4] },
+  { kind = "rect", at = [15.2, 4], size = [1.6, 3], fill = true },
+  { kind = "line", from = [24, 0], to = [24, 4] },
+  { kind = "rect", at = [23.2, 4], size = [1.6, 3], fill = true },
+  { kind = "rect", at = [-3, 3], size = [30, 8], stroke = "dashed" },
+  { kind = "line", from = [22, 9], to = [26, 9] },
+  { kind = "line", from = [23, 10.4], to = [25, 10.4] },
+]
+
+[behavior]
+kind = "none"

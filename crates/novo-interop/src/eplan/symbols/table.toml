@@ -41,6 +41,12 @@ W = "W1"
 U2 = "U2"
 V2 = "V2"
 W2 = "W2"
+"1U" = "U1"
+"1V" = "V1"
+"1W" = "W1"
+"2U" = "U2"
+"2V" = "V2"
+"2W" = "W2"
 PE2 = "PE"
 
 [pinset.sensor3]        # three-wire proximity sensor, by terminal or by wire colour
@@ -152,6 +158,16 @@ names = ["potential feed", "potential connection point", "potential marker", "po
 symbol = "connectivity/potential_feed_pe"
 letters = []
 names = ["pe potential feed", "protective earth potential feed", "pe feed", "pe potential", "pe potentiaal", "pe aansluiting", "pe potentialeinspeisung", "pe einspeisung", "schutzleiter potential"]
+
+[[entry]]
+symbol = "connectivity/device_pin"
+letters = []
+names = ["device connection point", "device pin", "component connection point", "connection point", "apparaat aansluitpunt", "aansluitpunt", "geraete anschlusspunkt", "anschlusspunkt"]
+
+[[entry]]
+symbol = "connectivity/wire_end_insulated"
+letters = []
+names = ["insulated wire termination", "insulated wire end", "wire end", "spare core", "unused core", "geisoleerd draadeinde", "draadeinde", "reserve ader", "isoliertes aderende", "aderende"]
 
 # ---------------------------------------------------------------- main contacts
 [[entry]]
@@ -303,12 +319,18 @@ names = ["current transformer", "ct", "stroomtransformator", "stroomtrafo", "str
 [[entry]]
 symbol = "motors/motor_3ph"
 letters = ["M"]
-names = ["motor", "three phase motor", "3 phase motor", "ac motor", "induction motor", "asynchronous motor", "motor 3 phase", "driefasenmotor", "draaistroommotor", "asynchrone motor", "elektromotor", "drehstrommotor", "asynchronmotor", "motor 3-phasig"]
+names = ["motor with pe variable", "motor", "three phase motor", "3 phase motor", "ac motor", "induction motor", "asynchronous motor", "motor 3 phase", "driefasenmotor", "draaistroommotor", "asynchrone motor", "elektromotor", "drehstrommotor", "asynchronmotor", "motor 3-phasig"]
 pins = "motor"
 [[entry]]
 symbol = "motors/motor_3ph_6t"
 letters = ["M"]
-names = ["motor 6 terminals", "three phase motor 6 terminals", "motor star delta", "motor star-delta", "motor ster driehoek", "motor sterdriehoek", "motor stern dreieck", "motor sterndreieck"]
+names = ["motor with pe variable", "motor 6 terminals", "three phase motor 6 terminals", "motor star delta", "motor star-delta", "motor ster driehoek", "motor sterdriehoek", "motor stern dreieck", "motor sterndreieck"]
+pins = "motor"
+
+[[entry]]
+symbol = "motors/motor_3ph_pe_t2"
+letters = ["M"]
+names = ["motor with pe variable", "motor with two extra terminals", "motor 2 extra terminals", "motor met twee extra klemmen", "motor mit zwei zusatzklemmen"]
 pins = "motor"
 [[entry]]
 symbol = "motors/motor_3ph_dahlander"
@@ -776,7 +798,7 @@ names = ["dc/dc converter", "dc dc converter", "dcdc converter", "dc converter",
 [[entry]]
 symbol = "switches/main_switch_3p"
 letters = ["Q"]
-names = ["main switch", "main isolator", "main disconnect", "main switch 3 pole", "hoofdschakelaar", "hoofdschakelaar 3 polig", "hauptschalter", "hauptschalter 3-polig"]
+names = ["main switch", "switch triple no contact", "switch 3 pole no contact", "main isolator", "main disconnect", "main switch 3 pole", "hoofdschakelaar", "hoofdschakelaar 3 polig", "hauptschalter", "hauptschalter 3-polig"]
 pins = "poles"
 [[entry]]
 symbol = "switches/main_switch_4p"
@@ -873,6 +895,11 @@ names = ["double level terminal", "two level terminal", "2 level terminal", "dou
 symbol = "terminals/terminal_3level"
 letters = ["X"]
 names = ["three level terminal", "triple level terminal", "3 level terminal", "driedeksklem", "drieetagenklem", "3 etages klem", "dreistockklemme"]
+
+[[entry]]
+symbol = "terminals/terminal_tap"
+letters = ["X"]
+names = ["terminal general 3 connection points", "terminal 3 connection points", "terminal with tap", "terminal tap", "klem 3 aansluitpunten", "klem met aftakking", "klemme 3 anschlusspunkte", "klemme mit abgriff"]
 [[entry]]
 symbol = "terminals/end_plate"
 letters = ["X"]
@@ -898,11 +925,41 @@ symbol = "terminals/socket_outlet"
 letters = ["X"]
 names = ["socket outlet", "power socket", "wall socket", "outlet", "schuko socket", "stopcontact", "wandcontactdoos", "contactdoos", "steckdose", "schutzkontaktsteckdose"]
 
+[[entry]]
+symbol = "terminals/socket_contact"
+letters = ["X"]
+names = ["female pin 2 connection points", "female pin", "socket contact", "female contact", "contactbus", "bus contact", "buchsenkontakt"]
+[[entry]]
+symbol = "terminals/plug_contact"
+letters = ["X"]
+names = ["male pin 2 connection points", "male pin", "plug contact", "male contact", "stekkerpen", "stiftkontakt"]
+[[entry]]
+symbol = "terminals/socket_3p_pe"
+letters = ["X"]
+names = ["female receptacle with pe 4 connection points", "power socket 3p pe", "cee socket 3p pe", "cee contactdoos 3p pe", "cee steckdose 3p pe", "kraftsteckdose 3p pe"]
+[[entry]]
+symbol = "terminals/socket_3p_n_pe"
+letters = ["X"]
+names = ["female receptacle with pe 5 connection points", "female receptacle with pe", "power socket 3p n pe", "cee socket 3p n pe", "cee socket", "cee contactdoos", "cee steckdose", "kraftsteckdose"]
+[[entry]]
+symbol = "terminals/plug_3p_pe"
+letters = ["X"]
+names = ["male plug with pe 4 connection points", "power plug 3p pe", "cee plug 3p pe", "cee stekker 3p pe", "cee stecker 3p pe", "kraftstecker 3p pe"]
+[[entry]]
+symbol = "terminals/plug_3p_n_pe"
+letters = ["X"]
+names = ["male plug with pe 5 connection points", "male plug with pe", "power plug 3p n pe", "cee plug 3p n pe", "cee plug", "cee stekker", "cee stecker", "kraftstecker"]
+
 # ---------------------------------------------------------------- transformers
 [[entry]]
 symbol = "transformers/transformer_1ph"
 letters = ["T"]
 names = ["transformer", "single phase transformer", "control transformer", "isolating transformer", "transformator", "trafo", "stuurstroomtransformator", "scheidingstransformator", "transformator 1 fase", "transformator", "steuertransformator", "trenntransformator", "einphasentransformator"]
+
+[[entry]]
+symbol = "transformers/transformer_1ph_pe"
+letters = ["T"]
+names = ["transformer 5 connection points with pe", "transformer with pe", "control transformer with pe", "transformator met pe", "stuurtransformator met pe", "transformator mit pe", "steuertransformator mit pe"]
 [[entry]]
 symbol = "transformers/transformer_3ph"
 letters = ["T"]

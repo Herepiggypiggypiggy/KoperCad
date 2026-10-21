@@ -60,27 +60,27 @@ fn rename(doc: &mut Document, aspect: Aspect, from: &str, to: &str) -> Result<Ou
 #[test]
 fn renaming_a_panel_rewrites_pages_devices_cables_and_structure() {
     let mut doc = Document::default();
-    let p = page(&mut doc, "1", "=10D41+K1B1G1");
-    let other = page(&mut doc, "1", "=10D41+K2");
-    let k1 = device(&mut doc, "=10D41+K1B1G1-K1");
-    let k2 = device(&mut doc, "=10D41+K2-K1");
-    structure(&mut doc, "+K1B1G1", true);
+    let p = page(&mut doc, "1", "=20D41+BAY1G1");
+    let other = page(&mut doc, "1", "=20D41+K2");
+    let k1 = device(&mut doc, "=20D41+BAY1G1-K1");
+    let k2 = device(&mut doc, "=20D41+K2-K1");
+    structure(&mut doc, "+BAY1G1", true);
     doc.execute(Command::AddCable {
-        tag: tag("=10D41+K1B1G1-W1"),
+        tag: tag("=20D41+BAY1G1-W1"),
         cores: Vec::new(),
     })
     .unwrap();
 
-    rename(&mut doc, Aspect::Location, "K1B1G1", "K1B2G1").unwrap();
+    rename(&mut doc, Aspect::Location, "BAY1G1", "BAY2G1").unwrap();
 
     let project = doc.project();
-    assert_eq!(project.page(p).unwrap().structure, tag("=10D41+K1B2G1"));
-    assert_eq!(project.page(other).unwrap().structure, tag("=10D41+K2"));
-    assert_eq!(project.device(k1).unwrap().tag, tag("=10D41+K1B2G1-K1"));
-    assert_eq!(project.device(k2).unwrap().tag, tag("=10D41+K2-K1"));
-    assert!(project.cables().any(|c| c.tag == tag("=10D41+K1B2G1-W1")));
-    assert!(project.structures().any(|s| s.tag == tag("+K1B2G1")));
-    assert!(!project.structures().any(|s| s.tag == tag("+K1B1G1")));
+    assert_eq!(project.page(p).unwrap().structure, tag("=20D41+BAY2G1"));
+    assert_eq!(project.page(other).unwrap().structure, tag("=20D41+K2"));
+    assert_eq!(project.device(k1).unwrap().tag, tag("=20D41+BAY2G1-K1"));
+    assert_eq!(project.device(k2).unwrap().tag, tag("=20D41+K2-K1"));
+    assert!(project.cables().any(|c| c.tag == tag("=20D41+BAY2G1-W1")));
+    assert!(project.structures().any(|s| s.tag == tag("+BAY2G1")));
+    assert!(!project.structures().any(|s| s.tag == tag("+BAY1G1")));
 }
 
 #[test]
@@ -110,13 +110,13 @@ fn enclosure_lookups_are_the_same_before_and_after() {
 #[test]
 fn renaming_a_group_leaves_a_shared_panel_alone() {
     let mut doc = Document::default();
-    page(&mut doc, "1", "=10D41+K1B1G1");
-    page(&mut doc, "1", "=11D21+K1B1G1");
+    page(&mut doc, "1", "=20D41+BAY1G1");
+    page(&mut doc, "1", "=21D21+BAY1G1");
 
-    rename(&mut doc, Aspect::Function, "10D41", "12D41").unwrap();
+    rename(&mut doc, Aspect::Function, "20D41", "22D41").unwrap();
 
     let project = doc.project();
-    assert_eq!(project.page_groups(), vec![tag("=11D21"), tag("=12D41")]);
+    assert_eq!(project.page_groups(), vec![tag("=21D21"), tag("=22D41")]);
     let panels = project.panels();
     assert_eq!(panels.len(), 1);
     assert_eq!(panels[0].pages.len(), 2);
@@ -125,18 +125,18 @@ fn renaming_a_group_leaves_a_shared_panel_alone() {
 #[test]
 fn a_frozen_page_keeps_what_was_printed() {
     let mut doc = Document::default();
-    let p = page(&mut doc, "1", "=10D41+K1B1G1");
+    let p = page(&mut doc, "1", "=20D41+BAY1G1");
     doc.execute(Command::FreezePage {
         page: p,
         revision: "B".into(),
     })
     .unwrap();
 
-    rename(&mut doc, Aspect::Location, "K1B1G1", "K9").unwrap();
+    rename(&mut doc, Aspect::Location, "BAY1G1", "K9").unwrap();
 
     let page = doc.project().page(p).unwrap().clone();
-    assert_eq!(page.structure, tag("=10D41+K9"));
-    assert_eq!(page.frozen.unwrap().structure, tag("=10D41+K1B1G1"));
+    assert_eq!(page.structure, tag("=20D41+K9"));
+    assert_eq!(page.frozen.unwrap().structure, tag("=20D41+BAY1G1"));
 }
 
 #[test]

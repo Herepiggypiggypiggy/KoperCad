@@ -6,6 +6,7 @@
 use std::path::Path;
 
 use eframe::egui;
+use novo_interop::eplan::crane::{CraneSource, CraneSummary, crane_notes, read_crane};
 use novo_interop::eplan::pxf::{PxfFile, PxfOptions, PxfPlan, plan_pxf, read_pxf, survey_pxf};
 
 use super::{Level, NovoApp, projects_dir};
@@ -13,7 +14,7 @@ use super::{Level, NovoApp, projects_dir};
 /// An EPLAN import waiting for the person to confirm.
 pub(super) struct EplanImport {
     file: String,
-    plan: PxfPlan,
+    pub(super) plan: PxfPlan,
     /// What was read, kept so another language can be tried without
     /// reading the file again.
     data: PxfFile,
@@ -27,6 +28,18 @@ pub(super) struct EplanImport {
     /// What `kopercad-cli eplan survey` says: object kinds, element names
     /// and counts, never values.
     survey: Option<String>,
+    /// Notes a crane configurator import adds to every plan (the
+    /// configurator's own check, what is exact and what is inferred).
+    notes: Vec<String>,
+}
+
+/// The languages named in the first 8 MB of `path`; a project's header and
+/// first pages carry them, and a 200 MB file need not be read twice.
+fn languages_of(path: &Path) -> Vec<String> {
+    use std::io::Read;
+    let mut head = Vec::new();
+    let _ = std::fs::File::open(path).and_then(|f| f.take(8 << 20).read_to_end(&mut head));
+    languages_in(&String::from_utf8_lossy(&head))
 }
 
 /// The languages (`en_US`, `de_DE`...) the multi-language texts in `text`
@@ -106,12 +119,12 @@ impl NovoApp {
             self.message(Level::Info, "Open a project first");
             return false;
         };
-        let bytes = std::fs::read(path).map_err(|e| e.to_string());
-        let langs = bytes
-            .as_ref()
-            .map(|b| languages_in(&String::from_utf8_lossy(b)))
-            .unwrap_or_default();
-        let read = bytes.and_then(|b| read_pxf(std::io::Cursor::new(b)).map_err(|e| e.to_string()));
+        let langs = languages_of(path);
+        let read = std::fs::File::open(path)
+            .map_err(|e| e.to_string())
+            .and_then(|f| {
+                read_pxf(std::io::BufReader::with_capacity(1 << 20, f)).map_err(|e| e.to_string())
+            });
         match read {
             Ok(file) => {
                 let opts = PxfOptions::default();
@@ -120,7 +133,14 @@ impl NovoApp {
                 } else {
                     langs[0].clone()
                 };
-                let plan = plan_pxf(doc.project(), &file, &PxfOptions { lang: lang.clone() });
+                let plan = plan_pxf(
+                    doc.project(),
+                    &file,
+                    &PxfOptions {
+                        lang: lang.clone(),
+                        ..PxfOptions::default()
+                    },
+                );
                 let (check, survey) = inspect(path);
                 self.wb.eplan_import = Some(EplanImport {
                     file: name,
@@ -130,11 +150,76 @@ impl NovoApp {
                     langs,
                     check,
                     survey,
+                    notes: Vec::new(),
                 });
                 true
             }
             Err(e) => {
                 self.message(Level::Error, format!("Could not import {name}: {e}"));
+                false
+            }
+        }
+    }
+
+    /// Asks for a crane configurator project folder and previews it.
+    pub(super) fn import_crane(&mut self) {
+        let mut dialog = crate::dialogs::FileDialog::new()
+            .set_title("Import crane configurator project (pick its output folder)");
+        if let Some(dir) = projects_dir().filter(|dir| dir.is_dir()) {
+            dialog = dialog.set_directory(dir);
+        }
+        if let Some(path) = dialog.pick_folder() {
+            self.import_crane_from(&path);
+        }
+    }
+
+    /// Reads a crane configurator output (an `.epj`, a version folder, a
+    /// project folder or the `output` folder) and opens the same preview as
+    /// the EPLAN import, with the configurator's own notes added.
+    pub fn import_crane_from(&mut self, path: &Path) -> bool {
+        let Some(doc) = self.backend.document() else {
+            self.message(Level::Info, "Open a project first");
+            return false;
+        };
+        match read_crane(path) {
+            Ok((file, src, summary)) => {
+                let langs = languages_of(&src.epj);
+                let opts = PxfOptions::default();
+                let lang = if langs.is_empty() || langs.contains(&opts.lang) {
+                    opts.lang.clone()
+                } else {
+                    langs[0].clone()
+                };
+                let notes = crane_notes(&src, &summary);
+                let mut plan = plan_pxf(
+                    doc.project(),
+                    &file,
+                    &PxfOptions {
+                        lang: lang.clone(),
+                        ..PxfOptions::default()
+                    },
+                );
+                for n in &notes {
+                    plan.note(n.clone());
+                }
+                let (check, survey) = inspect(&src.epj);
+                self.wb.eplan_import = Some(EplanImport {
+                    file: crane_title(&src, &summary),
+                    plan,
+                    data: file,
+                    lang,
+                    langs,
+                    check,
+                    survey,
+                    notes,
+                });
+                true
+            }
+            Err(e) => {
+                self.message(
+                    Level::Error,
+                    format!("Could not import {}: {e}", path.display()),
+                );
                 false
             }
         }
@@ -264,8 +349,12 @@ impl NovoApp {
                 &import.data,
                 &PxfOptions {
                     lang: import.lang.trim().to_owned(),
+                    ..PxfOptions::default()
                 },
             );
+            for n in &import.notes {
+                import.plan.note(n.clone());
+            }
         }
         if go {
             self.confirm_eplan_import();
@@ -273,4 +362,16 @@ impl NovoApp {
             self.wb.eplan_import = None;
         }
     }
+}
+
+fn crane_title(src: &CraneSource, summary: &CraneSummary) -> String {
+    let mut t = if summary.project.is_empty() {
+        src.name.clone().unwrap_or_else(|| "crane project".into())
+    } else {
+        summary.project.clone()
+    };
+    if let Some(v) = src.version {
+        t.push_str(&format!(" v{v}"));
+    }
+    t
 }

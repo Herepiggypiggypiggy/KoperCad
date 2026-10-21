@@ -52,6 +52,9 @@ pub struct PlantDevice {
     pub type_number: String,
     pub terminals: Vec<PlantTerminal>,
     pub properties: BTreeMap<String, Value>,
+    /// The part's width, height and depth in millimetres, when the file
+    /// gives them (`Width`, `Height`, `Depth` with an optional `Unit`).
+    pub size_mm: [Option<f64>; 3],
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -69,6 +72,95 @@ pub struct PlantCable {
     pub cores: Vec<PlantCore>,
 }
 
+/// A drawn page of the file's drawing profile (role `Page`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PlantPage {
+    /// The page's name, usually its label (`=A1+CAB1/01`).
+    pub name: String,
+    pub title: String,
+}
+
+/// A free text of a page (role `Text`): a cross section, a note. Device tags
+/// are not among them.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlantText {
+    /// Name of the page it sits on.
+    pub page: String,
+    pub value: String,
+    /// Millimetres on the page, origin bottom left, y up.
+    pub at: (f64, f64),
+    /// Character height in millimetres when the file says; else the default.
+    pub height: Option<f64>,
+    /// Turn in degrees counter-clockwise, 0 when the file has none.
+    pub rotation: f64,
+}
+
+/// A line or rectangle drawn on a page (roles `Line` and `Rectangle`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlantShape {
+    /// Name of the page it sits on.
+    pub page: String,
+    /// A rectangle between the two corners; else a line from one to the other.
+    pub rect: bool,
+    pub a: (f64, f64),
+    pub b: (f64, f64),
+}
+
+/// A connection point of a drawn symbol.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlantPin {
+    pub name: String,
+    /// Offset from the symbol's position in millimetres, y up.
+    pub offset: (f64, f64),
+    /// The sides a wire may leave from: `up`, `down`, `left`, `right`.
+    pub faces: Vec<String>,
+}
+
+/// One drawn symbol of a device or terminal strip (role `Symbol`): which
+/// page, where, and its pins. A device may have many (a coil and its
+/// contacts on other pages).
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlantSymbol {
+    /// Index into [`Plant::devices`] of the device or strip it belongs to;
+    /// `None` for a symbol that stands for no device (an earth symbol),
+    /// which the file lists under its page.
+    pub device: Option<usize>,
+    /// The terminal this symbol draws, for a strip.
+    pub terminal: Option<String>,
+    /// Name of the page it sits on (matches a [`PlantPage::name`]).
+    pub page: String,
+    /// Millimetres on the page, origin bottom left, y up.
+    pub at: (f64, f64),
+    /// What the symbol is: `coil`, `contact`, `terminal`, `lamp`, `motor`...
+    pub kind: String,
+    pub pins: Vec<PlantPin>,
+    /// The net an interruption point (`Kind` `interruption`) is named after:
+    /// points of the same name on different pages are one conductor.
+    pub net: Option<String>,
+}
+
+/// One straight run of a wire as the file draws it (role `Wire` inside a
+/// net): from one point to another on a page, millimetres, y up. Runs meet
+/// at pins, at corners and at junctions; the importer joins them into wires.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlantSegment {
+    /// Name of the page it is on (matches a [`PlantPage::name`]).
+    pub page: String,
+    pub from: (f64, f64),
+    pub to: (f64, f64),
+}
+
+/// A net: the symbol pins that are one conductor, as `(symbol, pin)` indexes
+/// into [`Plant::symbols`] and that symbol's pins.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlantNet {
+    pub name: String,
+    pub pins: Vec<(usize, usize)>,
+    /// The file draws this net's wires (it has runs): they are drawn as
+    /// given and nothing is routed for it.
+    pub drawn: bool,
+}
+
 /// Everything a file holds that KoperCAD can create.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Plant {
@@ -76,6 +168,14 @@ pub struct Plant {
     pub structures: Vec<PlantStructure>,
     pub devices: Vec<PlantDevice>,
     pub cables: Vec<PlantCable>,
+    pub pages: Vec<PlantPage>,
+    pub symbols: Vec<PlantSymbol>,
+    pub nets: Vec<PlantNet>,
+    /// The runs of the wires the file draws, by page name; empty when the
+    /// file only lists nets.
+    pub segments: Vec<PlantSegment>,
+    pub texts: Vec<PlantText>,
+    pub shapes: Vec<PlantShape>,
     pub report: Report,
 }
 
@@ -142,6 +242,8 @@ fn role_of(node: &Node) -> String {
 const MAX_PLATE_MM: f64 = 10_000.0;
 const MAX_CROSS_SECTION_MM2: f64 = 2_000.0;
 const MAX_LENGTH_M: f64 = 100_000.0;
+/// Page coordinates and pin offsets beyond this are a typo (a page is a few hundred millimetres).
+const MAX_PAGE_MM: f64 = 5_000.0;
 
 /// A size from a file: finite, above zero and no larger than `max`.
 fn dimension(text: &str, max: f64) -> Option<f64> {
@@ -149,6 +251,45 @@ fn dimension(text: &str, max: f64) -> Option<f64> {
         .parse::<f64>()
         .ok()
         .filter(|v| v.is_finite() && *v > 0.0 && *v <= max)
+}
+
+/// Largest part size taken from a file, in millimetres: a cabinet door.
+const MAX_PART_MM: f64 = 3_000.0;
+
+/// The width, height and depth a device element states, in millimetres.
+/// The `Unit` of an attribute (`mm`, `cm`, `m`, `in`) is honoured; without
+/// one the value is millimetres. A value that is not a plausible part size
+/// counts as missing.
+fn size_of(node: &Node) -> [Option<f64>; 3] {
+    let read = |names: &[&str]| {
+        node.children
+            .iter()
+            .filter(|c| c.name == "Attribute")
+            .find(|a| {
+                let n = a.attr("Name").unwrap_or_default();
+                names.iter().any(|w| n.eq_ignore_ascii_case(w))
+            })
+            .and_then(|a| {
+                let text = &a.children.iter().find(|c| c.name == "Value")?.text;
+                let factor = match a.attr("Unit").map(|u| u.trim().to_ascii_lowercase()) {
+                    None => 1.0,
+                    Some(u) => match u.as_str() {
+                        "" | "mm" | "millimetre" | "millimeter" => 1.0,
+                        "cm" => 10.0,
+                        "m" => 1000.0,
+                        "in" | "inch" => 25.4,
+                        _ => return None,
+                    },
+                };
+                dimension(text, f64::MAX).map(|v| v * factor)
+            })
+            .filter(|v| *v <= MAX_PART_MM)
+    };
+    [
+        read(&["Width", "Breite", "Breedte"]),
+        read(&["Height", "Hoehe", "Höhe", "Hoogte"]),
+        read(&["Depth", "Tiefe", "Diepte"]),
+    ]
 }
 
 fn value_of(text: &str, data_type: &str) -> Value {
@@ -197,6 +338,15 @@ struct Reader {
     links: usize,
     frames: usize,
     seen: std::collections::BTreeSet<String>,
+    /// Interface id of a symbol pin to `(symbol, pin)`.
+    pin_ids: BTreeMap<String, (usize, usize)>,
+    /// Both ends of every internal link, by the ids they name.
+    link_ends: Vec<(String, String)>,
+    /// Nets as read: name and the ids of their net points.
+    net_points: Vec<(String, Vec<String>, bool)>,
+
+    /// Symbols of devices that were skipped (a repeated tag).
+    lost_symbols: usize,
 }
 
 const TAG_NAMES: &[&str] = &[
@@ -231,6 +381,10 @@ pub fn read_aml(text: &str) -> Result<Plant, AmlError> {
         links: 0,
         frames: 0,
         seen: Default::default(),
+        pin_ids: BTreeMap::new(),
+        link_ends: Vec::new(),
+        net_points: Vec::new(),
+        lost_symbols: 0,
     };
     r.plant.name = hierarchies[0].attr("Name").unwrap_or_default().to_string();
     for h in hierarchies {
@@ -238,6 +392,7 @@ pub fn read_aml(text: &str) -> Result<Plant, AmlError> {
             r.element(el, &Context::default());
         }
     }
+    let resolved = r.resolve_nets();
     let mut report = std::mem::take(&mut r.plant.report);
     report.moved("locations and sections", r.plant.structures.len());
     report.moved("devices", r.plant.devices.len());
@@ -246,10 +401,18 @@ pub fn read_aml(text: &str) -> Result<Plant, AmlError> {
         r.plant.devices.iter().map(|d| d.terminals.len()).sum(),
     );
     report.moved("cables", r.plant.cables.len());
+    report.moved("pages", r.plant.pages.len());
+    report.moved("drawn symbols", r.plant.symbols.len());
+    report.moved("nets", r.plant.nets.len());
     report.lost(
         "connection links",
-        r.links,
-        "wires need symbols on a page; the connections are not drawn",
+        r.links.saturating_sub(resolved),
+        "the file has no drawn symbols for them, so there is nothing to wire on a page",
+    );
+    report.lost(
+        "drawn symbols of skipped devices",
+        r.lost_symbols,
+        "a repeated tag is used once, with the symbols of its first element",
     );
     report.lost(
         "elements without a usable tag",
@@ -280,15 +443,42 @@ impl Reader {
         let name = node.attr("Name").unwrap_or_default().trim().to_string();
         let attrs = attributes(node);
         let role = role_of(node);
-        self.links += node
-            .children
-            .iter()
-            .filter(|c| c.name == "InternalLink")
-            .count();
+        for l in node.children.iter().filter(|c| c.name == "InternalLink") {
+            self.links += 1;
+            if let (Some(a), Some(b)) = (l.attr("RefPartnerSideA"), l.attr("RefPartnerSideB")) {
+                self.link_ends.push((a.to_string(), b.to_string()));
+            }
+        }
 
-        // Nets and wire groups only carry connections.
-        if matches!(role.as_str(), "net" | "netgroup" | "wire" | "connection") {
-            return;
+        // Pages, symbols and nets belong to the drawing profile: pages are
+        // read here, symbols with their device, nets after everything else.
+        match role.as_str() {
+            "pagegroup" => {
+                for c in node.children.iter().filter(|c| c.name == "InternalElement") {
+                    self.element(c, ctx);
+                }
+                return;
+            }
+            "page" => {
+                self.page(node, &name, &attrs);
+                self.texts_of(node, &name);
+                self.shapes_of(node, &name);
+                self.symbols_of(node, None);
+                return;
+            }
+            "symbol" => return,
+            "netgroup" => {
+                for c in node.children.iter().filter(|c| c.name == "InternalElement") {
+                    self.element(c, ctx);
+                }
+                return;
+            }
+            "net" => {
+                self.net(node, &name);
+                return;
+            }
+            "wire" | "junction" | "connection" => return,
+            _ => {}
         }
 
         // A plant section or location: only aspects, no product level.
@@ -328,6 +518,12 @@ impl Reader {
                     }
                     _ => None,
                 };
+                // A location is a panel unless the file says it is not.
+                let enclosure = first(&attrs, &["Enclosure"]).map_or(
+                    role.contains("enclosure")
+                        || (!tag.location.is_empty() && tag.function.is_empty()),
+                    |v| v == "true",
+                );
                 self.plant.structures.push(PlantStructure {
                     tag: DeviceTag {
                         product: Vec::new(),
@@ -336,8 +532,7 @@ impl Reader {
                     description: first(&attrs, &["Description"])
                         .unwrap_or_default()
                         .to_string(),
-                    enclosure: first(&attrs, &["Enclosure"]).is_some_and(|v| v == "true")
-                        || role.contains("enclosure"),
+                    enclosure,
                     plate,
                 });
                 self.children(node, &inner);
@@ -368,6 +563,11 @@ impl Reader {
         let tag = ctx.complete(tag);
         if !self.seen.insert(tag.to_string()) {
             self.duplicate_tags += 1;
+            self.lost_symbols += node
+                .children
+                .iter()
+                .filter(|c| c.name == "InternalElement" && role_of(c) == "symbol")
+                .count();
             return;
         }
         if attrs.contains_key("Frame.x") {
@@ -423,6 +623,9 @@ impl Reader {
             "OrderNumber",
             "TypeNumber",
             "ArticleDescription",
+            "Width",
+            "Height",
+            "Depth",
         ];
         for (k, (v, ty)) in &attrs {
             let flat = !k.contains('.');
@@ -462,7 +665,10 @@ impl Reader {
                 .to_string(),
             terminals,
             properties,
+            size_mm: size_of(node),
         });
+        let device_index = self.plant.devices.len() - 1;
+        self.symbols_of(node, Some(device_index));
         // Sub-devices (a card in a rack) are devices too.
         let ctx = Context {
             function: self
@@ -477,6 +683,219 @@ impl Reader {
                 .map_or(ctx.location.clone(), |d| d.tag.location.clone()),
         };
         self.children(node, &ctx);
+    }
+
+    fn page(&mut self, _node: &Node, name: &str, attrs: &BTreeMap<String, (String, String)>) {
+        if name.is_empty() {
+            return;
+        }
+        self.plant.pages.push(PlantPage {
+            name: name.to_string(),
+            title: first(attrs, &["Title", "Description"])
+                .unwrap_or_default()
+                .to_string(),
+        });
+    }
+
+    /// The lines and rectangles on a page.
+    fn shapes_of(&mut self, node: &Node, page: &str) {
+        for c in node.children.iter().filter(|c| c.name == "InternalElement") {
+            let rect = match role_of(c).as_str() {
+                "line" => false,
+                "rectangle" => true,
+                _ => continue,
+            };
+            let a = attributes(c);
+            let coord = |k: &str| {
+                first(&a, &[k])
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .filter(|v| v.is_finite() && v.abs() <= MAX_PAGE_MM)
+            };
+            if let (Some(x1), Some(y1), Some(x2), Some(y2)) =
+                (coord("X1"), coord("Y1"), coord("X2"), coord("Y2"))
+            {
+                self.plant.shapes.push(PlantShape {
+                    page: page.to_string(),
+                    rect,
+                    a: (x1, y1),
+                    b: (x2, y2),
+                });
+            }
+        }
+    }
+
+    /// The free texts on a page: `Text` children with a value and a place.
+    fn texts_of(&mut self, node: &Node, page: &str) {
+        for t in node
+            .children
+            .iter()
+            .filter(|c| c.name == "InternalElement" && role_of(c) == "text")
+        {
+            let a = attributes(t);
+            let coord = |k: &str| {
+                first(&a, &[k])
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .filter(|v| v.is_finite() && v.abs() <= MAX_PAGE_MM)
+            };
+            let value = first(&a, &["Value"]).unwrap_or_default().trim().to_string();
+            let (Some(x), Some(y)) = (coord("Frame.x"), coord("Frame.y")) else {
+                continue;
+            };
+            if !value.is_empty() {
+                self.plant.texts.push(PlantText {
+                    page: page.to_string(),
+                    value,
+                    at: (x, y),
+                    height: coord("Height").filter(|h| *h > 0.0 && *h <= 50.0),
+                    rotation: first(&a, &["Rotation", "Frame.rz"])
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .filter(|v| v.is_finite())
+                        .unwrap_or(0.0),
+                });
+            }
+        }
+    }
+
+    /// The `Symbol` children of a device or strip, or of a page (symbols of no device).
+    fn symbols_of(&mut self, node: &Node, device: Option<usize>) {
+        for sym in node
+            .children
+            .iter()
+            .filter(|c| c.name == "InternalElement" && role_of(c) == "symbol")
+        {
+            let a = attributes(sym);
+            let Some(page) = first(&a, &["Page"]) else {
+                self.lost_symbols += 1;
+                continue;
+            };
+            let coord = |k: &str| {
+                first(&a, &[k])
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .filter(|v| v.is_finite() && v.abs() <= MAX_PAGE_MM)
+            };
+            let (Some(x), Some(y)) = (coord("Frame.x"), coord("Frame.y")) else {
+                self.lost_symbols += 1;
+                continue;
+            };
+            let index = self.plant.symbols.len();
+            let mut pins = Vec::new();
+            for i in sym
+                .children
+                .iter()
+                .filter(|c| c.name == "ExternalInterface")
+            {
+                let pa = attributes(i);
+                let offset = |k: &str| {
+                    first(&pa, &[k])
+                        .and_then(|v| v.parse::<f64>().ok())
+                        .filter(|v| v.is_finite() && v.abs() <= MAX_PAGE_MM)
+                        .unwrap_or(0.0)
+                };
+                if let Some(id) = i.attr("ID") {
+                    self.pin_ids.insert(id.to_string(), (index, pins.len()));
+                }
+                pins.push(PlantPin {
+                    name: i.attr("Name").unwrap_or_default().trim().to_string(),
+                    offset: (offset("X"), offset("Y")),
+                    faces: first(&pa, &["Faces"])
+                        .unwrap_or_default()
+                        .split(',')
+                        .map(|f| f.trim().to_ascii_lowercase())
+                        .filter(|f| matches!(f.as_str(), "up" | "down" | "left" | "right"))
+                        .collect(),
+                });
+            }
+            self.plant.symbols.push(PlantSymbol {
+                device,
+                terminal: first(&a, &["Terminal"]).map(str::to_string),
+                page: page.to_string(),
+                at: (x, y),
+                kind: first(&a, &["Kind"]).unwrap_or("generic").to_string(),
+                pins,
+                net: first(&a, &["Net"]).map(str::to_string),
+            });
+        }
+    }
+
+    /// A net element: its name and the ids of its net points.
+    fn net(&mut self, node: &Node, name: &str) {
+        // The wire runs the file draws for this net.
+        let before = self.plant.segments.len();
+        for w in node
+            .children
+            .iter()
+            .filter(|c| c.name == "InternalElement" && role_of(c) == "wire")
+        {
+            let a = attributes(w);
+            let num = |k: &str| {
+                first(&a, &[k])
+                    .and_then(|v| v.parse::<f64>().ok())
+                    .filter(|v| v.is_finite() && v.abs() <= MAX_PAGE_MM)
+            };
+            if let (Some(page), Some(x1), Some(y1), Some(x2), Some(y2)) = (
+                first(&a, &["Page"]),
+                num("X1"),
+                num("Y1"),
+                num("X2"),
+                num("Y2"),
+            ) {
+                self.plant.segments.push(PlantSegment {
+                    page: page.to_string(),
+                    from: (x1, y1),
+                    to: (x2, y2),
+                });
+            }
+        }
+        let drawn = self.plant.segments.len() > before;
+        let points: Vec<String> = node
+            .children
+            .iter()
+            .filter(|c| c.name == "ExternalInterface")
+            .filter_map(|c| c.attr("ID").map(str::to_string))
+            .collect();
+        if points.len() >= 2 {
+            // An unnamed net still needs a name to pair its interruption points by.
+            let name = if name.trim().is_empty() {
+                format!("N{}", self.net_points.len() + 1)
+            } else {
+                name.to_string()
+            };
+            self.net_points.push((name, points, drawn));
+        }
+    }
+
+    /// Joins the net points to the symbol pins through the links; returns
+    /// how many links ended on a drawn pin.
+    fn resolve_nets(&mut self) -> usize {
+        let mut partner: BTreeMap<&str, Vec<&str>> = BTreeMap::new();
+        for (a, b) in &self.link_ends {
+            partner.entry(a.as_str()).or_default().push(b.as_str());
+            partner.entry(b.as_str()).or_default().push(a.as_str());
+        }
+        let mut resolved = 0usize;
+        let mut nets = Vec::new();
+        for (name, points, drawn) in &self.net_points {
+            let mut pins: Vec<(usize, usize)> = Vec::new();
+            for p in points {
+                for other in partner.get(p.as_str()).into_iter().flatten() {
+                    if let Some(&pin) = self.pin_ids.get(*other) {
+                        resolved += 1;
+                        if !pins.contains(&pin) {
+                            pins.push(pin);
+                        }
+                    }
+                }
+            }
+            if pins.len() >= 2 {
+                nets.push(PlantNet {
+                    name: name.clone(),
+                    pins,
+                    drawn: *drawn,
+                });
+            }
+        }
+        self.plant.nets = nets;
+        resolved
     }
 
     fn children(&mut self, node: &Node, ctx: &Context) {
