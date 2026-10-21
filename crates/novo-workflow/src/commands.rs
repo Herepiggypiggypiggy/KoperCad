@@ -1385,7 +1385,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "view.3d_wire_runs",
-        "Show cable and wire runs in 3D: path, length, duct fill",
+        "Show cable and wire runs in 3D: routed path, length, duct fill",
         "View",
         &[
             "wire runs",
