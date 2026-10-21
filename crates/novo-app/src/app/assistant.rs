@@ -1316,17 +1316,33 @@ impl NovoApp {
                         .show(ui, |ui| self.assistant_agree_ui(ui));
                 }
                 egui::CentralPanel::default().show(ui, |ui| {
+                    // Settings scroll in their own area, at most half the
+                    // dialog while a chat sits below; the chat is outside it
+                    // (inside a scroll area its height would be unbounded and
+                    // the message box would leave the window).
+                    let room = ui.available_height();
+                    let settings_max = if self.settings.ai.enabled {
+                        (room * 0.5).max(160.0)
+                    } else {
+                        room
+                    };
                     egui::ScrollArea::vertical()
-                        .auto_shrink([false, false])
-                        .show(ui, |ui| {
-                            self.assistant_settings_ui(ui, ctx);
-                            ui.separator();
-                            if self.settings.ai.enabled {
-                                send = self.assistant_chat_ui(ui, &mut decide);
-                            } else {
-                                ui.weak("Turn Claude on above to start a conversation.");
-                            }
-                        });
+                        .id_salt("ask_claude_settings")
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .scroll_bar_visibility(
+                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
+                        )
+                        .max_height(settings_max)
+                        .auto_shrink([false, true])
+                        .show(ui, |ui| self.assistant_settings_ui(ui, ctx));
+                    ui.separator();
+                    if self.settings.ai.enabled {
+                        send = self.assistant_chat_ui(ui, &mut decide);
+                    } else {
+                        ui.weak("Turn Claude on above to start a conversation.");
+                    }
                 });
             });
         self.wb.assistant.open = open;

@@ -1,0 +1,70 @@
+[
+ {
+  "id": "msg_0",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5-5",
+  "content": [
+   {
+    "type": "text",
+    "text": "Answer 1. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. Answer 1. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. Answer 1. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. "
+   }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+   "input_tokens": 100,
+   "output_tokens": 60
+  }
+ },
+ {
+  "id": "msg_1",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5-5",
+  "content": [
+   {
+    "type": "text",
+    "text": "Answer 2. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. Answer 2. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. Answer 2. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. "
+   }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+   "input_tokens": 100,
+   "output_tokens": 60
+  }
+ },
+ {
+  "id": "msg_2",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5-5",
+  "content": [
+   {
+    "type": "text",
+    "text": "Answer 3. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. Answer 3. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. Answer 3. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. "
+   }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+   "input_tokens": 100,
+   "output_tokens": 60
+  }
+ },
+ {
+  "id": "msg_3",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5-5",
+  "content": [
+   {
+    "type": "text",
+    "text": "Answer 4. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. Answer 4. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. Answer 4. Every motor circuit on this page has its fuse, contactor and overload in the order the starter needs, and each device carries its tag. "
+   }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+   "input_tokens": 100,
+   "output_tokens": 60
+  }
+ }
+]
