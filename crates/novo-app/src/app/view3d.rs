@@ -1543,13 +1543,24 @@ fn scale_menu(ui: &mut egui::Ui, h: &mut Heat3d, auto: novo_heatview::range::Ran
             )
             .small(),
         );
-        if ui
-            .add_enabled(h.scale.is_some(), egui::Button::new("Auto"))
-            .on_hover_text("Ambient to the hottest cell")
-            .clicked()
-        {
-            h.scale = None;
-        }
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(h.scale.is_none(), egui::Button::new("Hold this range"))
+                .on_hover_text(
+                    "Keep the range now shown, so the colours do not shift while the run goes on or between runs",
+                )
+                .clicked()
+            {
+                h.scale = Some((auto.lo, auto.hi.max(auto.lo + 1.0)));
+            }
+            if ui
+                .add_enabled(h.scale.is_some(), egui::Button::new("Auto"))
+                .on_hover_text("Ambient to the hottest cell")
+                .clicked()
+            {
+                h.scale = None;
+            }
+        });
     });
 }
 
