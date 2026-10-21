@@ -307,6 +307,21 @@ impl Scene {
         item.local_bounds().transformed(&self.world_matrix(item))
     }
 
+    /// [`bounds`](Self::bounds) with the hinge `id` turned to `angle`: what a
+    /// camera has to frame for the door to be seen open.
+    pub fn bounds_with_group_angle(&self, id: GroupId, angle: f32) -> Aabb {
+        let Some(g) = self.group(id).copied() else {
+            return self.bounds();
+        };
+        let turned = Group { angle, ..g };
+        let mut b = self.bounds();
+        for i in self.items.iter().filter(|i| i.group == Some(id)) {
+            let m = turned.matrix() * i.pose.matrix();
+            b = b.union(&i.local_bounds().transformed(&m));
+        }
+        b
+    }
+
     /// Bounds of everything. Walks every item and wire point: take it once
     /// per frame, never once per item.
     pub fn bounds(&self) -> Aabb {
@@ -328,6 +343,34 @@ impl Scene {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_open_door_grows_the_bounds_to_where_it_swings() {
+        let mut s = Scene::new(PlateFrame {
+            width: 400.0,
+            height: 500.0,
+        });
+        s.groups.push(Group {
+            id: GroupId(1),
+            pivot: Vec3::new(0.0, 0.0, 200.0),
+            axis: Vec3::Y,
+            angle: 0.0,
+        });
+        let mut door = Item::new(
+            ItemId::new(ItemKind::Door, 0),
+            Shape::Box,
+            Pose::at(Vec3::new(200.0, 250.0, 200.0)),
+            Vec3::new(400.0, 500.0, 3.0),
+        );
+        door.group = Some(GroupId(1));
+        s.push(door);
+        let closed = s.bounds();
+        let open = s.bounds_with_group_angle(GroupId(1), -std::f32::consts::FRAC_PI_2 * 1.2);
+        assert!(open.max.z > closed.max.z + 100.0 || open.min.x < closed.min.x - 100.0);
+        // The scene itself is untouched, and an unknown hinge changes nothing.
+        assert_eq!(s.bounds(), closed);
+        assert_eq!(s.bounds_with_group_angle(GroupId(9), 1.0), closed);
+    }
 
     #[test]
     fn plate_frame_round_trips() {

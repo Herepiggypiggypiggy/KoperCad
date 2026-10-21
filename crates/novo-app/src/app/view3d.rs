@@ -95,6 +95,9 @@ pub(crate) struct View3dMode {
     /// The probe tool and the point it reads.
     probe: ProbeState,
     heat_shown: Option<(u64, Heat3d)>,
+    /// Whether the door was open on the last frame: opening it from closed
+    /// reframes the cabinet once so the leaf is not cut off.
+    door_was_open: bool,
     /// Overlays without the moving tracers, and the lines the tracers follow.
     heat_base: Vec<novo_view3d::Overlay>,
     heat_flow: heat_3d::Flow,
@@ -164,6 +167,7 @@ impl Default for View3dMode {
             heat: Heat3d::default(),
             probe: ProbeState::default(),
             heat_shown: None,
+            door_was_open: false,
             heat_base: Vec::new(),
             heat_flow: heat_3d::Flow::default(),
             heat_carry: super::heat_carry::Carry::default(),
@@ -750,6 +754,17 @@ impl NovoApp {
             mode.view
                 .set_door(DOOR_HINGE, angle, now, options.reduced_motion);
         }
+        // Opening the door from closed frames the cabinet with the door as far
+        // open as it goes, once; the slider after that moves nothing else.
+        let door_open = target > 0.0;
+        if door_open
+            && !mode.door_was_open
+            && let Some(max) = limit.and_then(|l| open_angle(scene, DOOR_HINGE, l as f32))
+        {
+            mode.view
+                .fit_with_door(scene, DOOR_HINGE, max, now, options.reduced_motion);
+        }
+        mode.door_was_open = door_open;
         let shown = match &solution {
             Some(sol) if mode.heat.devices => {
                 let key = (
