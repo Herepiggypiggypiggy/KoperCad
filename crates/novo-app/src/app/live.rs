@@ -30,6 +30,9 @@ use super::{Level, NovoApp};
 const BADGE: f32 = 6.0;
 /// How close the pointer must be to a wire to describe it, in screen points.
 const HOVER_REACH: f32 = 5.0;
+/// How far beyond a device's pins a click still asks about the device, in
+/// screen points.
+const WHY_REACH: f32 = 10.0;
 /// Width of the glow on a lit wire, in screen points.
 const LIT_WIDTH: f32 = 4.5;
 
@@ -49,8 +52,21 @@ pub(crate) struct LiveView {
     /// Easing state of the device animation (lamps, motors, coils).
     anim: Anim,
     solved: Option<Solved>,
+    /// Click mode of "Why?": the next click on a wire or device asks why it
+    /// is lit or dead (Alt+click does the same without the mode).
+    pub(super) why_mode: bool,
+    /// What the explanation is about.
+    why: Option<Target>,
     /// The PLC program window and the program running in it.
     pub(super) plc: super::plc_run::PlcRun,
+}
+
+/// What "Why?" was asked about. A wire is named by its id and a device by its
+/// symbol, since net numbers change whenever the netlist is rebuilt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    Wire(WireId),
+    Symbol(SymbolId),
 }
 
 /// A solution for one project revision and one pole state.
@@ -264,11 +280,9 @@ pub(super) fn together(project: &Project, symbol: SymbolId) -> Vec<SymbolId> {
 
 /// A pushbutton or foot switch: it springs back when let go.
 pub(super) fn is_momentary(project: &Project, symbol: SymbolId) -> bool {
-    project.symbol(symbol).is_some_and(|s| {
-        let name = s.symbol.0.rsplit('/').next().unwrap_or("");
-        s.symbol.0.contains("/operators/")
-            && (name.starts_with("pushbutton") || name.starts_with("footswitch"))
-    })
+    project
+        .symbol(symbol)
+        .is_some_and(|s| novo_sim::explain::is_pushbutton_key(&s.symbol.0))
 }
 
 /// One wire of the page and what it carries.
@@ -361,6 +375,78 @@ pub(super) fn pole_badges(project: &Project, page: PageId, poles: &PoleState) ->
         }
     }
     badges
+}
+
+/// A hand-operated device for the Operate list.
+pub(super) struct Operator {
+    /// The first symbol of the device; the others follow it.
+    pub symbol: SymbolId,
+    pub label: String,
+    pub kind: &'static str,
+    /// What the state is in words.
+    pub state: &'static str,
+    /// What the button does when used.
+    pub action: &'static str,
+    pub momentary: bool,
+    /// Away from its rest position.
+    pub active: bool,
+}
+
+/// The push buttons, selectors, emergency stops and breakers of the page that
+/// no coil drives, one row per device, in tag order.
+pub(super) fn operators(project: &Project, page: PageId, poles: &PoleState) -> Vec<Operator> {
+    use novo_sim::explain::{HandKind, hand_kind};
+    let rest = novo_sim::rest_state(project);
+    let mut seen = BTreeSet::new();
+    let mut out = Vec::new();
+    for s in project.symbols().filter(|s| s.page == page) {
+        let key = s.symbol.0.as_str();
+        if s.pass_through.is_empty()
+            || s.device().is_none()
+            || !(key.contains("/operators/") || hand_kind(key) == HandKind::Protective)
+        {
+            continue;
+        }
+        // A contact a coil drives is not operated by hand.
+        if s.device().is_some_and(|d| {
+            project
+                .symbols_of_device(d)
+                .iter()
+                .any(|m| novo_sim::is_coil(m))
+        }) {
+            continue;
+        }
+        let first = together(project, s.id)[0];
+        if s.device().is_some_and(|d| !seen.insert(d)) {
+            continue;
+        }
+        let active = together(project, s.id).iter().any(|&m| {
+            (0..project.symbol(m).map_or(0, |x| x.pass_through.len()))
+                .any(|g| poles.is_closed(m, g) != rest.is_closed(m, g))
+        });
+        let kind = hand_kind(key);
+        let (kind_text, state, action) = match (kind, active) {
+            (HandKind::Pushbutton, false) => ("push button", "released", "Hold to press"),
+            (HandKind::Pushbutton, true) => ("push button", "pressed", "Hold to press"),
+            (HandKind::EmergencyStop, false) => ("emergency stop", "released", "Press in"),
+            (HandKind::EmergencyStop, true) => ("emergency stop", "pressed in", "Release"),
+            (HandKind::Protective, false) => ("breaker", "on", "Switch off"),
+            (HandKind::Protective, true) => ("breaker", "off", "Switch on"),
+            (HandKind::Switch, false) => ("switch", "at rest", "Operate"),
+            (HandKind::Switch, true) => ("switch", "operated", "Return"),
+        };
+        out.push(Operator {
+            symbol: first,
+            label: symbol_name(project, s.id),
+            kind: kind_text,
+            state,
+            action,
+            momentary: kind == HandKind::Pushbutton,
+            active,
+        });
+    }
+    out.sort_by(|a, b| a.label.cmp(&b.label));
+    out
 }
 
 /// A coil of the page, for its badge.
@@ -562,6 +648,7 @@ impl NovoApp {
         let live = &mut self.wb.live;
         live.plc.sync(project, view.editor.catalog.library());
         let dt = f64::from(ctx.input(|i| i.stable_dt));
+        let why_target = live.why;
         let solved = live.solved(project, dt);
         let timing = solved.settled.timing.then_some(solved.settled.remaining);
         let wires = lit_wires(project, page, &solved.netlist, &solved.settled.solution);
@@ -585,6 +672,47 @@ impl NovoApp {
             .collect();
         let states = novo_sim::device_states(project, &solved.netlist, &solved.settled);
         let poles = solved.settled.poles.clone();
+        let story = novo_sim::explain::story(project, &solved.settled, &states, &|s| {
+            symbol_name(project, s)
+        });
+        let answer = why_target.map(|target| {
+            let name = |s: SymbolId| symbol_name(project, s);
+            match target {
+                Target::Wire(id) => {
+                    wires
+                        .iter()
+                        .find(|w| w.id == id)
+                        .and_then(|w| w.net)
+                        .map(|net| {
+                            novo_sim::explain::answer_net(
+                                project,
+                                &solved.netlist,
+                                &solved.settled,
+                                net,
+                                &name,
+                            )
+                        })
+                }
+                Target::Symbol(id) => Some(novo_sim::explain::answer_symbol(
+                    project,
+                    &solved.netlist,
+                    &solved.settled,
+                    &solved.forced,
+                    id,
+                    &name,
+                )),
+            }
+        });
+        let answer = answer.flatten();
+        let path_nets: BTreeSet<NetId> = answer
+            .as_ref()
+            .map(|a| a.nets.iter().copied().collect())
+            .unwrap_or_default();
+        let break_symbols: BTreeSet<SymbolId> = answer
+            .as_ref()
+            .map(|a| a.breaks.iter().copied().collect())
+            .unwrap_or_default();
+        let answer_dead = answer.as_ref().is_some_and(|a| a.dead);
         let analysis = self
             .wb
             .sim
@@ -632,6 +760,14 @@ impl NovoApp {
                         (color.gamma_multiply(0.9), LIT_WIDTH)
                     }
                     Live::Shorted(_) => (crate::theme::ui_palette().error, LIT_WIDTH + 1.0),
+                };
+                // The route of a "Why?" answer is drawn heavier, in amber when
+                // it ends in a break.
+                let on_path = wire.net.is_some_and(|n| path_nets.contains(&n));
+                let (color, width) = match (on_path, answer_dead) {
+                    (true, true) => (crate::theme::ui_palette().warning, LIT_WIDTH + 2.0),
+                    (true, false) => (color, width + 2.5),
+                    _ => (color, width),
                 };
                 let [r, g, b, a] = color.to_srgba_unmultiplied();
                 (
@@ -693,8 +829,50 @@ impl NovoApp {
             }
         }
 
+        // "Why?": a click in Why mode, or an Alt+click, asks about the device
+        // under the pointer, else the wire.
+        let mut asked: Option<Target> = None;
+        let alt = ctx.input(|i| i.modifiers.alt);
+        if (self.wb.live.why_mode || alt)
+            && ctx.input(|i| i.pointer.primary_clicked())
+            && let Some(pointer) = ctx.pointer_interact_pos()
+            && canvas.contains(pointer)
+            && ctx
+                .layer_id_at(pointer)
+                .is_none_or(|l| l.order == egui::Order::Background)
+        {
+            let device = project
+                .symbols()
+                .filter(|s| s.page == page && s.pins.len() >= 2)
+                .filter_map(|s| {
+                    let pts: Vec<egui::Pos2> = (0..s.pins.len())
+                        .filter_map(|p| s.pin_position(p as u16))
+                        .map(|p| to_screen(egui::vec2(p.x as f32, p.y as f32)))
+                        .collect();
+                    let rect = egui::Rect::from_points(&pts).expand(WHY_REACH);
+                    rect.contains(pointer)
+                        .then_some((rect.width() * rect.height(), s.id))
+                })
+                .min_by(|a, b| a.0.total_cmp(&b.0))
+                .map(|(_, id)| Target::Symbol(id));
+            let wire = || {
+                wires
+                    .iter()
+                    .find(|w| {
+                        w.points.windows(2).any(|seg| {
+                            distance_to_segment(pointer, to_screen(seg[0]), to_screen(seg[1]))
+                                <= HOVER_REACH
+                        })
+                    })
+                    .map(|w| Target::Wire(w.id))
+            };
+            asked = device.or_else(wire);
+        }
+
         // Pole badges: a click closes or opens the pole.
         let mut clicked: Option<(SymbolId, usize, bool)> = None;
+        let reduced = self.settings.reduce_motion;
+        let time = ctx.input(|i| i.time);
         // The first badge of each kind, for lessons to point at.
         let mut pole_rect: Option<egui::Rect> = None;
         let mut coil_rect: Option<egui::Rect> = None;
@@ -714,6 +892,19 @@ impl NovoApp {
                     let (rect, response) = ui
                         .allocate_exact_size(egui::Vec2::splat(BADGE * 2.4), egui::Sense::click());
                     let p = ui.painter();
+                    if break_symbols.contains(&badge.symbol) {
+                        // The open contact a "Why?" answer points at.
+                        let pulse = if reduced {
+                            1.0
+                        } else {
+                            0.6 + 0.4 * (time * 5.0).sin().abs() as f32
+                        };
+                        p.circle_stroke(
+                            rect.center(),
+                            BADGE + 4.0 * pulse,
+                            egui::Stroke::new(2.5, crate::theme::ui_palette().warning),
+                        );
+                    }
                     if badge.mixed {
                         p.circle_stroke(
                             rect.center(),
@@ -870,6 +1061,11 @@ impl NovoApp {
         let mut open_plc = false;
         let plc_running = self.wb.live.plc.is_running();
         let mut open_motor: Option<SymbolId> = None;
+        let mut toggle_why = false;
+        let mut clear_why = false;
+        let mut follow: Option<SymbolId> = None;
+        let why_mode = self.wb.live.why_mode;
+        let operators = operators(project, page, &poles);
         let card = super::panel::Panel::new(
             "live_card",
             "Live potentials",
@@ -891,16 +1087,44 @@ impl NovoApp {
             if badges.is_empty() {
                 ui.weak("No switched contacts on this page");
             } else {
-                ui.horizontal(|ui| {
-                    ui.weak(format!("{closed} of {} poles closed", badges.len()));
-                    if ui
-                        .small_button("Reset")
-                        .on_hover_text("Back to the plant at rest")
-                        .clicked()
-                    {
-                        open_all = true;
-                    }
-                });
+                ui.add(egui::Label::new(egui::RichText::new(&story).strong()).wrap())
+                    .on_hover_text(format!("{closed} of {} poles closed", badges.len()));
+                if ui
+                    .small_button("Reset")
+                    .on_hover_text("Back to the plant at rest")
+                    .clicked()
+                {
+                    open_all = true;
+                }
+            }
+            if !operators.is_empty() {
+                ui.add_space(2.0);
+                ui.label(egui::RichText::new("Operate").strong());
+                egui::ScrollArea::vertical()
+                    .max_height(150.0)
+                    .id_salt("live_operate")
+                    .show(ui, |ui| {
+                        for op in &operators {
+                            ui.horizontal(|ui| {
+                                ui.label(&op.label);
+                                ui.weak(format!("{} · {}", op.kind, op.state));
+                            });
+                            let response = ui.add(egui::Button::new(op.action).selected(op.active));
+                            let tip = if op.momentary {
+                                "Hold the mouse button down; it springs back when you let go"
+                            } else {
+                                "Click to switch; it stays until you click again"
+                            };
+                            let response = response.on_hover_text(tip);
+                            if op.momentary {
+                                if response.is_pointer_button_down_on() {
+                                    pressed = Some((op.symbol, 0));
+                                }
+                            } else if response.clicked() {
+                                clicked = Some((op.symbol, 0, true));
+                            }
+                        }
+                    });
             }
             ui.horizontal(|ui| {
                 if ui
@@ -940,6 +1164,50 @@ impl NovoApp {
             if let Some(left) = timing {
                 ui.weak(format!("A timer is running, {left:.1} s left"));
             }
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                if ui
+                    .selectable_label(why_mode, "Why?")
+                    .on_hover_text(
+                        "Then click a wire or a device to see why it is lit or dead. holding Alt while you click does the same at any time",
+                    )
+                    .clicked()
+                {
+                    toggle_why = true;
+                }
+                if answer.is_some() && ui.small_button("Clear").clicked() {
+                    clear_why = true;
+                }
+            });
+            if why_mode && answer.is_none() {
+                ui.weak("Click a wire or a device");
+            }
+            if let Some(a) = &answer {
+                ui.add(egui::Label::new(egui::RichText::new(&a.title).strong()).wrap());
+                for line in &a.lines {
+                    if let Some(symbol) = line.symbol {
+                        if ui
+                            .add(
+                                egui::Label::new(
+                                    egui::RichText::new(&line.text)
+                                        .color(crate::theme::ui_palette().accent)
+                                        .underline(),
+                                )
+                                .wrap()
+                                .sense(egui::Sense::click()),
+                            )
+                            .on_hover_text("Ask why about this one")
+                            .clicked()
+                        {
+                            follow = Some(symbol);
+                        }
+                    } else {
+                        ui.add(egui::Label::new(&line.text).wrap());
+                    }
+                }
+                ui.weak("Follows potentials, not currents: no direction of flow is modelled.");
+            }
+            ui.add_space(2.0);
             open_motor =
                 super::simulate::values_block(ui, project, &analysis, &|s| symbol_name(project, s));
             if legend.carried.is_empty() && legend.shorted == 0 {
@@ -965,7 +1233,34 @@ impl NovoApp {
         if open_plc {
             self.wb.live.plc.window = true;
         }
-        if leave || open_all || clicked.is_some() || timing.is_some() || animating || plc_running {
+        if leave
+            || open_all
+            || toggle_why
+            || asked.is_some()
+            || follow.is_some()
+            || clicked.is_some()
+            || timing.is_some()
+            || animating
+            || plc_running
+        {
+            ctx.request_repaint();
+        }
+        if toggle_why {
+            self.wb.live.why_mode ^= true;
+            self.learn_event(novo_learn::Event::Clicked("live.why".to_owned()));
+        }
+        if clear_why {
+            self.wb.live.why = None;
+            self.wb.live.why_mode = false;
+        }
+        if let Some(target) = asked {
+            self.wb.live.why = Some(target);
+            self.wb.live.why_mode = false;
+        }
+        if let Some(symbol) = follow {
+            self.wb.live.why = Some(Target::Symbol(symbol));
+        }
+        if !break_symbols.is_empty() && !self.settings.reduce_motion {
             ctx.request_repaint();
         }
         if let Some(motor) = open_motor {
@@ -1375,6 +1670,41 @@ mod tests {
         let colors: Vec<_> = doc.project().potentials().map(potential_color).collect();
         assert_eq!(colors.len(), 3);
         assert!(colors[0] != colors[1] && colors[1] != colors[2] && colors[0] != colors[2]);
+    }
+
+    /// The Operate list holds the hand devices only, with plain-words state.
+    #[test]
+    fn the_operate_list_shows_buttons_not_coil_driven_contacts() {
+        let mut doc = Document::default();
+        let (out, _) = doc
+            .transact("Draw", |tx| {
+                let page = tx.add_page("1")?;
+                let s1 = tx.add_device(novo_core::DeviceTag::product("S1"), "")?;
+                let k1 = tx.add_device(novo_core::DeviceTag::product("K1"), "")?;
+                let dev = |device, main| SymbolRole::Device { device, main };
+                let start = part(tx, page, "iec/operators/pushbutton_no", 0.0, dev(s1, true));
+                let seal = part(tx, page, "iec/contacts/contact_no", 10.0, dev(k1, false));
+                part(tx, page, "iec/relays/coil", 20.0, dev(k1, true));
+                tx.update::<novo_core::SymbolInstance>(start, |s| {
+                    s.pass_through = vec![vec![0, 1]]
+                })?;
+                Ok((page, start, seal))
+            })
+            .unwrap();
+        let (page, start, _seal) = out;
+        let project = doc.project();
+        let rest = novo_sim::rest_state(project);
+        let ops = operators(project, page, &rest);
+        assert_eq!(ops.len(), 1, "the seal-in contact belongs to a coil");
+        assert_eq!(
+            (ops[0].symbol, ops[0].state, ops[0].active),
+            (start, "released", false)
+        );
+        let mut pressed = rest.clone();
+        pressed.set_all(project, start, true);
+        let ops = operators(project, page, &pressed);
+        assert_eq!((ops[0].state, ops[0].active), ("pressed", true));
+        assert!(ops[0].momentary);
     }
 }
 

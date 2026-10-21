@@ -2300,7 +2300,7 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "export.pdf_options",
-            "Export PDF...",
+            "Export PDF with options...",
             "Export",
             &[
                 "pdf options",
@@ -2350,6 +2350,16 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export commissioning", "commissioning report"],
+    ),
+    verb(
+        cmd(
+            "export.punch_list",
+            "Export punch list (open items)",
+            "Export",
+            &["restpunten", "snag list", "defects", "open items"],
+            Needs::Project,
+        ),
+        &["export punch list", "punch list pdf"],
     ),
     verb(
         cmd(
@@ -2546,6 +2556,24 @@ pub const COMMANDS: &[CommandInfo] = &[
             Needs::Project,
         ),
         &["export assembly", "assembly checklist"],
+    ),
+    verb(
+        cmd(
+            "export.workshop",
+            "Export workshop pack (folder)",
+            "Export",
+            &[
+                "workshop",
+                "drilling template",
+                "1:1",
+                "bench",
+                "cut list",
+                "labels",
+                "checklist",
+            ],
+            Needs::Project,
+        ),
+        &["export workshop", "workshop pack", "drilling template"],
     ),
     verb(
         cmd(

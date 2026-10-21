@@ -124,7 +124,7 @@ impl NovoApp {
         let mut open = true;
         let mut apply = false;
         super::panel::dialog(ctx, "Renumber devices", [420.0, 0.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.weak(
                     "Numbers each letter code from 1 in reading order: page, column, top to \

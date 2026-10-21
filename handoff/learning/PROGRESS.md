@@ -12,3 +12,4 @@
 2026-10-17 10:20 UTC #682 merged. Third runner PR: ui_click, list_row, type_text ops; waive/restore replay; flyout kept open when a row menu entry is chosen; live-view momentary wording.
 2026-10-17 12:50 UTC #986 merged. Fourth runner PR (draft, held for freeze): 10 click-only manual steps now replay; tab clicks tick; replay state no longer leaks between lessons.
 - Guard test `every_shipped_lesson_replays_alone_on_a_fresh_app`: each lesson is replayed on a fresh app, so no lesson can pass only because an earlier one left a window open (the enclosure lesson did; it passes alone on current main).
+- "Open finished version" now exists on the lesson card (last step and finished card), with a confirm because it replaces the drawing; opens `finished.json` as "Finished: <lesson>", ends the lesson as done.

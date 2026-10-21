@@ -179,6 +179,18 @@ impl NovoApp {
                             self.wb.waiving = Some((*i, String::new()));
                             ui.close();
                         }
+                        if self.settings.ai.enabled {
+                            let explain = ui.button("Explain with Claude").on_hover_text(format!(
+                                "Sends this problem's text (tags and names as shown) to \
+                                 Claude, with your own API key, whatever data scope you chose \
+                                 (now: {}). Its reading appears in Ask Claude.",
+                                self.settings.ai.consent.effective().label()
+                            ));
+                            if explain.clicked() {
+                                self.wb.assistant.ask_later(explain_question(p));
+                                ui.close();
+                            }
+                        }
                         let copy = ui.button("Copy message");
                         self.learn_row("issues.list", "Copy message", copy.rect);
                         if copy.clicked() {
@@ -373,4 +385,18 @@ fn severity_rank(severity: Severity) -> usize {
         Severity::Warning => 1,
         Severity::Info => 2,
     }
+}
+
+/// The question "Explain with Claude" sends for one design-check problem.
+fn explain_question(p: &Problem) -> String {
+    let rule = p
+        .rule
+        .map(|r| format!(" (standards rule {r})"))
+        .unwrap_or_default();
+    format!(
+        "KoperCAD's design check reports this {:?}{rule}: \"{}\"\n\nExplain in plain words why \
+         it matters, how serious it really is, and what I would do about it. Look at the devices \
+         it names if you are allowed to. This is your reading, not the program's verdict.",
+        p.severity, p.message
+    )
 }

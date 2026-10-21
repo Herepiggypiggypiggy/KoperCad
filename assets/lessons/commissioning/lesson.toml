@@ -91,11 +91,11 @@ how_nl = ["Typ 2.5 Nm in het veld Value.", "Klik op Pass."]
 title = "Pass one, with a value"
 title_nl = "Keur er een goed, met een waarde"
 text = """
-Type a measured value in the field "Value (2.5 Nm, 0.2 ohm)", for example **2.5 Nm**, and press **Pass** when the check holds.
+Type a measured value in the Value field, for example **2.5 Nm**, and press **Pass** when the check holds.
 The line gets a tick, your name and the time, and the value is kept with it. **N/A** says the check does not apply here; **Reset** takes a decision back.
 """
 text_nl = """
-Typ een gemeten waarde in het veld "Value (2.5 Nm, 0.2 ohm)", bijvoorbeeld **2.5 Nm**, en druk op **Pass** als de controle klopt.
+Typ een gemeten waarde in het veld Value, bijvoorbeeld **2.5 Nm**, en druk op **Pass** als de controle klopt.
 De regel krijgt een vinkje, je naam en de tijd en de waarde wordt erbij bewaard. **N/A** zegt dat de controle hier niet geldt; met **Reset** neem je een beslissing terug.
 """
 point = { ui = "commissioning.pass" }
@@ -104,21 +104,21 @@ solve = [ { ui_click = "commissioning.pass" } ]
 
 [[step]]
 id = "fail"
-how = ["Click Next open.", "Type terminal loose in the Note field.", "Click Fail."]
-how_nl = ["Klik op Next open.", "Typ klem los in het veld Note.", "Klik op Fail."]
+how = ["Click Next open.", "Click Fail.", "Add the reason in the Note field, then click Fail again."]
+how_nl = ["Klik op Next open.", "Klik op Fail.", "Vul de reden in het veld Note aan en klik nogmaals op Fail."]
 title = "Fail one"
 title_nl = "Keur er een af"
 text = """
-Press **Next open** again, write what you saw in the **Note** field, for example "terminal loose", and press **Fail**.
+Press **Next open** again and press **Fail**. The **Note** field opens with the wire's ends already in it; add what you saw, for example "terminal loose", and press **Fail** again (or Enter). Typing a note first records the failure at once.
 The check is marked failed with your note, and KoperCAD raises a punch item itself: the line under the check says "Punch item raised:" with the title and the severity.
 """
 text_nl = """
-Druk nogmaals op **Next open**, schrijf in het veld **Note** wat je zag, bijvoorbeeld "klem los", en druk op **Fail**.
+Druk nogmaals op **Next open** en druk op **Fail**. Het veld **Note** opent met de uiteinden van de draad erin; vul aan wat je zag, bijvoorbeeld "klem los", en druk nogmaals op **Fail** (of Enter). Typ je eerst een notitie, dan wordt de afkeuring meteen vastgelegd.
 De controle wordt afgekeurd met je notitie en KoperCAD maakt zelf een punt aan: de regel onder de controle zegt "Punch item raised:" met de titel en de ernst.
 """
 point = { ui = "commissioning.fail" }
 expect = { clicked = "commissioning.fail" }
-solve = [ { ui_click = "commissioning.next_open" }, { ui_click = "commissioning.fail" } ]
+solve = [ { ui_click = "commissioning.next_open" }, { ui_click = "commissioning.fail" }, { ui_click = "commissioning.fail" } ]
 
 [[step]]
 id = "punch"

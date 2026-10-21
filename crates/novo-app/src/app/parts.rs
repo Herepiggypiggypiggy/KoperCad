@@ -762,7 +762,7 @@ impl NovoApp {
         });
         let dragging = ctx.input(|i| !i.raw.hovered_files.is_empty());
         let shown = super::panel::dialog(ctx, "Parts", window_size(ctx))
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             // The list and the detail pane scroll on their own; an outer
             // scroll area would give them no height to fill.
             .scroll([false, false])

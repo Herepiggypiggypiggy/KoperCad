@@ -507,10 +507,55 @@ pub fn commissioning_report(input: &CommissioningInput) -> ReportOutput {
     }
 }
 
+/// The punch list alone, to carry round the cabinet or hand to whoever
+/// fixes it: the items that still need work or verification (open or fixed),
+/// worst first, then the sign-off block. A list with nothing open prints the
+/// sign-off block under a "No open punch items" title.
+pub fn punch_list_report(input: &CommissioningInput) -> ReportOutput {
+    let open = CommissioningInput {
+        punch: input
+            .punch
+            .iter()
+            .filter(|p| p.state.is_open())
+            .cloned()
+            .collect(),
+        ..input.clone()
+    };
+    let mut sections = Vec::new();
+    if !open.punch.is_empty() {
+        sections.push(punch_section(&open));
+    }
+    sections.push(signoff_section(&open));
+    ReportOutput {
+        report: "punch_list".into(),
+        title: if open.punch.is_empty() {
+            "Punch list: no open items".into()
+        } else {
+            format!("Punch list: {} open", open.punch.len())
+        },
+        revision: 0,
+        sections,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{CsvOptions, to_csv};
+
+    #[test]
+    fn punch_list_report_keeps_only_open_items() {
+        let report = punch_list_report(&input());
+        assert_eq!(report.title, "Punch list: 2 open");
+        let punch = &report.sections[0];
+        assert_eq!(punch.rows.len(), 2, "the verified item is left out");
+        assert_eq!(report.sections.len(), 2, "list and sign-off");
+        let mut clean = input();
+        clean.punch.clear();
+        let none = punch_list_report(&clean);
+        assert_eq!(none.title, "Punch list: no open items");
+        assert_eq!(none.sections.len(), 1);
+    }
 
     fn check(id: u64, page: &str, cab: &str, state: CheckState) -> CheckRow {
         CheckRow {

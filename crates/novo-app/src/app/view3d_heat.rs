@@ -129,16 +129,25 @@ fn verdict_line(
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.label(egui::RichText::new(&v.lead).strong().color(colour));
-        if let Some((id, tag)) = &v.device
-            && ui
-                .add(
-                    egui::Button::new(egui::RichText::new(tag).strong().color(colour))
-                        .frame(false),
-                )
+        if let Some((id, tag)) = &v.device {
+            let resp = ui.add(
+                egui::Button::new(egui::RichText::new(tag).strong().color(colour)).frame(false),
+            );
+            if resp.hovered() {
+                // Underline on hover marks the name as a button.
+                let y = resp.rect.bottom() - 2.0;
+                ui.painter().hline(
+                    resp.rect.x_range(),
+                    y,
+                    egui::Stroke::new(1.0, colour),
+                );
+            }
+            if resp
                 .on_hover_text("Select the device and bring it into view")
                 .clicked()
-        {
-            jump = Some(*id);
+            {
+                jump = Some(*id);
+            }
         }
         ui.label(egui::RichText::new(&v.tail).strong().color(colour));
     })
@@ -155,7 +164,43 @@ fn verdict_line(
         .small()
         .color(pal.text_secondary),
     );
+    if !dim
+        && super::assistant::claude_is_on(ui.ctx())
+        && ui
+            .small_button("Describe with Claude")
+            .on_hover_text(
+                "Sends the verdict and hot-spot lines shown here to Claude (your own API \
+                 key, whatever data scope you chose) and shows a short paragraph for a \
+                 report in Ask Claude. It is Claude's reading of a model estimate. Check it before you use it.",
+            )
+            .clicked()
+    {
+        super::assistant::ask_claude_later(ui.ctx(), describe_question(snap, tag_of, &v));
+    }
     jump
+}
+
+/// The question sent for "Describe with Claude": only the text the panel shows.
+fn describe_question(
+    snap: &novo_cfd::CfdSnapshot,
+    tag_of: &dyn Fn(u64) -> String,
+    v: &super::heat_verdict::Verdict,
+) -> String {
+    let mut q = String::from(
+        "Write a short paragraph (3 to 5 sentences, plain words) for the thermal section of a \
+         design report, describing this enclosure heat result. Say that it is a model \
+         estimate, not a measurement. Use only the numbers below.\n\nVerdict: ",
+    );
+    q.push_str(&v.lead);
+    if let Some((_, tag)) = &v.device {
+        q.push_str(tag);
+    }
+    q.push_str(&v.tail);
+    q.push_str("\nHottest devices:\n");
+    for r in super::heat_spots::rows(snap, tag_of, 8) {
+        q.push_str(&format!("- {}\n", r.text()));
+    }
+    q
 }
 
 fn settings(ui: &mut egui::Ui, state: &mut HeatState) {
