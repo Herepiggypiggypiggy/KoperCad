@@ -434,12 +434,20 @@ impl NovoApp {
             .map(|c| readiness(&c.jobs, self.view3d_has_cabinet()))
             .unwrap_or_default();
 
+        let meter = state
+            .cache
+            .as_ref()
+            .map(|c| novo_reports::autopilot::ready(&c.jobs, self.view3d_has_cabinet()));
         let mut open = true;
         let mut action: Option<Act> = None;
         let mut paper = self.wb.workshop_paper;
         super::panel::dialog(ctx, "Bench output", [560.0, 640.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
+                if let Some(ready) = meter {
+                    super::autopilot::meter(ui, ready);
+                    ui.add_space(6.0);
+                }
                 workshop_strip(ui, &mut paper, &mut action);
                 ui.add_space(6.0);
                 readiness_strip(ui, &ready, &mut action);
@@ -565,9 +573,9 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     if no_size > 0 {
         out.push(Gap {
             text: format!(
-                "{no_size} wires have no cross-section: they get no ferrule and sit in one group. Use Fill in on the Cut list tab, or set it per wire in the wire panel"
+                "{no_size} wires have no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each"
             ),
-            fix: None,
+            fix: Some(("Autopilot", "wires.autopilot")),
         });
     }
     let (_, off) = novo_reports::ends_without_ferrule(jobs);

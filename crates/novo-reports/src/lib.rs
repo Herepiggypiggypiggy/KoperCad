@@ -76,6 +76,7 @@
 //! [`PageSetup::title_block_mm`] to match that frame.
 
 mod assembly;
+pub mod autopilot;
 pub(crate) mod bench;
 mod bom;
 pub mod commissioning;
