@@ -438,7 +438,7 @@ impl NovoApp {
         let mut action: Option<Act> = None;
         let mut paper = self.wb.workshop_paper;
         super::panel::dialog(ctx, "Bench output", [560.0, 640.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 workshop_strip(ui, &mut paper, &mut action);
                 ui.add_space(6.0);

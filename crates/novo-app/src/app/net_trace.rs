@@ -189,7 +189,7 @@ impl NovoApp {
         let mut page: Option<PageId> = None;
         super::panel::dialog(ctx, "Pages and devices on this net", [380.0, 0.0])
             .id(egui::Id::new("net_trace"))
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.weak("As of opening; select again to refresh");
                 for (i, net) in trace.nets.iter().enumerate() {

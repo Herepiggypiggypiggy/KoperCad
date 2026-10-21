@@ -350,7 +350,7 @@ impl NovoApp {
             .unwrap_or_default();
         let window = super::panel::dialog(ctx, "Macros", [520.0, 0.0])
             .id(egui::Id::new("macro_browser"))
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 let b = &mut self.wb.macros;
                 let Some(lib) = b.library.clone() else {

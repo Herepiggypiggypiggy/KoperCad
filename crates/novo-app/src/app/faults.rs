@@ -155,7 +155,7 @@ impl NovoApp {
         let mut open = true;
         let mut note: Option<(Level, String)> = None;
         super::panel::dialog(ctx, "Fault scenarios", [760.0, 640.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 header(ui, &mut win, &mut note);
                 ui.separator();
@@ -860,7 +860,7 @@ impl NovoApp {
         let mut add = false;
         super::panel::dialog(ctx, "Add fault", [380.0, 0.0])
             .id(egui::Id::new("add_fault"))
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 ui.weak(
                     "Adds a fault to this project's fault list; Simulate > Fault scenarios \

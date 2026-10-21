@@ -872,7 +872,7 @@ impl NovoApp {
         let mut decide: Option<(usize, bool)> = None;
         let mut send: Option<String> = None;
         super::panel::dialog(ctx, "Ask Claude", [460.0, 620.0])
-            .open(&mut open)
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 self.assistant_settings_ui(ui, ctx);
                 ui.separator();
