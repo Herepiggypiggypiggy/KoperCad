@@ -408,3 +408,17 @@ fn a_report_is_found_first_by_its_own_name_and_by_its_old_one() {
         );
     }
 }
+
+#[test]
+fn live_view_finds_the_live_view_before_any_lesson_about_it() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in ["live view", "live"] {
+        let rows = search(&palette, &keymap, query);
+        assert_eq!(
+            position(&rows, "sim.live"),
+            Some(0),
+            "{query:?} leads to the Live view, not {:?}",
+            rows[0].label
+        );
+    }
+}

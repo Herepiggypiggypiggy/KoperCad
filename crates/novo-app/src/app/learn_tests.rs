@@ -85,6 +85,36 @@ fn a_lesson_opens_its_own_project_marked_saved() {
     assert!(d.app.learn_active());
 }
 
+fn said(d: &Drive, words: &str) -> bool {
+    d.app.messages().iter().any(|m| m.text.contains(words))
+}
+
+#[test]
+fn opening_a_lesson_over_edited_work_says_where_that_work_went() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    d.place("mcb3", 60.0, 60.0);
+    d.frame();
+    assert!(d.app.is_dirty());
+    d.app.start_lesson("tiny");
+    d.frame();
+    assert!(
+        said(&d, "Your unsaved project is kept"),
+        "{:?}",
+        d.app.messages()
+    );
+}
+
+#[test]
+fn opening_a_lesson_over_an_empty_project_says_nothing_extra() {
+    let (_dir, mut d) = drive();
+    d.app.start_lesson("tiny");
+    d.frame();
+    assert!(!said(&d, "is kept") && !said(&d, "is saved"));
+}
+
 #[test]
 fn the_fast_keys_card_steps_aside_while_a_lesson_runs() {
     let (_dir, mut d) = drive();

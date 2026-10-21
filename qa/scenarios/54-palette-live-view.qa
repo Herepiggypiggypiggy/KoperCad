@@ -1,0 +1,28 @@
+@title Ctrl+K "live view" leads to the Live view; a lesson says where the replaced project went
+@area Palette
+# C-45: the command comes first, and opening a lesson over a project tells you the work is kept.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text live view
+wait 6
+shot live-view-search
+check_layout
+key Escape
+wait 4
+key ctrl+k
+wait 4
+text add page
+wait 6
+key Enter
+wait 6
+key ctrl+k
+wait 4
+text the live view
+wait 6
+key Down
+key Enter
+wait 3
+shot lesson-opened
+check_layout

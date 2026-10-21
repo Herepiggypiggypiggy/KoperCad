@@ -1729,7 +1729,15 @@ pub const COMMANDS: &[CommandInfo] = &[
         "sim.live",
         "Simulate live potentials",
         "View",
-        &["simulate", "contacts", "close", "energized", "try"],
+        &[
+            "live view",
+            "live",
+            "simulate",
+            "contacts",
+            "close",
+            "energized",
+            "try",
+        ],
         Needs::Page,
     ),
     cmd(
