@@ -23,6 +23,9 @@ pub(crate) struct IssueDraft {
     /// Lock every page with the revision, so the released sheets cannot be
     /// edited by accident.
     pub lock: bool,
+    /// Issue without saying what changed (otherwise the description is
+    /// required).
+    pub no_description: bool,
     /// Why the last attempt failed, shown in the window.
     pub error: Option<String>,
     /// The description field takes focus on the first frame.
@@ -96,6 +99,7 @@ impl NovoApp {
             description: description.unwrap_or_default().trim().to_owned(),
             note: String::new(),
             lock: true,
+            no_description: false,
             error: None,
             focused: false,
         });
@@ -129,6 +133,8 @@ impl NovoApp {
             if text.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)) {
                 issue = true;
             }
+            ui.checkbox(&mut draft.no_description, "No description")
+                .on_hover_text("Issue without saying what changed");
             ui.add_space(6.0);
             ui.label("Note (optional)");
             ui.add(
@@ -181,6 +187,11 @@ impl NovoApp {
     /// Issues the revision the window describes. On success the window
     /// closes; on a refusal it stays, saying why.
     pub(crate) fn submit_issue(&mut self, mut draft: IssueDraft) {
+        if draft.description.trim().is_empty() && !draft.no_description {
+            draft.error = Some("Say what changed, or tick No description".to_owned());
+            self.wb.issue = Some(draft);
+            return;
+        }
         let index = draft.index.trim().to_owned();
         let author = draft.author.trim().to_owned();
         let result = self.backend.issue_revision_locking(

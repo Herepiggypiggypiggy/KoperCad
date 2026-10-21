@@ -155,7 +155,7 @@ pub fn sweep(s: &Setup, t_air: &[f64], flow: &mut Flow) {
     // conjugate gradients handles. No anchor: it would leak mass.
     let a = bld.finish();
     let closed = g.iter().all(|v| *v == 0.0);
-    linalg::cg(&a, &rhs, &mut flow.p, 1e-9, 4000);
+    linalg::cg(&a, &rhs, &mut flow.p, 1e-7, 4000);
     if closed {
         let mean = flow.p.iter().sum::<f64>() / n as f64;
         for p in &mut flow.p {

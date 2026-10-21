@@ -142,6 +142,51 @@ fn a_supply_lead_is_routed_to_the_entry_and_exact_only_with_a_stated_outside() {
 }
 
 #[test]
+fn a_cable_is_counted_once_not_once_per_core() {
+    use novo_reports::{Report, WireCut, cable_runs, hookup_cut_mm};
+    let (mut doc, h, _cab) = cabinet();
+    set_run(&mut doc, &h, Some(12.12));
+    let project = doc.project();
+    let jobs = wire_cut_jobs(project);
+    let cores: Vec<_> = jobs.iter().filter(|j| j.cable.is_some()).collect();
+    assert!(cores.len() >= 3, "the motor cable has several cores");
+    assert!(jobs.iter().any(|j| j.cable.is_none()), "and hookup wires");
+
+    // One cable, bought once at its stated length, with all its cores.
+    let runs = cable_runs(project, &jobs);
+    assert_eq!(runs.len(), 1, "{runs:?}");
+    assert_eq!(runs[0].length_mm, 12_120.0);
+    assert_eq!(runs[0].cores, cores.len());
+
+    // The metres to pull leave the cores out.
+    let hookup: f64 = jobs
+        .iter()
+        .filter(|j| j.cable.is_none())
+        .map(|j| j.cut_mm)
+        .sum();
+    assert_eq!(hookup_cut_mm(&jobs), hookup);
+    let all: f64 = jobs.iter().map(|j| j.cut_mm).sum();
+    assert!(all - hookup > cores.len() as f64 * 12_000.0);
+
+    // Wire production: the stock holds hookup wire only, cables are apart.
+    let out = WireCut.generate(project);
+    let stock = out.sections.iter().find(|s| s.key == "stock").unwrap();
+    let stock_m: f64 = stock
+        .rows
+        .iter()
+        .map(|r| match &r.cells[3] {
+            novo_reports::Cell::Number(m) => *m,
+            other => panic!("{other:?}"),
+        })
+        .sum();
+    assert!(stock_m <= hookup / 1000.0 + 0.05 * stock.rows.len() as f64);
+    let cables = out.sections.iter().find(|s| s.key == "cables").unwrap();
+    assert_eq!(cables.rows.len(), 1);
+    // The job list still has every core.
+    assert_eq!(out.sections[0].rows.len(), jobs.len());
+}
+
+#[test]
 fn a_cable_shorter_than_the_route_to_the_entry_stays_an_estimate() {
     let (mut doc, h, cab) = cabinet();
     doc.transact("Entry", |tx| {

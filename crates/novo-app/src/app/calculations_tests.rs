@@ -337,6 +337,32 @@ fn the_safety_report_is_written_and_says_not_met() {
 }
 
 #[test]
+fn the_safety_sheets_are_one_page_per_function_with_drawing_locations() {
+    use novo_checks::safety::SafetyFunction;
+    let (dir, mut d, _) = open();
+    assert!(
+        d.app
+            .store_safety_functions(&[SafetyFunction::new("Guard"), SafetyFunction::new("E-stop")])
+    );
+    let input =
+        super::safety_report::report_input(d.app.backend.document().unwrap().project(), "T");
+    let sheets = novo_reports::safety::safety_sheets(&input);
+    assert_eq!(sheets.sections.len(), 2);
+    assert_eq!(sheets.sections[1].title, "Safety function 2: E-stop");
+    let rows = sheets.sections[0].text_rows();
+    assert!(
+        rows.iter()
+            .any(|r| r[0] == "Required" && r[3] == "S2 F1 P1")
+    );
+    let path = dir.path().join("sheets.pdf");
+    assert_eq!(
+        d.app.write_safety_pdf(&path, true).as_deref(),
+        Some(path.as_path())
+    );
+    assert!(std::fs::metadata(&path).unwrap().len() > 500);
+}
+
+#[test]
 fn the_safety_calculator_survives_save_close_and_reopen() {
     use novo_safety::{Category, Severity};
     let dir = tempfile::tempdir().unwrap();
