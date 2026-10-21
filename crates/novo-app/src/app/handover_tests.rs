@@ -94,6 +94,7 @@ fn the_package_fills_one_folder_and_says_what_it_left_out() {
     // An old file this run no longer writes is removed, the user's own file stays.
     std::fs::write(folder.join("8 Safety functions.pdf"), b"old").unwrap();
     std::fs::write(folder.join("Customer notes.pdf"), b"theirs").unwrap();
+    std::fs::create_dir_all(folder.join("Workshop")).unwrap();
     // A second run replaces its own files.
     assert!(d.app.export_handover_to(&folder).is_some());
     assert_eq!(d.app.messages().last().unwrap().level, Level::Info);
@@ -102,6 +103,11 @@ fn the_package_fills_one_folder_and_says_what_it_left_out() {
         "stale file removed"
     );
     assert!(folder.join("Customer notes.pdf").exists());
+    let bytes = std::fs::read(folder.join("0 Contents.pdf")).unwrap();
+    let pdf = lopdf::Document::load_mem(&bytes).unwrap();
+    let pages: Vec<u32> = pdf.get_pages().keys().copied().collect();
+    let text = pdf.extract_text(&pages).unwrap();
+    assert!(text.contains("earlier package is still here"), "{text}");
     let last = &d.app.messages().last().unwrap().text;
     assert!(
         last.contains("replaced") && last.contains("removed"),

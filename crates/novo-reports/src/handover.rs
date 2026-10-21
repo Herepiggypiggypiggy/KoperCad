@@ -57,6 +57,9 @@ pub struct HandoverInput {
     pub commissioning: Option<CommissioningFacts>,
     /// Pages that differ from the latest issued revision.
     pub changed_pages: usize,
+    /// Short sentences for a Notes table, for example about files an
+    /// earlier package left in the folder.
+    pub notes: Vec<String>,
 }
 
 /// How far a statement in the package can be trusted.
@@ -362,11 +365,19 @@ pub fn handover_summary(project: &Project, input: &HandoverInput) -> ReportOutpu
             Vec::new(),
         );
     }
+    let mut sections = vec![files, truth];
+    if !input.notes.is_empty() {
+        let mut notes = Section::new("notes", "Notes", vec![Column::new("note", "Note", 100.0)]);
+        for n in &input.notes {
+            notes.push(vec![Cell::text(n)], Vec::new());
+        }
+        sections.push(notes);
+    }
     ReportOutput {
         report: CONTENTS_ID.to_owned(),
         title: format!("{name}: handover package, {issue}"),
         revision: project.revision(),
-        sections: vec![files, truth],
+        sections,
     }
 }
 

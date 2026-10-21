@@ -266,12 +266,23 @@ impl NovoApp {
         }
         let changed_pages = self.pages_changed_since_latest().len();
         let problems = Some(Summary::of(self.problems()));
+        let mut notes = Vec::new();
+        let workshop_left = files
+            .iter()
+            .any(|f| f.name == "Workshop (folder)" && matches!(f.status, FileStatus::Left(_)));
+        if workshop_left && folder.join("Workshop").is_dir() {
+            notes.push(
+                "A Workshop folder from an earlier package is still here and is not part of this one."
+                    .to_owned(),
+            );
+        }
         let input = HandoverInput {
             date: date.clone(),
             files: files.clone(),
             problems,
             commissioning: facts,
             changed_pages,
+            notes,
         };
         let contents = handover_summary(self.backend.document()?.project(), &input);
         if let Err(e) = self.handover_pdf(&folder.join("0 Contents.pdf"), &[&contents], &date) {
@@ -291,9 +302,11 @@ impl NovoApp {
             .collect();
         let stale: Vec<&String> = before.iter().filter(|n| !kept.contains(*n)).collect();
         let mut removed = 0;
+        let mut stuck: Vec<String> = Vec::new();
         for name in &stale {
-            if std::fs::remove_file(folder.join(name)).is_ok() {
-                removed += 1;
+            match std::fs::remove_file(folder.join(name)) {
+                Ok(()) => removed += 1,
+                Err(e) => stuck.push(format!("{name}: {e}")),
             }
         }
         let replaced = before.iter().filter(|n| kept.contains(*n)).count();
@@ -328,6 +341,9 @@ impl NovoApp {
         }
         if workshop_old {
             text.push_str(". The Workshop folder from an earlier package was kept");
+        }
+        if !stuck.is_empty() {
+            text.push_str(&format!(". Could not remove {}", stuck.join(", ")));
         }
         self.message_file(text, folder);
         self.wb.last_export = Some(folder.to_owned());
