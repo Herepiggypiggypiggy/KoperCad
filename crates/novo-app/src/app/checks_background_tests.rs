@@ -120,3 +120,26 @@ fn frame_cost_of_a_big_project() {
         }
     }
 }
+
+#[test]
+fn a_burst_of_edits_runs_one_check_at_a_time() {
+    let (_dir, mut d) = big_project();
+    let _ = d.app.shown_problems();
+    assert_eq!(d.app.wb.check_started, 1);
+    // Three quick edits while that run is in flight start nothing more.
+    for _ in 0..3 {
+        add_symbols(&mut d, 1);
+        let _ = d.app.shown_problems();
+    }
+    assert!(
+        d.app.wb.check_started <= 2,
+        "one worker in flight, then at most one for the latest revision, saw {}",
+        d.app.wb.check_started
+    );
+    wait_for_checks(&mut d);
+    // Whatever order they landed in, the shown answer is for the last revision
+    // and no more than one run per landing was needed.
+    assert!(d.app.wb.check_started <= 3);
+    assert!(!d.app.checks_pending());
+    assert!(d.app.wb.check_job.is_none());
+}

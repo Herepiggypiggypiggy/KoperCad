@@ -103,7 +103,12 @@ impl NovoApp {
                         self.wb.problems = Some((done, problems));
                     }
                 }
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => self.wb.check_job = None,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                    // The worker died (a panic in a check): do not start it
+                    // again for this revision every frame.
+                    self.wb.check_failed = Some(job.revision);
+                    self.wb.check_job = None;
+                }
                 Err(std::sync::mpsc::TryRecvError::Empty) => {}
             }
         }
@@ -117,24 +122,22 @@ impl NovoApp {
         }
         let big = project.symbols().count() + project.wires().count() > BACKGROUND_FROM;
         if !(background && big) {
-            // A run for an older revision is left to finish and is dropped.
-            self.wb.check_job = None;
+            // A worker still running for an older revision is left to finish;
+            // its answer is not used once a newer one is stored.
             self.wb.problems = Some((revision, open_problems(project)));
             return;
         }
-        let stale = self
-            .wb
-            .check_job
-            .as_ref()
-            .is_some_and(|j| j.revision != revision);
-        if self.wb.check_job.is_none() || stale {
-            // One worker at a time: a run for an older revision is not waited
-            // for, its answer is dropped when it lands.
+        // One worker at a time. While it runs for an older revision nothing
+        // else starts; its answer is stored when it lands, and the next frame
+        // starts one run for the current revision. A burst of edits therefore
+        // costs one run in flight, not one per edit.
+        if self.wb.check_job.is_none() && self.wb.check_failed != Some(revision) {
             let snapshot = project.clone();
             let (tx, rx) = std::sync::mpsc::channel();
             std::thread::spawn(move || {
                 let _ = tx.send(open_problems(&snapshot));
             });
+            self.wb.check_started += 1;
             self.wb.check_job = Some(CheckJob { revision, rx });
         }
     }

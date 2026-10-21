@@ -177,6 +177,9 @@ pub(crate) struct Workbench {
     pub(super) problems: Option<(u64, Vec<Problem>)>,
     /// The design check running on a worker thread (big projects only).
     pub(super) check_job: Option<super::checks::CheckJob>,
+    /// The revision whose background check died, and how many were started.
+    pub(super) check_failed: Option<u64>,
+    pub(super) check_started: u32,
     /// Where the issue pill was drawn, so its own click does not close
     /// the outline it opens.
     pub(super) pill_rect: egui::Rect,
@@ -331,6 +334,8 @@ impl Default for Workbench {
             clip: Default::default(),
             problems: None,
             check_job: None,
+            check_failed: None,
+            check_started: 0,
             pill_rect: egui::Rect::NOTHING,
             issue_filter: [true; 3],
             problem_at: None,
