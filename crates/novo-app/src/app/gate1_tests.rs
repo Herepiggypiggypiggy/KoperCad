@@ -1096,6 +1096,8 @@ fn plc_commands_add_a_card_send_a_signal_and_renumber() {
     d.app.wb.plc_card = None;
     d.app.run_command(&ctx, "plc.add_card", Some("DI16 DQ8"));
     assert!(last(&d).starts_with("Added card"), "{}", last(&d));
+    // A PLC card is an automation device (-A), not a relay (-K): same letter as an imported I/O list.
+    assert!(last(&d).contains("-A1"), "{}", last(&d));
     assert_eq!(d.doc().undo_depth(), depth + 1);
     assert_eq!(novo_plc::cards(d.doc().project()).len(), 1);
 
