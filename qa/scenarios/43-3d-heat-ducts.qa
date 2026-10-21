@@ -1,0 +1,101 @@
+@title 3D view: heat slice through the cabinet ducts, finished run
+@area 3D
+@slow
+# The example cabinet has horizontal wire ducts; the Z slice must run unbroken through and past them. Waits until the run has finished.
+click_text "Open example"
+wait 20
+click_text 3D #1
+wait 30
+click_text Heat #1
+wait 20
+click_text "Settings for the next run"
+wait 10
+click_text Quick
+wait 10
+click_text Simulate #2
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+wait 1000
+try expect_not "Preliminary"
+move 700 650
+wait 10
+shot heat-finished-slice
+check_blank heat-finished-slice
+check_layout
