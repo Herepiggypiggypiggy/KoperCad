@@ -1592,6 +1592,7 @@ fn paint_peaks(
     to_screen: &dyn Fn(f64, f64) -> Pos2,
     badges: &[Rect],
 ) {
+    let pal = crate::theme::ui_palette();
     let title = FontId::proportional(t::FONT_SMALL);
     let canvas = painter.clip_rect();
     let devices: Vec<Rect> = input
@@ -1616,13 +1617,13 @@ fn paint_peaks(
         placed.push(card);
         painter.line_segment(
             [at, nearest_edge_point(card, at)],
-            Stroke::new(1.0, t::TEXT),
+            Stroke::new(1.0, pal.text_primary),
         );
         painter.rect(
             card,
             6.0,
-            t::BG_2,
-            Stroke::new(1.0, t::BORDER_STRONG),
+            pal.raised,
+            Stroke::new(1.0, pal.border_strong),
             egui::StrokeKind::Inside,
         );
         let (head, detail) = peak_text(tag, f64::from(p.value), f64::from(cache.mean), device);
@@ -1631,14 +1632,14 @@ fn paint_peaks(
             Align2::LEFT_TOP,
             head,
             title.clone(),
-            t::TEXT,
+            pal.text_primary,
         );
         painter.text(
             card.min + Vec2::new(8.0, 19.0),
             Align2::LEFT_TOP,
             detail,
             title.clone(),
-            t::TEXT_MUTED,
+            pal.text_secondary,
         );
     }
 }
@@ -1718,7 +1719,10 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                 let small = |text: &str, color| egui::RichText::new(text).small().color(color);
                 let (total_w, with_data, unknown) = totals(input);
                 if with_data > 0 {
-                    ui.label(small(&format!("Total loss {total_w:.0} W"), t::TEXT));
+                    ui.label(small(
+                        &format!("Total loss {total_w:.0} W"),
+                        crate::theme::ui_palette().text_primary,
+                    ));
                 }
                 if let Some(note) = estimate_note(input) {
                     ui.label(small(&note, t::WARNING));
@@ -1745,7 +1749,10 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                     Source::Solved(sol) => {
                         let p = &sol.snapshot.progress;
                         let validated = sol.snapshot.accuracy.validated;
-                        ui.label(small(&status_label(p, validated), t::TEXT));
+                        ui.label(small(
+                            &status_label(p, validated),
+                            crate::theme::ui_palette().text_primary,
+                        ));
                         if stale {
                             ui.label(small(
                                 "Out of date: the layout changed since this run.",
@@ -1771,13 +1778,18 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                             ui.label(small(m, t::WARNING));
                         }
                         if !sol.snapshot.notes.is_empty() {
-                            egui::CollapsingHeader::new(small("Notes on this run", t::TEXT_MUTED))
-                                .default_open(false)
-                                .show(ui, |ui| {
-                                    for n in sol.snapshot.notes.iter().take(4) {
-                                        ui.label(small(n, t::TEXT_MUTED));
-                                    }
-                                });
+                            let pal = crate::theme::ui_palette();
+                            let shown = sol.snapshot.notes.iter().take(4);
+                            egui::CollapsingHeader::new(small(
+                                &format!("Notes on this run ({})", shown.len()),
+                                pal.text_secondary,
+                            ))
+                            .default_open(false)
+                            .show(ui, |ui| {
+                                for n in shown {
+                                    ui.label(small(n, pal.text_secondary));
+                                }
+                            });
                         }
                     }
                 }
