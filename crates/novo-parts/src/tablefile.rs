@@ -48,10 +48,13 @@ pub enum TableError {
     Text(#[from] ParseError),
     #[error("the workbook could not be read: {0}")]
     Workbook(String),
+    // The caller names the file in front of this sentence.
     #[error(
-        "{0} is an old Excel format; open it in Excel and save it as .xlsx or CSV, then import that"
+        "this is an old Excel format; open it in Excel and save it as .xlsx or CSV, then import that"
     )]
     OldExcel(String),
+    #[error("this does not look like a text file; if it is a spreadsheet, save it as .xlsx or CSV")]
+    NotText,
     #[error("{0} is not a table file; use CSV, TSV, TXT or XLSX")]
     Unsupported(String),
     #[error("{0}")]
@@ -81,7 +84,16 @@ impl TableFile {
             .map(|(_, e)| e.to_ascii_lowercase())
             .unwrap_or_default();
         let sheets = match ext.as_str() {
-            "csv" | "tsv" | "txt" => vec![read_text(bytes)?],
+            "csv" | "tsv" | "txt" => {
+                // Excel's "Unicode Text" is UTF-16 with a byte order mark.
+                if let Some(text) = utf16_text(bytes) {
+                    vec![read_text(text.as_bytes())?]
+                } else if looks_binary(bytes) {
+                    return Err(TableError::NotText);
+                } else {
+                    vec![read_text(bytes)?]
+                }
+            }
             "xlsx" | "xlsm" => read_workbook(bytes)?,
             "xls" | "xlsb" | "ods" => return Err(TableError::OldExcel(name.to_owned())),
             _ => return Err(TableError::Unsupported(name.to_owned())),
@@ -95,6 +107,22 @@ impl TableFile {
         })
     }
 
+    /// The sheet to start on: the first one whose columns include an order
+    /// number (a workbook often opens on a cover or a notes sheet), else
+    /// the first sheet that has rows.
+    pub fn best_sheet(&self) -> usize {
+        self.sheets
+            .iter()
+            .position(|s| {
+                !s.rows.is_empty()
+                    && crate::tablemap::Mapping::suggest(s, crate::tablemap::guess_header_row(s))
+                        .columns
+                        .iter()
+                        .any(|c| c.target == crate::tablemap::Target::OrderNumber)
+            })
+            .unwrap_or_else(|| self.first_sheet())
+    }
+
     /// The first sheet that has rows.
     pub fn first_sheet(&self) -> usize {
         self.sheets
@@ -102,6 +130,38 @@ impl TableFile {
             .position(|s| !s.rows.is_empty())
             .unwrap_or(0)
     }
+}
+
+/// The text of a UTF-16 file (little or big endian byte order mark), if it is one.
+fn utf16_text(bytes: &[u8]) -> Option<String> {
+    let (rest, big) = match bytes {
+        [0xFF, 0xFE, rest @ ..] => (rest, false),
+        [0xFE, 0xFF, rest @ ..] => (rest, true),
+        _ => return None,
+    };
+    let units: Vec<u16> = (0..rest.len() / 2)
+        .map(|i| {
+            let pair = [rest[2 * i], rest[2 * i + 1]];
+            if big {
+                u16::from_be_bytes(pair)
+            } else {
+                u16::from_le_bytes(pair)
+            }
+        })
+        .collect();
+    String::from_utf16(&units).ok()
+}
+
+/// Control bytes (other than tab, line feeds and escape) in the first 8 KB
+/// make a file binary: a renamed picture or archive is refused, not shown as
+/// garbage columns.
+fn looks_binary(bytes: &[u8]) -> bool {
+    let head = &bytes[..bytes.len().min(8192)];
+    let control = head
+        .iter()
+        .filter(|&&b| b < 0x20 && !matches!(b, b'\t' | b'\n' | b'\r' | 0x0c | 0x1b))
+        .count();
+    head.contains(&0) || control * 100 > head.len()
 }
 
 /// The refusal for a file over [`MAX_FILE_BYTES`], also used by callers that
