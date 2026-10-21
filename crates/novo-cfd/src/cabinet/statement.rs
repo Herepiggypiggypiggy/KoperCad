@@ -128,8 +128,10 @@ pub fn accuracy_with_turbulence(fidelity: Fidelity, model: TurbModel) -> Accurac
              device film model, not the wall function. In a vented 100 W box at 6000 cells the \
              mean air rise changed by 3 % or less against laminar, the device surface rise by \
              under 1 % and the exhaust temperature at the top louvre by about 4 %, at 3400 \
-             cells by up to 11 %; fan-driven flow is not \
-             checked yet. Radiation is not modelled, so surface temperatures of hot devices are \
+             cells by up to 11 %. With a 120 m3/h intake fan in the same box the mean air rise was \
+             11 % (SST) to 15 % (k-epsilon) lower than laminar, the device surface rise 1 % to \
+             1.4 % lower and the exhaust temperature at the top louvre up to about 5 % lower, so \
+             read air temperatures of a fan case as an estimate. Radiation is not modelled, so surface temperatures of hot devices are \
              slightly high."
         );
     }
