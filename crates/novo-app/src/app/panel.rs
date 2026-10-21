@@ -182,13 +182,6 @@ impl Panel {
         };
         let moved = is_moved(ctx, id);
         let (pivot, start) = self.start();
-        // egui ignores the position given to a window that already exists
-        // unless it may be dragged from anywhere, so a panel that has not
-        // been moved is told once whenever its start changes (a bar or strip
-        // above the canvas appeared, the window was resized).
-        let start_id = id.with("start");
-        let restart = !moved && ctx.data(|d| d.get_temp::<egui::Pos2>(start_id)) != Some(start);
-        ctx.data_mut(|d| d.insert_temp(start_id, start));
         // A panel hanging from the right edge stays clear of a card in the
         // bottom right corner, unless the person has moved it.
         let corner = if self.above_card && self.side == Side::Right && !moved {
@@ -227,10 +220,18 @@ impl Panel {
         } else {
             window.constrain(false).pivot(pivot).current_pos(start)
         };
-        if taken.is_some() || restart {
-            // A window dragged by its title bar keeps the position it had
-            // before the frame and ignores the one given here; for the one
-            // frame that a layout places it, it may be dragged from anywhere.
+        // A window dragged by its title bar keeps the position it had before
+        // the frame and ignores the one given here. For the one frame that a
+        // layout places it, or that its side of the canvas has moved (a strip
+        // appeared above the view), it may be dragged from anywhere, which
+        // makes the position given here count (not while a button is down: that may
+        // be the person dragging it).
+        let drifted = !moved
+            && !ctx.input(|i| i.pointer.any_down())
+            && ctx
+                .memory(|m| m.area_rect(id))
+                .is_some_and(|r| corner_of(r, pivot).distance(start) > 1.0);
+        if taken.is_some() || drifted {
             window = window.drag_area(egui::containers::WindowDrag::Anywhere);
         }
         // The window's own scroll area has no bar setting, so a solid
@@ -243,13 +244,39 @@ impl Panel {
         if let Some(scroll) = before {
             ctx.global_style_mut(|st| st.spacing.scroll = scroll);
         }
-        if let Some(r) = &shown
-            && r.response.drag_started()
+        // Only a drag in which the pointer moved counts: a click on a button
+        // inside it presses on the window too, and that must not pin it
+        // where it was (it would stop following its side of the canvas).
+        // With a title bar, egui moves a window by the response of its title
+        // (the id `__title_click` under the window's id, an egui internal that
+        // 0.36 does not export), not by the area's own response; the
+        // `a_dragged_panel_stays_until_the_layout_is_reset` test fails if an
+        // egui update renames it.
+        let grabbed = shown.as_ref().is_some_and(|r| r.response.dragged())
+            || ctx
+                .read_response(id.with("__title_click"))
+                .is_some_and(|r| r.dragged());
+        if shown.is_some()
+            && grabbed
+            && ctx.input(|i| {
+                i.pointer
+                    .press_origin()
+                    .zip(i.pointer.latest_pos())
+                    .is_some_and(|(from, to)| from.distance(to) > 1.0)
+            })
         {
             mark_moved(ctx, id);
         }
         shown
     }
+}
+
+/// The point of `rect` that `pivot` names: the corner a panel hangs from.
+fn corner_of(rect: egui::Rect, pivot: egui::Align2) -> egui::Pos2 {
+    egui::pos2(
+        rect.min.x + pivot.x().to_factor() * rect.width(),
+        rect.min.y + pivot.y().to_factor() * rect.height(),
+    )
 }
 
 /// How much a dialog's default size grows on a screen wider than the 1366
@@ -538,6 +565,40 @@ mod tests {
         );
         out.textures_delta.clear();
         rect
+    }
+
+    #[test]
+    fn an_unmoved_panel_follows_its_canvas_when_the_canvas_moves_down() {
+        let ctx = egui::Context::default();
+        let top_with = |ctx: &egui::Context, canvas_top: f32| {
+            let area = egui::Rect::from_min_max(egui::pos2(0.0, canvas_top), canvas().max);
+            let mut top = 0.0;
+            let mut out = ctx.run_ui(
+                egui::RawInput {
+                    screen_rect: Some(canvas()),
+                    ..Default::default()
+                },
+                |ctx| {
+                    let panel = Panel::new("test", "Test", area, Side::Right, 300.0);
+                    if let Some(r) = panel.show(ctx, |ui| {
+                        ui.label("content");
+                    }) {
+                        top = r.response.rect.top();
+                    }
+                },
+            );
+            out.textures_delta.clear();
+            top
+        };
+        for _ in 0..3 {
+            top_with(&ctx, 0.0);
+        }
+        let first = top_with(&ctx, 0.0);
+        let mut later = first;
+        for _ in 0..3 {
+            later = top_with(&ctx, 66.0);
+        }
+        assert!((later - first - 66.0).abs() < 1.5, "{first} -> {later}");
     }
 
     #[test]

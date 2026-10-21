@@ -42,12 +42,12 @@ impl NovoApp {
             }
         };
         let docs = {
-            let doc = self.backend.document()?;
-            let project = doc.project();
+            // The plate of the machine as the current choice is drilled.
+            let project = self.machine()?;
             project
                 .structures()
                 .find(|s| s.enclosure && s.tag == location)
-                .and_then(|s| plate_documents(project, s.id))
+                .and_then(|s| plate_documents(&project, s.id))
         };
         let Some((docs, _table)) = docs else {
             self.message(

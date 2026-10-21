@@ -1,0 +1,9 @@
+Tag;Description;Signal type;Address;Station
+S1;Start button;DI;E0.0;Line 1
+S2;Stop button;DI;E0.1;Line 1
+B1;Part present;DI;E0.2;Line 1
+B2;Guard closed;DI;E0.3;Line 1
+Q1;Conveyor motor;DO;A0.0;Line 1
+H1;Run lamp;DO;A0.1;Line 1
+Y1;Gripper valve;DO;A0.2;Line 1
+B3;Pressure;AI;;Line 2

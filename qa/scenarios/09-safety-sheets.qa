@@ -1,0 +1,23 @@
+@title Safety function sheets from the example
+@area Reports
+# The example has one illustrative safety function; the sheets export is in the command field and the Safety window.
+click_text "Open example"
+wait 20
+key ctrl+k
+text safety sheets
+wait 5
+expect "Export safety function sheets (PDF)"
+shot command-field
+check_layout
+key Escape
+key ctrl+k
+text safety functions
+wait 5
+key Return
+wait 10
+expect "Motor stop, ordinary stop not e-stop (illustrative values)"
+expect "Export one sheet per function (PDF)"
+expect "not a certification"
+shot safety-window
+check_blank safety-window
+check_layout

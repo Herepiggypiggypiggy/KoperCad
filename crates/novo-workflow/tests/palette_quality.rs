@@ -326,3 +326,10 @@ fn two_letters_do_not_list_every_circuit() {
             .any(|r| matches!(r.target, Target::Macro(_)))
     );
 }
+
+#[test]
+fn print_opens_the_preview_and_does_not_export_at_once() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    let rows = search(&palette, &keymap, "print");
+    assert_eq!(rows[0].target, Target::Command("export.print_preview"));
+}

@@ -122,12 +122,13 @@ fn a_cut_wire_shows_as_a_changed_net() {
     );
 }
 
-/// A drawn project through PXF and back into an empty project. The file
-/// carries terminals, cables and devices, and what it does not carry shows up
-/// here by name: the EPLAN part number comes back whole as the order number,
-/// the page title is part of the page name, and without an EPLAN symbol table
-/// nothing is drawn, so no symbols and no nets come back. A new difference, or
-/// one that goes away, changes this list and has to be looked at.
+/// A drawn project through PXF and back into an empty project. Devices,
+/// parts (the order number is split from the maker and recombined), pages
+/// (structure, number and title kept apart), terminals and cables survive.
+/// What the file does not carry shows up here by name: without an EPLAN
+/// symbol table nothing is drawn, so no symbols and no nets come back. A new
+/// difference, or one that goes away, changes this list and has to be looked
+/// at.
 #[test]
 fn a_pxf_round_trip_differs_only_where_the_file_cannot_carry() {
     let before = drawn();
@@ -143,14 +144,8 @@ fn a_pxf_round_trip_differs_only_where_the_file_cannot_carry() {
     assert_eq!(
         what,
         [
-            "devices added or changed",
-            "devices missing or changed",
             "drawn symbols missing or changed",
             "nets missing or changed",
-            "pages added or changed",
-            "pages missing or changed",
-            "parts added or changed",
-            "parts missing or changed",
         ],
         "{}",
         c.report.text()

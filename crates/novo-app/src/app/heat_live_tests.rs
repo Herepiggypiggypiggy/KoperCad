@@ -117,7 +117,7 @@ fn frame(state: &mut HeatState, ctx: &egui::Context, p: &Project, cab: Structure
 }
 
 fn settle(state: &mut HeatState, ctx: &egui::Context, p: &Project, cab: StructureId, now: f64) {
-    for _ in 0..4000 {
+    for _ in super::test_wait::patient() {
         frame(state, ctx, p, cab, now);
         if !state.running() {
             return;
@@ -206,11 +206,23 @@ fn a_run_that_fails_is_not_started_again_every_frame() {
     // From here every run fails before its first snapshot.
     let fails = std::sync::Arc::new(Fails(Default::default()));
     state.set_solver_for_test(fails.clone());
-    for t in 1..60 {
-        frame(&mut state, &ctx, &p, cab, f64::from(t));
+    let failed = || fails.0.load(std::sync::atomic::Ordering::SeqCst);
+    let mut t = 1.0;
+    for _ in super::test_wait::patient() {
+        frame(&mut state, &ctx, &p, cab, t);
+        t += 1.0;
+        if failed() >= 1 {
+            break;
+        }
         std::thread::sleep(Duration::from_millis(5));
     }
-    assert_eq!(fails.0.load(std::sync::atomic::Ordering::SeqCst), 1);
+    // A failed run is not retried on its own: more frames start no second one.
+    for _ in 0..30 {
+        frame(&mut state, &ctx, &p, cab, t);
+        t += 1.0;
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(failed(), 1);
     assert!(state.live.is_stale());
 }
 
@@ -224,8 +236,8 @@ fn a_move_during_a_run_cancels_it_and_starts_the_next() {
     assert!(state.running());
     move_hot(&mut p, cab, hot, 300.0, 400.0);
     // The old run is superseded; no "stopped" warning is left behind.
-    for t in 1..4000 {
-        frame(&mut state, &ctx, &p, cab, f64::from(t));
+    for t in super::test_wait::patient().skip(1) {
+        frame(&mut state, &ctx, &p, cab, t as f64);
         std::thread::sleep(Duration::from_millis(5));
         if !state.running() && !state.live.is_stale() && state.solution().is_some() {
             break;

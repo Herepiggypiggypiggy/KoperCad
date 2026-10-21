@@ -149,3 +149,46 @@ fn the_window_and_both_tabs_draw_without_trouble() {
     }
     assert!(d.app.wb.print_preview.is_some());
 }
+
+#[test]
+fn the_design_checks_page_follows_the_checkbox_and_the_plain_export() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = saved_example(dir.path());
+    d.app.wb.queued.push("export.print_preview");
+    d.frame();
+    let (_, with) = d.app.print_preview_counts().unwrap();
+    d.app.print_preview_set_checks(false);
+    let (_, without) = d.app.print_preview_counts().unwrap();
+    // The example has design problems, so the checks page exists and goes.
+    assert_eq!(with, without + 1, "one page of checks");
+    // The plain export says so in its toast when it adds the page.
+    d.app.export_pdf().expect("project pdf");
+    assert!(
+        d.app
+            .messages()
+            .last()
+            .unwrap()
+            .text
+            .contains("Design checks page"),
+        "{:?}",
+        d.app.messages().last().map(|m| m.text.clone())
+    );
+}
+
+#[test]
+fn the_save_button_names_the_checks_page_only_when_it_exists() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = saved_example(dir.path());
+    d.app.wb.queued.push("export.print_preview");
+    d.frame();
+    d.app.print_preview_counts().unwrap();
+    assert!(
+        d.app
+            .print_preview_save_label()
+            .unwrap()
+            .contains("with checks")
+    );
+    d.app.print_preview_set_checks(false);
+    d.app.print_preview_counts().unwrap();
+    assert!(!d.app.print_preview_save_label().unwrap().contains("checks"));
+}
