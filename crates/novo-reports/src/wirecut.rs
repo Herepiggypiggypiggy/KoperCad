@@ -204,6 +204,7 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
             from: i.from,
             to: i.to,
             cross_section_mm2: sections(project, &i.wires).last().copied(),
+            cable_run_mm: crate::lengths::cable_run_mm(project, &i.wires),
         })
         .collect();
     let lengths::Measurement { lengths, plans } = lengths::measure(project, &measured);

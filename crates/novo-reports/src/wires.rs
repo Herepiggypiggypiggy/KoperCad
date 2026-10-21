@@ -147,6 +147,7 @@ impl WireList {
                 from: c.from,
                 to: c.to,
                 cross_section_mm2: cross_sections(&c.wires).last().copied(),
+                cable_run_mm: lengths::cable_run_mm(project, &c.wires),
             })
             .collect();
         let lengths = lengths::cut_lengths(project, &measured);
