@@ -738,16 +738,23 @@ fn actions(
 /// checks page is among them.
 fn save_label(state: &PrintPreview) -> String {
     let n = state.sheets.len();
+    // The checks page exists only when the project has open problems.
+    let checks = state.checks && state.sheets.last().is_some_and(|s| is_checks_page(&s.name));
     format!(
         "Save PDF ({n} page{}{})",
         if n == 1 { "" } else { "s" },
-        if state.checks { ", with checks" } else { "" }
+        if checks { ", with checks" } else { "" }
     )
+}
+
+/// Whether a sheet is the design checks page the PDF appends.
+fn is_checks_page(name: &str) -> bool {
+    name.starts_with("Design check")
 }
 
 /// A sheet name that fits under its thumbnail.
 fn short_name(name: &str) -> String {
-    if name.starts_with("Design check") {
+    if is_checks_page(name) {
         return "Checks".into();
     }
     if name.chars().count() <= 8 {
@@ -1300,6 +1307,10 @@ impl NovoApp {
     pub(super) fn print_preview_export_all_sets(&mut self) -> Vec<PathBuf> {
         self.with_preview(|app, s| app.export_every_plot_set(s))
             .unwrap_or_default()
+    }
+
+    pub(super) fn print_preview_save_label(&mut self) -> Option<String> {
+        self.with_preview(|_, s| save_label(s))
     }
 
     pub(super) fn print_preview_set_checks(&mut self, on: bool) {
