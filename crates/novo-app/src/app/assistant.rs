@@ -426,6 +426,12 @@ impl NovoApp {
     /// Ctrl+K found no command: open the window and ask the question.
     pub(super) fn ask_claude(&mut self, ctx: &egui::Context, question: String) {
         self.wb.assistant.open = true;
+        if self.wb.assistant.running.is_some() {
+            self.wb.assistant.transcript.push(Entry::Problem(
+                "Claude is still answering. Ask again when it has finished.".into(),
+            ));
+            return;
+        }
         self.assistant_send(ctx, question);
     }
 

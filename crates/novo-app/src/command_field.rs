@@ -200,7 +200,8 @@ impl CommandField {
         let ask_row = rows.is_empty()
             && self.ask_enabled
             && open.mode == Mode::All
-            && !open.query.trim().is_empty();
+            // Two words at least, so a mistyped command is not sent anywhere.
+            && open.query.split_whitespace().count() >= 2;
         let area = egui::Area::new(egui::Id::new("command_field"))
             .order(egui::Order::Foreground)
             .pivot(pivot)
@@ -220,7 +221,10 @@ impl CommandField {
                     ui.separator();
                     if rows.is_empty() {
                         if ask_row {
-                            let text = format!("Ask Claude: {}", open.query.trim());
+                            let text = format!(
+                                "Ask Claude: {}   (Enter sends this to Claude)",
+                                open.query.trim()
+                            );
                             if ui
                                 .selectable_label(true, text)
                                 .on_hover_text(

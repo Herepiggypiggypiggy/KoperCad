@@ -415,3 +415,44 @@ fn ctrl_k_offers_to_ask_claude_when_nothing_matches_and_only_when_it_is_on() {
     }]);
     assert!(s.script.seen.lock().unwrap().is_empty());
 }
+
+#[test]
+fn a_ctrl_k_question_while_claude_answers_is_refused_not_doubled() {
+    let mut s = setup(DataScope::Outline);
+    s.script.replies.lock().unwrap().push_back(text("First."));
+    s.d.app.wb.assistant.set_draft("first question");
+    let ctx = s.d.ctx.clone();
+    s.d.app.assistant_test_send(&ctx);
+    assert!(s.d.app.wb.assistant.is_running());
+    s.d.app.ask_claude(&ctx, "second question here".into());
+    for _ in 0..400 {
+        s.d.frame();
+        if !s.d.app.wb.assistant.is_running() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(s.script.seen.lock().unwrap().len(), 1, "one request only");
+    let t = s.d.app.wb.assistant.transcript_text();
+    assert!(t.contains("still answering") && t.contains("First."), "{t}");
+}
+
+#[test]
+fn a_single_typed_word_is_not_offered_to_claude() {
+    let mut s = setup(DataScope::Outline);
+    s.d.app
+        .wb
+        .field
+        .open(novo_workflow::palette::Mode::All, None);
+    s.d.app.wb.field.type_text("qqzzxx");
+    s.d.frame();
+    s.d.frame_with(vec![egui::Event::Key {
+        key: egui::Key::Enter,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    }]);
+    s.d.frame();
+    assert!(s.script.seen.lock().unwrap().is_empty());
+}
