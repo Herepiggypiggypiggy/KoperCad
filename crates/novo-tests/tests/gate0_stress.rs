@@ -10,6 +10,12 @@ use novo_tests::stress_page;
 
 const OBJECTS: usize = 10_000;
 
+/// Budgets are tight for release builds (scripts/scale-bench.sh); a debug
+/// build on a shared runner gets ten times as long. The guard is never off.
+fn budget(base: Duration) -> Duration {
+    base * if cfg!(debug_assertions) { 10 } else { 1 }
+}
+
 fn timed<R>(label: &str, f: impl FnOnce() -> R) -> (R, Duration) {
     let start = Instant::now();
     let r = f();
@@ -29,7 +35,10 @@ fn ten_thousand_objects_build_query_save_and_undo() {
 
     // Reading one page's contents is what every frame does.
     let (_, read) = timed("page_contents", || p.page_contents(page));
-    assert!(read < Duration::from_millis(500), "page read took {read:?}");
+    assert!(
+        read < budget(Duration::from_millis(500)),
+        "page read took {read:?}"
+    );
 
     let (net, took) = timed("netlist", || p.netlist());
     assert_eq!(net.nets().len(), OBJECTS.div_ceil(3) + 1);
@@ -48,9 +57,15 @@ fn ten_thousand_objects_build_query_save_and_undo() {
         })
         .unwrap()
     });
-    assert!(took < Duration::from_millis(200), "edit took {took:?}");
+    assert!(
+        took < budget(Duration::from_millis(200)),
+        "edit took {took:?}"
+    );
     let (_, took) = timed("undo move", || doc.undo().unwrap());
-    assert!(took < Duration::from_millis(200), "undo took {took:?}");
+    assert!(
+        took < budget(Duration::from_millis(200)),
+        "undo took {took:?}"
+    );
 
     let (_, took) = timed("undo whole page", || doc.undo().unwrap());
     assert_eq!(doc.project().records().count(), 0);

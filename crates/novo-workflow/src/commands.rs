@@ -2078,9 +2078,9 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.toc",
-            "Contents",
+            "Table of contents",
             "View",
-            &["table of contents", "index", "page list"],
+            &["contents", "index", "page list"],
             Needs::Project,
         ),
         &["contents"],
@@ -2138,9 +2138,9 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.cutlist",
-            "Cut list (wire by the metre)",
+            "Cut list",
             "View",
-            &["cut length", "wire lengths", "sleeves"],
+            &["wire by the metre", "cut length", "wire lengths", "sleeves"],
             Needs::Project,
         ),
         &["cut list"],
@@ -2158,9 +2158,14 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.wirecut",
-            "Wire cut list (machine job)",
+            "Wire production",
             "View",
-            &["wire machine", "cut and strip", "production"],
+            &[
+                "wire cut list",
+                "machine job",
+                "wire machine",
+                "cut and strip",
+            ],
             Needs::Project,
         ),
         &["wire cut report"],
@@ -2188,9 +2193,9 @@ pub const COMMANDS: &[CommandInfo] = &[
     verb(
         cmd(
             "report.plugs",
-            "Plug list",
+            "Plug connection list",
             "View",
-            &["connectors", "plugs", "sockets", "mating"],
+            &["plug list", "connectors", "plugs", "sockets", "mating"],
             Needs::Project,
         ),
         &["plug list"],
