@@ -143,12 +143,34 @@ pub(super) struct State {
     now: Arc<dyn Fn() -> u64 + Send + Sync>,
 }
 
+/// Name of the variable that makes the assistant answer from a file instead of the
+/// network, for the QA harness: the file holds a JSON list of Messages API replies,
+/// used in order. Nothing is sent anywhere while it is set, and the window says so.
+pub(super) const REPLAY_VAR: &str = "KOPERCAD_AI_REPLAY";
+
+fn replay_script() -> Option<novo_ai::api::testing::Script> {
+    let path = std::env::var_os(REPLAY_VAR)?;
+    let list: Vec<Value> = serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+    let script = novo_ai::api::testing::Script::default();
+    for reply in list {
+        script.push(200, reply);
+    }
+    Some(script)
+}
+
+fn default_transport() -> TransportFactory {
+    match replay_script() {
+        Some(script) => Arc::new(move || Box::new(script.clone())),
+        None => Arc::new(|| Box::new(UreqTransport::new())),
+    }
+}
+
 impl State {
     pub fn new() -> Self {
         Self::with(
             KeyStore::in_profile(),
             novo_ai::key::default_dir().map(|d| d.join("usage.json")),
-            Arc::new(|| Box::new(UreqTransport::new())),
+            default_transport(),
             Arc::new(unix_now),
         )
     }
@@ -1167,6 +1189,12 @@ impl NovoApp {
         let spent = self.wb.assistant.spent();
         let cap = self.settings.ai.monthly_cap_usd;
         let model = models::resolve(&self.settings.ai.model);
+        if std::env::var_os(REPLAY_VAR).is_some() {
+            ui.label(
+                egui::RichText::new("Test replay: answers come from a file, nothing is sent")
+                    .color(pal.warning),
+            );
+        }
         ui.horizontal(|ui| {
             if enabled {
                 ui.label(egui::RichText::new("Claude is on").color(pal.success));

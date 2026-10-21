@@ -14,3 +14,4 @@
 2026-10-21 10:40 UTC #1136 and #1165 merged. Follow-up: datasheet confirm line shows cost and month spend, Stop while reading, warning for a duplicate manufacturer and order number (PR from claude/ai-datasheet-followup).
 2026-10-21 11:00 UTC #1170 merged. Polish: spend label says counted by KoperCAD, no dollar guess, duplicate match ignores case/spaces/dashes, Stop tested (PR from claude/ai-datasheet-polish).
 2026-10-21 12:45 UTC Claude can propose set_wire_number (Whole project only, card shows the old number, one undo step) so it can act on the wire-number conflicts it reads (PR from claude/ai-wire-number-edit).
+2026-10-21 13:20 UTC QA replay mode: KOPERCAD_AI_REPLAY=<file> answers from canned replies (nothing sent, window says so); qa runner header @env; scenario 10-ask-claude-wire-number passes at both sizes (PR #1188).
