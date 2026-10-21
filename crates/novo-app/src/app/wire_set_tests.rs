@@ -20,5 +20,17 @@ fn every_report_counts_the_same_wire_set() {
     assert_eq!(wire_cut_jobs(p).len(), set.to_cut);
     let (n, noun) = headline_count("cutlist", &CutList::default().generate(p));
     assert_eq!((n, noun), (set.to_cut, "wires"));
-    assert!(set.explanation().contains("supply and PE leads"));
+    // The example's numbers, pinned: a change here is a change of the wire set.
+    assert_eq!(
+        (
+            set.connections,
+            set.leads(),
+            set.to_cut,
+            set.wire_labels,
+            set.drawn
+        ),
+        (19, 6, 25, 50, 27)
+    );
+    assert!(set.explanation().contains("6 supply and PE leads"));
+    assert_eq!(novo_reports::count_text(1, "connections"), "1 connection");
 }

@@ -27,15 +27,29 @@ pub fn headline_count(report_id: &str, output: &ReportOutput) -> (usize, &'stati
             output
                 .sections
                 .iter()
-                .filter(|s| s.key != "summary")
+                .filter(|s| s.key.starts_with("group-"))
                 .map(|s| s.rows.len())
                 .sum(),
             "wires",
         ),
         "wirecut" => (rows_of(&["cuts"]), "wires"),
-        "labels" => (output.row_count(), "labels"),
+        "labels" => (rows_of(&["wires"]), "wire labels"),
         _ => (output.row_count(), "rows"),
     }
+}
+
+/// `1 wire`, `25 wires`: the noun of a headline count made singular for 1.
+pub fn count_text(n: usize, noun: &str) -> String {
+    let one = match noun {
+        "connections" => "connection",
+        "wires" => "wire",
+        "wire labels" => "wire label",
+        "rows" => "row",
+        "supply and PE leads" => "supply or PE lead",
+        "wire pieces" => "wire piece",
+        other => other,
+    };
+    format!("{n} {}", if n == 1 { one } else { noun })
 }
 
 /// The wire counts of a project and why they differ.
@@ -59,7 +73,7 @@ impl WireSet {
         WireSet {
             connections: list.row_count(),
             to_cut,
-            wire_labels: 2 * to_cut,
+            wire_labels: headline_count("labels", &Labels.generate(project)).0,
             drawn: project.wires().count(),
         }
     }
@@ -72,13 +86,13 @@ impl WireSet {
     /// One sentence naming each difference.
     pub fn explanation(&self) -> String {
         format!(
-            "{} connections between pins + {} supply and PE leads = {} wires to cut; \
-             {} wire labels (two per wire); {} wires drawn (segments and feeds counted).",
-            self.connections,
-            self.leads(),
-            self.to_cut,
-            self.wire_labels,
-            self.drawn
+            "{} between pins + {} = {} to cut; {} (one per wire end); \
+             {} drawn (a connection can be drawn in several pieces, and supply feeds count too).",
+            count_text(self.connections, "connections"),
+            count_text(self.leads(), "supply and PE leads"),
+            count_text(self.to_cut, "wires"),
+            count_text(self.wire_labels, "wire labels"),
+            count_text(self.drawn, "wire pieces"),
         )
     }
 }
@@ -107,7 +121,7 @@ pub fn wire_set_mismatch(project: &Project) -> Option<String> {
                 .filter(|s| s.key == "wires")
                 .map(|s| s.rows.len())
                 .sum(),
-            set.wire_labels,
+            2 * set.to_cut,
         ),
     ];
     checks

@@ -47,6 +47,8 @@ pub(crate) struct ReportsView {
     sort: Option<(String, usize, bool)>,
     /// The shown report's output, kept while the project is unchanged.
     cache: Option<(String, u64, ReportOutput)>,
+    /// The wire counts at a project revision, so a repaint does not rebuild them.
+    wire_set: Option<(u64, novo_reports::WireSet)>,
     /// The row the keys act on: its section key and index in the section.
     cursor: Option<(String, usize)>,
     /// Put the cursor row in view on the next frame.
@@ -177,6 +179,16 @@ impl NovoApp {
         }
     }
 
+    /// The project's wire counts, kept while the project is unchanged.
+    fn wire_set(&mut self) -> Option<novo_reports::WireSet> {
+        let project = self.backend.document()?.project();
+        let revision = project.revision();
+        if self.reports_view.wire_set.as_ref().map(|(r, _)| *r) != Some(revision) {
+            self.reports_view.wire_set = Some((revision, novo_reports::WireSet::of(project)));
+        }
+        self.reports_view.wire_set.as_ref().map(|(_, s)| s.clone())
+    }
+
     /// The centre: header, filter and the report's tables.
     pub(super) fn reports_central(&mut self, ui: &mut egui::Ui) {
         let Some(id) = self.report_selected() else {
@@ -202,7 +214,7 @@ impl NovoApp {
         ui.horizontal(|ui| {
             ui.heading(&output.title);
             let (n, noun) = novo_reports::headline_count(&id, &output);
-            ui.weak(format!("{n} {noun}"));
+            ui.weak(novo_reports::count_text(n, noun));
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 ui.add_space(8.0);
                 lesson = chip_button(ui, chip.as_ref());
@@ -262,9 +274,9 @@ impl NovoApp {
             });
         });
         if matches!(id.as_str(), "wires" | "cutlist" | "wirecut" | "labels")
-            && let Some(doc) = self.backend.document()
+            && let Some(set) = self.wire_set()
         {
-            ui.weak(novo_reports::WireSet::of(doc.project()).explanation());
+            ui.weak(set.explanation());
         }
         ui.separator();
         let lit = self.lit_sources();
