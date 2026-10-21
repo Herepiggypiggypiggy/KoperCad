@@ -1134,7 +1134,7 @@ fn checks_tab(
     let pages = project.pages_in_order();
     let plan = mode.plan(project);
     let next = mode.next(project, mode.selected, current);
-    ui.horizontal(|ui| {
+    ui.horizontal_wrapped(|ui| {
         let next_open_button = widgets::primary_button(ui, "Next open")
             .on_hover_text("Go to the next wire, terminal or device with an open check");
         note_ctx(
@@ -1533,7 +1533,7 @@ fn walk_card(
     if let Some(step) = step {
         let end =
             |ui: &mut egui::Ui, caption: &str, designation: &str, ferrule: &Option<String>| {
-                ui.horizontal(|ui| {
+                ui.horizontal_wrapped(|ui| {
                     ui.label(egui::RichText::new(caption).small().color(p.text_tertiary));
                     let text = if designation.is_empty() {
                         "open end"
@@ -1551,7 +1551,7 @@ fn walk_card(
                     );
                     let (text, color) = match ferrule {
                         Some(f) => (format!("ferrule {f}"), p.text_secondary),
-                        None => ("no ferrule".to_owned(), p.text_tertiary),
+                        None => ("ferrule: not set".to_owned(), p.text_tertiary),
                     };
                     ui.label(egui::RichText::new(text).small().color(color));
                 });

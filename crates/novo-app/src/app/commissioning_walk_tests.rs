@@ -208,7 +208,13 @@ fn n_marks_not_applicable_and_backspace_takes_a_pass_back() {
     tap_space(&mut d); // passes the rest, moves on
     let moved = d.app.wb.commissioning.as_ref().unwrap().selected.unwrap();
     assert_ne!(moved, target);
+    let wires = d.doc().project().wires().count();
     key(&mut d, egui::Key::Backspace);
     let mode = d.app.wb.commissioning.as_ref().unwrap();
     assert_eq!(mode.selected, Some(target), "Backspace went back one wire");
+    assert_eq!(
+        d.doc().project().wires().count(),
+        wires,
+        "Backspace and N and F never delete a wire on the canvas"
+    );
 }
