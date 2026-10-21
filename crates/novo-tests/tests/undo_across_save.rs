@@ -2,12 +2,13 @@
 //! exactly, for every kind of edit.
 //!
 //! `data_safety.rs` pins single steps. Here a seeded random run mixes edits
-//! (place, move, remove, add and delete pages, texts, junctions; removing a
-//! device cascades through its symbols and wires), undo, redo, saves and
+//! (place, move, remove a symbol, a wire or a device, add and delete pages,
+//! junctions; removing a device cascades through its symbols and wires), undo, redo, saves and
 //! autosaves. After every save the file equals the drawing; at the end a
 //! crash (the session dropped, nothing closed) leaves the last save in the
-//! file and the drawing as it stood in the recovery file. Undoing everything
-//! and saving gives back the project the run started from, byte for byte.
+//! file and the drawing as it stood in the recovery file. Undoing the whole
+//! history and saving gives back the project the run started from (the id
+//! counter stays where the edits left it).
 
 use std::path::Path;
 
@@ -142,9 +143,8 @@ fn run(seed: u64, steps: usize) {
     let mut doc = Document::default();
     motor_starter(&mut doc).unwrap();
     doc.clear_history();
-    let start = doc.project().to_json();
     let mut session = Session::create(&path, doc.project()).unwrap();
-    let mut saved = start.clone();
+    let mut saved = doc.project().to_json();
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let (mut edits, mut undos, mut redos, mut saves) = (0, 0, 0, 0);
 
@@ -203,21 +203,15 @@ fn run(seed: u64, steps: usize) {
         ),
         None => assert_eq!(now, saved, "seed {seed}: unsaved work was not offered back"),
     }
+    // The drawing accepted back and saved: the file reads back the same.
     let mut session = opened.session;
-
-    // Undo everything and save: the project the run started from, exactly.
-    let mut doc = Document::new(opened.project);
-    // The history is gone with the process; replay it from the start by
-    // undoing in a fresh document would prove nothing, so check the other
-    // direction: save the drawing, close, and the file reads back the same.
-    session.save(doc.project()).unwrap();
+    session.save(&opened.project).unwrap();
     session.close().unwrap();
     assert_eq!(
         ProjectFile::read(&path).unwrap().to_json(),
         saved,
         "seed {seed}"
     );
-    let _ = (&mut doc, &start);
 }
 
 /// Undo to the bottom of the history and save: the file is the starting
