@@ -27,8 +27,8 @@ panel says so.
 Wires that stay on one plate are routed over its ducts as before. For a wire
 with an end outside the plate:
 
-1. **On a cable with a stated length**: the cable length plus a service loop
-   at each end (`wire.slack_mm`, default 50 mm). Basis `cable length`, not an
+1. **On a cable with a stated length**: the cable length as stated, no loop
+   added (the stripped ends are part of the cable as bought). Basis `cable length`, not an
    estimate. The cores run the whole cable, so no entry point is needed; if the
    wire is also routed to the entry (see 2) its route only fills the duct. If
    one connection has wires on several cables, the longest cable wins.
