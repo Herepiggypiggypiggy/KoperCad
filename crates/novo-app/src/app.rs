@@ -202,6 +202,9 @@ mod view3d_place;
 mod view3d_rail;
 #[cfg(test)]
 mod view3d_rail_tests;
+mod view3d_runs;
+#[cfg(test)]
+mod view3d_runs_tests;
 mod view3d_stats;
 mod view3d_surface_devices;
 #[cfg(test)]
