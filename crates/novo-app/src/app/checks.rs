@@ -162,9 +162,22 @@ impl NovoApp {
         } else {
             let response = novo_theme::widgets::issue_pill(ui, summary.errors, summary.warnings);
             if pending {
-                ui.weak("updating…");
+                // The counts are from before the last edit: a pulsing dot in
+                // the gap before the pill says so without moving the breadcrumb.
+                let t = ui.input(|i| i.time);
+                let alpha = 0.55 + 0.45 * (t * 6.0).sin() as f32;
+                let at = egui::pos2(response.rect.left() - 5.0, response.rect.center().y);
+                ui.painter().circle_filled(
+                    at,
+                    2.5,
+                    crate::theme::ui_palette()
+                        .text_secondary
+                        .gamma_multiply(alpha),
+                );
+                response.on_hover_text("Updating after your last edit; the counts may change")
+            } else {
+                response
             }
-            response
         };
         self.wb.pill_rect = response.rect;
         self.anchor_response("issue.pill", &response, "Issues");
