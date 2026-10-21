@@ -124,7 +124,26 @@ pub(crate) fn tint_devices(
         let rgb = heat::ramp(range.t(f64::from(cfd::temperature_at(snap, p))));
         item.tint = Some(rgb);
     }
+    pin_labels(&mut out, snap);
     out
+}
+
+/// How many of the hottest devices carry their temperature on the picture.
+const PINNED: usize = 3;
+
+/// The hottest devices (over their limit first, as in the Hot spots list) get
+/// their surface temperature on the tag chip in the view, for example
+/// `-F1  57 °C`, so the story is on the picture and not only in a menu.
+fn pin_labels(scene: &mut novo_view3d::Scene, snap: &CfdSnapshot) {
+    let rows = super::heat_spots::rows(snap, &|_| String::new(), PINNED);
+    for row in rows {
+        let id = novo_view3d::ItemId::new(novo_view3d::ItemKind::Device, row.id);
+        if let Some(item) = scene.items.iter_mut().find(|i| i.id == id) {
+            let tag = item.label.as_deref().unwrap_or("").to_owned();
+            let text = format!("{tag}  {:.0} °C", row.surface_c);
+            item.label = Some(text.trim_start().into());
+        }
+    }
 }
 
 /// Temperature scale of a result: ambient to the hottest cell.

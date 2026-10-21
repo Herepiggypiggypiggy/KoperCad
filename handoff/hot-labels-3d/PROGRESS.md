@@ -1,0 +1,1 @@
+- 2026-10-21 pinned temperature on the three hottest tag chips, 1 unit test, seen in the window

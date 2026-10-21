@@ -6,7 +6,7 @@ use novo_cfd::{
 };
 use novo_heatview::cfd::Axis;
 use novo_heatview::range::Range;
-use novo_view3d::{Item, ItemId, ItemKind, Overlay, PlateFrame, Pose, Shape};
+use novo_view3d::{Item, ItemId, ItemKind, Overlay, PlateFrame, Pose, Scene, Shape};
 
 use super::heat_3d::{
     Flow, Heat3d, Place, flow, overlays, range_for, shell_mesh, slice_mesh, stream_lines,
@@ -385,4 +385,73 @@ fn raising_the_scale_floor_changes_how_a_device_is_coloured() {
     let a = tint_devices(&scene, &snapshot(), 20.0, place, None, 1).items[0].tint;
     let b = tint_devices(&scene, &snapshot(), 20.0, place, Some((30.0, 40.0)), 1).items[0].tint;
     assert!(a.is_some() && b.is_some() && a != b);
+}
+
+#[test]
+fn the_hottest_three_devices_carry_their_temperature_on_the_tag() {
+    use novo_thermal::{DeviceResult, Status};
+    let frame = PlateFrame {
+        width: 100.0,
+        height: 80.0,
+    };
+    let place = Place {
+        plate_x: 0.0,
+        plate_y: 0.0,
+        frame,
+    };
+    let mut scene = Scene::new(frame);
+    let mut snap = snapshot();
+    for (raw, surface, status) in [
+        (1u64, 80.0, Status::Ok),
+        (2, 60.0, Status::Over),
+        (3, 70.0, Status::Ok),
+        (4, 50.0, Status::Ok),
+    ] {
+        let mut item = Item::new(
+            ItemId::new(ItemKind::Device, raw),
+            Shape::Box,
+            Pose::at(frame.world(10.0 * raw as f64, 40.0, 0.0)),
+            glam::Vec3::new(5.0, 5.0, 10.0),
+        );
+        item.label = Some(format!("-Q{raw}").into());
+        scene.push(item);
+        snap.devices.push(DeviceResult {
+            id: raw,
+            footprint: novo_layout::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 5.0,
+                h: 5.0,
+            },
+            loss_w: 5.0,
+            surface_c: surface,
+            air_c: surface - 5.0,
+            h_w_m2k: 8.0,
+            plate_share: 0.2,
+            surface_band_c: (surface, surface),
+            air_band_c: (surface, surface),
+            rated_max_ambient_c: None,
+            rated_max_surface_c: None,
+            margin_k: None,
+            margin_pessimistic_k: None,
+            status,
+        });
+    }
+    let tinted = tint_devices(&scene, &snap, 20.0, place, None, 1);
+    let text = |raw: u64| {
+        tinted
+            .items
+            .iter()
+            .find(|i| i.id.raw == raw)
+            .and_then(|i| i.label.as_deref())
+            .unwrap()
+            .to_owned()
+    };
+    // Over its limit first, then the hottest: Q2, Q1, Q3 are pinned, Q4 is not.
+    assert_eq!(text(2), "-Q2  60 °C");
+    assert_eq!(text(1), "-Q1  80 °C");
+    assert_eq!(text(3), "-Q3  70 °C");
+    assert_eq!(text(4), "-Q4");
+    // The source scene keeps its plain tags.
+    assert_eq!(scene.items[0].label.as_deref(), Some("-Q1"));
 }
