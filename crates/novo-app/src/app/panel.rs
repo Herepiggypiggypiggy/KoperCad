@@ -173,7 +173,15 @@ impl Panel {
         };
         let moved = is_moved(ctx, id);
         let (pivot, start) = self.start();
-        let max_height = (self.canvas.height() - self.top - BOTTOM - self.bottom).max(MIN_HEIGHT);
+        // A panel hanging from the right edge stays clear of a card in the
+        // bottom right corner, unless the person has moved it.
+        let corner = if self.side == Side::Right && !moved {
+            reserved_bottom_right(ctx)
+        } else {
+            0.0
+        };
+        let max_height =
+            (self.canvas.height() - self.top - BOTTOM - self.bottom - corner).max(MIN_HEIGHT);
         let mut window = egui::Window::new(&self.title)
             .id(id)
             .order(egui::Order::Middle)
@@ -273,6 +281,21 @@ pub(super) fn reset_layout(ctx: &egui::Context) {
         let epoch: u32 = d.get_persisted(epoch_id()).unwrap_or(0);
         d.insert_persisted(epoch_id(), epoch.wrapping_add(1));
     });
+}
+
+fn corner_id() -> egui::Id {
+    egui::Id::new("panel_corner_reserved")
+}
+
+/// The bottom right corner is taken by a card (the lesson card) this tall:
+/// panels that start at the right side stay above it instead of drawing
+/// under it. 0 gives the corner back. Read on the next frame.
+pub(super) fn reserve_bottom_right(ctx: &egui::Context, height: f32) {
+    ctx.data_mut(|d| d.insert_temp(corner_id(), height));
+}
+
+fn reserved_bottom_right(ctx: &egui::Context) -> f32 {
+    ctx.data(|d| d.get_temp::<f32>(corner_id())).unwrap_or(0.0)
 }
 
 fn epoch_id() -> egui::Id {

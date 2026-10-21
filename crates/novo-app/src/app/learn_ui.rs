@@ -68,6 +68,7 @@ impl NovoApp {
     /// The lesson card, the pointer and the notes, late in the frame.
     pub(super) fn learn_overlay(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         if !self.learn.card_on() {
+            super::panel::reserve_bottom_right(ctx, 0.0);
             return;
         }
         self.pointer(ctx, canvas);
@@ -92,6 +93,18 @@ impl NovoApp {
         })
         .map_or(egui::Rect::NOTHING, |r| r.response.rect);
         self.learn.card_pos = Some(card_rect.center());
+        // The inspector and the other right-hand panels keep above the card
+        // while it sits in its corner.
+        let parked =
+            card_rect.is_finite() && !super::panel::is_moved(ctx, super::panel::id("lesson_card"));
+        super::panel::reserve_bottom_right(
+            ctx,
+            if parked {
+                card_rect.height() + super::panel::MARGIN
+            } else {
+                0.0
+            },
+        );
         match action {
             Some(CardAction::Move(how)) => self.learn_move(how),
             Some(CardAction::ShowMe) => self.learn_show_me(),

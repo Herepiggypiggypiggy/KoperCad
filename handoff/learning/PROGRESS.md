@@ -11,3 +11,8 @@
 2026-10-16 12:10 UTC #642 merged (replay gate, 142 steps tick). Second runner PR: rename/tee/feed_row/cable/issue_revision/assign_part/held-key ops, `manual` marker, menu-row anchors with fallback, free-text control-name ratchet; fmt, clippy and tests pass locally.
 2026-10-17 10:20 UTC #682 merged. Third runner PR: ui_click, list_row, type_text ops; waive/restore replay; flyout kept open when a row menu entry is chosen; live-view momentary wording.
 2026-10-17 12:50 UTC #986 merged. Fourth runner PR (draft, held for freeze): 10 click-only manual steps now replay; tab clicks tick; replay state no longer leaks between lessons.
+
+## 2026-10-21 Learning fixer
+- Inspector (and other right-hand panels) now stay above the lesson card while it sits in its corner (`panel::reserve_bottom_right`); test at 1366x768.
+- Learning paths reordered so every `needs` is taught first and all 33 lessons are in a path; `lint::path_notes` + `repo_lessons` test keep it so.
+- Next: Skip step applies `solve`; replay test must not rely on a leftover Place rules window; Open finished version; quiet design checks in lessons; challenge lessons.
