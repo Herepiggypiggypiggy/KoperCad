@@ -165,6 +165,11 @@ impl NovoApp {
             return;
         }
         let left_commissioning = self.workspace == Workspace::Commissioning;
+        // The live view draws only over the schematic; it does not wait
+        // switched on for the next visit.
+        if workspace != Workspace::Schematic {
+            self.wb.live.leave();
+        }
         self.store_layout();
         self.workspace = workspace;
         self.settings.last_workspace = workspace.id().to_owned();

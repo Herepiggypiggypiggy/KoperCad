@@ -55,6 +55,9 @@ pub(crate) struct LiveView {
     /// Click mode of "Why?": the next click on a wire or device asks why it
     /// is lit or dead (Alt+click does the same without the mode).
     pub(super) why_mode: bool,
+    /// The frame whose Escape was handled, so a repeated pass of one frame
+    /// does not step back twice.
+    escaped_in: Option<u64>,
     /// What the explanation is about.
     why: Option<Target>,
     /// The PLC program window and the program running in it.
@@ -227,6 +230,26 @@ impl LiveView {
         let closed = self.poles.is_closed(symbol, group);
         for member in together(project, symbol) {
             self.poles.set_all(project, member, !closed);
+        }
+    }
+
+    /// Switches the live view off and drops what it was asking.
+    pub(super) fn leave(&mut self) {
+        self.on = false;
+        self.why_mode = false;
+        self.why = None;
+        self.held = None;
+    }
+
+    /// Escape steps back one level: the Why? click mode, then its answer,
+    /// then the live view itself.
+    pub(super) fn escape(&mut self) {
+        if self.why_mode {
+            self.why_mode = false;
+        } else if self.why.is_some() {
+            self.why = None;
+        } else {
+            self.leave();
         }
     }
 
@@ -617,6 +640,19 @@ impl NovoApp {
         }
     }
 
+    /// `sim.why`: switches the live view on if it is off and waits for a
+    /// click on a wire or a device.
+    pub(super) fn ask_why(&mut self) {
+        if !self.wb.live.on {
+            self.toggle_live();
+        }
+        self.wb.live.why_mode = true;
+        self.message(
+            Level::Info,
+            "Click a wire or a device to see why it is lit or dead",
+        );
+    }
+
     /// Hands the canvas the wire looks of the live view (none when it is off).
     fn light_wires(&mut self, looks: HashMap<WireId, WireLook>) {
         let Some(doc) = self.backend.document() else {
@@ -629,6 +665,22 @@ impl NovoApp {
 
     /// Paints the live view over the canvas and shows its card and badges.
     pub(super) fn live_view(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
+        if !self.wb.live.on {
+            self.light_wires(HashMap::new());
+            return;
+        }
+        // Escape, when nothing else is using it (the command field, the
+        // pages flyout, a menu or a text box).
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape))
+            && !self.wb.field.is_open()
+            && !self.outline_open
+            && !ctx.egui_wants_keyboard_input()
+            && !egui::Popup::is_any_open(ctx)
+            && self.wb.live.escaped_in != Some(ctx.cumulative_frame_nr())
+        {
+            self.wb.live.escaped_in = Some(ctx.cumulative_frame_nr());
+            self.wb.live.escape();
+        }
         if !self.wb.live.on {
             self.light_wires(HashMap::new());
             return;
@@ -1169,7 +1221,7 @@ impl NovoApp {
                 if ui
                     .selectable_label(why_mode, "Why?")
                     .on_hover_text(
-                        "Then click a wire or a device to see why it is lit or dead. holding Alt while you click does the same at any time",
+                        "Then click a wire or a device to see why it is lit or dead. Holding Alt while you click does the same at any time",
                     )
                     .clicked()
                 {
@@ -1267,7 +1319,7 @@ impl NovoApp {
             self.open_motor_start_for(motor);
         }
         if leave {
-            self.wb.live.on = false;
+            self.wb.live.leave();
         }
         if open_all {
             if let Some(doc) = self.backend.document() {
