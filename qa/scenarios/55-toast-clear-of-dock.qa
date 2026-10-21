@@ -1,0 +1,13 @@
+@title A toast stands above the tool dock, never over it
+@area Layout
+# C3-06: at 1366 wide the toast column reached the dock's left buttons. The export's "written" toast stays until clicked, like an error toast (a unit test covers the error one).
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 4
+text export pdf
+wait 6
+key Enter
+wait 15
+shot toast-and-dock
+check_layout
