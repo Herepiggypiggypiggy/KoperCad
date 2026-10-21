@@ -99,6 +99,9 @@ pub(super) struct State {
     pub open: bool,
     proposal_notes: HashMap<u32, String>,
     show_settings: bool,
+    /// The settings list has been scrolled to its end (or fits), so the notice
+    /// at its end has been in view.
+    settings_at_end: bool,
     /// Tests only: retries do not wait.
     instant_retries: bool,
     agreed: bool,
@@ -232,6 +235,7 @@ impl State {
             open: false,
             proposal_notes: HashMap::new(),
             show_settings: false,
+            settings_at_end: true,
             instant_retries: false,
             agreed: false,
             key_input: String::new(),
@@ -1326,17 +1330,21 @@ impl NovoApp {
                     } else {
                         room
                     };
-                    egui::ScrollArea::vertical()
+                    let scrolled = egui::ScrollArea::vertical()
                         .id_salt("ask_claude_settings")
-                        .scroll_bar_visibility(
-                            egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
-                        )
                         .scroll_bar_visibility(
                             egui::scroll_area::ScrollBarVisibility::AlwaysVisible,
                         )
                         .max_height(settings_max)
                         .auto_shrink([false, true])
-                        .show(ui, |ui| self.assistant_settings_ui(ui, ctx));
+                        .show(ui, |ui| {
+                            self.assistant_settings_ui(ui, ctx);
+                            if self.wb.assistant.show_settings {
+                                self.assistant_notice_ui(ui);
+                            }
+                        });
+                    let end = scrolled.state.offset.y + scrolled.inner_rect.height();
+                    self.wb.assistant.settings_at_end = end + 4.0 >= scrolled.content_size.y;
                     ui.separator();
                     if self.settings.ai.enabled {
                         send = self.assistant_chat_ui(ui, &mut decide);
@@ -1578,10 +1586,18 @@ impl NovoApp {
         ui.add_space(6.0);
     }
 
-    /// Section 4 of the settings, pinned under the scrolling sections 1 to 3
-    /// so the box and the button are reachable on a small window.
-    fn assistant_agree_ui(&mut self, ui: &mut egui::Ui) {
+    /// Section 4: the notice, at the end of the scrolling settings so it is
+    /// read in full whatever the window height.
+    fn assistant_notice_ui(&mut self, ui: &mut egui::Ui) {
         let pal = ui_palette();
+        ui.add_space(6.0);
+        ui.strong("4. Agree");
+        ui.label(egui::RichText::new(NOTICE).color(pal.text_secondary));
+    }
+
+    /// The box and the button, pinned under the scrolling settings so they are
+    /// reachable on a small window; the notice they refer to is above.
+    fn assistant_agree_ui(&mut self, ui: &mut egui::Ui) {
         let enabled = self.settings.ai.enabled;
         let key = self.wb.assistant.key();
         // Sections 1 to 3 have already stored a change of scope.
@@ -1590,8 +1606,9 @@ impl NovoApp {
             .assistant
             .pending_scope
             .unwrap_or_else(|| self.settings.ai.consent.effective());
-        ui.strong("4. Agree");
-        ui.label(egui::RichText::new(NOTICE).color(pal.text_secondary));
+        if !self.wb.assistant.settings_at_end {
+            ui.weak("Scroll down to read “4. Agree” before you agree.");
+        }
         if enabled {
             if ui.button("Turn Claude off").clicked() {
                 self.settings.ai.enabled = false;
