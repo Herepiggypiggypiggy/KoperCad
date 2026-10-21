@@ -822,8 +822,17 @@ fn suggest_column(header: &str, samples: &[&str]) -> ColumnMap {
             Target::Function,
         ),
     ];
+    // `Price EUR`, `Preis USD`: a price word with the currency after it.
+    let price_stem = [
+        "euro", "eur", "usd", "gbp", "chf", "sek", "dkk", "nok", "pln",
+    ]
+    .iter()
+    .find_map(|c| squashed.strip_suffix(c))
+    .filter(|stem| !stem.is_empty());
     for (words, target) in by_words {
-        if words.contains(&squashed.as_str()) {
+        if words.contains(&squashed.as_str())
+            || (*target == Target::Price && price_stem.is_some_and(|stem| words.contains(&stem)))
+        {
             let (u, note) = unit_for(target);
             return make(
                 target.clone(),

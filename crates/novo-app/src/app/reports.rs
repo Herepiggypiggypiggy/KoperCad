@@ -103,8 +103,8 @@ impl Reports {
 impl NovoApp {
     /// Adds the generated pages the project should have and lacks (DESIGN.md
     /// §2: automatic): the contents first, the reports after the drawing
-    /// pages, each once it has something to list. Runs on new and open, as
-    /// one undo step (the project's first, so one undo takes them all back). A kind the user turned off (deleting a generated page
+    /// pages, each once it has something to list. Runs on new and open, with no undo step
+    /// (opening starts an empty history). A kind the user turned off (deleting a generated page
     /// does, in `ProjectRules::generated_pages_off`) is not added again.
     pub(super) fn add_generated_pages(&mut self) {
         let Some(doc) = self.backend.document_mut() else {
@@ -133,10 +133,19 @@ impl NovoApp {
         {
             return;
         }
+        // Only a fresh history is reset: turning a page kind back on mid-session keeps the undo stack.
+        let fresh = doc.undo_depth() == 0 && doc.redo_label().is_none();
         match doc.transact("Generated pages", |tx| {
             novo_reports::add_generated_pages(tx, &specs)
         }) {
-            Ok(((), changes)) => self.changed_outside_canvas(&changes),
+            Ok(((), changes)) => {
+                // The pages are part of opening, not an edit of the person's: a fresh
+                // history (a project that was not saved with them stays unsaved).
+                if fresh {
+                    doc.clear_history();
+                }
+                self.changed_outside_canvas(&changes);
+            }
             Err(e) => self.message(
                 super::Level::Error,
                 format!("Could not add the generated pages: {e}"),

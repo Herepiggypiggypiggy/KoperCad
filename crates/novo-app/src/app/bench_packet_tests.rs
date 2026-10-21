@@ -71,6 +71,12 @@ fn the_packet_has_a_cover_then_the_parts_and_the_cover_names_the_right_pages() {
     assert!(cover.contains("2 Labels.pdf"), "{cover}");
     assert!(cover.contains("Print at 100"), "{cover}");
     assert!(cover.contains("Read before you print"), "{cover}");
+    // The wire counts are printed whole: a cell that is too long ends in "...".
+    assert!(!cover.contains("..."), "{cover}");
+    assert!(
+        cover.contains("between pins +") && cover.contains("pieces on the sheets"),
+        "{cover}"
+    );
     // Every "p. N" on the cover points at a page that starts the part.
     let marks: Vec<usize> = cover
         .split("p. ")
@@ -146,5 +152,29 @@ fn the_workshop_pack_holds_the_packet_and_the_labels_and_no_longer_the_loose_fil
             .iter()
             .any(|p| p.contains("ferrules compared with the")),
         "the test lines are on a circuit sheet"
+    );
+}
+
+#[test]
+fn every_cover_note_stays_on_the_cover() {
+    // The example has no wire sizes: the most notes, and the real command's contents lines.
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    assert!(d.app.save_to(&dir.path().join("Example.novo")));
+    d.frame();
+    let path = d.app.export_bench_packet().expect("the packet");
+    let pages = page_texts(&path);
+    let cover = &pages[0];
+    assert!(
+        cover.contains("workshop routine"),
+        "the last note is on the cover: {cover}"
+    );
+    assert!(
+        !pages[1].contains("workshop routine") && !pages[1].contains("Read before you print"),
+        "page 2 starts a part, not a spilled note: {}",
+        pages[1]
     );
 }

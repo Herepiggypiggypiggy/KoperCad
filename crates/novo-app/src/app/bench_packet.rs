@@ -24,12 +24,13 @@ pub(super) const PACKET_FILE: &str = "0 Bench packet.pdf";
 
 /// What the numbers of each part are, as the cover prints them.
 const DRAWING: &str = "Read from the drawing";
-const ROUTED: &str =
-    "Wires from the drawing; lengths routed along the ducts of the model, or ~ estimates";
+const ROUTED: &str = "Wires from the drawing; how each length was found: see the notes";
 const TABLE: &str = "Planning values you can edit";
 
 /// Row height of the tick tables, mm.
 const ROW_MM: f64 = 8.0;
+/// Row height of the cover facts, in mm.
+const COVER_FACT_ROW_MM: f64 = 4.5;
 
 /// The parts of a packet in order, each with its first section's place in
 /// the whole.
@@ -204,7 +205,12 @@ impl NovoApp {
                 Some(r) => format!("Revision {}", r.index),
                 None => "No revision issued".to_owned(),
             },
-            row_mm: keys(cover).into_iter().map(|k| (k, ROW_MM)).collect(),
+            // The facts are single lines: closer rows keep the whole cover, notes included, on page 1.
+            row_mm: keys(cover)
+                .into_iter()
+                .map(|k| (k, ROW_MM))
+                .chain([("facts".to_owned(), COVER_FACT_ROW_MM)])
+                .collect(),
             language: language.clone(),
             ..novo_pdf::ReportPdfOptions::default()
         };

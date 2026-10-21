@@ -114,15 +114,18 @@ impl Plan {
     }
 
     /// Why the number of numbers differs from the number of wires drawn: a number belongs to a
-    /// potential, and wires joined at a device or terminal are one potential.
+    /// potential, and wires joined at a terminal, junction or shared pin are one potential.
     pub fn scope_note(&self) -> String {
         let wires: usize = self.groups.iter().map(|g| g.wires.len()).sum();
         let numbers = self.groups.len();
         if wires == numbers {
-            return format!("{numbers} wires, one number each.");
+            return format!(
+                "{numbers} {}, one number each.",
+                if numbers == 1 { "wire" } else { "wires" }
+            );
         }
         format!(
-            "{numbers} numbers for {wires} wires: wires joined at a device or terminal share one number."
+            "{numbers} numbers for {wires} wires: wires joined at a terminal, junction or shared pin share one number."
         )
     }
 

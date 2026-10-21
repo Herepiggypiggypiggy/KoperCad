@@ -206,3 +206,47 @@ fn a_switched_off_generated_page_can_be_wanted_again() {
     d.frame();
     assert!(d.app.project_rules().wants_generated("bom"));
 }
+
+#[test]
+fn turning_a_generated_page_back_on_keeps_the_earlier_undo_steps() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    super::route_all_tests::wired_cabinet(&mut d);
+    // Saved with the Bill of materials switched off, so reopening does not add it.
+    let mut rules = d.app.project_rules();
+    rules.generated_pages_off.insert("bom".into());
+    d.app.set_project_rules(rules);
+    let file = dir.path().join("Rules.novo");
+    assert!(d.app.save_to(&file));
+    d.app.run(&ctx, Action::CloseProject);
+    d.frame();
+    let mut e = Drive::new(&dir.path().join("untitled2"));
+    e.app.open_path(&file);
+    e.frame();
+    let ctx = e.ctx.clone();
+    assert!(e.app.edit_project("Earlier edit", |tx| {
+        tx.set_info(|i| i.name = "Renamed".into())
+    }));
+    let pages = e.doc().project().pages().count();
+    let mut rules = e.app.project_rules();
+    rules.generated_pages_off.remove("bom");
+    e.app.set_project_rules(rules);
+    e.frame();
+    assert!(
+        e.doc().project().pages().count() > pages,
+        "the page comes back"
+    );
+    assert!(e.app.is_enabled(Action::Undo), "the earlier steps are kept");
+    for _ in 0..e.doc().undo_depth() {
+        e.app.run(&ctx, Action::Undo);
+    }
+    e.frame();
+    assert_ne!(
+        e.doc().project().info().name,
+        "Renamed",
+        "the earlier edit undoes"
+    );
+}

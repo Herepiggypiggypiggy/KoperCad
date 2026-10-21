@@ -171,7 +171,7 @@ fn design_sections(doc: &ComplianceDocument) -> Vec<Section> {
         }
         if matches!(
             r.verdict,
-            Verdict::Fail | Verdict::Partial | Verdict::NotCheckable
+            Verdict::Fail | Verdict::Warning | Verdict::Partial | Verdict::NotCheckable
         ) {
             lines.push(("Where to fix", r.family.fix.to_owned()));
         }
@@ -237,7 +237,11 @@ pub(super) fn report_output(doc: &ComplianceDocument) -> ReportOutput {
             Vec::new(),
         );
     }
-    sections.push(summary);
+    // With no standard selected the table would be a header row alone: the
+    // design checks summary opens the report instead.
+    if !doc.sections.is_empty() {
+        sections.push(summary);
+    }
     let mut notice = Section::new(
         "notice",
         "What this report is",
@@ -245,6 +249,14 @@ pub(super) fn report_output(doc: &ComplianceDocument) -> ReportOutput {
     );
     for line in wrap(doc.notice, 150) {
         notice.push(vec![Cell::text(line)], Vec::new());
+    }
+    if doc.sections.is_empty() {
+        notice.push(
+            vec![Cell::text(
+                "No standard is selected, so no clause rules were evaluated. Choose standards in Check > Standards check to add them; the design checks below ran regardless.",
+            )],
+            Vec::new(),
+        );
     }
     for s in &doc.sections {
         let line = format!(
@@ -500,7 +512,18 @@ impl NovoApp {
             let heat = self.heat_fact();
             let project = self.backend.document()?.project();
             let report = novo_checks::standards::compliance(project);
+            let jobs = novo_reports::wire_cut_jobs(project);
+            // The count the Bench output packet quotes: WireSet is the one
+            // definition both documents share.
+            let set = novo_reports::WireSet::of(project);
             let input = DesignInput {
+                wires: Some(novo_checks::standards::design::WireFacts {
+                    to_cut: set.to_cut,
+                    to_cut_sized: jobs
+                        .iter()
+                        .filter(|j| j.cross_section_mm2.is_some())
+                        .count(),
+                }),
                 open: novo_reports::issues::open(project),
                 waived: novo_reports::issues::waived(project),
                 heat,

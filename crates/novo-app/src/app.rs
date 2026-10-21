@@ -986,12 +986,57 @@ impl NovoApp {
                     ),
                 );
             }
+            // A damaged file is never edited in place. What can be read is
+            // written to a recovered copy beside it, and the copy opens.
+            Err(BackendError::Storage(novo_storage::StorageError::Corrupt { .. }))
+                if !read_only =>
+            {
+                self.open_salvaged(path);
+            }
             Err(e) => {
                 if is_not_found(&e) {
                     self.settings.forget_recent(path);
                 }
                 self.message(Level::Error, describe_error("open", path, &e));
             }
+        }
+    }
+
+    /// Opens the damaged project at `path` as a recovered copy, and says
+    /// plainly what was and was not read back. The damaged file is only read.
+    fn open_salvaged(&mut self, path: &Path) {
+        let name = path.file_name().map_or_else(
+            || path.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        match novo_storage::salvage(path) {
+            Ok(salvaged) if salvaged.recovered > 0 => {
+                let copy = salvaged.copy.clone();
+                self.open_path_as(&copy, false);
+                if self.project_path.as_deref() == Some(copy.as_path()) {
+                    self.raise(
+                        Level::Warning,
+                        format!(
+                            "{name} is damaged. {}. This is a recovered copy; {name} itself was not changed.",
+                            salvaged.summary()
+                        ),
+                        Some(copy),
+                    );
+                }
+            }
+            Ok(salvaged) => {
+                let _ = std::fs::remove_file(&salvaged.copy);
+                self.message(
+                    Level::Error,
+                    format!("{name} is damaged and nothing could be read back from it. The file was not changed."),
+                );
+            }
+            Err(e) => self.message(
+                Level::Error,
+                format!(
+                    "{name} is damaged and could not be recovered: {e}. The file was not changed."
+                ),
+            ),
         }
     }
 
@@ -2158,8 +2203,8 @@ impl NovoApp {
             });
     }
 
-    /// The latest messages, bottom left over the canvas. Info fades on its
-    /// own; warnings and errors stay until clicked.
+    /// The latest messages, bottom left over the canvas, above the tool dock
+    /// where the two would meet. Info fades on its own; warnings and errors stay until clicked.
     fn toasts(&mut self, ctx: &egui::Context, canvas: egui::Rect) {
         let now = Instant::now();
         let mut fade_in: Option<Duration> = None;
@@ -2195,13 +2240,23 @@ impl NovoApp {
         }
         let mut dismiss = Vec::new();
         let mut open = None;
+        // Never wider than the canvas: a 683 point window has less room than
+        // the usual 420.
+        let width = 420.0_f32.min((canvas.width() - 24.0).max(160.0));
+        // The tool dock sits bottom centre; where the stack would reach it
+        // (1366 wide and under), the stack stands on top of the dock instead.
+        let mut bottom = canvas.bottom() - 12.0;
+        if let Some(dock) = ctx.memory(|m| m.area_rect(egui::Id::new("tool_dock")))
+            && dock.left() < canvas.left() + 12.0 + width + 8.0
+            && dock.bottom() > bottom - 8.0
+        {
+            bottom = bottom.min(dock.top() - 8.0);
+        }
         egui::Area::new(egui::Id::new("toasts"))
             .pivot(egui::Align2::LEFT_BOTTOM)
-            .fixed_pos(canvas.left_bottom() + egui::vec2(12.0, -12.0))
+            .fixed_pos(egui::pos2(canvas.left() + 12.0, bottom))
             .show(ctx, |ui| {
-                // Never wider than the canvas: a 683 point window has less
-                // room than the usual 420.
-                ui.set_max_width(420.0_f32.min((canvas.width() - 24.0).max(160.0)));
+                ui.set_max_width(width);
                 for &i in shown.iter().rev() {
                     let m = &self.messages[i];
                     let color = match m.level {
@@ -2792,6 +2847,46 @@ mod tests {
         let mut reopened = storage_app();
         reopened.open_path(&path);
         assert_eq!(page_count(&reopened), 2, "{:?}", reopened.messages());
+    }
+
+    #[test]
+    fn a_damaged_file_opens_as_a_recovered_copy_and_the_original_is_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("plant.novo");
+        let mut app = storage_app();
+        app.run(&themed_ctx(), Action::NewProject);
+        {
+            let page = app.current_page.unwrap();
+            let mut open = OpenPage::new(&mut *app.backend, page).unwrap();
+            for n in 2..=150 {
+                open.transact("Add page", |tx| tx.add_page(n.to_string()))
+                    .unwrap();
+            }
+        }
+        assert!(app.save_to(&path));
+        app.run(&themed_ctx(), Action::CloseProject);
+        let bytes = std::fs::read(&path).unwrap();
+        let cut = &bytes[..bytes.len() * 6 / 10];
+        std::fs::write(&path, cut).unwrap();
+
+        let mut reopened = storage_app();
+        reopened.open_path(&path);
+        let copy = dir.path().join("plant.recovered.novo");
+        assert!(reopened.is_open(), "{:?}", reopened.messages());
+        assert_eq!(reopened.project_path.as_deref(), Some(copy.as_path()));
+        assert!(page_count(&reopened) > 1 && page_count(&reopened) < 150);
+        let warning = reopened
+            .messages()
+            .iter()
+            .find(|m| m.level == Level::Warning)
+            .expect("a warning says what happened");
+        assert!(warning.text.contains("damaged"), "{}", warning.text);
+        assert!(warning.text.contains("was not changed"), "{}", warning.text);
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            cut,
+            "the original is untouched"
+        );
     }
 
     #[test]

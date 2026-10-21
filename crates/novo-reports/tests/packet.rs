@@ -176,7 +176,7 @@ fn wires_without_a_size_are_named_on_the_cover_with_the_count() {
     let notes = cover_notes(&jobs);
     assert!(
         notes[0].starts_with(&format!(
-            "1 of {n} wires have no cross-section: no ferrule is listed"
+            "1 of {n} wires to cut have no cross-section: no ferrule is listed"
         )),
         "{}",
         notes[0]
@@ -240,4 +240,42 @@ fn unset_size_and_colour_print_as_not_set() {
         .find(|r| r.cells[5].to_string() == "not set")
         .expect("a row with no size");
     assert_eq!(wire.cells[6].to_string(), "not set");
+}
+
+#[test]
+fn the_cover_names_what_each_wire_count_counts() {
+    let doc = cabinet();
+    let jobs = bench_jobs(doc.project());
+    let set = novo_reports::WireSet::of(doc.project());
+    assert_eq!(set.to_cut, jobs.len());
+    let out = cover(doc.project(), "Test", &jobs, &[], &cover_notes(&jobs));
+    let facts: Vec<String> = out
+        .sections
+        .iter()
+        .filter(|s| s.key == "facts")
+        .flat_map(|s| s.rows.iter())
+        .map(|r| format!("{} | {}", r.cells[0], r.cells[1]))
+        .collect();
+    let to_cut = facts
+        .iter()
+        .find(|f| f.starts_with("Wires to cut"))
+        .unwrap();
+    assert!(to_cut.contains(&jobs.len().to_string()), "{to_cut}");
+    let drawn = facts
+        .iter()
+        .find(|f| f.starts_with("Wires as drawn"))
+        .unwrap();
+    assert!(drawn.contains(&set.drawn.to_string()), "{drawn}");
+    assert!(
+        to_cut.contains(&format!("{} between pins", set.connections)),
+        "{to_cut}"
+    );
+    assert!(
+        facts.iter().all(|f| f.chars().count() < 80),
+        "a cover fact is longer than one line: {facts:?}"
+    );
+    assert!(
+        facts.iter().all(|f| !f.contains("1 supply and PE leads")),
+        "{facts:?}"
+    );
 }
