@@ -284,8 +284,13 @@ impl NovoApp {
                     Mode::FillStrict => "also fix off-scheme",
                     Mode::Renumber => "renumber all",
                 };
+                let wires_name = match win.scope {
+                    ScopeChoice::Project => "whole project".to_owned(),
+                    ScopeChoice::ThisPage => "this page".to_owned(),
+                    ScopeChoice::Selection => format!("selection ({} selected)", selected.len()),
+                };
                 let title = format!(
-                    "Scheme and mode: {}, {mode_name}",
+                    "Scheme and mode: {}, {mode_name}, {wires_name}",
                     win.scheme.kind.label().to_lowercase()
                 );
                 // Collapsed by default so the net list gets the height.
@@ -548,7 +553,7 @@ fn numbers_ui(
         Order::Potential => rows.sort_by(|a, b| a.potential.cmp(&b.potential)),
     }
     ui.weak(format!(
-        "{} of {} nets (scope: runs only). Click a number to type another.",
+        "{} of {} nets. Click a number to type another.",
         rows.len(),
         plan.groups.len()
     ));
