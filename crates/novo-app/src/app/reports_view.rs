@@ -1102,7 +1102,7 @@ mod tests {
         ] {
             let hit = novo_workflow::commands::get(command).unwrap();
             assert!(
-                hit.keywords.iter().any(|k| *k == old) || hit.verbs.contains(&old),
+                hit.keywords.contains(&old) || hit.verbs.contains(&old),
                 "{command} lost {old:?}"
             );
         }
