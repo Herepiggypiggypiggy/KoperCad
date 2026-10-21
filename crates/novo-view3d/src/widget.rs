@@ -1330,7 +1330,9 @@ impl View3d {
             let chip = galley.size() + Vec2::new(8.0, 4.0);
             let along = b - a;
             let len = along.length();
-            if len < chip.x.max(MIN_DIMENSION_PX) {
+            // A gap with a clearance verdict is drawn however short: a part
+            // that is too close is exactly the one whose line is short.
+            if d.required.is_none() && len < chip.x.max(MIN_DIMENSION_PX) {
                 continue;
             }
             let col = match d.role {
