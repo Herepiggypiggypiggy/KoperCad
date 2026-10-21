@@ -24,10 +24,10 @@ pub(super) fn standards_findings(problems: &[Problem]) -> usize {
 }
 
 /// The sentence that says the standards' findings are inside the count, or `None` without any.
-pub(super) fn standards_note(n: usize) -> Option<String> {
+pub(super) fn standards_note(n: usize, counted: usize) -> Option<String> {
     (n > 0).then(|| {
         format!(
-            "{n} of these {} from the standards you selected (Standards check). Untick a standard there to leave its findings out.",
+            "{n} of the {counted} errors and warnings {} from the standards you selected. Untick a standard in Standards check to leave its findings out.",
             if n == 1 { "comes" } else { "come" }
         )
     })
@@ -175,7 +175,10 @@ impl NovoApp {
             return;
         }
         let summary = Summary::of(self.shown_problems());
-        let from_standards = standards_note(standards_findings(self.shown_problems()));
+        let from_standards = standards_note(
+            standards_findings(self.shown_problems()),
+            summary.errors + summary.warnings,
+        );
         let pending = self.checks_pending();
         if pending {
             ui.ctx()
@@ -241,7 +244,10 @@ impl NovoApp {
                 }
             }
         });
-        if let Some(note) = standards_note(standards_findings(self.shown_problems())) {
+        if let Some(note) = standards_note(
+            standards_findings(self.shown_problems()),
+            summary.errors + summary.warnings,
+        ) {
             ui.weak(note);
         }
         let filter = self.wb.issue_filter;
