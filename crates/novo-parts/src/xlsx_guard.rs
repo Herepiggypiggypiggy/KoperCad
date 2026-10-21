@@ -92,19 +92,26 @@ pub fn check_xlsx_with(bytes: &[u8], limits: XlsxLimits) -> Result<(), XlsxTooLa
             read: &read,
             limit: limits.max_unzipped_bytes,
         });
-        let head = part
-            .fill_buf()
-            .map_err(|e| XlsxTooLarge(format!("the workbook cannot be read: {e}")))?;
-        if !looks_like_xml(head) {
-            continue;
-        }
-        scan_sheet(part, limits).map_err(|why| {
+        let xml = starts_like_xml(&mut part)
+            .map_err(|e| XlsxTooLarge(format!("{name} cannot be read: {e}")))?;
+        // Every part is scanned, because the library ignores text before the
+        // root element, so a part can start with anything and still be read
+        // as a sheet. A part that does not start like XML is scanned
+        // leniently (a binary file will not parse; that is not a refusal),
+        // but every limit still applies to what is found before it stops.
+        scan_sheet(part, limits, xml).map_err(|why| {
             XlsxTooLarge(format!(
                 "{} is too large to import ({why}); export the table you need as CSV",
                 name.trim_start_matches("xl/worksheets/")
                     .trim_end_matches(".xml")
             ))
         })?;
+        if read.get() > limits.max_unzipped_bytes {
+            return Err(XlsxTooLarge(
+                "the workbook expands to far more data than a table holds; export the sheet as CSV"
+                    .into(),
+            ));
+        }
     }
     Ok(())
 }
@@ -138,11 +145,12 @@ impl<R: Read> Read for Counting<'_, R> {
 /// counts, and attributes through the attribute iterator, so single quotes
 /// and spaces around `=` count), so no spelling the library accepts slips
 /// past. An XML error ends the scan: the library fails on it too.
-fn scan_sheet(xml: impl BufRead, limits: XlsxLimits) -> Result<(), String> {
+fn scan_sheet(xml: impl BufRead, limits: XlsxLimits, strict: bool) -> Result<(), String> {
     let mut reader = quick_xml::Reader::from_reader(xml);
     // As the library: a lenient file that opens today keeps opening.
     reader.config_mut().check_end_names = false;
     reader.config_mut().check_comments = false;
+    reader.config_mut().expand_empty_elements = true;
     let mut bbox = Bbox::default();
     let mut cells = 0u64;
     let (mut row, mut col) = (0u64, 0u64);
@@ -154,12 +162,15 @@ fn scan_sheet(xml: impl BufRead, limits: XlsxLimits) -> Result<(), String> {
             Ok(Event::Eof) => return Ok(()),
             // Fail closed: a part that cannot be read as XML (or cannot be
             // read at all) is not passed on to the library.
-            Err(e) => return Err(format!("cannot be read: {e}")),
+            // A lenient scan (a part that does not start like XML) just stops.
+            Err(e) if strict => return Err(format!("cannot be read: {e}")),
+            Err(_) => return Ok(()),
             Ok(_) => {
                 buf.clear();
                 continue;
             }
         };
+        let decoder = reader.decoder();
         match element.local_name().as_ref() {
             b"c" => {
                 cells += 1;
@@ -167,19 +178,19 @@ fn scan_sheet(xml: impl BufRead, limits: XlsxLimits) -> Result<(), String> {
                     return Err(format!("more than {} cells", limits.max_cells));
                 }
                 col = col.saturating_add(1);
-                if let Some((r, c)) = attribute(element, b"r").and_then(|v| cell_ref(&v)) {
+                if let Some((r, c)) = attribute(element, b"r", decoder).and_then(|v| cell_ref(&v)) {
                     (row, col) = (r, c);
                 }
                 bbox.add(row.max(1), col, limits)?;
             }
             b"row" => {
-                row = attribute(element, b"r")
+                row = attribute(element, b"r", decoder)
                     .and_then(|v| std::str::from_utf8(&v).ok()?.trim().parse().ok())
                     .unwrap_or(row.saturating_add(1));
                 col = 0;
             }
             b"dimension" => {
-                if let Some(reference) = attribute(element, b"ref") {
+                if let Some(reference) = attribute(element, b"ref", decoder) {
                     let mut ends = reference.split(|b| *b == b':').filter_map(cell_ref);
                     if let (Some(first), Some(last)) = (ends.next(), ends.next()) {
                         let mut dim = Bbox::default();
@@ -194,26 +205,41 @@ fn scan_sheet(xml: impl BufRead, limits: XlsxLimits) -> Result<(), String> {
     }
 }
 
-/// Whether the first bytes of a part are XML: after an optional byte order
-/// mark and white space, a `<` (a UTF-16 mark counts, so that it is
-/// scanned and refused rather than skipped).
-fn looks_like_xml(head: &[u8]) -> bool {
-    if head.starts_with(&[0xFF, 0xFE]) || head.starts_with(&[0xFE, 0xFF]) {
-        return true;
+/// Whether a part starts like XML: skipping white space of any length
+/// (across reads, one byte of it never buffered), the first byte is `<` or
+/// the start of a byte order mark (a UTF-16 mark counts, so that it is
+/// scanned and refused rather than skipped). An empty part is not XML. How
+/// much white space is skipped is bounded by the real-size counter.
+fn starts_like_xml(part: &mut impl BufRead) -> std::io::Result<bool> {
+    loop {
+        let buf = part.fill_buf()?;
+        if buf.is_empty() {
+            return Ok(false);
+        }
+        match buf.iter().position(|b| !b.is_ascii_whitespace()) {
+            Some(at) => return Ok(matches!(buf[at], b'<' | 0xEF | 0xFF | 0xFE)),
+            None => {
+                let all = buf.len();
+                part.consume(all);
+            }
+        }
     }
-    let head = head.strip_prefix(&[0xEF, 0xBB, 0xBF][..]).unwrap_or(head);
-    head.iter()
-        .find(|b| !b.is_ascii_whitespace())
-        .is_some_and(|b| *b == b'<')
 }
 
 /// The raw value of attribute `name` (matched by local name).
-fn attribute(element: &BytesStart<'_>, name: &[u8]) -> Option<Vec<u8>> {
+fn attribute(
+    element: &BytesStart<'_>,
+    name: &[u8],
+    decoder: quick_xml::encoding::Decoder,
+) -> Option<Vec<u8>> {
     element
         .attributes()
         .flatten()
         .find(|a| a.key.local_name().as_ref() == name)
-        .map(|a| a.value.into_owned())
+        .map(|a| match a.decode_and_unescape_value(decoder) {
+            Ok(text) => text.into_owned().into_bytes(),
+            Err(_) => a.value.into_owned(),
+        })
 }
 
 /// The used rectangle of a sheet so far.
@@ -271,7 +297,7 @@ mod tests {
     use super::*;
 
     fn sheet(xml: &str) -> Result<(), String> {
-        scan_sheet(xml.as_bytes(), XlsxLimits::TABLES)
+        scan_sheet(xml.as_bytes(), XlsxLimits::TABLES, true)
     }
 
     #[test]
@@ -427,6 +453,73 @@ mod tests {
         assert!(check_xlsx(&bytes).is_ok());
     }
 
+    /// White space may come before the root element, as much as you like.
+    #[test]
+    fn a_sheet_hidden_behind_padding_is_still_found() {
+        use std::io::Write as _;
+        let huge = br#"<worksheet><dimension ref="A1:XFD1048576"/></worksheet>"#;
+        let pads: [Vec<u8>; 3] = [
+            vec![b' '; 20_000],
+            [&[0xEF, 0xBB, 0xBF][..], &vec![b'\n'; 50_000][..]].concat(),
+            [vec![b' '; 9_000], vec![b'\r', b'\n'].repeat(9_000)].concat(),
+        ];
+        for (n, pad) in pads.iter().enumerate() {
+            let mut bytes = Vec::new();
+            {
+                let mut zip = zip::ZipWriter::new(Cursor::new(&mut bytes));
+                zip.start_file(
+                    "xl/worksheets/sheet1.xml",
+                    zip::write::SimpleFileOptions::default(),
+                )
+                .unwrap();
+                zip.write_all(pad).unwrap();
+                zip.write_all(huge).unwrap();
+                zip.finish().unwrap();
+            }
+            assert!(check_xlsx(&bytes).is_err(), "padding case {n}");
+        }
+        // Nothing but white space is not a sheet.
+        assert!(!starts_like_xml(&mut std::io::BufReader::new(&vec![b' '; 100_000][..])).unwrap());
+    }
+
+    /// The library ignores text before the root element, so a part may
+    /// start with anything. Garbage, a comment-like prefix, binary bytes.
+    #[test]
+    fn a_sheet_behind_a_garbage_prefix_is_still_found() {
+        use std::io::Write as _;
+        let huge = br#"<worksheet><dimension ref="A1:XFD1048576"/></worksheet>"#;
+        for prefix in [
+            &b"not xml at all "[..],
+            &[0u8, 1, 2, 3, 0xFF, 0x89, b'P', b'N', b'G'][..],
+            &b"\x01\x02 <?xml-nothing?>"[..],
+        ] {
+            let mut bytes = Vec::new();
+            {
+                let mut zip = zip::ZipWriter::new(Cursor::new(&mut bytes));
+                zip.start_file(
+                    "xl/worksheets/sheet1.xml",
+                    zip::write::SimpleFileOptions::default(),
+                )
+                .unwrap();
+                zip.write_all(prefix).unwrap();
+                zip.write_all(huge).unwrap();
+                zip.finish().unwrap();
+            }
+            assert!(check_xlsx(&bytes).is_err(), "{prefix:?}");
+        }
+    }
+
+    /// Other ways to write the same thing: a character reference inside the
+    /// attribute.
+    #[test]
+    fn escaped_attributes_are_read_like_the_library_does() {
+        assert!(sheet(r#"<worksheet><dimension ref="A1:&#88;FD1048576"/></worksheet>"#).is_err());
+        assert!(sheet(r#"<sheetData><row r="1048576"><c r="&#65;1"/><c r="XFD1048576"/></row><row r="1"><c r="A1"/></row></sheetData>"#).is_err());
+
+        // A UTF-16 sheet is not decoded by the library's reader either: its
+        // element names never match `c` or `dimension`, so it builds nothing.
+    }
+
     #[test]
     fn a_sheet_with_a_mismatched_end_tag_that_the_library_reads_is_not_refused() {
         sheet(r#"<worksheet><sheetData><row r="1"><c r="A1"></x></row></sheetData></worksheet>"#)
@@ -445,6 +538,13 @@ mod tests {
             }
         }
         let xml = br#"<sheetData><row r="1"><c r="A1"/></row><row r="1048576"><c r="XFD1048576"/></row></sheetData>"#;
-        assert!(scan_sheet(std::io::BufReader::new(Dribble(xml)), XlsxLimits::TABLES).is_err());
+        assert!(
+            scan_sheet(
+                std::io::BufReader::new(Dribble(xml)),
+                XlsxLimits::TABLES,
+                true
+            )
+            .is_err()
+        );
     }
 }
