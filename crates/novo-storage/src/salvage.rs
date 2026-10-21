@@ -38,6 +38,10 @@ pub struct Salvage {
     /// Reading stopped early because part of the file is missing or
     /// unreadable, so more objects than `skipped` may be gone.
     pub cut_short: bool,
+    /// The project information (title block texts, rules, standards) could
+    /// not be read, so the copy has the defaults. The drawing is intact;
+    /// the title block and project rules need to be filled in again.
+    pub info_lost: bool,
 }
 
 impl Salvage {
@@ -49,6 +53,11 @@ impl Salvage {
         }
         if self.cut_short {
             text.push_str("; the end of the file was lost, so later pages may be missing");
+        }
+        if self.info_lost {
+            text.push_str(
+                "; the project information (title block, rules, standards) was unreadable and is back to the defaults, so check it",
+            );
         }
         text
     }
@@ -110,9 +119,9 @@ pub fn salvage(path: impl AsRef<Path>) -> Result<Salvage> {
             supported: JSON_FORMAT_VERSION,
         });
     }
-    let info: ProjectInfo = meta("info")
-        .and_then(|v| serde_json::from_str(&v).ok())
-        .unwrap_or_default();
+    let stored_info: Option<ProjectInfo> = meta("info").and_then(|v| serde_json::from_str(&v).ok());
+    let info_lost = stored_info.is_none();
+    let info = stored_info.unwrap_or_default();
     let next_id: u64 = meta("next_id").and_then(|v| v.parse().ok()).unwrap_or(1);
 
     let (records, mut skipped, rows_cut) = read_records(&conn);
@@ -133,6 +142,7 @@ pub fn salvage(path: impl AsRef<Path>) -> Result<Salvage> {
         recovered,
         skipped,
         cut_short,
+        info_lost,
     })
 }
 

@@ -248,3 +248,28 @@ fn numbers_survive_save_and_reopen_bit_for_bit() {
         assert_eq!(got.to_bits(), v.to_bits(), "v{n}: {got} vs {v}");
     }
 }
+
+#[test]
+fn salvage_says_when_only_the_project_information_was_lost() {
+    let (_dir, path) = temp();
+    let mut doc = saved(&path, 3);
+    {
+        let conn = Connection::open(&path).unwrap();
+        conn.execute("UPDATE meta SET value = '{broken' WHERE key = 'info'", [])
+            .unwrap();
+    }
+    let salvaged = salvage(&path).unwrap();
+    assert!(salvaged.info_lost);
+    assert_eq!(salvaged.skipped, 0, "every drawing object was read back");
+    assert_eq!(salvaged.recovered, doc.project().records().count());
+    assert!(
+        salvaged.summary().contains("project information"),
+        "the warning names it: {}",
+        salvaged.summary()
+    );
+
+    // A healthy file does not claim it.
+    let (_dir, path) = temp();
+    saved(&path, 1);
+    assert!(!salvage(&path).unwrap().info_lost);
+}
