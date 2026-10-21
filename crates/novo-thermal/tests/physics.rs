@@ -543,7 +543,8 @@ fn fan_jet_stirs_the_box_so_the_mean_air_rise_is_not_a_cold_pool_value() {
     // CFD (3D, 6000 cells) of this box gives a mean air rise of about 3 K; with
     // the old 2D mixing the 2D engine gave 1.33 K because the lower half stayed
     // at ambient. With the jet term it must land between the two, and the
-    // lower third must no longer sit at ambient.
+    // lower third must no longer sit at ambient. The bounds are a regression
+    // guard, not proof that the tuning is right.
     let r = quick(fan_box(true));
     let m = r.balance.mean_rise_k;
     assert!(m > 1.6 && m < 3.2, "mean air rise {m} K");

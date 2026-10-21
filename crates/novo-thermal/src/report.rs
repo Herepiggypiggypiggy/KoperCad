@@ -218,9 +218,9 @@ pub fn build(
     if s.jet_mixing_m2s > 0.0 {
         notes.push(
             "Fan case: this 2D model has no jet momentum. A mixing term stands in for the fan \
-             jet, but 3D CFD of a test box still gave a mean air rise about 1.6 times higher \
-             (air next to the device up to 3 times); treat the mean air temperature as a low \
-             estimate. Heat balance and flow agree with the CFD."
+             jet, but 3D CFD of a single test box (120 m3/h) still gave a mean air rise about 1.4 to 1.8 \
+             times higher (air next to the device about 3 times); treat the mean air temperature as a low \
+             estimate. Heat balance closes in both; exhaust flows agree within about 20 %."
                 .into(),
         );
     }

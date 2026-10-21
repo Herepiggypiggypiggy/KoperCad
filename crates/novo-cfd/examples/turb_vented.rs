@@ -2,6 +2,8 @@
 //! at a given cell count against the 2D engine (lane CFD-B).
 //! `cargo run --release -p novo-cfd --example turb_vented -- sst 6000`
 //! Add `fan` for a 120 m3/h intake fan in place of the bottom louvre.
+//! Environment: `FANQ` fan free flow m3/h (default 120), `MIX` 2D mixing m2/s,
+//! `PROFILE=1` prints the mean rise per height band for 3D and 2D.
 use novo_cfd::cabinet::{CabinetSolver, Tuning};
 use novo_cfd::turb::TurbModel;
 use novo_cfd::{Control, Fidelity, Solver};
@@ -90,7 +92,7 @@ fn main() {
         .unwrap_or(6000);
     let mut scn = scenario(100.0, std::env::args().any(|a| a == "fan"));
     if let Ok(m) = std::env::var("MIX") {
-        scn.params.mixing_m2s = m.parse().unwrap();
+        scn.params.mixing_m2s = m.parse().expect("MIX is a number in m2/s");
     }
     let two_d = simulate_steady(&scn).unwrap();
     let d2 = &two_d.devices[0];

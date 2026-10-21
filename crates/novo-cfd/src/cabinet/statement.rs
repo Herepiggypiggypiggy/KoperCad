@@ -131,13 +131,16 @@ pub fn accuracy_with_turbulence(fidelity: Fidelity, model: TurbModel) -> Accurac
              cells by up to 11 %. With a 120 m3/h intake fan in the same box the mean air rise was \
              11 % (SST) to 15 % (k-epsilon) lower than laminar. The device surface rise was 1 % \
              to 1.4 % lower and the exhaust temperature at the top louvre up to about 5 % lower. \
-             In that fan case the 3D air rise is about 1.6 times the 2D engine's (3.1 against \
-             1.9 K; the 2D engine gave 1.33 K before it got a fan-jet mixing term). Both close \
-             the heat balance and carry the same flow (0.0295 m3/s), so neither creates heat. The \
-             2D engine averages over the depth and has no jet momentum, so it leaves a cold pool \
-             below the device, while 3D shows a box stirred by the fan jet with a cooler stream \
-             short-circuiting from the fan to the top louvre. The device surface rise \
-             agrees within 3 to 9 %. Neither is validated against measurement, so \
+             In that fan case the 3D mean air rise is about 1.4 to 1.8 times the 2D engine's \
+             (2.8 to 3.5 K over 3400 to 24000 cells against 1.93 K; the 2D engine gave 1.33 K \
+             before it got a fan-jet mixing term tuned to the CFD of this one box). Both close \
+             the heat balance and the exhaust flows agree within about 20 %. The most likely \
+             cause is that the 2D engine averages over the depth and has no jet momentum, so it \
+             leaves a cold pool below the device (lower fifth 0.8 to 1.3 K against 2.3 to 2.5 K \
+             in 3D); a cooler stream short-circuiting from the fan to the top louvre may add to \
+             it but is not shown. The gap next to the device remains (2D 2.9 K, 3D 9.6 K). The \
+             device surface rise agrees within 4 % at 60 and 120 m3/h (9 % at 240 m3/h). \
+             Neither engine is validated against measurement, so \
              read air temperatures of a fan case as an estimate. Radiation is not modelled, so surface temperatures of hot devices are \
              slightly high."
         );
