@@ -4,7 +4,10 @@
 use novo_checks::safety::{functions, rate};
 use novo_core::Project;
 use novo_pdf::{ReportFileFormat, ReportPdfOptions};
-use novo_reports::safety::{BlockRow, FunctionRow, SafetyReportInput, safety_report};
+use novo_reports::location_text;
+use novo_reports::safety::{
+    BlockRow, FunctionRow, SafetyReportInput, safety_report, safety_sheets,
+};
 
 use super::commissioning::report_path_for;
 use super::pdf::write_replacing;
@@ -22,11 +25,33 @@ pub(super) fn report_input(project: &Project, name: &str) -> SafetyReportInput {
                 achieved: rating.total.as_ref().map(|t| t.pl.to_string()),
                 pfhd: rating.total.as_ref().map(|t| t.pfhd),
                 met: rating.met(),
+                risk: format!("{} {} {}", f.severity, f.frequency, f.avoidance),
+                duty: format!(
+                    "{} days, {} h per day, cycle {} s: {:.0} operations per year",
+                    f.days,
+                    f.hours,
+                    f.cycle_s,
+                    f.nop()
+                ),
                 blocks: rating
                     .blocks
                     .iter()
                     .zip(&f.blocks)
                     .map(|(b, block)| BlockRow {
+                        dc_percent: block.dc_percent,
+                        ccf: block.ccf,
+                        drawn_at: b
+                            .devices
+                            .iter()
+                            .flat_map(|&d| project.cross_references(d))
+                            .map(|r| location_text(&r.location))
+                            .fold(Vec::new(), |mut v, t| {
+                                if !v.contains(&t) {
+                                    v.push(t);
+                                }
+                                v
+                            }),
+                        sources: b.devices.iter().map(|&d| d.into()).collect(),
                         role: b.role.label().to_owned(),
                         name: b.name.clone(),
                         category: block.category.clone(),
@@ -70,15 +95,48 @@ impl NovoApp {
         self.write_safety_report(&path)
     }
 
+    /// Writes one sheet per safety function as a PDF next to the project file.
+    pub(super) fn export_safety_sheets(&mut self) -> Option<std::path::PathBuf> {
+        let name = self.project_name()?;
+        let file = self.backend.file().filter(|_| !self.backend.is_untitled());
+        let Some(path) = report_path_for(
+            "safety sheets",
+            file.as_deref(),
+            projects_dir().as_deref(),
+            &name,
+            "pdf",
+        ) else {
+            self.message(Level::Error, "Could not find the Documents folder");
+            return None;
+        };
+        self.write_safety_pdf(&path, true)
+    }
+
     pub(super) fn write_safety_report(
         &mut self,
         path: &std::path::Path,
     ) -> Option<std::path::PathBuf> {
+        self.write_safety_pdf(path, false)
+    }
+
+    pub(super) fn write_safety_pdf(
+        &mut self,
+        path: &std::path::Path,
+        sheets: bool,
+    ) -> Option<std::path::PathBuf> {
         let name = self.project_name()?;
         let project = self.backend.document()?.project();
-        let report = safety_report(&report_input(project, &name));
+        let input = report_input(project, &name);
+        let report = if sheets {
+            safety_sheets(&input)
+        } else {
+            safety_report(&input)
+        };
         let options = ReportPdfOptions {
-            title: format!("{name}, safety functions"),
+            title: format!(
+                "{name}, safety function {}",
+                if sheets { "sheets" } else { "report" }
+            ),
             language: self.report_translator(),
             ..ReportPdfOptions::default()
         };

@@ -141,8 +141,8 @@ pub use table::{Align, Cell, Column, ReportOutput, Row, Section};
 pub use toc::{PanelContents, TableOfContents};
 pub use wire_defaults::{SIZES_MM2, UnsetWires, WireDefaults, apply_wire_defaults, unset_wires};
 pub use wirecut::{
-    FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut, WireCutJob, WireEnd,
-    typical_strip_mm, wire_cut_csv, wire_cut_jobs, wire_cut_jobs_with,
+    CableRun, FERRULE_KEY, JOB_COLUMNS, STRIP_LENGTH_KEY, StripBasis, WireCut, WireCutJob, WireEnd,
+    cable_runs, hookup_cut_mm, typical_strip_mm, wire_cut_csv, wire_cut_jobs, wire_cut_jobs_with,
 };
 pub use wires::WireList;
 

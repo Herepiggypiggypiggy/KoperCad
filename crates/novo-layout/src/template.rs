@@ -175,6 +175,9 @@ pub struct TemplateSheet {
     /// Devices on this surface the part data gives no hole or cut-out for;
     /// the template shows their outline only.
     pub without_mounting_data: Vec<String>,
+    /// Devices clipped onto a DIN rail: nothing to drill, so they are not a
+    /// gap in the part data. The template shows their outline only.
+    pub clip_on: Vec<String>,
     /// Hole patterns that could not be read (plate sheet only): holes the
     /// template is missing.
     pub problems: Vec<String>,
@@ -221,6 +224,7 @@ fn sheet(
         },
     ));
     let mut without = Vec::new();
+    let mut clip_on = Vec::new();
     if *surface == Surface::Plate {
         for r in &layout.rails {
             for d in [-17.5, 17.5] {
@@ -254,7 +258,11 @@ fn sheet(
             if feature.is_some_and(|f| {
                 f.surface == Surface::Plate && f.holes.is_empty() && f.cutout.is_none()
             }) {
-                without.push(label);
+                if p.rail.is_some() {
+                    clip_on.push(label);
+                } else {
+                    without.push(label);
+                }
             }
         }
     }
@@ -327,6 +335,7 @@ fn sheet(
         holes: holes.into_iter().cloned().collect(),
         cutouts: cutouts.into_iter().cloned().collect(),
         without_mounting_data: without,
+        clip_on,
         problems: if *surface == Surface::Plate {
             table.problems.clone()
         } else {
@@ -414,5 +423,52 @@ mod tests {
         // Tile 2 starts at `sx`, which lies inside tile 1 (it ends at sx + overlap).
         assert!(xs.contains(&sx));
         assert!(xs.contains(&(sx + OVERLAP_MM)));
+    }
+
+    #[test]
+    fn clip_on_devices_are_not_reported_as_missing_hole_data() {
+        use crate::drill::{DeviceFeatures, Surface};
+        use crate::{Margins, Placement, Plate, Rail, Size};
+        let place = |id, x, rail| Placement {
+            id,
+            x,
+            y: 50.0,
+            rotated: false,
+            size: Size {
+                width: 20.0,
+                height: 60.0,
+                guessed: false,
+            },
+            clearance: None,
+            margins: Margins::default(),
+            rail,
+        };
+        let mut layout = CabinetLayout::new(Plate {
+            width: 400.0,
+            height: 300.0,
+            margin: 10.0,
+        });
+        layout.rails.push(Rail {
+            id: 7,
+            x: 20.0,
+            y: 70.0,
+            length: 200.0,
+            vertical: false,
+        });
+        layout.placements = vec![place(1, 20.0, Some(7)), place(2, 300.0, None)];
+        let features: Vec<DeviceFeatures> = [(1, "-K1"), (2, "-K2")]
+            .into_iter()
+            .map(|(id, label)| DeviceFeatures {
+                id,
+                label: label.into(),
+                surface: Surface::Plate,
+                holes: Vec::new(),
+                cutout: None,
+                problems: Vec::new(),
+            })
+            .collect();
+        let (sheets, _) = template_sheets("Cab", &layout, &features);
+        assert_eq!(sheets[0].clip_on, vec!["-K1".to_owned()]);
+        assert_eq!(sheets[0].without_mounting_data, vec!["-K2".to_owned()]);
     }
 }

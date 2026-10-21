@@ -962,6 +962,17 @@ pub const DUTCH: &[Aliases] = &[
         &["rapport pdf", "rapport afdrukken"],
     ),
     nl(
+        "export.print_preview",
+        &["afdrukvoorbeeld", "afdrukvoorbeeld en plotsets"],
+        &[
+            "plotset",
+            "papierformaat",
+            "schaal",
+            "marges",
+            "paginanummers",
+        ],
+    ),
+    nl(
         "export.pdf_options",
         &["pdf opties", "exporteer pdf opties"],
         &[

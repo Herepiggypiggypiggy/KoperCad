@@ -23,14 +23,25 @@ use super::{Level, NovoApp};
 /// slip (metres typed as millimetres); printing it would not be.
 const MAX_TEMPLATE_PAGES: usize = 300;
 
-/// The enclosures that have a mounting plate and the PDF of each one's
-/// template, as `(tag, pdf bytes)`, and the tags left out for needing more
-/// than `MAX_TEMPLATE_PAGES` pages.
+/// One cabinet's template files.
+pub(super) struct TemplatePdfs {
+    pub tag: String,
+    /// The tiled 1:1 template (overview, then A4 or A3 tiles).
+    pub tiled: Vec<u8>,
+    /// The mounting plate alone at true size on one page the size of the
+    /// plate, for a print shop; `None` when the plate is too small or too
+    /// large for one page.
+    pub plate: Option<Vec<u8>>,
+}
+
+/// The enclosures that have a mounting plate and the PDFs of each one's
+/// template, and the tags left out for needing more than
+/// `MAX_TEMPLATE_PAGES` pages.
 pub(super) fn template_pdfs(
     project: &Project,
     name: &str,
     paper: Paper,
-) -> (Vec<(String, Vec<u8>)>, Vec<String>) {
+) -> (Vec<TemplatePdfs>, Vec<String>) {
     let mut pdfs = Vec::new();
     let mut too_big = Vec::new();
     for s in project
@@ -47,10 +58,13 @@ pub(super) fn template_pdfs(
             too_big.push(format!("{} ({pages} pages)", s.tag));
             continue;
         }
-        pdfs.push((
-            s.tag.to_string(),
-            novo_pdf::template::export_template_pdf(&sheets, name, paper),
-        ));
+        pdfs.push(TemplatePdfs {
+            tag: s.tag.to_string(),
+            tiled: novo_pdf::template::export_template_pdf(&sheets, name, paper),
+            plate: sheets
+                .first()
+                .and_then(|plate| novo_pdf::template::export_plate_pdf(plate, name)),
+        });
     }
     (pdfs, too_big)
 }
@@ -76,6 +90,7 @@ impl NovoApp {
         let (templates, too_big) = template_pdfs(self.backend.document()?.project(), &name, paper);
         let mut done: Vec<String> = Vec::new();
         let mut skipped: Vec<String> = Vec::new();
+        let mut no_single_sheet: Vec<String> = Vec::new();
 
         if templates.is_empty() && too_big.is_empty() {
             skipped.push("drilling template (no cabinet has a mounting plate)".to_owned());
@@ -85,14 +100,24 @@ impl NovoApp {
                 "drilling template {tag}, over {MAX_TEMPLATE_PAGES} pages: check the plate size"
             ));
         }
-        for (tag, bytes) in &templates {
+        for t in &templates {
+            let tag = &t.tag;
             let file = folder.join(format!(
                 "1 Drilling template {} {}.pdf",
                 clean(tag),
                 paper.name()
             ));
-            if self.workshop_write(&file, bytes) {
+            if self.workshop_write(&file, &t.tiled) {
                 done.push(format!("drilling template {tag} ({})", paper.name()));
+            }
+            match &t.plate {
+                Some(bytes) => {
+                    let file = folder.join(format!("1 Plate full size {}.pdf", clean(tag)));
+                    if self.workshop_write(&file, bytes) {
+                        done.push(format!("plate {tag} on one sheet for a print shop"));
+                    }
+                }
+                None => no_single_sheet.push(tag.clone()),
             }
         }
         let steps: [(&str, &str); 4] = [
@@ -126,6 +151,12 @@ impl NovoApp {
             text.push_str(&format!(
                 ". Left out, nothing to print yet: {}",
                 skipped.join(", ")
+            ));
+        }
+        if !no_single_sheet.is_empty() {
+            text.push_str(&format!(
+                ". No one-sheet plate for {}: the plate is under 150 x 40 mm or over 5080 mm, use the tiled template",
+                no_single_sheet.join(", ")
             ));
         }
         self.message_file(text, folder);
