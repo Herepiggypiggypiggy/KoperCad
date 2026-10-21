@@ -129,16 +129,25 @@ fn verdict_line(
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
         ui.label(egui::RichText::new(&v.lead).strong().color(colour));
-        if let Some((id, tag)) = &v.device
-            && ui
-                .add(
-                    egui::Button::new(egui::RichText::new(tag).strong().color(colour))
-                        .frame(false),
-                )
+        if let Some((id, tag)) = &v.device {
+            let resp = ui.add(
+                egui::Button::new(egui::RichText::new(tag).strong().color(colour)).frame(false),
+            );
+            if resp.hovered() {
+                // Underline on hover marks the name as a button.
+                let y = resp.rect.bottom() - 2.0;
+                ui.painter().hline(
+                    resp.rect.x_range(),
+                    y,
+                    egui::Stroke::new(1.0, colour),
+                );
+            }
+            if resp
                 .on_hover_text("Select the device and bring it into view")
                 .clicked()
-        {
-            jump = Some(*id);
+            {
+                jump = Some(*id);
+            }
         }
         ui.label(egui::RichText::new(&v.tail).strong().color(colour));
     })
