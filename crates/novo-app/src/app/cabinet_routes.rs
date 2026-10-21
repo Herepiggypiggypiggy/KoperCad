@@ -115,7 +115,23 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
             length_mm: r.length_mm,
         })
         .collect();
-    let ducts = project
+    let ducts = duct_fills(project, structure, plan);
+    Overlay {
+        routes,
+        ducts,
+        rows,
+        notes,
+        rules,
+    }
+}
+
+/// Every duct of `structure` with how full the plan leaves it.
+pub(super) fn duct_fills(
+    project: &Project,
+    structure: StructureId,
+    plan: &novo_routing::Plan,
+) -> Vec<DuctFill> {
+    project
         .all::<Rail>()
         .filter(|r| r.structure == structure && r.kind == RailKind::Duct)
         .map(|r| {
@@ -139,14 +155,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
                 wires: fill.map_or(0, |f| f.jobs.len()),
             }
         })
-        .collect();
-    Overlay {
-        routes,
-        ducts,
-        rows,
-        notes,
-        rules,
-    }
+        .collect()
 }
 
 /// The route table: longest wire first, then by wire id.

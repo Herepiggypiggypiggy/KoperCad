@@ -246,3 +246,23 @@ fn the_example_wires_are_numbered_and_commissioning_names_them_by_number() {
         assert_ne!(label, id.to_string(), "commissioning names a wire by id");
     }
 }
+
+#[test]
+fn the_example_cabinet_problems_pill_can_say_what_it_counts() {
+    let (_dir, mut d) = drive();
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::OpenExample);
+    d.frame();
+    let p = d.doc().project();
+    let cab = p
+        .structures()
+        .find(|s| s.tag.to_string() == "+CAB")
+        .unwrap();
+    let l = novo_layout::model::load(p, cab.id).unwrap();
+    let name = |id: u64| format!("#{id}");
+    let lines = super::cabinet::panel_problem_lines(&l, &name);
+    assert!(
+        lines.iter().any(|t| t.contains("free room in front")),
+        "{lines:?}"
+    );
+}

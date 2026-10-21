@@ -12,7 +12,7 @@ use crate::door::DoorAnim;
 use crate::feel::{self, Inertia, Transition};
 use crate::governor::FrameGovernor;
 use crate::labels::{self, Fade, LabelCandidate};
-use crate::look::{self, Glyph, Look};
+use crate::look::{self, Glyph, Look, MARK_ERROR, MARK_OK};
 use crate::math::Ray;
 use crate::mesh::MeshLibrary;
 use crate::overlay::Overlay;
@@ -1336,7 +1336,11 @@ impl View3d {
             let col = match d.role {
                 Role::Overall => color(look.overlay.chip_text, 0.7),
                 Role::Size => color(look.overlay.chip_text, 1.0),
-                Role::Gap | Role::Edge => color3(look.selection.edge, 255),
+                Role::Gap | Role::Edge => match d.clearance_ok() {
+                    Some(false) => color3(MARK_ERROR, 255),
+                    Some(true) => color3(MARK_OK, 255),
+                    None => color3(look.selection.edge, 255),
+                },
             };
             let stroke = Stroke::new(1.0, col);
             painter.line_segment([a, b], stroke);
