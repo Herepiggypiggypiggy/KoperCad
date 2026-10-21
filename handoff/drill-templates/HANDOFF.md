@@ -1,6 +1,6 @@
 # Drill and cut-out templates: handoff
 
-Branch `claude/project-thread-vgkwt9` (kopercad), one PR from main (see PROGRESS.md for number and head).
+PR #1268, merged to main (3cbc2659). Follow-up work goes in a new PR from main.
 
 Code: `crates/novo-layout/src/cutout_cards.rs`, `crates/novo-pdf/src/template_cards.rs` (+ `tests/template_cards.rs`), `crates/novo-app/src/app/workshop.rs` (`export_scale_check`, pack files), `bench.rs` (`print_check` row), command `export.scale_check` (commands.rs, menus.rs, language.rs, workbench.rs, menu_bar.rs), QA `qa/scenarios/39-print-scale-check.qa`.
 
