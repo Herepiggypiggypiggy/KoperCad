@@ -1,0 +1,84 @@
+# Challenge: start does nothing. The wire from the start button's lower pin
+# to the coil -K1:A1 is missing (wire 47 of cross-references/finished.json).
+format = 1
+id = "coil-wont-pull-in"
+version = 1
+status = "early"
+kind = "challenge"
+title = "Fix it: the contactor never pulls in"
+title_nl = "Repareer het: de contactor trekt nooit aan"
+summary = "You press start and nothing happens. Follow the power and repair the break."
+summary_nl = "Je drukt op start en er gebeurt niets. Volg de spanning en herstel de onderbreking."
+track = "circuits"
+order = 50
+level = "intermediate"
+minutes = 4
+topics = ["simulation", "live", "troubleshooting"]
+needs = ["live-view"]
+project = "project.json"
+finished = "finished.json"
+page = "Control circuit"
+
+[[step]]
+id = "live"
+title = "Switch the live view on"
+title_nl = "Zet de live-weergave aan"
+text = """
+The pump starter does nothing when start is pressed. Find out where the power stops, like a technician with a meter. The live view lets you press the buttons without changing the drawing.
+"""
+text_nl = """
+De pompstarter doet niets als start wordt ingedrukt. Zoek uit waar de spanning ophoudt, zoals een monteur met een meter. Met de live-weergave druk je op de knoppen zonder de tekening te veranderen.
+"""
+how = [
+  "Press {key:sim.live}.",
+]
+how_nl = [
+  "Druk op {key:sim.live}.",
+]
+expect = { live = true }
+solve = [ { command = "sim.live" } ]
+
+[[step]]
+id = "pull-in"
+title = "Goal: start pulls the contactor in"
+title_nl = "Doel: start trekt de contactor aan"
+text = """
+**Goal:** press start (**-S2**) and the coil of **-K1** pulls in. Right now nothing happens. Find the break and repair the drawing.
+"""
+text_nl = """
+**Doel:** druk op start (**-S2**) en de spoel van **-K1** trekt aan. Nu gebeurt er niets. Zoek de onderbreking en herstel de tekening.
+"""
+hints = [
+  "Press start and look at the wires lit by the live view. The power should flow from the control breaker, through stop and start, to the coil. Where does the lit part end?",
+  "The wire leaves the start button but never arrives at the coil. Look at the coil's top pin A1: what is it connected to?",
+  "Draw a wire from the coil -K1 pin A1 to the lower pin (14) of the start button -S2.",
+]
+hints_nl = [
+  "Druk op start en kijk naar de draden die de live-weergave laat oplichten. De spanning moet van de stuurautomaat via stop en start naar de spoel lopen. Waar eindigt het verlichte deel?",
+  "De draad verlaat de startknop maar komt niet bij de spoel aan. Kijk naar de bovenste pen A1 van de spoel: waarmee is die verbonden?",
+  "Trek een draad van spoel -K1 pen A1 naar de onderste pen (14) van startknop -S2.",
+]
+point = { at = { device = "-K1", pin = "A1" } }
+expect = { coil_on = "-K1" }
+solve = [
+  { wire = ["-K1:A1", "-S2:14"] },
+  { live_pole = { device = "-S2" } },
+]
+
+[[step]]
+id = "hold"
+title = "It must hold in too"
+title_nl = "Hij moet ook aanhouden"
+text = """
+**Goal:** after you let go of start, the contactor must stay in. Check that it does: if it drops out, there is a second fault.
+"""
+text_nl = """
+**Doel:** als je start loslaat, moet de contactor aanblijven. Controleer dat hij dat doet: valt hij af, dan zit er een tweede fout in.
+"""
+hints = [
+  "Release start and watch the coil. It stays on thanks to the holding contact of -K1 (13-14), which feeds the coil in parallel with start.",
+]
+hints_nl = [
+  "Laat start los en kijk naar de spoel. Hij blijft aan dankzij het houdcontact van -K1 (13-14), dat de spoel parallel aan start voedt.",
+]
+expect = { all = [ { coil_on = "-K1" }, { not = { pole_closed = "-S2" } } ] }

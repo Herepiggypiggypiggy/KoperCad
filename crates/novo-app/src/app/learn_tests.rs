@@ -918,7 +918,16 @@ fn a_challenge_gives_its_hints_one_at_a_time_and_is_solved_by_the_fix() {
     assert_eq!(d.app.card().unwrap().hints_open.len(), 3);
     // The fault is real: pressing start without repairing anything does not
     // satisfy the goal; with the repair (the step's whole solve) it does.
-    let solve = d.app.learn.run.as_ref().unwrap().step().unwrap().solve.clone();
+    let solve = d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .unwrap()
+        .step()
+        .unwrap()
+        .solve
+        .clone();
     d.replay_op(&solve[1]).unwrap();
     for _ in 0..3 {
         d.frame();
@@ -930,4 +939,46 @@ fn a_challenge_gives_its_hints_one_at_a_time_and_is_solved_by_the_fix() {
         d.frame();
     }
     assert_eq!(step(&d), "stop", "the repaired holding contact holds");
+}
+
+#[test]
+fn the_broken_contactor_challenge_only_ticks_after_the_wire_is_drawn() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.learn.advance_after = std::time::Duration::ZERO;
+    d.app.start_lesson("coil-wont-pull-in");
+    d.frame();
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "sim.live", None);
+    for _ in 0..4 {
+        d.frame();
+    }
+    assert_eq!(step(&d), "pull-in");
+    let solve = d
+        .app
+        .learn
+        .run
+        .as_ref()
+        .unwrap()
+        .step()
+        .unwrap()
+        .solve
+        .clone();
+    d.replay_op(&solve[1]).unwrap();
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_eq!(
+        step(&d),
+        "pull-in",
+        "start does nothing while the wire is missing"
+    );
+    d.replay_op(&solve[0]).unwrap();
+    d.replay_op(&solve[1]).unwrap();
+    for _ in 0..3 {
+        d.frame();
+    }
+    assert_ne!(step(&d), "pull-in", "with the wire the coil pulls in");
 }
