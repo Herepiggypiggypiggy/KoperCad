@@ -279,53 +279,71 @@ impl NovoApp {
         super::panel::dialog(ctx, "Wire numbering", [560.0, 620.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
-                novo_theme::widgets::section_label(ui, "Scheme");
-                scheme_ui(ui, &mut win.scheme);
-                ui.add_space(8.0);
-                novo_theme::widgets::section_label(ui, "What to number");
-                let modes = [Mode::Fill, Mode::FillStrict, Mode::Renumber];
-                let mut mode = modes.iter().position(|m| *m == win.mode).unwrap_or(0);
-                if novo_theme::widgets::segmented(
-                    ui,
-                    &mut mode,
-                    &["Number new wires", "Also fix off-scheme", "Renumber all"],
-                ) {
-                    win.mode = modes[mode];
-                }
-                ui.weak(match win.mode {
-                    Mode::Fill => "Only wires without a number; existing numbers stay.",
-                    Mode::FillStrict => "Numbers the scheme would not give are replaced too.",
-                    Mode::Renumber => "Start over in reading order; typed numbers stay.",
-                });
-                ui.add_space(6.0);
-                ui.horizontal(|ui| {
-                    ui.label("Wires");
-                    let scopes = [
-                        ScopeChoice::Project,
-                        ScopeChoice::ThisPage,
-                        ScopeChoice::Selection,
-                    ];
-                    let mut scope = scopes.iter().position(|s| *s == win.scope).unwrap_or(0);
-                    if novo_theme::widgets::segmented(
-                        ui,
-                        &mut scope,
-                        &["Project", "This page", "Selection"],
-                    ) {
-                        let allowed = match scopes[scope] {
-                            ScopeChoice::Project => true,
-                            ScopeChoice::ThisPage => page.is_some(),
-                            ScopeChoice::Selection => !selected.is_empty(),
-                        };
-                        if allowed {
-                            win.scope = scopes[scope];
+                let mode_name = match win.mode {
+                    Mode::Fill => "number new wires",
+                    Mode::FillStrict => "also fix off-scheme",
+                    Mode::Renumber => "renumber all",
+                };
+                let title = format!(
+                    "Scheme and mode: {}, {mode_name}",
+                    win.scheme.kind.label().to_lowercase()
+                );
+                // Collapsed by default so the net list gets the height.
+                egui::CollapsingHeader::new(title)
+                    .id_salt("wirenum_settings")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        novo_theme::widgets::section_label(ui, "Scheme");
+                        scheme_ui(ui, &mut win.scheme);
+                        ui.add_space(8.0);
+                        novo_theme::widgets::section_label(ui, "What to number");
+                        let modes = [Mode::Fill, Mode::FillStrict, Mode::Renumber];
+                        let mut mode = modes.iter().position(|m| *m == win.mode).unwrap_or(0);
+                        if novo_theme::widgets::segmented(
+                            ui,
+                            &mut mode,
+                            &["Number new wires", "Also fix off-scheme", "Renumber all"],
+                        ) {
+                            win.mode = modes[mode];
                         }
-                    }
-                    if page.is_none() {
-                        ui.weak("This page: open a page first");
-                    } else if selected.is_empty() {
-                        ui.weak("Selection: select wires on the drawing first");
-                    }
-                });
+                        ui.weak(match win.mode {
+                            Mode::Fill => "Only wires without a number; existing numbers stay.",
+                            Mode::FillStrict => {
+                                "Numbers the scheme would not give are replaced too."
+                            }
+                            Mode::Renumber => "Start over in reading order; typed numbers stay.",
+                        });
+                        ui.add_space(6.0);
+                        ui.horizontal(|ui| {
+                            ui.label("Wires");
+                            let scopes = [
+                                ScopeChoice::Project,
+                                ScopeChoice::ThisPage,
+                                ScopeChoice::Selection,
+                            ];
+                            let mut scope =
+                                scopes.iter().position(|s| *s == win.scope).unwrap_or(0);
+                            if novo_theme::widgets::segmented(
+                                ui,
+                                &mut scope,
+                                &["Project", "This page", "Selection"],
+                            ) {
+                                let allowed = match scopes[scope] {
+                                    ScopeChoice::Project => true,
+                                    ScopeChoice::ThisPage => page.is_some(),
+                                    ScopeChoice::Selection => !selected.is_empty(),
+                                };
+                                if allowed {
+                                    win.scope = scopes[scope];
+                                }
+                            }
+                            if page.is_none() {
+                                ui.weak("This page: open a page first");
+                            } else if selected.is_empty() {
+                                ui.weak("Selection: select wires on the drawing first");
+                            }
+                        });
+                    });
                 let Some(shown) = win.shown.take() else {
                     return;
                 };
@@ -553,8 +571,8 @@ fn numbers_ui(
         .on_hover_text("The potential the net carries (L1, N, PE, ...)");
         ui.weak("Number");
     });
-    // Leave room for the scheme above and the buttons below on small screens.
-    let room = (ui.ctx().content_rect().height() - 640.0).clamp(90.0, 280.0);
+    // The list takes what the window has left, minus the buttons below.
+    let room = (ui.available_height() - 52.0).max(90.0);
     egui::ScrollArea::vertical()
         .max_height(room)
         .auto_shrink([false, true])
