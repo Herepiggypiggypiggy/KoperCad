@@ -250,6 +250,21 @@ fn unix_now() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
+const ON_ID: &str = "kopercad_ai_on";
+const ASK_ID: &str = "kopercad_ai_ask";
+
+/// True when Claude is turned on, so a panel may offer an "… with Claude" button.
+pub(super) fn claude_is_on(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(egui::Id::new(ON_ID)))
+        .unwrap_or(false)
+}
+
+/// Leaves a question for the Ask Claude window; it is sent on the next frame
+/// when Claude is on and no answer is in progress.
+pub(super) fn ask_claude_later(ctx: &egui::Context, question: String) {
+    ctx.data_mut(|d| d.insert_temp(egui::Id::new(ASK_ID), question));
+}
+
 /// The edits Claude may suggest. Each maps to one model command.
 fn edit_actions() -> Vec<EditAction> {
     vec![
@@ -849,6 +864,15 @@ impl NovoApp {
     }
 
     pub(super) fn assistant_window(&mut self, ctx: &egui::Context) {
+        // Panels elsewhere (the Heat panel) cannot reach this state; they read
+        // whether Claude is on and leave a question here for the next frame.
+        let on = self.settings.ai.enabled;
+        ctx.data_mut(|d| d.insert_temp(egui::Id::new(ON_ID), on));
+        if let Some(q) = ctx.data_mut(|d| d.remove_temp::<String>(egui::Id::new(ASK_ID)))
+            && on
+        {
+            self.wb.assistant.ask_later(q);
+        }
         if !self.wb.assistant.open {
             return;
         }
@@ -1167,7 +1191,16 @@ impl NovoApp {
                         }
                         Entry::Claude(t) => {
                             ui.add_space(4.0);
-                            ui.label(egui::RichText::new("Claude").strong());
+                            ui.horizontal(|ui| {
+                                ui.label(egui::RichText::new("Claude").strong());
+                                if ui
+                                    .small_button("Copy")
+                                    .on_hover_text("Copy this answer")
+                                    .clicked()
+                                {
+                                    ui.ctx().copy_text(t.clone());
+                                }
+                            });
                             ui.label(t);
                         }
                         Entry::Tool(t) => {
