@@ -1,0 +1,14 @@
+@title Start screen after a project was open: two ways to learn, each named and explained
+@area Start
+open crates/novo-tests/tests/golden/v0.1-motor-starter.novo
+wait 20
+key ctrl+k
+wait 6
+text close project
+wait 8
+key Enter
+wait 20
+shot start-after-close
+expect "Try the fast keys"
+expect "Learn"
+check_layout
