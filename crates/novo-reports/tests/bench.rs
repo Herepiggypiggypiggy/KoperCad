@@ -203,13 +203,14 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
         let n = |t: &str| t.trim_start_matches('~').parse::<f64>().expect("number");
         assert_eq!(n(&cut), n(&route) + 20.0);
     }
-    // The routed wires are exact, the rest are estimates.
+    // The routed wires and the four cores of the motor cable (its stated
+    // 12 m plus a loop at each end) are exact, the rest are estimates.
     let exact = group
         .rows
         .iter()
         .filter(|r| !text(&r.cells[2]).starts_with('~'))
         .count();
-    assert_eq!(exact, 3);
+    assert_eq!(exact, 7);
     // Longest first within the group.
     let cuts: Vec<f64> = group
         .rows
@@ -217,7 +218,7 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
         .map(|r| text(&r.cells[2]).trim_start_matches('~').parse().unwrap())
         .collect();
     assert!(cuts.windows(2).all(|w| w[0] >= w[1]));
-    assert!(out.sections[0].title.contains("22 of 25"));
+    assert!(out.sections[0].title.contains("18 of 25"));
     let estimated: i64 = out.sections[0]
         .rows
         .iter()
@@ -226,7 +227,7 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
             other => panic!("{other:?}"),
         })
         .sum();
-    assert_eq!(estimated, 22);
+    assert_eq!(estimated, 18);
 }
 
 #[test]

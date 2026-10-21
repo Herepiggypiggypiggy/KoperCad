@@ -68,6 +68,8 @@ pub(super) struct Overlay {
     /// A point is stored but cannot be used (outside a smaller plate, or
     /// only one number).
     pub(super) entry_hidden: bool,
+    /// Stated wire length outside the entry for wires without a cable, mm.
+    pub(super) outside_mm: Option<f64>,
 }
 
 impl Overlay {
@@ -109,6 +111,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
         .and_then(|s| s.plate)
         .map(|p| (p.width, p.height));
     let entry = novo_routing::entry::entry_point(project, structure).map(|p| (p.x, p.y));
+    let outside_mm = novo_routing::entry::outside_mm(project, structure);
     let entry_hidden = entry.is_none() && novo_routing::entry::has_stored_point(project, structure);
     let Some((_, plan)) = routed.plans.iter().find(|(s, _)| *s == structure) else {
         return Overlay {
@@ -116,6 +119,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
             plate,
             entry,
             entry_hidden,
+            outside_mm,
             ..Overlay::default()
         };
     };
@@ -141,6 +145,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
         plate,
         entry,
         entry_hidden,
+        outside_mm,
     }
 }
 
@@ -209,7 +214,7 @@ fn rows(
                 .is_some_and(|leg| leg.opening.is_some());
             let basis = match r.kind {
                 _ if to_door => "door, no gap",
-                _ if routed.entry_legs.contains(&r.job) => "to entry, outside not included",
+                _ if routed.entry_legs.contains_key(&r.job) => "to entry, outside not included",
                 Kind::FreeAir => "free air",
                 Kind::Ducted if routed.unknown_height.contains(&r.job) => "routed, no depth",
                 Kind::Ducted => "routed",
@@ -518,6 +523,40 @@ fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Op
             ask = Some(Ask::SetEntryPoint(plate, None));
         }
     });
+    if overlay.entry.is_some() {
+        ui.horizontal(|ui| {
+            ui.label("Wire outside the entry");
+            let id = egui::Id::new(("cabinet_entry_outside", plate));
+            let set = overlay.outside_mm;
+            let mut value = ui
+                .data(|d| d.get_temp::<f64>(id))
+                .unwrap_or(set.unwrap_or(0.0));
+            let r = ui.add(
+                egui::DragValue::new(&mut value)
+                    .range(0.0..=100_000.0)
+                    .speed(10.0)
+                    .suffix(" mm"),
+            );
+            if r.changed() {
+                ui.data_mut(|d| d.insert_temp(id, value));
+            }
+            if (r.drag_stopped() || r.lost_focus()) && ui.data(|d| d.get_temp::<f64>(id)).is_some()
+            {
+                ui.data_mut(|d| d.remove_temp::<f64>(id));
+                let new = (value > 0.0).then_some(value);
+                if new != set {
+                    ask = Some(Ask::SetEntryOutside(plate, new));
+                }
+            }
+            if set.is_none() {
+                ui.weak("not stated");
+            }
+        })
+        .response
+        .on_hover_text(
+            "How much wire lies outside the entry, loops included, for wires without a cable (a supply lead). Stated: those lengths count as exact. Not stated: they stay estimates. Wires on a cable use the cable's length.",
+        );
+    }
     if overlay.entry_hidden {
         ui.colored_label(
             crate::theme::ui_palette().warning,

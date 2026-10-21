@@ -189,6 +189,8 @@ pub(super) enum Ask {
     SetWireRule(&'static str, Option<f64>),
     /// Set or clear the cabinet entry point of a plate (mm, plate coordinates).
     SetEntryPoint(StructureId, Option<(f64, f64)>),
+    /// Set or clear the stated wire length outside the entry (mm).
+    SetEntryOutside(StructureId, Option<f64>),
     ExportWireProduction,
     OpenBench,
     ExportWiringDxf(StructureId),
@@ -2395,6 +2397,11 @@ impl NovoApp {
                         plate,
                         point.map(|(x, y)| novo_routing::Point::new(x, y)),
                     )
+                });
+            }
+            Ask::SetEntryOutside(plate, mm) => {
+                self.cabinet_edit("Wire outside the cabinet entry", move |tx| {
+                    novo_routing::entry::set_outside_mm(tx, plate, mm)
                 });
             }
             Ask::ExportWireCut => {

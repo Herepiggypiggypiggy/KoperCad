@@ -2,7 +2,7 @@
 //! ducts on an enclosure's mounting plate. Engine duct ids are the raw
 //! model ids of the rails.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, HashMap};
 
 use novo_core::{
     CabinetPlacement, DeviceId, Direction, PinRef, Project, Rail, RailKind, StructureId, SymbolRole,
@@ -115,7 +115,11 @@ fn is_outside(project: &Project, plate: StructureId, pin: PinRef) -> bool {
     ) else {
         return false;
     };
-    device.tag.location != structure.tag.location
+    // A tag without a location says nothing about where the device is: it is
+    // not "outside".
+    !device.tag.location.is_empty()
+        && !structure.tag.location.is_empty()
+        && device.tag.location != structure.tag.location
 }
 
 /// The device a pin physically sits on: the device of a device symbol, or
@@ -263,10 +267,11 @@ pub struct Routed {
     /// a side wall), by connection id: how they get there.
     pub surface_legs: BTreeMap<u64, SurfaceLeg>,
     /// Connections routed from a placed device to the plate's cabinet entry
-    /// point because their other end is outside the enclosure (a supply feed,
-    /// a device in another location). Their route ends at the entry: the part
-    /// outside is not in the length.
-    pub entry_legs: BTreeSet<u64>,
+    /// point (value: the plate) because their other end is outside the
+    /// enclosure (a supply feed, a device in another location). Their route
+    /// ends at the entry: the part outside is not in the length. The route
+    /// carries the service loop at the placed terminal and one at the entry.
+    pub entry_legs: BTreeMap<u64, StructureId>,
 }
 
 /// The part of a wire that runs on a surface other than the mounting plate.
@@ -370,7 +375,7 @@ pub fn route_connections(project: &Project, connections: &[Connection], rules: &
                 to: job_to,
                 diameter_mm: c.diameter_mm,
             });
-            out.entry_legs.insert(c.id);
+            out.entry_legs.insert(c.id, plate);
             continue;
         }
         let ends = a.zip(b);

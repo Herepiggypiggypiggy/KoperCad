@@ -83,6 +83,13 @@ pub enum Change {
     /// Put these wires in one cable of this type (`4G1.5`). Written last,
     /// when the sizes are in, from the cable proposal of that moment.
     Cable(String),
+    /// Mark where wires from outside enter this enclosure's plate (mm, plate
+    /// coordinates).
+    EntryPoint {
+        plate: novo_core::StructureId,
+        x: f64,
+        y: f64,
+    },
 }
 
 impl Change {
@@ -92,6 +99,7 @@ impl Change {
             Change::Colour(_) => "Colour",
             Change::Number(_) => "Number",
             Change::Cable(_) => "Cable",
+            Change::EntryPoint { .. } => "Entry point",
         }
     }
 
@@ -100,6 +108,7 @@ impl Change {
         match self {
             Change::Size(s) => format!("{} mm²", fmt(*s)),
             Change::Colour(c) | Change::Number(c) | Change::Cable(c) => c.clone(),
+            Change::EntryPoint { x, y, .. } => format!("x {} mm, y {} mm", fmt(*x), fmt(*y)),
         }
     }
 }
@@ -156,19 +165,19 @@ impl Autopilot {
 
     /// Writes the proposals with these ids (all when `accepted` is `None`).
     /// Call it in one transaction: one undo. Refused when the drawing
-    /// changed since the plan was made. Returns `(sizes, colours, numbers, cables)`.
+    /// changed since the plan was made. Returns `(sizes, colours, numbers, cables, entry points)`.
     pub fn apply(
         &self,
         tx: &mut Tx<'_>,
         accepted: Option<&BTreeSet<usize>>,
-    ) -> Result<(usize, usize, usize, usize)> {
+    ) -> Result<(usize, usize, usize, usize, usize)> {
         if tx.project().revision() != self.revision {
             return Err(novo_core::ModelError::Refused {
                 what: "Autopilot".into(),
                 reason: "the drawing changed since the review list was made".into(),
             });
         }
-        let mut counts = (0, 0, 0, 0);
+        let mut counts = (0, 0, 0, 0, 0);
         for p in &self.proposals {
             if accepted.is_some_and(|set| !set.contains(&p.id)) {
                 continue;
@@ -182,14 +191,23 @@ impl Autopilot {
                     Change::Number(n) => {
                         tx.update::<Wire>(*wire, |w| w.number = Some(n.clone()))?
                     }
-                    Change::Cable(_) => {}
+                    Change::Cable(_) | Change::EntryPoint { .. } => {}
                 }
+            }
+            // A change that is not about wires.
+            if let Change::EntryPoint { plate, x, y } = &p.change {
+                novo_routing::entry::set_entry_point(
+                    tx,
+                    *plate,
+                    Some(novo_routing::Point::new(*x, *y)),
+                )?;
             }
             match p.change {
                 Change::Size(_) => counts.0 += 1,
                 Change::Colour(_) => counts.1 += 1,
                 Change::Number(_) => counts.2 += 1,
                 Change::Cable(_) => {}
+                Change::EntryPoint { .. } => counts.4 += 1,
             }
         }
         // Cables last: their type follows the sizes just written.
@@ -386,10 +404,18 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
         });
     }
     let (mut feeds, mut field, mut unplaced) = (0, 0, 0);
+    let mut need_entry: BTreeSet<novo_core::StructureId> = BTreeSet::new();
     for job in jobs.iter().filter(|j| is_estimate(&j.basis)) {
         let (a, b) = (&job.end_a.designation, &job.end_b.designation);
         if a.ends_with("(feed)") || b.ends_with("(feed)") {
             feeds += 1;
+            for pin in [job.end_a.pin, job.end_b.pin] {
+                if let Some(plate) = placed_plate(project, pin)
+                    && novo_routing::entry::entry_point(project, plate).is_none()
+                {
+                    need_entry.insert(plate);
+                }
+            }
         } else if location_of(a) != location_of(b) {
             field += 1;
         } else {
@@ -408,12 +434,32 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
     );
     left(
         field,
-        "the wire goes to a device in another location. Its length is the cable run, which the drawing cannot know; the estimate is the page distance plus service loops.",
+        "the wire goes to a device in another location. Put the wires in a cable (see the cable rows) and state the cable's length on the cable: then the length is exact. Until then it is the page distance plus service loops.",
     );
     left(
         feeds,
-        "the wire comes in from outside the drawing (a supply feed with no device at the other end). The cabinet entry is not modelled, so its length is a planning figure.",
+        "the wire comes in from outside the drawing (a supply lead with no device at the other end). Set the cabinet entry and the wire length outside it (Cabinet > Routes): the lead is then routed to the entry and its length is exact.",
     );
+    for plate in need_entry {
+        let Some(structure) = project.get::<novo_core::Structure>(plate) else {
+            continue;
+        };
+        let Some(size) = structure.plate else {
+            continue;
+        };
+        out.proposals.push(Proposal {
+            id: out.proposals.len(),
+            wires: Vec::new(),
+            label: format!("entry point of {}", structure.tag),
+            change: Change::EntryPoint {
+                plate,
+                x: size.width / 2.0,
+                y: size.height,
+            },
+            reason: "supply leads come in from outside and the plate has no entry point: the bottom middle of the plate is where glands usually are. Move it to where yours is".to_owned(),
+            basis: Basis::Assumed,
+        });
+    }
     for c in novo_cables::propose::propose_cables(project) {
         let name = c.cable_type.name();
         out.proposals.push(Proposal {
@@ -484,6 +530,22 @@ fn scope(same_circuit: bool) -> &'static str {
     } else {
         "in the project (none on the same device)"
     }
+}
+
+/// The enclosure whose plate a pin's device is placed on.
+fn placed_plate(project: &Project, pin: novo_core::PinRef) -> Option<novo_core::StructureId> {
+    let device = match &project.symbol(pin.symbol)?.role {
+        SymbolRole::Device { device, .. } => *device,
+        SymbolRole::Terminal { .. } => {
+            let symbol = project.symbol(pin.symbol)?;
+            project.terminal(symbol.terminal_of_pin(pin.pin)?)?.strip
+        }
+        _ => return None,
+    };
+    project
+        .all::<novo_core::CabinetPlacement>()
+        .find(|p| p.device == device)
+        .map(|p| p.structure)
 }
 
 /// The `+LOCATION` of a designation (`=A1+CAB-X1:1` gives `CAB`).
