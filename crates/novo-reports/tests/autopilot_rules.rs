@@ -135,3 +135,34 @@ fn the_plan_is_grouped_by_protective_device_and_covers_every_row_once() {
     );
     assert!(gs.iter().all(|g| !g.summary.is_empty()));
 }
+
+#[test]
+fn protective_earth_stays_green_yellow_whatever_the_project_stores() {
+    let mut d = doc();
+    set(&mut d, wire_rules::PRESET, Value::Text("house".into()));
+    set(
+        &mut d,
+        &ColourClass::ProtectiveEarth.key(),
+        Value::Text("BK".into()),
+    );
+    set(&mut d, &ColourClass::Pen.key(), Value::Text("BK".into()));
+    let rules = WireRules::of(d.project());
+    assert_eq!(rules.house_colour(ColourClass::ProtectiveEarth), None);
+    assert_eq!(rules.house_colour(ColourClass::Pen), None);
+    assert!(colours(&d).contains("GNYE"));
+}
+
+#[test]
+fn an_absurd_minimum_section_is_ignored_as_unset() {
+    let mut d = doc();
+    set(&mut d, wire_rules::PRESET, Value::Text("house".into()));
+    for bad in [1000.0, 1e9, 0.01, 5.0] {
+        set(&mut d, wire_rules::MIN_POWER_MM2, Value::Float(bad));
+        set(&mut d, wire_rules::MIN_CONTROL_MM2, Value::Float(bad));
+        let rules = WireRules::of(d.project());
+        assert_eq!(rules.min_mm2(false), None, "{bad}");
+        assert_eq!(rules.min_mm2(true), None, "{bad}");
+    }
+    set(&mut d, wire_rules::MIN_POWER_MM2, Value::Float(2.5));
+    assert_eq!(WireRules::of(d.project()).min_mm2(false), Some(2.5));
+}

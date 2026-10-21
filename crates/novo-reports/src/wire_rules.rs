@@ -34,10 +34,9 @@ pub enum ColourClass {
 }
 
 impl ColourClass {
-    /// Classes a project can give its own colour.
-    pub const EDITABLE: [ColourClass; 8] = [
-        ColourClass::ProtectiveEarth,
-        ColourClass::Pen,
+    /// Classes a project can give its own colour. Protective earth and PEN
+    /// are not here: they are always green-yellow (IEC 60204-1, IEC 60445).
+    pub const EDITABLE: [ColourClass; 6] = [
         ColourClass::Neutral,
         ColourClass::DcNegative,
         ColourClass::AcPower,
@@ -141,6 +140,14 @@ fn number(project: &Project, key: &str) -> Option<f64> {
     .filter(|v| v.is_finite() && *v > 0.0)
 }
 
+/// Smallest sections a house rule may name, mm². Anything else in a file or
+/// script reads as unset.
+pub const MIN_RANGE_MM2: (f64, f64) = (0.5, 4.0);
+
+fn in_range(v: &f64) -> bool {
+    (MIN_RANGE_MM2.0..=MIN_RANGE_MM2.1).contains(v)
+}
+
 /// Normal form of a colour code the project typed (`gnye` -> `GNYE`), or
 /// `None` when it is not a code of [`CODES`].
 pub fn normal_code(code: &str) -> Option<&'static str> {
@@ -168,8 +175,8 @@ impl WireRules {
         WireRules {
             preset,
             house_colours,
-            min_power_mm2: number(project, MIN_POWER_MM2),
-            min_control_mm2: number(project, MIN_CONTROL_MM2),
+            min_power_mm2: number(project, MIN_POWER_MM2).filter(in_range),
+            min_control_mm2: number(project, MIN_CONTROL_MM2).filter(in_range),
         }
     }
 
