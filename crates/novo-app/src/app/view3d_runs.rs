@@ -115,6 +115,9 @@ pub(super) struct EntryFacts {
     pub wall: Option<(&'static str, bool)>,
     /// The wire outside the entry the designer stated, mm.
     pub outside_mm: Option<f64>,
+    /// The tag of the other cabinet when the wire ends in a second cabinet:
+    /// this is its leg inside this one, the other leg is drawn there.
+    pub across: Option<String>,
 }
 
 impl EntryFacts {
@@ -131,6 +134,12 @@ impl EntryFacts {
             ),
             None => String::new(),
         };
+        if let Some(other) = &self.across {
+            return format!(
+                "Drawn to the cabinet entry{at}{wall}; the other end is in {other}, where the rest is \
+                 drawn. The run between the two entries is not drawn"
+            );
+        }
         match self.outside_mm {
             Some(m) => format!(
                 "Drawn to the cabinet entry{at}{wall}; outside it {:.2} m as stated, not to scale",
@@ -161,6 +170,9 @@ enum Gap {
     OutsideNotStated,
     /// The stated cable length is shorter than the route inside the cabinet.
     CableTooShort,
+    /// The wire ends in a second cabinet: each cabinet draws its leg, the run
+    /// between the cabinets is not known.
+    AcrossCabinets,
 }
 
 /// The sentence for a basis text.
@@ -187,6 +199,9 @@ fn why(text: &str, gap: Gap) -> &'static str {
         }
         "estimate" if gap == Gap::OutsideNotStated => {
             "Drawn to the entry, but the wire outside it is not stated, so the length stays an estimate. State it in Cabinet > Routes."
+        }
+        "estimate" if gap == Gap::AcrossCabinets => {
+            "The run between the two cabinets is not known, so the length stays an estimate; the part inside each cabinet is drawn there."
         }
         _ => {
             "Not routed: a planning figure from the drawing. Place the devices (and set the cabinet entry for wires that leave) to make it exact."
@@ -235,6 +250,11 @@ pub(super) fn bases(
             let is_drawn = drawn.get(&id);
             let gap = if is_drawn.is_some() && cable.is_some_and(|c| c.stated) {
                 Gap::CableTooShort
+            } else if is_drawn
+                .and_then(|f| f.entry.as_ref())
+                .is_some_and(|e| e.across.is_some())
+            {
+                Gap::AcrossCabinets
             } else if is_drawn
                 .and_then(|f| f.entry.as_ref())
                 .is_some_and(|e| e.outside_mm.is_none())
@@ -1066,6 +1086,7 @@ mod tests {
             at: Some(Point::new(400.0, 560.0)),
             wall: None,
             outside_mm: None,
+            across: None,
         };
         assert_eq!(
             e.line(),
@@ -1073,6 +1094,7 @@ mod tests {
         );
         let e = EntryFacts {
             outside_mm: Some(3000.0),
+            across: None,
             ..e
         };
         assert!(
@@ -1093,6 +1115,19 @@ mod tests {
         assert!(stated.line().contains("gland in the left wall"));
         assert!(why("estimate", Gap::OutsideNotStated).contains("State it in Cabinet > Routes"));
         assert!(!why("estimate", Gap::None).contains("State it"));
+        let across_why = why("estimate", Gap::AcrossCabinets);
+        assert!(
+            across_why.contains("between the two cabinets"),
+            "{across_why}"
+        );
+        assert!(!across_why.contains("Place the devices"), "{across_why}");
+        let across = EntryFacts {
+            across: Some("+FLD".into()),
+            ..e
+        };
+        let line = across.line();
+        assert!(line.contains("other end is in +FLD"), "{line}");
+        assert!(!line.contains("not stated"), "{line}");
     }
 
     #[test]

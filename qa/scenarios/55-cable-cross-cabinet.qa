@@ -1,0 +1,25 @@
+@title Cross-cabinet run: the Run card names the other cabinet (1366x768)
+@area 3D
+# Fixture: the example plus a second enclosure +FLD holding the motor, entry points on both. In the 3D
+# view of the cabinet the motor wires end at its entry; the Run card says where the rest is drawn.
+open qa/fixtures/cable-cross.novo
+wait 20
+resize 1366 768
+wait 10
+click_text 3D
+wait 40
+key ctrl+k
+wait 3
+text wire runs
+wait 4
+key Enter
+wait 40
+shot list
+check_layout
+click 1130 407
+wait 60
+shot card-top
+expect "other end is in"
+scroll 1200 580 -400
+wait 10
+shot card-foot

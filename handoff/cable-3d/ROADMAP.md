@@ -39,6 +39,13 @@ Scope: draw cable and wire runs in the 3D cabinet view along the routed paths to
 - Click a duct in 3D: the Wire runs panel ("Duct runs") shows the duct's place and fill, the runs in it (rows, click one for its Run card), "Select its n runs", and lights the paths of those runs. A duct no drawn wire lies in says so. Needs the wires layer on (the runs come from the routed wires).
 - QA scenarios 34 (1366x768) and 35 (1920x1080) click the duct by pixel position.
 
+## Done in PR 6 (branch claude/cable-cross)
+- `novo_routing::model::route_connections`: a wire whose two ends sit on the plates of two different enclosures, both with an entry point, gets two legs, each routed to its own plate's entry (`Routed::cross_legs`, `Routed::cross_routes`). The wire stays in `unrouted`: nothing claims a whole length for the run between the entries (a stated cable length still counts as before).
+- 3D: the plate's scene draws its leg; the Run card says "the other end is in +X, where the rest is drawn" and that the run between the entries is not drawn.
+- Fixture `qa/fixtures/cable-cross.novo` (built by `write_cross_fixture`, ignored test); scenarios 55 (1366x768) and 56 (1920x1080).
+- Not done: the wire list and Ready meter do not use the legs; a cross run on a device on a door or side wall is not drawn; outside lengths (`entry.outside_mm`) of two cabinets are not added up.
+- Carried from the 1254 review (1254 is READY, so not pushed there): `Ask::SetEntryWall` needs a doc comment; scenario 39 should say which wall the example's entry gives.
+
 ## Done in PR 3 (branch claude/cable-bend-clearance)
 - `novo_routing::checks`: `tight_bends` (corner of two ducts against the arc the wire needs, bisection on a sampled arc tangent to both middle lines) and `near_hot` (distance from the routed centre line to a device outline). Pure geometry, unit tested.
 - Rules `wire.bend_factor` (6 x diameter), `wire.hot_gap_mm` (20), `wire.hot_loss_w` (5), planning values, in the Cabinet rules list.

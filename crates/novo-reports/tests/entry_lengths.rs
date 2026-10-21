@@ -237,3 +237,74 @@ fn cable_lines_say_when_the_length_is_estimated_and_the_cut_list_leaves_cores_ou
         "{total_m} vs {hookup}"
     );
 }
+
+/// A second enclosure +FLD with the motor terminal box M1 on its plate.
+fn with_field_cabinet(doc: &mut Document, h: &MotorStarter) -> StructureId {
+    let (fld, _) = doc
+        .transact("Field cabinet", |tx| {
+            let fld = tx.add_structure(DeviceTag::parse("+FLD")?, "Field", true)?;
+            tx.set_plate(
+                fld,
+                Some(MountingPlate {
+                    width: 400.0,
+                    height: 300.0,
+                    margin: 10.0,
+                }),
+            )?;
+            tx.place_device(h.m1, fld, Point::new(150.0, 100.0), false, None)?;
+            Ok(fld)
+        })
+        .expect("field cabinet");
+    fld
+}
+
+#[test]
+fn a_wire_between_two_cabinets_is_routed_to_each_entry() {
+    let (mut doc, h, cab) = cabinet();
+    let fld = with_field_cabinet(&mut doc, &h);
+    let none = novo_routing::model::route_project(doc.project());
+    assert!(none.cross_legs.is_empty(), "no entry points yet");
+
+    let (e_cab, e_fld) = (
+        novo_routing::Point::new(400.0, 600.0),
+        novo_routing::Point::new(200.0, 300.0),
+    );
+    doc.transact("Entries", |tx| {
+        set_entry_point(tx, cab, Some(e_cab))?;
+        set_entry_point(tx, fld, Some(e_fld))
+    })
+    .unwrap();
+    let routed = novo_routing::model::route_project(doc.project());
+    assert!(!routed.cross_legs.is_empty(), "the motor wires cross");
+    for (id, plates) in &routed.cross_legs {
+        assert_eq!(plates.len(), 2);
+        assert!(
+            routed.unrouted.contains(id),
+            "no whole length is claimed for the run between the entries"
+        );
+        assert!(!routed.routes.contains_key(id));
+        let leg = |plate| {
+            routed
+                .cross_routes
+                .get(&(*id, plate))
+                .unwrap_or_else(|| panic!("wire {id} has no leg on plate {plate:?}"))
+        };
+        let (near, far) = (leg(plates[0]), leg(plates[1]));
+        assert_eq!(
+            near.points.last(),
+            Some(&e_cab),
+            "ends at the cabinet entry"
+        );
+        assert_eq!(
+            far.points.first(),
+            Some(&e_fld),
+            "starts at the field entry"
+        );
+    }
+
+    // Only one entry point: the other end cannot be drawn, so nothing is claimed.
+    doc.transact("Clear", |tx| set_entry_point(tx, fld, None))
+        .unwrap();
+    let half = novo_routing::model::route_project(doc.project());
+    assert!(half.cross_legs.is_empty() && half.cross_routes.is_empty());
+}

@@ -3,6 +3,10 @@
 The id is a date and a letter; the top entry is the newest one a person has
 seen once they open the list. Add an entry when a feature PR merges. -->
 
+## 2026-10-21-f · Wires between two cabinets are drawn to each entry
+Where: 3D workspace, click a wire that ends in another cabinet.
+When both cabinets have an entry point, each cabinet draws its own part of the wire to its entry, and the Run card names the other cabinet. The run between the two entries is not drawn, and no length is invented for it. Each leg counts toward the duct fill of its own cabinet.
+
 ## 2026-10-21-e · Which wall the cabinet entry is in
 Where: Cabinet workspace, Routes panel, "Gland in the" (and the 3D view).
 State the wall the gland is in; the 3D view draws the way out from the entry through that edge of the plate. Not stated, the nearest edge is drawn dashed as a guess.
