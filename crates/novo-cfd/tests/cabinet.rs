@@ -168,7 +168,9 @@ fn cancelling_returns_promptly() {
     let r =
         CabinetSolver::new(tuning).solve(&scenario(false), Fidelity::Coarse, &control, &mut |_| {});
     assert!(matches!(r, Err(CfdError::Cancelled)));
-    assert!(t0.elapsed() < Duration::from_secs(5));
+    // Release keeps the tight guard; a debug build on a loaded runner gets four times as long.
+    let limit = Duration::from_secs(5) * if cfg!(debug_assertions) { 4 } else { 1 };
+    assert!(t0.elapsed() < limit);
 }
 
 #[test]
