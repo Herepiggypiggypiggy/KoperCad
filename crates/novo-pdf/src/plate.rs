@@ -77,7 +77,7 @@ fn sheets(doc: &PlateDocument) -> Vec<Sheet<'_>> {
     out
 }
 
-fn stroke_width(layer: Layer) -> f32 {
+pub(crate) fn stroke_width(layer: Layer) -> f32 {
     match layer {
         Layer::Plate => 0.5,
         Layer::Devices | Layer::Cutouts => 0.35,
@@ -87,7 +87,7 @@ fn stroke_width(layer: Layer) -> f32 {
     }
 }
 
-fn layer_color(layer: Layer) -> Color {
+pub(crate) fn layer_color(layer: Layer) -> Color {
     match layer {
         Layer::Devices | Layer::Rails => Color::rgb(90, 90, 90),
         Layer::Margin => Color::rgb(150, 150, 150),
@@ -95,7 +95,7 @@ fn layer_color(layer: Layer) -> Color {
     }
 }
 
-fn anchor(h: HAlign, v: VAlign) -> Anchor {
+pub(crate) fn anchor(h: HAlign, v: VAlign) -> Anchor {
     match (v, h) {
         (VAlign::Top, HAlign::Left) => Anchor::TopLeft,
         (VAlign::Top, HAlign::Center) => Anchor::TopCenter,
@@ -112,7 +112,12 @@ fn anchor(h: HAlign, v: VAlign) -> Anchor {
 /// Draws marks onto a page. `map` takes mark coordinates to page
 /// millimetres and `size` converts mark lengths (radii, text heights) to
 /// paper.
-fn render(w: &mut PageWriter<'_>, marks: &Marks, map: &dyn Fn((f64, f64)) -> Vec2, size: f64) {
+pub(crate) fn render(
+    w: &mut PageWriter<'_>,
+    marks: &Marks,
+    map: &dyn Fn((f64, f64)) -> Vec2,
+    size: f64,
+) {
     for (layer, shape) in &marks.shapes {
         let stroke = Stroke::world(stroke_width(*layer), layer_color(*layer));
         let shape = match *shape {
