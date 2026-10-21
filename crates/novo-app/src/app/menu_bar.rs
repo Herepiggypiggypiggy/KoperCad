@@ -314,6 +314,18 @@ impl NovoApp {
         {
             return Some("This page has no DXF background");
         }
+        match info.id {
+            "proposal.accept" if self.page_proposals().is_empty() => {
+                return Some("No proposal on this page");
+            }
+            "proposal.accept_all" if self.all_proposals_empty() => {
+                return Some("No proposals to accept");
+            }
+            "xref.link" if self.selected_symbol_count() != 2 => {
+                return Some("Select a contact and its coil first (Shift+click)");
+            }
+            _ => {}
+        }
         match Action::from_id(info.id) {
             Some(action) if !self.is_enabled(action) => Some("Not available now"),
             _ => None,
@@ -377,6 +389,26 @@ mod tests {
         assert_eq!(d.app.command_unavailable(save), Some("No project is open"));
         let new = commands::get("file.new").unwrap();
         assert_eq!(d.app.command_unavailable(new), None);
+    }
+
+    /// Audit C-08: Paste, Accept proposal(s) and Link cross reference are
+    /// greyed, with a reason, while there is nothing to act on.
+    #[test]
+    fn edit_and_draw_rows_with_nothing_to_act_on_are_greyed() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        let ctx = d.ctx.clone();
+        d.app.run(&ctx, Action::NewProject);
+        d.frame();
+        for id in [
+            "edit.paste",
+            "proposal.accept",
+            "proposal.accept_all",
+            "xref.link",
+        ] {
+            let info = commands::get(id).unwrap();
+            assert!(d.app.command_unavailable(info).is_some(), "{id}");
+        }
     }
 }
 
