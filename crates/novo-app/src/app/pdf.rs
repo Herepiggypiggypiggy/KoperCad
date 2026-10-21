@@ -4,7 +4,8 @@
 //! PDF takes its file name (`Plant 2.novo` gives `Plant 2.pdf`). Two
 //! projects with the same file name in different folders (`D:\A\Pump.novo`,
 //! `D:\B\Pump.novo`) would share it, so every PDF ends with a comment line
-//! naming the project file it came from and a project only replaces its
+//! holding a short hash of the project file's path (never the path, which
+//! would leak folder and user names) and a project only replaces its
 //! own: the other takes `Pump 2.pdf`. A project with no file yet gets
 //! `<name>.pdf` under a name not used yet.
 //!
@@ -205,20 +206,27 @@ fn is_ours(path: &Path) -> bool {
 
 const OWNER_MARK: &[u8] = b"\n%KoperCAD-project: ";
 
-/// The comment line after `%%EOF` that names the project file a PDF came from.
+/// A short stable tag of a project file's path (FNV-1a, 64 bit). The PDF
+/// carries this and never the path itself, which would hand the sender's
+/// user name and folders to whoever receives the PDF.
+fn owner_tag(project: &Path) -> String {
+    let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
+    for byte in project.to_string_lossy().bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0100_0000_01b3);
+    }
+    format!("{hash:016x}")
+}
+
+/// The comment line after `%%EOF` that tags the project file a PDF came from.
 fn owner_line(project: &Path) -> Vec<u8> {
     let mut line = OWNER_MARK.to_vec();
-    line.extend_from_slice(
-        project
-            .to_string_lossy()
-            .replace(['\n', '\r'], " ")
-            .as_bytes(),
-    );
+    line.extend_from_slice(owner_tag(project).as_bytes());
     line.push(b'\n');
     line
 }
 
-/// The project file named in `path`, when it is one of our PDFs that says.
+/// The project tag in `path`, when it is one of our PDFs that carries one.
 fn owner_of(path: &Path) -> Option<Vec<u8>> {
     let bytes = std::fs::read(path).ok()?;
     let at = bytes
@@ -229,17 +237,16 @@ fn owner_of(path: &Path) -> Option<Vec<u8>> {
     Some(rest[..end].to_vec())
 }
 
-/// [`replaceable_path`] for a saved project: a PDF that names another
-/// project file is not ours to replace. One that names none (written before
+/// [`replaceable_path`] for a saved project: a PDF tagged with another
+/// project file is not ours to replace. One with no tag (written before
 /// this) is claimed.
 pub(super) fn replaceable_path_for(path: &Path, owner: Option<&Path>) -> PathBuf {
     let Some(owner) = owner else {
         return replaceable_path(path);
     };
-    let owner = owner_line(owner);
-    let owner = &owner[OWNER_MARK.len()..owner.len() - 1];
+    let tag = owner_tag(owner).into_bytes();
     first_free(path, |candidate| {
-        is_ours(candidate) && owner_of(candidate).is_none_or(|o| o == owner)
+        is_ours(candidate) && owner_of(candidate).is_none_or(|o| o == tag)
     })
 }
 
