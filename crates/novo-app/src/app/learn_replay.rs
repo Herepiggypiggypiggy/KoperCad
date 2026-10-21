@@ -1177,3 +1177,54 @@ fn key_hints_in_ready_lessons_name_a_bound_key() {
         "ready lessons name a command with no key:\n{ready:?}"
     );
 }
+
+/// A lesson is played on a fresh app, as a learner opens it: the gate above
+/// plays all lessons in one app, so a window or a setting an earlier lesson
+/// left behind could be what lets a later one tick.
+#[test]
+fn every_shipped_lesson_replays_alone_on_a_fresh_app() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    let ids: Vec<String> = d
+        .app
+        .learn
+        .catalog
+        .entries
+        .iter()
+        .map(|e| e.lesson.id.clone())
+        .collect();
+    // Steps that name something this build lacks fail in any case.
+    let ahead: std::collections::BTreeSet<(String, String)> = d
+        .app
+        .learn
+        .lint_report()
+        .findings
+        .iter()
+        .filter(|f| f.message.contains("not in this build"))
+        .filter_map(|f| Some((f.lesson.clone(), f.step.clone()?)))
+        .collect();
+    let mut failed = Vec::new();
+    for id in ids {
+        let dir = tempfile::tempdir().unwrap();
+        let mut d = Drive::new(&dir.path().join("untitled"));
+        d.app.learn.reload();
+        d.app.learn.use_progress_file(dir.path().join("learn.json"));
+        d.app.learn.advance_after = std::time::Duration::ZERO;
+        let mut gap = false;
+        for (step, outcome) in d.replay_lesson(&id) {
+            match outcome {
+                Outcome::Failed(why) if !gap && !ahead.contains(&(id.clone(), step.clone())) => {
+                    failed.push(format!("{id}/{step}: {why}"))
+                }
+                Outcome::Failed(_) | Outcome::Unverified | Outcome::Manual(_) => gap = true,
+                _ => {}
+            }
+        }
+    }
+    assert!(
+        failed.is_empty(),
+        "alone on a fresh app:\n{}",
+        failed.join("\n")
+    );
+}
