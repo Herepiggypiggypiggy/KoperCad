@@ -3047,6 +3047,34 @@ mod tests {
     }
 
     #[test]
+    fn escape_closing_the_plc_window_leaves_live_on() {
+        let ctx = themed_ctx();
+        let mut app = app_with(MemoryBackend::default());
+        app.run(&ctx, Action::NewProject);
+        app.run_command(&ctx, "sim.plc_program", None);
+        for _ in 0..3 {
+            frame(&ctx, &mut app, sized(1366.0));
+        }
+        assert!(app.wb.live.on && app.wb.live.plc.window);
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(!app.wb.live.plc.window, "Escape closes the window");
+        assert!(app.wb.live.on, "and the live view stays");
+        for _ in 0..3 {
+            frame(&ctx, &mut app, sized(1366.0));
+        }
+        frame(
+            &ctx,
+            &mut app,
+            key(egui::Key::Escape, egui::Modifiers::NONE),
+        );
+        assert!(!app.wb.live.on, "the next Escape leaves Live");
+    }
+
+    #[test]
     fn cabinet_needs_an_open_project() {
         let app = app_with(MemoryBackend::default());
         assert!(!app.is_enabled(Action::ShowCabinet));

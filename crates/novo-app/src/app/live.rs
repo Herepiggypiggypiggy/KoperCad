@@ -670,12 +670,13 @@ impl NovoApp {
             return;
         }
         // Escape, when nothing else is using it (the command field, the
-        // pages flyout, a menu or a text box).
+        // pages flyout, a menu, a text box or a dialog such as the PLC window).
         if ctx.input(|i| i.key_pressed(egui::Key::Escape))
             && !self.wb.field.is_open()
             && !self.outline_open
             && !ctx.egui_wants_keyboard_input()
             && !egui::Popup::is_any_open(ctx)
+            && !super::panel::dialog_on_top(ctx)
             && self.wb.live.escaped_in != Some(ctx.cumulative_frame_nr())
         {
             self.wb.live.escaped_in = Some(ctx.cumulative_frame_nr());
