@@ -1,0 +1,21 @@
+@title Run card: bend radius and heat neighbour checks (models), read at the foot of the card
+@area 3D
+# 3D > Wire runs (Ctrl+K "wire runs"): pick a row, scroll the panel to the foot of the Run card.
+click_text "Open example"
+wait 20
+click_text 3D
+wait 40
+key ctrl+k
+wait 3
+text wire runs
+wait 4
+key Enter
+wait 40
+click_text "2   466 mm"
+wait 60
+shot card-top-whole-card-at-1920
+scroll 1250 580 -600
+wait 10
+shot card-foot
+expect "Bend radius"
+expect "Not checked: how stiff this cable is"

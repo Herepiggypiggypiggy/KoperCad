@@ -456,6 +456,14 @@ pub(super) fn overlays(
     if !ducts.positions.is_empty() {
         out.push(Overlay::Lines(ducts));
     }
+    let tight: Vec<(Point, f64)> = chosen
+        .iter()
+        .filter_map(|f| f.checks.as_ref())
+        .flat_map(|c| c.corners.iter().map(|k| (k.at, k.top_mm)))
+        .collect();
+    if !tight.is_empty() {
+        out.push(Overlay::Lines(corner_marks(scene, &tight)));
+    }
     if !path.positions.is_empty() {
         out.push(Overlay::Lines(path));
     }
@@ -508,6 +516,32 @@ fn entry_marker(scene: &Scene, at: Point) -> OverlayLines {
     poly(&[c - dx, c + dx]);
     poly(&[c - dy, c + dy]);
     poly(&[c, c + Vec3::Z * 40.0]);
+    lines
+}
+
+/// A red cross over each corner the wire cannot take, held above the ducts
+/// that meet there (a mark on the plate would sit inside them, out of sight).
+fn corner_marks(scene: &Scene, at: &[(Point, f64)]) -> OverlayLines {
+    let r = 16.0;
+    let red = tone_colour(Tone::Over);
+    let mut lines = OverlayLines {
+        width_px: 3.0,
+        order: 23,
+        ..OverlayLines::default()
+    };
+    for (p, top) in at {
+        let c = scene.frame.world(p.x, p.y, *top + 4.0);
+        for (a, b) in [
+            (Vec3::X + Vec3::Y, -Vec3::X - Vec3::Y),
+            (Vec3::X - Vec3::Y, Vec3::Y - Vec3::X),
+        ] {
+            lines.starts.push(lines.positions.len() as u32);
+            for q in [c + a * r, c + b * r] {
+                lines.positions.push(q);
+                lines.colors.push(red);
+            }
+        }
+    }
     lines
 }
 
@@ -595,10 +629,13 @@ pub(super) fn card_lines(f: &WireFacts) -> Vec<(Tone, String)> {
             "A device depth is unknown: the length is a little short".to_owned(),
         ));
     }
-    out.push((
-        Tone::Idle,
-        "Not checked: cable bend radius, clearance to hot parts".to_owned(),
-    ));
+    match &f.checks {
+        Some(c) => out.extend(c.lines()),
+        None => out.push((
+            Tone::Idle,
+            "Not checked: cable bend radius, clearance to hot parts".to_owned(),
+        )),
+    }
     out
 }
 
@@ -798,7 +835,7 @@ pub(super) fn panel(
     let room = (height - top - BELOW_PANEL).max(120.0);
     super::panel::Panel::new("view3d_wire_runs", title, view, side, PANEL_WIDTH)
         .top(top)
-        .height(room.min(560.0))
+        .height(room.min(760.0))
         .above_card()
         .show(ctx, |ui| {
             // The list on top so another run is always one click away; the card of
@@ -880,6 +917,7 @@ mod tests {
             )],
             entry: None,
             basis: None,
+            checks: None,
         }
     }
 

@@ -3,6 +3,10 @@
 The id is a date and a letter; the top entry is the newest one a person has
 seen once they open the list. Add an entry when a feature PR merges. -->
 
+## 2026-10-21-d · Bend radius and heat checks on the Run card
+Where: 3D workspace, click a wire; Settings rules "Bend radius", "Gap to hot devices", "Hot from".
+The card says whether the wire or cable can take the duct corners of its path (a red cross marks a tight one) and which devices losing heat it passes close to. Both are models, and the card says what they do not know.
+
 ## 2026-10-21-c · Pick a duct to list its runs
 Where: 3D workspace, click a duct.
 The Wire runs panel shows how full the duct is and every run in it; click a run for its Run card, or "Select its runs" to read them together.
