@@ -194,4 +194,9 @@ jobs:
       # (run 39043670782 hit the timeout while passing); Linux runs them in
       # three shards, and the engine is pure Rust with no platform code.
       # --no-fail-fast: one run lists every failing test, not only the first binary's.
-      - run: cargo test --workspace --exclude novo-cfd --no-fail-fast
+      # Not --all-targets: two example pairs share an output file name (demo in
+      # novo-canvas and novo-thermal, gallery in novo-symbols and novo-theme), and
+      # building both at once can fail with LNK1104 (main run 39508488067). Clippy
+      # above already compiles the examples; running them is not part of the tests.
+      - run: cargo test --workspace --exclude novo-cfd --no-fail-fast --lib --bins --tests
+      - run: cargo test --workspace --exclude novo-cfd --no-fail-fast --doc
