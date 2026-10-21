@@ -11,7 +11,7 @@ Done (PR 1)
   one undo step each). Edits so far: rename device, rename page, add device.
 
 Next, in order
-1. Streaming replies (SSE) so long answers show as they arrive; cancel button.
+1. (done, PR streaming) Streaming replies (SSE) with a Stop button.
 2. More edit actions (properties, part assignment, wire potentials, page moves), each one command.
 3. Selection-aware "Ask about this" in the canvas context menu and Inspector.
 4. Tool surface over the `--control` harness (`scene`, screenshots) so Claude can see the window;

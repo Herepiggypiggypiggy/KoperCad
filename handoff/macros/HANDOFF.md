@@ -27,3 +27,7 @@ Next: expose thin fns for macro.save (define_block + MacroLibrary save) and macr
 `preview`), register COMMANDS rows, then parts/cabinet offsets. Core gaps go to WS-02
 (cse_01B1jpjzeDiXvWoBCsv1BWt9). Draft PRs, small, no build, no admin rights. After a push, message the
 reviewer with the head SHA; once READY do not push.
+
+## Starter macros (2026-10-21)
+
+15 starters now ship: the original four in `starter.rs` plus eleven in `starter/more.rs`, drawn through a `Kit` helper that takes pins, bridges and pass-through from the symbol library. Search words live in each macro's tags. Next ideas: ATEX/Dahlander pole-changing, two-speed, autotransformer start, valve with feedback.

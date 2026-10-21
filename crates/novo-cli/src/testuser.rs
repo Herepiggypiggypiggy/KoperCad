@@ -9,9 +9,7 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpStream;
-#[cfg(target_os = "linux")]
-use std::path::Path;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 #[cfg(target_os = "linux")]
 use std::process::Stdio;
 use std::process::{Child, Command};
@@ -49,6 +47,21 @@ pub(crate) struct TestUser {
     real_profile: bool,
 }
 
+impl TestUser {
+    /// Settings for the QA runner: a fresh profile at `size`, pictures in `shots`.
+    pub(crate) fn for_qa(app: Option<PathBuf>, size: &str, shots: PathBuf) -> TestUser {
+        TestUser {
+            app,
+            connect: None,
+            token: None,
+            size: size.to_owned(),
+            project: None,
+            shots: Some(shots),
+            real_profile: false,
+        }
+    }
+}
+
 pub(crate) fn run(opts: TestUser, _out: &mut dyn Write) -> Result<i32, Failure> {
     let mut srv = Server::new(opts);
     srv.serve().map_err(|e| Failure::new(exit::WRITE, e))?;
@@ -62,7 +75,7 @@ struct Session {
     next_id: u64,
 }
 
-struct Server {
+pub(crate) struct Server {
     opts: TestUser,
     session: Option<Session>,
     children: Vec<Child>,
@@ -70,10 +83,14 @@ struct Server {
     shots: PathBuf,
     /// Keep the profile folder of the last start (a "crash" test relaunch).
     keep_profile: bool,
+    /// Findings the assistant filed with the `finding` tool, for `report`.
+    findings: Vec<Value>,
+    /// The newest screenshot, attached to the next finding.
+    last_shot: Option<PathBuf>,
 }
 
 impl Server {
-    fn new(opts: TestUser) -> Server {
+    pub(crate) fn new(opts: TestUser) -> Server {
         let shots = opts
             .shots
             .clone()
@@ -85,10 +102,12 @@ impl Server {
             shot_no: 0,
             shots,
             keep_profile: false,
+            findings: Vec::new(),
+            last_shot: None,
         }
     }
 
-    fn stop(&mut self) {
+    pub(crate) fn stop(&mut self) {
         self.session = None;
         for c in &mut self.children {
             let _ = c.kill();
@@ -149,7 +168,7 @@ impl Server {
         }
     }
 
-    fn tool(&mut self, name: &str, a: &Value) -> Result<Vec<Value>, String> {
+    pub(crate) fn tool(&mut self, name: &str, a: &Value) -> Result<Vec<Value>, String> {
         let text = |s: String| Ok(vec![json!({"type": "text", "text": s})]);
         match name {
             "screenshot" => self.screenshot(),
@@ -238,6 +257,66 @@ impl Server {
                 let r = self.send(json!({"cmd": "dialogs"}))?;
                 text(r.to_string())
             }
+            "check_layout" => {
+                let r = self.send(json!({"cmd": "ui_tree"}))?;
+                let nodes = r["nodes"].as_array().cloned().unwrap_or_default();
+                let info = self.send(json!({"cmd": "info"}))?;
+                let win = (
+                    info["size"][0].as_f64().unwrap_or(0.0),
+                    info["size"][1].as_f64().unwrap_or(0.0),
+                );
+                let hits = crate::qa::layout_hits(&nodes, win);
+                if hits.is_empty() {
+                    return text(format!(
+                        "no layout problems found at {}x{} (cheap check: clipping, overlap, tiny and unlabelled controls; look at a screenshot too)",
+                        win.0, win.1
+                    ));
+                }
+                let lines: Vec<String> = hits
+                    .iter()
+                    .map(|(sev, kind, title, detail)| format!("{sev} [{kind}] {title}: {detail}"))
+                    .collect();
+                text(lines.join("\n"))
+            }
+            "finding" => {
+                let sev = a["severity"].as_str().unwrap_or("S3");
+                if !matches!(sev, "S1" | "S2" | "S3" | "S4") {
+                    return Err("severity must be S1, S2, S3 or S4".into());
+                }
+                let title = a["title"].as_str().ok_or("finding needs a title")?;
+                let id = format!("F-{:03}", self.findings.len() + 1);
+                let steps: Vec<Value> = a["steps"].as_array().cloned().unwrap_or_default();
+                // The newest screenshot goes with the finding unless one is named.
+                let shot = a["screenshot"]
+                    .as_str()
+                    .map(PathBuf::from)
+                    .or_else(|| self.last_shot.clone())
+                    .map(|p| p.to_string_lossy().into_owned());
+                self.findings.push(json!({
+                    "id": id, "severity": sev, "kind": "manual",
+                    "area": a["area"].as_str().unwrap_or("General"),
+                    "title": title, "scenario": "interactive",
+                    "size": a["size"].as_str().unwrap_or(&self.opts.size),
+                    "steps": steps,
+                    "expected": a["expected"].as_str().unwrap_or(""),
+                    "saw": a["saw"].as_str().unwrap_or(""),
+                    "screenshot": shot,
+                }));
+                text(format!(
+                    "filed {id} ({sev}): {title}. Call report to write the audit report."
+                ))
+            }
+            "report" => {
+                let dir = a["out"]
+                    .as_str()
+                    .map_or_else(|| self.shots.join("audit"), PathBuf::from);
+                let md = self.write_report(&dir)?;
+                text(format!(
+                    "wrote {} ({} findings)",
+                    md.display(),
+                    self.findings.len()
+                ))
+            }
             "info" => {
                 let r = self.send(json!({"cmd": "info"}))?;
                 text(r.to_string())
@@ -258,6 +337,42 @@ impl Server {
             }
             other => Err(format!("unknown tool `{other}`")),
         }
+    }
+
+    /// Writes `results.json` and `report.md` (the same format `qa run` writes)
+    /// for the findings filed so far, with their screenshots copied beside it.
+    fn write_report(&mut self, dir: &Path) -> Result<PathBuf, String> {
+        let shots = dir.join("shots");
+        std::fs::create_dir_all(&shots).map_err(|e| e.to_string())?;
+        let mut findings = self.findings.clone();
+        for f in &mut findings {
+            if let Some(src) = f["screenshot"].as_str().map(PathBuf::from)
+                && let Some(name) = src.file_name()
+                && std::fs::copy(&src, shots.join(name)).is_ok()
+            {
+                f["screenshot"] = json!(format!("shots/{}", name.to_string_lossy()));
+            }
+        }
+        let info = self.send(json!({"cmd": "info"})).unwrap_or(Value::Null);
+        let blocking = findings.iter().filter(|f| f["severity"] != "S4").count();
+        let v = json!({
+            "tool": "kopercad-cli test-user report",
+            "platform": std::env::consts::OS,
+            "app_info": info,
+            "sizes": [self.opts.size],
+            "summary": {"runs": 0, "passed": 0, "failed": 0,
+                        "findings": findings.len(), "blocking": blocking},
+            "scenarios": [],
+            "findings": findings,
+        });
+        std::fs::write(
+            dir.join("results.json"),
+            serde_json::to_string_pretty(&v).map_err(|e| e.to_string())?,
+        )
+        .map_err(|e| e.to_string())?;
+        let md = dir.join("report.md");
+        std::fs::write(&md, crate::qa::render_report(&v)).map_err(|e| e.to_string())?;
+        Ok(md)
     }
 
     fn find(&mut self, wanted: &str, role: Option<&str>) -> Result<(f64, f64, String), String> {
@@ -297,6 +412,32 @@ impl Server {
         }
     }
 
+    /// Takes a screenshot as the file `name` in the shots folder; returns its
+    /// path (used by the QA runner, which names its pictures itself).
+    pub(crate) fn shot_file(&mut self, name: &str) -> Result<PathBuf, String> {
+        let r = self.send(json!({"cmd": "screenshot", "name": name}))?;
+        let path = r["path"]
+            .as_str()
+            .map_or_else(|| self.shots.join(name), PathBuf::from);
+        self.last_shot = Some(path.clone());
+        Ok(path)
+    }
+
+    /// Where the app's log of the current run is.
+    pub(crate) fn app_log(&self) -> PathBuf {
+        self.shots.join("app.log")
+    }
+
+    /// Start the next launch with this project file (or none).
+    pub(crate) fn set_project(&mut self, project: Option<PathBuf>) {
+        self.opts.project = project;
+    }
+
+    /// Whether the next launch keeps the profile of the last one.
+    pub(crate) fn keep_profile(&mut self, keep: bool) {
+        self.keep_profile = keep;
+    }
+
     fn screenshot(&mut self) -> Result<Vec<Value>, String> {
         self.shot_no += 1;
         let stamp = std::time::SystemTime::now()
@@ -308,6 +449,7 @@ impl Server {
         let path = r["path"]
             .as_str()
             .map_or_else(|| self.shots.join(&name), PathBuf::from);
+        self.last_shot = Some(path.clone());
         let bytes = std::fs::read(&path).map_err(|e| format!("cannot read screenshot: {e}"))?;
         Ok(vec![
             json!({"type": "image", "data": base64(&bytes), "mimeType": "image/png"}),
@@ -321,7 +463,7 @@ impl Server {
 
     // ---- talking to the app ---------------------------------------------
 
-    fn send(&mut self, mut req: Value) -> Result<Value, String> {
+    pub(crate) fn send(&mut self, mut req: Value) -> Result<Value, String> {
         self.ensure()?;
         let s = self.session.as_mut().ok_or("not connected")?;
         s.next_id += 1;
@@ -343,7 +485,7 @@ impl Server {
         Ok(v)
     }
 
-    fn ensure(&mut self) -> Result<(), String> {
+    pub(crate) fn ensure(&mut self) -> Result<(), String> {
         if self.session.is_some() {
             return Ok(());
         }
@@ -384,9 +526,18 @@ impl Server {
         if let Some((w, h)) = self.opts.size.split_once('x')
             && let (Ok(w), Ok(h)) = (w.parse::<f64>(), h.parse::<f64>())
         {
-            self.send(json!({"cmd": "resize", "w": w, "h": h}))?;
+            // The window manager may ignore the first resize while the window
+            // is still being mapped: ask again until the size is what was asked.
+            for _ in 0..4 {
+                self.send(json!({"cmd": "resize", "w": w, "h": h}))?;
+                let r = self.send(json!({"cmd": "wait", "frames": 20}))?;
+                let got = (r["size"][0].as_f64(), r["size"][1].as_f64());
+                if got == (Some(w), Some(h)) {
+                    break;
+                }
+            }
         }
-        self.send(json!({"cmd": "wait", "frames": 20}))?;
+        self.send(json!({"cmd": "wait", "frames": 10}))?;
         Ok(())
     }
 
@@ -658,6 +809,28 @@ fn tools() -> Value {
             "restart",
             "Close the app and start a fresh first-run one, optionally opening a project file.",
             json!({"project": {"type": "string"}}),
+            json!([])
+        ),
+        tool(
+            "check_layout",
+            "Cheap layout check of the current screen from the widget tree: controls cut off by the window edge, overlapping controls, tiny targets, icon-only buttons. Heuristic: look at a screenshot too.",
+            json!({}),
+            json!([])
+        ),
+        tool(
+            "finding",
+            "File a finding for the audit report: severity S1 (data loss, crash, cannot start), S2 (core workflow blocked or a wrong number shown as fact), S3 (wrong or confusing), S4 (polish). Attaches the newest screenshot. steps: the user actions that led here.",
+            json!({"severity": {"type": "string", "enum": ["S1", "S2", "S3", "S4"]},
+                   "title": {"type": "string"}, "area": {"type": "string"},
+                   "steps": {"type": "array", "items": {"type": "string"}},
+                   "expected": {"type": "string"}, "saw": {"type": "string"},
+                   "screenshot": {"type": "string"}}),
+            json!(["severity", "title"])
+        ),
+        tool(
+            "report",
+            "Write results.json and report.md for the findings filed so far (screenshots copied beside them). out: the folder, for example /mnt/project-files/qa/<name>.",
+            json!({"out": {"type": "string"}}),
             json!([])
         ),
         tool("quit", "Close the app.", json!({}), json!([])),

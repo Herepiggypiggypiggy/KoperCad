@@ -212,6 +212,12 @@ fn fit_pins(
     (miss == 0 && err <= 0.5 * span + 0.5).then_some(fit)
 }
 
+/// Whether `sym` would be drawn as a labelled box, because no library symbol
+/// of its kind and pin count fits.
+pub(super) fn is_box(sym: &PlantSymbol) -> bool {
+    design(sym, 297.0).key == BOX_SYMBOL
+}
+
 fn design(sym: &PlantSymbol, page_height: f64) -> Drawn {
     let lib = Library::shared(Pack::Iec);
     let (x, y) = sym.at;

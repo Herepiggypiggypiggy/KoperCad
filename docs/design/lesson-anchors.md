@@ -75,6 +75,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `cabinet.inspector`: {ui:cabinet.inspector} shows **Cabinet inspector**
 - `cabinet.door`: {ui:cabinet.door} shows **Door and depth**
 - `cabinet.surface`: {ui:cabinet.surface} shows **Surface**
+- `cabinet.door.depth`: {ui:cabinet.door.depth} shows **Inside depth**
 - `cabinet.door.apply`: {ui:cabinet.door.apply} shows **Apply**
 - `cabinet.routes_panel`: {ui:cabinet.routes_panel} shows **Routes panel**
 - `cabinet.wire_rules`: {ui:cabinet.wire_rules} shows **Wire rules**

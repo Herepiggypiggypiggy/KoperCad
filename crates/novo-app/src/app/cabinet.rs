@@ -351,6 +351,42 @@ pub(super) fn problem_lines(
     lines
 }
 
+/// What is wrong with the panel as a whole, in words: the problems the count
+/// in the status bar includes that belong to no single device (the wiring
+/// openings, the room for the door, the door's sweep, tight depth). Without
+/// these the problems pill opened an empty list.
+pub(super) fn panel_problem_lines(
+    layout: &CabinetLayout,
+    tag_of: &impl Fn(u64) -> String,
+) -> Vec<String> {
+    let mut lines: Vec<String> = layout.opening_problems.clone();
+    if let Some(door) = layout.door_report() {
+        for &(id, gap) in &door.tight {
+            lines.push(format!(
+                "{} leaves only {gap:.0} mm in front of it: the door nearly touches",
+                tag_of(id)
+            ));
+        }
+        if door.plate_too_big {
+            lines.push("The mounting plate is bigger than the inside of the enclosure".to_owned());
+        }
+        if let Some(short) = door.front_short {
+            lines.push(format!(
+                "The open door needs {short:.0} mm more free room in front of the enclosure"
+            ));
+        }
+        if let Some(short) = door.hinge_side_short {
+            lines.push(format!(
+                "The open door needs {short:.0} mm more free room beside the hinge side"
+            ));
+        }
+    }
+    if let Some(swing) = layout.swing_report() {
+        lines.extend(swing.hits.iter().map(|h| h.message(tag_of)));
+    }
+    lines
+}
+
 /// One line for every rail that runs under a duct (a rail has no tag, so
 /// it is named by where it lies).
 pub(super) fn rail_duct_lines(layout: &CabinetLayout) -> Vec<String> {
@@ -1330,7 +1366,10 @@ impl NovoApp {
                                 ui.close();
                             }
                         }
-                        for line in rail_duct_lines(shown) {
+                        for line in rail_duct_lines(shown)
+                            .into_iter()
+                            .chain(panel_problem_lines(shown, &tag_of))
+                        {
                             ui.label(line);
                         }
                     });

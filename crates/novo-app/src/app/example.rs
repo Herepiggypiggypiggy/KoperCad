@@ -179,6 +179,9 @@ impl NovoApp {
         self.fix_current_page();
         if let Some(doc) = self.backend.document_mut() {
             doc.mark_saved();
+            // Opening starts with an empty history, like a fresh project:
+            // Ctrl+Z must not silently undo the example's own drawing.
+            doc.clear_history();
         }
         self.message(
             Level::Info,

@@ -19,8 +19,9 @@ use novo_view3d::OverlayMesh;
 
 use super::heat_3d::Place;
 
-/// Slices through the volume.
+/// Slices through the volume by default, and the range the user can pick.
 pub(crate) const LAYERS: usize = 16;
+pub(crate) const LAYERS_RANGE: std::ops::RangeInclusive<u8> = 4..=40;
 /// Cells across the longer side of one slice.
 const CELLS: f64 = 48.0;
 /// Air whose share of the scale is below this is not drawn.
