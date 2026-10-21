@@ -22,6 +22,9 @@ use super::{ComplianceReport, NOTICE, RuleResult, RuleStatus, StandardSet, page_
 pub enum Verdict {
     Pass,
     Fail,
+    /// Only warnings are open (design checks): probably wrong or unfinished,
+    /// not wrong as drawn. Clause rules never give this.
+    Warning,
     /// Some items passed, others lacked the data to be judged.
     Partial,
     /// Data is missing: the program cannot say.
@@ -36,6 +39,7 @@ impl Verdict {
         match self {
             Verdict::Pass => "Pass",
             Verdict::Fail => "Fail",
+            Verdict::Warning => "Warnings only",
             Verdict::Partial => "Partly checkable",
             Verdict::NotCheckable => "Not checkable",
             Verdict::Waived => "Waived",
@@ -58,6 +62,7 @@ impl Verdict {
         match self {
             Verdict::Pass => "pass",
             Verdict::Fail => "fail",
+            Verdict::Warning => "unknown",
             Verdict::Partial | Verdict::NotCheckable => "unknown",
             Verdict::Waived => "waived",
             Verdict::NotApplicable => "na",
@@ -447,7 +452,7 @@ pub fn to_html(doc: &ComplianceDocument, date: &str) -> String {
         }
         if matches!(
             r.verdict,
-            Verdict::Fail | Verdict::Partial | Verdict::NotCheckable
+            Verdict::Fail | Verdict::Warning | Verdict::Partial | Verdict::NotCheckable
         ) {
             h.push_str(&format!(
                 "<p><span class=\"lbl\">Where to fix</span> {}</p>",
@@ -459,9 +464,10 @@ pub fn to_html(doc: &ComplianceDocument, date: &str) -> String {
     if doc.sections.is_empty() {
         h.push_str("<h2>Standards</h2><p>No standard is selected, so no clause rules were evaluated. Choose standards in Check > Standards check to add them.</p>");
     }
-    h.push_str("<h2>Summary</h2><table class=\"sum\"><tr><th>Standard</th><th>Pass</th><th>Fail</th><th>Partly</th><th>Not checkable</th><th>Waived</th><th>n/a</th></tr>");
-    for s in &doc.sections {
-        h.push_str(&format!(
+    if !doc.sections.is_empty() {
+        h.push_str("<h2>Standards summary</h2><table class=\"sum\"><tr><th>Standard</th><th>Pass</th><th>Fail</th><th>Partly</th><th>Not checkable</th><th>Waived</th><th>n/a</th></tr>");
+        for s in &doc.sections {
+            h.push_str(&format!(
             "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>",
             esc(s.set.short()),
             s.count(Verdict::Pass),
@@ -471,8 +477,9 @@ pub fn to_html(doc: &ComplianceDocument, date: &str) -> String {
             s.count(Verdict::Waived),
             s.count(Verdict::NotApplicable)
         ));
+        }
+        h.push_str("</table>");
     }
-    h.push_str("</table>");
     let planning = doc
         .sections
         .iter()
