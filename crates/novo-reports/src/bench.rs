@@ -516,7 +516,11 @@ impl BenchCut {
             ],
         );
         for (mm2, colour, list) in &groups {
-            let mm: f64 = list.iter().map(|j| j.cut_mm).sum();
+            let mm: f64 = list
+                .iter()
+                .filter(|j| j.cable.is_none())
+                .map(|j| j.cut_mm)
+                .sum();
             let longest = list.iter().map(|j| j.cut_mm).fold(0.0, f64::max);
             let ferrule = list
                 .iter()
@@ -562,6 +566,32 @@ impl BenchCut {
             ));
         }
         let mut sections = vec![summary];
+        let mut cable_section: Option<Section> = None;
+        let runs = crate::cable_runs(project, jobs);
+        if !runs.is_empty() {
+            let mut cables = Section::new(
+                "cables",
+                "Cables",
+                vec![
+                    Column::new("done", "", 5.0),
+                    Column::new("cable", "Cable", 14.0),
+                    Column::new("cores", "Cores", 8.0).right(),
+                    Column::new("metres", "Metres", 10.0).right(),
+                ],
+            );
+            for r in runs {
+                cables.push(
+                    vec![
+                        Cell::text(TICK_BOX),
+                        Cell::text(r.tag),
+                        Cell::Int(r.cores as i64),
+                        Cell::Number((r.length_mm / 1000.0 * 10.0).ceil() / 10.0),
+                    ],
+                    vec![r.cable.into()],
+                );
+            }
+            cable_section = Some(cables);
+        }
         if !notes.is_empty() {
             let mut note = Section::new(
                 "check",
@@ -576,13 +606,26 @@ impl BenchCut {
 
         let mut first_group = true;
         for (mm2, colour, list) in &groups {
-            let total: f64 = list.iter().map(|j| j.cut_mm).sum();
-            let heading = format!(
-                "{} · {} wires · {:.1} m",
-                group_name(*mm2, colour),
-                list.len(),
-                total / 1000.0
-            );
+            let total: f64 = list
+                .iter()
+                .filter(|j| j.cable.is_none())
+                .map(|j| j.cut_mm)
+                .sum();
+            let cores = list.iter().filter(|j| j.cable.is_some()).count();
+            let heading = if cores == list.len() {
+                format!(
+                    "{} · {} wires · cable cores (see Cables)",
+                    group_name(*mm2, colour),
+                    list.len()
+                )
+            } else {
+                format!(
+                    "{} · {} wires · {:.1} m",
+                    group_name(*mm2, colour),
+                    list.len(),
+                    total / 1000.0
+                )
+            };
             let mut section = Section::new(
                 &Self::group_key(*mm2, colour),
                 &heading,
@@ -635,6 +678,7 @@ impl BenchCut {
             first_group = false;
         }
 
+        sections.extend(cable_section);
         ReportOutput {
             report: Self::ID.into(),
             title,
