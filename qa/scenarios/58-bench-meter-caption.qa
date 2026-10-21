@@ -1,0 +1,14 @@
+@title Bench meter says what it counts without hovering (B-08)
+@area Reports
+@sizes 1366x768 1920x1080
+# The percentage is explained in a caption under the bar, not only on hover.
+click_text "Open example"
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+expect "Wires ready to build"
+expect "four per wire"
+shot bench-meter-caption
+check_layout

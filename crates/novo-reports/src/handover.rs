@@ -8,7 +8,7 @@
 //! open, how far commissioning is). It is pure and tested.
 
 use novo_checks::Summary;
-use novo_core::Project;
+use novo_core::{PageKind, Project};
 
 use crate::table::{Cell, Column, ReportOutput, Section};
 use crate::{BillOfMaterials, Report, is_estimate, wire_cut_jobs};
@@ -163,14 +163,27 @@ fn plural(n: usize, one: &str, many: &str) -> String {
 pub fn truth_rows(project: &Project, input: &HandoverInput) -> Vec<TruthRow> {
     let mut rows = Vec::new();
 
-    let pages = project.pages().count();
+    // Drawn pages only: the contents and report pages are generated from them.
+    let pages = project
+        .pages()
+        .filter(|p| !matches!(p.kind, PageKind::Generated { .. }))
+        .count();
+    let generated = project.pages().count() - pages;
     let devices = project.devices().count();
     rows.push(row(
         "Drawing, device and terminal lists",
         Truth::Exact,
         format!(
-            "Read from the drawing: {}, {}.",
-            plural(pages, "page", "pages"),
+            "Read from the drawing: {}{}, {}.",
+            plural(pages, "drawn page", "drawn pages"),
+            if generated > 0 {
+                format!(
+                    " and {}",
+                    plural(generated, "generated page", "generated pages")
+                )
+            } else {
+                String::new()
+            },
             plural(devices, "device", "devices")
         ),
     ));

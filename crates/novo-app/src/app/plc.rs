@@ -26,7 +26,7 @@ fn channel_symbol(kind: ChannelType) -> &'static str {
 }
 
 impl NovoApp {
-    /// `add card DI16 DQ8`: a PLC card with that layout, the next free `-K`
+    /// `add card DI16 DQ8`: a PLC card with that layout, the next free `-A`
     /// tag on the page and the next free addresses of the station.
     pub(super) fn plc_add_card(&mut self, argument: Option<&str>) {
         if self.current_page.is_none() {

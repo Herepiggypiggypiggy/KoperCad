@@ -169,6 +169,8 @@ impl CabinetState {
 pub(super) enum Ask {
     Panel(DeviceTag),
     CreateCabinet(DeviceTag),
+    /// The Pages > New > Cabinet form, from the empty state.
+    NewCabinetForm,
     SetPlate(StructureId),
     /// Set the plate to new dimensions from the inspector.
     SetPlateSize(StructureId, MountingPlate),
@@ -2054,7 +2056,7 @@ impl NovoApp {
                 ui.add_space(48.0);
                 ui.vertical_centered(|ui| {
                     ui.label(match (&location, structure) {
-                        (None, _) => "No panel yet. Give a page a panel name (+K1) to lay it out.",
+                        (None, _) => "No panel yet. Create a cabinet, or give a page a panel name (+K1), to lay it out.",
                         (Some(_), None) => {
                             "This panel has no cabinet yet. Create one to set its plate and place devices."
                         }
@@ -2062,6 +2064,15 @@ impl NovoApp {
                     });
                     ui.add_space(8.0);
                     match (&location, structure) {
+                        (None, _) => {
+                            // The same form as Pages > New > Cabinet: it names the
+                            // panel and gives its first page the name.
+                            if cabinet_bar::primary(ui, icons::CUBE, "New cabinet...", None, true)
+                                .clicked()
+                            {
+                                ask = Some(Ask::NewCabinetForm);
+                            }
+                        }
                         (Some(l), None) => {
                             if cabinet_bar::primary(ui, icons::CUBE, "Create cabinet", None, true)
                                 .clicked()
@@ -2100,7 +2111,6 @@ impl NovoApp {
                                 }
                             }
                         }
-                        _ => {}
                     }
                 });
             }
@@ -2594,6 +2604,7 @@ impl NovoApp {
             Ask::SetPlate(s) => {
                 self.cabinet_edit("Set plate", move |tx| set_plate(tx, s, DEFAULT_PLATE));
             }
+            Ask::NewCabinetForm => self.open_cabinet_form(Vec::new()),
             Ask::CreateCabinet(tag) => {
                 // An imported project already has the node, as a plain
                 // location: it becomes the cabinet instead of a second node.

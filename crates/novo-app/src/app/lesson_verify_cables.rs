@@ -781,7 +781,11 @@ fn plc_io_each_instruction_works_in_the_app() {
         "only the analog card -K1"
     );
     lv.palette("add card DI16 DQ8");
-    assert_eq!(lv.last(), "Added card =A1+CAB-A1 (DI16 DQ8)");
+    assert!(
+        lv.last().starts_with("Added card =A1+CAB-A1 (DI16 DQ8)"),
+        "{}",
+        lv.last()
+    );
     lv.ticked("add-card");
     assert_eq!(page_symbols(&lv), 4, "the card itself is not drawn");
 

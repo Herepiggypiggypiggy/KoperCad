@@ -172,7 +172,12 @@ impl NovoApp {
         match result {
             Ok(((_, tag), changes)) => {
                 self.changed_outside_canvas(&changes);
-                self.message(Level::Info, format!("Added card {tag} ({text})"));
+                self.message(
+                    Level::Info,
+                    format!(
+                        "Added card {tag} ({text}). Its channels are drawn when you send a contact, sensor or coil to it: select one and run To PLC"
+                    ),
+                );
                 true
             }
             Err(e) => {
@@ -379,10 +384,11 @@ impl NovoApp {
         let (rows, issues) = overview(doc.project(), library);
         let mut open = true;
         let (mut add, mut renumber) = (false, false);
-        egui::Window::new("PLC overview")
-            .id(egui::Id::new("plc_overview"))
-            .open(&mut open)
-            .default_width(460.0)
+        // Below the menu bar: egui's own default place covers the menu names.
+        super::panel::dialog(ctx, "PLC overview", [460.0, 0.0])
+            .id(super::panel::keep_id(ctx, egui::Id::new("plc_overview")))
+            .default_pos(egui::pos2(16.0, 56.0))
+            .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 if rows.is_empty() {
                     ui.label("The project has no PLC cards yet.");
