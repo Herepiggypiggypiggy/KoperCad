@@ -242,12 +242,12 @@ fn symbol_of(project: &Project, tag_text: &str, key_part: &str) -> SymbolId {
         .id
 }
 
-/// `add card DI16 DQ8` as the app runs it: the next free `-K` tag on the page.
+/// `add card DI16 DQ8` as the app runs it: the next free `-A` tag on the page.
 fn add_digital_card(doc: &mut Document, page: PageId) -> DeviceId {
     let layout: CardLayout = "DI16 DQ8".parse().expect("a card layout");
     let (card, _) = doc
         .transact("Add PLC card", |tx| {
-            let tag = next_device_tag(tx.project(), page, "K");
+            let tag = next_device_tag(tx.project(), page, "A");
             add_card(tx, tag, "", NewCardLayout::Typed(layout), "", None)
         })
         .expect("add card");
@@ -359,15 +359,15 @@ fn the_finished_project_has_the_channels_wired_and_renumbered() {
     let index = PlcIndex::build(&finished, library);
     assert!(index.issues().is_empty(), "{:?}", index.issues());
 
-    // The new card is the next free -K tag, with the typed layout.
+    // The new card is the next free -A tag, with the typed layout.
     let digital = cards(&finished)
         .into_iter()
         .find(|c| {
             finished
                 .device(c.device)
-                .is_some_and(|d| d.tag.to_string() == "=A1+CAB-K2")
+                .is_some_and(|d| d.tag.to_string() == "=A1+CAB-A1")
         })
-        .expect("the added card is -K2");
+        .expect("the added card is -A1");
     assert_eq!(digital.layout.as_ref().unwrap().to_string(), "DI16 DQ8");
     // Renumber io packed the cards in slot order: the analog card (slot 1)
     // first, the digital card (no slot) after its 8 bytes.
@@ -482,7 +482,7 @@ fn the_step_checks_are_false_at_the_start_and_true_at_the_end() {
     assert_eq!(on_page(&start), 4);
     assert_eq!(on_page(&finished), 6);
     let has = |p: &Project, tag_text: &str| p.devices().any(|d| d.tag.to_string() == tag_text);
-    assert!(!has(&start, "=A1+CAB-K2") && has(&finished, "=A1+CAB-K2"));
+    assert!(!has(&start, "=A1+CAB-A1") && has(&finished, "=A1+CAB-A1"));
     // The lesson opens on the drawing page, not on the I/O list.
     assert_eq!(
         start

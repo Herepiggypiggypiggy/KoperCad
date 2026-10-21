@@ -781,7 +781,7 @@ fn plc_io_each_instruction_works_in_the_app() {
         "only the analog card -K1"
     );
     lv.palette("add card DI16 DQ8");
-    assert_eq!(lv.last(), "Added card =A1+CAB-K2 (DI16 DQ8)");
+    assert_eq!(lv.last(), "Added card =A1+CAB-A1 (DI16 DQ8)");
     lv.ticked("add-card");
     assert_eq!(page_symbols(&lv), 4, "the card itself is not drawn");
 
@@ -793,7 +793,7 @@ fn plc_io_each_instruction_works_in_the_app() {
     // button-to-plc
     lv.not_yet("button-to-plc");
     lv.palette("to plc");
-    assert_eq!(lv.last(), "Sent to =A1+CAB-K2: next free DI channel");
+    assert_eq!(lv.last(), "Sent to =A1+CAB-A1: next free DI channel");
     lv.ticked("button-to-plc");
     assert_eq!(page_symbols(&lv), 5);
 
@@ -802,7 +802,7 @@ fn plc_io_each_instruction_works_in_the_app() {
     lv.click_symbol("-H1");
     assert_eq!(lv.d.app.selection().len(), 1);
     lv.palette("to plc");
-    assert_eq!(lv.last(), "Sent to =A1+CAB-K2: next free DQ channel");
+    assert_eq!(lv.last(), "Sent to =A1+CAB-A1: next free DQ channel");
     lv.ticked("lamp-to-plc");
     assert_eq!(page_symbols(&lv), 6);
     let keys: Vec<String> = lv.project().symbols().map(|s| s.symbol.0.clone()).collect();
@@ -826,7 +826,7 @@ fn plc_io_each_instruction_works_in_the_app() {
     assert_eq!(io.len(), 2);
     let row = |addr: &str, ty: &str, sig: &str| {
         io.iter()
-            .any(|r| r[0] == addr && r[1] == ty && r[2] == "=A1+CAB-K2" && r[5] == sig)
+            .any(|r| r[0] == addr && r[1] == ty && r[2] == "=A1+CAB-A1" && r[5] == sig)
     };
     assert!(row("%IX12.0", "DI", "Pump start button"), "{io:?}");
     assert!(row("%QX0.0", "DQ", "Pump running lamp"), "{io:?}");
