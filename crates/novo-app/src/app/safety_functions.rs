@@ -97,7 +97,7 @@ pub(super) fn section(
     project: &Project,
     state: &mut BoundFunctions,
     copy: &mut Option<String>,
-    export: &mut bool,
+    export: &mut Option<bool>,
 ) {
     widgets::section_label(ui, "Project safety functions");
     super::dialog_ui::hint(
@@ -240,7 +240,16 @@ pub(super) fn section(
             .on_hover_text("Writes <project> safety.pdf next to the project file")
             .clicked()
         {
-            *export = true;
+            *export = Some(false);
+        }
+        if ui
+            .button("Export sheets (PDF)")
+            .on_hover_text(
+                "One page per safety function for the technical file: <project> safety sheets.pdf next to the project file. A model estimate, not a certification",
+            )
+            .clicked()
+        {
+            *export = Some(true);
         }
     });
     if remove {
