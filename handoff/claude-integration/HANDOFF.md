@@ -24,3 +24,9 @@ anyone with a key: Settings > Check key, then one question, and compare the cost
 Anthropic console.
 
 Resume: `cargo test -p novo-ai`, `cargo test -p novo-app assistant`.
+
+## Datasheet to part and the click-tools decision (2026-10-21)
+- Datasheet: `crates/novo-ai/src/datasheet.rs` (engine, offline tests) and `crates/novo-app/src/app/assistant/datasheet.rs` (UI). Needs manufacturer and order number before a part can be added.
+- No click/keyboard tools for Claude in the app: every project change must go through a proposal and Apply (one undo step). The `--control` harness is for tests.
+- Waiting on Tadjiro: real-key test via docs/CLAUDE-ASSISTANT-TEST.md. Do not block on it.
+- Consent version 4 here; #1136 also changes the number, take the larger at merge.
