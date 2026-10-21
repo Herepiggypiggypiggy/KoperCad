@@ -3,6 +3,10 @@
 The id is a date and a letter; the top entry is the newest one a person has
 seen once they open the list. Add an entry when a feature PR merges. -->
 
+## 2026-10-21-c · Pick a duct to list its runs
+Where: 3D workspace, click a duct.
+The Wire runs panel shows how full the duct is and every run in it; click a run for its Run card, or "Select its runs" to read them together.
+
 ## 2026-10-21-a · Cable runs in 3D
 Where: 3D workspace, click a wire (or Ctrl+K, "wire runs", then a row).
 The Run card shows the path lit up along its ducts, how the length was found, how full each duct is and where the cabinet entry is; "Select all cores of the cable" lights a whole cable.
