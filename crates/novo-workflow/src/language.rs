@@ -228,6 +228,21 @@ pub const DUTCH: &[Aliases] = &[
         &["vergelijk"],
         &["verschil", "revisies vergelijken"],
     ),
+    nl(
+        "revision.lock_page",
+        &["vergrendel"],
+        &["blad vergrendelen", "beveiligen"],
+    ),
+    nl(
+        "revision.unlock_page",
+        &["ontgrendel"],
+        &["blad ontgrendelen"],
+    ),
+    nl(
+        "revision.restore_page",
+        &["herstel"],
+        &["terugzetten", "oude versie"],
+    ),
     nl("file.quit", &[], &["afsluiten", "stoppen"]),
     nl("help.about", &[], &["over", "versie"]),
     // Draw

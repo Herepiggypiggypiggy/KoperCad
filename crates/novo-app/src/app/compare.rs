@@ -9,7 +9,9 @@ use novo_canvas::model::{PageScene, item_id};
 use novo_canvas::widget::CanvasView;
 use novo_core::{PageId, Project, RevisionId};
 use novo_editor::art::LibraryArt;
-use novo_revisions::{ChangeKind, ChangeRow, Comparison, FieldChange, Group, Side, group_of};
+use novo_revisions::{
+    ChangeKind, ChangeRow, Comparison, FieldChange, Group, RestoreScope, Side, group_of,
+};
 use novo_symbols::Library;
 
 use super::changes::shown_on;
@@ -255,6 +257,7 @@ impl NovoApp {
         options.push(Side::Now);
         let mut open = true;
         let mut jump: Option<PageId> = None;
+        let mut restore: Option<(RevisionId, RestoreScope)> = None;
         super::panel::dialog(ctx, "Compare revisions", [520.0, 480.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
@@ -288,6 +291,42 @@ impl NovoApp {
                     {
                         ui.weak(format!("{label} {}: {}", r.index, r.note()));
                     }
+                }
+                let target = match (win.from, win.to) {
+                    (Side::Revision(id), _) | (_, Side::Revision(id)) => Some(id),
+                    _ => None,
+                };
+                if let Some(id) = target {
+                    let index = project
+                        .issued_revision(id)
+                        .map(|r| r.index.clone())
+                        .unwrap_or_default();
+                    ui.horizontal(|ui| {
+                        let page = self.current_page;
+                        if ui
+                            .add_enabled(
+                                page.is_some(),
+                                egui::Button::new(format!("Restore this page to {index}")),
+                            )
+                            .on_hover_text(
+                                "Puts the page on screen back as issued, even when it is locked; \
+                                 it is locked again if it was locked then. Asks first",
+                            )
+                            .clicked()
+                            && let Some(page) = page
+                        {
+                            restore = Some((id, RestoreScope::Pages(vec![page])));
+                        }
+                        if ui
+                            .button(format!("Restore the project to {index}"))
+                            .on_hover_text(
+                                "Puts every page and device back as issued; the revision list stays. Asks first",
+                            )
+                            .clicked()
+                        {
+                            restore = Some((id, RestoreScope::Project));
+                        }
+                    });
                 }
                 ui.add_space(4.0);
                 let Some((_, _, _, result)) = &win.shown else {
@@ -338,6 +377,9 @@ impl NovoApp {
                 .is_some_and(|d| d.project().page(page).is_some())
         {
             self.show_page(page);
+        }
+        if let Some((revision, scope)) = restore {
+            self.ask_restore(revision, scope);
         }
         if open {
             self.wb.compare = Some(win);

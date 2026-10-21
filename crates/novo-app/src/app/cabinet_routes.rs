@@ -535,7 +535,13 @@ fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Op
                 egui::DragValue::new(&mut value)
                     .range(0.0..=100_000.0)
                     .speed(10.0)
-                    .suffix(" mm"),
+                    .custom_formatter(|v, _| {
+                        if set.is_none() && v == 0.0 {
+                            "—".to_owned()
+                        } else {
+                            format!("{v:.0} mm")
+                        }
+                    }),
             );
             if r.changed() {
                 ui.data_mut(|d| d.insert_temp(id, value));
@@ -554,7 +560,7 @@ fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Op
         })
         .response
         .on_hover_text(
-            "How much wire lies outside the entry, loops included, for wires without a cable (a supply lead). Stated: those lengths count as exact. Not stated: they stay estimates. Wires on a cable use the cable's length.",
+            "How much wire lies outside the entry, loops included, for wires without a cable (a supply lead). This one figure applies to every such lead of this enclosure. Stated: those lengths use your figure and are no longer estimates. Not stated: they stay estimates. Wires on a cable use the cable's length.",
         );
     }
     if overlay.entry_hidden {

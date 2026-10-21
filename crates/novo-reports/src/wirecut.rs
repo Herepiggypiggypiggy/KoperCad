@@ -318,17 +318,14 @@ fn produce(project: &Project, standard: &FerruleStandard) -> (Vec<WireCutJob>, P
 }
 
 /// The cable a connection's wires are cores of: the one with the longest
-/// stated length, else the first.
+/// stated length, else the first. A connection is a core of a cable when any
+/// of its wires is; this is the one definition of "is a cable core".
 fn cable_of(project: &Project, wires: &[&novo_core::Wire]) -> Option<CableId> {
-    let cables: Vec<CableId> = wires
+    let len = |c: &CableId| project.cable(*c).and_then(|c| c.length_m).unwrap_or(0.0);
+    wires
         .iter()
-        .filter_map(|w| project.core_of_wire(w.id))
-        .map(|(c, _)| c)
-        .collect();
-    cables.iter().copied().max_by(|a, b| {
-        let len = |c: &CableId| project.cable(*c).and_then(|c| c.length_m).unwrap_or(0.0);
-        len(a).total_cmp(&len(b))
-    })
+        .filter_map(|w| project.cable_of_wire(w.id))
+        .max_by(|a, b| len(a).total_cmp(&len(b)))
 }
 
 /// The cross-sections of a connection's wires: the wire's own, else its

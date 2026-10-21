@@ -784,11 +784,12 @@ fn report(fields: Value) -> Value {
 fn read_sheet(s: &mut Setup, reply: Value) {
     s.script.push(200, reply);
     let ctx = s.d.ctx.clone();
+    let sent_before = s.script.seen.lock().unwrap().len();
     s.d.app
         .datasheet_test_choose("a.pdf", b"%PDF-1.4 test".to_vec());
     assert_eq!(s.d.app.datasheet_test_stage(), "confirm");
     assert!(
-        s.script.seen.lock().unwrap().is_empty(),
+        s.script.seen.lock().unwrap().len() == sent_before,
         "nothing is sent before the person agrees"
     );
     s.d.app.datasheet_test_send(&ctx);
@@ -878,4 +879,65 @@ fn wire_number_conflicts_are_a_project_section_only() {
         "{whole}"
     );
     assert!(result_for(DataScope::Outline).starts_with("Not allowed"));
+}
+
+#[test]
+fn reading_the_same_datasheet_twice_is_flagged_as_a_duplicate() {
+    let mut s = setup(DataScope::None);
+    let sheet = || {
+        report(json!({
+            "manufacturer": {"value": "Acme", "quote": "Acme GmbH"},
+            "order_number": {"value": "DUP-1", "quote": "Order DUP-1"}
+        }))
+    };
+    read_sheet(&mut s, sheet());
+    assert!(!s.d.app.datasheet_test_duplicate());
+    s.d.app.datasheet_test_add().unwrap();
+    read_sheet(&mut s, sheet());
+    assert!(s.d.app.datasheet_test_duplicate());
+}
+
+#[test]
+fn a_duplicate_ignores_case_spaces_and_dashes() {
+    let mut s = setup(DataScope::None);
+    read_sheet(
+        &mut s,
+        report(json!({
+            "manufacturer": {"value": "Acme", "quote": "Acme"},
+            "order_number": {"value": "ab-100 x", "quote": "ab-100 x"}
+        })),
+    );
+    s.d.app.datasheet_test_add().unwrap();
+    read_sheet(
+        &mut s,
+        report(json!({
+            "manufacturer": {"value": "ACME", "quote": "ACME"},
+            "order_number": {"value": "AB100X", "quote": "AB100X"}
+        })),
+    );
+    assert!(s.d.app.datasheet_test_duplicate());
+}
+
+#[test]
+fn stopping_a_reading_drops_the_answer_and_adds_nothing() {
+    let mut s = setup(DataScope::None);
+    s.script.push(
+        200,
+        report(json!({
+            "manufacturer": {"value": "Acme", "quote": "Acme"},
+            "order_number": {"value": "STOP-1", "quote": "STOP-1"}
+        })),
+    );
+    let ctx = s.d.ctx.clone();
+    s.d.app
+        .datasheet_test_choose("a.pdf", b"%PDF-1.4 test".to_vec());
+    s.d.app.datasheet_test_send(&ctx);
+    s.d.app.datasheet_test_stop();
+    assert_eq!(s.d.app.datasheet_test_stage(), "note");
+    for _ in 0..20 {
+        s.d.frame();
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(s.d.app.datasheet_test_stage(), "note", "no review appears");
+    assert!(!s.d.app.datasheet_test_duplicate());
 }

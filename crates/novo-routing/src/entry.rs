@@ -11,6 +11,8 @@ use crate::Point;
 /// Wire length outside the entry for wires that have no cable, mm: from the
 /// entry to where the wire ends, service loop included.
 pub const ENTRY_OUTSIDE: &str = "entry.outside_mm";
+/// The largest stated outside length, mm; a larger stored figure reads as not stated.
+pub const MAX_OUTSIDE_MM: f64 = 100_000.0;
 /// Plate x of the entry point, mm.
 pub const ENTRY_X: &str = "entry.x_mm";
 /// Plate y of the entry point, mm.
@@ -40,14 +42,14 @@ pub fn entry_point(project: &Project, structure: StructureId) -> Option<Point> {
 /// finite and positive, or `None` when not stated.
 pub fn outside_mm(project: &Project, structure: StructureId) -> Option<f64> {
     let s = project.get::<novo_core::Structure>(structure)?;
-    number(s.properties.get(ENTRY_OUTSIDE)?).filter(|v| *v > 0.0)
+    number(s.properties.get(ENTRY_OUTSIDE)?).filter(|v| *v > 0.0 && *v <= MAX_OUTSIDE_MM)
 }
 
 /// Sets the stated length of wire outside the entry, or clears it with
 /// `None`. Refused when not finite and positive.
 pub fn set_outside_mm(tx: &mut Tx<'_>, structure: StructureId, mm: Option<f64>) -> Result<()> {
     let value = match mm {
-        Some(v) if v.is_finite() && v > 0.0 && v <= 100_000.0 => Some(Value::Float(v)),
+        Some(v) if v.is_finite() && v > 0.0 && v <= MAX_OUTSIDE_MM => Some(Value::Float(v)),
         Some(_) => {
             return Err(ModelError::Refused {
                 what: "Wire outside the entry".into(),

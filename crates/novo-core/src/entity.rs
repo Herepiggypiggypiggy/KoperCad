@@ -305,6 +305,11 @@ pub struct Page {
     /// changes under its readers (pinned flow, DESIGN.md section 8).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub frozen: Option<PageFreeze>,
+    /// Set when the page is locked with an issued revision (its index):
+    /// edits to the page's drawing are refused until it is unlocked, so a
+    /// released sheet cannot change by accident.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub locked: Option<String>,
     #[serde(default)]
     pub properties: Properties,
 }

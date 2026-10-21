@@ -5,8 +5,8 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use eframe::egui;
-use novo_core::Project;
-use novo_revisions::IndexRule;
+use novo_core::{Command, Project, RevisionId};
+use novo_revisions::{IndexRule, RestoreScope};
 
 use super::{Level, NovoApp};
 use crate::backend::BackendError;
@@ -20,10 +20,24 @@ pub(crate) struct IssueDraft {
     pub description: String,
     /// A longer note on why; kept with the revision.
     pub note: String,
+    /// Lock every page with the revision, so the released sheets cannot be
+    /// edited by accident.
+    pub lock: bool,
     /// Why the last attempt failed, shown in the window.
     pub error: Option<String>,
     /// The description field takes focus on the first frame.
     focused: bool,
+}
+
+/// A restore waiting for the person's yes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RestoreAsk {
+    revision: RevisionId,
+    scope: RestoreScope,
+    index: String,
+    inserted: usize,
+    replaced: usize,
+    removed: usize,
 }
 
 /// The rule the project's revisions follow, read from the latest index:
@@ -81,6 +95,7 @@ impl NovoApp {
             author: self.settings.initials.clone(),
             description: description.unwrap_or_default().trim().to_owned(),
             note: String::new(),
+            lock: true,
             error: None,
             focused: false,
         });
@@ -123,6 +138,12 @@ impl NovoApp {
                     .desired_width(f32::INFINITY),
             );
             ui.add_space(6.0);
+            ui.checkbox(&mut draft.lock, "Lock the released pages")
+                .on_hover_text(
+                    "Locked pages refuse edits to their drawing until File > Revisions > Unlock page (reports and parts are not locked), \
+                     and Restore brings a locked page back as issued",
+                );
+            ui.add_space(2.0);
             ui.horizontal(|ui| {
                 ui.label("Index");
                 ui.add(egui::TextEdit::singleline(&mut draft.index).desired_width(48.0));
@@ -133,7 +154,7 @@ impl NovoApp {
             });
             if let Some(error) = &draft.error {
                 ui.add_space(4.0);
-                ui.colored_label(ui.visuals().error_fg_color, error);
+                ui.colored_label(crate::theme::ui_palette().error, error);
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -162,12 +183,13 @@ impl NovoApp {
     pub(crate) fn submit_issue(&mut self, mut draft: IssueDraft) {
         let index = draft.index.trim().to_owned();
         let author = draft.author.trim().to_owned();
-        let result = self.backend.issue_revision_noted(
+        let result = self.backend.issue_revision_locking(
             Some(index),
             draft.date.trim(),
             &author,
             draft.description.trim(),
             draft.note.trim(),
+            draft.lock,
         );
         match result {
             Ok(issued) => {
@@ -177,18 +199,208 @@ impl NovoApp {
                     Some(since) => format!(" · no changes since {since}"),
                     None => String::new(),
                 };
+                let locked = if draft.lock { " · pages locked" } else { "" };
                 self.message(
                     Level::Info,
-                    format!("Issued revision {}{note}", issued.index),
+                    format!("Issued revision {}{note}{locked}", issued.index),
                 );
             }
             Err(BackendError::Model(e)) => {
                 draft.error = Some(e.to_string());
                 self.wb.issue = Some(draft);
             }
+            Err(e @ BackendError::IssuedNotLocked(..)) => {
+                if let BackendError::IssuedNotLocked(_, changes) = &e {
+                    self.changed_outside_canvas(changes);
+                }
+                self.message(Level::Error, e.to_string());
+            }
             Err(e) => {
                 self.message(Level::Error, format!("Could not issue the revision: {e}"));
             }
+        }
+    }
+}
+
+impl NovoApp {
+    /// Locks (`true`) or unlocks the page on screen with the latest
+    /// revision's index.
+    pub(super) fn set_page_lock(&mut self, lock: bool) {
+        let Some(page) = self.current_page else {
+            self.message(Level::Info, "Open a page first".to_owned());
+            return;
+        };
+        let Some(project) = self.backend.document().map(|d| d.project()) else {
+            return;
+        };
+        let name = project
+            .page(page)
+            .map(|p| p.name.clone())
+            .unwrap_or_default();
+        let project_latest = project.latest_revision().map(|r| r.index.clone());
+        let command = if lock {
+            let Some(latest) = project.latest_revision() else {
+                self.message(
+                    Level::Info,
+                    "No revision yet: Issue revision first, it locks the pages".to_owned(),
+                );
+                return;
+            };
+            Command::LockPage {
+                page,
+                revision: latest.index.clone(),
+            }
+        } else {
+            Command::UnlockPage { page }
+        };
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        match doc.execute(command) {
+            Ok(outcome) => {
+                self.changed_outside_canvas(&outcome.changes);
+                let word = if lock { "locked" } else { "unlocked" };
+                let since = project_latest.map_or_else(String::new, |i| format!(" (since {i})"));
+                self.message(
+                    Level::Info,
+                    format!(
+                        "Page {name} {word}{}",
+                        if lock { since } else { String::new() }
+                    ),
+                );
+            }
+            Err(e) => self.message(Level::Error, format!("Could not change the lock: {e}")),
+        }
+    }
+
+    /// Asks before a restore from the Compare window: shows what it would
+    /// replace. Esc or a click outside cancels.
+    pub(super) fn ask_restore(&mut self, revision: RevisionId, scope: RestoreScope) {
+        let Some(snapshot) = self.backend.revision_snapshot(revision) else {
+            self.message(
+                Level::Error,
+                "This revision has no stored copy to restore".to_owned(),
+            );
+            return;
+        };
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        match novo_revisions::preview(doc, &snapshot, &scope) {
+            Ok(p) if p.is_empty() => {
+                self.message(
+                    Level::Info,
+                    "Already as issued with that revision".to_owned(),
+                );
+            }
+            Ok(p) => {
+                let index = snapshot
+                    .issued_revision(revision)
+                    .map(|r| r.index.clone())
+                    .unwrap_or_default();
+                self.wb.restore_ask = Some(RestoreAsk {
+                    revision,
+                    scope,
+                    index,
+                    inserted: p.inserted,
+                    replaced: p.replaced,
+                    removed: p.removed,
+                });
+            }
+            Err(e) => self.message(Level::Error, format!("Could not restore: {e}")),
+        }
+    }
+
+    pub(super) fn restore_ask_dialog(&mut self, ctx: &egui::Context) {
+        let Some(ask) = self.wb.restore_ask.take() else {
+            return;
+        };
+        let mut yes = false;
+        let modal = egui::Modal::new(egui::Id::new("restore_ask")).show(ctx, |ui| {
+            ui.set_width(360.0);
+            let what = match ask.scope {
+                RestoreScope::Project => "the whole project",
+                RestoreScope::Pages(_) => "this page",
+            };
+            ui.heading(format!("Restore {what} to revision {}?", ask.index));
+            ui.add_space(6.0);
+            ui.label(format!(
+                "Yes, replace {} things: {} brought back, {} reset to how they were, {} removed because they were added since.",
+                ask.inserted + ask.replaced + ask.removed,
+                ask.inserted,
+                ask.replaced,
+                ask.removed
+            ));
+            ui.weak("Undo takes it back while this project stays open. Esc cancels.");
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button("Yes, restore").clicked() {
+                    yes = true;
+                }
+                if ui.button("Cancel").clicked() {
+                    ui.close();
+                }
+            });
+        });
+        if yes {
+            self.restore_to(ask.revision, ask.scope);
+        } else if !modal.should_close() {
+            self.wb.restore_ask = Some(ask);
+        }
+    }
+
+    /// `restore A`: puts the page on screen back to revision A.
+    pub(super) fn restore_page_command(&mut self, argument: Option<&str>) {
+        let word = argument.unwrap_or("").trim();
+        let Some(page) = self.current_page else {
+            self.message(Level::Info, "Open a page first".to_owned());
+            return;
+        };
+        let revision = self
+            .backend
+            .document()
+            .and_then(|d| d.project().revision_by_index(word))
+            .map(|r| r.id);
+        match revision {
+            Some(revision) => self.restore_to(revision, RestoreScope::Pages(vec![page])),
+            None => self.message(
+                Level::Info,
+                "Name the revision to go back to, for example: restore A".to_owned(),
+            ),
+        }
+    }
+
+    /// Puts `scope` back to the state kept with `revision`. One undo step.
+    pub(super) fn restore_to(&mut self, revision: RevisionId, scope: RestoreScope) {
+        let Some(snapshot) = self.backend.revision_snapshot(revision) else {
+            self.message(
+                Level::Error,
+                "This revision has no stored copy to restore".to_owned(),
+            );
+            return;
+        };
+        let index = snapshot
+            .issued_revision(revision)
+            .map(|r| r.index.clone())
+            .unwrap_or_default();
+        let Some(doc) = self.backend.document_mut() else {
+            return;
+        };
+        match novo_revisions::restore(doc, &snapshot, &scope) {
+            Ok(restored) if restored.is_empty() => {
+                self.message(Level::Info, format!("Already as issued with {index}"));
+            }
+            Ok(restored) => {
+                self.changed_outside_canvas(&restored.changes);
+                self.message(
+                    Level::Info,
+                    format!(
+                        "Restored to revision {index}: {} brought back, {} reset, {} removed. Undo takes it back",
+                        restored.inserted, restored.replaced, restored.removed
+                    ),
+                );
+            }
+            Err(e) => self.message(Level::Error, format!("Could not restore: {e}")),
         }
     }
 }

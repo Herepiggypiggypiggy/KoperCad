@@ -90,6 +90,7 @@ pub(crate) struct Workbench {
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
+    pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
@@ -275,6 +276,7 @@ impl Default for Workbench {
             macro_editor: Default::default(),
             project_settings: false,
             issue: None,
+            restore_ask: None,
             compare: None,
             faults: None,
             add_fault: None,
@@ -581,6 +583,9 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "export.spec",
     "revision.issue",
     "revision.compare",
+    "revision.lock_page",
+    "revision.unlock_page",
+    "revision.restore_page",
     "terminal.toggle_pe",
     "terminal.reset_pe",
     "wire.mode",
@@ -1390,6 +1395,9 @@ impl NovoApp {
             }
             "revision.issue" => self.open_issue_revision(argument),
             "revision.compare" => self.open_compare(argument),
+            "revision.lock_page" => self.set_page_lock(true),
+            "revision.unlock_page" => self.set_page_lock(false),
+            "revision.restore_page" => self.restore_page_command(argument),
             other => {
                 let label = novo_workflow::commands::get(other).map_or(other, |c| c.label);
                 self.message(Level::Info, format!("{label} is not in the app yet"));
