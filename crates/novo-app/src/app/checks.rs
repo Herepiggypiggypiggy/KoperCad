@@ -44,6 +44,11 @@ impl NovoApp {
 
     /// The design-check problems of the current revision.
     pub(super) fn problems(&mut self) -> &[Problem] {
+        // A lesson about something else keeps the checks quiet: its sample
+        // project's own warnings are not the learner's to fix.
+        if self.learn.quiet_checks() {
+            return &[];
+        }
         let Some(doc) = self.backend.document() else {
             return &[];
         };

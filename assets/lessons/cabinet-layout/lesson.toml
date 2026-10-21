@@ -21,6 +21,7 @@ order = 10
 level = "beginner"
 minutes = 8
 topics = ["cabinet", "layout"]
+show_problems = true
 next = ["rails-and-ducts"]
 project = "project.json"
 finished = "finished.json"

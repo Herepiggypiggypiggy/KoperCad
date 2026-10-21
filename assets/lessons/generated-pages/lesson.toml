@@ -16,6 +16,7 @@ order = 20
 level = "beginner"
 minutes = 8
 topics = ["reports", "pages", "outline"]
+show_problems = true
 needs = ["terminal-strips", "cables-and-shields"]
 next = ["wire-list-and-bom"]
 project = "project.json"

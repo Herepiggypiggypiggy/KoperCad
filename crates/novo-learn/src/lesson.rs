@@ -115,6 +115,12 @@ pub struct Lesson {
     /// Name or title of the page shown on open.
     #[serde(default)]
     pub page: Option<String>,
+    /// The lesson is about the design checks: the issue pill, the marks on
+    /// symbols and the Issues list stay on. Otherwise they are quiet while
+    /// the lesson runs, so the sample project's own warnings are not shown
+    /// to a learner as if they were theirs.
+    #[serde(default)]
+    pub show_problems: bool,
     #[serde(rename = "step")]
     pub steps: Vec<Step>,
 }
