@@ -341,6 +341,15 @@ pub(crate) fn layout_hits(nodes: &[Value], window: (f64, f64)) -> Vec<Hit> {
         })
         .filter_map(rect)
         .collect();
+    let windows: Vec<[f64; 4]> = nodes
+        .iter()
+        .filter(|n| {
+            n["role"]
+                .as_str()
+                .is_some_and(|r| r.eq_ignore_ascii_case("window"))
+        })
+        .filter_map(rect)
+        .collect();
     let vertical_scroll = bars.iter().any(|b| b[3] - b[1] > b[2] - b[0]);
     let horizontal_scroll = bars.iter().any(|b| b[2] - b[0] > b[3] - b[1]);
     let wide_bar = bars
@@ -415,6 +424,17 @@ pub(crate) fn layout_hits(nodes: &[Value], window: (f64, f64)) -> Vec<Hit> {
             if a.1.trim().is_empty() || b.1.trim().is_empty() || a.1 == b.1 {
                 continue;
             }
+            // A dialog or floating panel lies over the page by design: only
+            // controls inside the same window are compared.
+            let home = |r: &[f64; 4]| {
+                let (cx, cy) = ((r[0] + r[2]) / 2.0, (r[1] + r[3]) / 2.0);
+                windows
+                    .iter()
+                    .position(|w| cx >= w[0] && cx <= w[2] && cy >= w[1] && cy <= w[3])
+            };
+            if home(&a.2) != home(&b.2) {
+                continue;
+            }
             // A popup menu lies over the page by design.
             if a.0.eq_ignore_ascii_case("menuitem") != b.0.eq_ignore_ascii_case("menuitem") {
                 continue;
@@ -435,9 +455,9 @@ pub(crate) fn layout_hits(nodes: &[Value], window: (f64, f64)) -> Vec<Hit> {
         let n = overlaps.len();
         overlaps.truncate(5);
         hits.push((
-            "S3",
-            "layout",
-            format!("{n} pair(s) of controls overlap"),
+            "S4",
+            "layout-maybe",
+            format!("{n} pair(s) of controls may overlap (dialogs and docks can stack on purpose; check the picture)"),
             overlaps.join("; "),
         ));
     }
@@ -738,7 +758,7 @@ impl Ctx<'_> {
                 .as_str()
                 .is_some_and(|r| r.eq_ignore_ascii_case("button"))
                 && l.strip_prefix(label)
-                    .is_some_and(|rest| rest.starts_with("  "))
+                    .is_some_and(|rest| rest.starts_with("  ") || rest.starts_with(':'))
                 && (!lesson || l.trim_end().ends_with("Lesson"))
         });
         let Some(row) = row else {
