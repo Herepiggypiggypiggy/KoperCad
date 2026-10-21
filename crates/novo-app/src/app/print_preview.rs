@@ -1180,11 +1180,12 @@ fn workshop_tab(ui: &mut egui::Ui, plates: &[WorkshopPlate], paper: &mut Paper, 
                 .iter()
                 .map(|s| novo_pdf::template::page_count(&s.sheet, *paper))
                 .sum();
-            ui.strong(format!(
-                "{}: {pages} page{}",
-                plate.tag,
-                if pages == 1 { "" } else { "s" }
-            ));
+            let tiles: usize = plate
+                .sheets
+                .iter()
+                .map(|s| novo_pdf::template::tile_plan(&s.sheet, *paper).count())
+                .sum();
+            ui.strong(pages_line(&plate.tag, pages, tiles, plate.sheets.len()));
             ui.horizontal_wrapped(|ui| {
                 for s in &plate.sheets {
                     let plan = novo_pdf::template::tile_plan(&s.sheet, *paper);
@@ -1323,5 +1324,37 @@ impl NovoApp {
 
     pub(super) fn plot_sets_for_test(&self) -> Vec<PlotSetChoice> {
         self.plot_sets()
+    }
+}
+
+/// "+CAB: 10 pages (8 tiles and 2 overviews)": a sheet prints its tiles and one overview.
+fn pages_line(tag: &str, pages: usize, tiles: usize, overviews: usize) -> String {
+    let n = |n: usize, one: &str, many: &str| format!("{n} {}", if n == 1 { one } else { many });
+    format!(
+        "{tag}: {} ({} and {})",
+        n(pages, "page", "pages"),
+        n(tiles, "tile", "tiles"),
+        n(overviews, "overview", "overviews")
+    )
+}
+
+#[cfg(test)]
+mod pages_line_tests {
+    use super::pages_line;
+
+    #[test]
+    fn the_parts_add_up_for_one_and_for_two_sheets() {
+        assert_eq!(
+            pages_line("+CAB", 9, 8, 1),
+            "+CAB: 9 pages (8 tiles and 1 overview)"
+        );
+        assert_eq!(
+            pages_line("+CAB", 10, 8, 2),
+            "+CAB: 10 pages (8 tiles and 2 overviews)"
+        );
+        assert_eq!(
+            pages_line("+K1", 2, 1, 1),
+            "+K1: 2 pages (1 tile and 1 overview)"
+        );
     }
 }
