@@ -562,13 +562,13 @@ fn wire_numbers_each_instruction_works_in_the_app() {
     lv.not_yet("preview");
     lv.palette("wire numbering");
     assert!(lv.d.app.wb.numbering.is_some());
-    for label in [
-        "Preview",
-        "Number",
-        "Close window",
-        "Number new wires",
-        "Renumber all",
-    ] {
+    for label in ["Preview", "Number", "Close window"] {
+        assert!(lv.has_label(label), "the window shows `{label}`");
+    }
+    // The scheme and mode block is collapsed on the Numbers tab: open it to read the scheme.
+    assert!(!lv.has_label("Renumber all"));
+    lv.click_label("Scheme and mode: sequential, number new wires, whole project");
+    for label in ["Number new wires", "Renumber all"] {
         assert!(lv.has_label(label), "the window shows `{label}`");
     }
     let scheme = novo_numbering::Scheme::load(lv.project());

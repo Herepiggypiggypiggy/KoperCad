@@ -23,6 +23,8 @@ expect "Click a number to type another"
 expect "Page.col"
 expect "no number yet"
 shot numbers-tab
+# The list keeps most of the height; the scheme block is collapsed.
+expect_not "Prefix"
 click_text Problems Button
 wait 5
 shot problems-filter
@@ -39,6 +41,9 @@ shot conflicts-tab
 # Number the wires, then type one number by hand: it is fixed and offers Unlock.
 click_text Numbers Button
 wait 5
+click_text "Scheme and mode: sequential, number new wires, selection (17 selected)"
+wait 3
+shot settings-open
 click_text Project Button
 wait 3
 click_text Number Button #2
