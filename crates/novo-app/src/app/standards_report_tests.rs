@@ -176,7 +176,7 @@ fn selecting_a_standard_adds_findings_and_the_pill_and_list_say_so() {
     let (_dir, mut d) = example();
     let none = d.app.problems().to_vec();
     assert_eq!(super::checks::standards_findings(&none), 0);
-    assert!(super::checks::standards_note(0).is_none());
+    assert!(super::checks::standards_note(0, 4).is_none());
     assert!(d.app.edit_project("Select standards", |tx| {
         standards::select(tx, &StandardSet::ALL)
     }));
@@ -187,8 +187,15 @@ fn selecting_a_standard_adds_findings_and_the_pill_and_list_say_so() {
         n > 0,
         "the example has standards findings with every set on"
     );
-    let note = super::checks::standards_note(n).unwrap();
+    let note = super::checks::standards_note(n, n + 1).unwrap();
     assert!(note.contains("standards you selected"), "{note}");
-    assert!(note.starts_with(&n.to_string()), "{note}");
-    assert!(super::checks::standards_note(1).unwrap().contains("comes"));
+    assert!(
+        note.starts_with(&format!("{n} of the {} errors", n + 1)),
+        "{note}"
+    );
+    assert!(
+        super::checks::standards_note(1, 6)
+            .unwrap()
+            .contains("comes")
+    );
 }

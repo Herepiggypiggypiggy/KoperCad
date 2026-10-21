@@ -591,9 +591,6 @@ impl CanvasView {
         self.show_in_rect(ui, rect, response, scene)
     }
 
-    /// Brings the scene into view: the whole of it, or on a page the
-    /// drawing alone (never closer than [`FIT_CONTENT_MAX_ZOOM`], so a lone
-    /// symbol is not blown up to fill the screen).
     /// Keeps the sheet clear of the card over the canvas edge: when the whole
     /// sheet is in view and the card covers part of it, the view is fitted
     /// into the free part beside the card (never closer than before). The
@@ -654,6 +651,9 @@ impl CanvasView {
         });
     }
 
+    /// Brings the scene into view: the whole of it, or on a page the
+    /// drawing alone (never closer than [`FIT_CONTENT_MAX_ZOOM`], so a lone
+    /// symbol is not blown up to fill the screen).
     fn fit_scene(&mut self, scene: &Scene, kind: Fit) {
         let reserve = self
             .fit_reserve_bottom

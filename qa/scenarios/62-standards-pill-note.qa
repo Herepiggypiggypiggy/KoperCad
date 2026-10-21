@@ -19,6 +19,6 @@ key Escape
 wait 3
 click_text "errors" #1
 wait 10
-expect "from the standards you selected"
+expect "errors and warnings come from the standards you selected"
 shot issues-standards-note
 check_layout
