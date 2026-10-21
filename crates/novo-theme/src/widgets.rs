@@ -862,7 +862,7 @@ mod tests {
         let mut out = ctx.run_ui(input, |ui| {
             height = banner(ui, Level::Info, text, |ui| {
                 if with_button {
-                    ui.button("Accept");
+                    let _ = ui.button("Accept");
                 }
             })
             .rect
