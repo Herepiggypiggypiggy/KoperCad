@@ -160,6 +160,24 @@ fn streamlines_run_downwind_in_the_scene_frame() {
 }
 
 #[test]
+fn the_cloud_layer_count_sets_how_much_is_drawn() {
+    let snap = snapshot();
+    let quads = |layers: u8| {
+        let s = Heat3d {
+            slice: false,
+            cloud: true,
+            cloud_layers: layers,
+            ..Heat3d::default()
+        };
+        match &overlays(&snap, 20.0, place(), &s, &Flow::default())[..] {
+            [Overlay::Mesh(m)] => m.indices.len(),
+            other => panic!("one cloud mesh expected, got {}", other.len()),
+        }
+    };
+    assert!(quads(40) > quads(4) * 5);
+}
+
+#[test]
 fn settings_choose_the_overlays() {
     let snap = snapshot();
     let fl = flow(&snap, place());

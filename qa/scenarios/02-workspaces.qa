@@ -1,0 +1,29 @@
+@title Every workspace of the example
+@area Workspaces
+# Switch through the top-bar workspaces; each must draw something and fit the window.
+click_text "Open example"
+wait 20
+click_text Cabinet #1
+wait 20
+shot cabinet
+check_blank cabinet
+check_layout
+click_text 3D
+wait 30
+shot 3d
+check_blank 3d
+check_layout
+click_text Reports #2
+wait 20
+shot reports
+check_blank reports
+check_layout
+click_text Commissioning
+wait 20
+shot commissioning
+check_blank commissioning
+check_layout
+click_text Schematic
+wait 20
+shot back-to-schematic
+check_layout

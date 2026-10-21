@@ -2029,6 +2029,7 @@ version = "0.1.0"
 dependencies = [
  "calamine",
  "clap",
+ "image",
  "novo-canvas",
  "novo-checks",
  "novo-commissioning",
@@ -2043,6 +2044,7 @@ dependencies = [
  "novo-reports",
  "novo-revisions",
  "novo-storage",
+ "novo-workflow",
  "novo-xref",
  "serde_json",
  "tempfile",
