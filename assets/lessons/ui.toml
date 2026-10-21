@@ -29,6 +29,10 @@ text_nl = "Terug"
 text = "Show me how"
 text_nl = "Laat zien"
 
+[do_it_for_me]
+text = "Do it for me"
+text_nl = "Doe het voor mij"
+
 [skip_step]
 text = "Skip step"
 text_nl = "Stap overslaan"

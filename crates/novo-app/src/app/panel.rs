@@ -309,6 +309,21 @@ fn pending_id() -> egui::Id {
     egui::Id::new("panel_dialog_pending")
 }
 
+/// Whether a dialog window is on top, which is then the one Escape belongs
+/// to ([`esc`] closes it on the same key press).
+pub(super) fn dialog_on_top(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<egui::Id>(pending_id()))
+        .is_some_and(|id| {
+            let layer = egui::LayerId::new(egui::Order::Middle, id);
+            // A dialog that was closed keeps its remembered layer; only one
+            // that was drawn last frame counts.
+            ctx.memory(|m| {
+                m.areas().top_layer_id(egui::Order::Middle) == Some(layer)
+                    && m.areas().visible_last_frame(&layer)
+            })
+        })
+}
+
 /// Escape closes the dialog on top: wrap the `open` flag handed to
 /// `.open(..)` right after [`dialog`]. Does nothing while a text field has
 /// the keyboard (Escape is theirs then) or when another floating window is on

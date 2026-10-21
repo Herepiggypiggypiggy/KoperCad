@@ -565,6 +565,11 @@ pub const DUTCH: &[Aliases] = &[
         ],
     ),
     nl(
+        "sim.why",
+        &["waarom"],
+        &["waarom brandt dit", "waarom dood", "uitleg", "pad volgen"],
+    ),
+    nl(
         "sim.plc_program",
         &["plc programma"],
         &["ladder", "programma draaien", "plc simuleren"],
@@ -1038,6 +1043,11 @@ pub const DUTCH: &[Aliases] = &[
         "export.wirecut_page",
         &["voeg draadproductiepagina toe"],
         &["pdf", "afdrukken", "draadsnijden"],
+    ),
+    nl(
+        "wires.autopilot",
+        &["autopilot", "vul de bedrading aan"],
+        &["draaddikte", "kleur", "doorsnede", "klaar om te bouwen"],
     ),
     nl(
         "view.bench",

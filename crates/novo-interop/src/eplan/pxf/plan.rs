@@ -476,7 +476,7 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
             "empty, or on a page that is not drawn",
         );
         report.note(format!(
-            "Drawn: {} circuit-diagram pages, {} symbols from KoperCAD's library, {} as labelled boxes, {} interruption points, {} nets joined by EPLAN's rules into {} wires. Symbol artwork is inferred (a box where no KoperCAD symbol fits); positions, pin counts, tags and which points are one net are read from the file. Wire routes are plain right-angle runs, not EPLAN's lines.",
+            "Drawn: {} circuit-diagram pages, {} symbols from KoperCAD's library, {} as labelled boxes, {} interruption points, {} nets joined by EPLAN's rules into {} wires. Symbol artwork is inferred (a box where no KoperCAD symbol fits); positions, pin counts, tags and which points are one net are read from the file. Wires follow the runs and nodes the file implies where it has them; the rest are plain right-angle runs.",
             st.pages, st.library_symbols, st.box_symbols, st.interruptions, st.nets, st.wires
         ));
         if !st.box_functions.is_empty() {
@@ -513,9 +513,15 @@ pub fn plan_pxf(project: &Project, file: &PxfFile, opts: &PxfOptions) -> PxfPlan
         );
         report.guess(
             "wire routes",
-            st.wires,
-            "plain right-angle runs between the pins, not EPLAN's lines; which pins are one net is read from the file",
+            st.wires - st.wires_followed,
+            "EPLAN joins these without any drawn run between them (both sides of a terminal, paired interruption points, same-name terminals, a bridge inside a symbol), so KoperCAD draws a plain right-angle wire to keep the nets equal; which pins are one net is read from the file",
         );
+        if st.wires_followed > 0 {
+            report.note(format!(
+                "{} wires follow the runs and nodes the file implies: the corners are at its nodes, not guessed.",
+                st.wires_followed
+            ));
+        }
         for (what, n) in &st.issues {
             report.note(format!("Net check: {n} {what}."));
         }

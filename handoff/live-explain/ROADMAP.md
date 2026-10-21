@@ -8,7 +8,7 @@ Done (PR from branch claude/project-thread-z38d09):
 
 Next, in order:
 1. Learning checks reuse `explain` (Learning owner): predict-then-see.
-2. A `sim.live.why` command with menu and keymap entry (touches workflow registries).
+2. (done in the follow-up PR) `sim.why` command.
 3. Operate keys (hold keys 1..9 for buttons) and click-through on the symbol itself.
 4. Explain for analog quantities (why this current / voltage) from `network::Analysis`.
 5. Energy pulses along the route: needs a wire animation layer in novo-canvas; no flow direction is modelled, so only on a route read from the supply.

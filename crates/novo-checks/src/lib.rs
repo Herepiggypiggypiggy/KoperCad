@@ -100,6 +100,7 @@
 //! ```
 
 pub mod calc;
+pub mod calc_basis;
 mod calc_checks;
 pub mod calc_view;
 mod checks;
