@@ -393,7 +393,8 @@ pub(crate) fn layout_hits(nodes: &[Value], window: (f64, f64)) -> Vec<Hit> {
                 r.map(f64::round)
             ));
         }
-        if rw < 8.0 || rh < 8.0 {
+        // A button that is just one or two characters (a page crumb "1") is as wide as its text.
+        if (rw < 8.0 || rh < 8.0) && norm(&label).chars().count() > 2 {
             tiny.push(format!("{role} '{}' {rw:.0}x{rh:.0}", short(&label)));
         }
         if label.trim().is_empty() && role.eq_ignore_ascii_case("button") {
