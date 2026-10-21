@@ -236,9 +236,11 @@ fn attribute(
         .attributes()
         .flatten()
         .find(|a| a.key.local_name().as_ref() == name)
-        .map(|a| match a.decode_and_unescape_value(decoder) {
-            Ok(text) => text.into_owned().into_bytes(),
-            Err(_) => a.value.into_owned(),
+        .map(|a| {
+            match a.decoded_and_normalized_value(quick_xml::XmlVersion::Implicit1_0, decoder) {
+                Ok(text) => text.into_owned().into_bytes(),
+                Err(_) => a.value.into_owned(),
+            }
         })
 }
 
@@ -461,7 +463,7 @@ mod tests {
         let pads: [Vec<u8>; 3] = [
             vec![b' '; 20_000],
             [&[0xEF, 0xBB, 0xBF][..], &vec![b'\n'; 50_000][..]].concat(),
-            [vec![b' '; 9_000], vec![b'\r', b'\n'].repeat(9_000)].concat(),
+            [vec![b' '; 9_000], b"\r\n".repeat(9_000)].concat(),
         ];
         for (n, pad) in pads.iter().enumerate() {
             let mut bytes = Vec::new();
