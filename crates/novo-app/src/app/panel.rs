@@ -61,6 +61,7 @@ pub(super) struct Panel {
     height: Option<f32>,
     fit: bool,
     title_bar: bool,
+    above_card: bool,
 }
 
 impl Panel {
@@ -84,6 +85,7 @@ impl Panel {
             height: None,
             fit: false,
             title_bar: true,
+            above_card: false,
         }
     }
 
@@ -117,6 +119,13 @@ impl Panel {
     /// No title bar: the panel has its own header and is dragged by its body.
     pub(super) fn bare(mut self) -> Self {
         self.title_bar = false;
+        self
+    }
+
+    /// Starts clear of a card in the bottom right corner (the lesson card)
+    /// instead of under it: for the panels that open on every selection.
+    pub(super) fn above_card(mut self) -> Self {
+        self.above_card = true;
         self
     }
 
@@ -175,7 +184,7 @@ impl Panel {
         let (pivot, start) = self.start();
         // A panel hanging from the right edge stays clear of a card in the
         // bottom right corner, unless the person has moved it.
-        let corner = if self.side == Side::Right && !moved {
+        let corner = if self.above_card && self.side == Side::Right && !moved {
             reserved_bottom_right(ctx)
         } else {
             0.0
