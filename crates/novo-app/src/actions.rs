@@ -108,7 +108,7 @@ impl Action {
             Action::OpenReadOnly => "Open read-only…",
             Action::OpenExample => "Open example",
             Action::TryFastKeys => "Try the fast keys",
-            Action::ShowWalkthrough => "Fast keys walk-through",
+            Action::ShowWalkthrough => "Fast keys card on this project",
             Action::Learn => "Learn…",
             Action::SaveProject => "Save",
             Action::SaveProjectAs => "Save as…",

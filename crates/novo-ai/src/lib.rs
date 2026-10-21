@@ -20,5 +20,6 @@ pub mod consent;
 pub mod image;
 pub mod key;
 pub mod models;
+pub mod stream;
 pub mod tools;
 pub mod usage;

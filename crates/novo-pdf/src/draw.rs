@@ -58,6 +58,23 @@ impl<'a> PageWriter<'a> {
         self.uses_bold
     }
 
+    /// Restricts everything drawn until [`PageWriter::end_clip`] to the
+    /// rectangle (page millimetres).
+    pub fn begin_clip(&mut self, x: f32, y: f32, w: f32, h: f32) {
+        self.content.save_state();
+        self.content.rect(x, y, w, h);
+        self.content.clip_nonzero();
+        self.content.end_path();
+    }
+
+    /// Ends the clip of [`PageWriter::begin_clip`].
+    pub fn end_clip(&mut self) {
+        self.content.restore_state();
+        // The restore also undid the colours and widths set inside the clip.
+        self.stroke = None;
+        self.fill = None;
+    }
+
     pub fn finish(self) -> Vec<u8> {
         self.content.finish().to_vec()
     }

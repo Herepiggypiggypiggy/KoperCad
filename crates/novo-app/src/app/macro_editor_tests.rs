@@ -149,7 +149,7 @@ fn a_pack_is_exported_from_the_browser_and_imported_into_another_library() {
     assert!(b.status.contains("Exported"), "{}", b.status);
 
     // A search narrows the pack.
-    b.query = "24 V".into();
+    b.query = "star-delta".into();
     let small = dir.path().join("small.kcmacropack");
     b.export_pack(&small);
     b.query.clear();

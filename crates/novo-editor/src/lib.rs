@@ -45,6 +45,7 @@ pub mod lines;
 pub mod naming;
 pub mod overlap;
 pub mod pages;
+pub mod pinkind;
 pub mod potential;
 pub mod potential_menu;
 pub mod row;

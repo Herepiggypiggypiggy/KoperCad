@@ -61,7 +61,14 @@ pub(super) fn phase_line(running: bool, has_result: bool, stale: bool) -> (&'sta
 
 /// The panel, top right of the 3D view. `stale` is true when the shown result
 /// was made for another layout.
-pub(super) fn show(ctx: &egui::Context, view: egui::Rect, state: &mut HeatState, stale: bool) {
+pub(super) fn show(
+    ctx: &egui::Context,
+    view: egui::Rect,
+    state: &mut HeatState,
+    stale: bool,
+    tag_of: &dyn Fn(u64) -> String,
+) -> Option<u64> {
+    let mut jump = None;
     super::panel::Panel::new(
         "view3d_heat_panel",
         "Heat",
@@ -79,6 +86,9 @@ pub(super) fn show(ctx: &egui::Context, view: egui::Rect, state: &mut HeatState,
         } else {
             t::TEXT_MUTED
         }));
+        if let Some(sol) = state.solution() {
+            jump = verdict_line(ui, &sol.snapshot, tag_of, stale || state.running());
+        }
         ui.horizontal_wrapped(|ui| heat::simulate_controls_with(ui, state, false));
         let running = state.running();
         egui::CollapsingHeader::new("Settings for the next run")
@@ -90,6 +100,71 @@ pub(super) fn show(ctx: &egui::Context, view: egui::Rect, state: &mut HeatState,
             .id_salt("view3d_heat_about")
             .show(ui, |ui| about(ui, state));
     });
+    jump
+}
+
+/// The verdict sentence of the shown result, its device name a button that
+/// selects the device in the view. Greyed while the result is out of date or
+/// a new run is under way. Returns the device picked.
+fn verdict_line(
+    ui: &mut egui::Ui,
+    snap: &novo_cfd::CfdSnapshot,
+    tag_of: &dyn Fn(u64) -> String,
+    dim: bool,
+) -> Option<u64> {
+    use super::heat_verdict::{Tone, verdict};
+    let v = verdict(snap, tag_of)?;
+    let pal = crate::theme::ui_palette();
+    let colour = if dim {
+        pal.text_secondary
+    } else {
+        match v.tone {
+            Tone::Fine => pal.success,
+            Tone::Tight => pal.warning,
+            Tone::TooHot => pal.error,
+            Tone::Unknown => pal.text_secondary,
+        }
+    };
+    let mut jump = None;
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        ui.label(egui::RichText::new(&v.lead).strong().color(colour));
+        if let Some((id, tag)) = &v.device {
+            let resp = ui.add(
+                egui::Button::new(egui::RichText::new(tag).strong().color(colour)).frame(false),
+            );
+            if resp.hovered() {
+                // Underline on hover marks the name as a button.
+                let y = resp.rect.bottom() - 2.0;
+                ui.painter().hline(
+                    resp.rect.x_range(),
+                    y,
+                    egui::Stroke::new(1.0, colour),
+                );
+            }
+            if resp
+                .on_hover_text("Select the device and bring it into view")
+                .clicked()
+            {
+                jump = Some(*id);
+            }
+        }
+        ui.label(egui::RichText::new(&v.tail).strong().color(colour));
+    })
+    .response
+    .on_hover_text(
+        "From the solver's per-device margins. A model estimate, not a measurement: limits come from the parts data.",
+    );
+    ui.label(
+        egui::RichText::new(if dim {
+            "Out of date or running: this is the previous result."
+        } else {
+            "Model estimate, not a measurement."
+        })
+        .small()
+        .color(pal.text_secondary),
+    );
+    jump
 }
 
 fn settings(ui: &mut egui::Ui, state: &mut HeatState) {

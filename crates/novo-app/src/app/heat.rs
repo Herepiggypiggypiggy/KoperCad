@@ -833,12 +833,19 @@ pub(super) fn simulate_controls_with(ui: &mut egui::Ui, state: &mut HeatState, c
                 let frac = heat_progress::fraction(levels, p);
                 // The level, iteration and time sit beside the bar: inside it
                 // they were cut off at the bar's end.
+                // A residual that has not started to fall reads 0 %; the bar
+                // moves instead of claiming nothing has happened.
+                let bar = egui::ProgressBar::new(frac).desired_width(80.0);
+                ui.add(if frac < 0.01 {
+                    bar.animate(true).text("working")
+                } else {
+                    bar.show_percentage()
+                });
                 ui.add(
-                    egui::ProgressBar::new(frac)
-                        .desired_width(80.0)
-                        .show_percentage(),
-                );
-                ui.label(egui::RichText::new(heat_progress::label(p, secs)).small());
+                    egui::Label::new(egui::RichText::new(heat_progress::label(p, secs)).small())
+                        .wrap_mode(egui::TextWrapMode::Extend),
+                )
+                .on_hover_text("Level, iteration (it) and seconds since the run started");
                 heat_progress::sparkline(ui, &state.history);
             }
             None => {

@@ -17,7 +17,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use novo_core::{Direction, Pin, Point};
+use novo_core::{Direction, Pin, Point, Rotation};
 use novo_symbols::{Library, Pack, Symbol};
 
 use super::library::{DOWN, LEFT, LibPort, Match, RIGHT, UP};
@@ -25,7 +25,7 @@ use super::model::{DeviceRole, PageClass, PxfFile};
 use crate::eplan::nets::{
     ConnGraph, ConnPoint, Dir, Interruption, NetIssue, PinKey, ReconNets, rebuild_nets,
 };
-use crate::eplan::symbols::{EplanSymbol, SymbolMapper, Target};
+use crate::eplan::symbols::{EplanSymbol, Port, SymbolMapper, Target, fit_geometry};
 
 /// EPLAN is y up from the bottom of the sheet; KoperCAD is y down from the
 /// top of an A3 landscape page.
@@ -84,6 +84,8 @@ pub struct DrawStats {
     pub unplaced: usize,
     /// Placements drawn although the library only loosely matched.
     pub loose: usize,
+    /// Function names of the loosely matched placements, with counts.
+    pub loose_functions: BTreeMap<String, usize>,
     pub interruptions: usize,
     pub nets: usize,
     pub wires: usize,
@@ -307,14 +309,18 @@ pub(super) fn draw(file: &PxfFile, mapper: &SymbolMapper, only: &BTreeSet<usize>
             out.stats.unplaced += 1;
             continue;
         };
-        if quality > Match::SameFamily {
-            out.stats.loose += 1;
-        }
         let function = file
             .library
             .function(key3)
             .map(|f| f.name.get("en_US").to_string())
             .unwrap_or_default();
+        if quality > Match::SameFamily {
+            out.stats.loose += 1;
+            *out.stats
+                .loose_functions
+                .entry(function.clone())
+                .or_default() += 1;
+        }
         let owner = format!("d{di}");
         let role = match d.role {
             DeviceRole::Terminal => Role::Terminal {
@@ -711,7 +717,7 @@ fn pick_library_symbol(
     {
         candidates.push(s);
     }
-    if candidates.is_empty() && !function.is_empty() {
+    if !function.is_empty() {
         let source = EplanSymbol {
             key: None,
             function: Some(function.to_string()),
@@ -738,6 +744,29 @@ fn pick_library_symbol(
         if s.connections.len() != ports.len() {
             continue;
         }
+        // Where the pin names say nothing in KoperCAD (`48Vac`, `0V48`), the
+        // arrangement of the points does: the primary of a transformer is on
+        // one side, the secondary on the other. Only an unturned, unmirrored
+        // fit is used, since the symbol is placed as it is.
+        let by_position = || -> Vec<usize> {
+            if ports.len() >= 3 {
+                let points: Vec<Port> = ports
+                    .iter()
+                    .map(|p| Port {
+                        // EPLAN's y is up; the fit's is down.
+                        at: Point::new(p.x, -p.y),
+                        dir: direction_of(p.dirs),
+                    })
+                    .collect();
+                if let Some(f) = fit_geometry(&points, s)
+                    && f.rotation == Rotation::R0
+                    && !f.mirrored
+                {
+                    return f.connection;
+                }
+            }
+            (0..ports.len()).collect()
+        };
         let conns: Vec<usize> = if named {
             let map = crate::eplan::symbols::match_pins(pin_names, s, None);
             if map.is_complete() && !map.positional {
@@ -751,13 +780,13 @@ fn pick_library_symbol(
                 if by_id.iter().all(Option::is_some) {
                     by_id.into_iter().flatten().collect()
                 } else {
-                    (0..ports.len()).collect()
+                    by_position()
                 }
             } else {
-                (0..ports.len()).collect()
+                by_position()
             }
         } else {
-            (0..ports.len()).collect()
+            by_position()
         };
         let distinct: BTreeSet<usize> = conns.iter().copied().collect();
         if distinct.len() == ports.len() {
@@ -769,8 +798,11 @@ fn pick_library_symbol(
 
 #[cfg(test)]
 mod tests {
+    use super::super::library::{DOWN, UP};
     use super::*;
     use crate::eplan::pxf::PxfInterruption;
+    use crate::eplan::symbols::SymbolMapper;
+    use novo_symbols::{Library, Pack};
 
     fn point(page: usize, text: &str) -> PxfInterruption {
         PxfInterruption {
@@ -781,6 +813,46 @@ mod tests {
             position: Some((10.0, 10.0)),
             variant: 0,
         }
+    }
+
+    fn port(index: u32, x: f64, y: f64, dirs: u8) -> LibPort {
+        LibPort { index, x, y, dirs }
+    }
+
+    #[test]
+    fn a_transformer_with_pe_is_fitted_by_where_its_points_sit() {
+        // Listed secondary, primary, secondary, primary, earth, as a
+        // crane drawing has them (y up: the secondary and the earth point at
+        // the bottom, leaving downward); the designations (`48Vac`, `0V48`)
+        // mean nothing in KoperCAD, the arrangement does.
+        let lib = Library::shared(Pack::Iec);
+        let mapper = SymbolMapper::new(Pack::Iec);
+        let ports = [
+            port(0, 0.0, -8.0, DOWN),
+            port(1, 0.0, 8.0, UP),
+            port(2, 16.0, -8.0, DOWN),
+            port(3, 16.0, 8.0, UP),
+            port(4, 24.0, -8.0, DOWN),
+        ];
+        let pins: Vec<String> = ["48Vac", "L1", "0V48", "L2", "PE"]
+            .map(String::from)
+            .to_vec();
+        let (symbol, conns) = pick_library_symbol(
+            lib,
+            &mapper,
+            "Transformer, 5 connection points with PE",
+            "T",
+            &pins,
+            &ports,
+            false,
+        );
+        let symbol = symbol.expect("the library has a transformer with PE");
+        assert_eq!(symbol.id, "iec/transformers/transformer_1ph_pe");
+        let ids: Vec<&str> = conns
+            .iter()
+            .map(|&j| symbol.connections[j].id.as_str())
+            .collect();
+        assert_eq!(ids, ["2.1", "1.1", "2.2", "1.2", "PE"]);
     }
 
     #[test]

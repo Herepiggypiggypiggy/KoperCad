@@ -436,9 +436,12 @@ impl NovoApp {
 
         let mut open = true;
         let mut action: Option<Act> = None;
+        let mut paper = self.wb.workshop_paper;
         super::panel::dialog(ctx, "Bench output", [560.0, 640.0])
             .open(&mut open)
             .show(ctx, |ui| {
+                workshop_strip(ui, &mut paper, &mut action);
+                ui.add_space(6.0);
                 readiness_strip(ui, &ready, &mut action);
                 let mut tab = match state.tab {
                     Tab::CutList => 0,
@@ -455,11 +458,15 @@ impl NovoApp {
                     Tab::Labels => label_tab(ui, &mut state, &stored_labels, &mut action),
                 }
             });
+        self.wb.workshop_paper = paper;
         if open {
             self.wb.bench = Some(state);
         }
         match action {
             Some(Act::Run(command)) => self.run_command(ctx, command, None),
+            Some(Act::ExportWorkshop) => {
+                self.export_workshop();
+            }
             Some(Act::ExportCut) => {
                 self.export_bench_cut();
             }
@@ -494,6 +501,7 @@ impl NovoApp {
 enum Act {
     /// A fix button of the readiness strip: runs this command.
     Run(&'static str),
+    ExportWorkshop,
     ExportCut,
     ExportMachineCsv,
     ExportFerrules,
@@ -502,6 +510,28 @@ enum Act {
     FillDefaults(WireDefaults),
     SaveStandard(FerruleStandard),
     SaveLabels(LabelSettings),
+}
+
+/// The one-button bundle for the hand workshop, above the tabs.
+fn workshop_strip(
+    ui: &mut egui::Ui,
+    paper: &mut novo_layout::template::Paper,
+    act: &mut Option<Act>,
+) {
+    use novo_layout::template::Paper;
+    ui.horizontal(|ui| {
+        if novo_theme::widgets::primary_button(ui, "Workshop pack (folder)")
+            .on_hover_text(super::WORKSHOP_HINT)
+            .clicked()
+        {
+            *act = Some(Act::ExportWorkshop);
+        }
+        ui.label("Template on");
+        for p in [Paper::A4, Paper::A3] {
+            ui.selectable_value(paper, p, p.name());
+        }
+    });
+    ui.weak("1:1 drilling template with a check ruler, cut list, ferrules, labels and the tick checklist, in one folder next to the project.");
 }
 
 /// One thing the printed bench output cannot be trusted on yet.

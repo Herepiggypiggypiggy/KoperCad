@@ -70,6 +70,7 @@ pub(crate) const ANCHOR_LABELS: &[(&str, &str)] = &[
     ("cabinet.inspector", "Cabinet inspector"),
     ("cabinet.door", "Door and depth"),
     ("cabinet.surface", "Surface"),
+    ("cabinet.door.depth", "Inside depth"),
     ("cabinet.door.apply", "Apply"),
     ("cabinet.routes_panel", "Routes panel"),
     ("cabinet.wire_rules", "Wire rules"),
