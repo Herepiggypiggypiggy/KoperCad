@@ -180,10 +180,12 @@ impl NovoApp {
                             ui.close();
                         }
                         if self.settings.ai.enabled {
-                            let explain = ui.button("Explain with Claude").on_hover_text(
-                                "Sends this problem's text to Claude, with your own API \
-                                     key, and shows its reading in Ask Claude.",
-                            );
+                            let explain = ui.button("Explain with Claude").on_hover_text(format!(
+                                "Sends this problem's text (tags and names as shown) to \
+                                 Claude, with your own API key, whatever data scope you chose \
+                                 (now: {}). Its reading appears in Ask Claude.",
+                                self.settings.ai.consent.effective().label()
+                            ));
                             if explain.clicked() {
                                 self.wb.assistant.ask_later(explain_question(p));
                                 ui.close();

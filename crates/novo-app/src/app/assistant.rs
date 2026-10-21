@@ -642,7 +642,14 @@ impl NovoApp {
         if self.wb.assistant.running.is_none()
             && let Some(q) = self.wb.assistant.pending_question.take()
         {
-            self.assistant_send(ctx, q);
+            if self.settings.ai.enabled {
+                self.assistant_send(ctx, q);
+            } else {
+                self.wb
+                    .assistant
+                    .transcript
+                    .push(Entry::Problem("Claude is off, so nothing was sent.".into()));
+            }
         }
         if self.wb.assistant.running.is_some() || self.wb.assistant.key_check.is_some() {
             ctx.request_repaint_after(std::time::Duration::from_millis(120));
@@ -803,6 +810,9 @@ impl NovoApp {
                 ui.weak(s.describes());
             });
         }
+        ui.weak(
+            "Buttons that say “with Claude” send the text shown on screen, whatever you chose here.",
+        );
         let current = self.settings.ai.consent.effective();
         if scope != self.wb.assistant.pending_scope.unwrap_or(current) {
             if enabled && scope > current {

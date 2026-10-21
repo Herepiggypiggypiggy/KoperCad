@@ -48,7 +48,8 @@ impl DataScope {
     pub fn describes(self) -> &'static str {
         match self {
             Self::None => {
-                "Only the messages you type are sent. Claude cannot look at your drawing."
+                "Only the messages you type are sent (and the text of a button that says \
+                 “with Claude”, when you press it). Claude cannot look at your drawing."
             }
             Self::Outline => {
                 "The project name, page names and titles, device tags and counts are sent \
