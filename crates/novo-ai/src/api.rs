@@ -87,6 +87,9 @@ impl<T: Transport + ?Sized> Transport for Box<T> {
     }
 }
 
+/// Longest single line of a streamed reply that is accepted.
+const MAX_LINE_BYTES: usize = 1024 * 1024;
+
 /// The real HTTPS transport.
 pub struct UreqTransport {
     agent: ureq::Agent,
@@ -162,7 +165,7 @@ impl Transport for UreqTransport {
         req: &HttpRequest,
         on_line: &mut dyn FnMut(&str) -> bool,
     ) -> Result<HttpResponse, String> {
-        use std::io::{BufRead, BufReader};
+        use std::io::{BufRead, BufReader, Read};
         let mut resp = self.call(req)?;
         let (status, headers) = head_of(&resp);
         if !(200..300).contains(&status) {
@@ -176,8 +179,23 @@ impl Transport for UreqTransport {
                 body,
             });
         }
-        for line in BufReader::new(resp.body_mut().as_reader()).lines() {
-            if !on_line(&line.map_err(|e| e.to_string())?) {
+        // Lines are read with a cap so a hostile or broken stream cannot
+        // make one line grow without bound.
+        let mut reader = BufReader::new(resp.body_mut().as_reader());
+        loop {
+            let mut raw = Vec::new();
+            let n = (&mut reader)
+                .take(MAX_LINE_BYTES as u64 + 1)
+                .read_until(b'\n', &mut raw)
+                .map_err(|e| e.to_string())?;
+            if n == 0 {
+                break;
+            }
+            if raw.len() > MAX_LINE_BYTES {
+                return Err("a line of the reply is longer than allowed".into());
+            }
+            let line = String::from_utf8_lossy(&raw);
+            if !on_line(line.trim_end_matches(['\r', '\n'])) {
                 break;
             }
         }

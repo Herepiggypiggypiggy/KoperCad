@@ -15,6 +15,11 @@ pub enum Delta {
     Thinking,
 }
 
+/// Highest content block index accepted; a reply has a handful of blocks.
+const MAX_BLOCKS: usize = 256;
+/// Most text, thinking and tool input one reply may build up (bytes).
+const MAX_BYTES: usize = 8 * 1024 * 1024;
+
 /// Builds a [`Reply`] from event lines fed one at a time.
 #[derive(Default)]
 pub struct Assembler {
@@ -26,6 +31,7 @@ pub struct Assembler {
     stop_details: Value,
     error: Option<ApiError>,
     stopped: bool,
+    bytes: usize,
 }
 
 impl Assembler {
@@ -40,10 +46,25 @@ impl Assembler {
         let Some(data) = line.strip_prefix("data:") else {
             return;
         };
+        if self.error.is_some() {
+            return;
+        }
+        self.bytes += data.len();
+        if self.bytes > MAX_BYTES {
+            self.error = Some(ApiError::Parse("the reply is larger than allowed".into()));
+            return;
+        }
         let Ok(ev) = serde_json::from_str::<Value>(data.trim()) else {
+            self.error = Some(ApiError::Parse("an event was not valid JSON".into()));
             return;
         };
         let index = ev["index"].as_u64().unwrap_or(0) as usize;
+        if index >= MAX_BLOCKS {
+            self.error = Some(ApiError::Parse(format!(
+                "content block index {index} too large"
+            )));
+            return;
+        }
         match ev["type"].as_str().unwrap_or_default() {
             "message_start" => {
                 self.model = ev["message"]["model"].as_str().unwrap_or_default().into();
@@ -284,5 +305,26 @@ mod tests {
             to_sse(&msg)
         );
         assert_eq!(run(&sse).0.unwrap().text(), "ok");
+    }
+
+    #[test]
+    fn a_huge_block_index_is_an_error_not_an_allocation() {
+        let sse = "data: {\"type\":\"content_block_start\",\"index\":4000000000,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n";
+        assert!(matches!(run(sse).0, Err(ApiError::Parse(_))));
+    }
+
+    #[test]
+    fn a_reply_over_the_size_cap_is_an_error() {
+        let big = "x".repeat(MAX_BYTES / 2 + 1);
+        let line = format!(
+            "data: {{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{{\"type\":\"text\",\"text\":\"{big}\"}}}}\n"
+        );
+        let sse = format!("{line}{line}");
+        assert!(matches!(run(&sse).0, Err(ApiError::Parse(_))));
+    }
+
+    #[test]
+    fn a_data_line_that_is_not_json_is_an_error() {
+        assert!(matches!(run("data: {oops\n").0, Err(ApiError::Parse(_))));
     }
 }
