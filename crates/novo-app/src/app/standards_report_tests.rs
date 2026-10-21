@@ -150,3 +150,23 @@ fn simulate_commands_live_in_the_simulate_menu_and_leave_cabinet_for_the_schemat
     );
     assert!(d.app.wb.live.on);
 }
+
+#[test]
+fn colours_are_not_checkable_when_no_wire_states_one() {
+    let (_dir, d) = example();
+    let project = d.app.backend.document().unwrap().project();
+    assert!(project.wires().count() > 0);
+    let unstated = project.wires().filter(|w| w.color.is_none()).count();
+    let doc = standards::document::build(project, &standards::compliance(project));
+    let row = doc
+        .design
+        .iter()
+        .find(|r| r.family.id == "colours")
+        .unwrap();
+    if unstated == project.wires().count() {
+        assert_eq!(row.verdict, standards::document::Verdict::NotCheckable);
+    } else if unstated > 0 {
+        assert_eq!(row.verdict, standards::document::Verdict::Partial);
+    }
+    assert_ne!(row.verdict, standards::document::Verdict::Pass);
+}

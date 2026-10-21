@@ -385,8 +385,11 @@ fn missing(project: &Project, id: &str, heat: Option<&HeatFact>) -> Vec<String> 
         }
         "colours" => {
             let wires = project.wires().count();
-            if wires > 0 && project.wires().all(|w| w.color.is_none()) {
-                out.push("No wire states a colour, so no colour was judged".to_owned());
+            let none = project.wires().filter(|w| w.color.is_none()).count();
+            if none > 0 {
+                out.push(format!(
+                    "{none} of {wires} wires state no colour, so they were not judged"
+                ));
             }
         }
         "protection" => {
@@ -562,8 +565,8 @@ pub fn rows(project: &Project, input: &DesignInput) -> Vec<Row> {
         } else if n == 0 && (family.id != "protection" || project.devices().count() == 0) {
             Verdict::NotApplicable
         } else if !not_checkable.is_empty() {
-            let nothing_ran = family.id == "safety-functions"
-                && safety_fn::functions(project).is_empty()
+            let nothing_ran = family.id == "colours" && project.wires().all(|w| w.color.is_none())
+                || family.id == "safety-functions" && safety_fn::functions(project).is_empty()
                 || family.id == "protection" && n == 0;
             if nothing_ran {
                 Verdict::NotCheckable
