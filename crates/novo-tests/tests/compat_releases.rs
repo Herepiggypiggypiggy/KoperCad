@@ -35,7 +35,10 @@ fn manifest(release: &str) -> Vec<(String, usize, usize, usize, usize)> {
         .collect()
 }
 
-fn counts(p: &Project) -> (usize, usize, usize, usize) {
+/// Records, pages, symbols and wires.
+type Counts = (usize, usize, usize, usize);
+
+fn counts(p: &Project) -> Counts {
     (
         p.records().count(),
         p.pages().count(),
@@ -44,7 +47,7 @@ fn counts(p: &Project) -> (usize, usize, usize, usize) {
     )
 }
 
-fn every_file() -> Vec<(String, PathBuf, (usize, usize, usize, usize))> {
+fn every_file() -> Vec<(String, PathBuf, Counts)> {
     let mut all = Vec::new();
     for release in ["rc1", "rc2"] {
         for (stem, records, pages, symbols, wires) in manifest(release) {
