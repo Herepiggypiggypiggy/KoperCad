@@ -11,6 +11,7 @@
 2026-10-16 12:10 UTC #642 merged (replay gate, 142 steps tick). Second runner PR: rename/tee/feed_row/cable/issue_revision/assign_part/held-key ops, `manual` marker, menu-row anchors with fallback, free-text control-name ratchet; fmt, clippy and tests pass locally.
 2026-10-17 10:20 UTC #682 merged. Third runner PR: ui_click, list_row, type_text ops; waive/restore replay; flyout kept open when a row menu entry is chosen; live-view momentary wording.
 2026-10-17 12:50 UTC #986 merged. Fourth runner PR (draft, held for freeze): 10 click-only manual steps now replay; tab clicks tick; replay state no longer leaks between lessons.
+- Skip step now does the step for the learner ("Do it for me") when it has a `solve` the editor can carry out: the document-changing solve ops moved from the replay gate (`learn_replay`) into `learn_solve.rs` (`NovoApp::solve_op`), shared by the gate and the card. UI-only ops (clicks on controls, held keys, live badges, cabinet ops) are still replay-only; those steps are skipped as before.
 
 ## 2026-10-21 Learning fixer
 - Inspector (and other right-hand panels) now stay above the lesson card while it sits in its corner (`panel::reserve_bottom_right`); test at 1366x768.

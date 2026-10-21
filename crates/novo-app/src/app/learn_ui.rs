@@ -45,6 +45,8 @@ pub(super) struct Card {
     /// A demonstration is on show (playing, or settled on its markers).
     demo_on: bool,
     next_lessons: Vec<(String, String)>,
+    /// Skip does the step for the learner (it has a `solve`).
+    skip_does_it: bool,
     /// The lesson ships a finished drawing and the learner is at its end.
     pub(super) can_open_finished: bool,
     confirm_finished: bool,
@@ -59,6 +61,7 @@ struct Words {
     replay: String,
     stop: String,
     skip: String,
+    do_it: String,
     next: String,
     restart: String,
     restart_confirm: String,
@@ -114,6 +117,7 @@ impl NovoApp {
             },
         );
         match action {
+            Some(CardAction::Move(Move::Skip)) => self.learn_skip(ctx),
             Some(CardAction::Move(how)) => self.learn_move(how),
             Some(CardAction::ShowMe) => self.learn_show_me(),
             Some(CardAction::StopDemo) => self.learn_stop_demo(),
@@ -147,6 +151,7 @@ impl NovoApp {
             replay: say("demo_replay"),
             stop: say("demo_stop"),
             skip: say("skip_step"),
+            do_it: say("do_it_for_me"),
             next: say("next"),
             restart: say("restart_lesson"),
             restart_confirm: say("restart_confirm"),
@@ -202,6 +207,7 @@ impl NovoApp {
             how: self.learn_how_lines(),
             demo_on: self.learn.demo.is_some(),
             next_lessons,
+            skip_does_it: step.is_some_and(|s| !s.solve.is_empty() && s.manual.is_none()),
             can_open_finished: (finished || run.index() + 1 >= total)
                 && self
                     .learn
@@ -302,7 +308,14 @@ impl NovoApp {
                     if novo_theme::widgets::primary_button(ui, &card.words.next).clicked() {
                         action = Some(CardAction::Move(Move::Next));
                     }
-                } else if ui.button(&card.words.skip).clicked() {
+                } else if ui
+                    .button(if card.skip_does_it {
+                        &card.words.do_it
+                    } else {
+                        &card.words.skip
+                    })
+                    .clicked()
+                {
                     action = Some(CardAction::Move(Move::Skip));
                 }
             });
