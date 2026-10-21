@@ -24,3 +24,16 @@ fn the_title_names_the_revision_state() {
     let out = handover_summary(doc.project(), &HandoverInput::default());
     assert!(out.title.contains("no revision issued"), "{}", out.title);
 }
+
+#[test]
+fn the_drawing_row_counts_drawn_pages_apart_from_generated_ones() {
+    let mut doc = Document::default();
+    motor_starter(&mut doc).unwrap();
+    let rows = truth_rows(doc.project(), &HandoverInput::default());
+    let drawing = rows
+        .iter()
+        .find(|r| r.item == "Drawing, device and terminal lists")
+        .unwrap();
+    assert!(drawing.detail.contains("drawn page"), "{}", drawing.detail);
+    assert!(!drawing.detail.contains("generated"), "{}", drawing.detail);
+}

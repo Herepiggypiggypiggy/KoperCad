@@ -1,0 +1,46 @@
+@title Add PLC card on a new project: the message says where the channels come from, the overview stays below the menu bar
+@area Journeys
+# Acceptance round 2: Add card drew nothing and said nothing; the PLC overview opened over the menu names.
+fresh
+key ctrl+n
+wait 20
+key ctrl+k
+wait 4
+text add plc card
+wait 6
+key Enter
+wait 10
+click_text "Add card"
+wait 20
+expect "Added card"
+expect "To PLC"
+shot card-added
+key ctrl+k
+wait 4
+text plc overview
+wait 6
+key Enter
+wait 20
+expect "PLC overview"
+expect "-K1"
+shot overview-below-menu
+check_layout
+# The Pages panel hint is painted text (not in the widget tree); the picture shows it wrapped, not cut at the left edge.
+key Escape
+try click_text Pages #1
+wait 8
+shot pages-hint
+# A-10: an empty Cabinet workspace offers the way out (the new cabinet form), not only a sentence.
+click_text Cabinet #1
+wait 20
+expect "No panel yet"
+expect_enabled "New cabinet..."
+shot cabinet-empty-offer
+click_text "New cabinet..."
+wait 10
+shot cabinet-form
+key Enter
+wait 20
+expect_not "No panel yet"
+shot cabinet-created
+check_layout

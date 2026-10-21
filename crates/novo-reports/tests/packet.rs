@@ -150,6 +150,19 @@ fn the_cover_lists_what_it_is_given_and_never_claims_exactness_by_itself() {
             .to_string()
             .starts_with(&jobs.len().to_string())
     );
+    // The cover names the drawing revision, not the model's edit counter.
+    let revision = facts
+        .rows
+        .iter()
+        .find(|r| r.cells[0].to_string() == "Drawing revision")
+        .expect("drawing revision");
+    assert_eq!(revision.cells[1].to_string(), "none issued yet");
+    assert!(
+        !facts
+            .rows
+            .iter()
+            .any(|r| r.cells[0].to_string() == "Project revision")
+    );
     let read = out.section("read-first").expect("notes");
     assert!(read.rows.len() >= 4);
 }
