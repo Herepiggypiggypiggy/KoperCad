@@ -1087,3 +1087,23 @@ fn the_broken_contactor_challenge_only_ticks_after_the_wire_is_drawn() {
     }
     assert_ne!(step(&d), "pull-in", "with the wire the coil pulls in");
 }
+
+#[test]
+fn a_lesson_about_something_else_keeps_the_design_checks_quiet() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    d.app.learn.reload();
+    d.app.learn.use_progress_file(dir.path().join("learn.json"));
+    d.app.start_lesson("motor-starter");
+    d.frame();
+    assert!(
+        d.app.shown_problems().is_empty(),
+        "the motor starter's sample warnings are not shown"
+    );
+    d.app.start_lesson("design-checks");
+    d.frame();
+    assert!(
+        !d.app.shown_problems().is_empty(),
+        "the lesson about the checks shows them"
+    );
+}

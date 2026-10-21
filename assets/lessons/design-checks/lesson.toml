@@ -10,6 +10,7 @@ level = "beginner"
 minutes = 8
 topics = ["checks", "problems", "waive"]
 needs = []
+show_problems = true
 next = ["parts-library"]
 project = "project.json"
 finished = "finished.json"

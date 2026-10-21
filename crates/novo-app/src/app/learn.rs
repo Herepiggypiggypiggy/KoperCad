@@ -443,6 +443,11 @@ impl LearnState {
         self.run.as_ref().map(|r| r.lesson().id.as_str())
     }
 
+    /// A lesson is running that is not about the design checks.
+    pub(crate) fn quiet_checks(&self) -> bool {
+        self.run.as_ref().is_some_and(|r| !r.lesson().show_problems)
+    }
+
     /// Whether a card should be on show.
     pub(crate) fn card_on(&self) -> bool {
         self.run.is_some() && !self.hidden
