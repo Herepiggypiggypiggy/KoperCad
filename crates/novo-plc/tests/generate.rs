@@ -277,3 +277,52 @@ fn the_address_text_under_a_channel_follows_a_renumbering() {
     .unwrap();
     assert_eq!(text(&doc).as_deref(), Some("%IX8.0"));
 }
+
+#[test]
+fn a_spare_channel_shows_its_address_too_and_it_follows_the_card() {
+    use novo_plc::card::{ADDRESS_TEXT, SPARE, start_key};
+    let mut doc = Document::default();
+    import(
+        &mut doc,
+        "Tag,Description,Type\nB1,Sensor,DI\n",
+        &Options::default(),
+    );
+    let spares = |doc: &Document| -> Vec<String> {
+        let mut texts: Vec<String> = doc
+            .project()
+            .symbols()
+            .filter(|s| s.properties.contains_key(SPARE))
+            .filter_map(|s| match s.properties.get(ADDRESS_TEXT) {
+                Some(novo_core::Value::Text(t)) => Some(t.clone()),
+                _ => None,
+            })
+            .collect();
+        texts.sort();
+        texts
+    };
+    let first = spares(&doc);
+    assert_eq!(first.len(), 7);
+    assert_eq!(first[0], "%IX0.1");
+    // A text object of the page prints it, as for a signal.
+    let printed = doc
+        .project()
+        .texts()
+        .filter(|t| {
+            matches!(&t.content, novo_core::TextContent::Property { key } if key == ADDRESS_TEXT)
+        })
+        .count();
+    assert_eq!(printed, 8);
+    let card = cards(doc.project())[0].device;
+    doc.transact("Move the card", |tx| {
+        tx.set_property(card, start_key(novo_plc::Space::Input), Some(8i64.into()))?;
+        novo_plc::sync_address_texts(tx, library()).map(|_| ())
+    })
+    .unwrap();
+    assert_eq!(spares(&doc)[0], "%IX8.1");
+}
+
+#[test]
+fn a_project_without_address_texts_is_not_indexed_to_look_for_stale_ones() {
+    let doc = Document::default();
+    assert!(novo_plc::stale_address_texts(doc.project(), library()).is_empty());
+}
