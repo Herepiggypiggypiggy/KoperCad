@@ -94,7 +94,7 @@ impl NovoApp {
 
     /// Writes the proposals with these ids as one undo step.
     pub(super) fn apply_autopilot(&mut self, plan: &Autopilot, ids: Option<&BTreeSet<usize>>) {
-        let mut counts = (0, 0, 0);
+        let mut counts = (0, 0, 0, 0);
         let unverified = plan.proposals.iter().any(|p| {
             ids.is_none_or(|set| set.contains(&p.id))
                 && matches!(p.change, Change::Size(_))
@@ -106,7 +106,7 @@ impl NovoApp {
         }) {
             return;
         }
-        let (sized, coloured, numbered) = counts;
+        let (sized, coloured, numbered, cabled) = counts;
         let mut parts = Vec::new();
         if sized > 0 {
             parts.push(if unverified {
@@ -120,6 +120,9 @@ impl NovoApp {
         }
         if numbered > 0 {
             parts.push(format!("{numbered} wire numbers"));
+        }
+        if cabled > 0 {
+            parts.push(format!("{cabled} cables"));
         }
         let text = if parts.is_empty() {
             "Autopilot had nothing to fill in".to_owned()
@@ -203,10 +206,11 @@ fn body(
         );
     } else {
         ui.label(format!(
-            "{} sizes, {} colours and {} wire numbers can be filled in from the drawing. Nothing is written until you accept; one Undo takes it all back.",
+            "{} sizes, {} colours, {} wire numbers and {} cables can be filled in from the drawing. Nothing is written until you accept; one Undo takes it all back.",
             state.plan.count("Size"),
             state.plan.count("Colour"),
             state.plan.count("Number"),
+            state.plan.count("Cable"),
         ));
     }
     if state.plan.planning_values && state.plan.count("Size") > 0 {
@@ -217,6 +221,24 @@ fn body(
             "Sizes use planning values: the built-in ampacity tables are not checked against the standard. Read the clauses in your licensed copy before relying on a number.",
             |_| {},
         );
+    }
+    if state
+        .plan
+        .proposals
+        .iter()
+        .any(|p| p.reason.contains("IEC "))
+    {
+        ui.add_space(4.0);
+        novo_theme::widgets::banner(
+            ui,
+            novo_theme::widgets::Level::Info,
+            "Unverified: the IEC clause numbers in the reasons are not checked against a licensed copy. Check them in your copy of the standard.",
+            |_| {},
+        );
+    }
+    for line in &state.plan.left_to_you {
+        ui.add_space(4.0);
+        novo_theme::widgets::banner(ui, novo_theme::widgets::Level::Info, line, |_| {});
     }
     if !state.plan.unresolved.is_empty() {
         ui.add_space(4.0);

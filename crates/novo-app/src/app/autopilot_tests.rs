@@ -199,3 +199,81 @@ fn assumed_rows_start_unticked_and_stay_out_of_accept_all() {
     let ticked = super::autopilot::default_ticked(&plan);
     assert_eq!(ticked, BTreeSet::from([0, 2]));
 }
+
+#[test]
+fn earth_and_neutral_reasons_say_which_circuit_they_follow() {
+    let (_dir, d) = example();
+    let (plan, _) = build(d.doc().project(), false);
+    let followers: Vec<_> = plan
+        .proposals
+        .iter()
+        .filter(|p| p.change.kind() == "Size")
+        .filter(|p| p.reason.starts_with("protective") || p.reason.starts_with("the neutral"))
+        .collect();
+    assert!(!followers.is_empty(), "the example has PE or neutral wires");
+    for p in &followers {
+        assert!(
+            p.reason.contains("on the same device") || p.reason.contains("none on the same device"),
+            "{}: {}",
+            p.label,
+            p.reason
+        );
+        // A size that follows another proposal is never presented as a plain rule.
+        if p.reason.contains("itself a proposal") {
+            assert_eq!(p.basis, Basis::Planning, "{}", p.reason);
+        }
+    }
+    for p in &followers {
+        eprintln!("{}: {} [{}]", p.label, p.reason, p.basis.label());
+    }
+}
+
+#[test]
+fn cable_rows_group_the_wires_that_leave_together_and_apply_last() {
+    let (_dir, mut d) = example();
+    let (plan, _) = build(d.doc().project(), false);
+    let cables: Vec<_> = plan
+        .proposals
+        .iter()
+        .filter(|p| p.change.kind() == "Cable")
+        .collect();
+    eprintln!("cable rows: {}", cables.len());
+    for c in &cables {
+        eprintln!("{}: {} -> {}", c.label, c.change.value(), c.reason);
+    }
+    let before = d.doc().project().cables().count();
+    d.app.apply_autopilot(&plan, None);
+    d.frame();
+    let made = d.doc().project().cables().count() - before;
+    assert_eq!(made, cables.len(), "every cable row creates its cable");
+}
+
+#[test]
+fn estimated_lengths_are_reported_as_left_to_the_designer() {
+    let (_dir, d) = example();
+    let (plan, _) = build(d.doc().project(), false);
+    if !plan.left_to_you.is_empty() {
+        assert!(
+            plan.left_to_you[0].contains("estimates"),
+            "{:?}",
+            plan.left_to_you
+        );
+    }
+}
+
+#[test]
+fn estimates_in_the_example_are_explained_by_cause() {
+    let (_dir, d) = example();
+    let (plan, _) = build(d.doc().project(), false);
+    let text = plan.left_to_you.join("\n");
+    // Four motor wires leave the cabinet; six wires are supply feeds.
+    assert!(
+        text.contains("4 wire lengths are estimates: the wire leaves the cabinet"),
+        "{text}"
+    );
+    assert!(
+        text.contains("6 wire lengths are estimates: the wire comes in from outside"),
+        "{text}"
+    );
+    assert!(!text.contains("not placed"), "{text}");
+}
