@@ -1100,7 +1100,6 @@ impl NovoApp {
         })
     }
 
-    /// Where a control was last drawn.
     /// Where `id` is drawn itself, with no fallback to the control that
     /// opens it.
     pub(super) fn learn_drawn(&self, id: &str) -> Option<egui::Rect> {
@@ -1111,6 +1110,7 @@ impl NovoApp {
             .copied()
     }
 
+    /// Where a control was last drawn.
     pub(super) fn learn_anchor(&self, id: &str) -> Option<egui::Rect> {
         // A control that is folded away or inside a closed menu is pointed
         // at through the one that opens it.
