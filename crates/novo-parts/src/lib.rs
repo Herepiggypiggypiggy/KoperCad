@@ -50,6 +50,7 @@ mod table;
 mod tablefile;
 mod tablemap;
 mod tablepreview;
+pub mod xlsx_guard;
 
 pub use assign::{
     AssignMode, PartProposal, Suggestion, assign_cable_part, assign_part, assign_terminal_part,

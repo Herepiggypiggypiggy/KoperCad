@@ -192,6 +192,7 @@ fn table_from(kind: TableKind, rows: Vec<Row>) -> Option<Table> {
 /// (case does not matter); `~Name` sheets are the baseline; others are
 /// listed in [`Workbook::ignored`] and otherwise left alone.
 pub fn read_xlsx(bytes: &[u8]) -> Result<Workbook, SheetError> {
+    novo_parts::xlsx_guard::check_xlsx(bytes).map_err(|e| SheetError::Read(e.0))?;
     let mut book: Xlsx<_> = open_workbook_from_rs(Cursor::new(bytes.to_vec()))
         .map_err(|e: calamine::XlsxError| SheetError::Read(e.to_string()))?;
     let mut out = Workbook::default();

@@ -62,8 +62,6 @@ pub enum TableError {
 pub const MAX_FILE_BYTES: u64 = 32 * 1024 * 1024;
 /// Most rows one sheet may have; a parts table has far fewer.
 pub const MAX_ROWS: usize = 200_000;
-/// Most an `.xlsx` may expand to when unzipped (a zip bomb stays small on disk).
-const MAX_UNZIPPED_BYTES: u64 = 256 * 1024 * 1024;
 
 /// File extensions the table reader accepts.
 pub const TABLE_EXTENSIONS: &[&str] = &["csv", "tsv", "txt", "xlsx"];
@@ -135,16 +133,7 @@ fn read_text(bytes: &[u8]) -> Result<Sheet, TableError> {
 }
 
 fn read_workbook(bytes: &[u8]) -> Result<Vec<Sheet>, TableError> {
-    let mut archive = zip::ZipArchive::new(Cursor::new(bytes))
-        .map_err(|e| TableError::Workbook(e.to_string()))?;
-    let unzipped: u64 = (0..archive.len())
-        .filter_map(|i| archive.by_index_raw(i).ok().map(|f| f.size()))
-        .sum();
-    if unzipped > MAX_UNZIPPED_BYTES {
-        return Err(TableError::TooLarge(
-            "the workbook expands to far more data than a parts table holds; export the sheet as CSV".into(),
-        ));
-    }
+    crate::xlsx_guard::check_xlsx(bytes).map_err(|e| TableError::TooLarge(e.0))?;
     let mut book: Xlsx<_> = open_workbook_from_rs(Cursor::new(bytes.to_vec()))
         .map_err(|e: calamine::XlsxError| TableError::Workbook(e.to_string()))?;
     let mut sheets = Vec::new();
