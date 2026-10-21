@@ -69,6 +69,7 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 | `expect "text"`, `expect_not "text"` | a label or value containing the text is (not) in the widget tree; a miss is a finding (S3) |
 | `expect_enabled "Label"`, `expect_disabled "Label"` | the control with this label (icon glyphs ignored) is enabled / disabled; a miss is a finding |
 | `expect_scene "text"` | the project data dump (`scene`) contains the text: checks the canvas without reading pixels |
+| `expect_file "path" [bytes]` | a file exists with at least that many bytes; `~/` is the app home, one `*` allowed |
 | `@env NAME=VALUE` (header) | start the app with this environment variable; Ask Claude scenarios use `KOPERCAD_AI_REPLAY=qa/replay/<file>.json` (a JSON list of Messages API replies used in order, nothing is sent) with a dummy `ANTHROPIC_API_KEY` |
 | `check_layout` | cheap layout checks, see below |
 | `check_blank [label]` | takes a screenshot; finding S2 when the window is one flat colour |
@@ -80,6 +81,22 @@ Every scenario starts a fresh app with an empty profile at the run's window size
 
 A step that cannot run (widget not found, app gone) ends the scenario: that is a
 finding with the steps so far and a picture; a dead app is S1.
+
+## The merge gate
+
+`scripts/qa.sh run` also writes `summary.md` beside `report.md`: one row per scenario, one column per
+window size (`pass` or `FAIL F-001`), then only the blocking findings (S1 to S3). It is short enough
+to paste into a PR comment or `coordination/audit-digest.md`. The exit code is 1 when a run failed.
+
+To gate a pull request, check out its head in a worktree, build `novo-app` and `novo-cli` with the
+shared `CARGO_TARGET_DIR`, and run `scripts/qa.sh run --app <that kopercad> --out /mnt/project-files/qa/pr<N>`.
+Journey scenarios (`10-` to `13-`) cover the end-user path: export, workshop output, new project
+with save and reopen, and the cabinet. Add one scenario per feature as it lands.
+
+`expect_file "<path>" [min bytes]` checks a file an export wrote. `~/` is the app's own home folder,
+so `~/Documents/KoperCAD/*ferrules.pdf` finds exports that need no file dialog (one `*` is allowed in
+the file name and in the folder name). `answer_dialog ~/...` and `open ~/...` work the same way; an
+`open` of a `~/` project keeps the profile, so a project saved by the run can be reopened.
 
 ## Checks
 
