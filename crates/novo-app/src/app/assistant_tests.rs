@@ -941,3 +941,66 @@ fn stopping_a_reading_drops_the_answer_and_adds_nothing() {
     assert_eq!(s.d.app.datasheet_test_stage(), "note", "no review appears");
     assert!(!s.d.app.datasheet_test_duplicate());
 }
+
+fn propose_wire(s: &mut Setup, wire: u64, number: &str) {
+    queue(
+        &s.script,
+        [
+            tool(
+                "t1",
+                "propose_edit",
+                json!({"action": "set_wire_number", "args": {"wire_id": wire, "number": number}}),
+            ),
+            text("done"),
+        ],
+    );
+    ask(s, "Fix the wire numbers");
+}
+
+fn first_wire(s: &Setup) -> (u64, Option<String>) {
+    let w =
+        s.d.app
+            .document()
+            .unwrap()
+            .project()
+            .wires()
+            .next()
+            .unwrap();
+    (w.id.raw(), w.number.clone())
+}
+
+#[test]
+fn a_wire_number_changes_as_one_undo_step_and_only_at_whole_project() {
+    let mut s = setup(DataScope::Project);
+    let (wire, before) = first_wire(&s);
+    propose_wire(&mut s, wire, "L1-77");
+    let index = s.d.app.wb.assistant.first_proposal_index().expect("a card");
+    s.d.app.assistant_test_decide(index, true);
+    assert_eq!(first_wire(&s).1.as_deref(), Some("L1-77"));
+    let ctx = s.d.ctx.clone();
+    s.d.app.run(&ctx, Action::Undo);
+    assert_eq!(first_wire(&s).1, before, "one undo takes the number back");
+
+    // Below the whole project no card is made and the answer says nothing about wires.
+    let mut low = setup(DataScope::Selection);
+    let (wire, _) = first_wire(&low);
+    propose_wire(&mut low, wire, "X1");
+    propose_wire(&mut low, 999_999, "X1");
+    assert!(low.d.app.wb.assistant.first_proposal_index().is_none());
+}
+
+#[test]
+fn a_wire_number_proposal_is_checked_before_a_card_is_made() {
+    let mut s = setup(DataScope::Project);
+    let (wire, _) = first_wire(&s);
+    propose_wire(&mut s, 999_999, "A");
+    assert!(
+        s.d.app.wb.assistant.first_proposal_index().is_none(),
+        "unknown wire"
+    );
+    propose_wire(&mut s, wire, &"9".repeat(60));
+    assert!(
+        s.d.app.wb.assistant.first_proposal_index().is_none(),
+        "too long"
+    );
+}

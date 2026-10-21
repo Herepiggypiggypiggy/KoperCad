@@ -380,6 +380,16 @@ fn edit_actions() -> Vec<EditAction> {
                 "required": ["device_id", "key", "value"]}),
         },
         EditAction {
+            name: "set_wire_number",
+            description: "Sets the number printed on a wire, or clears it with an empty \
+                          number. Use it to resolve wire-number conflicts (section wire_numbers).",
+            schema: json!({"type": "object", "properties": {
+                "wire_id": {"type": "integer", "description": "id from section wires"},
+                "number": {"type": "string",
+                           "description": "the new wire number; empty clears it"}},
+                "required": ["wire_id", "number"]}),
+        },
+        EditAction {
             name: "add_page",
             description: "Adds an empty schematic page at the end.",
             schema: json!({"type": "object", "properties": {
@@ -402,6 +412,13 @@ pub(super) const MAX_VALUE_CHARS: usize = 500;
 /// What a proposal would replace, for the card only. It is never sent back to
 /// the model: old values and part names can be above the agreed scope.
 pub(super) fn proposal_note(project: &Project, p: &Proposal) -> Option<String> {
+    if p.action == "set_wire_number" {
+        let wire = project.wire(p.args["wire_id"].as_u64()?.into())?;
+        return Some(match &wire.number {
+            Some(old) => format!("Replaces the current number: {old}"),
+            None => "The wire has no number yet.".into(),
+        });
+    }
     let device = project.device(p.args["device_id"].as_u64()?.into())?;
     match p.action.as_str() {
         "set_property" => {
@@ -426,7 +443,12 @@ pub(super) struct Known {
     devices: HashMap<u64, String>,
     pages: HashMap<u64, String>,
     parts: HashMap<u64, String>,
+    /// Wire id to its current number (empty when it has none).
+    wires: HashMap<u64, String>,
 }
+
+/// Longest wire number accepted.
+const MAX_WIRE_NUMBER_CHARS: usize = 40;
 
 pub(super) fn known_of(p: &Project) -> Known {
     Known {
@@ -435,6 +457,10 @@ pub(super) fn known_of(p: &Project) -> Known {
             .map(|d| (d.id.raw(), d.tag.to_string()))
             .collect(),
         pages: p.pages().map(|g| (g.id.raw(), g.name.clone())).collect(),
+        wires: p
+            .wires()
+            .map(|w| (w.id.raw(), w.number.clone().unwrap_or_default()))
+            .collect(),
         parts: p
             .parts()
             .map(|x| {
@@ -550,6 +576,35 @@ pub(super) fn proposal_command(
                     value: Some(value),
                 },
                 format!("Set {key} of {tag} to {shown}"),
+            ))
+        }
+        "set_wire_number" => {
+            let wire = id("wire_id")?;
+            if !known.wires.contains_key(&wire) {
+                return Err(format!(
+                    "there is no wire with id {wire} (see section wires)"
+                ));
+            }
+            let number = args["number"]
+                .as_str()
+                .ok_or("number must be text; use an empty text to clear it")?
+                .trim();
+            if number.chars().count() > MAX_WIRE_NUMBER_CHARS {
+                return Err(format!(
+                    "number is longer than {MAX_WIRE_NUMBER_CHARS} characters"
+                ));
+            }
+            let summary = if number.is_empty() {
+                format!("Clear the number of wire {wire}")
+            } else {
+                format!("Set the number of wire {wire} to {number}")
+            };
+            Ok((
+                Command::SetWireNumber {
+                    wire: wire.into(),
+                    number: (!number.is_empty()).then(|| number.to_string()),
+                },
+                summary,
             ))
         }
         "add_page" => {
@@ -779,8 +834,10 @@ impl NovoApp {
                 Box::new(move |action, args| {
                     // The answer goes back to the model, so it must not reveal
                     // more than the agreed scope (part names are Whole project).
-                    if action == "assign_part" && scope != DataScope::Project {
-                        return Err("assign_part is not allowed above the agreed scope".into());
+                    if matches!(action, "assign_part" | "set_wire_number")
+                        && scope != DataScope::Project
+                    {
+                        return Err(format!("{action} is not allowed above the agreed scope"));
                     }
                     proposal_command(&validator_known, action, args).map(|(_, summary)| summary)
                 }),
