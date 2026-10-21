@@ -35,6 +35,7 @@ use super::view3d_move::{self, MoveState};
 use super::view3d_nudge::{self, Fields, Step};
 use super::view3d_place::{self, PlaceList};
 use super::view3d_rail;
+use super::view3d_runs::{self, Undrawn};
 use super::view3d_stats::{Build, Stats};
 use super::view3d_views::{self, ViewsAction};
 use super::view3d_wires::{self, WireFacts};
@@ -115,6 +116,13 @@ pub(crate) struct View3dMode {
     wires: Option<(StructureId, u64, Vec<WireInput>)>,
     /// What each routed wire comes to, for the hover card and the list.
     pub(super) wire_facts: Option<(StructureId, u64, std::collections::BTreeMap<u64, WireFacts>)>,
+    /// The wires with no path in the picture, and the revision their length
+    /// basis was read at (read when a card or the list needs it).
+    pub(super) undrawn: Option<(StructureId, u64, Vec<Undrawn>)>,
+    /// The lit path, outlined ducts and entry marker, and what they were
+    /// built for (enclosure, project revision, pose revision, selection).
+    runs_shown: Option<(StructureId, u64, u64, BTreeSet<ItemId>)>,
+    pub(super) run_marks: Vec<novo_view3d::Overlay>,
     /// The Wire runs list is open.
     pub(super) wire_runs: bool,
     /// The toolbar's layers and door.
@@ -174,6 +182,9 @@ impl Default for View3dMode {
             duct_fill: None,
             wires: None,
             wire_facts: None,
+            undrawn: None,
+            runs_shown: None,
+            run_marks: Vec::new(),
             wire_runs: false,
             controls: Controls::default(),
             hints: Hints::default(),
@@ -329,7 +340,7 @@ impl NovoApp {
                     mode.wire_facts = Some((
                         id,
                         revision,
-                        view3d_wires::facts(project, &routed, &on_plate),
+                        view3d_wires::facts(project, id, &routed, &on_plate),
                     ));
                     mode.wires = Some((id, revision, inputs));
                 }
@@ -521,6 +532,51 @@ impl NovoApp {
             mode.pins_shown = Some(pins_key);
             ghost_changed = true;
         }
+        // Runs: read how the picked wires were measured, then light their
+        // path and outline their ducts.
+        let want_runs = mode.controls.layers.wires;
+        if want_runs
+            && (mode.wire_runs
+                || mode
+                    .view
+                    .state
+                    .selection
+                    .iter()
+                    .any(|i| i.kind == ItemKind::Wire))
+        {
+            view3d_runs::ensure(
+                &mut mode.wire_facts,
+                &mut mode.undrawn,
+                project,
+                id,
+                revision,
+            );
+        }
+        let runs_key = (
+            id,
+            revision,
+            scene.pose_revision,
+            if want_runs {
+                mode.view.state.selection.clone()
+            } else {
+                BTreeSet::new()
+            },
+        );
+        if mode.runs_shown.as_ref() != Some(&runs_key) {
+            mode.run_marks = match &mode.wire_facts {
+                Some((s, r, facts)) if want_runs && *s == id && *r == revision => {
+                    view3d_runs::overlays(
+                        scene,
+                        facts,
+                        &mode.view.state.selection,
+                        novo_routing::entry::entry_point(project, id),
+                    )
+                }
+                _ => Vec::new(),
+            };
+            mode.runs_shown = Some(runs_key);
+            ghost_changed = true;
+        }
         let stored = load(project, id);
         if let Some(lay) = &stored {
             let tag_of = |d: u64| {
@@ -622,6 +678,7 @@ impl NovoApp {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
             all.extend(mode.pin_marks.iter().cloned());
+            all.extend(mode.run_marks.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker.clone());
             mode.view.set_overlays(all);
@@ -630,6 +687,7 @@ impl NovoApp {
             let mut all = mode.heat_base.clone();
             all.extend(mode.surface_panes.iter().cloned());
             all.extend(mode.pin_marks.iter().cloned());
+            all.extend(mode.run_marks.iter().cloned());
             all.extend(ghost.iter().cloned());
             all.extend(marker);
             let time = ui.input(|i| i.time);
@@ -870,7 +928,17 @@ impl NovoApp {
                 super::view3d_tip::show(ui.ctx(), &tip);
             }
         }
-        // Wire runs: a card for the wire under the pointer, and the list.
+        // Wire runs: a card for the wire under the pointer, the Run card for
+        // the picked wires, and the list.
+        if mode.controls.layers.wires && out.hover.is_some_and(|h| h.kind == ItemKind::Wire) {
+            view3d_runs::ensure(
+                &mut mode.wire_facts,
+                &mut mode.undrawn,
+                project,
+                id,
+                revision,
+            );
+        }
         let wire_facts = mode
             .wire_facts
             .as_ref()
@@ -885,10 +953,37 @@ impl NovoApp {
         {
             view3d_wires::hover_card(ui.ctx(), at, f);
         }
+        if let Some(facts) = wire_facts {
+            let chosen = view3d_runs::picked(facts, &mode.view.state.selection);
+            let asked = view3d_runs::card(ui.ctx(), out.rect, &chosen, mode.wire_runs);
+            if let Some(cores) = asked.select_cores {
+                let cores: BTreeSet<ItemId> = cores
+                    .into_iter()
+                    .filter(|w| facts.contains_key(w))
+                    .map(|w| ItemId::new(ItemKind::Wire, w))
+                    .collect();
+                if !cores.is_empty() {
+                    mode.view.state.selection = cores;
+                }
+            } else if asked.clear {
+                mode.view.state.selection.clear();
+            }
+        }
         if mode.wire_runs
             && let Some(facts) = wire_facts
         {
-            let asked = view3d_wires::list(ui.ctx(), out.rect, facts, &mode.view.state.selection);
+            let undrawn = mode
+                .undrawn
+                .as_ref()
+                .filter(|(s, r, _)| *s == id && *r == revision)
+                .map_or(&[][..], |(_, _, u)| u.as_slice());
+            let asked = view3d_wires::list(
+                ui.ctx(),
+                out.rect,
+                facts,
+                undrawn,
+                &mode.view.state.selection,
+            );
             if let Some(w) = asked.select {
                 mode.view.state.selection = BTreeSet::from([ItemId::new(ItemKind::Wire, w)]);
             }
