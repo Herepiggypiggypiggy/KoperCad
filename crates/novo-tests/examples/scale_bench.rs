@@ -19,12 +19,16 @@ use novo_numbering::{Mode, Scheme, SchemeKind, Scope, plan};
 use novo_tests::{BigSpec, big_project};
 
 /// Step name prefix and its budget in milliseconds on the reference
-/// container (release build). A step over budget fails `--budget`.
+/// container (release build). A step over budget fails `--budget`. The first
+/// entry whose prefix matches wins, so each row has its own entry (a loose
+/// budget on a shared prefix once covered rows it was not meant for).
 const BUDGETS: &[(&str, f64)] = &[
     ("open file", 3000.0),
     ("save full", 5000.0),
     ("autosave", 500.0),
-    ("page scene", 10000.0),
+    ("page scene (one page", 100.0),
+    ("page scene + tessellate (one page", 100.0),
+    ("page scene + tessellate (every page", 1000.0),
     ("search", 100.0),
     ("edit one symbol", 100.0),
     ("undo edit", 100.0),

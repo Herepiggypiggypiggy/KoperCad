@@ -60,7 +60,7 @@ The cabinet in the heat test is deliberately dense (60 placed devices on a 1.6 x
 
 ## Budgets
 
-`scale_bench --budget` fails when open, save, autosave, page scene, search, one edit or undo exceed the limits in `BUDGETS`. `tests/scale_budget.rs` runs in normal CI at 60 pages with generous limits. A release-mode job in CI is not added (would cost Actions minutes); run the script before releases.
+`scale_bench --budget` fails when a step exceeds its entry in `BUDGETS`: open file 3 s, full save 5 s, autosave 0.5 s, page scene (one page) 100 ms, page scene + tessellate (one page) 100 ms, page scene + tessellate (every page, 600 pages) 1 s, search 100 ms, one edit 100 ms, undo 100 ms. Each row has its own entry; the first matching prefix wins. `tests/scale_budget.rs` runs in normal CI at 60 pages with generous limits. A release-mode job in CI is not added (would cost Actions minutes); run the script before releases.
 
 ## Where the user finds it
 
