@@ -475,6 +475,7 @@ impl NovoApp {
             Some(Act::ExportWorkshop) => {
                 self.export_workshop();
             }
+            Some(Act::PreviewWorkshop) => self.open_print_preview_workshop(),
             Some(Act::ExportCut) => {
                 self.export_bench_cut();
             }
@@ -510,6 +511,7 @@ enum Act {
     /// A fix button of the readiness strip: runs this command.
     Run(&'static str),
     ExportWorkshop,
+    PreviewWorkshop,
     ExportCut,
     ExportMachineCsv,
     ExportFerrules,
@@ -537,6 +539,13 @@ fn workshop_strip(
         ui.label("Template on");
         for p in [Paper::A4, Paper::A3] {
             ui.selectable_value(paper, p, p.name());
+        }
+        if ui
+            .button("Preview")
+            .on_hover_text("See how each mounting plate is cut into template pages")
+            .clicked()
+        {
+            *act = Some(Act::PreviewWorkshop);
         }
     });
     ui.weak("1:1 drilling template with a check ruler, cut list, ferrules, labels and the tick checklist, in one folder next to the project.");

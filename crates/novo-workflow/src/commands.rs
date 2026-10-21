@@ -2359,6 +2359,28 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     verb(
         cmd(
+            "export.print_preview",
+            "Print preview and plot sets...",
+            "Export",
+            &[
+                "print preview",
+                "plot set",
+                "plot",
+                "page setup",
+                "paper size",
+                "scale",
+                "margins",
+                "page numbers",
+                "a4",
+                "a3",
+                "print",
+            ],
+            Needs::Project,
+        ),
+        &["print preview", "plot sets"],
+    ),
+    verb(
+        cmd(
             "export.pdf_options",
             "Export PDF with options...",
             "Export",
