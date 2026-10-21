@@ -49,7 +49,7 @@ impl NovoApp {
         let mut open_folder = false;
         let mut copy = false;
         let mut close = false;
-        egui::Modal::new(egui::Id::new("crash_report")).show(ctx, |ui| {
+        let shown = egui::Modal::new(egui::Id::new("crash_report")).show(ctx, |ui| {
             ui.set_width(420.0);
             ui.heading("KoperCAD stopped unexpectedly");
             ui.label(
@@ -65,6 +65,8 @@ impl NovoApp {
                 close = ui.button("Dismiss").clicked();
             });
         });
+        // Escape or a click outside the card dismisses it, like the button.
+        close |= shown.should_close();
         if open_report {
             match userkeymap::open_in_editor(&report) {
                 Ok(()) => {}
@@ -148,5 +150,22 @@ mod tests {
         d.app.crash_report = None;
         d.frame();
         assert!(!d.app.modal_open());
+    }
+
+    #[test]
+    fn escape_dismisses_the_crash_card() {
+        let (dir, mut d) = drive();
+        d.app.offer_crash_report(dir.path().join("crash-x.txt"));
+        d.frame();
+        assert!(d.app.modal_open());
+        d.frame_with(vec![eframe::egui::Event::Key {
+            key: eframe::egui::Key::Escape,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: eframe::egui::Modifiers::NONE,
+        }]);
+        d.frame();
+        assert!(d.app.crash_report.is_none());
     }
 }
