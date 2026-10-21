@@ -495,7 +495,7 @@ fn a_typed_rail_length_reaches_the_3d_scene() {
 /// panel and the statistics start clear of each other and of the view cube.
 #[test]
 fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
-    for (w, h) in [(1366.0, 768.0), (900.0, 600.0)] {
+    for (w, h) in [(1366.0, 768.0), (1024.0, 768.0), (900.0, 600.0)] {
         let dir = tempfile::tempdir().unwrap();
         let mut d = Drive::new(&dir.path().join("untitled"));
         let (_, a, _) = cabinet_with_two_devices(&mut d);
@@ -528,6 +528,10 @@ fn the_3d_panels_start_clear_of_each_other_and_of_the_view_cube() {
         assert!(
             !heat.intersects(real_cube),
             "{w} x {h}: heat {heat:?} over the cube {real_cube:?} (canvas {canvas:?})"
+        );
+        assert!(
+            !toolbar.intersects(real_cube),
+            "{w} x {h}: toolbar {toolbar:?} over the cube {real_cube:?} (canvas {canvas:?})"
         );
         let panels = [
             ("toolbar", toolbar),
