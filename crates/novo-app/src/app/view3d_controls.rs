@@ -290,7 +290,8 @@ pub(super) fn toolbar(
                 &mut controls.dimensions,
                 "Dimensions",
                 "Measuring lines in mm: the enclosure, and for one selected part its \
-                 size and its distances to neighbours and the plate edge (View > 3D > \
+                 size and its distances to neighbours and the plate edge, and a dashed \
+                 rectangle around it: the free space it asks for (View > 3D > \
                  Dimensions)",
             );
             if controls.reduced {
