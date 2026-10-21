@@ -313,10 +313,15 @@ pub fn slotted_boxes(len: f32, width: f32, height: f32) -> Vec<(Vec3, Vec3)> {
         let mut edge = x0;
         for k in 0..count {
             let cx = first + k as f32 * MOUNT_PITCH_MM;
-            boxes.push(b(edge, cx - slot_len * 0.5, -half, half, 0.0, t));
+            // No bar when a slot starts right at the end of the last one.
+            if cx - slot_len * 0.5 > edge + 1e-3 {
+                boxes.push(b(edge, cx - slot_len * 0.5, -half, half, 0.0, t));
+            }
             edge = cx + slot_len * 0.5;
         }
-        boxes.push(b(edge, x1, -half, half, 0.0, t));
+        if x1 > edge + 1e-3 {
+            boxes.push(b(edge, x1, -half, half, 0.0, t));
+        }
     } else {
         boxes.push(b(x0, x1, -w * 0.5, w * 0.5, 0.0, t));
     }
@@ -415,6 +420,19 @@ mod tests {
             .map(|(a, _)| a.x)
             .collect();
         assert!((xs.iter().cloned().fold(f32::MAX, f32::min) + 250.0).abs() < 1e-3);
+    }
+
+    #[test]
+    fn no_floor_bar_has_zero_length() {
+        // 12 + 60 k: the first and last slot reach the ends of the duct.
+        for len in [72.0_f32, 132.0, 252.0, 12.0 + 60.0 * 7.0] {
+            for (lo, hi) in slotted_boxes(len, 40.0, 60.0)
+                .iter()
+                .map(|(a, b)| (a.x, b.x))
+            {
+                assert!(hi - lo > 1e-3, "{len}: box from {lo} to {hi}");
+            }
+        }
     }
 
     #[test]

@@ -199,10 +199,10 @@ pub(super) fn toolbar(
                         &mut layers.slots,
                         "Slotted ducts",
                         "Draw each duct with slotted walls (fingers) and mounting slots in the floor, \
-                         at the real width, height and length. The slot pitch (about 9 mm) and the \
-                         base band are typical of commercial duct, not one maker's; the heat and \
-                         fill figures do not read them. Far out the duct is drawn solid. Off draws \
-                         every duct solid.",
+                         at the real width, height and length. The finger pitch (about 9 mm) and the \
+                         slot width are a generic drawing, not the data of a catalogue duct, and \
+                         the heat and fill figures do not read them. Far out the duct is drawn \
+                         solid. Off draws every duct solid.",
                     );
                     if let Some(text) = &controls.models_text {
                         ui.label(egui::RichText::new(text).weak().small());
