@@ -573,7 +573,7 @@ pub(super) fn readiness(jobs: &[WireCutJob], has_plate: bool) -> Vec<Gap> {
     if no_size > 0 {
         out.push(Gap {
             text: format!(
-                "{no_size} wires have no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables, with a reason each"
+                "{no_size} wires have no cross-section: they get no ferrule and sit in one group. Autopilot proposes them from the protective devices and the ampacity tables (planning values), with a reason each"
             ),
             fix: Some(("Autopilot", "wires.autopilot")),
         });

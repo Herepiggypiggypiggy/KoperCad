@@ -85,6 +85,11 @@ impl NovoApp {
     /// Writes the proposals with these ids as one undo step.
     pub(super) fn apply_autopilot(&mut self, plan: &Autopilot, ids: Option<&BTreeSet<usize>>) {
         let mut counts = (0, 0, 0);
+        let unverified = plan.proposals.iter().any(|p| {
+            ids.is_none_or(|set| set.contains(&p.id))
+                && matches!(p.change, Change::Size(_))
+                && matches!(p.basis, Basis::Planning | Basis::Assumed)
+        });
         if !self.edit_project("Autopilot: complete the wires", |tx| {
             counts = plan.apply(tx, ids)?;
             Ok(())
@@ -94,7 +99,11 @@ impl NovoApp {
         let (sized, coloured, numbered) = counts;
         let mut parts = Vec::new();
         if sized > 0 {
-            parts.push(format!("{sized} sizes"));
+            parts.push(if unverified {
+                format!("{sized} sizes (planning values, check them)")
+            } else {
+                format!("{sized} sizes")
+            });
         }
         if coloured > 0 {
             parts.push(format!("{coloured} colours"));
@@ -151,7 +160,7 @@ pub(super) fn meter(ui: &mut egui::Ui, ready: Ready) {
     let fraction = ready.done as f32 / ready.total.max(1) as f32;
     novo_theme::widgets::progress_bar(
         ui,
-        "Ready to build",
+        "Wires ready to build",
         &format!("{} %", ready.percent()),
         fraction,
         0.0,

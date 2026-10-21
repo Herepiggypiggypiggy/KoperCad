@@ -7,7 +7,7 @@ click_text Reports
 wait 5
 click_text "Bench output..."
 wait 20
-expect "Ready to build"
+expect "Wires ready to build"
 expect "Before you print"
 shot bench-before
 check_layout
