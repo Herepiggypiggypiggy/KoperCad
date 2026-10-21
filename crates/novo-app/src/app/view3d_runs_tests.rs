@@ -173,7 +173,11 @@ fn the_entry_point_is_marked_on_the_plate_and_goes_when_it_is_cleared() {
     let marker = lines_of(&d);
     assert_eq!(marker.len(), 1, "just the entry marker");
     let m = marker[0];
-    assert_eq!(m.starts.len(), 4, "diamond, two cross bars and the post");
+    assert_eq!(
+        m.starts.len(),
+        4 + 1 + 5 + 1,
+        "diamond, two cross bars, the post, the stub to the edge, a dashed arrow (the wall is not stated) and its head"
+    );
     // The marker sits at the entry: plate y 560 is 40 mm from the bottom edge.
     let (lo, hi) = m
         .positions
@@ -185,6 +189,15 @@ fn the_entry_point_is_marked_on_the_plate_and_goes_when_it_is_cleared() {
         (lo - 386.0).abs() < 0.01 && (hi - 414.0).abs() < 0.01,
         "{lo} {hi}"
     );
+    // Stating the wall draws the arrow solid: one polyline instead of five dashes.
+    let doc = d.app.backend.document_mut().unwrap();
+    doc.transact("Wall", |tx| {
+        novo_routing::entry::set_wall(tx, cab, Some(novo_routing::entry::Wall::Bottom))
+    })
+    .unwrap();
+    d.frame();
+    d.frame();
+    assert_eq!(lines_of(&d)[0].starts.len(), 4 + 1 + 1 + 1);
     let doc = d.app.backend.document_mut().unwrap();
     doc.transact("Entry", |tx| {
         novo_routing::entry::set_entry_point(tx, cab, None)

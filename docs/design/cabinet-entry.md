@@ -70,3 +70,7 @@ outside it are what turn the remaining estimates exact; the window says so.
    length was found (done,
    `handoff/cable-3d/`). The outside part stays a stated length and is not
    drawn.
+
+## Wall of the entry (3D drawing only)
+
+`entry.wall` on the enclosure (`top`, `bottom`, `left`, `right`) says which side of the plate the gland is on. It changes no length. Unset, the plate edge nearest to the entry point is used and drawn dashed, labelled as a guess. The 3D view draws a line from the entry to that edge and an arrow beyond it; the part outside is a stated length and is not drawn to scale.

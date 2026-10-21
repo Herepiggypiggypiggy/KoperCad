@@ -68,6 +68,8 @@ pub(super) struct Overlay {
     /// A point is stored but cannot be used (outside a smaller plate, or
     /// only one number).
     pub(super) entry_hidden: bool,
+    /// The wall the entry leaves through (stated or the nearest edge).
+    pub(super) wall: Option<novo_routing::entry::EntryWall>,
     /// Stated wire length outside the entry for wires without a cable, mm.
     pub(super) outside_mm: Option<f64>,
 }
@@ -112,6 +114,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
         .map(|p| (p.width, p.height));
     let entry = novo_routing::entry::entry_point(project, structure).map(|p| (p.x, p.y));
     let outside_mm = novo_routing::entry::outside_mm(project, structure);
+    let wall = novo_routing::entry::entry_wall(project, structure);
     let entry_hidden = entry.is_none() && novo_routing::entry::has_stored_point(project, structure);
     let Some((_, plan)) = routed.plans.iter().find(|(s, _)| *s == structure) else {
         return Overlay {
@@ -120,6 +123,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
             entry,
             entry_hidden,
             outside_mm,
+            wall,
             ..Overlay::default()
         };
     };
@@ -146,6 +150,7 @@ pub(super) fn overlay(project: &Project, structure: StructureId) -> Overlay {
         entry,
         entry_hidden,
         outside_mm,
+        wall,
     }
 }
 
@@ -524,6 +529,36 @@ fn entry_section(ui: &mut egui::Ui, overlay: &Overlay, plate: StructureId) -> Op
         }
     });
     if overlay.entry.is_some() {
+        ui.horizontal(|ui| {
+            ui.label("Gland in the");
+            let current = overlay.wall;
+            let text = match current {
+                Some(w) if w.stated => w.wall.label().to_owned(),
+                Some(w) => format!("{} (nearest edge)", w.wall.label()),
+                None => "nearest edge".to_owned(),
+            };
+            egui::ComboBox::from_id_salt(("cabinet_entry_wall", plate))
+                .selected_text(text)
+                .show_ui(ui, |ui| {
+                    if ui
+                        .selectable_label(current.is_none_or(|w| !w.stated), "Nearest edge")
+                        .clicked()
+                    {
+                        ask = Some(Ask::SetEntryWall(plate, None));
+                    }
+                    for w in novo_routing::entry::Wall::ALL {
+                        let on = current.is_some_and(|c| c.stated && c.wall == w);
+                        if ui.selectable_label(on, w.label()).clicked() {
+                            ask = Some(Ask::SetEntryWall(plate, Some(w)));
+                        }
+                    }
+                });
+            ui.weak("wall");
+        })
+        .response
+        .on_hover_text(
+            "Which side of the plate the gland is on. Not stated: the plate edge nearest to the entry point is drawn, as a guess. It only decides where the 3D view draws the way out; no length uses it.",
+        );
         ui.horizontal(|ui| {
             ui.label("Wire outside the entry");
             let id = egui::Id::new(("cabinet_entry_outside", plate));

@@ -83,10 +83,36 @@ impl CableFacts {
     }
 }
 
+/// The cabinet entry as the 3D view draws it: the point, the plate edge of
+/// its wall and which way is out.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub(super) struct EntryDraw {
+    pub at: Point,
+    pub edge: Point,
+    pub outward: (f64, f64),
+    /// The designer stated the wall; else it is the nearest plate edge.
+    pub stated: bool,
+}
+
+/// The entry of `structure` for drawing; `None` without a valid entry point.
+pub(super) fn entry_draw(project: &Project, structure: StructureId) -> Option<EntryDraw> {
+    let at = novo_routing::entry::entry_point(project, structure)?;
+    let w = novo_routing::entry::entry_wall(project, structure)?;
+    let plate = project.get::<novo_core::Structure>(structure)?.plate?;
+    Some(EntryDraw {
+        at,
+        edge: novo_routing::entry::edge_point(&plate, at, w.wall),
+        outward: w.wall.outward(),
+        stated: w.stated,
+    })
+}
+
 /// A wire drawn to the cabinet entry point.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct EntryFacts {
     pub at: Option<Point>,
+    /// Which wall the way out is drawn through, and whether that is stated.
+    pub wall: Option<(&'static str, bool)>,
     /// The wire outside the entry the designer stated, mm.
     pub outside_mm: Option<f64>,
 }
@@ -97,12 +123,22 @@ impl EntryFacts {
             .at
             .map(|p| format!(" at x {:.0}, y {:.0} mm", p.x, p.y))
             .unwrap_or_default();
+        let wall = match self.wall {
+            Some((w, true)) => format!(", gland in the {} wall", w.to_lowercase()),
+            Some((w, false)) => format!(
+                ", arrow out through the {} edge (nearest to the entry; the wall is not stated)",
+                w.to_lowercase()
+            ),
+            None => String::new(),
+        };
         match self.outside_mm {
             Some(m) => format!(
-                "Drawn to the cabinet entry{at}; outside it {:.2} m as stated, not drawn",
+                "Drawn to the cabinet entry{at}{wall}; outside it {:.2} m as stated, not to scale",
                 m / 1000.0
             ),
-            None => format!("Drawn to the cabinet entry{at}; the part outside is not stated"),
+            None => {
+                format!("Drawn to the cabinet entry{at}{wall}; the part outside is not stated")
+            }
         }
     }
 }
@@ -357,11 +393,11 @@ pub(super) fn overlays(
     scene: &Scene,
     facts: &BTreeMap<u64, WireFacts>,
     selection: &BTreeSet<ItemId>,
-    entry: Option<Point>,
+    entry: Option<EntryDraw>,
 ) -> Vec<Overlay> {
     let mut out = Vec::new();
-    if let Some(p) = entry {
-        out.push(Overlay::Lines(entry_marker(scene, p)));
+    if let Some(e) = entry {
+        out.push(Overlay::Lines(entry_marker(scene, e)));
     }
     let chosen = picked(facts, selection);
     if chosen.is_empty() {
@@ -438,8 +474,9 @@ fn box_edges(lines: &mut OverlayLines, scene: &Scene, item: &novo_view3d::Item, 
 
 /// A diamond with a cross on the plate and a short post out of it: the
 /// gland, where the wires leave the cabinet.
-fn entry_marker(scene: &Scene, at: Point) -> OverlayLines {
+fn entry_marker(scene: &Scene, e: EntryDraw) -> OverlayLines {
     let r = 14.0;
+    let at = e.at;
     let c = scene.frame.world(at.x, at.y, 1.0);
     let mut lines = OverlayLines {
         width_px: 2.5,
@@ -458,6 +495,34 @@ fn entry_marker(scene: &Scene, at: Point) -> OverlayLines {
     poly(&[c - dx, c + dx]);
     poly(&[c - dy, c + dy]);
     poly(&[c, c + Vec3::Z * 40.0]);
+    // The way out: from the top of the post along the plate to the edge of
+    // its wall, then an arrow beyond it. The part outside is a length, not a
+    // path, so the arrow says only which way; dashed when the wall is the
+    // nearest edge by default and not stated.
+    let top = Vec3::Z * 40.0;
+    let to_edge = scene.frame.world(e.edge.x, e.edge.y, 1.0) - c;
+    poly(&[c + top, c + top + to_edge]);
+    let out_dir = scene
+        .frame
+        .world(at.x + e.outward.0, at.y + e.outward.1, 1.0)
+        - c;
+    let out_dir = out_dir.normalize_or_zero();
+    let across = out_dir.cross(Vec3::Z).normalize_or_zero();
+    let start = c + top + to_edge;
+    let tip = start + out_dir * 70.0;
+    if e.stated {
+        poly(&[start, tip]);
+    } else {
+        for i in 0..5 {
+            let a = start + out_dir * (14.0 * i as f32);
+            poly(&[a, a + out_dir * 8.0]);
+        }
+    }
+    poly(&[
+        tip - out_dir * 18.0 + across * 10.0,
+        tip,
+        tip - out_dir * 18.0 - across * 10.0,
+    ]);
     lines
 }
 
@@ -824,6 +889,7 @@ mod tests {
     fn an_entry_run_says_whether_the_outside_part_is_stated() {
         let e = EntryFacts {
             at: Some(Point::new(400.0, 560.0)),
+            wall: None,
             outside_mm: None,
         };
         assert_eq!(
@@ -834,7 +900,22 @@ mod tests {
             outside_mm: Some(3000.0),
             ..e
         };
-        assert!(e.line().contains("outside it 3.00 m as stated, not drawn"));
+        assert!(
+            e.line()
+                .contains("outside it 3.00 m as stated, not to scale")
+        );
+        let guessed = EntryFacts {
+            wall: Some(("Bottom", false)),
+            ..e.clone()
+        };
+        assert!(guessed.line().contains(
+            "arrow out through the bottom edge (nearest to the entry; the wall is not stated)"
+        ));
+        let stated = EntryFacts {
+            wall: Some(("Left", true)),
+            ..e
+        };
+        assert!(stated.line().contains("gland in the left wall"));
         assert!(why("estimate", Gap::OutsideNotStated).contains("State it in Cabinet > Routes"));
         assert!(!why("estimate", Gap::None).contains("State it"));
     }

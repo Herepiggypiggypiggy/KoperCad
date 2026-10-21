@@ -18,6 +18,117 @@ pub const ENTRY_X: &str = "entry.x_mm";
 /// Plate y of the entry point, mm.
 pub const ENTRY_Y: &str = "entry.y_mm";
 
+/// The wall of the enclosure the gland is in, as a side of the plate:
+/// `top`, `bottom`, `left` or `right`. Not stated reads as the plate edge
+/// nearest to the entry point (assumed, and labelled so).
+pub const ENTRY_WALL: &str = "entry.wall";
+
+/// A side of the mounting plate, plate coordinates (origin top left, y down).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Wall {
+    Top,
+    Bottom,
+    Left,
+    Right,
+}
+
+impl Wall {
+    pub const ALL: [Wall; 4] = [Wall::Top, Wall::Bottom, Wall::Left, Wall::Right];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Wall::Top => "top",
+            Wall::Bottom => "bottom",
+            Wall::Left => "left",
+            Wall::Right => "right",
+        }
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Wall::Top => "Top",
+            Wall::Bottom => "Bottom",
+            Wall::Left => "Left",
+            Wall::Right => "Right",
+        }
+    }
+
+    fn from_key(key: &str) -> Option<Wall> {
+        Wall::ALL.into_iter().find(|w| w.key() == key)
+    }
+
+    /// Unit vector pointing out of the plate through this side.
+    pub fn outward(self) -> (f64, f64) {
+        match self {
+            Wall::Top => (0.0, -1.0),
+            Wall::Bottom => (0.0, 1.0),
+            Wall::Left => (-1.0, 0.0),
+            Wall::Right => (1.0, 0.0),
+        }
+    }
+}
+
+/// The wall an entry leaves through and whether the designer stated it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EntryWall {
+    pub wall: Wall,
+    /// False: the plate edge nearest to the entry point, a guess.
+    pub stated: bool,
+}
+
+/// The plate edge nearest to `at` (ties: bottom, top, left, right, the
+/// order a gland is usually put in).
+pub fn nearest_wall(plate: &novo_core::MountingPlate, at: Point) -> Wall {
+    [
+        (Wall::Bottom, plate.height - at.y),
+        (Wall::Top, at.y),
+        (Wall::Left, at.x),
+        (Wall::Right, plate.width - at.x),
+    ]
+    .into_iter()
+    .min_by(|a, b| a.1.total_cmp(&b.1))
+    .map_or(Wall::Bottom, |(w, _)| w)
+}
+
+/// The wall of the entry point: stated, else the nearest plate edge. `None`
+/// without a valid entry point.
+pub fn entry_wall(project: &Project, structure: StructureId) -> Option<EntryWall> {
+    let at = entry_point(project, structure)?;
+    let s = project.get::<novo_core::Structure>(structure)?;
+    let plate = s.plate?;
+    let stated = match s.properties.get(ENTRY_WALL) {
+        Some(Value::Text(t)) => Wall::from_key(t.trim()),
+        _ => None,
+    };
+    Some(match stated {
+        Some(wall) => EntryWall { wall, stated: true },
+        None => EntryWall {
+            wall: nearest_wall(&plate, at),
+            stated: false,
+        },
+    })
+}
+
+/// Sets the wall of the entry, or clears it with `None` (back to the
+/// nearest plate edge).
+pub fn set_wall(tx: &mut Tx<'_>, structure: StructureId, wall: Option<Wall>) -> Result<()> {
+    tx.set_property(
+        structure,
+        ENTRY_WALL,
+        wall.map(|w| Value::Text(w.key().into())),
+    )
+}
+
+/// Where a wire from the entry reaches the plate edge of `wall`.
+pub fn edge_point(plate: &novo_core::MountingPlate, at: Point, wall: Wall) -> Point {
+    match wall {
+        Wall::Top => Point::new(at.x, 0.0),
+        Wall::Bottom => Point::new(at.x, plate.height),
+        Wall::Left => Point::new(0.0, at.y),
+        Wall::Right => Point::new(plate.width, at.y),
+    }
+}
+
 fn number(value: &Value) -> Option<f64> {
     match value {
         Value::Float(v) if v.is_finite() => Some(*v),
@@ -189,5 +300,64 @@ mod tests {
             .unwrap();
         let s = doc.project().get::<novo_core::Structure>(id).unwrap();
         assert!(!s.properties.contains_key(ENTRY_X) && !s.properties.contains_key(ENTRY_Y));
+    }
+
+    #[test]
+    fn the_wall_is_the_nearest_edge_until_it_is_stated() {
+        let (mut doc, id) = plate_doc();
+        assert_eq!(entry_wall(doc.project(), id), None, "no entry point");
+        doc.transact("Entry", |tx| {
+            set_entry_point(tx, id, Some(Point::new(300.0, 790.0)))
+        })
+        .unwrap();
+        assert_eq!(
+            entry_wall(doc.project(), id),
+            Some(EntryWall {
+                wall: Wall::Bottom,
+                stated: false
+            })
+        );
+        doc.transact("Wall", |tx| set_wall(tx, id, Some(Wall::Left)))
+            .unwrap();
+        assert_eq!(
+            entry_wall(doc.project(), id),
+            Some(EntryWall {
+                wall: Wall::Left,
+                stated: true
+            })
+        );
+        doc.transact("Garbage", |tx| {
+            tx.set_property(id, ENTRY_WALL, Some(Value::Text("sideways".into())))
+        })
+        .unwrap();
+        assert!(
+            !entry_wall(doc.project(), id).unwrap().stated,
+            "a bad value reads as not stated"
+        );
+        doc.undo().unwrap();
+        doc.undo().unwrap();
+        assert!(!entry_wall(doc.project(), id).unwrap().stated, "undone");
+    }
+
+    #[test]
+    fn the_stub_reaches_the_edge_of_its_wall() {
+        let plate = MountingPlate {
+            width: 600.0,
+            height: 800.0,
+            margin: 20.0,
+        };
+        let at = Point::new(100.0, 700.0);
+        assert_eq!(nearest_wall(&plate, at), Wall::Bottom);
+        assert_eq!(
+            edge_point(&plate, at, Wall::Bottom),
+            Point::new(100.0, 800.0)
+        );
+        assert_eq!(edge_point(&plate, at, Wall::Left), Point::new(0.0, 700.0));
+        assert_eq!(edge_point(&plate, at, Wall::Top), Point::new(100.0, 0.0));
+        assert_eq!(
+            edge_point(&plate, at, Wall::Right),
+            Point::new(600.0, 700.0)
+        );
+        assert_eq!(Wall::Left.outward(), (-1.0, 0.0));
     }
 }

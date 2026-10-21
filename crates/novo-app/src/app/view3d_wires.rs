@@ -236,6 +236,8 @@ pub(super) fn facts(
                     problems,
                     entry: to_entry.then(|| EntryFacts {
                         at: entry,
+                        wall: novo_routing::entry::entry_wall(project, structure)
+                            .map(|w| (w.wall.label(), w.stated)),
                         outside_mm: novo_routing::entry::outside_mm(project, structure),
                     }),
                     basis: None,

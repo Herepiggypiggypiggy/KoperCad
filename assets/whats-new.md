@@ -3,6 +3,10 @@
 The id is a date and a letter; the top entry is the newest one a person has
 seen once they open the list. Add an entry when a feature PR merges. -->
 
+## 2026-10-21-e · Which wall the cabinet entry is in
+Where: Cabinet workspace, Routes panel, "Gland in the" (and the 3D view).
+State the wall the gland is in; the 3D view draws the way out from the entry through that edge of the plate. Not stated, the nearest edge is drawn dashed as a guess.
+
 ## 2026-10-21-a · Cable runs in 3D
 Where: 3D workspace, click a wire (or Ctrl+K, "wire runs", then a row).
 The Run card shows the path lit up along its ducts, how the length was found, how full each duct is and where the cabinet entry is; "Select all cores of the cable" lights a whole cable.

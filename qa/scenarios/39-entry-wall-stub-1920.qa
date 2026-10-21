@@ -1,0 +1,34 @@
+@title Cabinet entry wall: the way out is drawn in 3D (1920x1080)
+@area 3D
+# Cabinet > Route all > Set entry: the arrow leaves through the nearest edge (dashed). Stating the wall draws it solid.
+click_text "Open example"
+wait 20
+resize 1920 1080
+wait 10
+click_text Cabinet #1
+wait 30
+key ctrl+k
+wait 3
+text Route all
+wait 4
+key Enter
+wait 30
+click_text Set
+wait 20
+shot entry-set-panel
+click_text 3D
+wait 40
+shot arrow-dashed
+click 1850 108
+wait 40
+shot arrow-dashed-front
+click_text Cabinet #1
+wait 30
+click_text "Bottom (nearest edge)"
+wait 6
+click_text Left
+wait 20
+shot wall-stated-panel
+click_text 3D
+wait 40
+shot arrow-solid-left
