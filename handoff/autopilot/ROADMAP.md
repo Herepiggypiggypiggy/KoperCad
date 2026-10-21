@@ -9,6 +9,11 @@ Scope: propose everything the drawing implies for the workshop pack, with a reas
 - Window Autopilot (command `wires.autopilot`, Edit menu, command field) with per-row tick, Accept all, Accept ticked.
 - Ready to build meter on Bench output and in the Autopilot window; "Before you print" list gets an Autopilot button.
 
+## Done (PR: wire rules and grouping)
+- Wire rules as a project setting (`novo_reports::wire_rules`, keys `wire_rules.*` in project info): preset IEC 60204-1 or House; house colour per class, smallest power and control section. Edited in the Autopilot window (Wire rules).
+- Review list grouped by protective device (`autopilot::groups`).
+- Cabinet entry lane finished: #1160, #1163, #1164, #1168 merged (entry point row, wire outside the entry).
+
 ## Next, in order
 1. (done: PE/neutral per circuit; cable rows as one undo with sizes; cores take their size from the cable still open)
 2. Ferrule and strip length rows: not needed as rows (they and the labels follow size and number by themselves; the window says so). Only an override per wire would be new.
