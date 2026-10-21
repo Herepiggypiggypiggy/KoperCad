@@ -7,7 +7,7 @@ the supply feeds that come in from outside. The routing engine cannot route
 them, because one end is not on a plate (`docs/design/wire-routing.md` §6a:
 "unrouted"). Placing ducts does not change that.
 
-Owner: Autopilot thread. Reviewed with WS-02 (no change to `novo-core`).
+Owner: Autopilot thread. The WS-02 thread agreed to the property keys and the validation rules in conversation; no change to `novo-core`.
 
 ## What is stored
 

@@ -125,6 +125,22 @@ fn the_overlay_carries_the_plate_and_its_entry_point_for_the_editor() {
     })
     .unwrap();
     assert_eq!(overlay(doc.project(), cab).entry, Some((w / 2.0, h)));
+    // A smaller plate hides the stored point and the panel says so.
+    doc.transact("Shrink", |tx| {
+        tx.update::<novo_core::Structure>(cab, |s| {
+            s.plate = Some(novo_core::MountingPlate {
+                width: 10.0,
+                height: 10.0,
+                margin: 0.0,
+            });
+        })
+    })
+    .unwrap();
+    let hidden = overlay(doc.project(), cab);
+    assert_eq!(hidden.entry, None);
+    assert!(hidden.entry_hidden);
     doc.undo().unwrap();
-    assert_eq!(overlay(doc.project(), cab).entry, None);
+    doc.undo().unwrap();
+    let o = overlay(doc.project(), cab);
+    assert_eq!((o.entry, o.entry_hidden), (None, false));
 }

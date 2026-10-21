@@ -404,7 +404,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
     };
     left(
         unplaced,
-        "a device is not placed on the mounting plate, or another cause. Use Cabinet > Place all; the lengths of placed devices are routed.",
+        "a device is not placed on the mounting plate, or its two ends are on different plates. Use Cabinet > Place all; the lengths of placed devices are routed.",
     );
     left(
         field,

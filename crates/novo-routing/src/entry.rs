@@ -33,6 +33,15 @@ pub fn entry_point(project: &Project, structure: StructureId) -> Option<Point> {
         .then(|| Point::new(x, y))
 }
 
+/// Whether the enclosure has an entry point stored, valid or not. True while
+/// [`entry_point`] is `None` means the stored point is hidden: half set, or
+/// outside a plate that was made smaller.
+pub fn has_stored_point(project: &Project, structure: StructureId) -> bool {
+    project
+        .get::<novo_core::Structure>(structure)
+        .is_some_and(|s| s.properties.contains_key(ENTRY_X) || s.properties.contains_key(ENTRY_Y))
+}
+
 /// Sets the entry point of an enclosure's plate, or clears it with `None`.
 /// Refused when there is no plate or the point is not finite and inside it.
 pub fn set_entry_point(
