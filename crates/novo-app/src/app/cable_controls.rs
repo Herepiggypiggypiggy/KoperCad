@@ -162,7 +162,7 @@ pub(super) fn cable_controls(
 
     ui.horizontal(|ui| {
         ui.label("Length (m)").on_hover_text(
-            "The whole cable as bought, between its two ends. Each core is cut at this length plus a service loop at each end, and the wire list counts it as exact. If a connection has wires on several cables, the longest wins.",
+            "The whole cable as bought, between its two ends. Each core runs the whole cable, so it is cut at this length with no loop added, and the wire list counts your figure as stated, no longer an estimate. If a connection has wires on several cables, the longest wins.",
         );
         let field = ui.add(
             egui::TextEdit::singleline(&mut edit.length)

@@ -125,7 +125,11 @@ impl NovoApp {
             parts.push(format!("{cabled} cables"));
         }
         if entries > 0 {
-            parts.push(format!("{entries} cabinet entry points"));
+            parts.push(if entries == 1 {
+                "1 cabinet entry point".to_owned()
+            } else {
+                format!("{entries} cabinet entry points")
+            });
         }
         let text = if parts.is_empty() {
             "Autopilot had nothing to fill in".to_owned()
@@ -209,11 +213,12 @@ fn body(
         );
     } else {
         ui.label(format!(
-            "{} sizes, {} colours, {} wire numbers and {} cables can be filled in from the drawing. Nothing is written until you accept; one Undo takes it all back.",
+            "{} sizes, {} colours, {} wire numbers, {} cables and {} cabinet entry points can be filled in from the drawing. Nothing is written until you accept; one Undo takes it all back.",
             state.plan.count("Size"),
             state.plan.count("Colour"),
             state.plan.count("Number"),
             state.plan.count("Cable"),
+            state.plan.count("Entry point"),
         ));
     }
     if state.plan.planning_values && state.plan.count("Size") > 0 {

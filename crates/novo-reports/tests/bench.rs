@@ -204,7 +204,7 @@ fn the_bench_cut_list_groups_ticks_and_marks_estimates() {
         assert_eq!(n(&cut), n(&route) + 20.0);
     }
     // The routed wires and the four cores of the motor cable (its stated
-    // 12 m plus a loop at each end) are exact, the rest are estimates.
+    // 12 m) count as stated, the rest are estimates.
     let exact = group
         .rows
         .iter()
