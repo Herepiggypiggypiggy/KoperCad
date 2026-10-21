@@ -5,6 +5,9 @@
 //! an exact match, a prefix, matches at word starts and runs of adjacent
 //! characters. Higher is better.
 
+/// From this many typed letters a match must be more than scattered.
+const SCATTER_FROM: usize = 4;
+
 /// Score of `query` against `text`, or `None` when it does not match. An
 /// empty query matches everything with score 0.
 pub fn score(query: &str, text: &str) -> Option<i32> {
@@ -33,6 +36,9 @@ pub fn score(query: &str, text: &str) -> Option<i32> {
 
     let mut qi = 0;
     let mut previous: Option<usize> = None;
+    let mut first: Option<usize> = None;
+    let mut last = 0usize;
+    let mut starts = 0usize;
     for (i, &c) in lower.iter().enumerate() {
         if qi == query.len() {
             break;
@@ -42,13 +48,26 @@ pub fn score(query: &str, text: &str) -> Option<i32> {
         }
         let at_word_start = i == 0 || !lower[i - 1].is_alphanumeric();
         total += if at_word_start { 15 } else { 1 };
+        starts += usize::from(at_word_start);
         if previous.is_some_and(|p| p + 1 == i) {
             total += 10;
         }
+        first.get_or_insert(i);
+        last = i;
         previous = Some(i);
         qi += 1;
     }
     if qi < query.len() {
+        return None;
+    }
+    // A longer query whose letters are scattered over several words (and are
+    // not the initials of them) is noise, not a typo: a typo stays inside one
+    // word. `option` is not in "Reset note position" or "Interruption point".
+    if query.len() >= SCATTER_FROM
+        && !compact.contains(&q)
+        && starts < query.len()
+        && first.is_some_and(|f| lower[f..=last].iter().any(|c| !c.is_alphanumeric()))
+    {
         return None;
     }
     // Shorter texts win ties: "Wire" before "Wire numbering".
