@@ -319,8 +319,8 @@ fn main() {
             (
                 (),
                 format!(
-                    "{}x{} cells, {} iterations, converged {}",
-                    g.cols, g.rows, r.iterations, r.converged
+                    "{}x{} cells, {} iterations, converged {}, stalled {}",
+                    g.cols, g.rows, r.iterations, r.converged, r.stalled
                 ),
             )
         });

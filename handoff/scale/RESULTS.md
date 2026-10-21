@@ -27,7 +27,7 @@ Numbers are one run each, not averages. The generator is plain: repeated identic
 
 | Step | Time | Why |
 | --- | ---: | --- |
-| Heat, 2D steady (central run) on a 60-device cabinet | 9 s (was 25 s) | about 380 ms per solver iteration, 24 iterations. With uncertainty bands (3 runs) 16 s (was 54 s). |
+| Heat, 2D steady (central run) on a 60-device cabinet | 9 s (was 25 s), stalled not converged | about 380 ms per solver iteration, 24 iterations. With uncertainty bands (3 runs) 16 s (was 54 s). |
 | Heat, coarse 3D CFD on the same cabinet | 181 s | 125 x 126 x 21 cells. Not changed here. |
 | `Project::netlist()` | 17 ms per call at 8,100 wires | Not cached; every caller pays it. Fine once, costly in a loop (see fix 1). |
 | Design checks | 0.9 s | OK for a button; would be too slow to run on every keystroke at this size. |
@@ -37,7 +37,7 @@ The cabinet in the heat test is deliberately dense (60 placed devices on a 1.6 x
 ## Fixes in this change
 
 1. **Cable diagram and cable schedule**: 6.3 s each on 300 cables, because `cable_screen` rebuilt the netlist for every cable. `cable_screens` now builds it once. Both reports about 100 ms. All reports together went from 13.2 s to under 1 s. Test: `tests/scale_budget.rs`.
-2. **2D heat solve stopped late**: the temperature change stalled near 0.02 K while the tolerance is 0.01 K, so every run used all 60 iterations and reported "not converged". A run whose change is within 3x the tolerance (0.03 K) and has not fallen by a fifth over 8 iterations now counts as settled (`converged = true`; the observed wobble is 0.02 K, far inside the model's own error). The pressure solve tolerance went from 1e-9 to 1e-7. Thermal and cables test suites pass. Effect: 60 to 24 iterations, 2.7x faster.
+2. **2D heat solve stopped late**: the temperature change per iteration stalled near 0.02 K while the tolerance is 0.01 K, so every run used all 60 iterations and ended "not converged". A run whose change has stalled (within 3x the tolerance, not falling by a fifth over 8 iterations) now stops early, **but is not marked converged**: it sets a new `stalled` flag on the result, and the report adds the note "The solver stopped when the change stalled just above its tolerance; the numbers may still move by up to about 1 K". Change per iteration is not error: on the dense 60-device cabinet the stalled answer differs from a longer run by up to about 0.7 K (R1's measurement). The old 60-iteration run was not converged either, so neither is a reference. The pressure solve tolerance went from 1e-9 to 1e-7. Effect: 60 to 24 iterations, 2.7x faster. Tests: stall rule and note in `thermal.rs` / `report.rs`.
 
 ## Not done (ranked)
 

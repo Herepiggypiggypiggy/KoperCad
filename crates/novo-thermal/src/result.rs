@@ -360,6 +360,9 @@ pub struct ThermalResult {
     /// Solver iterations used.
     pub iterations: usize,
     pub converged: bool,
+    /// Stopped because the change stalled a little above the tolerance: not
+    /// converged, and the answer may still move (about 1 K on a dense cabinet).
+    pub stalled: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
