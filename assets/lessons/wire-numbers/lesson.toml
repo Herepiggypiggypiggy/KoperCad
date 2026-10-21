@@ -118,12 +118,12 @@ Het venster Wire numbering toont het schema (Sequential: 1, 2, 3...) en een voor
 """
 how = [
   "Press {key:view.command_palette}, type **wire numbering** and press Enter",
-  "Read the Preview tab: each row shows old number, arrow, new number",
+  "Open the Scheme and mode line to read the scheme, then the Preview tab: each row shows old number, arrow, new number",
   "Click **Close window**",
 ]
 how_nl = [
   "Druk op {key:view.command_palette}, typ **wire numbering** en druk op Enter",
-  "Lees het tabblad Preview: elke rij toont oud nummer, pijl, nieuw nummer",
+  "Open de regel Scheme and mode om het schema te lezen en lees dan het tabblad Preview: elke rij toont oud nummer, pijl, nieuw nummer",
   "Klik op **Close window**",
 ]
 demo = [

@@ -62,6 +62,8 @@ pub(crate) struct NumberingWindow {
     order: Order,
     /// The net whose number is being typed, with the text so far.
     editing: Option<(WireId, String, bool)>,
+    /// The scheme and mode block is open: closed on the Numbers tab so the list has the height.
+    settings_open: bool,
     scheme: Scheme,
     mode: Mode,
     scope: ScopeChoice,
@@ -94,6 +96,7 @@ impl NovoApp {
             filter: Filter::All,
             order: Order::Reading,
             editing: None,
+            settings_open: tab != Tab::Numbers,
             scheme,
             mode,
             scope,
@@ -294,9 +297,9 @@ impl NovoApp {
                     win.scheme.kind.label().to_lowercase()
                 );
                 // Collapsed by default so the net list gets the height.
-                egui::CollapsingHeader::new(title)
+                let header = egui::CollapsingHeader::new(title)
                     .id_salt("wirenum_settings")
-                    .default_open(false)
+                    .open(Some(win.settings_open))
                     .show(ui, |ui| {
                         novo_theme::widgets::section_label(ui, "Scheme");
                         scheme_ui(ui, &mut win.scheme);
@@ -349,6 +352,9 @@ impl NovoApp {
                             }
                         });
                     });
+                if header.header_response.clicked() {
+                    win.settings_open = !win.settings_open;
+                }
                 let Some(shown) = win.shown.take() else {
                     return;
                 };
