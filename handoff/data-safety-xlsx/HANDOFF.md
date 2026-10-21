@@ -7,3 +7,4 @@ Rule: any new `.xlsx` reader must call `check_xlsx` before `open_workbook_from_r
 Limits: 200,000 rows, 8,000,000 cells in the used rectangle, 256 MiB unzipped; the scan reads the sheet XML once as a stream. It does not look at cell contents or shared strings beyond the unzipped-size cap.
 2026-10-21 21:50 UTC guard added, wired into five readers, tests pass.
 2026-10-21 21:40 UTC Reviewer A: guard now parses with quick-xml (local_name, attribute iterator); tests for prefix, single quotes, spaced =.
+2026-10-21 21:50 UTC Review round 2: real decompressed bytes counted (header lies refused), saturating sums and rows, fail closed on unreadable parts, all .xml parts scanned.

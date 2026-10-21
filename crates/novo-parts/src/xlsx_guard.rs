@@ -59,32 +59,67 @@ pub fn check_xlsx_with(bytes: &[u8], limits: XlsxLimits) -> Result<(), XlsxTooLa
     let Ok(mut archive) = zip::ZipArchive::new(Cursor::new(bytes)) else {
         return Ok(());
     };
+    // Saturating: zip64 sizes can be anything.
     let unzipped: u64 = (0..archive.len())
         .filter_map(|i| archive.by_index_raw(i).ok().map(|f| f.size()))
-        .sum();
+        .fold(0, u64::saturating_add);
     if unzipped > limits.max_unzipped_bytes {
         return Err(XlsxTooLarge(
             "the workbook expands to far more data than a table holds; export the sheet as CSV"
                 .into(),
         ));
     }
+    // The declared sizes are the archive's own claim; what is actually
+    // decompressed is counted here and stops at the same limit, so a header
+    // that lies about a small size does not get past.
+    let read = std::cell::Cell::new(0u64);
     for i in 0..archive.len() {
-        let Ok(file) = archive.by_index(i) else {
-            continue;
-        };
+        // Fail closed: a part that cannot be opened is not passed on.
+        let file = archive
+            .by_index(i)
+            .map_err(|e| XlsxTooLarge(format!("the workbook cannot be read: {e}")))?;
         let name = file.name().to_owned();
-        if !(name.starts_with("xl/worksheets/") && name.ends_with(".xml")) {
+        // Any XML part can be a sheet (the workbook names it by a relation),
+        // so none is skipped by its folder.
+        if !name.ends_with(".xml") || name == "[Content_Types].xml" {
             continue;
         }
-        scan_sheet(file, limits).map_err(|why| {
+        let counted = Counting {
+            inner: file,
+            read: &read,
+            limit: limits.max_unzipped_bytes,
+        };
+        scan_sheet(counted, limits).map_err(|why| {
             XlsxTooLarge(format!(
-                "sheet {} is too large to import ({why}); export the table you need as CSV",
+                "{} is too large to import ({why}); export the table you need as CSV",
                 name.trim_start_matches("xl/worksheets/")
                     .trim_end_matches(".xml")
             ))
         })?;
     }
     Ok(())
+}
+
+/// Counts what is really read across all parts and fails at the limit.
+struct Counting<'a, R> {
+    inner: R,
+    read: &'a std::cell::Cell<u64>,
+    limit: u64,
+}
+
+impl<R: Read> Read for Counting<'_, R> {
+    fn read(&mut self, out: &mut [u8]) -> std::io::Result<usize> {
+        let n = self.inner.read(out)?;
+        let total = self.read.get().saturating_add(n as u64);
+        self.read.set(total);
+        if total > self.limit {
+            return Err(std::io::Error::other(format!(
+                "it expands to more than {} MiB",
+                self.limit / (1024 * 1024)
+            )));
+        }
+        Ok(n)
+    }
 }
 
 /// Streams one worksheet's XML and stops at the first limit it breaks.
@@ -104,7 +139,10 @@ fn scan_sheet(xml: impl Read, limits: XlsxLimits) -> Result<(), String> {
         let event = reader.read_event_into(&mut buf);
         let element = match &event {
             Ok(Event::Start(e) | Event::Empty(e)) => e,
-            Ok(Event::Eof) | Err(_) => return Ok(()),
+            Ok(Event::Eof) => return Ok(()),
+            // Fail closed: a part that cannot be read as XML (or cannot be
+            // read at all) is not passed on to the library.
+            Err(e) => return Err(format!("cannot be read: {e}")),
             Ok(_) => {
                 buf.clear();
                 continue;
@@ -116,7 +154,7 @@ fn scan_sheet(xml: impl Read, limits: XlsxLimits) -> Result<(), String> {
                 if cells > limits.max_cells {
                     return Err(format!("more than {} cells", limits.max_cells));
                 }
-                col += 1;
+                col = col.saturating_add(1);
                 if let Some((r, c)) = attribute(element, b"r").and_then(|v| cell_ref(&v)) {
                     (row, col) = (r, c);
                 }
@@ -125,7 +163,7 @@ fn scan_sheet(xml: impl Read, limits: XlsxLimits) -> Result<(), String> {
             b"row" => {
                 row = attribute(element, b"r")
                     .and_then(|v| std::str::from_utf8(&v).ok()?.trim().parse().ok())
-                    .unwrap_or(row + 1);
+                    .unwrap_or(row.saturating_add(1));
                 col = 0;
             }
             b"dimension" => {
@@ -133,8 +171,8 @@ fn scan_sheet(xml: impl Read, limits: XlsxLimits) -> Result<(), String> {
                     let mut ends = reference.split(|b| *b == b':').filter_map(cell_ref);
                     if let (Some(first), Some(last)) = (ends.next(), ends.next()) {
                         let mut dim = Bbox::default();
-                        dim.add(first.0, first.1, limits)?;
-                        dim.add(last.0, last.1, limits)?;
+                        dim.add(first.0.max(1), first.1, limits)?;
+                        dim.add(last.0.max(1), last.1, limits)?;
                     }
                 }
             }
@@ -171,8 +209,8 @@ impl Bbox {
         grow(&mut self.rows, row);
         grow(&mut self.cols, col);
         let (r, c) = (self.rows.unwrap_or((0, 0)), self.cols.unwrap_or((0, 0)));
-        let height = r.1 - r.0 + 1;
-        let width = c.1 - c.0 + 1;
+        let height = (r.1 - r.0).saturating_add(1);
+        let width = (c.1 - c.0).saturating_add(1);
         if height > limits.max_rows {
             return Err(format!(
                 "rows {} to {} span more than {} rows",
@@ -253,6 +291,76 @@ mod tests {
         ] {
             assert!(sheet(xml).is_err(), "{xml}");
         }
+    }
+
+    #[test]
+    fn huge_row_numbers_do_not_overflow() {
+        for xml in [
+            r#"<sheetData><row r="18446744073709551615"><c/><c/></row></sheetData>"#,
+            r#"<sheetData><row r="18446744073709551615"/><row><c/></row></sheetData>"#,
+            r#"<dimension ref="A0:A18446744073709551615"/>"#,
+            r#"<sheetData><row r="1"><c r="A1"/></row><row r="18446744073709551615"><c r="A18446744073709551615"/></row></sheetData>"#,
+        ] {
+            // Refused or passed, never a panic (debug builds trap overflow).
+            let _ = sheet(xml);
+        }
+        assert!(
+            sheet(r#"<dimension ref="A0:A18446744073709551615"/>"#).is_err(),
+            "the whole range of u64 rows is far too tall"
+        );
+    }
+
+    #[test]
+    fn a_part_that_is_not_xml_is_refused() {
+        assert!(sheet("<sheetData><row r=\"1\"><c r=\"A1\"></row>").is_err());
+    }
+
+    #[test]
+    fn what_is_really_decompressed_is_counted_not_what_the_header_says() {
+        let read = std::cell::Cell::new(0);
+        let data = vec![b' '; 10_000];
+        let mut counted = Counting {
+            inner: data.as_slice(),
+            read: &read,
+            limit: 4_000,
+        };
+        let mut sink = Vec::new();
+        assert!(counted.read_to_end(&mut sink).is_err());
+        assert!(read.get() > 4_000);
+    }
+
+    /// A sheet of many megabytes whose headers claim 100 bytes.
+    #[test]
+    fn an_archive_that_lies_about_its_size_is_refused() {
+        use std::io::Write as _;
+        let mut bytes = Vec::new();
+        {
+            let mut zip = zip::ZipWriter::new(Cursor::new(&mut bytes));
+            zip.start_file(
+                "xl/worksheets/sheet1.xml",
+                zip::write::SimpleFileOptions::default(),
+            )
+            .unwrap();
+            zip.write_all(b"<sheetData>").unwrap();
+            zip.write_all(&vec![b' '; 6 * 1024 * 1024]).unwrap();
+            zip.write_all(b"</sheetData>").unwrap();
+            zip.finish().unwrap();
+        }
+        // Patch the declared uncompressed size in the local and central headers.
+        let patch = |bytes: &mut Vec<u8>, sig: [u8; 4], at: usize| {
+            let pos = bytes.windows(4).position(|w| w == sig).unwrap() + at;
+            bytes[pos..pos + 4].copy_from_slice(&100u32.to_le_bytes());
+        };
+        patch(&mut bytes, [0x50, 0x4b, 0x03, 0x04], 22);
+        patch(&mut bytes, [0x50, 0x4b, 0x01, 0x02], 24);
+        let limits = XlsxLimits {
+            max_unzipped_bytes: 1024 * 1024,
+            ..XlsxLimits::TABLES
+        };
+        assert!(
+            check_xlsx_with(&bytes, limits).is_err(),
+            "six megabytes of data against a one megabyte limit"
+        );
     }
 
     #[test]
