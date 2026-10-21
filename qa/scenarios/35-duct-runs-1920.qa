@@ -1,0 +1,15 @@
+@title Duct runs: pick a duct in 3D, read the runs in it (1920x1080)
+@area 3D
+# Click a duct in the 3D view: the Wire runs panel shows its fill and every run in it, and lights them.
+click_text "Open example"
+wait 20
+resize 1920 1080
+wait 10
+click_text 3D
+wait 40
+shot before
+click 832 640
+wait 60
+shot duct-picked
+expect "Duct runs"
+expect "runs,"

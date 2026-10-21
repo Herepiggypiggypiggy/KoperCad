@@ -1,0 +1,17 @@
+@title A neutral wire that is not blue is listed in Issues under IEC 60204-1
+@area Reports
+# The fixture is the example with its wires coloured by the Autopilot and one neutral wire set to black.
+open qa/fixtures/neutral-black.novo
+wait 20
+click_text "warning"
+wait 10
+expect "IEC 60204-1 gives BU"
+shot issues-neutral-not-blue
+check_blank issues-neutral-not-blue
+check_layout
+# A click on the row goes to the wire on its page and marks it.
+click_text "Wire 19 (Neutral circuit) is BK; IEC 60204-1 gives BU"
+wait 10
+shot neutral-wire-marked
+check_blank neutral-wire-marked
+check_layout

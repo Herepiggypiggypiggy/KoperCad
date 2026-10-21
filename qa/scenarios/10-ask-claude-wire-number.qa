@@ -16,6 +16,8 @@ scroll 250 300 -300
 wait 4
 click_text "Whole project"
 wait 4
+scroll 250 300 -3000
+wait 4
 click_text "I have read this and agree"
 wait 4
 click_text "Turn Claude on" Button

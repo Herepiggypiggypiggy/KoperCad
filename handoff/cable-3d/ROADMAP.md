@@ -28,6 +28,10 @@ Scope: draw cable and wire runs in the 3D cabinet view along the routed paths to
 - Heat panel and Wire runs panel both hang under the cube: with Heat open on a short window the Wire runs panel starts beside it (draggable).
 - "option" in Ctrl+K returns scattered letter matches (round 11): fuzzy ranking in `novo-workflow`, the UX thread's.
 
+## Done in PR 4 (branch claude/cable-duct-runs)
+- Click a duct in 3D: the Wire runs panel ("Duct runs") shows the duct's place and fill, the runs in it (rows, click one for its Run card), "Select its n runs", and lights the paths of those runs. A duct no drawn wire lies in says so. Needs the wires layer on (the runs come from the routed wires).
+- QA scenarios 34 (1366x768) and 35 (1920x1080) click the duct by pixel position.
+
 ## Done in PR 3 (branch claude/cable-bend-clearance)
 - `novo_routing::checks`: `tight_bends` (corner of two ducts against the arc the wire needs, bisection on a sampled arc tangent to both middle lines) and `near_hot` (distance from the routed centre line to a device outline). Pure geometry, unit tested.
 - Rules `wire.bend_factor` (6 x diameter), `wire.hot_gap_mm` (20), `wire.hot_loss_w` (5), planning values, in the Cabinet rules list.

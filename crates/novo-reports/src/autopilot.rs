@@ -934,16 +934,15 @@ pub struct RuleBreak {
     pub message: String,
 }
 
-/// Wires that already have a colour or size the project's house rules do not
-/// allow: a colour other than the house colour of its class, a section under
-/// the house minimum. Empty under IEC 60204-1 (the project states no rules of
-/// its own), and a wire without a value is not a break: the Autopilot fills
-/// those in. Read only.
+/// Wires that already have a colour or size the project's rules do not allow:
+/// a colour other than the house colour of its class (under House rules), a
+/// neutral or 0 V wire that is not blue (IEC 60204-1, also where a house set
+/// leaves the class blank), a section under the house minimum. Protective
+/// earth and PEN colours are left to the standards check. A wire without a
+/// value is not a break: the Autopilot fills those in. Read only.
 pub fn rule_breaks(project: &Project) -> Vec<RuleBreak> {
     let rules = WireRules::of(project);
-    if rules.preset != crate::wire_rules::Preset::House {
-        return Vec::new();
-    }
+    let house = rules.preset == crate::wire_rules::Preset::House;
     let basis = wire_basis(project, &project.netlist());
     let mut out = Vec::new();
     // A wire can belong to more than one cut item; it is judged once.
@@ -967,17 +966,31 @@ pub fn rule_breaks(project: &Project) -> Vec<RuleBreak> {
                 .and_then(crate::wire_rules::normal_code);
             // A class the Autopilot had to guess is no ground for a warning.
             let sure_class = colour_of(b).2 != Basis::Assumed;
-            if let (Some(have), Some(house)) = (have, rules.house_colour(class))
+            let expected = if house {
+                rules
+                    .house_colour(class)
+                    .map(|c| (c, "the project's house rule"))
+            } else {
+                None
+            }
+            .or_else(|| {
+                matches!(class, ColourClass::Neutral | ColourClass::DcNegative)
+                    .then_some(("BU", "IEC 60204-1"))
+            });
+            if let (Some(have), Some((want, who))) = (have, expected)
                 && sure_class
-                && have != house
+                && have != want
             {
                 out.push(RuleBreak {
                     wire: wire.id,
                     message: format!(
-                        "{name} ({} circuit) is {have}; the project's house rule gives {house}",
+                        "{name} ({} circuit) is {have}; {who} gives {want}",
                         class.label()
                     ),
                 });
+            }
+            if !house {
+                continue;
             }
             let control = is_control(b);
             let smallest = crate::wirecut::sections(project, &[wire])

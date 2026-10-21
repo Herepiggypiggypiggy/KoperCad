@@ -557,7 +557,7 @@ impl NovoApp {
                     .state
                     .selection
                     .iter()
-                    .any(|i| i.kind == ItemKind::Wire))
+                    .any(|i| matches!(i.kind, ItemKind::Wire | ItemKind::Duct)))
         {
             view3d_runs::ensure(
                 ui.ctx(),
@@ -987,6 +987,7 @@ impl NovoApp {
         }
         if let Some(facts) = wire_facts {
             let chosen = view3d_runs::picked(facts, &mode.view.state.selection);
+            let in_ducts = view3d_runs::duct_runs(facts, &mode.view.state.selection);
             let undrawn = mode
                 .undrawn
                 .as_ref()
@@ -1002,6 +1003,7 @@ impl NovoApp {
                 mode.controls.heat_panel,
                 list,
                 &chosen,
+                &in_ducts,
                 &mode.view.state.selection,
             );
             if let Some(asked) = asked {
@@ -1554,7 +1556,7 @@ fn heat_controls(
 /// warm cabinet; Auto goes back to ambient to the hottest cell.
 fn scale_menu(ui: &mut egui::Ui, h: &mut Heat3d, auto: novo_heatview::range::Range) {
     let label = if h.scale.is_some() {
-        "Scale: set"
+        "Scale: held"
     } else {
         "Scale"
     };

@@ -1,0 +1,22 @@
+@title Ask Claude: the agree box stays off until the notice has been scrolled into view
+@area Assistant
+@sizes 1366x600
+# On a short window the notice (section 4) is below the fold: the box cannot be ticked until it has been in view.
+click_text "Open example"
+wait 20
+key ctrl+k
+wait 6
+text ask claude
+wait 8
+key Enter
+wait 10
+expect "Scroll down and read"
+expect_disabled "I have read this and agree"
+expect_disabled "Turn Claude on"
+shot ask-claude-agree-gate-off
+scroll 250 300 -3000
+wait 6
+expect "4. Agree"
+expect_enabled "I have read this and agree"
+shot ask-claude-agree-gate-on
+check_layout
