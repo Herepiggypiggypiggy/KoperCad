@@ -50,12 +50,12 @@ title = "Two columns at the end"
 title_nl = "Twee kolommen achteraan"
 text = """
 The last two columns are **Route length mm** and **Length basis**.
-The first is how long to cut the wire. The second says how that length was found: "routed" or "estimate", and in free air when no duct reaches.
+The first is the length of the route; the bench cut list adds the allowance at each end. The second says how that length was found: "routed" or "estimate", and in free air when no duct reaches.
 Of the 19 rows here, 15 say **routed** and 4 say **estimate**.
 """
 text_nl = """
 De laatste twee kolommen zijn **Route length mm** en **Length basis**.
-De eerste is hoe lang de draad moet worden afgekort. De tweede zegt hoe die lengte is bepaald: "routed" of "estimate", en free air als geen kanaal de draad bereikt.
+De eerste is de lengte van de route; de bankwerklijst telt de toeslag aan elk uiteinde erbij. De tweede zegt hoe die lengte is bepaald: "routed" of "estimate", en free air als geen kanaal de draad bereikt.
 Van de 19 rijen hier staat er bij 15 **routed** en bij 4 **estimate**.
 """
 
