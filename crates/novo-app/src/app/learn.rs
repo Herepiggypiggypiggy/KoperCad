@@ -166,6 +166,9 @@ pub(crate) struct LearnState {
     pub(super) only_path: Option<String>,
     pub(super) show_drafts: bool,
     pub(super) confirm_restart: bool,
+    /// The step whose hints are being shown and how many are open.
+    pub(super) hints_for: String,
+    pub(super) hints_shown: usize,
     /// Set by the replay gate: draws one frame, so a page shown by a solve
     /// op has its canvas before the op goes on (a person's next frame).
     #[cfg(test)]
@@ -224,6 +227,8 @@ impl LearnState {
             only_path: None,
             show_drafts: false,
             confirm_restart: false,
+            hints_for: String::new(),
+            hints_shown: 0,
             #[cfg(test)]
             settle: None,
             confirm_reset: false,
@@ -994,6 +999,21 @@ impl NovoApp {
         self.learn.confirm_finished = false;
         self.learn.revealed = None;
         self.learn.ticked_at = None;
+        self.learn.hints_for.clear();
+        self.learn.hints_shown = 0;
+    }
+
+    /// The card's Hint: opens the next hint of the open step.
+    pub(super) fn learn_open_hint(&mut self) {
+        let Some(step) = self.learn.run.as_ref().and_then(|r| r.step()) else {
+            return;
+        };
+        let (id, total) = (step.id.clone(), step.hints(self.learn.lang).len());
+        if self.learn.hints_for != id {
+            self.learn.hints_for = id;
+            self.learn.hints_shown = 0;
+        }
+        self.learn.hints_shown = (self.learn.hints_shown + 1).min(total);
     }
 
     /// The card's Skip: does the step for the learner when its `solve` is

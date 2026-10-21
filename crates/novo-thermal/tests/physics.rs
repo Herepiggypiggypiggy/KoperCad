@@ -461,3 +461,111 @@ fn bad_input_is_refused() {
     sc.enclosure.width_mm = 10.0;
     assert!(simulate_steady(&sc).is_err());
 }
+
+/// The 600 x 800 x 300 mm vented box of the CFD comparison (100 W, 200 x 120
+/// mm louvre on top, 120 m3/h intake fan below).
+fn fan_box(fan: bool) -> Scenario {
+    let mut sc = scenario(vec![Device {
+        footprint: Rect {
+            x: 200.0,
+            y: 450.0,
+            w: 150.0,
+            h: 150.0,
+        },
+        height_mm: Some(100.0),
+        ..device(7, 0.0, 0.0, 0.0, 0.0, 100.0)
+    }]);
+    sc.enclosure.width_mm = 600.0;
+    sc.enclosure.height_mm = 800.0;
+    sc.enclosure.plate = Rect {
+        x: 40.0,
+        y: 40.0,
+        w: 510.0,
+        h: 700.0,
+    };
+    let opening = |placement| Opening {
+        placement,
+        width_mm: 200.0,
+        height_mm: 120.0,
+    };
+    sc.vents = vec![Vent {
+        opening: opening(Placement::Top { x_mm: 300.0 }),
+        free_area_fraction: 0.6,
+    }];
+    if fan {
+        sc.fans = vec![Fan {
+            opening: opening(Placement::Bottom { x_mm: 300.0 }),
+            mode: FanMode::Intake,
+            free_flow_m3h: 120.0,
+            max_pressure_pa: 60.0,
+        }];
+    } else {
+        sc.vents.push(Vent {
+            opening: opening(Placement::Bottom { x_mm: 300.0 }),
+            free_area_fraction: 0.6,
+        });
+    }
+    sc
+}
+
+#[test]
+fn fan_case_exhaust_enthalpy_matches_mass_flow_times_cp_times_rise() {
+    // Heat in = heat out through the walls + mdot cp dT of the exhaust: the
+    // analytic balance both engines must close. The jet mixing term moves heat
+    // around inside the box but must not change the balance.
+    let r = quick(fan_box(true));
+    assert!(r.balance.residual_rel.abs() < 1e-3);
+    let q_out: f64 = r
+        .openings
+        .iter()
+        .filter(|o| !o.is_fan && o.flow_m3h < 0.0)
+        .map(|o| -o.flow_m3h / 3600.0)
+        .sum();
+    assert!(q_out > 0.02, "exhaust flow {q_out}");
+    let rho_cp = 1.2 * 1006.0;
+    let walls = r.balance.front_w
+        + r.balance.rear_w
+        + r.balance.left_w
+        + r.balance.right_w
+        + r.balance.top_w
+        + r.balance.bottom_w;
+    let exhaust_rise = (100.0 - walls) / (rho_cp * q_out);
+    close(
+        r.balance.openings_w / (rho_cp * q_out),
+        exhaust_rise,
+        0.02,
+        "exhaust rise from the energy balance",
+    );
+}
+
+#[test]
+fn fan_jet_stirs_the_box_so_the_mean_air_rise_is_not_a_cold_pool_value() {
+    // CFD (3D, 6000 cells) of this box gives a mean air rise of about 3 K; with
+    // the old 2D mixing the 2D engine gave 1.33 K because the lower half stayed
+    // at ambient. With the jet term it must land between the two, and the
+    // lower third must no longer sit at ambient. The bounds are a regression
+    // guard, not proof that the tuning is right.
+    let r = quick(fan_box(true));
+    let m = r.balance.mean_rise_k;
+    assert!(m > 1.6 && m < 3.2, "mean air rise {m} K");
+    let f = &r.air_temp;
+    let rows = f.grid.rows;
+    let mut low = 0.0;
+    let mut n = 0.0;
+    for row in (2 * rows / 3)..rows {
+        for col in 0..f.grid.cols {
+            low += f.at(col, row) - 25.0;
+            n += 1.0;
+        }
+    }
+    assert!(low / n > 0.3, "lower third mean rise {} K", low / n);
+}
+
+#[test]
+fn box_without_fans_gets_no_jet_mixing() {
+    let a = quick(fan_box(false));
+    let mut p = fan_box(false);
+    p.params.mixing_m2s = 2.0e-3;
+    let b = quick(p);
+    assert_eq!(a.balance.mean_rise_k, b.balance.mean_rise_k);
+}

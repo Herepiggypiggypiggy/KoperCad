@@ -9,7 +9,7 @@ title = "First hour"
 title_nl = "Eerste uur"
 summary = "Anyone new: place parts, wire them, give them a supply, draw a motor starter, follow its contacts, watch it run."
 summary_nl = "Voor wie nieuw is: onderdelen plaatsen, bedraden, voeden, een motorstarter tekenen, contacten volgen, laten draaien."
-lessons = ["placing-parts", "wiring-modes", "potentials", "motor-starter", "cross-references", "live-view", "time-savers"]
+lessons = ["placing-parts", "wiring-modes", "potentials", "motor-starter", "cross-references", "live-view", "coil-wont-pull-in", "motor-wont-hold", "time-savers"]
 
 [[path]]
 id = "draftsperson"

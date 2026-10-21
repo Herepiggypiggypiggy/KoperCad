@@ -167,8 +167,13 @@ fn importing_into_an_empty_project_recreates_it_in_one_undo_step() {
             .starts_with("Would add 2 devices (3 terminals), 1 cables and 2 sections")
     );
     let n = plan.apply(&mut doc).unwrap();
-    assert_eq!(n, 2 + 3 + 1 + 2);
     let p = doc.project();
+    // The plant, and now the drawn pages, their symbols and wires.
+    assert_eq!(
+        n,
+        2 + 3 + 1 + 2 + p.pages().count() + p.symbols().count() + p.wires().count()
+    );
+    assert!(p.pages().count() >= 1 && p.symbols().count() >= 2);
     assert_eq!(p.devices().count(), 2);
     assert_eq!(p.terminals().count(), 3);
     assert_eq!(p.cables().count(), 1);

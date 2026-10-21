@@ -77,6 +77,18 @@ pub enum Level {
     Advanced,
 }
 
+/// What kind of lesson this is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Kind {
+    /// Steps to follow.
+    #[default]
+    Lesson,
+    /// A planted fault and a goal: each step names what must be true, and
+    /// its `hints` help in three levels instead of telling the way.
+    Challenge,
+}
+
 /// One lesson.
 #[derive(Debug, Clone, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -97,6 +109,8 @@ pub struct Lesson {
     pub order: i32,
     #[serde(default)]
     pub level: Level,
+    #[serde(default)]
+    pub kind: Kind,
     #[serde(default)]
     pub minutes: u32,
     #[serde(default)]
@@ -155,6 +169,12 @@ pub struct Step {
     pub point: Option<Target>,
     #[serde(default)]
     pub note: Vec<Note>,
+    /// Hints from vague to specific, shown one at a time on request.
+    #[serde(default)]
+    pub hints: Vec<String>,
+    /// The Dutch hints; as many as `hints`, or none.
+    #[serde(default)]
+    pub hints_nl: Vec<String>,
     /// What ticks the step. None is a reading step with a Next button.
     #[serde(default)]
     pub expect: Option<Check>,
@@ -751,6 +771,14 @@ impl Step {
         match lang {
             Lang::Nl if !self.how_nl.is_empty() => &self.how_nl,
             _ => &self.how,
+        }
+    }
+
+    /// The hints in the language, English when there is no Dutch twin.
+    pub fn hints(&self, lang: Lang) -> &[String] {
+        match lang {
+            Lang::Nl if !self.hints_nl.is_empty() => &self.hints_nl,
+            _ => &self.hints,
         }
     }
 
