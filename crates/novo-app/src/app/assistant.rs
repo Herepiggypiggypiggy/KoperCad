@@ -994,6 +994,11 @@ impl NovoApp {
     }
 
     #[cfg(test)]
+    pub(super) fn datasheet_test_duplicate(&self) -> bool {
+        self.datasheet_duplicate()
+    }
+
+    #[cfg(test)]
     pub(super) fn assistant_test_decide(&mut self, index: usize, apply: bool) {
         self.assistant_decide(index, apply);
     }
