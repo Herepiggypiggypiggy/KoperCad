@@ -104,6 +104,7 @@ mod strip_diagram;
 mod table;
 mod toc;
 mod wire_defaults;
+pub mod wire_rules;
 mod wirecut;
 mod wires;
 
