@@ -147,6 +147,10 @@ pub struct Item {
     pub size: Vec3,
     /// Maker colour, if the part has one.
     pub tint: Option<[u8; 3]>,
+    /// Free space the part asks for on each side, mm: left, right, above,
+    /// below as seen on the plate. Devices only; drives the clearance colour
+    /// of the dimensions.
+    pub needs: Option<[f32; 4]>,
     pub mark: Mark,
     pub label: Option<Arc<str>>,
     /// Doors and covers: drawn see-through, after the opaque items.
@@ -165,6 +169,7 @@ impl Item {
             pose,
             size,
             tint: None,
+            needs: None,
             mark: Mark::None,
             label: None,
             translucent: false,
