@@ -344,10 +344,15 @@ pub fn cover(
     let fact = |s: &mut Section, a: &str, b: String| {
         s.push(vec![Cell::text(a), Cell::text(b)], Vec::new());
     };
+    // The issued revision (A, B, ...), not the edit counter of the model: a
+    // workshop reads "Revision 3" as a drawing revision.
     fact(
         &mut facts,
-        "Project revision",
-        project.revision().to_string(),
+        "Drawing revision",
+        match project.latest_revision() {
+            Some(r) => r.index.to_string(),
+            None => "none issued yet".to_owned(),
+        },
     );
     let on_cable = jobs.iter().filter(|j| j.cable.is_some()).count();
     fact(

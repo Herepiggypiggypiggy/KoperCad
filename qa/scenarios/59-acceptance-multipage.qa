@@ -1,0 +1,53 @@
+@title Journey: two pages, undo a placement, save, reopen, both pages are back
+@area Journeys
+# Acceptance round 2: a multi-page project survives save and reopen; an undone placement stays undone.
+fresh
+key ctrl+n
+wait 20
+key q
+wait 4
+text circuit breaker
+wait 6
+click_text "Miniature circuit breaker, 3-pole" Button
+wait 6
+click 450 200
+wait 6
+key Escape
+expect_scene F1
+# At 1366 the Pages panel opens from its button; at 1920 it is docked already.
+try click_text Pages #1
+wait 8
+click_text New
+wait 6
+click_text Page #1
+wait 10
+key Escape
+key q
+wait 4
+text contactor
+wait 6
+click_text "Contactor main contacts, 3-pole" Button
+wait 6
+click 450 350
+wait 6
+key Escape
+expect_scene K1
+shot page2-placed
+key ctrl+z
+wait 6
+shot page2-undone
+answer_dialog ~/Documents/KoperCAD/two-pages.novo
+key ctrl+s
+wait 20
+expect_file ~/Documents/KoperCAD/two-pages.novo 4000
+open ~/Documents/KoperCAD/two-pages.novo
+wait 30
+expect_scene F1
+shot reopened-page1
+check_layout
+key ctrl+shift+z
+wait 6
+shot after-redo
+try click_text Pages #1
+wait 8
+shot pages-after-reopen
