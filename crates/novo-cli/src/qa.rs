@@ -1801,6 +1801,8 @@ mod tests {
             for st in &sc.steps {
                 if matches!(st.words[0].as_str(), "open" | "answer_dialog")
                     && !st.words[1].starts_with("~/")
+                    // Generated on demand (scale_bench --save-project), not shipped.
+                    && !st.words[1].starts_with("target/")
                 {
                     let f = root.join(&st.words[1]);
                     assert!(f.exists(), "{}: {} missing", sc.file, f.display());

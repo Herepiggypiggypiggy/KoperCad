@@ -21,3 +21,6 @@ These are NOT real-GPU numbers: the whole-frame figure is the CPU rasteriser. Ru
 
 ## Resume
 `cargo test -p novo-core -p novo-app -p novo-workflow`; scale file: `scripts/scale-bench.sh --size large --only generate --save-project target/scale600.novo`; frames: `KOPERCAD_BIN_DIR=target/release scripts/qa.sh --slow --only scale-frames`.
+
+## Review fixes (PR 1251)
+Caches clear on every op; the design check runs one worker at a time; a dead worker falls back to the foreground check; scenario 40 needs `target/scale600.novo` (generate with `scale_bench --save-project`).

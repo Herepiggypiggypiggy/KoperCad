@@ -20,8 +20,8 @@ const BACKGROUND_FROM: usize = 1500;
 
 /// A design check running for one project revision.
 pub(super) struct CheckJob {
-    revision: u64,
-    rx: std::sync::mpsc::Receiver<Vec<Problem>>,
+    pub(super) revision: u64,
+    pub(super) rx: std::sync::mpsc::Receiver<Vec<Problem>>,
 }
 
 impl NovoApp {
@@ -121,7 +121,10 @@ impl NovoApp {
             return;
         }
         let big = project.symbols().count() + project.wires().count() > BACKGROUND_FROM;
-        if !(background && big) {
+        // A revision whose worker died is checked right here instead: the pill
+        // must not pulse forever over old counts.
+        let failed = self.wb.check_failed == Some(revision);
+        if !(background && big) || failed {
             // A worker still running for an older revision is left to finish;
             // its answer is not used once a newer one is stored.
             self.wb.problems = Some((revision, open_problems(project)));
@@ -131,7 +134,7 @@ impl NovoApp {
         // else starts; its answer is stored when it lands, and the next frame
         // starts one run for the current revision. A burst of edits therefore
         // costs one run in flight, not one per edit.
-        if self.wb.check_job.is_none() && self.wb.check_failed != Some(revision) {
+        if self.wb.check_job.is_none() {
             let snapshot = project.clone();
             let (tx, rx) = std::sync::mpsc::channel();
             std::thread::spawn(move || {

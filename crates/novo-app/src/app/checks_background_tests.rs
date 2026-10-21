@@ -143,3 +143,24 @@ fn a_burst_of_edits_runs_one_check_at_a_time() {
     assert!(!d.app.checks_pending());
     assert!(d.app.wb.check_job.is_none());
 }
+
+#[test]
+fn a_dead_worker_falls_back_to_the_foreground_check() {
+    let (_dir, mut d) = big_project();
+    // Replace the running worker with one that died without an answer.
+    let revision = d.app.document().unwrap().project().revision();
+    let (tx, rx) = std::sync::mpsc::channel();
+    drop(tx);
+    d.app.wb.check_job = Some(super::checks::CheckJob { revision, rx });
+    let started = d.app.wb.check_started;
+    let _ = d.app.shown_problems();
+    assert_eq!(d.app.wb.check_failed, Some(revision));
+    // The next frame checks in the foreground: nothing keeps pulsing.
+    let _ = d.app.shown_problems();
+    assert!(!d.app.checks_pending());
+    assert!(d.app.wb.check_job.is_none());
+    assert_eq!(
+        d.app.wb.check_started, started,
+        "no new worker for a failed revision"
+    );
+}
