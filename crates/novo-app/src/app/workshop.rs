@@ -85,9 +85,9 @@ impl NovoApp {
 
     /// Writes the pack into `folder`, replacing the files of an earlier pack.
     pub fn export_workshop_to(&mut self, folder: &Path) -> Option<PathBuf> {
-        let name = self.project_name().unwrap_or_default();
+        let name = self.machine_title().unwrap_or_default();
         let paper = self.wb.workshop_paper;
-        let (templates, too_big) = template_pdfs(self.backend.document()?.project(), &name, paper);
+        let (templates, too_big) = template_pdfs(&*self.machine()?, &name, paper);
         let mut done: Vec<String> = Vec::new();
         let mut skipped: Vec<String> = Vec::new();
         let mut no_single_sheet: Vec<String> = Vec::new();

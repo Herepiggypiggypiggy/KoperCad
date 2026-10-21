@@ -34,8 +34,8 @@ impl NovoApp {
 
     /// Writes the job file to `path`.
     pub fn export_wire_cut_to(&mut self, path: &Path) -> Option<PathBuf> {
-        let project = self.backend.document()?.project();
-        let jobs = wire_cut_jobs(project);
+        let project = self.machine()?;
+        let jobs = wire_cut_jobs(&project);
         if jobs.is_empty() {
             self.message(Level::Info, "No wires to cut yet: connect two device pins");
             return None;
@@ -67,8 +67,8 @@ impl NovoApp {
 
     /// Writes the workbook to `path`.
     pub fn export_wire_production_to(&mut self, path: &Path) -> Option<PathBuf> {
-        let project = self.backend.document()?.project();
-        let report = WireCut.generate(project);
+        let project = self.machine()?;
+        let report = WireCut.generate(&project);
         if report.sections.is_empty() {
             self.message(Level::Info, "No wires to cut yet: connect two device pins");
             return None;

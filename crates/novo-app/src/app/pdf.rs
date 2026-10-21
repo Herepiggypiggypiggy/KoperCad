@@ -81,7 +81,7 @@ impl NovoApp {
     /// The design checks as report pages after the drawing. A clean
     /// project prints none, so its PDF is the drawing alone.
     fn checks_appendix(&self) -> Option<novo_pdf::Appendix> {
-        let lines = novo_checks::report_lines(self.backend.document()?.project());
+        let lines = novo_checks::report_lines(&*self.machine()?);
         // Headline and summary only: nothing to report.
         (lines.len() > 2).then(|| novo_pdf::Appendix {
             title: "Design checks".into(),
@@ -165,14 +165,16 @@ impl NovoApp {
     ) -> Option<PathBuf> {
         let summary = Summary::of(self.problems());
         let replaced = path.exists();
-        let doc = self.backend.document()?;
+        // The PDF is the machine of the current choice (the working project
+        // keeps every option's pages).
+        let project = self.machine()?;
         let art = self
             .library()
             .map(|lib| novo_editor::art::LibraryArt::new(lib, options.style.symbol));
         let result = match &art {
-            Some(art) => novo_pdf::export_pdf_with_art(doc.project(), options, art),
+            Some(art) => novo_pdf::export_pdf_with_art(&project, options, art),
             None => novo_pdf::export_pdf_with_art(
-                doc.project(),
+                &project,
                 options,
                 &novo_canvas::model::PlaceholderArt,
             ),

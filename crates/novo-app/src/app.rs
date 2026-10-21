@@ -106,6 +106,9 @@ mod learn_ui;
 mod link;
 mod live;
 mod live_anim;
+mod machine;
+#[cfg(test)]
+mod machine_tests;
 mod macro_actions;
 #[cfg(test)]
 mod macro_actions_tests;
