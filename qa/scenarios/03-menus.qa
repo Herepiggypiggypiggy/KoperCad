@@ -1,0 +1,44 @@
+@title Every top menu opens and fits
+@area Menus
+click_text "Open example"
+wait 20
+click_text File #1
+wait 6
+shot menu-file
+check_layout
+key Escape
+click_text Edit #1
+wait 6
+shot menu-edit
+check_layout
+key Escape
+click_text Draw #1
+wait 6
+shot menu-draw
+check_layout
+key Escape
+click_text View #1
+wait 6
+shot menu-view
+check_layout
+key Escape
+click_text Check #1
+wait 6
+shot menu-check
+check_layout
+key Escape
+click_text Reports #1
+wait 6
+shot menu-reports
+check_layout
+key Escape
+click_text Simulate #1
+wait 6
+shot menu-simulate
+check_layout
+key Escape
+click_text Help #1
+wait 6
+shot menu-help
+check_layout
+key Escape
