@@ -1243,6 +1243,14 @@ fn heat_controls(
                     .show_value(false),
             )
             .on_hover_text("How solid the cloud looks");
+            ui.add(
+                egui::DragValue::new(&mut h.cloud_layers)
+                    .range(heat_cloud::LAYERS_RANGE)
+                    .suffix(" layers"),
+            )
+            .on_hover_text(
+                "Slices through the cabinet: fewer is lighter on a slow graphics card, more is smoother",
+            );
         }
         ui.checkbox(&mut h.carry, "Heat flow").on_hover_text(
             "Where the heat goes: orange lines and moving dashes follow the heat the air carries away from hot parts (brighter is more heat per area); arrows inside plate, rails and devices show heat conducted through them. Derived from the solved temperature and air speed; surface radiation is not included. Air colder than ambient takes heat in, so its lines point against the air",
