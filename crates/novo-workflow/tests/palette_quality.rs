@@ -333,3 +333,18 @@ fn print_opens_the_preview_and_does_not_export_at_once() {
     let rows = search(&palette, &keymap, "print");
     assert_eq!(rows[0].target, Target::Command("export.print_preview"));
 }
+
+#[test]
+fn the_3d_run_card_is_found_by_cable_run_and_route() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    for query in ["cable run", "cable runs", "run card", "route", "wire runs"] {
+        let rows = search(&palette, &keymap, query);
+        let at = position(&rows, "view.3d_wire_runs")
+            .unwrap_or_else(|| panic!("{query:?} does not find the 3D runs command"));
+        assert!(
+            at < 3,
+            "{query:?} ranks it {at}th: {:?}",
+            rows.iter().take(5).map(|r| &r.target).collect::<Vec<_>>()
+        );
+    }
+}

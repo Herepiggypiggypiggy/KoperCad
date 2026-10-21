@@ -26,17 +26,17 @@ wait 40
 shot wire-runs-list
 expect "Wire runs"
 click_text "4   554 mm"
-wait 30
+wait 60
 shot run-card-entry
 expect "Run 4"
 expect "Drawn to the cabinet entry"
 expect "Not checked: cable bend radius"
 click_text "Select all cores of the cable"
-wait 30
+wait 60
 shot cable-cores
 expect "runs"
 click_text "2   466 mm"
-wait 30
+wait 60
 shot run-card-routed
 expect "routed"
 expect "Duct at"

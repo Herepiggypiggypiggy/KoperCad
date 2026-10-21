@@ -1385,9 +1385,20 @@ pub const COMMANDS: &[CommandInfo] = &[
     ),
     cmd(
         "view.3d_wire_runs",
-        "Show the wire runs and lengths in 3D",
+        "Show cable and wire runs in 3D: path, length, duct fill",
         "View",
-        &["wire runs", "wire lengths", "cut length", "routes", "ducts"],
+        &[
+            "wire runs",
+            "cable run",
+            "cable runs",
+            "run card",
+            "wire lengths",
+            "cut length",
+            "route",
+            "routes",
+            "ducts",
+            "cabinet entry",
+        ],
         Needs::Project,
     ),
     cmd(

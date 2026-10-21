@@ -1,6 +1,6 @@
 # Cable runs in 3D: handoff
 
-Updated 2026-10-21 UTC.
+Updated 2026-10-21 UTC. PR #1205 merged; panel and follow-ups in PR 2 (see ROADMAP.md).
 
 ## State
 - Branch `claude/project-thread-168e6g` (repo herepiggypiggypiggy/kopercad), PR 1 with the Run card, lit path, duct outlines, entry marker, Not drawn list. Head SHA and review state are in PROGRESS.md.
@@ -8,7 +8,7 @@ Updated 2026-10-21 UTC.
 - No change to `novo-core`, `novo-routing` or `novo-reports`.
 
 ## Design in one paragraph
-Geometry is the routing engine's (`route_project`, entry legs). The length and basis come from the wire list's own measurement (`novo_reports::wire_cut_jobs`), read lazily once per project revision (`view3d_runs::ensure`) because it routes again; so the card, cut list and wire list agree. Overlays (lit path 4 px, duct outlines 2 px, entry marker) are rebuilt when the revision, pose or selection changes.
+Geometry is the routing engine's (`route_project`, entry legs). The length and basis come from the wire list's own measurement (`novo_reports::wire_cut_jobs`), read lazily once per project revision (`view3d_runs::ensure`) because it routes again; so the card, cut list and wire list agree. The list and the card are one panel (`view3d_runs::panel`, `panel::Panel`, right side under the cube). Overlays (lit path 4 px, duct outlines 2 px, entry marker) are rebuilt when the revision, pose or selection changes.
 
 ## Resume
 ```

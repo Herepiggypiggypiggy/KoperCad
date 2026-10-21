@@ -20,9 +20,6 @@ use novo_view3d::scene::{ItemId, ItemKind};
 use super::cabinet_routes::{DuctFill, Tone, duct_fills, tone};
 use super::view3d_runs::{Basis, EntryFacts, Undrawn};
 
-/// Margin from the view's edge, in points.
-const MARGIN: f32 = 12.0;
-
 /// What one routed wire comes to.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct WireFacts {
@@ -51,7 +48,7 @@ pub(super) struct WireFacts {
     /// other end is outside the cabinet.
     pub entry: Option<EntryFacts>,
     /// How the length was found; read when a card needs it
-    /// (`view3d_runs::fill_basis`).
+    /// (`view3d_runs::ensure`).
     pub basis: Option<Basis>,
 }
 
@@ -316,82 +313,78 @@ pub(super) struct Asked {
     pub cut_list: bool,
 }
 
-/// The Wire runs list, left side of the view.
-pub(super) fn list(
-    ctx: &egui::Context,
-    view: egui::Rect,
+/// The Wire runs list, as the body of the Wire runs panel
+/// (`view3d_runs::panel`). `height` is the room the panel has, in points;
+/// `compact` keeps the rows to a few lines so a Run card below them is in view.
+pub(super) fn list_body(
+    ui: &mut egui::Ui,
+    height: f32,
+    compact: bool,
     all: &BTreeMap<u64, WireFacts>,
     undrawn: &[Undrawn],
     selection: &BTreeSet<ItemId>,
 ) -> Asked {
     let mut asked = Asked::default();
     let chosen = selected(all, selection);
-    egui::Area::new(egui::Id::new("view3d_wire_runs"))
-        .order(egui::Order::Middle)
-        .pivot(egui::Align2::LEFT_CENTER)
-        .fixed_pos(egui::pos2(view.left() + MARGIN, view.center().y))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_width(250.0);
-                ui.horizontal(|ui| {
-                    ui.strong("Wire runs");
-                    if ui.small_button("Close").clicked() {
-                        asked.close = true;
-                    }
-                });
-                if all.is_empty() {
-                    ui.weak("No wire is routed on this plate yet");
+    ui.horizontal(|ui| {
+        ui.strong("Wire runs");
+        if ui.small_button("Close").clicked() {
+            asked.close = true;
+        }
+    });
+    if all.is_empty() {
+        ui.weak("No wire is routed on this plate yet");
+    }
+    egui::ScrollArea::vertical()
+        .id_salt("view3d_wire_runs_rows")
+        .max_height(if compact {
+            100.0
+        } else {
+            (height * 0.3).max(90.0)
+        })
+        .show(ui, |ui| {
+            for f in sorted(all) {
+                let on = chosen.iter().any(|c| c.id == f.id);
+                let text = format!("{}   {:.0} mm", f.name(), f.length_mm);
+                let row = ui
+                    .selectable_label(on, text)
+                    .on_hover_text(f.lines().join("\n"));
+                if row.clicked() {
+                    asked.select = Some(f.id);
                 }
+            }
+        });
+    if !undrawn.is_empty() {
+        ui.separator();
+        egui::CollapsingHeader::new(format!("Not drawn ({})", undrawn.len()))
+            .default_open(false)
+            .show(ui, |ui| {
+                ui.weak("No path in the picture: how long each is and why");
                 egui::ScrollArea::vertical()
-                    .max_height((view.height() * 0.4).max(120.0))
+                    .id_salt("view3d_wire_runs_undrawn")
+                    .max_height((height * 0.2).max(60.0))
                     .show(ui, |ui| {
-                        for f in sorted(all) {
-                            let on = chosen.iter().any(|c| c.id == f.id);
-                            let text = format!("{}   {:.0} mm", f.name(), f.length_mm);
-                            let row = ui
-                                .selectable_label(on, text)
-                                .on_hover_text(f.lines().join("\n"));
-                            if row.clicked() {
-                                asked.select = Some(f.id);
-                            }
+                        for u in undrawn {
+                            ui.label(format!("{}   {:.0} mm, {}", u.name, u.length_mm, u.text))
+                                .on_hover_text(u.why);
                         }
                     });
-                if !undrawn.is_empty() {
-                    ui.separator();
-                    egui::CollapsingHeader::new(format!("Not drawn ({})", undrawn.len()))
-                        .default_open(false)
-                        .show(ui, |ui| {
-                            ui.weak("No path in the picture: how long each is and why");
-                            egui::ScrollArea::vertical()
-                                .id_salt("view3d_wire_runs_undrawn")
-                                .max_height((view.height() * 0.2).max(60.0))
-                                .show(ui, |ui| {
-                                    for u in undrawn {
-                                        ui.label(format!(
-                                            "{}   {:.0} mm, {}",
-                                            u.name, u.length_mm, u.text
-                                        ))
-                                        .on_hover_text(u.why);
-                                    }
-                                });
-                        });
-                }
-                ui.separator();
-                let total: f64 = all.values().map(|f| f.length_mm).sum();
-                ui.weak(format!("{} wires, {} in all", all.len(), metres(total)));
-                if !chosen.is_empty() {
-                    let sum: f64 = chosen.iter().map(|f| f.length_mm).sum();
-                    ui.label(format!("Selected {}: {}", chosen.len(), metres(sum)));
-                }
-                if ui
-                    .small_button("Open the cut list")
-                    .on_hover_text("The Cut list report: every wire to cut, by size and colour")
-                    .clicked()
-                {
-                    asked.cut_list = true;
-                }
             });
-        });
+    }
+    ui.separator();
+    let total: f64 = all.values().map(|f| f.length_mm).sum();
+    ui.weak(format!("{} wires, {} in all", all.len(), metres(total)));
+    if !chosen.is_empty() {
+        let sum: f64 = chosen.iter().map(|f| f.length_mm).sum();
+        ui.label(format!("Selected {}: {}", chosen.len(), metres(sum)));
+    }
+    if ui
+        .small_button("Open the cut list")
+        .on_hover_text("The Cut list report: every wire to cut, by size and colour")
+        .clicked()
+    {
+        asked.cut_list = true;
+    }
     asked
 }
 

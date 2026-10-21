@@ -1,0 +1,22 @@
+@title Wire runs panel keeps clear of the Inspector and the other 3D panels
+@area 3D
+# Open the Wire runs list, pick a wire, then select all devices so the Inspector opens: nothing may sit on anything else.
+click_text "Open example"
+wait 20
+click_text 3D
+wait 40
+key ctrl+k
+wait 3
+text wire runs
+wait 4
+key Enter
+wait 40
+shot list-open
+click_text "2   466 mm"
+wait 30
+shot wire-picked
+click_text "Select and hide"
+wait 8
+click_text "Select all devices"
+wait 30
+shot inspector-open

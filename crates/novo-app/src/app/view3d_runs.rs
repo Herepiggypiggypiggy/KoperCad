@@ -25,13 +25,6 @@ use novo_view3d::{Overlay, OverlayLines, Scene};
 use super::cabinet_routes::Tone;
 use super::view3d_wires::WireFacts;
 
-/// Margin from the view's edge, in points.
-const MARGIN: f32 = 12.0;
-/// Width of the Run card, in points.
-const CARD_WIDTH: f32 = 290.0;
-/// Width of the Wire runs list, which the card keeps clear of.
-const LIST_WIDTH: f32 = 250.0;
-
 /// Basis texts that are not a measurement of the finished wire: the card
 /// says in words what is still missing.
 const WEAK_BASES: [&str; 4] = ["estimate", "free air", "routed, no depth", "door, no gap"];
@@ -124,8 +117,18 @@ pub(super) struct Undrawn {
     pub why: &'static str,
 }
 
+/// What makes a length an estimate although the wire is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Gap {
+    None,
+    /// Drawn to the entry and nothing is stated for the part outside.
+    OutsideNotStated,
+    /// The stated cable length is shorter than the route inside the cabinet.
+    CableTooShort,
+}
+
 /// The sentence for a basis text.
-fn why(text: &str, entry_without_outside: bool) -> &'static str {
+fn why(text: &str, gap: Gap) -> &'static str {
     match text {
         "routed" => "Measured along the ducts from terminal to terminal, loops included.",
         "routed, no depth" => {
@@ -143,7 +146,10 @@ fn why(text: &str, entry_without_outside: bool) -> &'static str {
         "to entry + stated outside" => {
             "Routed to the cabinet entry, plus the length outside that you stated."
         }
-        "estimate" if entry_without_outside => {
+        "estimate" if gap == Gap::CableTooShort => {
+            "The stated cable length is shorter than the route inside the cabinet, so it cannot be right: the inside route is shown as an estimate. Check the cable length."
+        }
+        "estimate" if gap == Gap::OutsideNotStated => {
             "Drawn to the entry, but the wire outside it is not stated, so the length stays an estimate. State it in Cabinet > Routes."
         }
         _ => {
@@ -189,14 +195,22 @@ pub(super) fn bases(
     for job in &jobs {
         for wire in &job.wires {
             let id = wire.raw();
-            let entry_open = drawn
-                .get(&id)
+            let cable = job.cable.and_then(|c| cables.get(&c));
+            let is_drawn = drawn.get(&id);
+            let gap = if is_drawn.is_some() && cable.is_some_and(|c| c.stated) {
+                Gap::CableTooShort
+            } else if is_drawn
                 .and_then(|f| f.entry.as_ref())
-                .is_some_and(|e| e.outside_mm.is_none());
+                .is_some_and(|e| e.outside_mm.is_none())
+            {
+                Gap::OutsideNotStated
+            } else {
+                Gap::None
+            };
             let basis = Basis {
                 text: job.basis.clone(),
                 length_mm: job.length_mm,
-                why: why(&job.basis, entry_open),
+                why: why(&job.basis, gap),
                 cable: job.cable.and_then(|c| cables.get(&c).cloned()),
             };
             if !drawn.contains_key(&id) {
@@ -230,10 +244,41 @@ fn wire_name(project: &Project, id: WireId) -> String {
     format!("{} → {}", pin(&w.from), pin(&w.to))
 }
 
+/// How long the project must stay unchanged before the basis is read, in
+/// seconds: a drag or a run of nudges changes the revision every frame, and
+/// the read routes the whole project again.
+const SETTLE: f64 = 0.25;
+
+/// The revision last seen and since when it has been unchanged.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+pub(super) struct Settle {
+    revision: u64,
+    since: f64,
+}
+
+impl Settle {
+    /// Whether `revision` has been unchanged for [`SETTLE`] seconds at `now`;
+    /// notes it when it is new.
+    fn settled(&mut self, revision: u64, now: f64) -> bool {
+        if self.revision != revision {
+            *self = Settle {
+                revision,
+                since: now,
+            };
+        }
+        now - self.since >= SETTLE
+    }
+}
+
 /// Reads how the length of every wire was found, once per project revision
 /// (it routes the project again, so it waits until a card or the list needs
-/// it), and puts it on the drawn wires' facts.
+/// it and until the project has stopped changing), and puts it on the drawn
+/// wires' facts. Until then the card shows the routed length without a basis.
+#[allow(clippy::too_many_arguments)] // two caches, the project and the clock
 pub(super) fn ensure(
+    ctx: &egui::Context,
+    now: f64,
+    settle: &mut Settle,
     facts: &mut Option<(StructureId, u64, BTreeMap<u64, WireFacts>)>,
     undrawn: &mut Option<(StructureId, u64, Vec<Undrawn>)>,
     project: &Project,
@@ -247,6 +292,10 @@ pub(super) fn ensure(
         return;
     }
     if matches!(undrawn, Some((s, r, _)) if *s == id && *r == revision) {
+        return;
+    }
+    if !settle.settled(revision, now) {
+        ctx.request_repaint_after(std::time::Duration::from_secs_f64(SETTLE));
         return;
     }
     let (found, rest) = bases(project, map);
@@ -438,7 +487,15 @@ pub(super) fn card_lines(f: &WireFacts) -> Vec<(Tone, String)> {
     let mut out = Vec::new();
     match &f.basis {
         Some(b) => {
-            let tone = if b.is_weak() { Tone::Busy } else { Tone::Ok };
+            // A stated cable length is the designer's figure, not a result:
+            // neutral, not the green of a routed length.
+            let tone = if b.is_weak() {
+                Tone::Busy
+            } else if b.text == "cable length" {
+                Tone::Idle
+            } else {
+                Tone::Ok
+            };
             out.push((tone, format!("{:.0} mm, {}", b.length_mm, b.text)));
             out.push((Tone::Idle, b.why.to_owned()));
         }
@@ -469,6 +526,12 @@ pub(super) fn card_lines(f: &WireFacts) -> Vec<(Tone, String)> {
     for d in &f.duct_use {
         out.push((d.tone, d.text()));
     }
+    if !f.duct_use.is_empty() {
+        out.push((
+            Tone::Idle,
+            "Fill is a planning value: the wire cross-sections added up against the share the rules allow".to_owned(),
+        ));
+    }
     if let Some(e) = &f.entry {
         out.push((Tone::Idle, e.line()));
     }
@@ -489,87 +552,160 @@ pub(super) fn card_lines(f: &WireFacts) -> Vec<(Tone, String)> {
     out
 }
 
-/// The Run card for the picked wires, left side of the view above the stats.
-/// `list_open` moves it clear of the Wire runs list.
-pub(super) fn card(
-    ctx: &egui::Context,
-    view: egui::Rect,
-    chosen: &[&WireFacts],
-    list_open: bool,
-) -> Asked {
+/// The Run card for the picked wires, as the body of the Wire runs panel.
+fn card_body(ui: &mut egui::Ui, chosen: &[&WireFacts]) -> Asked {
     let mut asked = Asked::default();
     let Some(first) = chosen.first() else {
         return asked;
     };
-    let x = view.left()
-        + MARGIN
-        + if list_open {
-            LIST_WIDTH + MARGIN * 2.0
+    ui.horizontal(|ui| {
+        ui.strong(if chosen.len() == 1 {
+            format!("Run {}", first.name())
         } else {
-            0.0
-        };
-    egui::Area::new(egui::Id::new("view3d_run_card"))
-        .order(egui::Order::Middle)
-        .pivot(egui::Align2::LEFT_BOTTOM)
-        .fixed_pos(egui::pos2(x, view.bottom() - MARGIN))
-        .show(ctx, |ui| {
-            egui::Frame::popup(ui.style()).show(ui, |ui| {
-                ui.set_width(CARD_WIDTH);
-                ui.horizontal(|ui| {
-                    ui.strong(if chosen.len() == 1 {
-                        format!("Run {}", first.name())
-                    } else {
-                        format!("{} runs", chosen.len())
-                    });
-                    if ui.small_button("Close").clicked() {
-                        asked.clear = true;
-                    }
-                });
-                if chosen.len() == 1 {
-                    ui.weak(format!("{} → {}", first.from, first.to));
-                    for (tone, text) in card_lines(first) {
-                        let rich = egui::RichText::new(text).color(tone_text(tone));
-                        ui.add(egui::Label::new(rich).wrap());
-                    }
-                    if let Some(c) = first.basis.as_ref().and_then(|b| b.cable.as_ref())
-                        && ui
-                            .small_button("Select all cores of the cable")
-                            .on_hover_text("Light up every wire of this cable")
-                            .clicked()
-                    {
-                        asked.select_cores = Some(c.wires.clone());
-                    }
-                } else {
-                    let total: f64 = chosen.iter().map(|f| f.length_mm).sum();
-                    ui.label(format!(
-                        "{} inside the cabinet",
-                        super::view3d_wires::metres(total)
-                    ));
-                    if let Some(c) = common_cable(chosen) {
-                        ui.label(c.line());
-                    }
-                    let weak = chosen
-                        .iter()
-                        .filter(|f| f.basis.as_ref().is_some_and(Basis::is_weak))
-                        .count();
-                    if weak > 0 {
-                        ui.colored_label(
-                            tone_text(Tone::Busy),
-                            format!("{weak} of them are estimates or leave something out"),
-                        );
-                    }
-                    let mut ducts: BTreeMap<u64, &super::view3d_wires::DuctUse> = BTreeMap::new();
-                    for d in chosen.iter().flat_map(|f| &f.duct_use) {
-                        ducts.insert(d.rail, d);
-                    }
-                    for d in ducts.values() {
-                        ui.colored_label(tone_text(d.tone), d.text());
-                    }
-                    ui.weak("Click one wire for its path and length basis");
-                }
-            });
+            format!("{} runs", chosen.len())
         });
+        if ui.small_button("Close").clicked() {
+            asked.clear = true;
+        }
+    });
+    if chosen.len() == 1 {
+        ui.weak(format!("{} → {}", first.from, first.to));
+        for (tone, text) in card_lines(first) {
+            let rich = egui::RichText::new(text).color(tone_text(tone));
+            ui.add(egui::Label::new(rich).wrap());
+        }
+        if let Some(c) = first.basis.as_ref().and_then(|b| b.cable.as_ref())
+            && ui
+                .small_button("Select all cores of the cable")
+                .on_hover_text("Light up every wire of this cable")
+                .clicked()
+        {
+            asked.select_cores = Some(c.wires.clone());
+        }
+    } else {
+        let total: f64 = chosen.iter().map(|f| f.length_mm).sum();
+        ui.label(format!(
+            "{} inside the cabinet",
+            super::view3d_wires::metres(total)
+        ));
+        if let Some(c) = common_cable(chosen) {
+            ui.label(c.line());
+        }
+        let weak = chosen
+            .iter()
+            .filter(|f| f.basis.as_ref().is_some_and(Basis::is_weak))
+            .count();
+        if weak > 0 {
+            ui.colored_label(
+                tone_text(Tone::Busy),
+                format!("{weak} of them are estimates or leave something out"),
+            );
+        }
+        let mut ducts: BTreeMap<u64, &super::view3d_wires::DuctUse> = BTreeMap::new();
+        for d in chosen.iter().flat_map(|f| &f.duct_use) {
+            ducts.insert(d.rail, d);
+        }
+        for d in ducts.values() {
+            ui.colored_label(tone_text(d.tone), d.text());
+        }
+        ui.weak("Click one wire for its path and length basis");
+    }
     asked
+}
+
+/// What the Wire runs panel asked for this frame.
+#[derive(Debug, Default, PartialEq)]
+pub(super) struct PanelAsked {
+    pub list: super::view3d_wires::Asked,
+    pub card: Asked,
+}
+
+/// What the panel lists: the wires of the plate and those without a path.
+pub(super) struct ListInput<'a> {
+    pub all: &'a BTreeMap<u64, WireFacts>,
+    pub undrawn: &'a [Undrawn],
+}
+
+/// Start the panel this far below the view's top, under the view cube.
+const UNDER_CUBE: f32 = 12.0 + super::view3d_heat::CUBE_SIZE + 8.0;
+/// Room kept under the panel for the status bar and the title bar, in points.
+const BELOW_PANEL: f32 = 100.0;
+/// Width of the panel, in points.
+const PANEL_WIDTH: f32 = 300.0;
+
+/// Where the panel starts, from the top of the view: under the view cube, and
+/// under the Heat panel when that is open (it hangs from the same corner).
+fn start_below(ctx: &egui::Context, view: egui::Rect, heat_open: bool) -> f32 {
+    let heat = heat_open
+        .then(|| ctx.memory(|m| m.area_rect(super::panel::id("view3d_heat_panel"))))
+        .flatten()
+        .map(|r| r.bottom() - view.top() + 8.0);
+    match heat {
+        // Keep room for a usable list: on a short window the Heat panel wins
+        // the corner and this one starts beside it, where it can be dragged.
+        Some(b) if view.height() - b > 220.0 => b.max(UNDER_CUBE),
+        _ => UNDER_CUBE,
+    }
+}
+
+/// The Wire runs panel: the list when it is open, and the Run card of the
+/// picked wires below it. One panel on the right under the view cube, placed
+/// from the canvas like the other floating panels (it follows the canvas and
+/// can be dragged); the Inspector and the placement list live on the left.
+pub(super) fn panel(
+    ctx: &egui::Context,
+    view: egui::Rect,
+    heat_open: bool,
+    list: Option<ListInput<'_>>,
+    chosen: &[&WireFacts],
+    selection: &BTreeSet<ItemId>,
+) -> Option<PanelAsked> {
+    if list.is_none() && chosen.is_empty() {
+        return None;
+    }
+    let title = match (&list, chosen) {
+        (Some(_), _) => "Wire runs".to_owned(),
+        (None, [one]) => format!("Run {}", one.name()),
+        _ => "Runs".to_owned(),
+    };
+    let mut asked = PanelAsked::default();
+    let height = view.height();
+    let top = start_below(ctx, view, heat_open);
+    // What is left of the canvas under the panel's title bar; the body scrolls
+    // when the list and the card together are taller.
+    let room = (height - top - BELOW_PANEL).max(120.0);
+    super::panel::Panel::new(
+        "view3d_wire_runs",
+        title,
+        view,
+        super::panel::Side::Right,
+        PANEL_WIDTH,
+    )
+    .top(top)
+    .height(room.min(560.0))
+    .above_card()
+    .show(ctx, |ui| {
+        // The list on top so another run is always one click away; the card of
+        // the picked run below it. The panel's own scroll bar takes over when
+        // together they are taller than the room.
+        if let Some(l) = &list {
+            asked.list = super::view3d_wires::list_body(
+                ui,
+                height,
+                !chosen.is_empty(),
+                l.all,
+                l.undrawn,
+                selection,
+            );
+            if !chosen.is_empty() {
+                ui.separator();
+            }
+        }
+        if !chosen.is_empty() {
+            asked.card = card_body(ui, chosen);
+        }
+    });
+    Some(asked)
 }
 
 #[cfg(test)]
@@ -623,7 +759,7 @@ mod tests {
         Basis {
             text: text.into(),
             length_mm: mm,
-            why: why(text, false),
+            why: why(text, Gap::None),
             cable: None,
         }
     }
@@ -701,8 +837,45 @@ mod tests {
             ..e
         };
         assert!(e.line().contains("outside it 3.00 m as stated, not drawn"));
-        assert!(why("estimate", true).contains("State it in Cabinet > Routes"));
-        assert!(!why("estimate", false).contains("State it"));
+        assert!(why("estimate", Gap::OutsideNotStated).contains("State it in Cabinet > Routes"));
+        assert!(!why("estimate", Gap::None).contains("State it"));
+    }
+
+    #[test]
+    fn the_basis_waits_until_the_project_stops_changing() {
+        let mut s = Settle::default();
+        assert!(!s.settled(5, 10.0), "a new revision starts the clock");
+        assert!(!s.settled(5, 10.2));
+        assert!(s.settled(5, 10.3));
+        assert!(!s.settled(6, 10.4), "an edit restarts it");
+        assert!(s.settled(6, 10.7));
+    }
+
+    #[test]
+    fn a_cable_shorter_than_the_route_is_not_called_not_routed() {
+        let w = why("estimate", Gap::CableTooShort);
+        assert!(w.contains("shorter than the route inside the cabinet"));
+        assert!(!w.starts_with("Not routed"));
+        assert!(why("estimate", Gap::None).starts_with("Not routed"));
+    }
+
+    #[test]
+    fn a_stated_cable_length_is_neutral_and_fill_says_it_is_a_planning_value() {
+        let mut f = facts(1);
+        f.basis = Some(basis("cable length", 8000.0));
+        let lines = card_lines(&f);
+        assert_eq!(lines[0].0, Tone::Idle);
+        assert!(
+            lines
+                .iter()
+                .any(|(_, t)| t.starts_with("Fill is a planning value"))
+        );
+        f.duct_use.clear();
+        assert!(
+            !card_lines(&f)
+                .iter()
+                .any(|(_, t)| t.starts_with("Fill is a planning"))
+        );
     }
 
     #[test]
