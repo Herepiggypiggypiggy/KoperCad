@@ -1,0 +1,25 @@
+@title Autopilot fills in the example, Ready to build meter
+@area Reports
+# Bench output says what is missing; Autopilot proposes sizes and colours with a reason each.
+click_text "Open example"
+wait 20
+click_text Reports
+wait 5
+click_text "Bench output..."
+wait 20
+expect "Ready to build"
+expect "Before you print"
+shot bench-before
+check_layout
+click_text Autopilot
+wait 20
+expect "Accept all"
+expect "planning value"
+shot autopilot-review
+check_blank autopilot-review
+check_layout
+click_text "Accept all" Button
+wait 20
+shot autopilot-done
+expect "Nothing left to fill in"
+check_layout

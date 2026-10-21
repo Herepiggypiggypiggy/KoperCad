@@ -1051,6 +1051,27 @@ pub const COMMANDS: &[CommandInfo] = &[
         &["jump", "renumber", "continuation", "off page"],
         Needs::Project,
     ),
+    // Autopilot (novo_reports::autopilot): proposes sizes, colours and wire
+    // numbers with a reason each, for review.
+    verb(
+        cmd(
+            "wires.autopilot",
+            "Autopilot: complete the wires",
+            "Edit",
+            &[
+                "autopilot",
+                "complete",
+                "fill in",
+                "wire size",
+                "cross-section",
+                "colour",
+                "ready to build",
+                "propose",
+            ],
+            Needs::Project,
+        ),
+        &["autopilot", "complete the wires"],
+    ),
     // Wire numbering (novo-numbering). `wires.number` fills what has no
     // number; the window shows the scheme, a preview and the conflicts.
     cmd(
