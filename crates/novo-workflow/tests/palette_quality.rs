@@ -353,6 +353,27 @@ fn a_word_in_a_label_beats_the_same_word_as_a_keyword() {
 }
 
 #[test]
+fn a_word_does_not_match_letters_scattered_across_unrelated_labels() {
+    let (palette, keymap) = (Palette::default(), Keymap::workflow());
+    let rows = search(&palette, &keymap, "option");
+    assert!(!rows.is_empty(), "the options commands are found");
+    for row in &rows {
+        let label = row.label.to_lowercase();
+        let keywords_hit = matches!(&row.target, Target::Command(id)
+            if novo_workflow::commands::get(id)
+                .is_some_and(|c| c.keywords.iter().chain(c.verbs.iter()).any(|k| k.contains("option"))));
+        assert!(
+            label.contains("option") || keywords_hit,
+            "{:?} matched `option` by scattered letters only",
+            row.label
+        );
+    }
+    // A typo and an initialism still find their command.
+    let rows = search(&palette, &keymap, "duplicte");
+    assert_eq!(rows[0].target, Target::Command("edit.duplicate"));
+}
+
+#[test]
 fn a_report_is_found_first_by_its_own_name_and_by_its_old_one() {
     let (palette, keymap) = (Palette::default(), Keymap::workflow());
     for (query, command) in [
