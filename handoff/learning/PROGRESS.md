@@ -22,3 +22,4 @@
 - Learning paths reordered so every `needs` is taught first and all 33 lessons are in a path; `lint::path_notes` + `repo_lessons` test keep it so.
 - Next: Skip step applies `solve`; replay test must not rely on a leftover Place rules window; Open finished version; quiet design checks in lessons; challenge lessons.
 - "Open finished version" now exists on the lesson card (last step and finished card), with a confirm because it replaces the drawing; opens `finished.json` as "Finished: <lesson>", ends the lesson as done.
+- Challenge polish (creative round 8): the pointer ring of a challenge step stays hidden until every hint is open or Show me is pressed (`learn_point_hidden`); the end card of a challenge explains the fault (`explain` / `explain_nl` in lesson.toml) and says "Solved" or "Shown, not solved" when Do it for me did the repair; the card title truncates instead of running under the close button; the two challenges link to each other with `next`.
