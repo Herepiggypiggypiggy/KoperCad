@@ -76,6 +76,36 @@ pub fn issue_revision_noted(
     description: &str,
     note: &str,
 ) -> Result<Issued, IssueError> {
+    issue(doc, session, index, date, author, description, note, false)
+}
+
+/// Like [`issue_revision_noted`], and locks every page with the new
+/// revision in the same undo step: the released sheets cannot be edited
+/// until unlocked (`Command::UnlockPage`), and the kept snapshot holds the
+/// locks, so restoring a revision brings its locks back.
+pub fn issue_revision_locked(
+    doc: &mut Document,
+    session: &mut Session,
+    index: String,
+    date: &str,
+    author: &str,
+    description: &str,
+    note: &str,
+) -> Result<Issued, IssueError> {
+    issue(doc, session, index, date, author, description, note, true)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn issue(
+    doc: &mut Document,
+    session: &mut Session,
+    index: String,
+    date: &str,
+    author: &str,
+    description: &str,
+    note: &str,
+    lock: bool,
+) -> Result<Issued, IssueError> {
     let unchanged_since = unchanged_since(doc.project(), session);
     let outcome = doc.execute(Command::IssueRevision {
         index: index.clone(),
@@ -85,7 +115,18 @@ pub fn issue_revision_noted(
         note: note.into(),
     })?;
     session.record(&outcome.changes);
-    let changes = outcome.changes.clone();
+    let mut changes = outcome.changes.clone();
+    if lock {
+        let pages: Vec<_> = doc.project().pages().map(|p| p.id).collect();
+        let (_, locked) = doc.amend_last("Lock released pages", |tx| {
+            for page in pages {
+                tx.lock_page(page, index.clone())?;
+            }
+            Ok(())
+        })?;
+        session.record(&locked);
+        changes.merge(&locked);
+    }
     let revision = outcome
         .created
         .iter()

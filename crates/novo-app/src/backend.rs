@@ -199,6 +199,21 @@ pub trait ProjectBackend {
         Err(BackendError::Unavailable("Issuing revisions"))
     }
 
+    /// [`Self::issue_revision_noted`], and locks every page with the new
+    /// revision when `lock` is set.
+    fn issue_revision_locking(
+        &mut self,
+        index: Option<String>,
+        date: &str,
+        author: &str,
+        description: &str,
+        note: &str,
+        lock: bool,
+    ) -> Result<novo_revisions::Issued, BackendError> {
+        let _ = lock;
+        self.issue_revision_noted(index, date, author, description, note)
+    }
+
     /// Restores (`true`) or throws away (`false`) the offered recovery.
     fn resolve_recovery(&mut self, _restore: bool) -> Result<(), BackendError> {
         Ok(())
@@ -552,6 +567,18 @@ impl ProjectBackend for StorageBackend {
         description: &str,
         note: &str,
     ) -> Result<novo_revisions::Issued, BackendError> {
+        self.issue_revision_locking(index, date, author, description, note, false)
+    }
+
+    fn issue_revision_locking(
+        &mut self,
+        index: Option<String>,
+        date: &str,
+        author: &str,
+        description: &str,
+        note: &str,
+        lock: bool,
+    ) -> Result<novo_revisions::Issued, BackendError> {
         let (Some(session), Some(document)) = (self.session.as_mut(), self.document.as_mut())
         else {
             return Err(BackendError::Unavailable("Issuing revisions"));
@@ -562,7 +589,12 @@ impl ProjectBackend for StorageBackend {
                 .next(document.project())
                 .ok_or(novo_revisions::IssueError::NoIndex)?,
         };
-        let issued = novo_revisions::issue_revision_noted(
+        let issue = if lock {
+            novo_revisions::issue_revision_locked
+        } else {
+            novo_revisions::issue_revision_noted
+        };
+        Ok(issue(
             document,
             session,
             index,
@@ -570,8 +602,7 @@ impl ProjectBackend for StorageBackend {
             author,
             description,
             note,
-        )?;
-        Ok(issued)
+        )?)
     }
 
     fn record(&mut self, changes: &ChangeSet) {

@@ -416,6 +416,30 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["compare"],
     ),
+    cmd(
+        "revision.lock_page",
+        "Lock page",
+        "Project",
+        &["protect", "released sheet", "read only", "freeze edits"],
+        Needs::Project,
+    ),
+    cmd(
+        "revision.unlock_page",
+        "Unlock page",
+        "Project",
+        &["unprotect", "edit released sheet"],
+        Needs::Project,
+    ),
+    verb(
+        cmd(
+            "revision.restore_page",
+            "Restore page to revision",
+            "Project",
+            &["go back", "undo to revision", "revert page", "old version"],
+            Needs::Project,
+        ),
+        &["restore"],
+    ),
     cmd("file.quit", "Quit", "Project", &["exit"], Needs::Nothing),
     cmd(
         "help.about",
