@@ -1,0 +1,20 @@
+@title EPLAN project (PXF) import
+@area Fixtures
+# A synthetic EPLAN project export; the native file dialog is answered by the harness.
+click_text "Open example"
+wait 20
+answer_dialog crates/novo-interop/tests/fixtures/pxf/synthetic-small.epj
+key ctrl+k
+wait 4
+text Import EPLAN project
+wait 6
+key Enter
+wait 20
+shot eplan-import-plan
+check_layout
+check_blank eplan-import-plan
+click_text Import #1 Button
+wait 20
+shot eplan-imported
+check_layout
+expect_scene Q1
