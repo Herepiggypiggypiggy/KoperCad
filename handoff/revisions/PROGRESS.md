@@ -1,3 +1,4 @@
 2026-10-21 10:00 UTC Thread started from the round 5 audit (no revision lock). Found issue, snapshot, compare and revision table already on main.
 2026-10-21 10:40 UTC Added page lock in novo-core, issue_revision_locked and restore in novo-revisions with tests.
 2026-10-21 11:00 UTC App: Issue box, Lock/Unlock/Restore commands, Compare window Restore buttons.
+2026-10-21 10:30 UTC PR #1167 opened. R3 review: restore now asks first (counts, Esc/click-outside cancels), buttons offered for whichever side is a revision, lock toast says "since X", error colour from ui_palette. Default-on lock kept (decision for Tadjiro if unwanted).

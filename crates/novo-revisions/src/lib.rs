@@ -25,7 +25,7 @@ pub use issue::{
 };
 pub use list::{ChangeRow, change_list, list_of};
 pub use report::{REPORT_ID, change_report};
-pub use restore::{RestoreError, RestoreScope, Restored, restore};
+pub use restore::{RestoreError, RestoreScope, Restored, preview, restore};
 pub use sheets::{SheetChange, SheetChangeKind, changed_sheet_fingerprints, changed_sheets};
 
 /// How revisions are indexed, a project rule ("Revisions are indexed

@@ -42,6 +42,16 @@ pub enum RestoreError {
     Model(#[from] ModelError),
 }
 
+/// What [`restore`] would do, without doing it: the counts a confirmation
+/// shows before the person agrees.
+pub fn preview(
+    doc: &Document,
+    snapshot: &Project,
+    scope: &RestoreScope,
+) -> Result<Restored, RestoreError> {
+    restore(&mut doc.clone(), snapshot, scope)
+}
+
 enum Step {
     Insert(Record),
     Replace(Record),

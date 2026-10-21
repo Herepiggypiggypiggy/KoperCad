@@ -90,6 +90,7 @@ pub(crate) struct Workbench {
     pub(super) project_settings: bool,
     /// The Issue revision window, while it is open.
     pub(super) issue: Option<super::revisions::IssueDraft>,
+    pub(super) restore_ask: Option<super::revisions::RestoreAsk>,
     /// The Compare revisions window, while it is open.
     pub(super) compare: Option<super::compare::CompareWindow>,
     /// The Fault scenarios window, while it is open.
@@ -275,6 +276,7 @@ impl Default for Workbench {
             macro_editor: Default::default(),
             project_settings: false,
             issue: None,
+            restore_ask: None,
             compare: None,
             faults: None,
             add_fault: None,

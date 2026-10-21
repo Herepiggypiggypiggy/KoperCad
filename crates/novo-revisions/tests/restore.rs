@@ -241,3 +241,25 @@ fn restoring_the_project_brings_back_a_deleted_device() {
     assert_eq!(restored.inserted, 1);
     assert!(f.doc.project().device(device).is_some());
 }
+
+#[test]
+fn a_preview_counts_what_a_restore_would_do_and_changes_nothing() {
+    let mut f = fixture();
+    let issued = issue_revision(
+        &mut f.doc,
+        &mut f.session,
+        IndexRule::Letters,
+        "2026-10-21",
+        "TV",
+        "",
+    )
+    .unwrap();
+    let snapshot = f.session.snapshot(issued.revision).unwrap().unwrap();
+    text(&mut f.doc, f.page1, "added later");
+    let before = f.doc.project().clone();
+    let p =
+        novo_revisions::preview(&f.doc, &snapshot, &RestoreScope::Pages(vec![f.page1])).unwrap();
+    assert_eq!((p.inserted, p.replaced, p.removed), (0, 0, 1));
+    assert_eq!(f.doc.project().revision(), before.revision());
+    assert_eq!(f.doc.project().texts().count(), before.texts().count());
+}

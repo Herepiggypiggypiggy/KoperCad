@@ -29,6 +29,17 @@ pub(crate) struct IssueDraft {
     focused: bool,
 }
 
+/// A restore waiting for the person's yes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct RestoreAsk {
+    revision: RevisionId,
+    scope: RestoreScope,
+    index: String,
+    inserted: usize,
+    replaced: usize,
+    removed: usize,
+}
+
 /// The rule the project's revisions follow, read from the latest index:
 /// `01` is padded, `3` is numbers, anything else is letters. A project
 /// without revisions starts with letters.
@@ -143,7 +154,7 @@ impl NovoApp {
             });
             if let Some(error) = &draft.error {
                 ui.add_space(4.0);
-                ui.colored_label(ui.visuals().error_fg_color, error);
+                ui.colored_label(crate::theme::ui_palette().error, error);
             }
             ui.add_space(8.0);
             ui.horizontal(|ui| {
@@ -220,6 +231,7 @@ impl NovoApp {
             .page(page)
             .map(|p| p.name.clone())
             .unwrap_or_default();
+        let project_latest = project.latest_revision().map(|r| r.index.clone());
         let command = if lock {
             let Some(latest) = project.latest_revision() else {
                 self.message(
@@ -242,9 +254,92 @@ impl NovoApp {
             Ok(outcome) => {
                 self.changed_outside_canvas(&outcome.changes);
                 let word = if lock { "locked" } else { "unlocked" };
-                self.message(Level::Info, format!("Page {name} {word}"));
+                let since = project_latest.map_or_else(String::new, |i| format!(" (since {i})"));
+                self.message(
+                    Level::Info,
+                    format!(
+                        "Page {name} {word}{}",
+                        if lock { since } else { String::new() }
+                    ),
+                );
             }
             Err(e) => self.message(Level::Error, format!("Could not change the lock: {e}")),
+        }
+    }
+
+    /// Asks before a restore from the Compare window: shows what it would
+    /// replace. Esc or a click outside cancels.
+    pub(super) fn ask_restore(&mut self, revision: RevisionId, scope: RestoreScope) {
+        let Some(snapshot) = self.backend.revision_snapshot(revision) else {
+            self.message(
+                Level::Error,
+                "This revision has no stored copy to restore".to_owned(),
+            );
+            return;
+        };
+        let Some(doc) = self.backend.document() else {
+            return;
+        };
+        match novo_revisions::preview(doc, &snapshot, &scope) {
+            Ok(p) if p.is_empty() => {
+                self.message(
+                    Level::Info,
+                    "Already as issued with that revision".to_owned(),
+                );
+            }
+            Ok(p) => {
+                let index = snapshot
+                    .issued_revision(revision)
+                    .map(|r| r.index.clone())
+                    .unwrap_or_default();
+                self.wb.restore_ask = Some(RestoreAsk {
+                    revision,
+                    scope,
+                    index,
+                    inserted: p.inserted,
+                    replaced: p.replaced,
+                    removed: p.removed,
+                });
+            }
+            Err(e) => self.message(Level::Error, format!("Could not restore: {e}")),
+        }
+    }
+
+    pub(super) fn restore_ask_dialog(&mut self, ctx: &egui::Context) {
+        let Some(ask) = self.wb.restore_ask.take() else {
+            return;
+        };
+        let mut yes = false;
+        let modal = egui::Modal::new(egui::Id::new("restore_ask")).show(ctx, |ui| {
+            ui.set_width(360.0);
+            let what = match ask.scope {
+                RestoreScope::Project => "the whole project",
+                RestoreScope::Pages(_) => "this page",
+            };
+            ui.heading(format!("Restore {what} to revision {}?", ask.index));
+            ui.add_space(6.0);
+            ui.label(format!(
+                "Yes, replace {} things: {} brought back, {} reset to how they were, {} removed because they were added since.",
+                ask.inserted + ask.replaced + ask.removed,
+                ask.inserted,
+                ask.replaced,
+                ask.removed
+            ));
+            ui.weak("Undo takes it back while this project stays open. Esc cancels.");
+            ui.add_space(8.0);
+            ui.horizontal(|ui| {
+                if ui.button("Yes, restore").clicked() {
+                    yes = true;
+                }
+                if ui.button("Cancel").clicked() {
+                    ui.close();
+                }
+            });
+        });
+        if yes {
+            self.restore_to(ask.revision, ask.scope);
+        } else if !modal.should_close() {
+            self.wb.restore_ask = Some(ask);
         }
     }
 

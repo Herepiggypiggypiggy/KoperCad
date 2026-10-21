@@ -292,7 +292,11 @@ impl NovoApp {
                         ui.weak(format!("{label} {}: {}", r.index, r.note()));
                     }
                 }
-                if let Side::Revision(id) = win.from {
+                let target = match (win.from, win.to) {
+                    (Side::Revision(id), _) | (_, Side::Revision(id)) => Some(id),
+                    _ => None,
+                };
+                if let Some(id) = target {
                     let index = project
                         .issued_revision(id)
                         .map(|r| r.index.clone())
@@ -304,7 +308,10 @@ impl NovoApp {
                                 page.is_some(),
                                 egui::Button::new(format!("Restore this page to {index}")),
                             )
-                            .on_hover_text("Puts the page on screen back as issued. Undo takes it back")
+                            .on_hover_text(
+                                "Puts the page on screen back as issued, even when it is locked; \
+                                 it is locked again if it was locked then. Asks first",
+                            )
                             .clicked()
                             && let Some(page) = page
                         {
@@ -313,7 +320,7 @@ impl NovoApp {
                         if ui
                             .button(format!("Restore the project to {index}"))
                             .on_hover_text(
-                                "Puts every page and device back as issued; the revision list stays. Undo takes it back",
+                                "Puts every page and device back as issued; the revision list stays. Asks first",
                             )
                             .clicked()
                         {
@@ -372,7 +379,7 @@ impl NovoApp {
             self.show_page(page);
         }
         if let Some((revision, scope)) = restore {
-            self.restore_to(revision, scope);
+            self.ask_restore(revision, scope);
         }
         if open {
             self.wb.compare = Some(win);
