@@ -31,7 +31,7 @@ const TABLE: &str = "Planning values you can edit";
 /// Row height of the tick tables, mm.
 const ROW_MM: f64 = 8.0;
 /// Row height of the cover facts, in mm.
-const COVER_FACT_ROW_MM: f64 = 4.5;
+const COVER_FACT_ROW_MM: f64 = 3.3;
 
 /// The parts of a packet in order, each with its first section's place in
 /// the whole.

@@ -166,6 +166,9 @@ fn every_cover_note_stays_on_the_cover() {
     assert!(d.app.save_to(&dir.path().join("Example.novo")));
     d.frame();
     let path = d.app.export_bench_packet().expect("the packet");
+    if let Some(keep) = std::env::var_os("KOPERCAD_KEEP_PACKET") {
+        std::fs::copy(&path, keep).unwrap();
+    }
     let pages = page_texts(&path);
     let cover = &pages[0];
     assert!(
