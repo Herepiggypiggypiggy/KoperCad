@@ -63,13 +63,13 @@ fn a_field_wire_is_an_estimate_until_its_cable_states_a_length() {
 }
 
 #[test]
-fn a_stated_cable_length_makes_the_core_exact_with_a_loop_at_each_end() {
+fn a_stated_cable_length_is_the_core_length_with_no_loop_added() {
     let (mut doc, h, cab) = cabinet();
     set_run(&mut doc, &h, Some(10.0));
     let ten = motor_job(&doc);
     assert_eq!(ten.basis, "cable length");
     assert!(!is_estimate(&ten.basis));
-    assert_eq!(ten.length_mm, 10_000.0 + 2.0 * LOOP_MM);
+    assert_eq!(ten.length_mm, 10_000.0);
     set_run(&mut doc, &h, Some(20.0));
     assert_eq!(
         motor_job(&doc).length_mm - ten.length_mm,
@@ -82,7 +82,7 @@ fn a_stated_cable_length_makes_the_core_exact_with_a_loop_at_each_end() {
     })
     .unwrap();
     let with_entry = motor_job(&doc);
-    assert_eq!(with_entry.length_mm, 20_000.0 + 2.0 * LOOP_MM);
+    assert_eq!(with_entry.length_mm, 20_000.0);
     assert_eq!(with_entry.basis, "cable length");
 }
 
@@ -139,4 +139,62 @@ fn a_supply_lead_is_routed_to_the_entry_and_exact_only_with_a_stated_outside() {
     doc.transact("Outside", |tx| set_outside_mm(tx, cab, None))
         .unwrap();
     assert!(feed_jobs(&doc).iter().all(|j| j.basis == "estimate"));
+}
+
+#[test]
+fn a_cable_is_counted_once_not_once_per_core() {
+    use novo_reports::{Report, WireCut, cable_runs, hookup_cut_mm};
+    let (mut doc, h, _cab) = cabinet();
+    set_run(&mut doc, &h, Some(12.12));
+    let project = doc.project();
+    let jobs = wire_cut_jobs(project);
+    let cores: Vec<_> = jobs.iter().filter(|j| j.cable.is_some()).collect();
+    assert!(cores.len() >= 3, "the motor cable has several cores");
+    assert!(jobs.iter().any(|j| j.cable.is_none()), "and hookup wires");
+
+    // One cable, bought once at its stated length, with all its cores.
+    let runs = cable_runs(project, &jobs);
+    assert_eq!(runs.len(), 1, "{runs:?}");
+    assert_eq!(runs[0].length_mm, 12_120.0);
+    assert_eq!(runs[0].cores, cores.len());
+
+    // The metres to pull leave the cores out.
+    let hookup: f64 = jobs
+        .iter()
+        .filter(|j| j.cable.is_none())
+        .map(|j| j.cut_mm)
+        .sum();
+    assert_eq!(hookup_cut_mm(&jobs), hookup);
+    let all: f64 = jobs.iter().map(|j| j.cut_mm).sum();
+    assert!(all - hookup > cores.len() as f64 * 12_000.0);
+
+    // Wire production: the stock holds hookup wire only, cables are apart.
+    let out = WireCut.generate(project);
+    let stock = out.sections.iter().find(|s| s.key == "stock").unwrap();
+    let stock_m: f64 = stock
+        .rows
+        .iter()
+        .map(|r| match &r.cells[3] {
+            novo_reports::Cell::Number(m) => *m,
+            other => panic!("{other:?}"),
+        })
+        .sum();
+    assert!(stock_m <= hookup / 1000.0 + 0.05 * stock.rows.len() as f64);
+    let cables = out.sections.iter().find(|s| s.key == "cables").unwrap();
+    assert_eq!(cables.rows.len(), 1);
+    // The job list still has every core.
+    assert_eq!(out.sections[0].rows.len(), jobs.len());
+}
+
+#[test]
+fn a_cable_shorter_than_the_route_to_the_entry_stays_an_estimate() {
+    let (mut doc, h, cab) = cabinet();
+    doc.transact("Entry", |tx| {
+        set_entry_point(tx, cab, Some(novo_routing::Point::new(400.0, 600.0)))
+    })
+    .unwrap();
+    set_run(&mut doc, &h, Some(0.1));
+    let job = motor_job(&doc);
+    assert_eq!(job.basis, "estimate", "{job:?}");
+    assert!(is_estimate(&job.basis));
 }

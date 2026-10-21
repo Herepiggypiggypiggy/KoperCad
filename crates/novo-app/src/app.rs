@@ -146,6 +146,7 @@ mod plc_link;
 mod plc_run;
 mod potentials;
 mod preferences;
+mod print_preview;
 mod probe;
 mod project_rules;
 mod project_settings;
@@ -299,6 +300,8 @@ mod outline_tests;
 mod page_commands_tests;
 #[cfg(test)]
 mod pdf_options_tests;
+#[cfg(test)]
+mod print_preview_tests;
 #[cfg(test)]
 mod protection_tests;
 #[cfg(test)]
@@ -1384,6 +1387,7 @@ impl NovoApp {
         self.bench_window(&ctx);
         self.autopilot_window(&ctx);
         self.pdf_options_window(&ctx);
+        self.print_preview_window(&ctx);
         self.designer_window(&ctx);
         self.parts_window(&ctx);
         self.parts_bulk_dialog(&ctx);

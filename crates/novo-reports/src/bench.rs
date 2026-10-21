@@ -510,14 +510,25 @@ impl BenchCut {
                 Column::new("colour", "Colour", 12.0),
                 Column::new("wires", "Wires", 8.0).right(),
                 Column::new("metres", "Metres", 10.0).right(),
-                Column::new("longest", "Longest mm", 12.0).right(),
+                Column::new("longest", "Longest reel mm", 12.0).right(),
                 Column::new("ferrule", "Ferrule", 14.0),
                 Column::new("estimates", "Estimated", 10.0).right(),
             ],
         );
+        // Cores of a cable come with the cable (bought by the length on its
+        // BOM line); they are stripped and ferruled here but not pulled from
+        // a reel, so their metres are not metres to pull.
+        let on_cable = |j: &WireCutJob| j.cable.is_some();
+        let reel_mm = |list: &[&WireCutJob]| -> f64 {
+            list.iter().filter(|j| !on_cable(j)).map(|j| j.cut_mm).sum()
+        };
         for (mm2, colour, list) in &groups {
-            let mm: f64 = list.iter().map(|j| j.cut_mm).sum();
-            let longest = list.iter().map(|j| j.cut_mm).fold(0.0, f64::max);
+            let mm: f64 = reel_mm(list);
+            let longest = list
+                .iter()
+                .filter(|j| !on_cable(j))
+                .map(|j| j.cut_mm)
+                .fold(0.0, f64::max);
             let ferrule = list
                 .iter()
                 .find_map(|j| j.end_a.ferrule.clone())
@@ -561,7 +572,45 @@ impl BenchCut {
                 jobs.len()
             ));
         }
+        let cores: Vec<&WireCutJob> = jobs.iter().filter(|j| on_cable(j)).collect();
+        if !cores.is_empty() {
+            let (n, verb) = if cores.len() == 1 {
+                ("1 of", "is a core of a cable")
+            } else {
+                (&*format!("{} of", cores.len()), "are cores of cables")
+            };
+            notes.push(format!(
+                "{n} {} wires {verb}. A cable is bought by its own length (the BOM lists it when the cable has a stated length), not cut from a reel, so cores are left out of Metres and Longest reel mm; strip and ferrule each core end as listed.",
+                jobs.len()
+            ));
+        }
         let mut sections = vec![summary];
+        let mut cable_section: Option<Section> = None;
+        let runs = crate::cable_runs(project, jobs);
+        if !runs.is_empty() {
+            let mut cables = Section::new(
+                "cables",
+                "Cables",
+                vec![
+                    Column::new("done", "", 5.0),
+                    Column::new("cable", "Cable", 14.0),
+                    Column::new("cores", "Cores", 8.0).right(),
+                    Column::new("metres", "Metres", 10.0).right(),
+                ],
+            );
+            for r in runs {
+                cables.push(
+                    vec![
+                        Cell::text(TICK_BOX),
+                        Cell::text(r.tag),
+                        Cell::Int(r.cores as i64),
+                        Cell::Number((r.length_mm / 1000.0 * 10.0).ceil() / 10.0),
+                    ],
+                    vec![r.cable.into()],
+                );
+            }
+            cable_section = Some(cables);
+        }
         if !notes.is_empty() {
             let mut note = Section::new(
                 "check",
@@ -576,12 +625,18 @@ impl BenchCut {
 
         let mut first_group = true;
         for (mm2, colour, list) in &groups {
-            let total: f64 = list.iter().map(|j| j.cut_mm).sum();
+            let total: f64 = reel_mm(list);
+            let cores = list.iter().filter(|j| on_cable(j)).count();
             let heading = format!(
-                "{} · {} wires · {:.1} m",
+                "{} · {} wires · {:.1} m{}",
                 group_name(*mm2, colour),
                 list.len(),
-                total / 1000.0
+                total / 1000.0,
+                if cores > 0 {
+                    format!(" (+{cores} cable cores, not counted in metres)")
+                } else {
+                    String::new()
+                }
             );
             let mut section = Section::new(
                 &Self::group_key(*mm2, colour),
@@ -635,6 +690,7 @@ impl BenchCut {
             first_group = false;
         }
 
+        sections.extend(cable_section);
         ReportOutput {
             report: Self::ID.into(),
             title,

@@ -994,6 +994,11 @@ impl NovoApp {
     }
 
     #[cfg(test)]
+    pub(super) fn datasheet_test_stop(&mut self) {
+        self.datasheet_stop();
+    }
+
+    #[cfg(test)]
     pub(super) fn datasheet_test_duplicate(&self) -> bool {
         self.datasheet_duplicate()
     }

@@ -106,17 +106,15 @@ impl NovoApp {
         self.export_pdf_choice_to(path, pages, &PdfChoice::default())
     }
 
-    /// Exports `pages` to `path` the way `choice` says (everything but its
-    /// page selection, which the caller has turned into `pages`).
-    pub fn export_pdf_choice_to(
+    /// The PDF options for `pages` the way `choice` says, with `print` (the
+    /// print preview's paper, scale and page numbers) when given.
+    pub(super) fn pdf_options_for(
         &mut self,
-        path: &Path,
         pages: novo_pdf::PageSet,
         choice: &PdfChoice,
-    ) -> Option<PathBuf> {
-        let summary = Summary::of(self.problems());
-        let replaced = path.exists();
-        let options = novo_pdf::PdfOptions {
+        print: Option<novo_pdf::PrintSetup>,
+    ) -> novo_pdf::PdfOptions {
+        novo_pdf::PdfOptions {
             pages,
             style: super::pdf_options::style_of(choice),
             bookmarks: choice.bookmarks,
@@ -142,16 +140,40 @@ impl NovoApp {
             } else {
                 None
             },
-        };
+            print,
+        }
+    }
+
+    /// Exports `pages` to `path` the way `choice` says (everything but its
+    /// page selection, which the caller has turned into `pages`).
+    pub fn export_pdf_choice_to(
+        &mut self,
+        path: &Path,
+        pages: novo_pdf::PageSet,
+        choice: &PdfChoice,
+    ) -> Option<PathBuf> {
+        let options = self.pdf_options_for(pages, choice, None);
+        self.export_options_to(path, &options)
+    }
+
+    /// Writes the PDF `options` describe to `path`, with the same checks,
+    /// naming and message as every export.
+    pub(super) fn export_options_to(
+        &mut self,
+        path: &Path,
+        options: &novo_pdf::PdfOptions,
+    ) -> Option<PathBuf> {
+        let summary = Summary::of(self.problems());
+        let replaced = path.exists();
         let doc = self.backend.document()?;
         let art = self
             .library()
             .map(|lib| novo_editor::art::LibraryArt::new(lib, options.style.symbol));
         let result = match &art {
-            Some(art) => novo_pdf::export_pdf_with_art(doc.project(), &options, art),
+            Some(art) => novo_pdf::export_pdf_with_art(doc.project(), options, art),
             None => novo_pdf::export_pdf_with_art(
                 doc.project(),
-                &options,
+                options,
                 &novo_canvas::model::PlaceholderArt,
             ),
         }
@@ -209,7 +231,7 @@ const OWNER_MARK: &[u8] = b"\n%KoperCAD-project: ";
 /// A short stable tag of a project file's path (FNV-1a, 64 bit). The PDF
 /// carries this and never the path itself, which would hand the sender's
 /// user name and folders to whoever receives the PDF.
-fn owner_tag(project: &Path) -> String {
+pub(super) fn owner_tag(project: &Path) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
     for byte in project.to_string_lossy().bytes() {
         hash ^= u64::from(byte);
