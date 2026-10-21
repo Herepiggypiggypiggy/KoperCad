@@ -506,6 +506,12 @@ fn overview_page<'a>(sheet: &'a TemplateSheet, plan: &'a TilePlan, project: &'a 
                 sheet.without_mounting_data.join(", ")
             ));
         }
+        if !sheet.clip_on.is_empty() {
+            notes.push(format!(
+                "Clip-on devices on a rail, no holes to drill: {}. Their outline shows where they sit.",
+                sheet.clip_on.join(", ")
+            ));
+        }
         for p in &sheet.problems {
             notes.push(format!("Not read: {p}"));
         }
@@ -546,7 +552,59 @@ pub fn export_template_pdf(sheets: &[TemplateSheet], project_name: &str, paper: 
             }
         }
     }
+    write_pages(&pages, &format!("{project_name} - drilling template 1:1"))
+}
 
+/// Largest page side a PDF reader takes: 14 400 pt, about 5 080 mm.
+const MAX_PAGE_MM: f64 = 5080.0;
+
+/// The plate at true size on one page whose size is the plate's: for a print
+/// shop or a plotter, where one sheet beats taping tiles. `None` when the
+/// plate is smaller than the 100 mm check ruler or larger than a PDF page
+/// can be; the tiled template covers those.
+pub fn export_plate_pdf(sheet: &TemplateSheet, project_name: &str) -> Option<Vec<u8>> {
+    let (w, h) = (sheet.width, sheet.height);
+    if !(w.is_finite() && h.is_finite()) || w < 150.0 || h < 40.0 || w.max(h) > MAX_PAGE_MM {
+        return None;
+    }
+    let draw = move |pw: &mut PageWriter<'_>| {
+        let map = |p: (f64, f64)| Vec2::new(p.0 as f32, p.1 as f32);
+        render(pw, &sheet.marks, &map, 1.0);
+        let mut m = Marks::default();
+        text(
+            &mut m,
+            (5.0, h - 21.0),
+            3.5,
+            HAlign::Left,
+            true,
+            format!("{} - {}", sheet.title, sheet.surface.name()),
+        );
+        text(
+            &mut m,
+            (5.0, h - 16.0),
+            2.8,
+            HAlign::Left,
+            false,
+            format!(
+                "{} x {} mm, 1:1. Print at 100%, not fit to page. Hole list and notes: the tiled template.",
+                mm(w),
+                mm(h)
+            ),
+        );
+        ruler(&mut m, 5.0, h - 6.0);
+        render(pw, &m, &|p| Vec2::new(p.0 as f32, p.1 as f32), 1.0);
+    };
+    let page = Page {
+        size: (w, h),
+        draw: Box::new(draw),
+    };
+    Some(write_pages(
+        &[page],
+        &format!("{project_name} - plate {} 1:1, one sheet", sheet.title),
+    ))
+}
+
+fn write_pages(pages: &[Page<'_>], title: &str) -> Vec<u8> {
     let mut next = 1;
     let mut alloc = || {
         let r = Ref::new(next);
@@ -568,7 +626,7 @@ pub fn export_template_pdf(sheets: &[TemplateSheet], project_name: &str, paper: 
         .base_font(Name(b"Helvetica"))
         .encoding_predefined(Name(b"WinAnsiEncoding"));
     let mut info = pdf.document_info(info_id);
-    info.title(TextStr(&format!("{project_name} - drilling template 1:1")));
+    info.title(TextStr(title));
     info.producer(TextStr("KoperCAD"));
     info.finish();
 
