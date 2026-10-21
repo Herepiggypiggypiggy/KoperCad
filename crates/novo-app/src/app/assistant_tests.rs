@@ -6,6 +6,7 @@ use std::sync::{Arc, Mutex};
 use novo_ai::api::{HttpRequest, HttpResponse, Transport};
 use novo_ai::consent::{Consent, DataScope};
 use novo_ai::key::{ApiKey, KeyStore};
+use novo_ai::tools::Proposal;
 use serde_json::{Value, json};
 
 use super::assistant::*;
@@ -359,7 +360,6 @@ fn widening_the_scope_keeps_the_chat() {
 
 #[test]
 fn the_other_edits_apply_and_undo() {
-    use novo_core::Project;
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));
     let ctx = d.ctx.clone();
@@ -378,6 +378,39 @@ fn the_other_edits_apply_and_undo() {
     .unwrap();
     assert!(summary.contains(&tag) && summary.contains("note"));
     assert!(d.app.execute(cmd).unwrap().is_ok());
+    let prop = |d: &Drive| {
+        d.app
+            .document()
+            .unwrap()
+            .project()
+            .device(dev.into())
+            .unwrap()
+            .properties
+            .get("note")
+            .cloned()
+    };
+    assert!(prop(&d).is_some());
+    // The card says what the next change replaces.
+    let again = Proposal {
+        id: 1,
+        action: "set_property".into(),
+        args: json!({"device_id": dev, "key": "note", "value": "other"}),
+        summary: String::new(),
+    };
+    let note = proposal_note(d.app.document().unwrap().project(), &again).unwrap();
+    assert!(note.contains("check"), "{note}");
+    d.app.run(&ctx, Action::Undo);
+    assert!(prop(&d).is_none(), "one undo removes the property");
+    // Long keys and values are refused.
+    let long = "x".repeat(MAX_VALUE_CHARS + 1);
+    assert!(
+        proposal_command(
+            &known,
+            "set_property",
+            &json!({"device_id": dev, "key": "note", "value": long}),
+        )
+        .is_err()
+    );
     let (cmd, summary) = proposal_command(
         &known,
         "add_page",
@@ -399,5 +432,84 @@ fn the_other_edits_apply_and_undo() {
     )
     .unwrap_err();
     assert!(e.contains("parts"));
-    let _ = Project::new("x");
+    // An existing part assigns and undoes.
+    let parts_of = |d: &Drive| {
+        d.app
+            .document()
+            .unwrap()
+            .project()
+            .device(dev.into())
+            .unwrap()
+            .parts
+            .clone()
+    };
+    let before = parts_of(&d);
+    let part = d
+        .app
+        .document()
+        .unwrap()
+        .project()
+        .parts()
+        .map(|x| x.id)
+        .find(|id| !before.contains(id))
+        .expect("the example has a part not on the first device");
+    let (cmd, summary) = proposal_command(
+        &known,
+        "assign_part",
+        &json!({"device_id": dev, "part_id": part.raw()}),
+    )
+    .unwrap();
+    assert!(summary.starts_with("Assign part"));
+    assert!(d.app.execute(cmd).unwrap().is_ok());
+    assert!(parts_of(&d).contains(&part));
+    d.app.run(&ctx, Action::Undo);
+    assert_eq!(parts_of(&d), before);
+}
+
+#[test]
+fn assign_part_gives_nothing_away_below_the_whole_project() {
+    let mut s = setup(DataScope::Outline);
+    let (dev, part) = {
+        let p = s.d.app.document().unwrap().project();
+        (
+            p.devices().next().unwrap().id.raw(),
+            p.parts().next().map(|x| x.id.raw()).unwrap_or(1),
+        )
+    };
+    s.script.replies.lock().unwrap().extend([
+        tool(
+            "t1",
+            "propose_edit",
+            json!({"action": "assign_part", "args": {"device_id": dev, "part_id": part}}),
+        ),
+        tool(
+            "t2",
+            "propose_edit",
+            json!({"action": "assign_part", "args": {"device_id": dev, "part_id": 999_999}}),
+        ),
+        text("done"),
+    ]);
+    ask(&mut s, "Assign a part");
+    let seen = s.script.seen.lock().unwrap();
+    let last: Value = serde_json::from_str(&seen.last().unwrap().body).unwrap();
+    let results = last["messages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|m| m["content"].as_array())
+        .flatten()
+        .filter(|c| c["type"] == "tool_result")
+        .map(|c| c["content"].as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    assert_eq!(results.len(), 2);
+    assert_eq!(
+        results[0], results[1],
+        "same answer for a real and a missing part"
+    );
+    assert!(results[0].contains("not allowed"), "{}", results[0]);
+    drop(seen);
+    assert!(
+        s.d.app.wb.assistant.first_proposal_index().is_none(),
+        "no card was made"
+    );
 }

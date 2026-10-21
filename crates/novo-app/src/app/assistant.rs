@@ -54,6 +54,7 @@ enum Msg {
 /// Everything the window remembers while the app runs.
 pub(super) struct State {
     pub open: bool,
+    proposal_notes: HashMap<u32, String>,
     show_settings: bool,
     agreed: bool,
     key_input: String,
@@ -103,6 +104,7 @@ impl State {
         let ledger = ledger_path.as_deref().map(Ledger::load).unwrap_or_default();
         Self {
             open: false,
+            proposal_notes: HashMap::new(),
             show_settings: false,
             agreed: false,
             key_input: String::new(),
@@ -210,6 +212,7 @@ impl State {
         self.transcript.clear();
         self.conversation.clear();
         self.notes.clear();
+        self.proposal_notes.clear();
         self.session_cost = 0.0;
     }
 }
@@ -240,7 +243,8 @@ fn edit_actions() -> Vec<EditAction> {
         },
         EditAction {
             name: "assign_part",
-            description: "Assigns a part from the project's parts (section \"parts\") to a device.",
+            description: "Assigns a part from the project's parts (section \"parts\") to a device. \
+                          Only available when the person agreed to share the whole project.",
             schema: json!({"type": "object", "properties": {
                 "device_id": {"type": "integer"}, "part_id": {"type": "integer"}},
                 "required": ["device_id", "part_id"]}),
@@ -269,6 +273,29 @@ fn edit_actions() -> Vec<EditAction> {
                 "required": ["tag"]}),
         },
     ]
+}
+
+const MAX_KEY_CHARS: usize = 60;
+pub(super) const MAX_VALUE_CHARS: usize = 500;
+
+/// What a proposal would replace, for the card only. It is never sent back to
+/// the model: old values and part names can be above the agreed scope.
+pub(super) fn proposal_note(project: &Project, p: &Proposal) -> Option<String> {
+    let device = project.device(p.args["device_id"].as_u64()?.into())?;
+    match p.action.as_str() {
+        "set_property" => {
+            let key = p.args["key"].as_str()?.trim();
+            Some(match device.properties.get(key) {
+                Some(old) => format!("Replaces the current value: {old}"),
+                None => "There is no value yet.".into(),
+            })
+        }
+        "assign_part" if !device.parts.is_empty() => Some(format!(
+            "This device already has {} part(s) assigned.",
+            device.parts.len()
+        )),
+        _ => None,
+    }
 }
 
 /// What a proposal changes in the open project, by id, so the summary can
@@ -377,7 +404,13 @@ pub(super) fn proposal_command(
                 .get(&device)
                 .ok_or_else(|| format!("there is no device with id {device}"))?;
             let key = text("key")?;
+            if key.chars().count() > MAX_KEY_CHARS {
+                return Err(format!("key is longer than {MAX_KEY_CHARS} characters"));
+            }
             let (value, shown) = match &args["value"] {
+                Value::String(s) if s.chars().count() > MAX_VALUE_CHARS => {
+                    return Err(format!("value is longer than {MAX_VALUE_CHARS} characters"));
+                }
                 Value::String(s) => (novo_core::Value::Text(s.clone()), format!("{s:?}")),
                 Value::Bool(b) => (novo_core::Value::Bool(*b), b.to_string()),
                 Value::Number(n) => match n.as_i64() {
@@ -581,6 +614,11 @@ impl NovoApp {
                 scope,
                 edit_actions(),
                 Box::new(move |action, args| {
+                    // The answer goes back to the model, so it must not reveal
+                    // more than the agreed scope (part names are Whole project).
+                    if action == "assign_part" && scope != DataScope::Project {
+                        return Err("assign_part is not allowed above the agreed scope".into());
+                    }
                     proposal_command(&validator_known, action, args).map(|(_, summary)| summary)
                 }),
             )
@@ -661,6 +699,11 @@ impl NovoApp {
                             }
                             for p in turn.proposals {
                                 st.next_proposal = st.next_proposal.max(p.id + 1);
+                                if let Some(doc) = self.backend.document()
+                                    && let Some(note) = proposal_note(doc.project(), &p)
+                                {
+                                    st.proposal_notes.insert(p.id, note);
+                                }
                                 st.transcript
                                     .push(Entry::Proposal(p, ProposalState::Pending));
                             }
@@ -1054,6 +1097,9 @@ impl NovoApp {
                             egui::Frame::group(ui.style()).show(ui, |ui| {
                                 ui.label(egui::RichText::new("Suggested change").strong());
                                 ui.label(&p.summary);
+                                if let Some(note) = self.wb.assistant.proposal_notes.get(&p.id) {
+                                    ui.weak(note);
+                                }
                                 match state {
                                     ProposalState::Pending => {
                                         ui.horizontal(|ui| {
