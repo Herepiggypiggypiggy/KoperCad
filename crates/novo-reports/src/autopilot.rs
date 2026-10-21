@@ -219,7 +219,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
 
     // Line sections known so far, by class (control = true): the wires that
     // have one, then the proposals. Neutral and earth follow these.
-    let mut lines: Vec<(f64, bool, String)> = Vec::new();
+    let mut lines: Vec<(f64, bool, String, bool)> = Vec::new();
     let follows = |k: Option<PotentialKind>| {
         matches!(
             k,
@@ -234,7 +234,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
             .zip(job.wires.first().and_then(|w| basis.get(w)))
             && !follows(b.kind)
         {
-            lines.push((s, is_control(b), job_label(job)));
+            lines.push((s, is_control(b), job_label(job), false));
         }
     }
 
@@ -256,7 +256,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
         let length = (job.length_mm > 0.0).then(|| job.length_mm / 1000.0);
         match size_wire(b, length, is_estimate(&job.basis), tables, supply_v, limit) {
             Ok(s) => {
-                lines.push((s.section, is_control(b), job_label(job)));
+                lines.push((s.section, is_control(b), job_label(job), true));
                 out.proposals.push(Proposal {
                     id: out.proposals.len(),
                     wires,
@@ -272,7 +272,7 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
     let largest = |control: Option<bool>| {
         lines
             .iter()
-            .filter(|(_, c, _)| control.is_none_or(|want| *c == want))
+            .filter(|(_, c, _, _)| control.is_none_or(|want| *c == want))
             .max_by(|a, b| a.0.total_cmp(&b.0))
             .cloned()
     };
@@ -295,24 +295,26 @@ pub fn plan(project: &Project, tables: &TableSet, jobs: &[WireCutJob]) -> Autopi
             largest(Some(control)).or_else(|| largest(None))
         };
         let (section, reason, basis_kind) = match reference {
-            Some((phase, _, from)) if earth => {
+            Some((phase, _, from, proposed)) if earth => {
                 let want = min_pe_section(phase).unwrap_or(phase);
                 (
                     listed_at_least(tables, want),
                     format!(
-                        "protective conductor of the largest power wire here ({} mm², {from}): the same up to 16 mm², 16 mm² up to 35, half above (IEC 60364-5-54 Table 54.2)",
-                        fmt(phase)
+                        "protective conductor sized from the largest power wire in the project ({} mm², {from}{}): the same up to 16 mm², 16 mm² up to 35, half above (IEC 60364-5-54 Table 54.2)",
+                        fmt(phase),
+                        if proposed { ", itself a proposal" } else { "" }
                     ),
-                    Basis::Rule,
+                    if proposed { Basis::Planning } else { Basis::Rule },
                 )
             }
-            Some((phase, _, from)) => (
+            Some((phase, _, from, proposed)) => (
                 phase,
                 format!(
-                    "the neutral or 0 V conductor takes the section of the largest line wire of its circuit ({} mm², {from}), IEC 60364-5-52 §524.2",
-                    fmt(phase)
+                    "the neutral or 0 V conductor takes the section of the largest line wire of its kind in the project ({} mm², {from}{}), IEC 60364-5-52 §524.2",
+                    fmt(phase),
+                    if proposed { ", itself a proposal" } else { "" }
                 ),
-                Basis::Rule,
+                if proposed { Basis::Planning } else { Basis::Rule },
             ),
             None => (
                 if control { SMALL[0].0 } else { 1.5 },
@@ -479,22 +481,48 @@ fn size_wire(
         Supply::TwoWire
     };
     let drop_current = b.load_a.unwrap_or(current);
-    let mut drop_note = "length not known, voltage drop not checked".to_owned();
-    if let Some(len) = length_m {
+    let at_what = if b.load_a.is_some() {
+        ""
+    } else {
+        ", at the device rating"
+    };
+    // A control wire on a net with no stated voltage: the supply voltage
+    // would make the drop far too small, so the drop is not checked.
+    let voltage_known = b.potential_voltage.is_some() || !control;
+    let mut drop_note = if voltage_known {
+        "length not known, voltage drop not checked".to_owned()
+    } else {
+        "voltage of the net unknown, voltage drop not checked".to_owned()
+    };
+    if let (Some(len), true) = (length_m, voltage_known) {
         loop {
             let (s, _, _) = ladder[at];
             let drop = Run::new(len, s, drop_current, supply, voltage)
                 .drop_percent()
-                .unwrap_or(0.0);
-            if drop <= limit_percent + 1e-9 || at + 1 >= ladder.len() {
+                .ok_or_else(|| {
+                    format!(
+                        "the voltage drop of {} mm² over {len:.1} m could not be calculated",
+                        fmt(s)
+                    )
+                })?;
+            if drop <= limit_percent + 1e-9 {
                 drop_note = format!(
-                    "voltage drop {:.2} % of {} % over {:.1} m{}",
+                    "voltage drop {:.2} % of {} % over {:.1} m{}{at_what}",
                     drop,
                     fmt(limit_percent),
                     len,
                     if estimate { " (estimated length)" } else { "" }
                 );
                 break;
+            }
+            if at + 1 >= ladder.len() {
+                return Err(format!(
+                    "the voltage drop is {:.2} % at the largest listed section ({} mm²) over {:.1} m, above the {} % limit: shorten the run, raise the voltage or size it by hand",
+                    drop,
+                    fmt(s),
+                    len,
+                    fmt(limit_percent)
+                ));
             }
             at += 1;
         }
@@ -543,12 +571,12 @@ fn colour_of(b: &WireBasis) -> (&'static str, String, Basis) {
         ),
         Some(PotentialKind::Pen) => (
             "GNYE",
-            "PEN conductor: green and yellow with light blue marks at the ends (IEC 60204-1 §13.2.2); the marks are made by hand".into(),
+            "PEN conductor: green and yellow with light blue marks at the ends; the marks are made by hand".into(),
             Basis::Rule,
         ),
         Some(PotentialKind::Neutral) => (
             "BU",
-            "the neutral conductor is light blue (IEC 60204-1 §13.2.2)".into(),
+            "the neutral conductor is light blue (IEC 60204-1 §13.2.3)".into(),
             Basis::Rule,
         ),
         Some(PotentialKind::DcNegative) => (
@@ -558,13 +586,13 @@ fn colour_of(b: &WireBasis) -> (&'static str, String, Basis) {
         ),
         Some(PotentialKind::Line) if v.is_some_and(|v| v >= 380.0) => (
             "BK",
-            "AC power circuits are black (IEC 60204-1 §13.2.3)".into(),
+            "AC power circuits are black (IEC 60204-1 §13.2.4)".into(),
             Basis::Rule,
         ),
         Some(PotentialKind::Line) => match b.circuit {
             Circuit::Power => (
                 "BK",
-                "AC power circuit (a motor or main contactor is on it): black (IEC 60204-1 §13.2.3)".into(),
+                "AC power circuit (a motor or main contactor is on it): black (IEC 60204-1 §13.2.4)".into(),
                 Basis::Rule,
             ),
             Circuit::Control => (
@@ -575,7 +603,7 @@ fn colour_of(b: &WireBasis) -> (&'static str, String, Basis) {
             Circuit::Unknown => match b.protecting.as_ref().map(|p| p.rated_a) {
                 Some(a) if a > 6.0 => (
                     "BK",
-                    "single-phase line wire protected above 6 A, taken as power: black (IEC 60204-1 §13.2.3)".into(),
+                    "single-phase line wire protected above 6 A, taken as power: black (IEC 60204-1 §13.2.4)".into(),
                     Basis::Assumed,
                 ),
                 Some(_) => (
@@ -585,7 +613,7 @@ fn colour_of(b: &WireBasis) -> (&'static str, String, Basis) {
                 ),
                 None => (
                     "BK",
-                    "single-phase line wire with nothing to tell power from control, black assumed (IEC 60204-1 §13.2.3)".into(),
+                    "single-phase line wire with nothing to tell power from control, black assumed (IEC 60204-1 §13.2.4)".into(),
                     Basis::Assumed,
                 ),
             },
@@ -600,7 +628,7 @@ fn colour_of(b: &WireBasis) -> (&'static str, String, Basis) {
             } else {
                 (
                     "BK",
-                    "DC power circuit: black (IEC 60204-1 §13.2.3)".into(),
+                    "DC power circuit: black (IEC 60204-1 §13.2.4)".into(),
                     Basis::Rule,
                 )
             }
@@ -705,7 +733,7 @@ mod tests {
         size_wire(b, length, false, &TableSet::builtin(), 400.0, 5.0).unwrap()
     }
 
-    /// IEC 60364-5-52 Table B.52.4, copper PVC, method C, three loaded
+    /// IEC 60364-5-52 Annex B, copper PVC, method C, three loaded
     /// conductors: 1.5 mm² 17.5 A, 2.5 mm² 24 A, 4 mm² 32 A, 6 mm² 41 A.
     #[test]
     fn three_phase_sizes_follow_the_table_at_the_steps() {
@@ -755,6 +783,34 @@ mod tests {
         let mut small = basis(3.0, PotentialKind::DcPositive, 24.0);
         small.circuit = Circuit::Control;
         assert_eq!(size(&small, None).section, 0.75);
+    }
+
+    /// 16 A at 24 V DC over 600 m: even the largest listed section drops far too much.
+    #[test]
+    fn a_run_that_no_listed_section_can_serve_is_left_to_the_designer() {
+        let mut b = basis(16.0, PotentialKind::DcPositive, 24.0);
+        b.circuit = Circuit::Control;
+        let why = size_wire(&b, Some(600.0), false, &TableSet::builtin(), 400.0, 5.0)
+            .err()
+            .expect("unresolved");
+        assert!(why.contains("largest listed section"), "{why}");
+        assert!(why.contains("120 mm²"), "{why}");
+    }
+
+    /// A long signal wire on a net with no voltage must not be judged against
+    /// the 400 V supply (that would make the drop 17 times too small).
+    #[test]
+    fn a_control_wire_with_unknown_voltage_skips_the_drop_check_and_says_so() {
+        let mut b = basis(3.0, PotentialKind::Signal, 0.0);
+        b.potential_voltage = None;
+        b.circuit = Circuit::Control;
+        let got = size(&b, Some(200.0));
+        assert_eq!(got.section, 0.75);
+        assert!(
+            got.reason.contains("voltage of the net unknown"),
+            "{}",
+            got.reason
+        );
     }
 
     #[test]

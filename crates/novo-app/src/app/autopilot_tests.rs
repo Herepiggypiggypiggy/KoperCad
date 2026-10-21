@@ -182,3 +182,20 @@ fn the_command_opens_the_window_and_the_bench_names_it() {
         "{gaps:?}"
     );
 }
+
+#[test]
+fn assumed_rows_start_unticked_and_stay_out_of_accept_all() {
+    use novo_reports::autopilot::{Autopilot, Change, Proposal};
+    let mut plan = Autopilot::default();
+    let row = |basis| Proposal {
+        id: 0,
+        wires: Vec::new(),
+        label: "wire".into(),
+        change: Change::Size(1.5),
+        reason: "r".into(),
+        basis,
+    };
+    plan.extend([row(Basis::Planning), row(Basis::Assumed), row(Basis::Rule)]);
+    let ticked = super::autopilot::default_ticked(&plan);
+    assert_eq!(ticked, BTreeSet::from([0, 2]));
+}

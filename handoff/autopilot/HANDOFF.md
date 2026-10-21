@@ -6,7 +6,7 @@ Branch `claude/project-thread-md0z6t` (repo kopercad). PR: see PROGRESS.md for t
 Engine, window, command, meter and tests are done for sizes, colours and wire numbers. Cable types, routes, ferrule rows and the datasheet-to-part flow are not started (ROADMAP.md).
 
 ## Where things are
-- `crates/novo-reports/src/autopilot.rs`: `plan`, `Autopilot::apply`, `ready`, unit tests against IEC 60364-5-52 Table B.52.4 values, derating and voltage-drop cases.
+- `crates/novo-reports/src/autopilot.rs`: `plan`, `Autopilot::apply`, `ready`, unit tests against IEC 60364-5-52 Annex B method C values, derating and voltage-drop cases.
 - `crates/novo-checks/src/calc_basis.rs`: `wire_basis` (what each wire's sizing rests on). Shares defaults with the Calculations window.
 - `crates/novo-app/src/app/autopilot.rs` (+ `autopilot_tests.rs`): window, plan building, apply as one undo step (`edit_project`).
 - Command `wires.autopilot` in `novo-workflow` (commands.rs, language.rs), dispatch in `workbench.rs`.

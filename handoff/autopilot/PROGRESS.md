@@ -3,3 +3,4 @@
 2026-10-21 08:40 UTC Full novo-app tests pass (1099). QA screenshots could not run in this cloud box (no xkbcommon-x11 / Vulkan); scenario 08-autopilot.qa is ready for the QA thread.
 2026-10-21 09:00 UTC R3 wording asks done: meter named Wires ready to build, confirmation says planning values, bench tip says planning values.
 2026-10-21 09:20 UTC QA findings: window closes after Accept all (covered Bench output); repeated wire numbers 16/17 are in the example's own numbering, not written by Autopilot.
+2026-10-21 10:00 UTC Reviewer A/R1 asks: per-project PE/neutral wording and Planning basis, drop over limit or failed calc goes to unresolved, unknown control voltage skips drop check, assumed rows unticked and out of Accept all, IEC 60204-1 clause numbers fixed (13.2.2 PE, 13.2.3 neutral, 13.2.4 power/control colours), tests added.

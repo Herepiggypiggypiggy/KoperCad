@@ -23,6 +23,16 @@ pub(super) struct AutopilotState {
     ticked: BTreeSet<usize>,
 }
 
+/// The rows ticked when the list opens: everything but the assumed ones,
+/// which a person has to tick on purpose.
+pub(super) fn default_ticked(plan: &Autopilot) -> BTreeSet<usize> {
+    plan.proposals
+        .iter()
+        .filter(|p| p.basis != Basis::Assumed)
+        .map(|p| p.id)
+        .collect()
+}
+
 /// Builds the plan for the project: sizes and colours from the calculations,
 /// wire numbers from the project's numbering scheme.
 pub(super) fn build(project: &novo_core::Project, has_plate: bool) -> (Autopilot, Ready) {
@@ -74,7 +84,7 @@ impl NovoApp {
             return;
         };
         let (plan, ready) = build(project, has_plate);
-        let ticked = plan.proposals.iter().map(|p| p.id).collect();
+        let ticked = default_ticked(&plan);
         self.wb.autopilot = Some(AutopilotState {
             plan,
             ready,
@@ -133,25 +143,25 @@ impl NovoApp {
         if state.plan.revision() != project.revision() {
             // The drawing changed under the list (an undo, an edit): plan again.
             let (plan, ready) = build(project, has_plate);
-            state.ticked = plan.proposals.iter().map(|p| p.id).collect();
+            state.ticked = default_ticked(&plan);
             state.plan = plan;
             state.ready = ready;
         }
         let mut open = true;
-        let mut apply: Option<Option<BTreeSet<usize>>> = None;
+        let mut apply: Option<(BTreeSet<usize>, bool)> = None;
         super::panel::dialog(ctx, "Autopilot", [620.0, 640.0])
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| {
                 body(ui, &mut state, &mut apply);
             });
-        if let Some(ids) = apply {
+        if let Some((ids, finish)) = apply {
             // Accept all is the end of the job: close, so Bench output behind
             // it shows the new meter. Accepting some rows keeps the list.
-            if ids.is_none() {
+            if finish {
                 open = false;
             }
             let plan = state.plan.clone();
-            self.apply_autopilot(&plan, ids.as_ref());
+            self.apply_autopilot(&plan, Some(&ids));
             // The list is re-planned on the next frame, from the new drawing.
         }
         if open {
@@ -178,7 +188,7 @@ pub(super) fn meter(ui: &mut egui::Ui, ready: Ready) {
 fn body(
     ui: &mut egui::Ui,
     state: &mut AutopilotState,
-    apply: &mut Option<Option<BTreeSet<usize>>>,
+    apply: &mut Option<(BTreeSet<usize>, bool)>,
 ) {
     let pal = crate::theme::ui_palette();
     meter(ui, state.ready);
@@ -219,17 +229,28 @@ fn body(
         ui.add_space(6.0);
         ui.horizontal(|ui| {
             let ticked = state.ticked.len();
-            if novo_theme::widgets::primary_button(ui, &format!("Accept all ({total})")).clicked() {
-                *apply = Some(None);
+            let sure = default_ticked(&state.plan);
+            let label = if sure.len() < total {
+                format!("Accept all except assumed ({})", sure.len())
+            } else {
+                format!("Accept all ({total})")
+            };
+            let go = ui
+                .add_enabled_ui(!sure.is_empty(), |ui| {
+                    novo_theme::widgets::primary_button(ui, &label).clicked()
+                })
+                .inner;
+            if go {
+                *apply = Some((sure, true));
             }
             if ui
                 .add_enabled(
-                    ticked > 0 && ticked < total,
+                    ticked > 0,
                     egui::Button::new(format!("Accept ticked ({ticked})")),
                 )
                 .clicked()
             {
-                *apply = Some(Some(state.ticked.clone()));
+                *apply = Some((state.ticked.clone(), false));
             }
             if ui.small_button("Tick none").clicked() {
                 state.ticked.clear();
