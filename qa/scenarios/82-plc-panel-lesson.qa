@@ -1,0 +1,21 @@
+@title PLC panel lesson: fifteen parts on five rails, in the plate and in 3D
+@area Cabinet
+# The finished PLC panel sample of the lesson: all parts on rails, readable at both window sizes.
+open qa/fixtures/plc-panel.novo
+wait 30
+click_text Cabinet #1
+wait 30
+shot plate
+check_blank plate
+check_layout
+click_text 3D
+wait 60
+scroll 700 300 -30
+wait 40
+scroll 700 300 -30
+wait 40
+scroll 700 300 -30
+wait 40
+shot parts-3d
+check_blank parts-3d
+check_layout

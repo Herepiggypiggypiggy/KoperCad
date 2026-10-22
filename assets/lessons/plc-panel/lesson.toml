@@ -1,0 +1,123 @@
+# Cabinet track: a bigger panel. Sample project: a PLC with its 24 V supply, a drive, relays,
+# breakers and three terminal strips, 15 devices on an 800 x 1000 mm plate (project.json, nothing
+# placed). finished.json is the same panel after Place all with the standard rules. Both come from
+# `cargo run -p novo-app --example plc_panel_lesson -- assets/lessons`.
+# The part sizes are typical published sizes of the families, not checked against data sheets.
+format = 1
+id = "plc-panel"
+version = 1
+status = "draft"
+title = "A PLC panel: many parts, one plate"
+title_nl = "Een PLC-kast: veel onderdelen, één plaat"
+summary = "Place a PLC, its supply, a drive, relays and three terminal strips, read the rails Place all makes, find the hot drive and look at the panel in 3D."
+summary_nl = "Plaats een PLC, de voeding, een omvormer, relais en drie klemmenstroken, lees de rails die Place all maakt, vind de hete omvormer en bekijk de kast in 3D."
+track = "cabinet"
+order = 95
+level = "intermediate"
+minutes = 10
+topics = ["cabinet", "plc", "heat", "3d"]
+needs = ["cabinet-layout", "heat-and-sizing"]
+next = ["plc-io"]
+project = "project.json"
+finished = "finished.json"
+
+[[step]]
+id = "open-cabinet"
+how = ["Press {key:view.cabinet}.", "Check that 15 devices wait in the Unplaced list."]
+how_nl = ["Druk op {key:view.cabinet}.", "Controleer dat 15 componenten in de lijst Unplaced wachten."]
+title = "A bigger plate"
+title_nl = "Een grotere plaat"
+text = """
+Press {key:view.cabinet}. This panel is **800 x 1000 mm** and holds fifteen devices: a main breaker and three small ones, a 24 V supply, a PLC with two I/O modules, a drive, two relays, a contactor and three terminal strips.
+Their sizes come from their parts: typical published sizes of those families, not checked against data sheets.
+"""
+text_nl = """
+Druk op {key:view.cabinet}. Deze kast is **800 x 1000 mm** en bevat vijftien componenten: een hoofdautomaat en drie kleine, een 24 V-voeding, een PLC met twee I/O-modules, een omvormer, twee relais, een contactor en drie klemmenstroken.
+De afmetingen komen uit de artikelen: gangbare gepubliceerde maten van die families, niet gecontroleerd aan datasheets.
+"""
+point = { ui = "switcher.cabinet" }
+expect = { command = "view.cabinet" }
+solve = [ { command = "view.cabinet" } ]
+
+[[step]]
+id = "place-all"
+how = ["Click Place all in the Place group, or press Ctrl+Shift+P.", "A preview of all fifteen devices appears."]
+how_nl = ["Klik op Place all in de groep Place, of druk op Ctrl+Shift+P.", "Er verschijnt een voorbeeld van alle vijftien componenten."]
+title = "Place all fifteen"
+title_nl = "Plaats alle vijftien"
+text = """
+Click {ui:cabinet.place_all}. The rules put the breakers and the supply on the top rail, the PLC, its modules and the drive on a rail of their own, the relays and the contactor on the next, and the three strips at the bottom, each on its own rail with a duct.
+The hot drive is kept away from the PLC by the gap the rules keep between hot and heat-sensitive parts.
+"""
+text_nl = """
+Klik op {ui:cabinet.place_all}. De regels zetten de automaten en de voeding op de bovenste rail, de PLC, de modules en de omvormer op een eigen rail, de relais en de contactor op de volgende en de drie strips onderaan, elk op een eigen rail met een kanaal.
+De hete omvormer blijft op afstand van de PLC door de ruimte die de regels tussen warme en gevoelige onderdelen aanhouden.
+"""
+point = { ui = "cabinet.place_all" }
+expect = { clicked = "cabinet.place_all" }
+solve = [ { cabinet = "place_all" } ]
+
+[[step]]
+id = "accept"
+how = ["Press Enter, or click Accept.", "The bar shows 15 placed."]
+how_nl = ["Druk op Enter of klik op Accept.", "De balk toont 15 placed."]
+title = "Keep it"
+title_nl = "Bewaar het"
+text = """
+Press **Enter** or click {ui:cabinet.accept}. The strip under the bar says "15 placed". Each device sits on its rail with the rail running through its middle; click a part to see which rule put it there.
+"""
+text_nl = """
+Druk op **Enter** of klik op {ui:cabinet.accept}. De strook onder de balk zegt "15 placed". Elk component staat op zijn rail met de rail door het midden; klik een artikel aan om te zien welke regel het daar zette.
+"""
+point = { ui = "cabinet.accept" }
+expect = { signal = "cabinet_plan_accepted" }
+solve = [ { cabinet = "accept" } ]
+
+[[step]]
+id = "heat-on"
+how = ["Click Heat in the View group, or press {key:heat.toggle}.", "A temperature legend appears in the corner."]
+how_nl = ["Klik op Heat in de groep View, of druk op {key:heat.toggle}.", "In de hoek verschijnt een temperatuurlegenda."]
+title = "Find the hot part"
+title_nl = "Vind het hete onderdeel"
+text = """
+Turn on {ui:cabinet.heat}. The parts add up to about 118 W of loss; the drive alone is 60 W, the supply 18 W and the PLC 14 W. The hot spot sits on the drive, and the {tip:heat-map} shows how far it reaches towards the PLC.
+Losses are the figures in the parts; the map is a planning model, not a measurement.
+"""
+text_nl = """
+Zet {ui:cabinet.heat} aan. De artikelen tellen op tot ongeveer 118 W verlies; de omvormer alleen is 60 W, de voeding 18 W en de PLC 14 W. De hotspot zit op de omvormer en de {tip:heat-map} laat zien hoe ver die richting de PLC reikt.
+De verliezen zijn de cijfers in de artikelen; de kaart is een planningsmodel, geen meting.
+"""
+point = { ui = "cabinet.heat" }
+expect = { command = "heat.toggle" }
+solve = [ { command = "heat.toggle" } ]
+
+[[step]]
+id = "open-3d"
+how = ["Click 3D in the switcher at the top.", "The panel appears with its rails, ducts and parts."]
+how_nl = ["Klik bovenin op 3D in de schakelaar.", "De kast verschijnt met rails, kanalen en artikelen."]
+title = "Look at it in 3D"
+title_nl = "Bekijk het in 3D"
+text = """
+Click **3D** in the switcher. The drive is the tallest and deepest part, the strips are low, and the breakers show their poles. Drag to orbit and check that nothing in the back stands behind something taller.
+The shapes are typical for each family, not the maker's drawing; the sizes are those of the parts.
+"""
+text_nl = """
+Klik op **3D** in de schakelaar. De omvormer is het hoogste en diepste artikel, de strips zijn laag en de automaten tonen hun polen. Sleep om te draaien en controleer dat niets achterin achter iets hogers staat.
+De vormen zijn gangbaar per familie, niet de tekening van de maker; de maten zijn die van de artikelen.
+"""
+point = { ui = "workspace.view3d" }
+expect = { command = "view.3d" }
+solve = [ { command = "view.3d" } ]
+
+[[step]]
+id = "done"
+title = "That is a real panel"
+title_nl = "Dat is een echte kast"
+text = """
+You placed fifteen parts by the rules, read the rails and the hot spot, and checked the result in 3D.
+Next: the PLC inputs and outputs that wire these terminals to the field.
+"""
+text_nl = """
+Je plaatste vijftien artikelen volgens de regels, las de rails en de hotspot en controleerde het resultaat in 3D.
+Volgende: de PLC-in- en uitgangen die deze klemmen met het veld verbinden.
+"""

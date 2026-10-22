@@ -1,0 +1,388 @@
+{
+  "format": 1,
+  "info": {
+    "name": "PLC panel (lesson)",
+    "description": "A PLC with its supply, a drive, relays and terminal strips on an 800 x 1000 mm plate. The sizes are typical published sizes, not checked against data sheets.",
+    "rules": {
+      "terminals": {
+        "same_name": "join",
+        "join_link": "connector"
+      },
+      "potentials": {
+        "from_terminal_names": true
+      }
+    },
+    "properties": {}
+  },
+  "next_id": 32,
+  "parts": [
+    {
+      "id": 3,
+      "manufacturer": "Siemens",
+      "order_number": "5SL6 330-7 (3-pole 30 A)",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "power_loss_w": 9.0,
+        "width_mm": 54.0
+      }
+    },
+    {
+      "id": 5,
+      "manufacturer": "Siemens",
+      "order_number": "5SL6 106-7 (1-pole 6 A)",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "power_loss_w": 1.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 7,
+      "manufacturer": "Siemens",
+      "order_number": "5SL6 106-7 (1-pole 6 A)",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "power_loss_w": 1.5,
+        "width_mm": 18.0
+      }
+    },
+    {
+      "id": 9,
+      "manufacturer": "Siemens",
+      "order_number": "5SL6 210-7 (2-pole 10 A)",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 90.0,
+        "power_loss_w": 2.5,
+        "width_mm": 36.0
+      }
+    },
+    {
+      "id": 11,
+      "manufacturer": "Siemens",
+      "order_number": "6EP1334-2BA20 (24 V 10 A)",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 120.0,
+        "height_mm": 125.0,
+        "power_loss_w": 18.0,
+        "width_mm": 70.0
+      }
+    },
+    {
+      "id": 13,
+      "manufacturer": "Siemens",
+      "order_number": "S7-1200 CPU 1214C",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 75.0,
+        "height_mm": 100.0,
+        "power_loss_w": 14.0,
+        "width_mm": 110.0
+      }
+    },
+    {
+      "id": 15,
+      "manufacturer": "Siemens",
+      "order_number": "SM 1223 (16 DI / 16 DO)",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 75.0,
+        "height_mm": 100.0,
+        "power_loss_w": 4.0,
+        "width_mm": 45.0
+      }
+    },
+    {
+      "id": 17,
+      "manufacturer": "Siemens",
+      "order_number": "SM 1231 (8 AI)",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 75.0,
+        "height_mm": 100.0,
+        "power_loss_w": 2.0,
+        "width_mm": 45.0
+      }
+    },
+    {
+      "id": 19,
+      "manufacturer": "Siemens",
+      "order_number": "V20 drive 2.2 kW",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 160.0,
+        "height_mm": 196.0,
+        "power_loss_w": 60.0,
+        "width_mm": 90.0
+      }
+    },
+    {
+      "id": 21,
+      "manufacturer": "Finder",
+      "order_number": "Relay 4-pole on 27 mm base",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 80.0,
+        "power_loss_w": 1.0,
+        "width_mm": 27.0
+      }
+    },
+    {
+      "id": 23,
+      "manufacturer": "Finder",
+      "order_number": "Relay 4-pole on 27 mm base",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 70.0,
+        "height_mm": 80.0,
+        "power_loss_w": 1.0,
+        "width_mm": 27.0
+      }
+    },
+    {
+      "id": 25,
+      "manufacturer": "Siemens",
+      "order_number": "3RT2026 contactor 11 kW",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 90.0,
+        "height_mm": 85.0,
+        "power_loss_w": 4.0,
+        "width_mm": 45.0
+      }
+    },
+    {
+      "id": 27,
+      "manufacturer": "Phoenix Contact",
+      "order_number": "UT 4 strip, 24 blocks (field power)",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 45.0,
+        "height_mm": 50.0,
+        "power_loss_w": 0.0,
+        "width_mm": 140.0
+      }
+    },
+    {
+      "id": 29,
+      "manufacturer": "Phoenix Contact",
+      "order_number": "UT 2.5 strip, 32 blocks (inputs)",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 45.0,
+        "height_mm": 50.0,
+        "power_loss_w": 0.0,
+        "width_mm": 170.0
+      }
+    },
+    {
+      "id": 31,
+      "manufacturer": "Phoenix Contact",
+      "order_number": "UT 2.5 strip, 32 blocks (outputs)",
+      "type_number": "",
+      "description": "",
+      "properties": {
+        "depth_mm": 45.0,
+        "height_mm": 50.0,
+        "power_loss_w": 0.0,
+        "width_mm": 170.0
+      }
+    }
+  ],
+  "potentials": [],
+  "pages": [],
+  "devices": [
+    {
+      "id": 2,
+      "tag": "=A1+CAB-Q1",
+      "description": "5SL6 330-7 (3-pole 30 A)",
+      "kind": "general",
+      "parts": [
+        3
+      ],
+      "properties": {}
+    },
+    {
+      "id": 4,
+      "tag": "=A1+CAB-F1",
+      "description": "5SL6 106-7 (1-pole 6 A)",
+      "kind": "general",
+      "parts": [
+        5
+      ],
+      "properties": {}
+    },
+    {
+      "id": 6,
+      "tag": "=A1+CAB-F2",
+      "description": "5SL6 106-7 (1-pole 6 A)",
+      "kind": "general",
+      "parts": [
+        7
+      ],
+      "properties": {}
+    },
+    {
+      "id": 8,
+      "tag": "=A1+CAB-F3",
+      "description": "5SL6 210-7 (2-pole 10 A)",
+      "kind": "general",
+      "parts": [
+        9
+      ],
+      "properties": {}
+    },
+    {
+      "id": 10,
+      "tag": "=A1+CAB-G1",
+      "description": "6EP1334-2BA20 (24 V 10 A)",
+      "kind": "general",
+      "parts": [
+        11
+      ],
+      "properties": {}
+    },
+    {
+      "id": 12,
+      "tag": "=A1+CAB-A1",
+      "description": "S7-1200 CPU 1214C",
+      "kind": "general",
+      "parts": [
+        13
+      ],
+      "properties": {}
+    },
+    {
+      "id": 14,
+      "tag": "=A1+CAB-A2",
+      "description": "SM 1223 (16 DI / 16 DO)",
+      "kind": "general",
+      "parts": [
+        15
+      ],
+      "properties": {}
+    },
+    {
+      "id": 16,
+      "tag": "=A1+CAB-A3",
+      "description": "SM 1231 (8 AI)",
+      "kind": "general",
+      "parts": [
+        17
+      ],
+      "properties": {}
+    },
+    {
+      "id": 18,
+      "tag": "=A1+CAB-U1",
+      "description": "V20 drive 2.2 kW",
+      "kind": "general",
+      "parts": [
+        19
+      ],
+      "properties": {}
+    },
+    {
+      "id": 20,
+      "tag": "=A1+CAB-K1",
+      "description": "Relay 4-pole on 27 mm base",
+      "kind": "general",
+      "parts": [
+        21
+      ],
+      "properties": {}
+    },
+    {
+      "id": 22,
+      "tag": "=A1+CAB-K2",
+      "description": "Relay 4-pole on 27 mm base",
+      "kind": "general",
+      "parts": [
+        23
+      ],
+      "properties": {}
+    },
+    {
+      "id": 24,
+      "tag": "=A1+CAB-K3",
+      "description": "3RT2026 contactor 11 kW",
+      "kind": "general",
+      "parts": [
+        25
+      ],
+      "properties": {}
+    },
+    {
+      "id": 26,
+      "tag": "=A1+CAB-X1",
+      "description": "UT 4 strip, 24 blocks (field power)",
+      "kind": "general",
+      "parts": [
+        27
+      ],
+      "properties": {}
+    },
+    {
+      "id": 28,
+      "tag": "=A1+CAB-X2",
+      "description": "UT 2.5 strip, 32 blocks (inputs)",
+      "kind": "general",
+      "parts": [
+        29
+      ],
+      "properties": {}
+    },
+    {
+      "id": 30,
+      "tag": "=A1+CAB-X3",
+      "description": "UT 2.5 strip, 32 blocks (outputs)",
+      "kind": "general",
+      "parts": [
+        31
+      ],
+      "properties": {}
+    }
+  ],
+  "terminals": [],
+  "symbols": [],
+  "junctions": [],
+  "wires": [],
+  "cables": [],
+  "structures": [
+    {
+      "id": 1,
+      "tag": "+CAB",
+      "description": "Control cabinet",
+      "enclosure": true,
+      "plate": {
+        "width": 800.0,
+        "height": 1000.0,
+        "margin": 10.0
+      },
+      "properties": {}
+    }
+  ]
+}
