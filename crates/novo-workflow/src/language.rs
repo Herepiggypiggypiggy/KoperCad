@@ -706,6 +706,7 @@ pub const DUTCH: &[Aliases] = &[
         &[],
         &["handmatige wijzigingen tonen"],
     ),
+    nl("view.left_out", &[], &["opties tonen", "weggelaten tonen"]),
     nl("view.shortcuts", &[], &["sneltoetsen", "toetsen"]),
     // Check
     nl("check.problems", &["problemen", "fouten"], &["controles"]),

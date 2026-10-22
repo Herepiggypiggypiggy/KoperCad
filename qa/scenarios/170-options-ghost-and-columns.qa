@@ -1,0 +1,51 @@
+@title Machine options: what the choice leaves out is ghosted, the lists name the option
+@area Options
+# The fixture's Cooling fan page (page 3) is only there with the Cooling fan option. With the fan off the page stays on
+# the drawing, veiled and outlined, and says why on hover; View > Layers has the switch. With the fan on the page is
+# normal and the device list and wire list carry an Option column.
+open qa/fixtures/machine-options.novo
+wait 20
+expect "Options: no Cooling fan, Supply 400V"
+key PageDown
+wait 4
+key PageDown
+wait 6
+shot fan-off-ghosted
+check_layout
+move 313 190
+wait 4
+shot fan-off-hover-why
+key ctrl+k
+wait 3
+text ghost what the options leave out
+wait 4
+key Enter
+wait 6
+shot fan-off-ghost-switched-off
+key ctrl+k
+wait 3
+text ghost what the options leave out
+wait 4
+key Enter
+wait 6
+key ctrl+k
+wait 3
+text option fan on
+wait 4
+key Enter
+wait 10
+shot fan-on-normal
+check_layout
+click_text Reports #2
+wait 20
+click_text "Device list"
+wait 10
+expect "Option"
+expect "Cooling fan"
+shot device-list-option-column
+check_layout
+click_text "Wire list"
+wait 10
+expect "Option"
+shot wire-list-option-column
+check_layout

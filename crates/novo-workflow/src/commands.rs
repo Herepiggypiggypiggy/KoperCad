@@ -1958,6 +1958,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         Needs::Page,
     ),
     cmd(
+        "view.left_out",
+        "Ghost what the options leave out",
+        "View",
+        &["optional", "machine options", "variant", "left out"],
+        Needs::Page,
+    ),
+    cmd(
         "help.keymap_file",
         "Open keymap file",
         "View",

@@ -173,6 +173,9 @@ pub(crate) struct Workbench {
     pub(super) marks: bool,
     /// Shift+O: false hides the override diamonds (PE set by hand).
     pub(super) override_marks: bool,
+    /// False shows what the machine options leave out as normal drawing
+    /// instead of veiled (View > Layers).
+    pub(super) ghost_left_out: bool,
     /// Copy, cut and paste.
     pub(super) clip: super::clipboard::ClipState,
     /// Design-check results for one project revision.
@@ -342,6 +345,7 @@ impl Default for Workbench {
             wire_panel: Default::default(),
             marks: true,
             override_marks: true,
+            ghost_left_out: true,
             clip: Default::default(),
             problems: None,
             check_job: None,
@@ -427,6 +431,7 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "edit.paste_keep_tags",
     "edit.paste_in_place",
     "view.override_marks",
+    "view.left_out",
     "macro.save",
     "macro.place",
     "macro.edit",
@@ -1066,6 +1071,7 @@ impl NovoApp {
             "edit.cut" => self.copy_selection(ctx, true),
             "edit.paste" | "edit.paste_keep_tags" | "edit.paste_in_place" => self.paste_command(id),
             "view.override_marks" => self.wb.override_marks ^= true,
+            "view.left_out" => self.wb.ghost_left_out ^= true,
             "macro.save" => self.open_macro_save(argument),
             "macro.place" => self.open_macro_place(argument),
             "macro.edit" => self.open_macro_editor(argument),
@@ -1789,6 +1795,9 @@ impl NovoApp {
         }
         list.extend(self.changes_marks(page));
         list.extend(self.commissioning_marks(page));
+        if self.wb.ghost_left_out {
+            list.extend(self.left_out_marks(page));
+        }
         let hidden = !self.wb.marks;
         // Cross references are printed drawing content: they go into the
         // page scene, like the tags, so the PDF shows them the same way.
