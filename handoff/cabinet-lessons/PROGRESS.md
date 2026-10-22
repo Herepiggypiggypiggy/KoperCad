@@ -23,5 +23,5 @@ Heat anchors `heat.chips`, `heat.legend`, `heat.simulate` (fall back to `cabinet
 
 ## 2026-10-22: PLC panel lesson (ready)
 - New lesson `plc-panel` (cabinet track, order 95, status ready): 15 parts on an 800 x 1000 mm plate (PLC, two I/O modules, 24 V supply, drive, relays, contactor, breakers, three strips). Steps: open, Place all, accept, heat, 3D.
-- Generator `crates/novo-app/examples/plc_panel_lesson.rs`; test `crates/novo-app/tests/plc_panel_lesson.rs` (all placed, each on a rail through its centre, no problem); QA `scripts/qa.sh --only plc-panel` (scenario 82, both sizes).
+- Generator `crates/novo-app/examples/plc_panel_lesson.rs`; test `crates/novo-app/tests/plc_panel_lesson.rs` (all placed, each on a rail through its centre, no problem); QA `scripts/qa.sh --only plc-panel` (scenario 85, both sizes).
 - Part sizes are typical published sizes of the families, not checked against data sheets; part numbers illustrative.
