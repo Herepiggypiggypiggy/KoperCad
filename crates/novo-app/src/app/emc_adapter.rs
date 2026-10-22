@@ -18,8 +18,6 @@ use novo_view3d::emc::{
 
 /// Height of a device body above the plate when the model has none, mm.
 const BODY_HEIGHT_MM: f32 = 60.0;
-/// Pigtail length counted as short when the project does not say.
-const PIGTAIL_MM: f64 = 50.0;
 
 pub(crate) fn class_of(c: EmcClass) -> Class {
     match c {
@@ -104,7 +102,12 @@ fn fix_of(rule: &str, i: usize, f: &EngineFix) -> Fix {
 /// The band is drawn no wider than a fifth of the plate's short side so the
 /// devices stay readable; the real planning distance is on the card of a
 /// finding.
-fn halo_mm(run: &novo_emc::Run, victims: &[EmcClass], plate_mm: [f32; 2]) -> f32 {
+fn halo_mm(
+    run: &novo_emc::Run,
+    victims: &[EmcClass],
+    plate_mm: [f32; 2],
+    pigtail_max_mm: f64,
+) -> f32 {
     if !run.class.is_aggressor() {
         return 0.0;
     }
@@ -112,7 +115,7 @@ fn halo_mm(run: &novo_emc::Run, victims: &[EmcClass], plate_mm: [f32; 2]) -> f32
         .iter()
         .map(|v| novo_emc::default_distance_mm(run.class, *v))
         .fold(0.0, f64::max);
-    let factor = run.shield.map_or(1.0, |s| s.factor(PIGTAIL_MM));
+    let factor = run.shield.map_or(1.0, |s| s.factor(pigtail_max_mm));
     let cap = plate_mm[0].min(plate_mm[1]) * 0.2;
     ((base * factor) as f32).min(cap)
 }
@@ -189,7 +192,9 @@ pub(crate) fn build(
                 class: class_of(r.class),
                 shielded: r.shielded,
                 path: r.path.iter().map(|p| pt(*p)).collect(),
-                halo_mm: src.map_or(0.0, |x| halo_mm(x, &victims, plate_mm)),
+                halo_mm: src.map_or(0.0, |x| {
+                    halo_mm(x, &victims, plate_mm, input.params.pigtail_max_mm)
+                }),
                 class_reason: r.class_reason.clone(),
                 overridden: r.overridden,
             }
