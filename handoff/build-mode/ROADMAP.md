@@ -12,6 +12,6 @@ Next, in order:
 2. DONE (PR build-mode-pdf): Print sheet... writes the build sheet PDF.
 3. Door and wall steps in their own surface coordinates (today door devices say "Fit on the door").
 4. ~~Photos on a problem~~ done (PR build-mode-photos): chosen in the problem editor, kept on the punch item. Live camera capture is not done.
-5. Per-person claim of a step (two people on one cabinet) merged through the field file.
+5. DONE (PR build-mode-claims): "I take this step", merged through the field file (newest record wins, a release is a record).
 
 Open questions: whether wires should be grouped per circuit with a heading, and per-terminal tightening torque once part data has it.

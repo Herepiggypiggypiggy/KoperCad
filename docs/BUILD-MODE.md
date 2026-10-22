@@ -46,6 +46,13 @@ aside behind a "Back to Build mode" bar at the bottom left of the window, the de
 selected in the Cabinet canvas or the 3D view, and the bar brings you back to the
 same step. While it is stepped aside Space and Escape do not touch the build.
 
+**Taking a step.** "I take this step" tells the others you are on it: your name (set under
+Commissioning; "someone" without one) shows next to the step in the list and in "Also ready now",
+and someone else's card says who took it and offers "Take it over". "Let go" gives it back. Build
+mode offers a free step first when the next one is held. A claim is a signal, not a lock: anyone can
+still do the step, and the newest claim or release wins when the files are merged, in the same
+`.kcfield` file as the ticks. Two people with no name set cannot be told apart.
+
 ## Honest limits
 
 - Wires are cut and holes drilled by hand. A step says what to cut or drill and

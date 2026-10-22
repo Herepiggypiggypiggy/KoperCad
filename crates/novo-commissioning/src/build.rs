@@ -291,8 +291,19 @@ impl CabinetPlan {
         }
     }
 
-    /// The steps that can be done now, in order: lets two people work on
-    /// different devices at once.
+    /// [`CabinetPlan::next`] for `who`: when the next step is held by someone
+    /// else and another ready step is free (or theirs), that one.
+    pub fn next_for(&self, store: &CommissioningStore, who: &str) -> Next {
+        let next = self.next(store);
+        if let Next::Ready(n) = next
+            && !self.ready_for(store, who).contains(&n)
+            && let Some(&other) = self.ready_for(store, who).first()
+        {
+            return Next::Ready(other);
+        }
+        next
+    }
+
     /// The ready steps nobody else holds: what `who` can take up now.
     pub fn ready_for(&self, store: &CommissioningStore, who: &str) -> Vec<usize> {
         self.ready(store)
@@ -305,6 +316,8 @@ impl CabinetPlan {
             .collect()
     }
 
+    /// The steps that can be done now, in order: lets two people work on
+    /// different devices at once.
     pub fn ready(&self, store: &CommissioningStore) -> Vec<usize> {
         self.steps
             .iter()

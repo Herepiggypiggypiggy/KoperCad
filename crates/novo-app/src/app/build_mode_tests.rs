@@ -308,3 +308,33 @@ fn showing_a_device_switches_the_cabinet_to_the_step_s_own_plate_not_the_table()
     assert_eq!(d.app.cabinet.surface, None);
     assert_eq!(d.app.cabinet_selected(), vec![device]);
 }
+
+#[test]
+fn a_claim_by_someone_else_is_kept_in_the_project_and_the_screen_draws_with_it() {
+    let (_dir, mut d) = started();
+    cabinet(&mut d);
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "view.build", None);
+    d.frame();
+    d.frame();
+    let plan = novo_commissioning::BuildPlan::of(d.app.backend.document().unwrap().project());
+    let step = &plan.cabinets[0].steps[0];
+    {
+        let mode = d.app.wb.commissioning.as_mut().unwrap();
+        mode.who = "ann".into();
+        novo_commissioning::claim_step(&mut mode.store, step, "bob", "2026-10-22T09:00:00Z");
+        mode.dirty = true;
+    }
+    for size in [egui::vec2(1366.0, 768.0), egui::vec2(683.0, 384.0)] {
+        d.frame_sized(size, Vec::new());
+        d.frame_sized(size, Vec::new());
+        assert!(d.app.wb.build.is_some());
+    }
+    let json = d.app.backend.commissioning_json().unwrap();
+    let store = novo_commissioning::CommissioningStore::from_json(&json).unwrap();
+    assert_eq!(store.build_claim(step.key).unwrap().by, "bob");
+    // Taking the step over is a newer claim by ann.
+    let mode = d.app.wb.commissioning.as_mut().unwrap();
+    novo_commissioning::claim_step(&mut mode.store, step, "ann", "2026-10-22T09:30:00Z");
+    assert_eq!(mode.store.build_claim(step.key).unwrap().by, "ann");
+}
