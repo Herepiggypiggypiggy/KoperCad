@@ -2476,8 +2476,10 @@ impl NovoApp {
         if !self.show_about {
             return;
         }
+        let mut open_log = false;
+        let mut copy_info = false;
         let modal = egui::Modal::new(egui::Id::new("about")).show(ctx, |ui| {
-            ui.set_width(360.0);
+            ui.set_width(380.0);
             ui.vertical_centered(|ui| {
                 novo_theme::brand::lockup(ui, 56.0);
                 ui.add_space(novo_theme::space::L);
@@ -2488,16 +2490,56 @@ impl NovoApp {
                     crate::diag::BUILD_COMMIT,
                     crate::diag::BUILD_TIME
                 ));
-                ui.add_space(novo_theme::space::L);
+                if crate::is_portable() {
+                    ui.weak(
+                        "Portable: settings and logs are in the data folder beside the program",
+                    );
+                }
+                if crate::gpu::safe_graphics() {
+                    ui.weak("Safe graphics: software renderer (slower)");
+                }
+                ui.add_space(novo_theme::space::M);
+                ui.label("Made by KoperVonk");
+                ui.weak("Free software, MIT or Apache-2.0, at your choice");
+                ui.weak("Works offline; nothing is sent anywhere");
+                ui.add_space(novo_theme::space::M);
+                ui.horizontal_wrapped(|ui| {
+                    ui.hyperlink_to("Release notes", ABOUT_RELEASES_URL);
+                    ui.hyperlink_to("Licence", ABOUT_LICENCE_URL);
+                    ui.hyperlink_to("Third-party notices", ABOUT_NOTICES_URL);
+                });
+                ui.add_space(novo_theme::space::M);
+                ui.horizontal(|ui| {
+                    copy_info = ui
+                        .button("Copy version info")
+                        .on_hover_text(
+                            "Version, build, system and graphics, to paste into a message",
+                        )
+                        .clicked();
+                    open_log = ui.button("Open log folder").clicked();
+                });
+                ui.add_space(novo_theme::space::M);
                 ui.button("Close").clicked()
             })
             .inner
         });
+        if copy_info {
+            self.copy_problem_report(ctx);
+        }
+        if open_log {
+            self.open_log_folder();
+        }
         if modal.inner || modal.should_close() {
             self.show_about = false;
         }
     }
 }
+
+const ABOUT_RELEASES_URL: &str = "https://github.com/Herepiggypiggypiggy/kopercad/releases";
+const ABOUT_LICENCE_URL: &str =
+    "https://github.com/Herepiggypiggypiggy/kopercad/blob/main/LICENSE-MIT";
+const ABOUT_NOTICES_URL: &str =
+    "https://github.com/Herepiggypiggypiggy/kopercad/blob/main/THIRD_PARTY_NOTICES.txt";
 
 impl eframe::App for NovoApp {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {

@@ -21,6 +21,9 @@ You have one of two things:
 * The portable zip, KoperCAD-0.1.0-portable.zip. Unzip it anywhere you can write
   to, for example your Documents folder, and double-click run.cmd (or
   kopercad.exe directly). Nothing is installed.
+  The zip is portable: settings, logs and recovery files go to a `data` folder
+  next to the program, not to your user profile. Delete the folder to remove
+  everything. (The installed version keeps them under %LOCALAPPDATA%\KoperCAD.)
 
 Windows may show a blue "Windows protected your PC" box the first time, because
 the program is not code-signed yet. Choose "More info", then "Run anyway".
@@ -35,6 +38,9 @@ the window does not fit your screen, double-click its title bar to maximise it.
 
 If it will not start, or shows a start-up message, see "If something goes wrong"
 below. Do not try to run it as administrator; it will not help.
+If the window never appears or the graphics driver is the problem, start
+"KoperCAD (safe graphics)" from the Start menu (portable: run-safe-graphics.cmd).
+It uses the software renderer: slower, but it needs no graphics driver.
 
 
 2. Your first ten minutes

@@ -33,14 +33,32 @@ pub(crate) struct Wish {
     pub(crate) name: Option<String>,
     /// `WGPU_POWER_PREF=low`: an integrated GPU before a discrete one.
     pub(crate) low_power: bool,
+    /// `--safe-graphics`: the software renderer first. Slow, but it starts
+    /// where a broken GPU driver does not.
+    pub(crate) software: bool,
+}
+
+static SAFE_GRAPHICS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Records the `--safe-graphics` flag for this run; call before the window opens.
+pub(crate) fn set_safe_graphics(on: bool) {
+    SAFE_GRAPHICS.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether this run was started with `--safe-graphics`.
+pub(crate) fn safe_graphics() -> bool {
+    SAFE_GRAPHICS.load(std::sync::atomic::Ordering::Relaxed)
 }
 
 impl Wish {
     pub(crate) fn from_env() -> Wish {
-        Wish::parse(
-            std::env::var("WGPU_ADAPTER_NAME").ok().as_deref(),
-            std::env::var("WGPU_POWER_PREF").ok().as_deref(),
-        )
+        Wish {
+            software: safe_graphics(),
+            ..Wish::parse(
+                std::env::var("WGPU_ADAPTER_NAME").ok().as_deref(),
+                std::env::var("WGPU_POWER_PREF").ok().as_deref(),
+            )
+        }
     }
 
     pub(crate) fn parse(name: Option<&str>, power: Option<&str>) -> Wish {
@@ -49,6 +67,7 @@ impl Wish {
                 .map(|n| n.trim().to_lowercase())
                 .filter(|n| !n.is_empty()),
             low_power: power.is_some_and(|p| p.trim().eq_ignore_ascii_case("low")),
+            software: false,
         }
     }
 
@@ -65,6 +84,7 @@ pub(crate) fn order(kinds: &[wgpu::DeviceType], names: &[String], wish: &Wish) -
     let mut idx: Vec<usize> = (0..kinds.len()).collect();
     idx.sort_by_key(|&i| {
         let rank = match (wish.low_power, kinds[i]) {
+            _ if wish.software && kinds[i] == wgpu::DeviceType::Cpu => 0,
             (true, wgpu::DeviceType::IntegratedGpu) => 0,
             (true, wgpu::DeviceType::DiscreteGpu) => 1,
             (_, kind) => rank(kind) + 1,
@@ -79,6 +99,8 @@ pub(crate) fn order(kinds: &[wgpu::DeviceType], names: &[String], wish: &Wish) -
 pub(crate) fn why(name: &str, kind: wgpu::DeviceType, wish: &Wish) -> String {
     if wish.matches(name) {
         "named by WGPU_ADAPTER_NAME".to_owned()
+    } else if wish.software && kind == wgpu::DeviceType::Cpu {
+        "--safe-graphics asks for the software renderer".to_owned()
     } else if wish.low_power && kind == wgpu::DeviceType::IntegratedGpu {
         "WGPU_POWER_PREF asks for low power".to_owned()
     } else {
@@ -227,6 +249,19 @@ mod tests {
             order(&[DiscreteGpu, Cpu, IntegratedGpu], &names(3), &wish),
             vec![2, 0, 1]
         );
+    }
+
+    #[test]
+    fn safe_graphics_puts_the_software_renderer_first() {
+        let wish = Wish {
+            software: true,
+            ..Wish::default()
+        };
+        assert_eq!(
+            order(&[DiscreteGpu, IntegratedGpu, Cpu], &names(3), &wish),
+            vec![2, 0, 1]
+        );
+        assert!(why("Basic Render Driver", Cpu, &wish).contains("--safe-graphics"));
     }
 
     #[test]
