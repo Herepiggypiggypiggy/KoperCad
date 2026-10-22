@@ -84,6 +84,7 @@ mod heat_cloud;
 mod heat_compare;
 #[cfg(test)]
 mod heat_compare_tests;
+mod heat_cooling;
 #[cfg(test)]
 mod heat_duct_slice_tests;
 mod heat_legend;
@@ -91,6 +92,7 @@ mod heat_live;
 #[cfg(test)]
 mod heat_live_tests;
 mod heat_openings;
+mod heat_openings_store;
 mod heat_probe;
 mod heat_progress;
 #[cfg(test)]
@@ -1196,6 +1198,9 @@ impl NovoApp {
         self.learn_project_changed();
         self.canvas.document_replaced();
         self.wb.reports = Default::default();
+        // The openings of the Heat panel belong to the project's enclosure.
+        self.cabinet.heat.settings.load(Vec::new());
+        self.cabinet.heat.settings.stored = None;
         // The live view, an open drawer and a preview belong to the project
         // they were opened on; a lesson (or any project) starts clean.
         self.wb.live = Default::default();
@@ -1205,6 +1210,18 @@ impl NovoApp {
         self.wb.field.close();
         self.wb.commissioning = None;
         self.wb.sheet = 0;
+        // Build mode takes the whole canvas and the output windows show the old
+        // project's numbers: none may sit over the new project (or a lesson card).
+        self.wb.build = None;
+        self.wb.bench = None;
+        self.wb.autopilot = None;
+        self.wb.handover_ask = None;
+        self.wb.print_preview = None;
+        self.wb.calculations = None;
+        self.wb.electrical = None;
+        self.wb.safety = None;
+        self.protection.open = false;
+        self.standards_open = false;
         self.cabinet.result = None;
         self.add_generated_pages();
         // Nothing to commission in a closed project.

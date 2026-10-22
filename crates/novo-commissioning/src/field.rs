@@ -84,6 +84,8 @@ pub struct MergeReport {
     pub redlines_updated: usize,
     pub build_added: usize,
     pub build_updated: usize,
+    pub claims_added: usize,
+    pub claims_updated: usize,
     /// Photos attached to items that were already here.
     pub photos_added: usize,
 }
@@ -98,6 +100,8 @@ impl MergeReport {
             + self.redlines_updated
             + self.build_added
             + self.build_updated
+            + self.claims_added
+            + self.claims_updated
             + self.photos_added
             > 0
     }
@@ -117,6 +121,12 @@ impl MergeReport {
             text.push_str(&format!(
                 ", {} new and {} changed build steps",
                 self.build_added, self.build_updated
+            ));
+        }
+        if self.claims_added + self.claims_updated > 0 {
+            text.push_str(&format!(
+                ", {} new and {} changed step claims",
+                self.claims_added, self.claims_updated
             ));
         }
         if self.photos_added > 0 {
@@ -350,7 +360,7 @@ impl FieldPackage {
                 }
             }
         }
-        if self.store.build_ticks().next().is_some() {
+        if self.store.build_ticks().next().is_some() || self.store.build_claims().next().is_some() {
             // Computing the plan routes every wire: only when ticks came.
             let plan = BuildPlan::of(project);
             for incoming in self.store.build_ticks() {
@@ -373,6 +383,30 @@ impl FieldPackage {
                         report.build_updated += 1;
                     }
                     Some(_) => report.checks_kept += 1,
+                }
+            }
+            // A claim is a signal: the newest record wins, a release included.
+            for incoming in self.store.build_claims() {
+                let Some((_, step)) = plan.find(incoming.key) else {
+                    report.unknown_targets += 1;
+                    continue;
+                };
+                if step.mark != incoming.mark {
+                    report.mismatched_targets += 1;
+                    continue;
+                }
+                match store.build_claim_record(incoming.key) {
+                    None => {
+                        store.put_claim(incoming.clone());
+                        report.claims_added += 1;
+                    }
+                    Some(have) if have == incoming => {}
+                    // Same second: the larger name wins, so both machines agree.
+                    Some(have) if (&have.at, &have.by) < (&incoming.at, &incoming.by) => {
+                        store.put_claim(incoming.clone());
+                        report.claims_updated += 1;
+                    }
+                    Some(_) => {}
                 }
             }
         }

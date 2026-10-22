@@ -657,6 +657,10 @@ pub(super) const APP_COMMANDS: &[&str] = &[
     "heat.airflow",
     "heat.contours",
     "heat.simulate",
+    "heat.vents",
+    "heat.add_filter_fan",
+    "heat.add_grille",
+    "heat.add_exhaust_fan",
     "terminal.connect",
     "terminal.disconnect",
     "terminal.strip_up",
@@ -860,8 +864,9 @@ impl NovoApp {
         // Escape belongs to a window floating on top, not the drawing, even
         // with the pointer over it (the drawing would take the key first).
         let window_on_top = super::panel::dialog_on_top(ctx);
+        let modal = self.modal_open();
         if let Some(view) = self.canvas.schematic() {
-            view.yield_escape = window_on_top;
+            view.yield_escape = window_on_top || modal;
         }
     }
 
@@ -965,6 +970,22 @@ impl NovoApp {
                     self.view3d.controls.heat_panel = true;
                 }
                 self.cabinet.heat.command(id);
+            }
+            "heat.vents" | "heat.add_filter_fan" | "heat.add_grille" | "heat.add_exhaust_fan"
+                if self.is_open() =>
+            {
+                // The panel adds the opening: it knows the cabinet it is drawn in.
+                self.switch_workspace(Workspace::View3d);
+                self.view3d.controls.heat_panel = true;
+                let preset = match id {
+                    "heat.add_grille" => Some(0),
+                    "heat.add_filter_fan" => Some(2),
+                    "heat.add_exhaust_fan" => Some(4),
+                    _ => None,
+                };
+                if preset.is_some() {
+                    self.cabinet.heat.settings.requested = preset;
+                }
             }
             "tool.place" => match argument.filter(|a| !a.trim().is_empty()) {
                 Some(text) => self.wb.field.open_with(Mode::Place, text, pointer),

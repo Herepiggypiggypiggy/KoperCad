@@ -81,6 +81,11 @@ pub(super) struct Meta {
     pub ambient: f64,
     pub plate: [f64; 4],
     pub messages: Vec<String>,
+    /// The enclosure the run solved (outside size, wall, installation), for
+    /// the cooling selection.
+    pub enclosure: Option<novo_thermal::Enclosure>,
+    /// Heat of the wires in the ducts, W: part of what a cooling product carries.
+    pub duct_loss_w: f64,
     /// What the heat of the wires in the ducts rests on (information, not a
     /// warning).
     pub wire_notes: Vec<String>,
@@ -128,6 +133,8 @@ pub(super) struct HeatState {
     notice: Option<String>,
     /// Quality level, turbulence model and vents of the next run.
     pub settings: HeatSettings,
+    /// Target and product lists of the cooling selection.
+    pub(super) cooling: super::heat_cooling::CoolingSettings,
     /// The heat-up over time: frames and the slider over them.
     pub(super) time: super::heat_time::TimeLine,
     /// The next run is a heat-up over time, not a steady state.
@@ -186,6 +193,7 @@ impl HeatState {
             test_solver: None,
             notice: None,
             settings: HeatSettings::default(),
+            cooling: super::heat_cooling::CoolingSettings::default(),
             time: super::heat_time::TimeLine::new(),
             transient_wanted: false,
         }
@@ -360,6 +368,8 @@ impl HeatState {
                             ambient: m.ambient,
                             plate: m.plate,
                             messages: m.messages.clone(),
+                            enclosure: m.enclosure.clone(),
+                            duct_loss_w: m.duct_loss_w,
                             wire_notes: m.wire_notes.clone(),
                         }));
                     }
@@ -421,6 +431,8 @@ impl HeatState {
                         ambient: m.ambient,
                         plate: m.plate,
                         messages: m.messages,
+                        enclosure: m.enclosure,
+                        duct_loss_w: m.duct_loss_w,
                         wire_notes: m.wire_notes,
                     });
                     self.time.push(f.time_s, f.load_factor, solution);
@@ -996,6 +1008,8 @@ pub(super) fn start_run(
                 ambient: input.ambient,
                 plate: [plate.x, plate.y, plate.w, plate.h],
                 messages: bridge.report.messages(),
+                enclosure: Some(bridge.scenario.enclosure.clone()),
+                duct_loss_w: super::heat_cooling::duct_loss_w(&bridge.scenario),
                 wire_notes: wires.notes.clone(),
             };
             state.start(bridge.scenario, meta);
@@ -1110,7 +1124,7 @@ pub(super) fn paint_over(
         };
         heat_compare::legend(ui.ctx(), rect, d, &tag);
     } else {
-        legend(ui.ctx(), rect, cache, input, stale);
+        legend(ui.ctx(), rect, cache, input, stale, &mut state.cooling);
     }
     if let Some(d) = state.side_diff(cache) {
         paint_side_a(&painter, cache, d, input, &to_screen);
@@ -1685,13 +1699,20 @@ fn nearest_edge_point(card: Rect, p: Pos2) -> Pos2 {
     )
 }
 
-fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: bool) {
+fn legend(
+    ctx: &egui::Context,
+    rect: Rect,
+    cache: &Cache,
+    input: &Input,
+    stale: bool,
+    cooling: &mut super::heat_cooling::CoolingSettings,
+) {
     let shown = super::panel::Panel::new(
         "heat_legend",
         "Temperature",
         rect,
         super::panel::Side::Right,
-        164.0,
+        204.0,
     )
     .top(12.0)
     .fixed_open()
@@ -1706,7 +1727,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
             .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
             .auto_shrink([true, true])
             .show(ui, |ui| {
-                ui.set_width(140.0);
+                ui.set_width(180.0);
                 // Room for the top tick label, which hangs above the bar.
                 ui.add_space(6.0);
                 // A short canvas gets a shorter colour bar, so the notes below stay in view.
@@ -1825,6 +1846,7 @@ fn legend(ctx: &egui::Context, rect: Rect, cache: &Cache, input: &Input, stale: 
                         for m in &sol.messages {
                             ui.label(small(m, t::WARNING));
                         }
+                        super::heat_cooling::show(ui, sol, cooling, stale, false);
                         // The headline fits the narrow panel; what it rests on is
                         // on hover here and in full in the 3D Heat panel.
                         if let Some((head, basis)) = sol.wire_notes.split_first() {
@@ -2126,6 +2148,8 @@ mod tests {
             ambient: i.ambient,
             plate: [50.0, 50.0, 600.0, 800.0],
             messages: vec!["1 device has no loss data".into()],
+            enclosure: None,
+            duct_loss_w: 0.0,
             wire_notes: Vec::new(),
         }
     }
@@ -2343,7 +2367,14 @@ mod tests {
         let cache = build(&inp);
         for _ in 0..2 {
             let mut out = ctx.run_ui(raw.clone(), |ui| {
-                legend(ui.ctx(), canvas, &cache, &inp, true);
+                legend(
+                    ui.ctx(),
+                    canvas,
+                    &cache,
+                    &inp,
+                    true,
+                    &mut crate::app::heat_cooling::CoolingSettings::default(),
+                );
             });
             out.textures_delta.clear();
         }

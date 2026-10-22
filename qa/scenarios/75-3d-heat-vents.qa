@@ -28,6 +28,14 @@ expect_not "Grille, in the right wall"
 click_text Redo
 wait 10
 expect "Grille, in the right wall"
+key ctrl+k
+wait 6
+text add exhaust fan
+wait 8
+key Enter
+wait 20
+expect "3  Fan"
+shot added-by-command
 click_text "2  Grille, in the right wall"
 wait 10
 expect "Free area"

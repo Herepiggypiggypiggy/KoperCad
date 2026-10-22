@@ -1,0 +1,84 @@
+[
+ {
+  "id": "msg_1",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5-5",
+  "content": [
+   {
+    "type": "text",
+    "text": "I will plan this, build it in a draft, and check it."
+   },
+   {
+    "type": "tool_use",
+    "id": "t1",
+    "name": "set_plan",
+    "input": {
+     "steps": [
+      {
+       "title": "Place a direct-on-line starter on page 1",
+       "status": "doing"
+      },
+      {
+       "title": "Run the design checks on the draft",
+       "status": "todo"
+      }
+     ]
+    }
+   },
+   {
+    "type": "tool_use",
+    "id": "t2",
+    "name": "propose_edit",
+    "input": {
+     "action": "place_macro",
+     "args": {
+      "macro": "Motor starter DOL",
+      "page": "1"
+     }
+    }
+   }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+   "input_tokens": 100,
+   "output_tokens": 40
+  }
+ },
+ {
+  "id": "msg_2",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5-5",
+  "content": [
+   {
+    "type": "tool_use",
+    "id": "t3",
+    "name": "run_checks",
+    "input": {}
+   }
+  ],
+  "stop_reason": "tool_use",
+  "usage": {
+   "input_tokens": 100,
+   "output_tokens": 40
+  }
+ },
+ {
+  "id": "msg_3",
+  "type": "message",
+  "role": "assistant",
+  "model": "claude-opus-5-5",
+  "content": [
+   {
+    "type": "text",
+    "text": "The starter is in the draft with its checks run. Review the change set and press Apply to put it on page 1."
+   }
+  ],
+  "stop_reason": "end_turn",
+  "usage": {
+   "input_tokens": 100,
+   "output_tokens": 40
+  }
+ }
+]

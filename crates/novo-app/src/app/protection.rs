@@ -71,6 +71,8 @@ pub(super) struct ProtectionState {
     tables_loaded: bool,
     /// The analyses, for the study and supply current they were run on.
     pub(super) results: Option<Results>,
+    /// Where the tabs and the supply box were drawn, for the lesson pointer.
+    marks: Vec<(&'static str, egui::Rect, &'static str, bool)>,
 }
 
 /// One change the window asks of the project.
@@ -164,6 +166,7 @@ impl ProtectionState {
             tables_note: None,
             tables_loaded: false,
             results: None,
+            marks: Vec::new(),
         }
     }
 
@@ -260,7 +263,11 @@ impl NovoApp {
             .open(super::panel::esc(ctx, &mut open))
             .show(ctx, |ui| show(ui, state, &study, &rows));
         state.open = open;
+        let marks = std::mem::take(&mut state.marks);
         let edits = std::mem::take(&mut state.pending);
+        for (id, rect, label, clicked) in marks {
+            self.anchor_clicked(id, rect, label, clicked);
+        }
         for edit in edits {
             self.apply_protection_edit(edit);
         }
@@ -271,6 +278,7 @@ impl NovoApp {
     pub(super) fn apply_protection_edit(&mut self, edit: Edit) -> bool {
         match edit {
             Edit::Supply(ka) => {
+                self.learn_signal("supply_current_set");
                 let value = ka.filter(|k| k.is_finite() && *k > 0.0).map(Value::Float);
                 let done = self.edit_project("Set supply short-circuit current", |tx| {
                     novo_checks::standards::set_info_property(tx, SUPPLY_SHORT_CIRCUIT_KA, value)
@@ -300,12 +308,14 @@ impl NovoApp {
 
 fn show(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study, rows: &[LimiterRow]) {
     ui.horizontal(|ui| {
-        for (tab, label) in [
-            (Tab::Curves, "Curves"),
-            (Tab::Selectivity, "Selectivity"),
-            (Tab::Rating, "Panel rating"),
+        for (tab, label, id) in [
+            (Tab::Curves, "Curves", "protection.tab.curves"),
+            (Tab::Selectivity, "Selectivity", "protection.tab.selectivity"),
+            (Tab::Rating, "Panel rating", "protection.tab.rating"),
         ] {
-            if novo_theme::widgets::segment(ui, label, state.tab == tab).clicked() {
+            let segment = novo_theme::widgets::segment(ui, label, state.tab == tab);
+            state.marks.push((id, segment.rect, label, segment.clicked()));
+            if segment.clicked() {
                 state.tab = tab;
             }
         }
@@ -323,6 +333,9 @@ fn show(ui: &mut egui::Ui, state: &mut ProtectionState, study: &Study, rows: &[L
             .on_hover_text(
                 "Saved in the project as supply.short_circuit_ka when you let go (one undo step). Zero clears it. Also in Check > Electrical inputs.",
             );
+        state
+            .marks
+            .push(("protection.supply", response.rect, "Fault current box", false));
         if (k - before).abs() > f64::EPSILON {
             state.supply_override = (k > 0.0).then_some(k);
             state.supply_dirty = true;

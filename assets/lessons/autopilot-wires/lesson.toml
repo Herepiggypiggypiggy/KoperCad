@@ -1,0 +1,131 @@
+format = 1
+id = "autopilot-wires"
+version = 1
+status = "early"
+title = "Let Autopilot complete the wires"
+summary = "Review the sizes, colours and numbers the program proposes for every wire, with the reason for each, accept them in one undoable step, and know which ones are only planning values."
+track = "terminals"
+order = 55
+level = "intermediate"
+minutes = 7
+topics = ["autopilot", "wire size", "wire colour", "wire numbers", "ready to build"]
+needs = ["wire-numbers"]
+next = ["workshop-pack"]
+project = "@example"
+title_nl = "Laat Autopilot de draden afmaken"
+summary_nl = "Bekijk de maten, kleuren en nummers die het programma voor elke draad voorstelt, met de reden erbij, accepteer ze in een ongedaan te maken stap en weet welke slechts planningswaarden zijn."
+
+[[step]]
+id = "why"
+title = "A drawing that implies more than it says"
+title_nl = "Een tekening die meer impliceert dan ze zegt"
+text = """
+A fresh drawing has wires with no cross-section, no colour and no number, yet the drawing already implies most of it: the breaker behind a wire says how much current it may carry, the ampacity table says which section carries that, the standard says what colour an earth or a neutral wire has.
+{ui:autopilot.window} works that out and shows it; it writes nothing until you accept.
+"""
+text_nl = """
+Een verse tekening heeft draden zonder doorsnede, kleur en nummer, terwijl de tekening het meeste al impliceert: de automaat achter een draad zegt hoeveel stroom hij mag voeren, de stroomtabel zegt welke doorsnede dat draagt, de norm zegt welke kleur een aarde- of nuldraad heeft.
+{ui:autopilot.window} rekent dat uit en toont het; het schrijft niets tot jij accepteert.
+"""
+
+[[step]]
+id = "open"
+title = "Open Autopilot"
+title_nl = "Open Autopilot"
+text = "It is in the Edit menu, and a button in the Bench output's “Before you print” list opens it too when wires are missing a size."
+text_nl = "Het staat in het menu Edit, en een knop in de lijst “Before you print” van de werkbankuitvoer opent het ook als draden een maat missen."
+how = [
+  "Open {ui:menu.Edit} and choose {ui:cmd.wires.autopilot}.",
+  "Or press {key:view.command_palette}, type autopilot and press Enter.",
+]
+how_nl = [
+  "Open {ui:menu.Edit} en kies {ui:cmd.wires.autopilot}.",
+  "Of druk op {key:view.command_palette}, typ autopilot en druk op Enter.",
+]
+point = { ui = "cmd.wires.autopilot" }
+expect = { command = "wires.autopilot" }
+solve = [ { command = "wires.autopilot" } ]
+
+[[step]]
+id = "reasons"
+title = "Every row has a reason"
+title_nl = "Elke rij heeft een reden"
+text = """
+Each proposal gives the change and one sentence why, for example the protective device it follows. A row also says how far to trust it:
+a **rule** of the standard (protective earth is green-yellow), **calculated** from licensed tables, **planning** from the built-in tables, or **assumed** because the drawing gives too little.
+"""
+text_nl = """
+Elk voorstel geeft de wijziging en een zin waarom, bijvoorbeeld de beveiliging die het volgt. Een rij zegt ook hoe ver je hem kunt vertrouwen:
+een **regel** van de norm (aarde is groen-geel), **berekend** uit gelicentieerde tabellen, **planning** uit de ingebouwde tabellen, of **aangenomen** omdat de tekening te weinig geeft.
+"""
+how = [
+  "Read three rows and note their basis.",
+  "Find a row that is only “assumed”: it starts unticked, you have to tick it on purpose.",
+]
+how_nl = [
+  "Lees drie rijen en noteer hun basis.",
+  "Zoek een rij die slechts “aangenomen” is: hij staat standaard uit, je moet hem bewust aanvinken.",
+]
+point = { ui = "autopilot.window" }
+
+[[step]]
+id = "groups"
+title = "Grouped by protective device"
+title_nl = "Gegroepeerd per beveiliging"
+text = "Rows are grouped under the device that protects them, like **-F2 (5 A)**, so you can accept one circuit at a time. **Needs your decision** lists what the program could not settle, such as a wire not behind any protective device, and **left to you** names what it will never decide."
+text_nl = "Rijen staan gegroepeerd onder de beveiliging die ze beschermt, zoals **-F2 (5 A)**, zodat je een groep tegelijk kunt accepteren. **Needs your decision** noemt wat het programma niet kon beslissen, zoals een draad achter geen enkele beveiliging, en **left to you** noemt wat het nooit beslist."
+
+[[step]]
+id = "rules"
+title = "Colours follow your rules"
+title_nl = "Kleuren volgen jouw regels"
+text = "At the top, “Wire rules” choose IEC 60204-1 or your own house colours and smallest sections. Rules only change what Autopilot proposes from now on; wires that already have a colour or size are not touched, and any that break the house rules are listed in Issues."
+text_nl = "Bovenaan kies je bij “Wire rules” IEC 60204-1 of je eigen huiskleuren en kleinste doorsneden. Regels veranderen alleen wat Autopilot voortaan voorstelt; draden die al een kleur of maat hebben blijven ongemoeid, en draden die de huisregels schenden staan in Issues."
+
+[[step]]
+id = "accept"
+title = "Accept"
+title_nl = "Accepteer"
+text = """
+**Accept all** takes every row except the assumed ones, closes the window and shows the new **Wires ready to build** meter. **Accept ticked** takes just what you ticked and keeps the list open.
+Either way it is **one undo step**.
+"""
+text_nl = """
+**Accept all** neemt elke rij behalve de aangenomen, sluit het venster en toont de nieuwe meter **Wires ready to build**. **Accept ticked** neemt alleen wat je aanvinkte en laat de lijst open.
+In beide gevallen is het **één undo-stap**.
+"""
+how = [
+  "Press {ui:autopilot.accept_all}.",
+  "A toast tells you what was filled in and how to take it back.",
+]
+how_nl = [
+  "Druk op {ui:autopilot.accept_all}.",
+  "Een melding vertelt wat is ingevuld en hoe je het terugdraait.",
+]
+point = { ui = "autopilot.accept_all" }
+expect = { signal = "autopilot_applied" }
+solve = [ { ui_click = "autopilot.accept_all" } ]
+
+[[step]]
+id = "undo"
+title = "Take it back in one step"
+title_nl = "Draai het terug in een stap"
+text = "Everything Autopilot wrote is one entry in the history. Undo it, look at what changed, and redo it if you like the result."
+text_nl = "Alles wat Autopilot schreef is een regel in de geschiedenis. Maak het ongedaan, kijk wat er veranderde en herhaal het als je het resultaat goed vindt."
+how = [
+  "Press {key:edit.undo}. The wires lose their sizes again.",
+  "Press {key:edit.redo} to bring them back.",
+]
+how_nl = [
+  "Druk op {key:edit.undo}. De draden verliezen hun maten weer.",
+  "Druk op {key:edit.redo} om ze terug te halen.",
+]
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "honest"
+title = "Planning values stay planning values"
+title_nl = "Planningswaarden blijven planningswaarden"
+text = "The built-in ampacity tables are not checked against the standard, and the IEC clause numbers in the reasons are unverified. Sizes proposed from them say “planning value” on the toast. Read the clauses in your licensed copy before you buy cable."
+text_nl = "De ingebouwde stroomtabellen zijn niet getoetst aan de norm en de IEC-clausulenummers in de redenen zijn niet geverifieerd. Maten die daaruit volgen zeggen “planningswaarde” in de melding. Lees de clausules in je gelicentieerde exemplaar voordat je kabel koopt."

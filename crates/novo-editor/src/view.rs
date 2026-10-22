@@ -163,8 +163,8 @@ pub struct SchematicView {
     /// The Preferences default for moving a symbol: its wires go along
     /// (Shift then leaves them) or stay (Shift then takes them).
     pub move_carries: bool,
-    /// A window floats on top and Escape is its: the drawing leaves the key
-    /// alone, even with the pointer over it.
+    /// A window or dialog floats on top and Escape and Enter are its: the
+    /// drawing leaves the keys alone, even with the pointer over it.
     pub yield_escape: bool,
     /// The press that closed a popup, until its release.
     swallow: bool,
@@ -1469,7 +1469,7 @@ impl SchematicView {
         if pressed(Key::Backspace) {
             self.editor.key(document, EditorKey::Back, &selection);
         }
-        if self.editor.proposals().is_empty() && pressed(Key::Enter) {
+        if self.editor.proposals().is_empty() && !self.yield_escape && pressed(Key::Enter) {
             self.editor.key(document, EditorKey::Finish, &selection);
         }
         for (key, step) in [(Key::PageUp, -1), (Key::PageDown, 1)] {

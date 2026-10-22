@@ -1,0 +1,209 @@
+format = 1
+id = "protection-and-single-line"
+version = 1
+status = "early"
+title = "Does the protection protect?"
+summary = "Read the cable and breaker calculations, compare trip curves, see selectivity and the panel's short-circuit rating, and draw the single-line diagram, with a clear idea of which numbers are planning values."
+track = "outputs"
+order = 55
+level = "intermediate"
+minutes = 10
+topics = ["protection", "calculations", "short circuit", "selectivity", "single-line", "sccr"]
+needs = ["design-checks"]
+next = ["standards-check"]
+project = "@example"
+title_nl = "Beschermt de beveiliging wel?"
+summary_nl = "Lees de kabel- en automaatberekeningen, vergelijk uitschakelkrommen, zie selectiviteit en de kortsluitvastheid van het paneel en teken het enkelpolig schema, met een helder beeld van welke getallen planningswaarden zijn."
+
+[[step]]
+id = "why"
+title = "Five questions about every protected circuit"
+title_nl = "Vijf vragen over elke beveiligde groep"
+text = """
+For each breaker or fuse: does it carry the load, does it **protect the cable** (Ib ≤ In ≤ Iz), can it **break the fault current** at its place, does it **switch off in time** for a shock, and does it trip **before the device in front of it** (selectivity)?
+KoperCAD answers each with a number, the clause and a pass or fail, from the data you drew.
+"""
+text_nl = """
+Voor elke automaat of zekering: draagt hij de belasting, **beschermt hij de kabel** (Ib ≤ In ≤ Iz), kan hij de **foutstroom onderbreken** op zijn plek, **schakelt hij op tijd uit** voor een aanraking, en spreekt hij aan **vóór het apparaat ervoor** (selectiviteit)?
+KoperCAD beantwoordt elk met een getal, de clausule en een pass of fail, uit de gegevens die je tekende.
+"""
+
+[[step]]
+id = "calc"
+title = "Open the Calculations"
+title_nl = "Open de berekeningen"
+text = "The window starts with the supply it works from. **Supply not stated: nothing can be judged** is the honest answer when it is missing. The example states 400 V and 6 kA."
+text_nl = "Het venster begint met de voeding waarmee het rekent. **Supply not stated: nothing can be judged** is het eerlijke antwoord als die ontbreekt. Het voorbeeld geeft 400 V en 6 kA."
+how = [
+  "Open {ui:menu.Check} and choose {ui:cmd.check.calculations}.",
+  "Read the line at the top: the supply, and what is missing.",
+]
+how_nl = [
+  "Open {ui:menu.Check} en kies {ui:cmd.check.calculations}.",
+  "Lees de regel bovenaan: de voeding en wat er ontbreekt.",
+]
+point = { ui = "cmd.check.calculations" }
+expect = { command = "check.calculations" }
+solve = [ { command = "check.calculations" } ]
+
+[[step]]
+id = "circuit"
+title = "Read one circuit"
+title_nl = "Lees een groep"
+text = """
+A circuit is a protective device with the wires behind it. Each row gives the number and the clause: cable rating **Iz**, short-circuit current at the device and at the cable end, the smallest cross-section that passes when one fails.
+If no section passes, it says so and what to change: the device, the length or the installation.
+"""
+text_nl = """
+Een groep is een beveiliging met de draden erachter. Elke rij geeft het getal en de clausule: kabelbelasting **Iz**, kortsluitstroom bij de beveiliging en aan het kabeleinde, en de kleinste doorsnede die slaagt als er een faalt.
+Slaagt geen enkele doorsnede, dan zegt het dat en wat je kunt veranderen: de beveiliging, de lengte of de leggingswijze.
+"""
+how = [
+  "Open the first circuit on the {ui:calc.tab.circuits}.",
+  "Press “Show on the drawing” to jump to it, then come back.",
+]
+how_nl = [
+  "Open de eerste groep op het {ui:calc.tab.circuits}.",
+  "Druk op “Show on the drawing” om erheen te springen en kom daarna terug.",
+]
+point = { ui = "calc.tab.circuits" }
+
+[[step]]
+id = "planning"
+title = "Planning values, said out loud"
+title_nl = "Planningswaarden, hardop gezegd"
+text = """
+The window carries a warning: the **ampacity tables are planning values**, entered without the standard and not yet checked against it. The short-circuit formulas follow IEC 60909-0; the trip bands are the generic test points of IEC 60898-1 with straight lines between them.
+Load your licensed tables to turn a column from planning to licensed. Nothing here certifies a design.
+"""
+text_nl = """
+Het venster draagt een waarschuwing: de **stroomtabellen zijn planningswaarden**, ingevoerd zonder de norm en nog niet ertegen gecontroleerd. De kortsluitformules volgen IEC 60909-0; de uitschakelbanden zijn de generieke testpunten van IEC 60898-1 met rechte lijnen ertussen.
+Laad je gelicentieerde tabellen om een kolom van planning naar gelicentieerd te brengen. Niets hier certificeert een ontwerp.
+"""
+
+[[step]]
+id = "starters"
+title = "Starters sized from the motor"
+title_nl = "Starters bemeten vanuit de motor"
+text = "The “Motor starters” tab sizes the short-circuit device, contactor and overload from the motor's nameplate current with generic ratings (IEC 60947-4-1), and the cable and earth conductor. Maker coordination tables are not loaded, so those points stay open, and the tab says so."
+text_nl = "Het tabblad “Motor starters” bemeet de kortsluitbeveiliging, de contactor en het overbelastingsrelais vanuit de plaatstroom van de motor met generieke waarden (IEC 60947-4-1), en de kabel en de aardleiding. Fabrikantentabellen voor coördinatie zijn niet geladen, dus die punten blijven open en het tabblad zegt dat."
+how = [
+  "Press the {ui:calc.tab.starters}.",
+  "Compare the proposed device with the one drawn in the starter.",
+]
+how_nl = [
+  "Druk op het {ui:calc.tab.starters}.",
+  "Vergelijk het voorgestelde apparaat met het apparaat in de starter.",
+]
+point = { ui = "calc.tab.starters" }
+expect = { clicked = "calc.tab.starters" }
+solve = [ { ui_click = "calc.tab.starters" } ]
+
+[[step]]
+id = "protection"
+title = "See the curves"
+title_nl = "Zie de krommen"
+text = "The **Protection** view plots the trip curves of the protective devices on one log-log chart: current across, time up. A device sitting left and below another trips first. Tick a device to show or hide its curve."
+text_nl = "De weergave **Protection** tekent de uitschakelkrommen van de beveiligingen in één log-log-grafiek: stroom horizontaal, tijd verticaal. Een apparaat links en onder een ander spreekt eerst aan. Vink een apparaat aan om zijn kromme te tonen of te verbergen."
+how = [
+  "Open {ui:menu.View} and choose {ui:cmd.view.protection}.",
+  "Find where the curves cross the vertical line of the supply current.",
+]
+how_nl = [
+  "Open {ui:menu.View} en kies {ui:cmd.view.protection}.",
+  "Zoek waar de krommen de verticale lijn van de voedingsstroom kruisen.",
+]
+point = { ui = "cmd.view.protection" }
+expect = { command = "view.protection" }
+solve = [ { command = "view.protection" } ]
+
+[[step]]
+id = "supply"
+title = "Change the fault current"
+title_nl = "Verander de foutstroom"
+text = "Everything here depends on the **fault current at the supply**. Ask your network operator for the value at your connection; the example's 6 kA is only illustrative. A change is saved in the project when you let go, as one undo step, and every result updates."
+text_nl = "Alles hier hangt af van de **foutstroom bij de voeding**. Vraag je netbeheerder naar de waarde bij jouw aansluiting; de 6 kA van het voorbeeld is slechts ter illustratie. Een wijziging wordt bewaard in het project zodra je loslaat, als een undo-stap, en alle uitkomsten werken bij."
+how = [
+  "Drag the {ui:protection.supply} up to 10 kA, then let go.",
+  "Watch the verdicts change; press {key:edit.undo} to put 6 kA back.",
+]
+how_nl = [
+  "Sleep het {ui:protection.supply} naar 10 kA en laat los.",
+  "Zie de oordelen veranderen; druk op {key:edit.undo} om 6 kA terug te zetten.",
+]
+point = { ui = "protection.supply" }
+expect = { signal = "supply_current_set" }
+manual = "a number dragged in a box; no script drags a value"
+
+[[step]]
+id = "selectivity"
+title = "Who trips first"
+title_nl = "Wie spreekt eerst aan"
+text = """
+**Selectivity** needs two protective devices in series. The generic bands are a conservative envelope: they only say “selective” when the standards guarantee it, with the basis shown (by curves, by let-through energy, by the maker's table).
+Back-up protection can only come from a **maker's table**, a file of your own in your KoperCAD data folder; none is bundled.
+"""
+text_nl = """
+**Selectiviteit** vraagt twee beveiligingen in serie. De generieke banden zijn een voorzichtige omhullende: ze zeggen alleen “selectief” als de normen het garanderen, met de basis erbij (op krommen, op doorlaatenergie, op fabrikantentabel).
+Back-upbeveiliging kan alleen uit een **fabrikantentabel** komen, een eigen bestand in je KoperCAD-gegevensmap; er is er geen meegeleverd.
+"""
+how = [
+  "Press the {ui:protection.tab.selectivity}.",
+  "If the list is empty, the starter has no second protective device behind another one: that is what the note says.",
+]
+how_nl = [
+  "Druk op het {ui:protection.tab.selectivity}.",
+  "Is de lijst leeg, dan heeft de starter geen tweede beveiliging achter een andere: dat zegt de notitie.",
+]
+point = { ui = "protection.tab.selectivity" }
+expect = { clicked = "protection.tab.selectivity" }
+solve = [ { ui_click = "protection.tab.selectivity" } ]
+
+[[step]]
+id = "rating"
+title = "The weakest part sets the panel rating"
+title_nl = "Het zwakste onderdeel bepaalt de paneelwaarde"
+text = "The **short-circuit current rating** (SCCR) of the panel is the lowest rating among its components, listed weakest first. A component with no rating marked uses a default for its kind, and the list says so: those defaults are planning values."
+text_nl = "De **kortsluitvastheid** (SCCR) van het paneel is de laagste waarde van zijn componenten, zwakste eerst. Een onderdeel zonder opgegeven waarde gebruikt een standaardwaarde voor zijn soort en de lijst zegt dat: die standaardwaarden zijn planningswaarden."
+how = [
+  "Press the {ui:protection.tab.rating}.",
+  "Read the verdict line: at least, or below, the kA available.",
+]
+how_nl = [
+  "Druk op het {ui:protection.tab.rating}.",
+  "Lees de oordeelregel: minstens, of onder, de beschikbare kA.",
+]
+point = { ui = "protection.tab.rating" }
+expect = { clicked = "protection.tab.rating" }
+solve = [ { ui_click = "protection.tab.rating" } ]
+
+[[step]]
+id = "single-line"
+title = "Draw the single-line diagram"
+title_nl = "Teken het enkelpolig schema"
+text = """
+The **single-line diagram** shows the power distribution from the supply to its loads as one line per circuit. Boxes and runs that fail a calculation are outlined in red. The “Schedule” tab is the same boxes as a table that exports to Excel and CSV.
+**Add report as drawing page** puts it into the drawing set.
+"""
+text_nl = """
+Het **enkelpolig schema** toont de stroomverdeling van de voeding naar de verbruikers als één lijn per groep. Vakken en leidingen die een berekening niet halen krijgen een rode rand. Het tabblad “Schedule” is dezelfde vakken als tabel die naar Excel en CSV exporteert.
+**Add report as drawing page** zet het in de tekeningenset.
+"""
+how = [
+  "Open {ui:menu.Reports} and choose {ui:cmd.report.singleline}.",
+  "Look for red outlines, then open the Schedule tab.",
+]
+how_nl = [
+  "Open {ui:menu.Reports} en kies {ui:cmd.report.singleline}.",
+  "Zoek rode randen en open dan het tabblad Schedule.",
+]
+point = { ui = "cmd.report.singleline" }
+expect = { command = "report.singleline" }
+solve = [ { command = "report.singleline" } ]
+
+[[step]]
+id = "done"
+title = "Numbers you can defend"
+title_nl = "Getallen die je kunt verdedigen"
+text = "State the supply, set the installation method on the wires, load your licensed tables, then re-read the verdicts. The same results feed the standards check, which is next."
+text_nl = "Geef de voeding op, stel de leggingswijze op de draden in, laad je gelicentieerde tabellen en lees de oordelen opnieuw. Dezelfde resultaten voeden de normcontrole, die hierna komt."

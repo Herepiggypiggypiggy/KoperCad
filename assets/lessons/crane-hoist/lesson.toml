@@ -1,0 +1,166 @@
+# Challenge: the hoist drives up against a locked brake. The wire from the up
+# contactor's auxiliary contact (-K1 13/14) to the brake bus is missing.
+# Sample project: the program's own "Crane hoist up/down" macro, fed
+# (crates/novo-tests/tests/lessons/progression.rs). -S1 e-stop, -S2 up, -S3 down,
+# -B1 upper limit, -B2 lower limit, -K1 up, -K2 down, -Y1 brake.
+# Hold-to-run buttons: Shift+click keeps a button down in the live view.
+format = 1
+id = "crane-hoist"
+version = 1
+status = "early"
+kind = "challenge"
+title = "A crane hoist whose brake does not release"
+title_nl = "Een kraanlier waarvan de rem niet lost"
+summary = "Hold-to-run buttons, end limits, an emergency stop, an interlock and a brake: a hoist is many small circuits working together. Find why it lifts against a locked brake."
+summary_nl = "Houd-om-te-lopen-knoppen, eindschakelaars, een noodstop, een blokkering en een rem: een lier is veel kleine schakelingen die samenwerken. Zoek waarom hij tegen een vastzittende rem optilt."
+explain = "The spring-applied brake **-Y1** must be released by either contactor: the auxiliary contacts of **-K1** (up) and **-K2** (down) feed it in parallel. The wire from the auxiliary contact of **-K1** (pin 14) was missing, so going up the motor was powered against a locked brake: it hums, overheats and wears the brake lining. Going down worked, which made the fault easy to miss. A brake that releases only when a contactor is in is also the safe design: lose the power and the load is held."
+explain_nl = "De veerremmende rem **-Y1** moet door elke contactor gelost worden: de hulpcontacten van **-K1** (omhoog) en **-K2** (omlaag) voeden hem parallel. De draad van het hulpcontact van **-K1** (pen 14) ontbrak, dus omhoog werd de motor bekrachtigd tegen een vastzittende rem: hij bromt, wordt heet en slijt de remvoering. Omlaag werkte wel, waardoor de fout makkelijk gemist werd. Een rem die alleen lost als een contactor aan is, is ook het veilige ontwerp: valt de spanning weg, dan wordt de last vastgehouden."
+track = "machines"
+order = 40
+level = "advanced"
+minutes = 12
+topics = ["crane", "hoist", "brake", "limit switch", "interlock", "troubleshooting"]
+needs = ["reversing-starter"]
+next = ["conveyor-line"]
+project = "project.json"
+finished = "finished.json"
+page = "Crane hoist"
+
+[[step]]
+id = "live"
+title = "Switch the live view on"
+title_nl = "Zet de live-weergave aan"
+text = """
+A hoist has no self-holding contact: the buttons are **hold-to-run**, so the load only moves while you hold the button. Switch the live view on. In the live view, **Shift+click** keeps a button down until you click it again.
+"""
+text_nl = """
+Een lier heeft geen houdcontact: de knoppen zijn **houd-om-te-lopen**, dus de last beweegt alleen zolang je de knop vasthoudt. Zet de live-weergave aan. In de live-weergave houdt **Shift+klik** een knop ingedrukt tot je er weer op klikt.
+"""
+how = [
+  "Press {key:sim.live}.",
+]
+how_nl = [
+  "Druk op {key:sim.live}.",
+]
+expect = { live = true }
+solve = [ { command = "sim.live" } ]
+
+[[step]]
+id = "up"
+title = "Goal: lift with the brake released"
+title_nl = "Doel: optillen met gelost rem"
+text = """
+**Goal:** hold up (**-S2**, Shift+click) so that **-K1** pulls in **and** the brake **-Y1** releases. Right now the motor is powered but the brake coil stays dead. Find out why and repair the drawing.
+"""
+text_nl = """
+**Doel:** houd omhoog (**-S2**, Shift+klik) zodat **-K1** aantrekt **en** de rem **-Y1** lost. Nu is de motor bekrachtigd maar blijft de remspoel dood. Zoek uit waarom en herstel de tekening.
+"""
+hints = [
+  "Hold up and look at -K1 and then at the brake coil -Y1. The brake is fed from the auxiliary contacts of both contactors, in parallel.",
+  "Compare the two auxiliary contacts: -K2 pin 14 is connected, -K1 pin 14 is not.",
+  "Draw a wire from -K1 pin 14 to -K2 pin 14, then hold up with Shift+click on -S2.",
+]
+hints_nl = [
+  "Houd omhoog ingedrukt en kijk naar -K1 en dan naar de remspoel -Y1. De rem wordt gevoed via de hulpcontacten van beide contactoren, parallel.",
+  "Vergelijk de twee hulpcontacten: -K2 pen 14 is verbonden, -K1 pen 14 niet.",
+  "Trek een draad van -K1 pen 14 naar -K2 pen 14 en houd dan omhoog met Shift+klik op -S2.",
+]
+point = { at = { device = "-K1", pin = "14" } }
+expect = { all = [ { coil_on = "-K1" }, { coil_on = "-Y1" }, { pole_closed = "-S2" } ] }
+solve = [
+  { wire = ["-K1:14", "-K2:14"] },
+  { live_pole = { device = "-S2", shift = true } },
+]
+
+[[step]]
+id = "release"
+title = "Let go: the brake sets"
+title_nl = "Loslaten: de rem valt in"
+text = """
+**Goal:** let go of up (click **-S2** again). The contactor drops out and so does the brake coil: the brake sets and holds the load.
+"""
+text_nl = """
+**Doel:** laat omhoog los (klik nogmaals op **-S2**). De contactor valt af en de remspoel ook: de rem valt in en houdt de last vast.
+"""
+point = { at = { device = "-S2" } }
+expect = { all = [ { not = { coil_on = "-K1" } }, { not = { coil_on = "-Y1" } }, { not = { pole_closed = "-S2" } } ] }
+solve = [ { live_pole = { device = "-S2", shift = true } } ]
+
+[[step]]
+id = "down"
+title = "Down releases the brake too"
+title_nl = "Omlaag lost de rem ook"
+text = """
+**Goal:** hold down (**-S3**, Shift+click). The down contactor **-K2** pulls in, the brake releases through its own auxiliary contact, and **-K1** stays out because of the interlock.
+"""
+text_nl = """
+**Doel:** houd omlaag ingedrukt (**-S3**, Shift+klik). De omlaagcontactor **-K2** trekt aan, de rem lost via zijn eigen hulpcontact en **-K1** blijft uit door de blokkering.
+"""
+hints = [
+  "Shift+click the badge on the down button -S3.",
+]
+hints_nl = [
+  "Shift+klik op de knop van omlaag -S3.",
+]
+point = { at = { device = "-S3" } }
+expect = { all = [ { coil_on = "-K2" }, { coil_on = "-Y1" }, { not = { coil_on = "-K1" } } ] }
+solve = [ { live_pole = { device = "-S3", shift = true } } ]
+
+[[step]]
+id = "limit"
+title = "The lower end limit"
+title_nl = "De onderste eindschakelaar"
+text = """
+**Goal:** the load reaches the bottom. Open the lower end limit **-B2** (click it). It is a normally closed contact in series with the down coil, so the hoist stops and the brake sets, even though you still hold the button.
+"""
+text_nl = """
+**Doel:** de last bereikt de onderkant. Open de onderste eindschakelaar **-B2** (klik erop). Het is een verbreekcontact in serie met de omlaagspoel, dus de lier stopt en de rem valt in, ook al houd je de knop nog vast.
+"""
+hints = [
+  "Click the badge on the lower limit -B2. The up button still works afterwards, because only the down direction passes through -B2.",
+]
+hints_nl = [
+  "Klik op de knop van de onderste eindschakelaar -B2. De omhoogknop werkt daarna nog, want alleen de richting omlaag loopt via -B2.",
+]
+point = { at = { device = "-B2" } }
+expect = { all = [ { not = { coil_on = "-K2" } }, { not = { coil_on = "-Y1" } }, { not = { pole_closed = "-B2" } } ] }
+solve = [ { live_pole = { device = "-B2" } } ]
+
+[[step]]
+id = "estop-reset"
+title = "The limit clears"
+title_nl = "De eindschakelaar komt vrij"
+text = """
+**Goal:** the load is lifted off the limit: click **-B2** again to close it. As you still hold down, the hoist would run down again. This is why limits are not a stop button.
+"""
+text_nl = """
+**Doel:** de last komt van de eindschakelaar af: klik nogmaals op **-B2** om hem te sluiten. Omdat je omlaag nog vasthoudt, zou de lier weer omlaag lopen. Daarom zijn eindschakelaars geen stopknop.
+"""
+point = { at = { device = "-B2" } }
+expect = { all = [ { coil_on = "-K2" }, { pole_closed = "-B2" } ] }
+solve = [ { live_pole = { device = "-B2" } } ]
+
+[[step]]
+id = "estop"
+title = "The emergency stop"
+title_nl = "De noodstop"
+text = """
+**Goal:** press the emergency stop **-S1** (click it). It sits ahead of every control branch, so everything drops out at once: both contactors and the brake.
+"""
+text_nl = """
+**Doel:** druk op de noodstop **-S1** (klik erop). Hij staat voor elke stuurtak, dus alles valt tegelijk af: beide contactoren en de rem.
+"""
+point = { at = { device = "-S1" } }
+expect = { all = [ { not = { coil_on = "-K2" } }, { not = { coil_on = "-Y1" } }, { not = { pole_closed = "-S1" } } ] }
+solve = [ { live_pole = { device = "-S1" } } ]
+
+[[step]]
+id = "limits"
+title = "What this drawing does not cover"
+title_nl = "Wat deze tekening niet dekt"
+text = """
+A real hoist also needs overload protection on the load (a slack-rope or overload limiter), a second limit as a backup and a proper safety function with a rated stop. This macro is a circuit example, not a design to a crane standard; sizing and the required performance level are separate work in the Calculations and Safety windows.
+"""
+text_nl = """
+Een echte lier heeft ook overbelastingsbeveiliging op de last nodig (een slappe-kabel- of overlastbegrenzer), een tweede eindschakelaar als reserve en een echte veiligheidsfunctie met een gekwalificeerde stop. Deze macro is een schemavoorbeeld, geen ontwerp volgens een kraannorm; dimensionering en het vereiste prestatieniveau zijn aparte stappen in de vensters Berekeningen en Veiligheid.
+"""

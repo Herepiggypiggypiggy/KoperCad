@@ -4,23 +4,18 @@
 58	device tag / frame line (neighbour)
 8	device tag / outside the sheet
 1	device tag / potential feed name (neighbour)
-1715	device tag / symbol line (neighbour)
-897	device tag / symbol line (own symbol)
+1737	device tag / symbol line (neighbour)
+18	device tag / symbol line (own symbol)
 85	device tag / text inside symbol art (neighbour)
 31	device tag / text inside symbol art (neighbour) [tight]
-74	device tag / text inside symbol art (own symbol)
-2	device tag / text inside symbol art (own symbol) [tight]
 1	free text / free text (neighbour)
 1	free text / outside the sheet
-4	interruption name / symbol line (own symbol)
 13	potential feed name / potential feed name (neighbour) [tight]
 120	potential feed name / symbol line (neighbour)
-4	potential feed name / symbol line (own symbol)
 1	potential feed name / text inside symbol art (neighbour)
 4	strip name / frame line (neighbour)
 41	strip name / symbol line (neighbour)
-524	terminal name / symbol line (neighbour)
-110	terminal name / symbol line (own symbol)
+642	terminal name / symbol line (neighbour)
 6	terminal name / terminal name (neighbour)
 2	terminal name / terminal name (neighbour) [tight]
 22	text inside symbol art / frame line (neighbour)

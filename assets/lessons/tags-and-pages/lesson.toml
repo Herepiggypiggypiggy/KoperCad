@@ -1,0 +1,122 @@
+format = 1
+id = "tags-and-pages"
+version = 1
+status = "early"
+title = "Names that say where things are"
+summary = "Read a tag like =A1+CAB-K1, see how pages are filed by function and location, and let the program renumber devices without breaking a single reference."
+track = "start"
+order = 47
+level = "beginner"
+minutes = 7
+topics = ["tags", "iec 81346", "pages", "outline", "groups", "cabinets", "renumber"]
+needs = ["placing-parts"]
+next = ["drawing-standard"]
+project = "@example"
+title_nl = "Namen die zeggen waar dingen zijn"
+summary_nl = "Lees een tag als =A1+CAB-K1, zie hoe pagina's worden geordend op functie en locatie, en laat het programma apparaten hernummeren zonder één verwijzing te breken."
+
+[[step]]
+id = "tag"
+title = "Read a tag in three parts"
+title_nl = "Lees een tag in drie delen"
+text = """
+Every device has a tag built the IEC 81346 way: **=A1** is the function or plant it belongs to, **+CAB** is where it sits, and **-K1** is the device itself. So =A1+CAB-K1 is "contactor K1, in cabinet CAB, in function A1".
+Reports, cross references, terminal plans and labels all find a device by this tag, so tags must be unique.
+"""
+text_nl = """
+Elk apparaat heeft een tag volgens IEC 81346: **=A1** is de functie of installatie waartoe het hoort, **+CAB** is waar het zit en **-K1** is het apparaat zelf. =A1+CAB-K1 is dus "contactor K1, in kast CAB, in functie A1".
+Rapporten, kruisverwijzingen, klemmenplannen en labels vinden een apparaat via deze tag, dus tags moeten uniek zijn.
+"""
+
+[[step]]
+id = "tree"
+title = "Pages sit in groups and cabinets"
+title_nl = "Pagina's staan in groepen en kasten"
+text = """
+The pages list is a tree: a **group** (=A1, a function), a **cabinet** (+CAB, a place) and the pages inside. A switch above it flips the nesting between groups-first and cabinets-first.
+A group or cabinet with no page yet still shows as a row, so a new one is never invisible.
+"""
+text_nl = """
+De paginalijst is een boom: een **groep** (=A1, een functie), een **kast** (+CAB, een plaats) en de pagina's erin. Een schakelaar erboven wisselt de nesting tussen groepen-eerst en kasten-eerst.
+Een groep of kast zonder pagina toont toch als rij, zodat een nieuwe nooit onzichtbaar is.
+"""
+how = [
+  "Look at the {ui:outline.pages}. If it is closed, open it with {ui:outline.toggle}.",
+  "Find the group =A1 and the cabinet +CAB, and the report pages under Contents and reports.",
+]
+how_nl = [
+  "Bekijk de {ui:outline.pages}. Is hij dicht, open hem dan met {ui:outline.toggle}.",
+  "Zoek de groep =A1 en de kast +CAB, en de rapportpagina's onder Contents and reports.",
+]
+point = { ui = "outline.pages" }
+
+[[step]]
+id = "filing"
+title = "Where a page is filed decides its devices' tags"
+title_nl = "Waar een pagina is geordend bepaalt de tags van de apparaten"
+text = "A device placed on a filed page takes the group and the cabinet of that page in its tag. So file the page first and the tags come out right. Pages in no group or cabinet whose devices already carry tags are offered a home: “File them”."
+text_nl = "Een apparaat dat op een geordende pagina wordt geplaatst neemt de groep en de kast van die pagina over in zijn tag. Orden dus eerst de pagina en de tags komen goed uit. Pagina's in geen enkele groep of kast waarvan de apparaten al tags dragen krijgen een thuis aangeboden: “File them”."
+
+[[step]]
+id = "duplicate"
+title = "Duplicate a page and watch the tags"
+title_nl = "Dupliceer een pagina en kijk naar de tags"
+text = "Duplicating a page copies its devices, and the copies get **new tags** so no two devices share one. That is the whole point of a tag: a copy is never confused with the original."
+text_nl = "Een pagina dupliceren kopieert de apparaten en de kopieën krijgen **nieuwe tags**, zodat geen twee apparaten er een delen. Dat is het doel van een tag: een kopie wordt nooit met het origineel verward."
+how = [
+  "Open {ui:menu.File}, then Pages, and choose {ui:cmd.page.duplicate}.",
+  "Open the copy and read the tags of its devices.",
+]
+how_nl = [
+  "Open {ui:menu.File}, dan Pages, en kies {ui:cmd.page.duplicate}.",
+  "Open de kopie en lees de tags van de apparaten.",
+]
+point = { ui = "cmd.page.duplicate" }
+expect = { command = "page.duplicate" }
+solve = [ { command = "page.duplicate" } ]
+
+[[step]]
+id = "undo"
+title = "Take the copy back"
+title_nl = "Haal de kopie terug"
+text = "A copy of a page is one undo step, like every edit. Undo it so the practice project stays tidy."
+text_nl = "Een kopie van een pagina is een undo-stap, zoals elke bewerking. Maak hem ongedaan zodat het oefenproject netjes blijft."
+how = [
+  "Press {key:edit.undo}.",
+]
+how_nl = [
+  "Druk op {key:edit.undo}.",
+]
+expect = { command = "edit.undo" }
+solve = [ { command = "edit.undo" } ]
+
+[[step]]
+id = "renumber"
+title = "Renumber without breaking anything"
+title_nl = "Hernummer zonder iets te breken"
+text = """
+After a lot of editing the numbers have gaps: K1, K3, K7. **Renumber devices** shows every old and new tag in a preview, for the project, this page or the selection, and applies it as one undo step.
+Cross references, lists and labels follow because they refer to the device, not to the text of the tag.
+"""
+text_nl = """
+Na veel bewerken hebben de nummers gaten: K1, K3, K7. **Renumber devices** toont elke oude en nieuwe tag in een voorbeeld, voor het project, deze pagina of de selectie, en past het toe als een undo-stap.
+Kruisverwijzingen, lijsten en labels volgen omdat ze naar het apparaat verwijzen, niet naar de tekst van de tag.
+"""
+how = [
+  "Open {ui:menu.Edit}, then Renumber, and choose {ui:cmd.edit.renumber}.",
+  "Read the preview, then close the window without applying it.",
+]
+how_nl = [
+  "Open {ui:menu.Edit}, dan Renumber, en kies {ui:cmd.edit.renumber}.",
+  "Lees het voorbeeld en sluit het venster zonder het toe te passen.",
+]
+point = { ui = "cmd.edit.renumber" }
+expect = { command = "edit.renumber" }
+solve = [ { command = "edit.renumber" } ]
+
+[[step]]
+id = "done"
+title = "Names you can trust"
+title_nl = "Namen die je kunt vertrouwen"
+text = "File first, place second, renumber at the end. Rename a single device with F2 when you need a special name; the program keeps every list and reference pointing at it."
+text_nl = "Eerst ordenen, dan plaatsen, aan het eind hernummeren. Hernoem één apparaat met F2 als je een bijzondere naam nodig hebt; het programma houdt elke lijst en verwijzing erop gericht."

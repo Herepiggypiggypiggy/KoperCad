@@ -45,6 +45,9 @@ impl NovoApp {
         let mut ambient_done = false;
         let mut save: Option<StandardsFormat> = None;
         let (mut to_inputs, mut to_calc) = (false, false);
+        // Controls a lesson points at: registered after the window, when the
+        // project is no longer borrowed.
+        let mut marks: Vec<(&'static str, egui::Rect, &'static str, bool)> = Vec::new();
         let mut open = true;
         super::panel::dialog(ctx, "Standards check", [640.0, 520.0])
             .open(super::panel::esc(ctx, &mut open))
@@ -53,7 +56,18 @@ impl NovoApp {
                 ui.horizontal(|ui| {
                     for set in StandardSet::ALL {
                         let mut on = chosen.contains(&set);
-                        if ui.checkbox(&mut on, set.short()).changed() {
+                        let check = ui.checkbox(&mut on, set.short());
+                        marks.push((
+                            match set {
+                                StandardSet::Iec60204 => "standards.iec60204",
+                                StandardSet::Nfpa79 => "standards.nfpa79",
+                                StandardSet::Ul508a => "standards.ul508a",
+                            },
+                            check.rect,
+                            set.short(),
+                            check.changed() && on,
+                        ));
+                        if check.changed() {
                             if on {
                                 chosen.push(set);
                             } else {
@@ -90,18 +104,18 @@ impl NovoApp {
                     ambient_done = r.drag_stopped() || r.lost_focus();
                 });
                 ui.horizontal(|ui| {
-                    if ui
+                    let inputs = ui
                         .button("Electrical inputs...")
-                        .on_hover_text("Supply short-circuit current, panel SCCR, machine data and e-stop: the numbers the rules below are unknown without")
-                        .clicked()
-                    {
+                        .on_hover_text("Supply short-circuit current, panel SCCR, machine data and e-stop: the numbers the rules below are unknown without");
+                    marks.push(("standards.inputs", inputs.rect, "Electrical inputs", inputs.clicked()));
+                    if inputs.clicked() {
                         to_inputs = true;
                     }
-                    if ui
+                    let calc = ui
                         .button("Calculations...")
-                        .on_hover_text("Cable rating, voltage drop, short circuit and starter sizing with the numbers")
-                        .clicked()
-                    {
+                        .on_hover_text("Cable rating, voltage drop, short circuit and starter sizing with the numbers");
+                    marks.push(("standards.calculations", calc.rect, "Calculations", calc.clicked()));
+                    if calc.clicked() {
                         to_calc = true;
                     }
                 });
@@ -109,7 +123,9 @@ impl NovoApp {
                     ui.label("Choose a standard to add its clause rules. The saved report lists the design checks (wire sizing, protection, colours, safety functions, heat) either way.");
                 }
                 ui.horizontal(|ui| {
-                    if novo_theme::widgets::primary_button(ui, "Save report as PDF").clicked() {
+                    let pdf = novo_theme::widgets::primary_button(ui, "Save report as PDF");
+                    marks.push(("standards.save_pdf", pdf.rect, "Save report as PDF", pdf.clicked()));
+                    if pdf.clicked() {
                         save = Some(StandardsFormat::Pdf);
                     }
                     if ui.button("Save as web page").clicked() {
@@ -134,8 +150,15 @@ ui.weak(
                     }
                 });
             });
+        for (id, rect, label, clicked) in marks {
+            self.anchor_clicked(id, rect, label, clicked);
+        }
         if chosen != selected {
+            let added = chosen.iter().any(|s| !selected.contains(s));
             self.edit_project("Select standards", |tx| standards::select(tx, &chosen));
+            if added {
+                self.learn_signal("standards_chosen");
+            }
         }
         if new_method != method {
             self.edit_project("Default installation method", |tx| {

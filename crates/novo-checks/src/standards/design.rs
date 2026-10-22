@@ -271,6 +271,9 @@ pub struct HeatFact {
     pub sentence: String,
     /// The result was made for another layout than the current one.
     pub out_of_date: bool,
+    /// What the Heat panel proposes for cooling, as report lines (empty
+    /// when it has nothing to say).
+    pub cooling: Vec<String>,
 }
 
 /// How many wires there are, by the definition each part of the package
@@ -529,6 +532,7 @@ fn evidence(
         "heat" => {
             if let Some(h) = heat {
                 out.push(h.sentence.clone());
+                out.extend(h.cooling.iter().cloned());
             }
         }
         _ => {}
@@ -789,6 +793,7 @@ mod tests {
                 tone,
                 sentence: "Fine. Hottest -F1 57 °C.".into(),
                 out_of_date,
+                cooling: Vec::new(),
             }),
             ..DesignInput::default()
         };

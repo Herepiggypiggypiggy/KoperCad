@@ -1,0 +1,146 @@
+[
+  {
+    "content": [
+      {
+        "text": "The power and supply change the breaker and overload, so I need to ask.",
+        "type": "text"
+      },
+      {
+        "id": "toolu_1_0",
+        "input": {
+          "options": [
+            "2.2 kW, 400 V, page 1",
+            "7.5 kW, 400 V, page 1",
+            "Something else"
+          ],
+          "question": "What motor power and supply voltage, and which page should it go on?"
+        },
+        "name": "ask_user",
+        "type": "tool_use"
+      }
+    ],
+    "id": "msg_1",
+    "model": "claude-opus-5-5",
+    "role": "assistant",
+    "stop_reason": "tool_use",
+    "type": "message",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  },
+  {
+    "content": [
+      {
+        "text": "I'll wait for your answer before drawing anything.",
+        "type": "text"
+      }
+    ],
+    "id": "msg_2",
+    "model": "claude-opus-5-5",
+    "role": "assistant",
+    "stop_reason": "end_turn",
+    "type": "message",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  },
+  {
+    "content": [
+      {
+        "id": "toolu_3_0",
+        "input": {
+          "steps": [
+            {
+              "status": "doing",
+              "title": "Add page 1"
+            },
+            {
+              "status": "todo",
+              "title": "Place the starter"
+            },
+            {
+              "status": "todo",
+              "title": "Check"
+            }
+          ]
+        },
+        "name": "set_plan",
+        "type": "tool_use"
+      },
+      {
+        "id": "toolu_3_1",
+        "input": {
+          "action": "add_page",
+          "args": {
+            "name": "1",
+            "title": "Motor 7.5 kW"
+          }
+        },
+        "name": "propose_edit",
+        "type": "tool_use"
+      },
+      {
+        "id": "toolu_3_2",
+        "input": {
+          "action": "place_macro",
+          "args": {
+            "macro": "Motor starter DOL",
+            "page": "1",
+            "parameters": {
+              "power": 7.5
+            }
+          }
+        },
+        "name": "propose_edit",
+        "type": "tool_use"
+      }
+    ],
+    "id": "msg_3",
+    "model": "claude-opus-5-5",
+    "role": "assistant",
+    "stop_reason": "tool_use",
+    "type": "message",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  },
+  {
+    "content": [
+      {
+        "id": "toolu_4_0",
+        "input": {},
+        "name": "run_checks",
+        "type": "tool_use"
+      }
+    ],
+    "id": "msg_4",
+    "model": "claude-opus-5-5",
+    "role": "assistant",
+    "stop_reason": "tool_use",
+    "type": "message",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  },
+  {
+    "content": [
+      {
+        "text": "The 7.5 kW starter is on page 1 in the draft. Its supply pins are still open: ask me to terminate them, or connect your own incoming terminals. The macro sets the breaker and overload for its power parameter; confirm both against the motor's plate.",
+        "type": "text"
+      }
+    ],
+    "id": "msg_5",
+    "model": "claude-opus-5-5",
+    "role": "assistant",
+    "stop_reason": "end_turn",
+    "type": "message",
+    "usage": {
+      "input_tokens": 0,
+      "output_tokens": 0
+    }
+  }
+]

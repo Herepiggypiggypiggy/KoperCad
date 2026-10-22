@@ -29,9 +29,16 @@ pub(super) fn show(
         WIDTH,
     )
     .top(super::view3d_controls::BELOW)
-    // Tall enough for the list and an open fan under it at 1366 x 768.
-    .height(560.0)
-    .show(ctx, |ui| body(ui, settings, enclosure, flows, running));
+    // As tall as its content: the list, and the form of the one open opening.
+    .fit()
+    .show(ctx, |ui| {
+        // Past the window's bottom the list scrolls instead of being cut off.
+        let room = (view.height() - super::view3d_controls::BELOW - 64.0).max(160.0);
+        egui::ScrollArea::vertical()
+            .max_height(room)
+            .auto_shrink([false, true])
+            .show(ui, |ui| body(ui, settings, enclosure, flows, running));
+    });
 }
 
 fn body(
@@ -55,14 +62,22 @@ fn body(
         ));
         return;
     };
-    // A drag or typed value is one undo step; it ends when nothing is held.
-    if !ui.input(|i| i.pointer.any_down()) && ui.memory(|m| m.focused().is_none()) {
-        settings.end_edit();
-    }
     ui.label(muted(
-        "Where air gets in and out. Each opening is drawn in the cabinet as you edit it: \
-         blue is air in, orange is air out.",
+        "Where air gets in (blue) and out (orange). Grey: the direction is known after a run.",
     ));
+    if running {
+        ui.label(
+            egui::RichText::new("Locked while the run goes: Cancel it to edit.")
+                .small()
+                .color(pal.warning),
+        );
+    }
+    if let Some(k) = settings.requested.take()
+        && !running
+        && let Some(p) = VentSpec::presets(e).get(k)
+    {
+        settings.add(p.spec);
+    }
     ui.add_enabled_ui(!running, |ui| {
         ui.horizontal_wrapped(|ui| {
             ui.menu_button("Add opening", |ui| {
@@ -121,15 +136,13 @@ fn body(
                 settings.selected = if open { None } else { Some(i) };
             }
             let tag = match (role, flow) {
-                (Role::In, Some(q)) => format!("in {:.0} m³/h", q.abs()),
-                (Role::Out, Some(q)) => format!("out {:.0} m³/h", q.abs()),
-                (Role::In, None) => "in".into(),
-                (Role::Out, None) => "out".into(),
-                (Role::Open, _) => String::new(),
+                (Role::In, Some(q)) => format!("air in {:.0} m³/h (model)", q.abs()),
+                (Role::Out, Some(q)) => format!("air out {:.0} m³/h (model)", q.abs()),
+                (Role::In, None) => "air in".into(),
+                (Role::Out, None) => "air out".into(),
+                (Role::Open, _) => "direction after a run".into(),
             };
-            if !tag.is_empty() {
-                ui.label(muted(&tag));
-            }
+            ui.label(muted(&tag));
         });
         if open {
             let mut edited = spec;
@@ -151,12 +164,58 @@ fn body(
     if let Some(i) = remove {
         settings.remove(i);
     }
-    ui.add_space(4.0);
-    ui.label(muted(
-        "Openings are kept inside their wall. They apply to the next run and are kept for this \
-         session, not saved in the project yet. A grille's flow is read from the solved air speed \
-         next to it: a model value.",
-    ));
+    for (a, b) in settings.overlapping(e) {
+        ui.add_space(4.0);
+        ui.colored_label(
+            crate::theme::ui_palette().warning,
+            format!(
+                "Openings {} and {} cover the same part of a wall; their flow would be counted twice. \
+                 Move one.",
+                a + 1,
+                b + 1
+            ),
+        );
+    }
+    if let Some(line) = balance_line(flows, settings) {
+        ui.add_space(4.0);
+        ui.label(muted(&line));
+    }
+    egui::CollapsingHeader::new("What is this?")
+        .id_salt("view3d_vents_about")
+        .show(ui, |ui| {
+            ui.label(muted(
+                "Walls are named as seen from the front of the cabinet; the one you pick is tinted. \
+                 Openings are kept inside their wall and saved with the project. They apply to the \
+                 next run. A grille's flow is read from the solved air speed next to it: a model \
+                 value, not a measurement. Drag an opening's label in the cabinet to slide it.",
+            ));
+        });
+}
+
+/// One line on how much air comes in and goes out of the shown result, so a
+/// gap between the two is explained instead of left to the reader.
+fn balance_line(flows: &[Option<f64>], settings: &HeatSettings) -> Option<String> {
+    let (mut inflow, mut outflow) = (0.0_f64, 0.0_f64);
+    let mut any = false;
+    for (v, q) in settings.vents.iter().zip(flows) {
+        let Some(q) = q else { continue };
+        any = true;
+        match heat_openings::role_of(v, Some(*q)) {
+            Role::In => inflow += q.abs(),
+            Role::Out => outflow += q.abs(),
+            Role::Open => {}
+        }
+    }
+    if !any {
+        return None;
+    }
+    let gap = (inflow - outflow).abs();
+    let larger = inflow.max(outflow).max(1e-9);
+    Some(format!(
+        "Air in {inflow:.0}, out {outflow:.0} m³/h (model). The {gap:.0} m³/h ({:.0} %) gap is \
+         how closely the solved speeds next to the openings add up; the flow itself balances.",
+        100.0 * gap / larger
+    ))
 }
 
 /// Centre of `wall` along its first axis, mm.
@@ -269,8 +328,8 @@ fn editor(ui: &mut egui::Ui, v: &mut VentSpec, i: usize, e: &Enclosure) {
                 ui.end_row();
             }
             let (along_max, across_max, across_label) = match v.wall {
-                Wall::Top | Wall::Bottom => (w, d, "Width × depth"),
-                Wall::Left | Wall::Right => (h, d, "Length × depth"),
+                Wall::Top | Wall::Bottom => (w, d, "Width × front to back"),
+                Wall::Left | Wall::Right => (h, d, "Height × front to back"),
                 Wall::Door => (w, h, "Width × height"),
             };
             ui.label(across_label);
@@ -294,7 +353,7 @@ fn editor(ui: &mut egui::Ui, v: &mut VentSpec, i: usize, e: &Enclosure) {
             });
             ui.end_row();
             if v.kind.is_fan() {
-                ui.label("Datasheet");
+                ui.label("Flow, pressure");
                 ui.horizontal(|ui| {
                     ui.add(
                         egui::DragValue::new(&mut v.flow_m3h)
@@ -303,7 +362,9 @@ fn editor(ui: &mut egui::Ui, v: &mut VentSpec, i: usize, e: &Enclosure) {
                             .max_decimals(0)
                             .suffix(" m³/h"),
                     )
-                    .on_hover_text("Free-air flow of the fan, from the maker's datasheet");
+                    .on_hover_text(
+                        "Flow at free air (no back pressure), from the maker's datasheet",
+                    );
                     ui.add(
                         egui::DragValue::new(&mut v.pressure_pa)
                             .range(1.0..=2000.0)
@@ -311,18 +372,24 @@ fn editor(ui: &mut egui::Ui, v: &mut VentSpec, i: usize, e: &Enclosure) {
                             .max_decimals(0)
                             .suffix(" Pa"),
                     )
-                    .on_hover_text("Pressure at which the fan delivers nothing (shut-off)");
+                    .on_hover_text("Maximum pressure: where the fan delivers nothing (shut-off)");
                 });
                 ui.end_row();
             } else {
                 ui.label("Free area");
-                ui.add(
-                    egui::DragValue::new(&mut v.free_fraction)
-                        .range(0.05..=1.0)
-                        .speed(0.01)
-                        .fixed_decimals(2),
-                )
-                .on_hover_text("Free share of the opening: a louvred grille is 0.5 to 0.7");
+                let mut pct = (v.free_fraction * 100.0).round();
+                let r = ui
+                    .add(
+                        egui::DragValue::new(&mut pct)
+                            .range(5.0..=100.0)
+                            .speed(1.0)
+                            .max_decimals(0)
+                            .suffix(" %"),
+                    )
+                    .on_hover_text("Free share of the opening: a louvred grille is 50 to 70 %");
+                if r.changed() {
+                    v.free_fraction = pct / 100.0;
+                }
                 ui.end_row();
             }
         });

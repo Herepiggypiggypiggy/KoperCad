@@ -1711,3 +1711,68 @@ fn a_heat_run_reports_in_a_narrow_window_where_the_heat_toggle_is_in_more() {
         "the run published its result although the Heat toggle was not drawn"
     );
 }
+
+#[test]
+fn a_drop_on_a_rail_line_stays_mounted_and_one_off_it_leaves_the_rail() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut d = Drive::new(&dir.path().join("untitled"));
+    let ctx = d.ctx.clone();
+    d.app.run(&ctx, Action::NewProject);
+    d.frame();
+    add_cabinet(&mut d);
+    d.app.run(&ctx, Action::ShowCabinet);
+    d.frame();
+    let cab = project(&d).structures().find(|s| s.enclosure).unwrap().id;
+    d.app.cabinet_ask(Ask::SetPlate(cab), Some(cab), None, &[]);
+    let layout = layout_of(&d, cab);
+    let cands = novo_layout::model::candidates(project(&d), cab);
+    d.app.cabinet_ask(Ask::PlaceAll, Some(cab), layout, &cands);
+    d.app.cabinet_ask(Ask::Accept, Some(cab), None, &[]);
+    d.frame();
+
+    let device = cands[0].id;
+    let on = |d: &Drive| {
+        let l = layout_of(d, cab).unwrap();
+        let p = l
+            .placements
+            .iter()
+            .find(|p| p.id == device)
+            .unwrap()
+            .clone();
+        let rail = p
+            .rail
+            .and_then(|r| l.rails.iter().find(|x| x.id == r).cloned());
+        (p, rail)
+    };
+    let (p, rail) = on(&d);
+    let rail = rail.expect("Place all mounts every device");
+    let f = p.footprint();
+    assert!(
+        (f.y + f.h / 2.0 - rail.y).abs() < 1e-9,
+        "the rail runs through the middle of the device"
+    );
+
+    // Along the rail, on its line: still mounted, with the new offset.
+    let l = layout_of(&d, cab);
+    d.app
+        .cabinet_ask(Ask::Drop(device, p.x + 60.0, p.y), Some(cab), l, &cands);
+    let (moved, mounted) = on(&d);
+    assert_eq!(moved.x, p.x + 60.0);
+    assert_eq!(moved.rail, Some(rail.id));
+    assert!(mounted.is_some());
+    let record = project(&d)
+        .all::<CabinetPlacement>()
+        .find(|c| c.device.raw() == device)
+        .unwrap();
+    assert_eq!(record.rail_offset, Some(p.x + 60.0 - rail.x));
+
+    // Off the line by a few millimetres: not mounted any more.
+    let l = layout_of(&d, cab);
+    d.app.cabinet_ask(
+        Ask::Drop(device, p.x + 60.0, p.y + 4.0),
+        Some(cab),
+        l,
+        &cands,
+    );
+    assert_eq!(on(&d).0.rail, None);
+}
