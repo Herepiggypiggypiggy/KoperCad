@@ -1730,6 +1730,8 @@ pub const COMMANDS: &[CommandInfo] = &[
             "temperature",
             "cabinet",
             "loss",
+            "duct heat",
+            "wire heat",
         ],
         Needs::Project,
     ),
