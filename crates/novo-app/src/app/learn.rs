@@ -166,6 +166,10 @@ pub(crate) struct LearnState {
     pub(super) only_track: Option<String>,
     /// The Learn window lists only this learning path, in its order.
     pub(super) only_path: Option<String>,
+    /// The suite lists only lessons of this level.
+    pub(super) level: Option<novo_learn::lesson::Level>,
+    /// The window has been drawn since it opened (the search takes the keyboard on the first frame).
+    pub(super) window_drawn: bool,
     pub(super) show_drafts: bool,
     pub(super) confirm_restart: bool,
     /// The step whose hints are being shown and how many are open.
@@ -233,6 +237,8 @@ impl LearnState {
             filter: String::new(),
             only_track: None,
             only_path: None,
+            level: None,
+            window_drawn: false,
             show_drafts: false,
             confirm_restart: false,
             hints_for: String::new(),
