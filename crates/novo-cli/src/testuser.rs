@@ -713,7 +713,7 @@ fn has_parent_dir(p: &Path) -> bool {
         .any(|c| matches!(c, std::path::Component::ParentDir))
 }
 
-fn default_app() -> PathBuf {
+pub(crate) fn default_app() -> PathBuf {
     let name = if cfg!(windows) {
         "kopercad.exe"
     } else {
