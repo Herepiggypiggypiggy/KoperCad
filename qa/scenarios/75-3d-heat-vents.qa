@@ -60,6 +60,16 @@ wait_s 5
 click_text "1  Filter fan, in the door"
 wait 10
 shot after-cancel
+click_text "Cooling selection"
+wait 10
+click_text "40.0 °C"
+key ctrl+a
+text 37
+key Enter
+wait 20
+shot cooling-card
+click_text "Cooling selection"
+wait 10
 click_text Auto
 wait 10
 click_text Undo
