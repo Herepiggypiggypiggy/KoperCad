@@ -15,7 +15,7 @@ use novo_core::{
 use novo_editor::catalog::model_pins;
 use novo_editor::edit::draw_wire;
 use novo_editor::geometry::Target;
-use novo_editor::pages::add_page;
+use novo_editor::pages::{add_page, last_schematic_page};
 use novo_editor::pinkind::{Verdict, judge};
 use novo_symbols::{Library, Symbol};
 use novo_terminals::{next_free_number, next_order, strip_style, symbol_pins};
@@ -68,7 +68,7 @@ fn channel_symbol(library: &Library, kind: ChannelType) -> Result<&Symbol> {
 /// Adds everything of `plan`. `library` supplies the channel symbols.
 pub fn apply(tx: &mut Tx<'_>, library: &Library, list: &IoList, plan: &Plan) -> Result<Built> {
     let mut built = Built::default();
-    let mut after: Option<PageId> = tx.project().pages_in_order().last().map(|p| p.id);
+    let mut after: Option<PageId> = last_schematic_page(tx.project());
     for card in &plan.cards {
         let (device, page) = build_card(tx, library, list, card, after, &mut built)?;
         built.cards.push(device);
