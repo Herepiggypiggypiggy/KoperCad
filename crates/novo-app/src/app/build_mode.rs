@@ -630,17 +630,28 @@ fn card(
             }
             ui.add_space(10.0);
             status_and_buttons(ui, state, cab, mode, step, status, who, asked);
-            ui.horizontal(|ui| {
+            // Real buttons, in the size of the others: a bare text link is
+            // easy to miss and too small for a finger.
+            let h = if state.large { 48.0 } else { 30.0 };
+            let show = |ui: &mut egui::Ui, label: &str| {
+                ui.add_sized(
+                    [label.len() as f32 * 7.5 + 28.0, h],
+                    egui::Button::new(label),
+                )
+                .clicked()
+            };
+            ui.add_space(6.0);
+            ui.horizontal_wrapped(|ui| {
                 if let Some(device) = step.device {
-                    if widgets::ghost_button(ui, "Show on the plate").clicked() {
+                    if show(ui, "Show on the plate") {
                         asked.show = Some(Show::DevicePlate(device));
                     }
-                    if widgets::ghost_button(ui, "Show in 3D").clicked() {
+                    if show(ui, "Show in 3D") {
                         asked.show = Some(Show::Device3d(device));
                     }
                 }
                 if let Some(&w) = step.wires.first()
-                    && widgets::ghost_button(ui, "Show the wire in 3D").clicked()
+                    && show(ui, "Show the wire in 3D")
                 {
                     asked.show = Some(Show::Wire3d(w));
                 }
@@ -902,8 +913,10 @@ fn away_bar(ctx: &egui::Context, rect: egui::Rect, step: &str) -> bool {
     let mut back = false;
     egui::Area::new(egui::Id::new("build_mode_away"))
         .order(egui::Order::Middle)
-        .pivot(egui::Align2::CENTER_BOTTOM)
-        .fixed_pos(egui::pos2(rect.center().x, rect.bottom() - 14.0))
+        // Bottom left: the Cabinet's lowest device and the 3D view's
+        // controls sit towards the middle and the right.
+        .pivot(egui::Align2::LEFT_BOTTOM)
+        .fixed_pos(egui::pos2(rect.left() + 14.0, rect.bottom() - 14.0))
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.horizontal(|ui| {
