@@ -1,0 +1,21 @@
+@title Cabinet plate: EMC view of the drive example (classes, keep-clear bands, hot spots, exposure map)
+@area Cabinet
+# Ctrl+K "EMC view on the plate" (or the EMC button in the Cabinet toolbar, under More in a narrow window) draws the EMC picture flat over the mounting plate.
+key ctrl+k
+wait 6
+text open emc example
+wait 8
+key Enter
+wait 30
+key ctrl+k
+wait 6
+text emc view on the plate
+wait 8
+key Enter
+wait 30
+shot plate-emc
+check_layout
+click_text "Exposure map" #1
+wait 15
+shot plate-emc-exposure
+check_layout

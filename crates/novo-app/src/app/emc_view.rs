@@ -65,6 +65,46 @@ fn family_of_device(project: &Project, device: u64) -> Family {
         .map_or(Family::Other, |s| emc_stub::family_of(&s.symbol.0.clone()))
 }
 
+/// One wire as the stub reads it: its ends, colour and section from the
+/// project, its path as given. `stripe`: drawn bi-colour, a protective conductor.
+fn wire_in(project: &Project, raw: u64, stripe: bool, path: Vec<[f32; 3]>) -> Option<WireIn> {
+    let mw = project.wire(WireId::from(raw))?;
+    let end = |e: novo_core::Endpoint| {
+        let pin = e.as_pin()?;
+        let sym = project.symbol(pin.symbol)?;
+        let device = novo_routing::model::device_of_pin(project, pin).map(|d| d.raw());
+        let key = sym.symbol.0.clone();
+        Some(EndIn {
+            device,
+            family: emc_stub::family_of(&key),
+            pin: sym
+                .pins
+                .get(usize::from(pin.pin))
+                .map(|p| p.name.clone())
+                .unwrap_or_default(),
+            key,
+        })
+    };
+    let label = mw
+        .number
+        .clone()
+        .filter(|n| !n.is_empty())
+        .unwrap_or_else(|| format!("#{raw}"));
+    let colour = if stripe {
+        Some("green-yellow".to_owned())
+    } else {
+        mw.color.clone()
+    };
+    Some(WireIn {
+        id: raw,
+        label,
+        ends: (end(mw.from), end(mw.to)),
+        colour,
+        section_mm2: novo_routing::model::wire_section_mm2(project, mw),
+        path,
+    })
+}
+
 /// Reads the placed devices and routed wires of a plate out of the built
 /// scene and the project.
 fn inputs(project: &Project, scene: &Scene) -> (Vec<DeviceIn>, Vec<WireIn>) {
@@ -95,34 +135,6 @@ fn inputs(project: &Project, scene: &Scene) -> (Vec<DeviceIn>, Vec<WireIn>) {
         .wires
         .iter()
         .filter_map(|w| {
-            let mw = project.wire(WireId::from(w.id.raw))?;
-            let end = |e: novo_core::Endpoint| {
-                let pin = e.as_pin()?;
-                let sym = project.symbol(pin.symbol)?;
-                let device = novo_routing::model::device_of_pin(project, pin).map(|d| d.raw());
-                let key = sym.symbol.0.clone();
-                Some(EndIn {
-                    device,
-                    family: emc_stub::family_of(&key),
-                    pin: sym
-                        .pins
-                        .get(usize::from(pin.pin))
-                        .map(|p| p.name.clone())
-                        .unwrap_or_default(),
-                    key,
-                })
-            };
-            let label = mw
-                .number
-                .clone()
-                .filter(|n| !n.is_empty())
-                .unwrap_or_else(|| format!("#{}", w.id.raw));
-            // A bi-colour wire in the scene is a protective conductor.
-            let colour = if w.stripe.is_some() {
-                Some("green-yellow".to_owned())
-            } else {
-                mw.color.clone()
-            };
             let path = w
                 .points
                 .iter()
@@ -131,20 +143,69 @@ fn inputs(project: &Project, scene: &Scene) -> (Vec<DeviceIn>, Vec<WireIn>) {
                     [x as f32, y as f32, p.z]
                 })
                 .collect();
-            Some(WireIn {
-                id: w.id.raw,
-                label,
-                ends: (end(mw.from), end(mw.to)),
-                colour,
-                section_mm2: novo_routing::model::wire_section_mm2(project, mw),
-                path,
-            })
+            wire_in(project, w.id.raw, w.stripe.is_some(), path)
         })
         .collect();
     (devices, wires)
 }
 
 impl EmcState {
+    /// The picture of the mounting plate for the Cabinet's 2D view, from the
+    /// routes the Cabinet already computed and the placements of the plate.
+    pub(super) fn sync_plate(
+        &mut self,
+        project: &Project,
+        id: StructureId,
+        routes: &[super::cabinet_routes::RouteLine],
+    ) {
+        let key: Key = (id, project.revision(), 0);
+        if self.picture.as_ref().map(|p| p.0) == Some(key) {
+            return;
+        }
+        let Some(layout) = novo_layout::model::load(project, id) else {
+            self.picture = None;
+            return;
+        };
+        let devices: Vec<DeviceIn> = layout
+            .placements
+            .iter()
+            .filter(|p| !layout.off_plate.contains_key(&p.id))
+            .filter_map(|p| {
+                let d = project.get::<Device>(DeviceId::from(p.id))?;
+                let r = p.footprint();
+                Some(DeviceIn {
+                    id: p.id,
+                    tag: d
+                        .tag
+                        .device_code()
+                        .map_or_else(|| format!("device {}", p.id), |c| format!("-{c}")),
+                    family: family_of_device(project, p.id),
+                    rect: [r.x as f32, r.y as f32, r.w as f32, r.h as f32],
+                    height: layout.depths.get(&p.id).copied().unwrap_or(60.0) as f32,
+                })
+            })
+            .collect();
+        let wires: Vec<WireIn> = routes
+            .iter()
+            .filter(|r| !r.free_air)
+            .filter_map(|r| {
+                let path = r.points.iter().map(|&(x, y)| [x, y, 10.0]).collect();
+                wire_in(project, r.wire, false, path)
+            })
+            .collect();
+        let pic = emc_stub::build(
+            [layout.plate.width as f32, layout.plate.height as f32],
+            &devices,
+            &wires,
+        );
+        if let Some(sel) = self.selected
+            && pic.hotspot(sel).is_none()
+        {
+            self.selected = None;
+        }
+        self.picture = Some((key, Arc::new(pic)));
+    }
+
     /// Brings the picture and the overlays up to date. True when the overlays
     /// changed, so the host redraws them.
     pub(super) fn sync(
@@ -207,7 +268,7 @@ impl EmcState {
 }
 
 /// Black or white text, whichever reads on `bg`.
-fn text_on(bg: [u8; 3]) -> egui::Color32 {
+pub(super) fn text_on(bg: [u8; 3]) -> egui::Color32 {
     let lin = |v: u8| {
         let s = f32::from(v) / 255.0;
         if s <= 0.04045 {

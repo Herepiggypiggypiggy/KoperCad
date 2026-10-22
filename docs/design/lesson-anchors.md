@@ -43,6 +43,7 @@ A control a lesson may point at (`point = { ui = "id" }`, `{ui:id}` in text, `cl
 - `cabinet.rules`: {ui:cabinet.rules} shows **Rules**
 - `cabinet.plate`: {ui:cabinet.plate} shows **Plate setup**
 - `cabinet.routes`: {ui:cabinet.routes} shows **Route all**
+- `cabinet.emc`: {ui:cabinet.emc} shows **EMC**
 - `cabinet.cutlist`: {ui:cabinet.cutlist} shows **Cut list**
 - `cabinet.table`: {ui:cabinet.table} shows **Table**
 - `cabinet.heat`: {ui:cabinet.heat} shows **Heat**

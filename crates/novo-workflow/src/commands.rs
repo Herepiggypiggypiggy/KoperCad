@@ -2192,6 +2192,13 @@ pub const COMMANDS: &[CommandInfo] = &[
         ),
         &["route all", "route wires"],
     ),
+    cmd(
+        "cabinet.emc",
+        "EMC view on the plate (Cabinet)",
+        "View",
+        &["emc", "interference", "noisy wires", "keep clear", "drive"],
+        Needs::Project,
+    ),
     verb(
         cmd(
             "cabinet.rules",

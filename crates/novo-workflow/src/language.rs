@@ -1172,6 +1172,11 @@ pub const DUTCH: &[Aliases] = &[
         &["deur", "scharnier", "binnenmaat", "diepte"],
     ),
     nl(
+        "cabinet.emc",
+        &["emc weergave op de plaat tonen"],
+        &["emc", "storing", "kabelklassen"],
+    ),
+    nl(
         "cabinet.routes",
         &["bedraad alles", "routeer alle draden"],
         &["draadlengte", "bedrading", "kanaalvulling"],
