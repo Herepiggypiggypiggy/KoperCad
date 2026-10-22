@@ -1819,14 +1819,14 @@ fn legend(
                 let x = bar.left() + 4.0 + cache.range.t(tick) * len;
                 p.line_segment(
                     [Pos2::new(x, top + 10.0), Pos2::new(x, top + 13.0)],
-                    Stroke::new(1.0, t::TEXT_MUTED),
+                    Stroke::new(1.0, crate::theme::ui_palette().text_secondary),
                 );
                 p.text(
                     Pos2::new(x, top + 14.0),
                     Align2::CENTER_TOP,
                     format!("{tick:.0}"),
                     FontId::monospace(t::FONT_SMALL),
-                    t::TEXT_MUTED,
+                    crate::theme::ui_palette().text_secondary,
                 );
             }
         } else {
@@ -1851,21 +1851,21 @@ fn legend(
                 let y = bar.bottom() - cache.range.t(tick) * height;
                 p.line_segment(
                     [Pos2::new(bar.right(), y), Pos2::new(bar.right() + 5.0, y)],
-                    Stroke::new(1.0, t::TEXT_MUTED),
+                    Stroke::new(1.0, crate::theme::ui_palette().text_secondary),
                 );
                 p.text(
                     Pos2::new(bar.right() + 9.0, y),
                     Align2::LEFT_CENTER,
                     format!("{tick:.0}"),
                     FontId::monospace(t::FONT_SMALL),
-                    t::TEXT_MUTED,
+                    crate::theme::ui_palette().text_secondary,
                 );
             }
         }
         ui.label(
             egui::RichText::new(format!("°C · ambient {:.0}", cache.ambient))
                 .small()
-                .color(t::TEXT_MUTED),
+                .color(crate::theme::ui_palette().text_secondary),
         );
         if !flat {
             ui.add_space(4.0);
@@ -1879,7 +1879,7 @@ fn legend(
             ));
         }
         if let Some(note) = estimate_note(input) {
-            ui.label(small(&note, t::WARNING));
+            ui.label(small(&note, crate::theme::ui_palette().warning));
         }
         if unknown > 0 {
             let (noun, verb) = if unknown == 1 {
@@ -1889,14 +1889,14 @@ fn legend(
             };
             ui.label(small(
                 &format!("{unknown} {noun} {verb} no loss data (shown dashed)"),
-                t::WARNING,
+                crate::theme::ui_palette().warning,
             ));
         }
         match &cache.source {
             Source::Synthetic => {
                 ui.label(small(
                     "Preview from part losses, not a solver result. Simulate runs it.",
-                    t::TEXT_MUTED,
+                    crate::theme::ui_palette().text_secondary,
                 ));
             }
             Source::Solved(sol) => {
@@ -1929,7 +1929,7 @@ fn legend(
                 if stale {
                     ui.label(small(
                         "Out of date: the layout changed since this run.",
-                        t::WARNING,
+                        crate::theme::ui_palette().warning,
                     ));
                 }
                 // Not converged, or "steady" with a poor heat balance or
@@ -1942,12 +1942,12 @@ fn legend(
                 // The status line above already names the level.
                 let headline = without_level_name(&a.headline, p.fidelity.label());
                 if !headline.is_empty() {
-                    ui.label(small(&headline, t::TEXT_MUTED));
+                    ui.label(small(&headline, crate::theme::ui_palette().text_secondary));
                 }
                 // Warnings stay in view; the run's detailed notes fold away
                 // so a short window is not cut off mid-sentence.
                 for m in &sol.messages {
-                    ui.label(small(m, t::WARNING));
+                    ui.label(small(m, crate::theme::ui_palette().warning));
                 }
                 super::heat_cooling::show(ui, sol, cooling, stale, false);
                 // The headline fits the narrow panel; what it rests on is
