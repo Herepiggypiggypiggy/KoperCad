@@ -1,2 +1,4 @@
 2026-10-22 08:40 UTC Thread started; before pictures in /mnt/project-files/qa/heat-vents/before.
 2026-10-22 10:00 UTC Openings model, 3D drawing, panel, airflow colours; QA 75 clean at 1366x768 and 1920x1080, dark and light.
+2026-10-22 follow-up (branch vents2, PR after #1352 merges): openings saved in the project (structure property `heat.openings`, follows project undo and open); drag a label in 3D (one undo step); NaN guard; overlap warning; Ctrl+K "Vents and fans", "Add filter fan", "Add grille", "Add exhaust fan"; panel scrolls instead of being cut off; top label kept below the 3D toolbar; Heat strip room kept in tall windows only. QA 75 clean at both sizes (/mnt/project-files/qa/heat-vents/follow-up).
+Still open: Cooling selection hook (needs #1342), explaining the preliminary in/out gap and showing the fan operating point against its datasheet, a smaller-window cabinet size, light/dark walk with the auditors.

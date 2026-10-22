@@ -31,7 +31,14 @@ pub(super) fn show(
     .top(super::view3d_controls::BELOW)
     // As tall as its content: the list, and the form of the one open opening.
     .fit()
-    .show(ctx, |ui| body(ui, settings, enclosure, flows, running));
+    .show(ctx, |ui| {
+        // Past the window's bottom the list scrolls instead of being cut off.
+        let room = (view.height() - super::view3d_controls::BELOW - 64.0).max(160.0);
+        egui::ScrollArea::vertical()
+            .max_height(room)
+            .auto_shrink([false, true])
+            .show(ui, |ui| body(ui, settings, enclosure, flows, running));
+    });
 }
 
 fn body(

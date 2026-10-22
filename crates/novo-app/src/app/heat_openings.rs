@@ -353,6 +353,9 @@ pub(super) struct DragPhase {
     pub stopped: bool,
 }
 
+/// How far down from the view's top edge the 3D view toolbar reaches.
+const TOOLBAR_CLEAR: f32 = 112.0;
+
 /// Paints the labels over the 3D view and reports a click on one, or a drag
 /// of one (which slides its opening along the wall).
 pub(super) fn paint_labels(
@@ -380,10 +383,16 @@ pub(super) fn paint_labels(
             g1.size().y + g2.size().y + 8.0,
         );
         let mut chip = egui::Rect::from_center_size(at, size);
-        // Keep the chip inside the view and off the others.
+        // Keep the chip inside the view, below the 3D view toolbar and off the others.
+        let top = rect.min.y
+            + if rect.height() > 420.0 {
+                TOOLBAR_CLEAR
+            } else {
+                4.0
+            };
         chip = chip.translate(egui::vec2(
             (rect.min.x + 4.0 - chip.min.x).max(0.0) + (rect.max.x - 4.0 - chip.max.x).min(0.0),
-            (rect.min.y + 4.0 - chip.min.y).max(0.0) + (rect.max.y - 4.0 - chip.max.y).min(0.0),
+            (top - chip.min.y).max(0.0) + (rect.max.y - 4.0 - chip.max.y).min(0.0),
         ));
         while placed.iter().any(|p| p.intersects(chip)) && chip.max.y + size.y < rect.max.y {
             chip = chip.translate(egui::vec2(0.0, size.y + 3.0));
