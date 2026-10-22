@@ -1018,6 +1018,50 @@ fn the_inspector_keeps_above_the_lesson_card_at_1366() {
 }
 
 #[test]
+fn starting_a_lesson_clears_the_search_so_learn_reopens_on_its_home_page() {
+    let (_dir, mut d) = drive();
+    d.app.learn.filter = "wheel".into();
+    d.app.start_lesson("tiny");
+    assert!(d.app.learn.filter.is_empty());
+}
+
+#[test]
+fn page_down_changes_the_page_with_the_pointer_on_the_lesson_card() {
+    let (_dir, mut d) = drive();
+    d.app.start_lesson("tiny");
+    let size = eframe::egui::vec2(1366.0, 768.0);
+    for _ in 0..3 {
+        d.frame_sized(size, Vec::new());
+    }
+    let ctx = d.ctx.clone();
+    d.app.run_command(&ctx, "page.new", None);
+    d.app.run_command(&ctx, "nav.previous_page", None);
+    for _ in 0..3 {
+        d.frame_sized(size, Vec::new());
+    }
+    let first = d.app.current_page().expect("a page");
+    let card = d
+        .ctx
+        .memory(|m| m.area_rect(super::panel::id("lesson_card")))
+        .expect("the card is shown");
+    let key = |pressed| eframe::egui::Event::Key {
+        key: eframe::egui::Key::PageDown,
+        physical_key: None,
+        pressed,
+        repeat: false,
+        modifiers: eframe::egui::Modifiers::NONE,
+    };
+    d.frame_sized(size, vec![eframe::egui::Event::PointerMoved(card.center())]);
+    d.frame_sized(size, vec![key(true), key(false)]);
+    d.frame_sized(size, Vec::new());
+    assert_ne!(
+        d.app.current_page(),
+        Some(first),
+        "Page Down is taken with the pointer on the card"
+    );
+}
+
+#[test]
 fn skip_does_the_step_so_the_steps_after_it_find_their_parts() {
     let dir = tempfile::tempdir().unwrap();
     let mut d = Drive::new(&dir.path().join("untitled"));

@@ -71,20 +71,20 @@ text_nl = """
 Een driefasenmotor heeft drie voedingen naast elkaar nodig, één per pool. Slepen plaatst een hele rij in één keer, op de poolafstand, en noemt ze in volgorde **L1**, **L2** en **L3**.
 """
 how = [
-  "With the feed on your pointer, press and hold the mouse button just above the left top pin of **-Q1**.",
-  "Drag to the right, to just above its right top pin. The dock shows **Row ×3 · pitch 8 mm**.",
+  "With the feed on your pointer, press and hold the mouse button about 8 mm above the left top pin of **-Q1** (closer and the row stops before the breaker). The X and Y of the pointer are in the status bar.",
+  "Drag to the right, to the same height above its right top pin. The status bar shows **Row ×3 · pitch 8 mm**; if it shows ×2, go a little further right.",
   "Release above the right pole. Three feeds land above the three poles, each wired down to its pole.",
   "Press {key:edit.escape} to put the feed down.",
 ]
 how_nl = [
-  "Houd met de feed aan je aanwijzer de muisknop ingedrukt, net boven de linker bovenste pen van **-Q1**.",
-  "Sleep naar rechts, tot net boven de rechter bovenste pen. Het dock toont **Row ×3 · pitch 8 mm**.",
+  "Houd met de feed aan je aanwijzer de muisknop ingedrukt, ongeveer 8 mm boven de linker bovenste pen van **-Q1** (dichterbij stopt de rij voor de beveiliging). X en Y van de aanwijzer staan in de statusbalk.",
+  "Sleep naar rechts, tot op dezelfde hoogte boven de rechter bovenste pen. De statusbalk toont **Row ×3 · pitch 8 mm**; staat er ×2, ga dan iets verder naar rechts.",
   "Laat los boven de rechter pool. Drie feeds landen boven de drie polen, elk met een draad omlaag naar zijn pool.",
   "Druk op {key:edit.escape} om de feed los te laten.",
 ]
 demo = [
   { drag = { from = { at = { page = "Motor feeder", x = 80, y = 30 } }, to = { at = { page = "Motor feeder", x = 96, y = 30 } } } },
-  { say = "The dock shows Row ×3 · pitch 8 mm. Three feeds land, named L1, L2 and L3.", say_nl = "Het dock toont Row ×3 · pitch 8 mm. Drie feeds landen, met de namen L1, L2 en L3." },
+  { say = "The status bar shows Row ×3 · pitch 8 mm. Three feeds land, named L1, L2 and L3.", say_nl = "De statusbalk toont Row ×3 · pitch 8 mm. Drie feeds landen, met de namen L1, L2 en L3." },
   { press = "edit.escape" },
 ]
 point = { at = { device = "-Q1", pin = "1" } }

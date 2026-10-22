@@ -24,7 +24,7 @@ pub(super) const REARM: f64 = 0.08;
 /// How long the pointer must stay on another wedge before the outer ring
 /// follows it, so a path from one wedge's items that clips a neighbouring
 /// wedge does not change the choice.
-const DWELL: f64 = 0.18;
+const DWELL: f64 = 0.3;
 
 /// What a wedge puts down: the library key and the short name drawn.
 type Item = (&'static str, &'static str);

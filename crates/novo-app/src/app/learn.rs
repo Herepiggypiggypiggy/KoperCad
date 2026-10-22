@@ -1059,6 +1059,7 @@ impl NovoApp {
         self.learn.hints_shown = 0;
         self.learn.hidden = false;
         self.learn.window = false;
+        self.learn.filter.clear();
         self.learn.confirm_restart = false;
         self.learn.revealed = None;
         self.learn.ticked_at = None;

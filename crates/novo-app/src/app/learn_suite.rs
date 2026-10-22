@@ -79,6 +79,8 @@ impl NovoApp {
             self.learn.only_track = None;
             self.learn.only_path = None;
             self.learn.level = None;
+            // Reopening starts at the home page, not on an old search.
+            self.learn.filter.clear();
         }
         if reload {
             self.learn.reload();
