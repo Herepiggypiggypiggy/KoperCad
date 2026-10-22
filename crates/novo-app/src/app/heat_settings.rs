@@ -660,6 +660,40 @@ mod tests {
     }
 
     #[test]
+    fn a_proposed_fan_comes_with_the_grille_that_lets_the_air_through() {
+        use super::super::view3d_vents::Suggestion;
+        let e = enclosure();
+        let mut set = HeatSettings::default();
+        // A filter fan alone in a closed cabinet moves nothing: an exhaust
+        // grille is proposed, high on the right wall, sized for the flow.
+        let filter = Suggestion::for_test(Kind::FilterFan, 1, 70.0);
+        let g = filter.companion_for_test(&e, &set).unwrap();
+        assert_eq!((g.kind, g.wall), (Kind::Grille, Wall::Right));
+        assert!(g.width_mm * g.height_mm * g.free_fraction >= 70.0 / 3600.0 / 1.5 * 1e6 * 0.95);
+        assert!(
+            filter
+                .sentence_for_test(&e)
+                .starts_with("Cooling selection proposes")
+        );
+        // An exhaust fan gets an inlet grille low on the left wall.
+        let exhaust = Suggestion::for_test(Kind::Fan, 1, 70.0);
+        let inlet = exhaust.companion_for_test(&e, &set).unwrap();
+        assert_eq!((inlet.kind, inlet.wall), (Kind::Grille, Wall::Left));
+        // A grille already there serves as the other side: nothing is added.
+        set.add(VentSpec::new(Wall::Left));
+        assert!(filter.companion_for_test(&e, &set).is_none());
+        assert!(exhaust.companion_for_test(&e, &set).is_none());
+        // So does a fan blowing the other way.
+        let mut set = HeatSettings::default();
+        let mut out = VentSpec::new(Wall::Top);
+        out.kind = Kind::Fan;
+        out.exhaust = true;
+        set.add(out);
+        assert!(filter.companion_for_test(&e, &set).is_none());
+        assert!(exhaust.companion_for_test(&e, &set).is_some());
+    }
+
+    #[test]
     fn only_a_fan_thinner_than_any_real_fan_is_flagged() {
         let mut set = HeatSettings::default();
         let mut thin = VentSpec::new(Wall::Top);

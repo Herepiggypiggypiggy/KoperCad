@@ -241,6 +241,7 @@ const PLACEMENTS: &[(&str, MenuPlace)] = &[
     // Layers: what is drawn on top of the page
     ("view.toggle_marks", under("View", "Layers")),
     ("view.override_marks", under("View", "Layers")),
+    ("view.left_out", under("View", "Layers")),
     ("view.changes", under("View", "Layers")),
     ("view.background", under("View", "Layers")),
     ("view.background_place", under("View", "Layers")),

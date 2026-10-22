@@ -39,12 +39,12 @@ pub(super) fn show(
         super::panel::Side::Left,
         WIDTH,
     )
-    .top(super::view3d_controls::BELOW)
+    .top(super::view3d_controls::below(ctx))
     // As tall as its content: the list, and the form of the one open opening.
     .fit()
     .show(ctx, |ui| {
         // Past the window's bottom the list scrolls instead of being cut off.
-        let room = (view.height() - super::view3d_controls::BELOW - 64.0).max(160.0);
+        let room = (view.height() - super::view3d_controls::below(ctx) - 64.0).max(160.0);
         egui::ScrollArea::vertical()
             .max_height(room)
             .auto_shrink([false, true])
@@ -215,15 +215,19 @@ fn body(
     if let Some(sg) = suggestion {
         ui.add_space(4.0);
         egui::Frame::group(ui.style()).show(ui, |ui| {
-            ui.label(muted(&sg.sentence(e)));
             let specs = sg.specs(e);
+            let companion = sg.companion(e, settings);
+            ui.label(muted(&sg.sentence(e, companion.as_ref())));
             let held = settings.vents.iter().filter(|v| v.kind == sg.kind).count();
             let added = held >= specs.len();
             ui.add_enabled_ui(!running && !added, |ui| {
                 let label = if added {
                     "Already added".to_owned()
                 } else {
-                    format!("Add {} to the cabinet", sg.button(specs.len()))
+                    format!(
+                        "Add {} to the cabinet",
+                        sg.button(specs.len(), companion.is_some())
+                    )
                 };
                 if ui
                     .button(label)
@@ -233,7 +237,7 @@ fn body(
                     )
                     .clicked()
                 {
-                    for spec in specs {
+                    for spec in specs.into_iter().chain(companion) {
                         settings.add(spec);
                     }
                 }
@@ -303,6 +307,16 @@ fn balance_line(flows: &[Option<f64>], settings: &HeatSettings, running: bool) -
     }
     if !any {
         return None;
+    }
+    if !running && inflow + outflow < NO_FLOW_M3H {
+        // Not a reading to compare: nothing moves, and the usual reason is a
+        // fan with no opening on the other side of the cabinet.
+        return Some(
+            "No air moves through the openings in this run. A fan alone cannot push air through a \
+             closed cabinet: add a grille on the other side (an exhaust grille high up for an \
+             inlet fan, an inlet grille low down for an exhaust fan), then run again."
+                .to_owned(),
+        );
     }
     let gap = (inflow - outflow).abs();
     let larger = inflow.max(outflow).max(1e-9);
@@ -541,7 +555,15 @@ impl Suggestion {
     }
 
     pub(super) fn sentence_for_test(&self, e: &Enclosure) -> String {
-        self.sentence(e)
+        self.sentence(e, None)
+    }
+
+    pub(super) fn companion_for_test(
+        &self,
+        e: &Enclosure,
+        settings: &HeatSettings,
+    ) -> Option<VentSpec> {
+        self.companion(e, settings)
     }
 }
 
@@ -578,17 +600,48 @@ impl Suggestion {
             .collect()
     }
 
-    fn button(&self, placed: usize) -> String {
-        if placed > 1 {
+    /// The opening that lets the air through the other way: a fan alone moves
+    /// no air in a closed cabinet, so a filter fan comes with an exhaust grille
+    /// and an exhaust fan with an inlet grille. `None` when the cabinet has
+    /// one already (a grille, or a fan the other way).
+    fn companion(&self, e: &Enclosure, settings: &HeatSettings) -> Option<VentSpec> {
+        let exhaust_fan = self.kind != Kind::FilterFan;
+        let has_other_side = settings.vents.iter().any(|v| {
+            v.kind == Kind::Grille || (v.kind != Kind::Grille && v.exhaust != exhaust_fan)
+        });
+        if has_other_side {
+            return None;
+        }
+        let presets = VentSpec::presets(e);
+        let mut grille = if exhaust_fan {
+            presets[0].spec
+        } else {
+            presets[1].spec
+        };
+        // Free area for the proposed flow at about 1.5 m/s through the slots.
+        let free_m2 = self.total_m3h / 3600.0 / GRILLE_SPEED_M_S;
+        let side = (free_m2 / grille.free_fraction.max(0.05)).sqrt() * 1000.0;
+        grille.width_mm = side.clamp(100.0, 400.0);
+        grille.height_mm = side.clamp(100.0, 400.0);
+        Some(grille.fitted(e))
+    }
+
+    fn button(&self, placed: usize, with_grille: bool) -> String {
+        let fans = if placed > 1 {
             format!("{placed} openings")
         } else if self.kind == Kind::FilterFan {
             "the filter fan".into()
         } else {
             "the fan".into()
+        };
+        if with_grille {
+            format!("{fans} and a grille")
+        } else {
+            fans
         }
     }
 
-    fn sentence(&self, e: &Enclosure) -> String {
+    fn sentence(&self, e: &Enclosure, companion: Option<&VentSpec>) -> String {
         let placed = self.room(e).min(self.count);
         let mut text = format!(
             "Cooling selection proposes {} × {} ({:.0} m³/h installed, model estimate).",
@@ -600,9 +653,22 @@ impl Suggestion {
                 self.count - placed
             ));
         }
+        if let Some(g) = companion {
+            text.push_str(&format!(
+                " A grille of about {:.0} × {:.0} mm goes with it: a fan alone moves no air in a closed cabinet.",
+                g.width_mm, g.height_mm
+            ));
+        }
         text
     }
 }
+
+/// Below this total through-flow a result counts as "nothing moves", m³/h.
+const NO_FLOW_M3H: f64 = 1.0;
+
+/// Air speed through the free area of the grille that goes with a proposed
+/// fan, m/s: a planning value that keeps the grille's own resistance small.
+const GRILLE_SPEED_M_S: f64 = 1.5;
 
 /// The proposal of the Cooling selection when it is a fan or a filter fan.
 pub(super) fn suggestion(
@@ -640,6 +706,31 @@ fn planned_flow(kind: Kind, product: &novo_thermal::cooling::Product) -> f64 {
 mod tests {
     use super::*;
     use novo_thermal::cooling::{Kind as Cool, Product, Source};
+
+    #[test]
+    fn a_fan_with_no_way_out_says_so_instead_of_comparing_zeros() {
+        let mut fan = VentSpec::new(Wall::Door);
+        fan.kind = Kind::FilterFan;
+        let mut set = HeatSettings::default();
+        set.add(fan);
+        let line = balance_line(&[Some(0.0)], &set, false).unwrap();
+        assert!(
+            line.starts_with("No air moves") && line.contains("grille"),
+            "{line}"
+        );
+        // Still running: the usual preliminary text, not a verdict.
+        assert!(
+            balance_line(&[Some(0.0)], &set, true)
+                .unwrap()
+                .contains("preliminary")
+        );
+        // A real flow keeps the comparison.
+        assert!(
+            balance_line(&[Some(56.0)], &set, false)
+                .unwrap()
+                .contains("apart")
+        );
+    }
 
     #[test]
     fn a_filter_fan_gets_the_flow_after_its_mat_and_a_fan_the_free_flow() {

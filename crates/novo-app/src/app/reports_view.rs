@@ -120,7 +120,7 @@ impl NovoApp {
     }
 
     /// The selected report's output at the project's current state.
-    fn report_output(&mut self, id: &str) -> Option<ReportOutput> {
+    pub(super) fn report_output(&mut self, id: &str) -> Option<ReportOutput> {
         // A copy for the current choice has revisions of its own, so the
         // generation of the copy is part of the key.
         let generation = self.machine_generation();
@@ -133,7 +133,9 @@ impl NovoApp {
         }
         let output = {
             let (reports, project) = self.machine_reports()?;
-            reports.live(&project).get(&project, id)?.clone()
+            let mut output = reports.live(&project).get(&project, id)?.clone();
+            super::machine::with_option_column(&project, &mut output);
+            output
         };
         self.reports_view.cache = Some((id.to_owned(), revision, output.clone()));
         Some(output)

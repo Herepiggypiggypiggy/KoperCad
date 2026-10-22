@@ -14,13 +14,15 @@
 //! ([`NovoApp::machine_info`]); `option <name> [value]` switches it from the
 //! keyboard and `tie <option> [value]` ties the selection to it.
 
-use std::cell::{Cell, RefCell};
+use std::cell::{Cell as StdCell, RefCell};
 use std::ops::Deref;
 use std::rc::Rc;
 
-use novo_core::{AnyId, Project, SymbolRole, Value};
+use novo_core::{AnyId, Endpoint, Project, SymbolRole, Value};
 use novo_workflow::options::{self, Difference, OptionDef};
 use novo_workflow::parametric::ParamKind;
+
+use novo_reports::{Cell, Column, ReportOutput};
 
 use super::reports::Reports;
 use super::{Level, NovoApp};
@@ -75,13 +77,15 @@ struct Cache {
     info: MachineInfo,
     variant: Option<Rc<Project>>,
     generation: u64,
+    /// What the choice leaves out, spread (pages, devices, symbols, wires).
+    inactive: Rc<std::collections::BTreeSet<AnyId>>,
 }
 
 /// The machine view's state, owned by the workbench.
 #[derive(Default)]
 pub(crate) struct Machine {
     cache: RefCell<Option<Cache>>,
-    generations: Cell<u64>,
+    generations: StdCell<u64>,
     /// The live reports of the machine copy, used while the choice leaves
     /// something out or names the project.
     pub(super) reports: Reports,
@@ -131,6 +135,7 @@ impl NovoApp {
                 },
                 variant: None,
                 generation: 0,
+                inactive: Rc::default(),
             }
         } else {
             let assignment = options::current(project);
@@ -150,10 +155,57 @@ impl NovoApp {
                 },
                 variant: None,
                 generation: 0,
+                inactive: Rc::new(evaluation.inactive),
             }
         };
         *cache = Some(made);
         true
+    }
+
+    /// The marks that ghost what the choice leaves out on `page`: every
+    /// symbol, and every straight wire, of a left-out page or device, veiled
+    /// and outlined, with the condition in words on hover. The working
+    /// project keeps them, so switching the option back needs no undo.
+    pub(super) fn left_out_marks(&self, page: novo_core::PageId) -> Vec<novo_canvas::Mark> {
+        use novo_canvas::model::item_id;
+        use novo_canvas::{Mark, MarkKind};
+        if !self.machine_refresh() {
+            return Vec::new();
+        }
+        let Some(doc) = self.backend.document() else {
+            return Vec::new();
+        };
+        let project = doc.project();
+        let inactive = match self.wb.machine.cache.borrow().as_ref() {
+            Some(c) if !c.inactive.is_empty() => Rc::clone(&c.inactive),
+            _ => return Vec::new(),
+        };
+        // The words: what the object needs, else what its page needs.
+        let words = |id: AnyId| -> String {
+            let said = needs_of(project, id)
+                .or_else(|| options::describe_condition(project, AnyId::Page(page)));
+            match said {
+                Some(c) => format!("Left out: only with {c}"),
+                None => "Left out by the option choice".to_owned(),
+            }
+        };
+        let mut marks = Vec::new();
+        for s in project.symbols().filter(|s| s.page == page) {
+            let id = AnyId::Symbol(s.id);
+            if inactive.contains(&id) {
+                marks.push(Mark::on(MarkKind::LeftOut, item_id(id)).with_text(words(id)));
+            }
+        }
+        for w in project
+            .wires()
+            .filter(|w| w.page == page && w.route.is_empty())
+        {
+            let id = AnyId::Wire(w.id);
+            if inactive.contains(&id) {
+                marks.push(Mark::on(MarkKind::LeftOut, item_id(id)).with_text(words(id)));
+            }
+        }
+        marks
     }
 
     /// The current choice, when the project has options.
@@ -436,6 +488,115 @@ impl NovoApp {
         }
         parts.extend(pages);
         parts.join(", ")
+    }
+}
+
+/// Reports whose rows say which option they need.
+const OPTION_REPORTS: &[&str] = &["bom", "devices", "wires", "cutlist", "toc"];
+
+/// What an object needs, in words: its own condition, else that of the
+/// device it is drawn as (a terminal: its strip; a wire: the devices at its
+/// ends), else its page's.
+fn needs_of(project: &Project, id: AnyId) -> Option<String> {
+    let device_of = |s: novo_core::SymbolId| match project.symbol(s).map(|s| &s.role) {
+        Some(SymbolRole::Device { device, .. }) => Some(AnyId::Device(*device)),
+        _ => None,
+    };
+    if let Some(own) = options::describe_condition(project, id) {
+        return Some(own);
+    }
+    match id {
+        AnyId::Symbol(s) => {
+            let device = device_of(s)?;
+            needs_of(project, device)
+        }
+        AnyId::Device(d) => {
+            // Drawn only on pages that need an option: it needs them too.
+            let pages: Vec<_> = project
+                .symbols_of_device(d)
+                .iter()
+                .map(|s| s.page)
+                .collect();
+            let mut said: Vec<String> = pages
+                .iter()
+                .filter_map(|&p| options::describe_condition(project, AnyId::Page(p)))
+                .collect();
+            if said.len() < pages.len() {
+                return None;
+            }
+            said.dedup();
+            (!said.is_empty()).then(|| said.join(" and "))
+        }
+        AnyId::Terminal(t) => {
+            let strip = project.terminal(t)?.strip;
+            options::describe_condition(project, AnyId::Device(strip))
+        }
+        AnyId::Wire(w) => {
+            let w = project.wire(w)?;
+            let ends: Vec<String> = [&w.from, &w.to]
+                .into_iter()
+                .filter_map(|e| match e {
+                    Endpoint::Pin { symbol, .. } => device_of(*symbol),
+                    _ => None,
+                })
+                .filter_map(|d| needs_of(project, d))
+                .collect();
+            let mut ends = ends;
+            ends.sort();
+            ends.dedup();
+            (!ends.is_empty()).then(|| ends.join(" and "))
+        }
+        _ => None,
+    }
+}
+
+/// Adds an "Option" column to the lists that follow the machine's choice
+/// (bill of materials, device list, wire list, cut list, contents) when a
+/// row's objects are tied to an option: "Cooling fan", "not Conveyor". Rows
+/// that need nothing stay empty; nothing is added when no row needs an
+/// option, so a project without options prints exactly as before.
+pub(crate) fn with_option_column(project: &Project, output: &mut ReportOutput) {
+    if !OPTION_REPORTS.contains(&output.report.as_str()) || options::options(project).is_empty() {
+        return;
+    }
+    for section in &mut output.sections {
+        if section.column("option").is_some() {
+            continue;
+        }
+        let texts: Vec<String> = section
+            .rows
+            .iter()
+            .map(|row| {
+                let mut said: Vec<String> = row
+                    .sources
+                    .iter()
+                    .filter_map(|&id| needs_of(project, id))
+                    .collect();
+                said.sort();
+                said.dedup();
+                said.join(", ")
+            })
+            .collect();
+        if texts.iter().all(String::is_empty) {
+            continue;
+        }
+        // Next to the first column (tag, position, page), so it is on screen
+        // without scrolling at a small window.
+        let at = 1.min(section.columns.len());
+        section
+            .columns
+            .insert(at, Column::new("option", "Option", 22.0));
+        for (row, text) in section.rows.iter_mut().zip(texts) {
+            row.cells.resize(section.columns.len() - 1, Cell::Empty);
+            row.cells.insert(
+                at,
+                if text.is_empty() {
+                    Cell::Empty
+                } else {
+                    Cell::text(text)
+                },
+            );
+        }
     }
 }
 

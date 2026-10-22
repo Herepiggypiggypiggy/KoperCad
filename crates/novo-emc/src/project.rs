@@ -17,6 +17,9 @@
 //! | `emc.finish` | enclosure | `galvanised`, `bare`, `painted` |
 //! | `emc.divider` | duct | a metal divider between classes |
 //! | `emc.<limit>` | project | thresholds of [`Params`] (`emc.min_parallel_mm` ...) |
+//! | `emc.current_a` | wire, cable | RMS current in amperes for the magnetic field estimate (else the rated current of a device at an end) |
+//! | `emc.phase_deg` | wire | phase of that current in degrees (else read from the pin: U, V, W / L1, L2, L3, or the core order of a cable) |
+//! | `emc.field_hz`, `emc.field_slice_mm`, `emc.field_limit_ut`, `emc.induced_limit_mv`, `emc.twist_factor` | project | settings of [`FieldParams`]; `emc.plate_image` (`true` or `false`) says whether the plate counts as a conducting plane |
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -27,6 +30,7 @@ use novo_core::{
 };
 
 use crate::class::{EmcClass, Shield, Termination};
+use crate::field::{Current, FieldParams, FieldSetup};
 use crate::input::{
     Device as EmcDevice, Duct, FilterState, Finish, Input, Origin, Params, Plate, Role, Run,
 };
@@ -136,6 +140,171 @@ pub fn params_of(project: &Project) -> Params {
         wire_height_mm: num("wire_height_mm", d.wire_height_mm),
         distance_override,
         user_set,
+    }
+}
+
+/// The settings of the magnetic field estimate, with the project's overrides.
+pub fn field_params_of(project: &Project) -> FieldParams {
+    let props = &project.info().properties;
+    let d = FieldParams::default();
+    let num = |name: &'static str, default: f64, user: &mut Vec<&'static str>| match props
+        .get(&format!("emc.{name}"))
+        .and_then(as_f64)
+        .filter(|v| v.is_finite() && *v > 0.0)
+    {
+        Some(v) => {
+            user.push(name);
+            v
+        }
+        None => default,
+    };
+    let mut user_set = Vec::new();
+    let plate_image = props.get("emc.plate_image").and_then(as_bool);
+    if plate_image.is_some() {
+        user_set.push("plate_image");
+    }
+    FieldParams {
+        hz: num("field_hz", d.hz, &mut user_set),
+        slice_mm: num("field_slice_mm", d.slice_mm, &mut user_set),
+        limit_ut: num("field_limit_ut", d.limit_ut, &mut user_set),
+        induced_limit_mv: num("induced_limit_mv", d.induced_limit_mv, &mut user_set),
+        twist_factor: num("twist_factor", d.twist_factor, &mut user_set).min(1.0),
+        plate_image,
+        user_set,
+    }
+}
+
+/// The phase in degrees a pin name says, for the three phases of a drive
+/// output, a contactor pole or a mains terminal.
+fn phase_of_pin(name: &str) -> Option<f64> {
+    let n: String = name
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .collect::<String>()
+        .to_ascii_uppercase();
+    match n.as_str() {
+        "U" | "U1" | "U2" | "L1" | "T1" | "1" | "2" | "1L1" | "2T1" => Some(0.0),
+        "V" | "V1" | "V2" | "L2" | "T2" | "3" | "4" | "3L2" | "4T2" => Some(-120.0),
+        "W" | "W1" | "W2" | "L3" | "T3" | "5" | "6" | "5L3" | "6T3" => Some(120.0),
+        _ => None,
+    }
+}
+
+/// The currents the magnetic field estimate uses: the user's `emc.current_a`
+/// on a wire or its cable, else, for motor and power wires, the smaller
+/// rated current of the devices at the two ends. Phases come from
+/// `emc.phase_deg`, the pin names, a DC potential or the core order of a
+/// cable; a wire with none of these is taken alone (worst case).
+pub fn currents_of(project: &Project, netlist: &Netlist, input: &Input) -> Vec<Current> {
+    let mut out: Vec<Current> = Vec::new();
+    let mut cables: BTreeMap<u64, Vec<usize>> = BTreeMap::new();
+    for run in &input.runs {
+        let Some(w) = project.wire(novo_core::WireId::from(run.id)) else {
+            continue;
+        };
+        let cable = run
+            .cable
+            .and_then(|c| project.cable(novo_core::CableId::from(c)));
+        let declared = w
+            .properties
+            .get("emc.current_a")
+            .or_else(|| cable.and_then(|c| c.properties.get("emc.current_a")))
+            .and_then(as_f64)
+            .filter(|v| v.is_finite() && *v >= 0.0);
+        let (amps, source, is_declared) = match declared {
+            Some(a) => (a, "stated on the wire (emc.current_a)".to_owned(), true),
+            None if matches!(run.class, EmcClass::Motor | EmcClass::Power) => {
+                let ends: Vec<(f64, String)> = [run.from, run.to]
+                    .into_iter()
+                    .flatten()
+                    .filter_map(|d| {
+                        let id = novo_core::DeviceId::from(d);
+                        let a = project.rated_current_a(id).filter(|a| *a > 0.0)?;
+                        Some((a, project.device(id)?.tag.to_string()))
+                    })
+                    .collect();
+                let Some((a, tag)) = ends.into_iter().min_by(|x, y| x.0.total_cmp(&y.0)) else {
+                    continue;
+                };
+                (
+                    a,
+                    format!("rated current of {tag} (planning value: the smaller rated current)"),
+                    false,
+                )
+            }
+            None => continue,
+        };
+        let phase = w
+            .properties
+            .get("emc.phase_deg")
+            .and_then(as_f64)
+            .filter(|v| v.is_finite())
+            .map(|p| (p, "stated on the wire (emc.phase_deg)"))
+            .or_else(|| {
+                [w.from.as_pin(), w.to.as_pin()]
+                    .into_iter()
+                    .flatten()
+                    .find_map(|p| phase_of_pin(&pin_name(project, p)))
+                    .map(|p| (p, "from the pin names"))
+            })
+            .or_else(|| {
+                let n = run.net?;
+                let potentials = &netlist.net(NetId(n)).potentials;
+                potentials.iter().find_map(|pid| {
+                    match project.get::<novo_core::Potential>(*pid)?.kind {
+                        PotentialKind::DcPositive => Some((0.0, "DC positive")),
+                        PotentialKind::DcNegative => Some((180.0, "DC negative: the return")),
+                        _ => None,
+                    }
+                })
+            });
+        let idx = out.len();
+        if let Some(c) = run.cable {
+            cables.entry(c).or_default().push(idx);
+        }
+        out.push(Current {
+            run: run.id,
+            amps,
+            phase_deg: phase.map_or(0.0, |p| p.0),
+            source: match phase {
+                Some((_, how)) => format!("{source}; phase {how}"),
+                None => format!("{source}; phase not known, taken as a lone conductor"),
+            },
+            declared: is_declared,
+            phase_known: phase.is_some(),
+        });
+    }
+    // Cores of one cable with no phase of their own: go and return, or a
+    // balanced three-phase set, in the order of the wires.
+    for members in cables.values() {
+        let open: Vec<usize> = members
+            .iter()
+            .copied()
+            .filter(|i| !out[*i].phase_known)
+            .collect();
+        let set: &[f64] = match open.len() {
+            2 => &[0.0, 180.0],
+            3 => &[0.0, -120.0, 120.0],
+            _ => continue,
+        };
+        for (i, ph) in open.iter().zip(set) {
+            out[*i].phase_deg = *ph;
+            out[*i].phase_known = true;
+            out[*i].source = format!(
+                "{}; phase assumed from the core order of the cable ({} cores)",
+                out[*i].source.split("; phase").next().unwrap_or_default(),
+                set.len()
+            );
+        }
+    }
+    out
+}
+
+/// Currents and settings of the magnetic field estimate for a project.
+pub fn field_setup_of(project: &Project, netlist: &Netlist, input: &Input) -> FieldSetup {
+    FieldSetup {
+        currents: currents_of(project, netlist, input),
+        params: field_params_of(project),
     }
 }
 
@@ -601,7 +770,9 @@ pub fn analyse_project(project: &Project) -> Report {
 
 /// Runs the engine with a netlist that is current for the project.
 pub fn analyse_with(project: &Project, netlist: &Netlist) -> Report {
-    crate::analyse(&input_of(project, netlist))
+    let input = input_of(project, netlist);
+    let field = field_setup_of(project, netlist, &input);
+    crate::analyse_with_field(&input, Some(&field))
 }
 
 /// The picture of a project: classes, ribbons, loop sheets, zones and
@@ -609,7 +780,8 @@ pub fn analyse_with(project: &Project, netlist: &Netlist) -> Report {
 pub fn picture_of(project: &Project) -> crate::Picture {
     let netlist = project.netlist();
     let input = input_of(project, &netlist);
-    let report = crate::analyse(&input);
+    let field = field_setup_of(project, &netlist, &input);
+    let report = crate::analyse_with_field(&input, Some(&field));
     crate::picture(&input, &report)
 }
 

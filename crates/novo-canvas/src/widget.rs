@@ -1235,6 +1235,15 @@ impl CanvasView {
                         at(r.min),
                     ];
                     let stroke = egui::Stroke::new(1.5, color);
+                    if *kind == MarkKind::LeftOut {
+                        // A veil in the sheet's own colour: the object reads
+                        // as present but not part of this machine.
+                        painter.rect_filled(
+                            egui::Rect::from_min_max(at(r.min), at(r.max)),
+                            2.0,
+                            c32(st.background.with_alpha(170)),
+                        );
+                    }
                     if kind.is_dashed() {
                         painter.extend(egui::Shape::dashed_line(&corners, stroke, 5.0, 3.0));
                     } else {
@@ -1321,6 +1330,16 @@ impl CanvasView {
         // The hint goes on the nearest proposal only.
         if let Some(Placed::Outline { rect: r, mark, .. }) =
             marks::nearest_proposal(&placed, cursor)
+            && let Some(m) = self.marks.list.get(*mark)
+            && !m.text.is_empty()
+        {
+            note(at(Vec2::new(r.min.x, r.max.y + 4.0)), &m.text);
+        }
+        // What the option choice leaves out says why under the pointer.
+        if let Some(c) = cursor
+            && let Some(Placed::Outline { rect: r, mark, .. }) = placed.iter().find(|p| {
+                matches!(p, Placed::Outline { kind: MarkKind::LeftOut, rect, .. } if rect.contains_point(c))
+            })
             && let Some(m) = self.marks.list.get(*mark)
             && !m.text.is_empty()
         {

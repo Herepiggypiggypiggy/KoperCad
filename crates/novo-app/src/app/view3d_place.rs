@@ -96,7 +96,7 @@ pub(super) fn panel(
     let mut out = Picked::default();
     egui::Area::new(egui::Id::new("view3d_place"))
         .order(egui::Order::Middle)
-        .fixed_pos(view.left_top() + egui::vec2(MARGIN, super::view3d_controls::BELOW))
+        .fixed_pos(view.left_top() + egui::vec2(MARGIN, super::view3d_controls::below(ctx)))
         .show(ctx, |ui| {
             egui::Frame::popup(ui.style()).show(ui, |ui| {
                 ui.set_max_width(190.0);

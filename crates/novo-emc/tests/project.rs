@@ -281,3 +281,59 @@ fn each_fix_is_one_undo_step() {
             .any(|k| k.shield)
     );
 }
+
+#[test]
+fn currents_come_from_a_rating_or_the_user_and_phases_from_the_pin() {
+    let mut c = cabinet();
+    // No rating and no statement: no current, so the field rules say so.
+    let none = novo_emc::project::currents_of(
+        &c.project,
+        &c.project.netlist(),
+        &input_of(&c.project, &c.project.netlist()),
+    );
+    assert!(none.is_empty(), "{none:?}");
+    let report = analyse_project(&c.project);
+    let st = report.rules.iter().find(|r| r.rule == "EMC-19").unwrap();
+    assert_eq!(st.status, novo_emc::Status::NotEvaluated);
+    // A rated current on the drive: the motor wire carries it, phase from "U".
+    c.project
+        .transact("rating", |tx| {
+            tx.set_property(c.drive, "rated_current_a", Some(Value::Float(16.0)))
+        })
+        .unwrap();
+    let net = c.project.netlist();
+    let input = input_of(&c.project, &net);
+    let got = novo_emc::project::currents_of(&c.project, &net, &input);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].run, c.motor_wire.raw());
+    assert_eq!(got[0].amps, 16.0);
+    assert!(!got[0].declared && got[0].phase_known);
+    assert!(got[0].source.contains("-T1"), "{}", got[0].source);
+    // The user's number wins over the rating.
+    let wire = c.motor_wire;
+    c.project
+        .transact("state", |tx| {
+            tx.set_property(wire, "emc.current_a", Some(Value::Text("5,5".into())))?;
+            tx.set_property(wire, "emc.phase_deg", Some(Value::Float(-120.0)))
+        })
+        .unwrap();
+    let net = c.project.netlist();
+    let input = input_of(&c.project, &net);
+    let got = novo_emc::project::currents_of(&c.project, &net, &input);
+    assert_eq!((got[0].amps, got[0].phase_deg), (5.5, -120.0));
+    assert!(got[0].declared);
+    // The report carries the table and the settings can be overridden.
+    c.project
+        .transact("hz", |tx| {
+            tx.set_info(|i| {
+                i.properties
+                    .insert("emc.field_hz".into(), Value::Float(150.0));
+            })
+        })
+        .unwrap();
+    let p = novo_emc::project::field_params_of(&c.project);
+    assert_eq!(p.hz, 150.0);
+    assert!(p.user_set.contains(&"field_hz"));
+    let report = analyse_project(&c.project);
+    assert_eq!(report.field.as_ref().unwrap().currents.len(), 1);
+}

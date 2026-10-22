@@ -209,6 +209,25 @@ pub(super) fn report_lines(sol: &Solution, settings: &mut CoolingSettings) -> Ve
     lines
 }
 
+/// One short line for the closed fold: what the selection comes to.
+fn fold_summary(sol: &Solution, settings: &mut CoolingSettings) -> Option<String> {
+    let (_, selection) = selection_for(sol, settings)?;
+    Some(summary_of(&selection))
+}
+
+fn summary_of(selection: &Selection) -> String {
+    if selection.need.natural_ok() {
+        "No cooling needed.".to_owned()
+    } else if let Some(c) = selection.proposal() {
+        let kind = selection
+            .recommended
+            .map_or("Cooling", |i| selection.options[i].kind.label());
+        format!("{kind} proposed: {}.", c.product.name)
+    } else {
+        "Nothing listed is large enough: open for the options.".to_owned()
+    }
+}
+
 /// The section, for the 3D Heat panel and the 2D legend. Returns nothing:
 /// the settings are edited in place.
 pub(super) fn show(
@@ -220,7 +239,8 @@ pub(super) fn show(
 ) {
     let pal = crate::theme::ui_palette();
     let small = |text: &str, colour: egui::Color32| egui::RichText::new(text).small().color(colour);
-    egui::CollapsingHeader::new("Cooling selection")
+    let summary = fold_summary(sol, settings);
+    let header = egui::CollapsingHeader::new("Cooling selection")
         .id_salt("heat_cooling")
         .default_open(false)
         .show(ui, |ui| {
@@ -395,6 +415,13 @@ pub(super) fn show(
                 ui.label(small(notice, pal.text_secondary));
             }
         });
+    // A closed fold says what is inside it, so a first-time user knows it
+    // is worth opening.
+    if header.fully_closed()
+        && let Some(text) = summary
+    {
+        ui.label(small(&text, pal.text_secondary));
+    }
 }
 
 fn source_word(source: &Source) -> &'static str {
@@ -437,6 +464,40 @@ mod tests {
         // Wires alone still make a cabinet with no device loss need a size.
         assert!(basis_of(&e, 0.0, 50.0, 35.0, 40.0, false).is_some());
         assert!(basis_of(&e, 0.0, 0.0, 35.0, 40.0, false).is_none());
+    }
+
+    #[test]
+    fn the_closed_fold_says_what_the_selection_comes_to() {
+        use novo_layout::sizing::{Installation, Material};
+        let e = novo_thermal::Enclosure {
+            width_mm: 800.0,
+            height_mm: 1000.0,
+            depth_mm: 300.0,
+            wall_mm: 2.0,
+            material: Material::Steel,
+            installation: Installation::Wall,
+            plate: novo_layout::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 700.0,
+                h: 900.0,
+            },
+        };
+        let products = CoolingSettings::default().products();
+        let cool = cooling::select(
+            &basis_of(&e, 20.0, 0.0, 35.0, 40.0, false).unwrap(),
+            &products,
+        );
+        assert_eq!(summary_of(&cool), "No cooling needed.");
+        let hot = cooling::select(
+            &basis_of(&e, 300.0, 0.0, 35.0, 40.0, false).unwrap(),
+            &products,
+        );
+        let text = summary_of(&hot);
+        assert!(
+            text.contains("proposed") || text.starts_with("Nothing listed"),
+            "{text}"
+        );
     }
 
     #[test]
